@@ -20,47 +20,64 @@ dotnet test
 
 ```bash
 # Run an expression (compile to temp and execute)
-./dark -r "2 + 3"
+./dark -r -e "2 + 3"
 # Output: Exit code: 5
 
-./dark --run "6 * 7"
+./dark --run --expression "6 * 7"
 # Output: Exit code: 42
 
 # Quiet run (combined flags)
-./dark -qr "10 + 32"
+./dark -qr -e "10 + 32"
 # Output: (just exit code: 42)
+```
+
+**Compile a file:**
+
+```bash
+# Compile file to default output (dark.out)
+./dark prog.dark
+
+# Compile file to specific output
+./dark prog.dark -o output
+
+# Run file
+./dark -r prog.dark
+
+# Run the compiled binary
+./output
+echo $?  # Shows exit code
 ```
 
 **Compile an expression:**
 
 ```bash
-# Compile to file
-./dark -c "2 + 3" -o output
+# Compile expression to default file (dark.out)
+./dark -e "2 + 3"
 
-# Compile to default file (dark.out)
-./dark -c "2 + 3"
-
-# Run the compiled binary
-./output
-echo $?  # Shows exit code: 5
+# Compile expression to file
+./dark -e "6 * 7" -o output
 
 # Quiet compile
-./dark -qc "6 * 7" -o output
+./dark -q -e "2 + 3" -o output
 ```
 
 **Other features:**
 
 ```bash
 # Flags can appear in any order
-./dark -o output -c "2 + 3" -q
-./dark -q -o output -c "2 + 3"
+./dark -o output prog.dark -q
+./dark -q -o output prog.dark
 # Both are equivalent
 
-# Verbose output
-./dark -v -c "2 + 3" -o output
+# Verbose output (shows detailed IR)
+./dark -v prog.dark -o output
 
 # Read from stdin
-./dark -r - < <(echo "10 + 32")
+./dark -r -e - < input.txt
+
+# Combined short flags
+./dark -qr -e "42"    # quiet + run
+./dark -re "5"        # run + expression
 
 # Help and version
 ./dark -h

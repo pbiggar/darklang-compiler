@@ -22,19 +22,13 @@ module Program
 open System
 open System.IO
 
-/// Action to perform
-type ActionFlag = Compile | Run
-
-/// Input source type
-type InputFlag = Expression | File
-
 /// Output verbosity level
 type VerbosityLevel = Quiet | Normal | Verbose
 
 /// Parsed CLI options
 type CliOptions = {
-    Action: ActionFlag option
-    Input: InputFlag option
+    Run: bool                    // True = run, False = compile (default)
+    IsExpression: bool           // True = expression, False = file (default)
     OutputFile: string option
     Verbosity: VerbosityLevel
     Help: bool
@@ -44,8 +38,8 @@ type CliOptions = {
 
 /// Default empty options
 let defaultOptions = {
-    Action = None
-    Input = None
+    Run = false
+    IsExpression = false
     OutputFile = None
     Verbosity = Normal
     Help = false
@@ -61,23 +55,17 @@ let parseArgs (argv: string array) : Result<CliOptions, string> =
             // Apply last verbosity setting (last one wins)
             Ok { opts with Verbosity = lastVerbosity }
 
-        | "-c" :: rest | "--compile" :: rest ->
-            if opts.Action.IsSome then
-                Error "Cannot specify both compile and run flags"
-            else
-                parseFlags rest { opts with Action = Some Compile } lastVerbosity
-
         | "-r" :: rest | "--run" :: rest ->
-            if opts.Action.IsSome then
-                Error "Cannot specify both compile and run flags"
+            if opts.Run then
+                Error "Run flag specified multiple times"
             else
-                parseFlags rest { opts with Action = Some Run } lastVerbosity
+                parseFlags rest { opts with Run = true } lastVerbosity
 
-        | "-f" :: rest | "--file" :: rest ->
-            if opts.Input.IsSome then
-                Error "Cannot specify both file and expression input"
+        | "-e" :: rest | "--expression" :: rest ->
+            if opts.IsExpression then
+                Error "Expression flag specified multiple times"
             else
-                parseFlags rest { opts with Input = Some File } lastVerbosity
+                parseFlags rest { opts with IsExpression = true } lastVerbosity
 
         | "-o" :: value :: rest | "--output" :: value :: rest ->
             if opts.OutputFile.IsSome then
@@ -114,26 +102,20 @@ let parseArgs (argv: string array) : Result<CliOptions, string> =
             parseFlags rest { opts with Version = true } lastVerbosity
 
         | "-" :: rest ->
-            // Special case: "-" means stdin, treat as argument
+            // Special case: "-" means stdin
             if opts.Argument.IsSome then
                 Error "Cannot specify multiple input sources"
             else
-                let newOpts =
-                    if opts.Input.IsNone then
-                        { opts with Input = Some Expression; Argument = Some "-" }
-                    else
-                        { opts with Argument = Some "-" }
-                parseFlags rest newOpts lastVerbosity
+                parseFlags rest { opts with Argument = Some "-" } lastVerbosity
 
         | flag :: rest when flag.StartsWith("-") && flag.Length > 1 ->
-            // Handle combined short flags like -qr or -qvr
+            // Handle combined short flags like -qr, -re, etc.
             let chars = flag.Substring(1).ToCharArray()
             let rec expandFlags (cs: char list) (acc: string list) =
                 match cs with
                 | [] -> acc
-                | 'c' :: rest -> expandFlags rest ("-c" :: acc)
                 | 'r' :: rest -> expandFlags rest ("-r" :: acc)
-                | 'f' :: rest -> expandFlags rest ("-f" :: acc)
+                | 'e' :: rest -> expandFlags rest ("-e" :: acc)
                 | 'q' :: rest -> expandFlags rest ("-q" :: acc)
                 | 'v' :: rest -> expandFlags rest ("-v" :: acc)
                 | 'h' :: rest -> expandFlags rest ("-h" :: acc)
@@ -149,17 +131,11 @@ let parseArgs (argv: string array) : Result<CliOptions, string> =
             parseFlags (expandedFlags @ rest) opts lastVerbosity
 
         | arg :: rest when not (arg.StartsWith("-")) ->
-            // Non-flag argument - this is the expression or filename
+            // Non-flag argument - this is the filename or expression
             if opts.Argument.IsSome then
                 Error (sprintf "Unexpected argument: %s" arg)
             else
-                // Default to expression input if not specified
-                let newOpts =
-                    if opts.Input.IsNone then
-                        { opts with Input = Some Expression; Argument = Some arg }
-                    else
-                        { opts with Argument = Some arg }
-                parseFlags rest newOpts lastVerbosity
+                parseFlags rest { opts with Argument = Some arg } lastVerbosity
 
         | flag :: _ ->
             Error (sprintf "Unknown flag: %s" flag)
@@ -172,30 +148,14 @@ let validateOptions (opts: CliOptions) : Result<CliOptions, string> =
     if opts.Help || opts.Version then
         Ok opts
     else
-        // Check for required action
-        match opts.Action with
-        | None ->
-            if opts.OutputFile.IsSome then
-                // Has -o flag, default to compile
-                Ok { opts with Action = Some Compile }
-            else
-                Error "Must specify -c (compile) or -r (run)"
-
-        | Some Run ->
-            // Validate run mode
-            if opts.OutputFile.IsSome then
-                Error "Cannot specify output file with run mode"
-            else if opts.Argument.IsNone then
-                Error "Missing expression or filename"
-            else
-                Ok opts
-
-        | Some Compile ->
-            // Validate compile mode
-            if opts.Argument.IsNone then
-                Error "Missing expression or filename"
-            else
-                Ok opts
+        // Check for required argument
+        if opts.Argument.IsNone then
+            Error "Missing input (filename or expression with -e)"
+        // Check for conflicting options
+        else if opts.Run && opts.OutputFile.IsSome then
+            Error "Cannot specify output file with run mode (-r)"
+        else
+            Ok opts
 
 /// Compile source expression to executable
 let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) : unit =
@@ -310,35 +270,34 @@ let printUsage () =
     printfn "Dark Compiler v0.1.0"
     printfn ""
     printfn "Usage:"
-    printfn "  dark -c <expression> [-o <output>]       Compile expression to executable"
-    printfn "  dark -r <expression>                     Run expression"
-    printfn "  dark -f <file> [-o <output>]             Compile file to executable"
-    printfn "  dark -f <file> -r                        Compile and run file"
-    printfn "  dark -r -                                Read expression from stdin and run"
-    printfn "  dark -c - -o <output>                    Read from stdin and compile"
+    printfn "  dark <file> [-o <output>]           Compile file to executable (default)"
+    printfn "  dark -r <file>                      Compile and run file"
+    printfn "  dark -e <expression> [-o <output>]  Compile expression to executable"
+    printfn "  dark -r -e <expression>             Run expression"
+    printfn "  dark -r -e -                        Read expression from stdin and run"
     printfn ""
     printfn "Flags:"
-    printfn "  -c, --compile        Compile to executable"
-    printfn "  -r, --run            Compile and run, showing exit code"
-    printfn "  -f, --file           Treat argument as filename (not expression)"
+    printfn "  -r, --run            Run instead of compile (shows exit code)"
+    printfn "  -e, --expression     Treat argument as expression (not filename)"
     printfn "  -o, --output FILE    Output file (default: dark.out)"
     printfn "  -q, --quiet          Suppress compilation output"
     printfn "  -v, --verbose        Show detailed compilation steps"
     printfn "  -h, --help           Show this help message"
     printfn "  --version            Show version information"
     printfn ""
-    printfn "Flags can appear in any order and can be combined (e.g., -qr, -vf)"
+    printfn "Flags can appear in any order and can be combined (e.g., -qr, -re)"
     printfn "When both -q and -v are specified, the last one wins."
     printfn ""
     printfn "Examples:"
-    printfn "  dark -c \"2 + 3\" -o output            Compile expression to 'output'"
-    printfn "  dark -c \"2 + 3\"                      Compile to 'dark.out' (default)"
-    printfn "  dark -r \"2 + 3\"                      Run and show exit code (5)"
-    printfn "  dark -qr \"6 * 7\"                     Run quietly (exit code: 42)"
-    printfn "  dark -f prog.dark -o output          Compile file to executable"
-    printfn "  dark -rf prog.dark                   Compile and run file"
-    printfn "  echo \"2 + 3\" | dark -r -            Run expression from stdin"
-    printfn "  dark -v -c \"2 + 3\" -o output        Compile with verbose output"
+    printfn "  dark prog.dark                     Compile file to 'dark.out'"
+    printfn "  dark prog.dark -o output           Compile file to 'output'"
+    printfn "  dark -r prog.dark                  Compile and run file"
+    printfn "  dark -e \"2 + 3\"                    Compile expression to 'dark.out'"
+    printfn "  dark -e \"2 + 3\" -o output          Compile expression to 'output'"
+    printfn "  dark -r -e \"2 + 3\"                 Run and show exit code (5)"
+    printfn "  dark -qr -e \"6 * 7\"                Run quietly (exit code: 42)"
+    printfn "  dark -v prog.dark -o output        Compile with verbose output"
+    printfn "  dark -r -e - < input.txt           Run expression from stdin"
     printfn ""
     printfn "Note: Generated executables may require code signing to run on macOS"
 
@@ -375,7 +334,11 @@ let main argv =
                     with ex ->
                         Error (sprintf "Failed to read from stdin: %s" ex.Message)
 
-                | Some filepath when options.Input = Some File ->
+                | Some arg when options.IsExpression ->
+                    // Inline expression
+                    Ok arg
+
+                | Some filepath ->
                     // Read from file
                     if not (File.Exists filepath) then
                         Error (sprintf "File not found: %s" filepath)
@@ -385,29 +348,22 @@ let main argv =
                         with ex ->
                             Error (sprintf "Failed to read file: %s" ex.Message)
 
-                | Some expr when options.Input = Some Expression ->
-                    // Inline expression
-                    Ok expr
-
-                | _ ->
+                | None ->
                     Error "No source provided"
 
-            match options.Action, getSource() with
-            | Some Compile, Ok source ->
-                let output = options.OutputFile |> Option.defaultValue "dark.out"
-                compile source output options.Verbosity
-                0
+            match getSource() with
+            | Ok source ->
+                if options.Run then
+                    // Run mode
+                    run source options.Verbosity
+                else
+                    // Compile mode (default)
+                    let output = options.OutputFile |> Option.defaultValue "dark.out"
+                    compile source output options.Verbosity
+                    0
 
-            | Some Run, Ok source ->
-                run source options.Verbosity
-
-            | _, Error msg ->
+            | Error msg ->
                 printfn "Error: %s" msg
-                1
-
-            | _ ->
-                printfn "Error: Invalid combination of flags"
-                printUsage()
                 1
 
     with ex ->
