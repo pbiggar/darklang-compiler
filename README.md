@@ -19,26 +19,30 @@ dotnet test
 **Quick test an expression:**
 
 ```bash
-# Compile and run in one step (easiest way)
-./darkrun "2 + 3"
+# Run an expression (compile to temp and execute)
+./dark -r "2 + 3"
 # Output: Exit code: 5
 
-./darkrun "6 * 7"
+./dark --run "6 * 7"
 # Output: Exit code: 42
+
+# Quiet mode (no compilation output)
+./dark -q -r "10 + 32"
+# Output: (just exit code: 42)
 ```
 
 **Compile an expression:**
 
 ```bash
-# Using wrapper script
-./darkc "2 + 3" output
-
-# Or with dotnet
-dotnet run --project src/DarkCompiler/DarkCompiler.fsproj "2 + 3" output
+# Compile to file
+./dark "2 + 3" output
 
 # Run the compiled binary
 ./output
-echo $?  # Shows exit code (5 in this case)
+echo $?  # Shows exit code: 5
+
+# Quiet compile
+./dark -q "6 * 7" output
 ```
 
 **Clean build artifacts:**
