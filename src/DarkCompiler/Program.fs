@@ -1,3 +1,22 @@
+// Program.fs - Compiler CLI Entry Point
+//
+// The main entry point for the Darklang compiler CLI.
+//
+// This module:
+// - Parses command-line arguments
+// - Orchestrates the compilation pipeline through all passes
+// - Handles errors and provides user feedback
+//
+// Compilation pipeline:
+//   1. Parser: Source → AST
+//   2. AST_to_ANF: AST → ANF
+//   3. ANF_to_MIR: ANF → MIR
+//   4. MIR_to_LIR: MIR → LIR
+//   5. RegisterAllocation: LIR (virtual) → LIR (physical)
+//   6. CodeGen: LIR → ARM64 instructions
+//   7. ARM64_Encoding: ARM64 instructions → Machine code
+//   8. Binary_Generation: Machine code → Mach-O executable
+
 module Program
 
 open System
@@ -8,43 +27,45 @@ let compile (source: string) (outputPath: string) : unit =
     printfn "Compiling: %s" source
 
     // Parse
-    printfn "  [1/7] Parsing..."
+    printfn "  [1/8] Parsing..."
     let ast = Parser.parseString source
 
     // Convert to ANF
-    printfn "  [2/7] Converting to ANF..."
+    printfn "  [2/8] Converting to ANF..."
     let (AST.Program expr) = ast
-    let (anfExpr, _) = ANF.toANF expr (ANF.VarGen 0)
+    let (anfExpr, _) = AST_to_ANF.toANF expr (ANF.VarGen 0)
     let anfProgram = ANF.Program anfExpr
 
     // Convert to MIR
-    printfn "  [3/7] Converting to MIR..."
-    let (mirProgram, _) = MIR.toMIR anfProgram (MIR.RegGen 0)
+    printfn "  [3/8] Converting to MIR..."
+    let (mirProgram, _) = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0)
 
     // Convert to LIR
-    printfn "  [4/7] Converting to LIR..."
-    let lirProgram = LIR.toLIR mirProgram
+    printfn "  [4/8] Converting to LIR..."
+    let lirProgram = MIR_to_LIR.toLIR mirProgram
 
     // Allocate registers
-    printfn "  [5/7] Allocating registers..."
+    printfn "  [5/8] Allocating registers..."
     let (LIR.Program funcs) = lirProgram
     let func = List.head funcs
-    let allocResult = LIR.allocateRegisters func
+    let allocResult = RegisterAllocation.allocateRegisters func
     let allocatedFunc = { func with Body = allocResult.Instrs; StackSize = allocResult.StackSize }
     let allocatedProgram = LIR.Program [allocatedFunc]
 
     // Generate ARM64 code
-    printfn "  [6/7] Generating ARM64 code..."
+    printfn "  [6/8] Generating ARM64 code..."
     let arm64Code = CodeGen.generateARM64 allocatedProgram
     printfn "    Generated %d instructions" arm64Code.Length
 
     // Encode to machine code and generate binary
-    printfn "  [7/7] Generating binary..."
-    let machineCode = arm64Code |> List.collect ARM64.encode
-    let binary = Binary.createExecutable machineCode
+    printfn "  [7/8] Encoding ARM64 to machine code..."
+    let machineCode = arm64Code |> List.collect ARM64_Encoding.encode
+
+    printfn "  [8/8] Generating binary..."
+    let binary = Binary_Generation.createExecutable machineCode
 
     // Write to file
-    Binary.writeToFile outputPath binary
+    Binary_Generation.writeToFile outputPath binary
     printfn "Successfully wrote %d bytes to %s" binary.Length outputPath
 
 /// Print usage information

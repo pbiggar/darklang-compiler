@@ -1,3 +1,22 @@
+// 6_CodeGen.fs - Code Generation (Pass 6)
+//
+// Transforms LIR (with physical registers) into ARM64 instructions.
+//
+// This pass:
+// - Maps LIR register types to ARM64 register types
+// - Selects appropriate ARM64 instructions (immediate vs register forms)
+// - Handles immediate value loading (MOVZ for small values)
+// - Converts LIR operations to ARM64 instruction sequences
+//
+// Example transformation:
+//   Input LIR:   X0 <- Mov(Imm 42)
+//                X1 <- Add(X0, Imm 5)
+//   Output ARM64: MOVZ X0, #42, LSL #0
+//                 ADD X1, X0, #5
+//
+// Note: This pass assumes register allocation has already been performed,
+// so all registers in LIR are physical registers.
+
 module CodeGen
 
 /// Convert LIR.PhysReg to ARM64.Reg

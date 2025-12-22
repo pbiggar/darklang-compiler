@@ -1,3 +1,20 @@
+// Binary.fs - Mach-O Binary Format Types
+//
+// Defines data structures for the Mach-O binary format used by macOS.
+//
+// Mach-O is the executable format for macOS. This module defines the types
+// needed to represent Mach-O headers, load commands, segments, and sections.
+//
+// Structure of a Mach-O executable:
+// - Mach-O Header: Identifies the file type and architecture
+// - Load Commands: Instructions for the loader (segments, entry point, etc.)
+// - Data: The actual code and data sections
+//
+// Our minimal executable has:
+// - __PAGEZERO segment (4GB unmapped memory for security)
+// - __TEXT segment with __text section (executable code)
+// - LC_MAIN command (specifies entry point)
+
 module Binary
 
 /// Mach-O magic number for 64-bit
@@ -88,220 +105,3 @@ type MachOBinary = {
     MainCommand: MainCommand
     MachineCode: byte array
 }
-
-/// Helper: Pad string to fixed size with null bytes
-let padString (s: string) (size: int) : byte array =
-    let bytes = System.Text.Encoding.UTF8.GetBytes(s)
-    if bytes.Length > size then
-        Array.truncate size bytes
-    else
-        Array.append bytes (Array.create (size - bytes.Length) 0uy)
-
-/// Helper: Convert uint32 to little-endian bytes
-let uint32ToBytes (value: uint32) : byte array =
-    [|
-        byte (value &&& 0xFFu)
-        byte ((value >>> 8) &&& 0xFFu)
-        byte ((value >>> 16) &&& 0xFFu)
-        byte ((value >>> 24) &&& 0xFFu)
-    |]
-
-/// Helper: Convert uint64 to little-endian bytes
-let uint64ToBytes (value: uint64) : byte array =
-    [|
-        byte (value &&& 0xFFUL)
-        byte ((value >>> 8) &&& 0xFFUL)
-        byte ((value >>> 16) &&& 0xFFUL)
-        byte ((value >>> 24) &&& 0xFFUL)
-        byte ((value >>> 32) &&& 0xFFUL)
-        byte ((value >>> 40) &&& 0xFFUL)
-        byte ((value >>> 48) &&& 0xFFUL)
-        byte ((value >>> 56) &&& 0xFFUL)
-    |]
-
-/// Serialize MachHeader to bytes
-let serializeMachHeader (header: MachHeader) : byte array =
-    [|
-        yield! uint32ToBytes header.Magic
-        yield! uint32ToBytes header.CpuType
-        yield! uint32ToBytes header.CpuSubType
-        yield! uint32ToBytes header.FileType
-        yield! uint32ToBytes header.NumCommands
-        yield! uint32ToBytes header.SizeOfCommands
-        yield! uint32ToBytes header.Flags
-        yield! uint32ToBytes header.Reserved
-    |]
-
-/// Serialize Section64 to bytes
-let serializeSection64 (section: Section64) : byte array =
-    [|
-        yield! padString section.SectionName 16
-        yield! padString section.SegmentName 16
-        yield! uint64ToBytes section.Address
-        yield! uint64ToBytes section.Size
-        yield! uint32ToBytes section.Offset
-        yield! uint32ToBytes section.Align
-        yield! uint32ToBytes section.RelocationOffset
-        yield! uint32ToBytes section.NumRelocations
-        yield! uint32ToBytes section.Flags
-        yield! uint32ToBytes section.Reserved1
-        yield! uint32ToBytes section.Reserved2
-        yield! uint32ToBytes section.Reserved3
-    |]
-
-/// Serialize SegmentCommand64 to bytes
-let serializeSegmentCommand64 (segment: SegmentCommand64) : byte array =
-    [|
-        yield! uint32ToBytes segment.Command
-        yield! uint32ToBytes segment.CommandSize
-        yield! padString segment.SegmentName 16
-        yield! uint64ToBytes segment.VmAddress
-        yield! uint64ToBytes segment.VmSize
-        yield! uint64ToBytes segment.FileOffset
-        yield! uint64ToBytes segment.FileSize
-        yield! uint32ToBytes segment.MaxProt
-        yield! uint32ToBytes segment.InitProt
-        yield! uint32ToBytes segment.NumSections
-        yield! uint32ToBytes segment.Flags
-        for section in segment.Sections do
-            yield! serializeSection64 section
-    |]
-
-/// Serialize MainCommand to bytes
-let serializeMainCommand (main: MainCommand) : byte array =
-    [|
-        yield! uint32ToBytes main.Command
-        yield! uint32ToBytes main.CommandSize
-        yield! uint64ToBytes main.EntryOffset
-        yield! uint64ToBytes main.StackSize
-    |]
-
-/// Calculate the size of load commands
-let calculateCommandsSize (binary: MachOBinary) : uint32 =
-    binary.PageZeroCommand.CommandSize + binary.TextSegmentCommand.CommandSize + binary.MainCommand.CommandSize
-
-/// Serialize complete Mach-O binary to bytes
-let serializeMachO (binary: MachOBinary) : byte array =
-    let headerSize = 32  // sizeof(mach_header_64)
-    let commandsSize = int (calculateCommandsSize binary)
-    let dataStart = headerSize + commandsSize
-
-    // Pad to page boundary (16KB for ARM64 macOS)
-    let pageSize = 16384
-    let paddingNeeded = (pageSize - (dataStart % pageSize)) % pageSize
-    let padding = Array.create paddingNeeded 0uy
-
-    [|
-        yield! serializeMachHeader binary.Header
-        yield! serializeSegmentCommand64 binary.PageZeroCommand
-        yield! serializeSegmentCommand64 binary.TextSegmentCommand
-        yield! serializeMainCommand binary.MainCommand
-        yield! padding
-        yield! binary.MachineCode
-    |]
-
-/// Create a minimal Mach-O executable from ARM64 machine code
-let createExecutable (machineCode: uint32 list) : byte array =
-    let codeBytes =
-        machineCode
-        |> List.collect (fun word ->
-            uint32ToBytes word |> Array.toList)
-        |> Array.ofList
-
-    let codeSize = uint64 codeBytes.Length
-
-    // VM addresses - load at typical location
-    let vmBase = 0x100000000UL
-    let vmCodeOffset = 0x4000UL  // Start code at offset within VM
-
-    // File layout
-    let headerSize = 32
-    let pageZeroCommandSize = 72  // segment_command_64 with no sections
-    let textSegmentCommandSize = 72 + 80  // segment_command_64 + 1 section_64
-    let mainCommandSize = 24
-    let commandsSize = pageZeroCommandSize + textSegmentCommandSize + mainCommandSize
-    let pageSize = 16384
-    let dataStart = headerSize + commandsSize
-    let paddingNeeded = (pageSize - (dataStart % pageSize)) % pageSize
-    let codeFileOffset = uint64 (dataStart + paddingNeeded)
-
-    // __PAGEZERO segment (required by modern macOS)
-    let pageZeroCommand = {
-        Command = LC_SEGMENT_64
-        CommandSize = uint32 pageZeroCommandSize
-        SegmentName = "__PAGEZERO"
-        VmAddress = 0UL
-        VmSize = vmBase
-        FileOffset = 0UL
-        FileSize = 0UL
-        MaxProt = 0u
-        InitProt = 0u
-        NumSections = 0u
-        Flags = 0u
-        Sections = []
-    }
-
-    let textSection = {
-        SectionName = "__text"
-        SegmentName = "__TEXT"
-        Address = vmBase + vmCodeOffset
-        Size = codeSize
-        Offset = uint32 codeFileOffset
-        Align = 2u  // 2^2 = 4 byte alignment
-        RelocationOffset = 0u
-        NumRelocations = 0u
-        Flags = S_REGULAR ||| S_ATTR_PURE_INSTRUCTIONS ||| S_ATTR_SOME_INSTRUCTIONS
-        Reserved1 = 0u
-        Reserved2 = 0u
-        Reserved3 = 0u
-    }
-
-    let textSegmentCommand = {
-        Command = LC_SEGMENT_64
-        CommandSize = uint32 textSegmentCommandSize
-        SegmentName = "__TEXT"
-        VmAddress = vmBase
-        VmSize = vmCodeOffset + codeSize
-        FileOffset = 0UL
-        FileSize = codeFileOffset + codeSize
-        MaxProt = VM_PROT_READ ||| VM_PROT_WRITE ||| VM_PROT_EXECUTE
-        InitProt = VM_PROT_READ ||| VM_PROT_EXECUTE
-        NumSections = 1u
-        Flags = 0u
-        Sections = [textSection]
-    }
-
-    let mainCommand = {
-        Command = LC_MAIN
-        CommandSize = uint32 mainCommandSize
-        EntryOffset = codeFileOffset
-        StackSize = 0UL
-    }
-
-    let header = {
-        Magic = MH_MAGIC_64
-        CpuType = CPU_TYPE_ARM64
-        CpuSubType = CPU_SUBTYPE_ARM64_ALL
-        FileType = MH_EXECUTE
-        NumCommands = 3u
-        SizeOfCommands = uint32 commandsSize
-        Flags = MH_NOUNDEFS ||| MH_PIE
-        Reserved = 0u
-    }
-
-    let binary = {
-        Header = header
-        PageZeroCommand = pageZeroCommand
-        TextSegmentCommand = textSegmentCommand
-        MainCommand = mainCommand
-        MachineCode = codeBytes
-    }
-
-    serializeMachO binary
-
-/// Write bytes to file
-let writeToFile (path: string) (bytes: byte array) : unit =
-    System.IO.File.WriteAllBytes(path, bytes)
-    // Make executable
-    let permissions = System.IO.File.GetUnixFileMode(path)
-    System.IO.File.SetUnixFileMode(path, permissions ||| System.IO.UnixFileMode.UserExecute)

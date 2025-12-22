@@ -7,13 +7,19 @@
 
   <ItemGroup>
     <Compile Include="AST.fs" />
-    <Compile Include="Parser.fs" />
+    <Compile Include="1_Parser.fs" />
     <Compile Include="ANF.fs" />
+    <Compile Include="2_AST_to_ANF.fs" />
     <Compile Include="MIR.fs" />
+    <Compile Include="3_ANF_to_MIR.fs" />
     <Compile Include="LIR.fs" />
+    <Compile Include="4_MIR_to_LIR.fs" />
+    <Compile Include="5_RegisterAllocation.fs" />
     <Compile Include="ARM64.fs" />
-    <Compile Include="CodeGen.fs" />
+    <Compile Include="6_CodeGen.fs" />
+    <Compile Include="7_ARM64_Encoding.fs" />
     <Compile Include="Binary.fs" />
+    <Compile Include="8_Binary_Generation.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
