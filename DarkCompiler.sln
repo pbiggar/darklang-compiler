@@ -1,0 +1,27 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{EB51DAA9-BB59-46FF-A653-8487634FF903}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "DarkCompiler", "src\DarkCompiler\DarkCompiler.fsproj", "{4FD5027E-1F87-48DA-8D41-6DE0F88656FB}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4FD5027E-1F87-48DA-8D41-6DE0F88656FB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4FD5027E-1F87-48DA-8D41-6DE0F88656FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4FD5027E-1F87-48DA-8D41-6DE0F88656FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4FD5027E-1F87-48DA-8D41-6DE0F88656FB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{4FD5027E-1F87-48DA-8D41-6DE0F88656FB} = {EB51DAA9-BB59-46FF-A653-8487634FF903}
+	EndGlobalSection
+EndGlobal
