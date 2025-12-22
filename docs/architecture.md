@@ -1,6 +1,6 @@
 # Architecture Decisions
 
-- The compiler is designed to eventually be rewritten in Darklang itself. Using pure functional patterns makes this transition easier.
+- The compiler is designed to eventually be rewritten in Darklang itself.
 
 - Use multiple intermediate representations (AST → ANF → MIR → LIR → ARM64).
 
