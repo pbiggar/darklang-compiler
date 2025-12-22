@@ -3,12 +3,13 @@ module ARM64Tests
 open NUnit.Framework
 open FsUnit
 open ARM64
+open ARM64_Encoding
 
 [<Test>]
 let ``Encode MOVZ instruction`` () =
     // MOVZ X0, #42
     let instr = MOVZ (X0, 42us, 0)
-    let encoded = ARM64.encode instr
+    let encoded = ARM64_Encoding.encode instr
 
     encoded.Length |> should equal 1
     encoded.[0] |> should not' (equal 0u)
@@ -17,7 +18,7 @@ let ``Encode MOVZ instruction`` () =
 let ``Encode MOVK instruction`` () =
     // MOVK X1, #100, LSL #16
     let instr = MOVK (X1, 100us, 16)
-    let encoded = ARM64.encode instr
+    let encoded = ARM64_Encoding.encode instr
 
     encoded.Length |> should equal 1
     encoded.[0] |> should not' (equal 0u)
@@ -26,7 +27,7 @@ let ``Encode MOVK instruction`` () =
 let ``Encode ADD immediate`` () =
     // ADD X0, X1, #5
     let instr = ADD_imm (X0, X1, 5us)
-    let encoded = ARM64.encode instr
+    let encoded = ARM64_Encoding.encode instr
 
     encoded.Length |> should equal 1
     encoded.[0] |> should not' (equal 0u)
@@ -35,7 +36,7 @@ let ``Encode ADD immediate`` () =
 let ``Encode ADD register`` () =
     // ADD X0, X1, X2
     let instr = ADD_reg (X0, X1, X2)
-    let encoded = ARM64.encode instr
+    let encoded = ARM64_Encoding.encode instr
 
     encoded.Length |> should equal 1
     encoded.[0] |> should not' (equal 0u)
@@ -44,7 +45,7 @@ let ``Encode ADD register`` () =
 let ``Encode SUB immediate`` () =
     // SUB X0, X1, #3
     let instr = SUB_imm (X0, X1, 3us)
-    let encoded = ARM64.encode instr
+    let encoded = ARM64_Encoding.encode instr
 
     encoded.Length |> should equal 1
     encoded.[0] |> should not' (equal 0u)
@@ -53,7 +54,7 @@ let ``Encode SUB immediate`` () =
 let ``Encode SUB register`` () =
     // SUB X0, X1, X2
     let instr = SUB_reg (X0, X1, X2)
-    let encoded = ARM64.encode instr
+    let encoded = ARM64_Encoding.encode instr
 
     encoded.Length |> should equal 1
     encoded.[0] |> should not' (equal 0u)
@@ -62,7 +63,7 @@ let ``Encode SUB register`` () =
 let ``Encode MUL instruction`` () =
     // MUL X0, X1, X2
     let instr = MUL (X0, X1, X2)
-    let encoded = ARM64.encode instr
+    let encoded = ARM64_Encoding.encode instr
 
     encoded.Length |> should equal 1
     encoded.[0] |> should not' (equal 0u)
@@ -71,7 +72,7 @@ let ``Encode MUL instruction`` () =
 let ``Encode SDIV instruction`` () =
     // SDIV X0, X1, X2
     let instr = SDIV (X0, X1, X2)
-    let encoded = ARM64.encode instr
+    let encoded = ARM64_Encoding.encode instr
 
     encoded.Length |> should equal 1
     encoded.[0] |> should not' (equal 0u)
@@ -80,7 +81,7 @@ let ``Encode SDIV instruction`` () =
 let ``Encode MOV register`` () =
     // MOV X0, X1
     let instr = MOV_reg (X0, X1)
-    let encoded = ARM64.encode instr
+    let encoded = ARM64_Encoding.encode instr
 
     encoded.Length |> should equal 1
     encoded.[0] |> should not' (equal 0u)
@@ -89,7 +90,7 @@ let ``Encode MOV register`` () =
 let ``Encode RET instruction`` () =
     // RET
     let instr = RET
-    let encoded = ARM64.encode instr
+    let encoded = ARM64_Encoding.encode instr
 
     encoded.Length |> should equal 1
     encoded.[0] |> should equal 0xD65F03C0u
@@ -97,19 +98,19 @@ let ``Encode RET instruction`` () =
 [<Test>]
 let ``Register encoding correctness`` () =
     // Verify register numbers
-    ARM64.encodeReg X0 |> should equal 0u
-    ARM64.encodeReg X1 |> should equal 1u
-    ARM64.encodeReg X15 |> should equal 15u
-    ARM64.encodeReg X30 |> should equal 30u
-    ARM64.encodeReg SP |> should equal 31u
+    ARM64_Encoding.encodeReg X0 |> should equal 0u
+    ARM64_Encoding.encodeReg X1 |> should equal 1u
+    ARM64_Encoding.encodeReg X15 |> should equal 15u
+    ARM64_Encoding.encodeReg X30 |> should equal 30u
+    ARM64_Encoding.encodeReg SP |> should equal 31u
 
 [<Test>]
 let ``MOVZ encodes immediate correctly`` () =
     // MOVZ X0, #0 should have different encoding than MOVZ X0, #1
     let instr0 = MOVZ (X0, 0us, 0)
     let instr1 = MOVZ (X0, 1us, 0)
-    let encoded0 = ARM64.encode instr0
-    let encoded1 = ARM64.encode instr1
+    let encoded0 = ARM64_Encoding.encode instr0
+    let encoded1 = ARM64_Encoding.encode instr1
 
     encoded0.[0] |> should not' (equal encoded1.[0])
 
@@ -118,7 +119,7 @@ let ``Different registers produce different encodings`` () =
     // ADD X0, X1, #5 vs ADD X2, X1, #5
     let instr0 = ADD_imm (X0, X1, 5us)
     let instr2 = ADD_imm (X2, X1, 5us)
-    let encoded0 = ARM64.encode instr0
-    let encoded2 = ARM64.encode instr2
+    let encoded0 = ARM64_Encoding.encode instr0
+    let encoded2 = ARM64_Encoding.encode instr2
 
     encoded0.[0] |> should not' (equal encoded2.[0])

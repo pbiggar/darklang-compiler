@@ -4,13 +4,14 @@ open NUnit.Framework
 open FsUnit
 open ANF
 open MIR
+open ANF_to_MIR
 
 [<Test>]
 let ``Convert ANF integer literal to MIR`` () =
     // ANF: return 42
     let anfExpr = ANF.Return (ANF.IntLiteral 42L)
     let anfProgram = ANF.Program anfExpr
-    let (mirProgram, _) = MIR.toMIR anfProgram MIR.initialRegGen
+    let (mirProgram, _) = ANF_to_MIR.toMIR anfProgram MIR.initialRegGen
 
     match mirProgram with
     | MIR.Program [Block instrs] ->
@@ -25,7 +26,7 @@ let ``Convert ANF simple addition to MIR`` () =
     let anfExpr = ANF.Let (TempId 0, ANF.Prim (ANF.Add, ANF.IntLiteral 2L, ANF.IntLiteral 3L),
                            ANF.Return (ANF.Var (TempId 0)))
     let anfProgram = ANF.Program anfExpr
-    let (mirProgram, _) = MIR.toMIR anfProgram MIR.initialRegGen
+    let (mirProgram, _) = ANF_to_MIR.toMIR anfProgram MIR.initialRegGen
 
     match mirProgram with
     | MIR.Program [Block instrs] ->
@@ -44,7 +45,7 @@ let ``Convert ANF nested expression to MIR`` () =
                  ANF.Let (TempId 1, ANF.Prim (ANF.Add, ANF.IntLiteral 2L, ANF.Var (TempId 0)),
                           ANF.Return (ANF.Var (TempId 1))))
     let anfProgram = ANF.Program anfExpr
-    let (mirProgram, _) = MIR.toMIR anfProgram MIR.initialRegGen
+    let (mirProgram, _) = ANF_to_MIR.toMIR anfProgram MIR.initialRegGen
 
     match mirProgram with
     | MIR.Program [Block instrs] ->
@@ -68,17 +69,17 @@ let ``Convert ANF with all operators to MIR`` () =
     // Test Add
     let anfAdd = ANF.Let (TempId 0, ANF.Prim (ANF.Add, ANF.IntLiteral 1L, ANF.IntLiteral 2L),
                           ANF.Return (ANF.Var (TempId 0)))
-    let (Program [Block addInstrs], _) = MIR.toMIR (ANF.Program anfAdd) MIR.initialRegGen
+    let (Program [Block addInstrs], _) = ANF_to_MIR.toMIR (ANF.Program anfAdd) MIR.initialRegGen
     addInstrs.Length |> should be (greaterThan 0)
 
     // Test Sub
     let anfSub = ANF.Let (TempId 0, ANF.Prim (ANF.Sub, ANF.IntLiteral 5L, ANF.IntLiteral 3L),
                           ANF.Return (ANF.Var (TempId 0)))
-    let (Program [Block subInstrs], _) = MIR.toMIR (ANF.Program anfSub) MIR.initialRegGen
+    let (Program [Block subInstrs], _) = ANF_to_MIR.toMIR (ANF.Program anfSub) MIR.initialRegGen
     subInstrs.Length |> should be (greaterThan 0)
 
     // Test Div
     let anfDiv = ANF.Let (TempId 0, ANF.Prim (ANF.Div, ANF.IntLiteral 10L, ANF.IntLiteral 2L),
                           ANF.Return (ANF.Var (TempId 0)))
-    let (Program [Block divInstrs], _) = MIR.toMIR (ANF.Program anfDiv) MIR.initialRegGen
+    let (Program [Block divInstrs], _) = ANF_to_MIR.toMIR (ANF.Program anfDiv) MIR.initialRegGen
     divInstrs.Length |> should be (greaterThan 0)

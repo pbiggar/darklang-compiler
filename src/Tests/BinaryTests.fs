@@ -3,10 +3,12 @@ module BinaryTests
 open NUnit.Framework
 open FsUnit
 open Binary
+open Binary_Generation
+open ARM64_Encoding
 
 [<Test>]
 let ``uint32ToBytes converts correctly`` () =
-    let bytes = uint32ToBytes 0x12345678u
+    let bytes = Binary_Generation.uint32ToBytes 0x12345678u
     bytes.Length |> should equal 4
     bytes.[0] |> should equal 0x78uy
     bytes.[1] |> should equal 0x56uy
@@ -15,7 +17,7 @@ let ``uint32ToBytes converts correctly`` () =
 
 [<Test>]
 let ``uint64ToBytes converts correctly`` () =
-    let bytes = uint64ToBytes 0x123456789ABCDEF0UL
+    let bytes = Binary_Generation.uint64ToBytes 0x123456789ABCDEF0UL
     bytes.Length |> should equal 8
     bytes.[0] |> should equal 0xF0uy
     bytes.[1] |> should equal 0xDEuy
@@ -28,7 +30,7 @@ let ``uint64ToBytes converts correctly`` () =
 
 [<Test>]
 let ``padString pads to correct size`` () =
-    let padded = padString "hello" 10
+    let padded = Binary_Generation.padString "hello" 10
     padded.Length |> should equal 10
     padded.[0] |> should equal (byte 'h')
     padded.[4] |> should equal (byte 'o')
@@ -37,7 +39,7 @@ let ``padString pads to correct size`` () =
 
 [<Test>]
 let ``padString truncates if too long`` () =
-    let padded = padString "hello world this is long" 5
+    let padded = Binary_Generation.padString "hello world this is long" 5
     padded.Length |> should equal 5
     padded.[0] |> should equal (byte 'h')
     padded.[4] |> should equal (byte 'o')
@@ -54,7 +56,7 @@ let ``serializeMachHeader produces correct size`` () =
         Flags = MH_NOUNDEFS
         Reserved = 0u
     }
-    let bytes = serializeMachHeader header
+    let bytes = Binary_Generation.serializeMachHeader header
     bytes.Length |> should equal 32
 
 [<Test>]
@@ -69,7 +71,7 @@ let ``serializeMachHeader has correct magic`` () =
         Flags = MH_NOUNDEFS
         Reserved = 0u
     }
-    let bytes = serializeMachHeader header
+    let bytes = Binary_Generation.serializeMachHeader header
     // Check magic number (0xFEEDFACF in little-endian)
     bytes.[0] |> should equal 0xCFuy
     bytes.[1] |> should equal 0xFAuy
@@ -92,20 +94,20 @@ let ``serializeSection64 produces correct size`` () =
         Reserved2 = 0u
         Reserved3 = 0u
     }
-    let bytes = serializeSection64 section
+    let bytes = Binary_Generation.serializeSection64 section
     bytes.Length |> should equal 80
 
 [<Test>]
 let ``createExecutable produces non-empty binary`` () =
     // Simple RET instruction
     let machineCode = [0xD65F03C0u]
-    let binary = createExecutable machineCode
+    let binary = Binary_Generation.createExecutable machineCode
     binary.Length |> should be (greaterThan 0)
 
 [<Test>]
 let ``createExecutable binary starts with Mach-O magic`` () =
     let machineCode = [0xD65F03C0u]
-    let binary = createExecutable machineCode
+    let binary = Binary_Generation.createExecutable machineCode
     // Check magic number at start
     binary.[0] |> should equal 0xCFuy
     binary.[1] |> should equal 0xFAuy
@@ -116,7 +118,7 @@ let ``createExecutable binary starts with Mach-O magic`` () =
 let ``createExecutable includes machine code`` () =
     // RET instruction: 0xD65F03C0
     let machineCode = [0xD65F03C0u]
-    let binary = createExecutable machineCode
+    let binary = Binary_Generation.createExecutable machineCode
     // Find the RET instruction in the binary (should be near the end after padding)
     let retBytes = [| 0xC0uy; 0x03uy; 0x5Fuy; 0xD6uy |]
     let mutable found = false
@@ -134,7 +136,7 @@ let ``generated executable has correct encoding`` () =
     // Verify the machine code is correctly encoded
     let movInstr = ARM64.MOVZ (ARM64.X0, 42us, 0)
     let retInstr = ARM64.RET
-    let machineCode = (ARM64.encode movInstr) @ (ARM64.encode retInstr)
+    let machineCode = (ARM64_Encoding.encode movInstr) @ (ARM64_Encoding.encode retInstr)
 
     // Verify encoding
     machineCode.Length |> should equal 2
@@ -142,7 +144,7 @@ let ``generated executable has correct encoding`` () =
     machineCode.[1] |> should equal 0xD65F03C0u  // RET
 
     // Verify binary can be created
-    let binary = createExecutable machineCode
+    let binary = Binary_Generation.createExecutable machineCode
     binary.Length |> should be (greaterThan 0)
 
     // Verify it starts with Mach-O magic

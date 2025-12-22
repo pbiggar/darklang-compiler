@@ -4,12 +4,14 @@ open NUnit.Framework
 open FsUnit
 open MIR
 open LIR
+open MIR_to_LIR
+open RegisterAllocation
 
 [<Test>]
 let ``Convert MIR return to LIR`` () =
     // MIR: ret 42
     let mirProgram = MIR.Program [MIR.Block [MIR.Ret (MIR.IntConst 42L)]]
-    let lirProgram = LIR.toLIR mirProgram
+    let lirProgram = MIR_to_LIR.toLIR mirProgram
 
     match lirProgram with
     | LIR.Program [func] ->
@@ -27,7 +29,7 @@ let ``Convert MIR binop to LIR`` () =
             MIR.Ret (MIR.Register (MIR.VReg 0))
         ]
     ]
-    let lirProgram = LIR.toLIR mirProgram
+    let lirProgram = MIR_to_LIR.toLIR mirProgram
 
     match lirProgram with
     | LIR.Program [func] ->
@@ -43,7 +45,7 @@ let ``Convert MIR mov to LIR`` () =
             MIR.Ret (MIR.Register (MIR.VReg 0))
         ]
     ]
-    let lirProgram = LIR.toLIR mirProgram
+    let lirProgram = MIR_to_LIR.toLIR mirProgram
 
     match lirProgram with
     | LIR.Program [func] ->
@@ -59,7 +61,7 @@ let ``Virtual registers before allocation`` () =
             MIR.Ret (MIR.Register (MIR.VReg 0))
         ]
     ]
-    let lirProgram = LIR.toLIR mirProgram
+    let lirProgram = MIR_to_LIR.toLIR mirProgram
 
     match lirProgram with
     | LIR.Program [func] ->
@@ -83,7 +85,7 @@ let ``Convert all MIR operators to LIR`` () =
                 MIR.Ret (MIR.Register (MIR.VReg 0))
             ]
         ]
-        let lirProgram = LIR.toLIR mirProgram
+        let lirProgram = MIR_to_LIR.toLIR mirProgram
         match lirProgram with
         | LIR.Program [func] -> func.Body.Length |> should be (greaterThan 0)
         | _ -> Assert.Fail("Expected single function")
@@ -106,7 +108,7 @@ let ``Allocate registers for simple program`` () =
         ]
         StackSize = 0
     }
-    let allocated = LIR.allocateRegisters func
+    let allocated = RegisterAllocation.allocateRegisters func
 
     // Should have physical registers
     allocated.Instrs.Length |> should be (greaterThan 0)
@@ -130,7 +132,7 @@ let ``All virtual registers replaced after allocation`` () =
         ]
         StackSize = 0
     }
-    let allocated = LIR.allocateRegisters func
+    let allocated = RegisterAllocation.allocateRegisters func
 
     // No virtual registers should remain
     let hasVirtual = allocated.Instrs |> List.exists (fun instr ->
@@ -151,10 +153,10 @@ let ``Allocated program runs through pipeline`` () =
             MIR.Ret (MIR.Register (MIR.VReg 0))
         ]
     ]
-    let lirProgram = LIR.toLIR mirProgram
+    let lirProgram = MIR_to_LIR.toLIR mirProgram
 
     match lirProgram with
     | LIR.Program [func] ->
-        let allocated = LIR.allocateRegisters func
+        let allocated = RegisterAllocation.allocateRegisters func
         allocated.Instrs.Length |> should be (greaterThan 0)
     | _ -> Assert.Fail("Expected single function")

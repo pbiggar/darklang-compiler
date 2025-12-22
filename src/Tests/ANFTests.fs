@@ -4,6 +4,7 @@ open NUnit.Framework
 open FsUnit
 open AST
 open ANF
+open AST_to_ANF
 
 /// Helper to convert AST.BinOp to ANF.BinOp
 let convertOp (op: AST.BinOp) : ANF.BinOp =
@@ -16,7 +17,7 @@ let convertOp (op: AST.BinOp) : ANF.BinOp =
 [<Test>]
 let ``Convert integer literal to ANF`` () =
     let ast = AST.IntLiteral 42L
-    let (anf, _) = ANF.toANF ast ANF.initialVarGen
+    let (anf, _) = AST_to_ANF.toANF ast ANF.initialVarGen
 
     match anf with
     | Return (IntLiteral 42L) -> ()
@@ -26,7 +27,7 @@ let ``Convert integer literal to ANF`` () =
 let ``Convert simple addition to ANF`` () =
     // 2 + 3
     let ast = AST.BinOp (AST.Add, AST.IntLiteral 2L, AST.IntLiteral 3L)
-    let (anf, _) = ANF.toANF ast ANF.initialVarGen
+    let (anf, _) = AST_to_ANF.toANF ast ANF.initialVarGen
 
     match anf with
     | Let (TempId 0, Prim (Add, IntLiteral 2L, IntLiteral 3L), Return (Var (TempId 0))) -> ()
@@ -41,7 +42,7 @@ let ``Convert nested expression to ANF`` () =
     // return t1
     let inner = AST.BinOp (AST.Mul, AST.IntLiteral 3L, AST.IntLiteral 4L)
     let ast = AST.BinOp (AST.Add, AST.IntLiteral 2L, inner)
-    let (anf, _) = ANF.toANF ast ANF.initialVarGen
+    let (anf, _) = AST_to_ANF.toANF ast ANF.initialVarGen
 
     match anf with
     | Let (TempId 0, Prim (Mul, IntLiteral 3L, IntLiteral 4L),
@@ -60,7 +61,7 @@ let ``Convert deeply nested expression to ANF`` () =
     let left = AST.BinOp (AST.Add, AST.IntLiteral 1L, AST.IntLiteral 2L)
     let right = AST.BinOp (AST.Mul, AST.IntLiteral 3L, AST.IntLiteral 4L)
     let ast = AST.BinOp (AST.Add, left, right)
-    let (anf, _) = ANF.toANF ast ANF.initialVarGen
+    let (anf, _) = AST_to_ANF.toANF ast ANF.initialVarGen
 
     match anf with
     | Let (TempId 0, Prim (Add, IntLiteral 1L, IntLiteral 2L),
@@ -83,7 +84,7 @@ let ``VarGen generates fresh variables`` () =
 [<Test>]
 let ``Convert subtraction to ANF`` () =
     let ast = AST.BinOp (AST.Sub, AST.IntLiteral 5L, AST.IntLiteral 3L)
-    let (anf, _) = ANF.toANF ast ANF.initialVarGen
+    let (anf, _) = AST_to_ANF.toANF ast ANF.initialVarGen
 
     match anf with
     | Let (TempId 0, Prim (Sub, IntLiteral 5L, IntLiteral 3L), Return (Var (TempId 0))) -> ()
@@ -92,7 +93,7 @@ let ``Convert subtraction to ANF`` () =
 [<Test>]
 let ``Convert division to ANF`` () =
     let ast = AST.BinOp (AST.Div, AST.IntLiteral 10L, AST.IntLiteral 2L)
-    let (anf, _) = ANF.toANF ast ANF.initialVarGen
+    let (anf, _) = AST_to_ANF.toANF ast ANF.initialVarGen
 
     match anf with
     | Let (TempId 0, Prim (Div, IntLiteral 10L, IntLiteral 2L), Return (Var (TempId 0))) -> ()
