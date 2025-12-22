@@ -16,10 +16,21 @@ dotnet build
 dotnet test
 ```
 
+**Quick test an expression:**
+
+```bash
+# Compile and run in one step (easiest way)
+./darkrun "2 + 3"
+# Output: Exit code: 5
+
+./darkrun "6 * 7"
+# Output: Exit code: 42
+```
+
 **Compile an expression:**
 
 ```bash
-# Easy way (using wrapper script)
+# Using wrapper script
 ./darkc "2 + 3" output
 
 # Or with dotnet

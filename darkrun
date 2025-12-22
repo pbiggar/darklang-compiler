@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Compile and run a Darklang expression, showing the exit code
+
+set -euo pipefail
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Check if expression was provided
+if [ $# -eq 0 ]; then
+    echo "Usage: darkrun <expression>" >&2
+    echo "" >&2
+    echo "Examples:" >&2
+    echo "  darkrun \"2 + 3\"" >&2
+    echo "  darkrun \"6 * 7\"" >&2
+    echo "  darkrun \"10 - 3\"" >&2
+    exit 1
+fi
+
+# Create a temporary file for the executable
+TEMP_DIR="/tmp/claude"
+mkdir -p "$TEMP_DIR"
+TEMP_EXE="$TEMP_DIR/darkrun_$$"
+
+# Compile the expression
+"$SCRIPT_DIR/darkc" "$1" "$TEMP_EXE"
+
+echo ""
+echo "Running: $1"
+echo "---"
+
+# Run the executable and capture exit code
+set +e
+"$TEMP_EXE"
+EXIT_CODE=$?
+set -e
+
+echo "---"
+echo "Exit code: $EXIT_CODE"
+
+# Clean up temporary file
+rm -f "$TEMP_EXE"
+
+exit $EXIT_CODE
