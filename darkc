@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Wrapper script for the Darklang compiler
+
+set -euo pipefail
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Path to the compiled DLL
+COMPILER_DLL="$SCRIPT_DIR/bin/DarkCompiler/Debug/net9.0/DarkCompiler.dll"
+
+# Check if the compiler exists, if not, build it
+if [ ! -f "$COMPILER_DLL" ]; then
+    echo "Compiler not found. Building..." >&2
+    dotnet build "$SCRIPT_DIR/src/DarkCompiler/DarkCompiler.fsproj" --verbosity quiet 2>&1 | grep -v "NU1900" || true
+fi
+
+# Run the compiler with all arguments passed through
+exec dotnet "$COMPILER_DLL" "$@"

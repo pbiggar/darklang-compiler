@@ -16,10 +16,18 @@ dotnet build
 dotnet test
 ```
 
-**Compile a program:**
+**Compile an expression:**
 
 ```bash
-dotnet run --project src/DarkCompiler/DarkCompiler.fsproj -- <source-file> -o <output-file>
+# Easy way (using wrapper script)
+./darkc "2 + 3" output
+
+# Or with dotnet
+dotnet run --project src/DarkCompiler/DarkCompiler.fsproj "2 + 3" output
+
+# Run the compiled binary
+./output
+echo $?  # Shows exit code (5 in this case)
 ```
 
 **Clean build artifacts:**
