@@ -46,8 +46,50 @@ let lex (input: string) : Token list =
 
 /// Parser: convert tokens to AST
 let parse (tokens: Token list) : Program =
-    // To be implemented
-    Program (IntLiteral 0L)
+    // Recursive descent parser with operator precedence
+    let rec parseExpr (toks: Token list) : Expr * Token list =
+        parseAdditive toks
+
+    and parseAdditive (toks: Token list) : Expr * Token list =
+        let (left, remaining) = parseMultiplicative toks
+        let rec parseAdditiveRest (leftExpr: Expr) (toks: Token list) : Expr * Token list =
+            match toks with
+            | TPlus :: rest ->
+                let (right, remaining') = parseMultiplicative rest
+                parseAdditiveRest (BinOp (Add, leftExpr, right)) remaining'
+            | TMinus :: rest ->
+                let (right, remaining') = parseMultiplicative rest
+                parseAdditiveRest (BinOp (Sub, leftExpr, right)) remaining'
+            | _ -> (leftExpr, toks)
+        parseAdditiveRest left remaining
+
+    and parseMultiplicative (toks: Token list) : Expr * Token list =
+        let (left, remaining) = parsePrimary toks
+        let rec parseMultiplicativeRest (leftExpr: Expr) (toks: Token list) : Expr * Token list =
+            match toks with
+            | TStar :: rest ->
+                let (right, remaining') = parsePrimary rest
+                parseMultiplicativeRest (BinOp (Mul, leftExpr, right)) remaining'
+            | TSlash :: rest ->
+                let (right, remaining') = parsePrimary rest
+                parseMultiplicativeRest (BinOp (Div, leftExpr, right)) remaining'
+            | _ -> (leftExpr, toks)
+        parseMultiplicativeRest left remaining
+
+    and parsePrimary (toks: Token list) : Expr * Token list =
+        match toks with
+        | TInt n :: rest -> (IntLiteral n, rest)
+        | TLParen :: rest ->
+            let (expr, remaining) = parseExpr rest
+            match remaining with
+            | TRParen :: rest' -> (expr, rest')
+            | _ -> failwith "Expected ')'"
+        | _ -> failwith "Expected expression"
+
+    let (expr, remaining) = parseExpr tokens
+    match remaining with
+    | TEOF :: [] -> Program expr
+    | _ -> failwith "Unexpected tokens after expression"
 
 /// Parse a string directly to AST
 let parseString (input: string) : Program =
