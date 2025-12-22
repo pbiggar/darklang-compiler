@@ -12,6 +12,7 @@
     <Compile Include="ParserTests.fs"/>
     <Compile Include="ANFTests.fs"/>
     <Compile Include="MIRTests.fs"/>
+    <Compile Include="LIRTests.fs"/>
     <Compile Include="SmokeTests.fs"/>
   </ItemGroup>
 

@@ -54,3 +54,12 @@ type AllocResult = {
     Instrs: Instr list
     StackSize: int
 }
+
+/// Convert MIR to LIR (instruction selection)
+let toLIR (program: MIR.Program) : Program =
+    // To be implemented
+    Program [{
+        Name = "_start"
+        Body = []
+        StackSize = 0
+    }]
