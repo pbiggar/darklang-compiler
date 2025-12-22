@@ -29,6 +29,8 @@ let MH_EXECUTE = 0x2u  // Executable file
 
 /// Flags
 let MH_NOUNDEFS = 0x1u
+let MH_DYLDLINK = 0x4u
+let MH_TWOLEVEL = 0x80u
 let MH_PIE = 0x200000u
 
 /// Load command types

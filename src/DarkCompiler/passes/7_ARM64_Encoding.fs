@@ -22,6 +22,7 @@ let encodeReg (reg: ARM64.Reg) : uint32 =
     | ARM64.X4 -> 4u | ARM64.X5 -> 5u | ARM64.X6 -> 6u | ARM64.X7 -> 7u
     | ARM64.X8 -> 8u | ARM64.X9 -> 9u | ARM64.X10 -> 10u | ARM64.X11 -> 11u
     | ARM64.X12 -> 12u | ARM64.X13 -> 13u | ARM64.X14 -> 14u | ARM64.X15 -> 15u
+    | ARM64.X16 -> 16u
     | ARM64.X29 -> 29u | ARM64.X30 -> 30u | ARM64.SP -> 31u
 
 /// Encode ARM64 instruction to 32-bit machine code
@@ -121,3 +122,9 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // RET: 1101011 0 0 10 11111 0000 0 0 Rn=11110 00000
         // Default RET uses X30 (link register)
         [0xD65F03C0u]
+
+    | ARM64.SVC imm ->
+        // SVC: 11010100 000 imm16 000 01
+        // Bits: 11010100000(31-21) imm16(20-5) 00001(4-0)
+        let imm16 = uint32 imm
+        [0xD4000001u ||| (imm16 <<< 5)]

@@ -17,7 +17,15 @@
       "Bash(dotnet run:*)",
       "Bash(/tmp/test42:*)",
       "Bash(/tmp/claude/test_output)",
-      "Bash(/tmp/claude/test_simple:*)"
+      "Bash(/tmp/claude/test_simple:*)",
+      "Bash(/tmp/claude/test_fixed:*)",
+      "Bash(log show:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:alexomara.com)",
+      "Bash(timeout 60 dotnet build:*)",
+      "Bash(/tmp/claude/test_compact)",
+      "Bash(bin/DarkCompiler/Debug/net9.0/DarkCompiler:*)"
     ]
   },
   "sandbox": {

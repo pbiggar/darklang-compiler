@@ -129,11 +129,50 @@ let serializeBuildVersionCommand (buildVer: Binary.BuildVersionCommand) : byte a
         yield! uint32ToBytes buildVer.NumTools
     |]
 
+/// Serialize SymtabCommand to bytes
+let serializeSymtabCommand (symtab: Binary.SymtabCommand) : byte array =
+    [|
+        yield! uint32ToBytes symtab.Command
+        yield! uint32ToBytes symtab.CommandSize
+        yield! uint32ToBytes symtab.SymbolTableOffset
+        yield! uint32ToBytes symtab.NumSymbols
+        yield! uint32ToBytes symtab.StringTableOffset
+        yield! uint32ToBytes symtab.StringTableSize
+    |]
+
+/// Serialize DysymtabCommand to bytes
+let serializeDysymtabCommand (dysymtab: Binary.DysymtabCommand) : byte array =
+    [|
+        yield! uint32ToBytes dysymtab.Command
+        yield! uint32ToBytes dysymtab.CommandSize
+        yield! uint32ToBytes dysymtab.LocalSymIndex
+        yield! uint32ToBytes dysymtab.NumLocalSymbols
+        yield! uint32ToBytes dysymtab.ExtDefSymIndex
+        yield! uint32ToBytes dysymtab.NumExtDefSymbols
+        yield! uint32ToBytes dysymtab.UndefSymIndex
+        yield! uint32ToBytes dysymtab.NumUndefSymbols
+        yield! uint32ToBytes dysymtab.TocOffset
+        yield! uint32ToBytes dysymtab.NumTocEntries
+        yield! uint32ToBytes dysymtab.ModTableOffset
+        yield! uint32ToBytes dysymtab.NumModTableEntries
+        yield! uint32ToBytes dysymtab.ExtRefSymOffset
+        yield! uint32ToBytes dysymtab.NumExtRefSyms
+        yield! uint32ToBytes dysymtab.IndirectSymOffset
+        yield! uint32ToBytes dysymtab.NumIndirectSyms
+        yield! uint32ToBytes dysymtab.ExtRelOffset
+        yield! uint32ToBytes dysymtab.NumExtRel
+        yield! uint32ToBytes dysymtab.LocRelOffset
+        yield! uint32ToBytes dysymtab.NumLocRel
+    |]
+
 /// Calculate the size of load commands
 let calculateCommandsSize (binary: Binary.MachOBinary) : uint32 =
     binary.PageZeroCommand.CommandSize +
     binary.TextSegmentCommand.CommandSize +
+    binary.LinkeditSegmentCommand.CommandSize +
     binary.DylinkerCommand.CommandSize +
+    binary.SymtabCommand.CommandSize +
+    binary.DysymtabCommand.CommandSize +
     binary.UuidCommand.CommandSize +
     binary.BuildVersionCommand.CommandSize +
     binary.MainCommand.CommandSize
@@ -144,21 +183,35 @@ let serializeMachO (binary: Binary.MachOBinary) : byte array =
     let commandsSize = int (calculateCommandsSize binary)
     let dataStart = headerSize + commandsSize
 
-    // Pad to page boundary (16KB for ARM64 macOS)
-    let pageSize = 16384
-    let paddingNeeded = (pageSize - (dataStart % pageSize)) % pageSize
-    let padding = Array.create paddingNeeded 0uy
+    // Pad to code offset (extract from first section's offset)
+    let codeOffset =
+        match binary.TextSegmentCommand.Sections with
+        | section :: _ -> int section.Offset
+        | [] -> 0x1000  // Default to 4KB if no sections
+
+    let paddingBeforeCode = codeOffset - dataStart
+    let paddingBefore = Array.create paddingBeforeCode 0uy
+
+    // Pad to fill the entire __TEXT segment
+    let textSegmentSize = int binary.TextSegmentCommand.FileSize
+    let codeSize = binary.MachineCode.Length
+    let paddingAfterCode = textSegmentSize - codeOffset - codeSize
+    let paddingAfter = Array.create paddingAfterCode 0uy
 
     [|
         yield! serializeMachHeader binary.Header
         yield! serializeSegmentCommand64 binary.PageZeroCommand
         yield! serializeSegmentCommand64 binary.TextSegmentCommand
+        yield! serializeSegmentCommand64 binary.LinkeditSegmentCommand
         yield! serializeDylinkerCommand binary.DylinkerCommand
+        yield! serializeSymtabCommand binary.SymtabCommand
+        yield! serializeDysymtabCommand binary.DysymtabCommand
         yield! serializeUuidCommand binary.UuidCommand
         yield! serializeBuildVersionCommand binary.BuildVersionCommand
         yield! serializeMainCommand binary.MainCommand
-        yield! padding
+        yield! paddingBefore
         yield! binary.MachineCode
+        yield! paddingAfter
     |]
 
 /// Create a minimal Mach-O executable from ARM64 machine code
@@ -173,21 +226,25 @@ let createExecutable (machineCode: uint32 list) : byte array =
 
     // VM addresses - load at typical location
     let vmBase = 0x100000000UL
-    let vmCodeOffset = 0x4000UL  // Start code at offset within VM
 
-    // File layout
-    let headerSize = 32
-    let pageZeroCommandSize = 72  // segment_command_64 with no sections
-    let textSegmentCommandSize = 72 + 80  // segment_command_64 + 1 section_64
-    let dylinkerCommandSize = 32  // cmd + cmdsize + offset + padded path string
-    let uuidCommandSize = 24  // cmd + cmdsize + 16-byte uuid
-    let buildVersionCommandSize = 24  // cmd + cmdsize + platform + minos + sdk + numtools
+    // Command sizes (needed for CommandSize fields)
+    let pageZeroCommandSize = 72
+    let textSegmentCommandSize = 72 + 80
+    let linkeditSegmentCommandSize = 72
+    let dylinkerCommandSize = 32
+    let symtabCommandSize = 24
+    let dysymtabCommandSize = 80
+    let uuidCommandSize = 24
+    let buildVersionCommandSize = 24
     let mainCommandSize = 24
-    let commandsSize = pageZeroCommandSize + textSegmentCommandSize + dylinkerCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
-    let pageSize = 16384
-    let dataStart = headerSize + commandsSize
-    let paddingNeeded = (pageSize - (dataStart % pageSize)) % pageSize
-    let codeFileOffset = uint64 (dataStart + paddingNeeded)
+    let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
+
+    // Place code right after headers and load commands
+    // Add extra space (200 bytes) for codesign to add LC_CODE_SIGNATURE and other modifications
+    // Round up to 8-byte alignment
+    let headerSize = 32
+    let codeFileOffset = uint64 ((headerSize + commandsSize + 200 + 7) &&& ~~~7)
+    let vmCodeOffset = codeFileOffset
 
     // __PAGEZERO segment (required by modern macOS)
     let pageZeroCommand : Binary.SegmentCommand64 = {
@@ -220,19 +277,74 @@ let createExecutable (machineCode: uint32 list) : byte array =
         Reserved3 = 0u
     }
 
+    // Use a page-aligned segment size (16KB like ld produces)
+    let textSegmentSize = 0x4000UL
+
     let textSegmentCommand : Binary.SegmentCommand64 = {
         Command = Binary.LC_SEGMENT_64
         CommandSize = uint32 textSegmentCommandSize
         SegmentName = "__TEXT"
         VmAddress = vmBase
-        VmSize = vmCodeOffset + codeSize
+        VmSize = textSegmentSize
         FileOffset = 0UL
-        FileSize = codeFileOffset + codeSize
-        MaxProt = Binary.VM_PROT_READ ||| Binary.VM_PROT_WRITE ||| Binary.VM_PROT_EXECUTE
+        FileSize = textSegmentSize
+        MaxProt = Binary.VM_PROT_READ ||| Binary.VM_PROT_EXECUTE
         InitProt = Binary.VM_PROT_READ ||| Binary.VM_PROT_EXECUTE
         NumSections = 1u
         Flags = 0u
         Sections = [textSection]
+    }
+
+    // __LINKEDIT segment (required for code signing - will be populated by codesign)
+    let linkeditVmAddress = vmBase + textSegmentSize
+    let linkeditFileOffset = textSegmentSize
+    let linkeditSegmentCommand : Binary.SegmentCommand64 = {
+        Command = Binary.LC_SEGMENT_64
+        CommandSize = uint32 linkeditSegmentCommandSize
+        SegmentName = "__LINKEDIT"
+        VmAddress = linkeditVmAddress
+        VmSize = 0UL  // Will be populated by codesign
+        FileOffset = linkeditFileOffset
+        FileSize = 0UL  // Will be populated by codesign
+        MaxProt = Binary.VM_PROT_READ
+        InitProt = Binary.VM_PROT_READ
+        NumSections = 0u
+        Flags = 0u
+        Sections = []
+    }
+
+    // LC_SYMTAB command (empty symbol table - codesign may populate)
+    let symtabCommand : Binary.SymtabCommand = {
+        Command = Binary.LC_SYMTAB
+        CommandSize = uint32 symtabCommandSize
+        SymbolTableOffset = 0u
+        NumSymbols = 0u
+        StringTableOffset = 0u
+        StringTableSize = 0u
+    }
+
+    // LC_DYSYMTAB command (empty dynamic symbol table)
+    let dysymtabCommand : Binary.DysymtabCommand = {
+        Command = Binary.LC_DYSYMTAB
+        CommandSize = uint32 dysymtabCommandSize
+        LocalSymIndex = 0u
+        NumLocalSymbols = 0u
+        ExtDefSymIndex = 0u
+        NumExtDefSymbols = 0u
+        UndefSymIndex = 0u
+        NumUndefSymbols = 0u
+        TocOffset = 0u
+        NumTocEntries = 0u
+        ModTableOffset = 0u
+        NumModTableEntries = 0u
+        ExtRefSymOffset = 0u
+        NumExtRefSyms = 0u
+        IndirectSymOffset = 0u
+        NumIndirectSyms = 0u
+        ExtRelOffset = 0u
+        NumExtRel = 0u
+        LocRelOffset = 0u
+        NumLocRel = 0u
     }
 
     // LC_LOAD_DYLINKER command
@@ -271,9 +383,9 @@ let createExecutable (machineCode: uint32 list) : byte array =
         CpuType = Binary.CPU_TYPE_ARM64
         CpuSubType = Binary.CPU_SUBTYPE_ARM64_ALL
         FileType = Binary.MH_EXECUTE
-        NumCommands = 6u  // Updated to include new load commands
+        NumCommands = 9u  // __PAGEZERO, __TEXT, __LINKEDIT, DYLINKER, SYMTAB, DYSYMTAB, UUID, BUILD_VERSION, MAIN
         SizeOfCommands = uint32 commandsSize
-        Flags = Binary.MH_NOUNDEFS ||| Binary.MH_PIE
+        Flags = Binary.MH_NOUNDEFS ||| Binary.MH_DYLDLINK ||| Binary.MH_TWOLEVEL ||| Binary.MH_PIE
         Reserved = 0u
     }
 
@@ -281,7 +393,10 @@ let createExecutable (machineCode: uint32 list) : byte array =
         Header = header
         PageZeroCommand = pageZeroCommand
         TextSegmentCommand = textSegmentCommand
+        LinkeditSegmentCommand = linkeditSegmentCommand
         DylinkerCommand = dylinkerCommand
+        SymtabCommand = symtabCommand
+        DysymtabCommand = dysymtabCommand
         UuidCommand = uuidCommand
         BuildVersionCommand = buildVersionCommand
         MainCommand = mainCommand
@@ -290,9 +405,24 @@ let createExecutable (machineCode: uint32 list) : byte array =
 
     serializeMachO binary
 
-/// Write bytes to file
+/// Write bytes to file and sign it
 let writeToFile (path: string) (bytes: byte array) : unit =
     System.IO.File.WriteAllBytes(path, bytes)
     // Make executable
     let permissions = System.IO.File.GetUnixFileMode(path)
     System.IO.File.SetUnixFileMode(path, permissions ||| System.IO.UnixFileMode.UserExecute)
+
+    // Code sign with adhoc signature (required for macOS to execute)
+    let startInfo = System.Diagnostics.ProcessStartInfo()
+    startInfo.FileName <- "codesign"
+    startInfo.Arguments <- sprintf "-s - \"%s\"" path
+    startInfo.RedirectStandardOutput <- true
+    startInfo.RedirectStandardError <- true
+    startInfo.UseShellExecute <- false
+
+    let proc = System.Diagnostics.Process.Start(startInfo)
+    proc.WaitForExit()
+
+    if proc.ExitCode <> 0 then
+        let stderr = proc.StandardError.ReadToEnd()
+        failwith (sprintf "Code signing failed: %s" stderr)

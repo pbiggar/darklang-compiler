@@ -23,7 +23,7 @@ module ARM64
 /// ARM64 registers (subset for now)
 type Reg =
     | X0 | X1 | X2 | X3 | X4 | X5 | X6 | X7 | X8 | X9
-    | X10 | X11 | X12 | X13 | X14 | X15
+    | X10 | X11 | X12 | X13 | X14 | X15 | X16
     | X29 | X30 | SP
 
 /// ARM64 instruction types
@@ -38,6 +38,7 @@ type Instr =
     | SDIV of dest:Reg * src1:Reg * src2:Reg
     | MOV_reg of dest:Reg * src:Reg
     | RET
+    | SVC of imm:uint16  // Supervisor call (syscall)
 
 /// Machine code (32-bit instruction)
 type MachineCode = uint32

@@ -116,7 +116,12 @@ let convertInstr (instr: LIR.Instr) : ARM64.Instr list =
         [ARM64.SDIV (destReg, leftReg, rightReg)]
 
     | LIR.Ret ->
-        [ARM64.RET]
+        // Exit syscall for macOS: X0 already contains exit code, set X16 to BSD syscall number
+        // BSD exit syscall number is 1 (SVC 0x80 uses BSD syscall numbers, not Mach format)
+        [
+            ARM64.MOVZ (ARM64.X16, 0x0001us, 0)  // X16 = 1 (BSD exit syscall)
+            ARM64.SVC 0x80us                      // Supervisor call
+        ]
 
 /// Convert LIR function to ARM64 instructions
 let convertFunction (func: LIR.Function) : ARM64.Instr list =
