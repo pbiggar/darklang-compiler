@@ -2,21 +2,16 @@
 //
 // Transforms source code (string) into an Abstract Syntax Tree (AST).
 //
-// Components:
-// - Lexer: Converts source string into a list of tokens
-// - Parser: Recursive descent parser that builds AST from tokens
+// Lexer: Converts source string into tokens
+// Parser: Recursive descent parser with operator precedence
 //
-// Operator precedence:
+// Operator precedence (specific to this parser):
 // - Multiplication and division bind tighter than addition and subtraction
 // - Operators are left-associative: "1 + 2 + 3" parses as "(1 + 2) + 3"
 // - Parentheses for explicit grouping
 //
-// Input: Source code (string)
-// Output: AST
-//
-// Examples:
-//   Input:  "3 + 3 * 4"
-//   Output: BinOp(Add, IntLiteral(2), BinOp(Mul, IntLiteral(3), IntLiteral(4)))
+// Example:
+//   "2 + 3 * 4" → BinOp(Add, IntLiteral(2), BinOp(Mul, IntLiteral(3), IntLiteral(4)))
 
 module Parser
 

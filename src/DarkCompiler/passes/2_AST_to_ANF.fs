@@ -2,21 +2,17 @@
 //
 // Transforms AST into A-Normal Form (ANF).
 //
-// This pass converts nested expressions into a flat sequence of let-bindings
-// where all operands are simple (atoms). This makes evaluation order explicit
-// and simplifies subsequent compiler passes.
+// Algorithm:
+// - Recursively processes nested expressions
+// - Converts complex operands to atoms (literals or variables)
+// - Introduces let-bindings for intermediate computations
+// - Uses VarGen for generating fresh temporary variable names
 //
-// Input: AST
-// Output: ANF
-//
-// Example transformation of "2 + 3 * 4":
-//   Input AST:  BinOp(Add, IntLiteral(2), BinOp(Mul, IntLiteral(3), IntLiteral(4)))
-//   Output ANF: let tmp0 = 3
-//               let tmp1 = 4
-//               let tmp2 = tmp0 * tmp1
-//               let tmp3 = 2
-//               let tmp4 = tmp3 + tmp2
-//               return tmp4
+// Example:
+//   BinOp(Add, IntLiteral(2), BinOp(Mul, IntLiteral(3), IntLiteral(4)))
+//   →
+//   let tmp0 = 3; let tmp1 = 4; let tmp2 = tmp0 * tmp1;
+//   let tmp3 = 2; let tmp4 = tmp3 + tmp2; return tmp4
 
 module AST_to_ANF
 

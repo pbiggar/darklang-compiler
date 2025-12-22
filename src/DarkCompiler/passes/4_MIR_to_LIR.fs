@@ -1,21 +1,19 @@
 // 4_MIR_to_LIR.fs - Instruction Selection (Pass 4)
 //
-// Transforms platform-independent MIR into ARM64-specific LIR instructions.
+// Transforms MIR into LIR.
 //
-// This pass:
+// Instruction selection algorithm:
 // - Selects appropriate ARM64 instructions for each MIR operation
-// - Handles immediate value constraints (ARM64 ADD/SUB support 12-bit immediates)
-// - Ensures operands are in correct forms (registers vs immediates)
-// - Produces LIR with virtual registers (physical allocation happens in Pass 5)
+// - Handles ARM64 operand constraints:
+//   - ADD/SUB: support 12-bit immediates, left operand must be register
+//   - MUL/SDIV: both operands must be registers
+// - Inserts MOV instructions to load immediates when needed
+// - Emits return value in X0 register per ARM64 calling convention
 //
-// Example transformation:
-//   Input MIR:  v0 <- 42
-//               v1 <- v0 + 100
-//   Output LIR: v0 <- Mov(Imm 42)
-//               v1 <- Add(v0, Imm 100)
-//
-// Note: ARM64 MUL and SDIV require both operands in registers, so immediates
-// must be loaded into temporary registers first.
+// Example:
+//   v0 <- 42; v1 <- v0 + 100
+//   →
+//   v0 <- Mov(Imm 42); v1 <- Add(v0, Imm 100)
 
 module MIR_to_LIR
 

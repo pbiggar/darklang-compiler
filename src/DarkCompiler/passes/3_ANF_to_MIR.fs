@@ -1,19 +1,17 @@
 // 3_ANF_to_MIR.fs - MIR Transformation (Pass 3)
 //
-// Transforms ANF into platform-independent MIR (three-address code).
+// Transforms ANF into MIR.
 //
-// This pass converts ANF let-bindings into MIR instructions with virtual registers.
-// Each ANF temporary variable becomes a virtual register.
+// Algorithm:
+// - Converts ANF let-bindings into MIR instructions
+// - Maps ANF temporary variables to MIR virtual registers
+// - Converts ANF atoms to MIR operands (constants or registers)
+// - Uses RegGen for fresh virtual register name generation
 //
-// Example transformation:
-//   Input ANF:  let tmp0 = 2 + 3
-//               return tmp0
-//   Output MIR: v0 <- 2
-//               v1 <- 3
-//               v2 <- v0 + v1
-//               ret v2
-//
-// Uses the RegGen pattern for generating fresh virtual register names.
+// Example:
+//   let tmp0 = 2 + 3; return tmp0
+//   →
+//   v0 <- 2; v1 <- 3; v2 <- v0 + v1; ret v2
 
 module ANF_to_MIR
 

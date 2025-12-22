@@ -1,26 +1,20 @@
 // 5_RegisterAllocation.fs - Register Allocation (Pass 5)
 //
-// Maps virtual registers in LIR to physical ARM64 registers.
+// Allocates physical ARM64 registers to virtual registers in LIR.
 //
-// This pass:
-// - Collects all virtual registers used in a function
-// - Assigns physical registers (X1-X15) to virtual registers
-// - Uses simple greedy allocation (no spilling yet)
-// - Fails if more than 15 registers are needed
+// Simple greedy allocation algorithm:
+// 1. Collect all virtual register IDs from instructions
+// 2. Sort virtual registers by ID
+// 3. Assign physical registers in order: X1, X2, X3, ..., X15
+// 4. Transform all instructions to use assigned physical registers
 //
-// Algorithm:
-// 1. Collect all virtual register IDs
-// 2. Sort them by ID number
-// 3. Assign physical registers in order (X1, X2, X3, ...)
-// 4. Transform all instructions to use physical registers
+// Limitations: No spilling (fails if >15 registers needed)
+// Note: X0 reserved for return values per ARM64 calling convention
 //
 // Example:
-//   Input:  v0 <- Mov(Imm 42)
-//           v1 <- Add(v0, Imm 5)
-//   Output: X1 <- Mov(Imm 42)
-//           X2 <- Add(X1, Imm 5)
-//
-// Note: X0 is reserved for return values and not used in general allocation.
+//   v0 <- Mov(Imm 42); v1 <- Add(v0, Imm 5)
+//   →
+//   X1 <- Mov(Imm 42); X2 <- Add(X1, Imm 5)
 
 module RegisterAllocation
 

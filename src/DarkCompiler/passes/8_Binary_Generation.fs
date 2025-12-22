@@ -2,21 +2,15 @@
 //
 // Generates a complete Mach-O executable from ARM64 machine code.
 //
-// This pass:
-// - Converts machine code (list of uint32) to bytes
-// - Creates Mach-O headers, load commands, and segments
-// - Serializes all structures to bytes in the correct format
-// - Writes the executable file with correct permissions
-//
-// Memory layout:
-//   0x0000000000000000  __PAGEZERO (4GB unmapped)
-//   0x0000000100000000  __TEXT segment
-//   0x0000000100004000  .text section (code starts here)
-//
-// The generated executable:
-// - Runs on ARM64 macOS
-// - Returns the computed value as exit code
-// - Is position-independent (PIE)
+// Binary generation algorithm:
+// - Converts machine code (uint32 list) to byte array
+// - Calculates file offsets and VM addresses for segments
+// - Creates Mach-O header with ARM64 CPU type
+// - Creates __PAGEZERO segment (4GB unmapped memory)
+// - Creates __TEXT segment with __text section containing code
+// - Creates LC_MAIN load command specifying entry point
+// - Serializes all structures to little-endian bytes
+// - Writes byte array to file with executable permissions
 
 module Binary_Generation
 

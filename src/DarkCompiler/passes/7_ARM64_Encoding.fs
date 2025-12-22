@@ -1,20 +1,17 @@
 // 7_ARM64_Encoding.fs - ARM64 Machine Code Encoding (Pass 7)
 //
-// Encodes ARM64 instructions to 32-bit machine code.
+// Encodes ARM64 instructions to 32-bit machine code per ARMv8 specification.
 //
-// This pass converts ARM64 assembly instructions into their binary encoding
-// according to the ARMv8 specification. Each instruction is encoded as a
-// fixed 32-bit value.
+// Encoding algorithm:
+// - Encodes registers as 5-bit fields
+// - Packs immediates into instruction-specific bit positions
+// - Combines opcode bits, operand fields into 32-bit words
+// - Each instruction has unique bit layout defined by ARMv8
 //
-// Example encodings:
+// Example:
 //   MOVZ X0, #42, LSL #0  →  0xD2800540
 //   ADD X1, X0, #5        →  0x91001401
 //   RET                   →  0xD65F03C0
-//
-// Encoding details:
-// - Registers are encoded in 5-bit fields
-// - Immediates have varying bit widths depending on instruction
-// - Each instruction type has a specific bit pattern (opcode)
 
 module ARM64_Encoding
 
