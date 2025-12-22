@@ -36,3 +36,8 @@ let freshReg (RegGen n) : VReg * RegGen =
 
 /// Initial register generator
 let initialRegGen = RegGen 0
+
+/// Convert ANF to MIR
+let toMIR (program: ANF.Program) (regGen: RegGen) : Program * RegGen =
+    // To be implemented
+    (Program [Block []], regGen)
