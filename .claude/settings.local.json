@@ -14,7 +14,8 @@
       "Bash(dotnet fsi:*)",
       "Bash(otool:*)",
       "Bash(xattr:*)",
-      "Bash(dotnet run:*)"
+      "Bash(dotnet run:*)",
+      "Bash(/tmp/test42:*)"
     ]
   },
   "sandbox": {

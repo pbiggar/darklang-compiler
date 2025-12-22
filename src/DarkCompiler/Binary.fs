@@ -83,7 +83,8 @@ type MainCommand = {
 /// Complete Mach-O binary structure
 type MachOBinary = {
     Header: MachHeader
-    SegmentCommand: SegmentCommand64
+    PageZeroCommand: SegmentCommand64
+    TextSegmentCommand: SegmentCommand64
     MainCommand: MainCommand
     MachineCode: byte array
 }
@@ -177,7 +178,7 @@ let serializeMainCommand (main: MainCommand) : byte array =
 
 /// Calculate the size of load commands
 let calculateCommandsSize (binary: MachOBinary) : uint32 =
-    binary.SegmentCommand.CommandSize + binary.MainCommand.CommandSize
+    binary.PageZeroCommand.CommandSize + binary.TextSegmentCommand.CommandSize + binary.MainCommand.CommandSize
 
 /// Serialize complete Mach-O binary to bytes
 let serializeMachO (binary: MachOBinary) : byte array =
@@ -192,7 +193,8 @@ let serializeMachO (binary: MachOBinary) : byte array =
 
     [|
         yield! serializeMachHeader binary.Header
-        yield! serializeSegmentCommand64 binary.SegmentCommand
+        yield! serializeSegmentCommand64 binary.PageZeroCommand
+        yield! serializeSegmentCommand64 binary.TextSegmentCommand
         yield! serializeMainCommand binary.MainCommand
         yield! padding
         yield! binary.MachineCode
@@ -214,13 +216,30 @@ let createExecutable (machineCode: uint32 list) : byte array =
 
     // File layout
     let headerSize = 32
-    let segmentCommandSize = 72 + 80  // segment_command_64 + 1 section_64
+    let pageZeroCommandSize = 72  // segment_command_64 with no sections
+    let textSegmentCommandSize = 72 + 80  // segment_command_64 + 1 section_64
     let mainCommandSize = 24
-    let commandsSize = segmentCommandSize + mainCommandSize
+    let commandsSize = pageZeroCommandSize + textSegmentCommandSize + mainCommandSize
     let pageSize = 16384
     let dataStart = headerSize + commandsSize
     let paddingNeeded = (pageSize - (dataStart % pageSize)) % pageSize
     let codeFileOffset = uint64 (dataStart + paddingNeeded)
+
+    // __PAGEZERO segment (required by modern macOS)
+    let pageZeroCommand = {
+        Command = LC_SEGMENT_64
+        CommandSize = uint32 pageZeroCommandSize
+        SegmentName = "__PAGEZERO"
+        VmAddress = 0UL
+        VmSize = vmBase
+        FileOffset = 0UL
+        FileSize = 0UL
+        MaxProt = 0u
+        InitProt = 0u
+        NumSections = 0u
+        Flags = 0u
+        Sections = []
+    }
 
     let textSection = {
         SectionName = "__text"
@@ -237,9 +256,9 @@ let createExecutable (machineCode: uint32 list) : byte array =
         Reserved3 = 0u
     }
 
-    let segmentCommand = {
+    let textSegmentCommand = {
         Command = LC_SEGMENT_64
-        CommandSize = uint32 segmentCommandSize
+        CommandSize = uint32 textSegmentCommandSize
         SegmentName = "__TEXT"
         VmAddress = vmBase
         VmSize = vmCodeOffset + codeSize
@@ -264,7 +283,7 @@ let createExecutable (machineCode: uint32 list) : byte array =
         CpuType = CPU_TYPE_ARM64
         CpuSubType = CPU_SUBTYPE_ARM64_ALL
         FileType = MH_EXECUTE
-        NumCommands = 2u
+        NumCommands = 3u
         SizeOfCommands = uint32 commandsSize
         Flags = MH_NOUNDEFS ||| MH_PIE
         Reserved = 0u
@@ -272,7 +291,8 @@ let createExecutable (machineCode: uint32 list) : byte array =
 
     let binary = {
         Header = header
-        SegmentCommand = segmentCommand
+        PageZeroCommand = pageZeroCommand
+        TextSegmentCommand = textSegmentCommand
         MainCommand = mainCommand
         MachineCode = codeBytes
     }
