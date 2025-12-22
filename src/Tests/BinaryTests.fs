@@ -127,3 +127,26 @@ let ``createExecutable includes machine code`` () =
            binary.[i+3] = retBytes.[3] then
             found <- true
     found |> should equal true
+
+[<Test>]
+let ``generated executable has correct encoding`` () =
+    // Create simple program: mov x0, #42; ret
+    // Verify the machine code is correctly encoded
+    let movInstr = ARM64.MOVZ (ARM64.X0, 42us, 0)
+    let retInstr = ARM64.RET
+    let machineCode = (ARM64.encode movInstr) @ (ARM64.encode retInstr)
+
+    // Verify encoding
+    machineCode.Length |> should equal 2
+    machineCode.[0] |> should equal 0xD2800540u  // MOVZ X0, #42
+    machineCode.[1] |> should equal 0xD65F03C0u  // RET
+
+    // Verify binary can be created
+    let binary = createExecutable machineCode
+    binary.Length |> should be (greaterThan 0)
+
+    // Verify it starts with Mach-O magic
+    binary.[0] |> should equal 0xCFuy
+    binary.[1] |> should equal 0xFAuy
+    binary.[2] |> should equal 0xEDuy
+    binary.[3] |> should equal 0xFEuy

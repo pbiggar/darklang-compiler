@@ -7,7 +7,13 @@
       "Bash(dotnet restore:*)",
       "Bash(dotnet test:*)",
       "Bash(timeout 10 dotnet build:*)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(/tmp/test_exec)",
+      "Bash(echo:*)",
+      "Bash(codesign:*)",
+      "Bash(dotnet fsi:*)",
+      "Bash(otool:*)",
+      "Bash(xattr:*)"
     ]
   },
   "sandbox": {

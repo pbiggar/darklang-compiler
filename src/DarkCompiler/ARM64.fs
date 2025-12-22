@@ -35,23 +35,26 @@ let encodeReg (reg: Reg) : uint32 =
 let encode (instr: Instr) : MachineCode list =
     match instr with
     | MOVZ (dest, imm, shift) ->
-        // MOVZ encoding: sf=1 opc=10 hw shift imm16 Rd
-        // 1 10 1 0010 1 hw(2) imm16(16) Rd(5)
+        // MOVZ encoding: sf=1 opc=10 100101 hw imm16 Rd
+        // Bits: sf(31) opc(30-29) 100101(28-23) hw(22-21) imm16(20-5) Rd(4-0)
         let sf = 1u <<< 31
         let opc = 2u <<< 29
+        let opcode = 0b100101u <<< 23
         let hw = (uint32 shift / 16u) <<< 21
         let imm16 = (uint32 imm) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| 0b10010u <<< 23 ||| hw ||| imm16 ||| rd]
+        [sf ||| opc ||| opcode ||| hw ||| imm16 ||| rd]
 
     | MOVK (dest, imm, shift) ->
-        // MOVK encoding: sf=1 opc=11 hw shift imm16 Rd
+        // MOVK encoding: sf=1 opc=11 100101 hw imm16 Rd
+        // Bits: sf(31) opc(30-29) 100101(28-23) hw(22-21) imm16(20-5) Rd(4-0)
         let sf = 1u <<< 31
         let opc = 3u <<< 29
+        let opcode = 0b100101u <<< 23
         let hw = (uint32 shift / 16u) <<< 21
         let imm16 = (uint32 imm) <<< 5
         let rd = encodeReg dest
-        [sf ||| opc ||| 0b10010u <<< 23 ||| hw ||| imm16 ||| rd]
+        [sf ||| opc ||| opcode ||| hw ||| imm16 ||| rd]
 
     | ADD_imm (dest, src, imm) ->
         // ADD immediate: sf=1 0 0 10001 shift(2) imm12(12) Rn(5) Rd(5)
