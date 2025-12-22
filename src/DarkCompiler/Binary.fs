@@ -34,6 +34,11 @@ let MH_PIE = 0x200000u
 /// Load command types
 let LC_SEGMENT_64 = 0x19u
 let LC_MAIN = 0x80000028u
+let LC_LOAD_DYLINKER = 0xEu
+let LC_UUID = 0x1Bu
+let LC_BUILD_VERSION = 0x32u
+let LC_SYMTAB = 0x2u
+let LC_DYSYMTAB = 0xBu
 
 /// Virtual memory protections
 let VM_PROT_READ = 0x1u
@@ -97,11 +102,77 @@ type MainCommand = {
     StackSize: uint64
 }
 
+/// LC_LOAD_DYLINKER load command
+type DylinkerCommand = {
+    Command: uint32
+    CommandSize: uint32
+    Name: string  // Path to dylinker (e.g., "/usr/lib/dyld")
+}
+
+/// LC_UUID load command
+type UuidCommand = {
+    Command: uint32
+    CommandSize: uint32
+    Uuid: byte array  // 16 bytes
+}
+
+/// LC_BUILD_VERSION load command
+type BuildVersionCommand = {
+    Command: uint32
+    CommandSize: uint32
+    Platform: uint32  // 1 = macOS
+    MinOS: uint32     // Minimum OS version (e.g., 11.0 = 0xB0000)
+    Sdk: uint32       // SDK version
+    NumTools: uint32  // Number of tool entries (0 for simplicity)
+}
+
+/// LC_SYMTAB load command
+type SymtabCommand = {
+    Command: uint32
+    CommandSize: uint32
+    SymbolTableOffset: uint32
+    NumSymbols: uint32
+    StringTableOffset: uint32
+    StringTableSize: uint32
+}
+
+/// LC_DYSYMTAB load command
+type DysymtabCommand = {
+    Command: uint32
+    CommandSize: uint32
+    // Simplified - just the basic fields
+    LocalSymIndex: uint32
+    NumLocalSymbols: uint32
+    ExtDefSymIndex: uint32
+    NumExtDefSymbols: uint32
+    UndefSymIndex: uint32
+    NumUndefSymbols: uint32
+    // Zero out the rest
+    TocOffset: uint32
+    NumTocEntries: uint32
+    ModTableOffset: uint32
+    NumModTableEntries: uint32
+    ExtRefSymOffset: uint32
+    NumExtRefSyms: uint32
+    IndirectSymOffset: uint32
+    NumIndirectSyms: uint32
+    ExtRelOffset: uint32
+    NumExtRel: uint32
+    LocRelOffset: uint32
+    NumLocRel: uint32
+}
+
 /// Complete Mach-O binary structure
 type MachOBinary = {
     Header: MachHeader
     PageZeroCommand: SegmentCommand64
     TextSegmentCommand: SegmentCommand64
+    LinkeditSegmentCommand: SegmentCommand64
+    DylinkerCommand: DylinkerCommand
+    SymtabCommand: SymtabCommand
+    DysymtabCommand: DysymtabCommand
+    UuidCommand: UuidCommand
+    BuildVersionCommand: BuildVersionCommand
     MainCommand: MainCommand
     MachineCode: byte array
 }

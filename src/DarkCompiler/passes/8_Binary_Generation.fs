@@ -101,9 +101,42 @@ let serializeMainCommand (main: Binary.MainCommand) : byte array =
         yield! uint64ToBytes main.StackSize
     |]
 
+/// Serialize DylinkerCommand to bytes
+let serializeDylinkerCommand (dylinker: Binary.DylinkerCommand) : byte array =
+    [|
+        yield! uint32ToBytes dylinker.Command
+        yield! uint32ToBytes dylinker.CommandSize
+        yield! uint32ToBytes 12u  // Offset to name string (after command + cmdsize + offset)
+        yield! padString dylinker.Name (int dylinker.CommandSize - 12)
+    |]
+
+/// Serialize UuidCommand to bytes
+let serializeUuidCommand (uuid: Binary.UuidCommand) : byte array =
+    [|
+        yield! uint32ToBytes uuid.Command
+        yield! uint32ToBytes uuid.CommandSize
+        yield! uuid.Uuid
+    |]
+
+/// Serialize BuildVersionCommand to bytes
+let serializeBuildVersionCommand (buildVer: Binary.BuildVersionCommand) : byte array =
+    [|
+        yield! uint32ToBytes buildVer.Command
+        yield! uint32ToBytes buildVer.CommandSize
+        yield! uint32ToBytes buildVer.Platform
+        yield! uint32ToBytes buildVer.MinOS
+        yield! uint32ToBytes buildVer.Sdk
+        yield! uint32ToBytes buildVer.NumTools
+    |]
+
 /// Calculate the size of load commands
 let calculateCommandsSize (binary: Binary.MachOBinary) : uint32 =
-    binary.PageZeroCommand.CommandSize + binary.TextSegmentCommand.CommandSize + binary.MainCommand.CommandSize
+    binary.PageZeroCommand.CommandSize +
+    binary.TextSegmentCommand.CommandSize +
+    binary.DylinkerCommand.CommandSize +
+    binary.UuidCommand.CommandSize +
+    binary.BuildVersionCommand.CommandSize +
+    binary.MainCommand.CommandSize
 
 /// Serialize complete Mach-O binary to bytes
 let serializeMachO (binary: Binary.MachOBinary) : byte array =
@@ -120,6 +153,9 @@ let serializeMachO (binary: Binary.MachOBinary) : byte array =
         yield! serializeMachHeader binary.Header
         yield! serializeSegmentCommand64 binary.PageZeroCommand
         yield! serializeSegmentCommand64 binary.TextSegmentCommand
+        yield! serializeDylinkerCommand binary.DylinkerCommand
+        yield! serializeUuidCommand binary.UuidCommand
+        yield! serializeBuildVersionCommand binary.BuildVersionCommand
         yield! serializeMainCommand binary.MainCommand
         yield! padding
         yield! binary.MachineCode
@@ -143,8 +179,11 @@ let createExecutable (machineCode: uint32 list) : byte array =
     let headerSize = 32
     let pageZeroCommandSize = 72  // segment_command_64 with no sections
     let textSegmentCommandSize = 72 + 80  // segment_command_64 + 1 section_64
+    let dylinkerCommandSize = 32  // cmd + cmdsize + offset + padded path string
+    let uuidCommandSize = 24  // cmd + cmdsize + 16-byte uuid
+    let buildVersionCommandSize = 24  // cmd + cmdsize + platform + minos + sdk + numtools
     let mainCommandSize = 24
-    let commandsSize = pageZeroCommandSize + textSegmentCommandSize + mainCommandSize
+    let commandsSize = pageZeroCommandSize + textSegmentCommandSize + dylinkerCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
     let pageSize = 16384
     let dataStart = headerSize + commandsSize
     let paddingNeeded = (pageSize - (dataStart % pageSize)) % pageSize
@@ -196,6 +235,30 @@ let createExecutable (machineCode: uint32 list) : byte array =
         Sections = [textSection]
     }
 
+    // LC_LOAD_DYLINKER command
+    let dylinkerCommand : Binary.DylinkerCommand = {
+        Command = Binary.LC_LOAD_DYLINKER
+        CommandSize = uint32 dylinkerCommandSize
+        Name = "/usr/lib/dyld"
+    }
+
+    // LC_UUID command
+    let uuidCommand : Binary.UuidCommand = {
+        Command = Binary.LC_UUID
+        CommandSize = uint32 uuidCommandSize
+        Uuid = Array.create 16 0uy  // Zero UUID for now (could generate random)
+    }
+
+    // LC_BUILD_VERSION command
+    let buildVersionCommand : Binary.BuildVersionCommand = {
+        Command = Binary.LC_BUILD_VERSION
+        CommandSize = uint32 buildVersionCommandSize
+        Platform = 1u  // 1 = macOS
+        MinOS = 0xB0000u  // macOS 11.0 (Big Sur)
+        Sdk = 0xF0500u  // SDK 15.5
+        NumTools = 0u  // No tool entries
+    }
+
     let mainCommand : Binary.MainCommand = {
         Command = Binary.LC_MAIN
         CommandSize = uint32 mainCommandSize
@@ -208,7 +271,7 @@ let createExecutable (machineCode: uint32 list) : byte array =
         CpuType = Binary.CPU_TYPE_ARM64
         CpuSubType = Binary.CPU_SUBTYPE_ARM64_ALL
         FileType = Binary.MH_EXECUTE
-        NumCommands = 3u
+        NumCommands = 6u  // Updated to include new load commands
         SizeOfCommands = uint32 commandsSize
         Flags = Binary.MH_NOUNDEFS ||| Binary.MH_PIE
         Reserved = 0u
@@ -218,6 +281,9 @@ let createExecutable (machineCode: uint32 list) : byte array =
         Header = header
         PageZeroCommand = pageZeroCommand
         TextSegmentCommand = textSegmentCommand
+        DylinkerCommand = dylinkerCommand
+        UuidCommand = uuidCommand
+        BuildVersionCommand = buildVersionCommand
         MainCommand = mainCommand
         MachineCode = codeBytes
     }
