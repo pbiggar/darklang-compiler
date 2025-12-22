@@ -6,6 +6,9 @@
 // where all operands are simple (atoms). This makes evaluation order explicit
 // and simplifies subsequent compiler passes.
 //
+// Input: AST
+// Output: ANF
+//
 // Example transformation of "2 + 3 * 4":
 //   Input AST:  BinOp(Add, IntLiteral(2), BinOp(Mul, IntLiteral(3), IntLiteral(4)))
 //   Output ANF: let tmp0 = 3
@@ -14,9 +17,6 @@
 //               let tmp3 = 2
 //               let tmp4 = tmp3 + tmp2
 //               return tmp4
-//
-// Uses the VarGen pattern for generating fresh variable names in a purely
-// functional way (no mutable state).
 
 module AST_to_ANF
 

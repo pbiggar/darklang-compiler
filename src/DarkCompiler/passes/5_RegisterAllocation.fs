@@ -113,6 +113,6 @@ let allocateRegisters (func: LIR.Function) : LIR.AllocResult =
     let allocatedInstrs = func.Body |> List.map (applyAllocation allocation)
 
     {
-        LIR.Instrs = allocatedInstrs
-        LIR.StackSize = 0  // No spilling yet
-    }
+        Instrs = allocatedInstrs
+        StackSize = 0  // No spilling yet
+    } : LIR.AllocResult

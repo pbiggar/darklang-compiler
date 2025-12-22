@@ -1,6 +1,6 @@
 # Darklang Compiler
 
-A from-scratch compiler for Darklang written in pure functional F# that targets ARM64 macOS.
+A compiler for Darklang written in pure functional F# that targets ARM64 macOS.
 
 ## Quick Start
 
@@ -46,17 +46,6 @@ Compiles to an ARM64 executable that exits with code 14.
 Source Code → Parser → AST → ANF → MIR → LIR → Register Allocation → ARM64 → Machine Code → Mach-O Binary
 ```
 
-### Stages
-
-1. **Parser** (`Parser.fs`): Lexer + recursive descent parser → AST
-2. **ANF** (`ANF.fs`): Transforms to A-Normal Form (explicit evaluation order)
-3. **MIR** (`MIR.fs`): Platform-independent three-address code with virtual registers
-4. **LIR** (`LIR.fs`): ARM64-specific instruction selection
-5. **Register Allocation** (`LIR.fs`): Maps virtual registers to physical ARM64 registers (X0-X15)
-6. **Code Generation** (`CodeGen.fs`): LIR → ARM64 instructions
-7. **ARM64 Encoding** (`ARM64.fs`): ARM64 instructions → 32-bit machine code
-8. **Binary Generation** (`Binary.fs`): Machine code → Mach-O executable
-
 ### Example Trace: `2 + 3 * 4`
 
 ```
@@ -91,62 +80,26 @@ ARM64:  MOVZ X0, #3, LSL #0
 Result: Executable exits with code 14
 ```
 
-## Project Structure
-
-```
-.
-├── src/
-│   ├── DarkCompiler/           # Main compiler
-│   │   ├── AST.fs              # Abstract Syntax Tree types
-│   │   ├── Parser.fs           # Lexer and parser
-│   │   ├── ANF.fs              # A-Normal Form transformation
-│   │   ├── MIR.fs              # Mid-level IR
-│   │   ├── LIR.fs              # Low-level IR + register allocation
-│   │   ├── ARM64.fs            # ARM64 instruction encoding
-│   │   ├── CodeGen.fs          # LIR → ARM64 code generation
-│   │   ├── Binary.fs           # Mach-O binary generation
-│   │   └── Program.fs          # CLI entry point
-│   ├── Tests/                  # Test suite (FsUnit + NUnit)
-│   └── Directory.Build.props   # MSBuild configuration
-├── obj/                        # Build intermediate files
-├── bin/                        # Build output
-└── docs/                       # Detailed documentation
-    ├── README.md               # Overview and getting started
-    ├── pipeline.md             # Detailed pipeline explanation
-    └── architecture.md         # Design decisions
-```
-
 ## Key Design Principles
 
-### 1. Pure Functional F#
+### Pure Functional F#
 
 - No mutable state or imperative features
 - Makes future self-hosting in Darklang easier
-- Uses "generator patterns" for fresh name generation:
-  ```fsharp
-  type VarGen = VarGen of int
-  let freshVar (VarGen n) = (TempId n, VarGen (n + 1))
-  ```
 
-### 2. Multi-Stage IR Pipeline
+### Multi-Stage IR Pipeline
 
 - Each IR focuses on specific concerns
 - Testable in isolation
 - Easy to add new target architectures
 
-### 3. A-Normal Form (ANF)
-
-- Makes evaluation order explicit
-- Simplifies later passes (all operands are simple)
-- Standard technique from functional language compilers
-
-### 4. Direct Binary Generation
+### Direct Binary Generation
 
 - Generates Mach-O executables directly
 - No external assembler/linker required
 - Complete control over output
 
-### 5. Test-Driven Development
+### Test-Driven Development
 
 - Unit tests for each phase
 - End-to-end integration tests
@@ -269,80 +222,6 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 - Register allocator fails if >16 registers needed (no spilling)
 - Large immediates only partially supported
 
-## Future Enhancements
-
-Planned features (in rough order):
-
-1. Variables and let bindings
-2. Functions and function calls
-3. Control flow (if/else, loops)
-4. More data types (booleans, strings, lists)
-5. Pattern matching
-6. Module system
-7. Standard library
-8. Optimization passes
-9. Better error messages with source locations
-10. Other target architectures (x86-64, WASM)
-
-## File Descriptions
-
-### Core Compiler Files
-
-**AST.fs** - Abstract Syntax Tree types
-
-- `BinOp`: Add, Sub, Mul, Div
-- `Expr`: IntLiteral, BinOp
-- `Program`: Wraps top-level expression
-
-**Parser.fs** - Lexing and parsing
-
-- Token types and lexer
-- Recursive descent parser
-- Operator precedence and associativity
-
-**ANF.fs** - A-Normal Form transformation
-
-- `VarGen` for fresh variable names
-- `toANF` transformation
-- Atomic expressions and let bindings
-
-**MIR.fs** - Mid-level IR
-
-- `RegGen` for fresh virtual registers
-- Three-address code instructions
-- Platform-independent representation
-
-**LIR.fs** - Low-level IR
-
-- ARM64-specific instructions
-- Physical register types
-- Register allocation algorithm
-
-**ARM64.fs** - ARM64 instruction encoding
-
-- Instruction types (MOVZ, MOVK, ADD, SUB, MUL, SDIV, MOV, RET)
-- 32-bit machine code encoding
-- Register encoding (5-bit values)
-
-**CodeGen.fs** - Code generation
-
-- LIR → ARM64 translation
-- Immediate value handling
-- Register mapping
-
-**Binary.fs** - Mach-O generation
-
-- Mach-O header and load commands
-- Segment and section structures
-- Binary serialization
-- File writing with executable permissions
-
-**Program.fs** - CLI entry point
-
-- Command-line argument parsing
-- Pipeline orchestration
-- Error handling
-
 ### Test Files
 
 All test files follow naming convention `<Module>Tests.fs`:
@@ -418,14 +297,3 @@ echo $?                     # Show exit code
 - Apple's Mach-O file format reference
 - `otool` for inspection
 - `MachOView` for graphical inspection
-
-**Compiler Theory:**
-
-- "Modern Compiler Implementation in ML" by Appel
-- "Engineering a Compiler" by Cooper & Torczon
-- ANF papers from functional programming literature
-
-**F# Resources:**
-
-- F# Language Reference
-- "Expert F#" by Syme, Granicz, Cisternino

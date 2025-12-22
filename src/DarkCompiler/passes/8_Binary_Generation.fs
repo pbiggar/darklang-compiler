@@ -157,75 +157,75 @@ let createExecutable (machineCode: uint32 list) : byte array =
     let codeFileOffset = uint64 (dataStart + paddingNeeded)
 
     // __PAGEZERO segment (required by modern macOS)
-    let pageZeroCommand = {
-        Binary.Command = Binary.LC_SEGMENT_64
-        Binary.CommandSize = uint32 pageZeroCommandSize
-        Binary.SegmentName = "__PAGEZERO"
-        Binary.VmAddress = 0UL
-        Binary.VmSize = vmBase
-        Binary.FileOffset = 0UL
-        Binary.FileSize = 0UL
-        Binary.MaxProt = 0u
-        Binary.InitProt = 0u
-        Binary.NumSections = 0u
-        Binary.Flags = 0u
-        Binary.Sections = []
+    let pageZeroCommand : Binary.SegmentCommand64 = {
+        Command = Binary.LC_SEGMENT_64
+        CommandSize = uint32 pageZeroCommandSize
+        SegmentName = "__PAGEZERO"
+        VmAddress = 0UL
+        VmSize = vmBase
+        FileOffset = 0UL
+        FileSize = 0UL
+        MaxProt = 0u
+        InitProt = 0u
+        NumSections = 0u
+        Flags = 0u
+        Sections = []
     }
 
-    let textSection = {
-        Binary.SectionName = "__text"
-        Binary.SegmentName = "__TEXT"
-        Binary.Address = vmBase + vmCodeOffset
-        Binary.Size = codeSize
-        Binary.Offset = uint32 codeFileOffset
-        Binary.Align = 2u  // 2^2 = 4 byte alignment
-        Binary.RelocationOffset = 0u
-        Binary.NumRelocations = 0u
-        Binary.Flags = Binary.S_REGULAR ||| Binary.S_ATTR_PURE_INSTRUCTIONS ||| Binary.S_ATTR_SOME_INSTRUCTIONS
-        Binary.Reserved1 = 0u
-        Binary.Reserved2 = 0u
-        Binary.Reserved3 = 0u
+    let textSection : Binary.Section64 = {
+        SectionName = "__text"
+        SegmentName = "__TEXT"
+        Address = vmBase + vmCodeOffset
+        Size = codeSize
+        Offset = uint32 codeFileOffset
+        Align = 2u  // 2^2 = 4 byte alignment
+        RelocationOffset = 0u
+        NumRelocations = 0u
+        Flags = Binary.S_REGULAR ||| Binary.S_ATTR_PURE_INSTRUCTIONS ||| Binary.S_ATTR_SOME_INSTRUCTIONS
+        Reserved1 = 0u
+        Reserved2 = 0u
+        Reserved3 = 0u
     }
 
-    let textSegmentCommand = {
-        Binary.Command = Binary.LC_SEGMENT_64
-        Binary.CommandSize = uint32 textSegmentCommandSize
-        Binary.SegmentName = "__TEXT"
-        Binary.VmAddress = vmBase
-        Binary.VmSize = vmCodeOffset + codeSize
-        Binary.FileOffset = 0UL
-        Binary.FileSize = codeFileOffset + codeSize
-        Binary.MaxProt = Binary.VM_PROT_READ ||| Binary.VM_PROT_WRITE ||| Binary.VM_PROT_EXECUTE
-        Binary.InitProt = Binary.VM_PROT_READ ||| Binary.VM_PROT_EXECUTE
-        Binary.NumSections = 1u
-        Binary.Flags = 0u
-        Binary.Sections = [textSection]
+    let textSegmentCommand : Binary.SegmentCommand64 = {
+        Command = Binary.LC_SEGMENT_64
+        CommandSize = uint32 textSegmentCommandSize
+        SegmentName = "__TEXT"
+        VmAddress = vmBase
+        VmSize = vmCodeOffset + codeSize
+        FileOffset = 0UL
+        FileSize = codeFileOffset + codeSize
+        MaxProt = Binary.VM_PROT_READ ||| Binary.VM_PROT_WRITE ||| Binary.VM_PROT_EXECUTE
+        InitProt = Binary.VM_PROT_READ ||| Binary.VM_PROT_EXECUTE
+        NumSections = 1u
+        Flags = 0u
+        Sections = [textSection]
     }
 
-    let mainCommand = {
-        Binary.Command = Binary.LC_MAIN
-        Binary.CommandSize = uint32 mainCommandSize
-        Binary.EntryOffset = codeFileOffset
-        Binary.StackSize = 0UL
+    let mainCommand : Binary.MainCommand = {
+        Command = Binary.LC_MAIN
+        CommandSize = uint32 mainCommandSize
+        EntryOffset = codeFileOffset
+        StackSize = 0UL
     }
 
-    let header = {
-        Binary.Magic = Binary.MH_MAGIC_64
-        Binary.CpuType = Binary.CPU_TYPE_ARM64
-        Binary.CpuSubType = Binary.CPU_SUBTYPE_ARM64_ALL
-        Binary.FileType = Binary.MH_EXECUTE
-        Binary.NumCommands = 3u
-        Binary.SizeOfCommands = uint32 commandsSize
-        Binary.Flags = Binary.MH_NOUNDEFS ||| Binary.MH_PIE
-        Binary.Reserved = 0u
+    let header : Binary.MachHeader = {
+        Magic = Binary.MH_MAGIC_64
+        CpuType = Binary.CPU_TYPE_ARM64
+        CpuSubType = Binary.CPU_SUBTYPE_ARM64_ALL
+        FileType = Binary.MH_EXECUTE
+        NumCommands = 3u
+        SizeOfCommands = uint32 commandsSize
+        Flags = Binary.MH_NOUNDEFS ||| Binary.MH_PIE
+        Reserved = 0u
     }
 
-    let binary = {
-        Binary.Header = header
-        Binary.PageZeroCommand = pageZeroCommand
-        Binary.TextSegmentCommand = textSegmentCommand
-        Binary.MainCommand = mainCommand
-        Binary.MachineCode = codeBytes
+    let binary : Binary.MachOBinary = {
+        Header = header
+        PageZeroCommand = pageZeroCommand
+        TextSegmentCommand = textSegmentCommand
+        MainCommand = mainCommand
+        MachineCode = codeBytes
     }
 
     serializeMachO binary

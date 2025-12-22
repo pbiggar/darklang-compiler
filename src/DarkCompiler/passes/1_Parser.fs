@@ -9,9 +9,14 @@
 // Operator precedence:
 // - Multiplication and division bind tighter than addition and subtraction
 // - Operators are left-associative: "1 + 2 + 3" parses as "(1 + 2) + 3"
+// - Parentheses for explicit grouping
 //
-// Input:  "2 + 3 * 4"
-// Output: BinOp(Add, IntLiteral(2), BinOp(Mul, IntLiteral(3), IntLiteral(4)))
+// Input: Source code (string)
+// Output: AST
+//
+// Examples:
+//   Input:  "3 + 3 * 4"
+//   Output: BinOp(Add, IntLiteral(2), BinOp(Mul, IntLiteral(3), IntLiteral(4)))
 
 module Parser
 
