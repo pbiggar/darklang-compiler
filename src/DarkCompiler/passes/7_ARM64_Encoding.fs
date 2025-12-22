@@ -111,12 +111,14 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
 
     | ARM64.MOV_reg (dest, src) ->
         // MOV is ORR with XZR: sf=1 01 01010 00 0 Rm(5) 000000 Rn=11111 Rd(5)
+        // Bit 31: sf=1, Bit 30: 0, Bit 29: 1 (ORR not AND), Bits 28-21: 01010000
         let sf = 1u <<< 31
-        let op = 0b01010100u <<< 21
+        let opc = 1u <<< 29  // Critical: bit 29 distinguishes ORR (1) from AND (0)
+        let op = 0b01010000u <<< 21
         let rm = (encodeReg src) <<< 16
         let rn = 31u <<< 5  // XZR
         let rd = encodeReg dest
-        [sf ||| op ||| rm ||| rn ||| rd]
+        [sf ||| opc ||| op ||| rm ||| rn ||| rd]
 
     | ARM64.RET ->
         // RET: 1101011 0 0 10 11111 0000 0 0 Rn=11110 00000
