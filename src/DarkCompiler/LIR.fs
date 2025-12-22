@@ -136,3 +136,11 @@ let toLIR (program: MIR.Program) : Program =
     }
 
     Program [func]
+
+/// Register allocation
+let allocateRegisters (func: Function) : AllocResult =
+    // To be implemented
+    {
+        Instrs = func.Body
+        StackSize = 0
+    }
