@@ -13,6 +13,7 @@
     <Compile Include="LIR.fs" />
     <Compile Include="ARM64.fs" />
     <Compile Include="CodeGen.fs" />
+    <Compile Include="Binary.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
