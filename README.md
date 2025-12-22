@@ -26,8 +26,8 @@ dotnet test
 ./dark --run "6 * 7"
 # Output: Exit code: 42
 
-# Quiet mode (no compilation output)
-./dark -q -r "10 + 32"
+# Quiet run (combined flags)
+./dark -qr "10 + 32"
 # Output: (just exit code: 42)
 ```
 
@@ -35,14 +35,36 @@ dotnet test
 
 ```bash
 # Compile to file
-./dark "2 + 3" output
+./dark -c "2 + 3" -o output
+
+# Compile to default file (dark.out)
+./dark -c "2 + 3"
 
 # Run the compiled binary
 ./output
 echo $?  # Shows exit code: 5
 
 # Quiet compile
-./dark -q "6 * 7" output
+./dark -qc "6 * 7" -o output
+```
+
+**Other features:**
+
+```bash
+# Flags can appear in any order
+./dark -o output -c "2 + 3" -q
+./dark -q -o output -c "2 + 3"
+# Both are equivalent
+
+# Verbose output
+./dark -v -c "2 + 3" -o output
+
+# Read from stdin
+./dark -r - < <(echo "10 + 32")
+
+# Help and version
+./dark -h
+./dark --version
 ```
 
 **Clean build artifacts:**

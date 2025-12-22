@@ -3,7 +3,7 @@
 // The main entry point for the Darklang compiler CLI.
 //
 // This module:
-// - Parses command-line arguments
+// - Parses command-line arguments using POSIX-style flags
 // - Orchestrates the compilation pipeline through all passes
 // - Handles errors and provides user feedback
 //
@@ -22,55 +22,243 @@ module Program
 open System
 open System.IO
 
+/// Action to perform
+type ActionFlag = Compile | Run
+
+/// Input source type
+type InputFlag = Expression | File
+
+/// Output verbosity level
+type VerbosityLevel = Quiet | Normal | Verbose
+
+/// Parsed CLI options
+type CliOptions = {
+    Action: ActionFlag option
+    Input: InputFlag option
+    OutputFile: string option
+    Verbosity: VerbosityLevel
+    Help: bool
+    Version: bool
+    Argument: string option
+}
+
+/// Default empty options
+let defaultOptions = {
+    Action = None
+    Input = None
+    OutputFile = None
+    Verbosity = Normal
+    Help = false
+    Version = false
+    Argument = None
+}
+
+/// Parse command-line flags into options
+let parseArgs (argv: string array) : Result<CliOptions, string> =
+    let rec parseFlags (args: string list) (opts: CliOptions) (lastVerbosity: VerbosityLevel) : Result<CliOptions, string> =
+        match args with
+        | [] ->
+            // Apply last verbosity setting (last one wins)
+            Ok { opts with Verbosity = lastVerbosity }
+
+        | "-c" :: rest | "--compile" :: rest ->
+            if opts.Action.IsSome then
+                Error "Cannot specify both compile and run flags"
+            else
+                parseFlags rest { opts with Action = Some Compile } lastVerbosity
+
+        | "-r" :: rest | "--run" :: rest ->
+            if opts.Action.IsSome then
+                Error "Cannot specify both compile and run flags"
+            else
+                parseFlags rest { opts with Action = Some Run } lastVerbosity
+
+        | "-f" :: rest | "--file" :: rest ->
+            if opts.Input.IsSome then
+                Error "Cannot specify both file and expression input"
+            else
+                parseFlags rest { opts with Input = Some File } lastVerbosity
+
+        | "-o" :: value :: rest | "--output" :: value :: rest ->
+            if opts.OutputFile.IsSome then
+                Error "Output file specified multiple times"
+            else
+                parseFlags rest { opts with OutputFile = Some value } lastVerbosity
+
+        | flag :: rest when flag.StartsWith("-o") && flag.Length > 2 ->
+            // Handle -ofile format
+            let value = flag.Substring(2)
+            if opts.OutputFile.IsSome then
+                Error "Output file specified multiple times"
+            else
+                parseFlags rest { opts with OutputFile = Some value } lastVerbosity
+
+        | flag :: rest when flag.StartsWith("--output=") ->
+            // Handle --output=file format
+            let value = flag.Substring(9)
+            if opts.OutputFile.IsSome then
+                Error "Output file specified multiple times"
+            else
+                parseFlags rest { opts with OutputFile = Some value } lastVerbosity
+
+        | "-q" :: rest | "--quiet" :: rest ->
+            parseFlags rest opts Quiet
+
+        | "-v" :: rest | "--verbose" :: rest ->
+            parseFlags rest opts Verbose
+
+        | "-h" :: rest | "--help" :: rest ->
+            parseFlags rest { opts with Help = true } lastVerbosity
+
+        | "--version" :: rest ->
+            parseFlags rest { opts with Version = true } lastVerbosity
+
+        | "-" :: rest ->
+            // Special case: "-" means stdin, treat as argument
+            if opts.Argument.IsSome then
+                Error "Cannot specify multiple input sources"
+            else
+                let newOpts =
+                    if opts.Input.IsNone then
+                        { opts with Input = Some Expression; Argument = Some "-" }
+                    else
+                        { opts with Argument = Some "-" }
+                parseFlags rest newOpts lastVerbosity
+
+        | flag :: rest when flag.StartsWith("-") && flag.Length > 1 ->
+            // Handle combined short flags like -qr or -qvr
+            let chars = flag.Substring(1).ToCharArray()
+            let rec expandFlags (cs: char list) (acc: string list) =
+                match cs with
+                | [] -> acc
+                | 'c' :: rest -> expandFlags rest ("-c" :: acc)
+                | 'r' :: rest -> expandFlags rest ("-r" :: acc)
+                | 'f' :: rest -> expandFlags rest ("-f" :: acc)
+                | 'q' :: rest -> expandFlags rest ("-q" :: acc)
+                | 'v' :: rest -> expandFlags rest ("-v" :: acc)
+                | 'h' :: rest -> expandFlags rest ("-h" :: acc)
+                | 'o' :: rest when rest.Length > 0 ->
+                    // -ovalue format
+                    let value = System.String(Array.ofList rest)
+                    expandFlags [] (sprintf "-o%s" value :: acc)
+                | c :: _ ->
+                    // Invalid flag character
+                    expandFlags [] (sprintf "-%c" c :: acc)
+
+            let expandedFlags = expandFlags (Array.toList chars) [] |> List.rev
+            parseFlags (expandedFlags @ rest) opts lastVerbosity
+
+        | arg :: rest when not (arg.StartsWith("-")) ->
+            // Non-flag argument - this is the expression or filename
+            if opts.Argument.IsSome then
+                Error (sprintf "Unexpected argument: %s" arg)
+            else
+                // Default to expression input if not specified
+                let newOpts =
+                    if opts.Input.IsNone then
+                        { opts with Input = Some Expression; Argument = Some arg }
+                    else
+                        { opts with Argument = Some arg }
+                parseFlags rest newOpts lastVerbosity
+
+        | flag :: _ ->
+            Error (sprintf "Unknown flag: %s" flag)
+
+    parseFlags (Array.toList argv) defaultOptions Normal
+
+/// Validate parsed options
+let validateOptions (opts: CliOptions) : Result<CliOptions, string> =
+    // Help and version override everything else
+    if opts.Help || opts.Version then
+        Ok opts
+    else
+        // Check for required action
+        match opts.Action with
+        | None ->
+            if opts.OutputFile.IsSome then
+                // Has -o flag, default to compile
+                Ok { opts with Action = Some Compile }
+            else
+                Error "Must specify -c (compile) or -r (run)"
+
+        | Some Run ->
+            // Validate run mode
+            if opts.OutputFile.IsSome then
+                Error "Cannot specify output file with run mode"
+            else if opts.Argument.IsNone then
+                Error "Missing expression or filename"
+            else
+                Ok opts
+
+        | Some Compile ->
+            // Validate compile mode
+            if opts.Argument.IsNone then
+                Error "Missing expression or filename"
+            else
+                Ok opts
+
 /// Compile source expression to executable
-let compile (source: string) (outputPath: string) (quiet: bool) : unit =
-    if not quiet then
+let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) : unit =
+    let showNormal = verbosity = Normal || verbosity = Verbose
+    let showVerbose = verbosity = Verbose
+
+    if showNormal then
         printfn "Compiling: %s" source
 
     // Parse
-    if not quiet then printfn "  [1/8] Parsing..."
+    if showNormal then printfn "  [1/8] Parsing..."
     let ast = Parser.parseString source
+    if showVerbose then printfn "      AST: %A" ast
 
     // Convert to ANF
-    if not quiet then printfn "  [2/8] Converting to ANF..."
+    if showNormal then printfn "  [2/8] Converting to ANF..."
     let (AST.Program expr) = ast
     let (anfExpr, _) = AST_to_ANF.toANF expr (ANF.VarGen 0)
     let anfProgram = ANF.Program anfExpr
+    if showVerbose then printfn "      ANF: %A" anfProgram
 
     // Convert to MIR
-    if not quiet then printfn "  [3/8] Converting to MIR..."
+    if showNormal then printfn "  [3/8] Converting to MIR..."
     let (mirProgram, _) = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0)
+    if showVerbose then printfn "      MIR: %A" mirProgram
 
     // Convert to LIR
-    if not quiet then printfn "  [4/8] Converting to LIR..."
+    if showNormal then printfn "  [4/8] Converting to LIR..."
     let lirProgram = MIR_to_LIR.toLIR mirProgram
+    if showVerbose then printfn "      LIR: %A" lirProgram
 
     // Allocate registers
-    if not quiet then printfn "  [5/8] Allocating registers..."
+    if showNormal then printfn "  [5/8] Allocating registers..."
     let (LIR.Program funcs) = lirProgram
     let func = List.head funcs
     let allocResult = RegisterAllocation.allocateRegisters func
     let allocatedFunc = { func with Body = allocResult.Instrs; StackSize = allocResult.StackSize }
     let allocatedProgram = LIR.Program [allocatedFunc]
+    if showVerbose then printfn "      Allocated LIR: %A" allocatedProgram
 
     // Generate ARM64 code
-    if not quiet then printfn "  [6/8] Generating ARM64 code..."
+    if showNormal then printfn "  [6/8] Generating ARM64 code..."
     let arm64Code = CodeGen.generateARM64 allocatedProgram
-    if not quiet then printfn "    Generated %d instructions" arm64Code.Length
+    if showNormal then printfn "    Generated %d instructions" arm64Code.Length
+    if showVerbose then
+        arm64Code |> List.iteri (fun i instr -> printfn "      [%d] %A" i instr)
 
     // Encode to machine code and generate binary
-    if not quiet then printfn "  [7/8] Encoding ARM64 to machine code..."
+    if showNormal then printfn "  [7/8] Encoding ARM64 to machine code..."
     let machineCode = arm64Code |> List.collect ARM64_Encoding.encode
+    if showVerbose then printfn "      Machine code: %d bytes" machineCode.Length
 
-    if not quiet then printfn "  [8/8] Generating binary..."
+    if showNormal then printfn "  [8/8] Generating binary..."
     let binary = Binary_Generation.createExecutable machineCode
 
     // Write to file
     Binary_Generation.writeToFile outputPath binary
-    if not quiet then printfn "Successfully wrote %d bytes to %s" binary.Length outputPath
+    if showNormal then printfn "Successfully wrote %d bytes to %s" binary.Length outputPath
 
 /// Run an expression (compile to temp and execute)
-let run (source: string) (quiet: bool) : int =
+let run (source: string) (verbosity: VerbosityLevel) : int =
+    let showNormal = verbosity = Normal || verbosity = Verbose
+
     // Create temp directory and file
     let tempDir = "/tmp/claude"
     if not (Directory.Exists tempDir) then
@@ -80,9 +268,9 @@ let run (source: string) (quiet: bool) : int =
 
     try
         // Compile
-        compile source tempExe quiet
+        compile source tempExe verbosity
 
-        if not quiet then
+        if showNormal then
             printfn ""
             printfn "Running: %s" source
             printfn "---"
@@ -96,7 +284,7 @@ let run (source: string) (quiet: bool) : int =
 
         let exitCode = proc.ExitCode
 
-        if not quiet then
+        if showNormal then
             printfn "---"
             printfn "Exit code: %d" exitCode
 
@@ -112,71 +300,117 @@ let run (source: string) (quiet: bool) : int =
             File.Delete tempExe
         reraise()
 
+/// Print version information
+let printVersion () =
+    printfn "Dark Compiler v0.1.0"
+    printfn "Darklang ARM64 compiler for macOS"
+
 /// Print usage information
 let printUsage () =
-    printfn "Darklang Compiler"
+    printfn "Dark Compiler v0.1.0"
     printfn ""
     printfn "Usage:"
-    printfn "  DarkCompiler <expression> <output>       Compile expression to executable"
-    printfn "  DarkCompiler --file <file> <output>      Compile file to executable"
-    printfn "  DarkCompiler --run <expression>          Compile and run expression"
-    printfn "  DarkCompiler -r <expression>             Compile and run expression"
-    printfn "  DarkCompiler --quiet --run <expression>  Run without compilation output"
-    printfn "  DarkCompiler -q -r <expression>          Run without compilation output"
+    printfn "  dark -c <expression> [-o <output>]       Compile expression to executable"
+    printfn "  dark -r <expression>                     Run expression"
+    printfn "  dark -f <file> [-o <output>]             Compile file to executable"
+    printfn "  dark -f <file> -r                        Compile and run file"
+    printfn "  dark -r -                                Read expression from stdin and run"
+    printfn "  dark -c - -o <output>                    Read from stdin and compile"
+    printfn ""
+    printfn "Flags:"
+    printfn "  -c, --compile        Compile to executable"
+    printfn "  -r, --run            Compile and run, showing exit code"
+    printfn "  -f, --file           Treat argument as filename (not expression)"
+    printfn "  -o, --output FILE    Output file (default: dark.out)"
+    printfn "  -q, --quiet          Suppress compilation output"
+    printfn "  -v, --verbose        Show detailed compilation steps"
+    printfn "  -h, --help           Show this help message"
+    printfn "  --version            Show version information"
+    printfn ""
+    printfn "Flags can appear in any order and can be combined (e.g., -qr, -vf)"
+    printfn "When both -q and -v are specified, the last one wins."
     printfn ""
     printfn "Examples:"
-    printfn "  DarkCompiler \"2 + 3\" output              # Compile to 'output' file"
-    printfn "  DarkCompiler --run \"2 + 3\"               # Run and show exit code (5)"
-    printfn "  DarkCompiler -r \"6 * 7\"                  # Run and show exit code (42)"
-    printfn "  DarkCompiler -q -r \"10 + 32\"             # Run quietly, exit code 42"
+    printfn "  dark -c \"2 + 3\" -o output            Compile expression to 'output'"
+    printfn "  dark -c \"2 + 3\"                      Compile to 'dark.out' (default)"
+    printfn "  dark -r \"2 + 3\"                      Run and show exit code (5)"
+    printfn "  dark -qr \"6 * 7\"                     Run quietly (exit code: 42)"
+    printfn "  dark -f prog.dark -o output          Compile file to executable"
+    printfn "  dark -rf prog.dark                   Compile and run file"
+    printfn "  echo \"2 + 3\" | dark -r -            Run expression from stdin"
+    printfn "  dark -v -c \"2 + 3\" -o output        Compile with verbose output"
     printfn ""
     printfn "Note: Generated executables may require code signing to run on macOS"
 
 [<EntryPoint>]
 let main argv =
     try
-        match argv with
-        // Run with quiet mode (3 args - most specific first)
-        | [| "--quiet"; "--run"; expr |] ->
-            run expr true
-        | [| "-q"; "-r"; expr |] ->
-            run expr true
-
-        // Run mode (2 args)
-        | [| "--run"; expr |] ->
-            run expr false
-        | [| "-r"; expr |] ->
-            run expr false
-
-        // File input (3 args)
-        | [| "--file"; inputFile; output |] ->
-            if not (File.Exists inputFile) then
-                printfn "Error: Input file '%s' not found" inputFile
-                1
-            else
-                let source = File.ReadAllText inputFile
-                compile source output false
-                0
-
-        // Quiet compile (3 args)
-        | [| "--quiet"; expr; output |] ->
-            compile expr output true
-            0
-        | [| "-q"; expr; output |] ->
-            compile expr output true
-            0
-
-        // Normal compile (2 args - most general last)
-        | [| expr; output |] ->
-            compile expr output false
-            0
-
-        | _ ->
-            printUsage ()
+        match parseArgs argv |> Result.bind validateOptions with
+        | Error msg ->
+            printfn "Error: %s" msg
+            printfn ""
+            printUsage()
             1
 
-    with
-    | ex ->
+        | Ok options when options.Help ->
+            printUsage()
+            0
+
+        | Ok options when options.Version ->
+            printVersion()
+            0
+
+        | Ok options ->
+            // Get source code (from stdin, file, or inline expression)
+            let getSource () : Result<string, string> =
+                match options.Argument with
+                | Some "-" ->
+                    // Read from stdin
+                    try
+                        let source = Console.In.ReadToEnd()
+                        if String.IsNullOrWhiteSpace source then
+                            Error "No input provided on stdin"
+                        else
+                            Ok source
+                    with ex ->
+                        Error (sprintf "Failed to read from stdin: %s" ex.Message)
+
+                | Some filepath when options.Input = Some File ->
+                    // Read from file
+                    if not (File.Exists filepath) then
+                        Error (sprintf "File not found: %s" filepath)
+                    else
+                        try
+                            Ok (File.ReadAllText filepath)
+                        with ex ->
+                            Error (sprintf "Failed to read file: %s" ex.Message)
+
+                | Some expr when options.Input = Some Expression ->
+                    // Inline expression
+                    Ok expr
+
+                | _ ->
+                    Error "No source provided"
+
+            match options.Action, getSource() with
+            | Some Compile, Ok source ->
+                let output = options.OutputFile |> Option.defaultValue "dark.out"
+                compile source output options.Verbosity
+                0
+
+            | Some Run, Ok source ->
+                run source options.Verbosity
+
+            | _, Error msg ->
+                printfn "Error: %s" msg
+                1
+
+            | _ ->
+                printfn "Error: Invalid combination of flags"
+                printUsage()
+                1
+
+    with ex ->
         printfn "Error: %s" ex.Message
         printfn "%s" ex.StackTrace
         1
