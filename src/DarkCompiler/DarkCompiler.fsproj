@@ -10,6 +10,7 @@
     <Compile Include="Parser.fs" />
     <Compile Include="ANF.fs" />
     <Compile Include="MIR.fs" />
+    <Compile Include="LIR.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
