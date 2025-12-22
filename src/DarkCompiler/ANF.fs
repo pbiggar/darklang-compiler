@@ -37,3 +37,8 @@ let freshVar (VarGen n) : TempId * VarGen =
 
 /// Initial variable generator
 let initialVarGen = VarGen 0
+
+/// Convert AST to ANF
+let toANF (expr: AST.Expr) (varGen: VarGen) : AExpr * VarGen =
+    // To be implemented
+    (Return (IntLiteral 0L), varGen)

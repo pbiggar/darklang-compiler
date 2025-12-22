@@ -10,6 +10,7 @@
   <ItemGroup>
     <Compile Include="ASTTests.fs"/>
     <Compile Include="ParserTests.fs"/>
+    <Compile Include="ANFTests.fs"/>
     <Compile Include="SmokeTests.fs"/>
   </ItemGroup>
 
