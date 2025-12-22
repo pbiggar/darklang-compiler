@@ -14,6 +14,7 @@
     <Compile Include="MIRTests.fs"/>
     <Compile Include="LIRTests.fs"/>
     <Compile Include="ARM64Tests.fs"/>
+    <Compile Include="CodeGenTests.fs"/>
     <Compile Include="SmokeTests.fs"/>
   </ItemGroup>
 

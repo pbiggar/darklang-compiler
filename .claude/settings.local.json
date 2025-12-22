@@ -5,7 +5,9 @@
       "Bash(git -C /Users/paulbiggar/projects/compiler-for-dark log --oneline)",
       "Bash(dotnet --version:*)",
       "Bash(dotnet restore:*)",
-      "Bash(dotnet test:*)"
+      "Bash(dotnet test:*)",
+      "Bash(timeout 10 dotnet build:*)",
+      "Bash(dotnet build:*)"
     ]
   },
   "sandbox": {

@@ -12,6 +12,7 @@
     <Compile Include="MIR.fs" />
     <Compile Include="LIR.fs" />
     <Compile Include="ARM64.fs" />
+    <Compile Include="CodeGen.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
