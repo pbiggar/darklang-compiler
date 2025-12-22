@@ -11,6 +11,7 @@
     <Compile Include="ANF.fs" />
     <Compile Include="MIR.fs" />
     <Compile Include="LIR.fs" />
+    <Compile Include="ARM64.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
