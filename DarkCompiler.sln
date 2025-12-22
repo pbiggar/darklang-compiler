@@ -7,6 +7,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{EB51DAA9-BB5
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "DarkCompiler", "src\DarkCompiler\DarkCompiler.fsproj", "{4FD5027E-1F87-48DA-8D41-6DE0F88656FB}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Tests", "src\Tests\Tests.fsproj", "{01D30C01-2BC4-4286-9E2D-C93D6815D1A7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,8 +22,13 @@ Global
 		{4FD5027E-1F87-48DA-8D41-6DE0F88656FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4FD5027E-1F87-48DA-8D41-6DE0F88656FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4FD5027E-1F87-48DA-8D41-6DE0F88656FB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{01D30C01-2BC4-4286-9E2D-C93D6815D1A7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{01D30C01-2BC4-4286-9E2D-C93D6815D1A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{01D30C01-2BC4-4286-9E2D-C93D6815D1A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{01D30C01-2BC4-4286-9E2D-C93D6815D1A7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{4FD5027E-1F87-48DA-8D41-6DE0F88656FB} = {EB51DAA9-BB59-46FF-A653-8487634FF903}
+		{01D30C01-2BC4-4286-9E2D-C93D6815D1A7} = {EB51DAA9-BB59-46FF-A653-8487634FF903}
 	EndGlobalSection
 EndGlobal

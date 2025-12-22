@@ -3,7 +3,8 @@
     "allow": [
       "Bash(cat:*)",
       "Bash(git -C /Users/paulbiggar/projects/compiler-for-dark log --oneline)",
-      "Bash(dotnet --version:*)"
+      "Bash(dotnet --version:*)",
+      "Bash(dotnet restore:*)"
     ]
   },
   "sandbox": {
