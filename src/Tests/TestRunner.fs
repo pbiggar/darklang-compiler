@@ -218,11 +218,7 @@ let main args =
             printfn "%s🚀 E2E Tests%s" Colors.cyan Colors.reset
             printfn ""
 
-            // Find compiler executable - it's in the same bin directory as Tests
-            // assemblyDir is: /path/to/bin/Tests/Debug/net9.0
-            // compiler is at: /path/to/bin/DarkCompiler/Debug/net9.0/DarkCompiler.dll
-            let binDir = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(assemblyDir)))
-            let compilerPath = Path.Combine(binDir, "DarkCompiler/Debug/net9.0/DarkCompiler.dll")
+            // No compiler path needed - using library directly
 
             for testPath in e2eTests do
                 let testName = Path.GetFileName testPath
@@ -231,7 +227,7 @@ let main args =
 
                 match parseE2ETest testPath with
                 | Ok test ->
-                    let result = runE2ETest test compilerPath
+                    let result = runE2ETest test
                     testTimer.Stop()
                     if result.Success then
                         printfn "%s✓ PASS%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset

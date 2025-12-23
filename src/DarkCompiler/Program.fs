@@ -160,105 +160,42 @@ let validateOptions (opts: CliOptions) : Result<CliOptions, string> =
 /// Compile source expression to executable
 let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) : unit =
     let showNormal = verbosity = Normal || verbosity = Verbose
-    let showVerbose = verbosity = Verbose
 
     if showNormal then
         printfn "Compiling: %s" source
+        printfn "  [1-8] Running compilation pipeline..."
 
-    // Parse
-    if showNormal then printfn "  [1/8] Parsing..."
-    let ast = Parser.parseString source
-    if showVerbose then printfn "      AST: %A" ast
+    // Use library for compilation
+    let result = CompilerLibrary.compile source
 
-    // Convert to ANF
-    if showNormal then printfn "  [2/8] Converting to ANF..."
-    let (AST.Program expr) = ast
-    let (anfExpr, _) = AST_to_ANF.toANF expr (ANF.VarGen 0)
-    let anfProgram = ANF.Program anfExpr
-    if showVerbose then printfn "      ANF: %A" anfProgram
-
-    // Convert to MIR
-    if showNormal then printfn "  [3/8] Converting to MIR..."
-    let (mirProgram, _) = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0)
-    if showVerbose then printfn "      MIR: %A" mirProgram
-
-    // Convert to LIR
-    if showNormal then printfn "  [4/8] Converting to LIR..."
-    let lirProgram = MIR_to_LIR.toLIR mirProgram
-    if showVerbose then printfn "      LIR: %A" lirProgram
-
-    // Allocate registers
-    if showNormal then printfn "  [5/8] Allocating registers..."
-    let (LIR.Program funcs) = lirProgram
-    let func = List.head funcs
-    let allocResult = RegisterAllocation.allocateRegisters func
-    let allocatedFunc = { func with Body = allocResult.Instrs; StackSize = allocResult.StackSize }
-    let allocatedProgram = LIR.Program [allocatedFunc]
-    if showVerbose then printfn "      Allocated LIR: %A" allocatedProgram
-
-    // Generate ARM64 code
-    if showNormal then printfn "  [6/8] Generating ARM64 code..."
-    let arm64Code = CodeGen.generateARM64 allocatedProgram
-    if showNormal then printfn "    Generated %d instructions" arm64Code.Length
-    if showVerbose then
-        arm64Code |> List.iteri (fun i instr -> printfn "      [%d] %A" i instr)
-
-    // Encode to machine code and generate binary
-    if showNormal then printfn "  [7/8] Encoding ARM64 to machine code..."
-    let machineCode = arm64Code |> List.collect ARM64_Encoding.encode
-    if showVerbose then printfn "      Machine code: %d bytes" machineCode.Length
-
-    if showNormal then printfn "  [8/8] Generating binary..."
-    let binary = Binary_Generation.createExecutable machineCode
+    if not result.Success then
+        eprintfn "Compilation failed: %s" (result.ErrorMessage |> Option.defaultValue "Unknown error")
+        exit 1
 
     // Write to file
-    Binary_Generation.writeToFile outputPath binary
-    if showNormal then printfn "Successfully wrote %d bytes to %s" binary.Length outputPath
+    Binary_Generation.writeToFile outputPath result.Binary
+    if showNormal then printfn "Successfully wrote %d bytes to %s" result.Binary.Length outputPath
 
 /// Run an expression (compile to temp and execute)
 let run (source: string) (verbosity: VerbosityLevel) : int =
     let showNormal = verbosity = Normal || verbosity = Verbose
 
-    // Create temp directory and file
-    let tempDir = "/tmp/claude"
-    if not (Directory.Exists tempDir) then
-        Directory.CreateDirectory tempDir |> ignore
+    if showNormal then
+        printfn "Compiling and running: %s" source
+        printfn "---"
 
-    let tempExe = Path.Combine(tempDir, sprintf "dark_%d" (System.Diagnostics.Process.GetCurrentProcess().Id))
+    // Use library for compile and run
+    let result = CompilerLibrary.compileAndRun source
 
-    try
-        // Compile
-        compile source tempExe verbosity
+    if showNormal then
+        if result.Stdout <> "" then
+            printfn "%s" result.Stdout
+        if result.Stderr <> "" then
+            eprintfn "%s" result.Stderr
+        printfn "---"
+        printfn "Exit code: %d" result.ExitCode
 
-        if showNormal then
-            printfn ""
-            printfn "Running: %s" source
-            printfn "---"
-
-        // Execute
-        let proc = new System.Diagnostics.Process()
-        proc.StartInfo.FileName <- tempExe
-        proc.StartInfo.UseShellExecute <- false
-        proc.Start() |> ignore
-        proc.WaitForExit()
-
-        let exitCode = proc.ExitCode
-
-        if showNormal then
-            printfn "---"
-            printfn "Exit code: %d" exitCode
-
-        // Cleanup
-        if File.Exists tempExe then
-            File.Delete tempExe
-
-        exitCode
-    with
-    | ex ->
-        // Cleanup on error
-        if File.Exists tempExe then
-            File.Delete tempExe
-        reraise()
+    result.ExitCode
 
 /// Print version information
 let printVersion () =

@@ -21,6 +21,7 @@
     <Compile Include="passes/7_ARM64_Encoding.fs" />
     <Compile Include="Binary.fs" />
     <Compile Include="passes/8_Binary_Generation.fs" />
+    <Compile Include="CompilerLibrary.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
