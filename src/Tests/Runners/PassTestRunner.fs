@@ -10,11 +10,14 @@ open TestDSL.Common
 open TestDSL.ANFParser
 open TestDSL.MIRParser
 open TestDSL.LIRParser
+open TestDSL.ARM64Parser
 open ANF
 open MIR
 open LIR
+open ARM64
 open ANF_to_MIR
 open MIR_to_LIR
+open CodeGen
 
 /// Result of running a pass test
 type PassTestResult = {
@@ -193,3 +196,76 @@ let runANF2MIRTest (input: ANF.Program) (expected: MIR.Program) : PassTestResult
           Message = "Output mismatch"
           Expected = Some (prettyPrintMIR expected)
           Actual = Some (prettyPrintMIR actual) }
+
+/// Pretty-print ARM64 register
+let prettyPrintARM64Reg = function
+    | ARM64.X0 -> "X0" | ARM64.X1 -> "X1" | ARM64.X2 -> "X2" | ARM64.X3 -> "X3"
+    | ARM64.X4 -> "X4" | ARM64.X5 -> "X5" | ARM64.X6 -> "X6" | ARM64.X7 -> "X7"
+    | ARM64.X8 -> "X8" | ARM64.X9 -> "X9" | ARM64.X10 -> "X10" | ARM64.X11 -> "X11"
+    | ARM64.X12 -> "X12" | ARM64.X13 -> "X13" | ARM64.X14 -> "X14" | ARM64.X15 -> "X15"
+    | ARM64.X16 -> "X16" | ARM64.X29 -> "X29" | ARM64.X30 -> "X30" | ARM64.SP -> "SP"
+
+/// Pretty-print ARM64 instruction
+let prettyPrintARM64Instr = function
+    | ARM64.MOVZ (dest, imm, shift) ->
+        $"MOVZ({prettyPrintARM64Reg dest}, {imm}, {shift})"
+    | ARM64.MOVK (dest, imm, shift) ->
+        $"MOVK({prettyPrintARM64Reg dest}, {imm}, {shift})"
+    | ARM64.ADD_imm (dest, src, imm) ->
+        $"ADD_imm({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {imm})"
+    | ARM64.ADD_reg (dest, src1, src2) ->
+        $"ADD_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
+    | ARM64.SUB_imm (dest, src, imm) ->
+        $"SUB_imm({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {imm})"
+    | ARM64.SUB_reg (dest, src1, src2) ->
+        $"SUB_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
+    | ARM64.MUL (dest, src1, src2) ->
+        $"MUL({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
+    | ARM64.SDIV (dest, src1, src2) ->
+        $"SDIV({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
+    | ARM64.MOV_reg (dest, src) ->
+        $"MOV_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
+    | ARM64.RET -> "RET"
+    | ARM64.SVC imm -> $"SVC({imm})"
+
+/// Pretty-print ARM64 program
+let prettyPrintARM64 (instrs: ARM64.Instr list) : string =
+    instrs
+    |> List.map prettyPrintARM64Instr
+    |> String.concat "\n"
+
+/// Load LIR→ARM64 test from file
+let loadLIR2ARM64Test (path: string) : Result<LIR.Program * ARM64.Instr list, string> =
+    if not (File.Exists path) then
+        Error $"Test file not found: {path}"
+    else
+        let content = File.ReadAllText(path)
+        let testFile = parseTestFile content
+
+        match getRequiredSection "INPUT-LIR" testFile with
+        | Error e -> Error e
+        | Ok inputText ->
+            match parseLIR inputText with
+            | Error e -> Error $"Failed to parse INPUT-LIR: {e}"
+            | Ok lirProgram ->
+                match getRequiredSection "OUTPUT-ARM64" testFile with
+                | Error e -> Error e
+                | Ok outputText ->
+                    match parseARM64 outputText with
+                    | Error e -> Error $"Failed to parse OUTPUT-ARM64: {e}"
+                    | Ok arm64Instrs -> Ok (lirProgram, arm64Instrs)
+
+/// Run LIR→ARM64 test
+let runLIR2ARM64Test (input: LIR.Program) (expected: ARM64.Instr list) : PassTestResult =
+    let actual = CodeGen.generateARM64 input
+
+    if actual = expected then
+        { Success = true
+          Message = "Test passed"
+          Expected = None
+          Actual = None }
+    else
+        { Success = false
+          Message = "Output mismatch"
+          Expected = Some (prettyPrintARM64 expected)
+          Actual = Some (prettyPrintARM64 actual) }

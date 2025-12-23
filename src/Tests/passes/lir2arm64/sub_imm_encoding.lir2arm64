@@ -1,0 +1,15 @@
+---NAME---
+SUB immediate encoding - regression test for op bit bug
+
+---INPUT-LIR---
+X1 <- Mov(Imm 10)
+X1 <- Sub(X1, Imm 3)
+X0 <- Mov(Reg X1)
+Ret
+
+---OUTPUT-ARM64---
+MOVZ(X1, 10, 0)
+SUB_imm(X1, X1, 3)
+MOV_reg(X0, X1)
+MOVZ(X16, 1, 0)
+SVC(128)

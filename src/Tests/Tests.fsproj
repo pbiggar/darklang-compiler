@@ -13,6 +13,7 @@
     <Compile Include="TestDSL/ANFParser.fs" />
     <Compile Include="TestDSL/MIRParser.fs" />
     <Compile Include="TestDSL/LIRParser.fs" />
+    <Compile Include="TestDSL/ARM64Parser.fs" />
     <Compile Include="TestDSL/E2EFormat.fs" />
     <Compile Include="Runners/PassTestRunner.fs" />
     <Compile Include="Runners/E2ETestRunner.fs" />
@@ -53,6 +54,7 @@
   <ItemGroup>
     <None Include="passes/**/*.mir2lir" CopyToOutputDirectory="PreserveNewest" />
     <None Include="passes/**/*.anf2mir" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="passes/**/*.lir2arm64" CopyToOutputDirectory="PreserveNewest" />
     <None Include="e2e/**/*.test" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
