@@ -26,4 +26,3 @@ let testEncodeReg () =
 /// Run all encoding unit tests
 let runAll () =
     testEncodeReg()
-    printfn "  ✓ encodeReg test passed"

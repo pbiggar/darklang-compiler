@@ -141,34 +141,13 @@ let testCompleteEncodingPipeline () =
 /// Run all binary generation unit tests
 let runAll () =
     testUint32ToBytes()
-    printfn "  ✓ uint32ToBytes test passed"
-
     testUint64ToBytes()
-    printfn "  ✓ uint64ToBytes test passed"
-
     testPadString()
-    printfn "  ✓ padString test passed"
-
     testPadStringTruncate()
-    printfn "  ✓ padString truncate test passed"
-
     testSerializeMachHeaderSize()
-    printfn "  ✓ serializeMachHeader size test passed"
-
     testSerializeMachHeaderMagic()
-    printfn "  ✓ serializeMachHeader magic test passed"
-
     testSerializeSection64Size()
-    printfn "  ✓ serializeSection64 size test passed"
-
     testCreateExecutableNonEmpty()
-    printfn "  ✓ createExecutable non-empty test passed"
-
     testCreateExecutableMagic()
-    printfn "  ✓ createExecutable magic test passed"
-
     testCreateExecutableContainsCode()
-    printfn "  ✓ createExecutable contains code test passed"
-
     testCompleteEncodingPipeline()
-    printfn "  ✓ complete encoding pipeline test passed"

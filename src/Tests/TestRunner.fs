@@ -4,15 +4,36 @@
 
 module TestRunner.Main
 
+open System
 open System.IO
 open System.Reflection
+open System.Diagnostics
 open TestDSL.PassTestRunner
 open TestDSL.E2EFormat
 open TestDSL.E2ETestRunner
 
+// ANSI color codes
+module Colors =
+    let reset = "\x1b[0m"
+    let green = "\x1b[32m"
+    let red = "\x1b[31m"
+    let yellow = "\x1b[33m"
+    let cyan = "\x1b[36m"
+    let gray = "\x1b[90m"
+    let bold = "\x1b[1m"
+
+// Format elapsed time
+let formatTime (elapsed: TimeSpan) =
+    if elapsed.TotalMilliseconds < 1000.0 then
+        sprintf "%.0fms" elapsed.TotalMilliseconds
+    else
+        sprintf "%.2fs" elapsed.TotalSeconds
+
 [<EntryPoint>]
 let main args =
-    printfn "=== Running DSL-based Tests ==="
+    let totalTimer = Stopwatch.StartNew()
+
+    printfn "%s%s🧪 Running DSL-based Tests%s%s" Colors.bold Colors.cyan Colors.reset ""
     printfn ""
 
     // Get the directory where the assembly is located (where test files are copied)
@@ -26,21 +47,24 @@ let main args =
     if Directory.Exists anf2mirDir then
         let anf2mirTests = Directory.GetFiles(anf2mirDir, "*.anf2mir")
         if anf2mirTests.Length > 0 then
-            printfn "Running ANF→MIR tests from %s" anf2mirDir
+            let sectionTimer = Stopwatch.StartNew()
+            printfn "%s📦 ANF→MIR Tests%s" Colors.cyan Colors.reset
             printfn ""
 
             for testPath in anf2mirTests do
                 let testName = Path.GetFileName testPath
+                let testTimer = Stopwatch.StartNew()
                 printf "  %s... " testName
 
                 match loadANF2MIRTest testPath with
                 | Ok (input, expected) ->
                     let result = runANF2MIRTest input expected
+                    testTimer.Stop()
                     if result.Success then
-                        printfn "✓ PASS"
+                        printfn "%s✓ PASS%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
                         passed <- passed + 1
                     else
-                        printfn "✗ FAIL"
+                        printfn "%s✗ FAIL%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
                         printfn "    %s" result.Message
                         match result.Expected, result.Actual with
                         | Some exp, Some act ->
@@ -53,10 +77,13 @@ let main args =
                         | _ -> ()
                         failed <- failed + 1
                 | Error msg ->
-                    printfn "✗ ERROR"
+                    testTimer.Stop()
+                    printfn "%s✗ ERROR%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
                     printfn "    Failed to load test: %s" msg
                     failed <- failed + 1
 
+            sectionTimer.Stop()
+            printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
             printfn ""
 
     // Run MIR→LIR tests
@@ -64,21 +91,24 @@ let main args =
     if Directory.Exists mir2lirDir then
         let mir2lirTests = Directory.GetFiles(mir2lirDir, "*.mir2lir")
         if mir2lirTests.Length > 0 then
-            printfn "Running MIR→LIR tests from %s" mir2lirDir
+            let sectionTimer = Stopwatch.StartNew()
+            printfn "%s🔄 MIR→LIR Tests%s" Colors.cyan Colors.reset
             printfn ""
 
             for testPath in mir2lirTests do
                 let testName = Path.GetFileName testPath
+                let testTimer = Stopwatch.StartNew()
                 printf "  %s... " testName
 
                 match loadMIR2LIRTest testPath with
                 | Ok (input, expected) ->
                     let result = runMIR2LIRTest input expected
+                    testTimer.Stop()
                     if result.Success then
-                        printfn "✓ PASS"
+                        printfn "%s✓ PASS%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
                         passed <- passed + 1
                     else
-                        printfn "✗ FAIL"
+                        printfn "%s✗ FAIL%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
                         printfn "    %s" result.Message
                         match result.Expected, result.Actual with
                         | Some exp, Some act ->
@@ -91,10 +121,13 @@ let main args =
                         | _ -> ()
                         failed <- failed + 1
                 | Error msg ->
-                    printfn "✗ ERROR"
+                    testTimer.Stop()
+                    printfn "%s✗ ERROR%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
                     printfn "    Failed to load test: %s" msg
                     failed <- failed + 1
 
+            sectionTimer.Stop()
+            printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
             printfn ""
 
     // Run LIR→ARM64 tests
@@ -102,21 +135,24 @@ let main args =
     if Directory.Exists lir2arm64Dir then
         let lir2arm64Tests = Directory.GetFiles(lir2arm64Dir, "*.lir2arm64")
         if lir2arm64Tests.Length > 0 then
-            printfn "Running LIR→ARM64 tests from %s" lir2arm64Dir
+            let sectionTimer = Stopwatch.StartNew()
+            printfn "%s🎯 LIR→ARM64 Tests%s" Colors.cyan Colors.reset
             printfn ""
 
             for testPath in lir2arm64Tests do
                 let testName = Path.GetFileName testPath
+                let testTimer = Stopwatch.StartNew()
                 printf "  %s... " testName
 
                 match loadLIR2ARM64Test testPath with
                 | Ok (input, expected) ->
                     let result = runLIR2ARM64Test input expected
+                    testTimer.Stop()
                     if result.Success then
-                        printfn "✓ PASS"
+                        printfn "%s✓ PASS%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
                         passed <- passed + 1
                     else
-                        printfn "✗ FAIL"
+                        printfn "%s✗ FAIL%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
                         printfn "    %s" result.Message
                         match result.Expected, result.Actual with
                         | Some exp, Some act ->
@@ -129,10 +165,13 @@ let main args =
                         | _ -> ()
                         failed <- failed + 1
                 | Error msg ->
-                    printfn "✗ ERROR"
+                    testTimer.Stop()
+                    printfn "%s✗ ERROR%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
                     printfn "    Failed to load test: %s" msg
                     failed <- failed + 1
 
+            sectionTimer.Stop()
+            printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
             printfn ""
 
     // Run ARM64 encoding tests
@@ -140,28 +179,34 @@ let main args =
     if Directory.Exists arm64encDir then
         let arm64encTests = Directory.GetFiles(arm64encDir, "*.arm64enc")
         if arm64encTests.Length > 0 then
-            printfn "Running ARM64 Encoding tests from %s" arm64encDir
+            let sectionTimer = Stopwatch.StartNew()
+            printfn "%s⚙️  ARM64 Encoding Tests%s" Colors.cyan Colors.reset
             printfn ""
 
             for testPath in arm64encTests do
                 let testName = Path.GetFileName testPath
+                let testTimer = Stopwatch.StartNew()
                 printf "  %s... " testName
 
                 match TestDSL.ARM64EncodingTestRunner.loadARM64EncodingTest testPath with
                 | Ok test ->
                     let result = TestDSL.ARM64EncodingTestRunner.runARM64EncodingTest test
+                    testTimer.Stop()
                     if result.Success then
-                        printfn "✓ PASS"
+                        printfn "%s✓ PASS%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
                         passed <- passed + 1
                     else
-                        printfn "✗ FAIL"
+                        printfn "%s✗ FAIL%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
                         printfn "    %s" result.Message
                         failed <- failed + 1
                 | Error msg ->
-                    printfn "✗ ERROR"
+                    testTimer.Stop()
+                    printfn "%s✗ ERROR%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
                     printfn "    Failed to load test: %s" msg
                     failed <- failed + 1
 
+            sectionTimer.Stop()
+            printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
             printfn ""
 
     // Run E2E tests
@@ -169,7 +214,8 @@ let main args =
     if Directory.Exists e2eDir then
         let e2eTests = Directory.GetFiles(e2eDir, "*.test", SearchOption.AllDirectories)
         if e2eTests.Length > 0 then
-            printfn "Running E2E tests from %s" e2eDir
+            let sectionTimer = Stopwatch.StartNew()
+            printfn "%s🚀 E2E Tests%s" Colors.cyan Colors.reset
             printfn ""
 
             // Find compiler executable - it's in the same bin directory as Tests
@@ -180,16 +226,18 @@ let main args =
 
             for testPath in e2eTests do
                 let testName = Path.GetFileName testPath
+                let testTimer = Stopwatch.StartNew()
                 printf "  %s... " testName
 
                 match parseE2ETest testPath with
                 | Ok test ->
                     let result = runE2ETest test compilerPath
+                    testTimer.Stop()
                     if result.Success then
-                        printfn "✓ PASS"
+                        printfn "%s✓ PASS%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
                         passed <- passed + 1
                     else
-                        printfn "✗ FAIL"
+                        printfn "%s✗ FAIL%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
                         printfn "    %s" result.Message
                         match result.ExitCode with
                         | Some code when code <> test.ExpectedExitCode ->
@@ -207,38 +255,60 @@ let main args =
                         | _ -> ()
                         failed <- failed + 1
                 | Error msg ->
-                    printfn "✗ ERROR"
+                    testTimer.Stop()
+                    printfn "%s✗ ERROR%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
                     printfn "    Failed to load test: %s" msg
                     failed <- failed + 1
 
+            sectionTimer.Stop()
+            printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
             printfn ""
 
     // Run unit tests
-    printfn "Running Unit Tests"
+    let sectionTimer = Stopwatch.StartNew()
+    printfn "%s🔧 Unit Tests%s" Colors.cyan Colors.reset
     printfn ""
 
+    let unitTestTimer = Stopwatch.StartNew()
     try
         EncodingTests.runAll()
+        unitTestTimer.Stop()
+        printfn "  %s✓ Encoding Tests%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime unitTestTimer.Elapsed) Colors.reset
         passed <- passed + 1
     with
     | ex ->
-        printfn "✗ FAIL: Encoding tests"
+        unitTestTimer.Stop()
+        printfn "  %s✗ FAIL: Encoding tests%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime unitTestTimer.Elapsed) Colors.reset
         printfn "    %s" ex.Message
         failed <- failed + 1
 
+    let binaryTestTimer = Stopwatch.StartNew()
     try
         BinaryTests.runAll()
+        binaryTestTimer.Stop()
+        printfn "  %s✓ Binary Tests%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime binaryTestTimer.Elapsed) Colors.reset
         passed <- passed + 11  // 11 tests in BinaryTests
     with
     | ex ->
-        printfn "✗ FAIL: Binary tests"
+        binaryTestTimer.Stop()
+        printfn "  %s✗ FAIL: Binary tests%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime binaryTestTimer.Elapsed) Colors.reset
         printfn "    %s" ex.Message
         failed <- failed + 1
 
+    sectionTimer.Stop()
+    printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
     printfn ""
 
-    printfn "=== Results ==="
-    printfn "Passed: %d" passed
-    printfn "Failed: %d" failed
+    totalTimer.Stop()
+    printfn "%s%s═══════════════════════════════════════%s" Colors.bold Colors.cyan Colors.reset
+    printfn "%s%s📊 Test Results%s" Colors.bold Colors.cyan Colors.reset
+    printfn "%s%s═══════════════════════════════════════%s" Colors.bold Colors.cyan Colors.reset
+    if failed = 0 then
+        printfn "  %s✓ All tests passed: %d/%d%s" Colors.green (passed) (passed + failed) Colors.reset
+    else
+        printfn "  %s✓ Passed: %d%s" Colors.green passed Colors.reset
+        printfn "  %s✗ Failed: %d%s" Colors.red failed Colors.reset
+    printfn "  %s⏱  Total time: %s%s" Colors.gray (formatTime totalTimer.Elapsed) Colors.reset
+    printfn "%s%s═══════════════════════════════════════%s" Colors.bold Colors.cyan Colors.reset
 
     if failed = 0 then 0 else 1
