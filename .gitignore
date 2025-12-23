@@ -36,3 +36,4 @@ TestResults/
 # Examples output
 examples/*.out
 examples/output
+dark.out
