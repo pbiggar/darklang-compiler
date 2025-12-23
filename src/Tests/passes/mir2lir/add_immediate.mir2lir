@@ -1,0 +1,13 @@
+---NAME---
+Addition with immediate constant
+
+---INPUT-MIR---
+v0 <- 5
+v1 <- v0 + 10
+ret v1
+
+---OUTPUT-LIR---
+v0 <- Mov(Imm 5)
+v1 <- Add(v0, Imm 10)
+X0 <- Mov(Reg v1)
+Ret

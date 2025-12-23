@@ -1,0 +1,15 @@
+---NAME---
+Addition with two registers
+
+---INPUT-MIR---
+v0 <- 3
+v1 <- 7
+v2 <- v0 + v1
+ret v2
+
+---OUTPUT-LIR---
+v0 <- Mov(Imm 3)
+v1 <- Mov(Imm 7)
+v2 <- Add(v0, Reg v1)
+X0 <- Mov(Reg v2)
+Ret

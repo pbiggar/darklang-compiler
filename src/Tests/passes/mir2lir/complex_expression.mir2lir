@@ -1,0 +1,19 @@
+---NAME---
+Complex expression with multiple operations
+
+---INPUT-MIR---
+v0 <- 2
+v1 <- 3
+v2 <- v0 + v1
+v3 <- 4
+v4 <- v2 * v3
+ret v4
+
+---OUTPUT-LIR---
+v0 <- Mov(Imm 2)
+v1 <- Mov(Imm 3)
+v2 <- Add(v0, Reg v1)
+v3 <- Mov(Imm 4)
+v4 <- Mul(v2, Reg v3)
+X0 <- Mov(Reg v4)
+Ret

@@ -1,0 +1,15 @@
+---NAME---
+Division of two registers
+
+---INPUT-MIR---
+v0 <- 20
+v1 <- 4
+v2 <- v0 / v1
+ret v2
+
+---OUTPUT-LIR---
+v0 <- Mov(Imm 20)
+v1 <- Mov(Imm 4)
+v2 <- Sdiv(v0, Reg v1)
+X0 <- Mov(Reg v2)
+Ret
