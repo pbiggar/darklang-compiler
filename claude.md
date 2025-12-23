@@ -16,6 +16,12 @@ Comments:
 
 - Comments should be generated for an experienced senior compiler engineer / developer
 
+Tests:
+
+- Write tests first if possible
+- if a bug is found, add the smallest test for that bug in the right place.
+- Otherwise, largely focus on end-to-end language tests
+
 Misc:
 
 - Keep README.md and docs/ files updated
