@@ -1,0 +1,8 @@
+---NAME---
+Encode SVC instruction
+
+---INPUT-ARM64---
+SVC(128)
+
+---OUTPUT-HEX---
+0xD4001001

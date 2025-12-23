@@ -1,0 +1,13 @@
+---NAME---
+MOVZ with different immediates produces different encodings
+
+---INPUT-ARM64---
+MOVZ(X0, 0, 0)
+MOVZ(X0, 1, 0)
+
+---OUTPUT-HEX---
+0xD2800000
+0xD2800020
+
+---ASSERT-DIFFERENT---
+true

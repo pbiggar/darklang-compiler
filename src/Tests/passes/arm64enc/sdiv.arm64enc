@@ -1,0 +1,8 @@
+---NAME---
+Encode SDIV instruction
+
+---INPUT-ARM64---
+SDIV(X0, X1, X2)
+
+---OUTPUT-HEX---
+0x9AC20820

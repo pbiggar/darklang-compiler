@@ -1,0 +1,8 @@
+---NAME---
+Encode MOVK instruction
+
+---INPUT-ARM64---
+MOVK(X1, 100, 16)
+
+---OUTPUT-HEX---
+0xF2A00C81

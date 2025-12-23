@@ -1,0 +1,8 @@
+---NAME---
+Encode RET instruction
+
+---INPUT-ARM64---
+RET
+
+---OUTPUT-HEX---
+0xD65F03C0

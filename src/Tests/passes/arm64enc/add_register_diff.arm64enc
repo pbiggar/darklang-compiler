@@ -1,0 +1,13 @@
+---NAME---
+ADD_reg with different destination registers produces different encodings
+
+---INPUT-ARM64---
+ADD_reg(X0, X1, X2)
+ADD_reg(X2, X1, X2)
+
+---OUTPUT-HEX---
+0x8B020020
+0x8B020022
+
+---ASSERT-DIFFERENT---
+true

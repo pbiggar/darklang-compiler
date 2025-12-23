@@ -1,0 +1,8 @@
+---NAME---
+Encode MOV register instruction
+
+---INPUT-ARM64---
+MOV_reg(X0, X1)
+
+---OUTPUT-HEX---
+0xAA0103E0

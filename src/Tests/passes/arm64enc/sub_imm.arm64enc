@@ -1,0 +1,8 @@
+---NAME---
+Encode SUB immediate instruction
+
+---INPUT-ARM64---
+SUB_imm(X0, X1, 3)
+
+---OUTPUT-HEX---
+0xD1000C20

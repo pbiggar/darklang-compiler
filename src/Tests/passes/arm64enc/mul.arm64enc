@@ -1,0 +1,8 @@
+---NAME---
+Encode MUL instruction
+
+---INPUT-ARM64---
+MUL(X0, X1, X2)
+
+---OUTPUT-HEX---
+0x9B027C20

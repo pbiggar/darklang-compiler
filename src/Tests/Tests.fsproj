@@ -14,9 +14,15 @@
     <Compile Include="TestDSL/MIRParser.fs" />
     <Compile Include="TestDSL/LIRParser.fs" />
     <Compile Include="TestDSL/ARM64Parser.fs" />
+    <Compile Include="TestDSL/ARM64EncodingFormat.fs" />
     <Compile Include="TestDSL/E2EFormat.fs" />
     <Compile Include="Runners/PassTestRunner.fs" />
+    <Compile Include="Runners/ARM64EncodingTestRunner.fs" />
     <Compile Include="Runners/E2ETestRunner.fs" />
+
+    <!-- Unit tests -->
+    <Compile Include="EncodingTests.fs" />
+    <Compile Include="BinaryTests.fs" />
 
     <!-- Test Runner (must be last) -->
     <Compile Include="TestRunner.fs" />
@@ -31,6 +37,7 @@
     <None Include="passes/**/*.mir2lir" CopyToOutputDirectory="PreserveNewest" />
     <None Include="passes/**/*.anf2mir" CopyToOutputDirectory="PreserveNewest" />
     <None Include="passes/**/*.lir2arm64" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="passes/**/*.arm64enc" CopyToOutputDirectory="PreserveNewest" />
     <None Include="e2e/**/*.test" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

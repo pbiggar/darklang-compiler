@@ -1,0 +1,8 @@
+---NAME---
+Encode ADD register instruction
+
+---INPUT-ARM64---
+ADD_reg(X0, X1, X2)
+
+---OUTPUT-HEX---
+0x8B020020

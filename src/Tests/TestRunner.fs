@@ -135,6 +135,35 @@ let main args =
 
             printfn ""
 
+    // Run ARM64 encoding tests
+    let arm64encDir = Path.Combine(assemblyDir, "passes/arm64enc")
+    if Directory.Exists arm64encDir then
+        let arm64encTests = Directory.GetFiles(arm64encDir, "*.arm64enc")
+        if arm64encTests.Length > 0 then
+            printfn "Running ARM64 Encoding tests from %s" arm64encDir
+            printfn ""
+
+            for testPath in arm64encTests do
+                let testName = Path.GetFileName testPath
+                printf "  %s... " testName
+
+                match TestDSL.ARM64EncodingTestRunner.loadARM64EncodingTest testPath with
+                | Ok test ->
+                    let result = TestDSL.ARM64EncodingTestRunner.runARM64EncodingTest test
+                    if result.Success then
+                        printfn "✓ PASS"
+                        passed <- passed + 1
+                    else
+                        printfn "✗ FAIL"
+                        printfn "    %s" result.Message
+                        failed <- failed + 1
+                | Error msg ->
+                    printfn "✗ ERROR"
+                    printfn "    Failed to load test: %s" msg
+                    failed <- failed + 1
+
+            printfn ""
+
     // Run E2E tests
     let e2eDir = Path.Combine(assemblyDir, "e2e")
     if Directory.Exists e2eDir then
@@ -183,6 +212,30 @@ let main args =
                     failed <- failed + 1
 
             printfn ""
+
+    // Run unit tests
+    printfn "Running Unit Tests"
+    printfn ""
+
+    try
+        EncodingTests.runAll()
+        passed <- passed + 1
+    with
+    | ex ->
+        printfn "✗ FAIL: Encoding tests"
+        printfn "    %s" ex.Message
+        failed <- failed + 1
+
+    try
+        BinaryTests.runAll()
+        passed <- passed + 11  // 11 tests in BinaryTests
+    with
+    | ex ->
+        printfn "✗ FAIL: Binary tests"
+        printfn "    %s" ex.Message
+        failed <- failed + 1
+
+    printfn ""
 
     printfn "=== Results ==="
     printfn "Passed: %d" passed

@@ -1,0 +1,8 @@
+---NAME---
+Encode MOVZ instruction
+
+---INPUT-ARM64---
+MOVZ(X0, 42, 0)
+
+---OUTPUT-HEX---
+0xD2800540
