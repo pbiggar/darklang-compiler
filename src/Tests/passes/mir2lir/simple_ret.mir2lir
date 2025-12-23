@@ -1,0 +1,9 @@
+---NAME---
+Simple return constant
+
+---INPUT-MIR---
+ret 42
+
+---OUTPUT-LIR---
+X0 <- Mov(Imm 42)
+Ret
