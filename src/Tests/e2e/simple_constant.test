@@ -1,0 +1,8 @@
+---NAME---
+Simple constant return
+
+---SOURCE---
+42
+
+---EXIT-CODE---
+42

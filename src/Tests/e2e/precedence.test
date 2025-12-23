@@ -1,0 +1,8 @@
+---NAME---
+Operator precedence
+
+---SOURCE---
+2 + 3 * 4
+
+---EXIT-CODE---
+14

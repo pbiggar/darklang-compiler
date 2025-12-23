@@ -6,6 +6,8 @@ module TestRunner.Main
 
 open System.IO
 open TestDSL.PassTestRunner
+open TestDSL.E2EFormat
+open TestDSL.E2ETestRunner
 
 [<EntryPoint>]
 let main args =
@@ -82,6 +84,52 @@ let main args =
                             printfn "    Actual:"
                             for line in act.Split('\n') do
                                 printfn "      %s" line
+                        | _ -> ()
+                        failed <- failed + 1
+                | Error msg ->
+                    printfn "✗ ERROR"
+                    printfn "    Failed to load test: %s" msg
+                    failed <- failed + 1
+
+            printfn ""
+
+    // Run E2E tests
+    let e2eDir = "e2e"
+    if Directory.Exists e2eDir then
+        let e2eTests = Directory.GetFiles(e2eDir, "*.test", SearchOption.AllDirectories)
+        if e2eTests.Length > 0 then
+            printfn "Running E2E tests from %s" e2eDir
+            printfn ""
+
+            // Find compiler executable (use absolute path)
+            let compilerPath = Path.GetFullPath("../../../../bin/DarkCompiler/Debug/net9.0/DarkCompiler.dll")
+
+            for testPath in e2eTests do
+                let testName = Path.GetFileName testPath
+                printf "  %s... " testName
+
+                match parseE2ETest testPath with
+                | Ok test ->
+                    let result = runE2ETest test compilerPath
+                    if result.Success then
+                        printfn "✓ PASS"
+                        passed <- passed + 1
+                    else
+                        printfn "✗ FAIL"
+                        printfn "    %s" result.Message
+                        match result.ExitCode with
+                        | Some code when code <> test.ExpectedExitCode ->
+                            printfn "    Expected exit code: %d" test.ExpectedExitCode
+                            printfn "    Actual exit code: %d" code
+                        | _ -> ()
+                        // Always show stdout/stderr on failure
+                        match result.Stdout with
+                        | Some stdout when stdout.Trim() <> "" ->
+                            printfn "    Stdout: %s" (stdout.Trim())
+                        | _ -> ()
+                        match result.Stderr with
+                        | Some stderr when stderr.Trim() <> "" ->
+                            printfn "    Stderr: %s" (stderr.Trim())
                         | _ -> ()
                         failed <- failed + 1
                 | Error msg ->
