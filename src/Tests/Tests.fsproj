@@ -5,6 +5,7 @@
     <LangVersion>latest</LangVersion>
     <IsPackable>false</IsPackable>
     <OutputType>Exe</OutputType>
+    <NoWarn>NU1900</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
