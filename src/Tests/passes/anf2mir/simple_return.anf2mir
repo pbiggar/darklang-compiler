@@ -1,0 +1,8 @@
+---NAME---
+Simple return of constant
+
+---INPUT-ANF---
+return 42
+
+---OUTPUT-MIR---
+ret 42

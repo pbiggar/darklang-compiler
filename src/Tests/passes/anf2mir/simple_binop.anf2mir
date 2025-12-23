@@ -1,0 +1,10 @@
+---NAME---
+Simple binary operation
+
+---INPUT-ANF---
+let t0 = 3 + 4
+return t0
+
+---OUTPUT-MIR---
+v0 <- 3 + 4
+ret v0

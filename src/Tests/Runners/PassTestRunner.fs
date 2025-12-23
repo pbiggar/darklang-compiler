@@ -7,10 +7,13 @@ module TestDSL.PassTestRunner
 
 open System.IO
 open TestDSL.Common
+open TestDSL.ANFParser
 open TestDSL.MIRParser
 open TestDSL.LIRParser
+open ANF
 open MIR
 open LIR
+open ANF_to_MIR
 open MIR_to_LIR
 
 /// Result of running a pass test
@@ -124,3 +127,69 @@ let runMIR2LIRTest (input: MIR.Program) (expected: LIR.Program) : PassTestResult
           Message = "Output mismatch"
           Expected = Some (prettyPrintLIR expected)
           Actual = Some (prettyPrintLIR actual) }
+
+/// Pretty-print ANF atom
+let prettyPrintANFAtom = function
+    | ANF.IntLiteral n -> string n
+    | ANF.Var (ANF.TempId n) -> $"t{n}"
+
+/// Pretty-print ANF binary operator
+let prettyPrintANFOp = function
+    | ANF.Add -> "+"
+    | ANF.Sub -> "-"
+    | ANF.Mul -> "*"
+    | ANF.Div -> "/"
+
+/// Pretty-print ANF complex expression
+let prettyPrintANFCExpr = function
+    | ANF.Atom atom -> prettyPrintANFAtom atom
+    | ANF.Prim (op, left, right) ->
+        $"{prettyPrintANFAtom left} {prettyPrintANFOp op} {prettyPrintANFAtom right}"
+
+/// Pretty-print ANF expression (recursive)
+let rec prettyPrintANFExpr = function
+    | ANF.Return atom -> $"return {prettyPrintANFAtom atom}"
+    | ANF.Let (ANF.TempId n, cexpr, body) ->
+        let cexprStr = prettyPrintANFCExpr cexpr
+        let bodyStr = prettyPrintANFExpr body
+        $"let t{n} = {cexprStr}\n{bodyStr}"
+
+/// Pretty-print ANF program
+let prettyPrintANF (ANF.Program expr) : string =
+    prettyPrintANFExpr expr
+
+/// Load ANF→MIR test from file
+let loadANF2MIRTest (path: string) : Result<ANF.Program * MIR.Program, string> =
+    if not (File.Exists path) then
+        Error $"Test file not found: {path}"
+    else
+        let content = File.ReadAllText(path)
+        let testFile = parseTestFile content
+
+        match getRequiredSection "INPUT-ANF" testFile with
+        | Error e -> Error e
+        | Ok inputText ->
+            match parseANF inputText with
+            | Error e -> Error $"Failed to parse INPUT-ANF: {e}"
+            | Ok anfProgram ->
+                match getRequiredSection "OUTPUT-MIR" testFile with
+                | Error e -> Error e
+                | Ok outputText ->
+                    match parseMIR outputText with
+                    | Error e -> Error $"Failed to parse OUTPUT-MIR: {e}"
+                    | Ok mirProgram -> Ok (anfProgram, mirProgram)
+
+/// Run ANF→MIR test
+let runANF2MIRTest (input: ANF.Program) (expected: MIR.Program) : PassTestResult =
+    let (actual, _) = ANF_to_MIR.toMIR input MIR.initialRegGen
+
+    if actual = expected then
+        { Success = true
+          Message = "Test passed"
+          Expected = None
+          Actual = None }
+    else
+        { Success = false
+          Message = "Output mismatch"
+          Expected = Some (prettyPrintMIR expected)
+          Actual = Some (prettyPrintMIR actual) }

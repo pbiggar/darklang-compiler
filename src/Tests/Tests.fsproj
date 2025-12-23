@@ -10,6 +10,7 @@
   <ItemGroup>
     <!-- DSL Test Infrastructure -->
     <Compile Include="TestDSL/Common.fs" />
+    <Compile Include="TestDSL/ANFParser.fs" />
     <Compile Include="TestDSL/MIRParser.fs" />
     <Compile Include="TestDSL/LIRParser.fs" />
     <Compile Include="Runners/PassTestRunner.fs" />
