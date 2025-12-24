@@ -102,7 +102,17 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         [sf ||| op ||| rm ||| ra ||| rn ||| rd]
 
     | ARM64.SDIV (dest, src1, src2) ->
-        // SDIV: sf=1 0 0 11010110 Rm(5) 000010 Rn(5) Rd(5)
+        // SDIV: sf=1 0 0 11010110 Rm(5) 000011 Rn(5) Rd(5)
+        let sf = 1u <<< 31
+        let op = 0b11010110u <<< 21
+        let rm = (encodeReg src2) <<< 16
+        let fixedBits = 0b000011u <<< 10
+        let rn = (encodeReg src1) <<< 5
+        let rd = encodeReg dest
+        [sf ||| op ||| rm ||| fixedBits ||| rn ||| rd]
+
+    | ARM64.UDIV (dest, src1, src2) ->
+        // UDIV: sf=1 0 0 11010110 Rm(5) 000010 Rn(5) Rd(5)
         let sf = 1u <<< 31
         let op = 0b11010110u <<< 21
         let rm = (encodeReg src2) <<< 16
@@ -110,6 +120,18 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rn = (encodeReg src1) <<< 5
         let rd = encodeReg dest
         [sf ||| op ||| rm ||| fixedBits ||| rn ||| rd]
+
+    | ARM64.MSUB (dest, src1, src2, src3) ->
+        // MSUB: sf=1 0 0 11011 000 Rm(5) 1 Ra(5) Rn(5) Rd(5)
+        // Computes: Rd = Ra - (Rn * Rm)
+        let sf = 1u <<< 31
+        let op = 0b11011000u <<< 21
+        let rm = (encodeReg src2) <<< 16
+        let flagBit = 1u <<< 15  // Distinguishes MSUB from MADD
+        let ra = (encodeReg src3) <<< 10
+        let rn = (encodeReg src1) <<< 5
+        let rd = encodeReg dest
+        [sf ||| op ||| rm ||| flagBit ||| ra ||| rn ||| rd]
 
     | ARM64.MOV_reg (dest, src) ->
         // MOV is ORR with XZR: sf=1 01 01010 00 0 Rm(5) 000000 Rn=11111 Rd(5)
@@ -121,6 +143,35 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rn = 31u <<< 5  // XZR
         let rd = encodeReg dest
         [sf ||| opc ||| op ||| rm ||| rn ||| rd]
+
+    | ARM64.STRB (src, base, offset) ->
+        // STRB immediate: 00 111 00 00 0 imm12 Rn Rt
+        // Size=00 (byte), V=0, opc=00 (store), imm12 is unsigned offset
+        let size = 0u <<< 30  // Byte operation
+        let vOpc = 0b11100000u <<< 22  // Fixed bits for STRB
+        let imm12 = (uint32 offset &&& 0xFFFu) <<< 10
+        let rn = (encodeReg base) <<< 5
+        let rt = encodeReg src
+        [size ||| vOpc ||| imm12 ||| rn ||| rt]
+
+    | ARM64.CBZ (reg, offset) ->
+        // CBZ: sf 011010 0 imm19 Rt
+        // Compare and Branch on Zero
+        let sf = 1u <<< 31  // 64-bit register
+        let op = 0b011010u <<< 25
+        let flag = 0u <<< 24  // CBZ (vs CBNZ which has 1)
+        // Offset is in instructions (4-byte units), sign-extended, stored as imm19
+        let imm19 = ((uint32 offset) &&& 0x7FFFFu) <<< 5
+        let rt = encodeReg reg
+        [sf ||| op ||| flag ||| imm19 ||| rt]
+
+    | ARM64.B offset ->
+        // B: 000101 imm26
+        // Unconditional branch
+        // Offset is in instructions (4-byte units), sign-extended
+        let op = 0b000101u <<< 26
+        let imm26 = (uint32 offset) &&& 0x3FFFFFFu
+        [op ||| imm26]
 
     | ARM64.RET ->
         // RET: 1101011 0 0 10 11111 0000 0 0 Rn=11110 00000

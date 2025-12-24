@@ -21,9 +21,9 @@
 //   1/0 = exit=1 stderr="error\n"     // error case with non-zero exit
 //
 // Implementation note:
-// The compiled binary returns the result as an exit code (0-255).
-// CompilerLibrary.execute() captures this and synthesizes stdout for testing.
-// This allows tests to verify output without implementing full print in ARM64.
+// The compiled binary prints the result to stdout and exits with code 0.
+// Integer-to-string conversion is implemented in ARM64 using division by 10.
+// Currently only positive integers are supported (negative support TODO).
 
 
 // Constants
@@ -67,7 +67,123 @@
 
 
 // Edge cases
-123456789 = 21  // exit codes are modulo 256
+123456789 = 123456789  // large numbers print correctly
+
+
+// ===================================================================
+// Comprehensive Integer Tests
+// ===================================================================
+
+// Boundary values - basic
+1 = 1  // minimum positive
+254 = 254
+255 = 255
+256 = 256
+257 = 257
+
+// Boundary values - edge of byte boundaries
+127 = 127  // max signed byte (if using signed)
+128 = 128  // min negative as unsigned
+253 = 253
+254 = 254
+255 = 255
+
+// Zero operations
+0 + 0 = 0
+0 - 0 = 0
+0 * 0 = 0
+0 * 1 = 0
+0 * 255 = 0
+1 * 0 = 0
+255 * 0 = 0
+
+// Identity operations
+1 + 0 = 1
+0 + 1 = 1
+5 - 0 = 5
+1 * 1 = 1
+5 * 1 = 5
+1 * 5 = 5
+10 / 1 = 10
+5 / 5 = 1
+
+// Powers of 2
+1 = 1  // 2^0
+2 = 2  // 2^1
+4 = 4  // 2^2
+8 = 8  // 2^3
+16 = 16  // 2^4
+32 = 32  // 2^5
+64 = 64  // 2^6
+128 = 128  // 2^7
+2 * 2 = 4
+2 * 2 * 2 = 8
+2 * 2 * 2 * 2 = 16
+4 * 4 = 16
+8 * 8 = 64
+16 * 16 = 256
+
+// Addition tests with large results
+255 + 1 = 256
+255 + 2 = 257
+255 + 255 = 510
+200 + 100 = 300
+128 + 128 = 256
+127 + 129 = 256
+100 + 200 = 300
+150 + 150 = 300
+
+// Subtraction tests (positive results only - negative support TODO)
+10 - 3 = 7
+20 - 5 = 15
+100 - 50 = 50
+255 - 1 = 254
+255 - 100 = 155
+
+// Multiplication tests with large results
+16 * 16 = 256
+16 * 17 = 272
+15 * 17 = 255
+15 * 18 = 270
+20 * 20 = 400
+25 * 25 = 625
+50 * 50 = 2500
+100 * 100 = 10000
+128 * 2 = 256
+64 * 4 = 256
+32 * 8 = 256
+
+// Division edge cases
+1 / 1 = 1
+255 / 1 = 255
+255 / 255 = 1
+256 / 2 = 128  // 256 doesn't wrap before division
+100 / 10 = 10
+99 / 10 = 9  // integer division truncates
+10 / 3 = 3  // 10 / 3 = 3 remainder 1
+7 / 2 = 3  // 7 / 2 = 3 remainder 1
+1 / 2 = 0  // rounds down to 0
+
+// Large number combinations
+1000 + 2000 = 3000
+1000 * 1000 = 1000000
+10000 - 5000 = 5000
+500 + 500 = 1000
+999 = 999
+1024 = 1024
+2048 = 2048
+4096 = 4096
+
+// Sequential operations
+255 + 1 + 1 = 257
+128 + 128 + 1 = 257
+100 + 100 + 100 = 300
+
+// Mixed operations
+255 + 1 - 1 = 255
+200 + 100 - 50 = 250
+100 * 3 - 50 = 250
+50 * 2 + 100 = 200
 
 
 // Explicit format examples (for demonstration)
