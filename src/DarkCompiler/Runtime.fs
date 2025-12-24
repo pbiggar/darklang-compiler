@@ -79,11 +79,11 @@ let generatePrintInt () : ARM64.Instr list =
         ARM64.ADD_imm (ARM64.X2, ARM64.SP, 32us)  // 23: End of buffer
         ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1)  // 24: length = end - start
         ARM64.MOVZ (ARM64.X0, 1us, 0)  // 25: stdout = 1
-        ARM64.MOVZ (ARM64.X16, syscalls.Write, 0)  // 26: write syscall (platform-specific)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)  // 26: write syscall (X16 macOS, X8 Linux)
         ARM64.SVC syscalls.SvcImmediate  // 27: call write (platform-specific)
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32us)  // 28: Deallocate stack
         ARM64.MOVZ (ARM64.X0, 0us, 0)  // 29: exit code = 0
-        ARM64.MOVZ (ARM64.X16, syscalls.Exit, 0)  // 30: exit syscall (platform-specific)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Exit, 0)  // 30: exit syscall (X16 macOS, X8 Linux)
         ARM64.SVC syscalls.SvcImmediate  // 31: call exit (platform-specific)
 
         // Instruction 32-35: print_zero - Special case for value 0

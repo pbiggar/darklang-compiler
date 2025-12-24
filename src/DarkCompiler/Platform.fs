@@ -14,11 +14,12 @@ type OS =
     | MacOS
     | Linux
 
-/// Platform-specific syscall numbers
+/// Platform-specific syscall numbers and register conventions
 type SyscallNumbers = {
     Write: uint16
     Exit: uint16
     SvcImmediate: uint16  // SVC instruction immediate value
+    SyscallRegister: ARM64.Reg  // Register to hold syscall number (X16 for macOS, X8 for Linux)
 }
 
 /// Get the current operating system
@@ -36,11 +37,13 @@ let getSyscallNumbers (os: OS) : SyscallNumbers =
     | MacOS ->
         { Write = 4us
           Exit = 1us
-          SvcImmediate = 0x80us }
+          SvcImmediate = 0x80us
+          SyscallRegister = ARM64.X16 }
     | Linux ->
         { Write = 64us
           Exit = 93us
-          SvcImmediate = 0us }
+          SvcImmediate = 0us
+          SyscallRegister = ARM64.X8 }
 
 /// Check if code signing is required for this platform
 let requiresCodeSigning (os: OS) : bool =

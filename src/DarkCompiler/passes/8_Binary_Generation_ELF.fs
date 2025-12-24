@@ -136,14 +136,19 @@ let createExecutable (machineCode: uint32 list) : byte array =
     }
 
     // Create executable code segment
+    // The PT_LOAD segment must include the ELF header and program headers
+    // so the kernel can access them during execution
+    let segmentFileSize = codeFileOffset + codeSize
+    let segmentMemSize = segmentFileSize
+
     let codeSegment : Binary_ELF.Elf64ProgramHeader = {
         Type = Binary_ELF.PT_LOAD
         Flags = Binary_ELF.PF_R ||| Binary_ELF.PF_X  // Readable and executable
-        Offset = codeFileOffset
-        VAddr = codeVAddr
-        PAddr = codeVAddr  // Physical = virtual for user programs
-        FileSize = codeSize
-        MemSize = codeSize
+        Offset = 0UL  // Load from beginning of file (includes headers)
+        VAddr = baseVAddr  // Load at base address
+        PAddr = baseVAddr  // Physical = virtual for user programs
+        FileSize = segmentFileSize  // Includes headers + code
+        MemSize = segmentMemSize  // Same as file size
         Align = 0x1000UL  // 4KB alignment (page size)
     }
 
