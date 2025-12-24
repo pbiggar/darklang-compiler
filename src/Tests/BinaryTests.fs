@@ -3,6 +3,7 @@
 // Tests utility functions and integration for Mach-O binary generation.
 //
 // Note: These tests are for Mach-O format specifically
+// NOTE: All tests now return Result<> instead of using failwith
 
 module BinaryTests
 
@@ -11,35 +12,46 @@ open Binary_Generation_MachO
 open ARM64
 open ARM64_Encoding
 
-let testUint32ToBytes () =
+/// Test result type
+type TestResult = Result<unit, string>
+
+let testUint32ToBytes () : TestResult =
     let bytes = uint32ToBytes 0x12345678u
     let expected = [| 0x78uy; 0x56uy; 0x34uy; 0x12uy |]
     if bytes <> expected then
-        failwith "uint32ToBytes failed"
+        Error "uint32ToBytes failed"
+    else
+        Ok ()
 
-let testUint64ToBytes () =
+let testUint64ToBytes () : TestResult =
     let bytes = uint64ToBytes 0x123456789ABCDEF0UL
     let expected = [| 0xF0uy; 0xDEuy; 0xBCuy; 0x9Auy; 0x78uy; 0x56uy; 0x34uy; 0x12uy |]
     if bytes <> expected then
-        failwith "uint64ToBytes failed"
+        Error "uint64ToBytes failed"
+    else
+        Ok ()
 
-let testPadString () =
+let testPadString () : TestResult =
     let padded = padString "hello" 10
     if padded.Length <> 10 then
-        failwith "padString: wrong length"
-    if padded.[0] <> byte 'h' || padded.[4] <> byte 'o' then
-        failwith "padString: wrong content"
-    if padded.[5] <> 0uy || padded.[9] <> 0uy then
-        failwith "padString: wrong padding"
+        Error "padString: wrong length"
+    elif padded.[0] <> byte 'h' || padded.[4] <> byte 'o' then
+        Error "padString: wrong content"
+    elif padded.[5] <> 0uy || padded.[9] <> 0uy then
+        Error "padString: wrong padding"
+    else
+        Ok ()
 
-let testPadStringTruncate () =
+let testPadStringTruncate () : TestResult =
     let padded = padString "hello world this is long" 5
     if padded.Length <> 5 then
-        failwith "padString truncate: wrong length"
-    if padded.[0] <> byte 'h' || padded.[4] <> byte 'o' then
-        failwith "padString truncate: wrong content"
+        Error "padString truncate: wrong length"
+    elif padded.[0] <> byte 'h' || padded.[4] <> byte 'o' then
+        Error "padString truncate: wrong content"
+    else
+        Ok ()
 
-let testSerializeMachHeaderSize () =
+let testSerializeMachHeaderSize () : TestResult =
     let header = {
         Magic = MH_MAGIC_64
         CpuType = CPU_TYPE_ARM64
@@ -52,9 +64,11 @@ let testSerializeMachHeaderSize () =
     }
     let bytes = serializeMachHeader header
     if bytes.Length <> 32 then
-        failwith $"serializeMachHeader: expected size 32, got {bytes.Length}"
+        Error $"serializeMachHeader: expected size 32, got {bytes.Length}"
+    else
+        Ok ()
 
-let testSerializeMachHeaderMagic () =
+let testSerializeMachHeaderMagic () : TestResult =
     let header = {
         Magic = MH_MAGIC_64
         CpuType = CPU_TYPE_ARM64
@@ -68,9 +82,11 @@ let testSerializeMachHeaderMagic () =
     let bytes = serializeMachHeader header
     let expectedMagic = [| 0xCFuy; 0xFAuy; 0xEDuy; 0xFEuy |]
     if bytes.[0..3] <> expectedMagic then
-        failwith "serializeMachHeader: wrong magic bytes"
+        Error "serializeMachHeader: wrong magic bytes"
+    else
+        Ok ()
 
-let testSerializeSection64Size () =
+let testSerializeSection64Size () : TestResult =
     let section = {
         SectionName = "__text"
         SegmentName = "__TEXT"
@@ -87,22 +103,28 @@ let testSerializeSection64Size () =
     }
     let bytes = serializeSection64 section
     if bytes.Length <> 80 then
-        failwith $"serializeSection64: expected size 80, got {bytes.Length}"
+        Error $"serializeSection64: expected size 80, got {bytes.Length}"
+    else
+        Ok ()
 
-let testCreateExecutableNonEmpty () =
+let testCreateExecutableNonEmpty () : TestResult =
     let machineCode = [0xD65F03C0u]
     let binary = createExecutable machineCode
     if binary.Length = 0 then
-        failwith "createExecutable: binary is empty"
+        Error "createExecutable: binary is empty"
+    else
+        Ok ()
 
-let testCreateExecutableMagic () =
+let testCreateExecutableMagic () : TestResult =
     let machineCode = [0xD65F03C0u]
     let binary = createExecutable machineCode
     let expectedMagic = [| 0xCFuy; 0xFAuy; 0xEDuy; 0xFEuy |]
     if binary.[0..3] <> expectedMagic then
-        failwith "createExecutable: wrong magic bytes"
+        Error "createExecutable: wrong magic bytes"
+    else
+        Ok ()
 
-let testCreateExecutableContainsCode () =
+let testCreateExecutableContainsCode () : TestResult =
     let machineCode = [0xD65F03C0u]
     let binary = createExecutable machineCode
     let retBytes = [| 0xC0uy; 0x03uy; 0x5Fuy; 0xD6uy |]
@@ -116,9 +138,11 @@ let testCreateExecutableContainsCode () =
             found <- true
 
     if not found then
-        failwith "createExecutable: RET instruction not found in binary"
+        Error "createExecutable: RET instruction not found in binary"
+    else
+        Ok ()
 
-let testCompleteEncodingPipeline () =
+let testCompleteEncodingPipeline () : TestResult =
     // Test the complete pipeline: instructions -> encoding -> binary
     let movInstr = MOVZ (X0, 42us, 0)
     let retInstr = RET
@@ -126,30 +150,45 @@ let testCompleteEncodingPipeline () =
 
     // Verify encoding
     if machineCode.Length <> 2 then
-        failwith "Complete pipeline: wrong machine code count"
-    if machineCode.[0] <> 0xD2800540u then
-        failwith "Complete pipeline: wrong MOVZ encoding"
-    if machineCode.[1] <> 0xD65F03C0u then
-        failwith "Complete pipeline: wrong RET encoding"
-
-    // Verify binary generation
-    let binary = createExecutable machineCode
-    if binary.Length = 0 then
-        failwith "Complete pipeline: binary is empty"
-    let expectedMagic = [| 0xCFuy; 0xFAuy; 0xEDuy; 0xFEuy |]
-    if binary.[0..3] <> expectedMagic then
-        failwith "Complete pipeline: wrong magic bytes"
+        Error "Complete pipeline: wrong machine code count"
+    elif machineCode.[0] <> 0xD2800540u then
+        Error "Complete pipeline: wrong MOVZ encoding"
+    elif machineCode.[1] <> 0xD65F03C0u then
+        Error "Complete pipeline: wrong RET encoding"
+    else
+        // Verify binary generation
+        let binary = createExecutable machineCode
+        if binary.Length = 0 then
+            Error "Complete pipeline: binary is empty"
+        else
+            let expectedMagic = [| 0xCFuy; 0xFAuy; 0xEDuy; 0xFEuy |]
+            if binary.[0..3] <> expectedMagic then
+                Error "Complete pipeline: wrong magic bytes"
+            else
+                Ok ()
 
 /// Run all binary generation unit tests
-let runAll () =
-    testUint32ToBytes()
-    testUint64ToBytes()
-    testPadString()
-    testPadStringTruncate()
-    testSerializeMachHeaderSize()
-    testSerializeMachHeaderMagic()
-    testSerializeSection64Size()
-    testCreateExecutableNonEmpty()
-    testCreateExecutableMagic()
-    testCreateExecutableContainsCode()
-    testCompleteEncodingPipeline()
+/// Returns Ok () if all pass, Error with first failure message if any fail
+let runAll () : TestResult =
+    let tests = [
+        ("uint32ToBytes", testUint32ToBytes)
+        ("uint64ToBytes", testUint64ToBytes)
+        ("padString", testPadString)
+        ("padString truncate", testPadStringTruncate)
+        ("serializeMachHeader size", testSerializeMachHeaderSize)
+        ("serializeMachHeader magic", testSerializeMachHeaderMagic)
+        ("serializeSection64 size", testSerializeSection64Size)
+        ("createExecutable non-empty", testCreateExecutableNonEmpty)
+        ("createExecutable magic", testCreateExecutableMagic)
+        ("createExecutable contains code", testCreateExecutableContainsCode)
+        ("complete encoding pipeline", testCompleteEncodingPipeline)
+    ]
+
+    let rec runTests = function
+        | [] -> Ok ()
+        | (name, test) :: rest ->
+            match test () with
+            | Ok () -> runTests rest
+            | Error msg -> Error $"{name} test failed: {msg}"
+
+    runTests tests

@@ -1,0 +1,30 @@
+// Boolean type checking tests
+
+// Boolean literals
+true : bool
+false : bool
+
+// Comparisons
+1 == 2 : bool
+5 != 3 : bool
+10 < 20 : bool
+5 > 2 : bool
+3 <= 3 : bool
+10 >= 5 : bool
+
+// Logical operators
+true && false : bool
+true || false : bool
+!true : bool
+!false : bool
+
+// Complex boolean expressions
+(1 == 1) && (2 == 2) : bool
+(1 < 2) || (3 > 4) : bool
+!(5 < 3) : bool
+!!(true && false) : bool
+
+// Comparisons with arithmetic
+2 + 3 == 5 : bool
+10 - 5 != 4 : bool
+(1 + 2) < (4 + 5) : bool

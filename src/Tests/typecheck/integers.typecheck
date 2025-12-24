@@ -1,0 +1,25 @@
+// Integer type checking tests
+
+// Integer literals
+42 : int
+0 : int
+255 : int
+-10 : int
+
+// Arithmetic operations
+2 + 3 : int
+10 - 5 : int
+7 * 6 : int
+20 / 4 : int
+
+// Negation
+-42 : int
+-(5 + 3) : int
+
+// Nested operations
+2 + 3 * 4 : int  // precedence
+(2 + 3) * 4 : int
+10 + 20 - 5 : int
+
+// Complex expressions
+(10 + 20) * (30 - 15) / 2 : int

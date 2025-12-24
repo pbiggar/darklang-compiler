@@ -95,6 +95,7 @@ let x = 2 in let x = x * 2 in let x = x * 2 in x = 8
 // ===================================================================
 
 // Let binding with complex value expression
+// FIXME: all tests should use explicit parentheses for nested expressions if there could be any ambiguity as to their meaning
 let x = 2 + 3 in x = 5
 let x = 10 - 4 in x = 6
 let x = 3 * 4 in x = 12

@@ -250,6 +250,53 @@ let main args =
             printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
             printfn ""
 
+    // Run Type Checking tests
+    let typecheckDir = Path.Combine(assemblyDir, "typecheck")
+    if Directory.Exists typecheckDir then
+        let typecheckTestFiles = Directory.GetFiles(typecheckDir, "*.typecheck", SearchOption.AllDirectories)
+        if typecheckTestFiles.Length > 0 then
+            let sectionTimer = Stopwatch.StartNew()
+            printfn "%s📋 Type Checking Tests%s" Colors.cyan Colors.reset
+            printfn ""
+
+            // Parse and run all tests from .typecheck files
+            let mutable sectionPassed = 0
+            let mutable sectionFailed = 0
+
+            for testFile in typecheckTestFiles do
+                let fileName = Path.GetFileNameWithoutExtension testFile
+                match TestDSL.TypeCheckingTestRunner.runTypeCheckingTestFile testFile with
+                | Ok results ->
+                    for result in results do
+                        let testTimer = Stopwatch.StartNew()
+                        match result.Success with
+                        | true ->
+                            sectionPassed <- sectionPassed + 1
+                            passed <- passed + 1
+                        | false ->
+                            let typeDesc =
+                                match result.ExpectedType with
+                                | Some t -> TypeChecking.typeToString t
+                                | None -> "error"
+                            printf "  %s (%s)... " typeDesc fileName
+                            printfn "%s✗ FAIL%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
+                            printfn "    %s" result.Message
+                            sectionFailed <- sectionFailed + 1
+                            failed <- failed + 1
+                | Error msg ->
+                    printfn "%s✗ ERROR parsing %s%s" Colors.red (Path.GetFileName testFile) Colors.reset
+                    printfn "    %s" msg
+                    sectionFailed <- sectionFailed + 1
+                    failed <- failed + 1
+
+            sectionTimer.Stop()
+            if sectionFailed = 0 then
+                printfn "  %s✓ All %d type checking tests passed%s %s(%s)%s" Colors.green sectionPassed Colors.reset Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
+            else
+                printfn "  %s✓ %d passed, ✗ %d failed%s %s(%s)%s" Colors.yellow sectionPassed sectionFailed Colors.reset Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
+            printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
+            printfn ""
+
     // Run E2E tests (in parallel)
     let e2eDir = Path.Combine(assemblyDir, "e2e")
     if Directory.Exists e2eDir then
@@ -374,42 +421,39 @@ let main args =
     printfn ""
 
     let unitTestTimer = Stopwatch.StartNew()
-    try
-        EncodingTests.runAll()
+    match EncodingTests.runAll() with
+    | Ok () ->
         unitTestTimer.Stop()
         printfn "  %s✓ Encoding Tests%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime unitTestTimer.Elapsed) Colors.reset
         passed <- passed + 1
-    with
-    | ex ->
+    | Error msg ->
         unitTestTimer.Stop()
         printfn "  %s✗ FAIL: Encoding tests%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime unitTestTimer.Elapsed) Colors.reset
-        printfn "    %s" ex.Message
+        printfn "    %s" msg
         failed <- failed + 1
 
     let binaryTestTimer = Stopwatch.StartNew()
-    try
-        BinaryTests.runAll()
+    match BinaryTests.runAll() with
+    | Ok () ->
         binaryTestTimer.Stop()
         printfn "  %s✓ Binary Tests%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime binaryTestTimer.Elapsed) Colors.reset
         passed <- passed + 11  // 11 tests in BinaryTests
-    with
-    | ex ->
+    | Error msg ->
         binaryTestTimer.Stop()
         printfn "  %s✗ FAIL: Binary tests%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime binaryTestTimer.Elapsed) Colors.reset
-        printfn "    %s" ex.Message
+        printfn "    %s" msg
         failed <- failed + 1
 
     let typeCheckingTestTimer = Stopwatch.StartNew()
-    try
-        TypeCheckingTests.runAll()
+    match TypeCheckingTests.runAll() with
+    | Ok () ->
         typeCheckingTestTimer.Stop()
         printfn "  %s✓ Type Checking Tests%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime typeCheckingTestTimer.Elapsed) Colors.reset
         passed <- passed + 8  // 8 tests in TypeCheckingTests
-    with
-    | ex ->
+    | Error msg ->
         typeCheckingTestTimer.Stop()
         printfn "  %s✗ FAIL: Type checking tests%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime typeCheckingTestTimer.Elapsed) Colors.reset
-        printfn "    %s" ex.Message
+        printfn "    %s" msg
         failed <- failed + 1
 
     sectionTimer.Stop()

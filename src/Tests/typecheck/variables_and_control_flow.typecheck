@@ -1,0 +1,35 @@
+// Variable and control flow type checking tests
+
+// Let bindings - integers
+let x = 5 in x : int
+let x = 2 in let y = 3 in x + y : int
+let x = 10 in x * 2 : int
+
+// Let bindings - booleans
+let x = true in x : bool
+let x = false in x : bool
+let x = 1 == 1 in x : bool
+let x = true in let y = false in x && y : bool
+
+// Shadowing
+let x = 5 in let x = 10 in x : int
+let x = true in let x = false in x : bool
+
+// If expressions - same type in both branches
+if true then 42 else 0 : int
+if false then 10 else 20 : int
+if 5 > 3 then 1 else 2 : int
+
+// If with booleans
+if true then true else false : bool
+if 1 == 2 then false else true : bool
+
+// Nested if
+if true then (if false then 1 else 2) else 3 : int
+
+// If with let bindings
+let x = 10 in if x > 5 then 100 else 0 : int
+let x = true in if x then 1 else 0 : int
+
+// Complex control flow
+let x = 5 in let y = 3 in if x > y then x + y else x - y : int

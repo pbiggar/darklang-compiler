@@ -1,0 +1,22 @@
+// Type error tests - expressions that should fail type checking
+
+// Arithmetic with booleans (not yet implemented in type checker)
+// 1 + true : error
+// false - 5 : error
+// true * false : error
+
+// Boolean operators with integers (not yet implemented)
+// 1 && 2 : error
+// 5 || 10 : error
+// !42 : error
+
+// If with mismatched branch types (not yet implemented)
+// if true then 10 else false : error
+// if false then true else 5 : error
+
+// Comparison of incompatible types (not yet implemented)
+// true == 5 : error
+// 10 < false : error
+
+// Note: Most type errors not yet caught by current type checker
+// These tests will be uncommented as type checking is enhanced

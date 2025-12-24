@@ -2,78 +2,61 @@
 //
 // Tests the type checker for Phase 0 (integers only)
 // Will be extended in future phases for booleans, variables, functions, etc.
+//
+// NOTE: All tests now return Result<> instead of using failwith
 
 module TypeCheckingTests
 
 open AST
 open TypeChecking
 
-/// Test that integer literals have type TInt64
-let testIntLiteral () =
-    let expr = IntLiteral 42L
+/// Test result type
+type TestResult = Result<unit, string>
+
+/// Helper to check that type checking succeeds with expected type
+let expectType (expr: Expr) (expectedType: Type) : TestResult =
     let program = Program expr
     match checkProgram program with
-    | Ok TInt64 -> ()
-    | Ok other -> failwith $"Expected TInt64, got {typeToString other}"
-    | Error err -> failwith $"Type checking failed: {typeErrorToString err}"
+    | Ok actualType ->
+        if actualType = expectedType then
+            Ok ()
+        else
+            Error $"Expected {typeToString expectedType}, got {typeToString actualType}"
+    | Error err ->
+        Error $"Type checking failed: {typeErrorToString err}"
+
+/// Test that integer literals have type TInt64
+let testIntLiteral () : TestResult =
+    expectType (IntLiteral 42L) TInt64
 
 /// Test that addition of integers has type TInt64
-let testAddition () =
-    let expr = BinOp (Add, IntLiteral 2L, IntLiteral 3L)
-    let program = Program expr
-    match checkProgram program with
-    | Ok TInt64 -> ()
-    | Ok other -> failwith $"Expected TInt64, got {typeToString other}"
-    | Error err -> failwith $"Type checking failed: {typeErrorToString err}"
+let testAddition () : TestResult =
+    expectType (BinOp (Add, IntLiteral 2L, IntLiteral 3L)) TInt64
 
 /// Test that subtraction of integers has type TInt64
-let testSubtraction () =
-    let expr = BinOp (Sub, IntLiteral 10L, IntLiteral 5L)
-    let program = Program expr
-    match checkProgram program with
-    | Ok TInt64 -> ()
-    | Ok other -> failwith $"Expected TInt64, got {typeToString other}"
-    | Error err -> failwith $"Type checking failed: {typeErrorToString err}"
+let testSubtraction () : TestResult =
+    expectType (BinOp (Sub, IntLiteral 10L, IntLiteral 5L)) TInt64
 
 /// Test that multiplication of integers has type TInt64
-let testMultiplication () =
-    let expr = BinOp (Mul, IntLiteral 7L, IntLiteral 6L)
-    let program = Program expr
-    match checkProgram program with
-    | Ok TInt64 -> ()
-    | Ok other -> failwith $"Expected TInt64, got {typeToString other}"
-    | Error err -> failwith $"Type checking failed: {typeErrorToString err}"
+let testMultiplication () : TestResult =
+    expectType (BinOp (Mul, IntLiteral 7L, IntLiteral 6L)) TInt64
 
 /// Test that division of integers has type TInt64
-let testDivision () =
-    let expr = BinOp (Div, IntLiteral 20L, IntLiteral 4L)
-    let program = Program expr
-    match checkProgram program with
-    | Ok TInt64 -> ()
-    | Ok other -> failwith $"Expected TInt64, got {typeToString other}"
-    | Error err -> failwith $"Type checking failed: {typeErrorToString err}"
+let testDivision () : TestResult =
+    expectType (BinOp (Div, IntLiteral 20L, IntLiteral 4L)) TInt64
 
 /// Test that negation of integers has type TInt64
-let testNegation () =
-    let expr = UnaryOp (Neg, IntLiteral 42L)
-    let program = Program expr
-    match checkProgram program with
-    | Ok TInt64 -> ()
-    | Ok other -> failwith $"Expected TInt64, got {typeToString other}"
-    | Error err -> failwith $"Type checking failed: {typeErrorToString err}"
+let testNegation () : TestResult =
+    expectType (UnaryOp (Neg, IntLiteral 42L)) TInt64
 
 /// Test nested operations
-let testNestedOperations () =
+let testNestedOperations () : TestResult =
     // 2 + 3 * 4
     let expr = BinOp (Add, IntLiteral 2L, BinOp (Mul, IntLiteral 3L, IntLiteral 4L))
-    let program = Program expr
-    match checkProgram program with
-    | Ok TInt64 -> ()
-    | Ok other -> failwith $"Expected TInt64, got {typeToString other}"
-    | Error err -> failwith $"Type checking failed: {typeErrorToString err}"
+    expectType expr TInt64
 
 /// Test complex nested expression
-let testComplexExpression () =
+let testComplexExpression () : TestResult =
     // (10 + 20) * (30 - 15) / 2
     let expr =
         BinOp (Div,
@@ -81,19 +64,27 @@ let testComplexExpression () =
                 BinOp (Add, IntLiteral 10L, IntLiteral 20L),
                 BinOp (Sub, IntLiteral 30L, IntLiteral 15L)),
             IntLiteral 2L)
-    let program = Program expr
-    match checkProgram program with
-    | Ok TInt64 -> ()
-    | Ok other -> failwith $"Expected TInt64, got {typeToString other}"
-    | Error err -> failwith $"Type checking failed: {typeErrorToString err}"
+    expectType expr TInt64
 
 /// Run all type checking unit tests
-let runAll () =
-    testIntLiteral()
-    testAddition()
-    testSubtraction()
-    testMultiplication()
-    testDivision()
-    testNegation()
-    testNestedOperations()
-    testComplexExpression()
+/// Returns Ok () if all pass, Error with first failure message if any fail
+let runAll () : TestResult =
+    let tests = [
+        ("Integer literal", testIntLiteral)
+        ("Addition", testAddition)
+        ("Subtraction", testSubtraction)
+        ("Multiplication", testMultiplication)
+        ("Division", testDivision)
+        ("Negation", testNegation)
+        ("Nested operations", testNestedOperations)
+        ("Complex expression", testComplexExpression)
+    ]
+
+    let rec runTests = function
+        | [] -> Ok ()
+        | (name, test) :: rest ->
+            match test () with
+            | Ok () -> runTests rest
+            | Error msg -> Error $"{name} test failed: {msg}"
+
+    runTests tests

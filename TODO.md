@@ -14,6 +14,7 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 - [ ] Update DarkCompiler.fsproj with new pass
 
 **Design**: Explicit type annotations with simple checking
+
 - Function params/return types REQUIRED
 - Let bindings have optional type annotations
 - No ambiguity - top-down checking only
@@ -109,6 +110,7 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 ## Testing Strategy
 
 ### E2E Test Files (Priority Order)
+
 1. [ ] variables.e2e (Phase 1)
 2. [ ] booleans.e2e (Phase 2)
 3. [ ] control_flow.e2e (Phase 3)
@@ -117,6 +119,7 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 6. [ ] floats.e2e (Phase 6)
 
 ### Pass Tests
+
 - [ ] Add type checking tests
 - [ ] Add CFG construction tests (Phase 3)
 - [ ] Add liveness analysis tests (Phase 4)
@@ -125,6 +128,7 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 ## Code Quality
 
 ### Documentation
+
 - [ ] Update README.md with new language features
 - [ ] Document type checking algorithm
 - [ ] Document CFG structure
@@ -132,6 +136,7 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 - [ ] Document string memory model
 
 ### Refactoring
+
 - [ ] Clean up TODO.md after each phase
 - [ ] Update architecture docs
 - [ ] Fix compiler warnings
