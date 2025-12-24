@@ -33,4 +33,4 @@ Best-practices:
 
 - Keep README.md, TODO.md, and docs/ files updated
 - Always fix dotnet compiler or runtime warnings and errors, preferably before commiting (make a separate cleanup commit if needed)
-- For dumb warnings, ask the developer if you want to disable
+  - For dumb warnings, ask the developer if you want to disable

@@ -182,20 +182,20 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) : 
     let showNormal = verbosity = Normal || verbosity = Verbose
 
     if showNormal then
-        printfn $"Compiling: {source}"
+        printf $"Compiling: {source}\n"
 
     // Use library for compilation
     let result = CompilerLibrary.compile (verbosityToInt verbosity) source
 
     if not result.Success then
         let errorMsg = result.ErrorMessage |> Option.defaultValue "Unknown error"
-        eprintfn $"Compilation failed: {errorMsg}"
+        eprintf $"Compilation failed: {errorMsg}\n"
         1
     else
         // Write to file
         match Platform.detectOS () with
         | Error err ->
-            eprintfn $"Platform detection failed: {err}"
+            eprintf $"Platform detection failed: {err}\n"
             1
         | Ok os ->
             let writeResult =
@@ -204,10 +204,10 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) : 
                 | Platform.Linux -> Binary_Generation_ELF.writeToFile outputPath result.Binary
             match writeResult with
             | Error err ->
-                eprintfn $"Failed to write binary: {err}"
+                eprintf $"Failed to write binary: {err}\n"
                 1
             | Ok () ->
-                if showNormal then printfn $"Successfully wrote {result.Binary.Length} bytes to {outputPath}"
+                if showNormal then printf $"Successfully wrote {result.Binary.Length} bytes to {outputPath}\n"
                 0
 
 /// Run an expression (compile to temp and execute)
@@ -215,71 +215,71 @@ let run (source: string) (verbosity: VerbosityLevel) : int =
     let showNormal = verbosity = Normal || verbosity = Verbose
 
     if showNormal then
-        printfn $"Compiling and running: {source}"
-        printfn "---"
+        printf $"Compiling and running: {source}\n"
+        printf "---\n"
 
     // Use library for compile and run
     let result = CompilerLibrary.compileAndRun (verbosityToInt verbosity) source
 
     if showNormal then
         if result.Stdout <> "" then
-            printfn $"{result.Stdout}"
+            printf $"{result.Stdout}\n"
         if result.Stderr <> "" then
-            eprintfn $"{result.Stderr}"
-        printfn "---"
-        printfn $"Exit code: {result.ExitCode}"
+            eprintf $"{result.Stderr}\n"
+        printf "---\n"
+        printf $"Exit code: {result.ExitCode}\n"
 
     result.ExitCode
 
 /// Print version information
 let printVersion () =
-    printfn "Dark Compiler v0.1.0"
-    printfn "Darklang ARM64 compiler for macOS"
+    printf "Dark Compiler v0.1.0\n"
+    printf "Darklang ARM64 compiler for macOS\n"
 
 /// Print usage information
 let printUsage () =
-    printfn "Dark Compiler v0.1.0"
-    printfn ""
-    printfn "Usage:"
-    printfn "  dark <file> [-o <output>]           Compile file to executable (default)"
-    printfn "  dark -r <file>                      Compile and run file"
-    printfn "  dark -e <expression> [-o <output>]  Compile expression to executable"
-    printfn "  dark -r -e <expression>             Run expression"
-    printfn "  dark -r -e -                        Read expression from stdin and run"
-    printfn ""
-    printfn "Flags:"
-    printfn "  -r, --run            Run instead of compile (shows exit code)"
-    printfn "  -e, --expression     Treat argument as expression (not filename)"
-    printfn "  -o, --output FILE    Output file (default: dark.out)"
-    printfn "  -q, --quiet          Suppress compilation output"
-    printfn "  -v, --verbose        Show compilation pass names"
-    printfn "  -vv                  Show pass names + timing details"
-    printfn "  -h, --help           Show this help message"
-    printfn "  --version            Show version information"
-    printfn ""
-    printfn "Flags can appear in any order and can be combined (e.g., -qr, -re, -vvre)"
-    printfn "Verbosity levels: (none)=normal, -v=passes, -vv=passes+timing"
-    printfn ""
-    printfn "Examples:"
-    printfn "  dark prog.dark                     Compile file to 'dark.out'"
-    printfn "  dark prog.dark -o output           Compile file to 'output'"
-    printfn "  dark -r prog.dark                  Compile and run file"
-    printfn "  dark -e \"2 + 3\"                    Compile expression to 'dark.out'"
-    printfn "  dark -e \"2 + 3\" -o output          Compile expression to 'output'"
-    printfn "  dark -r -e \"2 + 3\"                 Run and show exit code (5)"
-    printfn "  dark -qr -e \"6 * 7\"                Run quietly (exit code: 42)"
-    printfn "  dark -v prog.dark -o output        Compile with verbose output"
-    printfn "  dark -r -e - < input.txt           Run expression from stdin"
-    printfn ""
-    printfn "Note: Generated executables may require code signing to run on macOS"
+    printf "Dark Compiler v0.1.0\n"
+    printf "\n"
+    printf "Usage:\n"
+    printf "  dark <file> [-o <output>]           Compile file to executable (default)\n"
+    printf "  dark -r <file>                      Compile and run file\n"
+    printf "  dark -e <expression> [-o <output>]  Compile expression to executable\n"
+    printf "  dark -r -e <expression>             Run expression\n"
+    printf "  dark -r -e -                        Read expression from stdin and run\n"
+    printf "\n"
+    printf "Flags:\n"
+    printf "  -r, --run            Run instead of compile (shows exit code)\n"
+    printf "  -e, --expression     Treat argument as expression (not filename)\n"
+    printf "  -o, --output FILE    Output file (default: dark.out)\n"
+    printf "  -q, --quiet          Suppress compilation output\n"
+    printf "  -v, --verbose        Show compilation pass names\n"
+    printf "  -vv                  Show pass names + timing details\n"
+    printf "  -h, --help           Show this help message\n"
+    printf "  --version            Show version information\n"
+    printf "\n"
+    printf "Flags can appear in any order and can be combined (e.g., -qr, -re, -vvre)\n"
+    printf "Verbosity levels: (none)=normal, -v=passes, -vv=passes+timing\n"
+    printf "\n"
+    printf "Examples:\n"
+    printf "  dark prog.dark                     Compile file to 'dark.out'\n"
+    printf "  dark prog.dark -o output           Compile file to 'output'\n"
+    printf "  dark -r prog.dark                  Compile and run file\n"
+    printf "  dark -e \"2 + 3\"                    Compile expression to 'dark.out'\n"
+    printf "  dark -e \"2 + 3\" -o output          Compile expression to 'output'\n"
+    printf "  dark -r -e \"2 + 3\"                 Run and show exit code (5)\n"
+    printf "  dark -qr -e \"6 * 7\"                Run quietly (exit code: 42)\n"
+    printf "  dark -v prog.dark -o output        Compile with verbose output\n"
+    printf "  dark -r -e - < input.txt           Run expression from stdin\n"
+    printf "\n"
+    printf "Note: Generated executables may require code signing to run on macOS\n"
 
 [<EntryPoint>]
 let main argv =
     try
         match parseArgs argv |> Result.bind validateOptions with
         | Error msg ->
-            printfn $"Error: {msg}"
-            printfn ""
+            printf $"Error: {msg}\n"
+            printf "\n"
             printUsage()
             1
 
@@ -334,10 +334,10 @@ let main argv =
                     compile source output options.Verbosity
 
             | Error msg ->
-                printfn $"Error: {msg}"
+                printf $"Error: {msg}\n"
                 1
 
     with ex ->
-        printfn $"Error: {ex.Message}"
-        printfn $"{ex.StackTrace}"
+        printf $"Error: {ex.Message}\n"
+        printf $"{ex.StackTrace}\n"
         1
