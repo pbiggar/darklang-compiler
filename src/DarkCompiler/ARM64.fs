@@ -55,12 +55,19 @@ type Instr =
     | MVN of dest:Reg * src:Reg  // Bitwise NOT
     | MOV_reg of dest:Reg * src:Reg
     | STRB of src:Reg * addr:Reg * offset:int  // Store byte [addr + offset] = src (lower 8 bits)
-    | CBZ of reg:Reg * offset:int  // Compare and branch if zero
+    // Label-based branches (for compiler-generated code with CFG)
+    | CBZ of reg:Reg * label:string  // Compare and branch if zero (label will be resolved)
+    | CBNZ of reg:Reg * label:string  // Compare and branch if not zero
+    | B_label of label:string  // Unconditional branch to label
+    // Offset-based branches (for handcrafted runtime code with known offsets)
+    | CBZ_offset of reg:Reg * offset:int  // CBZ with immediate offset
+    | CBNZ_offset of reg:Reg * offset:int  // CBNZ with immediate offset
     | TBNZ of reg:Reg * bit:int * offset:int  // Test bit and branch if not zero
-    | B of offset:int  // Unconditional branch
+    | B of offset:int  // Unconditional branch with immediate offset
     | NEG of dest:Reg * src:Reg  // Negate: dest = 0 - src
     | RET
     | SVC of imm:uint16  // Supervisor call (syscall)
+    | Label of string  // Pseudo-instruction: marks a label position
 
 /// Machine code (32-bit instruction)
 type MachineCode = uint32

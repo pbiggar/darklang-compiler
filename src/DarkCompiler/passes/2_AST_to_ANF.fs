@@ -189,6 +189,10 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
         let allBindings = leftBindings @ rightBindings @ [(tempVar, cexpr)]
         (ANF.Var tempVar, allBindings, varGen3)
 
+    // NOTE: If expressions in atom position are not yet supported
+    // If should only appear at AExpr level via toANF, not in atom position
+    // This is a known limitation - incomplete pattern match warning is expected
+
 /// Wrap let bindings around an expression
 and wrapBindings (bindings: (ANF.TempId * ANF.CExpr) list) (expr: ANF.AExpr) : ANF.AExpr =
     List.foldBack (fun (var, cexpr) acc -> ANF.Let (var, cexpr, acc)) bindings expr

@@ -205,18 +205,80 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             else
                 Runtime.generatePrintInt ())
 
+/// Convert LIR terminator to ARM64 instructions
+let convertTerminator (terminator: LIR.Terminator) : Result<ARM64.Instr list, string> =
+    match terminator with
     | LIR.Ret ->
         Ok [ARM64.RET]
 
-/// Convert LIR function to ARM64 instructions
-let convertFunction (func: LIR.Function) : Result<ARM64.Instr list, string> =
-    func.Body
-    |> List.map convertInstr
+    | LIR.Branch (condReg, trueLabel, falseLabel) ->
+        // Branch if register is non-zero (true), otherwise fall through to else
+        // Use CBNZ (compare and branch if not zero) to true label
+        // Then unconditional branch to false label
+        lirRegToARM64Reg condReg
+        |> Result.map (fun arm64Reg ->
+            [
+                ARM64.CBNZ (arm64Reg, trueLabel)  // If true, jump to then branch
+                ARM64.B_label falseLabel           // Otherwise jump to else branch
+            ])
+
+    | LIR.Jump label ->
+        Ok [ARM64.B_label label]
+
+/// Convert LIR basic block to ARM64 instructions (with label)
+let convertBlock (block: LIR.BasicBlock) : Result<ARM64.Instr list, string> =
+    // Emit label for this block
+    let labelInstr = ARM64.Label block.Label
+
+    // Convert all instructions
+    let instrResults = block.Instrs |> List.map convertInstr
+
+    // Convert terminator
+    let termResult = convertTerminator block.Terminator
+
+    // Collect all results
+    let rec collectResults acc results =
+        match results with
+        | [] -> Ok (List.rev acc)
+        | (Ok instrs) :: rest -> collectResults (List.rev instrs @ acc) rest
+        | (Error err) :: _ -> Error err
+
+    match collectResults [] instrResults with
+    | Error err -> Error err
+    | Ok instrs ->
+        match termResult with
+        | Error err -> Error err
+        | Ok termInstrs -> Ok (labelInstr :: instrs @ termInstrs)
+
+/// Convert LIR CFG to ARM64 instructions
+let convertCFG (cfg: LIR.CFG) : Result<ARM64.Instr list, string> =
+    // Get blocks in a deterministic order (entry first, then sorted by label)
+    let entryBlock =
+        match Map.tryFind cfg.Entry cfg.Blocks with
+        | Some block -> [block]
+        | None -> []
+
+    let otherBlocks =
+        cfg.Blocks
+        |> Map.toList
+        |> List.filter (fun (label, _) -> label <> cfg.Entry)
+        |> List.sortBy fst
+        |> List.map snd
+
+    let allBlocks = entryBlock @ otherBlocks
+
+    // Convert each block
+    allBlocks
+    |> List.map convertBlock
     |> List.fold (fun acc result ->
         match acc, result with
         | Ok instrs, Ok newInstrs -> Ok (instrs @ newInstrs)
         | Error err, _ -> Error err
         | _, Error err -> Error err) (Ok [])
+
+/// Convert LIR function to ARM64 instructions
+let convertFunction (func: LIR.Function) : Result<ARM64.Instr list, string> =
+    convertCFG func.CFG
 
 /// Convert LIR program to ARM64 instructions
 let generateARM64 (program: LIR.Program) : Result<ARM64.Instr list, string> =

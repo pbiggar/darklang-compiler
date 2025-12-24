@@ -1,0 +1,51 @@
+# control_flow.e2e - Control Flow (if/else) Tests
+#
+# Tests if/then/else expressions for Phase 3
+
+# Simple if/else with true condition
+if true then 42 else 0
+= 42
+
+# Simple if/else with false condition
+if false then 0 else 99
+= 99
+
+# If with comparison
+if 5 > 3 then 1 else 2
+= 1
+
+# If with comparison (false)
+if 1 > 10 then 100 else 200
+= 200
+
+# If with arithmetic in branches
+if true then 10 + 5 else 20 - 3
+= 15
+
+# Nested if expressions
+if true then (if false then 1 else 2) else 3
+= 2
+
+# If with let binding
+let x = 10 in if x > 5 then 100 else 0
+= 100
+
+# If with let binding (false)
+let y = 3 in if y > 5 then 100 else 50
+= 50
+
+# Complex condition
+if 2 + 3 == 5 then 42 else 0
+= 42
+
+# Boolean operators in condition
+if true && false then 1 else 2
+= 2
+
+# Boolean operators in condition (true)
+if true || false then 10 else 20
+= 10
+
+# Multiple operations
+let x = 5 in let y = 3 in if x > y then x + y else x - y
+= 8

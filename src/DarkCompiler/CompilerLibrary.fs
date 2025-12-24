@@ -72,8 +72,7 @@ let compile (verbosity: int) (source: string) : CompileResult =
             if verbosity >= 1 then println "  [5/8] Register Allocation..."
             let (LIR.Program funcs) = lirProgram
             let func = List.head funcs
-            let allocResult = RegisterAllocation.allocateRegisters func
-            let allocatedFunc = { func with Body = allocResult.Instrs; StackSize = allocResult.StackSize }
+            let allocatedFunc = RegisterAllocation.allocateRegisters func
             let allocatedProgram = LIR.Program [allocatedFunc]
             let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime - lirTime
             if verbosity >= 2 then
@@ -96,7 +95,7 @@ let compile (verbosity: int) (source: string) : CompileResult =
             | Ok arm64Instructions ->
                 // Pass 7: ARM64 Encoding (ARM64 → machine code)
                 if verbosity >= 1 then println "  [7/8] ARM64 Encoding..."
-                let machineCode = arm64Instructions |> List.collect ARM64_Encoding.encode
+                let machineCode = ARM64_Encoding.encodeAll arm64Instructions
                 let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime - lirTime - allocTime - codegenTime
                 if verbosity >= 2 then
                     let t = System.Math.Round(encodeTime, 1)

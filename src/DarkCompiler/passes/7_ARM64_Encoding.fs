@@ -3,6 +3,9 @@
 // Encodes ARM64 instructions to 32-bit machine code per ARMv8 specification.
 //
 // Encoding algorithm:
+// - Two-pass encoding for label-based branches:
+//   Pass 1: Compute label positions (byte offsets)
+//   Pass 2: Encode with computed branch offsets
 // - Encodes registers as 5-bit fields
 // - Packs immediates into instruction-specific bit positions
 // - Combines opcode bits, operand fields into 32-bit words
@@ -158,12 +161,43 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rt = encodeReg src
         [size ||| vOpc ||| imm12 ||| rn ||| rt]
 
-    | ARM64.CBZ (reg, offset) ->
+    // Label-based branches (for compiler-generated code) - require two-pass encoding
+    // TODO: These need two-pass encoding implementation
+    // For now, returning empty lists - will need proper label resolution
+    | ARM64.CBZ (reg, label) ->
+        // Placeholder: will be properly encoded in two-pass implementation
+        []
+
+    | ARM64.CBNZ (reg, label) ->
+        // Placeholder: will be properly encoded in two-pass implementation
+        []
+
+    | ARM64.B_label label ->
+        // Placeholder: will be properly encoded in two-pass implementation
+        []
+
+    | ARM64.Label label ->
+        // Pseudo-instruction: marks a label position (no machine code generated)
+        []
+
+    // Offset-based branches (for handcrafted runtime code with known offsets)
+    | ARM64.CBZ_offset (reg, offset) ->
         // CBZ: sf 011010 0 imm19 Rt
         // Compare and Branch on Zero
         let sf = 1u <<< 31  // 64-bit register
         let op = 0b011010u <<< 25
         let flag = 0u <<< 24  // CBZ (vs CBNZ which has 1)
+        // Offset is in instructions (4-byte units), sign-extended, stored as imm19
+        let imm19 = ((uint32 offset) &&& 0x7FFFFu) <<< 5
+        let rt = encodeReg reg
+        [sf ||| op ||| flag ||| imm19 ||| rt]
+
+    | ARM64.CBNZ_offset (reg, offset) ->
+        // CBNZ: sf 011010 1 imm19 Rt
+        // Compare and Branch on Non-Zero
+        let sf = 1u <<< 31  // 64-bit register
+        let op = 0b011010u <<< 25
+        let flag = 1u <<< 24  // CBNZ (vs CBZ which has 0)
         // Offset is in instructions (4-byte units), sign-extended, stored as imm19
         let imm19 = ((uint32 offset) &&& 0x7FFFFu) <<< 5
         let rt = encodeReg reg
@@ -296,3 +330,101 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // Bits: 11010100000(31-21) imm16(20-5) 00001(4-0)
         let imm16 = uint32 imm
         [0xD4000001u ||| (imm16 <<< 5)]
+
+/// Two-Pass Encoding for Label Resolution
+
+/// Pass 1: Compute byte offset for each label
+/// Returns map from label name to byte offset
+/// Note: Labels mark positions but don't generate code, so we track actual code offset
+let computeLabelPositions (instructions: ARM64.Instr list) : Map<string, int> =
+    let rec loop instrs offset labelMap =
+        match instrs with
+        | [] -> labelMap
+        | instr :: rest ->
+            match instr with
+            | ARM64.Label name ->
+                // Record this label's position, don't increment offset (pseudo-instruction)
+                loop rest offset (Map.add name offset labelMap)
+            | ARM64.CBZ _ | ARM64.CBNZ _ | ARM64.B_label _ ->
+                // These will be resolved in pass 2, each is 4 bytes
+                loop rest (offset + 4) labelMap
+            | _ ->
+                // Encode instruction to get actual size
+                let machineCode = encode instr
+                let size = List.length machineCode * 4
+                loop rest (offset + size) labelMap
+    loop instructions 0 Map.empty
+
+/// Encode an instruction with label resolution
+/// currentOffset: byte offset of current instruction
+/// labelMap: map of label names to byte offsets
+let encodeWithLabels (instr: ARM64.Instr) (currentOffset: int) (labelMap: Map<string, int>) : ARM64.MachineCode list =
+    match instr with
+    // Label-based branches - resolve to offsets
+    | ARM64.CBZ (reg, label) ->
+        match Map.tryFind label labelMap with
+        | Some targetOffset ->
+            // Compute relative offset in instructions (divide by 4)
+            let byteOffset = targetOffset - currentOffset
+            let instrOffset = byteOffset / 4
+            // Encode as CBZ with immediate offset
+            let sf = 1u <<< 31
+            let op = 0b011010u <<< 25
+            let flag = 0u <<< 24  // CBZ
+            let imm19 = ((uint32 instrOffset) &&& 0x7FFFFu) <<< 5
+            let rt = encodeReg reg
+            [sf ||| op ||| flag ||| imm19 ||| rt]
+        | None ->
+            // Label not found - return empty (error will be caught later)
+            []
+
+    | ARM64.CBNZ (reg, label) ->
+        match Map.tryFind label labelMap with
+        | Some targetOffset ->
+            let byteOffset = targetOffset - currentOffset
+            let instrOffset = byteOffset / 4
+            // Encode as CBNZ with immediate offset
+            let sf = 1u <<< 31
+            let op = 0b011010u <<< 25
+            let flag = 1u <<< 24  // CBNZ
+            let imm19 = ((uint32 instrOffset) &&& 0x7FFFFu) <<< 5
+            let rt = encodeReg reg
+            [sf ||| op ||| flag ||| imm19 ||| rt]
+        | None ->
+            []
+
+    | ARM64.B_label label ->
+        match Map.tryFind label labelMap with
+        | Some targetOffset ->
+            let byteOffset = targetOffset - currentOffset
+            let instrOffset = byteOffset / 4
+            // Encode as B with immediate offset
+            let op = 0b000101u <<< 26
+            let imm26 = (uint32 instrOffset) &&& 0x3FFFFFFu
+            [op ||| imm26]
+        | None ->
+            []
+
+    | ARM64.Label _ ->
+        // Pseudo-instruction: no machine code
+        []
+
+    // All other instructions: use single-pass encoding
+    | _ ->
+        encode instr
+
+/// Main encoding entry point with two-pass label resolution
+let encodeAll (instructions: ARM64.Instr list) : ARM64.MachineCode list =
+    // Pass 1: Compute label positions
+    let labelMap = computeLabelPositions instructions
+
+    // Pass 2: Encode with label resolution
+    let rec encodeLoop instrs offset acc =
+        match instrs with
+        | [] -> List.rev acc
+        | instr :: rest ->
+            let machineCode = encodeWithLabels instr offset labelMap
+            let newOffset = offset + (List.length machineCode * 4)
+            encodeLoop rest newOffset (List.rev machineCode @ acc)
+
+    encodeLoop instructions 0 []

@@ -1,19 +1,16 @@
 // 4_MIR_to_LIR.fs - Instruction Selection (Pass 4)
 //
-// Transforms MIR into LIR.
+// Transforms MIR CFG into LIR CFG.
 //
 // Instruction selection algorithm:
+// - Converts MIR basic blocks to LIR basic blocks
 // - Selects appropriate ARM64 instructions for each MIR operation
 // - Handles ARM64 operand constraints:
 //   - ADD/SUB: support 12-bit immediates, left operand must be register
 //   - MUL/SDIV: both operands must be registers
 // - Inserts MOV instructions to load immediates when needed
-// - Emits return value in X0 register per ARM64 calling convention
-//
-// Example:
-//   v0 <- 42; v1 <- v0 + 100
-//   →
-//   v0 <- Mov(Imm 42); v1 <- Add(v0, Imm 100)
+// - Converts MIR terminators to LIR terminators
+// - Preserves CFG structure (labels, branches, jumps)
 
 module MIR_to_LIR
 
@@ -128,30 +125,74 @@ let selectInstr (instr: MIR.Instr) : LIR.Instr list =
                 LIR.Sub (lirDest, lirDest, LIR.Reg srcReg)
             ]
 
+/// Convert MIR terminator to LIR terminator
+/// For Branch, need to convert operand to register (may add instructions)
+let selectTerminator (terminator: MIR.Terminator) : LIR.Instr list * LIR.Terminator =
+    match terminator with
     | MIR.Ret operand ->
-        // ARM64 returns value in X0
-        // For top-level programs: print result before exiting
+        // Move operand to X0 (return register), print it, then return
         let lirOp = convertOperand operand
-        [
+        let instrs = [
             LIR.Mov (LIR.Physical LIR.X0, lirOp)
-            LIR.PrintInt (LIR.Physical LIR.X0)  // Print before return
-            LIR.Ret
+            LIR.PrintInt (LIR.Physical LIR.X0)
         ]
+        (instrs, LIR.Ret)
 
-/// Convert MIR block to LIR instructions
-let selectBlock (MIR.Block instrs) : LIR.Instr list =
-    instrs |> List.collect selectInstr
+    | MIR.Branch (condOp, trueLabel, falseLabel) ->
+        // Convert MIR.Label to LIR.Label (just unwrap)
+        let (MIR.Label trueLbl) = trueLabel
+        let (MIR.Label falseLbl) = falseLabel
+
+        // Condition must be in a register for ARM64 branch instructions
+        let (condInstrs, condReg) = ensureInRegister condOp (LIR.Virtual 1002)
+        (condInstrs, LIR.Branch (condReg, trueLbl, falseLbl))
+
+    | MIR.Jump label ->
+        let (MIR.Label lbl) = label
+        ([], LIR.Jump lbl)
+
+/// Convert MIR label to LIR label
+let convertLabel (MIR.Label lbl) : LIR.Label = lbl
+
+/// Convert MIR basic block to LIR basic block
+let selectBlock (block: MIR.BasicBlock) : LIR.BasicBlock =
+    let lirLabel = convertLabel block.Label
+
+    // Convert all instructions
+    let lirInstrs = block.Instrs |> List.collect selectInstr
+
+    // Convert terminator (may add instructions)
+    let (termInstrs, lirTerm) = selectTerminator block.Terminator
+
+    {
+        LIR.Label = lirLabel
+        LIR.Instrs = lirInstrs @ termInstrs
+        LIR.Terminator = lirTerm
+    }
+
+/// Convert MIR CFG to LIR CFG
+let selectCFG (cfg: MIR.CFG) : LIR.CFG =
+    let lirEntry = convertLabel cfg.Entry
+    let lirBlocks =
+        cfg.Blocks
+        |> Map.toList
+        |> List.map (fun (label, block) -> (convertLabel label, selectBlock block))
+        |> Map.ofList
+
+    {
+        LIR.Entry = lirEntry
+        LIR.Blocks = lirBlocks
+    }
 
 /// Convert MIR program to LIR
 let toLIR (program: MIR.Program) : LIR.Program =
-    let (MIR.Program blocks) = program
+    let (MIR.Program cfg) = program
 
-    // For now, single function with all blocks
-    let instrs = blocks |> List.collect selectBlock
+    let lirCFG = selectCFG cfg
 
     let func = {
         LIR.Name = "_start"
-        LIR.Body = instrs
+        LIR.CFG = lirCFG
         LIR.StackSize = 0  // Will be determined by register allocation
     }
 

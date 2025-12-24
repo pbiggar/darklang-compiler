@@ -59,7 +59,7 @@ let generatePrintInt () : ARM64.Instr list =
         ARM64.TBNZ (ARM64.X2, 63, 29)  // 7: If negative, branch forward +29 to inst 36 (handle_negative)
 
         // Instruction 8: Check if zero (branch forward +24 to print_zero at inst 32)
-        ARM64.CBZ (ARM64.X2, 24)
+        ARM64.CBZ_offset (ARM64.X2, 24)
 
         // Instruction 9-17: convert_loop - Extract digits by dividing by 10
         ARM64.MOVZ (ARM64.X3, 10us, 0)  // 9: divisor = 10
@@ -69,11 +69,11 @@ let generatePrintInt () : ARM64.Instr list =
         ARM64.STRB (ARM64.X5, ARM64.X1, 0)  // 13: Store digit
         ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)  // 14: Move pointer back
         ARM64.MOV_reg (ARM64.X2, ARM64.X4)  // 15: value = value / 10
-        ARM64.CBZ (ARM64.X2, 2)  // 16: If zero, skip (+2) to store_minus_if_needed at inst 18
+        ARM64.CBZ_offset (ARM64.X2, 2)  // 16: If zero, skip (+2) to store_minus_if_needed at inst 18
         ARM64.B (-8)  // 17: Loop back (-8) to inst 9 (convert_loop start)
 
         // Instruction 18-21: store_minus_if_needed - If X6=1 (was negative), store '-'
-        ARM64.CBZ (ARM64.X6, 4)  // 18: If X6=0 (positive), skip (+4) to write_output at inst 22
+        ARM64.CBZ_offset (ARM64.X6, 4)  // 18: If X6=0 (positive), skip (+4) to write_output at inst 22
         ARM64.MOVZ (ARM64.X3, 45us, 0)  // 19: '-' = ASCII 45
         ARM64.STRB (ARM64.X3, ARM64.X1, 0)  // 20: Store '-' at X1
         ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)  // 21: Move pointer back

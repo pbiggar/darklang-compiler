@@ -43,7 +43,7 @@ type Condition =
     | LE   // Less than or equal (signed)
     | GE   // Greater than or equal (signed)
 
-/// Instructions (closer to ARM64 instructions)
+/// Instructions (closer to ARM64 instructions, non-control-flow)
 type Instr =
     | Mov of dest:Reg * src:Operand
     | Add of dest:Reg * left:Reg * right:Operand
@@ -57,12 +57,33 @@ type Instr =
     | Mvn of dest:Reg * src:Reg                 // Bitwise NOT
     | PrintInt of Reg                           // Print integer register to stdout
     | PrintBool of Reg                          // Print boolean register to stdout
-    | Ret
 
-/// Function (preparation for future functions)
+/// Basic block label
+type Label = string
+
+/// Terminator instructions (control flow)
+type Terminator =
+    | Ret                                              // Return from function
+    | Branch of cond:Reg * trueLabel:Label * falseLabel:Label  // Conditional branch
+    | Jump of Label                                     // Unconditional jump
+
+/// Basic block with label, instructions, and terminator
+type BasicBlock = {
+    Label: Label
+    Instrs: Instr list
+    Terminator: Terminator
+}
+
+/// Control Flow Graph
+type CFG = {
+    Entry: Label
+    Blocks: Map<Label, BasicBlock>
+}
+
+/// Function with CFG
 type Function = {
     Name: string
-    Body: Instr list
+    CFG: CFG
     StackSize: int  // Bytes needed for spills
 }
 

@@ -149,9 +149,17 @@ let rec convertExpr
         }
         let builder5 = { builder4 with Blocks = Map.add elseLabel elseBlock builder4.Blocks }
 
-        // Continue at join block with result in resultReg
+        // Create join block that returns the result
+        let joinBlock = {
+            MIR.Label = joinLabel
+            MIR.Instrs = []
+            MIR.Terminator = MIR.Ret (MIR.Register resultReg)
+        }
+        let builder6 = { builder5 with Blocks = Map.add joinLabel joinBlock builder5.Blocks }
+
+        // Return the result operand
         let resultOp = MIR.Register resultReg
-        (resultOp, { builder5 with Blocks = builder5.Blocks })  // Don't create join block yet, caller will
+        (resultOp, builder6)
 
 /// Helper: convert expression and extract final operand
 /// Creates blocks but doesn't finalize the last one
@@ -215,7 +223,16 @@ and convertExprToOperand
         }
         let builder5 = { builder4 with Blocks = Map.add elseLabel elseBlock builder4.Blocks }
 
-        (MIR.Register resultReg, builder5)
+        // Create join block (empty, will be filled by caller)
+        // The join block needs to exist as a target for the jumps from then/else
+        let joinBlock = {
+            MIR.Label = joinLabel
+            MIR.Instrs = []
+            MIR.Terminator = MIR.Ret (MIR.Register resultReg)  // Temporary, may be overwritten
+        }
+        let builder6 = { builder5 with Blocks = Map.add joinLabel joinBlock builder5.Blocks }
+
+        (MIR.Register resultReg, builder6)
 
 /// Convert ANF program to MIR CFG
 let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : MIR.Program * MIR.RegGen =
