@@ -42,11 +42,24 @@ let compile (verbosity: int) (source: string) : CompileResult =
               Success = false
               ErrorMessage = Some $"Parse error: {err}" }
         | Ok ast ->
+            // Show AST
+            if verbosity >= 3 then
+                println "\n=== AST ==="
+                let (AST.Program expr) = ast
+                println $"{expr}"
+                println ""
+
             // Pass 2: AST → ANF
             if verbosity >= 1 then println "  [2/8] AST → ANF..."
             let (AST.Program expr) = ast
             let (anfExpr, _) = AST_to_ANF.toANF expr (ANF.VarGen 0) Map.empty
             let anfProgram = ANF.Program anfExpr
+
+            // Show ANF
+            if verbosity >= 3 then
+                println "=== ANF ==="
+                println $"{anfExpr}"
+                println ""
             let anfTime = sw.Elapsed.TotalMilliseconds - parseTime
             if verbosity >= 2 then
                 let t = System.Math.Round(anfTime, 1)
@@ -55,6 +68,20 @@ let compile (verbosity: int) (source: string) : CompileResult =
             // Pass 3: ANF → MIR
             if verbosity >= 1 then println "  [3/8] ANF → MIR..."
             let (mirProgram, _) = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0)
+
+            // Show MIR
+            if verbosity >= 3 then
+                let (MIR.Program cfg) = mirProgram
+                println "=== MIR (Control Flow Graph) ==="
+                println $"Entry: {cfg.Entry}"
+                for kvp in cfg.Blocks do
+                    let block = kvp.Value
+                    println $"\n{block.Label}:"
+                    for instr in block.Instrs do
+                        println $"  {instr}"
+                    println $"  {block.Terminator}"
+                println ""
+
             let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime
             if verbosity >= 2 then
                 let t = System.Math.Round(mirTime, 1)
@@ -63,6 +90,22 @@ let compile (verbosity: int) (source: string) : CompileResult =
             // Pass 4: MIR → LIR
             if verbosity >= 1 then println "  [4/8] MIR → LIR..."
             let lirProgram = MIR_to_LIR.toLIR mirProgram
+
+            // Show LIR
+            if verbosity >= 3 then
+                let (LIR.Program funcs) = lirProgram
+                println "=== LIR (Low-level IR with CFG) ==="
+                for func in funcs do
+                    println $"Function: {func.Name}"
+                    println $"Entry: {func.CFG.Entry}"
+                    for kvp in func.CFG.Blocks do
+                        let block = kvp.Value
+                        println $"\n{block.Label}:"
+                        for instr in block.Instrs do
+                            println $"  {instr}"
+                        println $"  {block.Terminator}"
+                println ""
+
             let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime
             if verbosity >= 2 then
                 let t = System.Math.Round(lirTime, 1)
@@ -74,6 +117,20 @@ let compile (verbosity: int) (source: string) : CompileResult =
             let func = List.head funcs
             let allocatedFunc = RegisterAllocation.allocateRegisters func
             let allocatedProgram = LIR.Program [allocatedFunc]
+
+            // Show LIR after allocation
+            if verbosity >= 3 then
+                println "=== LIR (After Register Allocation) ==="
+                println $"Function: {allocatedFunc.Name}"
+                println $"Entry: {allocatedFunc.CFG.Entry}"
+                for kvp in allocatedFunc.CFG.Blocks do
+                    let block = kvp.Value
+                    println $"\n{block.Label}:"
+                    for instr in block.Instrs do
+                        println $"  {instr}"
+                    println $"  {block.Terminator}"
+                println ""
+
             let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime - lirTime
             if verbosity >= 2 then
                 let t = System.Math.Round(allocTime, 1)
@@ -93,9 +150,26 @@ let compile (verbosity: int) (source: string) : CompileResult =
                   Success = false
                   ErrorMessage = Some $"Code generation error: {err}" }
             | Ok arm64Instructions ->
+                // Show ARM64
+                if verbosity >= 3 then
+                    println "=== ARM64 Assembly Instructions ==="
+                    for (i, instr) in List.indexed arm64Instructions do
+                        println $"  {i}: {instr}"
+                    println ""
+
                 // Pass 7: ARM64 Encoding (ARM64 → machine code)
                 if verbosity >= 1 then println "  [7/8] ARM64 Encoding..."
                 let machineCode = ARM64_Encoding.encodeAll arm64Instructions
+
+                // Show machine code
+                if verbosity >= 3 then
+                    println "=== Machine Code (hex) ==="
+                    for i in 0 .. 4 .. (machineCode.Length - 1) do
+                        if i + 3 < machineCode.Length then
+                            let bytes = sprintf "%02x %02x %02x %02x" machineCode.[i] machineCode.[i+1] machineCode.[i+2] machineCode.[i+3]
+                            println $"  {i:X4}: {bytes}"
+                    println $"Total: {machineCode.Length} bytes\n"
+
                 let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime - lirTime - allocTime - codegenTime
                 if verbosity >= 2 then
                     let t = System.Math.Round(encodeTime, 1)

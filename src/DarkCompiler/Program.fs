@@ -28,16 +28,18 @@ open Output
 /// 1 = Normal (standard output)
 /// 2 = Verbose (show pass names)
 /// 3 = VeryVerbose (show pass names + timing)
-type VerbosityLevel = Quiet | Normal | Verbose | VeryVerbose
+/// 4 = DumpIR (show all intermediate representations)
+type VerbosityLevel = Quiet | Normal | Verbose | VeryVerbose | DumpIR
 
 /// Convert VerbosityLevel to integer for library
-/// Library verbosity: 0=silent, 1=pass names, 2=pass names + timing
+/// Library verbosity: 0=silent, 1=pass names, 2=pass names + timing, 3=dump all IRs
 let verbosityToInt (level: VerbosityLevel) : int =
     match level with
     | Quiet -> 0      // No output
     | Normal -> 0     // CLI handles output, library silent
     | Verbose -> 1    // Library shows pass names
     | VeryVerbose -> 2 // Library shows pass names + timing
+    | DumpIR -> 3     // Library dumps all IRs
 
 /// Parsed CLI options
 type CliOptions = {
@@ -107,13 +109,14 @@ let parseArgs (argv: string array) : Result<CliOptions, string> =
             parseFlags rest opts Quiet
 
         | "-v" :: rest | "--verbose" :: rest ->
-            // Stack -v flags: -v = Verbose, -vv = VeryVerbose
+            // Stack -v flags: -v = Verbose, -vv = VeryVerbose, -vvv = DumpIR
             let newVerbosity =
                 match lastVerbosity with
                 | Quiet -> Normal
                 | Normal -> Verbose
                 | Verbose -> VeryVerbose
-                | VeryVerbose -> VeryVerbose
+                | VeryVerbose -> DumpIR
+                | DumpIR -> DumpIR
             parseFlags rest opts newVerbosity
 
         | "-h" :: rest | "--help" :: rest ->
@@ -180,7 +183,7 @@ let validateOptions (opts: CliOptions) : Result<CliOptions, string> =
 
 /// Compile source expression to executable
 let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) : int =
-    let showNormal = verbosity = Normal || verbosity = Verbose
+    let showNormal = verbosity = Normal || verbosity = Verbose || verbosity = VeryVerbose || verbosity = DumpIR
 
     if showNormal then
         println $"Compiling: {source}"
@@ -213,7 +216,7 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) : 
 
 /// Run an expression (compile to temp and execute)
 let run (source: string) (verbosity: VerbosityLevel) : int =
-    let showNormal = verbosity = Normal || verbosity = Verbose
+    let showNormal = verbosity = Normal || verbosity = Verbose || verbosity = VeryVerbose || verbosity = DumpIR
 
     if showNormal then
         println $"Compiling and running: {source}"
@@ -255,11 +258,12 @@ let printUsage () =
     println "  -q, --quiet          Suppress compilation output"
     println "  -v, --verbose        Show compilation pass names"
     println "  -vv                  Show pass names + timing details"
+    println "  -vvv                 Dump all intermediate representations"
     println "  -h, --help           Show this help message"
     println "  --version            Show version information"
     println ""
     println "Flags can appear in any order and can be combined (e.g., -qr, -re, -vvre)"
-    println "Verbosity levels: (none)=normal, -v=passes, -vv=passes+timing"
+    println "Verbosity levels: (none)=normal, -v=passes, -vv=passes+timing, -vvv=dump IRs"
     println ""
     println "Examples:"
     println "  dark prog.dark                     Compile file to 'dark.out'"
