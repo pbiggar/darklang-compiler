@@ -41,25 +41,31 @@ let parseOp (text: string) : Result<BinOp, string> =
     | "-" -> Ok Sub
     | "*" -> Ok Mul
     | "/" -> Ok Div
-    | op -> Error $"Unknown operator '{op}' (expected +, -, *, /)"
+    | "==" -> Ok Eq
+    | "!=" -> Ok Neq
+    | "<" -> Ok Lt
+    | ">" -> Ok Gt
+    | "<=" -> Ok Lte
+    | ">=" -> Ok Gte
+    | "&&" -> Ok And
+    | "||" -> Ok Or
+    | op -> Error $"Unknown operator '{op}'"
 
-/// Parse a single MIR instruction
-/// NOTE: Temporarily disabled - MIR structure changed to CFG, needs rewrite
-let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
-    Error "MIR parser temporarily disabled - CFG structure needs rewrite"
-    (*
+/// Parse a single MIR instruction or terminator
+/// Returns either an Instr or a Terminator
+let parseInstructionOrTerminator (lineNum: int) (line: string) : Result<Choice<Instr, Terminator>, string> =
     let line = line.Trim()
 
     // Try ret pattern: "ret <operand>"
     let retMatch = Regex.Match(line, @"^ret\s+(.+)$")
     if retMatch.Success then
         match parseOperand retMatch.Groups.[1].Value with
-        | Ok operand -> Ok (Ret operand)
+        | Ok operand -> Ok (Choice2Of2 (Ret operand))
         | Error e -> Error $"Line {lineNum}: {e}"
     else
 
     // Try binop pattern: "v0 <- v1 + 3"
-    let binopMatch = Regex.Match(line, @"^(v\d+)\s*<-\s*(.+?)\s*([+\-*/])\s*(.+)$")
+    let binopMatch = Regex.Match(line, @"^(v\d+)\s*<-\s*(.+?)\s*([+\-*/]|==|!=|<=|>=|<|>|&&|\|\|)\s*(.+)$")
     if binopMatch.Success then
         match parseVReg binopMatch.Groups.[1].Value with
         | Error e -> Error $"Line {lineNum}: {e}"
@@ -72,23 +78,71 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
                 | Ok op ->
                     match parseOperand binopMatch.Groups.[4].Value with
                     | Error e -> Error $"Line {lineNum}: {e}"
-                    | Ok right -> Ok (BinOp (dest, op, left, right))
+                    | Ok right -> Ok (Choice1Of2 (BinOp (dest, op, left, right)))
     else
 
     // Try move pattern: "v0 <- 42" or "v0 <- v1"
-    let movMatch = Regex.Match(line, @"^(v\d+)\s*<-\s*([^+\-*/]+)$")
+    let movMatch = Regex.Match(line, @"^(v\d+)\s*<-\s*([^+\-*/!<>=&|]+)$")
     if movMatch.Success then
         match parseVReg movMatch.Groups.[1].Value with
         | Error e -> Error $"Line {lineNum}: {e}"
         | Ok dest ->
             match parseOperand movMatch.Groups.[2].Value with
             | Error e -> Error $"Line {lineNum}: {e}"
-            | Ok src -> Ok (Mov (dest, src))
+            | Ok src -> Ok (Choice1Of2 (Mov (dest, src)))
     else
         Error $"Line {lineNum}: Invalid instruction format '{line}'"
-    *)
 
 /// Parse MIR program from text
-/// NOTE: Temporarily disabled - MIR structure changed to CFG, needs rewrite
+/// Parses flat instruction list and wraps in a single-block CFG
 let parseMIR (text: string) : Result<MIR.Program, string> =
-    Error "MIR parser temporarily disabled - CFG structure changed, needs rewrite"
+    let lines =
+        text.Split('\n')
+        |> Array.map (fun line -> line.Trim())
+        |> Array.filter (fun line -> line <> "" && not (line.StartsWith("//")))
+        |> Array.toList
+
+    // Parse all instructions/terminators
+    let rec parseLines lineNum acc = function
+        | [] -> Ok (List.rev acc)
+        | line :: rest ->
+            match parseInstructionOrTerminator lineNum line with
+            | Error e -> Error e
+            | Ok result -> parseLines (lineNum + 1) (result :: acc) rest
+
+    match parseLines 1 [] lines with
+    | Error e -> Error e
+    | Ok [] -> Error "Empty MIR program"
+    | Ok parsed ->
+        // Split into instructions and terminator
+        // The last item should be a terminator (Ret)
+        let lastItem = List.last parsed
+        let instructions = List.take (List.length parsed - 1) parsed
+
+        match lastItem with
+        | Choice2Of2 terminator ->
+            // Extract instructions from Choice1Of2
+            let instrs =
+                instructions
+                |> List.choose (function
+                    | Choice1Of2 instr -> Some instr
+                    | Choice2Of2 _ -> None)
+
+            // Check that all non-last items are instructions
+            if List.length instrs <> List.length instructions then
+                Error "Only the last line can be a terminator (ret)"
+            else
+                // Build single-block CFG
+                let entryLabel = Label "entry"
+                let block = {
+                    Label = entryLabel
+                    Instrs = instrs
+                    Terminator = terminator
+                }
+                let cfg = {
+                    Entry = entryLabel
+                    Blocks = Map.ofList [(entryLabel, block)]
+                }
+                Ok (Program cfg)
+        | Choice1Of2 _ ->
+            Error "Last instruction must be a terminator (ret)"

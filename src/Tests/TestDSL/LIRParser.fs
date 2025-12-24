@@ -77,24 +77,30 @@ let parseOperand (text: string) : Result<Operand, string> =
     else
         Error $"Invalid operand '{text}' (expected 'Imm N', 'Reg X', or 'Stack N')"
 
-/// Parse a single LIR instruction
-/// NOTE: Temporarily disabled - LIR structure changed to CFG, needs rewrite
-let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
-    Error "LIR parser temporarily disabled - CFG structure changed, needs rewrite"
-    (*
+/// Parse a single LIR instruction or terminator
+/// Returns either an Instr or a Terminator
+let parseInstructionOrTerminator (lineNum: int) (line: string) : Result<Choice<Instr, Terminator>, string> =
     let line = line.Trim()
 
     // Try Ret: "Ret"
     if line = "Ret" then
-        Ok Ret
+        Ok (Choice2Of2 Ret)
     else
 
     // Try PrintInt: "PrintInt(X0)" or "PrintInt(v0)"
-    let printMatch = Regex.Match(line, @"^PrintInt\((.+)\)$")
-    if printMatch.Success then
-        match parseRegister printMatch.Groups.[1].Value with
+    let printIntMatch = Regex.Match(line, @"^PrintInt\((.+)\)$")
+    if printIntMatch.Success then
+        match parseRegister printIntMatch.Groups.[1].Value with
         | Error e -> Error $"Line {lineNum}: {e}"
-        | Ok reg -> Ok (PrintInt reg)
+        | Ok reg -> Ok (Choice1Of2 (PrintInt reg))
+    else
+
+    // Try PrintBool: "PrintBool(X0)" or "PrintBool(v0)"
+    let printBoolMatch = Regex.Match(line, @"^PrintBool\((.+)\)$")
+    if printBoolMatch.Success then
+        match parseRegister printBoolMatch.Groups.[1].Value with
+        | Error e -> Error $"Line {lineNum}: {e}"
+        | Ok reg -> Ok (Choice1Of2 (PrintBool reg))
     else
 
     // Try Mov: "X1 <- Mov(Imm 42)"
@@ -105,7 +111,7 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
         | Ok dest ->
             match parseOperand movMatch.Groups.[2].Value with
             | Error e -> Error $"Line {lineNum}: {e}"
-            | Ok src -> Ok (Mov (dest, src))
+            | Ok src -> Ok (Choice1Of2 (Mov (dest, src)))
     else
 
     // Try Add: "X3 <- Add(X1, Imm 5)"
@@ -119,7 +125,7 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             | Ok left ->
                 match parseOperand addMatch.Groups.[3].Value with
                 | Error e -> Error $"Line {lineNum}: {e}"
-                | Ok right -> Ok (Add (dest, left, right))
+                | Ok right -> Ok (Choice1Of2 (Add (dest, left, right)))
     else
 
     // Try Sub: "X3 <- Sub(X1, Imm 5)"
@@ -133,7 +139,7 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             | Ok left ->
                 match parseOperand subMatch.Groups.[3].Value with
                 | Error e -> Error $"Line {lineNum}: {e}"
-                | Ok right -> Ok (Sub (dest, left, right))
+                | Ok right -> Ok (Choice1Of2 (Sub (dest, left, right)))
     else
 
     // Try Mul: "X3 <- Mul(X1, Reg X2)" - note: Mul requires both operands to be registers
@@ -147,7 +153,7 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             | Ok left ->
                 match parseRegister mulMatch.Groups.[3].Value with
                 | Error e -> Error $"Line {lineNum}: {e}"
-                | Ok right -> Ok (Mul (dest, left, right))
+                | Ok right -> Ok (Choice1Of2 (Mul (dest, left, right)))
     else
 
     // Try Sdiv: "X3 <- Sdiv(X1, Reg X2)" - note: Sdiv requires both operands to be registers
@@ -161,12 +167,77 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             | Ok left ->
                 match parseRegister divMatch.Groups.[3].Value with
                 | Error e -> Error $"Line {lineNum}: {e}"
-                | Ok right -> Ok (Sdiv (dest, left, right))
+                | Ok right -> Ok (Choice1Of2 (Sdiv (dest, left, right)))
     else
         Error $"Line {lineNum}: Invalid instruction format '{line}'"
-    *)
 
 /// Parse LIR program from text
-/// NOTE: Temporarily disabled - LIR structure changed to CFG, needs rewrite
+/// Parses flat instruction list and wraps in a single-block CFG
 let parseLIR (text: string) : Result<LIR.Program, string> =
-    Error "LIR parser temporarily disabled - CFG structure changed, needs rewrite"
+    let lines =
+        text.Split('\n')
+        |> Array.map (fun line -> line.Trim())
+        |> Array.filter (fun line -> line <> "" && not (line.StartsWith("//")))
+        |> Array.toList
+
+    // Parse all instructions/terminators
+    let rec parseLines lineNum acc = function
+        | [] -> Ok (List.rev acc)
+        | line :: rest ->
+            match parseInstructionOrTerminator lineNum line with
+            | Error e -> Error e
+            | Ok result -> parseLines (lineNum + 1) (result :: acc) rest
+
+    match parseLines 1 [] lines with
+    | Error e -> Error e
+    | Ok [] -> Error "Empty LIR program"
+    | Ok parsed ->
+        // Split into instructions and terminator
+        // The last item might be a terminator (Ret) or an instruction
+        let lastItem = List.last parsed
+        let instructions = List.take (List.length parsed - 1) parsed
+
+        let (instrs, terminator) =
+            match lastItem with
+            | Choice2Of2 term ->
+                // Last item is a terminator
+                let instrs =
+                    instructions
+                    |> List.choose (function
+                        | Choice1Of2 instr -> Some instr
+                        | Choice2Of2 _ -> None)
+                // Check that all non-last items are instructions
+                if List.length instrs <> List.length instructions then
+                    ([], Ret)  // Will trigger error below
+                else
+                    (instrs, term)
+            | Choice1Of2 lastInstr ->
+                // Last item is an instruction - add default Ret terminator
+                let allInstrs =
+                    parsed
+                    |> List.choose (function
+                        | Choice1Of2 instr -> Some instr
+                        | Choice2Of2 _ -> None)
+                // Check that all items are instructions
+                if List.length allInstrs <> List.length parsed then
+                    ([], Ret)  // Will trigger error
+                else
+                    (allInstrs, Ret)
+
+        // Build single-block CFG
+        let entryLabel = "entry"
+        let block = {
+            Label = entryLabel
+            Instrs = instrs
+            Terminator = terminator
+        }
+        let cfg = {
+            Entry = entryLabel
+            Blocks = Map.ofList [(entryLabel, block)]
+        }
+        let func = {
+            Name = "_start"
+            CFG = cfg
+            StackSize = 0
+        }
+        Ok (Program [func])

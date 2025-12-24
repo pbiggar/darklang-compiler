@@ -81,14 +81,55 @@ let prettyPrintLIROperand = function
     | LIR.StackSlot n -> $"Stack {n}"
 
 /// Pretty-print LIR instruction
-/// NOTE: Disabled - LIR structure changed to CFG
 let prettyPrintLIRInstr (instr: LIR.Instr) : string =
-    "<LIR pretty-print disabled - CFG structure>"
+    match instr with
+    | LIR.Mov (dest, src) ->
+        $"{prettyPrintLIRReg dest} <- Mov({prettyPrintLIROperand src})"
+    | LIR.Add (dest, left, right) ->
+        $"{prettyPrintLIRReg dest} <- Add({prettyPrintLIRReg left}, {prettyPrintLIROperand right})"
+    | LIR.Sub (dest, left, right) ->
+        $"{prettyPrintLIRReg dest} <- Sub({prettyPrintLIRReg left}, {prettyPrintLIROperand right})"
+    | LIR.Mul (dest, left, right) ->
+        $"{prettyPrintLIRReg dest} <- Mul({prettyPrintLIRReg left}, Reg {prettyPrintLIRReg right})"
+    | LIR.Sdiv (dest, left, right) ->
+        $"{prettyPrintLIRReg dest} <- Sdiv({prettyPrintLIRReg left}, Reg {prettyPrintLIRReg right})"
+    | LIR.Cmp (left, right) ->
+        $"Cmp({prettyPrintLIRReg left}, {prettyPrintLIROperand right})"
+    | LIR.Cset (dest, cond) ->
+        $"{prettyPrintLIRReg dest} <- Cset({cond})"
+    | LIR.And (dest, left, right) ->
+        $"{prettyPrintLIRReg dest} <- And({prettyPrintLIRReg left}, {prettyPrintLIRReg right})"
+    | LIR.Orr (dest, left, right) ->
+        $"{prettyPrintLIRReg dest} <- Orr({prettyPrintLIRReg left}, {prettyPrintLIRReg right})"
+    | LIR.Mvn (dest, src) ->
+        $"{prettyPrintLIRReg dest} <- Mvn({prettyPrintLIRReg src})"
+    | LIR.PrintInt reg ->
+        $"PrintInt({prettyPrintLIRReg reg})"
+    | LIR.PrintBool reg ->
+        $"PrintBool({prettyPrintLIRReg reg})"
 
-/// Pretty-print LIR program
-/// NOTE: Disabled - LIR structure changed to CFG
+/// Pretty-print LIR terminator
+let prettyPrintLIRTerminator (term: LIR.Terminator) : string =
+    match term with
+    | LIR.Ret -> "Ret"
+    | LIR.Branch (cond, trueLabel, falseLabel) ->
+        $"Branch({prettyPrintLIRReg cond}, {trueLabel}, {falseLabel})"
+    | LIR.Jump label -> $"Jump({label})"
+
+/// Pretty-print LIR program (flat format for single-block CFGs)
 let prettyPrintLIR (program: LIR.Program) : string =
-    "<LIR pretty-print disabled - CFG structure>"
+    let (LIR.Program funcs) = program
+    // For simple test cases, we expect a single function with single block
+    match funcs with
+    | [func] ->
+        let entry = func.CFG.Entry
+        match Map.tryFind entry func.CFG.Blocks with
+        | Some block ->
+            let instrLines = block.Instrs |> List.map prettyPrintLIRInstr
+            let termLine = prettyPrintLIRTerminator block.Terminator
+            String.concat "\n" (instrLines @ [termLine])
+        | None -> "<entry block not found>"
+    | _ -> "<multiple functions not supported in pretty-print>"
 
 /// Load MIR→LIR test from file
 let loadMIR2LIRTest (path: string) : Result<MIR.Program * LIR.Program, string> =
@@ -279,9 +320,10 @@ let prettyPrintARM64Instr = function
     | ARM64.SVC imm -> $"SVC({imm})"
     | ARM64.Label label -> $"Label({label})"
 
-/// Pretty-print ARM64 program
+/// Pretty-print ARM64 program (filtering out Label pseudo-instructions)
 let prettyPrintARM64 (instrs: ARM64.Instr list) : string =
     instrs
+    |> List.filter (function | ARM64.Label _ -> false | _ -> true)
     |> List.map prettyPrintARM64Instr
     |> String.concat "\n"
 
@@ -314,7 +356,9 @@ let runLIR2ARM64Test (input: LIR.Program) (expected: ARM64.Instr list) : PassTes
           Message = $"Code generation failed: {err}"
           Expected = Some (prettyPrintARM64 expected)
           Actual = None }
-    | Ok actual ->
+    | Ok actualRaw ->
+        // Filter out Label pseudo-instructions for comparison
+        let actual = actualRaw |> List.filter (function | ARM64.Label _ -> false | _ -> true)
         if actual = expected then
             { Success = true
               Message = "Test passed"
@@ -324,4 +368,4 @@ let runLIR2ARM64Test (input: LIR.Program) (expected: ARM64.Instr list) : PassTes
             { Success = false
               Message = "Output mismatch"
               Expected = Some (prettyPrintARM64 expected)
-              Actual = Some (prettyPrintARM64 actual) }
+              Actual = Some (prettyPrintARM64 actualRaw) }

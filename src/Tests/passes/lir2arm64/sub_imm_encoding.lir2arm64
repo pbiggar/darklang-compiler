@@ -10,3 +10,4 @@ X0 <- Mov(Reg X1)
 MOVZ(X1, 10, 0)
 SUB_imm(X1, X1, 3)
 MOV_reg(X0, X1)
+RET
