@@ -31,7 +31,9 @@ let compile (verbosity: int) (source: string) : CompileResult =
         if verbosity >= 1 then printfn "  [1/8] Parse..."
         let parseResult = Parser.parseString source
         let parseTime = sw.Elapsed.TotalMilliseconds
-        if verbosity >= 2 then printfn "        %.1fms" parseTime
+        if verbosity >= 2 then
+            let t = System.Math.Round(parseTime, 1)
+            printfn $"        {t}ms"
 
         match parseResult with
         | Error err ->
@@ -45,19 +47,25 @@ let compile (verbosity: int) (source: string) : CompileResult =
             let (anfExpr, _) = AST_to_ANF.toANF expr (ANF.VarGen 0)
             let anfProgram = ANF.Program anfExpr
             let anfTime = sw.Elapsed.TotalMilliseconds - parseTime
-            if verbosity >= 2 then printfn "        %.1fms" anfTime
+            if verbosity >= 2 then
+                let t = System.Math.Round(anfTime, 1)
+                printfn $"        {t}ms"
 
             // Pass 3: ANF → MIR
             if verbosity >= 1 then printfn "  [3/8] ANF → MIR..."
             let (mirProgram, _) = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0)
             let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime
-            if verbosity >= 2 then printfn "        %.1fms" mirTime
+            if verbosity >= 2 then
+                let t = System.Math.Round(mirTime, 1)
+                printfn $"        {t}ms"
 
             // Pass 4: MIR → LIR
             if verbosity >= 1 then printfn "  [4/8] MIR → LIR..."
             let lirProgram = MIR_to_LIR.toLIR mirProgram
             let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime
-            if verbosity >= 2 then printfn "        %.1fms" lirTime
+            if verbosity >= 2 then
+                let t = System.Math.Round(lirTime, 1)
+                printfn $"        {t}ms"
 
             // Pass 5: Register Allocation
             if verbosity >= 1 then printfn "  [5/8] Register Allocation..."
@@ -67,13 +75,17 @@ let compile (verbosity: int) (source: string) : CompileResult =
             let allocatedFunc = { func with Body = allocResult.Instrs; StackSize = allocResult.StackSize }
             let allocatedProgram = LIR.Program [allocatedFunc]
             let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime - lirTime
-            if verbosity >= 2 then printfn "        %.1fms" allocTime
+            if verbosity >= 2 then
+                let t = System.Math.Round(allocTime, 1)
+                printfn $"        {t}ms"
 
             // Pass 6: Code Generation (LIR → ARM64)
             if verbosity >= 1 then printfn "  [6/8] Code Generation..."
             let codegenResult = CodeGen.generateARM64 allocatedProgram
             let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime - lirTime - allocTime
-            if verbosity >= 2 then printfn "        %.1fms" codegenTime
+            if verbosity >= 2 then
+                let t = System.Math.Round(codegenTime, 1)
+                printfn $"        {t}ms"
 
             match codegenResult with
             | Error err ->
@@ -85,7 +97,9 @@ let compile (verbosity: int) (source: string) : CompileResult =
                 if verbosity >= 1 then printfn "  [7/8] ARM64 Encoding..."
                 let machineCode = arm64Instructions |> List.collect ARM64_Encoding.encode
                 let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime - lirTime - allocTime - codegenTime
-                if verbosity >= 2 then printfn "        %.1fms" encodeTime
+                if verbosity >= 2 then
+                    let t = System.Math.Round(encodeTime, 1)
+                    printfn $"        {t}ms"
 
                 // Pass 8: Binary Generation (machine code → executable)
                 let osResult = Platform.detectOS ()
@@ -96,18 +110,20 @@ let compile (verbosity: int) (source: string) : CompileResult =
                       ErrorMessage = Some $"Platform detection error: {err}" }
                 | Ok os ->
                     let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
-                    if verbosity >= 1 then printfn "  [8/8] Binary Generation (%s)..." formatName
+                    if verbosity >= 1 then printfn $"  [8/8] Binary Generation ({formatName})..."
                     let binary =
                         match os with
                         | Platform.MacOS -> Binary_Generation_MachO.createExecutable machineCode
                         | Platform.Linux -> Binary_Generation_ELF.createExecutable machineCode
                     let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
-                    if verbosity >= 2 then printfn "        %.1fms" binaryTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(binaryTime, 1)
+                        printfn $"        {t}ms"
 
                     sw.Stop()
 
                     if verbosity >= 1 then
-                        printfn "  ✓ Compilation complete (%.1fms)" sw.Elapsed.TotalMilliseconds
+                        printfn $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
 
                     { Binary = binary
                       Success = true
@@ -136,7 +152,7 @@ let execute (verbosity: int) (binary: byte array) : ExecutionResult =
         stream.Flush(true)  // Flush both stream and OS buffers to disk
 
     let writeTime = sw.Elapsed.TotalMilliseconds
-    if verbosity >= 2 then printfn "      %.1fms" writeTime
+    if verbosity >= 2 then printfn $"      {System.Math.Round(writeTime, 1)}ms"
 
     try
         // Make executable using Unix file mode
@@ -144,7 +160,7 @@ let execute (verbosity: int) (binary: byte array) : ExecutionResult =
         let permissions = File.GetUnixFileMode(tempPath)
         File.SetUnixFileMode(tempPath, permissions ||| IO.UnixFileMode.UserExecute)
         let chmodTime = sw.Elapsed.TotalMilliseconds - writeTime
-        if verbosity >= 2 then printfn "      %.1fms" chmodTime
+        if verbosity >= 2 then printfn $"      {System.Math.Round(chmodTime, 1)}ms"
 
         // Code sign with adhoc signature (required for macOS only)
         let codesignResult =
@@ -169,7 +185,7 @@ let execute (verbosity: int) (binary: byte array) : ExecutionResult =
                         Some $"Code signing failed: {stderr}"
                     else
                         let codesignTime = sw.Elapsed.TotalMilliseconds - codesignStart
-                        if verbosity >= 2 then printfn "      %.1fms" codesignTime
+                        if verbosity >= 2 then printfn $"      {System.Math.Round(codesignTime, 1)}ms"
                         None
                 else
                     if verbosity >= 1 then printfn "    • Code signing skipped (not required on Linux)"
@@ -214,12 +230,12 @@ let execute (verbosity: int) (binary: byte array) : ExecutionResult =
             let stderr = stderrTask.Result
 
             let execTime = sw.Elapsed.TotalMilliseconds - execStart
-            if verbosity >= 2 then printfn "      %.1fms" execTime
+            if verbosity >= 2 then printfn $"      {System.Math.Round(execTime, 1)}ms"
 
             sw.Stop()
 
             if verbosity >= 1 then
-                printfn "  ✓ Execution complete (%.1fms)" sw.Elapsed.TotalMilliseconds
+                printfn $"  ✓ Execution complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
 
             { ExitCode = execProc.ExitCode
               Stdout = stdout

@@ -178,42 +178,44 @@ let validateOptions (opts: CliOptions) : Result<CliOptions, string> =
             Ok opts
 
 /// Compile source expression to executable
-let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) : unit =
+let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) : int =
     let showNormal = verbosity = Normal || verbosity = Verbose
 
     if showNormal then
-        printfn "Compiling: %s" source
+        printfn $"Compiling: {source}"
 
     // Use library for compilation
     let result = CompilerLibrary.compile (verbosityToInt verbosity) source
 
     if not result.Success then
-        eprintfn "Compilation failed: %s" (result.ErrorMessage |> Option.defaultValue "Unknown error")
-        exit 1
-
-    // Write to file
-    match Platform.detectOS () with
-    | Error err ->
-        eprintfn "Platform detection failed: %s" err
-        exit 1
-    | Ok os ->
-        let writeResult =
-            match os with
-            | Platform.MacOS -> Binary_Generation_MachO.writeToFile outputPath result.Binary
-            | Platform.Linux -> Binary_Generation_ELF.writeToFile outputPath result.Binary
-        match writeResult with
+        let errorMsg = result.ErrorMessage |> Option.defaultValue "Unknown error"
+        eprintfn $"Compilation failed: {errorMsg}"
+        1
+    else
+        // Write to file
+        match Platform.detectOS () with
         | Error err ->
-            eprintfn "Failed to write binary: %s" err
-            exit 1
-        | Ok () ->
-            if showNormal then printfn "Successfully wrote %d bytes to %s" result.Binary.Length outputPath
+            eprintfn $"Platform detection failed: {err}"
+            1
+        | Ok os ->
+            let writeResult =
+                match os with
+                | Platform.MacOS -> Binary_Generation_MachO.writeToFile outputPath result.Binary
+                | Platform.Linux -> Binary_Generation_ELF.writeToFile outputPath result.Binary
+            match writeResult with
+            | Error err ->
+                eprintfn $"Failed to write binary: {err}"
+                1
+            | Ok () ->
+                if showNormal then printfn $"Successfully wrote {result.Binary.Length} bytes to {outputPath}"
+                0
 
 /// Run an expression (compile to temp and execute)
 let run (source: string) (verbosity: VerbosityLevel) : int =
     let showNormal = verbosity = Normal || verbosity = Verbose
 
     if showNormal then
-        printfn "Compiling and running: %s" source
+        printfn $"Compiling and running: {source}"
         printfn "---"
 
     // Use library for compile and run
@@ -221,11 +223,11 @@ let run (source: string) (verbosity: VerbosityLevel) : int =
 
     if showNormal then
         if result.Stdout <> "" then
-            printfn "%s" result.Stdout
+            printfn $"{result.Stdout}"
         if result.Stderr <> "" then
-            eprintfn "%s" result.Stderr
+            eprintfn $"{result.Stderr}"
         printfn "---"
-        printfn "Exit code: %d" result.ExitCode
+        printfn $"Exit code: {result.ExitCode}"
 
     result.ExitCode
 
@@ -276,7 +278,7 @@ let main argv =
     try
         match parseArgs argv |> Result.bind validateOptions with
         | Error msg ->
-            printfn "Error: %s" msg
+            printfn $"Error: {msg}"
             printfn ""
             printUsage()
             1
@@ -330,13 +332,12 @@ let main argv =
                     // Compile mode (default)
                     let output = options.OutputFile |> Option.defaultValue "dark.out"
                     compile source output options.Verbosity
-                    0
 
             | Error msg ->
-                printfn "Error: %s" msg
+                printfn $"Error: {msg}"
                 1
 
     with ex ->
-        printfn "Error: %s" ex.Message
-        printfn "%s" ex.StackTrace
+        printfn $"Error: {ex.Message}"
+        printfn $"{ex.StackTrace}"
         1

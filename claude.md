@@ -3,10 +3,10 @@ Write in F#, with the intention to translate to Darklang later. Thus:
 - Use a limited set of F#
 - use only functional constructs and no imperative ones
 - use Options and Results a lot - dont use success flags or other imperative patterns
-- Don't use exceptions or failwith (or similar)
+- Don't use exceptions or failwith (or similar) or exit
 - don't use dotnet libraries much
 - use string interpolation instead of printf-style calls
-- obvious exception: when doing system calls, filesystem updates, etc
+- if a function or method we need to use throws an exception, create a wrapper function which uses Result instead.
 
 Dotnet:
 
