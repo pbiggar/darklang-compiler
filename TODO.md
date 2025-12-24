@@ -42,8 +42,9 @@
 ### Testing
 
 - [ ] Add unit tests for int-to-string conversion
-- [ ] Add tests for edge cases (INT64_MIN, INT64_MAX)
-- [ ] Add tests for large numbers (near 32-bit and 64-bit boundaries)
+- [x] Add tests for edge cases (INT64_MIN, INT64_MAX)
+- [x] Add tests for large numbers (near 32-bit and 64-bit boundaries)
+- [x] Add overflow tests for arithmetic operations at 64-bit boundaries
 
 ### Documentation
 
