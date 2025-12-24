@@ -94,6 +94,10 @@ let parse (tokens: Token list) : Program =
     and parsePrimary (toks: Token list) : Expr * Token list =
         match toks with
         | TInt n :: rest -> (IntLiteral n, rest)
+        | TMinus :: rest ->
+            // Unary negation
+            let (expr, remaining) = parsePrimary rest
+            (Neg expr, remaining)
         | TLParen :: rest ->
             let (expr, remaining) = parseExpr rest
             match remaining with

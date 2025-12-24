@@ -25,6 +25,7 @@ type BinOp =
 type Expr =
     | IntLiteral of int64
     | BinOp of BinOp * Expr * Expr
+    | Neg of Expr  // Unary negation: -expr
 
 /// Program is just an expression for now
 type Program = Program of Expr

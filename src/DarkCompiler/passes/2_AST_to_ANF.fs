@@ -33,6 +33,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) : ANF.AExpr * ANF.VarGen =
         // Base case: literal becomes return
         (ANF.Return (ANF.IntLiteral n), varGen)
 
+    | AST.Neg innerExpr ->
+        // Unary negation: convert to 0 - expr
+        toANF (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen
+
     | AST.BinOp (op, left, right) ->
         // Convert operands to atoms
         let (leftAtom, leftBindings, varGen1) = toAtom left varGen
@@ -55,6 +59,10 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) : ANF.Atom * (ANF.TempId * ANF.
     match expr with
     | AST.IntLiteral n ->
         (ANF.IntLiteral n, [], varGen)
+
+    | AST.Neg innerExpr ->
+        // Unary negation: convert to 0 - expr
+        toAtom (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen
 
     | AST.BinOp (op, left, right) ->
         // Complex expression: convert operands to atoms, create binding

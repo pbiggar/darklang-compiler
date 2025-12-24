@@ -21,9 +21,16 @@
 - [x] Add E2E tests for negative number operations
   - Subtraction producing negative results (e.g., `0 - 1 = -1`)
   - Mixed operations with negative results (e.g., `5 - 10 + 3 = -2`)
-- [ ] Add tests for negative literals and negative multiplication/division
-  - Need parser support for negative literals (e.g., `-5`)
-  - Tests like `-5 * 3`, `10 / -2`, `-10 * -3`, etc.
+- [x] Add parser support for negative literals
+  - Added `Neg` expression to AST for unary negation
+  - Parser handles unary minus in primary expressions
+  - AST_to_ANF converts `Neg(expr)` to `0 - expr`
+- [x] Add tests for negative literals and operations
+  - Negative literal constants: `-5`, `-42`, `-1`
+  - Operations with negative literals: `-5 + 10`, `-5 * 3`, etc.
+  - Negative multiplication/division: `-5 * -3 = 15`, `-10 / -2 = 5`
+  - Double negation: `-(-5) = 5`
+  - Negation of expressions: `-(10 + 5) = -15`
 
 ### Booleans
 
