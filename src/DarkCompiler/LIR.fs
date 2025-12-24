@@ -41,6 +41,7 @@ type Instr =
     | Sub of dest:Reg * left:Reg * right:Operand
     | Mul of dest:Reg * left:Reg * right:Reg
     | Sdiv of dest:Reg * left:Reg * right:Reg  // Signed division
+    | PrintInt of Reg  // Print integer register to stdout
     | Ret
 
 /// Function (preparation for future functions)

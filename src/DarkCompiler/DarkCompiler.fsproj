@@ -17,6 +17,7 @@
     <Compile Include="passes/4_MIR_to_LIR.fs" />
     <Compile Include="passes/5_RegisterAllocation.fs" />
     <Compile Include="ARM64.fs" />
+    <Compile Include="Runtime.fs" />
     <Compile Include="passes/6_CodeGen.fs" />
     <Compile Include="passes/7_ARM64_Encoding.fs" />
     <Compile Include="Binary.fs" />

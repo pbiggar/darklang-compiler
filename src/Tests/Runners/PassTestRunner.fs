@@ -86,6 +86,8 @@ let prettyPrintLIRInstr = function
         $"{prettyPrintLIRReg dest} <- Mul({prettyPrintLIRReg left}, Reg {prettyPrintLIRReg right})"
     | LIR.Sdiv (dest, left, right) ->
         $"{prettyPrintLIRReg dest} <- Sdiv({prettyPrintLIRReg left}, Reg {prettyPrintLIRReg right})"
+    | LIR.PrintInt reg ->
+        $"PrintInt({prettyPrintLIRReg reg})"
     | LIR.Ret -> "Ret"
 
 /// Pretty-print LIR program

@@ -12,4 +12,5 @@ v0 <- Mov(Imm 20)
 v1 <- Mov(Imm 4)
 v2 <- Sdiv(v0, Reg v1)
 X0 <- Mov(Reg v2)
+PrintInt(X0)
 Ret

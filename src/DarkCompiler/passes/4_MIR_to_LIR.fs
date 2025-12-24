@@ -74,9 +74,11 @@ let selectInstr (instr: MIR.Instr) : LIR.Instr list =
 
     | MIR.Ret operand ->
         // ARM64 returns value in X0
+        // For top-level programs: print result before exiting
         let lirOp = convertOperand operand
         [
             LIR.Mov (LIR.Physical LIR.X0, lirOp)
+            LIR.PrintInt (LIR.Physical LIR.X0)  // Print before return
             LIR.Ret
         ]
 

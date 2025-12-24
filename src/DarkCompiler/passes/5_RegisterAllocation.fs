@@ -93,6 +93,8 @@ let applyAllocation (allocation: Map<int, LIR.PhysReg>) (instr: LIR.Instr) : LIR
         LIR.Mul (applyToReg allocation dest, applyToReg allocation left, applyToReg allocation right)
     | LIR.Sdiv (dest, left, right) ->
         LIR.Sdiv (applyToReg allocation dest, applyToReg allocation left, applyToReg allocation right)
+    | LIR.PrintInt reg ->
+        LIR.PrintInt (applyToReg allocation reg)
     | LIR.Ret -> LIR.Ret
 
 /// Register allocation

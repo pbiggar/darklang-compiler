@@ -86,6 +86,14 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
         Ok Ret
     else
 
+    // Try PrintInt: "PrintInt(X0)" or "PrintInt(v0)"
+    let printMatch = Regex.Match(line, @"^PrintInt\((.+)\)$")
+    if printMatch.Success then
+        match parseRegister printMatch.Groups.[1].Value with
+        | Error e -> Error $"Line {lineNum}: {e}"
+        | Ok reg -> Ok (PrintInt reg)
+    else
+
     // Try Mov: "X1 <- Mov(Imm 42)"
     let movMatch = Regex.Match(line, @"^(.+?)\s*<-\s*Mov\((.+)\)$")
     if movMatch.Success then

@@ -6,4 +6,5 @@ ret 42
 
 ---OUTPUT-LIR---
 X0 <- Mov(Imm 42)
+PrintInt(X0)
 Ret
