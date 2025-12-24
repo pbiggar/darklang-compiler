@@ -1,0 +1,24 @@
+// Test STUR (Store Register Unscaled) with negative offset
+Mov (Physical X11, Imm 42L)
+Store (-8, Physical X11)
+
+---
+
+MOVZ (X11, 42us, 0)
+STUR (X11, X29, -8s)
+
+// Test LDUR (Load Register Unscaled) with negative offset
+Mov (Physical X12, StackSlot -8)
+
+---
+
+LDUR (X12, X29, -8s)
+
+// Test STUR with different negative offsets
+Store (-16, Physical X10)
+Store (-24, Physical X9)
+
+---
+
+STUR (X10, X29, -16s)
+STUR (X9, X29, -24s)
