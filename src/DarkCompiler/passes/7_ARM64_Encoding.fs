@@ -82,13 +82,17 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         [sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd]
 
     | ARM64.SUB_reg (dest, src1, src2) ->
-        // SUB register: sf=1 1 0 01011 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
-        let sf = 1u <<< 31
-        let op = 0b101011u <<< 24
+        // SUB register: sf=1 op=1 S=0 01011 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
+        // Bits: sf(31) op(30) S(29) 01011(28-24) shift(23-22) 0(21) Rm(20-16) imm6(15-10) Rn(9-5) Rd(4-0)
+        let sf = 1u <<< 31  // 64-bit
+        let op = 1u <<< 30  // Subtract (not add)
+        let s = 0u <<< 29   // Don't set flags (use SUB not SUBS)
+        let opcode = 0b01011u <<< 24
+        let shift = 0u <<< 22  // No shift
         let rm = (encodeReg src2) <<< 16
         let rn = (encodeReg src1) <<< 5
         let rd = encodeReg dest
-        [sf ||| op ||| rm ||| rn ||| rd]
+        [sf ||| op ||| s ||| opcode ||| shift ||| rm ||| rn ||| rd]
 
     | ARM64.MUL (dest, src1, src2) ->
         // MADD: sf=1 0 0 11011 000 Rm(5) 0 Ra=11111 Rn(5) Rd(5)
@@ -145,10 +149,10 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         [sf ||| opc ||| op ||| rm ||| rn ||| rd]
 
     | ARM64.STRB (src, addr, offset) ->
-        // STRB immediate: 00 111 00 00 0 imm12 Rn Rt
-        // Size=00 (byte), V=0, opc=00 (store), imm12 is unsigned offset
+        // STRB immediate unsigned offset: 00 111 001 00 imm12 Rn Rt
+        // Size=00 (byte), opc=00, bit24=1 for unsigned offset mode
         let size = 0u <<< 30  // Byte operation
-        let vOpc = 0b11100000u <<< 22  // Fixed bits for STRB
+        let vOpc = 0b11100100u <<< 22  // Fixed bits for STRB unsigned offset (bit 24 = 1)
         let imm12 = (uint32 offset &&& 0xFFFu) <<< 10
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg src
@@ -187,13 +191,16 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
 
     | ARM64.NEG (dest, src) ->
         // NEG: SUB dest, XZR, src
-        // Encoding: sf=1 1 0 01011 shift=00 0 Rm(src) imm6=000000 Rn=11111(XZR) Rd(dest)
-        let sf = 1u <<< 31
-        let op = 0b101011u <<< 24
+        // Encoding: sf=1 op=1 S=0 01011 shift=00 0 Rm(src) imm6=000000 Rn=11111(XZR) Rd(dest)
+        let sf = 1u <<< 31  // 64-bit
+        let op = 1u <<< 30  // Subtract
+        let s = 0u <<< 29   // Don't set flags
+        let opcode = 0b01011u <<< 24
+        let shift = 0u <<< 22  // No shift
         let rm = (encodeReg src) <<< 16
         let rn = 31u <<< 5  // XZR
         let rd = encodeReg dest
-        [sf ||| op ||| rm ||| rn ||| rd]
+        [sf ||| op ||| s ||| opcode ||| shift ||| rm ||| rn ||| rd]
 
     | ARM64.RET ->
         // RET: 1101011 0 0 10 11111 0000 0 0 Rn=11110 00000
