@@ -110,7 +110,13 @@ let execute (verbosity: int) (binary: byte array) : ExecutionResult =
     // Write binary to temp file
     if verbosity >= 1 then printfn "    • Writing binary to temp file..."
     let tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
-    File.WriteAllBytes(tempPath, binary)
+
+    // Write and flush to disk to minimize (but not eliminate) "Text file busy" race
+    do
+        use stream = new IO.FileStream(tempPath, IO.FileMode.Create, IO.FileAccess.Write, IO.FileShare.None)
+        stream.Write(binary, 0, binary.Length)
+        stream.Flush(true)  // Flush both stream and OS buffers to disk
+
     let writeTime = sw.Elapsed.TotalMilliseconds
     if verbosity >= 2 then printfn "      %.1fms" writeTime
 
@@ -144,7 +150,8 @@ let execute (verbosity: int) (binary: byte array) : ExecutionResult =
         else
             if verbosity >= 1 then printfn "    • Code signing skipped (not required on Linux)"
 
-        // Execute (with retry on "Text file busy" - can happen in parallel test execution)
+        // Execute (with retry for "Text file busy" race condition)
+        // Even with flush, kernel may not have fully synced file/permissions in parallel tests
         if verbosity >= 1 then printfn "    • Running binary..."
         let execStart = sw.Elapsed.TotalMilliseconds
         let execInfo = ProcessStartInfo(tempPath)
