@@ -62,6 +62,7 @@ type CExpr =
 type AExpr =
     | Let of TempId * CExpr * AExpr
     | Return of Atom
+    | If of cond:Atom * thenBranch:AExpr * elseBranch:AExpr
 
 /// ANF program
 type Program = Program of AExpr

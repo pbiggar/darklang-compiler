@@ -47,18 +47,36 @@ type UnaryOp =
     | Neg
     | Not
 
-/// Instructions
+/// Instructions (non-control-flow)
 type Instr =
     | Mov of dest:VReg * src:Operand
     | BinOp of dest:VReg * op:BinOp * left:Operand * right:Operand
     | UnaryOp of dest:VReg * op:UnaryOp * src:Operand
-    | Ret of Operand
 
-/// Basic block (for future control flow)
-type Block = Block of Instr list
+/// Basic block label
+type Label = Label of string
+
+/// Terminator instructions (control flow)
+type Terminator =
+    | Ret of Operand                                      // Return from function
+    | Branch of cond:Operand * trueLabel:Label * falseLabel:Label  // Conditional branch
+    | Jump of Label                                        // Unconditional jump
+
+/// Basic block with label, instructions, and terminator
+type BasicBlock = {
+    Label: Label
+    Instrs: Instr list
+    Terminator: Terminator
+}
+
+/// Control Flow Graph
+type CFG = {
+    Entry: Label
+    Blocks: Map<Label, BasicBlock>
+}
 
 /// MIR program
-type Program = Program of Block list
+type Program = Program of CFG
 
 /// Fresh register generator
 type RegGen = RegGen of int
@@ -69,3 +87,13 @@ let freshReg (RegGen n) : VReg * RegGen =
 
 /// Initial register generator
 let initialRegGen = RegGen 0
+
+/// Fresh label generator
+type LabelGen = LabelGen of int
+
+/// Generate a fresh label
+let freshLabel (LabelGen n) : Label * LabelGen =
+    (Label $"L{n}", LabelGen (n + 1))
+
+/// Initial label generator
+let initialLabelGen = LabelGen 0

@@ -30,6 +30,9 @@ type Token =
     | TRParen
     | TLet
     | TIn
+    | TIf          // if
+    | TThen        // then
+    | TElse        // else
     | TEquals      // = (assignment in let)
     | TEqEq        // == (equality comparison)
     | TNeq         // !=
@@ -84,6 +87,9 @@ let lex (input: string) : Result<Token list, string> =
                 match ident with
                 | "let" -> TLet
                 | "in" -> TIn
+                | "if" -> TIf
+                | "then" -> TThen
+                | "else" -> TElse
                 | "true" -> TTrue
                 | "false" -> TFalse
                 | _ -> TIdent ident
@@ -134,6 +140,21 @@ let parse (tokens: Token list) : Result<Program, string> =
                     |> Result.map (fun (body, remaining') ->
                         (Let (name, value, body), remaining'))
                 | _ -> Error "Expected 'in' after let binding value")
+        | TIf :: rest ->
+            // Parse: if cond then thenBranch else elseBranch
+            parseExpr rest
+            |> Result.bind (fun (cond, remaining) ->
+                match remaining with
+                | TThen :: rest' ->
+                    parseExpr rest'
+                    |> Result.bind (fun (thenBranch, remaining') ->
+                        match remaining' with
+                        | TElse :: rest'' ->
+                            parseExpr rest''
+                            |> Result.map (fun (elseBranch, remaining'') ->
+                                (If (cond, thenBranch, elseBranch), remaining''))
+                        | _ -> Error "Expected 'else' after then branch")
+                | _ -> Error "Expected 'then' after if condition")
         | _ ->
             parseOr toks
 

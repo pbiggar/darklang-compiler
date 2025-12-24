@@ -56,6 +56,7 @@ type Expr =
     | UnaryOp of UnaryOp * Expr
     | Let of name:string * value:Expr * body:Expr  // Let binding: let name = value in body
     | Var of string  // Variable reference
+    | If of cond:Expr * thenBranch:Expr * elseBranch:Expr  // If expression: if cond then thenBranch else elseBranch
 
 /// Program is just an expression for now
 type Program = Program of Expr

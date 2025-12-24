@@ -188,6 +188,25 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
         | None ->
             Error (UndefinedVariable name)
 
+    | If (cond, thenBranch, elseBranch) ->
+        // If expression: condition must be bool, branches must have same type
+        checkExpr cond env (Some TBool)
+        |> Result.bind (fun condType ->
+            if condType <> TBool then
+                Error (TypeMismatch (TBool, condType, "if condition"))
+            else
+                checkExpr thenBranch env expectedType
+                |> Result.bind (fun thenType ->
+                    checkExpr elseBranch env (Some thenType)
+                    |> Result.bind (fun elseType ->
+                        if thenType <> elseType then
+                            Error (TypeMismatch (thenType, elseType, "if branches must have same type"))
+                        else
+                            match expectedType with
+                            | Some expected when expected <> thenType ->
+                                Error (TypeMismatch (expected, thenType, "if expression"))
+                            | _ -> Ok thenType)))
+
 /// Type-check a program (Phase 0: just an expression)
 /// Returns the type of the expression or a type error
 let checkProgram (program: Program) : Result<Type, TypeError> =

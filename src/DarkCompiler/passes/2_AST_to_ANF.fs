@@ -113,6 +113,18 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
 
         (exprWithLeft, varGen3)
 
+    | AST.If (cond, thenBranch, elseBranch) ->
+        // If expression: convert condition to atom, both branches to ANF
+        let (condAtom, condBindings, varGen1) = toAtom cond varGen env
+        let (thenExpr, varGen2) = toANF thenBranch varGen1 env
+        let (elseExpr, varGen3) = toANF elseBranch varGen2 env
+
+        // Build the expression: condBindings + if condAtom then thenExpr else elseExpr
+        let finalExpr = ANF.If (condAtom, thenExpr, elseExpr)
+        let exprWithBindings = wrapBindings condBindings finalExpr
+
+        (exprWithBindings, varGen3)
+
 /// Convert an AST expression to an atom, introducing let bindings as needed
 and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) : ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
     match expr with
