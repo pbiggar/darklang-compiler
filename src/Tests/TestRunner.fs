@@ -209,7 +209,7 @@ let main args =
             printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
             printfn ""
 
-    // Run E2E tests
+    // Run E2E tests (in parallel)
     let e2eDir = Path.Combine(assemblyDir, "e2e")
     if Directory.Exists e2eDir then
         let e2eTests = Directory.GetFiles(e2eDir, "*.test", SearchOption.AllDirectories)
@@ -218,29 +218,42 @@ let main args =
             printfn "%s🚀 E2E Tests%s" Colors.cyan Colors.reset
             printfn ""
 
-            // No compiler path needed - using library directly
+            // Run tests in parallel and collect results
+            let results =
+                e2eTests
+                |> Array.Parallel.map (fun testPath ->
+                    let testName = Path.GetFileName testPath
+                    let testTimer = Stopwatch.StartNew()
 
-            for testPath in e2eTests do
-                let testName = Path.GetFileName testPath
-                let testTimer = Stopwatch.StartNew()
-                printf "  %s... " testName
+                    let parseResult = parseE2ETest testPath
+                    let testResult =
+                        match parseResult with
+                        | Ok test ->
+                            let result = runE2ETest test
+                            testTimer.Stop()
+                            Choice1Of3 (testName, test, result, testTimer.Elapsed)
+                        | Error msg ->
+                            testTimer.Stop()
+                            Choice2Of3 (testName, msg, testTimer.Elapsed)
+                    testResult
+                )
 
-                match parseE2ETest testPath with
-                | Ok test ->
-                    let result = runE2ETest test
-                    testTimer.Stop()
+            // Print results in order
+            for result in results do
+                match result with
+                | Choice1Of3 (testName, test, result, elapsed) ->
+                    printf "  %s... " testName
                     if result.Success then
-                        printfn "%s✓ PASS%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
+                        printfn "%s✓ PASS%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime elapsed) Colors.reset
                         passed <- passed + 1
                     else
-                        printfn "%s✗ FAIL%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
+                        printfn "%s✗ FAIL%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime elapsed) Colors.reset
                         printfn "    %s" result.Message
                         match result.ExitCode with
                         | Some code when code <> test.ExpectedExitCode ->
                             printfn "    Expected exit code: %d" test.ExpectedExitCode
                             printfn "    Actual exit code: %d" code
                         | _ -> ()
-                        // Always show stdout/stderr on failure
                         match result.Stdout with
                         | Some stdout when stdout.Trim() <> "" ->
                             printfn "    Stdout: %s" (stdout.Trim())
@@ -250,11 +263,12 @@ let main args =
                             printfn "    Stderr: %s" (stderr.Trim())
                         | _ -> ()
                         failed <- failed + 1
-                | Error msg ->
-                    testTimer.Stop()
-                    printfn "%s✗ ERROR%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
+                | Choice2Of3 (testName, msg, elapsed) ->
+                    printf "  %s... " testName
+                    printfn "%s✗ ERROR%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime elapsed) Colors.reset
                     printfn "    Failed to load test: %s" msg
                     failed <- failed + 1
+                | _ -> ()
 
             sectionTimer.Stop()
             printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
