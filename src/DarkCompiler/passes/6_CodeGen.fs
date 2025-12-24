@@ -133,44 +133,52 @@ let convertInstr (instr: LIR.Instr) : ARM64.Instr list =
             // Save value to X2 for conversion
             ARM64.MOV_reg (ARM64.X2, ARM64.X0)
 
-            // TODO: Handle negative numbers (need sign check and negation)
-            // For now, only positive numbers are supported
+            // Instruction 6: Test if negative (bit 63), branch to handle_negative if set
+            ARM64.TBNZ (ARM64.X2, 63, 23)  // Branch forward +23 to inst 30 (handle_negative)
 
-            // Instruction 6: Check if zero (branch forward +19 to print_zero at inst 26)
-            ARM64.CBZ (ARM64.X2, 19)
+            // Instruction 7: Check if zero (branch forward +20 to print_zero at inst 28)
+            ARM64.CBZ (ARM64.X2, 20)
 
-            // Instruction 7-15: convert_loop - Extract digits by dividing by 10
-            ARM64.MOVZ (ARM64.X3, 10us, 0)  // 7: divisor = 10
-            ARM64.UDIV (ARM64.X4, ARM64.X2, ARM64.X3)  // 8: X4 = value / 10
-            ARM64.MSUB (ARM64.X5, ARM64.X4, ARM64.X3, ARM64.X2)  // 9: X5 = value % 10
-            ARM64.ADD_imm (ARM64.X5, ARM64.X5, 48us)  // 10: Convert to ASCII
-            ARM64.STRB (ARM64.X5, ARM64.X1, 0)  // 11: Store digit
-            ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)  // 12: Move pointer back
-            ARM64.MOV_reg (ARM64.X2, ARM64.X4)  // 13: value = value / 10
-            ARM64.CBZ (ARM64.X2, 1)  // 14: If zero, skip (+1) to write_output at inst 16
-            ARM64.B (-8)  // 15: Loop back (-8) to inst 7 (convert_loop start)
+            // Instruction 8-16: convert_loop - Extract digits by dividing by 10
+            ARM64.MOVZ (ARM64.X3, 10us, 0)  // 8: divisor = 10
+            ARM64.UDIV (ARM64.X4, ARM64.X2, ARM64.X3)  // 9: X4 = value / 10
+            ARM64.MSUB (ARM64.X5, ARM64.X4, ARM64.X3, ARM64.X2)  // 10: X5 = value % 10
+            ARM64.ADD_imm (ARM64.X5, ARM64.X5, 48us)  // 11: Convert to ASCII
+            ARM64.STRB (ARM64.X5, ARM64.X1, 0)  // 12: Store digit
+            ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)  // 13: Move pointer back
+            ARM64.MOV_reg (ARM64.X2, ARM64.X4)  // 14: value = value / 10
+            ARM64.CBZ (ARM64.X2, 1)  // 15: If zero, skip (+1) to write_output at inst 17
+            ARM64.B (-8)  // 16: Loop back (-8) to inst 8 (convert_loop start)
 
             // Fall through to write_output
         ]
         @ [
-            // Instruction 16-25: write_output - Write buffer to stdout
-            ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1us)  // 16: X1 was one past first digit
-            ARM64.ADD_imm (ARM64.X2, ARM64.SP, 32us)  // 17: End of buffer
-            ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1)  // 18: length = end - start
-            ARM64.MOVZ (ARM64.X0, 1us, 0)  // 19: stdout = 1
-            ARM64.MOVZ (ARM64.X16, 4us, 0)  // 20: write syscall = 4
-            ARM64.SVC 0x80us  // 21: call write
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32us)  // 22: Deallocate stack
-            ARM64.MOVZ (ARM64.X0, 0us, 0)  // 23: exit code = 0
-            ARM64.MOVZ (ARM64.X16, 1us, 0)  // 24: exit syscall = 1
-            ARM64.SVC 0x80us  // 25: call exit
+            // Instruction 17-26: write_output - Write buffer to stdout
+            ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1us)  // 17: X1 was one past first digit
+            ARM64.ADD_imm (ARM64.X2, ARM64.SP, 32us)  // 18: End of buffer
+            ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1)  // 19: length = end - start
+            ARM64.MOVZ (ARM64.X0, 1us, 0)  // 20: stdout = 1
+            ARM64.MOVZ (ARM64.X16, 4us, 0)  // 21: write syscall = 4
+            ARM64.SVC 0x80us  // 22: call write
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32us)  // 23: Deallocate stack
+            ARM64.MOVZ (ARM64.X0, 0us, 0)  // 24: exit code = 0
+            ARM64.MOVZ (ARM64.X16, 1us, 0)  // 25: exit syscall = 1
+            ARM64.SVC 0x80us  // 26: call exit
         ]
         @ [
-            // Instruction 26-29: print_zero - Special case for value 0
-            ARM64.MOVZ (ARM64.X2, 48us, 0)  // 26: '0' = 48
-            ARM64.STRB (ARM64.X2, ARM64.X1, 0)  // 27: Store '0'
-            ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)  // 28: Move pointer back
-            ARM64.B (-13)  // 29: Branch back (-13) to inst 16 (write_output)
+            // Instruction 27-30: print_zero - Special case for value 0
+            ARM64.MOVZ (ARM64.X2, 48us, 0)  // 27: '0' = 48
+            ARM64.STRB (ARM64.X2, ARM64.X1, 0)  // 28: Store '0'
+            ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)  // 29: Move pointer back
+            ARM64.B (-13)  // 30: Branch back (-13) to inst 17 (write_output)
+        ]
+        @ [
+            // Instruction 31-35: handle_negative - Handle negative numbers
+            ARM64.NEG (ARM64.X2, ARM64.X2)  // 31: X2 = -X2 (get absolute value)
+            ARM64.MOVZ (ARM64.X3, 45us, 0)  // 32: '-' = ASCII 45
+            ARM64.STRB (ARM64.X3, ARM64.X1, 0)  // 33: Store '-'
+            ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)  // 34: Move pointer back
+            ARM64.B (-28)  // 35: Branch back (-28) to inst 7 (check for zero, then convert_loop)
         ]
 
 /// Convert LIR function to ARM64 instructions

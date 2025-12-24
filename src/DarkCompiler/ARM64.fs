@@ -41,7 +41,9 @@ type Instr =
     | MOV_reg of dest:Reg * src:Reg
     | STRB of src:Reg * base:Reg * offset:int  // Store byte [base + offset] = src (lower 8 bits)
     | CBZ of reg:Reg * offset:int  // Compare and branch if zero
+    | TBNZ of reg:Reg * bit:int * offset:int  // Test bit and branch if not zero
     | B of offset:int  // Unconditional branch
+    | NEG of dest:Reg * src:Reg  // Negate: dest = 0 - src
     | RET
     | SVC of imm:uint16  // Supervisor call (syscall)
 

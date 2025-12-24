@@ -23,7 +23,7 @@
 // Implementation note:
 // The compiled binary prints the result to stdout and exits with code 0.
 // Integer-to-string conversion is implemented in ARM64 using division by 10.
-// Currently only positive integers are supported (negative support TODO).
+// Negative numbers are supported: checks sign bit, negates value, prints '-'.
 
 
 // Constants
@@ -140,7 +140,7 @@
 255 - 1 = 254
 255 - 100 = 155
 
-// Subtraction tests (negative results - TODO: implement negative support)
+// Subtraction tests (negative results)
 0 - 1 = -1
 0 - 2 = -2
 1 - 2 = -1
@@ -194,7 +194,7 @@
 100 * 3 - 50 = 250
 50 * 2 + 100 = 200
 
-// Mixed operations (negative results - TODO: implement negative support)
+// Mixed operations (negative results)
 0 - 1 + 1 = 0
 5 - 10 + 3 = -2
 100 - 200 + 50 = -50

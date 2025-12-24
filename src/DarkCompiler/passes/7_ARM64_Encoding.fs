@@ -165,6 +165,18 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rt = encodeReg reg
         [sf ||| op ||| flag ||| imm19 ||| rt]
 
+    | ARM64.TBNZ (reg, bit, offset) ->
+        // TBNZ: b5 011011 1 b40 imm14 Rt
+        // Test bit and Branch if Not Zero
+        // b5 = bit[5], b40 = bit[4:0]
+        let b5 = (uint32 bit >>> 5) <<< 31
+        let op = 0b011011u <<< 25
+        let flag = 1u <<< 24  // TBNZ (vs TBZ which has 0)
+        let b40 = (uint32 bit &&& 0x1Fu) <<< 19
+        let imm14 = ((uint32 offset) &&& 0x3FFFu) <<< 5
+        let rt = encodeReg reg
+        [b5 ||| op ||| flag ||| b40 ||| imm14 ||| rt]
+
     | ARM64.B offset ->
         // B: 000101 imm26
         // Unconditional branch
@@ -172,6 +184,16 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let op = 0b000101u <<< 26
         let imm26 = (uint32 offset) &&& 0x3FFFFFFu
         [op ||| imm26]
+
+    | ARM64.NEG (dest, src) ->
+        // NEG: SUB dest, XZR, src
+        // Encoding: sf=1 1 0 01011 shift=00 0 Rm(src) imm6=000000 Rn=11111(XZR) Rd(dest)
+        let sf = 1u <<< 31
+        let op = 0b101011u <<< 24
+        let rm = (encodeReg src) <<< 16
+        let rn = 31u <<< 5  // XZR
+        let rd = encodeReg dest
+        [sf ||| op ||| rm ||| rn ||| rd]
 
     | ARM64.RET ->
         // RET: 1101011 0 0 10 11111 0000 0 0 Rn=11110 00000
