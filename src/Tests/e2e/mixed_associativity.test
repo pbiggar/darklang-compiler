@@ -1,0 +1,8 @@
+---NAME---
+Mixed operators and associativity
+
+---SOURCE---
+10 - 2 * 3 + 8 / 4
+
+---EXIT-CODE---
+18

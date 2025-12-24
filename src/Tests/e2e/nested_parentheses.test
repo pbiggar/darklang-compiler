@@ -1,0 +1,8 @@
+---NAME---
+Nested parentheses
+
+---SOURCE---
+((1 + 2) * (3 + 4))
+
+---EXIT-CODE---
+21
