@@ -144,13 +144,13 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rd = encodeReg dest
         [sf ||| opc ||| op ||| rm ||| rn ||| rd]
 
-    | ARM64.STRB (src, base, offset) ->
+    | ARM64.STRB (src, addr, offset) ->
         // STRB immediate: 00 111 00 00 0 imm12 Rn Rt
         // Size=00 (byte), V=0, opc=00 (store), imm12 is unsigned offset
         let size = 0u <<< 30  // Byte operation
         let vOpc = 0b11100000u <<< 22  // Fixed bits for STRB
         let imm12 = (uint32 offset &&& 0xFFFu) <<< 10
-        let rn = (encodeReg base) <<< 5
+        let rn = (encodeReg addr) <<< 5
         let rt = encodeReg src
         [size ||| vOpc ||| imm12 ||| rn ||| rt]
 

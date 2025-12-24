@@ -39,7 +39,7 @@ type Instr =
     | UDIV of dest:Reg * src1:Reg * src2:Reg  // Unsigned division (for positive integers)
     | MSUB of dest:Reg * src1:Reg * src2:Reg * src3:Reg  // Multiply-subtract (for modulo)
     | MOV_reg of dest:Reg * src:Reg
-    | STRB of src:Reg * base:Reg * offset:int  // Store byte [base + offset] = src (lower 8 bits)
+    | STRB of src:Reg * addr:Reg * offset:int  // Store byte [addr + offset] = src (lower 8 bits)
     | CBZ of reg:Reg * offset:int  // Compare and branch if zero
     | TBNZ of reg:Reg * bit:int * offset:int  // Test bit and branch if not zero
     | B of offset:int  // Unconditional branch

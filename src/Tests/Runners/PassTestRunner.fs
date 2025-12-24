@@ -223,8 +223,22 @@ let prettyPrintARM64Instr = function
         $"MUL({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
     | ARM64.SDIV (dest, src1, src2) ->
         $"SDIV({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
+    | ARM64.UDIV (dest, src1, src2) ->
+        $"UDIV({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
+    | ARM64.MSUB (dest, src1, src2, src3) ->
+        $"MSUB({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2}, {prettyPrintARM64Reg src3})"
     | ARM64.MOV_reg (dest, src) ->
         $"MOV_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
+    | ARM64.STRB (src, addr, offset) ->
+        $"STRB({prettyPrintARM64Reg src}, {prettyPrintARM64Reg addr}, {offset})"
+    | ARM64.CBZ (reg, offset) ->
+        $"CBZ({prettyPrintARM64Reg reg}, {offset})"
+    | ARM64.TBNZ (reg, bit, offset) ->
+        $"TBNZ({prettyPrintARM64Reg reg}, {bit}, {offset})"
+    | ARM64.B offset ->
+        $"B({offset})"
+    | ARM64.NEG (dest, src) ->
+        $"NEG({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
     | ARM64.RET -> "RET"
     | ARM64.SVC imm -> $"SVC({imm})"
 

@@ -5,4 +5,4 @@ Encode SDIV instruction
 SDIV(X0, X1, X2)
 
 ---OUTPUT-HEX---
-0x9AC20820
+0x9AC20C20

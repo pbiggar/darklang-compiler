@@ -68,15 +68,23 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, str
         let parseExpectations (exp: string) : Result<int * string option * string option, string> =
             let trimmed = exp.Trim()
 
-            // Check if old format (starts with digit)
-            if trimmed.Length > 0 && Char.IsDigit(trimmed.[0]) then
+            // Check if old format (starts with digit or negative sign followed by digit)
+            let isSimpleFormat =
+                if trimmed.Length > 0 && Char.IsDigit(trimmed.[0]) then
+                    true
+                elif trimmed.Length > 1 && trimmed.[0] = '-' && Char.IsDigit(trimmed.[1]) then
+                    true
+                else
+                    false
+
+            if isSimpleFormat then
                 // Old format: bare exit code (possibly followed by attributes - which is an error)
                 let spaceIdx = trimmed.IndexOf(' ')
                 let exitCodeStr =
                     if spaceIdx >= 0 then trimmed.Substring(0, spaceIdx)
                     else trimmed
 
-                match Int32.TryParse(exitCodeStr) with
+                match Int64.TryParse(exitCodeStr) with
                 | true, value ->
                     // Check if there are attributes after the value
                     let remaining =
