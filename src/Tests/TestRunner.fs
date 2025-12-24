@@ -212,37 +212,42 @@ let main args =
     // Run E2E tests (in parallel)
     let e2eDir = Path.Combine(assemblyDir, "e2e")
     if Directory.Exists e2eDir then
-        let e2eTests = Directory.GetFiles(e2eDir, "*.test", SearchOption.AllDirectories)
-        if e2eTests.Length > 0 then
+        let e2eTestFiles = Directory.GetFiles(e2eDir, "*.e2e", SearchOption.AllDirectories)
+        if e2eTestFiles.Length > 0 then
             let sectionTimer = Stopwatch.StartNew()
             printfn "%s🚀 E2E Tests%s" Colors.cyan Colors.reset
             printfn ""
 
+            // Parse all tests from .e2e files
+            let allTests = ResizeArray<TestDSL.E2EFormat.E2ETest>()
+            let mutable parseErrors = []
+
+            for testFile in e2eTestFiles do
+                match TestDSL.E2EFormat.parseE2ETestFile testFile with
+                | Ok tests -> allTests.AddRange(tests)
+                | Error msg ->
+                    parseErrors <- (Path.GetFileName testFile, msg) :: parseErrors
+
+            // Report parse errors
+            for (fileName, msg) in parseErrors do
+                printfn "%s✗ ERROR parsing %s%s" Colors.red fileName Colors.reset
+                printfn "    %s" msg
+                failed <- failed + 1
+
             // Run tests in parallel and collect results
-            let results =
-                e2eTests
-                |> Array.Parallel.map (fun testPath ->
-                    let testName = Path.GetFileName testPath
-                    let testTimer = Stopwatch.StartNew()
+            if allTests.Count > 0 then
+                let results =
+                    allTests.ToArray()
+                    |> Array.Parallel.map (fun test ->
+                        let testTimer = Stopwatch.StartNew()
+                        let result = runE2ETest test
+                        testTimer.Stop()
+                        (test, result, testTimer.Elapsed)
+                    )
 
-                    let parseResult = parseE2ETest testPath
-                    let testResult =
-                        match parseResult with
-                        | Ok test ->
-                            let result = runE2ETest test
-                            testTimer.Stop()
-                            Choice1Of3 (testName, test, result, testTimer.Elapsed)
-                        | Error msg ->
-                            testTimer.Stop()
-                            Choice2Of3 (testName, msg, testTimer.Elapsed)
-                    testResult
-                )
-
-            // Print results in order
-            for result in results do
-                match result with
-                | Choice1Of3 (testName, test, result, elapsed) ->
-                    printf "  %s... " testName
+                // Print results in order
+                for (test, result, elapsed) in results do
+                    printf "  %s... " test.Name
                     if result.Success then
                         printfn "%s✓ PASS%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime elapsed) Colors.reset
                         passed <- passed + 1
@@ -263,12 +268,6 @@ let main args =
                             printfn "    Stderr: %s" (stderr.Trim())
                         | _ -> ()
                         failed <- failed + 1
-                | Choice2Of3 (testName, msg, elapsed) ->
-                    printf "  %s... " testName
-                    printfn "%s✗ ERROR%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime elapsed) Colors.reset
-                    printfn "    Failed to load test: %s" msg
-                    failed <- failed + 1
-                | _ -> ()
 
             sectionTimer.Stop()
             printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset

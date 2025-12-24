@@ -1,8 +1,0 @@
----NAME---
-Minimal subtraction test - ARM64 SUB_imm encoding bug regression
-
----SOURCE---
-5 - 2
-
----EXIT-CODE---
-3

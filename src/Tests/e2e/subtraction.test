@@ -1,8 +1,0 @@
----NAME---
-Simple subtraction
-
----SOURCE---
-10 - 3
-
----EXIT-CODE---
-7

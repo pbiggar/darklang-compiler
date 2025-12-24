@@ -1,8 +1,0 @@
----NAME---
-Parentheses for grouping
-
----SOURCE---
-(2 + 3) * 4
-
----EXIT-CODE---
-20

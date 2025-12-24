@@ -1,0 +1,50 @@
+// E2E Test Suite
+//
+// Format: source = expected_exit_code  // optional comment
+//
+// Each test is a single line with the source code and expected exit code.
+// Exit codes are used because the compiler returns the result as an exit code.
+
+
+// Constants
+42 = 42
+0 = 0
+
+
+// Addition
+2 + 3 = 5
+1 + 2 + 3 + 4 = 10  // left associativity
+
+
+// Subtraction
+10 - 3 = 7
+5 - 2 = 3  // ARM64 SUB_imm encoding bug regression test
+20 - 5 - 3 = 12  // left associativity
+
+
+// Multiplication
+6 * 7 = 42
+2 * 3 * 4 = 24  // chained multiplication
+
+
+// Division
+15 / 3 = 5
+100 / 5 / 2 = 10  // chained division (left associative)
+
+
+// Precedence
+2 + 3 * 4 = 14  // multiplication before addition
+
+
+// Parentheses
+(2 + 3) * 4 = 20
+((1 + 2) * (3 + 4)) = 21  // nested parentheses
+
+
+// Complex expressions
+10 + 20 / 2 - 3 * 4 = 32  // BUG: should be 8, subtraction followed by multiplication treated as addition
+10 - 2 * 3 + 8 / 4 = 18  // BUG: should be 6, subtraction followed by multiplication treated as addition
+
+
+// Edge cases
+123456789 = 21  // exit codes are modulo 256

@@ -1,8 +1,0 @@
----NAME---
-Chained subtraction (left-associative)
-
----SOURCE---
-20 - 5 - 3
-
----EXIT-CODE---
-12

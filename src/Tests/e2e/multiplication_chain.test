@@ -1,8 +1,0 @@
----NAME---
-Chained multiplication
-
----SOURCE---
-2 * 3 * 4
-
----EXIT-CODE---
-24

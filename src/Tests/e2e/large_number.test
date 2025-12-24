@@ -1,8 +1,0 @@
----NAME---
-Large integer literal
-
----SOURCE---
-123456789
-
----EXIT-CODE---
-21

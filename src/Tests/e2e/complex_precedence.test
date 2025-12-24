@@ -1,8 +1,0 @@
----NAME---
-Complex precedence with all operators
-
----SOURCE---
-10 + 20 / 2 - 3 * 4
-
----EXIT-CODE---
-32

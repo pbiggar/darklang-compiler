@@ -39,7 +39,7 @@
     <None Include="passes/**/*.anf2mir" CopyToOutputDirectory="PreserveNewest" />
     <None Include="passes/**/*.lir2arm64" CopyToOutputDirectory="PreserveNewest" />
     <None Include="passes/**/*.arm64enc" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="e2e/**/*.test" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="e2e/**/*.e2e" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

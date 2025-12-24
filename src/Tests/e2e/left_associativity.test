@@ -1,8 +1,0 @@
----NAME---
-Left associativity for addition
-
----SOURCE---
-1 + 2 + 3 + 4
-
----EXIT-CODE---
-10

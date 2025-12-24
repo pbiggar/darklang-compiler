@@ -1,8 +1,0 @@
----NAME---
-Chained division (left-associative)
-
----SOURCE---
-100 / 5 / 2
-
----EXIT-CODE---
-10
