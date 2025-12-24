@@ -5,6 +5,9 @@
 //
 // Current functions:
 // - generatePrintInt: Convert int64 in X0 to ASCII and print to stdout
+//
+// Platform-specific:
+// - Uses Platform.fs to get correct syscall numbers for the target OS
 
 module Runtime
 
@@ -16,8 +19,8 @@ module Runtime
 /// 2. Convert X0 (int64) to ASCII decimal string (work backwards from end)
 /// 3. Handle negative numbers (negate value, prepend '-')
 /// 4. Handle special case: zero
-/// 5. Write buffer to stdout via write syscall (4)
-/// 6. Exit with code 0 via exit syscall (1)
+/// 5. Write buffer to stdout via write syscall
+/// 6. Exit with code 0 via exit syscall
 ///
 /// Register usage:
 /// - X0: Input value, then stdout fd, then exit code
@@ -28,7 +31,11 @@ module Runtime
 /// - X5: Remainder (digit to store)
 /// - X6: Negative flag (0 = positive, 1 = negative)
 /// - X16: Syscall number
+///
+/// Uses platform-specific syscall numbers from Platform module
 let generatePrintInt () : ARM64.Instr list =
+    let os = Platform.detectOS ()
+    let syscalls = Platform.getSyscallNumbers os
     [
         // Allocate 32 bytes on stack for buffer (plenty for 64-bit number + sign + newline)
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
@@ -72,12 +79,12 @@ let generatePrintInt () : ARM64.Instr list =
         ARM64.ADD_imm (ARM64.X2, ARM64.SP, 32us)  // 23: End of buffer
         ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1)  // 24: length = end - start
         ARM64.MOVZ (ARM64.X0, 1us, 0)  // 25: stdout = 1
-        ARM64.MOVZ (ARM64.X16, 4us, 0)  // 26: write syscall = 4
-        ARM64.SVC 0x80us  // 27: call write
+        ARM64.MOVZ (ARM64.X16, syscalls.Write, 0)  // 26: write syscall (platform-specific)
+        ARM64.SVC syscalls.SvcImmediate  // 27: call write (platform-specific)
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32us)  // 28: Deallocate stack
         ARM64.MOVZ (ARM64.X0, 0us, 0)  // 29: exit code = 0
-        ARM64.MOVZ (ARM64.X16, 1us, 0)  // 30: exit syscall = 1
-        ARM64.SVC 0x80us  // 31: call exit
+        ARM64.MOVZ (ARM64.X16, syscalls.Exit, 0)  // 30: exit syscall (platform-specific)
+        ARM64.SVC syscalls.SvcImmediate  // 31: call exit (platform-specific)
 
         // Instruction 32-35: print_zero - Special case for value 0
         ARM64.MOVZ (ARM64.X2, 48us, 0)  // 32: '0' = 48

@@ -192,7 +192,10 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) : 
         exit 1
 
     // Write to file
-    Binary_Generation.writeToFile outputPath result.Binary
+    let os = Platform.detectOS ()
+    match os with
+    | Platform.MacOS -> Binary_Generation_MachO.writeToFile outputPath result.Binary
+    | Platform.Linux -> Binary_Generation_ELF.writeToFile outputPath result.Binary
     if showNormal then printfn "Successfully wrote %d bytes to %s" result.Binary.Length outputPath
 
 /// Run an expression (compile to temp and execute)

@@ -1,6 +1,6 @@
-// 8_Binary_Generation.fs - Mach-O Binary Generation (Pass 8)
+// 8_Binary_Generation_MachO.fs - Mach-O Binary Generation (Pass 8, macOS variant)
 //
-// Generates a complete Mach-O executable from ARM64 machine code.
+// Generates a complete Mach-O executable from ARM64 machine code for macOS.
 //
 // Binary generation algorithm:
 // - Converts machine code (uint32 list) to byte array
@@ -11,8 +11,9 @@
 // - Creates LC_MAIN load command specifying entry point
 // - Serializes all structures to little-endian bytes
 // - Writes byte array to file with executable permissions
+// - Code signs the binary (required for macOS)
 
-module Binary_Generation
+module Binary_Generation_MachO
 
 /// Helper: Pad string to fixed size with null bytes
 let padString (s: string) (size: int) : byte array =

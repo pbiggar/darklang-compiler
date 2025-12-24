@@ -1,11 +1,13 @@
 // BinaryTests.fs - Unit tests for binary generation utilities
 //
 // Tests utility functions and integration for Mach-O binary generation.
+//
+// Note: These tests are for Mach-O format specifically
 
 module BinaryTests
 
 open Binary
-open Binary_Generation
+open Binary_Generation_MachO
 open ARM64
 open ARM64_Encoding
 

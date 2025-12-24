@@ -75,9 +75,14 @@ let compile (verbosity: int) (source: string) : CompileResult =
         let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime - lirTime - allocTime - codegenTime
         if verbosity >= 2 then printfn "        %.1fms" encodeTime
 
-        // Pass 8: Binary Generation (machine code → Mach-O)
-        if verbosity >= 1 then printfn "  [8/8] Binary Generation..."
-        let binary = Binary_Generation.createExecutable machineCode
+        // Pass 8: Binary Generation (machine code → executable)
+        let os = Platform.detectOS ()
+        let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
+        if verbosity >= 1 then printfn "  [8/8] Binary Generation (%s)..." formatName
+        let binary =
+            match os with
+            | Platform.MacOS -> Binary_Generation_MachO.createExecutable machineCode
+            | Platform.Linux -> Binary_Generation_ELF.createExecutable machineCode
         let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
         if verbosity >= 2 then printfn "        %.1fms" binaryTime
 
@@ -117,23 +122,27 @@ let execute (verbosity: int) (binary: byte array) : ExecutionResult =
         let chmodTime = sw.Elapsed.TotalMilliseconds - writeTime
         if verbosity >= 2 then printfn "      %.1fms" chmodTime
 
-        // Code sign with adhoc signature (required for macOS)
-        if verbosity >= 1 then printfn "    • Code signing (adhoc)..."
-        let codesignStart = sw.Elapsed.TotalMilliseconds
-        let codesignInfo = ProcessStartInfo("codesign")
-        codesignInfo.Arguments <- $"-s - \"{tempPath}\""
-        codesignInfo.UseShellExecute <- false
-        codesignInfo.RedirectStandardOutput <- true
-        codesignInfo.RedirectStandardError <- true
-        let codesignProc = Process.Start(codesignInfo)
-        codesignProc.WaitForExit()
+        // Code sign with adhoc signature (required for macOS only)
+        let os = Platform.detectOS ()
+        if Platform.requiresCodeSigning os then
+            if verbosity >= 1 then printfn "    • Code signing (adhoc)..."
+            let codesignStart = sw.Elapsed.TotalMilliseconds
+            let codesignInfo = ProcessStartInfo("codesign")
+            codesignInfo.Arguments <- $"-s - \"{tempPath}\""
+            codesignInfo.UseShellExecute <- false
+            codesignInfo.RedirectStandardOutput <- true
+            codesignInfo.RedirectStandardError <- true
+            let codesignProc = Process.Start(codesignInfo)
+            codesignProc.WaitForExit()
 
-        if codesignProc.ExitCode <> 0 then
-            let stderr = codesignProc.StandardError.ReadToEnd()
-            failwith (sprintf "Code signing failed: %s" stderr)
+            if codesignProc.ExitCode <> 0 then
+                let stderr = codesignProc.StandardError.ReadToEnd()
+                failwith (sprintf "Code signing failed: %s" stderr)
 
-        let codesignTime = sw.Elapsed.TotalMilliseconds - codesignStart
-        if verbosity >= 2 then printfn "      %.1fms" codesignTime
+            let codesignTime = sw.Elapsed.TotalMilliseconds - codesignStart
+            if verbosity >= 2 then printfn "      %.1fms" codesignTime
+        else
+            if verbosity >= 1 then printfn "    • Code signing skipped (not required on Linux)"
 
         // Execute
         if verbosity >= 1 then printfn "    • Running binary..."
