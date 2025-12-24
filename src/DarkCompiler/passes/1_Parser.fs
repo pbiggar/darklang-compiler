@@ -50,7 +50,19 @@ let lex (input: string) : Token list =
                     parseDigits rest (d :: digits)
                 | _ ->
                     let numStr = System.String(List.rev digits |> List.toArray)
-                    (System.Int64.Parse(numStr), cs)
+                    // Try to parse as int64
+                    match System.Int64.TryParse(numStr) with
+                    | (true, value) -> (value, cs)
+                    | (false, _) ->
+                        // Check for INT64_MIN special case: "9223372036854775808"
+                        // This value is > INT64_MAX but equals |INT64_MIN|
+                        // It's only valid when preceded by minus: -9223372036854775808
+                        if numStr = "9223372036854775808" then
+                            // Return INT64_MIN directly - this is a special sentinel
+                            // The parser will only accept this when it's negated
+                            (System.Int64.MinValue, cs)
+                        else
+                            failwith $"Integer literal too large: {numStr}"
 
             let (num, remaining) = parseDigits chars []
             lexHelper remaining (TInt num :: acc)

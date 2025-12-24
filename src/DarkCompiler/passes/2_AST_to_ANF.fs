@@ -35,7 +35,14 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) : ANF.AExpr * ANF.VarGen =
 
     | AST.Neg innerExpr ->
         // Unary negation: convert to 0 - expr
-        toANF (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen
+        // Special case: -INT64_MIN should stay as INT64_MIN (from lexer sentinel)
+        match innerExpr with
+        | AST.IntLiteral n when n = System.Int64.MinValue ->
+            // The lexer stores INT64_MIN as a sentinel for "9223372036854775808"
+            // When negated, it should remain INT64_MIN (mathematically correct)
+            (ANF.Return (ANF.IntLiteral System.Int64.MinValue), varGen)
+        | _ ->
+            toANF (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen
 
     | AST.BinOp (op, left, right) ->
         // Convert operands to atoms
@@ -62,7 +69,14 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) : ANF.Atom * (ANF.TempId * ANF.
 
     | AST.Neg innerExpr ->
         // Unary negation: convert to 0 - expr
-        toAtom (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen
+        // Special case: -INT64_MIN should stay as INT64_MIN (from lexer sentinel)
+        match innerExpr with
+        | AST.IntLiteral n when n = System.Int64.MinValue ->
+            // The lexer stores INT64_MIN as a sentinel for "9223372036854775808"
+            // When negated, it should remain INT64_MIN (mathematically correct)
+            (ANF.IntLiteral System.Int64.MinValue, [], varGen)
+        | _ ->
+            toAtom (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen
 
     | AST.BinOp (op, left, right) ->
         // Complex expression: convert operands to atoms, create binding

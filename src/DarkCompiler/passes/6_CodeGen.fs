@@ -48,14 +48,26 @@ let lirRegToARM64Reg (reg: LIR.Reg) : ARM64.Reg =
 
 /// Generate ARM64 instructions to load an immediate into a register
 let loadImmediate (dest: ARM64.Reg) (value: int64) : ARM64.Instr list =
-    // For now, handle simple case with MOVZ
-    // TODO: Handle large constants with MOVZ+MOVK
-    if value >= 0L && value < 65536L then
-        [ARM64.MOVZ (dest, uint16 value, 0)]
-    else
-        // For now, just use MOVZ with lower 16 bits
-        // A full implementation would use MOVZ + MOVK for all 64 bits
-        [ARM64.MOVZ (dest, uint16 (value &&& 0xFFFFL), 0)]
+    // Load 64-bit immediate using MOVZ + MOVK sequence
+    // Extract each 16-bit chunk
+    let chunk0 = uint16 (value >>> 0) &&& 0xFFFFus
+    let chunk1 = uint16 (value >>> 16) &&& 0xFFFFus
+    let chunk2 = uint16 (value >>> 32) &&& 0xFFFFus
+    let chunk3 = uint16 (value >>> 48) &&& 0xFFFFus
+
+    // Build instruction sequence
+    // Start with MOVZ for the first non-zero chunk (or chunk0 if all zero)
+    let mutable instrs = [ARM64.MOVZ (dest, chunk0, 0)]
+
+    // Add MOVK for remaining chunks if non-zero
+    if chunk1 <> 0us then
+        instrs <- instrs @ [ARM64.MOVK (dest, chunk1, 16)]
+    if chunk2 <> 0us then
+        instrs <- instrs @ [ARM64.MOVK (dest, chunk2, 32)]
+    if chunk3 <> 0us then
+        instrs <- instrs @ [ARM64.MOVK (dest, chunk3, 48)]
+
+    instrs
 
 /// Convert LIR instruction to ARM64 instructions
 let convertInstr (instr: LIR.Instr) : ARM64.Instr list =
