@@ -1,0 +1,43 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      platforms:
+        - linux/arm64
+    image: compiler-for-dark:dev
+    container_name: compiler-dev
+
+    # Volume mounts
+    volumes:
+      # Source code (editable from host) - matches host path
+      - .:/Users/paulbiggar/projects/compiler-for-dark:cached
+
+      # Claude Code configuration and session data
+      - ~/.claude:/home/paulbiggar/.claude:cached
+
+      # Persist .NET packages across container restarts
+      - dotnet-packages:/home/paulbiggar/.nuget/packages
+
+      # Persist build outputs (optional, for speed)
+      - build-output:/Users/paulbiggar/projects/compiler-for-dark/bin
+      - build-intermediate:/Users/paulbiggar/projects/compiler-for-dark/obj
+
+    working_dir: /Users/paulbiggar/projects/compiler-for-dark
+
+    # Environment variables
+    environment:
+      - DOTNET_CLI_TELEMETRY_OPTOUT=1
+      - DOTNET_NOLOGO=1
+
+    # Keep container running
+    stdin_open: true
+    tty: true
+
+    # Platform
+    platform: linux/arm64
+
+volumes:
+  dotnet-packages:
+  build-output:
+  build-intermediate:

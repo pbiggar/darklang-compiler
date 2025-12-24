@@ -1,0 +1,26 @@
+# Build artifacts (will be generated in container)
+bin/
+obj/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vs/
+.idea/
+.vscode/
+
+# Claude
+.claude/
+
+# OS
+.DS_Store
+
+# Output files
+*.out
+examples/output
+
+# Temp files
+*.tmp
+*.temp

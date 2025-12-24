@@ -36,6 +36,10 @@ TestResults/
 # Claude Code
 .claude/settings.local.json
 
+# Docker
+.docker/
+docker-compose.override.yml
+
 # Examples output
 examples/*.out
 examples/output

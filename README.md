@@ -111,6 +111,91 @@ otool -tv <binary>          # Disassemble text section
 file <binary>               # Check file type
 ```
 
+## Docker Development (with Claude Code Integration)
+
+### Initial Setup
+
+```bash
+# Build container image (includes Claude Code CLI)
+./docker.sh build
+
+# Start container
+./docker.sh up
+
+# Enter container
+./docker.sh shell
+```
+
+### Using Claude Code Inside Container
+
+**First time setup - Authenticate:**
+```bash
+# Enter container
+./docker.sh shell
+
+# Inside container - authenticate Claude Code
+claude login
+# Follow prompts to enter your API key
+
+# Start Claude Code in /workspace
+cd /workspace
+claude
+```
+
+**Subsequent sessions:**
+```bash
+./docker.sh shell
+cd /workspace
+claude
+```
+
+Your Claude Code configuration, conversation history, and session memory are persisted via volume mount at `~/.claude`.
+
+### Development Workflow
+
+**Option A: Using Claude Code inside container (recommended for full sandboxing)**
+```bash
+./docker.sh shell
+claude  # Start Claude Code session
+# Work with Claude Code interactively in the sandboxed environment
+```
+
+**Option B: Manual development**
+```bash
+# Inside container
+dotnet build                    # Build compiler
+dotnet clean                    # Clean build artifacts
+
+# On host (macOS)
+# Edit source files with your normal editor
+# Changes are immediately reflected in container via volume mount
+```
+
+### Container Commands
+
+```bash
+./docker.sh build           # Build Docker image
+./docker.sh up              # Start container
+./docker.sh down            # Stop container
+./docker.sh shell           # Enter container shell
+./docker.sh restart         # Restart container
+./docker.sh build-compiler  # Build compiler in container
+./docker.sh status          # Show container status
+```
+
+### What's Included
+
+- ✅ Claude Code CLI pre-installed
+- ✅ Build compiler DLL in container
+- ✅ Volume mount for source code (edit on host or in container)
+- ✅ Claude Code config/history persisted via volume mount
+- ✅ Full filesystem isolation and sandboxing
+- ❌ Cannot run E2E tests yet (generates macOS binaries, can't execute in Linux container)
+
+### Phase 2: Linux Binary Generation
+
+After authenticating Claude Code in the container, Phase 2 will add Linux ELF binary generation alongside macOS Mach-O support, enabling tests to run inside the container without codesigning overhead.
+
 ## Current Features
 
 **Language:**
