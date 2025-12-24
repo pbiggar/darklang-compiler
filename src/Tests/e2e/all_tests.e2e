@@ -133,12 +133,21 @@
 100 + 200 = 300
 150 + 150 = 300
 
-// Subtraction tests (positive results only - negative support TODO)
+// Subtraction tests (positive results)
 10 - 3 = 7
 20 - 5 = 15
 100 - 50 = 50
 255 - 1 = 254
 255 - 100 = 155
+
+// Subtraction tests (negative results - TODO: implement negative support)
+0 - 1 = -1
+0 - 2 = -2
+1 - 2 = -1
+1 - 10 = -9
+10 - 20 = -10
+0 - 255 = -255
+100 - 200 = -100
 
 // Multiplication tests with large results
 16 * 16 = 256
@@ -179,11 +188,16 @@
 128 + 128 + 1 = 257
 100 + 100 + 100 = 300
 
-// Mixed operations
+// Mixed operations (positive results)
 255 + 1 - 1 = 255
 200 + 100 - 50 = 250
 100 * 3 - 50 = 250
 50 * 2 + 100 = 200
+
+// Mixed operations (negative results - TODO: implement negative support)
+0 - 1 + 1 = 0
+5 - 10 + 3 = -2
+100 - 200 + 50 = -50
 
 
 // Explicit format examples (for demonstration)
