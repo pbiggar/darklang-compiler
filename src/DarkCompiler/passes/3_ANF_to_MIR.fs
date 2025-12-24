@@ -132,22 +132,55 @@ let rec convertExpr
         }
 
         // Convert then-branch: result goes into resultReg, then jump to join
-        let (thenResult, builder2) = convertExprToOperand thenBranch thenLabel [] builder1
-        let thenBlock = {
-            MIR.Label = thenLabel
-            MIR.Instrs = [MIR.Mov (resultReg, thenResult)]
-            MIR.Terminator = MIR.Jump joinLabel
-        }
-        let builder3 = { builder2 with Blocks = Map.add thenLabel thenBlock builder2.Blocks }
+        let (thenResult, thenJoinOpt, builder2) = convertExprToOperand thenBranch thenLabel [] builder1
+
+        // If then-branch created blocks (nested if), patch its join block
+        // Otherwise, create a simple block that moves result and jumps
+        let builder3 =
+            match thenJoinOpt with
+            | Some nestedJoinLabel ->
+                // Patch the nested join block to jump to our join instead of returning
+                match Map.tryFind nestedJoinLabel builder2.Blocks with
+                | Some nestedJoinBlock ->
+                    let patchedBlock = {
+                        nestedJoinBlock with
+                            Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, thenResult)]
+                            Terminator = MIR.Jump joinLabel
+                    }
+                    { builder2 with Blocks = Map.add nestedJoinLabel patchedBlock builder2.Blocks }
+                | None -> builder2  // Should not happen
+            | None ->
+                // Simple expression - create block that moves result and jumps
+                let thenBlock = {
+                    MIR.Label = thenLabel
+                    MIR.Instrs = [MIR.Mov (resultReg, thenResult)]
+                    MIR.Terminator = MIR.Jump joinLabel
+                }
+                { builder2 with Blocks = Map.add thenLabel thenBlock builder2.Blocks }
 
         // Convert else-branch: result goes into resultReg, then jump to join
-        let (elseResult, builder4) = convertExprToOperand elseBranch elseLabel [] builder3
-        let elseBlock = {
-            MIR.Label = elseLabel
-            MIR.Instrs = [MIR.Mov (resultReg, elseResult)]
-            MIR.Terminator = MIR.Jump joinLabel
-        }
-        let builder5 = { builder4 with Blocks = Map.add elseLabel elseBlock builder4.Blocks }
+        let (elseResult, elseJoinOpt, builder4) = convertExprToOperand elseBranch elseLabel [] builder3
+
+        // Same logic for else-branch
+        let builder5 =
+            match elseJoinOpt with
+            | Some nestedJoinLabel ->
+                match Map.tryFind nestedJoinLabel builder4.Blocks with
+                | Some nestedJoinBlock ->
+                    let patchedBlock = {
+                        nestedJoinBlock with
+                            Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, elseResult)]
+                            Terminator = MIR.Jump joinLabel
+                    }
+                    { builder4 with Blocks = Map.add nestedJoinLabel patchedBlock builder4.Blocks }
+                | None -> builder4  // Should not happen
+            | None ->
+                let elseBlock = {
+                    MIR.Label = elseLabel
+                    MIR.Instrs = [MIR.Mov (resultReg, elseResult)]
+                    MIR.Terminator = MIR.Jump joinLabel
+                }
+                { builder4 with Blocks = Map.add elseLabel elseBlock builder4.Blocks }
 
         // Create join block that returns the result
         let joinBlock = {
@@ -162,18 +195,33 @@ let rec convertExpr
         (resultOp, builder6)
 
 /// Helper: convert expression and extract final operand
-/// Creates blocks but doesn't finalize the last one
+/// Returns: (operand, optional join label if blocks were created, builder)
+/// - If join label is Some(label), the expression created blocks ending at that join block
+/// - If join label is None, no blocks were created (simple expression)
 and convertExprToOperand
     (expr: ANF.AExpr)
     (startLabel: MIR.Label)
     (startInstrs: MIR.Instr list)
     (builder: CFGBuilder)
-    : MIR.Operand * CFGBuilder =
+    : MIR.Operand * MIR.Label option * CFGBuilder =
 
     match expr with
     | ANF.Return atom ->
-        // Just return the operand, don't create a block yet
-        (atomToOperand atom, builder)
+        // If we have accumulated instructions from Let bindings, create a block
+        // Otherwise just return the operand
+        let operand = atomToOperand atom
+        if List.isEmpty startInstrs then
+            (operand, None, builder)
+        else
+            // Create a block with accumulated instructions
+            // Use temporary Ret terminator - caller will patch if needed
+            let block = {
+                MIR.Label = startLabel
+                MIR.Instrs = startInstrs
+                MIR.Terminator = MIR.Ret operand
+            }
+            let builder' = { builder with Blocks = Map.add startLabel block builder.Blocks }
+            (operand, Some startLabel, builder')
 
     | ANF.Let (tempId, cexpr, rest) ->
         let destReg = tempToVReg tempId
@@ -185,10 +233,11 @@ and convertExprToOperand
             | ANF.UnaryPrim (op, atom) ->
                 MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand atom)
 
+        // Let bindings accumulate instructions, pass through join label
         convertExprToOperand rest startLabel (startInstrs @ [instr]) builder
 
     | ANF.If (condAtom, thenBranch, elseBranch) ->
-        // Similar to convertExpr but return operand
+        // If expression: creates blocks with branch/jump/join structure
         let condOp = atomToOperand condAtom
         let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
         let (elseLabel, labelGen2) = MIR.freshLabel labelGen1
@@ -207,32 +256,67 @@ and convertExprToOperand
             RegGen = regGen1
         }
 
-        let (thenResult, builder2) = convertExprToOperand thenBranch thenLabel [] builder1
-        let thenBlock = {
-            MIR.Label = thenLabel
-            MIR.Instrs = [MIR.Mov (resultReg, thenResult)]
-            MIR.Terminator = MIR.Jump joinLabel
-        }
-        let builder3 = { builder2 with Blocks = Map.add thenLabel thenBlock builder2.Blocks }
+        // Convert then-branch
+        let (thenResult, thenJoinOpt, builder2) = convertExprToOperand thenBranch thenLabel [] builder1
 
-        let (elseResult, builder4) = convertExprToOperand elseBranch elseLabel [] builder3
-        let elseBlock = {
-            MIR.Label = elseLabel
-            MIR.Instrs = [MIR.Mov (resultReg, elseResult)]
-            MIR.Terminator = MIR.Jump joinLabel
-        }
-        let builder5 = { builder4 with Blocks = Map.add elseLabel elseBlock builder4.Blocks }
+        // If then-branch created blocks (nested if), patch its join block
+        // Otherwise, create a simple block that moves result and jumps
+        let builder3 =
+            match thenJoinOpt with
+            | Some nestedJoinLabel ->
+                // Patch the nested join block to jump to our join instead of returning
+                match Map.tryFind nestedJoinLabel builder2.Blocks with
+                | Some nestedJoinBlock ->
+                    let patchedBlock = {
+                        nestedJoinBlock with
+                            Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, thenResult)]
+                            Terminator = MIR.Jump joinLabel
+                    }
+                    { builder2 with Blocks = Map.add nestedJoinLabel patchedBlock builder2.Blocks }
+                | None -> builder2  // Should not happen
+            | None ->
+                // Simple expression - create block that moves result and jumps
+                let thenBlock = {
+                    MIR.Label = thenLabel
+                    MIR.Instrs = [MIR.Mov (resultReg, thenResult)]
+                    MIR.Terminator = MIR.Jump joinLabel
+                }
+                { builder2 with Blocks = Map.add thenLabel thenBlock builder2.Blocks }
 
-        // Create join block (empty, will be filled by caller)
-        // The join block needs to exist as a target for the jumps from then/else
+        // Convert else-branch
+        let (elseResult, elseJoinOpt, builder4) = convertExprToOperand elseBranch elseLabel [] builder3
+
+        // Same logic for else-branch
+        let builder5 =
+            match elseJoinOpt with
+            | Some nestedJoinLabel ->
+                match Map.tryFind nestedJoinLabel builder4.Blocks with
+                | Some nestedJoinBlock ->
+                    let patchedBlock = {
+                        nestedJoinBlock with
+                            Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, elseResult)]
+                            Terminator = MIR.Jump joinLabel
+                    }
+                    { builder4 with Blocks = Map.add nestedJoinLabel patchedBlock builder4.Blocks }
+                | None -> builder4  // Should not happen
+            | None ->
+                let elseBlock = {
+                    MIR.Label = elseLabel
+                    MIR.Instrs = [MIR.Mov (resultReg, elseResult)]
+                    MIR.Terminator = MIR.Jump joinLabel
+                }
+                { builder4 with Blocks = Map.add elseLabel elseBlock builder4.Blocks }
+
+        // Create join block
         let joinBlock = {
             MIR.Label = joinLabel
             MIR.Instrs = []
-            MIR.Terminator = MIR.Ret (MIR.Register resultReg)  // Temporary, may be overwritten
+            MIR.Terminator = MIR.Ret (MIR.Register resultReg)
         }
         let builder6 = { builder5 with Blocks = Map.add joinLabel joinBlock builder5.Blocks }
 
-        (MIR.Register resultReg, builder6)
+        // Return result register and our join label for potential patching by caller
+        (MIR.Register resultReg, Some joinLabel, builder6)
 
 /// Convert ANF program to MIR CFG
 let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : MIR.Program * MIR.RegGen =

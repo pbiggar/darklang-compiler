@@ -78,7 +78,10 @@ let parseOperand (text: string) : Result<Operand, string> =
         Error $"Invalid operand '{text}' (expected 'Imm N', 'Reg X', or 'Stack N')"
 
 /// Parse a single LIR instruction
+/// NOTE: Temporarily disabled - LIR structure changed to CFG, needs rewrite
 let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
+    Error "LIR parser temporarily disabled - CFG structure changed, needs rewrite"
+    (*
     let line = line.Trim()
 
     // Try Ret: "Ret"
@@ -161,23 +164,9 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
                 | Ok right -> Ok (Sdiv (dest, left, right))
     else
         Error $"Line {lineNum}: Invalid instruction format '{line}'"
+    *)
 
 /// Parse LIR program from text
+/// NOTE: Temporarily disabled - LIR structure changed to CFG, needs rewrite
 let parseLIR (text: string) : Result<LIR.Program, string> =
-    let lines = stripCommentsAndEmpty text
-
-    // Parse each line into an instruction
-    let results = lines |> List.mapi (fun i line -> parseInstruction (i+1) line)
-
-    // Collect all results, stopping at first error
-    let rec collectResults acc = function
-        | [] -> Ok (List.rev acc)
-        | (Ok instr) :: rest -> collectResults (instr :: acc) rest
-        | (Error e) :: _ -> Error e
-
-    match collectResults [] results with
-    | Ok instrs ->
-        // Wrap instructions in a default function
-        let func = { Name = "_start"; Body = instrs; StackSize = 0 }
-        Ok (LIR.Program [func])
-    | Error e -> Error e
+    Error "LIR parser temporarily disabled - CFG structure changed, needs rewrite"

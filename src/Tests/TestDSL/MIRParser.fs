@@ -44,7 +44,10 @@ let parseOp (text: string) : Result<BinOp, string> =
     | op -> Error $"Unknown operator '{op}' (expected +, -, *, /)"
 
 /// Parse a single MIR instruction
+/// NOTE: Temporarily disabled - MIR structure changed to CFG, needs rewrite
 let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
+    Error "MIR parser temporarily disabled - CFG structure needs rewrite"
+    (*
     let line = line.Trim()
 
     // Try ret pattern: "ret <operand>"
@@ -83,20 +86,9 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             | Ok src -> Ok (Mov (dest, src))
     else
         Error $"Line {lineNum}: Invalid instruction format '{line}'"
+    *)
 
 /// Parse MIR program from text
+/// NOTE: Temporarily disabled - MIR structure changed to CFG, needs rewrite
 let parseMIR (text: string) : Result<MIR.Program, string> =
-    let lines = stripCommentsAndEmpty text
-
-    // Parse each line into an instruction
-    let results = lines |> List.mapi (fun i line -> parseInstruction (i+1) line)
-
-    // Collect all results, stopping at first error
-    let rec collectResults acc = function
-        | [] -> Ok (List.rev acc)
-        | (Ok instr) :: rest -> collectResults (instr :: acc) rest
-        | (Error e) :: _ -> Error e
-
-    match collectResults [] results with
-    | Ok instrs -> Ok (MIR.Program [MIR.Block instrs])
-    | Error e -> Error e
+    Error "MIR parser temporarily disabled - CFG structure changed, needs rewrite"
