@@ -110,6 +110,18 @@ let serializeDylinkerCommand (dylinker: Binary.DylinkerCommand) : byte array =
         yield! padString dylinker.Name (int dylinker.CommandSize - 12)
     |]
 
+/// Serialize DylibCommand to bytes
+let serializeDylibCommand (dylib: Binary.DylibCommand) : byte array =
+    [|
+        yield! uint32ToBytes dylib.Command
+        yield! uint32ToBytes dylib.CommandSize
+        yield! uint32ToBytes 24u  // Offset to name string (after command + cmdsize + offset + timestamp + current_version + compatibility_version)
+        yield! uint32ToBytes dylib.Timestamp
+        yield! uint32ToBytes dylib.CurrentVersion
+        yield! uint32ToBytes dylib.CompatibilityVersion
+        yield! padString dylib.Name (int dylib.CommandSize - 24)
+    |]
+
 /// Serialize UuidCommand to bytes
 let serializeUuidCommand (uuid: Binary.UuidCommand) : byte array =
     [|
@@ -171,6 +183,7 @@ let calculateCommandsSize (binary: Binary.MachOBinary) : uint32 =
     binary.TextSegmentCommand.CommandSize +
     binary.LinkeditSegmentCommand.CommandSize +
     binary.DylinkerCommand.CommandSize +
+    binary.DylibCommand.CommandSize +
     binary.SymtabCommand.CommandSize +
     binary.DysymtabCommand.CommandSize +
     binary.UuidCommand.CommandSize +
@@ -204,6 +217,7 @@ let serializeMachO (binary: Binary.MachOBinary) : byte array =
         yield! serializeSegmentCommand64 binary.TextSegmentCommand
         yield! serializeSegmentCommand64 binary.LinkeditSegmentCommand
         yield! serializeDylinkerCommand binary.DylinkerCommand
+        yield! serializeDylibCommand binary.DylibCommand
         yield! serializeSymtabCommand binary.SymtabCommand
         yield! serializeDysymtabCommand binary.DysymtabCommand
         yield! serializeUuidCommand binary.UuidCommand
@@ -232,12 +246,13 @@ let createExecutable (machineCode: uint32 list) : byte array =
     let textSegmentCommandSize = 72 + 80
     let linkeditSegmentCommandSize = 72
     let dylinkerCommandSize = 32
+    let dylibCommandSize = 56  // 24 bytes for fixed fields + 32 bytes for padded library path
     let symtabCommandSize = 24
     let dysymtabCommandSize = 80
     let uuidCommandSize = 24
     let buildVersionCommandSize = 24
     let mainCommandSize = 24
-    let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
+    let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + dylibCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
 
     // Place code right after headers and load commands
     // Add extra space (200 bytes) for codesign to add LC_CODE_SIGNATURE and other modifications
@@ -354,6 +369,16 @@ let createExecutable (machineCode: uint32 list) : byte array =
         Name = "/usr/lib/dyld"
     }
 
+    // LC_LOAD_DYLIB command (link to libSystem)
+    let dylibCommand : Binary.DylibCommand = {
+        Command = Binary.LC_LOAD_DYLIB
+        CommandSize = uint32 dylibCommandSize
+        Name = "/usr/lib/libSystem.B.dylib"
+        Timestamp = 2u  // Standard value (ignored by dyld)
+        CurrentVersion = 0x00000000u  // 0.0.0
+        CompatibilityVersion = 0x00010000u  // 1.0.0
+    }
+
     // LC_UUID command
     let uuidCommand : Binary.UuidCommand = {
         Command = Binary.LC_UUID
@@ -383,7 +408,7 @@ let createExecutable (machineCode: uint32 list) : byte array =
         CpuType = Binary.CPU_TYPE_ARM64
         CpuSubType = Binary.CPU_SUBTYPE_ARM64_ALL
         FileType = Binary.MH_EXECUTE
-        NumCommands = 9u  // __PAGEZERO, __TEXT, __LINKEDIT, DYLINKER, SYMTAB, DYSYMTAB, UUID, BUILD_VERSION, MAIN
+        NumCommands = 10u  // __PAGEZERO, __TEXT, __LINKEDIT, DYLINKER, DYLIB, SYMTAB, DYSYMTAB, UUID, BUILD_VERSION, MAIN
         SizeOfCommands = uint32 commandsSize
         Flags = Binary.MH_NOUNDEFS ||| Binary.MH_DYLDLINK ||| Binary.MH_TWOLEVEL ||| Binary.MH_PIE
         Reserved = 0u
@@ -395,6 +420,7 @@ let createExecutable (machineCode: uint32 list) : byte array =
         TextSegmentCommand = textSegmentCommand
         LinkeditSegmentCommand = linkeditSegmentCommand
         DylinkerCommand = dylinkerCommand
+        DylibCommand = dylibCommand
         SymtabCommand = symtabCommand
         DysymtabCommand = dysymtabCommand
         UuidCommand = uuidCommand

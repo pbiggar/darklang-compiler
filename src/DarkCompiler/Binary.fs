@@ -37,6 +37,7 @@ let MH_PIE = 0x200000u
 let LC_SEGMENT_64 = 0x19u
 let LC_MAIN = 0x80000028u
 let LC_LOAD_DYLINKER = 0xEu
+let LC_LOAD_DYLIB = 0xCu
 let LC_UUID = 0x1Bu
 let LC_BUILD_VERSION = 0x32u
 let LC_SYMTAB = 0x2u
@@ -111,6 +112,16 @@ type DylinkerCommand = {
     Name: string  // Path to dylinker (e.g., "/usr/lib/dyld")
 }
 
+/// LC_LOAD_DYLIB load command
+type DylibCommand = {
+    Command: uint32
+    CommandSize: uint32
+    Name: string  // Path to library (e.g., "/usr/lib/libSystem.B.dylib")
+    Timestamp: uint32
+    CurrentVersion: uint32
+    CompatibilityVersion: uint32
+}
+
 /// LC_UUID load command
 type UuidCommand = {
     Command: uint32
@@ -171,6 +182,7 @@ type MachOBinary = {
     TextSegmentCommand: SegmentCommand64
     LinkeditSegmentCommand: SegmentCommand64
     DylinkerCommand: DylinkerCommand
+    DylibCommand: DylibCommand
     SymtabCommand: SymtabCommand
     DysymtabCommand: DysymtabCommand
     UuidCommand: UuidCommand
