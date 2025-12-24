@@ -134,9 +134,9 @@ let convertInstr (instr: LIR.Instr) : ARM64.Instr list =
             ARM64.MOV_reg (ARM64.X2, ARM64.X0)
 
             // Instruction 6: Test if negative (bit 63), branch to handle_negative if set
-            ARM64.TBNZ (ARM64.X2, 63, 23)  // Branch forward +23 to inst 30 (handle_negative)
+            ARM64.TBNZ (ARM64.X2, 63, 25)  // Branch forward +25 to inst 31 (handle_negative)
 
-            // Instruction 7: Check if zero (branch forward +20 to print_zero at inst 28)
+            // Instruction 7: Check if zero (branch forward +20 to print_zero at inst 27)
             ARM64.CBZ (ARM64.X2, 20)
 
             // Instruction 8-16: convert_loop - Extract digits by dividing by 10
@@ -147,7 +147,7 @@ let convertInstr (instr: LIR.Instr) : ARM64.Instr list =
             ARM64.STRB (ARM64.X5, ARM64.X1, 0)  // 12: Store digit
             ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)  // 13: Move pointer back
             ARM64.MOV_reg (ARM64.X2, ARM64.X4)  // 14: value = value / 10
-            ARM64.CBZ (ARM64.X2, 1)  // 15: If zero, skip (+1) to write_output at inst 17
+            ARM64.CBZ (ARM64.X2, 2)  // 15: If zero, skip (+2) to write_output at inst 17
             ARM64.B (-8)  // 16: Loop back (-8) to inst 8 (convert_loop start)
 
             // Fall through to write_output
@@ -158,12 +158,12 @@ let convertInstr (instr: LIR.Instr) : ARM64.Instr list =
             ARM64.ADD_imm (ARM64.X2, ARM64.SP, 32us)  // 18: End of buffer
             ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1)  // 19: length = end - start
             ARM64.MOVZ (ARM64.X0, 1us, 0)  // 20: stdout = 1
-            ARM64.MOVZ (ARM64.X16, 4us, 0)  // 21: write syscall = 4
-            ARM64.SVC 0x80us  // 22: call write
+            ARM64.MOVZ (ARM64.X8, 4us, 0)  // 21: write syscall = 4 (using X8 instead of X16)
+            ARM64.SVC 0us  // 22: call write
             ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32us)  // 23: Deallocate stack
             ARM64.MOVZ (ARM64.X0, 0us, 0)  // 24: exit code = 0
-            ARM64.MOVZ (ARM64.X16, 1us, 0)  // 25: exit syscall = 1
-            ARM64.SVC 0x80us  // 26: call exit
+            ARM64.MOVZ (ARM64.X8, 1us, 0)  // 25: exit syscall = 1 (using X8 instead of X16)
+            ARM64.SVC 0us  // 26: call exit
         ]
         @ [
             // Instruction 27-30: print_zero - Special case for value 0
