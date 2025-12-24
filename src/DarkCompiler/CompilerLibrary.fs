@@ -69,8 +69,7 @@ let compile (verbosity: int) (source: string) : CompileResult =
 
                 // Pass 2: AST → ANF
                 if verbosity >= 1 then println "  [2/8] AST → ANF..."
-                let (AST.Program expr) = ast
-                let anfResult = AST_to_ANF.toANF expr (ANF.VarGen 0) Map.empty
+                let anfResult = AST_to_ANF.convertProgram ast
                 let anfTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime
                 if verbosity >= 2 then
                     let t = System.Math.Round(anfTime, 1)
@@ -81,13 +80,19 @@ let compile (verbosity: int) (source: string) : CompileResult =
                     { Binary = Array.empty
                       Success = false
                       ErrorMessage = Some $"ANF conversion error: {err}" }
-                | Ok (anfExpr, _) ->
-                    let anfProgram = ANF.Program anfExpr
-
+                | Ok anfProgram ->
                     // Show ANF
                     if verbosity >= 3 then
                         println "=== ANF ==="
-                        println $"{anfExpr}"
+                        let (ANF.Program (funcs, mainExpr)) = anfProgram
+                        for func in funcs do
+                            println $"Function: {func.Name}"
+                            println $"  Params: {func.Params}"
+                            println $"  Body: {func.Body}"
+                            println ""
+                        match mainExpr with
+                        | Some expr -> println $"Main: {expr}"
+                        | None -> ()
                         println ""
 
                     // Pass 3: ANF → MIR
@@ -96,15 +101,17 @@ let compile (verbosity: int) (source: string) : CompileResult =
 
                     // Show MIR
                     if verbosity >= 3 then
-                        let (MIR.Program cfg) = mirProgram
+                        let (MIR.Program functions) = mirProgram
                         println "=== MIR (Control Flow Graph) ==="
-                        println $"Entry: {cfg.Entry}"
-                        for kvp in cfg.Blocks do
-                            let block = kvp.Value
-                            println $"\n{block.Label}:"
-                            for instr in block.Instrs do
-                                println $"  {instr}"
-                            println $"  {block.Terminator}"
+                        for func in functions do
+                            println $"\nFunction: {func.Name}"
+                            println $"Entry: {func.CFG.Entry}"
+                            for kvp in func.CFG.Blocks do
+                                let block = kvp.Value
+                                println $"\n{block.Label}:"
+                                for instr in block.Instrs do
+                                    println $"  {instr}"
+                                println $"  {block.Terminator}"
                         println ""
 
                     let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime
@@ -139,21 +146,21 @@ let compile (verbosity: int) (source: string) : CompileResult =
                     // Pass 5: Register Allocation
                     if verbosity >= 1 then println "  [5/8] Register Allocation..."
                     let (LIR.Program funcs) = lirProgram
-                    let func = List.head funcs
-                    let allocatedFunc = RegisterAllocation.allocateRegisters func
-                    let allocatedProgram = LIR.Program [allocatedFunc]
+                    let allocatedFuncs = funcs |> List.map RegisterAllocation.allocateRegisters
+                    let allocatedProgram = LIR.Program allocatedFuncs
 
                     // Show LIR after allocation
                     if verbosity >= 3 then
                         println "=== LIR (After Register Allocation) ==="
-                        println $"Function: {allocatedFunc.Name}"
-                        println $"Entry: {allocatedFunc.CFG.Entry}"
-                        for kvp in allocatedFunc.CFG.Blocks do
-                            let block = kvp.Value
-                            println $"\n{block.Label}:"
-                            for instr in block.Instrs do
-                                println $"  {instr}"
-                            println $"  {block.Terminator}"
+                        for allocatedFunc in allocatedFuncs do
+                            println $"Function: {allocatedFunc.Name}"
+                            println $"Entry: {allocatedFunc.CFG.Entry}"
+                            for kvp in allocatedFunc.CFG.Blocks do
+                                let block = kvp.Value
+                                println $"\n{block.Label}:"
+                                for instr in block.Instrs do
+                                    println $"  {instr}"
+                                println $"  {block.Terminator}"
                         println ""
 
                     let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - mirTime - lirTime

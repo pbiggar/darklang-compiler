@@ -145,6 +145,9 @@ let rec convertExpr
                     MIR.BinOp (destReg, convertBinOp op, atomToOperand leftAtom, atomToOperand rightAtom)
                 | ANF.UnaryPrim (op, atom) ->
                     MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand atom)
+                | ANF.Call (funcName, args) ->
+                    let argOperands = List.map atomToOperand args
+                    MIR.Call (destReg, funcName, argOperands)
                 | ANF.IfValue _ ->
                     // Already handled above
                     failwith "Unreachable: IfValue already handled"
@@ -327,6 +330,9 @@ and convertExprToOperand
                     MIR.BinOp (destReg, convertBinOp op, atomToOperand leftAtom, atomToOperand rightAtom)
                 | ANF.UnaryPrim (op, atom) ->
                     MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand atom)
+                | ANF.Call (funcName, args) ->
+                    let argOperands = List.map atomToOperand args
+                    MIR.Call (destReg, funcName, argOperands)
                 | ANF.IfValue _ ->
                     // Already handled above
                     failwith "Unreachable: IfValue already handled"
@@ -416,22 +422,77 @@ and convertExprToOperand
         // Return result register and our join label for potential patching by caller
         (MIR.Register resultReg, Some joinLabel, builder6)
 
-/// Convert ANF program to MIR CFG
-let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : MIR.Program * MIR.RegGen =
-    let (ANF.Program anfExpr) = program
-
-    let entryLabel = MIR.Label "entry"
+/// Convert an ANF function to a MIR function
+let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) : MIR.Function * MIR.RegGen =
+    // Create initial builder
     let initialBuilder = {
-        Blocks = Map.empty
-        LabelGen = MIR.initialLabelGen
         RegGen = regGen
+        LabelGen = MIR.initialLabelGen
+        Blocks = Map.empty
     }
 
-    let (_, finalBuilder) = convertExpr anfExpr entryLabel [] initialBuilder
+    // Create entry label for CFG (internal to function body)
+    let entryLabel = MIR.Label $"{anfFunc.Name}_body"
+
+    // Allocate VRegs for parameters
+    let (paramVRegs, builder1) =
+        anfFunc.Params
+        |> List.fold (fun (vregs, builder) _ ->
+            let (vreg, regGen') = MIR.freshReg builder.RegGen
+            (vregs @ [vreg], { builder with RegGen = regGen' }))
+            ([], initialBuilder)
+
+    // Convert function body to CFG
+    let (_, finalBuilder) = convertExpr anfFunc.Body entryLabel [] builder1
 
     let cfg = {
         MIR.Entry = entryLabel
         MIR.Blocks = finalBuilder.Blocks
     }
 
-    (MIR.Program cfg, finalBuilder.RegGen)
+    let mirFunc = {
+        MIR.Name = anfFunc.Name
+        MIR.Params = paramVRegs
+        MIR.CFG = cfg
+    }
+
+    (mirFunc, finalBuilder.RegGen)
+
+/// Convert ANF program to MIR program
+let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : MIR.Program * MIR.RegGen =
+    let (ANF.Program (functions, mainExpr)) = program
+
+    // Convert all functions to MIR
+    let (mirFuncs, regGen1) =
+        functions
+        |> List.fold (fun (funcs, rg) anfFunc ->
+            let (mirFunc, rg') = convertANFFunction anfFunc rg
+            (funcs @ [mirFunc], rg')) ([], regGen)
+
+    // Convert main expression (if any) to a synthetic "_start" function
+    let (allFuncs, finalRegGen) =
+        match mainExpr with
+        | Some expr ->
+            // Create _start function from main expression
+            let entryLabel = MIR.Label "_start_body"
+            let initialBuilder = {
+                RegGen = regGen1
+                LabelGen = MIR.initialLabelGen
+                Blocks = Map.empty
+            }
+            let (_, finalBuilder) = convertExpr expr entryLabel [] initialBuilder
+            let cfg = {
+                MIR.Entry = entryLabel
+                MIR.Blocks = finalBuilder.Blocks
+            }
+            let startFunc = {
+                MIR.Name = "_start"
+                MIR.Params = []
+                MIR.CFG = cfg
+            }
+            (mirFuncs @ [startFunc], finalBuilder.RegGen)
+        | None ->
+            // No main expression - just functions
+            (mirFuncs, regGen1)
+
+    (MIR.Program allFuncs, finalRegGen)

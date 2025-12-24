@@ -155,6 +155,71 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
         let imm = uint16 svcMatch.Groups.[1].Value
         Ok (SVC imm)
     else
+
+    // Try STP: "STP(X29, X30, SP, -16)"
+    let stpMatch = Regex.Match(line, @"^STP\((.+?),\s*(.+?),\s*(.+?),\s*(-?\d+)\)$")
+    if stpMatch.Success then
+        match parseReg stpMatch.Groups.[1].Value with
+        | Error e -> Error $"Line {lineNum}: {e}"
+        | Ok reg1 ->
+            match parseReg stpMatch.Groups.[2].Value with
+            | Error e -> Error $"Line {lineNum}: {e}"
+            | Ok reg2 ->
+                match parseReg stpMatch.Groups.[3].Value with
+                | Error e -> Error $"Line {lineNum}: {e}"
+                | Ok addr ->
+                    let offset = int16 stpMatch.Groups.[4].Value
+                    Ok (STP (reg1, reg2, addr, offset))
+    else
+
+    // Try LDP: "LDP(X29, X30, SP, 16)"
+    let ldpMatch = Regex.Match(line, @"^LDP\((.+?),\s*(.+?),\s*(.+?),\s*(-?\d+)\)$")
+    if ldpMatch.Success then
+        match parseReg ldpMatch.Groups.[1].Value with
+        | Error e -> Error $"Line {lineNum}: {e}"
+        | Ok reg1 ->
+            match parseReg ldpMatch.Groups.[2].Value with
+            | Error e -> Error $"Line {lineNum}: {e}"
+            | Ok reg2 ->
+                match parseReg ldpMatch.Groups.[3].Value with
+                | Error e -> Error $"Line {lineNum}: {e}"
+                | Ok addr ->
+                    let offset = int16 ldpMatch.Groups.[4].Value
+                    Ok (LDP (reg1, reg2, addr, offset))
+    else
+
+    // Try STR: "STR(X0, SP, 8)"
+    let strMatch = Regex.Match(line, @"^STR\((.+?),\s*(.+?),\s*(-?\d+)\)$")
+    if strMatch.Success then
+        match parseReg strMatch.Groups.[1].Value with
+        | Error e -> Error $"Line {lineNum}: {e}"
+        | Ok src ->
+            match parseReg strMatch.Groups.[2].Value with
+            | Error e -> Error $"Line {lineNum}: {e}"
+            | Ok addr ->
+                let offset = int16 strMatch.Groups.[3].Value
+                Ok (STR (src, addr, offset))
+    else
+
+    // Try LDR: "LDR(X0, SP, 8)"
+    let ldrMatch = Regex.Match(line, @"^LDR\((.+?),\s*(.+?),\s*(-?\d+)\)$")
+    if ldrMatch.Success then
+        match parseReg ldrMatch.Groups.[1].Value with
+        | Error e -> Error $"Line {lineNum}: {e}"
+        | Ok dest ->
+            match parseReg ldrMatch.Groups.[2].Value with
+            | Error e -> Error $"Line {lineNum}: {e}"
+            | Ok addr ->
+                let offset = int16 ldrMatch.Groups.[3].Value
+                Ok (LDR (dest, addr, offset))
+    else
+
+    // Try BL: "BL(label)"
+    let blMatch = Regex.Match(line, @"^BL\((.+?)\)$")
+    if blMatch.Success then
+        let label = blMatch.Groups.[1].Value
+        Ok (BL label)
+    else
         Error $"Line {lineNum}: Invalid ARM64 instruction format '{line}'"
 
 /// Parse ARM64 program from text

@@ -15,7 +15,7 @@ type TestResult = Result<unit, string>
 
 /// Helper to check that type checking succeeds with expected type
 let expectType (expr: Expr) (expectedType: Type) : TestResult =
-    let program = Program expr
+    let program = Program [Expression expr]
     match checkProgram program with
     | Ok actualType ->
         if actualType = expectedType then

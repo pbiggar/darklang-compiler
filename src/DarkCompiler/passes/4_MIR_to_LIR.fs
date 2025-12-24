@@ -125,18 +125,48 @@ let selectInstr (instr: MIR.Instr) : LIR.Instr list =
                 LIR.Sub (lirDest, lirDest, LIR.Reg srcReg)
             ]
 
+    | MIR.Call (dest, funcName, args) ->
+        // ARM64 calling convention (AAPCS64):
+        // - First 8 arguments in X0-X7
+        // - Return value in X0
+        // For now, only support ≤8 arguments
+        if List.length args > 8 then
+            failwith "Functions with >8 parameters not yet supported"
+        else
+            let lirDest = vregToLIRReg dest
+            let argRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
+
+            // Move each argument to its corresponding register
+            // Take only as many registers as we have arguments
+            let moveInstrs =
+                List.zip args (List.take (List.length args) argRegs)
+                |> List.map (fun (arg, reg) ->
+                    let lirArg = convertOperand arg
+                    LIR.Mov (LIR.Physical reg, lirArg))
+
+            // Call instruction
+            let callInstr = LIR.Call (lirDest, funcName, List.map convertOperand args)
+
+            // Move return value from X0 to destination (if not already X0)
+            let moveResult =
+                match lirDest with
+                | LIR.Physical LIR.X0 -> []
+                | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
+
+            moveInstrs @ [callInstr] @ moveResult
+
 /// Convert MIR terminator to LIR terminator
 /// For Branch, need to convert operand to register (may add instructions)
-let selectTerminator (terminator: MIR.Terminator) : LIR.Instr list * LIR.Terminator =
+/// isEntryFunc: whether this is the entry function (_start) that should print the result
+let selectTerminator (terminator: MIR.Terminator) (isEntryFunc: bool) : LIR.Instr list * LIR.Terminator =
     match terminator with
     | MIR.Ret operand ->
-        // Move operand to X0 (return register), print it, then return
+        // Move operand to X0 (return register)
         let lirOp = convertOperand operand
-        let instrs = [
-            LIR.Mov (LIR.Physical LIR.X0, lirOp)
-            LIR.PrintInt (LIR.Physical LIR.X0)
-        ]
-        (instrs, LIR.Ret)
+        let moveToX0 = [LIR.Mov (LIR.Physical LIR.X0, lirOp)]
+        // Only print if this is the entry function
+        let printInstr = if isEntryFunc then [LIR.PrintInt (LIR.Physical LIR.X0)] else []
+        (moveToX0 @ printInstr, LIR.Ret)
 
     | MIR.Branch (condOp, trueLabel, falseLabel) ->
         // Convert MIR.Label to LIR.Label (just unwrap)
@@ -155,14 +185,14 @@ let selectTerminator (terminator: MIR.Terminator) : LIR.Instr list * LIR.Termina
 let convertLabel (MIR.Label lbl) : LIR.Label = lbl
 
 /// Convert MIR basic block to LIR basic block
-let selectBlock (block: MIR.BasicBlock) : LIR.BasicBlock =
+let selectBlock (block: MIR.BasicBlock) (isEntryFunc: bool) : LIR.BasicBlock =
     let lirLabel = convertLabel block.Label
 
     // Convert all instructions
     let lirInstrs = block.Instrs |> List.collect selectInstr
 
     // Convert terminator (may add instructions)
-    let (termInstrs, lirTerm) = selectTerminator block.Terminator
+    let (termInstrs, lirTerm) = selectTerminator block.Terminator isEntryFunc
 
     {
         LIR.Label = lirLabel
@@ -171,12 +201,12 @@ let selectBlock (block: MIR.BasicBlock) : LIR.BasicBlock =
     }
 
 /// Convert MIR CFG to LIR CFG
-let selectCFG (cfg: MIR.CFG) : LIR.CFG =
+let selectCFG (cfg: MIR.CFG) (isEntryFunc: bool) : LIR.CFG =
     let lirEntry = convertLabel cfg.Entry
     let lirBlocks =
         cfg.Blocks
         |> Map.toList
-        |> List.map (fun (label, block) -> (convertLabel label, selectBlock block))
+        |> List.map (fun (label, block) -> (convertLabel label, selectBlock block isEntryFunc))
         |> Map.ofList
 
     {
@@ -186,14 +216,22 @@ let selectCFG (cfg: MIR.CFG) : LIR.CFG =
 
 /// Convert MIR program to LIR
 let toLIR (program: MIR.Program) : LIR.Program =
-    let (MIR.Program cfg) = program
+    let (MIR.Program mirFuncs) = program
 
-    let lirCFG = selectCFG cfg
+    // Convert each MIR function to LIR
+    let lirFuncs =
+        mirFuncs
+        |> List.map (fun mirFunc ->
+            let isEntryFunc = mirFunc.Name = "_start"
+            let lirCFG = selectCFG mirFunc.CFG isEntryFunc
+            // Convert MIR VRegs to LIR Virtual registers for parameters
+            let lirParams = mirFunc.Params |> List.map (fun (MIR.VReg id) -> LIR.Virtual id)
+            {
+                LIR.Name = mirFunc.Name
+                LIR.Params = lirParams
+                LIR.CFG = lirCFG
+                LIR.StackSize = 0  // Will be determined by register allocation
+                LIR.UsedCalleeSaved = []  // Will be determined by register allocation
+            })
 
-    let func = {
-        LIR.Name = "_start"
-        LIR.CFG = lirCFG
-        LIR.StackSize = 0  // Will be determined by register allocation
-    }
-
-    LIR.Program [func]
+    LIR.Program lirFuncs

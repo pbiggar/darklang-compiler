@@ -58,6 +58,7 @@ type CExpr =
     | Prim of BinOp * Atom * Atom
     | UnaryPrim of UnaryOp * Atom
     | IfValue of cond:Atom * thenValue:Atom * elseValue:Atom  // If-expression that produces a value
+    | Call of funcName:string * args:Atom list  // Function call
 
 /// ANF expressions with explicit sequencing
 type AExpr =
@@ -65,8 +66,15 @@ type AExpr =
     | Return of Atom
     | If of cond:Atom * thenBranch:AExpr * elseBranch:AExpr
 
-/// ANF program
-type Program = Program of AExpr
+/// ANF function definition
+type Function = {
+    Name: string
+    Params: TempId list
+    Body: AExpr
+}
+
+/// ANF program (functions and optional main expression)
+type Program = Program of functions:Function list * main:AExpr option
 
 /// Fresh variable generator (functional style)
 type VarGen = VarGen of int

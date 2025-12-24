@@ -99,5 +99,5 @@ let rec parseAExpr (lineNum: int) (lines: string list) : Result<AExpr, string> =
 let parseANF (text: string) : Result<ANF.Program, string> =
     let lines = stripCommentsAndEmpty text
     match parseAExpr 1 lines with
-    | Ok expr -> Ok (ANF.Program expr)
+    | Ok expr -> Ok (ANF.Program ([], Some expr))  // No functions, just main expression
     | Error e -> Error e

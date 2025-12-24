@@ -121,6 +121,26 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
 
                     (exprWithBindings, varGen3))))
 
+    | AST.Call (funcName, args) ->
+        // Function call: convert all arguments to atoms
+        let rec convertArgs (argExprs: AST.Expr list) (vg: ANF.VarGen) (accAtoms: ANF.Atom list) (accBindings: (ANF.TempId * ANF.CExpr) list) : Result<ANF.Atom list * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+            match argExprs with
+            | [] -> Ok (List.rev accAtoms, accBindings, vg)
+            | arg :: rest ->
+                toAtom arg vg env
+                |> Result.bind (fun (argAtom, argBindings, vg') ->
+                    convertArgs rest vg' (argAtom :: accAtoms) (accBindings @ argBindings))
+
+        convertArgs args varGen [] []
+        |> Result.map (fun (argAtoms, argBindings, varGen1) ->
+            // Bind call result to fresh variable
+            let (resultVar, varGen2) = ANF.freshVar varGen1
+            let callExpr = ANF.Call (funcName, argAtoms)
+            let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
+            let exprWithBindings = wrapBindings argBindings finalExpr
+
+            (exprWithBindings, varGen2))
+
 /// Convert an AST expression to an atom, introducing let bindings as needed
 and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     match expr with
@@ -195,6 +215,76 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
                     let allBindings = condBindings @ thenBindings @ elseBindings @ [(tempVar, ifCExpr)]
                     Ok (ANF.Var tempVar, allBindings, varGen4))))
 
+    | AST.Call (funcName, args) ->
+        // Function call in atom position: convert all arguments to atoms
+        let rec convertArgs (argExprs: AST.Expr list) (vg: ANF.VarGen) (accAtoms: ANF.Atom list) (accBindings: (ANF.TempId * ANF.CExpr) list) : Result<ANF.Atom list * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+            match argExprs with
+            | [] -> Ok (List.rev accAtoms, accBindings, vg)
+            | arg :: rest ->
+                toAtom arg vg env
+                |> Result.bind (fun (argAtom, argBindings, vg') ->
+                    convertArgs rest vg' (argAtom :: accAtoms) (accBindings @ argBindings))
+
+        convertArgs args varGen [] []
+        |> Result.map (fun (argAtoms, argBindings, varGen1) ->
+            // Create a temporary for the call result
+            let (tempVar, varGen2) = ANF.freshVar varGen1
+            let callCExpr = ANF.Call (funcName, argAtoms)
+            // Return temp as atom with all bindings
+            let allBindings = argBindings @ [(tempVar, callCExpr)]
+            (ANF.Var tempVar, allBindings, varGen2))
+
 /// Wrap let bindings around an expression
 and wrapBindings (bindings: (ANF.TempId * ANF.CExpr) list) (expr: ANF.AExpr) : ANF.AExpr =
     List.foldBack (fun (var, cexpr) acc -> ANF.Let (var, cexpr, acc)) bindings expr
+
+/// Convert a function definition to ANF
+let convertFunction (funcDef: AST.FunctionDef) (varGen: ANF.VarGen) : Result<ANF.Function * ANF.VarGen, string> =
+    // Allocate TempIds for parameters
+    let (paramIds, varGen1) =
+        funcDef.Params
+        |> List.fold (fun (ids, vg) (_, _) ->
+            let (tempId, vg') = ANF.freshVar vg
+            (ids @ [tempId], vg')) ([], varGen)
+
+    // Build environment mapping param names to TempIds
+    let paramEnv =
+        List.zip (List.map fst funcDef.Params) paramIds
+        |> Map.ofList
+
+    // Convert body
+    toANF funcDef.Body varGen1 paramEnv
+    |> Result.map (fun (body, varGen2) ->
+        ({ Name = funcDef.Name; Params = paramIds; Body = body }, varGen2))
+
+/// Convert a program to ANF
+let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
+    let (AST.Program topLevels) = program
+    let varGen = ANF.VarGen 0
+
+    // Separate functions and expressions
+    let functions = topLevels |> List.choose (function AST.FunctionDef f -> Some f | _ -> None)
+    let expressions = topLevels |> List.choose (function AST.Expression e -> Some e | _ -> None)
+
+    // Convert all functions
+    let rec convertFunctions (funcs: AST.FunctionDef list) (vg: ANF.VarGen) (acc: ANF.Function list) : Result<ANF.Function list * ANF.VarGen, string> =
+        match funcs with
+        | [] -> Ok (List.rev acc, vg)
+        | func :: rest ->
+            convertFunction func vg
+            |> Result.bind (fun (anfFunc, vg') ->
+                convertFunctions rest vg' (anfFunc :: acc))
+
+    convertFunctions functions varGen []
+    |> Result.bind (fun (anfFuncs, varGen1) ->
+        // Convert main expression (if any)
+        match expressions with
+        | [expr] ->
+            toANF expr varGen1 Map.empty
+            |> Result.map (fun (anfExpr, _) ->
+                ANF.Program (anfFuncs, Some anfExpr))
+        | [] ->
+            // No main expression - just functions
+            Ok (ANF.Program (anfFuncs, None))
+        | _ ->
+            Error "Multiple top-level expressions not allowed")

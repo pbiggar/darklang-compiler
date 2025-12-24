@@ -143,6 +143,11 @@ let parseMIR (text: string) : Result<MIR.Program, string> =
                     Entry = entryLabel
                     Blocks = Map.ofList [(entryLabel, block)]
                 }
-                Ok (Program cfg)
+                let func = {
+                    Name = "_start"
+                    Params = []
+                    CFG = cfg
+                }
+                Ok (Program [func])
         | Choice1Of2 _ ->
             Error "Last instruction must be a terminator (ret)"

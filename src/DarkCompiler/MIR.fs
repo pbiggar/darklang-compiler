@@ -52,6 +52,7 @@ type Instr =
     | Mov of dest:VReg * src:Operand
     | BinOp of dest:VReg * op:BinOp * left:Operand * right:Operand
     | UnaryOp of dest:VReg * op:UnaryOp * src:Operand
+    | Call of dest:VReg * funcName:string * args:Operand list
 
 /// Basic block label
 type Label = Label of string
@@ -75,8 +76,15 @@ type CFG = {
     Blocks: Map<Label, BasicBlock>
 }
 
-/// MIR program
-type Program = Program of CFG
+/// MIR function with CFG
+type Function = {
+    Name: string
+    Params: VReg list
+    CFG: CFG
+}
+
+/// MIR program (list of functions)
+type Program = Program of Function list
 
 /// Fresh register generator
 type RegGen = RegGen of int

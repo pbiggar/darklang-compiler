@@ -27,6 +27,7 @@ type TypeError =
     | UndefinedVariable of name:string
     | MissingTypeAnnotation of context:string
     | InvalidOperation of op:string * types:Type list
+    | GenericError of string
 
 /// Pretty-print a type for error messages
 let rec typeToString (t: Type) : string =
@@ -52,6 +53,8 @@ let typeErrorToString (err: TypeError) : string =
     | InvalidOperation (op, types) ->
         let typesStr = types |> List.map typeToString |> String.concat ", "
         $"Invalid operation '{op}' on types: {typesStr}"
+    | GenericError msg ->
+        msg
 
 /// Type environment - maps variable names to their types
 type TypeEnv = Map<string, Type>
@@ -207,9 +210,90 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
                                 Error (TypeMismatch (expected, thenType, "if expression"))
                             | _ -> Ok thenType)))
 
-/// Type-check a program (Phase 0: just an expression)
-/// Returns the type of the expression or a type error
+    | Call (funcName, args) ->
+        // Function call: look up function signature, check arguments match
+        match Map.tryFind funcName env with
+        | Some (TFunction (paramTypes, returnType)) ->
+            // Check argument count
+            if List.length args <> List.length paramTypes then
+                Error (GenericError $"Function {funcName} expects {List.length paramTypes} arguments, got {List.length args}")
+            else
+                // Check each argument type
+                List.zip args paramTypes
+                |> List.fold (fun result (arg, expectedParamType) ->
+                    result |> Result.bind (fun () ->
+                        checkExpr arg env (Some expectedParamType)
+                        |> Result.bind (fun argType ->
+                            if argType = expectedParamType then
+                                Ok ()
+                            else
+                                Error (TypeMismatch (expectedParamType, argType, $"argument to {funcName}")))))
+                    (Ok ())
+                |> Result.bind (fun () ->
+                    // All arguments type-checked, return the return type
+                    match expectedType with
+                    | Some expected when expected <> returnType ->
+                        Error (TypeMismatch (expected, returnType, $"result of call to {funcName}"))
+                    | _ -> Ok returnType)
+        | Some other ->
+            Error (GenericError $"{funcName} is not a function (has type {typeToString other})")
+        | None ->
+            Error (UndefinedVariable funcName)
+
+/// Type-check a function definition
+let checkFunctionDef (funcDef: FunctionDef) (env: TypeEnv) : Result<unit, TypeError> =
+    // Build environment with parameters
+    let paramEnv =
+        funcDef.Params
+        |> List.fold (fun e (name, ty) -> Map.add name ty e) env
+
+    // Check body has return type
+    checkExpr funcDef.Body paramEnv (Some funcDef.ReturnType)
+    |> Result.bind (fun bodyType ->
+        if bodyType = funcDef.ReturnType then
+            Ok ()
+        else
+            Error (TypeMismatch (funcDef.ReturnType, bodyType, $"function {funcDef.Name} body")))
+
+/// Type-check a program
+/// Returns the type of the main expression or unit for function-only programs
 let checkProgram (program: Program) : Result<Type, TypeError> =
-    let (Program expr) = program
-    let emptyEnv = Map.empty
-    checkExpr expr emptyEnv None
+    let (Program topLevels) = program
+
+    // First pass: collect all function signatures
+    let funcSigs =
+        topLevels
+        |> List.choose (function
+            | FunctionDef funcDef ->
+                Some (funcDef.Name, (List.map snd funcDef.Params, funcDef.ReturnType))
+            | _ -> None)
+        |> Map.ofList
+
+    // Build environment with function signatures
+    let funcEnv =
+        funcSigs
+        |> Map.map (fun _ (paramTypes, returnType) -> TFunction (paramTypes, returnType))
+
+    // Second pass: type check all function definitions
+    let checkAllFunctions () =
+        topLevels
+        |> List.fold (fun result topLevel ->
+            result |> Result.bind (fun () ->
+                match topLevel with
+                | FunctionDef funcDef -> checkFunctionDef funcDef funcEnv
+                | Expression _ -> Ok ())) (Ok ())
+
+    // Type check functions first
+    checkAllFunctions ()
+    |> Result.bind (fun () ->
+        // Then type check main expression if any
+        let mainExpr = topLevels |> List.tryPick (function Expression e -> Some e | _ -> None)
+        match mainExpr with
+        | Some expr -> checkExpr expr funcEnv None
+        | None ->
+            // No main expression - just functions
+            // For now, require a "main" function with signature () -> int
+            match Map.tryFind "main" funcSigs with
+            | Some ([], TInt64) -> Ok TInt64  // main() : int
+            | Some _ -> Error (GenericError "main function must have signature () -> int")
+            | None -> Error (GenericError "Program must have either a main expression or a main() : int function"))

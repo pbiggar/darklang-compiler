@@ -33,6 +33,9 @@ type Token =
     | TIf          // if
     | TThen        // then
     | TElse        // else
+    | TDef         // def (function definition)
+    | TColon       // : (type annotation)
+    | TComma       // , (parameter separator)
     | TEquals      // = (assignment in let)
     | TEqEq        // == (equality comparison)
     | TNeq         // !=
@@ -60,6 +63,8 @@ let lex (input: string) : Result<Token list, string> =
         | '/' :: rest -> lexHelper rest (TSlash :: acc)
         | '(' :: rest -> lexHelper rest (TLParen :: acc)
         | ')' :: rest -> lexHelper rest (TRParen :: acc)
+        | ':' :: rest -> lexHelper rest (TColon :: acc)
+        | ',' :: rest -> lexHelper rest (TComma :: acc)
         | '=' :: '=' :: rest -> lexHelper rest (TEqEq :: acc)
         | '=' :: rest -> lexHelper rest (TEquals :: acc)
         | '!' :: '=' :: rest -> lexHelper rest (TNeq :: acc)
@@ -90,6 +95,7 @@ let lex (input: string) : Result<Token list, string> =
                 | "if" -> TIf
                 | "then" -> TThen
                 | "else" -> TElse
+                | "def" -> TDef
                 | "true" -> TTrue
                 | "false" -> TFalse
                 | _ -> TIdent ident
@@ -123,6 +129,73 @@ let lex (input: string) : Result<Token list, string> =
             Error $"Unexpected character: {c}"
 
     input |> Seq.toList |> fun cs -> lexHelper cs []
+
+/// Parse a type annotation
+let parseType (tokens: Token list) : Result<Type * Token list, string> =
+    match tokens with
+    | TIdent "int" :: rest -> Ok (TInt64, rest)
+    | TIdent "bool" :: rest -> Ok (TBool, rest)
+    | _ -> Error "Expected type annotation (int or bool)"
+
+/// Parse a single parameter: IDENT : type
+let parseParam (tokens: Token list) : Result<(string * Type) * Token list, string> =
+    match tokens with
+    | TIdent name :: TColon :: rest ->
+        parseType rest
+        |> Result.map (fun (ty, remaining) -> ((name, ty), remaining))
+    | _ -> Error "Expected parameter (name : type)"
+
+/// Parse parameter list: param (, param)*
+let rec parseParams (tokens: Token list) (acc: (string * Type) list) : Result<(string * Type) list * Token list, string> =
+    match tokens with
+    | TRParen :: _ ->
+        // End of parameters
+        Ok (List.rev acc, tokens)
+    | _ ->
+        // Parse a parameter
+        parseParam tokens
+        |> Result.bind (fun (param, remaining) ->
+            match remaining with
+            | TComma :: rest ->
+                // More parameters
+                parseParams rest (param :: acc)
+            | TRParen :: _ ->
+                // End of parameters
+                Ok (List.rev (param :: acc), remaining)
+            | _ -> Error "Expected ',' or ')' after parameter")
+
+/// Parse a function definition: def name(params) : type = body
+let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr * Token list, string>) : Result<FunctionDef * Token list, string> =
+    match tokens with
+    | TDef :: TIdent name :: TLParen :: rest ->
+        // Parse parameters
+        let paramsResult =
+            match rest with
+            | TRParen :: _ -> Ok ([], rest)  // No parameters
+            | _ -> parseParams rest []
+
+        paramsResult
+        |> Result.bind (fun (parameters, remaining) ->
+            match remaining with
+            | TRParen :: TColon :: rest' ->
+                // Parse return type
+                parseType rest'
+                |> Result.bind (fun (returnType, remaining') ->
+                    match remaining' with
+                    | TEquals :: rest'' ->
+                        // Parse body
+                        parseExpr rest''
+                        |> Result.map (fun (body, remaining'') ->
+                            let funcDef = {
+                                Name = name
+                                Params = parameters
+                                ReturnType = returnType
+                                Body = body
+                            }
+                            (funcDef, remaining''))
+                    | _ -> Error "Expected '=' after function return type")
+            | _ -> Error "Expected ':' after function parameters")
+    | _ -> Error "Expected function definition (def name(params) : type = body)"
 
 /// Parser: convert tokens to AST
 let parse (tokens: Token list) : Result<Program, string> =
@@ -261,7 +334,14 @@ let parse (tokens: Token list) : Result<Program, string> =
         | TInt n :: rest -> Ok (IntLiteral n, rest)
         | TTrue :: rest -> Ok (BoolLiteral true, rest)
         | TFalse :: rest -> Ok (BoolLiteral false, rest)
-        | TIdent name :: rest -> Ok (Var name, rest)
+        | TIdent name :: TLParen :: rest ->
+            // Function call: name(args)
+            parseCallArgs rest []
+            |> Result.map (fun (args, remaining) ->
+                (Call (name, args), remaining))
+        | TIdent name :: rest ->
+            // Variable reference
+            Ok (Var name, rest)
         | TLParen :: rest ->
             parseExpr rest
             |> Result.bind (fun (expr, remaining) ->
@@ -270,11 +350,53 @@ let parse (tokens: Token list) : Result<Program, string> =
                 | _ -> Error "Expected ')'")
         | _ -> Error "Expected expression"
 
-    parseExpr tokens
-    |> Result.bind (fun (expr, remaining) ->
-        match remaining with
-        | TEOF :: [] -> Ok (Program expr)
-        | _ -> Error "Unexpected tokens after expression")
+    and parseCallArgs (toks: Token list) (acc: Expr list) : Result<Expr list * Token list, string> =
+        match toks with
+        | TRParen :: rest ->
+            // End of arguments
+            Ok (List.rev acc, rest)
+        | _ ->
+            // Parse an argument expression
+            parseExpr toks
+            |> Result.bind (fun (expr, remaining) ->
+                match remaining with
+                | TComma :: rest ->
+                    // More arguments
+                    parseCallArgs rest (expr :: acc)
+                | TRParen :: rest ->
+                    // End of arguments
+                    Ok (List.rev (expr :: acc), rest)
+                | _ -> Error "Expected ',' or ')' after function argument")
+
+    // Parse top-level elements (functions or expressions)
+    let rec parseTopLevels (toks: Token list) (acc: TopLevel list) : Result<Program, string> =
+        match toks with
+        | TEOF :: [] ->
+            // End of input
+            if List.isEmpty acc then
+                Error "Empty program"
+            else
+                Ok (Program (List.rev acc))
+
+        | TDef :: _ ->
+            // Parse function definition
+            parseFunctionDef toks parseExpr
+            |> Result.bind (fun (funcDef, remaining) ->
+                parseTopLevels remaining (FunctionDef funcDef :: acc))
+
+        | _ ->
+            // Parse expression
+            parseExpr toks
+            |> Result.bind (fun (expr, remaining) ->
+                match remaining with
+                | TEOF :: [] ->
+                    // Single expression program
+                    Ok (Program (List.rev (Expression expr :: acc)))
+                | _ ->
+                    // More top-level definitions after expression not allowed for now
+                    Error "Unexpected tokens after expression (only function definitions can be followed by more definitions)")
+
+    parseTopLevels tokens []
 
 /// Parse a string directly to AST
 let parseString (input: string) : Result<Program, string> =

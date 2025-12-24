@@ -57,6 +57,20 @@ type Expr =
     | Let of name:string * value:Expr * body:Expr  // Let binding: let name = value in body
     | Var of string  // Variable reference
     | If of cond:Expr * thenBranch:Expr * elseBranch:Expr  // If expression: if cond then thenBranch else elseBranch
+    | Call of funcName:string * args:Expr list  // Function call: funcName(arg1, arg2, ...)
 
-/// Program is just an expression for now
-type Program = Program of Expr
+/// Function definition
+type FunctionDef = {
+    Name: string
+    Params: (string * Type) list  // Parameter names with REQUIRED type annotations
+    ReturnType: Type               // REQUIRED return type annotation
+    Body: Expr
+}
+
+/// Top-level program elements
+type TopLevel =
+    | FunctionDef of FunctionDef
+    | Expression of Expr
+
+/// Program is a list of top-level definitions (functions and/or expressions)
+type Program = Program of TopLevel list

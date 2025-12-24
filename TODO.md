@@ -3,44 +3,6 @@
 This TODO reflects the approved implementation plan for completing the Dark compiler.
 See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design.
 
-## ✅ Completed Phases
-
-### Phase 0: Type System Foundation ✅
-- ✅ Type definitions in AST.fs
-- ✅ 1.5_TypeChecking.fs pass implemented
-- ✅ Simple top-down type checker working
-- ✅ Type annotations in ANF.fs and MIR.fs
-- ✅ 51 DSL tests + 8 unit tests for type checking
-- ✅ Integrated into compiler pipeline
-
-### Phase 1: Variables (Let Bindings) ✅
-- ✅ Let and Var nodes in AST.fs
-- ✅ Parser supports let expressions
-- ✅ Variable environment in AST_to_ANF.fs
-- ✅ Shadowing handled correctly
-- ✅ 127 E2E tests in variables.e2e
-- ✅ Edge cases tested: shadowing, nested lets, complex expressions
-
-### Phase 2: Booleans & Comparisons ✅
-- ✅ BoolLiteral and all comparison operators in AST
-- ✅ Boolean tokens and operator precedence in Parser
-- ✅ Boolean types throughout ANF, MIR, LIR
-- ✅ ARM64 instructions: CMP, CSET, AND, ORR, MVN
-- ✅ generatePrintBool in Runtime.fs
-- ✅ Comparison code generation (CMP + CSET)
-- ✅ E2E tests in booleans.e2e
-- ✅ Comparisons (==, !=, <, >, <=, >=) working
-- ✅ Boolean operations (&&, ||, !) working
-
-### Phase 3: Control Flow (if/else) ✅
-- ✅ If expressions in AST.fs
-- ✅ Parser supports if/then/else
-- ✅ Basic control flow working
-- ✅ Type checker validates branch types match
-- ✅ If expressions tested in variables.e2e and booleans.e2e
-
-**Note**: CFG redesign deferred - current simple implementation works for if/else
-
 ## Phase 4: Functions (3-4 weeks)
 
 - [ ] Add FunctionDef and Call to AST.fs
@@ -128,7 +90,7 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 
 ## Current Status
 
-- ✅ Integers with full arithmetic (+, -, *, /)
+- ✅ Integers with full arithmetic (+, -, \*, /)
 - ✅ Booleans with comparisons (==, !=, <, >, <=, >=) and operations (&&, ||, !)
 - ✅ Variables (let bindings with shadowing support)
 - ✅ Control flow (if/then/else expressions, including in atom position)
@@ -160,9 +122,11 @@ These are features that exist but have known limitations or incomplete implement
 **Status**: ⚠️ Partial
 
 **Current Behavior:**
+
 - Booleans print as `1` (true) and `0` (false)
 
 **Missing:**
+
 - `generatePrintBool()` function in Runtime.fs
 - Should print "true"/"false" strings instead
 
@@ -174,17 +138,20 @@ These are features that exist but have known limitations or incomplete implement
 **Status**: ⚠️ Limited - Works for current features
 
 **Current Implementation:**
+
 - Simple greedy allocation: X1-X15 (15 registers)
 - No liveness analysis
 - No register spilling
 
 **Limitations:**
+
 - **Fails if >15 virtual registers needed**
 - No support for caller/callee-saved register conventions
 - Located in: `src/DarkCompiler/passes/5_RegisterAllocation.fs:11`
 
 **Impact**: High - **Required for Phase 4 (Functions)**
 **Missing:**
+
 - Liveness analysis across blocks
 - Register spilling to stack
 - Callee-saved register tracking
@@ -195,12 +162,14 @@ These are features that exist but have known limitations or incomplete implement
 **Status**: ⚠️ Defined but Not Implemented
 
 **Current State:**
+
 - Stack slots defined in LIR data structures
 - Code generation returns error: "Stack slots not yet supported"
 - Located in: `src/DarkCompiler/passes/6_CodeGen.fs:85,104,121,152`
 
 **Impact**: High - **Required for Phase 4 (Functions)**
 **Missing:**
+
 - Stack slot code generation
 - Stack frame management
 - Local variable storage
@@ -211,12 +180,14 @@ These are features that exist but have known limitations or incomplete implement
 **Status**: ⚠️ Simple Implementation
 
 **Current Implementation:**
+
 - Basic CFG with basic blocks
 - Supports if/else (including nested)
 - Supports if-expressions in atom position
 - Branch, Jump, and Ret terminators working
 
 **Deferred:**
+
 - Advanced CFG optimizations (dead code elimination, etc.)
 - Phi node optimization (currently uses simple register assignments)
 - Loop constructs (by design - will use recursion instead)
@@ -229,6 +200,7 @@ These are features that exist but have known limitations or incomplete implement
 **Status**: ⚠️ Partial
 
 **Current State:**
+
 - ✅ macOS Mach-O binary generation working
 - ✅ Linux ELF binary generation working
 - ❌ Cannot run E2E tests in Docker (generates macOS binaries on Linux host)
@@ -241,11 +213,13 @@ These are features that exist but have known limitations or incomplete implement
 **Status**: ⚠️ Simple - No Type Inference
 
 **Current Implementation:**
+
 - Type checking with explicit annotations
 - Top-down type propagation
 - Let bindings have optional type annotations
 
 **Limitations:**
+
 - No type inference (beyond simple cases)
 - Function signatures **require** explicit type annotations (planned for Phase 4)
 - Limited type error messages
@@ -258,6 +232,7 @@ These are features that exist but have known limitations or incomplete implement
 ## Summary: What Needs Completion for Phase 4 (Functions)
 
 **Critical (Must Have):**
+
 1. ✅ CFG structure - **DONE** (added in Phase 3)
 2. ❌ Register allocation with spilling - **TODO**
 3. ❌ Liveness analysis - **TODO**
@@ -266,6 +241,7 @@ These are features that exist but have known limitations or incomplete implement
 6. ❌ Function prologue/epilogue generation - **TODO**
 
 **Nice to Have:**
+
 1. Better boolean printing
 2. Improved type error messages
 3. Docker E2E test support
