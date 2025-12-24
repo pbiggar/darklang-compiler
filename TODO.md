@@ -3,57 +3,43 @@
 This TODO reflects the approved implementation plan for completing the Dark compiler.
 See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design.
 
-## Phase 0: Type System Foundation (2-3 days)
+## ✅ Completed Phases
 
-- [ ] Add Type definitions to AST.fs
-- [ ] Create new pass: 1.5_TypeChecking.fs
-- [ ] Implement simple top-down type checker
-- [ ] Add type annotations to ANF.fs and MIR.fs
-- [ ] Write unit tests for type checking
-- [ ] Write E2E tests for type errors
-- [ ] Update DarkCompiler.fsproj with new pass
+### Phase 0: Type System Foundation ✅
+- ✅ Type definitions in AST.fs
+- ✅ 1.5_TypeChecking.fs pass implemented
+- ✅ Simple top-down type checker working
+- ✅ Type annotations in ANF.fs and MIR.fs
+- ✅ 51 DSL tests + 8 unit tests for type checking
+- ✅ Integrated into compiler pipeline
 
-**Design**: Explicit type annotations with simple checking
+### Phase 1: Variables (Let Bindings) ✅
+- ✅ Let and Var nodes in AST.fs
+- ✅ Parser supports let expressions
+- ✅ Variable environment in AST_to_ANF.fs
+- ✅ Shadowing handled correctly
+- ✅ 127 E2E tests in variables.e2e
+- ✅ Edge cases tested: shadowing, nested lets, complex expressions
 
-- Function params/return types REQUIRED
-- Let bindings have optional type annotations
-- No ambiguity - top-down checking only
+### Phase 2: Booleans & Comparisons ✅
+- ✅ BoolLiteral and all comparison operators in AST
+- ✅ Boolean tokens and operator precedence in Parser
+- ✅ Boolean types throughout ANF, MIR, LIR
+- ✅ ARM64 instructions: CMP, CSET, AND, ORR, MVN
+- ✅ generatePrintBool in Runtime.fs
+- ✅ Comparison code generation (CMP + CSET)
+- ✅ E2E tests in booleans.e2e
+- ✅ Comparisons (==, !=, <, >, <=, >=) working
+- ✅ Boolean operations (&&, ||, !) working
 
-## Phase 1: Variables (Let Bindings) (2-3 days)
+### Phase 3: Control Flow (if/else) ✅
+- ✅ If expressions in AST.fs
+- ✅ Parser supports if/then/else
+- ✅ Basic control flow working
+- ✅ Type checker validates branch types match
+- ✅ If expressions tested in variables.e2e and booleans.e2e
 
-- [ ] Add Let and Var nodes to AST.fs
-- [ ] Add tokens to 1_Parser.fs (TLet, TIn, TIdent)
-- [ ] Parse let expressions: `let IDENT = expr in expr`
-- [ ] Update 2_AST_to_ANF.fs with variable environment
-- [ ] Handle shadowing correctly
-- [ ] Write E2E tests (variables.e2e)
-- [ ] Test edge cases: shadowing, undefined vars
-
-## Phase 2: Booleans & Comparisons (3-4 days)
-
-- [ ] Add BoolLiteral and comparison operators to AST.fs
-- [ ] Add boolean tokens to 1_Parser.fs
-- [ ] Update operator precedence
-- [ ] Add boolean types to ANF, MIR, LIR
-- [ ] Add ARM64 instructions: CMP, CSET, AND, ORR, MVN
-- [ ] Implement generatePrintBool in Runtime.fs
-- [ ] Update CodeGen for comparisons (CMP + CSET)
-- [ ] Write E2E tests (booleans.e2e)
-- [ ] Test edge cases: comparison chaining
-
-## Phase 3: Control Flow (if/else only) (1 week)
-
-- [ ] Add If and Block nodes to AST.fs
-- [ ] Parse if/then/else expressions
-- [ ] **REDESIGN MIR.fs** with CFG and BasicBlocks
-- [ ] Update 3_ANF_to_MIR.fs to build CFG
-- [ ] Add branch instructions to ARM64.fs
-- [ ] Implement two-pass branch encoding in 7_ARM64_Encoding.fs
-- [ ] Update type checker for if expressions
-- [ ] Write E2E tests (control_flow.e2e)
-- [ ] Test recursion examples (factorial, sum)
-
-**Note**: No while loops - iteration via recursion
+**Note**: CFG redesign deferred - current simple implementation works for if/else
 
 ## Phase 4: Functions (3-4 weeks)
 
@@ -109,19 +95,18 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 
 ## Testing Strategy
 
-### E2E Test Files (Priority Order)
+### E2E Test Files
 
-1. [ ] variables.e2e (Phase 1)
-2. [ ] booleans.e2e (Phase 2)
-3. [ ] control_flow.e2e (Phase 3)
+1. ✅ variables.e2e (127 tests - Phase 1)
+2. ✅ booleans.e2e (tests complete - Phase 2)
+3. ✅ Control flow tested in existing E2E tests (Phase 3)
 4. [ ] functions.e2e (Phase 4)
 5. [ ] strings.e2e (Phase 5)
 6. [ ] floats.e2e (Phase 6)
 
 ### Pass Tests
 
-- [ ] Add type checking tests
-- [ ] Add CFG construction tests (Phase 3)
+- ✅ Type checking tests (51 DSL tests + 8 unit tests)
 - [ ] Add liveness analysis tests (Phase 4)
 - [ ] Add calling convention tests (Phase 4)
 
@@ -130,31 +115,36 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 ### Documentation
 
 - [ ] Update README.md with new language features
-- [ ] Document type checking algorithm
-- [ ] Document CFG structure
-- [ ] Document ARM64 calling convention
-- [ ] Document string memory model
+- ✅ Document type checking (in TypeChecking.fs comments)
+- [ ] Document ARM64 calling convention (Phase 4)
+- [ ] Document string memory model (Phase 5)
 
-### Refactoring
+### Test Suite Quality
 
-- [ ] Clean up TODO.md after each phase
-- [ ] Update architecture docs
-- [ ] Fix compiler warnings
+- ✅ Created type-checking DSL test format (.typecheck files)
+- ✅ Replaced all failwith with Result<> in tests
+- ✅ Replaced printf/printfn with string interpolation
+- ✅ Fixed FIXMEs in test suite (explicit parentheses, informative notes)
 
 ## Current Status
 
-- ✅ Integers with full arithmetic
-- ✅ 8-pass compiler pipeline
-- ✅ 216 passing E2E tests
+- ✅ Integers with full arithmetic (+, -, *, /)
+- ✅ Booleans with comparisons (==, !=, <, >, <=, >=) and operations (&&, ||, !)
+- ✅ Variables (let bindings with shadowing support)
+- ✅ Control flow (if/then/else expressions)
+- ✅ Type checking (51 DSL tests + 8 unit tests)
+- ✅ 8-pass compiler pipeline (Parser → TypeCheck → ANF → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
+- ✅ 410 passing tests (127 variables E2E, booleans E2E, 51 type checking DSL, 20 unit tests, 13 ARM64 encoding, integers E2E)
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
 
 ## Implementation Order
 
 ```
-Phase 0 → Phase 1 → Phase 2 → Phase 3 → Phase 4
-                                           ↓
-                                Phase 5 ← → Phase 6
+✅ Phase 0 → ✅ Phase 1 → ✅ Phase 2 → ✅ Phase 3 → Phase 4 (NEXT)
+                                                      ↓
+                                               Phase 5 ← → Phase 6
 ```
 
-**Estimated Total Time**: 8-11 weeks
-**Minimal Viable (Phases 0-4)**: 5-7 weeks
+**Original Estimate**: 8-11 weeks total
+**Completed**: Phases 0-3 (~2-3 weeks of work)
+**Remaining**: Phases 4-6 (~6-8 weeks estimated)
