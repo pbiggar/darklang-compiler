@@ -161,9 +161,10 @@ let createExecutable (machineCode: uint32 list) : byte array =
     serializeElf binary
 
 /// Write bytes to file (Linux - no code signing needed)
-let writeToFile (path: string) (bytes: byte array) : unit =
+let writeToFile (path: string) (bytes: byte array) : Result<unit, string> =
     System.IO.File.WriteAllBytes(path, bytes)
     // Make executable using Unix file mode
     let permissions = System.IO.File.GetUnixFileMode(path)
     System.IO.File.SetUnixFileMode(path, permissions ||| System.IO.UnixFileMode.UserExecute)
     // No code signing needed on Linux!
+    Ok ()

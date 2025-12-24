@@ -34,7 +34,11 @@ module Runtime
 ///
 /// Uses platform-specific syscall numbers from Platform module
 let generatePrintInt () : ARM64.Instr list =
-    let os = Platform.detectOS ()
+    // Platform detection at runtime - if it fails, default to Linux (most common for development)
+    let os =
+        match Platform.detectOS () with
+        | Ok platform -> platform
+        | Error _ -> Platform.Linux  // Fallback to Linux if platform detection fails
     let syscalls = Platform.getSyscallNumbers os
     [
         // Allocate 32 bytes on stack for buffer (plenty for 64-bit number + sign + newline)

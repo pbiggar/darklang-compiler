@@ -29,10 +29,10 @@ type Token =
     | TEOF
 
 /// Lexer: convert string to list of tokens
-let lex (input: string) : Token list =
-    let rec lexHelper (chars: char list) (acc: Token list) : Token list =
+let lex (input: string) : Result<Token list, string> =
+    let rec lexHelper (chars: char list) (acc: Token list) : Result<Token list, string> =
         match chars with
-        | [] -> List.rev (TEOF :: acc)
+        | [] -> Ok (List.rev (TEOF :: acc))
         | ' ' :: rest | '\t' :: rest | '\n' :: rest | '\r' :: rest ->
             // Skip whitespace
             lexHelper rest acc
@@ -44,7 +44,7 @@ let lex (input: string) : Token list =
         | ')' :: rest -> lexHelper rest (TRParen :: acc)
         | c :: _ when System.Char.IsDigit(c) ->
             // Parse integer
-            let rec parseDigits (cs: char list) (digits: char list) : int64 * char list =
+            let rec parseDigits (cs: char list) (digits: char list) : Result<int64 * char list, string> =
                 match cs with
                 | d :: rest when System.Char.IsDigit(d) ->
                     parseDigits rest (d :: digits)
@@ -52,7 +52,7 @@ let lex (input: string) : Token list =
                     let numStr = System.String(List.rev digits |> List.toArray)
                     // Try to parse as int64
                     match System.Int64.TryParse(numStr) with
-                    | (true, value) -> (value, cs)
+                    | (true, value) -> Ok (value, cs)
                     | (false, _) ->
                         // Check for INT64_MIN special case: "9223372036854775808"
                         // This value is > INT64_MAX but equals |INT64_MIN|
@@ -60,68 +60,78 @@ let lex (input: string) : Token list =
                         if numStr = "9223372036854775808" then
                             // Return INT64_MIN directly - this is a special sentinel
                             // The parser will only accept this when it's negated
-                            (System.Int64.MinValue, cs)
+                            Ok (System.Int64.MinValue, cs)
                         else
-                            failwith $"Integer literal too large: {numStr}"
+                            Error $"Integer literal too large: {numStr}"
 
-            let (num, remaining) = parseDigits chars []
-            lexHelper remaining (TInt num :: acc)
+            match parseDigits chars [] with
+            | Ok (num, remaining) -> lexHelper remaining (TInt num :: acc)
+            | Error err -> Error err
         | c :: _ ->
-            failwith $"Unexpected character: {c}"
+            Error $"Unexpected character: {c}"
 
     input |> Seq.toList |> fun cs -> lexHelper cs []
 
 /// Parser: convert tokens to AST
-let parse (tokens: Token list) : Program =
+let parse (tokens: Token list) : Result<Program, string> =
     // Recursive descent parser with operator precedence
-    let rec parseExpr (toks: Token list) : Expr * Token list =
+    let rec parseExpr (toks: Token list) : Result<Expr * Token list, string> =
         parseAdditive toks
 
-    and parseAdditive (toks: Token list) : Expr * Token list =
-        let (left, remaining) = parseMultiplicative toks
-        let rec parseAdditiveRest (leftExpr: Expr) (toks: Token list) : Expr * Token list =
-            match toks with
-            | TPlus :: rest ->
-                let (right, remaining') = parseMultiplicative rest
-                parseAdditiveRest (BinOp (Add, leftExpr, right)) remaining'
-            | TMinus :: rest ->
-                let (right, remaining') = parseMultiplicative rest
-                parseAdditiveRest (BinOp (Sub, leftExpr, right)) remaining'
-            | _ -> (leftExpr, toks)
-        parseAdditiveRest left remaining
+    and parseAdditive (toks: Token list) : Result<Expr * Token list, string> =
+        parseMultiplicative toks
+        |> Result.bind (fun (left, remaining) ->
+            let rec parseAdditiveRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
+                match toks with
+                | TPlus :: rest ->
+                    parseMultiplicative rest
+                    |> Result.bind (fun (right, remaining') ->
+                        parseAdditiveRest (BinOp (Add, leftExpr, right)) remaining')
+                | TMinus :: rest ->
+                    parseMultiplicative rest
+                    |> Result.bind (fun (right, remaining') ->
+                        parseAdditiveRest (BinOp (Sub, leftExpr, right)) remaining')
+                | _ -> Ok (leftExpr, toks)
+            parseAdditiveRest left remaining)
 
-    and parseMultiplicative (toks: Token list) : Expr * Token list =
-        let (left, remaining) = parsePrimary toks
-        let rec parseMultiplicativeRest (leftExpr: Expr) (toks: Token list) : Expr * Token list =
-            match toks with
-            | TStar :: rest ->
-                let (right, remaining') = parsePrimary rest
-                parseMultiplicativeRest (BinOp (Mul, leftExpr, right)) remaining'
-            | TSlash :: rest ->
-                let (right, remaining') = parsePrimary rest
-                parseMultiplicativeRest (BinOp (Div, leftExpr, right)) remaining'
-            | _ -> (leftExpr, toks)
-        parseMultiplicativeRest left remaining
+    and parseMultiplicative (toks: Token list) : Result<Expr * Token list, string> =
+        parsePrimary toks
+        |> Result.bind (fun (left, remaining) ->
+            let rec parseMultiplicativeRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
+                match toks with
+                | TStar :: rest ->
+                    parsePrimary rest
+                    |> Result.bind (fun (right, remaining') ->
+                        parseMultiplicativeRest (BinOp (Mul, leftExpr, right)) remaining')
+                | TSlash :: rest ->
+                    parsePrimary rest
+                    |> Result.bind (fun (right, remaining') ->
+                        parseMultiplicativeRest (BinOp (Div, leftExpr, right)) remaining')
+                | _ -> Ok (leftExpr, toks)
+            parseMultiplicativeRest left remaining)
 
-    and parsePrimary (toks: Token list) : Expr * Token list =
+    and parsePrimary (toks: Token list) : Result<Expr * Token list, string> =
         match toks with
-        | TInt n :: rest -> (IntLiteral n, rest)
+        | TInt n :: rest -> Ok (IntLiteral n, rest)
         | TMinus :: rest ->
             // Unary negation
-            let (expr, remaining) = parsePrimary rest
-            (Neg expr, remaining)
+            parsePrimary rest
+            |> Result.map (fun (expr, remaining) -> (Neg expr, remaining))
         | TLParen :: rest ->
-            let (expr, remaining) = parseExpr rest
-            match remaining with
-            | TRParen :: rest' -> (expr, rest')
-            | _ -> failwith "Expected ')'"
-        | _ -> failwith "Expected expression"
+            parseExpr rest
+            |> Result.bind (fun (expr, remaining) ->
+                match remaining with
+                | TRParen :: rest' -> Ok (expr, rest')
+                | _ -> Error "Expected ')'")
+        | _ -> Error "Expected expression"
 
-    let (expr, remaining) = parseExpr tokens
-    match remaining with
-    | TEOF :: [] -> Program expr
-    | _ -> failwith "Unexpected tokens after expression"
+    parseExpr tokens
+    |> Result.bind (fun (expr, remaining) ->
+        match remaining with
+        | TEOF :: [] -> Ok (Program expr)
+        | _ -> Error "Unexpected tokens after expression")
 
 /// Parse a string directly to AST
-let parseString (input: string) : Program =
-    input |> lex |> parse
+let parseString (input: string) : Result<Program, string> =
+    lex input
+    |> Result.bind parse

@@ -273,15 +273,20 @@ let loadLIR2ARM64Test (path: string) : Result<LIR.Program * ARM64.Instr list, st
 
 /// Run LIR→ARM64 test
 let runLIR2ARM64Test (input: LIR.Program) (expected: ARM64.Instr list) : PassTestResult =
-    let actual = CodeGen.generateARM64 input
-
-    if actual = expected then
-        { Success = true
-          Message = "Test passed"
-          Expected = None
-          Actual = None }
-    else
+    match CodeGen.generateARM64 input with
+    | Error err ->
         { Success = false
-          Message = "Output mismatch"
+          Message = $"Code generation failed: {err}"
           Expected = Some (prettyPrintARM64 expected)
-          Actual = Some (prettyPrintARM64 actual) }
+          Actual = None }
+    | Ok actual ->
+        if actual = expected then
+            { Success = true
+              Message = "Test passed"
+              Expected = None
+              Actual = None }
+        else
+            { Success = false
+              Message = "Output mismatch"
+              Expected = Some (prettyPrintARM64 expected)
+              Actual = Some (prettyPrintARM64 actual) }

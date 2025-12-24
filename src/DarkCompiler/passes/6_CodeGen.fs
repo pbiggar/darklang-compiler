@@ -41,10 +41,10 @@ let lirPhysRegToARM64Reg (physReg: LIR.PhysReg) : ARM64.Reg =
     | LIR.SP -> ARM64.SP
 
 /// Convert LIR.Reg to ARM64.Reg (assumes physical registers only)
-let lirRegToARM64Reg (reg: LIR.Reg) : ARM64.Reg =
+let lirRegToARM64Reg (reg: LIR.Reg) : Result<ARM64.Reg, string> =
     match reg with
-    | LIR.Physical physReg -> lirPhysRegToARM64Reg physReg
-    | LIR.Virtual _ -> failwith "Virtual registers should have been allocated"
+    | LIR.Physical physReg -> Ok (lirPhysRegToARM64Reg physReg)
+    | LIR.Virtual vreg -> Error $"Virtual register {vreg} should have been allocated"
 
 /// Generate ARM64 instructions to load an immediate into a register
 let loadImmediate (dest: ARM64.Reg) (value: int64) : ARM64.Instr list =
@@ -70,80 +70,102 @@ let loadImmediate (dest: ARM64.Reg) (value: int64) : ARM64.Instr list =
     instrs
 
 /// Convert LIR instruction to ARM64 instructions
-let convertInstr (instr: LIR.Instr) : ARM64.Instr list =
+let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
     match instr with
     | LIR.Mov (dest, src) ->
-        let destReg = lirRegToARM64Reg dest
-        match src with
-        | LIR.Imm value ->
-            loadImmediate destReg value
-        | LIR.Reg srcReg ->
-            let srcARM64 = lirRegToARM64Reg srcReg
-            [ARM64.MOV_reg (destReg, srcARM64)]
-        | LIR.StackSlot _ ->
-            failwith "Stack slots not yet supported"
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            match src with
+            | LIR.Imm value ->
+                Ok (loadImmediate destReg value)
+            | LIR.Reg srcReg ->
+                lirRegToARM64Reg srcReg
+                |> Result.map (fun srcARM64 -> [ARM64.MOV_reg (destReg, srcARM64)])
+            | LIR.StackSlot _ ->
+                Error "Stack slots not yet supported")
 
     | LIR.Add (dest, left, right) ->
-        let destReg = lirRegToARM64Reg dest
-        let leftReg = lirRegToARM64Reg left
-        match right with
-        | LIR.Imm value when value >= 0L && value < 4096L ->
-            // Can use immediate ADD
-            [ARM64.ADD_imm (destReg, leftReg, uint16 value)]
-        | LIR.Imm value ->
-            // Need to load immediate into register first
-            let tempReg = ARM64.X9  // Use X9 as temp
-            loadImmediate tempReg value @ [ARM64.ADD_reg (destReg, leftReg, tempReg)]
-        | LIR.Reg rightReg ->
-            let rightARM64 = lirRegToARM64Reg rightReg
-            [ARM64.ADD_reg (destReg, leftReg, rightARM64)]
-        | LIR.StackSlot _ ->
-            failwith "Stack slots not yet supported"
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg left
+            |> Result.bind (fun leftReg ->
+                match right with
+                | LIR.Imm value when value >= 0L && value < 4096L ->
+                    // Can use immediate ADD
+                    Ok [ARM64.ADD_imm (destReg, leftReg, uint16 value)]
+                | LIR.Imm value ->
+                    // Need to load immediate into register first
+                    let tempReg = ARM64.X9  // Use X9 as temp
+                    Ok (loadImmediate tempReg value @ [ARM64.ADD_reg (destReg, leftReg, tempReg)])
+                | LIR.Reg rightReg ->
+                    lirRegToARM64Reg rightReg
+                    |> Result.map (fun rightARM64 -> [ARM64.ADD_reg (destReg, leftReg, rightARM64)])
+                | LIR.StackSlot _ ->
+                    Error "Stack slots not yet supported"))
 
     | LIR.Sub (dest, left, right) ->
-        let destReg = lirRegToARM64Reg dest
-        let leftReg = lirRegToARM64Reg left
-        match right with
-        | LIR.Imm value when value >= 0L && value < 4096L ->
-            [ARM64.SUB_imm (destReg, leftReg, uint16 value)]
-        | LIR.Imm value ->
-            let tempReg = ARM64.X9
-            loadImmediate tempReg value @ [ARM64.SUB_reg (destReg, leftReg, tempReg)]
-        | LIR.Reg rightReg ->
-            let rightARM64 = lirRegToARM64Reg rightReg
-            [ARM64.SUB_reg (destReg, leftReg, rightARM64)]
-        | LIR.StackSlot _ ->
-            failwith "Stack slots not yet supported"
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg left
+            |> Result.bind (fun leftReg ->
+                match right with
+                | LIR.Imm value when value >= 0L && value < 4096L ->
+                    Ok [ARM64.SUB_imm (destReg, leftReg, uint16 value)]
+                | LIR.Imm value ->
+                    let tempReg = ARM64.X9
+                    Ok (loadImmediate tempReg value @ [ARM64.SUB_reg (destReg, leftReg, tempReg)])
+                | LIR.Reg rightReg ->
+                    lirRegToARM64Reg rightReg
+                    |> Result.map (fun rightARM64 -> [ARM64.SUB_reg (destReg, leftReg, rightARM64)])
+                | LIR.StackSlot _ ->
+                    Error "Stack slots not yet supported"))
 
     | LIR.Mul (dest, left, right) ->
-        let destReg = lirRegToARM64Reg dest
-        let leftReg = lirRegToARM64Reg left
-        let rightReg = lirRegToARM64Reg right
-        [ARM64.MUL (destReg, leftReg, rightReg)]
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg left
+            |> Result.bind (fun leftReg ->
+                lirRegToARM64Reg right
+                |> Result.map (fun rightReg -> [ARM64.MUL (destReg, leftReg, rightReg)])))
 
     | LIR.Sdiv (dest, left, right) ->
-        let destReg = lirRegToARM64Reg dest
-        let leftReg = lirRegToARM64Reg left
-        let rightReg = lirRegToARM64Reg right
-        [ARM64.SDIV (destReg, leftReg, rightReg)]
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg left
+            |> Result.bind (fun leftReg ->
+                lirRegToARM64Reg right
+                |> Result.map (fun rightReg -> [ARM64.SDIV (destReg, leftReg, rightReg)])))
 
     | LIR.PrintInt reg ->
         // Value to print should be in X0
-        let regARM64 = lirRegToARM64Reg reg
-        if regARM64 <> ARM64.X0 then
-            // Move to X0 if not already there
-            [ARM64.MOV_reg (ARM64.X0, regARM64)] @ Runtime.generatePrintInt ()
-        else
-            Runtime.generatePrintInt ()
+        lirRegToARM64Reg reg
+        |> Result.map (fun regARM64 ->
+            if regARM64 <> ARM64.X0 then
+                // Move to X0 if not already there
+                [ARM64.MOV_reg (ARM64.X0, regARM64)] @ Runtime.generatePrintInt ()
+            else
+                Runtime.generatePrintInt ())
 
     | LIR.Ret ->
-        [ARM64.RET]
+        Ok [ARM64.RET]
 
 /// Convert LIR function to ARM64 instructions
-let convertFunction (func: LIR.Function) : ARM64.Instr list =
-    func.Body |> List.collect convertInstr
+let convertFunction (func: LIR.Function) : Result<ARM64.Instr list, string> =
+    func.Body
+    |> List.map convertInstr
+    |> List.fold (fun acc result ->
+        match acc, result with
+        | Ok instrs, Ok newInstrs -> Ok (instrs @ newInstrs)
+        | Error err, _ -> Error err
+        | _, Error err -> Error err) (Ok [])
 
 /// Convert LIR program to ARM64 instructions
-let generateARM64 (program: LIR.Program) : ARM64.Instr list =
+let generateARM64 (program: LIR.Program) : Result<ARM64.Instr list, string> =
     let (LIR.Program functions) = program
-    functions |> List.collect convertFunction
+    functions
+    |> List.map convertFunction
+    |> List.fold (fun acc result ->
+        match acc, result with
+        | Ok instrs, Ok newInstrs -> Ok (instrs @ newInstrs)
+        | Error err, _ -> Error err
+        | _, Error err -> Error err) (Ok [])

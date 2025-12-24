@@ -142,10 +142,10 @@ let parseArgs (argv: string array) : Result<CliOptions, string> =
                 | 'o' :: rest when rest.Length > 0 ->
                     // -ovalue format
                     let value = System.String(Array.ofList rest)
-                    expandFlags [] (sprintf "-o%s" value :: acc)
+                    expandFlags [] ($"-o{value}" :: acc)
                 | c :: _ ->
                     // Invalid flag character
-                    expandFlags [] (sprintf "-%c" c :: acc)
+                    expandFlags [] ($"-{c}" :: acc)
 
             let expandedFlags = expandFlags (Array.toList chars) [] |> List.rev
             parseFlags (expandedFlags @ rest) opts lastVerbosity
@@ -153,12 +153,12 @@ let parseArgs (argv: string array) : Result<CliOptions, string> =
         | arg :: rest when not (arg.StartsWith("-")) ->
             // Non-flag argument - this is the filename or expression
             if opts.Argument.IsSome then
-                Error (sprintf "Unexpected argument: %s" arg)
+                Error $"Unexpected argument: {arg}"
             else
                 parseFlags rest { opts with Argument = Some arg } lastVerbosity
 
         | flag :: _ ->
-            Error (sprintf "Unknown flag: %s" flag)
+            Error $"Unknown flag: {flag}"
 
     parseFlags (Array.toList argv) defaultOptions Normal
 
@@ -192,11 +192,21 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) : 
         exit 1
 
     // Write to file
-    let os = Platform.detectOS ()
-    match os with
-    | Platform.MacOS -> Binary_Generation_MachO.writeToFile outputPath result.Binary
-    | Platform.Linux -> Binary_Generation_ELF.writeToFile outputPath result.Binary
-    if showNormal then printfn "Successfully wrote %d bytes to %s" result.Binary.Length outputPath
+    match Platform.detectOS () with
+    | Error err ->
+        eprintfn "Platform detection failed: %s" err
+        exit 1
+    | Ok os ->
+        let writeResult =
+            match os with
+            | Platform.MacOS -> Binary_Generation_MachO.writeToFile outputPath result.Binary
+            | Platform.Linux -> Binary_Generation_ELF.writeToFile outputPath result.Binary
+        match writeResult with
+        | Error err ->
+            eprintfn "Failed to write binary: %s" err
+            exit 1
+        | Ok () ->
+            if showNormal then printfn "Successfully wrote %d bytes to %s" result.Binary.Length outputPath
 
 /// Run an expression (compile to temp and execute)
 let run (source: string) (verbosity: VerbosityLevel) : int =
@@ -292,7 +302,7 @@ let main argv =
                         else
                             Ok source
                     with ex ->
-                        Error (sprintf "Failed to read from stdin: %s" ex.Message)
+                        Error $"Failed to read from stdin: {ex.Message}"
 
                 | Some arg when options.IsExpression ->
                     // Inline expression
@@ -301,12 +311,12 @@ let main argv =
                 | Some filepath ->
                     // Read from file
                     if not (File.Exists filepath) then
-                        Error (sprintf "File not found: %s" filepath)
+                        Error $"File not found: {filepath}"
                     else
                         try
                             Ok (File.ReadAllText filepath)
                         with ex ->
-                            Error (sprintf "Failed to read file: %s" ex.Message)
+                            Error $"Failed to read file: {ex.Message}"
 
                 | None ->
                     Error "No source provided"

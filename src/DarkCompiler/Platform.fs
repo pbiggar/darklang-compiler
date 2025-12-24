@@ -23,13 +23,13 @@ type SyscallNumbers = {
 }
 
 /// Get the current operating system
-let detectOS () : OS =
+let detectOS () : Result<OS, string> =
     if System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX) then
-        MacOS
+        Ok MacOS
     elif System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux) then
-        Linux
+        Ok Linux
     else
-        failwith "Unsupported operating system. Only macOS and Linux ARM64 are supported."
+        Error "Unsupported operating system. Only macOS and Linux ARM64 are supported."
 
 /// Get syscall numbers for the current platform
 let getSyscallNumbers (os: OS) : SyscallNumbers =

@@ -433,7 +433,7 @@ let createExecutable (machineCode: uint32 list) : byte array =
     serializeMachO binary
 
 /// Write bytes to file and sign it
-let writeToFile (path: string) (bytes: byte array) : unit =
+let writeToFile (path: string) (bytes: byte array) : Result<unit, string> =
     System.IO.File.WriteAllBytes(path, bytes)
     // Make executable
     let permissions = System.IO.File.GetUnixFileMode(path)
@@ -442,7 +442,7 @@ let writeToFile (path: string) (bytes: byte array) : unit =
     // Code sign with adhoc signature (required for macOS to execute)
     let startInfo = System.Diagnostics.ProcessStartInfo()
     startInfo.FileName <- "codesign"
-    startInfo.Arguments <- sprintf "-s - \"%s\"" path
+    startInfo.Arguments <- $"-s - \"{path}\""
     startInfo.RedirectStandardOutput <- true
     startInfo.RedirectStandardError <- true
     startInfo.UseShellExecute <- false
@@ -452,4 +452,6 @@ let writeToFile (path: string) (bytes: byte array) : unit =
 
     if proc.ExitCode <> 0 then
         let stderr = proc.StandardError.ReadToEnd()
-        failwith (sprintf "Code signing failed: %s" stderr)
+        Error $"Code signing failed: {stderr}"
+    else
+        Ok ()
