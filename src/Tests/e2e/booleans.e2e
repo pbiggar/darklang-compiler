@@ -1,0 +1,145 @@
+// Boolean Tests - Boolean literals, comparisons, and logical operations
+//
+// Tests covering:
+// - Boolean literals
+// - Integer comparisons
+// - Boolean operations (&&, ||, !)
+// - Let bindings with booleans
+
+
+// ===================================================================
+// Boolean Literals
+// ===================================================================
+
+true = 1
+false = 0
+
+
+// ===================================================================
+// Integer Comparisons
+// ===================================================================
+
+// Equality
+1 == 1 = 1
+1 == 2 = 0
+5 == 5 = 1
+0 == 0 = 1
+42 == 42 = 1
+
+// Inequality
+1 != 2 = 1
+5 != 5 = 0
+0 != 1 = 1
+42 != 0 = 1
+
+// Less than
+1 < 2 = 1
+2 < 1 = 0
+5 < 5 = 0
+0 < 1 = 1
+10 < 20 = 1
+
+// Greater than
+2 > 1 = 1
+1 > 2 = 0
+5 > 5 = 0
+20 > 10 = 1
+
+// Less than or equal
+1 <= 2 = 1
+2 <= 2 = 1
+3 <= 2 = 0
+5 <= 10 = 1
+
+// Greater than or equal
+2 >= 1 = 1
+2 >= 2 = 1
+1 >= 2 = 0
+10 >= 5 = 1
+
+
+// ===================================================================
+// Boolean Operations
+// ===================================================================
+
+// AND (&&)
+true && true = 1
+true && false = 0
+false && true = 0
+false && false = 0
+
+// OR (||)
+true || true = 1
+true || false = 1
+false || true = 1
+false || false = 0
+
+// NOT (!)
+!true = 0
+!false = 1
+!!true = 1
+!!false = 0
+
+
+// ===================================================================
+// Combined Comparisons and Boolean Operations
+// ===================================================================
+
+// Comparisons with boolean operators
+1 == 1 && 2 == 2 = 1
+1 == 1 && 1 == 2 = 0
+1 == 2 || 2 == 2 = 1
+1 == 2 || 3 == 4 = 0
+
+// Negated comparisons
+!(1 == 1) = 0
+!(1 == 2) = 1
+!(5 < 3) = 1
+!(5 > 3) = 0
+
+
+// ===================================================================
+// Let Bindings with Booleans
+// ===================================================================
+
+let x = true in x = 1
+let x = false in x = 0
+let x = 1 == 1 in x = 1
+let x = 1 == 2 in x = 0
+let x = 5 < 10 in x = 1
+
+// Multiple let bindings
+let x = true in let y = false in x && y = 0
+let x = true in let y = false in x || y = 1
+let x = 1 < 2 in let y = 3 > 2 in x && y = 1
+
+// Boolean operations in let values
+let x = true && false in x = 0
+let x = true || false in x = 1
+let x = !true in x = 0
+let x = !(1 == 2) in x = 1
+
+
+// ===================================================================
+// Complex Expressions
+// ===================================================================
+
+// Nested boolean operations
+(true || false) && true = 1
+true && (false || true) = 1
+(true && false) || (true && true) = 1
+
+// Comparisons with arithmetic
+1 + 1 == 2 = 1
+3 * 4 == 12 = 1
+10 - 5 == 5 = 1
+8 / 2 == 4 = 1
+
+// More complex
+(1 + 2) < (4 + 5) = 1
+(10 - 3) > (2 * 2) = 1
+(6 / 2) == 3 = 1
+
+// Negation with arithmetic
+!(5 + 5 == 11) = 1
+!(3 * 3 == 9) = 0

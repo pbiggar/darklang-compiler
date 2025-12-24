@@ -34,6 +34,15 @@ type Operand =
     | Reg of Reg             // Register
     | StackSlot of int       // Stack offset (for spills)
 
+/// Comparison conditions (for CSET)
+type Condition =
+    | EQ   // Equal
+    | NE   // Not equal
+    | LT   // Less than (signed)
+    | GT   // Greater than (signed)
+    | LE   // Less than or equal (signed)
+    | GE   // Greater than or equal (signed)
+
 /// Instructions (closer to ARM64 instructions)
 type Instr =
     | Mov of dest:Reg * src:Operand
@@ -41,7 +50,13 @@ type Instr =
     | Sub of dest:Reg * left:Reg * right:Operand
     | Mul of dest:Reg * left:Reg * right:Reg
     | Sdiv of dest:Reg * left:Reg * right:Reg  // Signed division
-    | PrintInt of Reg  // Print integer register to stdout
+    | Cmp of left:Reg * right:Operand           // Compare (sets flags)
+    | Cset of dest:Reg * cond:Condition         // Set register based on condition
+    | And of dest:Reg * left:Reg * right:Reg    // Bitwise AND (for boolean &&)
+    | Orr of dest:Reg * left:Reg * right:Reg    // Bitwise OR (for boolean ||)
+    | Mvn of dest:Reg * src:Reg                 // Bitwise NOT
+    | PrintInt of Reg                           // Print integer register to stdout
+    | PrintBool of Reg                          // Print boolean register to stdout
     | Ret
 
 /// Function (preparation for future functions)

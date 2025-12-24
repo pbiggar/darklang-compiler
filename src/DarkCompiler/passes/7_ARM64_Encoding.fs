@@ -189,6 +189,90 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm26 = (uint32 offset) &&& 0x3FFFFFFu
         [op ||| imm26]
 
+    | ARM64.CMP_imm (src, imm) ->
+        // CMP immediate is SUBS XZR, Rn, #imm (SUB with set flags, dest=XZR)
+        // Encoding: sf=1 op=1 S=1 10001 shift(2) imm12(12) Rn(5) Rd=11111
+        let sf = 1u <<< 31          // 64-bit operation
+        let op = 1u <<< 30          // SUB (vs ADD)
+        let s = 1u <<< 29           // Set flags (critical for CMP)
+        let opcode = 0b10001u <<< 24
+        let shift = 0u <<< 22       // No shift
+        let imm12 = (uint32 imm) <<< 10
+        let rn = (encodeReg src) <<< 5
+        let rd = 31u                // XZR (discard result, only flags matter)
+        [sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd]
+
+    | ARM64.CMP_reg (src1, src2) ->
+        // CMP register is SUBS XZR, Rn, Rm (SUB with set flags, dest=XZR)
+        // Encoding: sf=1 op=1 S=1 01011 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd=11111
+        let sf = 1u <<< 31  // 64-bit
+        let op = 1u <<< 30  // SUB
+        let s = 1u <<< 29   // Set flags (critical for CMP)
+        let opcode = 0b01011u <<< 24
+        let shift = 0u <<< 22  // No shift
+        let rm = (encodeReg src2) <<< 16
+        let rn = (encodeReg src1) <<< 5
+        let rd = 31u        // XZR (discard result)
+        [sf ||| op ||| s ||| opcode ||| shift ||| rm ||| rn ||| rd]
+
+    | ARM64.CSET (dest, cond) ->
+        // CSET Rd, cond is CSINC Rd, XZR, XZR, invert(cond)
+        // Encoding: sf=1 op=0 S=0 11010100 Rm=11111 cond(4) 01 Rn=11111 Rd(5)
+        let sf = 1u <<< 31
+        let op = 0u <<< 30
+        let s = 0u <<< 29
+        let opcode = 0b11010100u <<< 21
+        let rm = 31u <<< 16  // XZR
+        // Invert condition for CSINC
+        let condCode =
+            match cond with
+            | ARM64.EQ -> 0b0001u  // Inverted from NE
+            | ARM64.NE -> 0b0000u  // Inverted from EQ
+            | ARM64.LT -> 0b1010u  // Inverted from GE
+            | ARM64.GT -> 0b1101u  // Inverted from LE
+            | ARM64.LE -> 0b1100u  // Inverted from GT
+            | ARM64.GE -> 0b1011u  // Inverted from LT
+        let condBits = condCode <<< 12
+        let fixedBits = 0b01u <<< 10  // CSINC vs CSEL
+        let rn = 31u <<< 5  // XZR
+        let rd = encodeReg dest
+        [sf ||| op ||| s ||| opcode ||| rm ||| condBits ||| fixedBits ||| rn ||| rd]
+
+    | ARM64.AND_reg (dest, src1, src2) ->
+        // AND register: sf=1 opc=00 01010 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
+        let sf = 1u <<< 31  // 64-bit
+        let opc = 0u <<< 29  // AND (vs ORR which has opc=01)
+        let op = 0b01010u <<< 24
+        let shift = 0u <<< 22  // No shift
+        let rm = (encodeReg src2) <<< 16
+        let rn = (encodeReg src1) <<< 5
+        let rd = encodeReg dest
+        [sf ||| opc ||| op ||| shift ||| rm ||| rn ||| rd]
+
+    | ARM64.ORR_reg (dest, src1, src2) ->
+        // ORR register: sf=1 opc=01 01010 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
+        let sf = 1u <<< 31  // 64-bit
+        let opc = 1u <<< 29  // ORR
+        let op = 0b01010u <<< 24
+        let shift = 0u <<< 22  // No shift
+        let rm = (encodeReg src2) <<< 16
+        let rn = (encodeReg src1) <<< 5
+        let rd = encodeReg dest
+        [sf ||| opc ||| op ||| shift ||| rm ||| rn ||| rd]
+
+    | ARM64.MVN (dest, src) ->
+        // MVN is ORN Rd, XZR, Rm (OR NOT with Rn=XZR)
+        // Encoding: sf=1 opc=01 01010 shift=00 1 Rm(5) imm6=000000 Rn=11111 Rd(5)
+        let sf = 1u <<< 31  // 64-bit
+        let opc = 1u <<< 29  // ORR-family
+        let op = 0b01010u <<< 24
+        let shift = 0u <<< 22  // No shift
+        let n = 1u <<< 21  // NOT bit (distinguishes ORN from ORR)
+        let rm = (encodeReg src) <<< 16
+        let rn = 31u <<< 5  // XZR
+        let rd = encodeReg dest
+        [sf ||| opc ||| op ||| shift ||| n ||| rm ||| rn ||| rd]
+
     | ARM64.NEG (dest, src) ->
         // NEG: SUB dest, XZR, src
         // Encoding: sf=1 op=1 S=0 01011 shift=00 0 Rm(src) imm6=000000 Rn=11111(XZR) Rd(dest)

@@ -27,16 +27,33 @@ type Type =
 
 /// Binary operators
 type BinOp =
+    // Arithmetic
     | Add
     | Sub
     | Mul
     | Div
+    // Comparisons (return bool)
+    | Eq   // ==
+    | Neq  // !=
+    | Lt   // <
+    | Gt   // >
+    | Lte  // <=
+    | Gte  // >=
+    // Boolean operations
+    | And  // &&
+    | Or   // ||
+
+/// Unary operators
+type UnaryOp =
+    | Neg  // Unary negation: -expr
+    | Not  // Boolean not: !expr
 
 /// Expression nodes
 type Expr =
     | IntLiteral of int64
+    | BoolLiteral of bool
     | BinOp of BinOp * Expr * Expr
-    | Neg of Expr  // Unary negation: -expr
+    | UnaryOp of UnaryOp * Expr
     | Let of name:string * value:Expr * body:Expr  // Let binding: let name = value in body
     | Var of string  // Variable reference
 

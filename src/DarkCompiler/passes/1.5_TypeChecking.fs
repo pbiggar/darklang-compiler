@@ -70,43 +70,105 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
         | Some TInt64 | None -> Ok TInt64
         | Some other -> Error (TypeMismatch (other, TInt64, "integer literal"))
 
+    | BoolLiteral _ ->
+        // Boolean literals are always TBool
+        match expectedType with
+        | Some TBool | None -> Ok TBool
+        | Some other -> Error (TypeMismatch (other, TBool, "boolean literal"))
+
     | BinOp (op, left, right) ->
-        // For now, all binary operators work on integers and return integers
-        // This will be extended in Phase 2 for booleans and comparisons
-        let opName =
-            match op with
-            | Add -> "+"
-            | Sub -> "-"
-            | Mul -> "*"
-            | Div -> "/"
+        match op with
+        // Arithmetic operators: int -> int -> int
+        | Add | Sub | Mul | Div ->
+            let opName =
+                match op with
+                | Add -> "+"
+                | Sub -> "-"
+                | Mul -> "*"
+                | Div -> "/"
+                | _ -> failwith "unreachable"
 
-        // Check left operand is int64
-        checkExpr left env (Some TInt64)
-        |> Result.bind (fun leftType ->
-            if leftType <> TInt64 then
-                Error (TypeMismatch (TInt64, leftType, $"left operand of {opName}"))
-            else
-                // Check right operand is int64
-                checkExpr right env (Some TInt64)
-                |> Result.bind (fun rightType ->
-                    if rightType <> TInt64 then
-                        Error (TypeMismatch (TInt64, rightType, $"right operand of {opName}"))
-                    else
-                        // Result is int64
-                        match expectedType with
-                        | Some TInt64 | None -> Ok TInt64
-                        | Some other -> Error (TypeMismatch (other, TInt64, $"result of {opName}"))))
+            checkExpr left env (Some TInt64)
+            |> Result.bind (fun leftType ->
+                if leftType <> TInt64 then
+                    Error (TypeMismatch (TInt64, leftType, $"left operand of {opName}"))
+                else
+                    checkExpr right env (Some TInt64)
+                    |> Result.bind (fun rightType ->
+                        if rightType <> TInt64 then
+                            Error (TypeMismatch (TInt64, rightType, $"right operand of {opName}"))
+                        else
+                            match expectedType with
+                            | Some TInt64 | None -> Ok TInt64
+                            | Some other -> Error (TypeMismatch (other, TInt64, $"result of {opName}"))))
 
-    | Neg inner ->
-        // Negation works on integers and returns integers
-        checkExpr inner env (Some TInt64)
-        |> Result.bind (fun innerType ->
-            if innerType <> TInt64 then
-                Error (TypeMismatch (TInt64, innerType, "operand of negation"))
-            else
-                match expectedType with
-                | Some TInt64 | None -> Ok TInt64
-                | Some other -> Error (TypeMismatch (other, TInt64, "result of negation")))
+        // Comparison operators: int -> int -> bool
+        | Eq | Neq | Lt | Gt | Lte | Gte ->
+            let opName =
+                match op with
+                | Eq -> "=="
+                | Neq -> "!="
+                | Lt -> "<"
+                | Gt -> ">"
+                | Lte -> "<="
+                | Gte -> ">="
+                | _ -> failwith "unreachable"
+
+            checkExpr left env (Some TInt64)
+            |> Result.bind (fun leftType ->
+                if leftType <> TInt64 then
+                    Error (TypeMismatch (TInt64, leftType, $"left operand of {opName}"))
+                else
+                    checkExpr right env (Some TInt64)
+                    |> Result.bind (fun rightType ->
+                        if rightType <> TInt64 then
+                            Error (TypeMismatch (TInt64, rightType, $"right operand of {opName}"))
+                        else
+                            match expectedType with
+                            | Some TBool | None -> Ok TBool
+                            | Some other -> Error (TypeMismatch (other, TBool, $"result of {opName}"))))
+
+        // Boolean operators: bool -> bool -> bool
+        | And | Or ->
+            let opName = if op = And then "&&" else "||"
+
+            checkExpr left env (Some TBool)
+            |> Result.bind (fun leftType ->
+                if leftType <> TBool then
+                    Error (TypeMismatch (TBool, leftType, $"left operand of {opName}"))
+                else
+                    checkExpr right env (Some TBool)
+                    |> Result.bind (fun rightType ->
+                        if rightType <> TBool then
+                            Error (TypeMismatch (TBool, rightType, $"right operand of {opName}"))
+                        else
+                            match expectedType with
+                            | Some TBool | None -> Ok TBool
+                            | Some other -> Error (TypeMismatch (other, TBool, $"result of {opName}"))))
+
+    | UnaryOp (op, inner) ->
+        match op with
+        | Neg ->
+            // Negation works on integers and returns integers
+            checkExpr inner env (Some TInt64)
+            |> Result.bind (fun innerType ->
+                if innerType <> TInt64 then
+                    Error (TypeMismatch (TInt64, innerType, "operand of negation"))
+                else
+                    match expectedType with
+                    | Some TInt64 | None -> Ok TInt64
+                    | Some other -> Error (TypeMismatch (other, TInt64, "result of negation")))
+
+        | Not ->
+            // Boolean not works on booleans and returns booleans
+            checkExpr inner env (Some TBool)
+            |> Result.bind (fun innerType ->
+                if innerType <> TBool then
+                    Error (TypeMismatch (TBool, innerType, "operand of !"))
+                else
+                    match expectedType with
+                    | Some TBool | None -> Ok TBool
+                    | Some other -> Error (TypeMismatch (other, TBool, "result of !")))
 
     | Let (name, value, body) ->
         // Let binding: check value, extend environment, check body

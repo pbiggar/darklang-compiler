@@ -136,6 +136,65 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                 lirRegToARM64Reg right
                 |> Result.map (fun rightReg -> [ARM64.SDIV (destReg, leftReg, rightReg)])))
 
+    | LIR.Cmp (left, right) ->
+        lirRegToARM64Reg left
+        |> Result.bind (fun leftReg ->
+            match right with
+            | LIR.Imm value when value >= 0L && value < 4096L ->
+                Ok [ARM64.CMP_imm (leftReg, uint16 value)]
+            | LIR.Imm value ->
+                let tempReg = ARM64.X9
+                Ok (loadImmediate tempReg value @ [ARM64.CMP_reg (leftReg, tempReg)])
+            | LIR.Reg rightReg ->
+                lirRegToARM64Reg rightReg
+                |> Result.map (fun rightARM64 -> [ARM64.CMP_reg (leftReg, rightARM64)])
+            | LIR.StackSlot _ ->
+                Error "Stack slots not yet supported")
+
+    | LIR.Cset (dest, cond) ->
+        lirRegToARM64Reg dest
+        |> Result.map (fun destReg ->
+            let arm64Cond =
+                match cond with
+                | LIR.EQ -> ARM64.EQ
+                | LIR.NE -> ARM64.NE
+                | LIR.LT -> ARM64.LT
+                | LIR.GT -> ARM64.GT
+                | LIR.LE -> ARM64.LE
+                | LIR.GE -> ARM64.GE
+            [ARM64.CSET (destReg, arm64Cond)])
+
+    | LIR.And (dest, left, right) ->
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg left
+            |> Result.bind (fun leftReg ->
+                lirRegToARM64Reg right
+                |> Result.map (fun rightReg -> [ARM64.AND_reg (destReg, leftReg, rightReg)])))
+
+    | LIR.Orr (dest, left, right) ->
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg left
+            |> Result.bind (fun leftReg ->
+                lirRegToARM64Reg right
+                |> Result.map (fun rightReg -> [ARM64.ORR_reg (destReg, leftReg, rightReg)])))
+
+    | LIR.Mvn (dest, src) ->
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg src
+            |> Result.map (fun srcReg -> [ARM64.MVN (destReg, srcReg)]))
+
+    | LIR.PrintBool reg ->
+        // For now, print booleans as 0 or 1 (same as PrintInt)
+        lirRegToARM64Reg reg
+        |> Result.map (fun regARM64 ->
+            if regARM64 <> ARM64.X0 then
+                [ARM64.MOV_reg (ARM64.X0, regARM64)] @ Runtime.generatePrintInt ()
+            else
+                Runtime.generatePrintInt ())
+
     | LIR.PrintInt reg ->
         // Value to print should be in X0
         lirRegToARM64Reg reg

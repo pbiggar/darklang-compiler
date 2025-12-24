@@ -35,7 +35,7 @@ let parseOperand (text: string) : Result<Operand, string> =
         | false, _ -> Error $"Invalid operand '{text}' (expected number or register)"
 
 /// Parse binary operator
-let parseOp (text: string) : Result<Op, string> =
+let parseOp (text: string) : Result<BinOp, string> =
     match text.Trim() with
     | "+" -> Ok Add
     | "-" -> Ok Sub

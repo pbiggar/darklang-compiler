@@ -44,6 +44,23 @@ let collectVirtualRegs (instrs: LIR.Instr list) : Set<int> =
         | LIR.Sdiv (LIR.Virtual id, LIR.Virtual left, _) -> acc |> Set.add id |> Set.add left
         | LIR.Sdiv (LIR.Virtual id, _, LIR.Virtual right) -> acc |> Set.add id |> Set.add right
         | LIR.Sdiv (LIR.Virtual id, _, _) -> Set.add id acc
+        | LIR.Cmp (LIR.Virtual leftId, LIR.Reg (LIR.Virtual rightId)) ->
+            acc |> Set.add leftId |> Set.add rightId
+        | LIR.Cmp (LIR.Virtual leftId, _) -> Set.add leftId acc
+        | LIR.Cset (LIR.Virtual id, _) -> Set.add id acc
+        | LIR.And (LIR.Virtual id, LIR.Virtual left, LIR.Virtual right) ->
+            acc |> Set.add id |> Set.add left |> Set.add right
+        | LIR.And (LIR.Virtual id, LIR.Virtual left, _) -> acc |> Set.add id |> Set.add left
+        | LIR.And (LIR.Virtual id, _, LIR.Virtual right) -> acc |> Set.add id |> Set.add right
+        | LIR.And (LIR.Virtual id, _, _) -> Set.add id acc
+        | LIR.Orr (LIR.Virtual id, LIR.Virtual left, LIR.Virtual right) ->
+            acc |> Set.add id |> Set.add left |> Set.add right
+        | LIR.Orr (LIR.Virtual id, LIR.Virtual left, _) -> acc |> Set.add id |> Set.add left
+        | LIR.Orr (LIR.Virtual id, _, LIR.Virtual right) -> acc |> Set.add id |> Set.add right
+        | LIR.Orr (LIR.Virtual id, _, _) -> Set.add id acc
+        | LIR.Mvn (LIR.Virtual id, LIR.Virtual src) -> acc |> Set.add id |> Set.add src
+        | LIR.Mvn (LIR.Virtual id, _) -> Set.add id acc
+        | LIR.PrintBool (LIR.Virtual id) -> Set.add id acc
         | _ -> acc
 
     instrs |> List.fold (fun acc instr -> collect instr acc) Set.empty
@@ -93,8 +110,20 @@ let applyAllocation (allocation: Map<int, LIR.PhysReg>) (instr: LIR.Instr) : LIR
         LIR.Mul (applyToReg allocation dest, applyToReg allocation left, applyToReg allocation right)
     | LIR.Sdiv (dest, left, right) ->
         LIR.Sdiv (applyToReg allocation dest, applyToReg allocation left, applyToReg allocation right)
+    | LIR.Cmp (left, right) ->
+        LIR.Cmp (applyToReg allocation left, applyToOperand allocation right)
+    | LIR.Cset (dest, cond) ->
+        LIR.Cset (applyToReg allocation dest, cond)
+    | LIR.And (dest, left, right) ->
+        LIR.And (applyToReg allocation dest, applyToReg allocation left, applyToReg allocation right)
+    | LIR.Orr (dest, left, right) ->
+        LIR.Orr (applyToReg allocation dest, applyToReg allocation left, applyToReg allocation right)
+    | LIR.Mvn (dest, src) ->
+        LIR.Mvn (applyToReg allocation dest, applyToReg allocation src)
     | LIR.PrintInt reg ->
         LIR.PrintInt (applyToReg allocation reg)
+    | LIR.PrintBool reg ->
+        LIR.PrintBool (applyToReg allocation reg)
     | LIR.Ret -> LIR.Ret
 
 /// Register allocation

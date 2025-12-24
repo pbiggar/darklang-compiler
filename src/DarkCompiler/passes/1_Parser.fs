@@ -20,6 +20,8 @@ open AST
 /// Token types for lexer
 type Token =
     | TInt of int64
+    | TTrue
+    | TFalse
     | TPlus
     | TMinus
     | TStar
@@ -28,7 +30,16 @@ type Token =
     | TRParen
     | TLet
     | TIn
-    | TEquals
+    | TEquals      // = (assignment in let)
+    | TEqEq        // == (equality comparison)
+    | TNeq         // !=
+    | TLt          // <
+    | TGt          // >
+    | TLte         // <=
+    | TGte         // >=
+    | TAnd         // &&
+    | TOr          // ||
+    | TNot         // !
     | TIdent of string
     | TEOF
 
@@ -46,7 +57,18 @@ let lex (input: string) : Result<Token list, string> =
         | '/' :: rest -> lexHelper rest (TSlash :: acc)
         | '(' :: rest -> lexHelper rest (TLParen :: acc)
         | ')' :: rest -> lexHelper rest (TRParen :: acc)
+        | '=' :: '=' :: rest -> lexHelper rest (TEqEq :: acc)
         | '=' :: rest -> lexHelper rest (TEquals :: acc)
+        | '!' :: '=' :: rest -> lexHelper rest (TNeq :: acc)
+        | '!' :: rest -> lexHelper rest (TNot :: acc)
+        | '<' :: '=' :: rest -> lexHelper rest (TLte :: acc)
+        | '<' :: rest -> lexHelper rest (TLt :: acc)
+        | '>' :: '=' :: rest -> lexHelper rest (TGte :: acc)
+        | '>' :: rest -> lexHelper rest (TGt :: acc)
+        | '&' :: '&' :: rest -> lexHelper rest (TAnd :: acc)
+        | '&' :: _ -> Error "Unexpected character: & (did you mean &&?)"
+        | '|' :: '|' :: rest -> lexHelper rest (TOr :: acc)
+        | '|' :: _ -> Error "Unexpected character: | (did you mean ||?)"
         | c :: _ when System.Char.IsLetter(c) || c = '_' ->
             // Parse identifier or keyword
             let rec parseIdent (cs: char list) (chars: char list) : string * char list =
@@ -62,6 +84,8 @@ let lex (input: string) : Result<Token list, string> =
                 match ident with
                 | "let" -> TLet
                 | "in" -> TIn
+                | "true" -> TTrue
+                | "false" -> TFalse
                 | _ -> TIdent ident
             lexHelper remaining (token :: acc)
         | c :: _ when System.Char.IsDigit(c) ->
@@ -97,6 +121,7 @@ let lex (input: string) : Result<Token list, string> =
 /// Parser: convert tokens to AST
 let parse (tokens: Token list) : Result<Program, string> =
     // Recursive descent parser with operator precedence
+    // Precedence (low to high): or < and < comparison < +/- < */ < unary
     let rec parseExpr (toks: Token list) : Result<Expr * Token list, string> =
         match toks with
         | TLet :: TIdent name :: TEquals :: rest ->
@@ -110,7 +135,62 @@ let parse (tokens: Token list) : Result<Program, string> =
                         (Let (name, value, body), remaining'))
                 | _ -> Error "Expected 'in' after let binding value")
         | _ ->
-            parseAdditive toks
+            parseOr toks
+
+    and parseOr (toks: Token list) : Result<Expr * Token list, string> =
+        parseAnd toks
+        |> Result.bind (fun (left, remaining) ->
+            let rec parseOrRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
+                match toks with
+                | TOr :: rest ->
+                    parseAnd rest
+                    |> Result.bind (fun (right, remaining') ->
+                        parseOrRest (BinOp (Or, leftExpr, right)) remaining')
+                | _ -> Ok (leftExpr, toks)
+            parseOrRest left remaining)
+
+    and parseAnd (toks: Token list) : Result<Expr * Token list, string> =
+        parseComparison toks
+        |> Result.bind (fun (left, remaining) ->
+            let rec parseAndRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
+                match toks with
+                | TAnd :: rest ->
+                    parseComparison rest
+                    |> Result.bind (fun (right, remaining') ->
+                        parseAndRest (BinOp (And, leftExpr, right)) remaining')
+                | _ -> Ok (leftExpr, toks)
+            parseAndRest left remaining)
+
+    and parseComparison (toks: Token list) : Result<Expr * Token list, string> =
+        parseAdditive toks
+        |> Result.bind (fun (left, remaining) ->
+            // Comparison operators are non-associative (no chaining)
+            match remaining with
+            | TEqEq :: rest ->
+                parseAdditive rest
+                |> Result.map (fun (right, remaining') ->
+                    (BinOp (Eq, left, right), remaining'))
+            | TNeq :: rest ->
+                parseAdditive rest
+                |> Result.map (fun (right, remaining') ->
+                    (BinOp (Neq, left, right), remaining'))
+            | TLt :: rest ->
+                parseAdditive rest
+                |> Result.map (fun (right, remaining') ->
+                    (BinOp (Lt, left, right), remaining'))
+            | TGt :: rest ->
+                parseAdditive rest
+                |> Result.map (fun (right, remaining') ->
+                    (BinOp (Gt, left, right), remaining'))
+            | TLte :: rest ->
+                parseAdditive rest
+                |> Result.map (fun (right, remaining') ->
+                    (BinOp (Lte, left, right), remaining'))
+            | TGte :: rest ->
+                parseAdditive rest
+                |> Result.map (fun (right, remaining') ->
+                    (BinOp (Gte, left, right), remaining'))
+            | _ -> Ok (left, remaining))
 
     and parseAdditive (toks: Token list) : Result<Expr * Token list, string> =
         parseMultiplicative toks
@@ -129,29 +209,38 @@ let parse (tokens: Token list) : Result<Program, string> =
             parseAdditiveRest left remaining)
 
     and parseMultiplicative (toks: Token list) : Result<Expr * Token list, string> =
-        parsePrimary toks
+        parseUnary toks
         |> Result.bind (fun (left, remaining) ->
             let rec parseMultiplicativeRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
                 match toks with
                 | TStar :: rest ->
-                    parsePrimary rest
+                    parseUnary rest
                     |> Result.bind (fun (right, remaining') ->
                         parseMultiplicativeRest (BinOp (Mul, leftExpr, right)) remaining')
                 | TSlash :: rest ->
-                    parsePrimary rest
+                    parseUnary rest
                     |> Result.bind (fun (right, remaining') ->
                         parseMultiplicativeRest (BinOp (Div, leftExpr, right)) remaining')
                 | _ -> Ok (leftExpr, toks)
             parseMultiplicativeRest left remaining)
 
+    and parseUnary (toks: Token list) : Result<Expr * Token list, string> =
+        match toks with
+        | TMinus :: rest ->
+            parseUnary rest
+            |> Result.map (fun (expr, remaining) -> (UnaryOp (Neg, expr), remaining))
+        | TNot :: rest ->
+            parseUnary rest
+            |> Result.map (fun (expr, remaining) -> (UnaryOp (Not, expr), remaining))
+        | _ ->
+            parsePrimary toks
+
     and parsePrimary (toks: Token list) : Result<Expr * Token list, string> =
         match toks with
         | TInt n :: rest -> Ok (IntLiteral n, rest)
+        | TTrue :: rest -> Ok (BoolLiteral true, rest)
+        | TFalse :: rest -> Ok (BoolLiteral false, rest)
         | TIdent name :: rest -> Ok (Var name, rest)
-        | TMinus :: rest ->
-            // Unary negation
-            parsePrimary rest
-            |> Result.map (fun (expr, remaining) -> (Neg expr, remaining))
         | TLParen :: rest ->
             parseExpr rest
             |> Result.bind (fun (expr, remaining) ->

@@ -26,6 +26,15 @@ type Reg =
     | X10 | X11 | X12 | X13 | X14 | X15 | X16
     | X29 | X30 | SP
 
+/// Comparison conditions (for CSET)
+type Condition =
+    | EQ   // Equal (Z set)
+    | NE   // Not equal (Z clear)
+    | LT   // Less than (signed)
+    | GT   // Greater than (signed)
+    | LE   // Less than or equal (signed)
+    | GE   // Greater than or equal (signed)
+
 /// ARM64 instruction types
 type Instr =
     | MOVZ of dest:Reg * imm:uint16 * shift:int  // Move with zero
@@ -38,6 +47,12 @@ type Instr =
     | SDIV of dest:Reg * src1:Reg * src2:Reg
     | UDIV of dest:Reg * src1:Reg * src2:Reg  // Unsigned division (for positive integers)
     | MSUB of dest:Reg * src1:Reg * src2:Reg * src3:Reg  // Multiply-subtract (for modulo)
+    | CMP_imm of src:Reg * imm:uint16  // Compare with immediate (sets condition flags)
+    | CMP_reg of src1:Reg * src2:Reg  // Compare registers (sets condition flags)
+    | CSET of dest:Reg * cond:Condition  // Set register to 1 if condition, 0 otherwise
+    | AND_reg of dest:Reg * src1:Reg * src2:Reg  // Bitwise AND
+    | ORR_reg of dest:Reg * src1:Reg * src2:Reg  // Bitwise OR
+    | MVN of dest:Reg * src:Reg  // Bitwise NOT
     | MOV_reg of dest:Reg * src:Reg
     | STRB of src:Reg * addr:Reg * offset:int  // Store byte [addr + offset] = src (lower 8 bits)
     | CBZ of reg:Reg * offset:int  // Compare and branch if zero

@@ -55,7 +55,7 @@ let testDivision () =
 
 /// Test that negation of integers has type TInt64
 let testNegation () =
-    let expr = Neg (IntLiteral 42L)
+    let expr = UnaryOp (Neg, IntLiteral 42L)
     let program = Program expr
     match checkProgram program with
     | Ok TInt64 -> ()

@@ -24,6 +24,7 @@ let vregToLIRReg (MIR.VReg id) : LIR.Reg = LIR.Virtual id
 let convertOperand (operand: MIR.Operand) : LIR.Operand =
     match operand with
     | MIR.IntConst n -> LIR.Imm n
+    | MIR.BoolConst b -> LIR.Imm (if b then 1L else 0L)  // Booleans as 0/1
     | MIR.Register vreg -> LIR.Reg (vregToLIRReg vreg)
 
 /// Ensure operand is in a register (may need to load immediate)
@@ -32,6 +33,9 @@ let ensureInRegister (operand: MIR.Operand) (tempReg: LIR.Reg) : LIR.Instr list 
     | MIR.IntConst n ->
         // Need to load constant into a temporary register
         ([LIR.Mov (tempReg, LIR.Imm n)], tempReg)
+    | MIR.BoolConst b ->
+        // Load boolean (0 or 1) into register
+        ([LIR.Mov (tempReg, LIR.Imm (if b then 1L else 0L))], tempReg)
     | MIR.Register vreg ->
         ([], vregToLIRReg vreg)
 
@@ -71,6 +75,58 @@ let selectInstr (instr: MIR.Instr) : LIR.Instr list =
             let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
             let (rightInstrs, rightReg) = ensureInRegister right (LIR.Virtual 1001)
             leftInstrs @ rightInstrs @ [LIR.Sdiv (lirDest, leftReg, rightReg)]
+
+        // Comparisons: CMP + CSET sequence
+        | MIR.Eq ->
+            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
+            leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.EQ)]
+
+        | MIR.Neq ->
+            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
+            leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.NE)]
+
+        | MIR.Lt ->
+            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
+            leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.LT)]
+
+        | MIR.Gt ->
+            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
+            leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.GT)]
+
+        | MIR.Lte ->
+            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
+            leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.LE)]
+
+        | MIR.Gte ->
+            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
+            leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.GE)]
+
+        // Boolean operations (bitwise for 0/1 values)
+        | MIR.And ->
+            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
+            let (rightInstrs, rightReg) = ensureInRegister right (LIR.Virtual 1001)
+            leftInstrs @ rightInstrs @ [LIR.And (lirDest, leftReg, rightReg)]
+
+        | MIR.Or ->
+            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
+            let (rightInstrs, rightReg) = ensureInRegister right (LIR.Virtual 1001)
+            leftInstrs @ rightInstrs @ [LIR.Orr (lirDest, leftReg, rightReg)]
+
+    | MIR.UnaryOp (dest, op, src) ->
+        let lirDest = vregToLIRReg dest
+        let (srcInstrs, srcReg) = ensureInRegister src (LIR.Virtual 1000)
+
+        match op with
+        | MIR.Neg ->
+            // Negation: 0 - src
+            srcInstrs @ [LIR.Mov (lirDest, LIR.Imm 0L); LIR.Sub (lirDest, lirDest, LIR.Reg srcReg)]
+
+        | MIR.Not ->
+            // Boolean NOT: 1 - src (since booleans are 0 or 1)
+            srcInstrs @ [
+                LIR.Mov (lirDest, LIR.Imm 1L)
+                LIR.Sub (lirDest, lirDest, LIR.Reg srcReg)
+            ]
 
     | MIR.Ret operand ->
         // ARM64 returns value in X0

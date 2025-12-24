@@ -26,19 +26,37 @@ type TempId = TempId of int
 /// Atomic expressions (cannot be decomposed further)
 type Atom =
     | IntLiteral of int64
+    | BoolLiteral of bool
     | Var of TempId
 
 /// Binary operations on atoms
 type BinOp =
+    // Arithmetic
     | Add
     | Sub
     | Mul
     | Div
+    // Comparisons
+    | Eq
+    | Neq
+    | Lt
+    | Gt
+    | Lte
+    | Gte
+    // Boolean
+    | And
+    | Or
+
+/// Unary operations on atoms
+type UnaryOp =
+    | Neg
+    | Not
 
 /// Complex expressions (produce values)
 type CExpr =
     | Atom of Atom
     | Prim of BinOp * Atom * Atom
+    | UnaryPrim of UnaryOp * Atom
 
 /// ANF expressions with explicit sequencing
 type AExpr =

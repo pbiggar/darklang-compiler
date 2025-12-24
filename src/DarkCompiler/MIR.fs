@@ -21,19 +21,37 @@ type VReg = VReg of int
 /// Operands
 type Operand =
     | IntConst of int64
+    | BoolConst of bool
     | Register of VReg
 
-/// Operations
-type Op =
+/// Binary operations
+type BinOp =
+    // Arithmetic
     | Add
     | Sub
     | Mul
     | Div
+    // Comparisons
+    | Eq
+    | Neq
+    | Lt
+    | Gt
+    | Lte
+    | Gte
+    // Boolean
+    | And
+    | Or
+
+/// Unary operations
+type UnaryOp =
+    | Neg
+    | Not
 
 /// Instructions
 type Instr =
     | Mov of dest:VReg * src:Operand
-    | BinOp of dest:VReg * op:Op * left:Operand * right:Operand
+    | BinOp of dest:VReg * op:BinOp * left:Operand * right:Operand
+    | UnaryOp of dest:VReg * op:UnaryOp * src:Operand
     | Ret of Operand
 
 /// Basic block (for future control flow)

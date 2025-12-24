@@ -15,13 +15,27 @@
 
 module ANF_to_MIR
 
-/// Convert ANF.Op to MIR.Op
-let convertOp (op: ANF.BinOp) : MIR.Op =
+/// Convert ANF.BinOp to MIR.BinOp
+let convertBinOp (op: ANF.BinOp) : MIR.BinOp =
     match op with
     | ANF.Add -> MIR.Add
     | ANF.Sub -> MIR.Sub
     | ANF.Mul -> MIR.Mul
     | ANF.Div -> MIR.Div
+    | ANF.Eq -> MIR.Eq
+    | ANF.Neq -> MIR.Neq
+    | ANF.Lt -> MIR.Lt
+    | ANF.Gt -> MIR.Gt
+    | ANF.Lte -> MIR.Lte
+    | ANF.Gte -> MIR.Gte
+    | ANF.And -> MIR.And
+    | ANF.Or -> MIR.Or
+
+/// Convert ANF.UnaryOp to MIR.UnaryOp
+let convertUnaryOp (op: ANF.UnaryOp) : MIR.UnaryOp =
+    match op with
+    | ANF.Neg -> MIR.Neg
+    | ANF.Not -> MIR.Not
 
 /// Map ANF TempId to MIR virtual register
 /// We use the same ID number for simplicity
@@ -31,6 +45,7 @@ let tempToVReg (ANF.TempId id) : MIR.VReg = MIR.VReg id
 let atomToOperand (atom: ANF.Atom) : MIR.Operand =
     match atom with
     | ANF.IntLiteral n -> MIR.IntConst n
+    | ANF.BoolLiteral b -> MIR.BoolConst b
     | ANF.Var tempId -> MIR.Register (tempToVReg tempId)
 
 /// Convert ANF to MIR
@@ -57,8 +72,15 @@ let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : MIR.Program * MIR.RegGen
                 // Binary operation
                 let leftOp = atomToOperand leftAtom
                 let rightOp = atomToOperand rightAtom
-                let mirOp = convertOp op
+                let mirOp = convertBinOp op
                 let newInstrs = instrs @ [MIR.BinOp (destReg, mirOp, leftOp, rightOp)]
+                convertExpr rest newInstrs regGen
+
+            | ANF.UnaryPrim (op, atom) ->
+                // Unary operation
+                let operand = atomToOperand atom
+                let mirOp = convertUnaryOp op
+                let newInstrs = instrs @ [MIR.UnaryOp (destReg, mirOp, operand)]
                 convertExpr rest newInstrs regGen
 
     let (instrs, regGen') = convertExpr anfExpr [] regGen
