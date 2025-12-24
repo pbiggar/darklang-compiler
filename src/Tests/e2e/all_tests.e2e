@@ -1,4 +1,4 @@
-// E2E Test Suite
+// E2E Test Suite - Basic language feature tests
 //
 // Format: source = expectations  // optional comment
 //
@@ -24,9 +24,14 @@
 // The compiled binary prints the result to stdout and exits with code 0.
 // Integer-to-string conversion is implemented in ARM64 using division by 10.
 // Negative numbers are supported: checks sign bit, negates value, prints '-'.
+//
+// NOTE: Comprehensive integer tests (boundaries, overflow, etc.) are in integers.e2e
 
 
+// ===================================================================
 // Constants
+// ===================================================================
+
 42 = 42
 0 = 0
 -5 = -5  // negative literal
@@ -34,114 +39,54 @@
 -1 = -1
 
 
+// ===================================================================
+// Basic Arithmetic
+// ===================================================================
+
 // Addition
 2 + 3 = 5
 1 + 2 + 3 + 4 = 10  // left associativity
-
 
 // Subtraction
 10 - 3 = 7
 5 - 2 = 3  // ARM64 SUB_imm encoding bug regression test
 20 - 5 - 3 = 12  // left associativity
 
-
 // Multiplication
 6 * 7 = 42
 2 * 3 * 4 = 24  // chained multiplication
-
 
 // Division
 15 / 3 = 5
 100 / 5 / 2 = 10  // chained division (left associative)
 
 
+// ===================================================================
+// Operator Precedence and Grouping
+// ===================================================================
+
 // Precedence
 2 + 3 * 4 = 14  // multiplication before addition
-
 
 // Parentheses
 (2 + 3) * 4 = 20
 ((1 + 2) * (3 + 4)) = 21  // nested parentheses
-
 
 // Complex expressions
 10 + 20 / 2 - 3 * 4 = 32  // BUG: should be 8, subtraction followed by multiplication treated as addition
 10 - 2 * 3 + 8 / 4 = 18  // BUG: should be 6, subtraction followed by multiplication treated as addition
 
 
-// Edge cases
+// ===================================================================
+// Edge Cases
+// ===================================================================
+
 123456789 = 123456789  // large numbers print correctly
 
 
 // ===================================================================
-// Comprehensive Integer Tests
+// Negative Number Tests
 // ===================================================================
-
-// Boundary values - basic
-1 = 1  // minimum positive
-254 = 254
-255 = 255
-256 = 256
-257 = 257
-
-// Boundary values - edge of byte boundaries
-127 = 127  // max signed byte (if using signed)
-128 = 128  // min negative as unsigned
-253 = 253
-254 = 254
-255 = 255
-
-// Zero operations
-0 + 0 = 0
-0 - 0 = 0
-0 * 0 = 0
-0 * 1 = 0
-0 * 255 = 0
-1 * 0 = 0
-255 * 0 = 0
-
-// Identity operations
-1 + 0 = 1
-0 + 1 = 1
-5 - 0 = 5
-1 * 1 = 1
-5 * 1 = 5
-1 * 5 = 5
-10 / 1 = 10
-5 / 5 = 1
-
-// Powers of 2
-1 = 1  // 2^0
-2 = 2  // 2^1
-4 = 4  // 2^2
-8 = 8  // 2^3
-16 = 16  // 2^4
-32 = 32  // 2^5
-64 = 64  // 2^6
-128 = 128  // 2^7
-2 * 2 = 4
-2 * 2 * 2 = 8
-2 * 2 * 2 * 2 = 16
-4 * 4 = 16
-8 * 8 = 64
-16 * 16 = 256
-
-// Addition tests with large results
-255 + 1 = 256
-255 + 2 = 257
-255 + 255 = 510
-200 + 100 = 300
-128 + 128 = 256
-127 + 129 = 256
-100 + 200 = 300
-150 + 150 = 300
-
-// Subtraction tests (positive results)
-10 - 3 = 7
-20 - 5 = 15
-100 - 50 = 50
-255 - 1 = 254
-255 - 100 = 155
 
 // Subtraction tests (negative results)
 0 - 1 = -1
@@ -151,51 +96,6 @@
 10 - 20 = -10
 0 - 255 = -255
 100 - 200 = -100
-
-// Multiplication tests with large results
-16 * 16 = 256
-16 * 17 = 272
-15 * 17 = 255
-15 * 18 = 270
-20 * 20 = 400
-25 * 25 = 625
-50 * 50 = 2500
-100 * 100 = 10000
-128 * 2 = 256
-64 * 4 = 256
-32 * 8 = 256
-
-// Division edge cases
-1 / 1 = 1
-255 / 1 = 255
-255 / 255 = 1
-256 / 2 = 128  // 256 doesn't wrap before division
-100 / 10 = 10
-99 / 10 = 9  // integer division truncates
-10 / 3 = 3  // 10 / 3 = 3 remainder 1
-7 / 2 = 3  // 7 / 2 = 3 remainder 1
-1 / 2 = 0  // rounds down to 0
-
-// Large number combinations
-1000 + 2000 = 3000
-1000 * 1000 = 1000000
-10000 - 5000 = 5000
-500 + 500 = 1000
-999 = 999
-1024 = 1024
-2048 = 2048
-4096 = 4096
-
-// Sequential operations
-255 + 1 + 1 = 257
-128 + 128 + 1 = 257
-100 + 100 + 100 = 300
-
-// Mixed operations (positive results)
-255 + 1 - 1 = 255
-200 + 100 - 50 = 250
-100 * 3 - 50 = 250
-50 * 2 + 100 = 200
 
 // Mixed operations (negative results)
 0 - 1 + 1 = 0
@@ -219,113 +119,7 @@
 
 
 // ===================================================================
-// 32-bit Boundary Tests
-// ===================================================================
-
-// INT32_MAX = 2,147,483,647
-// INT32_MIN = -2,147,483,648
-
-// 32-bit maximum and minimum
-2147483647 = 2147483647  // INT32_MAX
--2147483648 = -2147483648  // INT32_MIN
-
-// Operations at 32-bit boundaries
-2147483647 + 1 = 2147483648  // INT32_MAX + 1
-2147483647 + 2147483647 = 4294967294  // INT32_MAX + INT32_MAX
--2147483648 - 1 = -2147483649  // INT32_MIN - 1
--2147483648 + -2147483648 = -4294967296  // INT32_MIN + INT32_MIN
-
-// Multiplication near 32-bit boundaries
-65536 * 65536 = 4294967296  // 2^32
-32768 * 65536 = 2147483648  // 2^31
-100000 * 100000 = 10000000000
-1000000 * 1000 = 1000000000
-
-// Division with 32-bit values
-2147483647 / 2 = 1073741823  // INT32_MAX / 2
--2147483648 / 2 = -1073741824  // INT32_MIN / 2
-4294967296 / 2 = 2147483648  // 2^32 / 2
-
-
-// ===================================================================
-// 64-bit Boundary Tests
-// ===================================================================
-
-// INT64_MAX = 9,223,372,036,854,775,807
-// INT64_MIN = -9,223,372,036,854,775,808
-
-// 64-bit maximum and minimum
-9223372036854775807 = 9223372036854775807  // INT64_MAX
--9223372036854775808 = -9223372036854775808  // INT64_MIN
-
-// Operations at 64-bit boundaries (overflow wraps around)
-9223372036854775807 + 1 = -9223372036854775808  // INT64_MAX + 1 wraps to INT64_MIN
-9223372036854775807 + 2 = -9223372036854775807  // INT64_MAX + 2
--9223372036854775808 - 1 = 9223372036854775807  // INT64_MIN - 1 wraps to INT64_MAX
--9223372036854775808 - 2 = 9223372036854775806  // INT64_MIN - 2
-
-// Addition overflow
-9223372036854775807 + 9223372036854775807 = -2  // INT64_MAX + INT64_MAX
-9000000000000000000 + 9000000000000000000 = -446744073709551616  // Large + Large
-5000000000000000000 + 5000000000000000000 = -8446744073709551616  // Overflow
-
-// Subtraction underflow
--9000000000000000000 - 9000000000000000000 = 446744073709551616
--5000000000000000000 - 5000000000000000000 = 8446744073709551616
-
-// Multiplication overflow
-1000000000 * 1000000000 = -8446744073709551616  // 10^9 * 10^9 overflows
-3000000000 * 3000000000 = -9223372036709301616  // Large multiplication
-4294967296 * 4294967296 = 0  // 2^32 * 2^32 = 2^64 = 0 (wraps)
-
-// Powers of 2 at boundaries
-4611686018427387904 = 4611686018427387904  // 2^62
-9223372036854775807 = 9223372036854775807  // 2^63 - 1
-
-// Large number operations
-1000000000000000000 = 1000000000000000000  // 10^18
-1000000000000000000 + 1000000000000000000 = 2000000000000000000
-1000000000000000000 * 2 = 2000000000000000000
-1000000000000000000 * 10 = -8446744073709551616  // 10^19 overflows
-
-
-// ===================================================================
-// Mixed Boundary Operations
-// ===================================================================
-
-// Crossing from 32-bit to 64-bit range
-2147483647 * 2 = 4294967294  // INT32_MAX * 2 (still in 64-bit range)
-2147483647 * 4 = 8589934588  // INT32_MAX * 4
-2147483647 * 1000000 = 2147483647000000
-
-// Operations that stay within 32-bit range
-1000000000 + 1000000000 = 2000000000
-1000000 * 2000 = 2000000000
-2000000000 / 2 = 1000000000
-
-// Near-boundary division
-9223372036854775807 / 2 = 4611686018427387903  // INT64_MAX / 2
-9223372036854775807 / 9223372036854775807 = 1  // INT64_MAX / INT64_MAX
-
-
-// ===================================================================
-// Special INT64_MIN Cases
-// ===================================================================
-
-// INT64_MIN is special: -INT64_MIN overflows to INT64_MIN
-// (because abs(INT64_MIN) = INT64_MAX + 1, which doesn't fit)
--(-9223372036854775808) = -9223372036854775808  // -INT64_MIN = INT64_MIN (overflow)
-
-// INT64_MIN operations
--9223372036854775808 + 1 = -9223372036854775807
--9223372036854775808 * 1 = -9223372036854775808
--9223372036854775808 * -1 = -9223372036854775808  // Overflow: should be INT64_MAX+1
--9223372036854775808 / 1 = -9223372036854775808
--9223372036854775808 / -1 = -9223372036854775808  // Overflow case
-
-
-// ===================================================================
-// Explicit format examples (for demonstration)
+// Explicit Format Examples
 // ===================================================================
 
 100 = stdout="100\n"  // explicit stdout, exit defaults to 0
