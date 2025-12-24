@@ -95,18 +95,17 @@ let x = 2 in let x = x * 2 in let x = x * 2 in x = 8
 // ===================================================================
 
 // Let binding with complex value expression
-// FIXME: all tests should use explicit parentheses for nested expressions if there could be any ambiguity as to their meaning
 let x = 2 + 3 in x = 5
 let x = 10 - 4 in x = 6
 let x = 3 * 4 in x = 12
 let x = 20 / 5 in x = 4
-let x = 2 + 3 * 4 in x = 14
+let x = 2 + (3 * 4) in x = 14
 let x = (2 + 3) * 4 in x = 20
 
 // Let binding with complex body expression
-let x = 5 in x + 2 * 3 = 11
+let x = 5 in x + (2 * 3) = 11
 let x = 10 in (x + 2) * 3 = 36
-let x = 4 in x * x + x = 20
+let x = 4 in (x * x) + x = 20
 
 // Multiple variables with complex expressions
 let x = 2 + 3 in let y = 4 * 5 in x + y = 25

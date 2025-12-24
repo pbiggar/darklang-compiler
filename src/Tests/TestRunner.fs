@@ -8,6 +8,7 @@ open System
 open System.IO
 open System.Reflection
 open System.Diagnostics
+open Output
 open TestDSL.PassTestRunner
 open TestDSL.E2EFormat
 open TestDSL.E2ETestRunner
@@ -74,8 +75,8 @@ let parallelMapWithLimit (maxDegree: int) (f: 'a -> 'b) (array: 'a array) : 'b a
 let main args =
     let totalTimer = Stopwatch.StartNew()
 
-    printfn "%s%s🧪 Running DSL-based Tests%s%s" Colors.bold Colors.cyan Colors.reset ""
-    printfn ""
+    println $"{Colors.bold}{Colors.cyan}🧪 Running DSL-based Tests{Colors.reset}"
+    println ""
 
     // Get the directory where the assembly is located (where test files are copied)
     let assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)
@@ -89,43 +90,43 @@ let main args =
         let anf2mirTests = Directory.GetFiles(anf2mirDir, "*.anf2mir")
         if anf2mirTests.Length > 0 then
             let sectionTimer = Stopwatch.StartNew()
-            printfn "%s📦 ANF→MIR Tests%s" Colors.cyan Colors.reset
-            printfn ""
+            println $"{Colors.cyan}📦 ANF→MIR Tests{Colors.reset}"
+            println ""
 
             for testPath in anf2mirTests do
                 let testName = Path.GetFileName testPath
                 let testTimer = Stopwatch.StartNew()
-                printf "  %s... " testName
+                print $"  {testName}... "
 
                 match loadANF2MIRTest testPath with
                 | Ok (input, expected) ->
                     let result = runANF2MIRTest input expected
                     testTimer.Stop()
                     if result.Success then
-                        printfn "%s✓ PASS%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
+                        println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         passed <- passed + 1
                     else
-                        printfn "%s✗ FAIL%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
-                        printfn "    %s" result.Message
+                        println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                        println $"    {result.Message}"
                         match result.Expected, result.Actual with
                         | Some exp, Some act ->
-                            printfn "    Expected:"
+                            println "    Expected:"
                             for line in exp.Split('\n') do
-                                printfn "      %s" line
-                            printfn "    Actual:"
+                                println $"      {line}"
+                            println "    Actual:"
                             for line in act.Split('\n') do
-                                printfn "      %s" line
+                                println $"      {line}"
                         | _ -> ()
                         failed <- failed + 1
                 | Error msg ->
                     testTimer.Stop()
-                    printfn "%s✗ ERROR%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
-                    printfn "    Failed to load test: %s" msg
+                    println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                    println $"    Failed to load test: {msg}"
                     failed <- failed + 1
 
             sectionTimer.Stop()
-            printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
-            printfn ""
+            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
+            println ""
 
     // Run MIR→LIR tests
     let mir2lirDir = Path.Combine(assemblyDir, "passes/mir2lir")
@@ -133,43 +134,43 @@ let main args =
         let mir2lirTests = Directory.GetFiles(mir2lirDir, "*.mir2lir")
         if mir2lirTests.Length > 0 then
             let sectionTimer = Stopwatch.StartNew()
-            printfn "%s🔄 MIR→LIR Tests%s" Colors.cyan Colors.reset
-            printfn ""
+            println $"{Colors.cyan}🔄 MIR→LIR Tests{Colors.reset}"
+            println ""
 
             for testPath in mir2lirTests do
                 let testName = Path.GetFileName testPath
                 let testTimer = Stopwatch.StartNew()
-                printf "  %s... " testName
+                print $"  {testName}... "
 
                 match loadMIR2LIRTest testPath with
                 | Ok (input, expected) ->
                     let result = runMIR2LIRTest input expected
                     testTimer.Stop()
                     if result.Success then
-                        printfn "%s✓ PASS%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
+                        println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         passed <- passed + 1
                     else
-                        printfn "%s✗ FAIL%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
-                        printfn "    %s" result.Message
+                        println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                        println $"    {result.Message}"
                         match result.Expected, result.Actual with
                         | Some exp, Some act ->
-                            printfn "    Expected:"
+                            println "    Expected:"
                             for line in exp.Split('\n') do
-                                printfn "      %s" line
-                            printfn "    Actual:"
+                                println $"      {line}"
+                            println "    Actual:"
                             for line in act.Split('\n') do
-                                printfn "      %s" line
+                                println $"      {line}"
                         | _ -> ()
                         failed <- failed + 1
                 | Error msg ->
                     testTimer.Stop()
-                    printfn "%s✗ ERROR%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
-                    printfn "    Failed to load test: %s" msg
+                    println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                    println $"    Failed to load test: {msg}"
                     failed <- failed + 1
 
             sectionTimer.Stop()
-            printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
-            printfn ""
+            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
+            println ""
 
     // Run LIR→ARM64 tests
     let lir2arm64Dir = Path.Combine(assemblyDir, "passes/lir2arm64")
@@ -177,43 +178,43 @@ let main args =
         let lir2arm64Tests = Directory.GetFiles(lir2arm64Dir, "*.lir2arm64")
         if lir2arm64Tests.Length > 0 then
             let sectionTimer = Stopwatch.StartNew()
-            printfn "%s🎯 LIR→ARM64 Tests%s" Colors.cyan Colors.reset
-            printfn ""
+            println $"{Colors.cyan}🎯 LIR→ARM64 Tests{Colors.reset}"
+            println ""
 
             for testPath in lir2arm64Tests do
                 let testName = Path.GetFileName testPath
                 let testTimer = Stopwatch.StartNew()
-                printf "  %s... " testName
+                print $"  {testName}... "
 
                 match loadLIR2ARM64Test testPath with
                 | Ok (input, expected) ->
                     let result = runLIR2ARM64Test input expected
                     testTimer.Stop()
                     if result.Success then
-                        printfn "%s✓ PASS%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
+                        println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         passed <- passed + 1
                     else
-                        printfn "%s✗ FAIL%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
-                        printfn "    %s" result.Message
+                        println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                        println $"    {result.Message}"
                         match result.Expected, result.Actual with
                         | Some exp, Some act ->
-                            printfn "    Expected:"
+                            println "    Expected:"
                             for line in exp.Split('\n') do
-                                printfn "      %s" line
-                            printfn "    Actual:"
+                                println $"      {line}"
+                            println "    Actual:"
                             for line in act.Split('\n') do
-                                printfn "      %s" line
+                                println $"      {line}"
                         | _ -> ()
                         failed <- failed + 1
                 | Error msg ->
                     testTimer.Stop()
-                    printfn "%s✗ ERROR%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
-                    printfn "    Failed to load test: %s" msg
+                    println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                    println $"    Failed to load test: {msg}"
                     failed <- failed + 1
 
             sectionTimer.Stop()
-            printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
-            printfn ""
+            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
+            println ""
 
     // Run ARM64 encoding tests
     let arm64encDir = Path.Combine(assemblyDir, "passes/arm64enc")
@@ -221,34 +222,34 @@ let main args =
         let arm64encTests = Directory.GetFiles(arm64encDir, "*.arm64enc")
         if arm64encTests.Length > 0 then
             let sectionTimer = Stopwatch.StartNew()
-            printfn "%s⚙️  ARM64 Encoding Tests%s" Colors.cyan Colors.reset
-            printfn ""
+            println $"{Colors.cyan}⚙️  ARM64 Encoding Tests{Colors.reset}"
+            println ""
 
             for testPath in arm64encTests do
                 let testName = Path.GetFileName testPath
                 let testTimer = Stopwatch.StartNew()
-                printf "  %s... " testName
+                print $"  {testName}... "
 
                 match TestDSL.ARM64EncodingTestRunner.loadARM64EncodingTest testPath with
                 | Ok test ->
                     let result = TestDSL.ARM64EncodingTestRunner.runARM64EncodingTest test
                     testTimer.Stop()
                     if result.Success then
-                        printfn "%s✓ PASS%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
+                        println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         passed <- passed + 1
                     else
-                        printfn "%s✗ FAIL%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
-                        printfn "    %s" result.Message
+                        println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                        println $"    {result.Message}"
                         failed <- failed + 1
                 | Error msg ->
                     testTimer.Stop()
-                    printfn "%s✗ ERROR%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
-                    printfn "    Failed to load test: %s" msg
+                    println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                    println $"    Failed to load test: {msg}"
                     failed <- failed + 1
 
             sectionTimer.Stop()
-            printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
-            printfn ""
+            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
+            println ""
 
     // Run Type Checking tests
     let typecheckDir = Path.Combine(assemblyDir, "typecheck")
@@ -256,8 +257,8 @@ let main args =
         let typecheckTestFiles = Directory.GetFiles(typecheckDir, "*.typecheck", SearchOption.AllDirectories)
         if typecheckTestFiles.Length > 0 then
             let sectionTimer = Stopwatch.StartNew()
-            printfn "%s📋 Type Checking Tests%s" Colors.cyan Colors.reset
-            printfn ""
+            println $"{Colors.cyan}📋 Type Checking Tests{Colors.reset}"
+            println ""
 
             // Parse and run all tests from .typecheck files
             let mutable sectionPassed = 0
@@ -278,24 +279,24 @@ let main args =
                                 match result.ExpectedType with
                                 | Some t -> TypeChecking.typeToString t
                                 | None -> "error"
-                            printf "  %s (%s)... " typeDesc fileName
-                            printfn "%s✗ FAIL%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime testTimer.Elapsed) Colors.reset
-                            printfn "    %s" result.Message
+                            print $"  {typeDesc} ({fileName})... "
+                            println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                            println $"    {result.Message}"
                             sectionFailed <- sectionFailed + 1
                             failed <- failed + 1
                 | Error msg ->
-                    printfn "%s✗ ERROR parsing %s%s" Colors.red (Path.GetFileName testFile) Colors.reset
-                    printfn "    %s" msg
+                    println $"{Colors.red}✗ ERROR parsing {Path.GetFileName testFile}{Colors.reset}"
+                    println $"    {msg}"
                     sectionFailed <- sectionFailed + 1
                     failed <- failed + 1
 
             sectionTimer.Stop()
             if sectionFailed = 0 then
-                printfn "  %s✓ All %d type checking tests passed%s %s(%s)%s" Colors.green sectionPassed Colors.reset Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
+                println $"  {Colors.green}✓ All {sectionPassed} type checking tests passed{Colors.reset} {Colors.gray}({formatTime sectionTimer.Elapsed}){Colors.reset}"
             else
-                printfn "  %s✓ %d passed, ✗ %d failed%s %s(%s)%s" Colors.yellow sectionPassed sectionFailed Colors.reset Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
-            printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
-            printfn ""
+                println $"  {Colors.yellow}✓ {sectionPassed} passed, ✗ {sectionFailed} failed{Colors.reset} {Colors.gray}({formatTime sectionTimer.Elapsed}){Colors.reset}"
+            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
+            println ""
 
     // Run E2E tests (in parallel)
     let e2eDir = Path.Combine(assemblyDir, "e2e")
@@ -303,8 +304,8 @@ let main args =
         let e2eTestFiles = Directory.GetFiles(e2eDir, "*.e2e", SearchOption.AllDirectories)
         if e2eTestFiles.Length > 0 then
             let sectionTimer = Stopwatch.StartNew()
-            printfn "%s🚀 E2E Tests%s" Colors.cyan Colors.reset
-            printfn ""
+            println $"{Colors.cyan}🚀 E2E Tests{Colors.reset}"
+            println ""
 
             // Parse all tests from .e2e files
             let allTests = ResizeArray<TestDSL.E2EFormat.E2ETest>()
@@ -318,8 +319,8 @@ let main args =
 
             // Report parse errors
             for (fileName, msg) in parseErrors do
-                printfn "%s✗ ERROR parsing %s%s" Colors.red fileName Colors.reset
-                printfn "    %s" msg
+                println $"{Colors.red}✗ ERROR parsing {fileName}{Colors.reset}"
+                println $"    {msg}"
                 failed <- failed + 1
 
             // Run tests in parallel (dynamically determined based on system resources) and print as they complete (in order)
@@ -332,50 +333,58 @@ let main args =
 
                 // Determine optimal parallelism based on system resources
                 let maxParallel = getOptimalParallelism()
-                printfn "  %s(Running with %d parallel tests based on system resources)%s" Colors.gray maxParallel Colors.reset
-                printfn ""
+                println $"  {Colors.gray}(Running with {maxParallel} parallel tests based on system resources){Colors.reset}"
+                println ""
 
                 // Helper function to print a test result
                 let printTestResult (test: E2ETest) (result: E2ETestResult) (elapsed: TimeSpan) =
-                    printf "  %s... " test.Name
+                    print $"  {test.Name}... "
                     if result.Success then
-                        printfn "%s✓ PASS%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime elapsed) Colors.reset
+                        println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime elapsed}){Colors.reset}"
                         lock lockObj (fun () -> passed <- passed + 1)
                     else
-                        printfn "%s✗ FAIL%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime elapsed) Colors.reset
-                        printfn "    %s" result.Message
+                        println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime elapsed}){Colors.reset}"
+                        println $"    {result.Message}"
 
                         // Show exit code mismatch
                         match result.ExitCode with
                         | Some code when code <> test.ExpectedExitCode ->
-                            printfn "    Expected exit code: %d" test.ExpectedExitCode
-                            printfn "    Actual exit code: %d" code
+                            println $"    Expected exit code: {test.ExpectedExitCode}"
+                            println $"    Actual exit code: {code}"
                         | _ -> ()
 
                         // Show stdout mismatch
                         match test.ExpectedStdout, result.Stdout with
                         | Some expected, Some actual when actual.Trim() <> expected.Trim() ->
-                            printfn "    Expected stdout: %s" (expected.Replace("\n", "\\n"))
-                            printfn "    Actual stdout: %s" (actual.Replace("\n", "\\n"))
+                            let expectedDisplay = expected.Replace("\n", "\\n")
+                            let actualDisplay = actual.Replace("\n", "\\n")
+                            println $"    Expected stdout: {expectedDisplay}"
+                            println $"    Actual stdout: {actualDisplay}"
                         | Some expected, None ->
-                            printfn "    Expected stdout: %s" (expected.Replace("\n", "\\n"))
-                            printfn "    Actual: no stdout captured"
+                            let expectedDisplay = expected.Replace("\n", "\\n")
+                            println $"    Expected stdout: {expectedDisplay}"
+                            println "    Actual: no stdout captured"
                         | None, Some actual when actual.Trim() <> "" ->
                             // Unexpected stdout when none was expected
-                            printfn "    Unexpected stdout: %s" (actual.Replace("\n", "\\n"))
+                            let actualDisplay = actual.Replace("\n", "\\n")
+                            println $"    Unexpected stdout: {actualDisplay}"
                         | _ -> ()
 
                         // Show stderr mismatch
                         match test.ExpectedStderr, result.Stderr with
                         | Some expected, Some actual when actual.Trim() <> expected.Trim() ->
-                            printfn "    Expected stderr: %s" (expected.Replace("\n", "\\n"))
-                            printfn "    Actual stderr: %s" (actual.Replace("\n", "\\n"))
+                            let expectedDisplay = expected.Replace("\n", "\\n")
+                            let actualDisplay = actual.Replace("\n", "\\n")
+                            println $"    Expected stderr: {expectedDisplay}"
+                            println $"    Actual stderr: {actualDisplay}"
                         | Some expected, None ->
-                            printfn "    Expected stderr: %s" (expected.Replace("\n", "\\n"))
-                            printfn "    Actual: no stderr captured"
+                            let expectedDisplay = expected.Replace("\n", "\\n")
+                            println $"    Expected stderr: {expectedDisplay}"
+                            println "    Actual: no stderr captured"
                         | None, Some actual when actual.Trim() <> "" ->
                             // Unexpected stderr when none was expected
-                            printfn "    Unexpected stderr: %s" (actual.Replace("\n", "\\n"))
+                            let actualDisplay = actual.Replace("\n", "\\n")
+                            println $"    Unexpected stderr: {actualDisplay}"
                         | _ -> ()
 
                         lock lockObj (fun () -> failed <- failed + 1)
@@ -412,64 +421,64 @@ let main args =
                 ) |> ignore
 
             sectionTimer.Stop()
-            printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
-            printfn ""
+            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
+            println ""
 
     // Run unit tests
     let sectionTimer = Stopwatch.StartNew()
-    printfn "%s🔧 Unit Tests%s" Colors.cyan Colors.reset
-    printfn ""
+    println $"{Colors.cyan}🔧 Unit Tests{Colors.reset}"
+    println ""
 
     let unitTestTimer = Stopwatch.StartNew()
     match EncodingTests.runAll() with
     | Ok () ->
         unitTestTimer.Stop()
-        printfn "  %s✓ Encoding Tests%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime unitTestTimer.Elapsed) Colors.reset
+        println $"  {Colors.green}✓ Encoding Tests{Colors.reset} {Colors.gray}({formatTime unitTestTimer.Elapsed}){Colors.reset}"
         passed <- passed + 1
     | Error msg ->
         unitTestTimer.Stop()
-        printfn "  %s✗ FAIL: Encoding tests%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime unitTestTimer.Elapsed) Colors.reset
-        printfn "    %s" msg
+        println $"  {Colors.red}✗ FAIL: Encoding tests{Colors.reset} {Colors.gray}({formatTime unitTestTimer.Elapsed}){Colors.reset}"
+        println $"    {msg}"
         failed <- failed + 1
 
     let binaryTestTimer = Stopwatch.StartNew()
     match BinaryTests.runAll() with
     | Ok () ->
         binaryTestTimer.Stop()
-        printfn "  %s✓ Binary Tests%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime binaryTestTimer.Elapsed) Colors.reset
+        println $"  {Colors.green}✓ Binary Tests{Colors.reset} {Colors.gray}({formatTime binaryTestTimer.Elapsed}){Colors.reset}"
         passed <- passed + 11  // 11 tests in BinaryTests
     | Error msg ->
         binaryTestTimer.Stop()
-        printfn "  %s✗ FAIL: Binary tests%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime binaryTestTimer.Elapsed) Colors.reset
-        printfn "    %s" msg
+        println $"  {Colors.red}✗ FAIL: Binary tests{Colors.reset} {Colors.gray}({formatTime binaryTestTimer.Elapsed}){Colors.reset}"
+        println $"    {msg}"
         failed <- failed + 1
 
     let typeCheckingTestTimer = Stopwatch.StartNew()
     match TypeCheckingTests.runAll() with
     | Ok () ->
         typeCheckingTestTimer.Stop()
-        printfn "  %s✓ Type Checking Tests%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime typeCheckingTestTimer.Elapsed) Colors.reset
+        println $"  {Colors.green}✓ Type Checking Tests{Colors.reset} {Colors.gray}({formatTime typeCheckingTestTimer.Elapsed}){Colors.reset}"
         passed <- passed + 8  // 8 tests in TypeCheckingTests
     | Error msg ->
         typeCheckingTestTimer.Stop()
-        printfn "  %s✗ FAIL: Type checking tests%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime typeCheckingTestTimer.Elapsed) Colors.reset
-        printfn "    %s" msg
+        println $"  {Colors.red}✗ FAIL: Type checking tests{Colors.reset} {Colors.gray}({formatTime typeCheckingTestTimer.Elapsed}){Colors.reset}"
+        println $"    {msg}"
         failed <- failed + 1
 
     sectionTimer.Stop()
-    printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
-    printfn ""
+    println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
+    println ""
 
     totalTimer.Stop()
-    printfn "%s%s═══════════════════════════════════════%s" Colors.bold Colors.cyan Colors.reset
-    printfn "%s%s📊 Test Results%s" Colors.bold Colors.cyan Colors.reset
-    printfn "%s%s═══════════════════════════════════════%s" Colors.bold Colors.cyan Colors.reset
+    println $"{Colors.bold}{Colors.cyan}═══════════════════════════════════════{Colors.reset}"
+    println $"{Colors.bold}{Colors.cyan}📊 Test Results{Colors.reset}"
+    println $"{Colors.bold}{Colors.cyan}═══════════════════════════════════════{Colors.reset}"
     if failed = 0 then
-        printfn "  %s✓ All tests passed: %d/%d%s" Colors.green (passed) (passed + failed) Colors.reset
+        println $"  {Colors.green}✓ All tests passed: {passed}/{passed + failed}{Colors.reset}"
     else
-        printfn "  %s✓ Passed: %d%s" Colors.green passed Colors.reset
-        printfn "  %s✗ Failed: %d%s" Colors.red failed Colors.reset
-    printfn "  %s⏱  Total time: %s%s" Colors.gray (formatTime totalTimer.Elapsed) Colors.reset
-    printfn "%s%s═══════════════════════════════════════%s" Colors.bold Colors.cyan Colors.reset
+        println $"  {Colors.green}✓ Passed: {passed}{Colors.reset}"
+        println $"  {Colors.red}✗ Failed: {failed}{Colors.reset}"
+    println $"  {Colors.gray}⏱  Total time: {formatTime totalTimer.Elapsed}{Colors.reset}"
+    println $"{Colors.bold}{Colors.cyan}═══════════════════════════════════════{Colors.reset}"
 
     if failed = 0 then 0 else 1
