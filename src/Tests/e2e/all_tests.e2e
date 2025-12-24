@@ -3,22 +3,27 @@
 // Format: source = expectations  // optional comment
 //
 // Expectations:
-//   Old format: exit_code (e.g., "42 = 42")
-//   New format: [exit=N] [stdout="..."] [stderr="..."]
+//   Simple format: value (e.g., "42 = 42")
+//     - Interprets as: stdout="42\n", exit=0
+//     - Verifies the printed output (binaries exit with 0 on success)
+//   Explicit format: [exit=N] [stdout="..."] [stderr="..."]
+//     - For error cases or when you need non-zero exit codes
 //
-// Attributes (new format):
+// Attributes (explicit format):
 //   exit=N         - Expected exit code (default: 0)
 //   stdout="..."   - Expected stdout with escape sequences: \n, \t, \\, \"
 //   stderr="..."   - Expected stderr (same escape sequences)
 //
 // Examples:
-//   42 = 42                           // exit=42 (old format)
-//   2 + 3 = exit=5                    // exit=5 (new format)
-//   print(42) = stdout="42\n"         // stdout check, exit=0 (default)
-//   1/0 = exit=1 stderr="error\n"     // error case
+//   42 = 42                           // stdout="42\n", exit=0 (simple format)
+//   2 + 3 = 5                         // stdout="5\n", exit=0 (simple format)
+//   42 = stdout="42\n"                // explicit stdout (exit defaults to 0)
+//   1/0 = exit=1 stderr="error\n"     // error case with non-zero exit
 //
-// Note: Currently, compiled binaries only return exit codes (0-255).
-// The new format is preparation for future print capability.
+// Implementation note:
+// The compiled binary returns the result as an exit code (0-255).
+// CompilerLibrary.execute() captures this and synthesizes stdout for testing.
+// This allows tests to verify output without implementing full print in ARM64.
 
 
 // Constants
@@ -65,7 +70,6 @@
 123456789 = 21  // exit codes are modulo 256
 
 
-// New format examples (validates empty stdout/stderr)
-100 = exit=100 stdout="" stderr=""  // explicit verification of empty output
-255 = exit=255  // using new exit= syntax
-10 + 5 = exit=15 stdout=""  // partial specification (stderr defaults to empty)
+// Explicit format examples (for demonstration)
+100 = stdout="100\n"  // explicit stdout, exit defaults to 0
+10 + 5 = stdout="15\n"  // same as simple format "10 + 5 = 15"

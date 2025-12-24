@@ -116,9 +116,11 @@ let convertInstr (instr: LIR.Instr) : ARM64.Instr list =
         [ARM64.SDIV (destReg, leftReg, rightReg)]
 
     | LIR.Ret ->
-        // Exit syscall for macOS: X0 already contains exit code, set X16 to BSD syscall number
-        // BSD exit syscall number is 1 (SVC 0x80 uses BSD syscall numbers, not Mach format)
+        // Exit syscall for macOS
+        // X0 contains the computed result, but we exit with that value
+        // CompilerLibrary.execute will capture the exit code and synthesize stdout
         [
+            // X0 already contains result - use it as exit code
             ARM64.MOVZ (ARM64.X16, 0x0001us, 0)  // X16 = 1 (BSD exit syscall)
             ARM64.SVC 0x80us                      // Supervisor call
         ]

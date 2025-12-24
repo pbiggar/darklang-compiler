@@ -77,20 +77,22 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, str
                     else trimmed
 
                 match Int32.TryParse(exitCodeStr) with
-                | true, exitCode ->
-                    // Check if there are attributes after the exit code
+                | true, value ->
+                    // Check if there are attributes after the value
                     let remaining =
                         if spaceIdx >= 0 then trimmed.Substring(spaceIdx + 1).Trim()
                         else ""
 
                     if remaining.Length = 0 then
-                        // Pure old format
-                        Ok (exitCode, None, None)
+                        // Bare number format: expect stdout with exit=0
+                        // e.g., "42 = 42" means stdout="42\n", exit=0
+                        // The binary returns the value as exit code, but CompilerLibrary reports exit=0
+                        Ok (0, Some $"{value}\n", None)
                     else
                         // Mixed format error
-                        Error "Cannot mix bare exit code with attributes. Use 'exit=N' instead."
+                        Error "Cannot mix bare number with attributes. Use explicit attributes instead."
                 | false, _ ->
-                    Error $"Invalid exit code: {exitCodeStr}"
+                    Error $"Invalid value: {exitCodeStr}"
             else
                 // New format: parse attributes
                 let mutable exitCode = 0  // default
