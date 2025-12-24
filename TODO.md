@@ -12,26 +12,6 @@
   - Converts integers to decimal strings via repeated division by 10
   - Should become a library function once strings are supported
 
-### Negative Numbers
-
-- [x] Implement negative number support in print routine
-  - Added TBNZ instruction to test sign bit (bit 63)
-  - Added NEG instruction to compute absolute value
-  - Print '-' character before digits for negative numbers
-- [x] Add E2E tests for negative number operations
-  - Subtraction producing negative results (e.g., `0 - 1 = -1`)
-  - Mixed operations with negative results (e.g., `5 - 10 + 3 = -2`)
-- [x] Add parser support for negative literals
-  - Added `Neg` expression to AST for unary negation
-  - Parser handles unary minus in primary expressions
-  - AST_to_ANF converts `Neg(expr)` to `0 - expr`
-- [x] Add tests for negative literals and operations
-  - Negative literal constants: `-5`, `-42`, `-1`
-  - Operations with negative literals: `-5 + 10`, `-5 * 3`, etc.
-  - Negative multiplication/division: `-5 * -3 = 15`, `-10 / -2 = 5`
-  - Double negation: `-(-5) = 5`
-  - Negation of expressions: `-(10 + 5) = -15`
-
 ### Booleans
 
 - [ ] Implement bool type in AST
