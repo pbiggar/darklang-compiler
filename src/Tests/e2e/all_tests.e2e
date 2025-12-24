@@ -72,9 +72,9 @@
 (2 + 3) * 4 = 20
 ((1 + 2) * (3 + 4)) = 21  // nested parentheses
 
-// Complex expressions
-10 + 20 / 2 - 3 * 4 = 32  // BUG: should be 8, subtraction followed by multiplication treated as addition
-10 - 2 * 3 + 8 / 4 = 18  // BUG: should be 6, subtraction followed by multiplication treated as addition
+// Complex expressions (operator precedence)
+10 + 20 / 2 - 3 * 4 = 8  // 10 + (20/2) - (3*4) = 10 + 10 - 12 = 8
+10 - 2 * 3 + 8 / 4 = 6  // 10 - (2*3) + (8/4) = 10 - 6 + 2 = 6
 
 
 // ===================================================================

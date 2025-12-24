@@ -144,7 +144,7 @@ let execute (verbosity: int) (binary: byte array) : ExecutionResult =
         else
             if verbosity >= 1 then printfn "    • Code signing skipped (not required on Linux)"
 
-        // Execute
+        // Execute (with retry on "Text file busy" - can happen in parallel test execution)
         if verbosity >= 1 then printfn "    • Running binary..."
         let execStart = sw.Elapsed.TotalMilliseconds
         let execInfo = ProcessStartInfo(tempPath)
@@ -152,7 +152,16 @@ let execute (verbosity: int) (binary: byte array) : ExecutionResult =
         execInfo.RedirectStandardError <- true
         execInfo.UseShellExecute <- false
 
-        use execProc = Process.Start(execInfo)
+        // Retry up to 3 times with small delay if we get "Text file busy"
+        let rec startWithRetry attempts =
+            try
+                Process.Start(execInfo)
+            with
+            | :? System.ComponentModel.Win32Exception as ex when ex.Message.Contains("Text file busy") && attempts > 0 ->
+                Threading.Thread.Sleep(10)  // Wait 10ms before retry
+                startWithRetry (attempts - 1)
+
+        use execProc = startWithRetry 3
 
         // Start async reads immediately to avoid blocking
         let stdoutTask = execProc.StandardOutput.ReadToEndAsync()
