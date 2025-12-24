@@ -29,6 +29,31 @@ let formatTime (elapsed: TimeSpan) =
     else
         sprintf "%.2fs" elapsed.TotalSeconds
 
+// Get optimal parallelism based on system resources
+let getOptimalParallelism () : int =
+    // Get CPU core count
+    let cpuCores = Environment.ProcessorCount
+
+    // Get available memory in GB
+    let gcMemoryInfo = System.GC.GetGCMemoryInfo()
+    let totalMemoryGB = float gcMemoryInfo.TotalAvailableMemoryBytes / (1024.0 * 1024.0 * 1024.0)
+
+    // Each E2E test needs roughly:
+    // - 1 CPU core for compilation + execution
+    // - ~200MB memory (compiler + generated binary + test overhead)
+    let estimatedMemoryPerTestGB = 0.2
+
+    // Calculate max based on memory
+    let maxByMemory = int (totalMemoryGB / estimatedMemoryPerTestGB)
+
+    // Calculate max based on CPU (leave 1 core free for system)
+    let maxByCPU = max 1 (cpuCores - 1)
+
+    // Use the smaller of the two, with a minimum of 2 and maximum of 16
+    let optimal = min (min maxByMemory maxByCPU) 16 |> max 2
+
+    optimal
+
 // Parallel map with limited degree of parallelism
 let parallelMapWithLimit (maxDegree: int) (f: 'a -> 'b) (array: 'a array) : 'b array =
     let results = Array.zeroCreate array.Length
@@ -250,13 +275,18 @@ let main args =
                 printfn "    %s" msg
                 failed <- failed + 1
 
-            // Run tests in parallel (max 6 concurrent) and print as they complete (in order)
+            // Run tests in parallel (dynamically determined based on system resources) and print as they complete (in order)
             if allTests.Count > 0 then
                 let testsArray = allTests.ToArray()
                 let numTests = testsArray.Length
                 let results = Array.zeroCreate<option<E2ETest * E2ETestResult * TimeSpan>> numTests
                 let mutable nextToPrint = 0
                 let lockObj = obj()
+
+                // Determine optimal parallelism based on system resources
+                let maxParallel = getOptimalParallelism()
+                printfn "  %s(Running with %d parallel tests based on system resources)%s" Colors.gray maxParallel Colors.reset
+                printfn ""
 
                 // Helper function to print a test result
                 let printTestResult (test: E2ETest) (result: E2ETestResult) (elapsed: TimeSpan) =
@@ -314,7 +344,7 @@ let main args =
 
                 // Run tests in parallel
                 let options = System.Threading.Tasks.ParallelOptions()
-                options.MaxDegreeOfParallelism <- 6
+                options.MaxDegreeOfParallelism <- maxParallel
                 System.Threading.Tasks.Parallel.For(
                     0,
                     numTests,
