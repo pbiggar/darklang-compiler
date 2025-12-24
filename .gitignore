@@ -33,6 +33,9 @@ TestResults/
 # MacOS
 .DS_Store
 
+# Claude Code
+.claude/settings.local.json
+
 # Examples output
 examples/*.out
 examples/output
