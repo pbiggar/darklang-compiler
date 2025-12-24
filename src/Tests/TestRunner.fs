@@ -254,19 +254,40 @@ let main args =
                     else
                         printfn "%s✗ FAIL%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime elapsed) Colors.reset
                         printfn "    %s" result.Message
+
+                        // Show exit code mismatch
                         match result.ExitCode with
                         | Some code when code <> test.ExpectedExitCode ->
                             printfn "    Expected exit code: %d" test.ExpectedExitCode
                             printfn "    Actual exit code: %d" code
                         | _ -> ()
-                        match result.Stdout with
-                        | Some stdout when stdout.Trim() <> "" ->
-                            printfn "    Stdout: %s" (stdout.Trim())
+
+                        // Show stdout mismatch
+                        match test.ExpectedStdout, result.Stdout with
+                        | Some expected, Some actual when actual.Trim() <> expected.Trim() ->
+                            printfn "    Expected stdout: %s" (expected.Replace("\n", "\\n"))
+                            printfn "    Actual stdout: %s" (actual.Replace("\n", "\\n"))
+                        | Some expected, None ->
+                            printfn "    Expected stdout: %s" (expected.Replace("\n", "\\n"))
+                            printfn "    Actual: no stdout captured"
+                        | None, Some actual when actual.Trim() <> "" ->
+                            // Unexpected stdout when none was expected
+                            printfn "    Unexpected stdout: %s" (actual.Replace("\n", "\\n"))
                         | _ -> ()
-                        match result.Stderr with
-                        | Some stderr when stderr.Trim() <> "" ->
-                            printfn "    Stderr: %s" (stderr.Trim())
+
+                        // Show stderr mismatch
+                        match test.ExpectedStderr, result.Stderr with
+                        | Some expected, Some actual when actual.Trim() <> expected.Trim() ->
+                            printfn "    Expected stderr: %s" (expected.Replace("\n", "\\n"))
+                            printfn "    Actual stderr: %s" (actual.Replace("\n", "\\n"))
+                        | Some expected, None ->
+                            printfn "    Expected stderr: %s" (expected.Replace("\n", "\\n"))
+                            printfn "    Actual: no stderr captured"
+                        | None, Some actual when actual.Trim() <> "" ->
+                            // Unexpected stderr when none was expected
+                            printfn "    Unexpected stderr: %s" (actual.Replace("\n", "\\n"))
                         | _ -> ()
+
                         failed <- failed + 1
 
             sectionTimer.Stop()

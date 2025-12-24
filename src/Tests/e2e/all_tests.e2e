@@ -1,9 +1,24 @@
 // E2E Test Suite
 //
-// Format: source = expected_exit_code  // optional comment
+// Format: source = expectations  // optional comment
 //
-// Each test is a single line with the source code and expected exit code.
-// Exit codes are used because the compiler returns the result as an exit code.
+// Expectations:
+//   Old format: exit_code (e.g., "42 = 42")
+//   New format: [exit=N] [stdout="..."] [stderr="..."]
+//
+// Attributes (new format):
+//   exit=N         - Expected exit code (default: 0)
+//   stdout="..."   - Expected stdout with escape sequences: \n, \t, \\, \"
+//   stderr="..."   - Expected stderr (same escape sequences)
+//
+// Examples:
+//   42 = 42                           // exit=42 (old format)
+//   2 + 3 = exit=5                    // exit=5 (new format)
+//   print(42) = stdout="42\n"         // stdout check, exit=0 (default)
+//   1/0 = exit=1 stderr="error\n"     // error case
+//
+// Note: Currently, compiled binaries only return exit codes (0-255).
+// The new format is preparation for future print capability.
 
 
 // Constants
@@ -48,3 +63,9 @@
 
 // Edge cases
 123456789 = 21  // exit codes are modulo 256
+
+
+// New format examples (validates empty stdout/stderr)
+100 = exit=100 stdout="" stderr=""  // explicit verification of empty output
+255 = exit=255  // using new exit= syntax
+10 + 5 = exit=15 stdout=""  // partial specification (stderr defaults to empty)
