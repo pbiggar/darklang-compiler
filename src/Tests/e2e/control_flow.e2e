@@ -34,3 +34,19 @@ if true || false then 10 else 20 = 10
 
 // Multiple operations
 let x = 5 in let y = 3 in if x > y then x + y else x - y = 8
+
+// If-expressions in atom position (sub-expressions)
+(if true then 5 else 10) + 3 = 8
+(if false then 5 else 10) + 3 = 13
+2 * (if true then 3 else 4) = 6
+(if 1 < 2 then 100 else 200) - 50 = 50
+
+// If in both operands
+(if true then 1 else 2) + (if false then 3 else 4) = 5
+
+// Nested if in atom position
+(if true then (if false then 1 else 2) else 3) + 10 = 12
+
+// Let binding with if in atom position
+let x = if true then 42 else 99 in x = 42
+let y = (if false then 10 else 20) + 5 in y = 25

@@ -200,6 +200,8 @@ let prettyPrintANFCExpr = function
         $"{prettyPrintANFAtom left} {prettyPrintANFOp op} {prettyPrintANFAtom right}"
     | ANF.UnaryPrim (op, operand) ->
         $"{prettyPrintANFUnaryOp op}{prettyPrintANFAtom operand}"
+    | ANF.IfValue (cond, thenAtom, elseAtom) ->
+        $"if {prettyPrintANFAtom cond} then {prettyPrintANFAtom thenAtom} else {prettyPrintANFAtom elseAtom}"
 
 /// Pretty-print ANF expression (recursive)
 let rec prettyPrintANFExpr = function

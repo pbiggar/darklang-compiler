@@ -182,10 +182,18 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
                 let allBindings = leftBindings @ rightBindings @ [(tempVar, cexpr)]
                 (ANF.Var tempVar, allBindings, varGen3)))
 
-    | AST.If (_, _, _) ->
-        // If expressions in atom position are not yet supported
-        // They should only appear at AExpr level via toANF
-        Error "If expressions in atom position are not yet supported - use at statement level instead"
+    | AST.If (condExpr, thenExpr, elseExpr) ->
+        // If expression in atom position: convert all parts to atoms, create IfValue
+        toAtom condExpr varGen env |> Result.bind (fun (condAtom, condBindings, varGen1) ->
+            toAtom thenExpr varGen1 env |> Result.bind (fun (thenAtom, thenBindings, varGen2) ->
+                toAtom elseExpr varGen2 env |> Result.bind (fun (elseAtom, elseBindings, varGen3) ->
+                    // Create a temporary for the result
+                    let (tempVar, varGen4) = ANF.freshVar varGen3
+                    // Create an IfValue CExpr
+                    let ifCExpr = ANF.IfValue (condAtom, thenAtom, elseAtom)
+                    // Return temp as atom with all bindings
+                    let allBindings = condBindings @ thenBindings @ elseBindings @ [(tempVar, ifCExpr)]
+                    Ok (ANF.Var tempVar, allBindings, varGen4))))
 
 /// Wrap let bindings around an expression
 and wrapBindings (bindings: (ANF.TempId * ANF.CExpr) list) (expr: ANF.AExpr) : ANF.AExpr =

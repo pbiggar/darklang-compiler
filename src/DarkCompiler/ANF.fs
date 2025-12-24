@@ -57,6 +57,7 @@ type CExpr =
     | Atom of Atom
     | Prim of BinOp * Atom * Atom
     | UnaryPrim of UnaryOp * Atom
+    | IfValue of cond:Atom * thenValue:Atom * elseValue:Atom  // If-expression that produces a value
 
 /// ANF expressions with explicit sequencing
 type AExpr =

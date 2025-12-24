@@ -86,20 +86,71 @@ let rec convertExpr
         (operand, builder')
 
     | ANF.Let (tempId, cexpr, rest) ->
-        // Let binding: add instruction to current block, continue
+        // Let binding: handle based on cexpr type
         let destReg = tempToVReg tempId
 
-        let instr =
-            match cexpr with
-            | ANF.Atom atom ->
-                MIR.Mov (destReg, atomToOperand atom)
-            | ANF.Prim (op, leftAtom, rightAtom) ->
-                MIR.BinOp (destReg, convertBinOp op, atomToOperand leftAtom, atomToOperand rightAtom)
-            | ANF.UnaryPrim (op, atom) ->
-                MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand atom)
+        match cexpr with
+        | ANF.IfValue (condAtom, thenAtom, elseAtom) ->
+            // IfValue requires control flow blocks
+            // 1. End current block with branch on condition
+            // 2. Create then-block (assigns thenAtom to destReg, jumps to join)
+            // 3. Create else-block (assigns elseAtom to destReg, jumps to join)
+            // 4. Create join-block (continues with rest)
 
-        let newInstrs = currentInstrs @ [instr]
-        convertExpr rest currentLabel newInstrs builder
+            let condOp = atomToOperand condAtom
+            let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
+            let (elseLabel, labelGen2) = MIR.freshLabel labelGen1
+            let (joinLabel, labelGen3) = MIR.freshLabel labelGen2
+
+            // Current block ends with branch
+            let currentBlock = {
+                MIR.Label = currentLabel
+                MIR.Instrs = currentInstrs
+                MIR.Terminator = MIR.Branch (condOp, thenLabel, elseLabel)
+            }
+
+            // Then block: assign thenAtom to destReg, jump to join
+            let thenBlock = {
+                MIR.Label = thenLabel
+                MIR.Instrs = [MIR.Mov (destReg, atomToOperand thenAtom)]
+                MIR.Terminator = MIR.Jump joinLabel
+            }
+
+            // Else block: assign elseAtom to destReg, jump to join
+            let elseBlock = {
+                MIR.Label = elseLabel
+                MIR.Instrs = [MIR.Mov (destReg, atomToOperand elseAtom)]
+                MIR.Terminator = MIR.Jump joinLabel
+            }
+
+            let builder' = {
+                builder with
+                    Blocks = builder.Blocks
+                             |> Map.add currentLabel currentBlock
+                             |> Map.add thenLabel thenBlock
+                             |> Map.add elseLabel elseBlock
+                    LabelGen = labelGen3
+            }
+
+            // Continue with rest in join block (no instructions yet)
+            convertExpr rest joinLabel [] builder'
+
+        | _ ->
+            // Simple CExpr: add instruction to current block, continue
+            let instr =
+                match cexpr with
+                | ANF.Atom atom ->
+                    MIR.Mov (destReg, atomToOperand atom)
+                | ANF.Prim (op, leftAtom, rightAtom) ->
+                    MIR.BinOp (destReg, convertBinOp op, atomToOperand leftAtom, atomToOperand rightAtom)
+                | ANF.UnaryPrim (op, atom) ->
+                    MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand atom)
+                | ANF.IfValue _ ->
+                    // Already handled above
+                    failwith "Unreachable: IfValue already handled"
+
+            let newInstrs = currentInstrs @ [instr]
+            convertExpr rest currentLabel newInstrs builder
 
     | ANF.If (condAtom, thenBranch, elseBranch) ->
         // If expression:
@@ -225,16 +276,63 @@ and convertExprToOperand
 
     | ANF.Let (tempId, cexpr, rest) ->
         let destReg = tempToVReg tempId
-        let instr =
-            match cexpr with
-            | ANF.Atom atom -> MIR.Mov (destReg, atomToOperand atom)
-            | ANF.Prim (op, leftAtom, rightAtom) ->
-                MIR.BinOp (destReg, convertBinOp op, atomToOperand leftAtom, atomToOperand rightAtom)
-            | ANF.UnaryPrim (op, atom) ->
-                MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand atom)
 
-        // Let bindings accumulate instructions, pass through join label
-        convertExprToOperand rest startLabel (startInstrs @ [instr]) builder
+        match cexpr with
+        | ANF.IfValue (condAtom, thenAtom, elseAtom) ->
+            // IfValue requires control flow - similar to convertExpr version
+            let condOp = atomToOperand condAtom
+            let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
+            let (elseLabel, labelGen2) = MIR.freshLabel labelGen1
+            let (joinLabel, labelGen3) = MIR.freshLabel labelGen2
+
+            // Current block ends with branch
+            let startBlock = {
+                MIR.Label = startLabel
+                MIR.Instrs = startInstrs
+                MIR.Terminator = MIR.Branch (condOp, thenLabel, elseLabel)
+            }
+
+            // Then block: assign thenAtom to destReg, jump to join
+            let thenBlock = {
+                MIR.Label = thenLabel
+                MIR.Instrs = [MIR.Mov (destReg, atomToOperand thenAtom)]
+                MIR.Terminator = MIR.Jump joinLabel
+            }
+
+            // Else block: assign elseAtom to destReg, jump to join
+            let elseBlock = {
+                MIR.Label = elseLabel
+                MIR.Instrs = [MIR.Mov (destReg, atomToOperand elseAtom)]
+                MIR.Terminator = MIR.Jump joinLabel
+            }
+
+            let builder' = {
+                builder with
+                    Blocks = builder.Blocks
+                             |> Map.add startLabel startBlock
+                             |> Map.add thenLabel thenBlock
+                             |> Map.add elseLabel elseBlock
+                    LabelGen = labelGen3
+            }
+
+            // Continue with rest in join block (no instructions yet)
+            convertExprToOperand rest joinLabel [] builder'
+
+        | _ ->
+            // Simple CExpr: create instruction and accumulate
+            let instr =
+                match cexpr with
+                | ANF.Atom atom -> MIR.Mov (destReg, atomToOperand atom)
+                | ANF.Prim (op, leftAtom, rightAtom) ->
+                    MIR.BinOp (destReg, convertBinOp op, atomToOperand leftAtom, atomToOperand rightAtom)
+                | ANF.UnaryPrim (op, atom) ->
+                    MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand atom)
+                | ANF.IfValue _ ->
+                    // Already handled above
+                    failwith "Unreachable: IfValue already handled"
+
+            // Let bindings accumulate instructions, pass through join label
+            convertExprToOperand rest startLabel (startInstrs @ [instr]) builder
 
     | ANF.If (condAtom, thenBranch, elseBranch) ->
         // If expression: creates blocks with branch/jump/join structure
