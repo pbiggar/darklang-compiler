@@ -399,6 +399,19 @@ let main args =
         printfn "    %s" ex.Message
         failed <- failed + 1
 
+    let typeCheckingTestTimer = Stopwatch.StartNew()
+    try
+        TypeCheckingTests.runAll()
+        typeCheckingTestTimer.Stop()
+        printfn "  %s✓ Type Checking Tests%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime typeCheckingTestTimer.Elapsed) Colors.reset
+        passed <- passed + 8  // 8 tests in TypeCheckingTests
+    with
+    | ex ->
+        typeCheckingTestTimer.Stop()
+        printfn "  %s✗ FAIL: Type checking tests%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime typeCheckingTestTimer.Elapsed) Colors.reset
+        printfn "    %s" ex.Message
+        failed <- failed + 1
+
     sectionTimer.Stop()
     printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
     printfn ""

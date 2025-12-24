@@ -14,6 +14,15 @@
 
 module AST
 
+/// Type system - will be used for type checking in Phase 0+
+type Type =
+    | TInt64
+    | TBool
+    | TFloat64
+    | TString
+    | TUnit
+    | TFunction of Type list * Type  // parameter types * return type
+
 /// Binary operators
 type BinOp =
     | Add

@@ -24,6 +24,7 @@
     <!-- Unit tests -->
     <Compile Include="EncodingTests.fs" />
     <Compile Include="BinaryTests.fs" />
+    <Compile Include="TypeCheckingTests.fs" />
 
     <!-- Test Runner (must be last) -->
     <Compile Include="TestRunner.fs" />
