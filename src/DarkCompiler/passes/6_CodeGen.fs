@@ -69,6 +69,89 @@ let loadImmediate (dest: ARM64.Reg) (value: int64) : ARM64.Instr list =
 
     instrs
 
+/// Generate ARM64 instructions to load a stack slot into a register
+/// Stack slots are accessed relative to FP (X29)
+/// Uses LDUR for signed offsets (stack slots are negative from FP)
+let loadStackSlot (dest: ARM64.Reg) (offset: int) : ARM64.Instr list =
+    // LDUR dest, [X29, #offset] - signed offset version
+    // Offset is in bytes, can be negative (-256 to +255)
+    [ARM64.LDUR (dest, ARM64.X29, int16 offset)]
+
+/// Generate ARM64 instructions to store a register to a stack slot
+/// Stack slots are accessed relative to FP (X29)
+/// Uses STUR for signed offsets (stack slots are negative from FP)
+let storeStackSlot (src: ARM64.Reg) (offset: int) : ARM64.Instr list =
+    // STUR src, [X29, #offset] - signed offset version
+    // Offset is in bytes, can be negative (-256 to +255)
+    [ARM64.STUR (src, ARM64.X29, int16 offset)]
+
+/// Convert LIR operand to ARM64 register, loading from stack if needed
+/// Returns (register, instruction list to load it)
+/// Uses X9 as temporary register for stack slots
+let operandToReg (operand: LIR.Operand) : Result<ARM64.Reg * ARM64.Instr list, string> =
+    match operand with
+    | LIR.Reg reg ->
+        lirRegToARM64Reg reg
+        |> Result.map (fun r -> (r, []))
+    | LIR.Imm value ->
+        // Load immediate into X9
+        Ok (ARM64.X9, loadImmediate ARM64.X9 value)
+    | LIR.StackSlot offset ->
+        // Load stack slot into X9
+        Ok (ARM64.X9, loadStackSlot ARM64.X9 offset)
+
+/// Generate function prologue
+/// Saves FP, LR, callee-saved registers, and allocates stack space
+let generatePrologue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM64.Instr list =
+    // Prologue sequence:
+    // 1. Decrement SP and save FP (X29) and LR (X30)
+    // 2. Set FP = SP: MOV X29, SP
+    // 3. Save callee-saved registers (if any): STP X19, X20, [SP, #-16]! ...
+    // 4. Allocate stack space for spills: SUB SP, SP, #stackSize
+
+    let saveFpLr = [
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)  // Decrement SP by 16
+        ARM64.STP (ARM64.X29, ARM64.X30, ARM64.SP, 0s)  // Store at [SP]
+    ]
+    let setFp = [ARM64.MOV_reg (ARM64.X29, ARM64.SP)]
+
+    // TODO: Save callee-saved registers when we add X19-X28 to LIR.PhysReg
+    let saveCalleeSaved = []
+
+    let allocStack =
+        if stackSize > 0 then
+            [ARM64.SUB_imm (ARM64.SP, ARM64.SP, uint16 stackSize)]
+        else
+            []
+
+    saveFpLr @ setFp @ saveCalleeSaved @ allocStack
+
+/// Generate function epilogue
+/// Restores callee-saved registers, FP, LR, and returns
+let generateEpilogue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM64.Instr list =
+    // Epilogue sequence (reverse of prologue):
+    // 1. Deallocate stack: ADD SP, SP, #stackSize
+    // 2. Restore callee-saved registers: LDP X19, X20, [SP], #16 ...
+    // 3. Restore FP and LR from [SP], then increment SP
+    // 4. Return: RET
+
+    let deallocStack =
+        if stackSize > 0 then
+            [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 stackSize)]
+        else
+            []
+
+    // TODO: Restore callee-saved registers when we add X19-X28 to LIR.PhysReg
+    let restoreCalleeSaved = []
+
+    let restoreFpLr = [
+        ARM64.LDP (ARM64.X29, ARM64.X30, ARM64.SP, 0s)  // Load from [SP]
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)  // Increment SP by 16
+    ]
+    let ret = [ARM64.RET]
+
+    deallocStack @ restoreCalleeSaved @ restoreFpLr @ ret
+
 /// Convert LIR instruction to ARM64 instructions
 let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
     match instr with
@@ -81,8 +164,14 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             | LIR.Reg srcReg ->
                 lirRegToARM64Reg srcReg
                 |> Result.map (fun srcARM64 -> [ARM64.MOV_reg (destReg, srcARM64)])
-            | LIR.StackSlot _ ->
-                Error "Stack slots not yet supported")
+            | LIR.StackSlot offset ->
+                // Load from stack slot into destination register
+                Ok (loadStackSlot destReg offset))
+
+    | LIR.Store (offset, src) ->
+        // Store register to stack slot
+        lirRegToARM64Reg src
+        |> Result.map (fun srcReg -> storeStackSlot srcReg offset)
 
     | LIR.Add (dest, left, right) ->
         lirRegToARM64Reg dest
@@ -100,8 +189,10 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                 | LIR.Reg rightReg ->
                     lirRegToARM64Reg rightReg
                     |> Result.map (fun rightARM64 -> [ARM64.ADD_reg (destReg, leftReg, rightARM64)])
-                | LIR.StackSlot _ ->
-                    Error "Stack slots not yet supported"))
+                | LIR.StackSlot offset ->
+                    // Load stack slot into temp register, then add
+                    let tempReg = ARM64.X9
+                    Ok (loadStackSlot tempReg offset @ [ARM64.ADD_reg (destReg, leftReg, tempReg)])))
 
     | LIR.Sub (dest, left, right) ->
         lirRegToARM64Reg dest
@@ -117,8 +208,11 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                 | LIR.Reg rightReg ->
                     lirRegToARM64Reg rightReg
                     |> Result.map (fun rightARM64 -> [ARM64.SUB_reg (destReg, leftReg, rightARM64)])
-                | LIR.StackSlot _ ->
-                    Error "Stack slots not yet supported"))
+                | LIR.StackSlot offset ->
+                    // Load stack slot into temp register, then subtract
+                    let tempReg = ARM64.X9
+                    Ok (loadStackSlot tempReg offset @ [ARM64.SUB_reg (destReg, leftReg, tempReg)])))
+
 
     | LIR.Mul (dest, left, right) ->
         lirRegToARM64Reg dest
@@ -148,8 +242,10 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             | LIR.Reg rightReg ->
                 lirRegToARM64Reg rightReg
                 |> Result.map (fun rightARM64 -> [ARM64.CMP_reg (leftReg, rightARM64)])
-            | LIR.StackSlot _ ->
-                Error "Stack slots not yet supported")
+            | LIR.StackSlot offset ->
+                // Load stack slot into temp register, then compare
+                let tempReg = ARM64.X9
+                Ok (loadStackSlot tempReg offset @ [ARM64.CMP_reg (leftReg, tempReg)]))
 
     | LIR.Cset (dest, cond) ->
         lirRegToARM64Reg dest
@@ -195,6 +291,12 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             else
                 Runtime.generatePrintInt ())
 
+    | LIR.Call (dest, funcName, args) ->
+        // Function call: arguments already moved to X0-X7 by LIR pass
+        // Just generate BL instruction
+        // Return value will be in X0, already moved to dest by LIR pass
+        Ok [ARM64.BL funcName]
+
     | LIR.PrintInt reg ->
         // Value to print should be in X0
         lirRegToARM64Reg reg
@@ -209,7 +311,8 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
 let convertTerminator (terminator: LIR.Terminator) : Result<ARM64.Instr list, string> =
     match terminator with
     | LIR.Ret ->
-        Ok [ARM64.RET]
+        // Don't generate RET here - the function epilogue handles return
+        Ok []
 
     | LIR.Branch (condReg, trueLabel, falseLabel) ->
         // Branch if register is non-zero (true), otherwise fall through to else
@@ -276,14 +379,65 @@ let convertCFG (cfg: LIR.CFG) : Result<ARM64.Instr list, string> =
         | Error err, _ -> Error err
         | _, Error err -> Error err) (Ok [])
 
-/// Convert LIR function to ARM64 instructions
+/// Convert LIR function to ARM64 instructions with prologue and epilogue
 let convertFunction (func: LIR.Function) : Result<ARM64.Instr list, string> =
-    convertCFG func.CFG
+    // Convert CFG to ARM64 instructions
+    match convertCFG func.CFG with
+    | Error err -> Error err
+    | Ok cfgInstrs ->
+        // Generate prologue (save FP/LR, allocate stack)
+        let prologue = generatePrologue func.UsedCalleeSaved func.StackSize
+
+        // Generate parameter setup: move X0-X7 to allocated parameter registers
+        // This must come AFTER the prologue but BEFORE the function body
+        // Strategy: Save all source registers to temp regs first to avoid clobbering
+        // Use X9, X10, X11, X12, X13, X14, X15 as temps
+        let argRegs = [ARM64.X0; ARM64.X1; ARM64.X2; ARM64.X3; ARM64.X4; ARM64.X5; ARM64.X6; ARM64.X7]
+        let tempRegs = [ARM64.X9; ARM64.X10; ARM64.X11; ARM64.X12; ARM64.X13; ARM64.X14; ARM64.X15]
+
+        // Step 1: Save all calling convention registers to temps
+        let saveToTemps =
+            List.zip (List.take (List.length func.Params) argRegs) (List.take (List.length func.Params) tempRegs)
+            |> List.map (fun (argReg, tempReg) -> ARM64.MOV_reg (tempReg, argReg))
+
+        // Step 2: Move from temps to allocated parameter registers
+        let moveFromTemps =
+            List.zip func.Params (List.take (List.length func.Params) tempRegs)
+            |> List.map (fun (paramReg, tempReg) ->
+                match lirRegToARM64Reg paramReg with
+                | Ok paramArm64 ->
+                    if paramArm64 = tempReg then
+                        []  // Already in the right place
+                    else
+                        [ARM64.MOV_reg (paramArm64, tempReg)]
+                | Error _ -> [])  // Shouldn't happen
+            |> List.concat
+
+        let paramSetup = saveToTemps @ moveFromTemps
+
+        // Generate epilogue (deallocate stack, restore FP/LR, return)
+        let epilogue = generateEpilogue func.UsedCalleeSaved func.StackSize
+
+        // Add function entry label (for BL to branch to)
+        let functionEntryLabel = [ARM64.Label func.Name]
+
+        // Combine: function label + prologue + param setup + CFG body + epilogue
+        // Note: The RET in epilogue replaces any RET in the CFG body
+        // TODO: Handle multiple return points properly when we have complex control flow
+        Ok (functionEntryLabel @ prologue @ paramSetup @ cfgInstrs @ epilogue)
 
 /// Convert LIR program to ARM64 instructions
 let generateARM64 (program: LIR.Program) : Result<ARM64.Instr list, string> =
     let (LIR.Program functions) = program
-    functions
+    // Ensure _start is first (entry point)
+    let sortedFunctions =
+        match List.tryFind (fun (f: LIR.Function) -> f.Name = "_start") functions with
+        | Some startFunc ->
+            let otherFuncs = List.filter (fun (f: LIR.Function) -> f.Name <> "_start") functions
+            startFunc :: otherFuncs
+        | None -> functions  // No _start, keep original order
+
+    sortedFunctions
     |> List.map convertFunction
     |> List.fold (fun acc result ->
         match acc, result with

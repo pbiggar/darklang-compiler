@@ -46,6 +46,7 @@ type Condition =
 /// Instructions (closer to ARM64 instructions, non-control-flow)
 type Instr =
     | Mov of dest:Reg * src:Operand
+    | Store of stackSlot:int * src:Reg          // Store register to stack slot (for spills)
     | Add of dest:Reg * left:Reg * right:Operand
     | Sub of dest:Reg * left:Reg * right:Operand
     | Mul of dest:Reg * left:Reg * right:Reg
@@ -55,6 +56,7 @@ type Instr =
     | And of dest:Reg * left:Reg * right:Reg    // Bitwise AND (for boolean &&)
     | Orr of dest:Reg * left:Reg * right:Reg    // Bitwise OR (for boolean ||)
     | Mvn of dest:Reg * src:Reg                 // Bitwise NOT
+    | Call of dest:Reg * funcName:string * args:Operand list  // Function call
     | PrintInt of Reg                           // Print integer register to stdout
     | PrintBool of Reg                          // Print boolean register to stdout
 
@@ -83,8 +85,10 @@ type CFG = {
 /// Function with CFG
 type Function = {
     Name: string
+    Params: Reg list  // Parameter registers (before allocation: Virtual, after: Physical)
     CFG: CFG
-    StackSize: int  // Bytes needed for spills
+    StackSize: int  // Bytes needed for spills (16-byte aligned)
+    UsedCalleeSaved: PhysReg list  // Callee-saved registers used (for prologue/epilogue)
 }
 
 /// LIR program

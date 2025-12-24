@@ -85,6 +85,8 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
     match instr with
     | LIR.Mov (dest, src) ->
         $"{prettyPrintLIRReg dest} <- Mov({prettyPrintLIROperand src})"
+    | LIR.Store (offset, src) ->
+        $"Store(Stack {offset}, {prettyPrintLIRReg src})"
     | LIR.Add (dest, left, right) ->
         $"{prettyPrintLIRReg dest} <- Add({prettyPrintLIRReg left}, {prettyPrintLIROperand right})"
     | LIR.Sub (dest, left, right) ->
@@ -103,6 +105,9 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- Orr({prettyPrintLIRReg left}, {prettyPrintLIRReg right})"
     | LIR.Mvn (dest, src) ->
         $"{prettyPrintLIRReg dest} <- Mvn({prettyPrintLIRReg src})"
+    | LIR.Call (dest, funcName, args) ->
+        let argStr = args |> List.map prettyPrintLIROperand |> String.concat ", "
+        $"{prettyPrintLIRReg dest} <- Call({funcName}, [{argStr}])"
     | LIR.PrintInt reg ->
         $"PrintInt({prettyPrintLIRReg reg})"
     | LIR.PrintBool reg ->
@@ -200,6 +205,9 @@ let prettyPrintANFCExpr = function
         $"{prettyPrintANFAtom left} {prettyPrintANFOp op} {prettyPrintANFAtom right}"
     | ANF.UnaryPrim (op, operand) ->
         $"{prettyPrintANFUnaryOp op}{prettyPrintANFAtom operand}"
+    | ANF.Call (funcName, args) ->
+        let argStr = args |> List.map prettyPrintANFAtom |> String.concat ", "
+        $"{funcName}({argStr})"
     | ANF.IfValue (cond, thenAtom, elseAtom) ->
         $"if {prettyPrintANFAtom cond} then {prettyPrintANFAtom thenAtom} else {prettyPrintANFAtom elseAtom}"
 
@@ -217,8 +225,24 @@ let rec prettyPrintANFExpr = function
         $"if {condStr} then\n  {thenStr}\nelse\n  {elseStr}"
 
 /// Pretty-print ANF program
-let prettyPrintANF (ANF.Program expr) : string =
-    prettyPrintANFExpr expr
+let prettyPrintANF (ANF.Program (functions, mainExpr)) : string =
+    let funcStrs =
+        functions
+        |> List.map (fun func ->
+            $"Function {func.Name}:\n{prettyPrintANFExpr func.Body}")
+        |> String.concat "\n\n"
+
+    let mainStr =
+        match mainExpr with
+        | Some expr -> prettyPrintANFExpr expr
+        | None -> ""
+
+    if List.isEmpty functions then
+        mainStr
+    else if Option.isNone mainExpr then
+        funcStrs
+    else
+        funcStrs + "\n\nMain:\n" + mainStr
 
 /// Load ANF→MIR test from file
 let loadANF2MIRTest (path: string) : Result<ANF.Program * MIR.Program, string> =
@@ -318,6 +342,20 @@ let prettyPrintARM64Instr = function
         $"B_label({label})"
     | ARM64.NEG (dest, src) ->
         $"NEG({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
+    | ARM64.STP (reg1, reg2, addr, offset) ->
+        $"STP({prettyPrintARM64Reg reg1}, {prettyPrintARM64Reg reg2}, {prettyPrintARM64Reg addr}, {offset})"
+    | ARM64.LDP (reg1, reg2, addr, offset) ->
+        $"LDP({prettyPrintARM64Reg reg1}, {prettyPrintARM64Reg reg2}, {prettyPrintARM64Reg addr}, {offset})"
+    | ARM64.STR (src, addr, offset) ->
+        $"STR({prettyPrintARM64Reg src}, {prettyPrintARM64Reg addr}, {offset})"
+    | ARM64.LDR (dest, addr, offset) ->
+        $"LDR({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg addr}, {offset})"
+    | ARM64.STUR (src, addr, offset) ->
+        $"STUR({prettyPrintARM64Reg src}, {prettyPrintARM64Reg addr}, {offset})"
+    | ARM64.LDUR (dest, addr, offset) ->
+        $"LDUR({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg addr}, {offset})"
+    | ARM64.BL label ->
+        $"BL({label})"
     | ARM64.RET -> "RET"
     | ARM64.SVC imm -> $"SVC({imm})"
     | ARM64.Label label -> $"Label({label})"

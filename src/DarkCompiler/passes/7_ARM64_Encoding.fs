@@ -319,6 +319,88 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rd = encodeReg dest
         [sf ||| op ||| s ||| opcode ||| shift ||| rm ||| rn ||| rd]
 
+    // Stack operations
+    | ARM64.STP (reg1, reg2, addr, offset) ->
+        // STP (Store Pair) - signed offset addressing
+        // Encoding: opc=10 101 0 010 imm7 Rt2 Rn Rt
+        // For 64-bit registers: opc=10 (bits 31-30)
+        // imm7 is signed offset in units of 8 bytes (bits 21-15)
+        let opc = 2u <<< 30  // 64-bit
+        let fixedBits = 0b1010010u <<< 23  // STP signed offset mode
+        // Convert byte offset to 8-byte units and extract 7 bits
+        let imm7 = ((uint32 (int offset / 8)) &&& 0x7Fu) <<< 15
+        let rt2 = (encodeReg reg2) <<< 10
+        let rn = (encodeReg addr) <<< 5
+        let rt = encodeReg reg1
+        [opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt]
+
+    | ARM64.LDP (reg1, reg2, addr, offset) ->
+        // LDP (Load Pair) - signed offset addressing
+        // Encoding: opc=10 101 0 011 imm7 Rt2 Rn Rt
+        // Same as STP but bit 22 = 1 for load
+        let opc = 2u <<< 30  // 64-bit
+        let fixedBits = 0b1010011u <<< 23  // LDP signed offset mode (bit 22=1)
+        let imm7 = ((uint32 (int offset / 8)) &&& 0x7Fu) <<< 15
+        let rt2 = (encodeReg reg2) <<< 10
+        let rn = (encodeReg addr) <<< 5
+        let rt = encodeReg reg1
+        [opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt]
+
+    | ARM64.STR (src, addr, offset) ->
+        // STR (Store Register) - unsigned offset addressing
+        // Encoding: size=11 111 001 00 imm12 Rn Rt
+        // For 64-bit: size=11 (bits 31-30)
+        // imm12 is unsigned offset in units of 8 bytes (bits 21-10)
+        let size = 3u <<< 30  // 64-bit (11)
+        let fixedBits = 0b11100100u <<< 22  // STR unsigned offset mode
+        // Convert byte offset to 8-byte units and extract 12 bits
+        let imm12 = ((uint32 (int offset / 8)) &&& 0xFFFu) <<< 10
+        let rn = (encodeReg addr) <<< 5
+        let rt = encodeReg src
+        [size ||| fixedBits ||| imm12 ||| rn ||| rt]
+
+    | ARM64.LDR (dest, addr, offset) ->
+        // LDR (Load Register) - unsigned offset addressing
+        // Encoding: size=11 111 001 01 imm12 Rn Rt
+        // Same as STR but bit 22 = 1 for load
+        let size = 3u <<< 30  // 64-bit (11)
+        let fixedBits = 0b11100101u <<< 22  // LDR unsigned offset mode (bit 22=1)
+        let imm12 = ((uint32 (int offset / 8)) &&& 0xFFFu) <<< 10
+        let rn = (encodeReg addr) <<< 5
+        let rt = encodeReg dest
+        [size ||| fixedBits ||| imm12 ||| rn ||| rt]
+
+    | ARM64.STUR (src, addr, offset) ->
+        // STUR (Store Register Unscaled) - signed offset addressing
+        // Encoding: size=11 111 000 00 0 imm9 00 Rn Rt
+        // For 64-bit: size=11 (bits 31-30)
+        // Fixed bits 29-21: 111000000 (unscaled store)
+        // imm9 is signed offset in bytes (bits 20-12)
+        let size = 3u <<< 30  // 64-bit (11)
+        let fixedBits = 0b111000000u <<< 21  // STUR: bits 29-21 = 111000000
+        // Extract 9-bit signed offset (sign-extend to 32-bit, then mask)
+        let imm9 = ((uint32 offset) &&& 0x1FFu) <<< 12
+        let rn = (encodeReg addr) <<< 5
+        let rt = encodeReg src
+        [size ||| fixedBits ||| imm9 ||| rn ||| rt]
+
+    | ARM64.LDUR (dest, addr, offset) ->
+        // LDUR (Load Register Unscaled) - signed offset addressing
+        // Encoding: size=11 111 000 01 0 imm9 00 Rn Rt
+        // Same as STUR but bit 22 = 1 for load
+        // Fixed bits 29-21: 111000010 (unscaled load, bit 22=1)
+        let size = 3u <<< 30  // 64-bit (11)
+        let fixedBits = 0b111000010u <<< 21  // LDUR: bits 29-21 = 111000010 (bit 22=1)
+        let imm9 = ((uint32 offset) &&& 0x1FFu) <<< 12
+        let rn = (encodeReg addr) <<< 5
+        let rt = encodeReg dest
+        [size ||| fixedBits ||| imm9 ||| rn ||| rt]
+
+    | ARM64.BL label ->
+        // BL is handled in encodeWithLabels (label-based branch)
+        // Resolved via two-pass encoding like other label-based branches
+        []
+
     | ARM64.RET ->
         // RET: 1101011 0 0 10 11111 0000 0 0 Rn=11110 00000
         // Default RET uses X30 (link register)
@@ -344,7 +426,7 @@ let computeLabelPositions (instructions: ARM64.Instr list) : Map<string, int> =
             | ARM64.Label name ->
                 // Record this label's position, don't increment offset (pseudo-instruction)
                 loop rest offset (Map.add name offset labelMap)
-            | ARM64.CBZ _ | ARM64.CBNZ _ | ARM64.B_label _ ->
+            | ARM64.CBZ _ | ARM64.CBNZ _ | ARM64.B_label _ | ARM64.BL _ ->
                 // These will be resolved in pass 2, each is 4 bytes
                 loop rest (offset + 4) labelMap
             | _ ->
@@ -399,6 +481,19 @@ let encodeWithLabels (instr: ARM64.Instr) (currentOffset: int) (labelMap: Map<st
             let instrOffset = byteOffset / 4
             // Encode as B with immediate offset
             let op = 0b000101u <<< 26
+            let imm26 = (uint32 instrOffset) &&& 0x3FFFFFFu
+            [op ||| imm26]
+        | None ->
+            []
+
+    | ARM64.BL label ->
+        match Map.tryFind label labelMap with
+        | Some targetOffset ->
+            let byteOffset = targetOffset - currentOffset
+            let instrOffset = byteOffset / 4
+            // BL encoding: 1 00101 imm26
+            // Bit 31 = 1 (distinguishes BL from B which has bit 31 = 0)
+            let op = 0b100101u <<< 26  // BL opcode (bit 31=1, bits 30-26=00101)
             let imm26 = (uint32 instrOffset) &&& 0x3FFFFFFu
             [op ||| imm26]
         | None ->

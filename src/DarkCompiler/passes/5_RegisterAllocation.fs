@@ -2,16 +2,29 @@
 //
 // Allocates physical ARM64 registers to virtual registers in LIR CFG.
 //
-// Simple greedy allocation algorithm:
+// Naive spilling allocation algorithm:
 // 1. Collect all virtual register IDs from all blocks in CFG
-// 2. Sort virtual registers by ID
-// 3. Assign physical registers in order: X1, X2, X3, ..., X15
-// 4. Transform all blocks to use assigned physical registers
+// 2. If <= 10 vregs: use X1-X10 (caller-saved, no save/restore overhead)
+// 3. If 11-18 vregs: use X1-X10 + X19-X28 (callee-saved, need save/restore)
+// 4. If > 18 vregs: use X1-X10 + X19-X28, spill remainder to stack
+// 5. Track callee-saved register usage for prologue/epilogue generation
 //
-// Limitations: No spilling (fails if >15 registers needed), no liveness analysis
 // Note: X0 reserved for return values per ARM64 calling convention
+// Stack slots are negative offsets from FP (X29): 0, -8, -16, -24, ...
 
 module RegisterAllocation
+
+/// Result of register allocation
+type AllocationResult = {
+    Mapping: Map<int, Allocation>  // VReg ID -> allocation
+    StackSize: int                  // Total stack space for spills (16-byte aligned)
+    UsedCalleeSaved: LIR.PhysReg list  // Callee-saved registers used
+}
+
+/// Allocation target for a virtual register
+and Allocation =
+    | PhysReg of LIR.PhysReg
+    | StackSlot of int  // Byte offset from FP (negative)
 
 /// Collect all virtual registers used in an instruction
 let rec collectVRegsInstr (instr: LIR.Instr) (acc: Set<int>) : Set<int> =
@@ -77,81 +90,227 @@ let collectVirtualRegs (cfg: LIR.CFG) : Set<int> =
     |> Map.toList
     |> List.fold (fun acc (_, block) -> collectVRegsBlock block acc) Set.empty
 
-/// Available physical registers for allocation (avoiding X0 which is for return)
-let availableRegs = [
-    LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7; LIR.X8
-    LIR.X9; LIR.X10; LIR.X11; LIR.X12; LIR.X13; LIR.X14; LIR.X15
+/// Caller-saved registers (no save/restore needed in prologue/epilogue)
+let callerSavedRegs = [
+    LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5
+    LIR.X6; LIR.X7; LIR.X8; LIR.X9; LIR.X10
 ]
 
-/// Create allocation map for virtual registers
-let createAllocation (virtualRegs: Set<int>) : Map<int, LIR.PhysReg> =
+/// Callee-saved registers (must be saved/restored in prologue/epilogue)
+/// Note: X19-X28 per AAPCS64. We exclude X29 (FP) and X30 (LR) as they're special
+/// TODO: Add X19-X28 when LIR.PhysReg supports them
+let calleeSavedRegs: LIR.PhysReg list = []
+
+/// Helper: Align size to 16-byte boundary
+let alignTo16 (size: int) : int =
+    ((size + 15) / 16) * 16
+
+/// Create allocation result for virtual registers
+let createAllocation (virtualRegs: Set<int>) : AllocationResult =
     let sorted = Set.toList virtualRegs |> List.sort
-    let regsToUse = List.truncate sorted.Length availableRegs
-    List.zip sorted regsToUse
-    |> Map.ofList
+    let numVRegs = List.length sorted
+
+    if numVRegs = 0 then
+        // No virtual registers to allocate
+        {
+            Mapping = Map.empty
+            StackSize = 0
+            UsedCalleeSaved = []
+        }
+    else if numVRegs <= 10 then
+        // Use only caller-saved registers (X1-X10)
+        let mapping =
+            List.zip sorted (List.take numVRegs callerSavedRegs)
+            |> List.map (fun (vregId, physReg) -> (vregId, PhysReg physReg))
+            |> Map.ofList
+        {
+            Mapping = mapping
+            StackSize = 0
+            UsedCalleeSaved = []
+        }
+
+    else
+        // NOTE: Callee-saved registers (X19-X28) not yet implemented in LIR.PhysReg
+        // For now, spill everything beyond X1-X10
+        // Spill excess vregs to stack
+        let regsToUse = callerSavedRegs  // TODO: Add callee-saved
+        let numToSpill = numVRegs - List.length regsToUse
+
+        // Assign first N vregs to physical registers
+        let (inRegs, toSpill) = List.splitAt (List.length regsToUse) sorted
+
+        let regMapping =
+            List.zip inRegs regsToUse
+            |> List.map (fun (vregId, physReg) -> (vregId, PhysReg physReg))
+
+        // Assign remaining vregs to stack slots (negative offsets from FP)
+        let stackMapping =
+            toSpill
+            |> List.mapi (fun i vregId -> (vregId, StackSlot (-(i + 1) * 8)))
+
+        let allMapping = regMapping @ stackMapping |> Map.ofList
+        let stackSize = alignTo16 (numToSpill * 8)
+
+        {
+            Mapping = allMapping
+            StackSize = stackSize
+            UsedCalleeSaved = []  // TODO: Track callee-saved usage
+        }
 
 /// Apply allocation to a register
-let applyToReg (allocation: Map<int, LIR.PhysReg>) (reg: LIR.Reg) : LIR.Reg =
+/// Returns either a physical register or None if allocated to stack
+let applyToReg (allocation: Map<int, Allocation>) (reg: LIR.Reg) : LIR.Reg option =
     match reg with
-    | LIR.Physical p -> LIR.Physical p
+    | LIR.Physical p -> Some (LIR.Physical p)
     | LIR.Virtual id ->
         match Map.tryFind id allocation with
-        | Some physReg -> LIR.Physical physReg
-        | None -> LIR.Physical LIR.X1  // Fallback (shouldn't happen)
+        | Some (PhysReg physReg) -> Some (LIR.Physical physReg)
+        | Some (StackSlot _) -> None  // Allocated to stack
+        | None -> Some (LIR.Physical LIR.X1)  // Fallback (shouldn't happen)
 
 /// Apply allocation to an operand
-let applyToOperand (allocation: Map<int, LIR.PhysReg>) (operand: LIR.Operand) : LIR.Operand =
+/// Stack-allocated vregs become StackSlot operands
+let applyToOperand (allocation: Map<int, Allocation>) (operand: LIR.Operand) : LIR.Operand =
     match operand with
     | LIR.Imm n -> LIR.Imm n
-    | LIR.Reg reg -> LIR.Reg (applyToReg allocation reg)
+    | LIR.Reg reg ->
+        match reg with
+        | LIR.Physical p -> LIR.Reg (LIR.Physical p)
+        | LIR.Virtual id ->
+            match Map.tryFind id allocation with
+            | Some (PhysReg physReg) -> LIR.Reg (LIR.Physical physReg)
+            | Some (StackSlot offset) -> LIR.StackSlot offset
+            | None -> LIR.Reg (LIR.Physical LIR.X1)  // Fallback
     | LIR.StackSlot s -> LIR.StackSlot s
 
 /// Apply allocation to an instruction
-let applyAllocation (allocation: Map<int, LIR.PhysReg>) (instr: LIR.Instr) : LIR.Instr =
-    match instr with
-    | LIR.Mov (dest, src) ->
-        LIR.Mov (applyToReg allocation dest, applyToOperand allocation src)
-    | LIR.Add (dest, left, right) ->
-        LIR.Add (applyToReg allocation dest, applyToReg allocation left, applyToOperand allocation right)
-    | LIR.Sub (dest, left, right) ->
-        LIR.Sub (applyToReg allocation dest, applyToReg allocation left, applyToOperand allocation right)
-    | LIR.Mul (dest, left, right) ->
-        LIR.Mul (applyToReg allocation dest, applyToReg allocation left, applyToReg allocation right)
-    | LIR.Sdiv (dest, left, right) ->
-        LIR.Sdiv (applyToReg allocation dest, applyToReg allocation left, applyToReg allocation right)
-    | LIR.Cmp (left, right) ->
-        LIR.Cmp (applyToReg allocation left, applyToOperand allocation right)
-    | LIR.Cset (dest, cond) ->
-        LIR.Cset (applyToReg allocation dest, cond)
-    | LIR.And (dest, left, right) ->
-        LIR.And (applyToReg allocation dest, applyToReg allocation left, applyToReg allocation right)
-    | LIR.Orr (dest, left, right) ->
-        LIR.Orr (applyToReg allocation dest, applyToReg allocation left, applyToReg allocation right)
-    | LIR.Mvn (dest, src) ->
-        LIR.Mvn (applyToReg allocation dest, applyToReg allocation src)
-    | LIR.PrintInt reg ->
-        LIR.PrintInt (applyToReg allocation reg)
-    | LIR.PrintBool reg ->
-        LIR.PrintBool (applyToReg allocation reg)
+/// Returns a list of instructions (may include store for spilled destinations)
+/// Note: For destinations allocated to stack, uses X11 as temp, then stores to stack
+let applyAllocation (allocation: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr list =
+    // Helper to get a register from option, using X11 as fallback for stack-allocated dests
+    let regOrTemp (regOpt: LIR.Reg option) : LIR.Reg =
+        match regOpt with
+        | Some r -> r
+        | None -> LIR.Physical LIR.X11  // Temp for stack-allocated destinations
+
+    // Helper to check if a destination needs a store after computation
+    let needsStore (dest: LIR.Reg) : LIR.Operand option =
+        match dest with
+        | LIR.Virtual id ->
+            match Map.tryFind id allocation with
+            | Some (StackSlot offset) -> Some (LIR.StackSlot offset)
+            | _ -> None
+        | _ -> None
+
+    // Helper to generate store instruction if needed
+    let storeIfNeeded (dest: LIR.Reg) : LIR.Instr list =
+        match needsStore dest with
+        | Some (LIR.StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+        | _ -> []
+
+    // Helper to load a register from stack if needed
+    // Returns (register to use, load instructions)
+    // Uses X12, X13 as temps for loading stack slots
+    let loadIfNeeded (reg: LIR.Reg) (tempReg: LIR.PhysReg) : LIR.Reg * LIR.Instr list =
+        match reg with
+        | LIR.Virtual id ->
+            match Map.tryFind id allocation with
+            | Some (StackSlot offset) ->
+                // Load from stack into temp register
+                (LIR.Physical tempReg, [LIR.Mov (LIR.Physical tempReg, LIR.StackSlot offset)])
+            | Some (PhysReg physReg) ->
+                (LIR.Physical physReg, [])
+            | None ->
+                (LIR.Physical LIR.X1, [])  // Fallback
+        | LIR.Physical p ->
+            (LIR.Physical p, [])
+
+    let (rewritten, preLoads) =
+        match instr with
+        | LIR.Mov (dest, src) ->
+            (LIR.Mov (regOrTemp (applyToReg allocation dest), applyToOperand allocation src), [])
+        | LIR.Store (offset, src) ->
+            (LIR.Store (offset, regOrTemp (applyToReg allocation src)), [])
+        | LIR.Add (dest, left, right) ->
+            (LIR.Add (regOrTemp (applyToReg allocation dest), regOrTemp (applyToReg allocation left), applyToOperand allocation right), [])
+        | LIR.Sub (dest, left, right) ->
+            (LIR.Sub (regOrTemp (applyToReg allocation dest), regOrTemp (applyToReg allocation left), applyToOperand allocation right), [])
+        | LIR.Mul (dest, left, right) ->
+            // Mul requires all operands in registers, load from stack if needed
+            let (leftReg, leftLoads) = loadIfNeeded left LIR.X12
+            let (rightReg, rightLoads) = loadIfNeeded right LIR.X13
+            (LIR.Mul (regOrTemp (applyToReg allocation dest), leftReg, rightReg), leftLoads @ rightLoads)
+        | LIR.Sdiv (dest, left, right) ->
+            // Sdiv requires all operands in registers, load from stack if needed
+            let (leftReg, leftLoads) = loadIfNeeded left LIR.X12
+            let (rightReg, rightLoads) = loadIfNeeded right LIR.X13
+            (LIR.Sdiv (regOrTemp (applyToReg allocation dest), leftReg, rightReg), leftLoads @ rightLoads)
+        | LIR.Cmp (left, right) ->
+            (LIR.Cmp (regOrTemp (applyToReg allocation left), applyToOperand allocation right), [])
+        | LIR.Cset (dest, cond) ->
+            (LIR.Cset (regOrTemp (applyToReg allocation dest), cond), [])
+        | LIR.And (dest, left, right) ->
+            // And requires all operands in registers, load from stack if needed
+            let (leftReg, leftLoads) = loadIfNeeded left LIR.X12
+            let (rightReg, rightLoads) = loadIfNeeded right LIR.X13
+            (LIR.And (regOrTemp (applyToReg allocation dest), leftReg, rightReg), leftLoads @ rightLoads)
+        | LIR.Orr (dest, left, right) ->
+            // Orr requires all operands in registers, load from stack if needed
+            let (leftReg, leftLoads) = loadIfNeeded left LIR.X12
+            let (rightReg, rightLoads) = loadIfNeeded right LIR.X13
+            (LIR.Orr (regOrTemp (applyToReg allocation dest), leftReg, rightReg), leftLoads @ rightLoads)
+        | LIR.Mvn (dest, src) ->
+            // Mvn requires all operands in registers, load from stack if needed
+            let (srcReg, srcLoads) = loadIfNeeded src LIR.X12
+            (LIR.Mvn (regOrTemp (applyToReg allocation dest), srcReg), srcLoads)
+        | LIR.Call (dest, funcName, args) ->
+            (LIR.Call (regOrTemp (applyToReg allocation dest), funcName, List.map (applyToOperand allocation) args), [])
+        | LIR.PrintInt reg ->
+            (LIR.PrintInt (regOrTemp (applyToReg allocation reg)), [])
+        | LIR.PrintBool reg ->
+            (LIR.PrintBool (regOrTemp (applyToReg allocation reg)), [])
+
+    // Build final instruction sequence: preLoads + rewritten + postStores
+    let postStores =
+        match instr with
+        | LIR.Mov (dest, _)
+        | LIR.Add (dest, _, _)
+        | LIR.Sub (dest, _, _)
+        | LIR.Mul (dest, _, _)
+        | LIR.Sdiv (dest, _, _)
+        | LIR.Cset (dest, _)
+        | LIR.And (dest, _, _)
+        | LIR.Orr (dest, _, _)
+        | LIR.Mvn (dest, _)
+        | LIR.Call (dest, _, _) ->
+            storeIfNeeded dest
+        | _ -> []
+
+    preLoads @ [rewritten] @ postStores
 
 /// Apply allocation to a terminator
-let applyAllocToTerm (allocation: Map<int, LIR.PhysReg>) (term: LIR.Terminator) : LIR.Terminator =
+let applyAllocToTerm (allocation: Map<int, Allocation>) (term: LIR.Terminator) : LIR.Terminator =
+    let regOrTemp (regOpt: LIR.Reg option) : LIR.Reg =
+        match regOpt with
+        | Some r -> r
+        | None -> LIR.Physical LIR.X11
+
     match term with
     | LIR.Ret -> LIR.Ret
     | LIR.Branch (cond, trueLabel, falseLabel) ->
-        LIR.Branch (applyToReg allocation cond, trueLabel, falseLabel)
+        LIR.Branch (regOrTemp (applyToReg allocation cond), trueLabel, falseLabel)
     | LIR.Jump label -> LIR.Jump label
 
 /// Apply allocation to a basic block
-let applyAllocToBlock (allocation: Map<int, LIR.PhysReg>) (block: LIR.BasicBlock) : LIR.BasicBlock =
+let applyAllocToBlock (allocation: Map<int, Allocation>) (block: LIR.BasicBlock) : LIR.BasicBlock =
     {
         LIR.Label = block.Label
-        LIR.Instrs = block.Instrs |> List.map (applyAllocation allocation)
+        LIR.Instrs = block.Instrs |> List.collect (applyAllocation allocation)  // Changed to collect since applyAllocation returns list
         LIR.Terminator = applyAllocToTerm allocation block.Terminator
     }
 
 /// Apply allocation to CFG
-let applyAllocToCFG (allocation: Map<int, LIR.PhysReg>) (cfg: LIR.CFG) : LIR.CFG =
+let applyAllocToCFG (allocation: Map<int, Allocation>) (cfg: LIR.CFG) : LIR.CFG =
     let allocatedBlocks =
         cfg.Blocks
         |> Map.map (fun _ block -> applyAllocToBlock allocation block)
@@ -166,14 +325,24 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
     // Collect virtual registers from all blocks
     let virtualRegs = collectVirtualRegs func.CFG
 
-    // Create allocation map
-    let allocation = createAllocation virtualRegs
+    // Create allocation result
+    let allocationResult = createAllocation virtualRegs
 
     // Apply allocation to CFG
-    let allocatedCFG = applyAllocToCFG allocation func.CFG
+    let allocatedCFG = applyAllocToCFG allocationResult.Mapping func.CFG
+
+    // Apply allocation to parameters
+    let allocatedParams =
+        func.Params
+        |> List.map (fun reg ->
+            match applyToReg allocationResult.Mapping reg with
+            | Some allocatedReg -> allocatedReg
+            | None -> reg)  // If not allocated (shouldn't happen), keep original
 
     {
         LIR.Name = func.Name
+        LIR.Params = allocatedParams
         LIR.CFG = allocatedCFG
-        LIR.StackSize = 0  // No spilling yet
+        LIR.StackSize = allocationResult.StackSize
+        LIR.UsedCalleeSaved = allocationResult.UsedCalleeSaved
     }
