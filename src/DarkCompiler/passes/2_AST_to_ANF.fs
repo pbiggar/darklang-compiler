@@ -42,33 +42,32 @@ let convertUnaryOp (op: AST.UnaryOp) : ANF.UnaryOp =
 
 /// Convert AST expression to ANF
 /// env maps user variable names to ANF TempIds
-let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) : ANF.AExpr * ANF.VarGen =
+let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) : Result<ANF.AExpr * ANF.VarGen, string> =
     match expr with
     | AST.IntLiteral n ->
         // Integer literal becomes return
-        (ANF.Return (ANF.IntLiteral n), varGen)
+        Ok (ANF.Return (ANF.IntLiteral n), varGen)
 
     | AST.BoolLiteral b ->
         // Boolean literal becomes return
-        (ANF.Return (ANF.BoolLiteral b), varGen)
+        Ok (ANF.Return (ANF.BoolLiteral b), varGen)
 
     | AST.Var name ->
         // Variable reference: look up in environment
         match Map.tryFind name env with
-        | Some tempId -> (ANF.Return (ANF.Var tempId), varGen)
-        | None -> failwith $"Undefined variable: {name}"  // TODO: use Result
+        | Some tempId -> Ok (ANF.Return (ANF.Var tempId), varGen)
+        | None -> Error $"Undefined variable: {name}"
 
     | AST.Let (name, value, body) ->
         // Let binding: convert value to atom, allocate fresh temp, convert body with extended env
-        let (valueAtom, valueBindings, varGen1) = toAtom value varGen env
-        let (tempId, varGen2) = ANF.freshVar varGen1
-        let env' = Map.add name tempId env
-        let (bodyExpr, varGen3) = toANF body varGen2 env'
-
-        // Build: valueBindings + let tempId = valueAtom + body
-        let finalExpr = ANF.Let (tempId, ANF.Atom valueAtom, bodyExpr)
-        let exprWithBindings = wrapBindings valueBindings finalExpr
-        (exprWithBindings, varGen3)
+        toAtom value varGen env |> Result.bind (fun (valueAtom, valueBindings, varGen1) ->
+            let (tempId, varGen2) = ANF.freshVar varGen1
+            let env' = Map.add name tempId env
+            toANF body varGen2 env' |> Result.map (fun (bodyExpr, varGen3) ->
+                // Build: valueBindings + let tempId = valueAtom + body
+                let finalExpr = ANF.Let (tempId, ANF.Atom valueAtom, bodyExpr)
+                let exprWithBindings = wrapBindings valueBindings finalExpr
+                (exprWithBindings, varGen3)))
 
     | AST.UnaryOp (AST.Neg, innerExpr) ->
         // Unary negation: convert to 0 - expr
@@ -77,79 +76,75 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
         | AST.IntLiteral n when n = System.Int64.MinValue ->
             // The lexer stores INT64_MIN as a sentinel for "9223372036854775808"
             // When negated, it should remain INT64_MIN (mathematically correct)
-            (ANF.Return (ANF.IntLiteral System.Int64.MinValue), varGen)
+            Ok (ANF.Return (ANF.IntLiteral System.Int64.MinValue), varGen)
         | _ ->
             toANF (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen env
 
     | AST.UnaryOp (op, innerExpr) ->
         // Unary operation: convert operand to atom
-        let (innerAtom, innerBindings, varGen1) = toAtom innerExpr varGen env
+        toAtom innerExpr varGen env |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
+            // Create unary op and bind to fresh variable
+            let (tempVar, varGen2) = ANF.freshVar varGen1
+            let anfOp = convertUnaryOp op
+            let cexpr = ANF.UnaryPrim (anfOp, innerAtom)
 
-        // Create unary op and bind to fresh variable
-        let (tempVar, varGen2) = ANF.freshVar varGen1
-        let anfOp = convertUnaryOp op
-        let cexpr = ANF.UnaryPrim (anfOp, innerAtom)
+            // Build the expression: innerBindings + let tempVar = op
+            let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
+            let exprWithBindings = wrapBindings innerBindings finalExpr
 
-        // Build the expression: innerBindings + let tempVar = op
-        let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
-        let exprWithBindings = wrapBindings innerBindings finalExpr
-
-        (exprWithBindings, varGen2)
+            (exprWithBindings, varGen2))
 
     | AST.BinOp (op, left, right) ->
         // Convert operands to atoms
-        let (leftAtom, leftBindings, varGen1) = toAtom left varGen env
-        let (rightAtom, rightBindings, varGen2) = toAtom right varGen1 env
+        toAtom left varGen env |> Result.bind (fun (leftAtom, leftBindings, varGen1) ->
+            toAtom right varGen1 env |> Result.map (fun (rightAtom, rightBindings, varGen2) ->
+                // Create binop and bind to fresh variable
+                let (tempVar, varGen3) = ANF.freshVar varGen2
+                let anfOp = convertBinOp op
+                let cexpr = ANF.Prim (anfOp, leftAtom, rightAtom)
 
-        // Create binop and bind to fresh variable
-        let (tempVar, varGen3) = ANF.freshVar varGen2
-        let anfOp = convertBinOp op
-        let cexpr = ANF.Prim (anfOp, leftAtom, rightAtom)
+                // Build the expression: leftBindings + rightBindings + let tempVar = op
+                let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
+                let exprWithRight = wrapBindings rightBindings finalExpr
+                let exprWithLeft = wrapBindings leftBindings exprWithRight
 
-        // Build the expression: leftBindings + rightBindings + let tempVar = op
-        let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
-        let exprWithRight = wrapBindings rightBindings finalExpr
-        let exprWithLeft = wrapBindings leftBindings exprWithRight
-
-        (exprWithLeft, varGen3)
+                (exprWithLeft, varGen3)))
 
     | AST.If (cond, thenBranch, elseBranch) ->
         // If expression: convert condition to atom, both branches to ANF
-        let (condAtom, condBindings, varGen1) = toAtom cond varGen env
-        let (thenExpr, varGen2) = toANF thenBranch varGen1 env
-        let (elseExpr, varGen3) = toANF elseBranch varGen2 env
+        toAtom cond varGen env |> Result.bind (fun (condAtom, condBindings, varGen1) ->
+            toANF thenBranch varGen1 env |> Result.bind (fun (thenExpr, varGen2) ->
+                toANF elseBranch varGen2 env |> Result.map (fun (elseExpr, varGen3) ->
+                    // Build the expression: condBindings + if condAtom then thenExpr else elseExpr
+                    let finalExpr = ANF.If (condAtom, thenExpr, elseExpr)
+                    let exprWithBindings = wrapBindings condBindings finalExpr
 
-        // Build the expression: condBindings + if condAtom then thenExpr else elseExpr
-        let finalExpr = ANF.If (condAtom, thenExpr, elseExpr)
-        let exprWithBindings = wrapBindings condBindings finalExpr
-
-        (exprWithBindings, varGen3)
+                    (exprWithBindings, varGen3))))
 
 /// Convert an AST expression to an atom, introducing let bindings as needed
-and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) : ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
+and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     match expr with
     | AST.IntLiteral n ->
-        (ANF.IntLiteral n, [], varGen)
+        Ok (ANF.IntLiteral n, [], varGen)
 
     | AST.BoolLiteral b ->
-        (ANF.BoolLiteral b, [], varGen)
+        Ok (ANF.BoolLiteral b, [], varGen)
 
     | AST.Var name ->
         // Variable reference: look up in environment
         match Map.tryFind name env with
-        | Some tempId -> (ANF.Var tempId, [], varGen)
-        | None -> failwith $"Undefined variable: {name}"  // TODO: use Result
+        | Some tempId -> Ok (ANF.Var tempId, [], varGen)
+        | None -> Error $"Undefined variable: {name}"
 
     | AST.Let (name, value, body) ->
         // Let binding in atom position: need to evaluate and return the body as an atom
-        let (valueAtom, valueBindings, varGen1) = toAtom value varGen env
-        let (tempId, varGen2) = ANF.freshVar varGen1
-        let env' = Map.add name tempId env
-        let (bodyAtom, bodyBindings, varGen3) = toAtom body varGen2 env'
-
-        // All bindings: valueBindings + binding tempId to value + bodyBindings
-        let allBindings = valueBindings @ [(tempId, ANF.Atom valueAtom)] @ bodyBindings
-        (bodyAtom, allBindings, varGen3)
+        toAtom value varGen env |> Result.bind (fun (valueAtom, valueBindings, varGen1) ->
+            let (tempId, varGen2) = ANF.freshVar varGen1
+            let env' = Map.add name tempId env
+            toAtom body varGen2 env' |> Result.map (fun (bodyAtom, bodyBindings, varGen3) ->
+                // All bindings: valueBindings + binding tempId to value + bodyBindings
+                let allBindings = valueBindings @ [(tempId, ANF.Atom valueAtom)] @ bodyBindings
+                (bodyAtom, allBindings, varGen3)))
 
     | AST.UnaryOp (AST.Neg, innerExpr) ->
         // Unary negation: convert to 0 - expr
@@ -158,36 +153,34 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
         | AST.IntLiteral n when n = System.Int64.MinValue ->
             // The lexer stores INT64_MIN as a sentinel for "9223372036854775808"
             // When negated, it should remain INT64_MIN (mathematically correct)
-            (ANF.IntLiteral System.Int64.MinValue, [], varGen)
+            Ok (ANF.IntLiteral System.Int64.MinValue, [], varGen)
         | _ ->
             toAtom (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen env
 
     | AST.UnaryOp (op, innerExpr) ->
         // Unary operation: convert operand to atom, create binding
-        let (innerAtom, innerBindings, varGen1) = toAtom innerExpr varGen env
+        toAtom innerExpr varGen env |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
+            // Create the operation
+            let (tempVar, varGen2) = ANF.freshVar varGen1
+            let anfOp = convertUnaryOp op
+            let cexpr = ANF.UnaryPrim (anfOp, innerAtom)
 
-        // Create the operation
-        let (tempVar, varGen2) = ANF.freshVar varGen1
-        let anfOp = convertUnaryOp op
-        let cexpr = ANF.UnaryPrim (anfOp, innerAtom)
-
-        // Return the temp variable as atom, plus all bindings
-        let allBindings = innerBindings @ [(tempVar, cexpr)]
-        (ANF.Var tempVar, allBindings, varGen2)
+            // Return the temp variable as atom, plus all bindings
+            let allBindings = innerBindings @ [(tempVar, cexpr)]
+            (ANF.Var tempVar, allBindings, varGen2))
 
     | AST.BinOp (op, left, right) ->
         // Complex expression: convert operands to atoms, create binding
-        let (leftAtom, leftBindings, varGen1) = toAtom left varGen env
-        let (rightAtom, rightBindings, varGen2) = toAtom right varGen1 env
+        toAtom left varGen env |> Result.bind (fun (leftAtom, leftBindings, varGen1) ->
+            toAtom right varGen1 env |> Result.map (fun (rightAtom, rightBindings, varGen2) ->
+                // Create the operation
+                let (tempVar, varGen3) = ANF.freshVar varGen2
+                let anfOp = convertBinOp op
+                let cexpr = ANF.Prim (anfOp, leftAtom, rightAtom)
 
-        // Create the operation
-        let (tempVar, varGen3) = ANF.freshVar varGen2
-        let anfOp = convertBinOp op
-        let cexpr = ANF.Prim (anfOp, leftAtom, rightAtom)
-
-        // Return the temp variable as atom, plus all bindings
-        let allBindings = leftBindings @ rightBindings @ [(tempVar, cexpr)]
-        (ANF.Var tempVar, allBindings, varGen3)
+                // Return the temp variable as atom, plus all bindings
+                let allBindings = leftBindings @ rightBindings @ [(tempVar, cexpr)]
+                (ANF.Var tempVar, allBindings, varGen3)))
 
     // NOTE: If expressions in atom position are not yet supported
     // If should only appear at AExpr level via toANF, not in atom position

@@ -49,159 +49,184 @@ let compile (verbosity: int) (source: string) : CompileResult =
                 println $"{expr}"
                 println ""
 
-            // Pass 2: AST → ANF
-            if verbosity >= 1 then println "  [2/8] AST → ANF..."
-            let (AST.Program expr) = ast
-            let (anfExpr, _) = AST_to_ANF.toANF expr (ANF.VarGen 0) Map.empty
-            let anfProgram = ANF.Program anfExpr
-
-            // Show ANF
-            if verbosity >= 3 then
-                println "=== ANF ==="
-                println $"{anfExpr}"
-                println ""
-            let anfTime = sw.Elapsed.TotalMilliseconds - parseTime
+            // Pass 1.5: Type Checking
+            if verbosity >= 1 then println "  [1.5/8] Type Checking..."
+            let typeCheckResult = TypeChecking.checkProgram ast
+            let typeCheckTime = sw.Elapsed.TotalMilliseconds - parseTime
             if verbosity >= 2 then
-                let t = System.Math.Round(anfTime, 1)
+                let t = System.Math.Round(typeCheckTime, 1)
                 println $"        {t}ms"
 
-            // Pass 3: ANF → MIR
-            if verbosity >= 1 then println "  [3/8] ANF → MIR..."
-            let (mirProgram, _) = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0)
-
-            // Show MIR
-            if verbosity >= 3 then
-                let (MIR.Program cfg) = mirProgram
-                println "=== MIR (Control Flow Graph) ==="
-                println $"Entry: {cfg.Entry}"
-                for kvp in cfg.Blocks do
-                    let block = kvp.Value
-                    println $"\n{block.Label}:"
-                    for instr in block.Instrs do
-                        println $"  {instr}"
-                    println $"  {block.Terminator}"
-                println ""
-
-            let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime
-            if verbosity >= 2 then
-                let t = System.Math.Round(mirTime, 1)
-                println $"        {t}ms"
-
-            // Pass 4: MIR → LIR
-            if verbosity >= 1 then println "  [4/8] MIR → LIR..."
-            let lirProgram = MIR_to_LIR.toLIR mirProgram
-
-            // Show LIR
-            if verbosity >= 3 then
-                let (LIR.Program funcs) = lirProgram
-                println "=== LIR (Low-level IR with CFG) ==="
-                for func in funcs do
-                    println $"Function: {func.Name}"
-                    println $"Entry: {func.CFG.Entry}"
-                    for kvp in func.CFG.Blocks do
-                        let block = kvp.Value
-                        println $"\n{block.Label}:"
-                        for instr in block.Instrs do
-                            println $"  {instr}"
-                        println $"  {block.Terminator}"
-                println ""
-
-            let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime
-            if verbosity >= 2 then
-                let t = System.Math.Round(lirTime, 1)
-                println $"        {t}ms"
-
-            // Pass 5: Register Allocation
-            if verbosity >= 1 then println "  [5/8] Register Allocation..."
-            let (LIR.Program funcs) = lirProgram
-            let func = List.head funcs
-            let allocatedFunc = RegisterAllocation.allocateRegisters func
-            let allocatedProgram = LIR.Program [allocatedFunc]
-
-            // Show LIR after allocation
-            if verbosity >= 3 then
-                println "=== LIR (After Register Allocation) ==="
-                println $"Function: {allocatedFunc.Name}"
-                println $"Entry: {allocatedFunc.CFG.Entry}"
-                for kvp in allocatedFunc.CFG.Blocks do
-                    let block = kvp.Value
-                    println $"\n{block.Label}:"
-                    for instr in block.Instrs do
-                        println $"  {instr}"
-                    println $"  {block.Terminator}"
-                println ""
-
-            let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime - lirTime
-            if verbosity >= 2 then
-                let t = System.Math.Round(allocTime, 1)
-                println $"        {t}ms"
-
-            // Pass 6: Code Generation (LIR → ARM64)
-            if verbosity >= 1 then println "  [6/8] Code Generation..."
-            let codegenResult = CodeGen.generateARM64 allocatedProgram
-            let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime - lirTime - allocTime
-            if verbosity >= 2 then
-                let t = System.Math.Round(codegenTime, 1)
-                println $"        {t}ms"
-
-            match codegenResult with
-            | Error err ->
+            match typeCheckResult with
+            | Error typeErr ->
                 { Binary = Array.empty
                   Success = false
-                  ErrorMessage = Some $"Code generation error: {err}" }
-            | Ok arm64Instructions ->
-                // Show ARM64
+                  ErrorMessage = Some $"Type error: {TypeChecking.typeErrorToString typeErr}" }
+            | Ok programType ->
                 if verbosity >= 3 then
-                    println "=== ARM64 Assembly Instructions ==="
-                    for (i, instr) in List.indexed arm64Instructions do
-                        println $"  {i}: {instr}"
+                    println $"Program type: {TypeChecking.typeToString programType}"
                     println ""
 
-                // Pass 7: ARM64 Encoding (ARM64 → machine code)
-                if verbosity >= 1 then println "  [7/8] ARM64 Encoding..."
-                let machineCode = ARM64_Encoding.encodeAll arm64Instructions
-
-                // Show machine code
-                if verbosity >= 3 then
-                    println "=== Machine Code (hex) ==="
-                    for i in 0 .. 4 .. (machineCode.Length - 1) do
-                        if i + 3 < machineCode.Length then
-                            let bytes = sprintf "%02x %02x %02x %02x" machineCode.[i] machineCode.[i+1] machineCode.[i+2] machineCode.[i+3]
-                            println $"  {i:X4}: {bytes}"
-                    println $"Total: {machineCode.Length} bytes\n"
-
-                let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime - lirTime - allocTime - codegenTime
+                // Pass 2: AST → ANF
+                if verbosity >= 1 then println "  [2/8] AST → ANF..."
+                let (AST.Program expr) = ast
+                let anfResult = AST_to_ANF.toANF expr (ANF.VarGen 0) Map.empty
+                let anfTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime
                 if verbosity >= 2 then
-                    let t = System.Math.Round(encodeTime, 1)
+                    let t = System.Math.Round(anfTime, 1)
                     println $"        {t}ms"
 
-                // Pass 8: Binary Generation (machine code → executable)
-                let osResult = Platform.detectOS ()
-                match osResult with
+                match anfResult with
                 | Error err ->
                     { Binary = Array.empty
                       Success = false
-                      ErrorMessage = Some $"Platform detection error: {err}" }
-                | Ok os ->
-                    let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
-                    if verbosity >= 1 then println $"  [8/8] Binary Generation ({formatName})..."
-                    let binary =
-                        match os with
-                        | Platform.MacOS -> Binary_Generation_MachO.createExecutable machineCode
-                        | Platform.Linux -> Binary_Generation_ELF.createExecutable machineCode
-                    let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - anfTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
+                      ErrorMessage = Some $"ANF conversion error: {err}" }
+                | Ok (anfExpr, _) ->
+                    let anfProgram = ANF.Program anfExpr
+
+                    // Show ANF
+                    if verbosity >= 3 then
+                        println "=== ANF ==="
+                        println $"{anfExpr}"
+                        println ""
+
+                    // Pass 3: ANF → MIR
+                    if verbosity >= 1 then println "  [3/8] ANF → MIR..."
+                    let (mirProgram, _) = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0)
+
+                    // Show MIR
+                    if verbosity >= 3 then
+                        let (MIR.Program cfg) = mirProgram
+                        println "=== MIR (Control Flow Graph) ==="
+                        println $"Entry: {cfg.Entry}"
+                        for kvp in cfg.Blocks do
+                            let block = kvp.Value
+                            println $"\n{block.Label}:"
+                            for instr in block.Instrs do
+                                println $"  {instr}"
+                            println $"  {block.Terminator}"
+                        println ""
+
+                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime
                     if verbosity >= 2 then
-                        let t = System.Math.Round(binaryTime, 1)
+                        let t = System.Math.Round(mirTime, 1)
                         println $"        {t}ms"
 
-                    sw.Stop()
+                    // Pass 4: MIR → LIR
+                    if verbosity >= 1 then println "  [4/8] MIR → LIR..."
+                    let lirProgram = MIR_to_LIR.toLIR mirProgram
 
-                    if verbosity >= 1 then
-                        println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
+                    // Show LIR
+                    if verbosity >= 3 then
+                        let (LIR.Program funcs) = lirProgram
+                        println "=== LIR (Low-level IR with CFG) ==="
+                        for func in funcs do
+                            println $"Function: {func.Name}"
+                            println $"Entry: {func.CFG.Entry}"
+                            for kvp in func.CFG.Blocks do
+                                let block = kvp.Value
+                                println $"\n{block.Label}:"
+                                for instr in block.Instrs do
+                                    println $"  {instr}"
+                                println $"  {block.Terminator}"
+                        println ""
 
-                    { Binary = binary
-                      Success = true
-                      ErrorMessage = None }
+                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - mirTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(lirTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 5: Register Allocation
+                    if verbosity >= 1 then println "  [5/8] Register Allocation..."
+                    let (LIR.Program funcs) = lirProgram
+                    let func = List.head funcs
+                    let allocatedFunc = RegisterAllocation.allocateRegisters func
+                    let allocatedProgram = LIR.Program [allocatedFunc]
+
+                    // Show LIR after allocation
+                    if verbosity >= 3 then
+                        println "=== LIR (After Register Allocation) ==="
+                        println $"Function: {allocatedFunc.Name}"
+                        println $"Entry: {allocatedFunc.CFG.Entry}"
+                        for kvp in allocatedFunc.CFG.Blocks do
+                            let block = kvp.Value
+                            println $"\n{block.Label}:"
+                            for instr in block.Instrs do
+                                println $"  {instr}"
+                            println $"  {block.Terminator}"
+                        println ""
+
+                    let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - mirTime - lirTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(allocTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 6: Code Generation (LIR → ARM64)
+                    if verbosity >= 1 then println "  [6/8] Code Generation..."
+                    let codegenResult = CodeGen.generateARM64 allocatedProgram
+                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - mirTime - lirTime - allocTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(codegenTime, 1)
+                        println $"        {t}ms"
+
+                    match codegenResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"Code generation error: {err}" }
+                    | Ok arm64Instructions ->
+                        // Show ARM64
+                        if verbosity >= 3 then
+                            println "=== ARM64 Assembly Instructions ==="
+                            for (i, instr) in List.indexed arm64Instructions do
+                                println $"  {i}: {instr}"
+                            println ""
+
+                        // Pass 7: ARM64 Encoding (ARM64 → machine code)
+                        if verbosity >= 1 then println "  [7/8] ARM64 Encoding..."
+                        let machineCode = ARM64_Encoding.encodeAll arm64Instructions
+
+                        // Show machine code
+                        if verbosity >= 3 then
+                            println "=== Machine Code (hex) ==="
+                            for i in 0 .. 4 .. (machineCode.Length - 1) do
+                                if i + 3 < machineCode.Length then
+                                    let bytes = sprintf "%02x %02x %02x %02x" machineCode.[i] machineCode.[i+1] machineCode.[i+2] machineCode.[i+3]
+                                    println $"  {i:X4}: {bytes}"
+                            println $"Total: {machineCode.Length} bytes\n"
+
+                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - mirTime - lirTime - allocTime - codegenTime
+                        if verbosity >= 2 then
+                            let t = System.Math.Round(encodeTime, 1)
+                            println $"        {t}ms"
+
+                        // Pass 8: Binary Generation (machine code → executable)
+                        let osResult = Platform.detectOS ()
+                        match osResult with
+                        | Error err ->
+                            { Binary = Array.empty
+                              Success = false
+                              ErrorMessage = Some $"Platform detection error: {err}" }
+                        | Ok os ->
+                            let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
+                            if verbosity >= 1 then println $"  [8/8] Binary Generation ({formatName})..."
+                            let binary =
+                                match os with
+                                | Platform.MacOS -> Binary_Generation_MachO.createExecutable machineCode
+                                | Platform.Linux -> Binary_Generation_ELF.createExecutable machineCode
+                            let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
+                            if verbosity >= 2 then
+                                let t = System.Math.Round(binaryTime, 1)
+                                println $"        {t}ms"
+
+                            sw.Stop()
+
+                            if verbosity >= 1 then
+                                println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
+
+                            { Binary = binary
+                              Success = true
+                              ErrorMessage = None }
     with
     | ex ->
         { Binary = Array.empty

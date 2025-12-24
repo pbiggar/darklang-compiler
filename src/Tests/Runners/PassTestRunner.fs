@@ -33,6 +33,7 @@ type PassTestResult = {
 /// Pretty-print MIR operand
 let prettyPrintMIROperand = function
     | MIR.IntConst n -> string n
+    | MIR.BoolConst b -> if b then "true" else "false"
     | MIR.Register (MIR.VReg n) -> $"v{n}"
 
 /// Pretty-print MIR operator
@@ -41,6 +42,14 @@ let prettyPrintMIROp = function
     | MIR.Sub -> "-"
     | MIR.Mul -> "*"
     | MIR.Div -> "/"
+    | MIR.Eq -> "=="
+    | MIR.Neq -> "!="
+    | MIR.Lt -> "<"
+    | MIR.Gt -> ">"
+    | MIR.Lte -> "<="
+    | MIR.Gte -> ">="
+    | MIR.And -> "&&"
+    | MIR.Or -> "||"
 
 /// Pretty-print MIR instruction
 /// NOTE: Disabled - MIR structure changed to CFG
@@ -120,6 +129,7 @@ let runMIR2LIRTest (input: MIR.Program) (expected: LIR.Program) : PassTestResult
 /// Pretty-print ANF atom
 let prettyPrintANFAtom = function
     | ANF.IntLiteral n -> string n
+    | ANF.BoolLiteral b -> if b then "true" else "false"
     | ANF.Var (ANF.TempId n) -> $"t{n}"
 
 /// Pretty-print ANF binary operator
@@ -128,12 +138,27 @@ let prettyPrintANFOp = function
     | ANF.Sub -> "-"
     | ANF.Mul -> "*"
     | ANF.Div -> "/"
+    | ANF.Eq -> "=="
+    | ANF.Neq -> "!="
+    | ANF.Lt -> "<"
+    | ANF.Gt -> ">"
+    | ANF.Lte -> "<="
+    | ANF.Gte -> ">="
+    | ANF.And -> "&&"
+    | ANF.Or -> "||"
+
+/// Pretty-print ANF unary operator
+let prettyPrintANFUnaryOp = function
+    | ANF.Neg -> "-"
+    | ANF.Not -> "!"
 
 /// Pretty-print ANF complex expression
 let prettyPrintANFCExpr = function
     | ANF.Atom atom -> prettyPrintANFAtom atom
     | ANF.Prim (op, left, right) ->
         $"{prettyPrintANFAtom left} {prettyPrintANFOp op} {prettyPrintANFAtom right}"
+    | ANF.UnaryPrim (op, operand) ->
+        $"{prettyPrintANFUnaryOp op}{prettyPrintANFAtom operand}"
 
 /// Pretty-print ANF expression (recursive)
 let rec prettyPrintANFExpr = function
@@ -142,6 +167,11 @@ let rec prettyPrintANFExpr = function
         let cexprStr = prettyPrintANFCExpr cexpr
         let bodyStr = prettyPrintANFExpr body
         $"let t{n} = {cexprStr}\n{bodyStr}"
+    | ANF.If (cond, thenBranch, elseBranch) ->
+        let condStr = prettyPrintANFAtom cond
+        let thenStr = prettyPrintANFExpr thenBranch
+        let elseStr = prettyPrintANFExpr elseBranch
+        $"if {condStr} then\n  {thenStr}\nelse\n  {elseStr}"
 
 /// Pretty-print ANF program
 let prettyPrintANF (ANF.Program expr) : string =
@@ -217,16 +247,37 @@ let prettyPrintARM64Instr = function
         $"MOV_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
     | ARM64.STRB (src, addr, offset) ->
         $"STRB({prettyPrintARM64Reg src}, {prettyPrintARM64Reg addr}, {offset})"
-    | ARM64.CBZ (reg, offset) ->
-        $"CBZ({prettyPrintARM64Reg reg}, {offset})"
+    | ARM64.CMP_imm (src, imm) ->
+        $"CMP_imm({prettyPrintARM64Reg src}, {imm})"
+    | ARM64.CMP_reg (src1, src2) ->
+        $"CMP_reg({prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
+    | ARM64.CSET (dest, cond) ->
+        $"CSET({prettyPrintARM64Reg dest}, {cond})"
+    | ARM64.AND_reg (dest, src1, src2) ->
+        $"AND_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
+    | ARM64.ORR_reg (dest, src1, src2) ->
+        $"ORR_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
+    | ARM64.MVN (dest, src) ->
+        $"MVN({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
+    | ARM64.CBZ (reg, label) ->
+        $"CBZ({prettyPrintARM64Reg reg}, {label})"
+    | ARM64.CBZ_offset (reg, offset) ->
+        $"CBZ_offset({prettyPrintARM64Reg reg}, {offset})"
+    | ARM64.CBNZ (reg, label) ->
+        $"CBNZ({prettyPrintARM64Reg reg}, {label})"
+    | ARM64.CBNZ_offset (reg, offset) ->
+        $"CBNZ_offset({prettyPrintARM64Reg reg}, {offset})"
     | ARM64.TBNZ (reg, bit, offset) ->
         $"TBNZ({prettyPrintARM64Reg reg}, {bit}, {offset})"
     | ARM64.B offset ->
         $"B({offset})"
+    | ARM64.B_label label ->
+        $"B_label({label})"
     | ARM64.NEG (dest, src) ->
         $"NEG({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
     | ARM64.RET -> "RET"
     | ARM64.SVC imm -> $"SVC({imm})"
+    | ARM64.Label label -> $"Label({label})"
 
 /// Pretty-print ARM64 program
 let prettyPrintARM64 (instrs: ARM64.Instr list) : string =

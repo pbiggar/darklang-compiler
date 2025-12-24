@@ -161,19 +161,18 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rt = encodeReg src
         [size ||| vOpc ||| imm12 ||| rn ||| rt]
 
-    // Label-based branches (for compiler-generated code) - require two-pass encoding
-    // TODO: These need two-pass encoding implementation
-    // For now, returning empty lists - will need proper label resolution
+    // Label-based branches - resolved via two-pass encoding (see encodeWithLabels)
+    // These return empty here because they are only used during label resolution
     | ARM64.CBZ (reg, label) ->
-        // Placeholder: will be properly encoded in two-pass implementation
+        // Resolved in encodeWithLabels with computed label offsets
         []
 
     | ARM64.CBNZ (reg, label) ->
-        // Placeholder: will be properly encoded in two-pass implementation
+        // Resolved in encodeWithLabels with computed label offsets
         []
 
     | ARM64.B_label label ->
-        // Placeholder: will be properly encoded in two-pass implementation
+        // Resolved in encodeWithLabels with computed label offsets
         []
 
     | ARM64.Label label ->
