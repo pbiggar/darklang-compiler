@@ -93,6 +93,9 @@ let main args =
             println $"{Colors.cyan}📦 ANF→MIR Tests{Colors.reset}"
             println ""
 
+            let mutable sectionPassed = 0
+            let mutable sectionFailed = 0
+
             for testPath in anf2mirTests do
                 let testName = Path.GetFileName testPath
                 let testTimer = Stopwatch.StartNew()
@@ -105,6 +108,7 @@ let main args =
                     if result.Success then
                         println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         passed <- passed + 1
+                        sectionPassed <- sectionPassed + 1
                     else
                         println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         println $"    {result.Message}"
@@ -118,13 +122,19 @@ let main args =
                                 println $"      {line}"
                         | _ -> ()
                         failed <- failed + 1
+                        sectionFailed <- sectionFailed + 1
                 | Error msg ->
                     testTimer.Stop()
                     println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                     println $"    Failed to load test: {msg}"
                     failed <- failed + 1
+                    sectionFailed <- sectionFailed + 1
 
             sectionTimer.Stop()
+            if sectionFailed = 0 then
+                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
+            else
+                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
             println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
             println ""
 
@@ -136,6 +146,9 @@ let main args =
             let sectionTimer = Stopwatch.StartNew()
             println $"{Colors.cyan}🔄 MIR→LIR Tests{Colors.reset}"
             println ""
+
+            let mutable sectionPassed = 0
+            let mutable sectionFailed = 0
 
             for testPath in mir2lirTests do
                 let testName = Path.GetFileName testPath
@@ -149,6 +162,7 @@ let main args =
                     if result.Success then
                         println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         passed <- passed + 1
+                        sectionPassed <- sectionPassed + 1
                     else
                         println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         println $"    {result.Message}"
@@ -162,13 +176,19 @@ let main args =
                                 println $"      {line}"
                         | _ -> ()
                         failed <- failed + 1
+                        sectionFailed <- sectionFailed + 1
                 | Error msg ->
                     testTimer.Stop()
                     println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                     println $"    Failed to load test: {msg}"
                     failed <- failed + 1
+                    sectionFailed <- sectionFailed + 1
 
             sectionTimer.Stop()
+            if sectionFailed = 0 then
+                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
+            else
+                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
             println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
             println ""
 
@@ -180,6 +200,9 @@ let main args =
             let sectionTimer = Stopwatch.StartNew()
             println $"{Colors.cyan}🎯 LIR→ARM64 Tests{Colors.reset}"
             println ""
+
+            let mutable sectionPassed = 0
+            let mutable sectionFailed = 0
 
             for testPath in lir2arm64Tests do
                 let testName = Path.GetFileName testPath
@@ -193,6 +216,7 @@ let main args =
                     if result.Success then
                         println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         passed <- passed + 1
+                        sectionPassed <- sectionPassed + 1
                     else
                         println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         println $"    {result.Message}"
@@ -206,13 +230,19 @@ let main args =
                                 println $"      {line}"
                         | _ -> ()
                         failed <- failed + 1
+                        sectionFailed <- sectionFailed + 1
                 | Error msg ->
                     testTimer.Stop()
                     println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                     println $"    Failed to load test: {msg}"
                     failed <- failed + 1
+                    sectionFailed <- sectionFailed + 1
 
             sectionTimer.Stop()
+            if sectionFailed = 0 then
+                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
+            else
+                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
             println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
             println ""
 
@@ -224,6 +254,9 @@ let main args =
             let sectionTimer = Stopwatch.StartNew()
             println $"{Colors.cyan}⚙️  ARM64 Encoding Tests{Colors.reset}"
             println ""
+
+            let mutable sectionPassed = 0
+            let mutable sectionFailed = 0
 
             for testPath in arm64encTests do
                 let testName = Path.GetFileName testPath
@@ -237,17 +270,24 @@ let main args =
                     if result.Success then
                         println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         passed <- passed + 1
+                        sectionPassed <- sectionPassed + 1
                     else
                         println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         println $"    {result.Message}"
                         failed <- failed + 1
+                        sectionFailed <- sectionFailed + 1
                 | Error msg ->
                     testTimer.Stop()
                     println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                     println $"    Failed to load test: {msg}"
                     failed <- failed + 1
+                    sectionFailed <- sectionFailed + 1
 
             sectionTimer.Stop()
+            if sectionFailed = 0 then
+                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
+            else
+                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
             println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
             println ""
 
@@ -292,9 +332,9 @@ let main args =
 
             sectionTimer.Stop()
             if sectionFailed = 0 then
-                println $"  {Colors.green}✓ All {sectionPassed} type checking tests passed{Colors.reset} {Colors.gray}({formatTime sectionTimer.Elapsed}){Colors.reset}"
+                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
             else
-                println $"  {Colors.yellow}✓ {sectionPassed} passed, ✗ {sectionFailed} failed{Colors.reset} {Colors.gray}({formatTime sectionTimer.Elapsed}){Colors.reset}"
+                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
             println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
             println ""
 
@@ -420,6 +460,23 @@ let main args =
                         printPendingResults ()
                 ) |> ignore
 
+                // Count E2E section results
+                let mutable sectionPassed = 0
+                let mutable sectionFailed = 0
+                for result in results do
+                    match result with
+                    | Some (_, testResult, _) ->
+                        if testResult.Success then
+                            sectionPassed <- sectionPassed + 1
+                        else
+                            sectionFailed <- sectionFailed + 1
+                    | None -> ()
+
+                if sectionFailed = 0 then
+                    println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
+                else
+                    println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
+
             sectionTimer.Stop()
             println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
             println ""
@@ -429,17 +486,22 @@ let main args =
     println $"{Colors.cyan}🔧 Unit Tests{Colors.reset}"
     println ""
 
+    let mutable sectionPassed = 0
+    let mutable sectionFailed = 0
+
     let unitTestTimer = Stopwatch.StartNew()
     match EncodingTests.runAll() with
     | Ok () ->
         unitTestTimer.Stop()
         println $"  {Colors.green}✓ Encoding Tests{Colors.reset} {Colors.gray}({formatTime unitTestTimer.Elapsed}){Colors.reset}"
         passed <- passed + 1
+        sectionPassed <- sectionPassed + 1
     | Error msg ->
         unitTestTimer.Stop()
         println $"  {Colors.red}✗ FAIL: Encoding tests{Colors.reset} {Colors.gray}({formatTime unitTestTimer.Elapsed}){Colors.reset}"
         println $"    {msg}"
         failed <- failed + 1
+        sectionFailed <- sectionFailed + 1
 
     let binaryTestTimer = Stopwatch.StartNew()
     match BinaryTests.runAll() with
@@ -447,11 +509,13 @@ let main args =
         binaryTestTimer.Stop()
         println $"  {Colors.green}✓ Binary Tests{Colors.reset} {Colors.gray}({formatTime binaryTestTimer.Elapsed}){Colors.reset}"
         passed <- passed + 11  // 11 tests in BinaryTests
+        sectionPassed <- sectionPassed + 11
     | Error msg ->
         binaryTestTimer.Stop()
         println $"  {Colors.red}✗ FAIL: Binary tests{Colors.reset} {Colors.gray}({formatTime binaryTestTimer.Elapsed}){Colors.reset}"
         println $"    {msg}"
         failed <- failed + 1
+        sectionFailed <- sectionFailed + 1
 
     let typeCheckingTestTimer = Stopwatch.StartNew()
     match TypeCheckingTests.runAll() with
@@ -459,13 +523,19 @@ let main args =
         typeCheckingTestTimer.Stop()
         println $"  {Colors.green}✓ Type Checking Tests{Colors.reset} {Colors.gray}({formatTime typeCheckingTestTimer.Elapsed}){Colors.reset}"
         passed <- passed + 8  // 8 tests in TypeCheckingTests
+        sectionPassed <- sectionPassed + 8
     | Error msg ->
         typeCheckingTestTimer.Stop()
         println $"  {Colors.red}✗ FAIL: Type checking tests{Colors.reset} {Colors.gray}({formatTime typeCheckingTestTimer.Elapsed}){Colors.reset}"
         println $"    {msg}"
         failed <- failed + 1
+        sectionFailed <- sectionFailed + 1
 
     sectionTimer.Stop()
+    if sectionFailed = 0 then
+        println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
+    else
+        println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
     println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
     println ""
 
