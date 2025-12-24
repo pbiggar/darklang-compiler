@@ -22,7 +22,8 @@ type E2ETestResult = {
 let runE2ETest (test: E2ETest) : E2ETestResult =
     try
         // Call compiler as library (no process spawn for compilation)
-        let execResult = CompilerLibrary.compileAndRun test.Source
+        // verbosity = 0 to suppress instrumentation during tests
+        let execResult = CompilerLibrary.compileAndRun 0 test.Source
 
         // Compare results
         let stdoutMatches =

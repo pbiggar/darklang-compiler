@@ -23,7 +23,20 @@ open System
 open System.IO
 
 /// Output verbosity level
-type VerbosityLevel = Quiet | Normal | Verbose
+/// 0 = Quiet (no output)
+/// 1 = Normal (standard output)
+/// 2 = Verbose (show pass names)
+/// 3 = VeryVerbose (show pass names + timing)
+type VerbosityLevel = Quiet | Normal | Verbose | VeryVerbose
+
+/// Convert VerbosityLevel to integer for library
+/// Library verbosity: 0=silent, 1=pass names, 2=pass names + timing
+let verbosityToInt (level: VerbosityLevel) : int =
+    match level with
+    | Quiet -> 0      // No output
+    | Normal -> 0     // CLI handles output, library silent
+    | Verbose -> 1    // Library shows pass names
+    | VeryVerbose -> 2 // Library shows pass names + timing
 
 /// Parsed CLI options
 type CliOptions = {
@@ -93,7 +106,14 @@ let parseArgs (argv: string array) : Result<CliOptions, string> =
             parseFlags rest opts Quiet
 
         | "-v" :: rest | "--verbose" :: rest ->
-            parseFlags rest opts Verbose
+            // Stack -v flags: -v = Verbose, -vv = VeryVerbose
+            let newVerbosity =
+                match lastVerbosity with
+                | Quiet -> Normal
+                | Normal -> Verbose
+                | Verbose -> VeryVerbose
+                | VeryVerbose -> VeryVerbose
+            parseFlags rest opts newVerbosity
 
         | "-h" :: rest | "--help" :: rest ->
             parseFlags rest { opts with Help = true } lastVerbosity
@@ -163,10 +183,9 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) : 
 
     if showNormal then
         printfn "Compiling: %s" source
-        printfn "  [1-8] Running compilation pipeline..."
 
     // Use library for compilation
-    let result = CompilerLibrary.compile source
+    let result = CompilerLibrary.compile (verbosityToInt verbosity) source
 
     if not result.Success then
         eprintfn "Compilation failed: %s" (result.ErrorMessage |> Option.defaultValue "Unknown error")
@@ -185,7 +204,7 @@ let run (source: string) (verbosity: VerbosityLevel) : int =
         printfn "---"
 
     // Use library for compile and run
-    let result = CompilerLibrary.compileAndRun source
+    let result = CompilerLibrary.compileAndRun (verbosityToInt verbosity) source
 
     if showNormal then
         if result.Stdout <> "" then
@@ -218,12 +237,13 @@ let printUsage () =
     printfn "  -e, --expression     Treat argument as expression (not filename)"
     printfn "  -o, --output FILE    Output file (default: dark.out)"
     printfn "  -q, --quiet          Suppress compilation output"
-    printfn "  -v, --verbose        Show detailed compilation steps"
+    printfn "  -v, --verbose        Show compilation pass names"
+    printfn "  -vv                  Show pass names + timing details"
     printfn "  -h, --help           Show this help message"
     printfn "  --version            Show version information"
     printfn ""
-    printfn "Flags can appear in any order and can be combined (e.g., -qr, -re)"
-    printfn "When both -q and -v are specified, the last one wins."
+    printfn "Flags can appear in any order and can be combined (e.g., -qr, -re, -vvre)"
+    printfn "Verbosity levels: (none)=normal, -v=passes, -vv=passes+timing"
     printfn ""
     printfn "Examples:"
     printfn "  dark prog.dark                     Compile file to 'dark.out'"
