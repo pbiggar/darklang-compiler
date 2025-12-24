@@ -108,6 +108,24 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
                 | Some TInt64 | None -> Ok TInt64
                 | Some other -> Error (TypeMismatch (other, TInt64, "result of negation")))
 
+    | Let (name, value, body) ->
+        // Let binding: check value, extend environment, check body
+        checkExpr value env None
+        |> Result.bind (fun valueType ->
+            let env' = Map.add name valueType env
+            checkExpr body env' expectedType)
+
+    | Var name ->
+        // Variable reference: look up in environment
+        match Map.tryFind name env with
+        | Some varType ->
+            match expectedType with
+            | Some expected when expected <> varType ->
+                Error (TypeMismatch (expected, varType, $"variable {name}"))
+            | _ -> Ok varType
+        | None ->
+            Error (UndefinedVariable name)
+
 /// Type-check a program (Phase 0: just an expression)
 /// Returns the type of the expression or a type error
 let checkProgram (program: Program) : Result<Type, TypeError> =

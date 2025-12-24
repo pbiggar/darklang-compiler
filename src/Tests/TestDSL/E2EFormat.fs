@@ -47,22 +47,50 @@ let private parseAttribute (attr: string) : Result<string * string, string> =
 ///   Old: source = exit_code  // comment
 ///   New: source = [exit=N] [stdout="..."] [stderr="..."]  // comment
 let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, string> =
-    // Split by = to get source and expectations
-    let parts = line.Split([|'='|], 2)
-    if parts.Length <> 2 then
-        Error $"Line {lineNumber}: Expected format 'source = expectations', got: {line}"
-    else
-        let source = parts.[0].Trim()
-        let restOfLine = parts.[1].Trim()
+    // First, remove any comment
+    let lineWithoutComment, comment =
+        let commentIdx = line.IndexOf("//")
+        if commentIdx >= 0 then
+            (line.Substring(0, commentIdx).Trim(),
+             Some (line.Substring(commentIdx + 2).Trim()))
+        else
+            (line, None)
 
-        // Split rest by // to separate expectations from comment
-        let expectationsStr, comment =
-            let commentIdx = restOfLine.IndexOf("//")
-            if commentIdx >= 0 then
-                (restOfLine.Substring(0, commentIdx).Trim(),
-                 Some (restOfLine.Substring(commentIdx + 2).Trim()))
+    // Find the = that separates source from expectations
+    // It's the last = that's not inside quotes AND is followed by either:
+    // - A digit (simple format)
+    // - An attribute keyword (exit, stdout, stderr)
+    // - Whitespace then digit or attribute
+    let findSeparatorIndex (s: string) : int option =
+        let isExpectationStart (rest: string) : bool =
+            let trimmed = rest.TrimStart()
+            if trimmed.Length = 0 then false
+            elif Char.IsDigit(trimmed.[0]) || trimmed.[0] = '-' then true
+            elif trimmed.StartsWith("exit") || trimmed.StartsWith("stdout") || trimmed.StartsWith("stderr") then true
+            else false
+
+        let rec findLast (i: int) (inQuotes: bool) (lastEqualsIdx: int option) : int option =
+            if i >= s.Length then
+                lastEqualsIdx
+            elif s.[i] = '"' then
+                findLast (i + 1) (not inQuotes) lastEqualsIdx
+            elif s.[i] = '=' && not inQuotes then
+                // Check if this = is followed by an expectation
+                let rest = s.Substring(i + 1)
+                if isExpectationStart rest then
+                    findLast (i + 1) inQuotes (Some i)
+                else
+                    findLast (i + 1) inQuotes lastEqualsIdx
             else
-                (restOfLine, None)
+                findLast (i + 1) inQuotes lastEqualsIdx
+        findLast 0 false None
+
+    match findSeparatorIndex lineWithoutComment with
+    | None ->
+        Error $"Line {lineNumber}: Expected format 'source = expectations', got: {line}"
+    | Some equalsIdx ->
+        let source = lineWithoutComment.Substring(0, equalsIdx).Trim()
+        let expectationsStr = lineWithoutComment.Substring(equalsIdx + 1).Trim()
 
         // Parse expectations - either old format (bare number) or new format (attributes)
         let parseExpectations (exp: string) : Result<int * string option * string option, string> =

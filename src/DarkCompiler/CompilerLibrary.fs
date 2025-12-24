@@ -45,7 +45,7 @@ let compile (verbosity: int) (source: string) : CompileResult =
             // Pass 2: AST → ANF
             if verbosity >= 1 then println "  [2/8] AST → ANF..."
             let (AST.Program expr) = ast
-            let (anfExpr, _) = AST_to_ANF.toANF expr (ANF.VarGen 0)
+            let (anfExpr, _) = AST_to_ANF.toANF expr (ANF.VarGen 0) Map.empty
             let anfProgram = ANF.Program anfExpr
             let anfTime = sw.Elapsed.TotalMilliseconds - parseTime
             if verbosity >= 2 then

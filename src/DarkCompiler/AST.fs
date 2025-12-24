@@ -8,9 +8,11 @@
 // - Integer literals (64-bit signed)
 // - Binary operators: +, -, *, /
 // - Parenthesized expressions
+// - Let bindings: let x = expr in body
+// - Variables: identifiers bound by let
 //
-// Example AST for "2 + 3 * 4":
-//   BinOp(Add, IntLiteral(2), BinOp(Mul, IntLiteral(3), IntLiteral(4)))
+// Example AST for "let x = 5 in x + 3":
+//   Let("x", IntLiteral(5), BinOp(Add, Var("x"), IntLiteral(3)))
 
 module AST
 
@@ -35,6 +37,8 @@ type Expr =
     | IntLiteral of int64
     | BinOp of BinOp * Expr * Expr
     | Neg of Expr  // Unary negation: -expr
+    | Let of name:string * value:Expr * body:Expr  // Let binding: let name = value in body
+    | Var of string  // Variable reference
 
 /// Program is just an expression for now
 type Program = Program of Expr

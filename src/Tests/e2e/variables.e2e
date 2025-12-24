@@ -1,0 +1,139 @@
+// Variable Tests - Let bindings and variable references
+//
+// Tests covering:
+// - Basic let bindings
+// - Variable references
+// - Shadowing
+// - Nested let bindings
+// - Let bindings in expressions
+
+
+// ===================================================================
+// Basic Let Bindings
+// ===================================================================
+
+// Simple let binding
+let x = 5 in x = 5
+
+// Let binding with arithmetic
+let x = 10 in x + 5 = 15
+let x = 20 in x - 7 = 13
+let x = 6 in x * 3 = 18
+let x = 15 in x / 3 = 5
+
+// Let binding used multiple times
+let x = 4 in x + x = 8
+let x = 3 in x * x = 9
+let x = 10 in x - x = 0
+let x = 5 in x / x = 1
+
+
+// ===================================================================
+// Multiple Let Bindings
+// ===================================================================
+
+// Sequential let bindings
+let x = 2 in let y = 3 in x + y = 5
+let x = 10 in let y = 4 in x - y = 6
+let x = 5 in let y = 7 in x * y = 35
+let x = 20 in let y = 4 in x / y = 5
+
+// Multiple variables in expressions
+let x = 1 in let y = 2 in let z = 3 in x + y + z = 6
+let a = 10 in let b = 5 in let c = 2 in a - b - c = 3
+let x = 2 in let y = 3 in let z = 4 in x * y * z = 24
+
+
+// ===================================================================
+// Shadowing
+// ===================================================================
+
+// Simple shadowing
+let x = 5 in let x = 10 in x = 10
+let x = 1 in let x = 2 in let x = 3 in x = 3
+
+// Shadowing with arithmetic
+let x = 5 in let x = x + 1 in x = 6
+let x = 10 in let x = x * 2 in x = 20
+let x = 8 in let x = x - 3 in x = 5
+let x = 12 in let x = x / 2 in x = 6
+
+// Multiple shadowing
+let x = 1 in let x = x + 1 in let x = x + 1 in x = 3
+let x = 2 in let x = x * 2 in let x = x * 2 in x = 8
+
+
+// ===================================================================
+// Nested Let Bindings in Expressions
+// ===================================================================
+
+// Let binding in left operand
+(let x = 5 in x) + 3 = 8
+(let x = 10 in x) - 4 = 6
+(let x = 6 in x) * 2 = 12
+(let x = 20 in x) / 4 = 5
+
+// Let binding in right operand
+3 + (let x = 5 in x) = 8
+10 - (let x = 4 in x) = 6
+2 * (let x = 6 in x) = 12
+20 / (let x = 4 in x) = 5
+
+// Let bindings in both operands
+(let x = 3 in x) + (let y = 4 in y) = 7
+(let x = 10 in x) - (let y = 3 in y) = 7
+(let x = 5 in x) * (let y = 4 in y) = 20
+(let x = 24 in x) / (let y = 6 in y) = 4
+
+// Nested let bindings with multiple variables
+(let x = 2 in let y = 3 in x + y) + 1 = 6
+(let x = 10 in let y = 5 in x - y) * 2 = 10
+
+
+// ===================================================================
+// Complex Expressions
+// ===================================================================
+
+// Let binding with complex value expression
+let x = 2 + 3 in x = 5
+let x = 10 - 4 in x = 6
+let x = 3 * 4 in x = 12
+let x = 20 / 5 in x = 4
+let x = 2 + 3 * 4 in x = 14
+let x = (2 + 3) * 4 in x = 20
+
+// Let binding with complex body expression
+let x = 5 in x + 2 * 3 = 11
+let x = 10 in (x + 2) * 3 = 36
+let x = 4 in x * x + x = 20
+
+// Multiple variables with complex expressions
+let x = 2 + 3 in let y = 4 * 5 in x + y = 25
+let x = 10 - 2 in let y = 3 + 1 in x * y = 32
+let x = (2 + 3) * 2 in let y = 20 / 4 in x + y = 15
+
+
+// ===================================================================
+// Edge Cases
+// ===================================================================
+
+// Zero values
+let x = 0 in x = 0
+let x = 0 in x + 5 = 5
+let x = 0 in 5 + x = 5
+let x = 5 in let y = 0 in x + y = 5
+
+// Negative values
+let x = -5 in x = -5
+let x = -10 in x + 15 = 5
+let x = 10 in x + -5 = 5
+let x = -3 in let y = -4 in x + y = -7
+
+// Large values
+let x = 1000000 in x = 1000000
+let x = 9223372036854775807 in x = 9223372036854775807
+let x = -9223372036854775808 in x = -9223372036854775808
+
+// Long variable names
+let variable_name_with_underscores = 42 in variable_name_with_underscores = 42
+let x123 = 456 in x123 = 456

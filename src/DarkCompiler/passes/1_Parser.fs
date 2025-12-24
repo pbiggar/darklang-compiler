@@ -26,6 +26,10 @@ type Token =
     | TSlash
     | TLParen
     | TRParen
+    | TLet
+    | TIn
+    | TEquals
+    | TIdent of string
     | TEOF
 
 /// Lexer: convert string to list of tokens
@@ -42,6 +46,24 @@ let lex (input: string) : Result<Token list, string> =
         | '/' :: rest -> lexHelper rest (TSlash :: acc)
         | '(' :: rest -> lexHelper rest (TLParen :: acc)
         | ')' :: rest -> lexHelper rest (TRParen :: acc)
+        | '=' :: rest -> lexHelper rest (TEquals :: acc)
+        | c :: _ when System.Char.IsLetter(c) || c = '_' ->
+            // Parse identifier or keyword
+            let rec parseIdent (cs: char list) (chars: char list) : string * char list =
+                match cs with
+                | c :: rest when System.Char.IsLetterOrDigit(c) || c = '_' ->
+                    parseIdent rest (c :: chars)
+                | _ ->
+                    let ident = System.String(List.rev chars |> List.toArray)
+                    (ident, cs)
+
+            let (ident, remaining) = parseIdent chars []
+            let token =
+                match ident with
+                | "let" -> TLet
+                | "in" -> TIn
+                | _ -> TIdent ident
+            lexHelper remaining (token :: acc)
         | c :: _ when System.Char.IsDigit(c) ->
             // Parse integer
             let rec parseDigits (cs: char list) (digits: char list) : Result<int64 * char list, string> =
@@ -76,7 +98,19 @@ let lex (input: string) : Result<Token list, string> =
 let parse (tokens: Token list) : Result<Program, string> =
     // Recursive descent parser with operator precedence
     let rec parseExpr (toks: Token list) : Result<Expr * Token list, string> =
-        parseAdditive toks
+        match toks with
+        | TLet :: TIdent name :: TEquals :: rest ->
+            // Parse: let name = value in body
+            parseExpr rest
+            |> Result.bind (fun (value, remaining) ->
+                match remaining with
+                | TIn :: rest' ->
+                    parseExpr rest'
+                    |> Result.map (fun (body, remaining') ->
+                        (Let (name, value, body), remaining'))
+                | _ -> Error "Expected 'in' after let binding value")
+        | _ ->
+            parseAdditive toks
 
     and parseAdditive (toks: Token list) : Result<Expr * Token list, string> =
         parseMultiplicative toks
@@ -113,6 +147,7 @@ let parse (tokens: Token list) : Result<Program, string> =
     and parsePrimary (toks: Token list) : Result<Expr * Token list, string> =
         match toks with
         | TInt n :: rest -> Ok (IntLiteral n, rest)
+        | TIdent name :: rest -> Ok (Var name, rest)
         | TMinus :: rest ->
             // Unary negation
             parsePrimary rest
