@@ -2,8 +2,15 @@ Write in F#, with the intention to translate to Darklang later. Thus:
 
 - Use a limited set of F#
 - use only functional constructs and no imperative ones
+- use Options and Results a lot - dont use success flags or other imperative patterns
+- Don't use exceptions or failwith (or similar)
 - don't use dotnet libraries much
+- use string interpolation instead of printf-style calls
 - obvious exception: when doing system calls, filesystem updates, etc
+
+Dotnet:
+
+- The dotnet compiler often hangs, do not use a long timeout
 
 Compiler structure:
 
@@ -22,6 +29,8 @@ Tests:
 - if a bug is found, add the smallest test for that bug in the right place.
 - Otherwise, largely focus on end-to-end language tests
 
-Misc:
+Best-practices:
 
-- Keep README.md and docs/ files updated
+- Keep README.md, TODO.md, and docs/ files updated
+- Always fix dotnet compiler or runtime warnings and errors, preferably before commiting (make a separate cleanup commit if needed)
+- For dumb warnings, ask the developer if you want to disable
