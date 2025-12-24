@@ -492,7 +492,32 @@ let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : MIR.Program * MIR.RegGen
             }
             (mirFuncs @ [startFunc], finalBuilder.RegGen)
         | None ->
-            // No main expression - just functions
-            (mirFuncs, regGen1)
+            // No main expression - check if there's a main() function
+            let hasMainFunc = functions |> List.exists (fun f -> f.Name = "main")
+            if hasMainFunc then
+                // Create _start function that calls main()
+                let entryLabel = MIR.Label "_start_body"
+                let (resultReg, regGen2) = MIR.freshReg regGen1
+
+                // Create block that calls main and returns result
+                let block = {
+                    MIR.Label = entryLabel
+                    MIR.Instrs = [MIR.Call (resultReg, "main", [])]
+                    MIR.Terminator = MIR.Ret (MIR.Register resultReg)
+                }
+
+                let cfg = {
+                    MIR.Entry = entryLabel
+                    MIR.Blocks = Map.ofList [(entryLabel, block)]
+                }
+
+                let startFunc = {
+                    MIR.Name = "_start"
+                    MIR.Params = []
+                    MIR.CFG = cfg
+                }
+                (mirFuncs @ [startFunc], regGen2)
+            else
+                failwith "Program must have either a main expression or a main() function"
 
     (MIR.Program allFuncs, finalRegGen)

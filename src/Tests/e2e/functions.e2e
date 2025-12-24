@@ -1,0 +1,62 @@
+// E2E tests for function definitions (Phase 4 Milestone 3)
+// These test function definitions without function calls
+
+// Test 1: Simplest function - no parameters, return constant
+def main() : int = 42
+---
+42
+
+// Test 2: Function with arithmetic
+def main() : int = 10 + 32
+---
+42
+
+// Test 3: Function with let binding
+def main() : int =
+  let x = 10 in
+  let y = 32 in
+  x + y
+---
+42
+
+// Test 4: Function with negation
+def main() : int = -42
+---
+-42
+
+// Test 5: Function with if expression
+def main() : int = if 5 > 3 then 42 else 0
+---
+42
+
+// Test 6: Function with if-else (false branch)
+def main() : int = if 1 > 10 then 0 else 42
+---
+42
+
+// Test 7: Function with complex expression
+def main() : int =
+  let a = 6 in
+  let b = 7 in
+  a * b
+---
+42
+
+// Test 8: Function with comparison returning bool (printed as 1 for true)
+def main() : int = if 10 == 10 then 1 else 0
+---
+1
+
+// Test 9: Function with boolean operations
+def main() : int = if true && false then 0 else 42
+---
+42
+
+// Test 10: Function with nested if
+def main() : int =
+  if true then
+    if false then 0 else 42
+  else
+    0
+---
+42
