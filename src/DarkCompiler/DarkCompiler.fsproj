@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Output.fs" />
     <Compile Include="AST.fs" />
     <Compile Include="passes/1_Parser.fs" />
     <Compile Include="passes/1.5_TypeChecking.fs" />
