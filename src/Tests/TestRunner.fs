@@ -29,6 +29,22 @@ let formatTime (elapsed: TimeSpan) =
     else
         sprintf "%.2fs" elapsed.TotalSeconds
 
+// Parallel map with limited degree of parallelism
+let parallelMapWithLimit (maxDegree: int) (f: 'a -> 'b) (array: 'a array) : 'b array =
+    let results = Array.zeroCreate array.Length
+    let options = System.Threading.Tasks.ParallelOptions()
+    options.MaxDegreeOfParallelism <- maxDegree
+
+    System.Threading.Tasks.Parallel.For(
+        0,
+        array.Length,
+        options,
+        fun i ->
+            results.[i] <- f array.[i]
+    ) |> ignore
+
+    results
+
 [<EntryPoint>]
 let main args =
     let totalTimer = Stopwatch.StartNew()
@@ -234,11 +250,11 @@ let main args =
                 printfn "    %s" msg
                 failed <- failed + 1
 
-            // Run tests in parallel and collect results
+            // Run tests in parallel (max 6 concurrent) and collect results
             if allTests.Count > 0 then
                 let results =
                     allTests.ToArray()
-                    |> Array.Parallel.map (fun test ->
+                    |> parallelMapWithLimit 6 (fun test ->
                         let testTimer = Stopwatch.StartNew()
                         let result = runE2ETest test
                         testTimer.Stop()
