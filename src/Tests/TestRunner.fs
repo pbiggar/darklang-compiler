@@ -250,23 +250,20 @@ let main args =
                 printfn "    %s" msg
                 failed <- failed + 1
 
-            // Run tests in parallel (max 6 concurrent) and collect results
+            // Run tests in parallel (max 6 concurrent) and print as they complete (in order)
             if allTests.Count > 0 then
-                let results =
-                    allTests.ToArray()
-                    |> parallelMapWithLimit 6 (fun test ->
-                        let testTimer = Stopwatch.StartNew()
-                        let result = runE2ETest test
-                        testTimer.Stop()
-                        (test, result, testTimer.Elapsed)
-                    )
+                let testsArray = allTests.ToArray()
+                let numTests = testsArray.Length
+                let results = Array.zeroCreate<option<E2ETest * E2ETestResult * TimeSpan>> numTests
+                let mutable nextToPrint = 0
+                let lockObj = obj()
 
-                // Print results in order
-                for (test, result, elapsed) in results do
+                // Helper function to print a test result
+                let printTestResult (test: E2ETest) (result: E2ETestResult) (elapsed: TimeSpan) =
                     printf "  %s... " test.Name
                     if result.Success then
                         printfn "%s✓ PASS%s %s(%s)%s" Colors.green Colors.reset Colors.gray (formatTime elapsed) Colors.reset
-                        passed <- passed + 1
+                        lock lockObj (fun () -> passed <- passed + 1)
                     else
                         printfn "%s✗ FAIL%s %s(%s)%s" Colors.red Colors.reset Colors.gray (formatTime elapsed) Colors.reset
                         printfn "    %s" result.Message
@@ -304,7 +301,38 @@ let main args =
                             printfn "    Unexpected stderr: %s" (actual.Replace("\n", "\\n"))
                         | _ -> ()
 
-                        failed <- failed + 1
+                        lock lockObj (fun () -> failed <- failed + 1)
+
+                // Helper to print all consecutive completed tests starting from nextToPrint
+                let printPendingResults () =
+                    lock lockObj (fun () ->
+                        while nextToPrint < numTests && results.[nextToPrint].IsSome do
+                            let (test, result, elapsed) = results.[nextToPrint].Value
+                            printTestResult test result elapsed
+                            nextToPrint <- nextToPrint + 1
+                    )
+
+                // Run tests in parallel
+                let options = System.Threading.Tasks.ParallelOptions()
+                options.MaxDegreeOfParallelism <- 6
+                System.Threading.Tasks.Parallel.For(
+                    0,
+                    numTests,
+                    options,
+                    fun i ->
+                        let test = testsArray.[i]
+                        let testTimer = Stopwatch.StartNew()
+                        let result = runE2ETest test
+                        testTimer.Stop()
+
+                        // Store result
+                        lock lockObj (fun () ->
+                            results.[i] <- Some (test, result, testTimer.Elapsed)
+                        )
+
+                        // Try to print this and any subsequent completed tests
+                        printPendingResults ()
+                ) |> ignore
 
             sectionTimer.Stop()
             printfn "  %s└─ Completed in %s%s" Colors.gray (formatTime sectionTimer.Elapsed) Colors.reset
