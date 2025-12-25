@@ -24,6 +24,17 @@ type TypeRegistry = Map<string, (string * AST.Type) list>
 /// Variant lookup - maps variant names to (type name, tag index, payload type)
 type VariantLookup = Map<string, (string * int * AST.Type option)>
 
+/// Function registry - maps function names to their return types
+type FunctionRegistry = Map<string, AST.Type>
+
+/// Variable environment - maps variable names to their TempIds and types
+/// The type information is used for type-directed field lookup in record access
+type VarEnv = Map<string, ANF.TempId * AST.Type>
+
+/// Extract just the type environment from VarEnv for use with inferType
+let typeEnvFromVarEnv (varEnv: VarEnv) : Map<string, AST.Type> =
+    varEnv |> Map.map (fun _ (_, t) -> t)
+
 /// Convert AST.BinOp to ANF.BinOp
 let convertBinOp (op: AST.BinOp) : ANF.BinOp =
     match op with
@@ -46,11 +57,104 @@ let convertUnaryOp (op: AST.UnaryOp) : ANF.UnaryOp =
     | AST.Neg -> ANF.Neg
     | AST.Not -> ANF.Not
 
+/// Infer the type of an expression using type environment and registries
+/// Used for type-directed field lookup in record access
+let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) : Result<AST.Type, string> =
+    match expr with
+    | AST.IntLiteral _ -> Ok AST.TInt64
+    | AST.BoolLiteral _ -> Ok AST.TBool
+    | AST.StringLiteral _ -> Ok AST.TString
+    | AST.FloatLiteral _ -> Ok AST.TFloat64
+    | AST.Var name ->
+        match Map.tryFind name typeEnv with
+        | Some t -> Ok t
+        | None -> Error $"Cannot infer type: undefined variable '{name}'"
+    | AST.RecordLiteral (typeName, fields) ->
+        if typeName = "" then
+            // Anonymous record literal - try to find matching type by field names
+            let literalFieldNames = fields |> List.map fst |> Set.ofList
+            let matchingTypes =
+                typeReg
+                |> Map.toList
+                |> List.filter (fun (_, typeFields) ->
+                    let typeFieldNames = typeFields |> List.map fst |> Set.ofList
+                    typeFieldNames = literalFieldNames)
+                |> List.map fst
+            match matchingTypes with
+            | [singleMatch] -> Ok (AST.TRecord singleMatch)
+            | [] -> Error "Cannot infer type: no record type matches the field names"
+            | matches ->
+                let names = String.concat ", " matches
+                Error $"Ambiguous record literal: matches multiple types: {names}"
+        else
+            Ok (AST.TRecord typeName)
+    | AST.RecordAccess (recordExpr, fieldName) ->
+        inferType recordExpr typeEnv typeReg variantLookup funcReg
+        |> Result.bind (fun recordType ->
+            match recordType with
+            | AST.TRecord typeName ->
+                match Map.tryFind typeName typeReg with
+                | Some fields ->
+                    match List.tryFind (fun (name, _) -> name = fieldName) fields with
+                    | Some (_, fieldType) -> Ok fieldType
+                    | None -> Error $"Record type {typeName} has no field '{fieldName}'"
+                | None -> Error $"Unknown record type: {typeName}"
+            | _ -> Error $"Cannot access field on non-record type")
+    | AST.TupleLiteral elems ->
+        elems
+        |> List.map (fun e -> inferType e typeEnv typeReg variantLookup funcReg)
+        |> List.fold (fun acc r ->
+            match acc, r with
+            | Ok types, Ok t -> Ok (types @ [t])
+            | Error e, _ -> Error e
+            | _, Error e -> Error e) (Ok [])
+        |> Result.map AST.TTuple
+    | AST.TupleAccess (tupleExpr, index) ->
+        inferType tupleExpr typeEnv typeReg variantLookup funcReg
+        |> Result.bind (fun tupleType ->
+            match tupleType with
+            | AST.TTuple elemTypes when index >= 0 && index < List.length elemTypes ->
+                Ok (List.item index elemTypes)
+            | AST.TTuple _ -> Error $"Tuple index {index} out of bounds"
+            | _ -> Error "Cannot access index on non-tuple type")
+    | AST.Constructor (_, variantName, _) ->
+        match Map.tryFind variantName variantLookup with
+        | Some (typeName, _, _) -> Ok (AST.TSum typeName)
+        | None -> Error $"Unknown constructor: {variantName}"
+    | AST.ListLiteral _ -> Ok AST.TList
+    | AST.Let (name, value, body) ->
+        inferType value typeEnv typeReg variantLookup funcReg
+        |> Result.bind (fun valueType ->
+            let typeEnv' = Map.add name valueType typeEnv
+            inferType body typeEnv' typeReg variantLookup funcReg)
+    | AST.If (_, thenExpr, _) ->
+        // Both branches should have same type, just infer from then branch
+        inferType thenExpr typeEnv typeReg variantLookup funcReg
+    | AST.BinOp (op, _, _) ->
+        match op with
+        | AST.Add | AST.Sub | AST.Mul | AST.Div -> Ok AST.TInt64
+        | AST.Eq | AST.Neq | AST.Lt | AST.Gt | AST.Lte | AST.Gte | AST.And | AST.Or -> Ok AST.TBool
+    | AST.UnaryOp (op, _) ->
+        match op with
+        | AST.Neg -> Ok AST.TInt64
+        | AST.Not -> Ok AST.TBool
+    | AST.Match (_, cases) ->
+        // Infer from first case body
+        match cases with
+        | (_, body) :: _ -> inferType body typeEnv typeReg variantLookup funcReg
+        | [] -> Error "Empty match expression"
+    | AST.Call (funcName, _) ->
+        // Look up function return type from the function registry
+        match Map.tryFind funcName funcReg with
+        | Some returnType -> Ok returnType
+        | None -> Error $"Unknown function: '{funcName}'"
+
 /// Convert AST expression to ANF
-/// env maps user variable names to ANF TempIds
+/// env maps user variable names to ANF TempIds and their types
 /// typeReg maps record type names to field definitions
 /// variantLookup maps variant names to (type name, tag index)
-let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) : Result<ANF.AExpr * ANF.VarGen, string> =
+/// funcReg maps function names to their return types
+let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     match expr with
     | AST.IntLiteral n ->
         // Integer literal becomes return
@@ -71,19 +175,23 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
     | AST.Var name ->
         // Variable reference: look up in environment
         match Map.tryFind name env with
-        | Some tempId -> Ok (ANF.Return (ANF.Var tempId), varGen)
+        | Some (tempId, _) -> Ok (ANF.Return (ANF.Var tempId), varGen)
         | None -> Error $"Undefined variable: {name}"
 
     | AST.Let (name, value, body) ->
         // Let binding: convert value to atom, allocate fresh temp, convert body with extended env
-        toAtom value varGen env typeReg variantLookup |> Result.bind (fun (valueAtom, valueBindings, varGen1) ->
-            let (tempId, varGen2) = ANF.freshVar varGen1
-            let env' = Map.add name tempId env
-            toANF body varGen2 env' typeReg variantLookup |> Result.map (fun (bodyExpr, varGen3) ->
-                // Build: valueBindings + let tempId = valueAtom + body
-                let finalExpr = ANF.Let (tempId, ANF.Atom valueAtom, bodyExpr)
-                let exprWithBindings = wrapBindings valueBindings finalExpr
-                (exprWithBindings, varGen3)))
+        // Infer the type of the value for type-directed field lookup
+        let typeEnv = typeEnvFromVarEnv env
+        inferType value typeEnv typeReg variantLookup funcReg
+        |> Result.bind (fun valueType ->
+            toAtom value varGen env typeReg variantLookup funcReg |> Result.bind (fun (valueAtom, valueBindings, varGen1) ->
+                let (tempId, varGen2) = ANF.freshVar varGen1
+                let env' = Map.add name (tempId, valueType) env
+                toANF body varGen2 env' typeReg variantLookup funcReg |> Result.map (fun (bodyExpr, varGen3) ->
+                    // Build: valueBindings + let tempId = valueAtom + body
+                    let finalExpr = ANF.Let (tempId, ANF.Atom valueAtom, bodyExpr)
+                    let exprWithBindings = wrapBindings valueBindings finalExpr
+                    (exprWithBindings, varGen3))))
 
     | AST.UnaryOp (AST.Neg, innerExpr) ->
         // Unary negation: handle differently based on operand type
@@ -97,11 +205,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
             Ok (ANF.Return (ANF.FloatLiteral (-f)), varGen)
         | _ ->
             // Integer negation: convert to 0 - expr
-            toANF (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen env typeReg variantLookup
+            toANF (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen env typeReg variantLookup funcReg
 
     | AST.UnaryOp (op, innerExpr) ->
         // Unary operation: convert operand to atom
-        toAtom innerExpr varGen env typeReg variantLookup |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
+        toAtom innerExpr varGen env typeReg variantLookup funcReg |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
             // Create unary op and bind to fresh variable
             let (tempVar, varGen2) = ANF.freshVar varGen1
             let anfOp = convertUnaryOp op
@@ -115,8 +223,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
 
     | AST.BinOp (op, left, right) ->
         // Convert operands to atoms
-        toAtom left varGen env typeReg variantLookup |> Result.bind (fun (leftAtom, leftBindings, varGen1) ->
-            toAtom right varGen1 env typeReg variantLookup |> Result.map (fun (rightAtom, rightBindings, varGen2) ->
+        toAtom left varGen env typeReg variantLookup funcReg |> Result.bind (fun (leftAtom, leftBindings, varGen1) ->
+            toAtom right varGen1 env typeReg variantLookup funcReg |> Result.map (fun (rightAtom, rightBindings, varGen2) ->
                 // Create binop and bind to fresh variable
                 let (tempVar, varGen3) = ANF.freshVar varGen2
                 let anfOp = convertBinOp op
@@ -131,9 +239,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
 
     | AST.If (cond, thenBranch, elseBranch) ->
         // If expression: convert condition to atom, both branches to ANF
-        toAtom cond varGen env typeReg variantLookup |> Result.bind (fun (condAtom, condBindings, varGen1) ->
-            toANF thenBranch varGen1 env typeReg variantLookup |> Result.bind (fun (thenExpr, varGen2) ->
-                toANF elseBranch varGen2 env typeReg variantLookup |> Result.map (fun (elseExpr, varGen3) ->
+        toAtom cond varGen env typeReg variantLookup funcReg |> Result.bind (fun (condAtom, condBindings, varGen1) ->
+            toANF thenBranch varGen1 env typeReg variantLookup funcReg |> Result.bind (fun (thenExpr, varGen2) ->
+                toANF elseBranch varGen2 env typeReg variantLookup funcReg |> Result.map (fun (elseExpr, varGen3) ->
                     // Build the expression: condBindings + if condAtom then thenExpr else elseExpr
                     let finalExpr = ANF.If (condAtom, thenExpr, elseExpr)
                     let exprWithBindings = wrapBindings condBindings finalExpr
@@ -146,7 +254,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
             match argExprs with
             | [] -> Ok (List.rev accAtoms, accBindings, vg)
             | arg :: rest ->
-                toAtom arg vg env typeReg variantLookup
+                toAtom arg vg env typeReg variantLookup funcReg
                 |> Result.bind (fun (argAtom, argBindings, vg') ->
                     convertArgs rest vg' (argAtom :: accAtoms) (accBindings @ argBindings))
 
@@ -166,7 +274,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
             match elems with
             | [] -> Ok (List.rev accAtoms, accBindings, vg)
             | elem :: rest ->
-                toAtom elem vg env typeReg variantLookup
+                toAtom elem vg env typeReg variantLookup funcReg
                 |> Result.bind (fun (elemAtom, elemBindings, vg') ->
                     convertElements rest vg' (elemAtom :: accAtoms) (accBindings @ elemBindings))
 
@@ -182,7 +290,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
 
     | AST.TupleAccess (tupleExpr, index) ->
         // Convert tuple to atom and create TupleGet
-        toAtom tupleExpr varGen env typeReg variantLookup
+        toAtom tupleExpr varGen env typeReg variantLookup funcReg
         |> Result.map (fun (tupleAtom, tupleBindings, varGen1) ->
             let (resultVar, varGen2) = ANF.freshVar varGen1
             let getExpr = ANF.TupleGet (tupleAtom, index)
@@ -209,36 +317,34 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
             |> List.choose (fun fname -> Map.tryFind fname fieldMap)
 
         // Convert to TupleLiteral and reuse tuple handling
-        toANF (AST.TupleLiteral orderedValues) varGen env typeReg variantLookup
+        toANF (AST.TupleLiteral orderedValues) varGen env typeReg variantLookup funcReg
 
     | AST.RecordAccess (recordExpr, fieldName) ->
         // Records are compiled like tuples - field access becomes TupleGet
-        // Need to determine field index from type
-        // Find all record types that have this field (to detect ambiguity)
-        let findFieldMatches () =
-            typeReg
-            |> Map.toList
-            |> List.choose (fun (typeName, fields) ->
-                fields
-                |> List.tryFindIndex (fun (name, _) -> name = fieldName)
-                |> Option.map (fun idx -> (typeName, idx)))
-
-        match findFieldMatches () with
-        | [(_, index)] ->
-            // Exactly one match - use it
-            toAtom recordExpr varGen env typeReg variantLookup
-            |> Result.map (fun (recordAtom, recordBindings, varGen1) ->
-                let (resultVar, varGen2) = ANF.freshVar varGen1
-                let getExpr = ANF.TupleGet (recordAtom, index)
-                let finalExpr = ANF.Let (resultVar, getExpr, ANF.Return (ANF.Var resultVar))
-                let exprWithBindings = wrapBindings recordBindings finalExpr
-                (exprWithBindings, varGen2))
-        | [] ->
-            Error $"Unknown field: {fieldName}"
-        | matches ->
-            // Multiple matches - ambiguous
-            let typeNames = matches |> List.map fst |> String.concat ", "
-            Error $"Ambiguous field '{fieldName}' found in multiple record types: {typeNames}"
+        // Use type-directed lookup: infer the record type, then find field index
+        let typeEnv = typeEnvFromVarEnv env
+        inferType recordExpr typeEnv typeReg variantLookup funcReg
+        |> Result.bind (fun recordType ->
+            match recordType with
+            | AST.TRecord typeName ->
+                // Look up field index in the specific record type
+                match Map.tryFind typeName typeReg with
+                | Some fields ->
+                    match List.tryFindIndex (fun (name, _) -> name = fieldName) fields with
+                    | Some index ->
+                        toAtom recordExpr varGen env typeReg variantLookup funcReg
+                        |> Result.map (fun (recordAtom, recordBindings, varGen1) ->
+                            let (resultVar, varGen2) = ANF.freshVar varGen1
+                            let getExpr = ANF.TupleGet (recordAtom, index)
+                            let finalExpr = ANF.Let (resultVar, getExpr, ANF.Return (ANF.Var resultVar))
+                            let exprWithBindings = wrapBindings recordBindings finalExpr
+                            (exprWithBindings, varGen2))
+                    | None ->
+                        Error $"Record type '{typeName}' has no field '{fieldName}'"
+                | None ->
+                    Error $"Unknown record type: {typeName}"
+            | _ ->
+                Error $"Cannot access field '{fieldName}' on non-record type")
 
     | AST.Constructor (_, variantName, payload) ->
         match Map.tryFind variantName variantLookup with
@@ -266,7 +372,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                 Ok (finalExpr, varGen1)
             | Some payloadExpr ->
                 // Variant with payload: allocate [tag, payload] on heap
-                toAtom payloadExpr varGen env typeReg variantLookup
+                toAtom payloadExpr varGen env typeReg variantLookup funcReg
                 |> Result.map (fun (payloadAtom, payloadBindings, varGen1) ->
                     let tagAtom = ANF.IntLiteral (int64 tag)
                     // Create TupleAlloc [tag, payload] and bind to fresh variable
@@ -287,7 +393,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                 buildList rest vg tailAtom allBindings
                 |> Result.bind (fun (restAtom, restBindings, vg1) ->
                     // Now add this element: Cons(elem, rest)
-                    toAtom elem vg1 env typeReg variantLookup
+                    toAtom elem vg1 env typeReg variantLookup funcReg
                     |> Result.map (fun (elemAtom, elemBindings, vg2) ->
                         let (consVar, vg3) = ANF.freshVar vg2
                         // Cons = [tag=1, head, tail]
@@ -309,7 +415,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
     | AST.Match (scrutinee, cases) ->
         // Compile match to if-else chain
         // First convert scrutinee to atom
-        toAtom scrutinee varGen env typeReg variantLookup
+        toAtom scrutinee varGen env typeReg variantLookup funcReg
         |> Result.bind (fun (scrutineeAtom, scrutineeBindings, varGen1) ->
             // Check if any pattern needs to access list structure
             // If so, we must ensure scrutinee is a variable (can't TupleGet on literal)
@@ -345,24 +451,27 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                 | _ -> false
 
             // Extract pattern bindings and compile body with extended environment
-            let rec extractAndCompileBody (pattern: AST.Pattern) (body: AST.Expr) (scrutAtom: ANF.Atom) (currentEnv: Map<string, ANF.TempId>) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
+            // Note: Pattern-bound variables use TInt64 as placeholder type since full type inference
+            // for pattern variables requires scrutinee type analysis (future improvement)
+            let rec extractAndCompileBody (pattern: AST.Pattern) (body: AST.Expr) (scrutAtom: ANF.Atom) (currentEnv: VarEnv) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
                 match pattern with
-                | AST.PWildcard -> toANF body vg currentEnv typeReg variantLookup
-                | AST.PLiteral _ -> toANF body vg currentEnv typeReg variantLookup
-                | AST.PBool _ -> toANF body vg currentEnv typeReg variantLookup
-                | AST.PString _ -> toANF body vg currentEnv typeReg variantLookup
-                | AST.PFloat _ -> toANF body vg currentEnv typeReg variantLookup
+                | AST.PWildcard -> toANF body vg currentEnv typeReg variantLookup funcReg
+                | AST.PLiteral _ -> toANF body vg currentEnv typeReg variantLookup funcReg
+                | AST.PBool _ -> toANF body vg currentEnv typeReg variantLookup funcReg
+                | AST.PString _ -> toANF body vg currentEnv typeReg variantLookup funcReg
+                | AST.PFloat _ -> toANF body vg currentEnv typeReg variantLookup funcReg
                 | AST.PVar name ->
                     // Bind scrutinee to variable name
                     let (tempId, vg1) = ANF.freshVar vg
-                    let env' = Map.add name tempId currentEnv
-                    toANF body vg1 env' typeReg variantLookup
+                    // Use TInt64 as placeholder - pattern variable type tracking is future work
+                    let env' = Map.add name (tempId, AST.TInt64) currentEnv
+                    toANF body vg1 env' typeReg variantLookup funcReg
                     |> Result.map (fun (bodyExpr, vg2) ->
                         let expr = ANF.Let (tempId, ANF.Atom scrutAtom, bodyExpr)
                         (expr, vg2))
                 | AST.PConstructor (_, payloadPattern) ->
                     match payloadPattern with
-                    | None -> toANF body vg currentEnv typeReg variantLookup
+                    | None -> toANF body vg currentEnv typeReg variantLookup funcReg
                     | Some innerPattern ->
                         // Extract payload from heap-allocated variant
                         // Variant layout: [tag:8][payload:8], so payload is at index 1
@@ -375,23 +484,23 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                             (expr, vg2))
                 | AST.PTuple patterns ->
                     // Extract each element and bind pattern variables
-                    let rec extractTupleElements (pats: AST.Pattern list) (idx: int) (env: Map<string, ANF.TempId>) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
+                    let rec extractTupleElements (pats: AST.Pattern list) (idx: int) (env: VarEnv) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
                         match pats with
-                        | [] -> toANF body vg env typeReg variantLookup
+                        | [] -> toANF body vg env typeReg variantLookup funcReg
                         | pat :: rest ->
                             let (elemVar, vg1) = ANF.freshVar vg
                             let elemExpr = ANF.TupleGet (scrutAtom, idx)
                             extractAndCompileBody pat body (ANF.Var elemVar) env vg1
                             |> Result.bind (fun _ ->
                                 // For non-binding patterns, just continue
-                                // For binding patterns, add to env
+                                // For binding patterns, add to env with placeholder type
                                 let newEnv =
                                     match pat with
-                                    | AST.PVar name -> Map.add name elemVar env
+                                    | AST.PVar name -> Map.add name (elemVar, AST.TInt64) env
                                     | _ -> env
                                 extractTupleElements rest (idx + 1) newEnv vg1)
                     // Simplified: extract all bindings first, then compile body
-                    let rec collectTupleBindings (pats: AST.Pattern list) (idx: int) (env: Map<string, ANF.TempId>) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<Map<string, ANF.TempId> * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                    let rec collectTupleBindings (pats: AST.Pattern list) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                         match pats with
                         | [] -> Ok (env, List.rev bindings, vg)
                         | pat :: rest ->
@@ -400,7 +509,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                             let binding = (elemVar, elemExpr)
                             match pat with
                             | AST.PVar name ->
-                                let newEnv = Map.add name elemVar env
+                                // Use TInt64 as placeholder type
+                                let newEnv = Map.add name (elemVar, AST.TInt64) env
                                 collectTupleBindings rest (idx + 1) newEnv (binding :: bindings) vg1
                             | AST.PWildcard ->
                                 collectTupleBindings rest (idx + 1) env bindings vg1
@@ -410,13 +520,13 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                                 collectTupleBindings rest (idx + 1) env (binding :: bindings) vg1
                     collectTupleBindings patterns 0 currentEnv [] vg
                     |> Result.bind (fun (newEnv, bindings, vg1) ->
-                        toANF body vg1 newEnv typeReg variantLookup
+                        toANF body vg1 newEnv typeReg variantLookup funcReg
                         |> Result.map (fun (bodyExpr, vg2) ->
                             let finalExpr = wrapBindings bindings bodyExpr
                             (finalExpr, vg2)))
                 | AST.PRecord (_, fieldPatterns) ->
                     // Extract each field and bind pattern variables
-                    let rec collectRecordBindings (fields: (string * AST.Pattern) list) (env: Map<string, ANF.TempId>) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) (fieldIdx: int) : Result<Map<string, ANF.TempId> * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                    let rec collectRecordBindings (fields: (string * AST.Pattern) list) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) (fieldIdx: int) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                         match fields with
                         | [] -> Ok (env, List.rev bindings, vg)
                         | (_, pat) :: rest ->
@@ -425,7 +535,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                             let binding = (fieldVar, fieldExpr)
                             match pat with
                             | AST.PVar name ->
-                                let newEnv = Map.add name fieldVar env
+                                // Use TInt64 as placeholder type
+                                let newEnv = Map.add name (fieldVar, AST.TInt64) env
                                 collectRecordBindings rest newEnv (binding :: bindings) vg1 (fieldIdx + 1)
                             | AST.PWildcard ->
                                 collectRecordBindings rest env bindings vg1 (fieldIdx + 1)
@@ -433,14 +544,14 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                                 collectRecordBindings rest env (binding :: bindings) vg1 (fieldIdx + 1)
                     collectRecordBindings fieldPatterns currentEnv [] vg 0
                     |> Result.bind (fun (newEnv, bindings, vg1) ->
-                        toANF body vg1 newEnv typeReg variantLookup
+                        toANF body vg1 newEnv typeReg variantLookup funcReg
                         |> Result.map (fun (bodyExpr, vg2) ->
                             let finalExpr = wrapBindings bindings bodyExpr
                             (finalExpr, vg2)))
                 | AST.PList patterns ->
                     // Extract list elements: walk through Cons cells
                     // List layout: Nil = 0, Cons = [tag=1, head, tail]
-                    let rec collectListBindings (pats: AST.Pattern list) (listAtom: ANF.Atom) (env: Map<string, ANF.TempId>) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<Map<string, ANF.TempId> * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                    let rec collectListBindings (pats: AST.Pattern list) (listAtom: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                         match pats with
                         | [] -> Ok (env, List.rev bindings, vg)
                         | pat :: rest ->
@@ -454,7 +565,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                             let tailBinding = (tailVar, tailExpr)
                             match pat with
                             | AST.PVar name ->
-                                let newEnv = Map.add name headVar env
+                                // Use TInt64 as placeholder type
+                                let newEnv = Map.add name (headVar, AST.TInt64) env
                                 collectListBindings rest (ANF.Var tailVar) newEnv (tailBinding :: headBinding :: bindings) vg2
                             | AST.PWildcard ->
                                 collectListBindings rest (ANF.Var tailVar) env (tailBinding :: bindings) vg2
@@ -462,7 +574,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                                 collectListBindings rest (ANF.Var tailVar) env (tailBinding :: headBinding :: bindings) vg2
                     collectListBindings patterns scrutAtom currentEnv [] vg
                     |> Result.bind (fun (newEnv, bindings, vg1) ->
-                        toANF body vg1 newEnv typeReg variantLookup
+                        toANF body vg1 newEnv typeReg variantLookup funcReg
                         |> Result.map (fun (bodyExpr, vg2) ->
                             let finalExpr = wrapBindings bindings bodyExpr
                             (finalExpr, vg2)))
@@ -560,7 +672,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                 (exprWithBindings, varGen2)))
 
 /// Convert an AST expression to an atom, introducing let bindings as needed
-and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     match expr with
     | AST.IntLiteral n ->
         Ok (ANF.IntLiteral n, [], varGen)
@@ -577,18 +689,22 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
     | AST.Var name ->
         // Variable reference: look up in environment
         match Map.tryFind name env with
-        | Some tempId -> Ok (ANF.Var tempId, [], varGen)
+        | Some (tempId, _) -> Ok (ANF.Var tempId, [], varGen)
         | None -> Error $"Undefined variable: {name}"
 
     | AST.Let (name, value, body) ->
         // Let binding in atom position: need to evaluate and return the body as an atom
-        toAtom value varGen env typeReg variantLookup |> Result.bind (fun (valueAtom, valueBindings, varGen1) ->
-            let (tempId, varGen2) = ANF.freshVar varGen1
-            let env' = Map.add name tempId env
-            toAtom body varGen2 env' typeReg variantLookup |> Result.map (fun (bodyAtom, bodyBindings, varGen3) ->
-                // All bindings: valueBindings + binding tempId to value + bodyBindings
-                let allBindings = valueBindings @ [(tempId, ANF.Atom valueAtom)] @ bodyBindings
-                (bodyAtom, allBindings, varGen3)))
+        // Infer the type of the value for type-directed field lookup
+        let typeEnv = typeEnvFromVarEnv env
+        inferType value typeEnv typeReg variantLookup funcReg
+        |> Result.bind (fun valueType ->
+            toAtom value varGen env typeReg variantLookup funcReg |> Result.bind (fun (valueAtom, valueBindings, varGen1) ->
+                let (tempId, varGen2) = ANF.freshVar varGen1
+                let env' = Map.add name (tempId, valueType) env
+                toAtom body varGen2 env' typeReg variantLookup funcReg |> Result.map (fun (bodyAtom, bodyBindings, varGen3) ->
+                    // All bindings: valueBindings + binding tempId to value + bodyBindings
+                    let allBindings = valueBindings @ [(tempId, ANF.Atom valueAtom)] @ bodyBindings
+                    (bodyAtom, allBindings, varGen3))))
 
     | AST.UnaryOp (AST.Neg, innerExpr) ->
         // Unary negation: handle differently based on operand type
@@ -602,11 +718,11 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
             Ok (ANF.FloatLiteral (-f), [], varGen)
         | _ ->
             // Integer negation: convert to 0 - expr
-            toAtom (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen env typeReg variantLookup
+            toAtom (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen env typeReg variantLookup funcReg
 
     | AST.UnaryOp (op, innerExpr) ->
         // Unary operation: convert operand to atom, create binding
-        toAtom innerExpr varGen env typeReg variantLookup |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
+        toAtom innerExpr varGen env typeReg variantLookup funcReg |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
             // Create the operation
             let (tempVar, varGen2) = ANF.freshVar varGen1
             let anfOp = convertUnaryOp op
@@ -618,8 +734,8 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
 
     | AST.BinOp (op, left, right) ->
         // Complex expression: convert operands to atoms, create binding
-        toAtom left varGen env typeReg variantLookup |> Result.bind (fun (leftAtom, leftBindings, varGen1) ->
-            toAtom right varGen1 env typeReg variantLookup |> Result.map (fun (rightAtom, rightBindings, varGen2) ->
+        toAtom left varGen env typeReg variantLookup funcReg |> Result.bind (fun (leftAtom, leftBindings, varGen1) ->
+            toAtom right varGen1 env typeReg variantLookup funcReg |> Result.map (fun (rightAtom, rightBindings, varGen2) ->
                 // Create the operation
                 let (tempVar, varGen3) = ANF.freshVar varGen2
                 let anfOp = convertBinOp op
@@ -631,9 +747,9 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
 
     | AST.If (condExpr, thenExpr, elseExpr) ->
         // If expression in atom position: convert all parts to atoms, create IfValue
-        toAtom condExpr varGen env typeReg variantLookup |> Result.bind (fun (condAtom, condBindings, varGen1) ->
-            toAtom thenExpr varGen1 env typeReg variantLookup |> Result.bind (fun (thenAtom, thenBindings, varGen2) ->
-                toAtom elseExpr varGen2 env typeReg variantLookup |> Result.bind (fun (elseAtom, elseBindings, varGen3) ->
+        toAtom condExpr varGen env typeReg variantLookup funcReg |> Result.bind (fun (condAtom, condBindings, varGen1) ->
+            toAtom thenExpr varGen1 env typeReg variantLookup funcReg |> Result.bind (fun (thenAtom, thenBindings, varGen2) ->
+                toAtom elseExpr varGen2 env typeReg variantLookup funcReg |> Result.bind (fun (elseAtom, elseBindings, varGen3) ->
                     // Create a temporary for the result
                     let (tempVar, varGen4) = ANF.freshVar varGen3
                     // Create an IfValue CExpr
@@ -648,7 +764,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
             match argExprs with
             | [] -> Ok (List.rev accAtoms, accBindings, vg)
             | arg :: rest ->
-                toAtom arg vg env typeReg variantLookup
+                toAtom arg vg env typeReg variantLookup funcReg
                 |> Result.bind (fun (argAtom, argBindings, vg') ->
                     convertArgs rest vg' (argAtom :: accAtoms) (accBindings @ argBindings))
 
@@ -667,7 +783,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
             match elems with
             | [] -> Ok (List.rev accAtoms, accBindings, vg)
             | elem :: rest ->
-                toAtom elem vg env typeReg variantLookup
+                toAtom elem vg env typeReg variantLookup funcReg
                 |> Result.bind (fun (elemAtom, elemBindings, vg') ->
                     convertElements rest vg' (elemAtom :: accAtoms) (accBindings @ elemBindings))
 
@@ -682,7 +798,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
 
     | AST.TupleAccess (tupleExpr, index) ->
         // Convert tuple to atom and create TupleGet
-        toAtom tupleExpr varGen env typeReg variantLookup
+        toAtom tupleExpr varGen env typeReg variantLookup funcReg
         |> Result.map (fun (tupleAtom, tupleBindings, varGen1) ->
             let (tempVar, varGen2) = ANF.freshVar varGen1
             let getCExpr = ANF.TupleGet (tupleAtom, index)
@@ -706,34 +822,33 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
             |> List.choose (fun fname -> Map.tryFind fname fieldMap)
 
         // Reuse tuple handling
-        toAtom (AST.TupleLiteral orderedValues) varGen env typeReg variantLookup
+        toAtom (AST.TupleLiteral orderedValues) varGen env typeReg variantLookup funcReg
 
     | AST.RecordAccess (recordExpr, fieldName) ->
         // Records are compiled like tuples - field access becomes TupleGet
-        // Find all record types that have this field (to detect ambiguity)
-        let findFieldMatches () =
-            typeReg
-            |> Map.toList
-            |> List.choose (fun (typeName, fields) ->
-                fields
-                |> List.tryFindIndex (fun (name, _) -> name = fieldName)
-                |> Option.map (fun idx -> (typeName, idx)))
-
-        match findFieldMatches () with
-        | [(_, index)] ->
-            // Exactly one match - use it
-            toAtom recordExpr varGen env typeReg variantLookup
-            |> Result.bind (fun (recordAtom, recordBindings, varGen1) ->
-                let (tempVar, varGen2) = ANF.freshVar varGen1
-                let getCExpr = ANF.TupleGet (recordAtom, index)
-                let allBindings = recordBindings @ [(tempVar, getCExpr)]
-                Ok (ANF.Var tempVar, allBindings, varGen2))
-        | [] ->
-            Error $"Unknown field: {fieldName}"
-        | matches ->
-            // Multiple matches - ambiguous
-            let typeNames = matches |> List.map fst |> String.concat ", "
-            Error $"Ambiguous field '{fieldName}' found in multiple record types: {typeNames}"
+        // Use type-directed lookup: infer the record type, then find field index
+        let typeEnv = typeEnvFromVarEnv env
+        inferType recordExpr typeEnv typeReg variantLookup funcReg
+        |> Result.bind (fun recordType ->
+            match recordType with
+            | AST.TRecord typeName ->
+                // Look up field index in the specific record type
+                match Map.tryFind typeName typeReg with
+                | Some fields ->
+                    match List.tryFindIndex (fun (name, _) -> name = fieldName) fields with
+                    | Some index ->
+                        toAtom recordExpr varGen env typeReg variantLookup funcReg
+                        |> Result.bind (fun (recordAtom, recordBindings, varGen1) ->
+                            let (tempVar, varGen2) = ANF.freshVar varGen1
+                            let getCExpr = ANF.TupleGet (recordAtom, index)
+                            let allBindings = recordBindings @ [(tempVar, getCExpr)]
+                            Ok (ANF.Var tempVar, allBindings, varGen2))
+                    | None ->
+                        Error $"Record type '{typeName}' has no field '{fieldName}'"
+                | None ->
+                    Error $"Unknown record type: {typeName}"
+            | _ ->
+                Error $"Cannot access field '{fieldName}' on non-record type")
 
     | AST.Constructor (_, variantName, payload) ->
         match Map.tryFind variantName variantLookup with
@@ -759,7 +874,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
                 Ok (ANF.Var tempVar, [(tempVar, tupleCExpr)], varGen1)
             | Some payloadExpr ->
                 // Variant with payload: allocate [tag, payload] on heap
-                toAtom payloadExpr varGen env typeReg variantLookup
+                toAtom payloadExpr varGen env typeReg variantLookup funcReg
                 |> Result.map (fun (payloadAtom, payloadBindings, varGen1) ->
                     let tagAtom = ANF.IntLiteral (int64 tag)
                     // Create TupleAlloc [tag, payload] and bind to fresh variable
@@ -778,7 +893,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
                 buildList rest vg tailAtom allBindings
                 |> Result.bind (fun (restAtom, restBindings, vg1) ->
                     // Now add this element: Cons(elem, rest)
-                    toAtom elem vg1 env typeReg variantLookup
+                    toAtom elem vg1 env typeReg variantLookup funcReg
                     |> Result.map (fun (elemAtom, elemBindings, vg2) ->
                         let (consVar, vg3) = ANF.freshVar vg2
                         // Cons = [tag=1, head, tail]
@@ -795,7 +910,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
 
     | AST.Match (scrutinee, cases) ->
         // Match in atom position - compile and extract result
-        toANF (AST.Match (scrutinee, cases)) varGen env typeReg variantLookup
+        toANF (AST.Match (scrutinee, cases)) varGen env typeReg variantLookup funcReg
         |> Result.bind (fun (matchExpr, varGen1) ->
             // The match compiles to an if-else chain that returns a value
             // We need to extract that value into a temp variable
@@ -807,7 +922,7 @@ and wrapBindings (bindings: (ANF.TempId * ANF.CExpr) list) (expr: ANF.AExpr) : A
     List.foldBack (fun (var, cexpr) acc -> ANF.Let (var, cexpr, acc)) bindings expr
 
 /// Convert a function definition to ANF
-let convertFunction (funcDef: AST.FunctionDef) (varGen: ANF.VarGen) (typeReg: TypeRegistry) (variantLookup: VariantLookup) : Result<ANF.Function * ANF.VarGen, string> =
+let convertFunction (funcDef: AST.FunctionDef) (varGen: ANF.VarGen) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) : Result<ANF.Function * ANF.VarGen, string> =
     // Allocate TempIds for parameters
     let (paramIds, varGen1) =
         funcDef.Params
@@ -815,13 +930,14 @@ let convertFunction (funcDef: AST.FunctionDef) (varGen: ANF.VarGen) (typeReg: Ty
             let (tempId, vg') = ANF.freshVar vg
             (ids @ [tempId], vg')) ([], varGen)
 
-    // Build environment mapping param names to TempIds
-    let paramEnv =
-        List.zip (List.map fst funcDef.Params) paramIds
+    // Build environment mapping param names to (TempId, Type)
+    let paramEnv : VarEnv =
+        List.zip funcDef.Params paramIds
+        |> List.map (fun ((name, typ), tempId) -> (name, (tempId, typ)))
         |> Map.ofList
 
     // Convert body
-    toANF funcDef.Body varGen1 paramEnv typeReg variantLookup
+    toANF funcDef.Body varGen1 paramEnv typeReg variantLookup funcReg
     |> Result.map (fun (body, varGen2) ->
         ({ Name = funcDef.Name; Params = paramIds; Body = body }, varGen2))
 
@@ -855,12 +971,18 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
     let functions = topLevels |> List.choose (function AST.FunctionDef f -> Some f | _ -> None)
     let expressions = topLevels |> List.choose (function AST.Expression e -> Some e | _ -> None)
 
+    // Build function registry - maps function names to their return types
+    let funcReg : FunctionRegistry =
+        functions
+        |> List.map (fun f -> (f.Name, f.ReturnType))
+        |> Map.ofList
+
     // Convert all functions
     let rec convertFunctions (funcs: AST.FunctionDef list) (vg: ANF.VarGen) (acc: ANF.Function list) : Result<ANF.Function list * ANF.VarGen, string> =
         match funcs with
         | [] -> Ok (List.rev acc, vg)
         | func :: rest ->
-            convertFunction func vg typeReg variantLookup
+            convertFunction func vg typeReg variantLookup funcReg
             |> Result.bind (fun (anfFunc, vg') ->
                 convertFunctions rest vg' (anfFunc :: acc))
 
@@ -869,7 +991,8 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
         // Convert main expression (if any)
         match expressions with
         | [expr] ->
-            toANF expr varGen1 Map.empty typeReg variantLookup
+            let emptyEnv : VarEnv = Map.empty
+            toANF expr varGen1 emptyEnv typeReg variantLookup funcReg
             |> Result.map (fun (anfExpr, _) ->
                 ANF.Program (anfFuncs, Some anfExpr))
         | [] ->

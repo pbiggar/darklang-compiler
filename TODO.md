@@ -87,6 +87,8 @@ The following are known simplifications or potential issues in the compiler code
 - ✅ 8-pass compiler pipeline (Parser → TypeCheck → ANF → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
 - ✅ 664 passing tests
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
+- ✅ Type-directed record field lookup (no ambiguity when multiple record types have same field names)
+- ✅ Function return type inference using function registry (enables type inference for let-bound function calls)
 
 ## Known Limitations & Partial Implementations
 
