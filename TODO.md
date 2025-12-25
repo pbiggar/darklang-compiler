@@ -34,51 +34,31 @@ The following are known simplifications or potential issues in the compiler code
 **Issue:** Pattern `[a, b, c]` only checks if list is non-nil, not actual length
 **Risk:** Can crash when extracting elements from a shorter list
 
-#### 2. Stack offset range validation missing
-**File:** `src/DarkCompiler/passes/6_CodeGen.fs` (lines 95-106)
-**Issue:** LDUR/STUR support -256 to +255 bytes only, no validation before int16 cast
-**Risk:** Wrong memory access for large stack allocations
-
-#### 3. Record field lookup ambiguity
-**File:** `src/DarkCompiler/passes/2_AST_to_ANF.fs` (lines 226-232)
-**Issue:** RecordAccess searches ALL record types for field name, picks first match
-**Risk:** Wrong field accessed if multiple types have same field name
-
-#### 4. Pool lookup invariant violations
-**File:** `src/DarkCompiler/passes/3_ANF_to_MIR.fs` (lines 188-191)
-**Issue:** Uses `Map.find` which throws on missing key
-**Risk:** Cryptic "Key not found" exception instead of clear error
-
 ### MEDIUM Priority (Incomplete features)
 
-#### 5. Callee-saved registers not implemented
+#### 2. Callee-saved registers not implemented
 **Files:** `src/DarkCompiler/passes/5_RegisterAllocation.fs` (line 111), `6_CodeGen.fs` (lines 147, 173)
 **Issue:** `calleeSavedRegs` is empty list, X19-X28 not supported in LIR.PhysReg
 **Impact:** Suboptimal register allocation, more spilling than necessary
 
-#### 6. Anonymous record type inference fragile
-**File:** `src/DarkCompiler/passes/1.5_TypeChecking.fs` (lines 318-381)
-**Issue:** Anonymous records infer type by matching field names, picks first match
-**Risk:** Wrong type inferred if multiple record types have overlapping field names
-
 ### LOW Priority (Feature limitations, not bugs)
 
-#### 7. Monomorphic lists
+#### 3. Monomorphic lists
 **Files:** `src/DarkCompiler/AST.fs` (line 31), `1.5_TypeChecking.fs` (line 530)
 **Issue:** TList only supports int, not polymorphic types
 **Future:** Add type parameter support for lists
 
-#### 8. ARM64 register subset
+#### 4. ARM64 register subset
 **File:** `src/DarkCompiler/ARM64.fs` (line 26)
 **Issue:** Only subset of ARM64 registers implemented
 **Future:** Add more registers as needed
 
-#### 9. Parser structure limitations
+#### 5. Parser structure limitations
 **File:** `src/DarkCompiler/passes/1_Parser.fs` (line 839)
 **Issue:** Only function definitions allowed after expressions
 **Future:** Expand module-level structure support
 
-#### 10. MachO UUID hardcoded to zeros
+#### 6. MachO UUID hardcoded to zeros
 **File:** `src/DarkCompiler/passes/8_Binary_Generation_MachO.fs` (line 468)
 **Issue:** All binaries have identical UUID (all zeros)
 **Impact:** Cosmetic - doesn't affect functionality
