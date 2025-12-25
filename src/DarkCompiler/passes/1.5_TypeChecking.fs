@@ -318,26 +318,34 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
     | RecordLiteral (typeName, fields) ->
         // For anonymous records (typeName = ""), try to infer from expected type or field names
         // For named records, look up type definition
-        let recordTypeName =
+        // Returns Result to handle ambiguity detection
+        let recordTypeNameResult =
             if typeName = "" then
                 match expectedType with
-                | Some (TRecord name) -> Some name
+                | Some (TRecord name) -> Ok name
                 | _ ->
                     // Try to infer record type from field names
+                    // Find ALL matching types to detect ambiguity
                     let fieldNames = fields |> List.map fst |> Set.ofList
-                    typeReg
-                    |> Map.toList
-                    |> List.tryFind (fun (_, typeFields) ->
-                        let typeFieldNames = typeFields |> List.map fst |> Set.ofList
-                        typeFieldNames = fieldNames)
-                    |> Option.map fst
-            else
-                Some typeName
+                    let matches =
+                        typeReg
+                        |> Map.toList
+                        |> List.choose (fun (recTypeName, typeFields) ->
+                            let typeFieldNames = typeFields |> List.map fst |> Set.ofList
+                            if typeFieldNames = fieldNames then Some recTypeName else None)
 
-        match recordTypeName with
-        | None ->
-            Error (GenericError "Cannot infer record type - no matching type definition found")
-        | Some name ->
+                    match matches with
+                    | [single] -> Ok single
+                    | [] -> Error (GenericError "Cannot infer record type - no matching type definition found")
+                    | multiple ->
+                        let typeNames = String.concat ", " multiple
+                        Error (GenericError $"Ambiguous record literal - fields match multiple types: {typeNames}")
+            else
+                Ok typeName
+
+        match recordTypeNameResult with
+        | Error err -> Error err
+        | Ok name ->
             match Map.tryFind name typeReg with
             | None ->
                 Error (GenericError $"Unknown record type: {name}")
