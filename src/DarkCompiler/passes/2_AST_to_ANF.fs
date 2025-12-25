@@ -637,6 +637,59 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let cmpExpr = ANF.Prim (ANF.Neq, scrutAtom, ANF.IntLiteral 0L)
                         Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
 
+            // Compile a list pattern with proper length validation.
+            // Generates nested if-expressions that check each element exists before extracting.
+            // This fixes the bug where [a, b] pattern would crash when matching against [1].
+            let rec compileListPatternWithChecks
+                (patterns: AST.Pattern list)
+                (listAtom: ANF.Atom)
+                (currentEnv: VarEnv)
+                (body: AST.Expr)
+                (elseExpr: ANF.AExpr)
+                (vg: ANF.VarGen)
+                : Result<ANF.AExpr * ANF.VarGen, string> =
+
+                match patterns with
+                | [] ->
+                    // All elements extracted - compile the body
+                    // Note: We don't check tail == 0 here, so lists with more elements
+                    // than the pattern will still match. This is a simplification.
+                    // TODO: Add exact length matching if needed
+                    toANF body vg currentEnv typeReg variantLookup funcReg
+
+                | pat :: restPatterns ->
+                    // Check current position is non-nil (list has at least one more element)
+                    let (checkVar, vg1) = ANF.freshVar vg
+                    let checkExpr = ANF.Prim (ANF.Neq, listAtom, ANF.IntLiteral 0L)
+
+                    // Extract head (index 1) and tail (index 2) from Cons cell
+                    let (headVar, vg2) = ANF.freshVar vg1
+                    let headExpr = ANF.TupleGet (listAtom, 1)
+                    let (tailVar, vg3) = ANF.freshVar vg2
+                    let tailExpr = ANF.TupleGet (listAtom, 2)
+
+                    // Update environment based on pattern type
+                    let newEnv =
+                        match pat with
+                        | AST.PVar name -> Map.add name (headVar, AST.TInt64) currentEnv
+                        | _ -> currentEnv
+
+                    // Recursively compile rest of list pattern
+                    compileListPatternWithChecks restPatterns (ANF.Var tailVar) newEnv body elseExpr vg3
+                    |> Result.map (fun (innerExpr, vg4) ->
+                        // Build nested structure:
+                        // let checkVar = (listAtom != 0) in
+                        //   if checkVar then
+                        //     let headVar = TupleGet(listAtom, 1) in
+                        //     let tailVar = TupleGet(listAtom, 2) in
+                        //     <innerExpr>
+                        //   else
+                        //     <elseExpr>
+                        let withTail = ANF.Let (tailVar, tailExpr, innerExpr)
+                        let withHead = ANF.Let (headVar, headExpr, withTail)
+                        let ifExpr = ANF.If (ANF.Var checkVar, withHead, elseExpr)
+                        (ANF.Let (checkVar, checkExpr, ifExpr), vg4))
+
             // Build the if-else chain from cases
             let rec buildChain (remaining: (AST.Pattern * AST.Expr) list) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
                 match remaining with
@@ -644,27 +697,47 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     // No cases left - shouldn't happen if we have wildcard/var
                     Error "Non-exhaustive pattern match"
                 | [(pattern, body)] ->
-                    // Last case - just return the body (assumes exhaustive or wildcard)
-                    extractAndCompileBody pattern body scrutineeAtom' env vg
+                    // Last case - for most patterns just compile the body
+                    // For non-empty list patterns, we still need proper length checking
+                    match pattern with
+                    | AST.PList (_ :: _ as listPatterns) ->
+                        // For list patterns as last case, generate proper checks
+                        // If the pattern doesn't match, this is a non-exhaustive match
+                        // We generate an expression that returns 0 as a fallback (TODO: proper error)
+                        let fallbackExpr = ANF.Return (ANF.IntLiteral 0L)
+                        compileListPatternWithChecks listPatterns scrutineeAtom' env body fallbackExpr vg
+                    | _ ->
+                        // Other patterns - original behavior
+                        extractAndCompileBody pattern body scrutineeAtom' env vg
                 | (pattern, body) :: rest ->
                     if patternAlwaysMatches pattern then
                         // Wildcard or var - matches everything, no more cases
                         extractAndCompileBody pattern body scrutineeAtom' env vg
                     else
-                        buildPatternComparison pattern scrutineeAtom' vg
-                        |> Result.bind (fun cmpOpt ->
-                            match cmpOpt with
-                            | None ->
-                                // Pattern always matches
-                                extractAndCompileBody pattern body scrutineeAtom' env vg
-                            | Some (condAtom, bindings, vg1) ->
-                                extractAndCompileBody pattern body scrutineeAtom' env vg1
-                                |> Result.bind (fun (thenExpr, vg2) ->
-                                    buildChain rest vg2
-                                    |> Result.map (fun (elseExpr, vg3) ->
-                                        let ifExpr = ANF.If (condAtom, thenExpr, elseExpr)
-                                        let finalExpr = wrapBindings bindings ifExpr
-                                        (finalExpr, vg3))))
+                        // Non-empty list patterns need special handling with interleaved checks
+                        match pattern with
+                        | AST.PList (_ :: _ as listPatterns) ->
+                            // Build the else branch first (rest of cases)
+                            buildChain rest vg
+                            |> Result.bind (fun (elseExpr, vg1) ->
+                                // Use the new interleaved check-and-extract function
+                                compileListPatternWithChecks listPatterns scrutineeAtom' env body elseExpr vg1)
+                        | _ ->
+                            // Original logic for other patterns
+                            buildPatternComparison pattern scrutineeAtom' vg
+                            |> Result.bind (fun cmpOpt ->
+                                match cmpOpt with
+                                | None ->
+                                    // Pattern always matches
+                                    extractAndCompileBody pattern body scrutineeAtom' env vg
+                                | Some (condAtom, bindings, vg1) ->
+                                    extractAndCompileBody pattern body scrutineeAtom' env vg1
+                                    |> Result.bind (fun (thenExpr, vg2) ->
+                                        buildChain rest vg2
+                                        |> Result.map (fun (elseExpr, vg3) ->
+                                            let ifExpr = ANF.If (condAtom, thenExpr, elseExpr)
+                                            let finalExpr = wrapBindings bindings ifExpr
+                                            (finalExpr, vg3))))
 
             buildChain cases varGen1'
             |> Result.map (fun (chainExpr, varGen2) ->
