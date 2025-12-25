@@ -27,95 +27,126 @@ let convertOperand (operand: MIR.Operand) : LIR.Operand =
     | MIR.Register vreg -> LIR.Reg (vregToLIRReg vreg)
 
 /// Ensure operand is in a register (may need to load immediate)
-let ensureInRegister (operand: MIR.Operand) (tempReg: LIR.Reg) : LIR.Instr list * LIR.Reg =
+let ensureInRegister (operand: MIR.Operand) (tempReg: LIR.Reg) : Result<LIR.Instr list * LIR.Reg, string> =
     match operand with
     | MIR.IntConst n ->
         // Need to load constant into a temporary register
-        ([LIR.Mov (tempReg, LIR.Imm n)], tempReg)
+        Ok ([LIR.Mov (tempReg, LIR.Imm n)], tempReg)
     | MIR.BoolConst b ->
         // Load boolean (0 or 1) into register
-        ([LIR.Mov (tempReg, LIR.Imm (if b then 1L else 0L))], tempReg)
+        Ok ([LIR.Mov (tempReg, LIR.Imm (if b then 1L else 0L))], tempReg)
     | MIR.FloatRef idx ->
         // Load float into a register (placeholder - proper FP support needed later)
-        ([LIR.Mov (tempReg, LIR.FloatImm 0.0)], tempReg)
+        Ok ([LIR.Mov (tempReg, LIR.FloatImm 0.0)], tempReg)
     | MIR.StringRef _ ->
         // String references are not used as operands in arithmetic operations
-        failwith "Cannot use string literal as arithmetic operand"
+        Error "Internal error: Cannot use string literal as arithmetic operand"
     | MIR.Register vreg ->
-        ([], vregToLIRReg vreg)
+        Ok ([], vregToLIRReg vreg)
 
 /// Convert MIR instruction to LIR instructions
-let selectInstr (instr: MIR.Instr) : LIR.Instr list =
+let selectInstr (instr: MIR.Instr) : Result<LIR.Instr list, string> =
     match instr with
     | MIR.Mov (dest, src) ->
         let lirDest = vregToLIRReg dest
         let lirSrc = convertOperand src
-        [LIR.Mov (lirDest, lirSrc)]
+        Ok [LIR.Mov (lirDest, lirSrc)]
 
     | MIR.BinOp (dest, op, left, right) ->
         let lirDest = vregToLIRReg dest
-        let leftOp = convertOperand left
         let rightOp = convertOperand right
 
         match op with
         | MIR.Add ->
             // ADD can have immediate or register as right operand
             // Left operand must be in a register
-            let (leftInstrs, leftReg) = ensureInRegister left lirDest
-            leftInstrs @ [LIR.Add (lirDest, leftReg, rightOp)]
+            match ensureInRegister left lirDest with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+                Ok (leftInstrs @ [LIR.Add (lirDest, leftReg, rightOp)])
 
         | MIR.Sub ->
             // SUB can have immediate or register as right operand
-            let (leftInstrs, leftReg) = ensureInRegister left lirDest
-            leftInstrs @ [LIR.Sub (lirDest, leftReg, rightOp)]
+            match ensureInRegister left lirDest with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+                Ok (leftInstrs @ [LIR.Sub (lirDest, leftReg, rightOp)])
 
         | MIR.Mul ->
             // MUL requires both operands in registers
-            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
-            let (rightInstrs, rightReg) = ensureInRegister right (LIR.Virtual 1001)
-            leftInstrs @ rightInstrs @ [LIR.Mul (lirDest, leftReg, rightReg)]
+            match ensureInRegister left (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+            match ensureInRegister right (LIR.Virtual 1001) with
+            | Error err -> Error err
+            | Ok (rightInstrs, rightReg) ->
+                Ok (leftInstrs @ rightInstrs @ [LIR.Mul (lirDest, leftReg, rightReg)])
 
         | MIR.Div ->
             // SDIV requires both operands in registers
-            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
-            let (rightInstrs, rightReg) = ensureInRegister right (LIR.Virtual 1001)
-            leftInstrs @ rightInstrs @ [LIR.Sdiv (lirDest, leftReg, rightReg)]
+            match ensureInRegister left (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+            match ensureInRegister right (LIR.Virtual 1001) with
+            | Error err -> Error err
+            | Ok (rightInstrs, rightReg) ->
+                Ok (leftInstrs @ rightInstrs @ [LIR.Sdiv (lirDest, leftReg, rightReg)])
 
         // Comparisons: CMP + CSET sequence
         | MIR.Eq ->
-            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
-            leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.EQ)]
+            match ensureInRegister left (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+                Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.EQ)])
 
         | MIR.Neq ->
-            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
-            leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.NE)]
+            match ensureInRegister left (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+                Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.NE)])
 
         | MIR.Lt ->
-            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
-            leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.LT)]
+            match ensureInRegister left (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+                Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.LT)])
 
         | MIR.Gt ->
-            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
-            leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.GT)]
+            match ensureInRegister left (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+                Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.GT)])
 
         | MIR.Lte ->
-            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
-            leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.LE)]
+            match ensureInRegister left (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+                Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.LE)])
 
         | MIR.Gte ->
-            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
-            leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.GE)]
+            match ensureInRegister left (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+                Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.GE)])
 
         // Boolean operations (bitwise for 0/1 values)
         | MIR.And ->
-            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
-            let (rightInstrs, rightReg) = ensureInRegister right (LIR.Virtual 1001)
-            leftInstrs @ rightInstrs @ [LIR.And (lirDest, leftReg, rightReg)]
+            match ensureInRegister left (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+            match ensureInRegister right (LIR.Virtual 1001) with
+            | Error err -> Error err
+            | Ok (rightInstrs, rightReg) ->
+                Ok (leftInstrs @ rightInstrs @ [LIR.And (lirDest, leftReg, rightReg)])
 
         | MIR.Or ->
-            let (leftInstrs, leftReg) = ensureInRegister left (LIR.Virtual 1000)
-            let (rightInstrs, rightReg) = ensureInRegister right (LIR.Virtual 1001)
-            leftInstrs @ rightInstrs @ [LIR.Orr (lirDest, leftReg, rightReg)]
+            match ensureInRegister left (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+            match ensureInRegister right (LIR.Virtual 1001) with
+            | Error err -> Error err
+            | Ok (rightInstrs, rightReg) ->
+                Ok (leftInstrs @ rightInstrs @ [LIR.Orr (lirDest, leftReg, rightReg)])
 
     | MIR.UnaryOp (dest, op, src) ->
         let lirDest = vregToLIRReg dest
@@ -125,28 +156,27 @@ let selectInstr (instr: MIR.Instr) : LIR.Instr list =
             // Check if source is a float - use FP negation
             match src with
             | MIR.FloatRef idx ->
-                // Float negation: load float into D1, negate into D0, move to integer reg
-                // Actually, we need to produce a float result. For now, let's use FNeg
-                // and store result in a FP virtual register that maps to an integer virtual
-                // Since we don't have proper FP virtual registers yet, we'll work around this
-                // by loading the float, negating it, and the result stays in FP register
-                // For the entry function case, the terminator will handle printing
-                [
-                    LIR.FLoad (LIR.FPhysical LIR.D1, idx)  // Load float constant into D1
-                    LIR.FNeg (LIR.FPhysical LIR.D0, LIR.FPhysical LIR.D1)  // Negate into D0
+                // Float negation: load float into D1, negate into D0
+                Ok [
+                    LIR.FLoad (LIR.FPhysical LIR.D1, idx)
+                    LIR.FNeg (LIR.FPhysical LIR.D0, LIR.FPhysical LIR.D1)
                 ]
             | _ ->
                 // Integer negation: 0 - src
-                let (srcInstrs, srcReg) = ensureInRegister src (LIR.Virtual 1000)
-                srcInstrs @ [LIR.Mov (lirDest, LIR.Imm 0L); LIR.Sub (lirDest, lirDest, LIR.Reg srcReg)]
+                match ensureInRegister src (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (srcInstrs, srcReg) ->
+                    Ok (srcInstrs @ [LIR.Mov (lirDest, LIR.Imm 0L); LIR.Sub (lirDest, lirDest, LIR.Reg srcReg)])
 
         | MIR.Not ->
             // Boolean NOT: 1 - src (since booleans are 0 or 1)
-            let (srcInstrs, srcReg) = ensureInRegister src (LIR.Virtual 1000)
-            srcInstrs @ [
-                LIR.Mov (lirDest, LIR.Imm 1L)
-                LIR.Sub (lirDest, lirDest, LIR.Reg srcReg)
-            ]
+            match ensureInRegister src (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (srcInstrs, srcReg) ->
+                Ok (srcInstrs @ [
+                    LIR.Mov (lirDest, LIR.Imm 1L)
+                    LIR.Sub (lirDest, lirDest, LIR.Reg srcReg)
+                ])
 
     | MIR.Call (dest, funcName, args) ->
         // ARM64 calling convention (AAPCS64):
@@ -181,27 +211,27 @@ let selectInstr (instr: MIR.Instr) : LIR.Instr list =
             | LIR.Physical LIR.X0 -> []
             | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
 
-        saveInstrs @ moveInstrs @ [callInstr] @ restoreInstrs @ moveResult
+        Ok (saveInstrs @ moveInstrs @ [callInstr] @ restoreInstrs @ moveResult)
 
     | MIR.HeapAlloc (dest, sizeBytes) ->
         let lirDest = vregToLIRReg dest
-        [LIR.HeapAlloc (lirDest, sizeBytes)]
+        Ok [LIR.HeapAlloc (lirDest, sizeBytes)]
 
     | MIR.HeapStore (addr, offset, src) ->
         let lirAddr = vregToLIRReg addr
         let lirSrc = convertOperand src
-        [LIR.HeapStore (lirAddr, offset, lirSrc)]
+        Ok [LIR.HeapStore (lirAddr, offset, lirSrc)]
 
     | MIR.HeapLoad (dest, addr, offset) ->
         let lirDest = vregToLIRReg dest
         let lirAddr = vregToLIRReg addr
-        [LIR.HeapLoad (lirDest, lirAddr, offset)]
+        Ok [LIR.HeapLoad (lirDest, lirAddr, offset)]
 
 /// Convert MIR terminator to LIR terminator
 /// For Branch, need to convert operand to register (may add instructions)
 /// isEntryFunc: whether this is the entry function (_start) that should print the result
 /// stringPool: needed to look up string lengths for PrintString
-let selectTerminator (terminator: MIR.Terminator) (isEntryFunc: bool) (stringPool: MIR.StringPool) : LIR.Instr list * LIR.Terminator =
+let selectTerminator (terminator: MIR.Terminator) (isEntryFunc: bool) (stringPool: MIR.StringPool) : Result<LIR.Instr list * LIR.Terminator, string> =
     match terminator with
     | MIR.Ret operand ->
         // Handle different return types appropriately
@@ -210,23 +240,23 @@ let selectTerminator (terminator: MIR.Terminator) (isEntryFunc: bool) (stringPoo
             // Look up string length from pool
             let (_, strLen) = Map.find idx stringPool.Strings
             // PrintString generates its own code to load address and print
-            ([LIR.PrintString (idx, strLen)], LIR.Ret)
+            Ok ([LIR.PrintString (idx, strLen)], LIR.Ret)
         | MIR.FloatRef idx when isEntryFunc ->
             // Load float from pool into D0 and print it
             let loadFloat = LIR.FLoad (LIR.FPhysical LIR.D0, idx)
             let printFloat = LIR.PrintFloat (LIR.FPhysical LIR.D0)
-            ([loadFloat; printFloat], LIR.Ret)
+            Ok ([loadFloat; printFloat], LIR.Ret)
         | MIR.FloatRef idx ->
             // Non-entry function: load float into D0 for return
             let loadFloat = LIR.FLoad (LIR.FPhysical LIR.D0, idx)
-            ([loadFloat], LIR.Ret)
+            Ok ([loadFloat], LIR.Ret)
         | _ ->
             // Move operand to X0 (return register)
             let lirOp = convertOperand operand
             let moveToX0 = [LIR.Mov (LIR.Physical LIR.X0, lirOp)]
             // Only print if this is the entry function
             let printInstr = if isEntryFunc then [LIR.PrintInt (LIR.Physical LIR.X0)] else []
-            (moveToX0 @ printInstr, LIR.Ret)
+            Ok (moveToX0 @ printInstr, LIR.Ret)
 
     | MIR.Branch (condOp, trueLabel, falseLabel) ->
         // Convert MIR.Label to LIR.Label (just unwrap)
@@ -234,44 +264,74 @@ let selectTerminator (terminator: MIR.Terminator) (isEntryFunc: bool) (stringPoo
         let (MIR.Label falseLbl) = falseLabel
 
         // Condition must be in a register for ARM64 branch instructions
-        let (condInstrs, condReg) = ensureInRegister condOp (LIR.Virtual 1002)
-        (condInstrs, LIR.Branch (condReg, trueLbl, falseLbl))
+        match ensureInRegister condOp (LIR.Virtual 1002) with
+        | Error err -> Error err
+        | Ok (condInstrs, condReg) ->
+            Ok (condInstrs, LIR.Branch (condReg, trueLbl, falseLbl))
 
     | MIR.Jump label ->
         let (MIR.Label lbl) = label
-        ([], LIR.Jump lbl)
+        Ok ([], LIR.Jump lbl)
 
 /// Convert MIR label to LIR label
 let convertLabel (MIR.Label lbl) : LIR.Label = lbl
 
+/// Helper: collect Results from a list, returning Error on first failure
+let private collectResults (results: Result<'a list, string> list) : Result<'a list, string> =
+    let rec loop acc remaining =
+        match remaining with
+        | [] -> Ok (List.rev acc |> List.concat)
+        | (Error err) :: _ -> Error err
+        | (Ok instrs) :: rest -> loop (instrs :: acc) rest
+    loop [] results
+
 /// Convert MIR basic block to LIR basic block
-let selectBlock (block: MIR.BasicBlock) (isEntryFunc: bool) (stringPool: MIR.StringPool) : LIR.BasicBlock =
+let selectBlock (block: MIR.BasicBlock) (isEntryFunc: bool) (stringPool: MIR.StringPool) : Result<LIR.BasicBlock, string> =
     let lirLabel = convertLabel block.Label
 
     // Convert all instructions
-    let lirInstrs = block.Instrs |> List.collect selectInstr
+    let instrResults = block.Instrs |> List.map selectInstr
+    match collectResults instrResults with
+    | Error err -> Error err
+    | Ok lirInstrs ->
 
     // Convert terminator (may add instructions)
-    let (termInstrs, lirTerm) = selectTerminator block.Terminator isEntryFunc stringPool
+    match selectTerminator block.Terminator isEntryFunc stringPool with
+    | Error err -> Error err
+    | Ok (termInstrs, lirTerm) ->
 
-    {
+    Ok {
         LIR.Label = lirLabel
         LIR.Instrs = lirInstrs @ termInstrs
         LIR.Terminator = lirTerm
     }
 
-/// Convert MIR CFG to LIR CFG
-let selectCFG (cfg: MIR.CFG) (isEntryFunc: bool) (stringPool: MIR.StringPool) : LIR.CFG =
-    let lirEntry = convertLabel cfg.Entry
-    let lirBlocks =
-        cfg.Blocks
-        |> Map.toList
-        |> List.map (fun (label, block) -> (convertLabel label, selectBlock block isEntryFunc stringPool))
-        |> Map.ofList
+/// Helper: map a function returning Result over a list, returning Error on first failure
+let private mapResults (f: 'a -> Result<'b, string>) (items: 'a list) : Result<'b list, string> =
+    let rec loop acc remaining =
+        match remaining with
+        | [] -> Ok (List.rev acc)
+        | item :: rest ->
+            match f item with
+            | Error err -> Error err
+            | Ok result -> loop (result :: acc) rest
+    loop [] items
 
-    {
+/// Convert MIR CFG to LIR CFG
+let selectCFG (cfg: MIR.CFG) (isEntryFunc: bool) (stringPool: MIR.StringPool) : Result<LIR.CFG, string> =
+    let lirEntry = convertLabel cfg.Entry
+
+    let blockList = cfg.Blocks |> Map.toList
+    match mapResults (fun (label, block) ->
+        match selectBlock block isEntryFunc stringPool with
+        | Error err -> Error err
+        | Ok lirBlock -> Ok (convertLabel label, lirBlock)) blockList with
+    | Error err -> Error err
+    | Ok lirBlockList ->
+
+    Ok {
         LIR.Entry = lirEntry
-        LIR.Blocks = lirBlocks
+        LIR.Blocks = Map.ofList lirBlockList
     }
 
 /// Check if any function has more than 8 parameters (ARM64 calling convention limit)
@@ -316,19 +376,22 @@ let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
     | Ok () ->
 
     // Convert each MIR function to LIR
-    let lirFuncs =
-        mirFuncs
-        |> List.map (fun mirFunc ->
-            let isEntryFunc = mirFunc.Name = "_start"
-            let lirCFG = selectCFG mirFunc.CFG isEntryFunc stringPool
+    let convertFunc (mirFunc: MIR.Function) =
+        let isEntryFunc = mirFunc.Name = "_start"
+        match selectCFG mirFunc.CFG isEntryFunc stringPool with
+        | Error err -> Error err
+        | Ok lirCFG ->
             // Convert MIR VRegs to LIR Virtual registers for parameters
             let lirParams = mirFunc.Params |> List.map (fun (MIR.VReg id) -> LIR.Virtual id)
-            {
+            Ok {
                 LIR.Name = mirFunc.Name
                 LIR.Params = lirParams
                 LIR.CFG = lirCFG
                 LIR.StackSize = 0  // Will be determined by register allocation
                 LIR.UsedCalleeSaved = []  // Will be determined by register allocation
-            })
+            }
 
-    Ok (LIR.Program (lirFuncs, stringPool, floatPool))
+    match mapResults convertFunc mirFuncs with
+    | Error err -> Error err
+    | Ok lirFuncs ->
+        Ok (LIR.Program (lirFuncs, stringPool, floatPool))

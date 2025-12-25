@@ -192,13 +192,13 @@ let atomToOperand (builder: CFGBuilder) (atom: ANF.Atom) : MIR.Operand =
     | ANF.Var tempId -> MIR.Register (tempToVReg tempId)
 
 /// Convert ANF expression to CFG
-/// Returns: (final value operand, CFG builder with all blocks)
+/// Returns: Result of (final value operand, CFG builder with all blocks)
 let rec convertExpr
     (expr: ANF.AExpr)
     (currentLabel: MIR.Label)
     (currentInstrs: MIR.Instr list)
     (builder: CFGBuilder)
-    : MIR.Operand * CFGBuilder =
+    : Result<MIR.Operand * CFGBuilder, string> =
 
     match expr with
     | ANF.Return atom ->
@@ -210,7 +210,7 @@ let rec convertExpr
             MIR.Terminator = MIR.Ret operand
         }
         let builder' = { builder with Blocks = Map.add currentLabel block builder.Blocks }
-        (operand, builder')
+        Ok (operand, builder')
 
     | ANF.Let (tempId, cexpr, rest) ->
         // Let binding: handle based on cexpr type
@@ -264,17 +264,17 @@ let rec convertExpr
 
         | _ ->
             // Simple CExpr: add instruction(s) to current block, continue
-            let instrs =
+            let instrsResult =
                 match cexpr with
                 | ANF.Atom atom ->
-                    [MIR.Mov (destReg, atomToOperand builder atom)]
+                    Ok [MIR.Mov (destReg, atomToOperand builder atom)]
                 | ANF.Prim (op, leftAtom, rightAtom) ->
-                    [MIR.BinOp (destReg, convertBinOp op, atomToOperand builder leftAtom, atomToOperand builder rightAtom)]
+                    Ok [MIR.BinOp (destReg, convertBinOp op, atomToOperand builder leftAtom, atomToOperand builder rightAtom)]
                 | ANF.UnaryPrim (op, atom) ->
-                    [MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand builder atom)]
+                    Ok [MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand builder atom)]
                 | ANF.Call (funcName, args) ->
                     let argOperands = List.map (atomToOperand builder) args
-                    [MIR.Call (destReg, funcName, argOperands)]
+                    Ok [MIR.Call (destReg, funcName, argOperands)]
                 | ANF.TupleAlloc elems ->
                     // Allocate heap space: 8 bytes per element
                     let sizeBytes = List.length elems * 8
@@ -284,20 +284,24 @@ let rec convertExpr
                         elems
                         |> List.mapi (fun i elem ->
                             MIR.HeapStore (destReg, i * 8, atomToOperand builder elem))
-                    allocInstr :: storeInstrs
+                    Ok (allocInstr :: storeInstrs)
                 | ANF.TupleGet (tupleAtom, index) ->
                     // Tuple should always be a variable in ANF
-                    let tupleReg =
-                        match tupleAtom with
-                        | ANF.Var tid -> tempToVReg tid
-                        | _ -> failwith "Tuple access on non-variable (should be impossible after ANF)"
-                    [MIR.HeapLoad (destReg, tupleReg, index * 8)]
+                    match tupleAtom with
+                    | ANF.Var tid ->
+                        let tupleReg = tempToVReg tid
+                        Ok [MIR.HeapLoad (destReg, tupleReg, index * 8)]
+                    | _ ->
+                        Error "Internal error: Tuple access on non-variable (ANF invariant violated)"
                 | ANF.IfValue _ ->
-                    // Already handled above
-                    failwith "Unreachable: IfValue already handled"
+                    // This case is handled above; reaching here indicates a bug
+                    Error "Internal error: IfValue should have been handled in outer match"
 
-            let newInstrs = currentInstrs @ instrs
-            convertExpr rest currentLabel newInstrs builder
+            match instrsResult with
+            | Error err -> Error err
+            | Ok instrs ->
+                let newInstrs = currentInstrs @ instrs
+                convertExpr rest currentLabel newInstrs builder
 
     | ANF.If (condAtom, thenBranch, elseBranch) ->
         // If expression:
@@ -332,7 +336,9 @@ let rec convertExpr
         }
 
         // Convert then-branch: result goes into resultReg, then jump to join
-        let (thenResult, thenJoinOpt, builder2) = convertExprToOperand thenBranch thenLabel [] builder1
+        match convertExprToOperand thenBranch thenLabel [] builder1 with
+        | Error err -> Error err
+        | Ok (thenResult, thenJoinOpt, builder2) ->
 
         // If then-branch created blocks (nested if), patch its join block
         // Otherwise, create a simple block that moves result and jumps
@@ -359,7 +365,9 @@ let rec convertExpr
                 { builder2 with Blocks = Map.add thenLabel thenBlock builder2.Blocks }
 
         // Convert else-branch: result goes into resultReg, then jump to join
-        let (elseResult, elseJoinOpt, builder4) = convertExprToOperand elseBranch elseLabel [] builder3
+        match convertExprToOperand elseBranch elseLabel [] builder3 with
+        | Error err -> Error err
+        | Ok (elseResult, elseJoinOpt, builder4) ->
 
         // Same logic for else-branch
         let builder5 =
@@ -392,10 +400,10 @@ let rec convertExpr
 
         // Return the result operand
         let resultOp = MIR.Register resultReg
-        (resultOp, builder6)
+        Ok (resultOp, builder6)
 
 /// Helper: convert expression and extract final operand
-/// Returns: (operand, optional join label if blocks were created, builder)
+/// Returns: Result of (operand, optional join label if blocks were created, builder)
 /// - If join label is Some(label), the expression created blocks ending at that join block
 /// - If join label is None, no blocks were created (simple expression)
 and convertExprToOperand
@@ -403,7 +411,7 @@ and convertExprToOperand
     (startLabel: MIR.Label)
     (startInstrs: MIR.Instr list)
     (builder: CFGBuilder)
-    : MIR.Operand * MIR.Label option * CFGBuilder =
+    : Result<MIR.Operand * MIR.Label option * CFGBuilder, string> =
 
     match expr with
     | ANF.Return atom ->
@@ -411,7 +419,7 @@ and convertExprToOperand
         // Otherwise just return the operand
         let operand = atomToOperand builder atom
         if List.isEmpty startInstrs then
-            (operand, None, builder)
+            Ok (operand, None, builder)
         else
             // Create a block with accumulated instructions
             // Use temporary Ret terminator - caller will patch if needed
@@ -421,7 +429,7 @@ and convertExprToOperand
                 MIR.Terminator = MIR.Ret operand
             }
             let builder' = { builder with Blocks = Map.add startLabel block builder.Blocks }
-            (operand, Some startLabel, builder')
+            Ok (operand, Some startLabel, builder')
 
     | ANF.Let (tempId, cexpr, rest) ->
         let destReg = tempToVReg tempId
@@ -469,16 +477,17 @@ and convertExprToOperand
 
         | _ ->
             // Simple CExpr: create instruction(s) and accumulate
-            let instrs =
+            let instrsResult =
                 match cexpr with
-                | ANF.Atom atom -> [MIR.Mov (destReg, atomToOperand builder atom)]
+                | ANF.Atom atom ->
+                    Ok [MIR.Mov (destReg, atomToOperand builder atom)]
                 | ANF.Prim (op, leftAtom, rightAtom) ->
-                    [MIR.BinOp (destReg, convertBinOp op, atomToOperand builder leftAtom, atomToOperand builder rightAtom)]
+                    Ok [MIR.BinOp (destReg, convertBinOp op, atomToOperand builder leftAtom, atomToOperand builder rightAtom)]
                 | ANF.UnaryPrim (op, atom) ->
-                    [MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand builder atom)]
+                    Ok [MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand builder atom)]
                 | ANF.Call (funcName, args) ->
                     let argOperands = List.map (atomToOperand builder) args
-                    [MIR.Call (destReg, funcName, argOperands)]
+                    Ok [MIR.Call (destReg, funcName, argOperands)]
                 | ANF.TupleAlloc elems ->
                     // Allocate heap space: 8 bytes per element
                     let sizeBytes = List.length elems * 8
@@ -488,20 +497,24 @@ and convertExprToOperand
                         elems
                         |> List.mapi (fun i elem ->
                             MIR.HeapStore (destReg, i * 8, atomToOperand builder elem))
-                    allocInstr :: storeInstrs
+                    Ok (allocInstr :: storeInstrs)
                 | ANF.TupleGet (tupleAtom, index) ->
                     // Tuple should always be a variable in ANF
-                    let tupleReg =
-                        match tupleAtom with
-                        | ANF.Var tid -> tempToVReg tid
-                        | _ -> failwith "Tuple access on non-variable (should be impossible after ANF)"
-                    [MIR.HeapLoad (destReg, tupleReg, index * 8)]
+                    match tupleAtom with
+                    | ANF.Var tid ->
+                        let tupleReg = tempToVReg tid
+                        Ok [MIR.HeapLoad (destReg, tupleReg, index * 8)]
+                    | _ ->
+                        Error "Internal error: Tuple access on non-variable (ANF invariant violated)"
                 | ANF.IfValue _ ->
-                    // Already handled above
-                    failwith "Unreachable: IfValue already handled"
+                    // This case is handled above; reaching here indicates a bug
+                    Error "Internal error: IfValue should have been handled in outer match"
 
             // Let bindings accumulate instructions, pass through join label
-            convertExprToOperand rest startLabel (startInstrs @ instrs) builder
+            match instrsResult with
+            | Error err -> Error err
+            | Ok instrs ->
+                convertExprToOperand rest startLabel (startInstrs @ instrs) builder
 
     | ANF.If (condAtom, thenBranch, elseBranch) ->
         // If expression: creates blocks with branch/jump/join structure
@@ -526,7 +539,9 @@ and convertExprToOperand
         }
 
         // Convert then-branch
-        let (thenResult, thenJoinOpt, builder2) = convertExprToOperand thenBranch thenLabel [] builder1
+        match convertExprToOperand thenBranch thenLabel [] builder1 with
+        | Error err -> Error err
+        | Ok (thenResult, thenJoinOpt, builder2) ->
 
         // If then-branch created blocks (nested if), patch its join block
         // Otherwise, create a simple block that moves result and jumps
@@ -553,7 +568,9 @@ and convertExprToOperand
                 { builder2 with Blocks = Map.add thenLabel thenBlock builder2.Blocks }
 
         // Convert else-branch
-        let (elseResult, elseJoinOpt, builder4) = convertExprToOperand elseBranch elseLabel [] builder3
+        match convertExprToOperand elseBranch elseLabel [] builder3 with
+        | Error err -> Error err
+        | Ok (elseResult, elseJoinOpt, builder4) ->
 
         // Same logic for else-branch
         let builder5 =
@@ -585,10 +602,10 @@ and convertExprToOperand
         let builder6 = { builder5 with Blocks = Map.add joinLabel joinBlock builder5.Blocks }
 
         // Return result register and our join label for potential patching by caller
-        (MIR.Register resultReg, Some joinLabel, builder6)
+        Ok (MIR.Register resultReg, Some joinLabel, builder6)
 
 /// Convert an ANF function to a MIR function
-let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: Map<string, int>) (fltLookup: Map<float, int>) : MIR.Function * MIR.RegGen =
+let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: Map<string, int>) (fltLookup: Map<float, int>) : Result<MIR.Function * MIR.RegGen, string> =
     // Create initial builder with lookups
     let initialBuilder = {
         RegGen = regGen
@@ -610,7 +627,9 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
             ([], initialBuilder)
 
     // Convert function body to CFG
-    let (_, finalBuilder) = convertExpr anfFunc.Body entryLabel [] builder1
+    match convertExpr anfFunc.Body entryLabel [] builder1 with
+    | Error err -> Error err
+    | Ok (_, finalBuilder) ->
 
     let cfg = {
         MIR.Entry = entryLabel
@@ -623,7 +642,7 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
         MIR.CFG = cfg
     }
 
-    (mirFunc, finalBuilder.RegGen)
+    Ok (mirFunc, finalBuilder.RegGen)
 
 /// Convert ANF program to MIR program
 let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : Result<MIR.Program * MIR.RegGen, string> =
@@ -640,11 +659,17 @@ let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : Result<MIR.Program * MIR
     let fltLookup = buildFloatLookup floatPool
 
     // Phase 2: Convert all functions to MIR
-    let (mirFuncs, regGen1) =
-        functions
-        |> List.fold (fun (funcs, rg) anfFunc ->
-            let (mirFunc, rg') = convertANFFunction anfFunc rg strLookup fltLookup
-            (funcs @ [mirFunc], rg')) ([], regGen)
+    let rec convertFunctions funcs rg remaining =
+        match remaining with
+        | [] -> Ok (funcs, rg)
+        | anfFunc :: rest ->
+            match convertANFFunction anfFunc rg strLookup fltLookup with
+            | Error err -> Error err
+            | Ok (mirFunc, rg') -> convertFunctions (funcs @ [mirFunc]) rg' rest
+
+    match convertFunctions [] regGen functions with
+    | Error err -> Error err
+    | Ok (mirFuncs, regGen1) ->
 
     // Convert main expression (if any) to a synthetic "_start" function
     let startFuncResult =
@@ -659,7 +684,9 @@ let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : Result<MIR.Program * MIR
                 StringLookup = strLookup
                 FloatLookup = fltLookup
             }
-            let (_, finalBuilder) = convertExpr expr entryLabel [] initialBuilder
+            match convertExpr expr entryLabel [] initialBuilder with
+            | Error err -> Error err
+            | Ok (_, finalBuilder) ->
             let cfg = {
                 MIR.Entry = entryLabel
                 MIR.Blocks = finalBuilder.Blocks
