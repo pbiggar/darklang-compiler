@@ -178,6 +178,7 @@ let applyToOperand (allocation: Map<int, Allocation>) (operand: LIR.Operand) : L
             | Some (StackSlot offset) -> LIR.StackSlot offset
             | None -> LIR.Reg (LIR.Physical LIR.X1)  // Fallback
     | LIR.StackSlot s -> LIR.StackSlot s
+    | LIR.StringRef idx -> LIR.StringRef idx  // String refs pass through unchanged
 
 /// Apply allocation to an instruction
 /// Returns a list of instructions (may include store for spilled destinations)
@@ -269,6 +270,9 @@ let applyAllocation (allocation: Map<int, Allocation>) (instr: LIR.Instr) : LIR.
             (LIR.PrintInt (regOrTemp (applyToReg allocation reg)), [])
         | LIR.PrintBool reg ->
             (LIR.PrintBool (regOrTemp (applyToReg allocation reg)), [])
+        | LIR.PrintString (idx, len) ->
+            // PrintString doesn't use registers, just passes through
+            (LIR.PrintString (idx, len), [])
 
     // Build final instruction sequence: preLoads + rewritten + postStores
     let postStores =

@@ -1,0 +1,35 @@
+// String Literals E2E Tests
+//
+// Tests for string literal parsing, type checking, and printing
+
+// Basic string literal printing
+"hello" = stdout="hello\n"
+"world" = stdout="world\n"
+"test" = stdout="test\n"
+
+// Empty string (just newline output)
+"" = stdout="\n"
+
+// String with spaces
+"hello world" = stdout="hello world\n"
+"a b c" = stdout="a b c\n"
+
+// Single characters
+"a" = stdout="a\n"
+"Z" = stdout="Z\n"
+"0" = stdout="0\n"
+
+// Escape sequences - newline
+"hello\nworld" = stdout="hello\nworld\n"
+
+// Escape sequences - tab
+"a\tb" = stdout="a\tb\n"
+
+// Escape sequences - quote
+"say \"hi\"" = stdout="say \"hi\"\n"
+
+// Escape sequences - backslash
+"a\\b" = stdout="a\\b\n"
+
+// Multiple newlines
+"a\nb\nc" = stdout="a\nb\nc\n"

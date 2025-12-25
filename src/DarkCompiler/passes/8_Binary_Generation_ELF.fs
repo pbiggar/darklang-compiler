@@ -82,17 +82,41 @@ let serializeElf (binary: Binary_ELF.ElfBinary) : byte array =
         for ph in binary.ProgramHeaders do
             yield! serializeElf64ProgramHeader ph
         yield! binary.MachineCode
+        yield! binary.StringData
     |]
 
-/// Create a minimal ELF executable from ARM64 machine code
-let createExecutable (machineCode: uint32 list) : byte array =
+/// Create string data bytes from string pool (same logic as Mach-O)
+let createStringData (stringPool: MIR.StringPool) : byte array =
+    if stringPool.Strings.IsEmpty then
+        [||]
+    else
+        // Sort by index to ensure consistent ordering
+        let sortedStrings =
+            stringPool.Strings
+            |> Map.toList
+            |> List.sortBy fst
+
+        // Build string bytes
+        let mutable allBytes : byte list = []
+
+        for (_idx, (str, _len)) in sortedStrings do
+            let strBytes = System.Text.Encoding.UTF8.GetBytes(str)
+            allBytes <- allBytes @ (Array.toList strBytes) @ [0uy]  // null-terminated
+
+        Array.ofList allBytes
+
+/// Create an ELF executable with string data
+let createExecutableWithStrings (machineCode: uint32 list) (stringPool: MIR.StringPool) : byte array =
     let codeBytes =
         machineCode
         |> List.collect (fun word ->
             uint32ToBytes word |> Array.toList)
         |> Array.ofList
 
+    let stringBytes = createStringData stringPool
+
     let codeSize = uint64 codeBytes.Length
+    let stringSize = uint64 stringBytes.Length
 
     // ELF structures
     let elfHeaderSize = 64UL
@@ -136,9 +160,9 @@ let createExecutable (machineCode: uint32 list) : byte array =
     }
 
     // Create executable code segment
-    // The PT_LOAD segment must include the ELF header and program headers
+    // The PT_LOAD segment must include the ELF header, program headers, code, and string data
     // so the kernel can access them during execution
-    let segmentFileSize = codeFileOffset + codeSize
+    let segmentFileSize = codeFileOffset + codeSize + stringSize
     let segmentMemSize = segmentFileSize
 
     let codeSegment : Binary_ELF.Elf64ProgramHeader = {
@@ -147,7 +171,7 @@ let createExecutable (machineCode: uint32 list) : byte array =
         Offset = 0UL  // Load from beginning of file (includes headers)
         VAddr = baseVAddr  // Load at base address
         PAddr = baseVAddr  // Physical = virtual for user programs
-        FileSize = segmentFileSize  // Includes headers + code
+        FileSize = segmentFileSize  // Includes headers + code + strings
         MemSize = segmentMemSize  // Same as file size
         Align = 0x1000UL  // 4KB alignment (page size)
     }
@@ -156,9 +180,14 @@ let createExecutable (machineCode: uint32 list) : byte array =
         Header = header
         ProgramHeaders = [codeSegment]
         MachineCode = codeBytes
+        StringData = stringBytes
     }
 
     serializeElf binary
+
+/// Create a minimal ELF executable from ARM64 machine code (legacy, no strings)
+let createExecutable (machineCode: uint32 list) : byte array =
+    createExecutableWithStrings machineCode MIR.emptyStringPool
 
 /// Write bytes to file (Linux - no code signing needed)
 let writeToFile (path: string) (bytes: byte array) : Result<unit, string> =

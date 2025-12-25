@@ -3,26 +3,25 @@
 This TODO reflects the approved implementation plan for completing the Dark compiler.
 See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design.
 
-## Phase 4: Functions (3-4 weeks)
+## ✅ Phase 4: Functions (COMPLETE)
 
-- [ ] Add FunctionDef and Call to AST.fs
-- [ ] Parse function definitions with type signatures
-- [ ] Parse function calls
-- [ ] Update ANF and MIR for multiple functions
-- [ ] Add function calling instructions to LIR.fs
-- [ ] **MAJOR**: Rewrite 5_RegisterAllocation.fs
-  - [ ] Liveness analysis across blocks
-  - [ ] Register spilling to stack
-  - [ ] Callee-saved register tracking
-- [ ] Implement ARM64 calling convention (AAPCS64)
-- [ ] Generate function prologue/epilogue
-- [ ] Update Runtime.fs with entry point
-- [ ] Write E2E tests (functions.e2e)
-- [ ] Test recursion, mutual recursion
+- [x] Add FunctionDef and Call to AST.fs
+- [x] Parse function definitions with type signatures
+- [x] Parse function calls
+- [x] Update ANF and MIR for multiple functions
+- [x] Add function calling instructions to LIR.fs
+- [x] Register allocation with caller-saved registers (X1-X10)
+- [x] Register spilling to stack (STUR/LDUR)
+- [x] Implement ARM64 calling convention (AAPCS64)
+- [x] Generate function prologue/epilogue
+- [x] SaveRegs/RestoreRegs for caller-save around calls
+- [x] Update Runtime.fs with entry point
+- [x] Write E2E tests (functions.e2e - 30 tests)
+- [x] Test recursion (factorial, fib, gcd, power, ack, sumTo, countdown, isEven)
 
-**Critical**: All function signatures require type annotations
+**All function signatures require type annotations**
 
-## Phase 5: Strings (1-2 weeks)
+## Phase 5: Strings (NEXT)
 
 ### Phase 5a: String Literals Only
 
@@ -44,7 +43,7 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 
 **Memory Model**: Hybrid (literal pool + simple heap, no GC)
 
-## Phase 6: Floats (1 week)
+## Phase 6: Floats
 
 - [ ] Add FloatLiteral to AST.fs
 - [ ] Parse float literals (decimal, scientific notation)
@@ -62,15 +61,15 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 1. ✅ variables.e2e (127 tests - Phase 1)
 2. ✅ booleans.e2e (tests complete - Phase 2)
 3. ✅ Control flow tested in existing E2E tests (Phase 3)
-4. [ ] functions.e2e (Phase 4)
+4. ✅ functions.e2e (30 tests - Phase 4)
 5. [ ] strings.e2e (Phase 5)
 6. [ ] floats.e2e (Phase 6)
 
 ### Pass Tests
 
 - ✅ Type checking tests (51 DSL tests + 8 unit tests)
-- [ ] Add liveness analysis tests (Phase 4)
-- [ ] Add calling convention tests (Phase 4)
+- ✅ MIR→LIR tests (7 tests)
+- ✅ ARM64 encoding tests (13 tests)
 
 ## Code Quality
 
@@ -94,22 +93,23 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 - ✅ Booleans with comparisons (==, !=, <, >, <=, >=) and operations (&&, ||, !)
 - ✅ Variables (let bindings with shadowing support)
 - ✅ Control flow (if/then/else expressions, including in atom position)
+- ✅ Functions with type signatures, calls, and recursion
 - ✅ Type checking (51 DSL tests + 8 unit tests)
 - ✅ 8-pass compiler pipeline (Parser → TypeCheck → ANF → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
-- ✅ 430 passing tests
+- ✅ 457 passing tests
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
 
 ## Implementation Order
 
 ```
-✅ Phase 0 → ✅ Phase 1 → ✅ Phase 2 → ✅ Phase 3 → Phase 4 (NEXT)
+✅ Phase 0 → ✅ Phase 1 → ✅ Phase 2 → ✅ Phase 3 → ✅ Phase 4
                                                       ↓
-                                               Phase 5 ← → Phase 6
+                                               Phase 5 (NEXT) → Phase 6
 ```
 
 **Original Estimate**: 8-11 weeks total
-**Completed**: Phases 0-3 (~2-3 weeks of work)
-**Remaining**: Phases 4-6 (~6-8 weeks estimated)
+**Completed**: Phases 0-4
+**Remaining**: Phases 5-6
 
 ---
 
@@ -131,53 +131,27 @@ These are features that exist but have known limitations or incomplete implement
 - Should print "true"/"false" strings instead
 
 **Impact**: Low - values are correct, just not pretty
-**Required For**: Better user experience
+**Required For**: Phase 5 (will need string printing anyway)
 
-### 2. Register Allocation (Critical for Functions)
+### 2. Register Allocation
 
-**Status**: ⚠️ Limited - Works for current features
+**Status**: ✅ Working
 
 **Current Implementation:**
 
-- Simple greedy allocation: X1-X15 (15 registers)
-- No liveness analysis
-- No register spilling
+- Uses X1-X10 for virtual registers (10 registers)
+- X0 reserved for return values
+- Caller-saved registers preserved with SaveRegs/RestoreRegs
+- Stack spilling via STUR/LDUR for overflow
 
 **Limitations:**
 
-- **Fails if >15 virtual registers needed**
-- No support for caller/callee-saved register conventions
-- Located in: `src/DarkCompiler/passes/5_RegisterAllocation.fs:11`
+- No liveness analysis (greedy allocation)
+- Spilling is simple (one slot per spilled vreg)
 
-**Impact**: High - **Required for Phase 4 (Functions)**
-**Missing:**
+### 3. Control Flow Graph
 
-- Liveness analysis across blocks
-- Register spilling to stack
-- Callee-saved register tracking
-- Caller-saved register preservation across calls
-
-### 3. Stack Slot Support (Critical for Functions)
-
-**Status**: ⚠️ Defined but Not Implemented
-
-**Current State:**
-
-- Stack slots defined in LIR data structures
-- Code generation returns error: "Stack slots not yet supported"
-- Located in: `src/DarkCompiler/passes/6_CodeGen.fs:85,104,121,152`
-
-**Impact**: High - **Required for Phase 4 (Functions)**
-**Missing:**
-
-- Stack slot code generation
-- Stack frame management
-- Local variable storage
-- Spilled register storage
-
-### 4. Control Flow Graph (Acceptable)
-
-**Status**: ⚠️ Simple Implementation
+**Status**: ✅ Working
 
 **Current Implementation:**
 
@@ -185,17 +159,14 @@ These are features that exist but have known limitations or incomplete implement
 - Supports if/else (including nested)
 - Supports if-expressions in atom position
 - Branch, Jump, and Ret terminators working
+- Epilogue labels for proper return from multiple exit points
 
 **Deferred:**
 
 - Advanced CFG optimizations (dead code elimination, etc.)
-- Phi node optimization (currently uses simple register assignments)
 - Loop constructs (by design - will use recursion instead)
 
-**Impact**: Low - Current implementation sufficient for if/else
-**Note**: No loops planned (language will use recursion)
-
-### 5. Cross-Platform Testing (Development Workflow)
+### 4. Cross-Platform Testing
 
 **Status**: ⚠️ Partial
 
@@ -207,43 +178,5 @@ These are features that exist but have known limitations or incomplete implement
 
 **Impact**: Medium - Affects Docker development workflow
 **Workaround**: Run tests on macOS host
-
-### 6. Type System (Explicit Annotations Required)
-
-**Status**: ⚠️ Simple - No Type Inference
-
-**Current Implementation:**
-
-- Type checking with explicit annotations
-- Top-down type propagation
-- Let bindings have optional type annotations
-
-**Limitations:**
-
-- No type inference (beyond simple cases)
-- Function signatures **require** explicit type annotations (planned for Phase 4)
-- Limited type error messages
-
-**Impact**: Medium - Verbose but clear
-**Philosophy**: Explicit over implicit (good for learning compiler)
-
----
-
-## Summary: What Needs Completion for Phase 4 (Functions)
-
-**Critical (Must Have):**
-
-1. ✅ CFG structure - **DONE** (added in Phase 3)
-2. ❌ Register allocation with spilling - **TODO**
-3. ❌ Liveness analysis - **TODO**
-4. ❌ Stack slot support - **TODO**
-5. ❌ Calling convention (AAPCS64) - **TODO**
-6. ❌ Function prologue/epilogue generation - **TODO**
-
-**Nice to Have:**
-
-1. Better boolean printing
-2. Improved type error messages
-3. Docker E2E test support
 
 ---

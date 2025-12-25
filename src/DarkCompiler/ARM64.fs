@@ -79,6 +79,9 @@ type Instr =
     | RET
     | SVC of imm:uint16  // Supervisor call (syscall)
     | Label of string  // Pseudo-instruction: marks a label position
+    // PC-relative addressing for .rodata access
+    | ADRP of dest:Reg * label:string  // Address page: dest = PC-relative page address of label
+    | ADD_label of dest:Reg * src:Reg * label:string  // Add label offset: dest = src + page offset of label
 
 /// Machine code (32-bit instruction)
 type MachineCode = uint32

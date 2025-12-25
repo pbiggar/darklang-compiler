@@ -148,6 +148,6 @@ let parseMIR (text: string) : Result<MIR.Program, string> =
                     Params = []
                     CFG = cfg
                 }
-                Ok (Program [func])
+                Ok (Program ([func], MIR.emptyStringPool))
         | Choice1Of2 _ ->
             Error "Last instruction must be a terminator (ret)"

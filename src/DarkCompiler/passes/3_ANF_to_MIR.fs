@@ -50,11 +50,73 @@ let convertUnaryOp (op: ANF.UnaryOp) : MIR.UnaryOp =
 /// Map ANF TempId to MIR virtual register
 let tempToVReg (ANF.TempId id) : MIR.VReg = MIR.VReg id
 
+/// Collect all string literals from an ANF atom
+let collectStringsFromAtom (atom: ANF.Atom) : string list =
+    match atom with
+    | ANF.StringLiteral s -> [s]
+    | _ -> []
+
+/// Collect all string literals from a CExpr
+let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
+    match cexpr with
+    | ANF.Atom atom -> collectStringsFromAtom atom
+    | ANF.Prim (_, left, right) ->
+        collectStringsFromAtom left @ collectStringsFromAtom right
+    | ANF.UnaryPrim (_, atom) -> collectStringsFromAtom atom
+    | ANF.IfValue (cond, thenAtom, elseAtom) ->
+        collectStringsFromAtom cond @
+        collectStringsFromAtom thenAtom @
+        collectStringsFromAtom elseAtom
+    | ANF.Call (_, args) ->
+        args |> List.collect collectStringsFromAtom
+
+/// Collect all string literals from an ANF expression
+let rec collectStringsFromExpr (expr: ANF.AExpr) : string list =
+    match expr with
+    | ANF.Return atom -> collectStringsFromAtom atom
+    | ANF.Let (_, cexpr, rest) ->
+        collectStringsFromCExpr cexpr @ collectStringsFromExpr rest
+    | ANF.If (cond, thenBranch, elseBranch) ->
+        collectStringsFromAtom cond @
+        collectStringsFromExpr thenBranch @
+        collectStringsFromExpr elseBranch
+
+/// Collect all string literals from an ANF function
+let collectStringsFromFunction (func: ANF.Function) : string list =
+    collectStringsFromExpr func.Body
+
+/// Collect all string literals from an ANF program
+let collectStringsFromProgram (program: ANF.Program) : string list =
+    let (ANF.Program (functions, mainExpr)) = program
+    let funcStrings = functions |> List.collect collectStringsFromFunction
+    let mainStrings = mainExpr |> Option.map collectStringsFromExpr |> Option.defaultValue []
+    funcStrings @ mainStrings
+
+/// Build a string pool from a list of strings (deduplicates)
+let buildStringPool (strings: string list) : MIR.StringPool =
+    strings
+    |> List.fold (fun pool s ->
+        let (_, pool') = MIR.addString pool s
+        pool') MIR.emptyStringPool
+
+/// Build a lookup map from string content to pool index
+let buildStringLookup (pool: MIR.StringPool) : Map<string, int> =
+    pool.Strings
+    |> Map.fold (fun lookup idx (s, _) -> Map.add s idx lookup) Map.empty
+
+/// Module-level mutable string lookup (set during toMIR, used by atomToOperand)
+/// This avoids threading the pool through all functions
+let mutable private stringLookup : Map<string, int> = Map.empty
+
 /// Convert ANF Atom to MIR Operand
 let atomToOperand (atom: ANF.Atom) : MIR.Operand =
     match atom with
     | ANF.IntLiteral n -> MIR.IntConst n
     | ANF.BoolLiteral b -> MIR.BoolConst b
+    | ANF.StringLiteral s ->
+        match Map.tryFind s stringLookup with
+        | Some idx -> MIR.StringRef idx
+        | None -> failwith $"String not found in pool: {s}"
     | ANF.Var tempId -> MIR.Register (tempToVReg tempId)
 
 /// CFG builder state
@@ -462,7 +524,12 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) : MIR.Functi
 let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : MIR.Program * MIR.RegGen =
     let (ANF.Program (functions, mainExpr)) = program
 
-    // Convert all functions to MIR
+    // Phase 1: Collect all strings and build the pool
+    let allStrings = collectStringsFromProgram program
+    let stringPool = buildStringPool allStrings
+    stringLookup <- buildStringLookup stringPool
+
+    // Phase 2: Convert all functions to MIR
     let (mirFuncs, regGen1) =
         functions
         |> List.fold (fun (funcs, rg) anfFunc ->
@@ -520,4 +587,4 @@ let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : MIR.Program * MIR.RegGen
             else
                 failwith "Program must have either a main expression or a main() function"
 
-    (MIR.Program allFuncs, finalRegGen)
+    (MIR.Program (allFuncs, stringPool), finalRegGen)

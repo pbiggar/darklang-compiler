@@ -27,6 +27,7 @@ type TempId = TempId of int
 type Atom =
     | IntLiteral of int64
     | BoolLiteral of bool
+    | StringLiteral of string
     | Var of TempId
 
 /// Binary operations on atoms

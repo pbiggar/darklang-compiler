@@ -33,6 +33,7 @@ type Operand =
     | Imm of int64           // Immediate value
     | Reg of Reg             // Register
     | StackSlot of int       // Stack offset (for spills)
+    | StringRef of int       // Reference to string in pool (by index)
 
 /// Comparison conditions (for CSET)
 type Condition =
@@ -61,6 +62,7 @@ type Instr =
     | RestoreRegs                                // Restore caller-saved registers (X1-X10) after call
     | PrintInt of Reg                           // Print integer register to stdout
     | PrintBool of Reg                          // Print boolean register to stdout
+    | PrintString of stringIndex:int * stringLen:int  // Print string from pool to stdout
 
 /// Basic block label
 type Label = string
@@ -93,8 +95,8 @@ type Function = {
     UsedCalleeSaved: PhysReg list  // Callee-saved registers used (for prologue/epilogue)
 }
 
-/// LIR program
-type Program = Program of Function list
+/// LIR program with functions and string pool
+type Program = Program of functions:Function list * strings:MIR.StringPool
 
 /// Live range for a virtual register (future use)
 type LiveRange = {

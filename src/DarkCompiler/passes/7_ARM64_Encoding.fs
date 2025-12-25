@@ -191,6 +191,14 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // Pseudo-instruction: marks a label position (no machine code generated)
         []
 
+    | ARM64.ADRP (dest, label) ->
+        // Resolved in encodeWithLabels with computed label offsets
+        []
+
+    | ARM64.ADD_label (dest, src, label) ->
+        // Resolved in encodeWithLabels with computed label offsets
+        []
+
     // Offset-based branches (for handcrafted runtime code with known offsets)
     | ARM64.CBZ_offset (reg, offset) ->
         // CBZ: sf 011010 0 imm19 Rt
@@ -440,7 +448,8 @@ let computeLabelPositions (instructions: ARM64.Instr list) : Map<string, int> =
             | ARM64.Label name ->
                 // Record this label's position, don't increment offset (pseudo-instruction)
                 loop rest offset (Map.add name offset labelMap)
-            | ARM64.CBZ _ | ARM64.CBNZ _ | ARM64.B_label _ | ARM64.BL _ ->
+            | ARM64.CBZ _ | ARM64.CBNZ _ | ARM64.B_label _ | ARM64.BL _
+            | ARM64.ADRP _ | ARM64.ADD_label _ ->
                 // These will be resolved in pass 2, each is 4 bytes
                 loop rest (offset + 4) labelMap
             | _ ->
@@ -517,16 +526,104 @@ let encodeWithLabels (instr: ARM64.Instr) (currentOffset: int) (labelMap: Map<st
         // Pseudo-instruction: no machine code
         []
 
+    | ARM64.ADRP (dest, label) ->
+        // ADRP: form PC-relative address to 4KB page
+        // Encoding: 1 immlo(2) 10000 immhi(19) Rd(5)
+        // The label should point to data in .rodata section
+        match Map.tryFind label labelMap with
+        | Some targetOffset ->
+            // Compute page-relative offset (4KB pages)
+            // ADRP uses the page containing PC, so we compute:
+            // page_offset = ((target & ~0xFFF) - (pc & ~0xFFF)) >> 12
+            let pcPage = currentOffset &&& (~~~0xFFF)
+            let targetPage = targetOffset &&& (~~~0xFFF)
+            let pageOffset = (targetPage - pcPage) / 4096
+            // Encode
+            let rd = encodeReg dest
+            let immlo = ((uint32 pageOffset) &&& 0b11u) <<< 29
+            let immhi = ((uint32 pageOffset >>> 2) &&& 0x7FFFFu) <<< 5
+            let op = 1u <<< 31  // ADRP (bit 31=1)
+            let opcode = 0b10000u <<< 24
+            [op ||| immlo ||| opcode ||| immhi ||| rd]
+        | None ->
+            // Label not found - return placeholder (will fail)
+            []
+
+    | ARM64.ADD_label (dest, src, label) ->
+        // ADD with label offset (page offset portion)
+        // Used with ADRP to get full address
+        // This adds the lower 12 bits of the address (page offset)
+        match Map.tryFind label labelMap with
+        | Some targetOffset ->
+            // Get the 12-bit page offset
+            let pageOffset = targetOffset &&& 0xFFF
+            // Encode as ADD immediate
+            let sf = 1u <<< 31  // 64-bit
+            let op = 0b00100010u <<< 23  // ADD immediate opcode
+            let shift = 0u <<< 22  // No shift
+            let imm12 = ((uint32 pageOffset) &&& 0xFFFu) <<< 10
+            let rn = encodeReg src <<< 5
+            let rd = encodeReg dest
+            [sf ||| op ||| shift ||| imm12 ||| rn ||| rd]
+        | None ->
+            []
+
     // All other instructions: use single-pass encoding
     | _ ->
         encode instr
 
-/// Main encoding entry point with two-pass label resolution
-let encodeAll (instructions: ARM64.Instr list) : ARM64.MachineCode list =
-    // Pass 1: Compute label positions
-    let labelMap = computeLabelPositions instructions
+/// Compute the size of code in bytes (for placing string data after code)
+let getCodeSize (instructions: ARM64.Instr list) : int =
+    instructions
+    |> List.sumBy (fun instr ->
+        match instr with
+        | ARM64.Label _ -> 0  // Labels don't generate code
+        | _ -> 4)  // All ARM64 instructions are 4 bytes
 
-    // Pass 2: Encode with label resolution
+/// Compute string label positions given code file offset, code size, and string pool
+/// Returns map from "_strN" to byte offset (relative to segment/file start)
+/// codeFileOffset: where code starts in the file/segment
+let computeStringLabels (codeFileOffset: int) (codeSize: int) (stringPool: MIR.StringPool) : Map<string, int> =
+    if stringPool.Strings.IsEmpty then
+        Map.empty
+    else
+        // Sort by index to ensure consistent ordering
+        let sortedStrings =
+            stringPool.Strings
+            |> Map.toList
+            |> List.sortBy fst
+
+        // Build label map with offsets
+        // Strings start after headers + code
+        let mutable currentOffset = codeFileOffset + codeSize
+        let mutable labelMap = Map.empty
+
+        for (idx, (str, _len)) in sortedStrings do
+            let label = sprintf "_str%d" idx
+            labelMap <- Map.add label currentOffset labelMap
+            let strBytes = System.Text.Encoding.UTF8.GetBytes(str)
+            currentOffset <- currentOffset + strBytes.Length + 1  // +1 for null terminator
+
+        labelMap
+
+/// Encoding with string pool support
+/// Computes string label positions and encodes ADRP/ADD_label correctly
+/// codeFileOffset: where code will be placed in the final binary (for correct PC-relative addressing)
+let encodeAllWithStrings (instructions: ARM64.Instr list) (stringPool: MIR.StringPool) (codeFileOffset: int) : ARM64.MachineCode list =
+    // Step 1: Compute code size
+    let codeSize = getCodeSize instructions
+
+    // Step 2: Compute string label positions (after headers + code)
+    let stringLabels = computeStringLabels codeFileOffset codeSize stringPool
+
+    // Step 3: Compute code label positions (relative to code start, add file offset)
+    let rawCodeLabels = computeLabelPositions instructions
+    let codeLabelMap = rawCodeLabels |> Map.map (fun _ offset -> codeFileOffset + offset)
+
+    // Step 4: Merge code labels with string labels
+    let labelMap = Map.fold (fun acc k v -> Map.add k v acc) codeLabelMap stringLabels
+
+    // Step 5: Encode with label resolution (current offset includes file offset)
     let rec encodeLoop instrs offset acc =
         match instrs with
         | [] -> List.rev acc
@@ -535,4 +632,9 @@ let encodeAll (instructions: ARM64.Instr list) : ARM64.MachineCode list =
             let newOffset = offset + (List.length machineCode * 4)
             encodeLoop rest newOffset (List.rev machineCode @ acc)
 
-    encodeLoop instructions 0 []
+    encodeLoop instructions codeFileOffset []
+
+/// Main encoding entry point with two-pass label resolution (for code without strings)
+let encodeAll (instructions: ARM64.Instr list) : ARM64.MachineCode list =
+    // Use version with empty string pool and 0 offset for backwards compatibility
+    encodeAllWithStrings instructions MIR.emptyStringPool 0

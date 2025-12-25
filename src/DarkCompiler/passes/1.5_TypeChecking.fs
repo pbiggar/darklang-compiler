@@ -79,6 +79,12 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
         | Some TBool | None -> Ok TBool
         | Some other -> Error (TypeMismatch (other, TBool, "boolean literal"))
 
+    | StringLiteral _ ->
+        // String literals are always TString
+        match expectedType with
+        | Some TString | None -> Ok TString
+        | Some other -> Error (TypeMismatch (other, TString, "string literal"))
+
     | BinOp (op, left, right) ->
         match op with
         // Arithmetic operators: int -> int -> int

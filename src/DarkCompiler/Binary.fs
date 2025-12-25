@@ -189,4 +189,5 @@ type MachOBinary = {
     BuildVersionCommand: BuildVersionCommand
     MainCommand: MainCommand
     MachineCode: byte array
+    StringData: byte array  // Constant string data (placed after code)
 }

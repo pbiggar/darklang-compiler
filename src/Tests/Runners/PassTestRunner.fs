@@ -34,6 +34,7 @@ type PassTestResult = {
 let prettyPrintMIROperand = function
     | MIR.IntConst n -> string n
     | MIR.BoolConst b -> if b then "true" else "false"
+    | MIR.StringRef idx -> $"str[{idx}]"
     | MIR.Register (MIR.VReg n) -> $"v{n}"
 
 /// Pretty-print MIR operator
@@ -79,6 +80,7 @@ let prettyPrintLIROperand = function
     | LIR.Imm n -> $"Imm {n}"
     | LIR.Operand.Reg reg -> $"Reg {prettyPrintLIRReg reg}"
     | LIR.StackSlot n -> $"Stack {n}"
+    | LIR.StringRef idx -> $"str[{idx}]"
 
 /// Pretty-print LIR instruction
 let prettyPrintLIRInstr (instr: LIR.Instr) : string =
@@ -112,6 +114,8 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"PrintInt({prettyPrintLIRReg reg})"
     | LIR.PrintBool reg ->
         $"PrintBool({prettyPrintLIRReg reg})"
+    | LIR.PrintString (idx, len) ->
+        $"PrintString(str[{idx}], len={len})"
     | LIR.SaveRegs ->
         "SaveRegs"
     | LIR.RestoreRegs ->
@@ -127,7 +131,7 @@ let prettyPrintLIRTerminator (term: LIR.Terminator) : string =
 
 /// Pretty-print LIR program (flat format for single-block CFGs)
 let prettyPrintLIR (program: LIR.Program) : string =
-    let (LIR.Program funcs) = program
+    let (LIR.Program (funcs, _)) = program
     // For simple test cases, we expect a single function with single block
     match funcs with
     | [func] ->
@@ -180,6 +184,7 @@ let runMIR2LIRTest (input: MIR.Program) (expected: LIR.Program) : PassTestResult
 let prettyPrintANFAtom = function
     | ANF.IntLiteral n -> string n
     | ANF.BoolLiteral b -> if b then "true" else "false"
+    | ANF.StringLiteral s -> $"\"{s}\""
     | ANF.Var (ANF.TempId n) -> $"t{n}"
 
 /// Pretty-print ANF binary operator
@@ -363,6 +368,10 @@ let prettyPrintARM64Instr = function
     | ARM64.RET -> "RET"
     | ARM64.SVC imm -> $"SVC({imm})"
     | ARM64.Label label -> $"Label({label})"
+    | ARM64.ADRP (dest, label) ->
+        $"ADRP({prettyPrintARM64Reg dest}, {label})"
+    | ARM64.ADD_label (dest, src, label) ->
+        $"ADD_label({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {label})"
 
 /// Pretty-print ARM64 program (filtering out Label pseudo-instructions)
 let prettyPrintARM64 (instrs: ARM64.Instr list) : string =

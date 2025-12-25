@@ -22,6 +22,7 @@ let convertOperand (operand: MIR.Operand) : LIR.Operand =
     match operand with
     | MIR.IntConst n -> LIR.Imm n
     | MIR.BoolConst b -> LIR.Imm (if b then 1L else 0L)  // Booleans as 0/1
+    | MIR.StringRef idx -> LIR.StringRef idx
     | MIR.Register vreg -> LIR.Reg (vregToLIRReg vreg)
 
 /// Ensure operand is in a register (may need to load immediate)
@@ -33,6 +34,9 @@ let ensureInRegister (operand: MIR.Operand) (tempReg: LIR.Reg) : LIR.Instr list 
     | MIR.BoolConst b ->
         // Load boolean (0 or 1) into register
         ([LIR.Mov (tempReg, LIR.Imm (if b then 1L else 0L))], tempReg)
+    | MIR.StringRef _ ->
+        // String references are not used as operands in arithmetic operations
+        failwith "Cannot use string literal as arithmetic operand"
     | MIR.Register vreg ->
         ([], vregToLIRReg vreg)
 
@@ -166,15 +170,24 @@ let selectInstr (instr: MIR.Instr) : LIR.Instr list =
 /// Convert MIR terminator to LIR terminator
 /// For Branch, need to convert operand to register (may add instructions)
 /// isEntryFunc: whether this is the entry function (_start) that should print the result
-let selectTerminator (terminator: MIR.Terminator) (isEntryFunc: bool) : LIR.Instr list * LIR.Terminator =
+/// stringPool: needed to look up string lengths for PrintString
+let selectTerminator (terminator: MIR.Terminator) (isEntryFunc: bool) (stringPool: MIR.StringPool) : LIR.Instr list * LIR.Terminator =
     match terminator with
     | MIR.Ret operand ->
-        // Move operand to X0 (return register)
-        let lirOp = convertOperand operand
-        let moveToX0 = [LIR.Mov (LIR.Physical LIR.X0, lirOp)]
-        // Only print if this is the entry function
-        let printInstr = if isEntryFunc then [LIR.PrintInt (LIR.Physical LIR.X0)] else []
-        (moveToX0 @ printInstr, LIR.Ret)
+        // Handle string returns differently - use PrintString instead of PrintInt
+        match operand with
+        | MIR.StringRef idx when isEntryFunc ->
+            // Look up string length from pool
+            let (_, strLen) = Map.find idx stringPool.Strings
+            // PrintString generates its own code to load address and print
+            ([LIR.PrintString (idx, strLen)], LIR.Ret)
+        | _ ->
+            // Move operand to X0 (return register)
+            let lirOp = convertOperand operand
+            let moveToX0 = [LIR.Mov (LIR.Physical LIR.X0, lirOp)]
+            // Only print if this is the entry function
+            let printInstr = if isEntryFunc then [LIR.PrintInt (LIR.Physical LIR.X0)] else []
+            (moveToX0 @ printInstr, LIR.Ret)
 
     | MIR.Branch (condOp, trueLabel, falseLabel) ->
         // Convert MIR.Label to LIR.Label (just unwrap)
@@ -193,14 +206,14 @@ let selectTerminator (terminator: MIR.Terminator) (isEntryFunc: bool) : LIR.Inst
 let convertLabel (MIR.Label lbl) : LIR.Label = lbl
 
 /// Convert MIR basic block to LIR basic block
-let selectBlock (block: MIR.BasicBlock) (isEntryFunc: bool) : LIR.BasicBlock =
+let selectBlock (block: MIR.BasicBlock) (isEntryFunc: bool) (stringPool: MIR.StringPool) : LIR.BasicBlock =
     let lirLabel = convertLabel block.Label
 
     // Convert all instructions
     let lirInstrs = block.Instrs |> List.collect selectInstr
 
     // Convert terminator (may add instructions)
-    let (termInstrs, lirTerm) = selectTerminator block.Terminator isEntryFunc
+    let (termInstrs, lirTerm) = selectTerminator block.Terminator isEntryFunc stringPool
 
     {
         LIR.Label = lirLabel
@@ -209,12 +222,12 @@ let selectBlock (block: MIR.BasicBlock) (isEntryFunc: bool) : LIR.BasicBlock =
     }
 
 /// Convert MIR CFG to LIR CFG
-let selectCFG (cfg: MIR.CFG) (isEntryFunc: bool) : LIR.CFG =
+let selectCFG (cfg: MIR.CFG) (isEntryFunc: bool) (stringPool: MIR.StringPool) : LIR.CFG =
     let lirEntry = convertLabel cfg.Entry
     let lirBlocks =
         cfg.Blocks
         |> Map.toList
-        |> List.map (fun (label, block) -> (convertLabel label, selectBlock block isEntryFunc))
+        |> List.map (fun (label, block) -> (convertLabel label, selectBlock block isEntryFunc stringPool))
         |> Map.ofList
 
     {
@@ -224,14 +237,14 @@ let selectCFG (cfg: MIR.CFG) (isEntryFunc: bool) : LIR.CFG =
 
 /// Convert MIR program to LIR
 let toLIR (program: MIR.Program) : LIR.Program =
-    let (MIR.Program mirFuncs) = program
+    let (MIR.Program (mirFuncs, stringPool)) = program
 
     // Convert each MIR function to LIR
     let lirFuncs =
         mirFuncs
         |> List.map (fun mirFunc ->
             let isEntryFunc = mirFunc.Name = "_start"
-            let lirCFG = selectCFG mirFunc.CFG isEntryFunc
+            let lirCFG = selectCFG mirFunc.CFG isEntryFunc stringPool
             // Convert MIR VRegs to LIR Virtual registers for parameters
             let lirParams = mirFunc.Params |> List.map (fun (MIR.VReg id) -> LIR.Virtual id)
             {
@@ -242,4 +255,4 @@ let toLIR (program: MIR.Program) : LIR.Program =
                 LIR.UsedCalleeSaved = []  // Will be determined by register allocation
             })
 
-    LIR.Program lirFuncs
+    LIR.Program (lirFuncs, stringPool)

@@ -52,6 +52,7 @@ type UnaryOp =
 type Expr =
     | IntLiteral of int64
     | BoolLiteral of bool
+    | StringLiteral of string
     | BinOp of BinOp * Expr * Expr
     | UnaryOp of UnaryOp * Expr
     | Let of name:string * value:Expr * body:Expr  // Let binding: let name = value in body

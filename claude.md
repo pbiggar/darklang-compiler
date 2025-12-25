@@ -28,6 +28,7 @@ Tests:
 - Write tests first if possible
 - if a bug is found, add the smallest test for that bug in the right place.
 - Otherwise, largely focus on end-to-end language tests
+- if at decision points, it seems the tests are failing, fix the tests if possible
 
 Best-practices:
 

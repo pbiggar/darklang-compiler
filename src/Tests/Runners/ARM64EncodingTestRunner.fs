@@ -71,6 +71,8 @@ let formatMismatches (mismatches: (int * Instr * uint32 * uint32) list) : string
                     | RET -> "RET"
                     | SVC imm -> $"SVC({imm})"
                     | Label label -> $"Label({label})"
+                    | ADRP (dest, label) -> $"ADRP({dest}, {label})"
+                    | ADD_label (dest, src, label) -> $"ADD_label({dest}, {src}, {label})"
 
                 $"Instruction {i}: {instrStr}\n      Expected: 0x{expected:X8}, Got: 0x{actual:X8}")
         String.concat "\n    " lines

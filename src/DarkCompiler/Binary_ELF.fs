@@ -85,4 +85,5 @@ type ElfBinary = {
     Header: Elf64Header
     ProgramHeaders: Elf64ProgramHeader list
     MachineCode: byte array
+    StringData: byte array  // Constant string data (placed after code)
 }

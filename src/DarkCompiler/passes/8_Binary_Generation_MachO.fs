@@ -209,7 +209,8 @@ let serializeMachO (binary: Binary.MachOBinary) : byte array =
     // Pad to fill the entire __TEXT segment
     let textSegmentSize = int binary.TextSegmentCommand.FileSize
     let codeSize = binary.MachineCode.Length
-    let paddingAfterCode = textSegmentSize - codeOffset - codeSize
+    let stringSize = binary.StringData.Length
+    let paddingAfterCode = textSegmentSize - codeOffset - codeSize - stringSize
     let paddingAfter = Array.create paddingAfterCode 0uy
 
     [|
@@ -226,25 +227,59 @@ let serializeMachO (binary: Binary.MachOBinary) : byte array =
         yield! serializeMainCommand binary.MainCommand
         yield! paddingBefore
         yield! binary.MachineCode
+        yield! binary.StringData
         yield! paddingAfter
     |]
 
-/// Create a minimal Mach-O executable from ARM64 machine code
-let createExecutable (machineCode: uint32 list) : byte array =
+/// Create string data bytes and label map from string pool
+/// Returns (string bytes, label map from "_strN" to offset within string section)
+let createStringData (stringPool: MIR.StringPool) : byte array * Map<string, int> =
+    if stringPool.Strings.IsEmpty then
+        ([||], Map.empty)
+    else
+        // Sort by index to ensure consistent ordering
+        let sortedStrings =
+            stringPool.Strings
+            |> Map.toList
+            |> List.sortBy fst
+
+        // Build string bytes and track offsets
+        let mutable currentOffset = 0
+        let mutable labelMap = Map.empty
+        let mutable allBytes : byte list = []
+
+        for (idx, (str, _len)) in sortedStrings do
+            let label = sprintf "_str%d" idx
+            labelMap <- Map.add label currentOffset labelMap
+            let strBytes = System.Text.Encoding.UTF8.GetBytes(str)
+            allBytes <- allBytes @ (Array.toList strBytes) @ [0uy]  // null-terminated
+            currentOffset <- currentOffset + strBytes.Length + 1
+
+        (Array.ofList allBytes, labelMap)
+
+/// Create a Mach-O executable with string data
+let createExecutableWithStrings (machineCode: uint32 list) (stringPool: MIR.StringPool) : byte array =
     let codeBytes =
         machineCode
         |> List.collect (fun word ->
             uint32ToBytes word |> Array.toList)
         |> Array.ofList
 
+    // Create string data
+    let (stringBytes, _stringLabelMap) = createStringData stringPool
+    let hasStrings = stringBytes.Length > 0
+
     let codeSize = uint64 codeBytes.Length
+    let stringSize = uint64 stringBytes.Length
 
     // VM addresses - load at typical location
     let vmBase = 0x100000000UL
 
     // Command sizes (needed for CommandSize fields)
     let pageZeroCommandSize = 72
-    let textSegmentCommandSize = 72 + 80
+    // If we have strings, we need 2 sections (__text and __cstring)
+    let numTextSections = if hasStrings then 2 else 1
+    let textSegmentCommandSize = 72 + (80 * numTextSections)
     let linkeditSegmentCommandSize = 72
     let dylinkerCommandSize = 32
     let dylibCommandSize = 56  // 24 bytes for fixed fields + 32 bytes for padded library path
@@ -261,6 +296,10 @@ let createExecutable (machineCode: uint32 list) : byte array =
     let headerSize = 32
     let codeFileOffset = uint64 ((headerSize + commandsSize + 200 + 7) &&& ~~~7)
     let vmCodeOffset = codeFileOffset
+
+    // String data goes right after code
+    let stringFileOffset = codeFileOffset + codeSize
+    let vmStringOffset = vmCodeOffset + codeSize
 
     // __PAGEZERO segment (required by modern macOS)
     let pageZeroCommand : Binary.SegmentCommand64 = {
@@ -293,8 +332,26 @@ let createExecutable (machineCode: uint32 list) : byte array =
         Reserved3 = 0u
     }
 
+    // __cstring section for string constants
+    let cstringSection : Binary.Section64 = {
+        SectionName = "__cstring"
+        SegmentName = "__TEXT"
+        Address = vmBase + vmStringOffset
+        Size = stringSize
+        Offset = uint32 stringFileOffset
+        Align = 0u  // 2^0 = 1 byte alignment
+        RelocationOffset = 0u
+        NumRelocations = 0u
+        Flags = 0x2u  // S_CSTRING_LITERALS
+        Reserved1 = 0u
+        Reserved2 = 0u
+        Reserved3 = 0u
+    }
+
     // Use a page-aligned segment size (16KB like ld produces)
     let textSegmentSize = 0x4000UL
+
+    let textSections = if hasStrings then [textSection; cstringSection] else [textSection]
 
     let textSegmentCommand : Binary.SegmentCommand64 = {
         Command = Binary.LC_SEGMENT_64
@@ -306,9 +363,9 @@ let createExecutable (machineCode: uint32 list) : byte array =
         FileSize = textSegmentSize
         MaxProt = Binary.VM_PROT_READ ||| Binary.VM_PROT_EXECUTE
         InitProt = Binary.VM_PROT_READ ||| Binary.VM_PROT_EXECUTE
-        NumSections = 1u
+        NumSections = uint32 numTextSections
         Flags = 0u
-        Sections = [textSection]
+        Sections = textSections
     }
 
     // __LINKEDIT segment (required for code signing - will be populated by codesign)
@@ -428,9 +485,14 @@ let createExecutable (machineCode: uint32 list) : byte array =
         BuildVersionCommand = buildVersionCommand
         MainCommand = mainCommand
         MachineCode = codeBytes
+        StringData = stringBytes
     }
 
     serializeMachO binary
+
+/// Create a minimal Mach-O executable from ARM64 machine code (legacy, no strings)
+let createExecutable (machineCode: uint32 list) : byte array =
+    createExecutableWithStrings machineCode MIR.emptyStringPool
 
 /// Write bytes to file and sign it
 let writeToFile (path: string) (bytes: byte array) : Result<unit, string> =

@@ -20,6 +20,7 @@ open AST
 /// Token types for lexer
 type Token =
     | TInt of int64
+    | TStringLit of string  // String literal token (named to avoid conflict with AST.TString type)
     | TTrue
     | TFalse
     | TPlus
@@ -125,6 +126,43 @@ let lex (input: string) : Result<Token list, string> =
             match parseDigits chars [] with
             | Ok (num, remaining) -> lexHelper remaining (TInt num :: acc)
             | Error err -> Error err
+        | '"' :: rest ->
+            // Parse string literal with escape sequences
+            let rec parseString (cs: char list) (chars: char list) : Result<string * char list, string> =
+                match cs with
+                | [] -> Error "Unterminated string literal"
+                | '"' :: remaining ->
+                    // End of string
+                    let str = System.String(List.rev chars |> List.toArray)
+                    Ok (str, remaining)
+                | '\\' :: 'n' :: remaining ->
+                    parseString remaining ('\n' :: chars)
+                | '\\' :: 't' :: remaining ->
+                    parseString remaining ('\t' :: chars)
+                | '\\' :: 'r' :: remaining ->
+                    parseString remaining ('\r' :: chars)
+                | '\\' :: '\\' :: remaining ->
+                    parseString remaining ('\\' :: chars)
+                | '\\' :: '"' :: remaining ->
+                    parseString remaining ('"' :: chars)
+                | '\\' :: '0' :: remaining ->
+                    parseString remaining ('\000' :: chars)
+                | '\\' :: 'x' :: h1 :: h2 :: remaining ->
+                    // Hex escape: \xNN
+                    let hexStr = System.String([| h1; h2 |])
+                    match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
+                    | (true, value) ->
+                        parseString remaining (char value :: chars)
+                    | (false, _) ->
+                        Error $"Invalid hex escape sequence: \\x{hexStr}"
+                | '\\' :: c :: _ ->
+                    Error $"Unknown escape sequence: \\{c}"
+                | c :: remaining ->
+                    parseString remaining (c :: chars)
+
+            match parseString rest [] with
+            | Ok (str, remaining) -> lexHelper remaining (TStringLit str :: acc)
+            | Error err -> Error err
         | c :: _ ->
             Error $"Unexpected character: {c}"
 
@@ -135,7 +173,8 @@ let parseType (tokens: Token list) : Result<Type * Token list, string> =
     match tokens with
     | TIdent "int" :: rest -> Ok (TInt64, rest)
     | TIdent "bool" :: rest -> Ok (TBool, rest)
-    | _ -> Error "Expected type annotation (int or bool)"
+    | TIdent "string" :: rest -> Ok (TString, rest)
+    | _ -> Error "Expected type annotation (int, bool, or string)"
 
 /// Parse a single parameter: IDENT : type
 let parseParam (tokens: Token list) : Result<(string * Type) * Token list, string> =
@@ -332,6 +371,7 @@ let parse (tokens: Token list) : Result<Program, string> =
     and parsePrimary (toks: Token list) : Result<Expr * Token list, string> =
         match toks with
         | TInt n :: rest -> Ok (IntLiteral n, rest)
+        | TStringLit s :: rest -> Ok (StringLiteral s, rest)
         | TTrue :: rest -> Ok (BoolLiteral true, rest)
         | TFalse :: rest -> Ok (BoolLiteral false, rest)
         | TIdent name :: TLParen :: rest ->

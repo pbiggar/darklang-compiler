@@ -52,6 +52,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
         // Boolean literal becomes return
         Ok (ANF.Return (ANF.BoolLiteral b), varGen)
 
+    | AST.StringLiteral s ->
+        // String literal becomes return
+        Ok (ANF.Return (ANF.StringLiteral s), varGen)
+
     | AST.Var name ->
         // Variable reference: look up in environment
         match Map.tryFind name env with
@@ -149,6 +153,9 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
 
     | AST.BoolLiteral b ->
         Ok (ANF.BoolLiteral b, [], varGen)
+
+    | AST.StringLiteral s ->
+        Ok (ANF.StringLiteral s, [], varGen)
 
     | AST.Var name ->
         // Variable reference: look up in environment

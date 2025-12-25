@@ -18,10 +18,35 @@ module MIR
 /// Virtual register (infinite supply)
 type VReg = VReg of int
 
+/// String pool for deduplicating string literals
+/// Maps pool index to (string value, length)
+type StringPool = {
+    Strings: Map<int, string * int>  // index -> (string, length)
+    NextId: int
+}
+
+/// Empty string pool
+let emptyStringPool = { Strings = Map.empty; NextId = 0 }
+
+/// Add a string to the pool, returning its index
+/// If string already exists, returns existing index
+let addString (pool: StringPool) (s: string) : int * StringPool =
+    // Check if string already exists
+    let existing =
+        pool.Strings
+        |> Map.tryFindKey (fun _ (str, _) -> str = s)
+    match existing with
+    | Some idx -> (idx, pool)
+    | None ->
+        let idx = pool.NextId
+        let pool' = { Strings = Map.add idx (s, String.length s) pool.Strings; NextId = idx + 1 }
+        (idx, pool')
+
 /// Operands
 type Operand =
     | IntConst of int64
     | BoolConst of bool
+    | StringRef of int  // Index into string pool
     | Register of VReg
 
 /// Binary operations
@@ -83,8 +108,8 @@ type Function = {
     CFG: CFG
 }
 
-/// MIR program (list of functions)
-type Program = Program of Function list
+/// MIR program (list of functions with string pool)
+type Program = Program of functions:Function list * strings:StringPool
 
 /// Fresh register generator
 type RegGen = RegGen of int

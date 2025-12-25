@@ -99,6 +99,9 @@ let operandToReg (operand: LIR.Operand) : Result<ARM64.Reg * ARM64.Instr list, s
     | LIR.StackSlot offset ->
         // Load stack slot into X9
         Ok (ARM64.X9, loadStackSlot ARM64.X9 offset)
+    | LIR.StringRef _ ->
+        // String address loading handled by PrintString instruction
+        Error "StringRef cannot be directly used as register operand"
 
 /// Generate function prologue
 /// Saves FP, LR, callee-saved registers, and allocates stack space
@@ -166,7 +169,9 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                 |> Result.map (fun srcARM64 -> [ARM64.MOV_reg (destReg, srcARM64)])
             | LIR.StackSlot offset ->
                 // Load from stack slot into destination register
-                Ok (loadStackSlot destReg offset))
+                Ok (loadStackSlot destReg offset)
+            | LIR.StringRef _ ->
+                Error "Cannot MOV string reference - use PrintString instruction")
 
     | LIR.Store (offset, src) ->
         // Store register to stack slot
@@ -192,7 +197,9 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                 | LIR.StackSlot offset ->
                     // Load stack slot into temp register, then add
                     let tempReg = ARM64.X9
-                    Ok (loadStackSlot tempReg offset @ [ARM64.ADD_reg (destReg, leftReg, tempReg)])))
+                    Ok (loadStackSlot tempReg offset @ [ARM64.ADD_reg (destReg, leftReg, tempReg)])
+                | LIR.StringRef _ ->
+                    Error "Cannot use string reference in arithmetic operation"))
 
     | LIR.Sub (dest, left, right) ->
         lirRegToARM64Reg dest
@@ -211,7 +218,9 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                 | LIR.StackSlot offset ->
                     // Load stack slot into temp register, then subtract
                     let tempReg = ARM64.X9
-                    Ok (loadStackSlot tempReg offset @ [ARM64.SUB_reg (destReg, leftReg, tempReg)])))
+                    Ok (loadStackSlot tempReg offset @ [ARM64.SUB_reg (destReg, leftReg, tempReg)])
+                | LIR.StringRef _ ->
+                    Error "Cannot use string reference in arithmetic operation"))
 
 
     | LIR.Mul (dest, left, right) ->
@@ -245,7 +254,9 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             | LIR.StackSlot offset ->
                 // Load stack slot into temp register, then compare
                 let tempReg = ARM64.X9
-                Ok (loadStackSlot tempReg offset @ [ARM64.CMP_reg (leftReg, tempReg)]))
+                Ok (loadStackSlot tempReg offset @ [ARM64.CMP_reg (leftReg, tempReg)])
+            | LIR.StringRef _ ->
+                Error "Cannot compare string references directly")
 
     | LIR.Cset (dest, cond) ->
         lirRegToARM64Reg dest
@@ -328,6 +339,17 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                 [ARM64.MOV_reg (ARM64.X0, regARM64)] @ Runtime.generatePrintInt ()
             else
                 Runtime.generatePrintInt ())
+
+    | LIR.PrintString (idx, len) ->
+        // To print a string, we need:
+        // 1. ADRP + ADD to load string address into X0
+        // 2. Call Runtime.generatePrintString which handles write syscall
+        // String labels are named "_str0", "_str1", etc.
+        let stringLabel = sprintf "_str%d" idx
+        Ok ([
+            ARM64.ADRP (ARM64.X0, stringLabel)  // Load page address of string
+            ARM64.ADD_label (ARM64.X0, ARM64.X0, stringLabel)  // Add page offset
+        ] @ Runtime.generatePrintString len)
 
 /// Epilogue label for current function (set during function conversion)
 let mutable private currentEpilogueLabel = ""
@@ -460,7 +482,7 @@ let convertFunction (func: LIR.Function) : Result<ARM64.Instr list, string> =
 
 /// Convert LIR program to ARM64 instructions
 let generateARM64 (program: LIR.Program) : Result<ARM64.Instr list, string> =
-    let (LIR.Program functions) = program
+    let (LIR.Program (functions, _stringPool)) = program
     // Ensure _start is first (entry point)
     let sortedFunctions =
         match List.tryFind (fun (f: LIR.Function) -> f.Name = "_start") functions with

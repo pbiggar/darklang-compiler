@@ -101,7 +101,7 @@ let compile (verbosity: int) (source: string) : CompileResult =
 
                     // Show MIR
                     if verbosity >= 3 then
-                        let (MIR.Program functions) = mirProgram
+                        let (MIR.Program (functions, _)) = mirProgram
                         println "=== MIR (Control Flow Graph) ==="
                         for func in functions do
                             println $"\nFunction: {func.Name}"
@@ -125,7 +125,7 @@ let compile (verbosity: int) (source: string) : CompileResult =
 
                     // Show LIR
                     if verbosity >= 3 then
-                        let (LIR.Program funcs) = lirProgram
+                        let (LIR.Program (funcs, _)) = lirProgram
                         println "=== LIR (Low-level IR with CFG) ==="
                         for func in funcs do
                             println $"Function: {func.Name}"
@@ -145,9 +145,9 @@ let compile (verbosity: int) (source: string) : CompileResult =
 
                     // Pass 5: Register Allocation
                     if verbosity >= 1 then println "  [5/8] Register Allocation..."
-                    let (LIR.Program funcs) = lirProgram
+                    let (LIR.Program (funcs, stringPool)) = lirProgram
                     let allocatedFuncs = funcs |> List.map RegisterAllocation.allocateRegisters
-                    let allocatedProgram = LIR.Program allocatedFuncs
+                    let allocatedProgram = LIR.Program (allocatedFuncs, stringPool)
 
                     // Show LIR after allocation
                     if verbosity >= 3 then
@@ -189,9 +189,45 @@ let compile (verbosity: int) (source: string) : CompileResult =
                                 println $"  {i}: {instr}"
                             println ""
 
+                        // Detect platform for encoding and binary generation
+                        let osResult = Platform.detectOS ()
+                        match osResult with
+                        | Error err ->
+                            { Binary = Array.empty
+                              Success = false
+                              ErrorMessage = Some $"Platform detection error: {err}" }
+                        | Ok os ->
+
                         // Pass 7: ARM64 Encoding (ARM64 → machine code)
+                        // Use encodeAllWithStrings to handle ADRP/ADD_label for string addresses
                         if verbosity >= 1 then println "  [7/8] ARM64 Encoding..."
-                        let machineCode = ARM64_Encoding.encodeAll arm64Instructions
+
+                        // Compute code file offset based on platform
+                        let codeFileOffset =
+                            match os with
+                            | Platform.Linux ->
+                                // ELF: header (64) + 1 program header (56) = 120
+                                64 + 56
+                            | Platform.MacOS ->
+                                // Mach-O: header (32) + load commands + padding
+                                // This needs to match 8_Binary_Generation_MachO.fs calculation
+                                let headerSize = 32
+                                // Same calculation as in createExecutableWithStrings
+                                let pageZeroCommandSize = 72
+                                let numTextSections = if stringPool.Strings.IsEmpty then 1 else 2
+                                let textSegmentCommandSize = 72 + (80 * numTextSections)
+                                let linkeditSegmentCommandSize = 72
+                                let dylinkerCommandSize = 32
+                                let dylibCommandSize = 56
+                                let symtabCommandSize = 24
+                                let dysymtabCommandSize = 80
+                                let uuidCommandSize = 24
+                                let buildVersionCommandSize = 24
+                                let mainCommandSize = 24
+                                let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + dylibCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
+                                // Round up: (headerSize + commandsSize + 200 + 7) &&& ~~~7
+                                (headerSize + commandsSize + 200 + 7) &&& (~~~7)
+                        let machineCode = ARM64_Encoding.encodeAllWithStrings arm64Instructions stringPool codeFileOffset
 
                         // Show machine code
                         if verbosity >= 3 then
@@ -208,32 +244,25 @@ let compile (verbosity: int) (source: string) : CompileResult =
                             println $"        {t}ms"
 
                         // Pass 8: Binary Generation (machine code → executable)
-                        let osResult = Platform.detectOS ()
-                        match osResult with
-                        | Error err ->
-                            { Binary = Array.empty
-                              Success = false
-                              ErrorMessage = Some $"Platform detection error: {err}" }
-                        | Ok os ->
-                            let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
-                            if verbosity >= 1 then println $"  [8/8] Binary Generation ({formatName})..."
-                            let binary =
-                                match os with
-                                | Platform.MacOS -> Binary_Generation_MachO.createExecutable machineCode
-                                | Platform.Linux -> Binary_Generation_ELF.createExecutable machineCode
-                            let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
-                            if verbosity >= 2 then
-                                let t = System.Math.Round(binaryTime, 1)
-                                println $"        {t}ms"
+                        let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
+                        if verbosity >= 1 then println $"  [8/8] Binary Generation ({formatName})..."
+                        let binary =
+                            match os with
+                            | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithStrings machineCode stringPool
+                            | Platform.Linux -> Binary_Generation_ELF.createExecutableWithStrings machineCode stringPool
+                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
+                        if verbosity >= 2 then
+                            let t = System.Math.Round(binaryTime, 1)
+                            println $"        {t}ms"
 
-                            sw.Stop()
+                        sw.Stop()
 
-                            if verbosity >= 1 then
-                                println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
+                        if verbosity >= 1 then
+                            println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
 
-                            { Binary = binary
-                              Success = true
-                              ErrorMessage = None }
+                        { Binary = binary
+                          Success = true
+                          ErrorMessage = None }
     with
     | ex ->
         { Binary = Array.empty

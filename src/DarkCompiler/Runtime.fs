@@ -101,3 +101,60 @@ let generatePrintInt () : ARM64.Instr list =
         ARM64.MOVZ (ARM64.X6, 1us, 0)  // 37: X6 = 1 (negative flag)
         ARM64.B (-30)  // 38: Branch back (-30) to inst 8 (CBZ zero check)
     ]
+
+/// Generate ARM64 instructions to print string to stdout with newline, then exit
+///
+/// Assumes:
+/// - X0 = string address (set up by caller via ADRP + ADD_label)
+/// - stringLen = length of string to print (not including any newline)
+///
+/// Algorithm:
+/// 1. Save string address
+/// 2. Print string via write syscall
+/// 3. Print newline via write syscall
+/// 4. Exit with code 0
+///
+/// Register usage:
+/// - X0: string address, then stdout fd
+/// - X1: buffer pointer
+/// - X2: length
+/// - X16/X8: Syscall number (platform-specific)
+let generatePrintString (stringLen: int) : ARM64.Instr list =
+    let os =
+        match Platform.detectOS () with
+        | Ok platform -> platform
+        | Error _ -> Platform.Linux
+    let syscalls = Platform.getSyscallNumbers os
+    [
+        // Save string address in X1, set up for write syscall
+        ARM64.MOV_reg (ARM64.X1, ARM64.X0)  // X1 = buffer address
+        ARM64.MOVZ (ARM64.X0, 1us, 0)  // X0 = stdout fd (1)
+
+        // Load string length into X2
+        // For lengths > 16 bits, we'd need MOVK, but strings this long are unlikely
+        ARM64.MOVZ (ARM64.X2, uint16 stringLen, 0)  // X2 = length
+
+        // Call write syscall
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.SVC syscalls.SvcImmediate
+
+        // Now print newline: allocate 1 byte on stack
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)  // 16-byte aligned
+        ARM64.MOVZ (ARM64.X3, 10us, 0)  // '\n' = 10
+        ARM64.STRB (ARM64.X3, ARM64.SP, 0)  // Store newline at SP
+
+        // Write newline
+        ARM64.MOVZ (ARM64.X0, 1us, 0)  // stdout
+        ARM64.MOV_reg (ARM64.X1, ARM64.SP)  // buffer = SP
+        ARM64.MOVZ (ARM64.X2, 1us, 0)  // length = 1
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.SVC syscalls.SvcImmediate
+
+        // Cleanup stack
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
+
+        // Exit with code 0
+        ARM64.MOVZ (ARM64.X0, 0us, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Exit, 0)
+        ARM64.SVC syscalls.SvcImmediate
+    ]
