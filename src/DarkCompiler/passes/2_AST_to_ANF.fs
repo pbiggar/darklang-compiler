@@ -279,11 +279,58 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                     let exprWithBindings = wrapBindings payloadBindings finalExpr
                     (exprWithBindings, varGen2))
 
+    | AST.ListLiteral elements ->
+        // Compile list literal as linked list: Nil = 0, Cons = [tag=1, head, tail]
+        // Build right-to-left: start with Nil, then Cons(last, Nil), etc.
+        let rec buildList (elems: AST.Expr list) (vg: ANF.VarGen) (tailAtom: ANF.Atom) (allBindings: (ANF.TempId * ANF.CExpr) list) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+            match elems with
+            | [] -> Ok (tailAtom, allBindings, vg)
+            | elem :: rest ->
+                // First build the rest of the list
+                buildList rest vg tailAtom allBindings
+                |> Result.bind (fun (restAtom, restBindings, vg1) ->
+                    // Now add this element: Cons(elem, rest)
+                    toAtom elem vg1 env typeReg variantLookup
+                    |> Result.map (fun (elemAtom, elemBindings, vg2) ->
+                        let (consVar, vg3) = ANF.freshVar vg2
+                        // Cons = [tag=1, head, tail]
+                        let consExpr = ANF.TupleAlloc [ANF.IntLiteral 1L; elemAtom; restAtom]
+                        let newBindings = restBindings @ elemBindings @ [(consVar, consExpr)]
+                        (ANF.Var consVar, newBindings, vg3)))
+
+        if List.isEmpty elements then
+            // Empty list is Nil (represented as 0)
+            Ok (ANF.Return (ANF.IntLiteral 0L), varGen)
+        else
+            // Build the list starting with Nil
+            buildList elements varGen (ANF.IntLiteral 0L) []
+            |> Result.map (fun (listAtom, listBindings, varGen1) ->
+                let finalExpr = ANF.Return listAtom
+                let exprWithBindings = wrapBindings listBindings finalExpr
+                (exprWithBindings, varGen1))
+
     | AST.Match (scrutinee, cases) ->
         // Compile match to if-else chain
         // First convert scrutinee to atom
         toAtom scrutinee varGen env typeReg variantLookup
         |> Result.bind (fun (scrutineeAtom, scrutineeBindings, varGen1) ->
+            // Check if any pattern needs to access list structure
+            // If so, we must ensure scrutinee is a variable (can't TupleGet on literal)
+            let hasNonEmptyListPattern =
+                cases |> List.exists (fun (pat, _) ->
+                    match pat with
+                    | AST.PList (_ :: _) -> true
+                    | _ -> false)
+
+            // If there are non-empty list patterns, bind the scrutinee to a variable
+            let (scrutineeAtom', scrutineeBindings', varGen1') =
+                match scrutineeAtom with
+                | ANF.Var _ -> (scrutineeAtom, scrutineeBindings, varGen1)
+                | _ when hasNonEmptyListPattern ->
+                    let (tempVar, vg) = ANF.freshVar varGen1
+                    (ANF.Var tempVar, scrutineeBindings @ [(tempVar, ANF.Atom scrutineeAtom)], vg)
+                | _ -> (scrutineeAtom, scrutineeBindings, varGen1)
+
             // Check if the TYPE that a variant belongs to has any variant with a payload
             // This determines if values are heap-allocated or simple integers
             let typeHasAnyPayload (variantName: string) : bool =
@@ -393,6 +440,35 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                         |> Result.map (fun (bodyExpr, vg2) ->
                             let finalExpr = wrapBindings bindings bodyExpr
                             (finalExpr, vg2)))
+                | AST.PList patterns ->
+                    // Extract list elements: walk through Cons cells
+                    // List layout: Nil = 0, Cons = [tag=1, head, tail]
+                    let rec collectListBindings (pats: AST.Pattern list) (listAtom: ANF.Atom) (env: Map<string, ANF.TempId>) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<Map<string, ANF.TempId> * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                        match pats with
+                        | [] -> Ok (env, List.rev bindings, vg)
+                        | pat :: rest ->
+                            // Extract head from current Cons cell (index 1)
+                            let (headVar, vg1) = ANF.freshVar vg
+                            let headExpr = ANF.TupleGet (listAtom, 1)
+                            let headBinding = (headVar, headExpr)
+                            // Extract tail from current Cons cell (index 2)
+                            let (tailVar, vg2) = ANF.freshVar vg1
+                            let tailExpr = ANF.TupleGet (listAtom, 2)
+                            let tailBinding = (tailVar, tailExpr)
+                            match pat with
+                            | AST.PVar name ->
+                                let newEnv = Map.add name headVar env
+                                collectListBindings rest (ANF.Var tailVar) newEnv (tailBinding :: headBinding :: bindings) vg2
+                            | AST.PWildcard ->
+                                collectListBindings rest (ANF.Var tailVar) env (tailBinding :: bindings) vg2
+                            | _ ->
+                                collectListBindings rest (ANF.Var tailVar) env (tailBinding :: headBinding :: bindings) vg2
+                    collectListBindings patterns scrutAtom currentEnv [] vg
+                    |> Result.bind (fun (newEnv, bindings, vg1) ->
+                        toANF body vg1 newEnv typeReg variantLookup
+                        |> Result.map (fun (bodyExpr, vg2) ->
+                            let finalExpr = wrapBindings bindings bodyExpr
+                            (finalExpr, vg2)))
 
             // Build comparison expression for a pattern
             let rec buildPatternComparison (pattern: AST.Pattern) (scrutAtom: ANF.Atom) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
@@ -434,6 +510,23 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                     | None -> Error $"Unknown constructor in pattern: {variantName}"
                 | AST.PTuple _ -> Ok None  // Tuple patterns just bind, don't compare
                 | AST.PRecord _ -> Ok None  // Record patterns just bind, don't compare
+                | AST.PList patterns ->
+                    // List pattern comparison: check length matches
+                    // [] matches Nil (0), [a, b, ...] needs scrutinee to be non-nil first
+                    // IMPORTANT: Must check non-nil BEFORE loading tag to avoid null deref
+                    if List.isEmpty patterns then
+                        // Empty list pattern: check scrutinee == 0
+                        let (cmpVar, vg1) = ANF.freshVar vg
+                        let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral 0L)
+                        Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
+                    else
+                        // Non-empty list pattern: check scrutinee != 0 (not Nil)
+                        // We only check that it's a Cons (non-nil). Length matching
+                        // is not fully validated here - mismatched lengths may crash
+                        // when extracting elements. Full validation would need nested ifs.
+                        let (cmpVar, vg1) = ANF.freshVar vg
+                        let cmpExpr = ANF.Prim (ANF.Neq, scrutAtom, ANF.IntLiteral 0L)
+                        Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
 
             // Build the if-else chain from cases
             let rec buildChain (remaining: (AST.Pattern * AST.Expr) list) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
@@ -443,20 +536,20 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                     Error "Non-exhaustive pattern match"
                 | [(pattern, body)] ->
                     // Last case - just return the body (assumes exhaustive or wildcard)
-                    extractAndCompileBody pattern body scrutineeAtom env vg
+                    extractAndCompileBody pattern body scrutineeAtom' env vg
                 | (pattern, body) :: rest ->
                     if patternAlwaysMatches pattern then
                         // Wildcard or var - matches everything, no more cases
-                        extractAndCompileBody pattern body scrutineeAtom env vg
+                        extractAndCompileBody pattern body scrutineeAtom' env vg
                     else
-                        buildPatternComparison pattern scrutineeAtom vg
+                        buildPatternComparison pattern scrutineeAtom' vg
                         |> Result.bind (fun cmpOpt ->
                             match cmpOpt with
                             | None ->
                                 // Pattern always matches
-                                extractAndCompileBody pattern body scrutineeAtom env vg
+                                extractAndCompileBody pattern body scrutineeAtom' env vg
                             | Some (condAtom, bindings, vg1) ->
-                                extractAndCompileBody pattern body scrutineeAtom env vg1
+                                extractAndCompileBody pattern body scrutineeAtom' env vg1
                                 |> Result.bind (fun (thenExpr, vg2) ->
                                     buildChain rest vg2
                                     |> Result.map (fun (elseExpr, vg3) ->
@@ -464,9 +557,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                                         let finalExpr = wrapBindings bindings ifExpr
                                         (finalExpr, vg3))))
 
-            buildChain cases varGen1
+            buildChain cases varGen1'
             |> Result.map (fun (chainExpr, varGen2) ->
-                let exprWithBindings = wrapBindings scrutineeBindings chainExpr
+                let exprWithBindings = wrapBindings scrutineeBindings' chainExpr
                 (exprWithBindings, varGen2)))
 
 /// Convert an AST expression to an atom, introducing let bindings as needed
@@ -671,6 +764,31 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
                     let tupleCExpr = ANF.TupleAlloc [tagAtom; payloadAtom]
                     let allBindings = payloadBindings @ [(tempVar, tupleCExpr)]
                     (ANF.Var tempVar, allBindings, varGen2))
+
+    | AST.ListLiteral elements ->
+        // Compile list literal as linked list in atom position
+        let rec buildList (elems: AST.Expr list) (vg: ANF.VarGen) (tailAtom: ANF.Atom) (allBindings: (ANF.TempId * ANF.CExpr) list) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+            match elems with
+            | [] -> Ok (tailAtom, allBindings, vg)
+            | elem :: rest ->
+                // First build the rest of the list
+                buildList rest vg tailAtom allBindings
+                |> Result.bind (fun (restAtom, restBindings, vg1) ->
+                    // Now add this element: Cons(elem, rest)
+                    toAtom elem vg1 env typeReg variantLookup
+                    |> Result.map (fun (elemAtom, elemBindings, vg2) ->
+                        let (consVar, vg3) = ANF.freshVar vg2
+                        // Cons = [tag=1, head, tail]
+                        let consExpr = ANF.TupleAlloc [ANF.IntLiteral 1L; elemAtom; restAtom]
+                        let newBindings = restBindings @ elemBindings @ [(consVar, consExpr)]
+                        (ANF.Var consVar, newBindings, vg3)))
+
+        if List.isEmpty elements then
+            // Empty list is Nil (represented as 0)
+            Ok (ANF.IntLiteral 0L, [], varGen)
+        else
+            // Build the list starting with Nil
+            buildList elements varGen (ANF.IntLiteral 0L) []
 
     | AST.Match (scrutinee, cases) ->
         // Match in atom position - compile and extract result

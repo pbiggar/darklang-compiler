@@ -48,6 +48,8 @@ type Token =
     | TWith        // with (pattern matching)
     | TArrow       // -> (pattern matching)
     | TUnderscore  // _ (wildcard pattern)
+    | TLBracket    // [ (list literal)
+    | TRBracket    // ] (list literal)
     | TEquals      // = (assignment in let)
     | TEqEq        // == (equality comparison)
     | TNeq         // !=
@@ -78,6 +80,8 @@ let lex (input: string) : Result<Token list, string> =
         | ')' :: rest -> lexHelper rest (TRParen :: acc)
         | '{' :: rest -> lexHelper rest (TLBrace :: acc)
         | '}' :: rest -> lexHelper rest (TRBrace :: acc)
+        | '[' :: rest -> lexHelper rest (TLBracket :: acc)
+        | ']' :: rest -> lexHelper rest (TRBracket :: acc)
         | ':' :: rest -> lexHelper rest (TColon :: acc)
         | ',' :: rest -> lexHelper rest (TComma :: acc)
         | '.' :: rest -> lexHelper rest (TDot :: acc)
@@ -417,6 +421,9 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
     | TLBrace :: rest ->
         // Record pattern: { x = a, y = b }
         parseRecordPattern rest []
+    | TLBracket :: rest ->
+        // List pattern: [a, b, c] or []
+        parseListPattern rest []
     | TIdent name :: TLParen :: rest when System.Char.IsUpper(name.[0]) ->
         // Constructor with payload pattern: Some(x)
         parsePattern rest
@@ -462,6 +469,23 @@ and parseRecordPattern (tokens: Token list) (acc: (string * Pattern) list) : Res
                 parseRecordPattern rest' (field :: acc)
             | _ -> Error "Expected ',' or '}' in record pattern")
     | _ -> Error "Expected field name in record pattern"
+
+and parseListPattern (tokens: Token list) (acc: Pattern list) : Result<Pattern * Token list, string> =
+    match tokens with
+    | TRBracket :: rest ->
+        // Empty list or end of list pattern
+        Ok (PList (List.rev acc), rest)
+    | _ ->
+        parsePattern tokens
+        |> Result.bind (fun (pat, remaining) ->
+            match remaining with
+            | TRBracket :: rest ->
+                // End of list pattern
+                Ok (PList (List.rev (pat :: acc)), rest)
+            | TComma :: rest ->
+                // More elements
+                parseListPattern rest (pat :: acc)
+            | _ -> Error "Expected ',' or ']' in list pattern")
 
 /// Parse a single case: | pattern -> expr
 let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Token list, string>) : Result<(Pattern * Expr) * Token list, string> =
@@ -683,6 +707,9 @@ let parse (tokens: Token list) : Result<Program, string> =
             // Record literal: { x = 1, y = 2 }
             // Note: Anonymous records need type inference, we'll use empty type name for now
             parseRecordLiteralFields rest []
+        | TLBracket :: rest ->
+            // List literal: [1, 2, 3] or []
+            parseListLiteralElements rest []
         | _ -> Error "Expected expression"
 
     and parseTupleElements (toks: Token list) (acc: Expr list) : Result<Expr * Token list, string> =
@@ -717,6 +744,24 @@ let parse (tokens: Token list) : Result<Program, string> =
                     Ok (RecordLiteral ("", List.rev ((fieldName, value) :: acc)), rest')
                 | _ -> Error "Expected ',' or '}' after record field value")
         | _ -> Error "Expected field name in record literal"
+
+    and parseListLiteralElements (toks: Token list) (acc: Expr list) : Result<Expr * Token list, string> =
+        // Parse list literal elements: [expr, expr, ...] or []
+        match toks with
+        | TRBracket :: rest ->
+            // Empty list or end of list
+            Ok (ListLiteral (List.rev acc), rest)
+        | _ ->
+            parseExpr toks
+            |> Result.bind (fun (expr, remaining) ->
+                match remaining with
+                | TComma :: rest ->
+                    // More elements
+                    parseListLiteralElements rest (expr :: acc)
+                | TRBracket :: rest ->
+                    // End of list
+                    Ok (ListLiteral (List.rev (expr :: acc)), rest)
+                | _ -> Error "Expected ',' or ']' in list literal")
 
     and parsePostfix (expr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
         // Handle postfix operations: tuple access (.0, .1) or field access (.fieldName)

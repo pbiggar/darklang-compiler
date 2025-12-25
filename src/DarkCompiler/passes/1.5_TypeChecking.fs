@@ -45,6 +45,7 @@ let rec typeToString (t: Type) : string =
         $"({elemsStr})"
     | TRecord name -> name
     | TSum name -> name
+    | TList -> "list"
 
 /// Pretty-print a type error
 let typeErrorToString (err: TypeError) : string =
@@ -486,6 +487,18 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                                 | _, Error e -> Error e) (Ok [])
                         | None -> Error (GenericError $"Unknown record type: {recordName}")
                     | _ -> Error (GenericError "Record pattern used on non-record type")
+                | PList patterns ->
+                    match patternType with
+                    | TList ->
+                        // Each element pattern binds int variables
+                        patterns
+                        |> List.map (fun p -> extractPatternBindings p TInt64)
+                        |> List.fold (fun acc res ->
+                            match acc, res with
+                            | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
+                            | Error e, _ -> Error e
+                            | _, Error e -> Error e) (Ok [])
+                    | _ -> Error (GenericError "List pattern used on non-list type")
 
             // Type check each case and ensure they all return the same type
             let rec checkCases (remaining: (Pattern * Expr) list) (resultType: Type option) : Result<Type, TypeError> =
@@ -512,6 +525,25 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 | Some expected when expected <> matchType ->
                     Error (TypeMismatch (expected, matchType, "match expression"))
                 | _ -> Ok matchType))
+
+    | ListLiteral elements ->
+        // Type-check each element (must all be int for now - monomorphic)
+        let rec checkElements elems =
+            match elems with
+            | [] -> Ok ()
+            | e :: rest ->
+                checkExpr e env typeReg variantLookup (Some TInt64)
+                |> Result.bind (fun elemType ->
+                    if elemType <> TInt64 then
+                        Error (TypeMismatch (TInt64, elemType, "list element"))
+                    else
+                        checkElements rest)
+
+        checkElements elements
+        |> Result.bind (fun () ->
+            match expectedType with
+            | Some TList | None -> Ok TList
+            | Some other -> Error (TypeMismatch (other, TList, "list literal")))
 
 /// Type-check a function definition
 let checkFunctionDef (funcDef: FunctionDef) (env: TypeEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) : Result<unit, TypeError> =
