@@ -293,9 +293,27 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
 
     | LIR.Call (dest, funcName, args) ->
         // Function call: arguments already moved to X0-X7 by LIR pass
-        // Just generate BL instruction
-        // Return value will be in X0, already moved to dest by LIR pass
-        Ok [ARM64.BL funcName]
+        // IMPORTANT: Save caller-saved registers (X1-X10) before call
+        // These may hold live values that we need after the call
+        // Allocate 80 bytes (10 regs * 8 bytes), store pairs
+        let saveRegs = [
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 80us)
+            ARM64.STP (ARM64.X1, ARM64.X2, ARM64.SP, 0s)
+            ARM64.STP (ARM64.X3, ARM64.X4, ARM64.SP, 16s)
+            ARM64.STP (ARM64.X5, ARM64.X6, ARM64.SP, 32s)
+            ARM64.STP (ARM64.X7, ARM64.X8, ARM64.SP, 48s)
+            ARM64.STP (ARM64.X9, ARM64.X10, ARM64.SP, 64s)
+        ]
+        let callInstr = ARM64.BL funcName
+        let restoreRegs = [
+            ARM64.LDP (ARM64.X1, ARM64.X2, ARM64.SP, 0s)
+            ARM64.LDP (ARM64.X3, ARM64.X4, ARM64.SP, 16s)
+            ARM64.LDP (ARM64.X5, ARM64.X6, ARM64.SP, 32s)
+            ARM64.LDP (ARM64.X7, ARM64.X8, ARM64.SP, 48s)
+            ARM64.LDP (ARM64.X9, ARM64.X10, ARM64.SP, 64s)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 80us)
+        ]
+        Ok (saveRegs @ [callInstr] @ restoreRegs)
 
     | LIR.PrintInt reg ->
         // Value to print should be in X0
