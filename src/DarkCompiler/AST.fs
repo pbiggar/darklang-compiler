@@ -26,6 +26,7 @@ type Type =
     | TUnit
     | TFunction of Type list * Type  // parameter types * return type
     | TTuple of Type list             // tuple type: (Int, Bool, String)
+    | TRecord of string               // record type by name: Point, Color, etc.
 
 /// Binary operators
 type BinOp =
@@ -64,6 +65,8 @@ type Expr =
     | Call of funcName:string * args:Expr list  // Function call: funcName(arg1, arg2, ...)
     | TupleLiteral of Expr list              // Tuple literal: (1, 2, 3)
     | TupleAccess of tuple:Expr * index:int  // Tuple access: t.0, t.1, etc.
+    | RecordLiteral of typeName:string * fields:(string * Expr) list  // { x = 1, y = 2 }
+    | RecordAccess of record:Expr * fieldName:string                  // p.x, p.y
 
 /// Function definition
 type FunctionDef = {
@@ -73,9 +76,14 @@ type FunctionDef = {
     Body: Expr
 }
 
+/// Type definition (record types, sum types, etc.)
+type TypeDef =
+    | RecordDef of name:string * fields:(string * Type) list  // type Point = { x: Int, y: Int }
+
 /// Top-level program elements
 type TopLevel =
     | FunctionDef of FunctionDef
+    | TypeDef of TypeDef
     | Expression of Expr
 
 /// Program is a list of top-level definitions (functions and/or expressions)

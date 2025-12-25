@@ -36,9 +36,12 @@ type Token =
     | TThen        // then
     | TElse        // else
     | TDef         // def (function definition)
+    | TType        // type (type definition)
     | TColon       // : (type annotation)
     | TComma       // , (parameter separator)
-    | TDot         // . (tuple access)
+    | TDot         // . (tuple/record access)
+    | TLBrace      // { (record literal)
+    | TRBrace      // } (record literal)
     | TEquals      // = (assignment in let)
     | TEqEq        // == (equality comparison)
     | TNeq         // !=
@@ -66,6 +69,8 @@ let lex (input: string) : Result<Token list, string> =
         | '/' :: rest -> lexHelper rest (TSlash :: acc)
         | '(' :: rest -> lexHelper rest (TLParen :: acc)
         | ')' :: rest -> lexHelper rest (TRParen :: acc)
+        | '{' :: rest -> lexHelper rest (TLBrace :: acc)
+        | '}' :: rest -> lexHelper rest (TRBrace :: acc)
         | ':' :: rest -> lexHelper rest (TColon :: acc)
         | ',' :: rest -> lexHelper rest (TComma :: acc)
         | '.' :: rest -> lexHelper rest (TDot :: acc)
@@ -100,6 +105,7 @@ let lex (input: string) : Result<Token list, string> =
                 | "then" -> TThen
                 | "else" -> TElse
                 | "def" -> TDef
+                | "type" -> TType
                 | "true" -> TTrue
                 | "false" -> TFalse
                 | _ -> TIdent ident
@@ -222,7 +228,10 @@ let parseType (tokens: Token list) : Result<Type * Token list, string> =
     | TIdent "bool" :: rest -> Ok (TBool, rest)
     | TIdent "string" :: rest -> Ok (TString, rest)
     | TIdent "float" :: rest -> Ok (TFloat64, rest)
-    | _ -> Error "Expected type annotation (int, bool, string, or float)"
+    | TIdent typeName :: rest when System.Char.IsUpper(typeName.[0]) ->
+        // Record type reference (capitalized identifier)
+        Ok (TRecord typeName, rest)
+    | _ -> Error "Expected type annotation (int, bool, string, float, or RecordType)"
 
 /// Parse a single parameter: IDENT : type
 let parseParam (tokens: Token list) : Result<(string * Type) * Token list, string> =
@@ -250,6 +259,36 @@ let rec parseParams (tokens: Token list) (acc: (string * Type) list) : Result<(s
                 // End of parameters
                 Ok (List.rev (param :: acc), remaining)
             | _ -> Error "Expected ',' or ')' after parameter")
+
+/// Parse record fields in a type definition: { name: Type, name: Type, ... }
+let rec parseRecordFields (tokens: Token list) (acc: (string * Type) list) : Result<(string * Type) list * Token list, string> =
+    match tokens with
+    | TRBrace :: rest ->
+        // End of fields
+        Ok (List.rev acc, rest)
+    | TIdent name :: TColon :: rest ->
+        parseType rest
+        |> Result.bind (fun (ty, remaining) ->
+            match remaining with
+            | TComma :: rest' ->
+                // More fields
+                parseRecordFields rest' ((name, ty) :: acc)
+            | TRBrace :: rest' ->
+                // End of fields
+                Ok (List.rev ((name, ty) :: acc), rest')
+            | _ -> Error "Expected ',' or '}' after record field")
+    | _ -> Error "Expected field name in record definition"
+
+/// Parse a type definition: type Name = { fields }
+let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
+    match tokens with
+    | TType :: TIdent name :: TEquals :: TLBrace :: rest when System.Char.IsUpper(name.[0]) ->
+        parseRecordFields rest []
+        |> Result.map (fun (fields, remaining) ->
+            (RecordDef (name, fields), remaining))
+    | TType :: TIdent name :: _ when not (System.Char.IsUpper(name.[0])) ->
+        Error $"Type name must start with uppercase letter: {name}"
+    | _ -> Error "Expected type definition: type Name = { fields }"
 
 /// Parse a function definition: def name(params) : type = body
 let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr * Token list, string>) : Result<FunctionDef * Token list, string> =
@@ -449,6 +488,10 @@ let parse (tokens: Token list) : Result<Program, string> =
                     // Tuple literal: (expr, expr, ...)
                     parseTupleElements rest' [firstExpr]
                 | _ -> Error "Expected ')' or ',' in tuple/parenthesized expression")
+        | TLBrace :: rest ->
+            // Record literal: { x = 1, y = 2 }
+            // Note: Anonymous records need type inference, we'll use empty type name for now
+            parseRecordLiteralFields rest []
         | _ -> Error "Expected expression"
 
     and parseTupleElements (toks: Token list) (acc: Expr list) : Result<Expr * Token list, string> =
@@ -465,8 +508,27 @@ let parse (tokens: Token list) : Result<Program, string> =
                 Ok (TupleLiteral elements, rest)
             | _ -> Error "Expected ',' or ')' in tuple literal")
 
+    and parseRecordLiteralFields (toks: Token list) (acc: (string * Expr) list) : Result<Expr * Token list, string> =
+        // Parse record literal fields: { name = expr, name = expr, ... }
+        match toks with
+        | TRBrace :: rest ->
+            // Empty record or end of fields
+            Ok (RecordLiteral ("", List.rev acc), rest)
+        | TIdent fieldName :: TEquals :: rest ->
+            parseExpr rest
+            |> Result.bind (fun (value, remaining) ->
+                match remaining with
+                | TComma :: rest' ->
+                    // More fields
+                    parseRecordLiteralFields rest' ((fieldName, value) :: acc)
+                | TRBrace :: rest' ->
+                    // End of record
+                    Ok (RecordLiteral ("", List.rev ((fieldName, value) :: acc)), rest')
+                | _ -> Error "Expected ',' or '}' after record field value")
+        | _ -> Error "Expected field name in record literal"
+
     and parsePostfix (expr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
-        // Handle postfix operations: tuple access (.0, .1, etc.)
+        // Handle postfix operations: tuple access (.0, .1) or field access (.fieldName)
         match toks with
         | TDot :: TInt index :: rest ->
             if index < 0L then
@@ -474,6 +536,10 @@ let parse (tokens: Token list) : Result<Program, string> =
             else
                 let accessExpr = TupleAccess (expr, int index)
                 parsePostfix accessExpr rest
+        | TDot :: TIdent fieldName :: rest ->
+            // Record field access
+            let accessExpr = RecordAccess (expr, fieldName)
+            parsePostfix accessExpr rest
         | _ -> Ok (expr, toks)
 
     and parseCallArgs (toks: Token list) (acc: Expr list) : Result<Expr list * Token list, string> =
@@ -509,6 +575,12 @@ let parse (tokens: Token list) : Result<Program, string> =
             parseFunctionDef toks parseExpr
             |> Result.bind (fun (funcDef, remaining) ->
                 parseTopLevels remaining (FunctionDef funcDef :: acc))
+
+        | TType :: _ ->
+            // Parse type definition
+            parseTypeDef toks
+            |> Result.bind (fun (typeDef, remaining) ->
+                parseTopLevels remaining (TypeDef typeDef :: acc))
 
         | _ ->
             // Parse expression

@@ -43,6 +43,7 @@ let rec typeToString (t: Type) : string =
     | TTuple elemTypes ->
         let elemsStr = elemTypes |> List.map typeToString |> String.concat ", "
         $"({elemsStr})"
+    | TRecord name -> name
 
 /// Pretty-print a type error
 let typeErrorToString (err: TypeError) : string =
@@ -62,13 +63,17 @@ let typeErrorToString (err: TypeError) : string =
 /// Type environment - maps variable names to their types
 type TypeEnv = Map<string, Type>
 
+/// Type registry - maps record type names to their field definitions
+type TypeRegistry = Map<string, (string * Type) list>
+
 /// Check expression type top-down
 /// Parameters:
 ///   - expr: Expression to type-check
 ///   - env: Type environment (variable name -> type mappings)
+///   - typeReg: Type registry (record type name -> field definitions)
 ///   - expectedType: Optional expected type from context (for checking)
 /// Returns: Result<Type, TypeError>
-let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Result<Type, TypeError> =
+let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (expectedType: Type option) : Result<Type, TypeError> =
     match expr with
     | IntLiteral _ ->
         // Integer literals are always TInt64
@@ -107,12 +112,12 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
                 | _ -> "?"
 
             // Check left operand to determine numeric type
-            checkExpr left env None
+            checkExpr left env typeReg None
             |> Result.bind (fun leftType ->
                 match leftType with
                 | TInt64 | TFloat64 ->
                     // Right operand must be same type
-                    checkExpr right env (Some leftType)
+                    checkExpr right env typeReg (Some leftType)
                     |> Result.bind (fun rightType ->
                         if rightType <> leftType then
                             Error (TypeMismatch (leftType, rightType, $"right operand of {opName}"))
@@ -137,12 +142,12 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
                 | _ -> "?"
 
             // Check left operand to determine numeric type
-            checkExpr left env None
+            checkExpr left env typeReg None
             |> Result.bind (fun leftType ->
                 match leftType with
                 | TInt64 | TFloat64 ->
                     // Right operand must be same type
-                    checkExpr right env (Some leftType)
+                    checkExpr right env typeReg (Some leftType)
                     |> Result.bind (fun rightType ->
                         if rightType <> leftType then
                             Error (TypeMismatch (leftType, rightType, $"right operand of {opName}"))
@@ -157,12 +162,12 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
         | And | Or ->
             let opName = if op = And then "&&" else "||"
 
-            checkExpr left env (Some TBool)
+            checkExpr left env typeReg (Some TBool)
             |> Result.bind (fun leftType ->
                 if leftType <> TBool then
                     Error (TypeMismatch (TBool, leftType, $"left operand of {opName}"))
                 else
-                    checkExpr right env (Some TBool)
+                    checkExpr right env typeReg (Some TBool)
                     |> Result.bind (fun rightType ->
                         if rightType <> TBool then
                             Error (TypeMismatch (TBool, rightType, $"right operand of {opName}"))
@@ -175,7 +180,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
         match op with
         | Neg ->
             // Negation works on integers and floats
-            checkExpr inner env None
+            checkExpr inner env typeReg None
             |> Result.bind (fun innerType ->
                 match innerType with
                 | TInt64 | TFloat64 ->
@@ -188,7 +193,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
 
         | Not ->
             // Boolean not works on booleans and returns booleans
-            checkExpr inner env (Some TBool)
+            checkExpr inner env typeReg (Some TBool)
             |> Result.bind (fun innerType ->
                 if innerType <> TBool then
                     Error (TypeMismatch (TBool, innerType, "operand of !"))
@@ -199,10 +204,10 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
 
     | Let (name, value, body) ->
         // Let binding: check value, extend environment, check body
-        checkExpr value env None
+        checkExpr value env typeReg None
         |> Result.bind (fun valueType ->
             let env' = Map.add name valueType env
-            checkExpr body env' expectedType)
+            checkExpr body env' typeReg expectedType)
 
     | Var name ->
         // Variable reference: look up in environment
@@ -217,14 +222,14 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
 
     | If (cond, thenBranch, elseBranch) ->
         // If expression: condition must be bool, branches must have same type
-        checkExpr cond env (Some TBool)
+        checkExpr cond env typeReg (Some TBool)
         |> Result.bind (fun condType ->
             if condType <> TBool then
                 Error (TypeMismatch (TBool, condType, "if condition"))
             else
-                checkExpr thenBranch env expectedType
+                checkExpr thenBranch env typeReg expectedType
                 |> Result.bind (fun thenType ->
-                    checkExpr elseBranch env (Some thenType)
+                    checkExpr elseBranch env typeReg (Some thenType)
                     |> Result.bind (fun elseType ->
                         if thenType <> elseType then
                             Error (TypeMismatch (thenType, elseType, "if branches must have same type"))
@@ -246,7 +251,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
                 List.zip args paramTypes
                 |> List.fold (fun result (arg, expectedParamType) ->
                     result |> Result.bind (fun () ->
-                        checkExpr arg env (Some expectedParamType)
+                        checkExpr arg env typeReg (Some expectedParamType)
                         |> Result.bind (fun argType ->
                             if argType = expectedParamType then
                                 Ok ()
@@ -270,7 +275,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
             match elems with
             | [] -> Ok (List.rev acc)
             | e :: rest ->
-                checkExpr e env None
+                checkExpr e env typeReg None
                 |> Result.bind (fun elemType ->
                     checkElements rest (elemType :: acc))
 
@@ -286,7 +291,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
 
     | TupleAccess (tupleExpr, index) ->
         // Check the tuple expression
-        checkExpr tupleExpr env None
+        checkExpr tupleExpr env typeReg None
         |> Result.bind (fun tupleType ->
             match tupleType with
             | TTuple elemTypes ->
@@ -301,15 +306,101 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
             | other ->
                 Error (GenericError $"Cannot access .{index} on non-tuple type {typeToString other}"))
 
+    | RecordLiteral (typeName, fields) ->
+        // For anonymous records (typeName = ""), try to infer from expected type or field names
+        // For named records, look up type definition
+        let recordTypeName =
+            if typeName = "" then
+                match expectedType with
+                | Some (TRecord name) -> Some name
+                | _ ->
+                    // Try to infer record type from field names
+                    let fieldNames = fields |> List.map fst |> Set.ofList
+                    typeReg
+                    |> Map.toList
+                    |> List.tryFind (fun (_, typeFields) ->
+                        let typeFieldNames = typeFields |> List.map fst |> Set.ofList
+                        typeFieldNames = fieldNames)
+                    |> Option.map fst
+            else
+                Some typeName
+
+        match recordTypeName with
+        | None ->
+            Error (GenericError "Cannot infer record type - no matching type definition found")
+        | Some name ->
+            match Map.tryFind name typeReg with
+            | None ->
+                Error (GenericError $"Unknown record type: {name}")
+            | Some expectedFields ->
+                // Check that all fields are present and have correct types
+                let fieldMap = Map.ofList fields
+
+                // Check for missing fields
+                let missingFields =
+                    expectedFields
+                    |> List.filter (fun (fname, _) -> not (Map.containsKey fname fieldMap))
+                    |> List.map fst
+
+                if not (List.isEmpty missingFields) then
+                    let missingStr = String.concat ", " missingFields
+                    Error (GenericError $"Missing fields in record literal: {missingStr}")
+                else
+                    // Check for extra fields
+                    let expectedFieldNames = expectedFields |> List.map fst |> Set.ofList
+                    let extraFields =
+                        fields
+                        |> List.filter (fun (fname, _) -> not (Set.contains fname expectedFieldNames))
+                        |> List.map fst
+
+                    if not (List.isEmpty extraFields) then
+                        let extraStr = String.concat ", " extraFields
+                        Error (GenericError $"Unknown fields in record literal: {extraStr}")
+                    else
+                        // Type check each field
+                        expectedFields
+                        |> List.fold (fun result (fname, expectedFieldType) ->
+                            result |> Result.bind (fun () ->
+                                match Map.tryFind fname fieldMap with
+                                | Some fieldExpr ->
+                                    checkExpr fieldExpr env typeReg (Some expectedFieldType)
+                                    |> Result.bind (fun actualType ->
+                                        if actualType = expectedFieldType then Ok ()
+                                        else Error (TypeMismatch (expectedFieldType, actualType, $"field {fname}")))
+                                | None -> Ok ())) // Already checked for missing fields
+                            (Ok ())
+                        |> Result.map (fun () -> TRecord name)
+
+    | RecordAccess (recordExpr, fieldName) ->
+        // Check the record expression
+        checkExpr recordExpr env typeReg None
+        |> Result.bind (fun recordType ->
+            match recordType with
+            | TRecord typeName ->
+                match Map.tryFind typeName typeReg with
+                | None ->
+                    Error (GenericError $"Unknown record type: {typeName}")
+                | Some fields ->
+                    match List.tryFind (fun (name, _) -> name = fieldName) fields with
+                    | None ->
+                        Error (GenericError $"Record type {typeName} has no field '{fieldName}'")
+                    | Some (_, fieldType) ->
+                        match expectedType with
+                        | Some expected when expected <> fieldType ->
+                            Error (TypeMismatch (expected, fieldType, $"field access .{fieldName}"))
+                        | _ -> Ok fieldType
+            | other ->
+                Error (GenericError $"Cannot access .{fieldName} on non-record type {typeToString other}"))
+
 /// Type-check a function definition
-let checkFunctionDef (funcDef: FunctionDef) (env: TypeEnv) : Result<unit, TypeError> =
+let checkFunctionDef (funcDef: FunctionDef) (env: TypeEnv) (typeReg: TypeRegistry) : Result<unit, TypeError> =
     // Build environment with parameters
     let paramEnv =
         funcDef.Params
         |> List.fold (fun e (name, ty) -> Map.add name ty e) env
 
     // Check body has return type
-    checkExpr funcDef.Body paramEnv (Some funcDef.ReturnType)
+    checkExpr funcDef.Body paramEnv typeReg (Some funcDef.ReturnType)
     |> Result.bind (fun bodyType ->
         if bodyType = funcDef.ReturnType then
             Ok ()
@@ -321,7 +412,15 @@ let checkFunctionDef (funcDef: FunctionDef) (env: TypeEnv) : Result<unit, TypeEr
 let checkProgram (program: Program) : Result<Type, TypeError> =
     let (Program topLevels) = program
 
-    // First pass: collect all function signatures
+    // First pass: collect all type definitions (records)
+    let typeReg : TypeRegistry =
+        topLevels
+        |> List.choose (function
+            | TypeDef (RecordDef (name, fields)) -> Some (name, fields)
+            | _ -> None)
+        |> Map.ofList
+
+    // Second pass: collect all function signatures
     let funcSigs =
         topLevels
         |> List.choose (function
@@ -335,13 +434,14 @@ let checkProgram (program: Program) : Result<Type, TypeError> =
         funcSigs
         |> Map.map (fun _ (paramTypes, returnType) -> TFunction (paramTypes, returnType))
 
-    // Second pass: type check all function definitions
+    // Third pass: type check all function definitions
     let checkAllFunctions () =
         topLevels
         |> List.fold (fun result topLevel ->
             result |> Result.bind (fun () ->
                 match topLevel with
-                | FunctionDef funcDef -> checkFunctionDef funcDef funcEnv
+                | FunctionDef funcDef -> checkFunctionDef funcDef funcEnv typeReg
+                | TypeDef _ -> Ok ()  // Type definitions already processed
                 | Expression _ -> Ok ())) (Ok ())
 
     // Type check functions first
@@ -350,7 +450,7 @@ let checkProgram (program: Program) : Result<Type, TypeError> =
         // Then type check main expression if any
         let mainExpr = topLevels |> List.tryPick (function Expression e -> Some e | _ -> None)
         match mainExpr with
-        | Some expr -> checkExpr expr funcEnv None
+        | Some expr -> checkExpr expr funcEnv typeReg None
         | None ->
             // No main expression - just functions
             // For now, require a "main" function with signature () -> int
