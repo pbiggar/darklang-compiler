@@ -1,0 +1,16 @@
+// Sum type (ADT) tests with payloads for Phase 7 Milestone 4
+
+// None case returns tag 0
+type Option = None | Some of int None = stdout="0\n"
+
+// Err case returns tag 1 (second variant)
+type Result = Ok of int | Err Err = stdout="1\n"
+
+// Variant ordering with payloads
+type Three = A | B of int | C A = stdout="0\n"
+
+type Three = A | B of int | C C = stdout="2\n"
+
+// Multiple payload types in let binding (just verify it compiles)
+type Option = None | Some of int let n = None in n = stdout="0\n"
+

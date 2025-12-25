@@ -70,8 +70,8 @@ type TypeRegistry = Map<string, (string * Type) list>
 /// Sum type registry - maps sum type names to their variant lists (name, tag, payload)
 type SumTypeRegistry = Map<string, (string * int * Type option) list>
 
-/// Variant lookup - maps variant names to (type name, tag index)
-type VariantLookup = Map<string, (string * int)>
+/// Variant lookup - maps variant names to (type name, tag index, payload type)
+type VariantLookup = Map<string, (string * int * Type option)>
 
 /// Check expression type top-down
 /// Parameters:
@@ -401,22 +401,37 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 Error (GenericError $"Cannot access .{fieldName} on non-record type {typeToString other}"))
 
     | Constructor (_, variantName, payload) ->
-        // For M3, constructors have no payload
-        // Look up the variant to find its type
+        // Look up the variant to find its type and expected payload
         match Map.tryFind variantName variantLookup with
         | None ->
             Error (GenericError $"Unknown constructor: {variantName}")
-        | Some (typeName, _tag) ->
-            // For M3, no payload support yet
-            match payload with
-            | Some _ ->
-                Error (GenericError $"Constructor {variantName} does not take a payload (M3 only supports simple enums)")
-            | None ->
+        | Some (typeName, _tag, expectedPayload) ->
+            match expectedPayload, payload with
+            | None, None ->
+                // Variant without payload, no payload provided - OK
                 let sumType = TSum typeName
                 match expectedType with
                 | Some expected when expected <> sumType ->
                     Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
                 | _ -> Ok sumType
+            | None, Some _ ->
+                // Variant doesn't take payload but one was provided
+                Error (GenericError $"Constructor {variantName} does not take a payload")
+            | Some _, None ->
+                // Variant requires payload but none provided
+                Error (GenericError $"Constructor {variantName} requires a payload")
+            | Some payloadType, Some payloadExpr ->
+                // Variant with payload - check payload has correct type
+                checkExpr payloadExpr env typeReg variantLookup (Some payloadType)
+                |> Result.bind (fun actualPayloadType ->
+                    if actualPayloadType <> payloadType then
+                        Error (TypeMismatch (payloadType, actualPayloadType, $"payload of {variantName}"))
+                    else
+                        let sumType = TSum typeName
+                        match expectedType with
+                        | Some expected when expected <> sumType ->
+                            Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
+                        | _ -> Ok sumType)
 
 /// Type-check a function definition
 let checkFunctionDef (funcDef: FunctionDef) (env: TypeEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) : Result<unit, TypeError> =
@@ -447,7 +462,7 @@ let checkProgram (program: Program) : Result<Type, TypeError> =
         |> Map.ofList
 
     // Collect sum type definitions and build variant lookup
-    // Maps variant name -> (type name, tag index)
+    // Maps variant name -> (type name, tag index, payload type)
     let variantLookup : VariantLookup =
         topLevels
         |> List.choose (function
@@ -456,7 +471,7 @@ let checkProgram (program: Program) : Result<Type, TypeError> =
             | _ -> None)
         |> List.collect (fun (typeName, variants) ->
             variants
-            |> List.mapi (fun idx variant -> (variant.Name, (typeName, idx))))
+            |> List.mapi (fun idx variant -> (variant.Name, (typeName, idx, variant.Payload))))
         |> Map.ofList
 
     // Second pass: collect all function signatures

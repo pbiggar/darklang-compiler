@@ -21,8 +21,8 @@ open ANF
 /// Type registry - maps record type names to their field definitions
 type TypeRegistry = Map<string, (string * AST.Type) list>
 
-/// Variant lookup - maps variant names to (type name, tag index)
-type VariantLookup = Map<string, (string * int)>
+/// Variant lookup - maps variant names to (type name, tag index, payload type)
+type VariantLookup = Map<string, (string * int * AST.Type option)>
 
 /// Convert AST.BinOp to ANF.BinOp
 let convertBinOp (op: AST.BinOp) : ANF.BinOp =
@@ -244,17 +244,25 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
             Error $"Unknown field: {fieldName}"
 
     | AST.Constructor (_, variantName, payload) ->
-        // For simple enums (M3), constructors compile to their tag as an integer
-        match payload with
-        | Some _ ->
-            Error $"Constructor {variantName} with payload not supported in M3"
+        match Map.tryFind variantName variantLookup with
         | None ->
-            match Map.tryFind variantName variantLookup with
-            | Some (_, tag) ->
-                // Return the tag as an integer literal
-                Ok (ANF.Return (ANF.IntLiteral (int64 tag)), varGen)
+            Error $"Unknown constructor: {variantName}"
+        | Some (_, tag, _) ->
+            match payload with
             | None ->
-                Error $"Unknown constructor: {variantName}"
+                // Simple enum: return tag as an integer
+                Ok (ANF.Return (ANF.IntLiteral (int64 tag)), varGen)
+            | Some payloadExpr ->
+                // Variant with payload: allocate [tag, payload] on heap
+                toAtom payloadExpr varGen env typeReg variantLookup
+                |> Result.map (fun (payloadAtom, payloadBindings, varGen1) ->
+                    let tagAtom = ANF.IntLiteral (int64 tag)
+                    // Create TupleAlloc [tag, payload] and bind to fresh variable
+                    let (resultVar, varGen2) = ANF.freshVar varGen1
+                    let tupleExpr = ANF.TupleAlloc [tagAtom; payloadAtom]
+                    let finalExpr = ANF.Let (resultVar, tupleExpr, ANF.Return (ANF.Var resultVar))
+                    let exprWithBindings = wrapBindings payloadBindings finalExpr
+                    (exprWithBindings, varGen2))
 
 /// Convert an AST expression to an atom, introducing let bindings as needed
 and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
@@ -427,17 +435,24 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
             Error $"Unknown field: {fieldName}"
 
     | AST.Constructor (_, variantName, payload) ->
-        // For simple enums (M3), constructors compile to their tag as an integer
-        match payload with
-        | Some _ ->
-            Error $"Constructor {variantName} with payload not supported in M3"
+        match Map.tryFind variantName variantLookup with
         | None ->
-            match Map.tryFind variantName variantLookup with
-            | Some (_, tag) ->
-                // Return the tag as an integer literal (no bindings needed)
-                Ok (ANF.IntLiteral (int64 tag), [], varGen)
+            Error $"Unknown constructor: {variantName}"
+        | Some (_, tag, _) ->
+            match payload with
             | None ->
-                Error $"Unknown constructor: {variantName}"
+                // Simple enum: return tag as an integer (no bindings needed)
+                Ok (ANF.IntLiteral (int64 tag), [], varGen)
+            | Some payloadExpr ->
+                // Variant with payload: allocate [tag, payload] on heap
+                toAtom payloadExpr varGen env typeReg variantLookup
+                |> Result.map (fun (payloadAtom, payloadBindings, varGen1) ->
+                    let tagAtom = ANF.IntLiteral (int64 tag)
+                    // Create TupleAlloc [tag, payload] and bind to fresh variable
+                    let (tempVar, varGen2) = ANF.freshVar varGen1
+                    let tupleCExpr = ANF.TupleAlloc [tagAtom; payloadAtom]
+                    let allBindings = payloadBindings @ [(tempVar, tupleCExpr)]
+                    (ANF.Var tempVar, allBindings, varGen2))
 
 /// Wrap let bindings around an expression
 and wrapBindings (bindings: (ANF.TempId * ANF.CExpr) list) (expr: ANF.AExpr) : ANF.AExpr =
@@ -476,7 +491,7 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
         |> Map.ofList
 
     // Build variant lookup from sum type definitions
-    // Maps variant name -> (type name, tag index)
+    // Maps variant name -> (type name, tag index, payload type)
     let variantLookup : VariantLookup =
         topLevels
         |> List.choose (function
@@ -485,7 +500,7 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
             | _ -> None)
         |> List.collect (fun (typeName, variants) ->
             variants
-            |> List.mapi (fun idx variant -> (variant.Name, (typeName, idx))))
+            |> List.mapi (fun idx variant -> (variant.Name, (typeName, idx, variant.Payload))))
         |> Map.ofList
 
     // Separate functions and expressions

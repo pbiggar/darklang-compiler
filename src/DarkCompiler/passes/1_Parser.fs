@@ -43,6 +43,7 @@ type Token =
     | TLBrace      // { (record literal)
     | TRBrace      // } (record literal)
     | TBar         // | (sum type variant separator)
+    | TOf          // of (sum type payload)
     | TEquals      // = (assignment in let)
     | TEqEq        // == (equality comparison)
     | TNeq         // !=
@@ -107,6 +108,7 @@ let lex (input: string) : Result<Token list, string> =
                 | "else" -> TElse
                 | "def" -> TDef
                 | "type" -> TType
+                | "of" -> TOf
                 | "true" -> TTrue
                 | "false" -> TFalse
                 | _ -> TIdent ident
@@ -281,12 +283,24 @@ let rec parseRecordFields (tokens: Token list) (acc: (string * Type) list) : Res
             | _ -> Error "Expected ',' or '}' after record field")
     | _ -> Error "Expected field name in record definition"
 
-/// Parse sum type variants: Variant1 | Variant2 | ...
+/// Parse sum type variants: Variant1 | Variant2 of Type | ...
 /// Returns list of variants and remaining tokens
 let rec parseVariants (tokens: Token list) (acc: Variant list) : Result<Variant list * Token list, string> =
     match tokens with
+    | TIdent variantName :: TOf :: rest when System.Char.IsUpper(variantName.[0]) ->
+        // Variant with payload: Variant of Type
+        parseType rest
+        |> Result.bind (fun (payloadType, afterType) ->
+            let variant = { Name = variantName; Payload = Some payloadType }
+            match afterType with
+            | TBar :: rest' ->
+                // More variants
+                parseVariants rest' (variant :: acc)
+            | _ ->
+                // End of variants
+                Ok (List.rev (variant :: acc), afterType))
     | TIdent variantName :: rest when System.Char.IsUpper(variantName.[0]) ->
-        // Simple enum variant (no payload for M3)
+        // Simple enum variant (no payload)
         let variant = { Name = variantName; Payload = None }
         match rest with
         | TBar :: rest' ->
@@ -297,7 +311,7 @@ let rec parseVariants (tokens: Token list) (acc: Variant list) : Result<Variant 
             Ok (List.rev (variant :: acc), rest)
     | _ -> Error "Expected variant name (must start with uppercase letter)"
 
-/// Parse a type definition: type Name = { fields } or type Name = Variant1 | Variant2
+/// Parse a type definition: type Name = { fields } or type Name = Variant1 | Variant2 of Type | ...
 let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
     match tokens with
     | TType :: TIdent name :: TEquals :: TLBrace :: rest when System.Char.IsUpper(name.[0]) ->
@@ -305,6 +319,20 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
         parseRecordFields rest []
         |> Result.map (fun (fields, remaining) ->
             (RecordDef (name, fields), remaining))
+    | TType :: TIdent name :: TEquals :: TIdent variantName :: TOf :: rest when System.Char.IsUpper(name.[0]) && System.Char.IsUpper(variantName.[0]) ->
+        // Sum type with first variant having payload: type Name = Variant of Type | ...
+        parseType rest
+        |> Result.bind (fun (payloadType, afterType) ->
+            let firstVariant = { Name = variantName; Payload = Some payloadType }
+            match afterType with
+            | TBar :: rest' ->
+                // More variants
+                parseVariants rest' [firstVariant]
+                |> Result.map (fun (variants, remaining) ->
+                    (SumTypeDef (name, variants), remaining))
+            | _ ->
+                // Single variant sum type
+                Ok (SumTypeDef (name, [firstVariant]), afterType))
     | TType :: TIdent name :: TEquals :: TIdent variantName :: rest when System.Char.IsUpper(name.[0]) && System.Char.IsUpper(variantName.[0]) ->
         // Sum type: type Name = Variant1 | Variant2 | ...
         let firstVariant = { Name = variantName; Payload = None }
@@ -504,9 +532,16 @@ let parse (tokens: Token list) : Result<Program, string> =
             parseCallArgs rest []
             |> Result.map (fun (args, remaining) ->
                 (Call (name, args), remaining))
+        | TIdent name :: TLParen :: rest when System.Char.IsUpper(name.[0]) ->
+            // Constructor with payload: Constructor(payload)
+            parseExpr rest
+            |> Result.bind (fun (payloadExpr, remaining) ->
+                match remaining with
+                | TRParen :: rest' ->
+                    Ok (Constructor ("", name, Some payloadExpr), rest')
+                | _ -> Error "Expected ')' after constructor payload")
         | TIdent name :: rest when System.Char.IsUpper(name.[0]) ->
-            // Constructor (uppercase identifier) - type will be inferred during type checking
-            // For M3, constructors have no payload
+            // Constructor without payload (enum variant)
             Ok (Constructor ("", name, None), rest)
         | TIdent name :: rest ->
             // Variable reference (lowercase identifier)
