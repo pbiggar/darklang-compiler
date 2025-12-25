@@ -471,16 +471,26 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
     | LIR.HeapAlloc (dest, sizeBytes) ->
         // Inline bump allocator using X28 as heap pointer
         // X28 is reserved for heap allocation (initialized in _start prologue)
+        //
+        // Memory layout with reference counting:
+        //   [payload: sizeBytes][refcount: 8 bytes]
+        //
+        // The ref count is placed AFTER the payload to avoid modifying
+        // the returned pointer, which caused issues with spilling.
+        //
         // Algorithm:
-        // 1. Save current heap pointer to dest
-        // 2. Bump X28 by aligned size
+        // 1. Save current heap pointer to dest (payload starts at X28)
+        // 2. Store ref count (=1) at X28 + sizeBytes
+        // 3. Bump X28 by (sizeBytes + 8), aligned to 8 bytes
         lirRegToARM64Reg dest
         |> Result.map (fun destReg ->
-            // Align size to 8 bytes
-            let alignedSize = (sizeBytes + 7) &&& (~~~7)
+            // Total size includes 8 bytes for ref count, aligned to 8 bytes
+            let totalSize = ((sizeBytes + 8) + 7) &&& (~~~7)
             [
-                ARM64.MOV_reg (destReg, ARM64.X28)  // dest = current heap pointer
-                ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 alignedSize)  // bump pointer
+                ARM64.MOV_reg (destReg, ARM64.X28)  // dest = current heap pointer (payload)
+                ARM64.MOVZ (ARM64.X15, 1us, 0)  // X15 = 1 (initial ref count)
+                ARM64.STR (ARM64.X15, ARM64.X28, int16 sizeBytes)  // store ref count after payload
+                ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)  // bump pointer
             ])
 
     | LIR.HeapStore (addr, offset, src) ->

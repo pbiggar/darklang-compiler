@@ -65,31 +65,36 @@ These are features that exist but have known limitations or incomplete implement
 
 ### 2. Reference Counting (Memory Management)
 
-**Status**: ⏸️ Deferred
+**Status**: 🚧 Infrastructure Complete
 
 **Current Behavior:**
 
-- Simple bump allocator for heap allocations
-- No deallocation (memory is never freed)
+- Bump allocator for heap allocations
+- Ref count headers initialized to 1 for each allocation
+- Memory layout: `[payload: sizeBytes][refcount: 8 bytes]`
+- No deallocation yet (memory is never freed)
 
-**Investigation Summary:**
+**What's Done:**
 
-Attempted to add reference count headers to heap allocations with the layout:
-`[ref_count: 8 bytes][payload: sizeBytes]`
+✅ Ref count field added to all heap allocations
+✅ Ref count initialized to 1 at allocation time
+✅ All 664 tests pass with ref count headers
 
-The approach was to return a pointer offset by 8 bytes (to the payload) while reserving
-space for the ref count. However, adding the 8-byte offset to the returned pointer
-causes segfaults in list pattern matching tests, specifically with 5+ element lists
-or lists bound to variables before matching.
+**History:**
 
-The issue appears related to how pointer arithmetic interacts with the register
-allocation spilling mechanism and/or list pattern matching code. Tests pass with
-offsets 0 or 1, but fail with offsets >= 2. The exact cause remains unclear.
+Initially attempted layout `[refcount: 8 bytes][payload]` where the returned pointer
+would be offset by 8 bytes to the payload start. This caused mysterious segfaults
+with register spilling in list pattern matching (5+ elements or let-bound lists).
 
-**Next Steps:**
+**Solution:** Use layout `[payload][refcount: 8 bytes]` instead. The returned pointer
+points directly to the payload (unchanged), and the ref count is stored after it
+at offset `sizeBytes`. This avoids any pointer arithmetic on the returned value.
 
-1. Investigate how list pattern matching accesses memory
-2. Consider alternative layouts (ref count after payload)
-3. May need to modify ANF/MIR compilation to explicitly track heap pointers
+**Remaining Work:**
+
+1. Add ref count increment when pointers are copied
+2. Add ref count decrement when pointers go out of scope
+3. Free memory when ref count reaches 0 (requires tracking free list or similar)
+4. Track heap pointer types through ANF/MIR/LIR for proper insertion of inc/dec
 
 **Impact**: Currently memory is never freed, but the bump allocator has 64KB of space which is sufficient for most test programs
