@@ -5,6 +5,7 @@ Write in F#, with the intention to translate to Darklang later. Thus:
 - use Options and Results a lot - dont use success flags or other imperative patterns
 - Don't use exceptions or failwith (or similar) or exit
 - don't use dotnet libraries much
+- completely avoid all mutable values
 - use string interpolation instead of printf-style calls
 - if a function or method we need to use throws an exception, create a wrapper function which uses Result instead.
 
@@ -35,3 +36,4 @@ Best-practices:
 - Keep README.md, TODO.md, and docs/ files updated
 - Always fix dotnet compiler or runtime warnings and errors, preferably before commiting (make a separate cleanup commit if needed)
   - For dumb warnings, ask the developer if you want to disable
+  - when fixing tests, ensure that its the compiler that's fixed, and that the tests are not changed to avoid the error

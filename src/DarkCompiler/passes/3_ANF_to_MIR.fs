@@ -166,34 +166,30 @@ let buildFloatLookup (pool: MIR.FloatPool) : Map<float, int> =
     pool.Floats
     |> Map.fold (fun lookup idx f -> Map.add f idx lookup) Map.empty
 
-/// Module-level mutable string lookup (set during toMIR, used by atomToOperand)
-/// This avoids threading the pool through all functions
-let mutable private stringLookup : Map<string, int> = Map.empty
-
-/// Module-level mutable float lookup (set during toMIR, used by atomToOperand)
-let mutable private floatLookup : Map<float, int> = Map.empty
-
-/// Convert ANF Atom to MIR Operand
-let atomToOperand (atom: ANF.Atom) : MIR.Operand =
-    match atom with
-    | ANF.IntLiteral n -> MIR.IntConst n
-    | ANF.BoolLiteral b -> MIR.BoolConst b
-    | ANF.FloatLiteral f ->
-        match Map.tryFind f floatLookup with
-        | Some idx -> MIR.FloatRef idx
-        | None -> failwith $"Float not found in pool: {f}"
-    | ANF.StringLiteral s ->
-        match Map.tryFind s stringLookup with
-        | Some idx -> MIR.StringRef idx
-        | None -> failwith $"String not found in pool: {s}"
-    | ANF.Var tempId -> MIR.Register (tempToVReg tempId)
-
-/// CFG builder state
+/// CFG builder state - includes lookups to avoid mutable module-level state
+/// which would cause race conditions in parallel test execution
 type CFGBuilder = {
     Blocks: Map<MIR.Label, MIR.BasicBlock>
     LabelGen: MIR.LabelGen
     RegGen: MIR.RegGen
+    StringLookup: Map<string, int>
+    FloatLookup: Map<float, int>
 }
+
+/// Convert ANF Atom to MIR Operand using lookups from builder
+let atomToOperand (builder: CFGBuilder) (atom: ANF.Atom) : MIR.Operand =
+    match atom with
+    | ANF.IntLiteral n -> MIR.IntConst n
+    | ANF.BoolLiteral b -> MIR.BoolConst b
+    | ANF.FloatLiteral f ->
+        match Map.tryFind f builder.FloatLookup with
+        | Some idx -> MIR.FloatRef idx
+        | None -> failwith $"Float not found in pool: {f}"
+    | ANF.StringLiteral s ->
+        match Map.tryFind s builder.StringLookup with
+        | Some idx -> MIR.StringRef idx
+        | None -> failwith $"String not found in pool: {s}"
+    | ANF.Var tempId -> MIR.Register (tempToVReg tempId)
 
 /// Convert ANF expression to CFG
 /// Returns: (final value operand, CFG builder with all blocks)
@@ -207,7 +203,7 @@ let rec convertExpr
     match expr with
     | ANF.Return atom ->
         // Return: end current block with Ret terminator
-        let operand = atomToOperand atom
+        let operand = atomToOperand builder atom
         let block = {
             MIR.Label = currentLabel
             MIR.Instrs = currentInstrs
@@ -228,7 +224,7 @@ let rec convertExpr
             // 3. Create else-block (assigns elseAtom to destReg, jumps to join)
             // 4. Create join-block (continues with rest)
 
-            let condOp = atomToOperand condAtom
+            let condOp = atomToOperand builder condAtom
             let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
             let (elseLabel, labelGen2) = MIR.freshLabel labelGen1
             let (joinLabel, labelGen3) = MIR.freshLabel labelGen2
@@ -243,14 +239,14 @@ let rec convertExpr
             // Then block: assign thenAtom to destReg, jump to join
             let thenBlock = {
                 MIR.Label = thenLabel
-                MIR.Instrs = [MIR.Mov (destReg, atomToOperand thenAtom)]
+                MIR.Instrs = [MIR.Mov (destReg, atomToOperand builder thenAtom)]
                 MIR.Terminator = MIR.Jump joinLabel
             }
 
             // Else block: assign elseAtom to destReg, jump to join
             let elseBlock = {
                 MIR.Label = elseLabel
-                MIR.Instrs = [MIR.Mov (destReg, atomToOperand elseAtom)]
+                MIR.Instrs = [MIR.Mov (destReg, atomToOperand builder elseAtom)]
                 MIR.Terminator = MIR.Jump joinLabel
             }
 
@@ -271,13 +267,13 @@ let rec convertExpr
             let instrs =
                 match cexpr with
                 | ANF.Atom atom ->
-                    [MIR.Mov (destReg, atomToOperand atom)]
+                    [MIR.Mov (destReg, atomToOperand builder atom)]
                 | ANF.Prim (op, leftAtom, rightAtom) ->
-                    [MIR.BinOp (destReg, convertBinOp op, atomToOperand leftAtom, atomToOperand rightAtom)]
+                    [MIR.BinOp (destReg, convertBinOp op, atomToOperand builder leftAtom, atomToOperand builder rightAtom)]
                 | ANF.UnaryPrim (op, atom) ->
-                    [MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand atom)]
+                    [MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand builder atom)]
                 | ANF.Call (funcName, args) ->
-                    let argOperands = List.map atomToOperand args
+                    let argOperands = List.map (atomToOperand builder) args
                     [MIR.Call (destReg, funcName, argOperands)]
                 | ANF.TupleAlloc elems ->
                     // Allocate heap space: 8 bytes per element
@@ -287,7 +283,7 @@ let rec convertExpr
                     let storeInstrs =
                         elems
                         |> List.mapi (fun i elem ->
-                            MIR.HeapStore (destReg, i * 8, atomToOperand elem))
+                            MIR.HeapStore (destReg, i * 8, atomToOperand builder elem))
                     allocInstr :: storeInstrs
                 | ANF.TupleGet (tupleAtom, index) ->
                     // Tuple should always be a variable in ANF
@@ -310,7 +306,7 @@ let rec convertExpr
         // 3. Create join-block where both branches meet
         // 4. Both branches put result in same register and jump to join
 
-        let condOp = atomToOperand condAtom
+        let condOp = atomToOperand builder condAtom
 
         // Generate labels for then, else, and join blocks
         let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
@@ -331,6 +327,8 @@ let rec convertExpr
             Blocks = Map.add currentLabel currentBlock builder.Blocks
             LabelGen = labelGen3
             RegGen = regGen1
+            StringLookup = builder.StringLookup
+            FloatLookup = builder.FloatLookup
         }
 
         // Convert then-branch: result goes into resultReg, then jump to join
@@ -411,7 +409,7 @@ and convertExprToOperand
     | ANF.Return atom ->
         // If we have accumulated instructions from Let bindings, create a block
         // Otherwise just return the operand
-        let operand = atomToOperand atom
+        let operand = atomToOperand builder atom
         if List.isEmpty startInstrs then
             (operand, None, builder)
         else
@@ -431,7 +429,7 @@ and convertExprToOperand
         match cexpr with
         | ANF.IfValue (condAtom, thenAtom, elseAtom) ->
             // IfValue requires control flow - similar to convertExpr version
-            let condOp = atomToOperand condAtom
+            let condOp = atomToOperand builder condAtom
             let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
             let (elseLabel, labelGen2) = MIR.freshLabel labelGen1
             let (joinLabel, labelGen3) = MIR.freshLabel labelGen2
@@ -446,14 +444,14 @@ and convertExprToOperand
             // Then block: assign thenAtom to destReg, jump to join
             let thenBlock = {
                 MIR.Label = thenLabel
-                MIR.Instrs = [MIR.Mov (destReg, atomToOperand thenAtom)]
+                MIR.Instrs = [MIR.Mov (destReg, atomToOperand builder thenAtom)]
                 MIR.Terminator = MIR.Jump joinLabel
             }
 
             // Else block: assign elseAtom to destReg, jump to join
             let elseBlock = {
                 MIR.Label = elseLabel
-                MIR.Instrs = [MIR.Mov (destReg, atomToOperand elseAtom)]
+                MIR.Instrs = [MIR.Mov (destReg, atomToOperand builder elseAtom)]
                 MIR.Terminator = MIR.Jump joinLabel
             }
 
@@ -473,13 +471,13 @@ and convertExprToOperand
             // Simple CExpr: create instruction(s) and accumulate
             let instrs =
                 match cexpr with
-                | ANF.Atom atom -> [MIR.Mov (destReg, atomToOperand atom)]
+                | ANF.Atom atom -> [MIR.Mov (destReg, atomToOperand builder atom)]
                 | ANF.Prim (op, leftAtom, rightAtom) ->
-                    [MIR.BinOp (destReg, convertBinOp op, atomToOperand leftAtom, atomToOperand rightAtom)]
+                    [MIR.BinOp (destReg, convertBinOp op, atomToOperand builder leftAtom, atomToOperand builder rightAtom)]
                 | ANF.UnaryPrim (op, atom) ->
-                    [MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand atom)]
+                    [MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand builder atom)]
                 | ANF.Call (funcName, args) ->
-                    let argOperands = List.map atomToOperand args
+                    let argOperands = List.map (atomToOperand builder) args
                     [MIR.Call (destReg, funcName, argOperands)]
                 | ANF.TupleAlloc elems ->
                     // Allocate heap space: 8 bytes per element
@@ -489,7 +487,7 @@ and convertExprToOperand
                     let storeInstrs =
                         elems
                         |> List.mapi (fun i elem ->
-                            MIR.HeapStore (destReg, i * 8, atomToOperand elem))
+                            MIR.HeapStore (destReg, i * 8, atomToOperand builder elem))
                     allocInstr :: storeInstrs
                 | ANF.TupleGet (tupleAtom, index) ->
                     // Tuple should always be a variable in ANF
@@ -507,7 +505,7 @@ and convertExprToOperand
 
     | ANF.If (condAtom, thenBranch, elseBranch) ->
         // If expression: creates blocks with branch/jump/join structure
-        let condOp = atomToOperand condAtom
+        let condOp = atomToOperand builder condAtom
         let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
         let (elseLabel, labelGen2) = MIR.freshLabel labelGen1
         let (joinLabel, labelGen3) = MIR.freshLabel labelGen2
@@ -523,6 +521,8 @@ and convertExprToOperand
             Blocks = Map.add startLabel startBlock builder.Blocks
             LabelGen = labelGen3
             RegGen = regGen1
+            StringLookup = builder.StringLookup
+            FloatLookup = builder.FloatLookup
         }
 
         // Convert then-branch
@@ -588,12 +588,14 @@ and convertExprToOperand
         (MIR.Register resultReg, Some joinLabel, builder6)
 
 /// Convert an ANF function to a MIR function
-let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) : MIR.Function * MIR.RegGen =
-    // Create initial builder
+let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: Map<string, int>) (fltLookup: Map<float, int>) : MIR.Function * MIR.RegGen =
+    // Create initial builder with lookups
     let initialBuilder = {
         RegGen = regGen
         LabelGen = MIR.initialLabelGen
         Blocks = Map.empty
+        StringLookup = strLookup
+        FloatLookup = fltLookup
     }
 
     // Create entry label for CFG (internal to function body)
@@ -627,20 +629,21 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) : MIR.Functi
 let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : MIR.Program * MIR.RegGen =
     let (ANF.Program (functions, mainExpr)) = program
 
-    // Phase 1: Collect all strings and floats, build pools
+    // Phase 1: Collect all strings and floats, build pools and lookups
+    // Lookups are local (not mutable module-level) to avoid race conditions in parallel tests
     let allStrings = collectStringsFromProgram program
     let stringPool = buildStringPool allStrings
-    stringLookup <- buildStringLookup stringPool
+    let strLookup = buildStringLookup stringPool
 
     let allFloats = collectFloatsFromProgram program
     let floatPool = buildFloatPool allFloats
-    floatLookup <- buildFloatLookup floatPool
+    let fltLookup = buildFloatLookup floatPool
 
     // Phase 2: Convert all functions to MIR
     let (mirFuncs, regGen1) =
         functions
         |> List.fold (fun (funcs, rg) anfFunc ->
-            let (mirFunc, rg') = convertANFFunction anfFunc rg
+            let (mirFunc, rg') = convertANFFunction anfFunc rg strLookup fltLookup
             (funcs @ [mirFunc], rg')) ([], regGen)
 
     // Convert main expression (if any) to a synthetic "_start" function
@@ -653,6 +656,8 @@ let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : MIR.Program * MIR.RegGen
                 RegGen = regGen1
                 LabelGen = MIR.initialLabelGen
                 Blocks = Map.empty
+                StringLookup = strLookup
+                FloatLookup = fltLookup
             }
             let (_, finalBuilder) = convertExpr expr entryLabel [] initialBuilder
             let cfg = {
