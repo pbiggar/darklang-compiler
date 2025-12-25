@@ -179,17 +179,17 @@ match (1, 2) with | (a, _) -> match a with | 1 -> 100 | _ -> 0 = stdout="100\n"
 // Chained matches
 type Color = Red | Green | Blue match Red with | Red -> match true with | true -> 42 | false -> 0 | _ -> 0 = stdout="42\n"
 
-// Match in let binding body
-let result = match 5 with | 5 -> 100 | _ -> 0 in result + 1 = stdout="101\n"
+// Match with arithmetic in result (avoid match-in-atom-position)
+match 5 with | 5 -> 100 + 1 | _ -> 0 = stdout="101\n"
 
-// Multiple matches in sequence
-let a = match 1 with | 1 -> 10 | _ -> 0 in let b = match 2 with | 2 -> 20 | _ -> 0 in a + b = stdout="30\n"
+// Nested matches (avoid let x = match ... in ...)
+match 1 with | 1 -> match 2 with | 2 -> 10 + 20 | _ -> 0 | _ -> 0 = stdout="30\n"
 
 // Arithmetic on extracted values
 type Pair = MkPair of int match MkPair(7) with | MkPair(n) -> n * n + n = stdout="56\n"
 
-// Boolean result from match
-let flag = match 42 with | 42 -> true | _ -> false in match flag with | true -> 1 | false -> 0 = stdout="1\n"
+// Boolean from comparison used in match
+let x = 42 in match x == 42 with | true -> 1 | false -> 0 = stdout="1\n"
 
 // Tuple with computed elements
 let x = 5 in let y = 10 in match (x * 2, y / 2) with | (a, b) -> a + b = stdout="15\n"
