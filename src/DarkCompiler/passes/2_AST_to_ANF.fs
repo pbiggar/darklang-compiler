@@ -247,11 +247,26 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
         match Map.tryFind variantName variantLookup with
         | None ->
             Error $"Unknown constructor: {variantName}"
-        | Some (_, tag, _) ->
+        | Some (typeName, tag, _) ->
+            // Check if ANY variant in this type has a payload
+            // If so, all variants must be heap-allocated for consistency
+            // Note: We get typeName from variantLookup, not from AST (which may be empty)
+            let typeHasPayloadVariants =
+                variantLookup
+                |> Map.exists (fun _ (tName, _, pType) -> tName = typeName && pType.IsSome)
+
             match payload with
-            | None ->
-                // Simple enum: return tag as an integer
+            | None when not typeHasPayloadVariants ->
+                // Pure enum type (no payloads anywhere): return tag as an integer
                 Ok (ANF.Return (ANF.IntLiteral (int64 tag)), varGen)
+            | None ->
+                // No payload but type has other variants with payloads
+                // Heap-allocate as [tag] for consistent representation
+                let tagAtom = ANF.IntLiteral (int64 tag)
+                let (resultVar, varGen1) = ANF.freshVar varGen
+                let tupleExpr = ANF.TupleAlloc [tagAtom]
+                let finalExpr = ANF.Let (resultVar, tupleExpr, ANF.Return (ANF.Var resultVar))
+                Ok (finalExpr, varGen1)
             | Some payloadExpr ->
                 // Variant with payload: allocate [tag, payload] on heap
                 toAtom payloadExpr varGen env typeReg variantLookup
@@ -269,7 +284,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
         // First convert scrutinee to atom
         toAtom scrutinee varGen env typeReg variantLookup
         |> Result.bind (fun (scrutineeAtom, scrutineeBindings, varGen1) ->
-            // Convert pattern to a tag value for comparison (simple enums only for M5)
+            // Convert pattern to a tag value for comparison
             let patternToTag (pattern: AST.Pattern) : Result<int64 option, string> =
                 match pattern with
                 | AST.PWildcard -> Ok None  // Wildcard matches everything
@@ -280,6 +295,42 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                     | Some (_, tag, _) -> Ok (Some (int64 tag))
                     | None -> Error $"Unknown constructor in pattern: {variantName}"
 
+            // Check if the TYPE that a variant belongs to has any variant with a payload
+            // This determines if values are heap-allocated or simple integers
+            let typeHasAnyPayload (variantName: string) : bool =
+                match Map.tryFind variantName variantLookup with
+                | Some (typeName, _, _) ->
+                    variantLookup
+                    |> Map.exists (fun _ (tName, _, pType) -> tName = typeName && pType.IsSome)
+                | None -> false
+
+            // Extract pattern bindings and compile body with extended environment
+            let rec extractAndCompileBody (pattern: AST.Pattern) (body: AST.Expr) (scrutAtom: ANF.Atom) (currentEnv: Map<string, ANF.TempId>) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
+                match pattern with
+                | AST.PWildcard -> toANF body vg currentEnv typeReg variantLookup
+                | AST.PLiteral _ -> toANF body vg currentEnv typeReg variantLookup
+                | AST.PVar name ->
+                    // Bind scrutinee to variable name
+                    let (tempId, vg1) = ANF.freshVar vg
+                    let env' = Map.add name tempId currentEnv
+                    toANF body vg1 env' typeReg variantLookup
+                    |> Result.map (fun (bodyExpr, vg2) ->
+                        let expr = ANF.Let (tempId, ANF.Atom scrutAtom, bodyExpr)
+                        (expr, vg2))
+                | AST.PConstructor (variantName, payloadPattern) ->
+                    match payloadPattern with
+                    | None -> toANF body vg currentEnv typeReg variantLookup
+                    | Some innerPattern ->
+                        // Extract payload from heap-allocated variant
+                        // Variant layout: [tag:8][payload:8], so payload is at index 1
+                        let (payloadVar, vg1) = ANF.freshVar vg
+                        let payloadExpr = ANF.TupleGet (scrutAtom, 1)
+                        // Now compile the inner pattern with the payload
+                        extractAndCompileBody innerPattern body (ANF.Var payloadVar) currentEnv vg1
+                        |> Result.map (fun (innerExpr, vg2) ->
+                            let expr = ANF.Let (payloadVar, payloadExpr, innerExpr)
+                            (expr, vg2))
+
             // Build the if-else chain from cases
             let rec buildChain (remaining: (AST.Pattern * AST.Expr) list) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
                 match remaining with
@@ -288,27 +339,48 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                     Error "Non-exhaustive pattern match"
                 | [(pattern, body)] ->
                     // Last case - just return the body (assumes exhaustive or wildcard)
-                    toANF body vg env typeReg variantLookup
+                    extractAndCompileBody pattern body scrutineeAtom env vg
                 | (pattern, body) :: rest ->
                     patternToTag pattern
                     |> Result.bind (fun tagOpt ->
                         match tagOpt with
                         | None ->
                             // Wildcard or var - matches everything, no more cases
-                            toANF body vg env typeReg variantLookup
+                            extractAndCompileBody pattern body scrutineeAtom env vg
                         | Some tag ->
-                            // Build: if scrutinee == tag then body else rest
-                            let tagAtom = ANF.IntLiteral tag
-                            toANF body vg env typeReg variantLookup
-                            |> Result.bind (fun (thenExpr, vg1) ->
-                                buildChain rest vg1
-                                |> Result.map (fun (elseExpr, vg2) ->
-                                    // Create comparison
-                                    let (cmpVar, vg3) = ANF.freshVar vg2
-                                    let cmpExpr = ANF.Prim (ANF.Eq, scrutineeAtom, tagAtom)
-                                    let ifExpr = ANF.If (ANF.Var cmpVar, thenExpr, elseExpr)
-                                    let finalExpr = ANF.Let (cmpVar, cmpExpr, ifExpr)
-                                    (finalExpr, vg3))))
+                            // For types with any payload variants, we need to compare the tag at offset 0
+                            let needsTagLoad =
+                                match pattern with
+                                | AST.PConstructor (variantName, _) -> typeHasAnyPayload variantName
+                                | _ -> false
+
+                            if needsTagLoad then
+                                // Load tag from heap (index 0), then compare
+                                let (tagVar, vg0) = ANF.freshVar vg
+                                let tagLoadExpr = ANF.TupleGet (scrutineeAtom, 0)
+                                let tagAtom = ANF.IntLiteral tag
+                                extractAndCompileBody pattern body scrutineeAtom env vg0
+                                |> Result.bind (fun (thenExpr, vg1) ->
+                                    buildChain rest vg1
+                                    |> Result.map (fun (elseExpr, vg2) ->
+                                        let (cmpVar, vg3) = ANF.freshVar vg2
+                                        let cmpExpr = ANF.Prim (ANF.Eq, ANF.Var tagVar, tagAtom)
+                                        let ifExpr = ANF.If (ANF.Var cmpVar, thenExpr, elseExpr)
+                                        let letCmp = ANF.Let (cmpVar, cmpExpr, ifExpr)
+                                        let letTag = ANF.Let (tagVar, tagLoadExpr, letCmp)
+                                        (letTag, vg3)))
+                            else
+                                // Simple enum - scrutinee IS the tag
+                                let tagAtom = ANF.IntLiteral tag
+                                extractAndCompileBody pattern body scrutineeAtom env vg
+                                |> Result.bind (fun (thenExpr, vg1) ->
+                                    buildChain rest vg1
+                                    |> Result.map (fun (elseExpr, vg2) ->
+                                        let (cmpVar, vg3) = ANF.freshVar vg2
+                                        let cmpExpr = ANF.Prim (ANF.Eq, scrutineeAtom, tagAtom)
+                                        let ifExpr = ANF.If (ANF.Var cmpVar, thenExpr, elseExpr)
+                                        let finalExpr = ANF.Let (cmpVar, cmpExpr, ifExpr)
+                                        (finalExpr, vg3))))
 
             buildChain cases varGen1
             |> Result.map (fun (chainExpr, varGen2) ->
@@ -489,11 +561,24 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
         match Map.tryFind variantName variantLookup with
         | None ->
             Error $"Unknown constructor: {variantName}"
-        | Some (_, tag, _) ->
+        | Some (typeName, tag, _) ->
+            // Check if ANY variant in this type has a payload
+            // Note: We get typeName from variantLookup, not from AST (which may be empty)
+            let typeHasPayloadVariants =
+                variantLookup
+                |> Map.exists (fun _ (tName, _, pType) -> tName = typeName && pType.IsSome)
+
             match payload with
-            | None ->
-                // Simple enum: return tag as an integer (no bindings needed)
+            | None when not typeHasPayloadVariants ->
+                // Pure enum type: return tag as an integer (no bindings needed)
                 Ok (ANF.IntLiteral (int64 tag), [], varGen)
+            | None ->
+                // No payload but type has other variants with payloads
+                // Heap-allocate as [tag] for consistent representation
+                let tagAtom = ANF.IntLiteral (int64 tag)
+                let (tempVar, varGen1) = ANF.freshVar varGen
+                let tupleCExpr = ANF.TupleAlloc [tagAtom]
+                Ok (ANF.Var tempVar, [(tempVar, tupleCExpr)], varGen1)
             | Some payloadExpr ->
                 // Variant with payload: allocate [tag, payload] on heap
                 toAtom payloadExpr varGen env typeReg variantLookup

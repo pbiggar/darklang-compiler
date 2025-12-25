@@ -437,6 +437,23 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         // Type check the scrutinee first
         checkExpr scrutinee env typeReg variantLookup None
         |> Result.bind (fun scrutineeType ->
+            // Extract bindings from a pattern based on scrutinee type
+            let rec extractPatternBindings (pattern: Pattern) (patternType: Type) : Result<(string * Type) list, TypeError> =
+                match pattern with
+                | PWildcard -> Ok []
+                | PLiteral _ -> Ok []
+                | PVar name -> Ok [(name, patternType)]
+                | PConstructor (variantName, payloadPattern) ->
+                    match Map.tryFind variantName variantLookup with
+                    | None -> Error (GenericError $"Unknown variant in pattern: {variantName}")
+                    | Some (_, _, payloadType) ->
+                        match payloadPattern, payloadType with
+                        | None, _ -> Ok []
+                        | Some innerPattern, Some pType ->
+                            extractPatternBindings innerPattern pType
+                        | Some _, None ->
+                            Error (GenericError $"Variant {variantName} has no payload but pattern expects one")
+
             // Type check each case and ensure they all return the same type
             let rec checkCases (remaining: (Pattern * Expr) list) (resultType: Type option) : Result<Type, TypeError> =
                 match remaining with
@@ -445,14 +462,16 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     | Some t -> Ok t
                     | None -> Error (GenericError "Match expression must have at least one case")
                 | (pattern, body) :: rest ->
-                    // For M5, we do simple pattern checking - just check the body
-                    // TODO: Check pattern matches scrutinee type and bind variables
-                    checkExpr body env typeReg variantLookup resultType
-                    |> Result.bind (fun bodyType ->
-                        match resultType with
-                        | None -> checkCases rest (Some bodyType)
-                        | Some expected when expected = bodyType -> checkCases rest resultType
-                        | Some expected -> Error (TypeMismatch (expected, bodyType, "match case")))
+                    // Extract bindings from pattern and add to environment
+                    extractPatternBindings pattern scrutineeType
+                    |> Result.bind (fun bindings ->
+                        let bodyEnv = List.fold (fun e (name, ty) -> Map.add name ty e) env bindings
+                        checkExpr body bodyEnv typeReg variantLookup resultType
+                        |> Result.bind (fun bodyType ->
+                            match resultType with
+                            | None -> checkCases rest (Some bodyType)
+                            | Some expected when expected = bodyType -> checkCases rest resultType
+                            | Some expected -> Error (TypeMismatch (expected, bodyType, "match case"))))
 
             checkCases cases None
             |> Result.bind (fun matchType ->

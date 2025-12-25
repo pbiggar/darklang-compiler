@@ -33,3 +33,35 @@ type Bool = True | False match False with | True -> 1 | False -> 0 = stdout="0\n
 // Four variant type
 type Dir = North | East | South | West match South with | North -> 0 | East -> 1 | South -> 2 | West -> 3 = stdout="2\n"
 
+// === Milestone 6: Payload Extraction ===
+
+// Extract payload from Some variant
+type Option = None | Some of int match Some(42) with | Some(x) -> x | None -> 0 = stdout="42\n"
+
+// Extract and use payload in arithmetic
+type Option = None | Some of int match Some(10) with | Some(x) -> x + 5 | None -> 0 = stdout="15\n"
+
+// Match None case (no extraction)
+type Option = None | Some of int match None with | Some(x) -> x | None -> 99 = stdout="99\n"
+
+// Variable binding on whole scrutinee
+type Color = Red | Green | Blue match Green with | x -> 1 = stdout="1\n"
+
+// Extract payload with different variant order
+type Result = Ok of int | Err match Ok(100) with | Ok(v) -> v | Err -> 0 = stdout="100\n"
+
+// Match second variant of Result
+type Result = Ok of int | Err match Err with | Ok(v) -> v | Err -> 1 = stdout="1\n"
+
+// Multiple payload variants - match first
+type Either = Left of int | Right of int match Left(5) with | Left(x) -> x | Right(y) -> y = stdout="5\n"
+
+// Multiple payload variants - match second
+type Either = Left of int | Right of int match Right(7) with | Left(x) -> x | Right(y) -> y = stdout="7\n"
+
+// Extract and multiply
+type Option = None | Some of int match Some(6) with | Some(x) -> x * 7 | None -> 0 = stdout="42\n"
+
+// Extract with wildcard fallback
+type Option = None | Some of int match Some(123) with | Some(n) -> n | _ -> 0 = stdout="123\n"
+
