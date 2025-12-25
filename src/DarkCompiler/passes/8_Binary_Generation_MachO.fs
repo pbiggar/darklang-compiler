@@ -242,19 +242,12 @@ let createFloatData (floatPool: MIR.FloatPool) : byte array =
         [||]
     else
         // Sort by index to ensure consistent ordering
-        let sortedFloats =
-            floatPool.Floats
-            |> Map.toList
-            |> List.sortBy fst
-
-        // Build float bytes (each float is 8 bytes)
-        let mutable allBytes : byte list = []
-
-        for (_idx, floatVal) in sortedFloats do
-            let floatBytes = System.BitConverter.GetBytes(floatVal)
-            allBytes <- allBytes @ (Array.toList floatBytes)
-
-        Array.ofList allBytes
+        floatPool.Floats
+        |> Map.toList
+        |> List.sortBy fst
+        |> List.collect (fun (_idx, floatVal) ->
+            System.BitConverter.GetBytes(floatVal) |> Array.toList)
+        |> Array.ofList
 
 /// Create string data bytes and label map from string pool
 /// Returns (string bytes, label map from "_strN" to offset within string section)
@@ -268,17 +261,17 @@ let createStringData (stringPool: MIR.StringPool) : byte array * Map<string, int
             |> Map.toList
             |> List.sortBy fst
 
-        // Build string bytes and track offsets
-        let mutable currentOffset = 0
-        let mutable labelMap = Map.empty
-        let mutable allBytes : byte list = []
-
-        for (idx, (str, _len)) in sortedStrings do
-            let label = sprintf "_str%d" idx
-            labelMap <- Map.add label currentOffset labelMap
-            let strBytes = System.Text.Encoding.UTF8.GetBytes(str)
-            allBytes <- allBytes @ (Array.toList strBytes) @ [0uy]  // null-terminated
-            currentOffset <- currentOffset + strBytes.Length + 1
+        // Build string bytes and track offsets using fold
+        let (allBytes, labelMap, _finalOffset) =
+            sortedStrings
+            |> List.fold (fun (bytes, labels, offset) (idx, (str, _len)) ->
+                let label = sprintf "_str%d" idx
+                let strBytes = System.Text.Encoding.UTF8.GetBytes(str) |> Array.toList
+                let newBytes = bytes @ strBytes @ [0uy]  // null-terminated
+                let newLabels = Map.add label offset labels
+                let newOffset = offset + strBytes.Length + 1
+                (newBytes, newLabels, newOffset))
+                ([], Map.empty, 0)
 
         (Array.ofList allBytes, labelMap)
 

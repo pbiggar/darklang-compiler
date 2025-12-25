@@ -734,20 +734,18 @@ let computeFloatLabels (codeFileOffset: int) (codeSize: int) (floatPool: MIR.Flo
             |> Map.toList
             |> List.sortBy fst
 
-        // Build label map with offsets
+        // Build label map with offsets using fold
         // Floats start after headers + code, 8-byte aligned
         let startOffset = codeFileOffset + codeSize
-        // Align to 8 bytes
         let alignedStart = (startOffset + 7) &&& (~~~7)
-        let mutable currentOffset = alignedStart
-        let mutable labelMap = Map.empty
 
-        for (idx, _floatVal) in sortedFloats do
+        sortedFloats
+        |> List.fold (fun (offset, labelMap) (idx, _floatVal) ->
             let label = sprintf "_float%d" idx
-            labelMap <- Map.add label currentOffset labelMap
-            currentOffset <- currentOffset + 8  // Each double is 8 bytes
-
-        labelMap
+            let newMap = Map.add label offset labelMap
+            (offset + 8, newMap))  // Each double is 8 bytes
+            (alignedStart, Map.empty)
+        |> snd
 
 /// Compute string label positions given code file offset, code size, and string pool
 /// Returns map from "_strN" to byte offset (relative to segment/file start)
@@ -766,20 +764,20 @@ let computeStringLabels (codeFileOffset: int) (codeSize: int) (floatPoolSize: in
             |> Map.toList
             |> List.sortBy fst
 
-        // Build label map with offsets
+        // Build label map with offsets using fold
         // Strings start after headers + code + floats
         // Float pool is 8-byte aligned, so account for alignment
         let floatStart = (codeFileOffset + codeSize + 7) &&& (~~~7)
-        let mutable currentOffset = floatStart + floatPoolSize
-        let mutable labelMap = Map.empty
+        let startOffset = floatStart + floatPoolSize
 
-        for (idx, (str, _len)) in sortedStrings do
+        sortedStrings
+        |> List.fold (fun (offset, labelMap) (idx, (str, _len)) ->
             let label = sprintf "_str%d" idx
-            labelMap <- Map.add label currentOffset labelMap
+            let newMap = Map.add label offset labelMap
             let strBytes = System.Text.Encoding.UTF8.GetBytes(str)
-            currentOffset <- currentOffset + strBytes.Length + 1  // +1 for null terminator
-
-        labelMap
+            (offset + strBytes.Length + 1, newMap))  // +1 for null terminator
+            (startOffset, Map.empty)
+        |> snd
 
 /// Encoding with string and float pool support
 /// Computes label positions and encodes ADRP/ADD_label correctly

@@ -81,19 +81,13 @@ let loadImmediate (dest: ARM64.Reg) (value: int64) : ARM64.Instr list =
     let chunk2 = uint16 (value >>> 32) &&& 0xFFFFus
     let chunk3 = uint16 (value >>> 48) &&& 0xFFFFus
 
-    // Build instruction sequence
-    // Start with MOVZ for the first non-zero chunk (or chunk0 if all zero)
-    let mutable instrs = [ARM64.MOVZ (dest, chunk0, 0)]
-
-    // Add MOVK for remaining chunks if non-zero
-    if chunk1 <> 0us then
-        instrs <- instrs @ [ARM64.MOVK (dest, chunk1, 16)]
-    if chunk2 <> 0us then
-        instrs <- instrs @ [ARM64.MOVK (dest, chunk2, 32)]
-    if chunk3 <> 0us then
-        instrs <- instrs @ [ARM64.MOVK (dest, chunk3, 48)]
-
-    instrs
+    // Build instruction sequence functionally
+    // Start with MOVZ for the first chunk (or chunk0 if all zero)
+    // Add MOVK for remaining non-zero chunks
+    [ARM64.MOVZ (dest, chunk0, 0)]
+    @ (if chunk1 <> 0us then [ARM64.MOVK (dest, chunk1, 16)] else [])
+    @ (if chunk2 <> 0us then [ARM64.MOVK (dest, chunk2, 32)] else [])
+    @ (if chunk3 <> 0us then [ARM64.MOVK (dest, chunk3, 48)] else [])
 
 /// Generate ARM64 instructions to load a stack slot into a register
 /// Stack slots are accessed relative to FP (X29)
@@ -525,19 +519,13 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             |> Result.map (fun addrReg ->
                 [ARM64.LDR (destReg, addrReg, int16 offset)]))
 
-/// Epilogue label for current function (set during function conversion)
-let mutable private currentEpilogueLabel = ""
-
-/// Set the epilogue label for the current function being converted
-let setEpilogueLabel (funcName: string) =
-    currentEpilogueLabel <- sprintf "_epilogue_%s" funcName
-
 /// Convert LIR terminator to ARM64 instructions
-let convertTerminator (terminator: LIR.Terminator) : Result<ARM64.Instr list, string> =
+/// epilogueLabel: the label to jump to for function return (handles stack cleanup)
+let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Result<ARM64.Instr list, string> =
     match terminator with
     | LIR.Ret ->
         // Jump to function epilogue (handles stack cleanup and RET)
-        Ok [ARM64.B_label currentEpilogueLabel]
+        Ok [ARM64.B_label epilogueLabel]
 
     | LIR.Branch (condReg, trueLabel, falseLabel) ->
         // Branch if register is non-zero (true), otherwise fall through to else
@@ -554,7 +542,8 @@ let convertTerminator (terminator: LIR.Terminator) : Result<ARM64.Instr list, st
         Ok [ARM64.B_label label]
 
 /// Convert LIR basic block to ARM64 instructions (with label)
-let convertBlock (block: LIR.BasicBlock) : Result<ARM64.Instr list, string> =
+/// epilogueLabel: passed through to terminator for Ret handling
+let convertBlock (epilogueLabel: string) (block: LIR.BasicBlock) : Result<ARM64.Instr list, string> =
     // Emit label for this block
     let labelInstr = ARM64.Label block.Label
 
@@ -562,7 +551,7 @@ let convertBlock (block: LIR.BasicBlock) : Result<ARM64.Instr list, string> =
     let instrResults = block.Instrs |> List.map convertInstr
 
     // Convert terminator
-    let termResult = convertTerminator block.Terminator
+    let termResult = convertTerminator epilogueLabel block.Terminator
 
     // Collect all results
     let rec collectResults acc results =
@@ -579,7 +568,8 @@ let convertBlock (block: LIR.BasicBlock) : Result<ARM64.Instr list, string> =
         | Ok termInstrs -> Ok (labelInstr :: instrs @ termInstrs)
 
 /// Convert LIR CFG to ARM64 instructions
-let convertCFG (cfg: LIR.CFG) : Result<ARM64.Instr list, string> =
+/// epilogueLabel: passed through to blocks for Ret handling
+let convertCFG (epilogueLabel: string) (cfg: LIR.CFG) : Result<ARM64.Instr list, string> =
     // Get blocks in a deterministic order (entry first, then sorted by label)
     let entryBlock =
         match Map.tryFind cfg.Entry cfg.Blocks with
@@ -597,7 +587,7 @@ let convertCFG (cfg: LIR.CFG) : Result<ARM64.Instr list, string> =
 
     // Convert each block
     allBlocks
-    |> List.map convertBlock
+    |> List.map (convertBlock epilogueLabel)
     |> List.fold (fun acc result ->
         match acc, result with
         | Ok instrs, Ok newInstrs -> Ok (instrs @ newInstrs)
@@ -618,11 +608,11 @@ let generateHeapInit () : ARM64.Instr list =
 
 /// Convert LIR function to ARM64 instructions with prologue and epilogue
 let convertFunction (func: LIR.Function) : Result<ARM64.Instr list, string> =
-    // Set the epilogue label for this function so Ret terminators can jump to it
-    setEpilogueLabel func.Name
+    // Generate epilogue label for this function (passed to convertCFG for Ret terminators)
+    let epilogueLabel = sprintf "_epilogue_%s" func.Name
 
     // Convert CFG to ARM64 instructions
-    match convertCFG func.CFG with
+    match convertCFG epilogueLabel func.CFG with
     | Error err -> Error err
     | Ok cfgInstrs ->
         // Generate prologue (save FP/LR, allocate stack)

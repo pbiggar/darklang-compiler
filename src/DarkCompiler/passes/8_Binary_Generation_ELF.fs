@@ -97,40 +97,27 @@ let createFloatData (floatPool: MIR.FloatPool) : byte array =
     if floatPool.Floats.IsEmpty then
         [||]
     else
-        // Sort by index to ensure consistent ordering
-        let sortedFloats =
-            floatPool.Floats
-            |> Map.toList
-            |> List.sortBy fst
-
-        // Build float bytes (each float is 8 bytes)
-        let mutable allBytes : byte list = []
-
-        for (_idx, floatVal) in sortedFloats do
-            let floatBytes = System.BitConverter.GetBytes(floatVal)
-            allBytes <- allBytes @ (Array.toList floatBytes)
-
-        Array.ofList allBytes
+        // Sort by index and collect all float bytes
+        floatPool.Floats
+        |> Map.toList
+        |> List.sortBy fst
+        |> List.collect (fun (_idx, floatVal) ->
+            System.BitConverter.GetBytes(floatVal) |> Array.toList)
+        |> Array.ofList
 
 /// Create string data bytes from string pool (same logic as Mach-O)
 let createStringData (stringPool: MIR.StringPool) : byte array =
     if stringPool.Strings.IsEmpty then
         [||]
     else
-        // Sort by index to ensure consistent ordering
-        let sortedStrings =
-            stringPool.Strings
-            |> Map.toList
-            |> List.sortBy fst
-
-        // Build string bytes
-        let mutable allBytes : byte list = []
-
-        for (_idx, (str, _len)) in sortedStrings do
-            let strBytes = System.Text.Encoding.UTF8.GetBytes(str)
-            allBytes <- allBytes @ (Array.toList strBytes) @ [0uy]  // null-terminated
-
-        Array.ofList allBytes
+        // Sort by index and collect all string bytes (null-terminated)
+        stringPool.Strings
+        |> Map.toList
+        |> List.sortBy fst
+        |> List.collect (fun (_idx, (str, _len)) ->
+            let strBytes = System.Text.Encoding.UTF8.GetBytes(str) |> Array.toList
+            strBytes @ [0uy])  // null-terminated
+        |> Array.ofList
 
 /// Create an ELF executable with float and string data
 let createExecutableWithPools (machineCode: uint32 list) (stringPool: MIR.StringPool) (floatPool: MIR.FloatPool) : byte array =
