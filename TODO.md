@@ -40,7 +40,7 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 - ✅ Lists (linked list implementation with [1, 2, 3] syntax and pattern matching)
 - ✅ Type checking (51 DSL tests + 8 unit tests)
 - ✅ 8-pass compiler pipeline (Parser → TypeCheck → ANF → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
-- ✅ 641 passing tests
+- ✅ 646 passing tests
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
 
 ## Known Limitations & Partial Implementations
