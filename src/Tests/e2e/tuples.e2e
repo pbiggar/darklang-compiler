@@ -39,3 +39,44 @@ let a = (1, 2) in let b = (3, 4) in a.0 + b.1 = stdout="5\n"
 
 // Large tuple (4 elements)
 let t = (1, 2, 3, 4) in t.0 + t.1 + t.2 + t.3 = stdout="10\n"
+
+
+// ===================================================================
+// Let-Pattern Matching with Tuples
+// ===================================================================
+
+// Basic tuple destructuring - 2 elements
+let (a, b) = (1, 2) in a = stdout="1\n"
+let (a, b) = (1, 2) in b = stdout="2\n"
+let (a, b) = (10, 20) in a + b = stdout="30\n"
+
+// 3-element tuple destructuring
+let (a, b, c) = (1, 2, 3) in a = stdout="1\n"
+let (a, b, c) = (1, 2, 3) in b = stdout="2\n"
+let (a, b, c) = (1, 2, 3) in c = stdout="3\n"
+let (a, b, c) = (10, 20, 30) in a + b + c = stdout="60\n"
+
+// 4-element tuple destructuring
+let (a, b, c, d) = (1, 2, 3, 4) in a + b + c + d = stdout="10\n"
+
+// Tuple destructuring with expressions
+let (x, y) = (3 + 4, 5 * 2) in x = stdout="7\n"
+let (x, y) = (3 + 4, 5 * 2) in y = stdout="10\n"
+let (x, y) = (3 + 4, 5 * 2) in x + y = stdout="17\n"
+
+// Nested let with tuple destructuring
+let (a, b) = (1, 2) in let (c, d) = (3, 4) in a + b + c + d = stdout="10\n"
+
+// Tuple from variable
+let t = (5, 10) in let (a, b) = t in a * b = stdout="50\n"
+
+// Wildcard in tuple pattern
+let (a, _) = (42, 99) in a = stdout="42\n"
+let (_, b) = (99, 42) in b = stdout="42\n"
+let (a, _, c) = (1, 2, 3) in a + c = stdout="4\n"
+
+// Tuple destructuring with negative numbers
+let (a, b) = (-5, 10) in a + b = stdout="5\n"
+
+// Complex expression using destructured values
+let (x, y) = (6, 4) in x * y - x + y = stdout="22\n"

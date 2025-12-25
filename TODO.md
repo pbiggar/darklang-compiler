@@ -5,7 +5,6 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 
 ## Things to add
 
-- let-matching with tuples
 - require type name for record creation
 - polymorphism in types, functions
 - reference counting
@@ -34,13 +33,14 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 - ✅ Integers with full arithmetic (+, -, \*, /)
 - ✅ Booleans with comparisons (==, !=, <, >, <=, >=) and operations (&&, ||, !)
 - ✅ Variables (let bindings with shadowing support)
+- ✅ Let-pattern matching with tuples (e.g., `let (a, b) = tuple in ...`)
 - ✅ Control flow (if/then/else expressions, including in atom position)
 - ✅ Functions with type signatures, calls, and recursion
 - ✅ String literals with escape sequences
 - ✅ Lists (linked list implementation with [1, 2, 3] syntax and pattern matching)
 - ✅ Type checking (51 DSL tests + 8 unit tests)
 - ✅ 8-pass compiler pipeline (Parser → TypeCheck → ANF → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
-- ✅ 646 passing tests
+- ✅ 664 passing tests
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
 
 ## Known Limitations & Partial Implementations

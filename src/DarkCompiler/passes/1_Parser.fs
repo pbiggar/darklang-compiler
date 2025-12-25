@@ -523,16 +523,25 @@ let parse (tokens: Token list) : Result<Program, string> =
 
     and parseExpr (toks: Token list) : Result<Expr * Token list, string> =
         match toks with
-        | TLet :: TIdent name :: TEquals :: rest ->
-            // Parse: let name = value in body
-            parseExpr rest
-            |> Result.bind (fun (value, remaining) ->
+        | TLet :: rest ->
+            // Parse: let pattern = value in body
+            // Supports simple let (let x = ...) and pattern matching (let (a, b) = ...)
+            parsePattern rest
+            |> Result.bind (fun (pattern, remaining) ->
                 match remaining with
-                | TIn :: rest' ->
+                | TEquals :: rest' ->
                     parseExpr rest'
-                    |> Result.map (fun (body, remaining') ->
-                        (Let (name, value, body), remaining'))
-                | _ -> Error "Expected 'in' after let binding value")
+                    |> Result.bind (fun (value, remaining') ->
+                        match remaining' with
+                        | TIn :: rest'' ->
+                            parseExpr rest''
+                            |> Result.map (fun (body, remaining'') ->
+                                // If pattern is just PVar, use Let; otherwise desugar to Match
+                                match pattern with
+                                | PVar name -> (Let (name, value, body), remaining'')
+                                | _ -> (Match (value, [(pattern, body)]), remaining''))
+                        | _ -> Error "Expected 'in' after let binding value")
+                | _ -> Error "Expected '=' after let binding pattern")
         | TIf :: rest ->
             // Parse: if cond then thenBranch else elseBranch
             parseExpr rest

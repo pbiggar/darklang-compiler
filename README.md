@@ -223,6 +223,7 @@ dotnet clean                    # Clean build artifacts
 **Control Flow:**
 
 - Let bindings: `let x = 5 in x + 1`
+- Let-pattern matching: `let (a, b) = tuple in a + b`
 - If expressions: `if x > 0 then x else -x`
 - Pattern matching:
   ```
@@ -313,7 +314,7 @@ Source → Parser → TypeCheck → ANF → MIR → LIR → RegAlloc → CodeGen
 
 ### Test-Driven Development
 
-- 646+ tests covering all language features
+- 664+ tests covering all language features
 - DSL-based E2E tests for quick iteration
 - Unit tests for each compiler phase
 - Tests document expected behavior
