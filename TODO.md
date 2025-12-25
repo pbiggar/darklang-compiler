@@ -53,12 +53,12 @@ These are features that exist but have known limitations or incomplete implement
 
 **Current Behavior:**
 
-- Booleans print as `1` (true) and `0` (false)
+- Boolean literals (`true`, `false`) print as "true" and "false"
+- Computed booleans (e.g., `5 > 3`) still print as `1` and `0`
 
-**Missing:**
+**Why Partial:**
 
-- `generatePrintBool()` function in Runtime.fs
-- Should print "true"/"false" strings instead
+- Type information is lost during compilation for computed values
+- Full fix would require propagating type info through MIR/LIR
 
-**Impact**: Low - values are correct, just not pretty
-**Required For**: Phase 5 (will need string printing anyway)
+**Impact**: Low - literal booleans work correctly, computed ones show numeric representation

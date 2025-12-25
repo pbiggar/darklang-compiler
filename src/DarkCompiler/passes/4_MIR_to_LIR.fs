@@ -250,6 +250,16 @@ let selectTerminator (terminator: MIR.Terminator) (isEntryFunc: bool) (stringPoo
             // Non-entry function: load float into D0 for return
             let loadFloat = LIR.FLoad (LIR.FPhysical LIR.D0, idx)
             Ok ([loadFloat], LIR.Ret)
+        | MIR.BoolConst b when isEntryFunc ->
+            // Print boolean as "true" or "false"
+            let lirOp = LIR.Imm (if b then 1L else 0L)
+            let moveToX0 = [LIR.Mov (LIR.Physical LIR.X0, lirOp)]
+            Ok (moveToX0 @ [LIR.PrintBool (LIR.Physical LIR.X0)], LIR.Ret)
+        | MIR.BoolConst b ->
+            // Non-entry function: just return bool as 0/1
+            let lirOp = LIR.Imm (if b then 1L else 0L)
+            let moveToX0 = [LIR.Mov (LIR.Physical LIR.X0, lirOp)]
+            Ok (moveToX0, LIR.Ret)
         | _ ->
             // Move operand to X0 (return register)
             let lirOp = convertOperand operand

@@ -10,10 +10,9 @@
 // ===================================================================
 // Boolean Literals
 // ===================================================================
-// Note: Currently booleans print as 1 (true) and 0 (false)
-// Future: Runtime will be enhanced to print "true" and "false"
-true = 1
-false = 0
+// Boolean literals print as "true" and "false"
+true = stdout="true\n"
+false = stdout="false\n"
 
 
 // ===================================================================

@@ -336,13 +336,13 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             |> Result.map (fun srcReg -> [ARM64.MVN (destReg, srcReg)]))
 
     | LIR.PrintBool reg ->
-        // For now, print booleans as 0 or 1 (same as PrintInt)
+        // Print booleans as "true" or "false"
         lirRegToARM64Reg reg
         |> Result.map (fun regARM64 ->
             if regARM64 <> ARM64.X0 then
-                [ARM64.MOV_reg (ARM64.X0, regARM64)] @ Runtime.generatePrintInt ()
+                [ARM64.MOV_reg (ARM64.X0, regARM64)] @ Runtime.generatePrintBool ()
             else
-                Runtime.generatePrintInt ())
+                Runtime.generatePrintBool ())
 
     | LIR.Call (dest, funcName, args) ->
         // Function call: arguments already moved to X0-X7 by preceding MOVs
