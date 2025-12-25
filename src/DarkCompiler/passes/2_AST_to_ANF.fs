@@ -214,25 +214,18 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
     | AST.RecordAccess (recordExpr, fieldName) ->
         // Records are compiled like tuples - field access becomes TupleGet
         // Need to determine field index from type
-        // First, we need to get the record type to find field index
-        // For now, we use a simple approach: get the record type from typeReg
-
-        // Convert record expression to get its type
-        // This is tricky since we don't have type info here
-        // As a workaround, we'll need the record expression's type
-        // For now, assume we can infer it from the first RecordLiteral in scope
-
-        // Get field index by looking up in all record types
-        let findFieldIndex () =
+        // Find all record types that have this field (to detect ambiguity)
+        let findFieldMatches () =
             typeReg
             |> Map.toList
-            |> List.tryPick (fun (_, fields) ->
+            |> List.choose (fun (typeName, fields) ->
                 fields
                 |> List.tryFindIndex (fun (name, _) -> name = fieldName)
-                |> Option.map (fun idx -> idx))
+                |> Option.map (fun idx -> (typeName, idx)))
 
-        match findFieldIndex () with
-        | Some index ->
+        match findFieldMatches () with
+        | [(_, index)] ->
+            // Exactly one match - use it
             toAtom recordExpr varGen env typeReg variantLookup
             |> Result.map (fun (recordAtom, recordBindings, varGen1) ->
                 let (resultVar, varGen2) = ANF.freshVar varGen1
@@ -240,8 +233,12 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                 let finalExpr = ANF.Let (resultVar, getExpr, ANF.Return (ANF.Var resultVar))
                 let exprWithBindings = wrapBindings recordBindings finalExpr
                 (exprWithBindings, varGen2))
-        | None ->
+        | [] ->
             Error $"Unknown field: {fieldName}"
+        | matches ->
+            // Multiple matches - ambiguous
+            let typeNames = matches |> List.map fst |> String.concat ", "
+            Error $"Ambiguous field '{fieldName}' found in multiple record types: {typeNames}"
 
     | AST.Constructor (_, variantName, payload) ->
         match Map.tryFind variantName variantLookup with
@@ -713,24 +710,30 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
 
     | AST.RecordAccess (recordExpr, fieldName) ->
         // Records are compiled like tuples - field access becomes TupleGet
-        let findFieldIndex () =
+        // Find all record types that have this field (to detect ambiguity)
+        let findFieldMatches () =
             typeReg
             |> Map.toList
-            |> List.tryPick (fun (_, fields) ->
+            |> List.choose (fun (typeName, fields) ->
                 fields
                 |> List.tryFindIndex (fun (name, _) -> name = fieldName)
-                |> Option.map (fun idx -> idx))
+                |> Option.map (fun idx -> (typeName, idx)))
 
-        match findFieldIndex () with
-        | Some index ->
+        match findFieldMatches () with
+        | [(_, index)] ->
+            // Exactly one match - use it
             toAtom recordExpr varGen env typeReg variantLookup
             |> Result.bind (fun (recordAtom, recordBindings, varGen1) ->
                 let (tempVar, varGen2) = ANF.freshVar varGen1
                 let getCExpr = ANF.TupleGet (recordAtom, index)
                 let allBindings = recordBindings @ [(tempVar, getCExpr)]
                 Ok (ANF.Var tempVar, allBindings, varGen2))
-        | None ->
+        | [] ->
             Error $"Unknown field: {fieldName}"
+        | matches ->
+            // Multiple matches - ambiguous
+            let typeNames = matches |> List.map fst |> String.concat ", "
+            Error $"Ambiguous field '{fieldName}' found in multiple record types: {typeNames}"
 
     | AST.Constructor (_, variantName, payload) ->
         match Map.tryFind variantName variantLookup with
