@@ -1,6 +1,6 @@
 # Darklang Compiler
 
-A compiler for Darklang written in pure functional F# that targets ARM64 macOS.
+A compiler for Darklang written in pure functional F# that targets ARM64 (macOS and Linux).
 
 ## Quick Start
 
@@ -190,27 +190,112 @@ dotnet clean                    # Clean build artifacts
 - ✅ Volume mount for source code (edit on host or in container)
 - ✅ Claude Code config/history persisted via volume mount
 - ✅ Full filesystem isolation and sandboxing
-- ❌ Cannot run E2E tests yet (generates macOS binaries, can't execute in Linux container)
-
-### Phase 2: Linux Binary Generation
-
-After authenticating Claude Code in the container, Phase 2 will add Linux ELF binary generation alongside macOS Mach-O support, enabling tests to run inside the container without codesigning overhead.
+- ✅ Run all tests in container (generates Linux ELF binaries)
 
 ## Current Features
 
-**Language:**
+**Types:**
 
-- Integer literals (64-bit signed)
-- Arithmetic operators: `+`, `-`, `*`, `/`
-- Operator precedence (multiplication/division before addition/subtraction)
-- Left-associative operators
+- `int` - 64-bit signed integers
+- `bool` - Boolean values (true/false)
+- `float` - 64-bit floating-point numbers
+- `string` - String literals with escape sequences
+- Tuples - `(int, bool)`, `(int, int, int)`, etc.
+- Records - `type Point = { x: int, y: int }`
+- Algebraic Data Types - `type Option = None | Some of int`
+- Lists - `[1, 2, 3]` (linked list implementation)
+
+**Expressions:**
+
+- Integer literals: `42`, `-17`, `0`
+- Float literals: `3.14`, `-0.5`
+- Boolean literals: `true`, `false`
+- String literals: `"hello"`, `"with\nescape"`
+- Arithmetic: `+`, `-`, `*`, `/`
+- Comparisons: `==`, `!=`, `<`, `>`, `<=`, `>=`
+- Logical operators: `&&`, `||`, `!`
 - Parentheses for grouping
+- Tuple construction: `(1, 2)`, `(a, b, c)`
+- Record construction: `{ x = 3, y = 4 }`
+- List literals: `[1, 2, 3]`, `[]`
+- ADT constructors: `Some(42)`, `None`
+
+**Control Flow:**
+
+- Let bindings: `let x = 5 in x + 1`
+- If expressions: `if x > 0 then x else -x`
+- Pattern matching:
+  ```
+  match expr with
+  | pattern1 -> result1
+  | pattern2 -> result2
+  ```
+
+**Patterns:**
+
+- Literal patterns: `42`, `true`, `"hello"`
+- Variable patterns: `x`, `_` (wildcard)
+- Tuple patterns: `(a, b)`, `(x, _, z)`
+- Record patterns: `{ x = a, y = b }`
+- ADT patterns: `Some(n)`, `None`
+- List patterns: `[a, b]`, `[]`, `[_, x, _]`
+
+**Functions:**
+
+- Function definitions with type signatures:
+  ```
+  fn add(x: int, y: int): int = x + y
+  ```
+- Recursion support
+- Up to 8 parameters (ARM64 calling convention)
+
+**Examples:**
+
+```
+// Factorial
+fn factorial(n: int): int =
+  if n <= 1 then 1
+  else n * factorial(n - 1)
+factorial(5)
+
+// Pattern matching on ADT
+type Option = None | Some of int
+match Some(42) with
+| Some(x) -> x * 2
+| None -> 0
+
+// List processing
+match [1, 2, 3] with
+| [a, b, c] -> a + b + c
+| _ -> 0
+```
+
+## Compiler Architecture
+
+The compiler uses an 8-pass pipeline:
+
+```
+Source → Parser → TypeCheck → ANF → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary
+```
+
+| Pass | Input | Output | Purpose |
+|------|-------|--------|---------|
+| 1. Parser | Source text | AST | Parse syntax into abstract syntax tree |
+| 1.5. TypeCheck | AST | Typed AST | Verify types and infer where needed |
+| 2. AST→ANF | AST | ANF | A-Normal Form - flatten expressions |
+| 3. ANF→MIR | ANF | MIR | Mid-level IR with virtual registers and CFG |
+| 4. MIR→LIR | MIR | LIR | Low-level IR close to machine instructions |
+| 5. RegAlloc | LIR | LIR | Allocate physical registers, handle spilling |
+| 6. CodeGen | LIR | ARM64 | Generate ARM64 assembly instructions |
+| 7. ARM64Enc | ARM64 | bytes | Encode instructions to machine code |
+| 8. BinaryGen | bytes | executable | Generate Mach-O (macOS) or ELF (Linux) |
 
 ## Key Design Principles
 
 ### Pure Functional F#
 
 - No mutable state or imperative features
+- Result types for error handling (no exceptions)
 - Makes future self-hosting in Darklang easier
 
 ### Multi-Stage IR Pipeline
@@ -221,15 +306,17 @@ After authenticating Claude Code in the container, Phase 2 will add Linux ELF bi
 
 ### Direct Binary Generation
 
-- Generates Mach-O executables directly
+- Generates Mach-O (macOS) or ELF (Linux) executables directly
 - No external assembler/linker required
 - Complete control over output
+- Cross-platform: same compiler works on macOS and Linux
 
 ### Test-Driven Development
 
-- Unit tests for each phase
-- End-to-end integration tests
-- Tests document behavior
+- 646+ tests covering all language features
+- DSL-based E2E tests for quick iteration
+- Unit tests for each compiler phase
+- Tests document expected behavior
 
 ## Common Issues
 
