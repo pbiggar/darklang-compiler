@@ -141,15 +141,27 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         [sf ||| op ||| rm ||| flagBit ||| ra ||| rn ||| rd]
 
     | ARM64.MOV_reg (dest, src) ->
-        // MOV is ORR with XZR: sf=1 01 01010 00 0 Rm(5) 000000 Rn=11111 Rd(5)
-        // Bit 31: sf=1, Bit 30: 0, Bit 29: 1 (ORR not AND), Bits 28-21: 01010000
-        let sf = 1u <<< 31
-        let opc = 1u <<< 29  // Critical: bit 29 distinguishes ORR (1) from AND (0)
-        let op = 0b01010000u <<< 21
-        let rm = (encodeReg src) <<< 16
-        let rn = 31u <<< 5  // XZR
-        let rd = encodeReg dest
-        [sf ||| opc ||| op ||| rm ||| rn ||| rd]
+        // Special case: MOV Xd, SP cannot use ORR (register 31 = XZR in ORR context)
+        // Use ADD Xd, SP, #0 instead
+        if src = ARM64.SP then
+            // ADD immediate: sf=1 0 0 10001 shift(2) imm12(12) Rn(5) Rd(5)
+            let sf = 1u <<< 31
+            let op = 0b10001u <<< 24
+            let shift = 0u <<< 22  // No shift
+            let imm12 = 0u <<< 10  // Zero immediate
+            let rn = 31u <<< 5     // SP
+            let rd = encodeReg dest
+            [sf ||| op ||| shift ||| imm12 ||| rn ||| rd]
+        else
+            // MOV is ORR with XZR: sf=1 01 01010 00 0 Rm(5) 000000 Rn=11111 Rd(5)
+            // Bit 31: sf=1, Bit 30: 0, Bit 29: 1 (ORR not AND), Bits 28-21: 01010000
+            let sf = 1u <<< 31
+            let opc = 1u <<< 29  // Critical: bit 29 distinguishes ORR (1) from AND (0)
+            let op = 0b01010000u <<< 21
+            let rm = (encodeReg src) <<< 16
+            let rn = 31u <<< 5  // XZR
+            let rd = encodeReg dest
+            [sf ||| opc ||| op ||| rm ||| rn ||| rd]
 
     | ARM64.STRB (src, addr, offset) ->
         // STRB immediate unsigned offset: 00 111 001 00 imm12 Rn Rt
@@ -322,11 +334,12 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
     // Stack operations
     | ARM64.STP (reg1, reg2, addr, offset) ->
         // STP (Store Pair) - signed offset addressing
-        // Encoding: opc=10 101 0 010 imm7 Rt2 Rn Rt
+        // Encoding: opc(2) 101 V(1) mode(2) L(1) imm7(7) Rt2(5) Rn(5) Rt(5)
         // For 64-bit registers: opc=10 (bits 31-30)
-        // imm7 is signed offset in units of 8 bytes (bits 21-15)
+        // V=0 (integer), mode=10 (signed offset), L=0 (store)
+        // Bits 29-22 = 1010 010 0 = 0b10100100
         let opc = 2u <<< 30  // 64-bit
-        let fixedBits = 0b1010010u <<< 23  // STP signed offset mode
+        let fixedBits = 0b10100100u <<< 22  // STP: 101 0 010 0 (mode=signed offset, L=0)
         // Convert byte offset to 8-byte units and extract 7 bits
         let imm7 = ((uint32 (int offset / 8)) &&& 0x7Fu) <<< 15
         let rt2 = (encodeReg reg2) <<< 10
@@ -336,10 +349,11 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
 
     | ARM64.LDP (reg1, reg2, addr, offset) ->
         // LDP (Load Pair) - signed offset addressing
-        // Encoding: opc=10 101 0 011 imm7 Rt2 Rn Rt
-        // Same as STP but bit 22 = 1 for load
+        // Encoding: opc(2) 101 V(1) mode(2) L(1) imm7(7) Rt2(5) Rn(5) Rt(5)
+        // V=0 (integer), mode=10 (signed offset), L=1 (load)
+        // Bits 29-22 = 1010 010 1 = 0b10100101
         let opc = 2u <<< 30  // 64-bit
-        let fixedBits = 0b1010011u <<< 23  // LDP signed offset mode (bit 22=1)
+        let fixedBits = 0b10100101u <<< 22  // LDP: 101 0 010 1 (mode=signed offset, L=1)
         let imm7 = ((uint32 (int offset / 8)) &&& 0x7Fu) <<< 15
         let rt2 = (encodeReg reg2) <<< 10
         let rn = (encodeReg addr) <<< 5

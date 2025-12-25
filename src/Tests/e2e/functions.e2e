@@ -60,3 +60,72 @@ def main() : int =
     0
 ---
 42
+
+// =====================================================
+// Function Calls (Phase 4 Milestone 4)
+// =====================================================
+
+// Test 11: Simple function call - double
+def double(x: int) : int = x + x
+def main() : int = double(21)
+---
+42
+
+// Test 12: Function with two parameters
+def add(a: int, b: int) : int = a + b
+def main() : int = add(20, 22)
+---
+42
+
+// Test 13: Function with three parameters
+def sum3(a: int, b: int, c: int) : int = a + b + c
+def main() : int = sum3(10, 12, 20)
+---
+42
+
+// Test 14: Function with let binding in body
+def compute(x: int, y: int) : int =
+  let sum = x + y in
+  sum * 2
+def main() : int = compute(10, 11)
+---
+42
+
+// Test 15: Function with if expression
+def max(a: int, b: int) : int = if a > b then a else b
+def main() : int = max(42, 10)
+---
+42
+
+// Test 16: Multiple function calls in expression
+def inc(x: int) : int = x + 1
+def main() : int = inc(inc(40))
+---
+42
+
+// Test 17: Function with complex body
+def calculate(x: int, y: int, z: int) : int =
+  let sum = x + y in
+  let product = sum * z in
+  product - 1
+def main() : int = calculate(2, 3, 9)
+---
+44
+
+// Test 18: Function returning comparison result as int
+def isPositive(x: int) : int = if x > 0 then 1 else 0
+def main() : int = isPositive(42)
+---
+1
+
+// Test 19: Calling function multiple times
+def triple(x: int) : int = x * 3
+def main() : int = triple(7) + triple(7)
+---
+42
+
+// Test 20: Four parameter function
+def sum4(a: int, b: int, c: int, d: int) : int = a + b + c + d
+def main() : int = sum4(10, 11, 12, 9)
+---
+42
