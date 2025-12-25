@@ -62,3 +62,34 @@ These are features that exist but have known limitations or incomplete implement
 - Full fix would require propagating type info through MIR/LIR
 
 **Impact**: Low - literal booleans work correctly, computed ones show numeric representation
+
+### 2. Reference Counting (Memory Management)
+
+**Status**: ⏸️ Deferred
+
+**Current Behavior:**
+
+- Simple bump allocator for heap allocations
+- No deallocation (memory is never freed)
+
+**Investigation Summary:**
+
+Attempted to add reference count headers to heap allocations with the layout:
+`[ref_count: 8 bytes][payload: sizeBytes]`
+
+The approach was to return a pointer offset by 8 bytes (to the payload) while reserving
+space for the ref count. However, adding the 8-byte offset to the returned pointer
+causes segfaults in list pattern matching tests, specifically with 5+ element lists
+or lists bound to variables before matching.
+
+The issue appears related to how pointer arithmetic interacts with the register
+allocation spilling mechanism and/or list pattern matching code. Tests pass with
+offsets 0 or 1, but fail with offsets >= 2. The exact cause remains unclear.
+
+**Next Steps:**
+
+1. Investigate how list pattern matching accesses memory
+2. Consider alternative layouts (ref count after payload)
+3. May need to modify ANF/MIR compilation to explicitly track heap pointers
+
+**Impact**: Currently memory is never freed, but the bump allocator has 64KB of space which is sufficient for most test programs
