@@ -292,11 +292,14 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                 Runtime.generatePrintInt ())
 
     | LIR.Call (dest, funcName, args) ->
-        // Function call: arguments already moved to X0-X7 by LIR pass
-        // IMPORTANT: Save caller-saved registers (X1-X10) before call
-        // These may hold live values that we need after the call
+        // Function call: arguments already moved to X0-X7 by preceding MOVs
+        // Caller-save is handled by SaveRegs/RestoreRegs instructions
+        Ok [ARM64.BL funcName]
+
+    | LIR.SaveRegs ->
+        // Save caller-saved registers (X1-X10) before call
         // Allocate 80 bytes (10 regs * 8 bytes), store pairs
-        let saveRegs = [
+        Ok [
             ARM64.SUB_imm (ARM64.SP, ARM64.SP, 80us)
             ARM64.STP (ARM64.X1, ARM64.X2, ARM64.SP, 0s)
             ARM64.STP (ARM64.X3, ARM64.X4, ARM64.SP, 16s)
@@ -304,8 +307,10 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             ARM64.STP (ARM64.X7, ARM64.X8, ARM64.SP, 48s)
             ARM64.STP (ARM64.X9, ARM64.X10, ARM64.SP, 64s)
         ]
-        let callInstr = ARM64.BL funcName
-        let restoreRegs = [
+
+    | LIR.RestoreRegs ->
+        // Restore caller-saved registers (X1-X10) after call
+        Ok [
             ARM64.LDP (ARM64.X1, ARM64.X2, ARM64.SP, 0s)
             ARM64.LDP (ARM64.X3, ARM64.X4, ARM64.SP, 16s)
             ARM64.LDP (ARM64.X5, ARM64.X6, ARM64.SP, 32s)
@@ -313,7 +318,6 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             ARM64.LDP (ARM64.X9, ARM64.X10, ARM64.SP, 64s)
             ARM64.ADD_imm (ARM64.SP, ARM64.SP, 80us)
         ]
-        Ok (saveRegs @ [callInstr] @ restoreRegs)
 
     | LIR.PrintInt reg ->
         // Value to print should be in X0
@@ -325,12 +329,19 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             else
                 Runtime.generatePrintInt ())
 
+/// Epilogue label for current function (set during function conversion)
+let mutable private currentEpilogueLabel = ""
+
+/// Set the epilogue label for the current function being converted
+let setEpilogueLabel (funcName: string) =
+    currentEpilogueLabel <- sprintf "_epilogue_%s" funcName
+
 /// Convert LIR terminator to ARM64 instructions
 let convertTerminator (terminator: LIR.Terminator) : Result<ARM64.Instr list, string> =
     match terminator with
     | LIR.Ret ->
-        // Don't generate RET here - the function epilogue handles return
-        Ok []
+        // Jump to function epilogue (handles stack cleanup and RET)
+        Ok [ARM64.B_label currentEpilogueLabel]
 
     | LIR.Branch (condReg, trueLabel, falseLabel) ->
         // Branch if register is non-zero (true), otherwise fall through to else
@@ -399,6 +410,9 @@ let convertCFG (cfg: LIR.CFG) : Result<ARM64.Instr list, string> =
 
 /// Convert LIR function to ARM64 instructions with prologue and epilogue
 let convertFunction (func: LIR.Function) : Result<ARM64.Instr list, string> =
+    // Set the epilogue label for this function so Ret terminators can jump to it
+    setEpilogueLabel func.Name
+
     // Convert CFG to ARM64 instructions
     match convertCFG func.CFG with
     | Error err -> Error err
@@ -434,15 +448,15 @@ let convertFunction (func: LIR.Function) : Result<ARM64.Instr list, string> =
         let paramSetup = saveToTemps @ moveFromTemps
 
         // Generate epilogue (deallocate stack, restore FP/LR, return)
+        let epilogueLabel = [ARM64.Label (sprintf "_epilogue_%s" func.Name)]
         let epilogue = generateEpilogue func.UsedCalleeSaved func.StackSize
 
         // Add function entry label (for BL to branch to)
         let functionEntryLabel = [ARM64.Label func.Name]
 
-        // Combine: function label + prologue + param setup + CFG body + epilogue
-        // Note: The RET in epilogue replaces any RET in the CFG body
-        // TODO: Handle multiple return points properly when we have complex control flow
-        Ok (functionEntryLabel @ prologue @ paramSetup @ cfgInstrs @ epilogue)
+        // Combine: function label + prologue + param setup + CFG body + epilogue label + epilogue
+        // All Ret terminators jump to the epilogue label
+        Ok (functionEntryLabel @ prologue @ paramSetup @ cfgInstrs @ epilogueLabel @ epilogue)
 
 /// Convert LIR program to ARM64 instructions
 let generateARM64 (program: LIR.Program) : Result<ARM64.Instr list, string> =

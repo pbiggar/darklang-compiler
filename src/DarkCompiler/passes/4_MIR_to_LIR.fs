@@ -136,6 +136,11 @@ let selectInstr (instr: MIR.Instr) : LIR.Instr list =
             let lirDest = vregToLIRReg dest
             let argRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
 
+            // IMPORTANT: Save caller-saved registers BEFORE setting up arguments
+            // Because argument setup may clobber registers that hold live values
+            // We use a special SaveRegs/RestoreRegs instruction pair that CodeGen expands
+            let saveInstrs = [LIR.SaveRegs]
+
             // Move each argument to its corresponding register
             // Take only as many registers as we have arguments
             let moveInstrs =
@@ -144,8 +149,11 @@ let selectInstr (instr: MIR.Instr) : LIR.Instr list =
                     let lirArg = convertOperand arg
                     LIR.Mov (LIR.Physical reg, lirArg))
 
-            // Call instruction
+            // Call instruction (no longer handles caller-save - it's done above)
             let callInstr = LIR.Call (lirDest, funcName, List.map convertOperand args)
+
+            // Restore caller-saved registers after the call
+            let restoreInstrs = [LIR.RestoreRegs]
 
             // Move return value from X0 to destination (if not already X0)
             let moveResult =
@@ -153,7 +161,7 @@ let selectInstr (instr: MIR.Instr) : LIR.Instr list =
                 | LIR.Physical LIR.X0 -> []
                 | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
 
-            moveInstrs @ [callInstr] @ moveResult
+            saveInstrs @ moveInstrs @ [callInstr] @ restoreInstrs @ moveResult
 
 /// Convert MIR terminator to LIR terminator
 /// For Branch, need to convert operand to register (may add instructions)

@@ -106,19 +106,22 @@ let alignTo16 (size: int) : int =
     ((size + 15) / 16) * 16
 
 /// Create allocation result for virtual registers
-let createAllocation (virtualRegs: Set<int>) : AllocationResult =
+/// paramVRegs: list of VReg IDs that are function parameters
+///             Parameters are assigned to caller-saved registers (X1-X10) because X0 is clobbered
+///             by function call return values. The code generator handles moving from X0-X7 at entry.
+let createAllocation (virtualRegs: Set<int>) (paramVRegs: int list) : AllocationResult =
     let sorted = Set.toList virtualRegs |> List.sort
     let numVRegs = List.length sorted
 
     if numVRegs = 0 then
-        // No virtual registers to allocate
         {
             Mapping = Map.empty
             StackSize = 0
             UsedCalleeSaved = []
         }
     else if numVRegs <= 10 then
-        // Use only caller-saved registers (X1-X10)
+        // Use caller-saved registers (X1-X10) for all virtual registers
+        // This keeps parameters safe from call clobbering (since X0 is return value)
         let mapping =
             List.zip sorted (List.take numVRegs callerSavedRegs)
             |> List.map (fun (vregId, physReg) -> (vregId, PhysReg physReg))
@@ -128,33 +131,26 @@ let createAllocation (virtualRegs: Set<int>) : AllocationResult =
             StackSize = 0
             UsedCalleeSaved = []
         }
-
     else
-        // NOTE: Callee-saved registers (X19-X28) not yet implemented in LIR.PhysReg
-        // For now, spill everything beyond X1-X10
-        // Spill excess vregs to stack
-        let regsToUse = callerSavedRegs  // TODO: Add callee-saved
-        let numToSpill = numVRegs - List.length regsToUse
-
-        // Assign first N vregs to physical registers
-        let (inRegs, toSpill) = List.splitAt (List.length regsToUse) sorted
+        // Need to spill some vregs to stack
+        let numToSpill = numVRegs - List.length callerSavedRegs
+        let (inRegs, toSpill) = List.splitAt (List.length callerSavedRegs) sorted
 
         let regMapping =
-            List.zip inRegs regsToUse
+            List.zip inRegs callerSavedRegs
             |> List.map (fun (vregId, physReg) -> (vregId, PhysReg physReg))
 
-        // Assign remaining vregs to stack slots (negative offsets from FP)
         let stackMapping =
             toSpill
             |> List.mapi (fun i vregId -> (vregId, StackSlot (-(i + 1) * 8)))
 
-        let allMapping = regMapping @ stackMapping |> Map.ofList
+        let allMapping = (regMapping @ stackMapping) |> Map.ofList
         let stackSize = alignTo16 (numToSpill * 8)
 
         {
             Mapping = allMapping
             StackSize = stackSize
-            UsedCalleeSaved = []  // TODO: Track callee-saved usage
+            UsedCalleeSaved = []
         }
 
 /// Apply allocation to a register
@@ -265,6 +261,10 @@ let applyAllocation (allocation: Map<int, Allocation>) (instr: LIR.Instr) : LIR.
             (LIR.Mvn (regOrTemp (applyToReg allocation dest), srcReg), srcLoads)
         | LIR.Call (dest, funcName, args) ->
             (LIR.Call (regOrTemp (applyToReg allocation dest), funcName, List.map (applyToOperand allocation) args), [])
+        | LIR.SaveRegs ->
+            (LIR.SaveRegs, [])
+        | LIR.RestoreRegs ->
+            (LIR.RestoreRegs, [])
         | LIR.PrintInt reg ->
             (LIR.PrintInt (regOrTemp (applyToReg allocation reg)), [])
         | LIR.PrintBool reg ->
@@ -325,8 +325,16 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
     // Collect virtual registers from all blocks
     let virtualRegs = collectVirtualRegs func.CFG
 
-    // Create allocation result
-    let allocationResult = createAllocation virtualRegs
+    // Get parameter VReg IDs (these should be pre-assigned to X0, X1, etc.)
+    let paramVRegIds =
+        func.Params
+        |> List.choose (fun reg ->
+            match reg with
+            | LIR.Virtual id -> Some id
+            | LIR.Physical _ -> None)  // Already physical, skip
+
+    // Create allocation result with param pre-assignment
+    let allocationResult = createAllocation virtualRegs paramVRegIds
 
     // Apply allocation to CFG
     let allocatedCFG = applyAllocToCFG allocationResult.Mapping func.CFG

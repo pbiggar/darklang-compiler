@@ -112,6 +112,10 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"PrintInt({prettyPrintLIRReg reg})"
     | LIR.PrintBool reg ->
         $"PrintBool({prettyPrintLIRReg reg})"
+    | LIR.SaveRegs ->
+        "SaveRegs"
+    | LIR.RestoreRegs ->
+        "RestoreRegs"
 
 /// Pretty-print LIR terminator
 let prettyPrintLIRTerminator (term: LIR.Terminator) : string =

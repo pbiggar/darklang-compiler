@@ -57,6 +57,8 @@ type Instr =
     | Orr of dest:Reg * left:Reg * right:Reg    // Bitwise OR (for boolean ||)
     | Mvn of dest:Reg * src:Reg                 // Bitwise NOT
     | Call of dest:Reg * funcName:string * args:Operand list  // Function call
+    | SaveRegs                                   // Save caller-saved registers (X1-X10) before call
+    | RestoreRegs                                // Restore caller-saved registers (X1-X10) after call
     | PrintInt of Reg                           // Print integer register to stdout
     | PrintBool of Reg                          // Print boolean register to stdout
 
