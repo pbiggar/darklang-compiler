@@ -30,9 +30,15 @@ The following are known simplifications or potential issues in the compiler code
 ### HIGH Priority (Can cause crashes or wrong results)
 
 #### 1. List pattern length validation gap
-**File:** `src/DarkCompiler/passes/2_AST_to_ANF.fs` (lines 523-529)
+**File:** `src/DarkCompiler/passes/2_AST_to_ANF.fs` (lines 519-526)
 **Issue:** Pattern `[a, b, c]` only checks if list is non-nil, not actual length
-**Risk:** Can crash when extracting elements from a shorter list
+**Risk:** Can crash (segfault) when extracting elements from a shorter list
+**Example:** `match [1] with | [a, b] -> a + b | _ -> 99` crashes instead of returning 99
+**Why Complex:** Fix requires restructuring pattern match architecture:
+- `buildPatternComparison` returns flat condition, but length check needs nested ifs
+- Each tail access must be guarded (can't access `TupleGet(nil, 2)`)
+- Need to interleave nil checks with element extraction
+**Workaround:** Ensure match expressions always have patterns that match list lengths
 
 ### MEDIUM Priority (Incomplete features)
 
