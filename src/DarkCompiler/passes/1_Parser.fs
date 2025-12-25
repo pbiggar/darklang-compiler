@@ -42,6 +42,7 @@ type Token =
     | TDot         // . (tuple/record access)
     | TLBrace      // { (record literal)
     | TRBrace      // } (record literal)
+    | TBar         // | (sum type variant separator)
     | TEquals      // = (assignment in let)
     | TEqEq        // == (equality comparison)
     | TNeq         // !=
@@ -85,7 +86,7 @@ let lex (input: string) : Result<Token list, string> =
         | '&' :: '&' :: rest -> lexHelper rest (TAnd :: acc)
         | '&' :: _ -> Error "Unexpected character: & (did you mean &&?)"
         | '|' :: '|' :: rest -> lexHelper rest (TOr :: acc)
-        | '|' :: _ -> Error "Unexpected character: | (did you mean ||?)"
+        | '|' :: rest -> lexHelper rest (TBar :: acc)
         | c :: _ when System.Char.IsLetter(c) || c = '_' ->
             // Parse identifier or keyword
             let rec parseIdent (cs: char list) (chars: char list) : string * char list =
@@ -229,9 +230,10 @@ let parseType (tokens: Token list) : Result<Type * Token list, string> =
     | TIdent "string" :: rest -> Ok (TString, rest)
     | TIdent "float" :: rest -> Ok (TFloat64, rest)
     | TIdent typeName :: rest when System.Char.IsUpper(typeName.[0]) ->
-        // Record type reference (capitalized identifier)
+        // User-defined type reference (record or sum type - capitalized identifier)
+        // Note: We don't distinguish here; type checking resolves which it is
         Ok (TRecord typeName, rest)
-    | _ -> Error "Expected type annotation (int, bool, string, float, or RecordType)"
+    | _ -> Error "Expected type annotation (int, bool, string, float, or TypeName)"
 
 /// Parse a single parameter: IDENT : type
 let parseParam (tokens: Token list) : Result<(string * Type) * Token list, string> =
@@ -279,16 +281,45 @@ let rec parseRecordFields (tokens: Token list) (acc: (string * Type) list) : Res
             | _ -> Error "Expected ',' or '}' after record field")
     | _ -> Error "Expected field name in record definition"
 
-/// Parse a type definition: type Name = { fields }
+/// Parse sum type variants: Variant1 | Variant2 | ...
+/// Returns list of variants and remaining tokens
+let rec parseVariants (tokens: Token list) (acc: Variant list) : Result<Variant list * Token list, string> =
+    match tokens with
+    | TIdent variantName :: rest when System.Char.IsUpper(variantName.[0]) ->
+        // Simple enum variant (no payload for M3)
+        let variant = { Name = variantName; Payload = None }
+        match rest with
+        | TBar :: rest' ->
+            // More variants
+            parseVariants rest' (variant :: acc)
+        | _ ->
+            // End of variants (next token is not a bar)
+            Ok (List.rev (variant :: acc), rest)
+    | _ -> Error "Expected variant name (must start with uppercase letter)"
+
+/// Parse a type definition: type Name = { fields } or type Name = Variant1 | Variant2
 let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
     match tokens with
     | TType :: TIdent name :: TEquals :: TLBrace :: rest when System.Char.IsUpper(name.[0]) ->
+        // Record type: type Name = { field: Type, ... }
         parseRecordFields rest []
         |> Result.map (fun (fields, remaining) ->
             (RecordDef (name, fields), remaining))
+    | TType :: TIdent name :: TEquals :: TIdent variantName :: rest when System.Char.IsUpper(name.[0]) && System.Char.IsUpper(variantName.[0]) ->
+        // Sum type: type Name = Variant1 | Variant2 | ...
+        let firstVariant = { Name = variantName; Payload = None }
+        match rest with
+        | TBar :: rest' ->
+            // More variants
+            parseVariants rest' [firstVariant]
+            |> Result.map (fun (variants, remaining) ->
+                (SumTypeDef (name, variants), remaining))
+        | _ ->
+            // Single variant sum type
+            Ok (SumTypeDef (name, [firstVariant]), rest)
     | TType :: TIdent name :: _ when not (System.Char.IsUpper(name.[0])) ->
         Error $"Type name must start with uppercase letter: {name}"
-    | _ -> Error "Expected type definition: type Name = { fields }"
+    | _ -> Error "Expected type definition: type Name = { fields } or type Name = Variant1 | Variant2"
 
 /// Parse a function definition: def name(params) : type = body
 let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr * Token list, string>) : Result<FunctionDef * Token list, string> =
@@ -468,13 +499,17 @@ let parse (tokens: Token list) : Result<Program, string> =
         | TStringLit s :: rest -> Ok (StringLiteral s, rest)
         | TTrue :: rest -> Ok (BoolLiteral true, rest)
         | TFalse :: rest -> Ok (BoolLiteral false, rest)
-        | TIdent name :: TLParen :: rest ->
-            // Function call: name(args)
+        | TIdent name :: TLParen :: rest when not (System.Char.IsUpper(name.[0])) ->
+            // Function call: name(args) - only for lowercase names
             parseCallArgs rest []
             |> Result.map (fun (args, remaining) ->
                 (Call (name, args), remaining))
+        | TIdent name :: rest when System.Char.IsUpper(name.[0]) ->
+            // Constructor (uppercase identifier) - type will be inferred during type checking
+            // For M3, constructors have no payload
+            Ok (Constructor ("", name, None), rest)
         | TIdent name :: rest ->
-            // Variable reference
+            // Variable reference (lowercase identifier)
             Ok (Var name, rest)
         | TLParen :: rest ->
             // Either parenthesized expression or tuple literal

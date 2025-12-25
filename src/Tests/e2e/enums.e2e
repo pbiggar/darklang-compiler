@@ -1,0 +1,34 @@
+// Enum (simple sum type) tests for Phase 7 Milestone 3
+
+// Basic enum type - first variant (tag 0)
+type Color = Red | Green | Blue Red = stdout="0\n"
+
+// Second variant (tag 1)
+type Color = Red | Green | Blue Green = stdout="1\n"
+
+// Third variant (tag 2)
+type Color = Red | Green | Blue Blue = stdout="2\n"
+
+// Enum with two variants
+type Bool2 = False2 | True2 False2 = stdout="0\n"
+
+type Bool2 = False2 | True2 True2 = stdout="1\n"
+
+// Single variant enum
+type Unit2 = Unit2 Unit2 = stdout="0\n"
+
+// Enum in let binding
+type Color = Red | Green | Blue let c = Red in c = stdout="0\n"
+
+type Color = Red | Green | Blue let c = Blue in c = stdout="2\n"
+
+// Multiple enums in nested let
+type Color = Red | Green | Blue let a = Red in let b = Green in let c = Blue in c = stdout="2\n"
+
+// Enum with four variants
+type Direction = North | East | South | West North = stdout="0\n"
+
+type Direction = North | East | South | West South = stdout="2\n"
+
+type Direction = North | East | South | West West = stdout="3\n"
+

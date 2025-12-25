@@ -21,6 +21,9 @@ open ANF
 /// Type registry - maps record type names to their field definitions
 type TypeRegistry = Map<string, (string * AST.Type) list>
 
+/// Variant lookup - maps variant names to (type name, tag index)
+type VariantLookup = Map<string, (string * int)>
+
 /// Convert AST.BinOp to ANF.BinOp
 let convertBinOp (op: AST.BinOp) : ANF.BinOp =
     match op with
@@ -46,7 +49,8 @@ let convertUnaryOp (op: AST.UnaryOp) : ANF.UnaryOp =
 /// Convert AST expression to ANF
 /// env maps user variable names to ANF TempIds
 /// typeReg maps record type names to field definitions
-let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) (typeReg: TypeRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
+/// variantLookup maps variant names to (type name, tag index)
+let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) : Result<ANF.AExpr * ANF.VarGen, string> =
     match expr with
     | AST.IntLiteral n ->
         // Integer literal becomes return
@@ -72,10 +76,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
 
     | AST.Let (name, value, body) ->
         // Let binding: convert value to atom, allocate fresh temp, convert body with extended env
-        toAtom value varGen env typeReg |> Result.bind (fun (valueAtom, valueBindings, varGen1) ->
+        toAtom value varGen env typeReg variantLookup |> Result.bind (fun (valueAtom, valueBindings, varGen1) ->
             let (tempId, varGen2) = ANF.freshVar varGen1
             let env' = Map.add name tempId env
-            toANF body varGen2 env' typeReg |> Result.map (fun (bodyExpr, varGen3) ->
+            toANF body varGen2 env' typeReg variantLookup |> Result.map (fun (bodyExpr, varGen3) ->
                 // Build: valueBindings + let tempId = valueAtom + body
                 let finalExpr = ANF.Let (tempId, ANF.Atom valueAtom, bodyExpr)
                 let exprWithBindings = wrapBindings valueBindings finalExpr
@@ -93,11 +97,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
             Ok (ANF.Return (ANF.FloatLiteral (-f)), varGen)
         | _ ->
             // Integer negation: convert to 0 - expr
-            toANF (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen env typeReg
+            toANF (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen env typeReg variantLookup
 
     | AST.UnaryOp (op, innerExpr) ->
         // Unary operation: convert operand to atom
-        toAtom innerExpr varGen env typeReg |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
+        toAtom innerExpr varGen env typeReg variantLookup |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
             // Create unary op and bind to fresh variable
             let (tempVar, varGen2) = ANF.freshVar varGen1
             let anfOp = convertUnaryOp op
@@ -111,8 +115,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
 
     | AST.BinOp (op, left, right) ->
         // Convert operands to atoms
-        toAtom left varGen env typeReg |> Result.bind (fun (leftAtom, leftBindings, varGen1) ->
-            toAtom right varGen1 env typeReg |> Result.map (fun (rightAtom, rightBindings, varGen2) ->
+        toAtom left varGen env typeReg variantLookup |> Result.bind (fun (leftAtom, leftBindings, varGen1) ->
+            toAtom right varGen1 env typeReg variantLookup |> Result.map (fun (rightAtom, rightBindings, varGen2) ->
                 // Create binop and bind to fresh variable
                 let (tempVar, varGen3) = ANF.freshVar varGen2
                 let anfOp = convertBinOp op
@@ -127,9 +131,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
 
     | AST.If (cond, thenBranch, elseBranch) ->
         // If expression: convert condition to atom, both branches to ANF
-        toAtom cond varGen env typeReg |> Result.bind (fun (condAtom, condBindings, varGen1) ->
-            toANF thenBranch varGen1 env typeReg |> Result.bind (fun (thenExpr, varGen2) ->
-                toANF elseBranch varGen2 env typeReg |> Result.map (fun (elseExpr, varGen3) ->
+        toAtom cond varGen env typeReg variantLookup |> Result.bind (fun (condAtom, condBindings, varGen1) ->
+            toANF thenBranch varGen1 env typeReg variantLookup |> Result.bind (fun (thenExpr, varGen2) ->
+                toANF elseBranch varGen2 env typeReg variantLookup |> Result.map (fun (elseExpr, varGen3) ->
                     // Build the expression: condBindings + if condAtom then thenExpr else elseExpr
                     let finalExpr = ANF.If (condAtom, thenExpr, elseExpr)
                     let exprWithBindings = wrapBindings condBindings finalExpr
@@ -142,7 +146,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
             match argExprs with
             | [] -> Ok (List.rev accAtoms, accBindings, vg)
             | arg :: rest ->
-                toAtom arg vg env typeReg
+                toAtom arg vg env typeReg variantLookup
                 |> Result.bind (fun (argAtom, argBindings, vg') ->
                     convertArgs rest vg' (argAtom :: accAtoms) (accBindings @ argBindings))
 
@@ -162,7 +166,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
             match elems with
             | [] -> Ok (List.rev accAtoms, accBindings, vg)
             | elem :: rest ->
-                toAtom elem vg env typeReg
+                toAtom elem vg env typeReg variantLookup
                 |> Result.bind (fun (elemAtom, elemBindings, vg') ->
                     convertElements rest vg' (elemAtom :: accAtoms) (accBindings @ elemBindings))
 
@@ -178,7 +182,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
 
     | AST.TupleAccess (tupleExpr, index) ->
         // Convert tuple to atom and create TupleGet
-        toAtom tupleExpr varGen env typeReg
+        toAtom tupleExpr varGen env typeReg variantLookup
         |> Result.map (fun (tupleAtom, tupleBindings, varGen1) ->
             let (resultVar, varGen2) = ANF.freshVar varGen1
             let getExpr = ANF.TupleGet (tupleAtom, index)
@@ -205,7 +209,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
             |> List.choose (fun fname -> Map.tryFind fname fieldMap)
 
         // Convert to TupleLiteral and reuse tuple handling
-        toANF (AST.TupleLiteral orderedValues) varGen env typeReg
+        toANF (AST.TupleLiteral orderedValues) varGen env typeReg variantLookup
 
     | AST.RecordAccess (recordExpr, fieldName) ->
         // Records are compiled like tuples - field access becomes TupleGet
@@ -229,7 +233,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
 
         match findFieldIndex () with
         | Some index ->
-            toAtom recordExpr varGen env typeReg
+            toAtom recordExpr varGen env typeReg variantLookup
             |> Result.map (fun (recordAtom, recordBindings, varGen1) ->
                 let (resultVar, varGen2) = ANF.freshVar varGen1
                 let getExpr = ANF.TupleGet (recordAtom, index)
@@ -239,8 +243,21 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
         | None ->
             Error $"Unknown field: {fieldName}"
 
+    | AST.Constructor (_, variantName, payload) ->
+        // For simple enums (M3), constructors compile to their tag as an integer
+        match payload with
+        | Some _ ->
+            Error $"Constructor {variantName} with payload not supported in M3"
+        | None ->
+            match Map.tryFind variantName variantLookup with
+            | Some (_, tag) ->
+                // Return the tag as an integer literal
+                Ok (ANF.Return (ANF.IntLiteral (int64 tag)), varGen)
+            | None ->
+                Error $"Unknown constructor: {variantName}"
+
 /// Convert an AST expression to an atom, introducing let bindings as needed
-and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) (typeReg: TypeRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     match expr with
     | AST.IntLiteral n ->
         Ok (ANF.IntLiteral n, [], varGen)
@@ -262,10 +279,10 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
 
     | AST.Let (name, value, body) ->
         // Let binding in atom position: need to evaluate and return the body as an atom
-        toAtom value varGen env typeReg |> Result.bind (fun (valueAtom, valueBindings, varGen1) ->
+        toAtom value varGen env typeReg variantLookup |> Result.bind (fun (valueAtom, valueBindings, varGen1) ->
             let (tempId, varGen2) = ANF.freshVar varGen1
             let env' = Map.add name tempId env
-            toAtom body varGen2 env' typeReg |> Result.map (fun (bodyAtom, bodyBindings, varGen3) ->
+            toAtom body varGen2 env' typeReg variantLookup |> Result.map (fun (bodyAtom, bodyBindings, varGen3) ->
                 // All bindings: valueBindings + binding tempId to value + bodyBindings
                 let allBindings = valueBindings @ [(tempId, ANF.Atom valueAtom)] @ bodyBindings
                 (bodyAtom, allBindings, varGen3)))
@@ -282,11 +299,11 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
             Ok (ANF.FloatLiteral (-f), [], varGen)
         | _ ->
             // Integer negation: convert to 0 - expr
-            toAtom (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen env typeReg
+            toAtom (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen env typeReg variantLookup
 
     | AST.UnaryOp (op, innerExpr) ->
         // Unary operation: convert operand to atom, create binding
-        toAtom innerExpr varGen env typeReg |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
+        toAtom innerExpr varGen env typeReg variantLookup |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
             // Create the operation
             let (tempVar, varGen2) = ANF.freshVar varGen1
             let anfOp = convertUnaryOp op
@@ -298,8 +315,8 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
 
     | AST.BinOp (op, left, right) ->
         // Complex expression: convert operands to atoms, create binding
-        toAtom left varGen env typeReg |> Result.bind (fun (leftAtom, leftBindings, varGen1) ->
-            toAtom right varGen1 env typeReg |> Result.map (fun (rightAtom, rightBindings, varGen2) ->
+        toAtom left varGen env typeReg variantLookup |> Result.bind (fun (leftAtom, leftBindings, varGen1) ->
+            toAtom right varGen1 env typeReg variantLookup |> Result.map (fun (rightAtom, rightBindings, varGen2) ->
                 // Create the operation
                 let (tempVar, varGen3) = ANF.freshVar varGen2
                 let anfOp = convertBinOp op
@@ -311,9 +328,9 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
 
     | AST.If (condExpr, thenExpr, elseExpr) ->
         // If expression in atom position: convert all parts to atoms, create IfValue
-        toAtom condExpr varGen env typeReg |> Result.bind (fun (condAtom, condBindings, varGen1) ->
-            toAtom thenExpr varGen1 env typeReg |> Result.bind (fun (thenAtom, thenBindings, varGen2) ->
-                toAtom elseExpr varGen2 env typeReg |> Result.bind (fun (elseAtom, elseBindings, varGen3) ->
+        toAtom condExpr varGen env typeReg variantLookup |> Result.bind (fun (condAtom, condBindings, varGen1) ->
+            toAtom thenExpr varGen1 env typeReg variantLookup |> Result.bind (fun (thenAtom, thenBindings, varGen2) ->
+                toAtom elseExpr varGen2 env typeReg variantLookup |> Result.bind (fun (elseAtom, elseBindings, varGen3) ->
                     // Create a temporary for the result
                     let (tempVar, varGen4) = ANF.freshVar varGen3
                     // Create an IfValue CExpr
@@ -328,7 +345,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
             match argExprs with
             | [] -> Ok (List.rev accAtoms, accBindings, vg)
             | arg :: rest ->
-                toAtom arg vg env typeReg
+                toAtom arg vg env typeReg variantLookup
                 |> Result.bind (fun (argAtom, argBindings, vg') ->
                     convertArgs rest vg' (argAtom :: accAtoms) (accBindings @ argBindings))
 
@@ -347,7 +364,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
             match elems with
             | [] -> Ok (List.rev accAtoms, accBindings, vg)
             | elem :: rest ->
-                toAtom elem vg env typeReg
+                toAtom elem vg env typeReg variantLookup
                 |> Result.bind (fun (elemAtom, elemBindings, vg') ->
                     convertElements rest vg' (elemAtom :: accAtoms) (accBindings @ elemBindings))
 
@@ -362,7 +379,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
 
     | AST.TupleAccess (tupleExpr, index) ->
         // Convert tuple to atom and create TupleGet
-        toAtom tupleExpr varGen env typeReg
+        toAtom tupleExpr varGen env typeReg variantLookup
         |> Result.map (fun (tupleAtom, tupleBindings, varGen1) ->
             let (tempVar, varGen2) = ANF.freshVar varGen1
             let getCExpr = ANF.TupleGet (tupleAtom, index)
@@ -386,7 +403,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
             |> List.choose (fun fname -> Map.tryFind fname fieldMap)
 
         // Reuse tuple handling
-        toAtom (AST.TupleLiteral orderedValues) varGen env typeReg
+        toAtom (AST.TupleLiteral orderedValues) varGen env typeReg variantLookup
 
     | AST.RecordAccess (recordExpr, fieldName) ->
         // Records are compiled like tuples - field access becomes TupleGet
@@ -400,7 +417,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
 
         match findFieldIndex () with
         | Some index ->
-            toAtom recordExpr varGen env typeReg
+            toAtom recordExpr varGen env typeReg variantLookup
             |> Result.bind (fun (recordAtom, recordBindings, varGen1) ->
                 let (tempVar, varGen2) = ANF.freshVar varGen1
                 let getCExpr = ANF.TupleGet (recordAtom, index)
@@ -409,12 +426,25 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
         | None ->
             Error $"Unknown field: {fieldName}"
 
+    | AST.Constructor (_, variantName, payload) ->
+        // For simple enums (M3), constructors compile to their tag as an integer
+        match payload with
+        | Some _ ->
+            Error $"Constructor {variantName} with payload not supported in M3"
+        | None ->
+            match Map.tryFind variantName variantLookup with
+            | Some (_, tag) ->
+                // Return the tag as an integer literal (no bindings needed)
+                Ok (ANF.IntLiteral (int64 tag), [], varGen)
+            | None ->
+                Error $"Unknown constructor: {variantName}"
+
 /// Wrap let bindings around an expression
 and wrapBindings (bindings: (ANF.TempId * ANF.CExpr) list) (expr: ANF.AExpr) : ANF.AExpr =
     List.foldBack (fun (var, cexpr) acc -> ANF.Let (var, cexpr, acc)) bindings expr
 
 /// Convert a function definition to ANF
-let convertFunction (funcDef: AST.FunctionDef) (varGen: ANF.VarGen) (typeReg: TypeRegistry) : Result<ANF.Function * ANF.VarGen, string> =
+let convertFunction (funcDef: AST.FunctionDef) (varGen: ANF.VarGen) (typeReg: TypeRegistry) (variantLookup: VariantLookup) : Result<ANF.Function * ANF.VarGen, string> =
     // Allocate TempIds for parameters
     let (paramIds, varGen1) =
         funcDef.Params
@@ -428,7 +458,7 @@ let convertFunction (funcDef: AST.FunctionDef) (varGen: ANF.VarGen) (typeReg: Ty
         |> Map.ofList
 
     // Convert body
-    toANF funcDef.Body varGen1 paramEnv typeReg
+    toANF funcDef.Body varGen1 paramEnv typeReg variantLookup
     |> Result.map (fun (body, varGen2) ->
         ({ Name = funcDef.Name; Params = paramIds; Body = body }, varGen2))
 
@@ -445,6 +475,19 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
             | _ -> None)
         |> Map.ofList
 
+    // Build variant lookup from sum type definitions
+    // Maps variant name -> (type name, tag index)
+    let variantLookup : VariantLookup =
+        topLevels
+        |> List.choose (function
+            | AST.TypeDef (AST.SumTypeDef (typeName, variants)) ->
+                Some (typeName, variants)
+            | _ -> None)
+        |> List.collect (fun (typeName, variants) ->
+            variants
+            |> List.mapi (fun idx variant -> (variant.Name, (typeName, idx))))
+        |> Map.ofList
+
     // Separate functions and expressions
     let functions = topLevels |> List.choose (function AST.FunctionDef f -> Some f | _ -> None)
     let expressions = topLevels |> List.choose (function AST.Expression e -> Some e | _ -> None)
@@ -454,7 +497,7 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
         match funcs with
         | [] -> Ok (List.rev acc, vg)
         | func :: rest ->
-            convertFunction func vg typeReg
+            convertFunction func vg typeReg variantLookup
             |> Result.bind (fun (anfFunc, vg') ->
                 convertFunctions rest vg' (anfFunc :: acc))
 
@@ -463,7 +506,7 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
         // Convert main expression (if any)
         match expressions with
         | [expr] ->
-            toANF expr varGen1 Map.empty typeReg
+            toANF expr varGen1 Map.empty typeReg variantLookup
             |> Result.map (fun (anfExpr, _) ->
                 ANF.Program (anfFuncs, Some anfExpr))
         | [] ->

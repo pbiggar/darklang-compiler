@@ -44,6 +44,7 @@ let rec typeToString (t: Type) : string =
         let elemsStr = elemTypes |> List.map typeToString |> String.concat ", "
         $"({elemsStr})"
     | TRecord name -> name
+    | TSum name -> name
 
 /// Pretty-print a type error
 let typeErrorToString (err: TypeError) : string =
@@ -66,14 +67,21 @@ type TypeEnv = Map<string, Type>
 /// Type registry - maps record type names to their field definitions
 type TypeRegistry = Map<string, (string * Type) list>
 
+/// Sum type registry - maps sum type names to their variant lists (name, tag, payload)
+type SumTypeRegistry = Map<string, (string * int * Type option) list>
+
+/// Variant lookup - maps variant names to (type name, tag index)
+type VariantLookup = Map<string, (string * int)>
+
 /// Check expression type top-down
 /// Parameters:
 ///   - expr: Expression to type-check
 ///   - env: Type environment (variable name -> type mappings)
 ///   - typeReg: Type registry (record type name -> field definitions)
+///   - variantLookup: Maps variant names to (type name, tag index)
 ///   - expectedType: Optional expected type from context (for checking)
 /// Returns: Result<Type, TypeError>
-let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (expectedType: Type option) : Result<Type, TypeError> =
+let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (expectedType: Type option) : Result<Type, TypeError> =
     match expr with
     | IntLiteral _ ->
         // Integer literals are always TInt64
@@ -112,12 +120,12 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (expectedT
                 | _ -> "?"
 
             // Check left operand to determine numeric type
-            checkExpr left env typeReg None
+            checkExpr left env typeReg variantLookup None
             |> Result.bind (fun leftType ->
                 match leftType with
                 | TInt64 | TFloat64 ->
                     // Right operand must be same type
-                    checkExpr right env typeReg (Some leftType)
+                    checkExpr right env typeReg variantLookup (Some leftType)
                     |> Result.bind (fun rightType ->
                         if rightType <> leftType then
                             Error (TypeMismatch (leftType, rightType, $"right operand of {opName}"))
@@ -142,12 +150,12 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (expectedT
                 | _ -> "?"
 
             // Check left operand to determine numeric type
-            checkExpr left env typeReg None
+            checkExpr left env typeReg variantLookup None
             |> Result.bind (fun leftType ->
                 match leftType with
                 | TInt64 | TFloat64 ->
                     // Right operand must be same type
-                    checkExpr right env typeReg (Some leftType)
+                    checkExpr right env typeReg variantLookup (Some leftType)
                     |> Result.bind (fun rightType ->
                         if rightType <> leftType then
                             Error (TypeMismatch (leftType, rightType, $"right operand of {opName}"))
@@ -162,12 +170,12 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (expectedT
         | And | Or ->
             let opName = if op = And then "&&" else "||"
 
-            checkExpr left env typeReg (Some TBool)
+            checkExpr left env typeReg variantLookup (Some TBool)
             |> Result.bind (fun leftType ->
                 if leftType <> TBool then
                     Error (TypeMismatch (TBool, leftType, $"left operand of {opName}"))
                 else
-                    checkExpr right env typeReg (Some TBool)
+                    checkExpr right env typeReg variantLookup (Some TBool)
                     |> Result.bind (fun rightType ->
                         if rightType <> TBool then
                             Error (TypeMismatch (TBool, rightType, $"right operand of {opName}"))
@@ -180,7 +188,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (expectedT
         match op with
         | Neg ->
             // Negation works on integers and floats
-            checkExpr inner env typeReg None
+            checkExpr inner env typeReg variantLookup None
             |> Result.bind (fun innerType ->
                 match innerType with
                 | TInt64 | TFloat64 ->
@@ -193,7 +201,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (expectedT
 
         | Not ->
             // Boolean not works on booleans and returns booleans
-            checkExpr inner env typeReg (Some TBool)
+            checkExpr inner env typeReg variantLookup (Some TBool)
             |> Result.bind (fun innerType ->
                 if innerType <> TBool then
                     Error (TypeMismatch (TBool, innerType, "operand of !"))
@@ -204,10 +212,10 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (expectedT
 
     | Let (name, value, body) ->
         // Let binding: check value, extend environment, check body
-        checkExpr value env typeReg None
+        checkExpr value env typeReg variantLookup None
         |> Result.bind (fun valueType ->
             let env' = Map.add name valueType env
-            checkExpr body env' typeReg expectedType)
+            checkExpr body env' typeReg variantLookup expectedType)
 
     | Var name ->
         // Variable reference: look up in environment
@@ -222,14 +230,14 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (expectedT
 
     | If (cond, thenBranch, elseBranch) ->
         // If expression: condition must be bool, branches must have same type
-        checkExpr cond env typeReg (Some TBool)
+        checkExpr cond env typeReg variantLookup (Some TBool)
         |> Result.bind (fun condType ->
             if condType <> TBool then
                 Error (TypeMismatch (TBool, condType, "if condition"))
             else
-                checkExpr thenBranch env typeReg expectedType
+                checkExpr thenBranch env typeReg variantLookup expectedType
                 |> Result.bind (fun thenType ->
-                    checkExpr elseBranch env typeReg (Some thenType)
+                    checkExpr elseBranch env typeReg variantLookup (Some thenType)
                     |> Result.bind (fun elseType ->
                         if thenType <> elseType then
                             Error (TypeMismatch (thenType, elseType, "if branches must have same type"))
@@ -251,7 +259,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (expectedT
                 List.zip args paramTypes
                 |> List.fold (fun result (arg, expectedParamType) ->
                     result |> Result.bind (fun () ->
-                        checkExpr arg env typeReg (Some expectedParamType)
+                        checkExpr arg env typeReg variantLookup (Some expectedParamType)
                         |> Result.bind (fun argType ->
                             if argType = expectedParamType then
                                 Ok ()
@@ -275,7 +283,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (expectedT
             match elems with
             | [] -> Ok (List.rev acc)
             | e :: rest ->
-                checkExpr e env typeReg None
+                checkExpr e env typeReg variantLookup None
                 |> Result.bind (fun elemType ->
                     checkElements rest (elemType :: acc))
 
@@ -291,7 +299,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (expectedT
 
     | TupleAccess (tupleExpr, index) ->
         // Check the tuple expression
-        checkExpr tupleExpr env typeReg None
+        checkExpr tupleExpr env typeReg variantLookup None
         |> Result.bind (fun tupleType ->
             match tupleType with
             | TTuple elemTypes ->
@@ -363,7 +371,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (expectedT
                             result |> Result.bind (fun () ->
                                 match Map.tryFind fname fieldMap with
                                 | Some fieldExpr ->
-                                    checkExpr fieldExpr env typeReg (Some expectedFieldType)
+                                    checkExpr fieldExpr env typeReg variantLookup (Some expectedFieldType)
                                     |> Result.bind (fun actualType ->
                                         if actualType = expectedFieldType then Ok ()
                                         else Error (TypeMismatch (expectedFieldType, actualType, $"field {fname}")))
@@ -373,7 +381,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (expectedT
 
     | RecordAccess (recordExpr, fieldName) ->
         // Check the record expression
-        checkExpr recordExpr env typeReg None
+        checkExpr recordExpr env typeReg variantLookup None
         |> Result.bind (fun recordType ->
             match recordType with
             | TRecord typeName ->
@@ -392,15 +400,33 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (expectedT
             | other ->
                 Error (GenericError $"Cannot access .{fieldName} on non-record type {typeToString other}"))
 
+    | Constructor (_, variantName, payload) ->
+        // For M3, constructors have no payload
+        // Look up the variant to find its type
+        match Map.tryFind variantName variantLookup with
+        | None ->
+            Error (GenericError $"Unknown constructor: {variantName}")
+        | Some (typeName, _tag) ->
+            // For M3, no payload support yet
+            match payload with
+            | Some _ ->
+                Error (GenericError $"Constructor {variantName} does not take a payload (M3 only supports simple enums)")
+            | None ->
+                let sumType = TSum typeName
+                match expectedType with
+                | Some expected when expected <> sumType ->
+                    Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
+                | _ -> Ok sumType
+
 /// Type-check a function definition
-let checkFunctionDef (funcDef: FunctionDef) (env: TypeEnv) (typeReg: TypeRegistry) : Result<unit, TypeError> =
+let checkFunctionDef (funcDef: FunctionDef) (env: TypeEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) : Result<unit, TypeError> =
     // Build environment with parameters
     let paramEnv =
         funcDef.Params
         |> List.fold (fun e (name, ty) -> Map.add name ty e) env
 
     // Check body has return type
-    checkExpr funcDef.Body paramEnv typeReg (Some funcDef.ReturnType)
+    checkExpr funcDef.Body paramEnv typeReg variantLookup (Some funcDef.ReturnType)
     |> Result.bind (fun bodyType ->
         if bodyType = funcDef.ReturnType then
             Ok ()
@@ -418,6 +444,19 @@ let checkProgram (program: Program) : Result<Type, TypeError> =
         |> List.choose (function
             | TypeDef (RecordDef (name, fields)) -> Some (name, fields)
             | _ -> None)
+        |> Map.ofList
+
+    // Collect sum type definitions and build variant lookup
+    // Maps variant name -> (type name, tag index)
+    let variantLookup : VariantLookup =
+        topLevels
+        |> List.choose (function
+            | TypeDef (SumTypeDef (typeName, variants)) ->
+                Some (typeName, variants)
+            | _ -> None)
+        |> List.collect (fun (typeName, variants) ->
+            variants
+            |> List.mapi (fun idx variant -> (variant.Name, (typeName, idx))))
         |> Map.ofList
 
     // Second pass: collect all function signatures
@@ -440,7 +479,7 @@ let checkProgram (program: Program) : Result<Type, TypeError> =
         |> List.fold (fun result topLevel ->
             result |> Result.bind (fun () ->
                 match topLevel with
-                | FunctionDef funcDef -> checkFunctionDef funcDef funcEnv typeReg
+                | FunctionDef funcDef -> checkFunctionDef funcDef funcEnv typeReg variantLookup
                 | TypeDef _ -> Ok ()  // Type definitions already processed
                 | Expression _ -> Ok ())) (Ok ())
 
@@ -450,7 +489,7 @@ let checkProgram (program: Program) : Result<Type, TypeError> =
         // Then type check main expression if any
         let mainExpr = topLevels |> List.tryPick (function Expression e -> Some e | _ -> None)
         match mainExpr with
-        | Some expr -> checkExpr expr funcEnv typeReg None
+        | Some expr -> checkExpr expr funcEnv typeReg variantLookup None
         | None ->
             // No main expression - just functions
             // For now, require a "main" function with signature () -> int

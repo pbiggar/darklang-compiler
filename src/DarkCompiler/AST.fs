@@ -27,6 +27,7 @@ type Type =
     | TFunction of Type list * Type  // parameter types * return type
     | TTuple of Type list             // tuple type: (Int, Bool, String)
     | TRecord of string               // record type by name: Point, Color, etc.
+    | TSum of string                  // sum type by name: Option, Color, etc.
 
 /// Binary operators
 type BinOp =
@@ -67,6 +68,7 @@ type Expr =
     | TupleAccess of tuple:Expr * index:int  // Tuple access: t.0, t.1, etc.
     | RecordLiteral of typeName:string * fields:(string * Expr) list  // { x = 1, y = 2 }
     | RecordAccess of record:Expr * fieldName:string                  // p.x, p.y
+    | Constructor of typeName:string * variantName:string * payload:Expr option  // Red, Some(42)
 
 /// Function definition
 type FunctionDef = {
@@ -76,9 +78,16 @@ type FunctionDef = {
     Body: Expr
 }
 
+/// Variant in a sum type (with optional payload type for M4)
+type Variant = {
+    Name: string
+    Payload: Type option  // None for simple enums, Some for payloads (M4)
+}
+
 /// Type definition (record types, sum types, etc.)
 type TypeDef =
     | RecordDef of name:string * fields:(string * Type) list  // type Point = { x: Int, y: Int }
+    | SumTypeDef of name:string * variants:Variant list       // type Color = Red | Green | Blue
 
 /// Top-level program elements
 type TopLevel =
