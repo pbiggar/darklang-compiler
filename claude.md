@@ -32,6 +32,7 @@ Tests:
 - if a bug is found, add the smallest test for that bug in the right place.
 - Otherwise, largely focus on end-to-end language tests
 - if at decision points, it seems the tests are failing, fix the tests if possible
+- never disable failing tests, or change test cases to no longer hit the bug
 
 Best-practices:
 
@@ -39,6 +40,6 @@ Best-practices:
 - Always fix dotnet compiler or runtime warnings and errors, preferably before commiting (make a separate cleanup commit if needed)
 
   - For dumb warnings, ask the developer if you want to disable
-  - when fixing tests, ensure that its the compiler that's fixed, and that the tests are not changed to avoid the error
+  - when fixing tests, ensure that its the compiler that's fixed, and that the tests are not changed to avoid the error. It's ok to add and commit tests that work incorrectly, in order to fix later.
 
 - Never ever ever make assumptions, fall-backs, or potentially incorrect defaults. Add a call to TODO() instead.

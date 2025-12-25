@@ -1,0 +1,112 @@
+// Register Allocation Tests
+//
+// Tests for register pressure and spilling scenarios.
+// These test cases ensure register allocation works correctly when
+// there are more live values than available registers.
+
+// ===================================================================
+// Register Pressure with Let Bindings
+// ===================================================================
+
+// 1-4 let bindings: should use registers only (X1-X10)
+let x = 1 in x = 1
+let x = 1 in let y = 2 in x + y = 3
+let x = 1 in let y = 2 in let z = 3 in x + y + z = 6
+let x = 1 in let y = 2 in let z = 3 in let w = 4 in x + y + z + w = 10
+
+// 5+ let bindings: triggers spilling
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in a + b + c + d + e = 15
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in a + b + c + d + e + f = 21
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in a + b + c + d + e + f + g = 28
+
+// 8+ let bindings: more spilling
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in a + b + c + d + e + f + g + h = 36
+
+// 10 let bindings: at capacity
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in let i = 9 in let j = 10 in a + b + c + d + e + f + g + h + i + j = 55
+
+// 12 let bindings: needs callee-saved or spilling
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in let i = 9 in let j = 10 in let k = 11 in let l = 12 in a + b + c + d + e + f + g + h + i + j + k + l = 78
+
+
+// ===================================================================
+// Register Pressure with Pattern Matching
+// (These expose the bug where register values aren't preserved across blocks)
+// ===================================================================
+
+// 4 lets + pattern match (works - no spilling needed)
+let x = 1 in let y = 2 in let z = 3 in let w = 4 in match [7, 8] with | [a, b] -> a + b | _ -> 99 = 15
+
+// 5 lets + pattern match with operation (works)
+let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in match [7, 8] with | [a, b] -> a + b | _ -> 99 = 15
+
+// BUG: 5 lets + pattern match with direct return of first extracted element
+let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in match [7, 8] with | [a, b] -> a | _ -> 99 = 7
+
+// BUG: 5 lets + pattern match with direct return of second extracted element
+let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in match [7, 8] with | [a, b] -> b | _ -> 99 = 8
+
+// BUG: 5 lets + pattern match with constant return
+let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in match [7, 8] with | [a, b] -> 42 | _ -> 99 = 42
+
+// 5 lets + pattern match with a + 0 (works - forces operation)
+let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in match [7, 8] with | [a, b] -> a + 0 | _ -> 99 = 7
+
+
+// ===================================================================
+// Cross-Block Value Preservation
+// ===================================================================
+
+// Values defined before branch must be available after
+let x = 42 in if true then x else 0 = 42
+let x = 42 in if false then 0 else x = 42
+
+// Multiple values across branches
+let x = 10 in let y = 20 in if true then x + y else 0 = 30
+let x = 10 in let y = 20 in if false then 0 else x + y = 30
+
+// Nested conditions with value preservation
+let x = 5 in if x > 0 then if x > 3 then x else 0 else 0 = 5
+
+
+// ===================================================================
+// Pattern Matching with Value Preservation
+// ===================================================================
+
+// Match on integer with values from outer scope
+let x = 100 in match 1 with | 1 -> x | _ -> 0 = 100
+
+// Match on tuple with outer scope values
+let x = 10 in match (1, 2) with | (a, b) -> x + a + b = 13
+
+// ADT match with outer scope values
+type Option = None | Some of int let x = 100 in match Some(42) with | Some(n) -> x + n | None -> 0 = 142
+
+
+// ===================================================================
+// Complex Register Pressure Scenarios
+// ===================================================================
+
+// Many live values across branches
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in if a > 0 then a + b + c + d + e else 0 = 15
+
+// Nested matches with many outer values
+let x = 1 in let y = 2 in let z = 3 in match true with | true -> match false with | false -> x + y + z | true -> 0 | false -> 0 = 6
+
+// Many values through multiple match levels
+let a = 10 in let b = 20 in match 1 with | 1 -> let c = 30 in a + b + c | _ -> 0 = 60
+
+
+// ===================================================================
+// Spill and Reload Correctness
+// ===================================================================
+
+// Spilled value used multiple times
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in let i = 9 in let j = 10 in let k = 11 in k + k = 22
+
+// Multiple spilled values used together
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in let i = 9 in let j = 10 in let k = 11 in let l = 12 in k + l = 23
+
+// Early and late values used together
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in let i = 9 in let j = 10 in let k = 11 in let l = 12 in a + l = 13
+
