@@ -101,7 +101,7 @@ let compile (verbosity: int) (source: string) : CompileResult =
 
                     // Show MIR
                     if verbosity >= 3 then
-                        let (MIR.Program (functions, _)) = mirProgram
+                        let (MIR.Program (functions, _, _)) = mirProgram
                         println "=== MIR (Control Flow Graph) ==="
                         for func in functions do
                             println $"\nFunction: {func.Name}"
@@ -125,7 +125,7 @@ let compile (verbosity: int) (source: string) : CompileResult =
 
                     // Show LIR
                     if verbosity >= 3 then
-                        let (LIR.Program (funcs, _)) = lirProgram
+                        let (LIR.Program (funcs, _, _)) = lirProgram
                         println "=== LIR (Low-level IR with CFG) ==="
                         for func in funcs do
                             println $"Function: {func.Name}"
@@ -145,9 +145,9 @@ let compile (verbosity: int) (source: string) : CompileResult =
 
                     // Pass 5: Register Allocation
                     if verbosity >= 1 then println "  [5/8] Register Allocation..."
-                    let (LIR.Program (funcs, stringPool)) = lirProgram
+                    let (LIR.Program (funcs, stringPool, floatPool)) = lirProgram
                     let allocatedFuncs = funcs |> List.map RegisterAllocation.allocateRegisters
-                    let allocatedProgram = LIR.Program (allocatedFuncs, stringPool)
+                    let allocatedProgram = LIR.Program (allocatedFuncs, stringPool, floatPool)
 
                     // Show LIR after allocation
                     if verbosity >= 3 then
@@ -227,7 +227,7 @@ let compile (verbosity: int) (source: string) : CompileResult =
                                 let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + dylibCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
                                 // Round up: (headerSize + commandsSize + 200 + 7) &&& ~~~7
                                 (headerSize + commandsSize + 200 + 7) &&& (~~~7)
-                        let machineCode = ARM64_Encoding.encodeAllWithStrings arm64Instructions stringPool codeFileOffset
+                        let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions stringPool floatPool codeFileOffset
 
                         // Show machine code
                         if verbosity >= 3 then
@@ -248,8 +248,8 @@ let compile (verbosity: int) (source: string) : CompileResult =
                         if verbosity >= 1 then println $"  [8/8] Binary Generation ({formatName})..."
                         let binary =
                             match os with
-                            | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithStrings machineCode stringPool
-                            | Platform.Linux -> Binary_Generation_ELF.createExecutableWithStrings machineCode stringPool
+                            | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode stringPool floatPool
+                            | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode stringPool floatPool
                         let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
                         if verbosity >= 2 then
                             let t = System.Math.Round(binaryTime, 1)

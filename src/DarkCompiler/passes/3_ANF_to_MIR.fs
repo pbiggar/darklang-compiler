@@ -56,6 +56,12 @@ let collectStringsFromAtom (atom: ANF.Atom) : string list =
     | ANF.StringLiteral s -> [s]
     | _ -> []
 
+/// Collect all float literals from an ANF atom
+let collectFloatsFromAtom (atom: ANF.Atom) : float list =
+    match atom with
+    | ANF.FloatLiteral f -> [f]
+    | _ -> []
+
 /// Collect all string literals from a CExpr
 let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
     match cexpr with
@@ -69,6 +75,28 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
         collectStringsFromAtom elseAtom
     | ANF.Call (_, args) ->
         args |> List.collect collectStringsFromAtom
+    | ANF.TupleAlloc elems ->
+        elems |> List.collect collectStringsFromAtom
+    | ANF.TupleGet (tupleAtom, _) ->
+        collectStringsFromAtom tupleAtom
+
+/// Collect all float literals from a CExpr
+let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
+    match cexpr with
+    | ANF.Atom atom -> collectFloatsFromAtom atom
+    | ANF.Prim (_, left, right) ->
+        collectFloatsFromAtom left @ collectFloatsFromAtom right
+    | ANF.UnaryPrim (_, atom) -> collectFloatsFromAtom atom
+    | ANF.IfValue (cond, thenAtom, elseAtom) ->
+        collectFloatsFromAtom cond @
+        collectFloatsFromAtom thenAtom @
+        collectFloatsFromAtom elseAtom
+    | ANF.Call (_, args) ->
+        args |> List.collect collectFloatsFromAtom
+    | ANF.TupleAlloc elems ->
+        elems |> List.collect collectFloatsFromAtom
+    | ANF.TupleGet (tupleAtom, _) ->
+        collectFloatsFromAtom tupleAtom
 
 /// Collect all string literals from an ANF expression
 let rec collectStringsFromExpr (expr: ANF.AExpr) : string list =
@@ -81,9 +109,24 @@ let rec collectStringsFromExpr (expr: ANF.AExpr) : string list =
         collectStringsFromExpr thenBranch @
         collectStringsFromExpr elseBranch
 
+/// Collect all float literals from an ANF expression
+let rec collectFloatsFromExpr (expr: ANF.AExpr) : float list =
+    match expr with
+    | ANF.Return atom -> collectFloatsFromAtom atom
+    | ANF.Let (_, cexpr, rest) ->
+        collectFloatsFromCExpr cexpr @ collectFloatsFromExpr rest
+    | ANF.If (cond, thenBranch, elseBranch) ->
+        collectFloatsFromAtom cond @
+        collectFloatsFromExpr thenBranch @
+        collectFloatsFromExpr elseBranch
+
 /// Collect all string literals from an ANF function
 let collectStringsFromFunction (func: ANF.Function) : string list =
     collectStringsFromExpr func.Body
+
+/// Collect all float literals from an ANF function
+let collectFloatsFromFunction (func: ANF.Function) : float list =
+    collectFloatsFromExpr func.Body
 
 /// Collect all string literals from an ANF program
 let collectStringsFromProgram (program: ANF.Program) : string list =
@@ -92,6 +135,13 @@ let collectStringsFromProgram (program: ANF.Program) : string list =
     let mainStrings = mainExpr |> Option.map collectStringsFromExpr |> Option.defaultValue []
     funcStrings @ mainStrings
 
+/// Collect all float literals from an ANF program
+let collectFloatsFromProgram (program: ANF.Program) : float list =
+    let (ANF.Program (functions, mainExpr)) = program
+    let funcFloats = functions |> List.collect collectFloatsFromFunction
+    let mainFloats = mainExpr |> Option.map collectFloatsFromExpr |> Option.defaultValue []
+    funcFloats @ mainFloats
+
 /// Build a string pool from a list of strings (deduplicates)
 let buildStringPool (strings: string list) : MIR.StringPool =
     strings
@@ -99,20 +149,39 @@ let buildStringPool (strings: string list) : MIR.StringPool =
         let (_, pool') = MIR.addString pool s
         pool') MIR.emptyStringPool
 
+/// Build a float pool from a list of floats (deduplicates)
+let buildFloatPool (floats: float list) : MIR.FloatPool =
+    floats
+    |> List.fold (fun pool f ->
+        let (_, pool') = MIR.addFloat pool f
+        pool') MIR.emptyFloatPool
+
 /// Build a lookup map from string content to pool index
 let buildStringLookup (pool: MIR.StringPool) : Map<string, int> =
     pool.Strings
     |> Map.fold (fun lookup idx (s, _) -> Map.add s idx lookup) Map.empty
 
+/// Build a lookup map from float value to pool index
+let buildFloatLookup (pool: MIR.FloatPool) : Map<float, int> =
+    pool.Floats
+    |> Map.fold (fun lookup idx f -> Map.add f idx lookup) Map.empty
+
 /// Module-level mutable string lookup (set during toMIR, used by atomToOperand)
 /// This avoids threading the pool through all functions
 let mutable private stringLookup : Map<string, int> = Map.empty
+
+/// Module-level mutable float lookup (set during toMIR, used by atomToOperand)
+let mutable private floatLookup : Map<float, int> = Map.empty
 
 /// Convert ANF Atom to MIR Operand
 let atomToOperand (atom: ANF.Atom) : MIR.Operand =
     match atom with
     | ANF.IntLiteral n -> MIR.IntConst n
     | ANF.BoolLiteral b -> MIR.BoolConst b
+    | ANF.FloatLiteral f ->
+        match Map.tryFind f floatLookup with
+        | Some idx -> MIR.FloatRef idx
+        | None -> failwith $"Float not found in pool: {f}"
     | ANF.StringLiteral s ->
         match Map.tryFind s stringLookup with
         | Some idx -> MIR.StringRef idx
@@ -198,23 +267,40 @@ let rec convertExpr
             convertExpr rest joinLabel [] builder'
 
         | _ ->
-            // Simple CExpr: add instruction to current block, continue
-            let instr =
+            // Simple CExpr: add instruction(s) to current block, continue
+            let instrs =
                 match cexpr with
                 | ANF.Atom atom ->
-                    MIR.Mov (destReg, atomToOperand atom)
+                    [MIR.Mov (destReg, atomToOperand atom)]
                 | ANF.Prim (op, leftAtom, rightAtom) ->
-                    MIR.BinOp (destReg, convertBinOp op, atomToOperand leftAtom, atomToOperand rightAtom)
+                    [MIR.BinOp (destReg, convertBinOp op, atomToOperand leftAtom, atomToOperand rightAtom)]
                 | ANF.UnaryPrim (op, atom) ->
-                    MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand atom)
+                    [MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand atom)]
                 | ANF.Call (funcName, args) ->
                     let argOperands = List.map atomToOperand args
-                    MIR.Call (destReg, funcName, argOperands)
+                    [MIR.Call (destReg, funcName, argOperands)]
+                | ANF.TupleAlloc elems ->
+                    // Allocate heap space: 8 bytes per element
+                    let sizeBytes = List.length elems * 8
+                    let allocInstr = MIR.HeapAlloc (destReg, sizeBytes)
+                    // Store each element at its offset
+                    let storeInstrs =
+                        elems
+                        |> List.mapi (fun i elem ->
+                            MIR.HeapStore (destReg, i * 8, atomToOperand elem))
+                    allocInstr :: storeInstrs
+                | ANF.TupleGet (tupleAtom, index) ->
+                    // Tuple should always be a variable in ANF
+                    let tupleReg =
+                        match tupleAtom with
+                        | ANF.Var tid -> tempToVReg tid
+                        | _ -> failwith "Tuple access on non-variable (should be impossible after ANF)"
+                    [MIR.HeapLoad (destReg, tupleReg, index * 8)]
                 | ANF.IfValue _ ->
                     // Already handled above
                     failwith "Unreachable: IfValue already handled"
 
-            let newInstrs = currentInstrs @ [instr]
+            let newInstrs = currentInstrs @ instrs
             convertExpr rest currentLabel newInstrs builder
 
     | ANF.If (condAtom, thenBranch, elseBranch) ->
@@ -384,23 +470,40 @@ and convertExprToOperand
             convertExprToOperand rest joinLabel [] builder'
 
         | _ ->
-            // Simple CExpr: create instruction and accumulate
-            let instr =
+            // Simple CExpr: create instruction(s) and accumulate
+            let instrs =
                 match cexpr with
-                | ANF.Atom atom -> MIR.Mov (destReg, atomToOperand atom)
+                | ANF.Atom atom -> [MIR.Mov (destReg, atomToOperand atom)]
                 | ANF.Prim (op, leftAtom, rightAtom) ->
-                    MIR.BinOp (destReg, convertBinOp op, atomToOperand leftAtom, atomToOperand rightAtom)
+                    [MIR.BinOp (destReg, convertBinOp op, atomToOperand leftAtom, atomToOperand rightAtom)]
                 | ANF.UnaryPrim (op, atom) ->
-                    MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand atom)
+                    [MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand atom)]
                 | ANF.Call (funcName, args) ->
                     let argOperands = List.map atomToOperand args
-                    MIR.Call (destReg, funcName, argOperands)
+                    [MIR.Call (destReg, funcName, argOperands)]
+                | ANF.TupleAlloc elems ->
+                    // Allocate heap space: 8 bytes per element
+                    let sizeBytes = List.length elems * 8
+                    let allocInstr = MIR.HeapAlloc (destReg, sizeBytes)
+                    // Store each element at its offset
+                    let storeInstrs =
+                        elems
+                        |> List.mapi (fun i elem ->
+                            MIR.HeapStore (destReg, i * 8, atomToOperand elem))
+                    allocInstr :: storeInstrs
+                | ANF.TupleGet (tupleAtom, index) ->
+                    // Tuple should always be a variable in ANF
+                    let tupleReg =
+                        match tupleAtom with
+                        | ANF.Var tid -> tempToVReg tid
+                        | _ -> failwith "Tuple access on non-variable (should be impossible after ANF)"
+                    [MIR.HeapLoad (destReg, tupleReg, index * 8)]
                 | ANF.IfValue _ ->
                     // Already handled above
                     failwith "Unreachable: IfValue already handled"
 
             // Let bindings accumulate instructions, pass through join label
-            convertExprToOperand rest startLabel (startInstrs @ [instr]) builder
+            convertExprToOperand rest startLabel (startInstrs @ instrs) builder
 
     | ANF.If (condAtom, thenBranch, elseBranch) ->
         // If expression: creates blocks with branch/jump/join structure
@@ -524,10 +627,14 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) : MIR.Functi
 let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : MIR.Program * MIR.RegGen =
     let (ANF.Program (functions, mainExpr)) = program
 
-    // Phase 1: Collect all strings and build the pool
+    // Phase 1: Collect all strings and floats, build pools
     let allStrings = collectStringsFromProgram program
     let stringPool = buildStringPool allStrings
     stringLookup <- buildStringLookup stringPool
+
+    let allFloats = collectFloatsFromProgram program
+    let floatPool = buildFloatPool allFloats
+    floatLookup <- buildFloatLookup floatPool
 
     // Phase 2: Convert all functions to MIR
     let (mirFuncs, regGen1) =
@@ -587,4 +694,4 @@ let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : MIR.Program * MIR.RegGen
             else
                 failwith "Program must have either a main expression or a main() function"
 
-    (MIR.Program (allFuncs, stringPool), finalRegGen)
+    (MIR.Program (allFuncs, stringPool, floatPool), finalRegGen)

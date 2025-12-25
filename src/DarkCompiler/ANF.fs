@@ -28,6 +28,7 @@ type Atom =
     | IntLiteral of int64
     | BoolLiteral of bool
     | StringLiteral of string
+    | FloatLiteral of float
     | Var of TempId
 
 /// Binary operations on atoms
@@ -60,6 +61,8 @@ type CExpr =
     | UnaryPrim of UnaryOp * Atom
     | IfValue of cond:Atom * thenValue:Atom * elseValue:Atom  // If-expression that produces a value
     | Call of funcName:string * args:Atom list  // Function call
+    | TupleAlloc of Atom list                   // Create tuple: (a, b, c)
+    | TupleGet of tuple:Atom * index:int        // Get tuple element: t.0
 
 /// ANF expressions with explicit sequencing
 type AExpr =

@@ -56,6 +56,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
         // String literal becomes return
         Ok (ANF.Return (ANF.StringLiteral s), varGen)
 
+    | AST.FloatLiteral f ->
+        // Float literal becomes return
+        Ok (ANF.Return (ANF.FloatLiteral f), varGen)
+
     | AST.Var name ->
         // Variable reference: look up in environment
         match Map.tryFind name env with
@@ -74,14 +78,17 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                 (exprWithBindings, varGen3)))
 
     | AST.UnaryOp (AST.Neg, innerExpr) ->
-        // Unary negation: convert to 0 - expr
-        // Special case: -INT64_MIN should stay as INT64_MIN (from lexer sentinel)
+        // Unary negation: handle differently based on operand type
         match innerExpr with
         | AST.IntLiteral n when n = System.Int64.MinValue ->
             // The lexer stores INT64_MIN as a sentinel for "9223372036854775808"
             // When negated, it should remain INT64_MIN (mathematically correct)
             Ok (ANF.Return (ANF.IntLiteral System.Int64.MinValue), varGen)
+        | AST.FloatLiteral f ->
+            // Constant-fold negative float literals at compile time
+            Ok (ANF.Return (ANF.FloatLiteral (-f)), varGen)
         | _ ->
+            // Integer negation: convert to 0 - expr
             toANF (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen env
 
     | AST.UnaryOp (op, innerExpr) ->
@@ -145,6 +152,37 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
 
             (exprWithBindings, varGen2))
 
+    | AST.TupleLiteral elements ->
+        // Convert all elements to atoms
+        let rec convertElements (elems: AST.Expr list) (vg: ANF.VarGen) (accAtoms: ANF.Atom list) (accBindings: (ANF.TempId * ANF.CExpr) list) : Result<ANF.Atom list * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+            match elems with
+            | [] -> Ok (List.rev accAtoms, accBindings, vg)
+            | elem :: rest ->
+                toAtom elem vg env
+                |> Result.bind (fun (elemAtom, elemBindings, vg') ->
+                    convertElements rest vg' (elemAtom :: accAtoms) (accBindings @ elemBindings))
+
+        convertElements elements varGen [] []
+        |> Result.map (fun (elemAtoms, elemBindings, varGen1) ->
+            // Create TupleAlloc and bind to fresh variable
+            let (resultVar, varGen2) = ANF.freshVar varGen1
+            let tupleExpr = ANF.TupleAlloc elemAtoms
+            let finalExpr = ANF.Let (resultVar, tupleExpr, ANF.Return (ANF.Var resultVar))
+            let exprWithBindings = wrapBindings elemBindings finalExpr
+
+            (exprWithBindings, varGen2))
+
+    | AST.TupleAccess (tupleExpr, index) ->
+        // Convert tuple to atom and create TupleGet
+        toAtom tupleExpr varGen env
+        |> Result.map (fun (tupleAtom, tupleBindings, varGen1) ->
+            let (resultVar, varGen2) = ANF.freshVar varGen1
+            let getExpr = ANF.TupleGet (tupleAtom, index)
+            let finalExpr = ANF.Let (resultVar, getExpr, ANF.Return (ANF.Var resultVar))
+            let exprWithBindings = wrapBindings tupleBindings finalExpr
+
+            (exprWithBindings, varGen2))
+
 /// Convert an AST expression to an atom, introducing let bindings as needed
 and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     match expr with
@@ -156,6 +194,9 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
 
     | AST.StringLiteral s ->
         Ok (ANF.StringLiteral s, [], varGen)
+
+    | AST.FloatLiteral f ->
+        Ok (ANF.FloatLiteral f, [], varGen)
 
     | AST.Var name ->
         // Variable reference: look up in environment
@@ -174,14 +215,17 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
                 (bodyAtom, allBindings, varGen3)))
 
     | AST.UnaryOp (AST.Neg, innerExpr) ->
-        // Unary negation: convert to 0 - expr
-        // Special case: -INT64_MIN should stay as INT64_MIN (from lexer sentinel)
+        // Unary negation: handle differently based on operand type
         match innerExpr with
         | AST.IntLiteral n when n = System.Int64.MinValue ->
             // The lexer stores INT64_MIN as a sentinel for "9223372036854775808"
             // When negated, it should remain INT64_MIN (mathematically correct)
             Ok (ANF.IntLiteral System.Int64.MinValue, [], varGen)
+        | AST.FloatLiteral f ->
+            // Constant-fold negative float literals at compile time
+            Ok (ANF.FloatLiteral (-f), [], varGen)
         | _ ->
+            // Integer negation: convert to 0 - expr
             toAtom (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen env
 
     | AST.UnaryOp (op, innerExpr) ->
@@ -239,6 +283,35 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
             let callCExpr = ANF.Call (funcName, argAtoms)
             // Return temp as atom with all bindings
             let allBindings = argBindings @ [(tempVar, callCExpr)]
+            (ANF.Var tempVar, allBindings, varGen2))
+
+    | AST.TupleLiteral elements ->
+        // Convert all elements to atoms
+        let rec convertElements (elems: AST.Expr list) (vg: ANF.VarGen) (accAtoms: ANF.Atom list) (accBindings: (ANF.TempId * ANF.CExpr) list) : Result<ANF.Atom list * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+            match elems with
+            | [] -> Ok (List.rev accAtoms, accBindings, vg)
+            | elem :: rest ->
+                toAtom elem vg env
+                |> Result.bind (fun (elemAtom, elemBindings, vg') ->
+                    convertElements rest vg' (elemAtom :: accAtoms) (accBindings @ elemBindings))
+
+        convertElements elements varGen [] []
+        |> Result.map (fun (elemAtoms, elemBindings, varGen1) ->
+            // Create a temporary for the tuple
+            let (tempVar, varGen2) = ANF.freshVar varGen1
+            let tupleCExpr = ANF.TupleAlloc elemAtoms
+            // Return temp as atom with all bindings
+            let allBindings = elemBindings @ [(tempVar, tupleCExpr)]
+            (ANF.Var tempVar, allBindings, varGen2))
+
+    | AST.TupleAccess (tupleExpr, index) ->
+        // Convert tuple to atom and create TupleGet
+        toAtom tupleExpr varGen env
+        |> Result.map (fun (tupleAtom, tupleBindings, varGen1) ->
+            let (tempVar, varGen2) = ANF.freshVar varGen1
+            let getCExpr = ANF.TupleGet (tupleAtom, index)
+            // Return temp as atom with all bindings
+            let allBindings = tupleBindings @ [(tempVar, getCExpr)]
             (ANF.Var tempVar, allBindings, varGen2))
 
 /// Wrap let bindings around an expression

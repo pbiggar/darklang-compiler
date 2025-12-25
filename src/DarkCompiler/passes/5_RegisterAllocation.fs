@@ -69,6 +69,16 @@ let rec collectVRegsInstr (instr: LIR.Instr) (acc: Set<int>) : Set<int> =
     | LIR.Mvn (LIR.Virtual id, _) -> Set.add id acc
     | LIR.PrintInt (LIR.Virtual id) -> Set.add id acc
     | LIR.PrintBool (LIR.Virtual id) -> Set.add id acc
+    // Heap operations
+    | LIR.HeapAlloc (LIR.Virtual id, _) -> Set.add id acc
+    | LIR.HeapStore (LIR.Virtual addrId, _, LIR.Reg (LIR.Virtual srcId)) ->
+        acc |> Set.add addrId |> Set.add srcId
+    | LIR.HeapStore (LIR.Virtual addrId, _, _) -> Set.add addrId acc
+    | LIR.HeapStore (_, _, LIR.Reg (LIR.Virtual srcId)) -> Set.add srcId acc
+    | LIR.HeapLoad (LIR.Virtual destId, LIR.Virtual addrId, _) ->
+        acc |> Set.add destId |> Set.add addrId
+    | LIR.HeapLoad (LIR.Virtual destId, _, _) -> Set.add destId acc
+    | LIR.HeapLoad (_, LIR.Virtual addrId, _) -> Set.add addrId acc
     | _ -> acc
 
 /// Collect virtual registers from a terminator
@@ -169,6 +179,7 @@ let applyToReg (allocation: Map<int, Allocation>) (reg: LIR.Reg) : LIR.Reg optio
 let applyToOperand (allocation: Map<int, Allocation>) (operand: LIR.Operand) : LIR.Operand =
     match operand with
     | LIR.Imm n -> LIR.Imm n
+    | LIR.FloatImm f -> LIR.FloatImm f  // Float immediates pass through unchanged
     | LIR.Reg reg ->
         match reg with
         | LIR.Physical p -> LIR.Reg (LIR.Physical p)
@@ -179,6 +190,7 @@ let applyToOperand (allocation: Map<int, Allocation>) (operand: LIR.Operand) : L
             | None -> LIR.Reg (LIR.Physical LIR.X1)  // Fallback
     | LIR.StackSlot s -> LIR.StackSlot s
     | LIR.StringRef idx -> LIR.StringRef idx  // String refs pass through unchanged
+    | LIR.FloatRef idx -> LIR.FloatRef idx    // Float refs pass through unchanged
 
 /// Apply allocation to an instruction
 /// Returns a list of instructions (may include store for spilled destinations)
@@ -270,9 +282,30 @@ let applyAllocation (allocation: Map<int, Allocation>) (instr: LIR.Instr) : LIR.
             (LIR.PrintInt (regOrTemp (applyToReg allocation reg)), [])
         | LIR.PrintBool reg ->
             (LIR.PrintBool (regOrTemp (applyToReg allocation reg)), [])
+        | LIR.PrintFloat freg ->
+            // FP registers are not allocated by this pass, pass through unchanged
+            (LIR.PrintFloat freg, [])
         | LIR.PrintString (idx, len) ->
             // PrintString doesn't use registers, just passes through
             (LIR.PrintString (idx, len), [])
+        // FP instructions pass through unchanged - separate FP register allocation not implemented yet
+        | LIR.FMov (dest, src) -> (LIR.FMov (dest, src), [])
+        | LIR.FLoad (dest, idx) -> (LIR.FLoad (dest, idx), [])
+        | LIR.FAdd (dest, left, right) -> (LIR.FAdd (dest, left, right), [])
+        | LIR.FSub (dest, left, right) -> (LIR.FSub (dest, left, right), [])
+        | LIR.FMul (dest, left, right) -> (LIR.FMul (dest, left, right), [])
+        | LIR.FDiv (dest, left, right) -> (LIR.FDiv (dest, left, right), [])
+        | LIR.FNeg (dest, src) -> (LIR.FNeg (dest, src), [])
+        | LIR.FCmp (left, right) -> (LIR.FCmp (left, right), [])
+        // Heap operations
+        | LIR.HeapAlloc (dest, sizeBytes) ->
+            (LIR.HeapAlloc (regOrTemp (applyToReg allocation dest), sizeBytes), [])
+        | LIR.HeapStore (addr, offset, src) ->
+            let (addrReg, addrLoads) = loadIfNeeded addr LIR.X12
+            (LIR.HeapStore (addrReg, offset, applyToOperand allocation src), addrLoads)
+        | LIR.HeapLoad (dest, addr, offset) ->
+            let (addrReg, addrLoads) = loadIfNeeded addr LIR.X12
+            (LIR.HeapLoad (regOrTemp (applyToReg allocation dest), addrReg, offset), addrLoads)
 
     // Build final instruction sequence: preLoads + rewritten + postStores
     let postStores =
@@ -286,7 +319,9 @@ let applyAllocation (allocation: Map<int, Allocation>) (instr: LIR.Instr) : LIR.
         | LIR.And (dest, _, _)
         | LIR.Orr (dest, _, _)
         | LIR.Mvn (dest, _)
-        | LIR.Call (dest, _, _) ->
+        | LIR.Call (dest, _, _)
+        | LIR.HeapAlloc (dest, _)
+        | LIR.HeapLoad (dest, _, _) ->
             storeIfNeeded dest
         | _ -> []
 

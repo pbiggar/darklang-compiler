@@ -40,6 +40,32 @@ let lirPhysRegToARM64Reg (physReg: LIR.PhysReg) : ARM64.Reg =
     | LIR.X30 -> ARM64.X30
     | LIR.SP -> ARM64.SP
 
+/// Convert LIR.PhysFPReg to ARM64.FReg
+let lirPhysFPRegToARM64FReg (physReg: LIR.PhysFPReg) : ARM64.FReg =
+    match physReg with
+    | LIR.D0 -> ARM64.D0
+    | LIR.D1 -> ARM64.D1
+    | LIR.D2 -> ARM64.D2
+    | LIR.D3 -> ARM64.D3
+    | LIR.D4 -> ARM64.D4
+    | LIR.D5 -> ARM64.D5
+    | LIR.D6 -> ARM64.D6
+    | LIR.D7 -> ARM64.D7
+    | LIR.D8 -> ARM64.D8
+    | LIR.D9 -> ARM64.D9
+    | LIR.D10 -> ARM64.D10
+    | LIR.D11 -> ARM64.D11
+    | LIR.D12 -> ARM64.D12
+    | LIR.D13 -> ARM64.D13
+    | LIR.D14 -> ARM64.D14
+    | LIR.D15 -> ARM64.D15
+
+/// Convert LIR.FReg to ARM64.FReg (assumes physical registers only)
+let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64.FReg, string> =
+    match freg with
+    | LIR.FPhysical physReg -> Ok (lirPhysFPRegToARM64FReg physReg)
+    | LIR.FVirtual vreg -> Error $"Virtual FP register {vreg} should have been allocated"
+
 /// Convert LIR.Reg to ARM64.Reg (assumes physical registers only)
 let lirRegToARM64Reg (reg: LIR.Reg) : Result<ARM64.Reg, string> =
     match reg with
@@ -96,12 +122,18 @@ let operandToReg (operand: LIR.Operand) : Result<ARM64.Reg * ARM64.Instr list, s
     | LIR.Imm value ->
         // Load immediate into X9
         Ok (ARM64.X9, loadImmediate ARM64.X9 value)
+    | LIR.FloatImm _ ->
+        // Float support not yet implemented - will be added in later milestone
+        Error "Float code generation not yet implemented"
     | LIR.StackSlot offset ->
         // Load stack slot into X9
         Ok (ARM64.X9, loadStackSlot ARM64.X9 offset)
     | LIR.StringRef _ ->
         // String address loading handled by PrintString instruction
         Error "StringRef cannot be directly used as register operand"
+    | LIR.FloatRef _ ->
+        // Float address loading handled by FLoad instruction
+        Error "FloatRef cannot be directly used as register operand"
 
 /// Generate function prologue
 /// Saves FP, LR, callee-saved registers, and allocates stack space
@@ -164,6 +196,8 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             match src with
             | LIR.Imm value ->
                 Ok (loadImmediate destReg value)
+            | LIR.FloatImm _ ->
+                Error "Float code generation not yet implemented"
             | LIR.Reg srcReg ->
                 lirRegToARM64Reg srcReg
                 |> Result.map (fun srcARM64 -> [ARM64.MOV_reg (destReg, srcARM64)])
@@ -171,7 +205,9 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                 // Load from stack slot into destination register
                 Ok (loadStackSlot destReg offset)
             | LIR.StringRef _ ->
-                Error "Cannot MOV string reference - use PrintString instruction")
+                Error "Cannot MOV string reference - use PrintString instruction"
+            | LIR.FloatRef _ ->
+                Error "Cannot MOV float reference - use FLoad instruction")
 
     | LIR.Store (offset, src) ->
         // Store register to stack slot
@@ -191,6 +227,8 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                     // Need to load immediate into register first
                     let tempReg = ARM64.X9  // Use X9 as temp
                     Ok (loadImmediate tempReg value @ [ARM64.ADD_reg (destReg, leftReg, tempReg)])
+                | LIR.FloatImm _ ->
+                    Error "Float code generation not yet implemented"
                 | LIR.Reg rightReg ->
                     lirRegToARM64Reg rightReg
                     |> Result.map (fun rightARM64 -> [ARM64.ADD_reg (destReg, leftReg, rightARM64)])
@@ -199,7 +237,9 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                     let tempReg = ARM64.X9
                     Ok (loadStackSlot tempReg offset @ [ARM64.ADD_reg (destReg, leftReg, tempReg)])
                 | LIR.StringRef _ ->
-                    Error "Cannot use string reference in arithmetic operation"))
+                    Error "Cannot use string reference in arithmetic operation"
+                | LIR.FloatRef _ ->
+                    Error "Cannot use float reference in integer arithmetic"))
 
     | LIR.Sub (dest, left, right) ->
         lirRegToARM64Reg dest
@@ -212,6 +252,8 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                 | LIR.Imm value ->
                     let tempReg = ARM64.X9
                     Ok (loadImmediate tempReg value @ [ARM64.SUB_reg (destReg, leftReg, tempReg)])
+                | LIR.FloatImm _ ->
+                    Error "Float code generation not yet implemented"
                 | LIR.Reg rightReg ->
                     lirRegToARM64Reg rightReg
                     |> Result.map (fun rightARM64 -> [ARM64.SUB_reg (destReg, leftReg, rightARM64)])
@@ -220,7 +262,9 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                     let tempReg = ARM64.X9
                     Ok (loadStackSlot tempReg offset @ [ARM64.SUB_reg (destReg, leftReg, tempReg)])
                 | LIR.StringRef _ ->
-                    Error "Cannot use string reference in arithmetic operation"))
+                    Error "Cannot use string reference in arithmetic operation"
+                | LIR.FloatRef _ ->
+                    Error "Cannot use float reference in integer arithmetic"))
 
 
     | LIR.Mul (dest, left, right) ->
@@ -248,6 +292,8 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             | LIR.Imm value ->
                 let tempReg = ARM64.X9
                 Ok (loadImmediate tempReg value @ [ARM64.CMP_reg (leftReg, tempReg)])
+            | LIR.FloatImm _ ->
+                Error "Float code generation not yet implemented"
             | LIR.Reg rightReg ->
                 lirRegToARM64Reg rightReg
                 |> Result.map (fun rightARM64 -> [ARM64.CMP_reg (leftReg, rightARM64)])
@@ -256,7 +302,9 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                 let tempReg = ARM64.X9
                 Ok (loadStackSlot tempReg offset @ [ARM64.CMP_reg (leftReg, tempReg)])
             | LIR.StringRef _ ->
-                Error "Cannot compare string references directly")
+                Error "Cannot compare string references directly"
+            | LIR.FloatRef _ ->
+                Error "Cannot compare float references directly - use FCmp")
 
     | LIR.Cset (dest, cond) ->
         lirRegToARM64Reg dest
@@ -340,6 +388,17 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             else
                 Runtime.generatePrintInt ())
 
+    | LIR.PrintFloat freg ->
+        // Print float value from FP register
+        // Value should be in D0 for generatePrintFloat
+        lirFRegToARM64FReg freg
+        |> Result.map (fun fregARM64 ->
+            if fregARM64 <> ARM64.D0 then
+                // Move to D0 if not already there
+                [ARM64.FMOV_reg (ARM64.D0, fregARM64)] @ Runtime.generatePrintFloat ()
+            else
+                Runtime.generatePrintFloat ())
+
     | LIR.PrintString (idx, len) ->
         // To print a string, we need:
         // 1. ADRP + ADD to load string address into X0
@@ -350,6 +409,121 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             ARM64.ADRP (ARM64.X0, stringLabel)  // Load page address of string
             ARM64.ADD_label (ARM64.X0, ARM64.X0, stringLabel)  // Add page offset
         ] @ Runtime.generatePrintString len)
+
+    // Floating-point instructions
+    | LIR.FMov (dest, src) ->
+        lirFRegToARM64FReg dest
+        |> Result.bind (fun destReg ->
+            lirFRegToARM64FReg src
+            |> Result.map (fun srcReg -> [ARM64.FMOV_reg (destReg, srcReg)]))
+
+    | LIR.FLoad (dest, idx) ->
+        // Load float from pool into FP register
+        // Float labels are named "_float0", "_float1", etc.
+        lirFRegToARM64FReg dest
+        |> Result.map (fun destReg ->
+            let floatLabel = sprintf "_float%d" idx
+            [
+                ARM64.ADRP (ARM64.X9, floatLabel)           // Load page address of float
+                ARM64.ADD_label (ARM64.X9, ARM64.X9, floatLabel)  // Add page offset
+                ARM64.LDR_fp (destReg, ARM64.X9, 0s)        // Load float from [X9]
+            ])
+
+    | LIR.FAdd (dest, left, right) ->
+        lirFRegToARM64FReg dest
+        |> Result.bind (fun destReg ->
+            lirFRegToARM64FReg left
+            |> Result.bind (fun leftReg ->
+                lirFRegToARM64FReg right
+                |> Result.map (fun rightReg -> [ARM64.FADD (destReg, leftReg, rightReg)])))
+
+    | LIR.FSub (dest, left, right) ->
+        lirFRegToARM64FReg dest
+        |> Result.bind (fun destReg ->
+            lirFRegToARM64FReg left
+            |> Result.bind (fun leftReg ->
+                lirFRegToARM64FReg right
+                |> Result.map (fun rightReg -> [ARM64.FSUB (destReg, leftReg, rightReg)])))
+
+    | LIR.FMul (dest, left, right) ->
+        lirFRegToARM64FReg dest
+        |> Result.bind (fun destReg ->
+            lirFRegToARM64FReg left
+            |> Result.bind (fun leftReg ->
+                lirFRegToARM64FReg right
+                |> Result.map (fun rightReg -> [ARM64.FMUL (destReg, leftReg, rightReg)])))
+
+    | LIR.FDiv (dest, left, right) ->
+        lirFRegToARM64FReg dest
+        |> Result.bind (fun destReg ->
+            lirFRegToARM64FReg left
+            |> Result.bind (fun leftReg ->
+                lirFRegToARM64FReg right
+                |> Result.map (fun rightReg -> [ARM64.FDIV (destReg, leftReg, rightReg)])))
+
+    | LIR.FNeg (dest, src) ->
+        lirFRegToARM64FReg dest
+        |> Result.bind (fun destReg ->
+            lirFRegToARM64FReg src
+            |> Result.map (fun srcReg -> [ARM64.FNEG (destReg, srcReg)]))
+
+    | LIR.FCmp (left, right) ->
+        lirFRegToARM64FReg left
+        |> Result.bind (fun leftReg ->
+            lirFRegToARM64FReg right
+            |> Result.map (fun rightReg -> [ARM64.FCMP (leftReg, rightReg)]))
+
+    // Heap operations
+    | LIR.HeapAlloc (dest, sizeBytes) ->
+        // Inline bump allocator using X28 as heap pointer
+        // X28 is reserved for heap allocation (initialized in _start prologue)
+        // Algorithm:
+        // 1. Save current heap pointer to dest
+        // 2. Bump X28 by aligned size
+        lirRegToARM64Reg dest
+        |> Result.map (fun destReg ->
+            // Align size to 8 bytes
+            let alignedSize = (sizeBytes + 7) &&& (~~~7)
+            [
+                ARM64.MOV_reg (destReg, ARM64.X28)  // dest = current heap pointer
+                ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 alignedSize)  // bump pointer
+            ])
+
+    | LIR.HeapStore (addr, offset, src) ->
+        // Store value at addr + offset (offset is in bytes)
+        lirRegToARM64Reg addr
+        |> Result.bind (fun addrReg ->
+            match src with
+            | LIR.Imm value ->
+                // Load immediate into temp register, then store
+                let tempReg = ARM64.X9
+                Ok (loadImmediate tempReg value @
+                    [ARM64.STR (tempReg, addrReg, int16 offset)])
+            | LIR.Reg srcReg ->
+                lirRegToARM64Reg srcReg
+                |> Result.map (fun srcARM64 ->
+                    // If src and addr are the same register, we have a problem
+                    // due to register allocation bug. Use temp register as workaround.
+                    if srcARM64 = addrReg then
+                        // Save value to temp, use temp for store
+                        let tempReg = ARM64.X9
+                        [ARM64.MOV_reg (tempReg, srcARM64); ARM64.STR (tempReg, addrReg, int16 offset)]
+                    else
+                        [ARM64.STR (srcARM64, addrReg, int16 offset)])
+            | LIR.StackSlot slotOffset ->
+                // Load from stack slot into temp, then store to heap
+                let tempReg = ARM64.X9
+                Ok (loadStackSlot tempReg slotOffset @
+                    [ARM64.STR (tempReg, addrReg, int16 offset)])
+            | _ -> Error "Unsupported operand type in HeapStore")
+
+    | LIR.HeapLoad (dest, addr, offset) ->
+        // Load value from addr + offset (offset is in bytes)
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg addr
+            |> Result.map (fun addrReg ->
+                [ARM64.LDR (destReg, addrReg, int16 offset)]))
 
 /// Epilogue label for current function (set during function conversion)
 let mutable private currentEpilogueLabel = ""
@@ -430,6 +604,18 @@ let convertCFG (cfg: LIR.CFG) : Result<ARM64.Instr list, string> =
         | Error err, _ -> Error err
         | _, Error err -> Error err) (Ok [])
 
+/// Generate heap initialization code for _start function
+/// Reserves 64KB of stack space for heap allocations and initializes X28
+let generateHeapInit () : ARM64.Instr list =
+    [
+        // Allocate 64KB (0x10000) of stack space for heap
+        // SUB SP, SP, #0x10000 (in chunks since immediate is 12-bit max)
+        ARM64.MOVZ (ARM64.X28, 0us, 0)  // Start with 0
+        ARM64.MOVK (ARM64.X28, 0x1us, 1)  // 0x10000 = 65536
+        ARM64.SUB_reg (ARM64.SP, ARM64.SP, ARM64.X28)  // SP -= 64KB
+        ARM64.MOV_reg (ARM64.X28, ARM64.SP)  // X28 = heap base (bottom of reserved area)
+    ]
+
 /// Convert LIR function to ARM64 instructions with prologue and epilogue
 let convertFunction (func: LIR.Function) : Result<ARM64.Instr list, string> =
     // Set the epilogue label for this function so Ret terminators can jump to it
@@ -441,6 +627,11 @@ let convertFunction (func: LIR.Function) : Result<ARM64.Instr list, string> =
     | Ok cfgInstrs ->
         // Generate prologue (save FP/LR, allocate stack)
         let prologue = generatePrologue func.UsedCalleeSaved func.StackSize
+
+        // Generate heap initialization for _start only
+        let heapInit =
+            if func.Name = "_start" then generateHeapInit ()
+            else []
 
         // Generate parameter setup: move X0-X7 to allocated parameter registers
         // This must come AFTER the prologue but BEFORE the function body
@@ -476,13 +667,13 @@ let convertFunction (func: LIR.Function) : Result<ARM64.Instr list, string> =
         // Add function entry label (for BL to branch to)
         let functionEntryLabel = [ARM64.Label func.Name]
 
-        // Combine: function label + prologue + param setup + CFG body + epilogue label + epilogue
+        // Combine: function label + prologue + heap init + param setup + CFG body + epilogue label + epilogue
         // All Ret terminators jump to the epilogue label
-        Ok (functionEntryLabel @ prologue @ paramSetup @ cfgInstrs @ epilogueLabel @ epilogue)
+        Ok (functionEntryLabel @ prologue @ heapInit @ paramSetup @ cfgInstrs @ epilogueLabel @ epilogue)
 
 /// Convert LIR program to ARM64 instructions
 let generateARM64 (program: LIR.Program) : Result<ARM64.Instr list, string> =
-    let (LIR.Program (functions, _stringPool)) = program
+    let (LIR.Program (functions, _stringPool, _floatPool)) = program
     // Ensure _start is first (entry point)
     let sortedFunctions =
         match List.tryFind (fun (f: LIR.Function) -> f.Name = "_start") functions with

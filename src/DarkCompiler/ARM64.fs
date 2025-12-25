@@ -23,11 +23,17 @@
 
 module ARM64
 
-/// ARM64 registers (subset for now)
+/// ARM64 general-purpose registers (subset for now)
 type Reg =
     | X0 | X1 | X2 | X3 | X4 | X5 | X6 | X7 | X8 | X9
     | X10 | X11 | X12 | X13 | X14 | X15 | X16
+    | X28  // Reserved for heap pointer
     | X29 | X30 | SP
+
+/// ARM64 floating-point registers (D0-D15 for double precision)
+type FReg =
+    | D0 | D1 | D2 | D3 | D4 | D5 | D6 | D7
+    | D8 | D9 | D10 | D11 | D12 | D13 | D14 | D15
 
 /// Comparison conditions (for CSET)
 type Condition =
@@ -82,6 +88,20 @@ type Instr =
     // PC-relative addressing for .rodata access
     | ADRP of dest:Reg * label:string  // Address page: dest = PC-relative page address of label
     | ADD_label of dest:Reg * src:Reg * label:string  // Add label offset: dest = src + page offset of label
+    // Floating-point instructions
+    | LDR_fp of dest:FReg * addr:Reg * offset:int16  // Load double from [addr + offset]
+    | STR_fp of src:FReg * addr:Reg * offset:int16   // Store double to [addr + offset]
+    | FADD of dest:FReg * src1:FReg * src2:FReg      // FP add: dest = src1 + src2
+    | FSUB of dest:FReg * src1:FReg * src2:FReg      // FP sub: dest = src1 - src2
+    | FMUL of dest:FReg * src1:FReg * src2:FReg      // FP mul: dest = src1 * src2
+    | FDIV of dest:FReg * src1:FReg * src2:FReg      // FP div: dest = src1 / src2
+    | FNEG of dest:FReg * src:FReg                   // FP negate: dest = -src
+    | FABS of dest:FReg * src:FReg                   // FP absolute value: dest = |src|
+    | FCMP of src1:FReg * src2:FReg                  // FP compare (sets condition flags)
+    | FMOV_reg of dest:FReg * src:FReg               // FP move between registers
+    | FMOV_to_gp of dest:Reg * src:FReg              // FP to GP register (bit-for-bit)
+    | SCVTF of dest:FReg * src:Reg                   // Signed int to FP: dest = (double)src
+    | FCVTZS of dest:Reg * src:FReg                  // FP to signed int (truncate): dest = (int64)src
 
 /// Machine code (32-bit instruction)
 type MachineCode = uint32

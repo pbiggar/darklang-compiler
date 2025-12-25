@@ -42,10 +42,35 @@ let addString (pool: StringPool) (s: string) : int * StringPool =
         let pool' = { Strings = Map.add idx (s, String.length s) pool.Strings; NextId = idx + 1 }
         (idx, pool')
 
+/// Float pool for storing float constants in data section
+/// Maps pool index to float value
+type FloatPool = {
+    Floats: Map<int, float>  // index -> float value
+    NextId: int
+}
+
+/// Empty float pool
+let emptyFloatPool = { Floats = Map.empty; NextId = 0 }
+
+/// Add a float to the pool, returning its index
+/// If float already exists, returns existing index
+let addFloat (pool: FloatPool) (f: float) : int * FloatPool =
+    // Check if float already exists
+    let existing =
+        pool.Floats
+        |> Map.tryFindKey (fun _ v -> v = f)
+    match existing with
+    | Some idx -> (idx, pool)
+    | None ->
+        let idx = pool.NextId
+        let pool' = { Floats = Map.add idx f pool.Floats; NextId = idx + 1 }
+        (idx, pool')
+
 /// Operands
 type Operand =
     | IntConst of int64
     | BoolConst of bool
+    | FloatRef of int   // Index into float pool
     | StringRef of int  // Index into string pool
     | Register of VReg
 
@@ -78,6 +103,10 @@ type Instr =
     | BinOp of dest:VReg * op:BinOp * left:Operand * right:Operand
     | UnaryOp of dest:VReg * op:UnaryOp * src:Operand
     | Call of dest:VReg * funcName:string * args:Operand list
+    // Heap operations for tuples and other compound types
+    | HeapAlloc of dest:VReg * sizeBytes:int       // Allocate heap memory
+    | HeapStore of addr:VReg * offset:int * src:Operand  // Store at heap[addr+offset]
+    | HeapLoad of dest:VReg * addr:VReg * offset:int     // Load from heap[addr+offset]
 
 /// Basic block label
 type Label = Label of string
@@ -108,8 +137,8 @@ type Function = {
     CFG: CFG
 }
 
-/// MIR program (list of functions with string pool)
-type Program = Program of functions:Function list * strings:StringPool
+/// MIR program (list of functions with string and float pools)
+type Program = Program of functions:Function list * strings:StringPool * floats:FloatPool
 
 /// Fresh register generator
 type RegGen = RegGen of int

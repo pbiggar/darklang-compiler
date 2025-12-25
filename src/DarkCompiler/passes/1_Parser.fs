@@ -20,6 +20,7 @@ open AST
 /// Token types for lexer
 type Token =
     | TInt of int64
+    | TFloat of float
     | TStringLit of string  // String literal token (named to avoid conflict with AST.TString type)
     | TTrue
     | TFalse
@@ -37,6 +38,7 @@ type Token =
     | TDef         // def (function definition)
     | TColon       // : (type annotation)
     | TComma       // , (parameter separator)
+    | TDot         // . (tuple access)
     | TEquals      // = (assignment in let)
     | TEqEq        // == (equality comparison)
     | TNeq         // !=
@@ -66,6 +68,7 @@ let lex (input: string) : Result<Token list, string> =
         | ')' :: rest -> lexHelper rest (TRParen :: acc)
         | ':' :: rest -> lexHelper rest (TColon :: acc)
         | ',' :: rest -> lexHelper rest (TComma :: acc)
+        | '.' :: rest -> lexHelper rest (TDot :: acc)
         | '=' :: '=' :: rest -> lexHelper rest (TEqEq :: acc)
         | '=' :: rest -> lexHelper rest (TEquals :: acc)
         | '!' :: '=' :: rest -> lexHelper rest (TNeq :: acc)
@@ -102,30 +105,74 @@ let lex (input: string) : Result<Token list, string> =
                 | _ -> TIdent ident
             lexHelper remaining (token :: acc)
         | c :: _ when System.Char.IsDigit(c) ->
-            // Parse integer
-            let rec parseDigits (cs: char list) (digits: char list) : Result<int64 * char list, string> =
+            // Parse number (integer or float)
+            // First collect all digits
+            let rec collectDigits (cs: char list) (acc: char list) : char list * char list =
                 match cs with
-                | d :: rest when System.Char.IsDigit(d) ->
-                    parseDigits rest (d :: digits)
-                | _ ->
-                    let numStr = System.String(List.rev digits |> List.toArray)
-                    // Try to parse as int64
-                    match System.Int64.TryParse(numStr) with
-                    | (true, value) -> Ok (value, cs)
-                    | (false, _) ->
-                        // Check for INT64_MIN special case: "9223372036854775808"
-                        // This value is > INT64_MAX but equals |INT64_MIN|
-                        // It's only valid when preceded by minus: -9223372036854775808
-                        if numStr = "9223372036854775808" then
-                            // Return INT64_MIN directly - this is a special sentinel
-                            // The parser will only accept this when it's negated
-                            Ok (System.Int64.MinValue, cs)
-                        else
-                            Error $"Integer literal too large: {numStr}"
+                | d :: rest when System.Char.IsDigit(d) -> collectDigits rest (d :: acc)
+                | _ -> (List.rev acc, cs)
 
-            match parseDigits chars [] with
-            | Ok (num, remaining) -> lexHelper remaining (TInt num :: acc)
-            | Error err -> Error err
+            let (intDigits, afterInt) = collectDigits chars []
+
+            // Check if this is a float (has decimal point or exponent)
+            match afterInt with
+            | '.' :: rest when not (List.isEmpty rest) && System.Char.IsDigit(List.head rest) ->
+                // Float with decimal point: 3.14
+                let (fracDigits, afterFrac) = collectDigits rest []
+                // Check for exponent
+                match afterFrac with
+                | ('e' :: rest' | 'E' :: rest') ->
+                    // Scientific notation: 3.14e10 or 3.14e-10
+                    let (expSign, afterSign) =
+                        match rest' with
+                        | '+' :: r -> (['+'], r)
+                        | '-' :: r -> (['-'], r)
+                        | _ -> ([], rest')
+                    let (expDigits, remaining) = collectDigits afterSign []
+                    if List.isEmpty expDigits then
+                        Error "Expected exponent digits after 'e'"
+                    else
+                        let numStr = System.String(Array.ofList (intDigits @ ['.'] @ fracDigits @ ['e'] @ expSign @ expDigits))
+                        match System.Double.TryParse(numStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture) with
+                        | (true, value) -> lexHelper remaining (TFloat value :: acc)
+                        | (false, _) -> Error $"Invalid float literal: {numStr}"
+                | _ ->
+                    // Float without exponent: 3.14
+                    let numStr = System.String(Array.ofList (intDigits @ ['.'] @ fracDigits))
+                    match System.Double.TryParse(numStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture) with
+                    | (true, value) -> lexHelper afterFrac (TFloat value :: acc)
+                    | (false, _) -> Error $"Invalid float literal: {numStr}"
+            | ('e' :: rest | 'E' :: rest) ->
+                // Scientific notation without decimal: 1e10 or 1e-10
+                let (expSign, afterSign) =
+                    match rest with
+                    | '+' :: r -> (['+'], r)
+                    | '-' :: r -> (['-'], r)
+                    | _ -> ([], rest)
+                let (expDigits, remaining) = collectDigits afterSign []
+                if List.isEmpty expDigits then
+                    Error "Expected exponent digits after 'e'"
+                else
+                    let numStr = System.String(Array.ofList (intDigits @ ['e'] @ expSign @ expDigits))
+                    match System.Double.TryParse(numStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture) with
+                    | (true, value) -> lexHelper remaining (TFloat value :: acc)
+                    | (false, _) -> Error $"Invalid float literal: {numStr}"
+            | _ ->
+                // Integer
+                let numStr = System.String(List.toArray intDigits)
+                // Try to parse as int64
+                match System.Int64.TryParse(numStr) with
+                | (true, value) -> lexHelper afterInt (TInt value :: acc)
+                | (false, _) ->
+                    // Check for INT64_MIN special case: "9223372036854775808"
+                    // This value is > INT64_MAX but equals |INT64_MIN|
+                    // It's only valid when preceded by minus: -9223372036854775808
+                    if numStr = "9223372036854775808" then
+                        // Return INT64_MIN directly - this is a special sentinel
+                        // The parser will only accept this when it's negated
+                        lexHelper afterInt (TInt System.Int64.MinValue :: acc)
+                    else
+                        Error $"Integer literal too large: {numStr}"
         | '"' :: rest ->
             // Parse string literal with escape sequences
             let rec parseString (cs: char list) (chars: char list) : Result<string * char list, string> =
@@ -174,7 +221,8 @@ let parseType (tokens: Token list) : Result<Type * Token list, string> =
     | TIdent "int" :: rest -> Ok (TInt64, rest)
     | TIdent "bool" :: rest -> Ok (TBool, rest)
     | TIdent "string" :: rest -> Ok (TString, rest)
-    | _ -> Error "Expected type annotation (int, bool, or string)"
+    | TIdent "float" :: rest -> Ok (TFloat64, rest)
+    | _ -> Error "Expected type annotation (int, bool, string, or float)"
 
 /// Parse a single parameter: IDENT : type
 let parseParam (tokens: Token list) : Result<(string * Type) * Token list, string> =
@@ -369,8 +417,15 @@ let parse (tokens: Token list) : Result<Program, string> =
             parsePrimary toks
 
     and parsePrimary (toks: Token list) : Result<Expr * Token list, string> =
+        // Parse a primary expression, then handle any postfix operations
+        parsePrimaryBase toks
+        |> Result.bind (fun (expr, remaining) ->
+            parsePostfix expr remaining)
+
+    and parsePrimaryBase (toks: Token list) : Result<Expr * Token list, string> =
         match toks with
         | TInt n :: rest -> Ok (IntLiteral n, rest)
+        | TFloat f :: rest -> Ok (FloatLiteral f, rest)
         | TStringLit s :: rest -> Ok (StringLiteral s, rest)
         | TTrue :: rest -> Ok (BoolLiteral true, rest)
         | TFalse :: rest -> Ok (BoolLiteral false, rest)
@@ -383,12 +438,43 @@ let parse (tokens: Token list) : Result<Program, string> =
             // Variable reference
             Ok (Var name, rest)
         | TLParen :: rest ->
+            // Either parenthesized expression or tuple literal
             parseExpr rest
-            |> Result.bind (fun (expr, remaining) ->
+            |> Result.bind (fun (firstExpr, remaining) ->
                 match remaining with
-                | TRParen :: rest' -> Ok (expr, rest')
-                | _ -> Error "Expected ')'")
+                | TRParen :: rest' ->
+                    // Parenthesized expression (single element)
+                    Ok (firstExpr, rest')
+                | TComma :: rest' ->
+                    // Tuple literal: (expr, expr, ...)
+                    parseTupleElements rest' [firstExpr]
+                | _ -> Error "Expected ')' or ',' in tuple/parenthesized expression")
         | _ -> Error "Expected expression"
+
+    and parseTupleElements (toks: Token list) (acc: Expr list) : Result<Expr * Token list, string> =
+        // Parse remaining tuple elements after the first comma
+        parseExpr toks
+        |> Result.bind (fun (expr, remaining) ->
+            match remaining with
+            | TComma :: rest ->
+                // More elements
+                parseTupleElements rest (expr :: acc)
+            | TRParen :: rest ->
+                // End of tuple
+                let elements = List.rev (expr :: acc)
+                Ok (TupleLiteral elements, rest)
+            | _ -> Error "Expected ',' or ')' in tuple literal")
+
+    and parsePostfix (expr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
+        // Handle postfix operations: tuple access (.0, .1, etc.)
+        match toks with
+        | TDot :: TInt index :: rest ->
+            if index < 0L then
+                Error "Tuple index cannot be negative"
+            else
+                let accessExpr = TupleAccess (expr, int index)
+                parsePostfix accessExpr rest
+        | _ -> Ok (expr, toks)
 
     and parseCallArgs (toks: Token list) (acc: Expr list) : Result<Expr list * Token list, string> =
         match toks with

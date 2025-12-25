@@ -22,6 +22,7 @@ let convertOperand (operand: MIR.Operand) : LIR.Operand =
     match operand with
     | MIR.IntConst n -> LIR.Imm n
     | MIR.BoolConst b -> LIR.Imm (if b then 1L else 0L)  // Booleans as 0/1
+    | MIR.FloatRef idx -> LIR.FloatImm 0.0  // Placeholder - actual float loaded from pool later
     | MIR.StringRef idx -> LIR.StringRef idx
     | MIR.Register vreg -> LIR.Reg (vregToLIRReg vreg)
 
@@ -34,6 +35,9 @@ let ensureInRegister (operand: MIR.Operand) (tempReg: LIR.Reg) : LIR.Instr list 
     | MIR.BoolConst b ->
         // Load boolean (0 or 1) into register
         ([LIR.Mov (tempReg, LIR.Imm (if b then 1L else 0L))], tempReg)
+    | MIR.FloatRef idx ->
+        // Load float into a register (placeholder - proper FP support needed later)
+        ([LIR.Mov (tempReg, LIR.FloatImm 0.0)], tempReg)
     | MIR.StringRef _ ->
         // String references are not used as operands in arithmetic operations
         failwith "Cannot use string literal as arithmetic operand"
@@ -115,15 +119,30 @@ let selectInstr (instr: MIR.Instr) : LIR.Instr list =
 
     | MIR.UnaryOp (dest, op, src) ->
         let lirDest = vregToLIRReg dest
-        let (srcInstrs, srcReg) = ensureInRegister src (LIR.Virtual 1000)
 
         match op with
         | MIR.Neg ->
-            // Negation: 0 - src
-            srcInstrs @ [LIR.Mov (lirDest, LIR.Imm 0L); LIR.Sub (lirDest, lirDest, LIR.Reg srcReg)]
+            // Check if source is a float - use FP negation
+            match src with
+            | MIR.FloatRef idx ->
+                // Float negation: load float into D1, negate into D0, move to integer reg
+                // Actually, we need to produce a float result. For now, let's use FNeg
+                // and store result in a FP virtual register that maps to an integer virtual
+                // Since we don't have proper FP virtual registers yet, we'll work around this
+                // by loading the float, negating it, and the result stays in FP register
+                // For the entry function case, the terminator will handle printing
+                [
+                    LIR.FLoad (LIR.FPhysical LIR.D1, idx)  // Load float constant into D1
+                    LIR.FNeg (LIR.FPhysical LIR.D0, LIR.FPhysical LIR.D1)  // Negate into D0
+                ]
+            | _ ->
+                // Integer negation: 0 - src
+                let (srcInstrs, srcReg) = ensureInRegister src (LIR.Virtual 1000)
+                srcInstrs @ [LIR.Mov (lirDest, LIR.Imm 0L); LIR.Sub (lirDest, lirDest, LIR.Reg srcReg)]
 
         | MIR.Not ->
             // Boolean NOT: 1 - src (since booleans are 0 or 1)
+            let (srcInstrs, srcReg) = ensureInRegister src (LIR.Virtual 1000)
             srcInstrs @ [
                 LIR.Mov (lirDest, LIR.Imm 1L)
                 LIR.Sub (lirDest, lirDest, LIR.Reg srcReg)
@@ -167,6 +186,20 @@ let selectInstr (instr: MIR.Instr) : LIR.Instr list =
 
             saveInstrs @ moveInstrs @ [callInstr] @ restoreInstrs @ moveResult
 
+    | MIR.HeapAlloc (dest, sizeBytes) ->
+        let lirDest = vregToLIRReg dest
+        [LIR.HeapAlloc (lirDest, sizeBytes)]
+
+    | MIR.HeapStore (addr, offset, src) ->
+        let lirAddr = vregToLIRReg addr
+        let lirSrc = convertOperand src
+        [LIR.HeapStore (lirAddr, offset, lirSrc)]
+
+    | MIR.HeapLoad (dest, addr, offset) ->
+        let lirDest = vregToLIRReg dest
+        let lirAddr = vregToLIRReg addr
+        [LIR.HeapLoad (lirDest, lirAddr, offset)]
+
 /// Convert MIR terminator to LIR terminator
 /// For Branch, need to convert operand to register (may add instructions)
 /// isEntryFunc: whether this is the entry function (_start) that should print the result
@@ -174,13 +207,22 @@ let selectInstr (instr: MIR.Instr) : LIR.Instr list =
 let selectTerminator (terminator: MIR.Terminator) (isEntryFunc: bool) (stringPool: MIR.StringPool) : LIR.Instr list * LIR.Terminator =
     match terminator with
     | MIR.Ret operand ->
-        // Handle string returns differently - use PrintString instead of PrintInt
+        // Handle different return types appropriately
         match operand with
         | MIR.StringRef idx when isEntryFunc ->
             // Look up string length from pool
             let (_, strLen) = Map.find idx stringPool.Strings
             // PrintString generates its own code to load address and print
             ([LIR.PrintString (idx, strLen)], LIR.Ret)
+        | MIR.FloatRef idx when isEntryFunc ->
+            // Load float from pool into D0 and print it
+            let loadFloat = LIR.FLoad (LIR.FPhysical LIR.D0, idx)
+            let printFloat = LIR.PrintFloat (LIR.FPhysical LIR.D0)
+            ([loadFloat; printFloat], LIR.Ret)
+        | MIR.FloatRef idx ->
+            // Non-entry function: load float into D0 for return
+            let loadFloat = LIR.FLoad (LIR.FPhysical LIR.D0, idx)
+            ([loadFloat], LIR.Ret)
         | _ ->
             // Move operand to X0 (return register)
             let lirOp = convertOperand operand
@@ -237,7 +279,7 @@ let selectCFG (cfg: MIR.CFG) (isEntryFunc: bool) (stringPool: MIR.StringPool) : 
 
 /// Convert MIR program to LIR
 let toLIR (program: MIR.Program) : LIR.Program =
-    let (MIR.Program (mirFuncs, stringPool)) = program
+    let (MIR.Program (mirFuncs, stringPool, floatPool)) = program
 
     // Convert each MIR function to LIR
     let lirFuncs =
@@ -255,4 +297,4 @@ let toLIR (program: MIR.Program) : LIR.Program =
                 LIR.UsedCalleeSaved = []  // Will be determined by register allocation
             })
 
-    LIR.Program (lirFuncs, stringPool)
+    LIR.Program (lirFuncs, stringPool, floatPool)

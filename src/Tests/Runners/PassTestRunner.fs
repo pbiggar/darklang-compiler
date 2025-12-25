@@ -34,6 +34,7 @@ type PassTestResult = {
 let prettyPrintMIROperand = function
     | MIR.IntConst n -> string n
     | MIR.BoolConst b -> if b then "true" else "false"
+    | MIR.FloatRef idx -> $"float[{idx}]"
     | MIR.StringRef idx -> $"str[{idx}]"
     | MIR.Register (MIR.VReg n) -> $"v{n}"
 
@@ -75,12 +76,26 @@ let prettyPrintLIRReg = function
     | LIR.Physical pr -> prettyPrintLIRPhysReg pr
     | LIR.Virtual n -> $"v{n}"
 
+/// Pretty-print LIR FP physical register
+let prettyPrintLIRPhysFPReg = function
+    | LIR.D0 -> "D0" | LIR.D1 -> "D1" | LIR.D2 -> "D2" | LIR.D3 -> "D3"
+    | LIR.D4 -> "D4" | LIR.D5 -> "D5" | LIR.D6 -> "D6" | LIR.D7 -> "D7"
+    | LIR.D8 -> "D8" | LIR.D9 -> "D9" | LIR.D10 -> "D10" | LIR.D11 -> "D11"
+    | LIR.D12 -> "D12" | LIR.D13 -> "D13" | LIR.D14 -> "D14" | LIR.D15 -> "D15"
+
+/// Pretty-print LIR FP register
+let prettyPrintLIRFReg = function
+    | LIR.FPhysical pr -> prettyPrintLIRPhysFPReg pr
+    | LIR.FVirtual n -> $"fv{n}"
+
 /// Pretty-print LIR operand
 let prettyPrintLIROperand = function
     | LIR.Imm n -> $"Imm {n}"
+    | LIR.FloatImm f -> $"FloatImm {f}"
     | LIR.Operand.Reg reg -> $"Reg {prettyPrintLIRReg reg}"
     | LIR.StackSlot n -> $"Stack {n}"
     | LIR.StringRef idx -> $"str[{idx}]"
+    | LIR.FloatRef idx -> $"float[{idx}]"
 
 /// Pretty-print LIR instruction
 let prettyPrintLIRInstr (instr: LIR.Instr) : string =
@@ -114,12 +129,38 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"PrintInt({prettyPrintLIRReg reg})"
     | LIR.PrintBool reg ->
         $"PrintBool({prettyPrintLIRReg reg})"
+    | LIR.PrintFloat freg ->
+        $"PrintFloat({prettyPrintLIRFReg freg})"
     | LIR.PrintString (idx, len) ->
         $"PrintString(str[{idx}], len={len})"
     | LIR.SaveRegs ->
         "SaveRegs"
     | LIR.RestoreRegs ->
         "RestoreRegs"
+    // FP instructions
+    | LIR.FMov (dest, src) ->
+        $"{prettyPrintLIRFReg dest} <- FMov({prettyPrintLIRFReg src})"
+    | LIR.FLoad (dest, idx) ->
+        $"{prettyPrintLIRFReg dest} <- FLoad(float[{idx}])"
+    | LIR.FAdd (dest, left, right) ->
+        $"{prettyPrintLIRFReg dest} <- FAdd({prettyPrintLIRFReg left}, {prettyPrintLIRFReg right})"
+    | LIR.FSub (dest, left, right) ->
+        $"{prettyPrintLIRFReg dest} <- FSub({prettyPrintLIRFReg left}, {prettyPrintLIRFReg right})"
+    | LIR.FMul (dest, left, right) ->
+        $"{prettyPrintLIRFReg dest} <- FMul({prettyPrintLIRFReg left}, {prettyPrintLIRFReg right})"
+    | LIR.FDiv (dest, left, right) ->
+        $"{prettyPrintLIRFReg dest} <- FDiv({prettyPrintLIRFReg left}, {prettyPrintLIRFReg right})"
+    | LIR.FNeg (dest, src) ->
+        $"{prettyPrintLIRFReg dest} <- FNeg({prettyPrintLIRFReg src})"
+    | LIR.FCmp (left, right) ->
+        $"FCmp({prettyPrintLIRFReg left}, {prettyPrintLIRFReg right})"
+    // Heap operations
+    | LIR.HeapAlloc (dest, sizeBytes) ->
+        $"{prettyPrintLIRReg dest} <- HeapAlloc({sizeBytes})"
+    | LIR.HeapStore (addr, offset, src) ->
+        $"HeapStore({prettyPrintLIRReg addr}, {offset}, {prettyPrintLIROperand src})"
+    | LIR.HeapLoad (dest, addr, offset) ->
+        $"{prettyPrintLIRReg dest} <- HeapLoad({prettyPrintLIRReg addr}, {offset})"
 
 /// Pretty-print LIR terminator
 let prettyPrintLIRTerminator (term: LIR.Terminator) : string =
@@ -131,7 +172,7 @@ let prettyPrintLIRTerminator (term: LIR.Terminator) : string =
 
 /// Pretty-print LIR program (flat format for single-block CFGs)
 let prettyPrintLIR (program: LIR.Program) : string =
-    let (LIR.Program (funcs, _)) = program
+    let (LIR.Program (funcs, _, _)) = program
     // For simple test cases, we expect a single function with single block
     match funcs with
     | [func] ->
@@ -185,6 +226,7 @@ let prettyPrintANFAtom = function
     | ANF.IntLiteral n -> string n
     | ANF.BoolLiteral b -> if b then "true" else "false"
     | ANF.StringLiteral s -> $"\"{s}\""
+    | ANF.FloatLiteral f -> string f
     | ANF.Var (ANF.TempId n) -> $"t{n}"
 
 /// Pretty-print ANF binary operator
@@ -219,6 +261,11 @@ let prettyPrintANFCExpr = function
         $"{funcName}({argStr})"
     | ANF.IfValue (cond, thenAtom, elseAtom) ->
         $"if {prettyPrintANFAtom cond} then {prettyPrintANFAtom thenAtom} else {prettyPrintANFAtom elseAtom}"
+    | ANF.TupleAlloc elems ->
+        let elemsStr = elems |> List.map prettyPrintANFAtom |> String.concat ", "
+        $"({elemsStr})"
+    | ANF.TupleGet (tupleAtom, index) ->
+        $"{prettyPrintANFAtom tupleAtom}.{index}"
 
 /// Pretty-print ANF expression (recursive)
 let rec prettyPrintANFExpr = function
@@ -295,7 +342,8 @@ let prettyPrintARM64Reg = function
     | ARM64.X4 -> "X4" | ARM64.X5 -> "X5" | ARM64.X6 -> "X6" | ARM64.X7 -> "X7"
     | ARM64.X8 -> "X8" | ARM64.X9 -> "X9" | ARM64.X10 -> "X10" | ARM64.X11 -> "X11"
     | ARM64.X12 -> "X12" | ARM64.X13 -> "X13" | ARM64.X14 -> "X14" | ARM64.X15 -> "X15"
-    | ARM64.X16 -> "X16" | ARM64.X29 -> "X29" | ARM64.X30 -> "X30" | ARM64.SP -> "SP"
+    | ARM64.X16 -> "X16" | ARM64.X28 -> "X28"
+    | ARM64.X29 -> "X29" | ARM64.X30 -> "X30" | ARM64.SP -> "SP"
 
 /// Pretty-print ARM64 instruction
 let prettyPrintARM64Instr = function
@@ -372,6 +420,33 @@ let prettyPrintARM64Instr = function
         $"ADRP({prettyPrintARM64Reg dest}, {label})"
     | ARM64.ADD_label (dest, src, label) ->
         $"ADD_label({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {label})"
+    // Floating-point instructions
+    | ARM64.LDR_fp (dest, addr, offset) ->
+        $"LDR_fp({dest}, {prettyPrintARM64Reg addr}, {offset})"
+    | ARM64.STR_fp (src, addr, offset) ->
+        $"STR_fp({src}, {prettyPrintARM64Reg addr}, {offset})"
+    | ARM64.FADD (dest, src1, src2) ->
+        $"FADD({dest}, {src1}, {src2})"
+    | ARM64.FSUB (dest, src1, src2) ->
+        $"FSUB({dest}, {src1}, {src2})"
+    | ARM64.FMUL (dest, src1, src2) ->
+        $"FMUL({dest}, {src1}, {src2})"
+    | ARM64.FDIV (dest, src1, src2) ->
+        $"FDIV({dest}, {src1}, {src2})"
+    | ARM64.FNEG (dest, src) ->
+        $"FNEG({dest}, {src})"
+    | ARM64.FABS (dest, src) ->
+        $"FABS({dest}, {src})"
+    | ARM64.FCMP (src1, src2) ->
+        $"FCMP({src1}, {src2})"
+    | ARM64.FMOV_reg (dest, src) ->
+        $"FMOV_reg({dest}, {src})"
+    | ARM64.FMOV_to_gp (dest, src) ->
+        $"FMOV_to_gp({prettyPrintARM64Reg dest}, {src})"
+    | ARM64.SCVTF (dest, src) ->
+        $"SCVTF({dest}, {prettyPrintARM64Reg src})"
+    | ARM64.FCVTZS (dest, src) ->
+        $"FCVTZS({prettyPrintARM64Reg dest}, {src})"
 
 /// Pretty-print ARM64 program (filtering out Label pseudo-instructions)
 let prettyPrintARM64 (instrs: ARM64.Instr list) : string =

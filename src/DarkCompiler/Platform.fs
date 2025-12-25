@@ -18,6 +18,7 @@ type OS =
 type SyscallNumbers = {
     Write: uint16
     Exit: uint16
+    Mmap: uint16  // Memory map syscall for heap allocation
     SvcImmediate: uint16  // SVC instruction immediate value
     SyscallRegister: ARM64.Reg  // Register to hold syscall number (X16 for macOS, X8 for Linux)
 }
@@ -37,11 +38,13 @@ let getSyscallNumbers (os: OS) : SyscallNumbers =
     | MacOS ->
         { Write = 4us
           Exit = 1us
+          Mmap = 197us  // macOS mmap syscall number
           SvcImmediate = 0x80us
           SyscallRegister = ARM64.X16 }
     | Linux ->
         { Write = 64us
           Exit = 93us
+          Mmap = 222us  // Linux mmap syscall number
           SvcImmediate = 0us
           SyscallRegister = ARM64.X8 }
 

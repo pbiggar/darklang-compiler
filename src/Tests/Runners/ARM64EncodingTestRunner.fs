@@ -73,6 +73,20 @@ let formatMismatches (mismatches: (int * Instr * uint32 * uint32) list) : string
                     | Label label -> $"Label({label})"
                     | ADRP (dest, label) -> $"ADRP({dest}, {label})"
                     | ADD_label (dest, src, label) -> $"ADD_label({dest}, {src}, {label})"
+                    // Floating-point instructions
+                    | LDR_fp (dest, addr, offset) -> $"LDR_fp({dest}, {addr}, {offset})"
+                    | STR_fp (src, addr, offset) -> $"STR_fp({src}, {addr}, {offset})"
+                    | FADD (dest, src1, src2) -> $"FADD({dest}, {src1}, {src2})"
+                    | FSUB (dest, src1, src2) -> $"FSUB({dest}, {src1}, {src2})"
+                    | FMUL (dest, src1, src2) -> $"FMUL({dest}, {src1}, {src2})"
+                    | FDIV (dest, src1, src2) -> $"FDIV({dest}, {src1}, {src2})"
+                    | FNEG (dest, src) -> $"FNEG({dest}, {src})"
+                    | FABS (dest, src) -> $"FABS({dest}, {src})"
+                    | FCMP (src1, src2) -> $"FCMP({src1}, {src2})"
+                    | FMOV_reg (dest, src) -> $"FMOV_reg({dest}, {src})"
+                    | FMOV_to_gp (dest, src) -> $"FMOV_to_gp({dest}, {src})"
+                    | SCVTF (dest, src) -> $"SCVTF({dest}, {src})"
+                    | FCVTZS (dest, src) -> $"FCVTZS({dest}, {src})"
 
                 $"Instruction {i}: {instrStr}\n      Expected: 0x{expected:X8}, Got: 0x{actual:X8}")
         String.concat "\n    " lines

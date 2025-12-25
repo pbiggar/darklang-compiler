@@ -242,4 +242,4 @@ let parseLIR (text: string) : Result<LIR.Program, string> =
             StackSize = 0
             UsedCalleeSaved = []
         }
-        Ok (Program ([func], MIR.emptyStringPool))
+        Ok (Program ([func], MIR.emptyStringPool, MIR.emptyFloatPool))

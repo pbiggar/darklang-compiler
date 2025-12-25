@@ -1,0 +1,41 @@
+// Tuple tests for Phase 7 Milestone 1
+
+// Basic tuple creation and access
+// Note: Currently tuples cannot be directly printed, so we access elements
+
+// 2-element tuple - first element
+let t = (1, 2) in t.0 = stdout="1\n"
+
+// 2-element tuple - second element
+let t = (1, 2) in t.1 = stdout="2\n"
+
+// 3-element tuple - all elements
+let t = (10, 20, 30) in t.0 = stdout="10\n"
+let t = (10, 20, 30) in t.1 = stdout="20\n"
+let t = (10, 20, 30) in t.2 = stdout="30\n"
+
+// Tuple with negative numbers
+let t = (-1, -2) in t.0 = stdout="-1\n"
+let t = (-1, -2) in t.1 = stdout="-2\n"
+
+// Tuple with zero
+let t = (0, 1) in t.0 = stdout="0\n"
+let t = (0, 1) in t.1 = stdout="1\n"
+
+// Nested tuple access (single level)
+let t = (100, 200) in t.0 + t.1 = stdout="300\n"
+
+// Tuple with boolean values - access as integers
+// Note: Type information is lost through tuples, so booleans are output as 1/0
+let t = (true, false) in t.0 = stdout="1\n"
+let t = (true, false) in t.1 = stdout="0\n"
+
+// Tuple elements in arithmetic
+let t = (5, 3) in t.0 - t.1 = stdout="2\n"
+let t = (5, 3) in t.0 * t.1 = stdout="15\n"
+
+// Multiple tuples
+let a = (1, 2) in let b = (3, 4) in a.0 + b.1 = stdout="5\n"
+
+// Large tuple (4 elements)
+let t = (1, 2, 3, 4) in t.0 + t.1 + t.2 + t.3 = stdout="10\n"

@@ -23,17 +23,29 @@ type PhysReg =
     | X30  // Link register
     | SP   // Stack pointer
 
+/// ARM64 floating-point registers
+type PhysFPReg =
+    | D0 | D1 | D2 | D3 | D4 | D5 | D6 | D7
+    | D8 | D9 | D10 | D11 | D12 | D13 | D14 | D15
+
 /// Register or virtual register (before allocation)
 type Reg =
     | Physical of PhysReg
     | Virtual of int
 
+/// Floating-point register or virtual FP register (before allocation)
+type FReg =
+    | FPhysical of PhysFPReg
+    | FVirtual of int
+
 /// Operands
 type Operand =
     | Imm of int64           // Immediate value
+    | FloatImm of float      // Float immediate value (legacy - prefer FloatRef)
     | Reg of Reg             // Register
     | StackSlot of int       // Stack offset (for spills)
     | StringRef of int       // Reference to string in pool (by index)
+    | FloatRef of int        // Reference to float in pool (by index)
 
 /// Comparison conditions (for CSET)
 type Condition =
@@ -62,7 +74,21 @@ type Instr =
     | RestoreRegs                                // Restore caller-saved registers (X1-X10) after call
     | PrintInt of Reg                           // Print integer register to stdout
     | PrintBool of Reg                          // Print boolean register to stdout
+    | PrintFloat of FReg                        // Print float from FP register to stdout
     | PrintString of stringIndex:int * stringLen:int  // Print string from pool to stdout
+    // Floating-point instructions
+    | FMov of dest:FReg * src:FReg              // Move between FP registers
+    | FLoad of dest:FReg * floatIdx:int         // Load float from pool into FP register
+    | FAdd of dest:FReg * left:FReg * right:FReg
+    | FSub of dest:FReg * left:FReg * right:FReg
+    | FMul of dest:FReg * left:FReg * right:FReg
+    | FDiv of dest:FReg * left:FReg * right:FReg
+    | FNeg of dest:FReg * src:FReg
+    | FCmp of left:FReg * right:FReg            // Compare FP values (sets flags)
+    // Heap operations for tuples and other compound types
+    | HeapAlloc of dest:Reg * sizeBytes:int       // Allocate heap memory
+    | HeapStore of addr:Reg * offset:int * src:Operand  // Store at heap[addr+offset]
+    | HeapLoad of dest:Reg * addr:Reg * offset:int     // Load from heap[addr+offset]
 
 /// Basic block label
 type Label = string
@@ -95,8 +121,8 @@ type Function = {
     UsedCalleeSaved: PhysReg list  // Callee-saved registers used (for prologue/epilogue)
 }
 
-/// LIR program with functions and string pool
-type Program = Program of functions:Function list * strings:MIR.StringPool
+/// LIR program with functions, string pool, and float pool
+type Program = Program of functions:Function list * strings:MIR.StringPool * floats:MIR.FloatPool
 
 /// Live range for a virtual register (future use)
 type LiveRange = {

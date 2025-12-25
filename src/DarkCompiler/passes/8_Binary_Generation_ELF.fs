@@ -76,14 +76,41 @@ let serializeElf64ProgramHeader (ph: Binary_ELF.Elf64ProgramHeader) : byte array
     |]
 
 /// Serialize complete ELF binary to bytes
+/// Adds alignment padding between code and data for 8-byte alignment
 let serializeElf (binary: Binary_ELF.ElfBinary) : byte array =
+    // Calculate alignment padding needed after code
+    let headerSize = 64 + (56 * binary.ProgramHeaders.Length)
+    let codeEnd = headerSize + binary.MachineCode.Length
+    let alignedDataStart = (codeEnd + 7) &&& (~~~7)
+    let alignmentPadding = Array.create (alignedDataStart - codeEnd) 0uy
     [|
         yield! serializeElf64Header binary.Header
         for ph in binary.ProgramHeaders do
             yield! serializeElf64ProgramHeader ph
         yield! binary.MachineCode
+        yield! alignmentPadding  // Align to 8 bytes before float/string data
         yield! binary.StringData
     |]
+
+/// Create float data bytes from float pool
+let createFloatData (floatPool: MIR.FloatPool) : byte array =
+    if floatPool.Floats.IsEmpty then
+        [||]
+    else
+        // Sort by index to ensure consistent ordering
+        let sortedFloats =
+            floatPool.Floats
+            |> Map.toList
+            |> List.sortBy fst
+
+        // Build float bytes (each float is 8 bytes)
+        let mutable allBytes : byte list = []
+
+        for (_idx, floatVal) in sortedFloats do
+            let floatBytes = System.BitConverter.GetBytes(floatVal)
+            allBytes <- allBytes @ (Array.toList floatBytes)
+
+        Array.ofList allBytes
 
 /// Create string data bytes from string pool (same logic as Mach-O)
 let createStringData (stringPool: MIR.StringPool) : byte array =
@@ -105,18 +132,25 @@ let createStringData (stringPool: MIR.StringPool) : byte array =
 
         Array.ofList allBytes
 
-/// Create an ELF executable with string data
-let createExecutableWithStrings (machineCode: uint32 list) (stringPool: MIR.StringPool) : byte array =
+/// Create an ELF executable with float and string data
+let createExecutableWithPools (machineCode: uint32 list) (stringPool: MIR.StringPool) (floatPool: MIR.FloatPool) : byte array =
     let codeBytes =
         machineCode
         |> List.collect (fun word ->
             uint32ToBytes word |> Array.toList)
         |> Array.ofList
 
+    // Create float data (goes after code, before strings)
+    let floatBytes = createFloatData floatPool
+
+    // Create string data
     let stringBytes = createStringData stringPool
 
+    // Combined constant data: floats then strings
+    let dataBytes = Array.append floatBytes stringBytes
+
     let codeSize = uint64 codeBytes.Length
-    let stringSize = uint64 stringBytes.Length
+    let dataSize = uint64 dataBytes.Length
 
     // ELF structures
     let elfHeaderSize = 64UL
@@ -160,9 +194,12 @@ let createExecutableWithStrings (machineCode: uint32 list) (stringPool: MIR.Stri
     }
 
     // Create executable code segment
-    // The PT_LOAD segment must include the ELF header, program headers, code, and string data
+    // The PT_LOAD segment must include the ELF header, program headers, code, and constant data
     // so the kernel can access them during execution
-    let segmentFileSize = codeFileOffset + codeSize + stringSize
+    // Account for 8-byte alignment padding between code and data
+    let alignedDataOffset = (codeFileOffset + codeSize + 7UL) &&& (~~~7UL)
+    let alignmentPadding = alignedDataOffset - (codeFileOffset + codeSize)
+    let segmentFileSize = codeFileOffset + codeSize + alignmentPadding + dataSize
     let segmentMemSize = segmentFileSize
 
     let codeSegment : Binary_ELF.Elf64ProgramHeader = {
@@ -171,7 +208,7 @@ let createExecutableWithStrings (machineCode: uint32 list) (stringPool: MIR.Stri
         Offset = 0UL  // Load from beginning of file (includes headers)
         VAddr = baseVAddr  // Load at base address
         PAddr = baseVAddr  // Physical = virtual for user programs
-        FileSize = segmentFileSize  // Includes headers + code + strings
+        FileSize = segmentFileSize  // Includes headers + code + data
         MemSize = segmentMemSize  // Same as file size
         Align = 0x1000UL  // 4KB alignment (page size)
     }
@@ -180,14 +217,18 @@ let createExecutableWithStrings (machineCode: uint32 list) (stringPool: MIR.Stri
         Header = header
         ProgramHeaders = [codeSegment]
         MachineCode = codeBytes
-        StringData = stringBytes
+        StringData = dataBytes  // Contains floats + strings
     }
 
     serializeElf binary
 
-/// Create a minimal ELF executable from ARM64 machine code (legacy, no strings)
+/// Create an ELF executable with string data (legacy wrapper for backwards compatibility)
+let createExecutableWithStrings (machineCode: uint32 list) (stringPool: MIR.StringPool) : byte array =
+    createExecutableWithPools machineCode stringPool MIR.emptyFloatPool
+
+/// Create a minimal ELF executable from ARM64 machine code (legacy, no data)
 let createExecutable (machineCode: uint32 list) : byte array =
-    createExecutableWithStrings machineCode MIR.emptyStringPool
+    createExecutableWithPools machineCode MIR.emptyStringPool MIR.emptyFloatPool
 
 /// Write bytes to file (Linux - no code signing needed)
 let writeToFile (path: string) (bytes: byte array) : Result<unit, string> =

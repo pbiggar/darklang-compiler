@@ -21,18 +21,16 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 
 **All function signatures require type annotations**
 
-## Phase 5: Strings (NEXT)
+## ✅ Phase 5a: String Literals (COMPLETE)
 
-### Phase 5a: String Literals Only
-
-- [ ] Add StringLiteral to AST.fs
-- [ ] Parse string literals with escape sequences
-- [ ] Add string pool to MIR.fs
-- [ ] Add .rodata section to Binary_Generation_ELF.fs
-- [ ] Add .rodata section to Binary_Generation_MachO.fs
-- [ ] Add ADRP and ADD_pcrel to ARM64.fs
-- [ ] Implement generatePrintString in Runtime.fs
-- [ ] Write E2E tests (strings.e2e - literals only)
+- [x] Add StringLiteral to AST.fs
+- [x] Parse string literals with escape sequences (\n, \t, \", \\, \r, \0, \xNN)
+- [x] Add string pool to MIR.fs
+- [x] Add __cstring section to Binary_Generation_MachO.fs
+- [x] Add string data to Binary_Generation_ELF.fs
+- [x] Add ADRP and ADD_label to ARM64.fs
+- [x] Implement generatePrintString in Runtime.fs
+- [x] Write E2E tests (strings.e2e - 14 tests)
 
 ### Phase 5b: String Concatenation (Later)
 
@@ -43,7 +41,7 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 
 **Memory Model**: Hybrid (literal pool + simple heap, no GC)
 
-## Phase 6: Floats
+## Phase 6: Floats (NEXT)
 
 - [ ] Add FloatLiteral to AST.fs
 - [ ] Parse float literals (decimal, scientific notation)
@@ -94,22 +92,25 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 - ✅ Variables (let bindings with shadowing support)
 - ✅ Control flow (if/then/else expressions, including in atom position)
 - ✅ Functions with type signatures, calls, and recursion
+- ✅ String literals with escape sequences
 - ✅ Type checking (51 DSL tests + 8 unit tests)
 - ✅ 8-pass compiler pipeline (Parser → TypeCheck → ANF → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
-- ✅ 457 passing tests
+- ✅ 471 passing tests
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
 
 ## Implementation Order
 
 ```
-✅ Phase 0 → ✅ Phase 1 → ✅ Phase 2 → ✅ Phase 3 → ✅ Phase 4
-                                                      ↓
-                                               Phase 5 (NEXT) → Phase 6
+✅ Phase 0 → ✅ Phase 1 → ✅ Phase 2 → ✅ Phase 3 → ✅ Phase 4 → ✅ Phase 5a
+                                                                    ↓
+                                                             Phase 6 (NEXT)
+                                                                    ↓
+                                                              Phase 5b
 ```
 
 **Original Estimate**: 8-11 weeks total
-**Completed**: Phases 0-4
-**Remaining**: Phases 5-6
+**Completed**: Phases 0-4, 5a
+**Remaining**: Phase 6, Phase 5b (optional)
 
 ---
 

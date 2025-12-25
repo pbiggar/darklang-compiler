@@ -18,15 +18,23 @@
 
 module ARM64_Encoding
 
-/// Encode register to 5-bit value
+/// Encode general-purpose register to 5-bit value
 let encodeReg (reg: ARM64.Reg) : uint32 =
     match reg with
     | ARM64.X0 -> 0u | ARM64.X1 -> 1u | ARM64.X2 -> 2u | ARM64.X3 -> 3u
     | ARM64.X4 -> 4u | ARM64.X5 -> 5u | ARM64.X6 -> 6u | ARM64.X7 -> 7u
     | ARM64.X8 -> 8u | ARM64.X9 -> 9u | ARM64.X10 -> 10u | ARM64.X11 -> 11u
     | ARM64.X12 -> 12u | ARM64.X13 -> 13u | ARM64.X14 -> 14u | ARM64.X15 -> 15u
-    | ARM64.X16 -> 16u
+    | ARM64.X16 -> 16u | ARM64.X28 -> 28u
     | ARM64.X29 -> 29u | ARM64.X30 -> 30u | ARM64.SP -> 31u
+
+/// Encode floating-point register to 5-bit value
+let encodeFReg (reg: ARM64.FReg) : uint32 =
+    match reg with
+    | ARM64.D0 -> 0u | ARM64.D1 -> 1u | ARM64.D2 -> 2u | ARM64.D3 -> 3u
+    | ARM64.D4 -> 4u | ARM64.D5 -> 5u | ARM64.D6 -> 6u | ARM64.D7 -> 7u
+    | ARM64.D8 -> 8u | ARM64.D9 -> 9u | ARM64.D10 -> 10u | ARM64.D11 -> 11u
+    | ARM64.D12 -> 12u | ARM64.D13 -> 13u | ARM64.D14 -> 14u | ARM64.D15 -> 15u
 
 /// Encode ARM64 instruction to 32-bit machine code
 let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
@@ -434,6 +442,139 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm16 = uint32 imm
         [0xD4000001u ||| (imm16 <<< 5)]
 
+    // Floating-point instructions
+    | ARM64.LDR_fp (dest, addr, offset) ->
+        // LDR (SIMD&FP) - unsigned offset addressing for double
+        // Encoding: size=11 111 101 01 imm12 Rn Rt
+        // size=11 for 64-bit (double), V=1 (FP), opc=01 (load)
+        let size = 3u <<< 30  // 64-bit (double)
+        let fixedBits = 0b11110101u <<< 22  // LDR FP unsigned offset mode
+        // imm12 is unsigned offset in units of 8 bytes (like integer LDR 64-bit)
+        let imm12 = ((uint32 (int offset / 8)) &&& 0xFFFu) <<< 10
+        let rn = (encodeReg addr) <<< 5
+        let rt = encodeFReg dest
+        [size ||| fixedBits ||| imm12 ||| rn ||| rt]
+
+    | ARM64.STR_fp (src, addr, offset) ->
+        // STR (SIMD&FP) - unsigned offset addressing for double
+        // Encoding: size=11 111 101 00 imm12 Rn Rt
+        // size=11 for 64-bit (double), V=1 (FP), opc=00 (store)
+        let size = 3u <<< 30  // 64-bit (double)
+        let fixedBits = 0b11110100u <<< 22  // STR FP unsigned offset mode
+        let imm12 = ((uint32 (int offset / 8)) &&& 0xFFFu) <<< 10
+        let rn = (encodeReg addr) <<< 5
+        let rt = encodeFReg src
+        [size ||| fixedBits ||| imm12 ||| rn ||| rt]
+
+    | ARM64.FADD (dest, src1, src2) ->
+        // FADD (scalar, double): 0001 1110 01 1 Rm 0010 10 Rn Rd
+        // ftype=01 (double), opcode=0010 (add)
+        let fixedBits = 0b00011110011u <<< 21
+        let rm = (encodeFReg src2) <<< 16
+        let opcode = 0b001010u <<< 10  // FADD
+        let rn = (encodeFReg src1) <<< 5
+        let rd = encodeFReg dest
+        [fixedBits ||| rm ||| opcode ||| rn ||| rd]
+
+    | ARM64.FSUB (dest, src1, src2) ->
+        // FSUB (scalar, double): 0001 1110 01 1 Rm 0011 10 Rn Rd
+        let fixedBits = 0b00011110011u <<< 21
+        let rm = (encodeFReg src2) <<< 16
+        let opcode = 0b001110u <<< 10  // FSUB
+        let rn = (encodeFReg src1) <<< 5
+        let rd = encodeFReg dest
+        [fixedBits ||| rm ||| opcode ||| rn ||| rd]
+
+    | ARM64.FMUL (dest, src1, src2) ->
+        // FMUL (scalar, double): 0001 1110 01 1 Rm 0000 10 Rn Rd
+        let fixedBits = 0b00011110011u <<< 21
+        let rm = (encodeFReg src2) <<< 16
+        let opcode = 0b000010u <<< 10  // FMUL
+        let rn = (encodeFReg src1) <<< 5
+        let rd = encodeFReg dest
+        [fixedBits ||| rm ||| opcode ||| rn ||| rd]
+
+    | ARM64.FDIV (dest, src1, src2) ->
+        // FDIV (scalar, double): 0001 1110 01 1 Rm 0001 10 Rn Rd
+        let fixedBits = 0b00011110011u <<< 21
+        let rm = (encodeFReg src2) <<< 16
+        let opcode = 0b000110u <<< 10  // FDIV
+        let rn = (encodeFReg src1) <<< 5
+        let rd = encodeFReg dest
+        [fixedBits ||| rm ||| opcode ||| rn ||| rd]
+
+    | ARM64.FNEG (dest, src) ->
+        // FNEG (scalar, double): 0001 1110 01 1 00000 10000 Rn Rd
+        // Encoding: 0001 1110 01 1 00000 100001 Rn Rd
+        let fixedBits = 0b00011110011u <<< 21
+        let rm = 0u <<< 16  // Unused, must be 0
+        let opcode = 0b100001u <<< 10  // FNEG opcode
+        let rn = (encodeFReg src) <<< 5
+        let rd = encodeFReg dest
+        [fixedBits ||| rm ||| opcode ||| rn ||| rd]
+
+    | ARM64.FABS (dest, src) ->
+        // FABS (scalar, double): 0001 1110 01 1 00000 100000 Rn Rd
+        let fixedBits = 0b00011110011u <<< 21
+        let rm = 0u <<< 16  // Unused, must be 0
+        let opcode = 0b100000u <<< 10  // FABS opcode
+        let rn = (encodeFReg src) <<< 5
+        let rd = encodeFReg dest
+        [fixedBits ||| rm ||| opcode ||| rn ||| rd]
+
+    | ARM64.FCMP (src1, src2) ->
+        // FCMP (scalar, double): 0001 1110 01 1 Rm 00 1000 Rn 00 000
+        // Encoding: 0001 1110 01 1 Rm 00 1000 Rn 00 opc=000
+        let fixedBits = 0b00011110011u <<< 21
+        let rm = (encodeFReg src2) <<< 16
+        let opcode = 0b001000u <<< 10  // FCMP
+        let rn = (encodeFReg src1) <<< 5
+        let opc = 0b00000u  // Compare (not with zero)
+        [fixedBits ||| rm ||| opcode ||| rn ||| opc]
+
+    | ARM64.FMOV_reg (dest, src) ->
+        // FMOV (register, double): 0001 1110 01 1 00000 010000 Rn Rd
+        let fixedBits = 0b00011110011u <<< 21
+        let rm = 0u <<< 16  // Unused
+        let opcode = 0b010000u <<< 10  // FMOV
+        let rn = (encodeFReg src) <<< 5
+        let rd = encodeFReg dest
+        [fixedBits ||| rm ||| opcode ||| rn ||| rd]
+
+    | ARM64.FMOV_to_gp (dest, src) ->
+        // FMOV (scalar to GP, double): 1001 1110 01 1 00110 000000 Vn Rd
+        // sf=1, ftype=01 (double), rmode=00, opcode=110
+        // Move 64-bit FP register to GP register (bit-for-bit)
+        let sf = 1u <<< 31
+        let fixedBits = 0b0011110011u <<< 21
+        let opcode1 = 0b00110u <<< 16  // FMOV to general
+        let opcode2 = 0b000000u <<< 10
+        let rn = (encodeFReg src) <<< 5
+        let rd = encodeReg dest
+        [sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd]
+
+    | ARM64.SCVTF (dest, src) ->
+        // SCVTF (scalar, integer to FP, double): 1001 1110 01 1 00010 000000 Rn Rd
+        // sf=1 (64-bit int), ftype=01 (double), rmode=00, opcode=010
+        let sf = 1u <<< 31
+        let fixedBits = 0b0011110011u <<< 21
+        let opcode1 = 0b00010u <<< 16  // SCVTF
+        let opcode2 = 0b000000u <<< 10
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeFReg dest
+        [sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd]
+
+    | ARM64.FCVTZS (dest, src) ->
+        // FCVTZS (scalar, FP to integer, double): 1001 1110 01 1 11000 000000 Rn Rd
+        // sf=1 (64-bit int), ftype=01 (double), rmode=11 (toward zero), opcode=000
+        let sf = 1u <<< 31
+        let fixedBits = 0b0011110011u <<< 21
+        let opcode1 = 0b11000u <<< 16  // FCVTZS
+        let opcode2 = 0b000000u <<< 10
+        let rn = (encodeFReg src) <<< 5
+        let rd = encodeReg dest
+        [sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd]
+
 /// Two-Pass Encoding for Label Resolution
 
 /// Pass 1: Compute byte offset for each label
@@ -580,10 +721,42 @@ let getCodeSize (instructions: ARM64.Instr list) : int =
         | ARM64.Label _ -> 0  // Labels don't generate code
         | _ -> 4)  // All ARM64 instructions are 4 bytes
 
+/// Compute float label positions given code file offset, code size, and float pool
+/// Returns map from "_floatN" to byte offset (relative to segment/file start)
+/// Floats are stored as 8-byte IEEE 754 doubles, aligned to 8 bytes
+let computeFloatLabels (codeFileOffset: int) (codeSize: int) (floatPool: MIR.FloatPool) : Map<string, int> =
+    if floatPool.Floats.IsEmpty then
+        Map.empty
+    else
+        // Sort by index to ensure consistent ordering
+        let sortedFloats =
+            floatPool.Floats
+            |> Map.toList
+            |> List.sortBy fst
+
+        // Build label map with offsets
+        // Floats start after headers + code, 8-byte aligned
+        let startOffset = codeFileOffset + codeSize
+        // Align to 8 bytes
+        let alignedStart = (startOffset + 7) &&& (~~~7)
+        let mutable currentOffset = alignedStart
+        let mutable labelMap = Map.empty
+
+        for (idx, _floatVal) in sortedFloats do
+            let label = sprintf "_float%d" idx
+            labelMap <- Map.add label currentOffset labelMap
+            currentOffset <- currentOffset + 8  // Each double is 8 bytes
+
+        labelMap
+
 /// Compute string label positions given code file offset, code size, and string pool
 /// Returns map from "_strN" to byte offset (relative to segment/file start)
 /// codeFileOffset: where code starts in the file/segment
-let computeStringLabels (codeFileOffset: int) (codeSize: int) (stringPool: MIR.StringPool) : Map<string, int> =
+/// Compute the size of the float pool in bytes
+let getFloatPoolSize (floatPool: MIR.FloatPool) : int =
+    floatPool.Floats.Count * 8  // Each double is 8 bytes
+
+let computeStringLabels (codeFileOffset: int) (codeSize: int) (floatPoolSize: int) (stringPool: MIR.StringPool) : Map<string, int> =
     if stringPool.Strings.IsEmpty then
         Map.empty
     else
@@ -594,8 +767,10 @@ let computeStringLabels (codeFileOffset: int) (codeSize: int) (stringPool: MIR.S
             |> List.sortBy fst
 
         // Build label map with offsets
-        // Strings start after headers + code
-        let mutable currentOffset = codeFileOffset + codeSize
+        // Strings start after headers + code + floats
+        // Float pool is 8-byte aligned, so account for alignment
+        let floatStart = (codeFileOffset + codeSize + 7) &&& (~~~7)
+        let mutable currentOffset = floatStart + floatPoolSize
         let mutable labelMap = Map.empty
 
         for (idx, (str, _len)) in sortedStrings do
@@ -606,22 +781,29 @@ let computeStringLabels (codeFileOffset: int) (codeSize: int) (stringPool: MIR.S
 
         labelMap
 
-/// Encoding with string pool support
-/// Computes string label positions and encodes ADRP/ADD_label correctly
+/// Encoding with string and float pool support
+/// Computes label positions and encodes ADRP/ADD_label correctly
 /// codeFileOffset: where code will be placed in the final binary (for correct PC-relative addressing)
-let encodeAllWithStrings (instructions: ARM64.Instr list) (stringPool: MIR.StringPool) (codeFileOffset: int) : ARM64.MachineCode list =
+let encodeAllWithPools (instructions: ARM64.Instr list) (stringPool: MIR.StringPool) (floatPool: MIR.FloatPool) (codeFileOffset: int) : ARM64.MachineCode list =
     // Step 1: Compute code size
     let codeSize = getCodeSize instructions
 
-    // Step 2: Compute string label positions (after headers + code)
-    let stringLabels = computeStringLabels codeFileOffset codeSize stringPool
+    // Step 2: Compute float label positions (after headers + code, 8-byte aligned)
+    let floatLabels = computeFloatLabels codeFileOffset codeSize floatPool
+    let floatPoolSize = getFloatPoolSize floatPool
 
-    // Step 3: Compute code label positions (relative to code start, add file offset)
+    // Step 3: Compute string label positions (after headers + code + floats)
+    let stringLabels = computeStringLabels codeFileOffset codeSize floatPoolSize stringPool
+
+    // Step 4: Compute code label positions (relative to code start, add file offset)
     let rawCodeLabels = computeLabelPositions instructions
     let codeLabelMap = rawCodeLabels |> Map.map (fun _ offset -> codeFileOffset + offset)
 
-    // Step 4: Merge code labels with string labels
-    let labelMap = Map.fold (fun acc k v -> Map.add k v acc) codeLabelMap stringLabels
+    // Step 5: Merge all labels
+    let labelMap =
+        codeLabelMap
+        |> Map.fold (fun acc k v -> Map.add k v acc) floatLabels
+        |> Map.fold (fun acc k v -> Map.add k v acc) stringLabels
 
     // Step 5: Encode with label resolution (current offset includes file offset)
     let rec encodeLoop instrs offset acc =
@@ -634,7 +816,11 @@ let encodeAllWithStrings (instructions: ARM64.Instr list) (stringPool: MIR.Strin
 
     encodeLoop instructions codeFileOffset []
 
+/// Backwards-compatible version for code with only strings (no floats)
+let encodeAllWithStrings (instructions: ARM64.Instr list) (stringPool: MIR.StringPool) (codeFileOffset: int) : ARM64.MachineCode list =
+    encodeAllWithPools instructions stringPool MIR.emptyFloatPool codeFileOffset
+
 /// Main encoding entry point with two-pass label resolution (for code without strings)
 let encodeAll (instructions: ARM64.Instr list) : ARM64.MachineCode list =
-    // Use version with empty string pool and 0 offset for backwards compatibility
-    encodeAllWithStrings instructions MIR.emptyStringPool 0
+    // Use version with empty pools and 0 offset for backwards compatibility
+    encodeAllWithPools instructions MIR.emptyStringPool MIR.emptyFloatPool 0

@@ -6,6 +6,7 @@
 //
 // Current language features:
 // - Integer literals (64-bit signed)
+// - Float literals (64-bit double)
 // - Binary operators: +, -, *, /
 // - Parenthesized expressions
 // - Let bindings: let x = expr in body
@@ -24,6 +25,7 @@ type Type =
     | TString
     | TUnit
     | TFunction of Type list * Type  // parameter types * return type
+    | TTuple of Type list             // tuple type: (Int, Bool, String)
 
 /// Binary operators
 type BinOp =
@@ -53,12 +55,15 @@ type Expr =
     | IntLiteral of int64
     | BoolLiteral of bool
     | StringLiteral of string
+    | FloatLiteral of float
     | BinOp of BinOp * Expr * Expr
     | UnaryOp of UnaryOp * Expr
     | Let of name:string * value:Expr * body:Expr  // Let binding: let name = value in body
     | Var of string  // Variable reference
     | If of cond:Expr * thenBranch:Expr * elseBranch:Expr  // If expression: if cond then thenBranch else elseBranch
     | Call of funcName:string * args:Expr list  // Function call: funcName(arg1, arg2, ...)
+    | TupleLiteral of Expr list              // Tuple literal: (1, 2, 3)
+    | TupleAccess of tuple:Expr * index:int  // Tuple access: t.0, t.1, etc.
 
 /// Function definition
 type FunctionDef = {

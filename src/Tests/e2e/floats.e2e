@@ -1,0 +1,28 @@
+// Float literal tests
+// Note: Output format shows 2 decimal places
+
+// Basic float literals
+1.0 = stdout="1.00\n"
+0.5 = stdout="0.50\n"
+3.14 = stdout="3.14\n"
+2.5 = stdout="2.50\n"
+
+// Zero
+0.0 = stdout="0.00\n"
+
+// Float with integer-like values
+5.0 = stdout="5.00\n"
+10.0 = stdout="10.00\n"
+100.0 = stdout="100.00\n"
+
+// Small fractional values
+0.25 = stdout="0.25\n"
+0.99 = stdout="0.99\n"
+0.01 = stdout="0.01\n"
+
+// Negative floats
+-1.0 = stdout="-1.00\n"
+-0.5 = stdout="-0.50\n"
+-3.14 = stdout="-3.14\n"
+-0.50 = stdout="-0.50\n"
+-0.01 = stdout="-0.01\n"

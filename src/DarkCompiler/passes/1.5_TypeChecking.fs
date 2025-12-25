@@ -40,6 +40,9 @@ let rec typeToString (t: Type) : string =
     | TFunction (params', ret) ->
         let paramStr = params' |> List.map typeToString |> String.concat ", "
         $"({paramStr}) -> {typeToString ret}"
+    | TTuple elemTypes ->
+        let elemsStr = elemTypes |> List.map typeToString |> String.concat ", "
+        $"({elemsStr})"
 
 /// Pretty-print a type error
 let typeErrorToString (err: TypeError) : string =
@@ -85,9 +88,15 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
         | Some TString | None -> Ok TString
         | Some other -> Error (TypeMismatch (other, TString, "string literal"))
 
+    | FloatLiteral _ ->
+        // Float literals are always TFloat64
+        match expectedType with
+        | Some TFloat64 | None -> Ok TFloat64
+        | Some other -> Error (TypeMismatch (other, TFloat64, "float literal"))
+
     | BinOp (op, left, right) ->
         match op with
-        // Arithmetic operators: int -> int -> int
+        // Arithmetic operators: T -> T -> T (where T is int or float)
         | Add | Sub | Mul | Div ->
             let opName =
                 match op with
@@ -95,23 +104,27 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
                 | Sub -> "-"
                 | Mul -> "*"
                 | Div -> "/"
-                | _ -> failwith "unreachable"
+                | _ -> "?"
 
-            checkExpr left env (Some TInt64)
+            // Check left operand to determine numeric type
+            checkExpr left env None
             |> Result.bind (fun leftType ->
-                if leftType <> TInt64 then
-                    Error (TypeMismatch (TInt64, leftType, $"left operand of {opName}"))
-                else
-                    checkExpr right env (Some TInt64)
+                match leftType with
+                | TInt64 | TFloat64 ->
+                    // Right operand must be same type
+                    checkExpr right env (Some leftType)
                     |> Result.bind (fun rightType ->
-                        if rightType <> TInt64 then
-                            Error (TypeMismatch (TInt64, rightType, $"right operand of {opName}"))
+                        if rightType <> leftType then
+                            Error (TypeMismatch (leftType, rightType, $"right operand of {opName}"))
                         else
                             match expectedType with
-                            | Some TInt64 | None -> Ok TInt64
-                            | Some other -> Error (TypeMismatch (other, TInt64, $"result of {opName}"))))
+                            | Some expected when expected <> leftType ->
+                                Error (TypeMismatch (expected, leftType, $"result of {opName}"))
+                            | _ -> Ok leftType)
+                | other ->
+                    Error (InvalidOperation (opName, [other])))
 
-        // Comparison operators: int -> int -> bool
+        // Comparison operators: T -> T -> bool (where T is int or float)
         | Eq | Neq | Lt | Gt | Lte | Gte ->
             let opName =
                 match op with
@@ -121,21 +134,24 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
                 | Gt -> ">"
                 | Lte -> "<="
                 | Gte -> ">="
-                | _ -> failwith "unreachable"
+                | _ -> "?"
 
-            checkExpr left env (Some TInt64)
+            // Check left operand to determine numeric type
+            checkExpr left env None
             |> Result.bind (fun leftType ->
-                if leftType <> TInt64 then
-                    Error (TypeMismatch (TInt64, leftType, $"left operand of {opName}"))
-                else
-                    checkExpr right env (Some TInt64)
+                match leftType with
+                | TInt64 | TFloat64 ->
+                    // Right operand must be same type
+                    checkExpr right env (Some leftType)
                     |> Result.bind (fun rightType ->
-                        if rightType <> TInt64 then
-                            Error (TypeMismatch (TInt64, rightType, $"right operand of {opName}"))
+                        if rightType <> leftType then
+                            Error (TypeMismatch (leftType, rightType, $"right operand of {opName}"))
                         else
                             match expectedType with
                             | Some TBool | None -> Ok TBool
-                            | Some other -> Error (TypeMismatch (other, TBool, $"result of {opName}"))))
+                            | Some other -> Error (TypeMismatch (other, TBool, $"result of {opName}")))
+                | other ->
+                    Error (InvalidOperation (opName, [other])))
 
         // Boolean operators: bool -> bool -> bool
         | And | Or ->
@@ -158,15 +174,17 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
     | UnaryOp (op, inner) ->
         match op with
         | Neg ->
-            // Negation works on integers and returns integers
-            checkExpr inner env (Some TInt64)
+            // Negation works on integers and floats
+            checkExpr inner env None
             |> Result.bind (fun innerType ->
-                if innerType <> TInt64 then
-                    Error (TypeMismatch (TInt64, innerType, "operand of negation"))
-                else
+                match innerType with
+                | TInt64 | TFloat64 ->
                     match expectedType with
-                    | Some TInt64 | None -> Ok TInt64
-                    | Some other -> Error (TypeMismatch (other, TInt64, "result of negation")))
+                    | Some expected when expected <> innerType ->
+                        Error (TypeMismatch (expected, innerType, "result of negation"))
+                    | _ -> Ok innerType
+                | other ->
+                    Error (InvalidOperation ("-", [other])))
 
         | Not ->
             // Boolean not works on booleans and returns booleans
@@ -245,6 +263,43 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (expectedType: Type option) : Resu
             Error (GenericError $"{funcName} is not a function (has type {typeToString other})")
         | None ->
             Error (UndefinedVariable funcName)
+
+    | TupleLiteral elements ->
+        // Type-check each element and build tuple type
+        let rec checkElements elems acc =
+            match elems with
+            | [] -> Ok (List.rev acc)
+            | e :: rest ->
+                checkExpr e env None
+                |> Result.bind (fun elemType ->
+                    checkElements rest (elemType :: acc))
+
+        checkElements elements []
+        |> Result.bind (fun elemTypes ->
+            let tupleType = TTuple elemTypes
+            match expectedType with
+            | Some (TTuple expectedElemTypes) when expectedElemTypes <> elemTypes ->
+                Error (TypeMismatch (TTuple expectedElemTypes, tupleType, "tuple literal"))
+            | Some other when other <> tupleType ->
+                Error (TypeMismatch (other, tupleType, "tuple literal"))
+            | _ -> Ok tupleType)
+
+    | TupleAccess (tupleExpr, index) ->
+        // Check the tuple expression
+        checkExpr tupleExpr env None
+        |> Result.bind (fun tupleType ->
+            match tupleType with
+            | TTuple elemTypes ->
+                if index < 0 || index >= List.length elemTypes then
+                    Error (GenericError $"Tuple index {index} out of bounds (tuple has {List.length elemTypes} elements)")
+                else
+                    let elemType = List.item index elemTypes
+                    match expectedType with
+                    | Some expected when expected <> elemType ->
+                        Error (TypeMismatch (expected, elemType, $"tuple access .{index}"))
+                    | _ -> Ok elemType
+            | other ->
+                Error (GenericError $"Cannot access .{index} on non-tuple type {typeToString other}"))
 
 /// Type-check a function definition
 let checkFunctionDef (funcDef: FunctionDef) (env: TypeEnv) : Result<unit, TypeError> =
