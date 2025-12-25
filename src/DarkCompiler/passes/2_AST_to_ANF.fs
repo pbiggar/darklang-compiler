@@ -264,6 +264,57 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                     let exprWithBindings = wrapBindings payloadBindings finalExpr
                     (exprWithBindings, varGen2))
 
+    | AST.Match (scrutinee, cases) ->
+        // Compile match to if-else chain
+        // First convert scrutinee to atom
+        toAtom scrutinee varGen env typeReg variantLookup
+        |> Result.bind (fun (scrutineeAtom, scrutineeBindings, varGen1) ->
+            // Convert pattern to a tag value for comparison (simple enums only for M5)
+            let patternToTag (pattern: AST.Pattern) : Result<int64 option, string> =
+                match pattern with
+                | AST.PWildcard -> Ok None  // Wildcard matches everything
+                | AST.PVar _ -> Ok None     // Variable matches everything
+                | AST.PLiteral n -> Ok (Some n)  // Literal is the value itself
+                | AST.PConstructor (variantName, _) ->
+                    match Map.tryFind variantName variantLookup with
+                    | Some (_, tag, _) -> Ok (Some (int64 tag))
+                    | None -> Error $"Unknown constructor in pattern: {variantName}"
+
+            // Build the if-else chain from cases
+            let rec buildChain (remaining: (AST.Pattern * AST.Expr) list) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
+                match remaining with
+                | [] ->
+                    // No cases left - shouldn't happen if we have wildcard/var
+                    Error "Non-exhaustive pattern match"
+                | [(pattern, body)] ->
+                    // Last case - just return the body (assumes exhaustive or wildcard)
+                    toANF body vg env typeReg variantLookup
+                | (pattern, body) :: rest ->
+                    patternToTag pattern
+                    |> Result.bind (fun tagOpt ->
+                        match tagOpt with
+                        | None ->
+                            // Wildcard or var - matches everything, no more cases
+                            toANF body vg env typeReg variantLookup
+                        | Some tag ->
+                            // Build: if scrutinee == tag then body else rest
+                            let tagAtom = ANF.IntLiteral tag
+                            toANF body vg env typeReg variantLookup
+                            |> Result.bind (fun (thenExpr, vg1) ->
+                                buildChain rest vg1
+                                |> Result.map (fun (elseExpr, vg2) ->
+                                    // Create comparison
+                                    let (cmpVar, vg3) = ANF.freshVar vg2
+                                    let cmpExpr = ANF.Prim (ANF.Eq, scrutineeAtom, tagAtom)
+                                    let ifExpr = ANF.If (ANF.Var cmpVar, thenExpr, elseExpr)
+                                    let finalExpr = ANF.Let (cmpVar, cmpExpr, ifExpr)
+                                    (finalExpr, vg3))))
+
+            buildChain cases varGen1
+            |> Result.map (fun (chainExpr, varGen2) ->
+                let exprWithBindings = wrapBindings scrutineeBindings chainExpr
+                (exprWithBindings, varGen2)))
+
 /// Convert an AST expression to an atom, introducing let bindings as needed
 and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     match expr with
@@ -453,6 +504,15 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId>) 
                     let tupleCExpr = ANF.TupleAlloc [tagAtom; payloadAtom]
                     let allBindings = payloadBindings @ [(tempVar, tupleCExpr)]
                     (ANF.Var tempVar, allBindings, varGen2))
+
+    | AST.Match (scrutinee, cases) ->
+        // Match in atom position - compile and extract result
+        toANF (AST.Match (scrutinee, cases)) varGen env typeReg variantLookup
+        |> Result.bind (fun (matchExpr, varGen1) ->
+            // The match compiles to an if-else chain that returns a value
+            // We need to extract that value into a temp variable
+            // For now, just return an error - complex match in atom position needs more work
+            Error "Match expressions in atom position not yet supported (use let binding)")
 
 /// Wrap let bindings around an expression
 and wrapBindings (bindings: (ANF.TempId * ANF.CExpr) list) (expr: ANF.AExpr) : ANF.AExpr =

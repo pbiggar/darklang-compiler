@@ -433,6 +433,34 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
                         | _ -> Ok sumType)
 
+    | Match (scrutinee, cases) ->
+        // Type check the scrutinee first
+        checkExpr scrutinee env typeReg variantLookup None
+        |> Result.bind (fun scrutineeType ->
+            // Type check each case and ensure they all return the same type
+            let rec checkCases (remaining: (Pattern * Expr) list) (resultType: Type option) : Result<Type, TypeError> =
+                match remaining with
+                | [] ->
+                    match resultType with
+                    | Some t -> Ok t
+                    | None -> Error (GenericError "Match expression must have at least one case")
+                | (pattern, body) :: rest ->
+                    // For M5, we do simple pattern checking - just check the body
+                    // TODO: Check pattern matches scrutinee type and bind variables
+                    checkExpr body env typeReg variantLookup resultType
+                    |> Result.bind (fun bodyType ->
+                        match resultType with
+                        | None -> checkCases rest (Some bodyType)
+                        | Some expected when expected = bodyType -> checkCases rest resultType
+                        | Some expected -> Error (TypeMismatch (expected, bodyType, "match case")))
+
+            checkCases cases None
+            |> Result.bind (fun matchType ->
+                match expectedType with
+                | Some expected when expected <> matchType ->
+                    Error (TypeMismatch (expected, matchType, "match expression"))
+                | _ -> Ok matchType))
+
 /// Type-check a function definition
 let checkFunctionDef (funcDef: FunctionDef) (env: TypeEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) : Result<unit, TypeError> =
     // Build environment with parameters

@@ -1,0 +1,35 @@
+// Pattern matching tests for Phase 7 Milestone 5
+
+// Match on simple enum - first variant
+type Color = Red | Green | Blue match Red with | Red -> 1 | Green -> 2 | Blue -> 3 = stdout="1\n"
+
+// Match on simple enum - second variant
+type Color = Red | Green | Blue match Green with | Red -> 1 | Green -> 2 | Blue -> 3 = stdout="2\n"
+
+// Match on simple enum - third variant
+type Color = Red | Green | Blue match Blue with | Red -> 1 | Green -> 2 | Blue -> 3 = stdout="3\n"
+
+// Wildcard pattern matches anything
+type Color = Red | Green | Blue match Green with | Red -> 1 | _ -> 99 = stdout="99\n"
+
+// Wildcard at end is catch-all
+type Color = Red | Green | Blue match Blue with | Red -> 1 | Green -> 2 | _ -> 100 = stdout="100\n"
+
+// Match on enum stored in variable
+type Color = Red | Green | Blue let c = Green in match c with | Red -> 10 | Green -> 20 | Blue -> 30 = stdout="20\n"
+
+// Match with arithmetic in case body
+type Color = Red | Green | Blue match Red with | Red -> 5 + 10 | _ -> 0 = stdout="15\n"
+
+// Nested match - match result of another match
+type Bool = True | False let b = True in match b with | True -> 100 | False -> 0 = stdout="100\n"
+
+// Match with complex body expressions
+type Color = Red | Green | Blue match Red with | Red -> 2 + 3 | Green -> 10 - 5 | Blue -> 1 * 1 = stdout="5\n"
+
+// Two variant type
+type Bool = True | False match False with | True -> 1 | False -> 0 = stdout="0\n"
+
+// Four variant type
+type Dir = North | East | South | West match South with | North -> 0 | East -> 1 | South -> 2 | West -> 3 = stdout="2\n"
+

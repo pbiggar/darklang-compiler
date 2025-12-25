@@ -42,8 +42,12 @@ type Token =
     | TDot         // . (tuple/record access)
     | TLBrace      // { (record literal)
     | TRBrace      // } (record literal)
-    | TBar         // | (sum type variant separator)
+    | TBar         // | (sum type variant separator / pattern separator)
     | TOf          // of (sum type payload)
+    | TMatch       // match (pattern matching)
+    | TWith        // with (pattern matching)
+    | TArrow       // -> (pattern matching)
+    | TUnderscore  // _ (wildcard pattern)
     | TEquals      // = (assignment in let)
     | TEqEq        // == (equality comparison)
     | TNeq         // !=
@@ -66,6 +70,7 @@ let lex (input: string) : Result<Token list, string> =
             // Skip whitespace
             lexHelper rest acc
         | '+' :: rest -> lexHelper rest (TPlus :: acc)
+        | '-' :: '>' :: rest -> lexHelper rest (TArrow :: acc)
         | '-' :: rest -> lexHelper rest (TMinus :: acc)
         | '*' :: rest -> lexHelper rest (TStar :: acc)
         | '/' :: rest -> lexHelper rest (TSlash :: acc)
@@ -109,8 +114,11 @@ let lex (input: string) : Result<Token list, string> =
                 | "def" -> TDef
                 | "type" -> TType
                 | "of" -> TOf
+                | "match" -> TMatch
+                | "with" -> TWith
                 | "true" -> TTrue
                 | "false" -> TFalse
+                | "_" -> TUnderscore
                 | _ -> TIdent ident
             lexHelper remaining (token :: acc)
         | c :: _ when System.Char.IsDigit(c) ->
@@ -382,11 +390,66 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
             | _ -> Error "Expected ':' after function parameters")
     | _ -> Error "Expected function definition (def name(params) : type = body)"
 
+/// Parse a pattern for pattern matching
+let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string> =
+    match tokens with
+    | TUnderscore :: rest ->
+        // Wildcard pattern: _
+        Ok (PWildcard, rest)
+    | TInt n :: rest ->
+        // Integer literal pattern
+        Ok (PLiteral n, rest)
+    | TIdent name :: TLParen :: rest when System.Char.IsUpper(name.[0]) ->
+        // Constructor with payload pattern: Some(x)
+        parsePattern rest
+        |> Result.bind (fun (payloadPattern, remaining) ->
+            match remaining with
+            | TRParen :: rest' ->
+                Ok (PConstructor (name, Some payloadPattern), rest')
+            | _ -> Error "Expected ')' after constructor pattern payload")
+    | TIdent name :: rest when System.Char.IsUpper(name.[0]) ->
+        // Constructor pattern without payload: Red, None
+        Ok (PConstructor (name, None), rest)
+    | TIdent name :: rest ->
+        // Variable pattern: x (binds the value)
+        Ok (PVar name, rest)
+    | _ -> Error "Expected pattern (_, variable, literal, or constructor)"
+
+/// Parse a single case: | pattern -> expr
+let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Token list, string>) : Result<(Pattern * Expr) * Token list, string> =
+    match tokens with
+    | TBar :: rest ->
+        parsePattern rest
+        |> Result.bind (fun (pattern, remaining) ->
+            match remaining with
+            | TArrow :: rest' ->
+                parseExprFn rest'
+                |> Result.map (fun (body, remaining') ->
+                    ((pattern, body), remaining'))
+            | _ -> Error "Expected '->' after pattern")
+    | _ -> Error "Expected '|' before pattern"
+
 /// Parser: convert tokens to AST
 let parse (tokens: Token list) : Result<Program, string> =
     // Recursive descent parser with operator precedence
     // Precedence (low to high): or < and < comparison < +/- < */ < unary
-    let rec parseExpr (toks: Token list) : Result<Expr * Token list, string> =
+
+    /// Parse multiple cases for pattern matching: | p1 -> e1 | p2 -> e2 ...
+    let rec parseCases (toks: Token list) (acc: (Pattern * Expr) list) : Result<(Pattern * Expr) list * Token list, string> =
+        match toks with
+        | TBar :: _ ->
+            // Another case
+            parseCase toks parseExpr
+            |> Result.bind (fun (case, remaining) ->
+                parseCases remaining (case :: acc))
+        | _ ->
+            // End of cases
+            if List.isEmpty acc then
+                Error "Match expression must have at least one case"
+            else
+                Ok (List.rev acc, toks)
+
+    and parseExpr (toks: Token list) : Result<Expr * Token list, string> =
         match toks with
         | TLet :: TIdent name :: TEquals :: rest ->
             // Parse: let name = value in body
@@ -413,6 +476,16 @@ let parse (tokens: Token list) : Result<Program, string> =
                                 (If (cond, thenBranch, elseBranch), remaining''))
                         | _ -> Error "Expected 'else' after then branch")
                 | _ -> Error "Expected 'then' after if condition")
+        | TMatch :: rest ->
+            // Parse: match scrutinee with | p1 -> e1 | p2 -> e2
+            parseExpr rest
+            |> Result.bind (fun (scrutinee, remaining) ->
+                match remaining with
+                | TWith :: rest' ->
+                    parseCases rest' []
+                    |> Result.map (fun (cases, remaining') ->
+                        (Match (scrutinee, cases), remaining'))
+                | _ -> Error "Expected 'with' after match scrutinee")
         | _ ->
             parseOr toks
 

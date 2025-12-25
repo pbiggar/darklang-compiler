@@ -52,6 +52,13 @@ type UnaryOp =
     | Neg  // Unary negation: -expr
     | Not  // Boolean not: !expr
 
+/// Pattern matching patterns
+type Pattern =
+    | PWildcard                                            // _
+    | PVar of string                                       // x (binds value to variable)
+    | PConstructor of variantName:string * payload:Pattern option  // Red, Some(x)
+    | PLiteral of int64                                    // 42 (integer literal)
+
 /// Expression nodes
 type Expr =
     | IntLiteral of int64
@@ -69,6 +76,7 @@ type Expr =
     | RecordLiteral of typeName:string * fields:(string * Expr) list  // { x = 1, y = 2 }
     | RecordAccess of record:Expr * fieldName:string                  // p.x, p.y
     | Constructor of typeName:string * variantName:string * payload:Expr option  // Red, Some(42)
+    | Match of scrutinee:Expr * cases:(Pattern * Expr) list  // match e with | p1 -> e1 | p2 -> e2
 
 /// Function definition
 type FunctionDef = {
