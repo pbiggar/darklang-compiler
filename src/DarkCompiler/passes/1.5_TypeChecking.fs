@@ -442,6 +442,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 match pattern with
                 | PWildcard -> Ok []
                 | PLiteral _ -> Ok []
+                | PBool _ -> Ok []
+                | PString _ -> Ok []
+                | PFloat _ -> Ok []
                 | PVar name -> Ok [(name, patternType)]
                 | PConstructor (variantName, payloadPattern) ->
                     match Map.tryFind variantName variantLookup with
@@ -453,6 +456,36 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             extractPatternBindings innerPattern pType
                         | Some _, None ->
                             Error (GenericError $"Variant {variantName} has no payload but pattern expects one")
+                | PTuple patterns ->
+                    match patternType with
+                    | TTuple elementTypes when List.length patterns = List.length elementTypes ->
+                        List.zip patterns elementTypes
+                        |> List.map (fun (p, t) -> extractPatternBindings p t)
+                        |> List.fold (fun acc res ->
+                            match acc, res with
+                            | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
+                            | Error e, _ -> Error e
+                            | _, Error e -> Error e) (Ok [])
+                    | TTuple elementTypes ->
+                        Error (GenericError $"Tuple pattern has {List.length patterns} elements but type has {List.length elementTypes}")
+                    | _ -> Error (GenericError "Tuple pattern used on non-tuple type")
+                | PRecord (_, fieldPatterns) ->
+                    match patternType with
+                    | TRecord recordName ->
+                        match Map.tryFind recordName typeReg with
+                        | Some fields ->
+                            fieldPatterns
+                            |> List.map (fun (fieldName, pat) ->
+                                match List.tryFind (fun (n, _) -> n = fieldName) fields with
+                                | Some (_, fieldType) -> extractPatternBindings pat fieldType
+                                | None -> Error (GenericError $"Unknown field in pattern: {fieldName}"))
+                            |> List.fold (fun acc res ->
+                                match acc, res with
+                                | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
+                                | Error e, _ -> Error e
+                                | _, Error e -> Error e) (Ok [])
+                        | None -> Error (GenericError $"Unknown record type: {recordName}")
+                    | _ -> Error (GenericError "Record pattern used on non-record type")
 
             // Type check each case and ensure they all return the same type
             let rec checkCases (remaining: (Pattern * Expr) list) (resultType: Type option) : Result<Type, TypeError> =

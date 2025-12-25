@@ -399,6 +399,24 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
     | TInt n :: rest ->
         // Integer literal pattern
         Ok (PLiteral n, rest)
+    | TTrue :: rest ->
+        // Boolean true pattern
+        Ok (PBool true, rest)
+    | TFalse :: rest ->
+        // Boolean false pattern
+        Ok (PBool false, rest)
+    | TStringLit s :: rest ->
+        // String literal pattern
+        Ok (PString s, rest)
+    | TFloat f :: rest ->
+        // Float literal pattern
+        Ok (PFloat f, rest)
+    | TLParen :: rest ->
+        // Tuple pattern: (a, b, c)
+        parseTuplePattern rest []
+    | TLBrace :: rest ->
+        // Record pattern: { x = a, y = b }
+        parseRecordPattern rest []
     | TIdent name :: TLParen :: rest when System.Char.IsUpper(name.[0]) ->
         // Constructor with payload pattern: Some(x)
         parsePattern rest
@@ -414,6 +432,36 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
         // Variable pattern: x (binds the value)
         Ok (PVar name, rest)
     | _ -> Error "Expected pattern (_, variable, literal, or constructor)"
+
+and parseTuplePattern (tokens: Token list) (acc: Pattern list) : Result<Pattern * Token list, string> =
+    parsePattern tokens
+    |> Result.bind (fun (pat, remaining) ->
+        match remaining with
+        | TRParen :: rest ->
+            // End of tuple pattern
+            let patterns = List.rev (pat :: acc)
+            Ok (PTuple patterns, rest)
+        | TComma :: rest ->
+            // More elements
+            parseTuplePattern rest (pat :: acc)
+        | _ -> Error "Expected ',' or ')' in tuple pattern")
+
+and parseRecordPattern (tokens: Token list) (acc: (string * Pattern) list) : Result<Pattern * Token list, string> =
+    match tokens with
+    | TIdent fieldName :: TEquals :: rest ->
+        parsePattern rest
+        |> Result.bind (fun (pat, remaining) ->
+            let field = (fieldName, pat)
+            match remaining with
+            | TRBrace :: rest' ->
+                // End of record pattern
+                let fields = List.rev (field :: acc)
+                Ok (PRecord ("", fields), rest')
+            | TComma :: rest' ->
+                // More fields
+                parseRecordPattern rest' (field :: acc)
+            | _ -> Error "Expected ',' or '}' in record pattern")
+    | _ -> Error "Expected field name in record pattern"
 
 /// Parse a single case: | pattern -> expr
 let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Token list, string>) : Result<(Pattern * Expr) * Token list, string> =

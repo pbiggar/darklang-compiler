@@ -58,6 +58,11 @@ type Pattern =
     | PVar of string                                       // x (binds value to variable)
     | PConstructor of variantName:string * payload:Pattern option  // Red, Some(x)
     | PLiteral of int64                                    // 42 (integer literal)
+    | PBool of bool                                        // true, false
+    | PString of string                                    // "hello"
+    | PFloat of float                                      // 3.14
+    | PTuple of Pattern list                               // (a, b, c)
+    | PRecord of typeName:string * fields:(string * Pattern) list  // { x = a, y = b }
 
 /// Expression nodes
 type Expr =

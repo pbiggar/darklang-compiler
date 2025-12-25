@@ -284,17 +284,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
         // First convert scrutinee to atom
         toAtom scrutinee varGen env typeReg variantLookup
         |> Result.bind (fun (scrutineeAtom, scrutineeBindings, varGen1) ->
-            // Convert pattern to a tag value for comparison
-            let patternToTag (pattern: AST.Pattern) : Result<int64 option, string> =
-                match pattern with
-                | AST.PWildcard -> Ok None  // Wildcard matches everything
-                | AST.PVar _ -> Ok None     // Variable matches everything
-                | AST.PLiteral n -> Ok (Some n)  // Literal is the value itself
-                | AST.PConstructor (variantName, _) ->
-                    match Map.tryFind variantName variantLookup with
-                    | Some (_, tag, _) -> Ok (Some (int64 tag))
-                    | None -> Error $"Unknown constructor in pattern: {variantName}"
-
             // Check if the TYPE that a variant belongs to has any variant with a payload
             // This determines if values are heap-allocated or simple integers
             let typeHasAnyPayload (variantName: string) : bool =
@@ -304,11 +293,21 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                     |> Map.exists (fun _ (tName, _, pType) -> tName = typeName && pType.IsSome)
                 | None -> false
 
+            // Check if pattern always matches (wildcard or variable)
+            let rec patternAlwaysMatches (pattern: AST.Pattern) : bool =
+                match pattern with
+                | AST.PWildcard -> true
+                | AST.PVar _ -> true
+                | _ -> false
+
             // Extract pattern bindings and compile body with extended environment
             let rec extractAndCompileBody (pattern: AST.Pattern) (body: AST.Expr) (scrutAtom: ANF.Atom) (currentEnv: Map<string, ANF.TempId>) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
                 match pattern with
                 | AST.PWildcard -> toANF body vg currentEnv typeReg variantLookup
                 | AST.PLiteral _ -> toANF body vg currentEnv typeReg variantLookup
+                | AST.PBool _ -> toANF body vg currentEnv typeReg variantLookup
+                | AST.PString _ -> toANF body vg currentEnv typeReg variantLookup
+                | AST.PFloat _ -> toANF body vg currentEnv typeReg variantLookup
                 | AST.PVar name ->
                     // Bind scrutinee to variable name
                     let (tempId, vg1) = ANF.freshVar vg
@@ -317,7 +316,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                     |> Result.map (fun (bodyExpr, vg2) ->
                         let expr = ANF.Let (tempId, ANF.Atom scrutAtom, bodyExpr)
                         (expr, vg2))
-                | AST.PConstructor (variantName, payloadPattern) ->
+                | AST.PConstructor (_, payloadPattern) ->
                     match payloadPattern with
                     | None -> toANF body vg currentEnv typeReg variantLookup
                     | Some innerPattern ->
@@ -330,6 +329,111 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                         |> Result.map (fun (innerExpr, vg2) ->
                             let expr = ANF.Let (payloadVar, payloadExpr, innerExpr)
                             (expr, vg2))
+                | AST.PTuple patterns ->
+                    // Extract each element and bind pattern variables
+                    let rec extractTupleElements (pats: AST.Pattern list) (idx: int) (env: Map<string, ANF.TempId>) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
+                        match pats with
+                        | [] -> toANF body vg env typeReg variantLookup
+                        | pat :: rest ->
+                            let (elemVar, vg1) = ANF.freshVar vg
+                            let elemExpr = ANF.TupleGet (scrutAtom, idx)
+                            extractAndCompileBody pat body (ANF.Var elemVar) env vg1
+                            |> Result.bind (fun _ ->
+                                // For non-binding patterns, just continue
+                                // For binding patterns, add to env
+                                let newEnv =
+                                    match pat with
+                                    | AST.PVar name -> Map.add name elemVar env
+                                    | _ -> env
+                                extractTupleElements rest (idx + 1) newEnv vg1)
+                    // Simplified: extract all bindings first, then compile body
+                    let rec collectTupleBindings (pats: AST.Pattern list) (idx: int) (env: Map<string, ANF.TempId>) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<Map<string, ANF.TempId> * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                        match pats with
+                        | [] -> Ok (env, List.rev bindings, vg)
+                        | pat :: rest ->
+                            let (elemVar, vg1) = ANF.freshVar vg
+                            let elemExpr = ANF.TupleGet (scrutAtom, idx)
+                            let binding = (elemVar, elemExpr)
+                            match pat with
+                            | AST.PVar name ->
+                                let newEnv = Map.add name elemVar env
+                                collectTupleBindings rest (idx + 1) newEnv (binding :: bindings) vg1
+                            | AST.PWildcard ->
+                                collectTupleBindings rest (idx + 1) env bindings vg1
+                            | _ ->
+                                // For nested patterns, we need more complex handling
+                                // For now, just continue with the element bound
+                                collectTupleBindings rest (idx + 1) env (binding :: bindings) vg1
+                    collectTupleBindings patterns 0 currentEnv [] vg
+                    |> Result.bind (fun (newEnv, bindings, vg1) ->
+                        toANF body vg1 newEnv typeReg variantLookup
+                        |> Result.map (fun (bodyExpr, vg2) ->
+                            let finalExpr = wrapBindings bindings bodyExpr
+                            (finalExpr, vg2)))
+                | AST.PRecord (_, fieldPatterns) ->
+                    // Extract each field and bind pattern variables
+                    let rec collectRecordBindings (fields: (string * AST.Pattern) list) (env: Map<string, ANF.TempId>) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) (fieldIdx: int) : Result<Map<string, ANF.TempId> * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                        match fields with
+                        | [] -> Ok (env, List.rev bindings, vg)
+                        | (_, pat) :: rest ->
+                            let (fieldVar, vg1) = ANF.freshVar vg
+                            let fieldExpr = ANF.TupleGet (scrutAtom, fieldIdx)
+                            let binding = (fieldVar, fieldExpr)
+                            match pat with
+                            | AST.PVar name ->
+                                let newEnv = Map.add name fieldVar env
+                                collectRecordBindings rest newEnv (binding :: bindings) vg1 (fieldIdx + 1)
+                            | AST.PWildcard ->
+                                collectRecordBindings rest env bindings vg1 (fieldIdx + 1)
+                            | _ ->
+                                collectRecordBindings rest env (binding :: bindings) vg1 (fieldIdx + 1)
+                    collectRecordBindings fieldPatterns currentEnv [] vg 0
+                    |> Result.bind (fun (newEnv, bindings, vg1) ->
+                        toANF body vg1 newEnv typeReg variantLookup
+                        |> Result.map (fun (bodyExpr, vg2) ->
+                            let finalExpr = wrapBindings bindings bodyExpr
+                            (finalExpr, vg2)))
+
+            // Build comparison expression for a pattern
+            let rec buildPatternComparison (pattern: AST.Pattern) (scrutAtom: ANF.Atom) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
+                match pattern with
+                | AST.PWildcard -> Ok None
+                | AST.PVar _ -> Ok None
+                | AST.PLiteral n ->
+                    let (cmpVar, vg1) = ANF.freshVar vg
+                    let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral n)
+                    Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
+                | AST.PBool b ->
+                    let (cmpVar, vg1) = ANF.freshVar vg
+                    let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.BoolLiteral b)
+                    Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
+                | AST.PString s ->
+                    // String comparison - for now just compare as atoms
+                    let (cmpVar, vg1) = ANF.freshVar vg
+                    let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.StringLiteral s)
+                    Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
+                | AST.PFloat f ->
+                    let (cmpVar, vg1) = ANF.freshVar vg
+                    let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.FloatLiteral f)
+                    Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
+                | AST.PConstructor (variantName, _) ->
+                    match Map.tryFind variantName variantLookup with
+                    | Some (_, tag, _) ->
+                        if typeHasAnyPayload variantName then
+                            // Load tag from heap (index 0), then compare
+                            let (tagVar, vg1) = ANF.freshVar vg
+                            let tagLoadExpr = ANF.TupleGet (scrutAtom, 0)
+                            let (cmpVar, vg2) = ANF.freshVar vg1
+                            let cmpExpr = ANF.Prim (ANF.Eq, ANF.Var tagVar, ANF.IntLiteral (int64 tag))
+                            Ok (Some (ANF.Var cmpVar, [(tagVar, tagLoadExpr); (cmpVar, cmpExpr)], vg2))
+                        else
+                            // Simple enum - scrutinee IS the tag
+                            let (cmpVar, vg1) = ANF.freshVar vg
+                            let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (int64 tag))
+                            Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
+                    | None -> Error $"Unknown constructor in pattern: {variantName}"
+                | AST.PTuple _ -> Ok None  // Tuple patterns just bind, don't compare
+                | AST.PRecord _ -> Ok None  // Record patterns just bind, don't compare
 
             // Build the if-else chain from cases
             let rec buildChain (remaining: (AST.Pattern * AST.Expr) list) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
@@ -341,45 +445,23 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: Map<string, ANF.TempId
                     // Last case - just return the body (assumes exhaustive or wildcard)
                     extractAndCompileBody pattern body scrutineeAtom env vg
                 | (pattern, body) :: rest ->
-                    patternToTag pattern
-                    |> Result.bind (fun tagOpt ->
-                        match tagOpt with
-                        | None ->
-                            // Wildcard or var - matches everything, no more cases
-                            extractAndCompileBody pattern body scrutineeAtom env vg
-                        | Some tag ->
-                            // For types with any payload variants, we need to compare the tag at offset 0
-                            let needsTagLoad =
-                                match pattern with
-                                | AST.PConstructor (variantName, _) -> typeHasAnyPayload variantName
-                                | _ -> false
-
-                            if needsTagLoad then
-                                // Load tag from heap (index 0), then compare
-                                let (tagVar, vg0) = ANF.freshVar vg
-                                let tagLoadExpr = ANF.TupleGet (scrutineeAtom, 0)
-                                let tagAtom = ANF.IntLiteral tag
-                                extractAndCompileBody pattern body scrutineeAtom env vg0
-                                |> Result.bind (fun (thenExpr, vg1) ->
-                                    buildChain rest vg1
-                                    |> Result.map (fun (elseExpr, vg2) ->
-                                        let (cmpVar, vg3) = ANF.freshVar vg2
-                                        let cmpExpr = ANF.Prim (ANF.Eq, ANF.Var tagVar, tagAtom)
-                                        let ifExpr = ANF.If (ANF.Var cmpVar, thenExpr, elseExpr)
-                                        let letCmp = ANF.Let (cmpVar, cmpExpr, ifExpr)
-                                        let letTag = ANF.Let (tagVar, tagLoadExpr, letCmp)
-                                        (letTag, vg3)))
-                            else
-                                // Simple enum - scrutinee IS the tag
-                                let tagAtom = ANF.IntLiteral tag
+                    if patternAlwaysMatches pattern then
+                        // Wildcard or var - matches everything, no more cases
+                        extractAndCompileBody pattern body scrutineeAtom env vg
+                    else
+                        buildPatternComparison pattern scrutineeAtom vg
+                        |> Result.bind (fun cmpOpt ->
+                            match cmpOpt with
+                            | None ->
+                                // Pattern always matches
                                 extractAndCompileBody pattern body scrutineeAtom env vg
-                                |> Result.bind (fun (thenExpr, vg1) ->
-                                    buildChain rest vg1
-                                    |> Result.map (fun (elseExpr, vg2) ->
-                                        let (cmpVar, vg3) = ANF.freshVar vg2
-                                        let cmpExpr = ANF.Prim (ANF.Eq, scrutineeAtom, tagAtom)
-                                        let ifExpr = ANF.If (ANF.Var cmpVar, thenExpr, elseExpr)
-                                        let finalExpr = ANF.Let (cmpVar, cmpExpr, ifExpr)
+                            | Some (condAtom, bindings, vg1) ->
+                                extractAndCompileBody pattern body scrutineeAtom env vg1
+                                |> Result.bind (fun (thenExpr, vg2) ->
+                                    buildChain rest vg2
+                                    |> Result.map (fun (elseExpr, vg3) ->
+                                        let ifExpr = ANF.If (condAtom, thenExpr, elseExpr)
+                                        let finalExpr = wrapBindings bindings ifExpr
                                         (finalExpr, vg3))))
 
             buildChain cases varGen1

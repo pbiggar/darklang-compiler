@@ -65,3 +65,196 @@ type Option = None | Some of int match Some(6) with | Some(x) -> x * 7 | None ->
 // Extract with wildcard fallback
 type Option = None | Some of int match Some(123) with | Some(n) -> n | _ -> 0 = stdout="123\n"
 
+// === Integer Literal Patterns ===
+
+// Match on integer literal - first case
+match 42 with | 42 -> 1 | _ -> 0 = stdout="1\n"
+
+// Match on integer literal - fallback
+match 99 with | 42 -> 1 | _ -> 0 = stdout="0\n"
+
+// Multiple integer cases
+match 2 with | 1 -> 10 | 2 -> 20 | 3 -> 30 | _ -> 0 = stdout="20\n"
+
+// Integer match with variable binding
+match 7 with | 7 -> 100 | x -> x = stdout="100\n"
+
+// Match on computed integer
+let x = 3 + 2 in match x with | 5 -> 1 | _ -> 0 = stdout="1\n"
+
+// Large integer literal
+match 1000000 with | 1000000 -> 1 | _ -> 0 = stdout="1\n"
+
+// Zero matching
+match 0 with | 0 -> 42 | _ -> 0 = stdout="42\n"
+
+// Negative number matching
+match 0 - 5 with | 0 -> 1 | x -> x + 10 = stdout="5\n"
+
+// === Boolean Patterns ===
+
+// Match on true literal
+match true with | true -> 1 | false -> 0 = stdout="1\n"
+
+// Match on false literal
+match false with | true -> 1 | false -> 0 = stdout="0\n"
+
+// Boolean from comparison
+match 5 > 3 with | true -> 100 | false -> 0 = stdout="100\n"
+
+// Boolean from equality
+match 5 == 5 with | true -> 1 | false -> 0 = stdout="1\n"
+
+// Boolean in variable
+let b = true in match b with | true -> 42 | false -> 0 = stdout="42\n"
+
+// Inverted boolean match
+match false with | false -> 99 | true -> 1 = stdout="99\n"
+
+// === Tuple Patterns ===
+
+// Simple 2-tuple extraction
+match (1, 2) with | (a, b) -> a + b = stdout="3\n"
+
+// 3-tuple extraction
+match (10, 20, 30) with | (a, b, c) -> a + b + c = stdout="60\n"
+
+// 4-tuple extraction
+match (1, 2, 3, 4) with | (a, b, c, d) -> a + b + c + d = stdout="10\n"
+
+// Tuple with wildcard elements
+match (100, 200) with | (x, _) -> x = stdout="100\n"
+
+// Tuple with second element wildcard
+match (100, 200) with | (_, y) -> y = stdout="200\n"
+
+// Nested arithmetic in tuple
+match (5 + 5, 3 * 4) with | (a, b) -> a * b = stdout="120\n"
+
+// Tuple from variable
+let t = (7, 8) in match t with | (x, y) -> x * y = stdout="56\n"
+
+// Tuple with all wildcards (just structure match)
+match (1, 2, 3) with | (_, _, _) -> 42 = stdout="42\n"
+
+// Mix of binding and wildcard
+match (1, 2, 3, 4, 5) with | (a, _, c, _, e) -> a + c + e = stdout="9\n"
+
+// === Record Patterns ===
+
+// Simple record extraction
+type Point = { x: int, y: int } match { x = 10, y = 20 } with | { x = a, y = b } -> a + b = stdout="30\n"
+
+// Record with one field extracted
+type Point = { x: int, y: int } match { x = 5, y = 10 } with | { x = n, y = _ } -> n = stdout="5\n"
+
+// Record second field only
+type Point = { x: int, y: int } match { x = 5, y = 15 } with | { x = _, y = m } -> m = stdout="15\n"
+
+// Record from variable
+type Point = { x: int, y: int } let p = { x = 3, y = 4 } in match p with | { x = a, y = b } -> a * a + b * b = stdout="25\n"
+
+// Three-field record
+type Vec3 = { x: int, y: int, z: int } match { x = 1, y = 2, z = 3 } with | { x = a, y = b, z = c } -> a + b + c = stdout="6\n"
+
+// === Nested ADT Patterns ===
+
+// Nested Option - Some(Some(x))
+type Option = None | Some of int type Nested = Empty | Wrap of int match Wrap(42) with | Wrap(x) -> x | Empty -> 0 = stdout="42\n"
+
+// Deeply extract from nested variant
+type Box = Empty | Full of int match Full(99) with | Full(n) -> n * 2 | Empty -> 0 = stdout="198\n"
+
+// === Complex Combinations ===
+
+// Tuple inside match case body
+type Option = None | Some of int match Some(5) with | Some(x) -> let t = (x, x * 2) in match t with | (a, b) -> a + b | None -> 0 = stdout="15\n"
+
+// Record access in match body
+type Point = { x: int, y: int } type Option = None | Some of int match Some(1) with | Some(_) -> let p = { x = 10, y = 20 } in p.x + p.y | None -> 0 = stdout="30\n"
+
+// Match on tuple element
+match (1, 2) with | (a, _) -> match a with | 1 -> 100 | _ -> 0 = stdout="100\n"
+
+// Chained matches
+type Color = Red | Green | Blue match Red with | Red -> match true with | true -> 42 | false -> 0 | _ -> 0 = stdout="42\n"
+
+// Match in let binding body
+let result = match 5 with | 5 -> 100 | _ -> 0 in result + 1 = stdout="101\n"
+
+// Multiple matches in sequence
+let a = match 1 with | 1 -> 10 | _ -> 0 in let b = match 2 with | 2 -> 20 | _ -> 0 in a + b = stdout="30\n"
+
+// Arithmetic on extracted values
+type Pair = MkPair of int match MkPair(7) with | MkPair(n) -> n * n + n = stdout="56\n"
+
+// Boolean result from match
+let flag = match 42 with | 42 -> true | _ -> false in match flag with | true -> 1 | false -> 0 = stdout="1\n"
+
+// Tuple with computed elements
+let x = 5 in let y = 10 in match (x * 2, y / 2) with | (a, b) -> a + b = stdout="15\n"
+
+// === Edge Cases ===
+
+// Single element match (just variable)
+match 42 with | x -> x = stdout="42\n"
+
+// Empty-ish patterns with just wildcards
+match 999 with | _ -> 1 = stdout="1\n"
+
+// Order of patterns matters
+match 1 with | 1 -> 100 | 2 -> 200 | _ -> 0 = stdout="100\n"
+
+// Last pattern is fallback
+match 99 with | 1 -> 100 | 2 -> 200 | n -> n = stdout="99\n"
+
+// Multiple wildcards in different positions
+type Triple = T of int match T(5) with | T(x) -> x + 1 = stdout="6\n"
+
+// Combine enum and payload extraction
+type MaybeInt = Nothing | Just of int match Just(10) with | Nothing -> 0 | Just(n) -> n + n = stdout="20\n"
+
+// Mix patterns in same match
+match 2 with | 1 -> 10 | 2 -> 20 | x -> x * 100 = stdout="20\n"
+
+// Fallback captures value
+match 7 with | 1 -> 10 | 2 -> 20 | x -> x * 100 = stdout="700\n"
+
+// === Tuple-Returning Functions ===
+
+// Function that returns tuple, matched
+let t = (1 + 2, 3 + 4) in match t with | (a, b) -> a * b = stdout="21\n"
+
+// Tuple of booleans
+match (true, false) with | (a, _) -> match a with | true -> 1 | false -> 0 = stdout="1\n"
+
+// === Records with Complex Bodies ===
+
+type Point = { x: int, y: int } let p = { x = 3, y = 4 } in match p with | { x = a, y = b } -> (a + b) * (a - b) = stdout="-7\n"
+
+// Manhattan distance style
+type Point = { x: int, y: int } match { x = 3, y = 4 } with | { x = a, y = b } -> if a > b then a else b = stdout="4\n"
+
+// === Wild Nested Combinations ===
+
+// Tuple in ADT payload then extracted
+type Box = Empty | Pair of int match Pair(42) with | Pair(n) -> let t = (n, n + 1) in match t with | (a, b) -> a + b | Empty -> 0 = stdout="85\n"
+
+// ADT in tuple (via let)
+type Maybe = No | Yes of int let m = Yes(5) in let t = (m, 10) in match t with | (_, y) -> y = stdout="10\n"
+
+// Deeply nested match cascade
+match 1 with | 1 -> match 2 with | 2 -> match 3 with | 3 -> 42 | _ -> 0 | _ -> 0 | _ -> 0 = stdout="42\n"
+
+// Match that returns different types of numbers
+match true with | true -> 99 | false -> 0 - 1 = stdout="99\n"
+
+// Compare result in match
+let x = 5 in let y = 5 in match x == y with | true -> 1000 | false -> 0 = stdout="1000\n"
+
+// Boolean arithmetic in match
+match (5 > 3) && (2 < 4) with | true -> 1 | false -> 0 = stdout="1\n"
+
+// Or in match condition
+match (1 > 10) || (10 > 1) with | true -> 42 | false -> 0 = stdout="42\n"
+
