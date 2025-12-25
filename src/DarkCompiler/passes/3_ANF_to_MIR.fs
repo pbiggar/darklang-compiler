@@ -47,6 +47,17 @@ let convertUnaryOp (op: ANF.UnaryOp) : MIR.UnaryOp =
     | ANF.Neg -> MIR.Neg
     | ANF.Not -> MIR.Not
 
+/// Sequence a list of Results into a Result of list
+let sequenceResults (results: Result<'a, string> list) : Result<'a list, string> =
+    let rec loop acc remaining =
+        match remaining with
+        | [] -> Ok (List.rev acc)
+        | r :: rest ->
+            match r with
+            | Ok v -> loop (v :: acc) rest
+            | Error e -> Error e
+    loop [] results
+
 /// Map ANF TempId to MIR virtual register
 let tempToVReg (ANF.TempId id) : MIR.VReg = MIR.VReg id
 
@@ -177,19 +188,20 @@ type CFGBuilder = {
 }
 
 /// Convert ANF Atom to MIR Operand using lookups from builder
-/// Note: Float/string lookup failures are internal invariant violations - they indicate
-/// bugs in the pool collection phase and should never occur in correct code.
-let atomToOperand (builder: CFGBuilder) (atom: ANF.Atom) : MIR.Operand =
+/// Returns Error if float/string lookup fails (internal invariant violation)
+let atomToOperand (builder: CFGBuilder) (atom: ANF.Atom) : Result<MIR.Operand, string> =
     match atom with
-    | ANF.IntLiteral n -> MIR.IntConst n
-    | ANF.BoolLiteral b -> MIR.BoolConst b
+    | ANF.IntLiteral n -> Ok (MIR.IntConst n)
+    | ANF.BoolLiteral b -> Ok (MIR.BoolConst b)
     | ANF.FloatLiteral f ->
-        // Pool collection should have found all float literals
-        Map.find f builder.FloatLookup |> MIR.FloatRef
+        match Map.tryFind f builder.FloatLookup with
+        | Some idx -> Ok (MIR.FloatRef idx)
+        | None -> Error $"Internal error: float literal {f} not found in pool"
     | ANF.StringLiteral s ->
-        // Pool collection should have found all string literals
-        Map.find s builder.StringLookup |> MIR.StringRef
-    | ANF.Var tempId -> MIR.Register (tempToVReg tempId)
+        match Map.tryFind s builder.StringLookup with
+        | Some idx -> Ok (MIR.StringRef idx)
+        | None -> Error $"Internal error: string literal not found in pool"
+    | ANF.Var tempId -> Ok (MIR.Register (tempToVReg tempId))
 
 /// Convert ANF expression to CFG
 /// Returns: Result of (final value operand, CFG builder with all blocks)
@@ -203,14 +215,15 @@ let rec convertExpr
     match expr with
     | ANF.Return atom ->
         // Return: end current block with Ret terminator
-        let operand = atomToOperand builder atom
-        let block = {
-            MIR.Label = currentLabel
-            MIR.Instrs = currentInstrs
-            MIR.Terminator = MIR.Ret operand
-        }
-        let builder' = { builder with Blocks = Map.add currentLabel block builder.Blocks }
-        Ok (operand, builder')
+        atomToOperand builder atom
+        |> Result.bind (fun operand ->
+            let block = {
+                MIR.Label = currentLabel
+                MIR.Instrs = currentInstrs
+                MIR.Terminator = MIR.Ret operand
+            }
+            let builder' = { builder with Blocks = Map.add currentLabel block builder.Blocks }
+            Ok (operand, builder'))
 
     | ANF.Let (tempId, cexpr, rest) ->
         // Let binding: handle based on cexpr type
@@ -224,67 +237,84 @@ let rec convertExpr
             // 3. Create else-block (assigns elseAtom to destReg, jumps to join)
             // 4. Create join-block (continues with rest)
 
-            let condOp = atomToOperand builder condAtom
-            let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
-            let (elseLabel, labelGen2) = MIR.freshLabel labelGen1
-            let (joinLabel, labelGen3) = MIR.freshLabel labelGen2
+            atomToOperand builder condAtom
+            |> Result.bind (fun condOp ->
+                atomToOperand builder thenAtom
+                |> Result.bind (fun thenOp ->
+                    atomToOperand builder elseAtom
+                    |> Result.bind (fun elseOp ->
+                        let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
+                        let (elseLabel, labelGen2) = MIR.freshLabel labelGen1
+                        let (joinLabel, labelGen3) = MIR.freshLabel labelGen2
 
-            // Current block ends with branch
-            let currentBlock = {
-                MIR.Label = currentLabel
-                MIR.Instrs = currentInstrs
-                MIR.Terminator = MIR.Branch (condOp, thenLabel, elseLabel)
-            }
+                        // Current block ends with branch
+                        let currentBlock = {
+                            MIR.Label = currentLabel
+                            MIR.Instrs = currentInstrs
+                            MIR.Terminator = MIR.Branch (condOp, thenLabel, elseLabel)
+                        }
 
-            // Then block: assign thenAtom to destReg, jump to join
-            let thenBlock = {
-                MIR.Label = thenLabel
-                MIR.Instrs = [MIR.Mov (destReg, atomToOperand builder thenAtom)]
-                MIR.Terminator = MIR.Jump joinLabel
-            }
+                        // Then block: assign thenAtom to destReg, jump to join
+                        let thenBlock = {
+                            MIR.Label = thenLabel
+                            MIR.Instrs = [MIR.Mov (destReg, thenOp)]
+                            MIR.Terminator = MIR.Jump joinLabel
+                        }
 
-            // Else block: assign elseAtom to destReg, jump to join
-            let elseBlock = {
-                MIR.Label = elseLabel
-                MIR.Instrs = [MIR.Mov (destReg, atomToOperand builder elseAtom)]
-                MIR.Terminator = MIR.Jump joinLabel
-            }
+                        // Else block: assign elseAtom to destReg, jump to join
+                        let elseBlock = {
+                            MIR.Label = elseLabel
+                            MIR.Instrs = [MIR.Mov (destReg, elseOp)]
+                            MIR.Terminator = MIR.Jump joinLabel
+                        }
 
-            let builder' = {
-                builder with
-                    Blocks = builder.Blocks
-                             |> Map.add currentLabel currentBlock
-                             |> Map.add thenLabel thenBlock
-                             |> Map.add elseLabel elseBlock
-                    LabelGen = labelGen3
-            }
+                        let builder' = {
+                            builder with
+                                Blocks = builder.Blocks
+                                         |> Map.add currentLabel currentBlock
+                                         |> Map.add thenLabel thenBlock
+                                         |> Map.add elseLabel elseBlock
+                                LabelGen = labelGen3
+                        }
 
-            // Continue with rest in join block (no instructions yet)
-            convertExpr rest joinLabel [] builder'
+                        // Continue with rest in join block (no instructions yet)
+                        convertExpr rest joinLabel [] builder')))
 
         | _ ->
             // Simple CExpr: add instruction(s) to current block, continue
             let instrsResult =
                 match cexpr with
                 | ANF.Atom atom ->
-                    Ok [MIR.Mov (destReg, atomToOperand builder atom)]
+                    atomToOperand builder atom
+                    |> Result.map (fun op -> [MIR.Mov (destReg, op)])
                 | ANF.Prim (op, leftAtom, rightAtom) ->
-                    Ok [MIR.BinOp (destReg, convertBinOp op, atomToOperand builder leftAtom, atomToOperand builder rightAtom)]
+                    atomToOperand builder leftAtom
+                    |> Result.bind (fun leftOp ->
+                        atomToOperand builder rightAtom
+                        |> Result.map (fun rightOp ->
+                            [MIR.BinOp (destReg, convertBinOp op, leftOp, rightOp)]))
                 | ANF.UnaryPrim (op, atom) ->
-                    Ok [MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand builder atom)]
+                    atomToOperand builder atom
+                    |> Result.map (fun operand ->
+                        [MIR.UnaryOp (destReg, convertUnaryOp op, operand)])
                 | ANF.Call (funcName, args) ->
-                    let argOperands = List.map (atomToOperand builder) args
-                    Ok [MIR.Call (destReg, funcName, argOperands)]
+                    args
+                    |> List.map (atomToOperand builder)
+                    |> sequenceResults
+                    |> Result.map (fun argOperands ->
+                        [MIR.Call (destReg, funcName, argOperands)])
                 | ANF.TupleAlloc elems ->
                     // Allocate heap space: 8 bytes per element
                     let sizeBytes = List.length elems * 8
                     let allocInstr = MIR.HeapAlloc (destReg, sizeBytes)
                     // Store each element at its offset
-                    let storeInstrs =
-                        elems
-                        |> List.mapi (fun i elem ->
-                            MIR.HeapStore (destReg, i * 8, atomToOperand builder elem))
-                    Ok (allocInstr :: storeInstrs)
+                    elems
+                    |> List.mapi (fun i elem -> (i, elem))
+                    |> List.map (fun (i, elem) ->
+                        atomToOperand builder elem
+                        |> Result.map (fun op -> MIR.HeapStore (destReg, i * 8, op)))
+                    |> sequenceResults
+                    |> Result.map (fun storeInstrs -> allocInstr :: storeInstrs)
                 | ANF.TupleGet (tupleAtom, index) ->
                     // Tuple should always be a variable in ANF
                     match tupleAtom with
@@ -310,7 +340,8 @@ let rec convertExpr
         // 3. Create join-block where both branches meet
         // 4. Both branches put result in same register and jump to join
 
-        let condOp = atomToOperand builder condAtom
+        atomToOperand builder condAtom
+        |> Result.bind (fun condOp ->
 
         // Generate labels for then, else, and join blocks
         let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
@@ -400,7 +431,7 @@ let rec convertExpr
 
         // Return the result operand
         let resultOp = MIR.Register resultReg
-        Ok (resultOp, builder6)
+        Ok (resultOp, builder6))
 
 /// Helper: convert expression and extract final operand
 /// Returns: Result of (operand, optional join label if blocks were created, builder)
@@ -417,19 +448,20 @@ and convertExprToOperand
     | ANF.Return atom ->
         // If we have accumulated instructions from Let bindings, create a block
         // Otherwise just return the operand
-        let operand = atomToOperand builder atom
-        if List.isEmpty startInstrs then
-            Ok (operand, None, builder)
-        else
-            // Create a block with accumulated instructions
-            // Use temporary Ret terminator - caller will patch if needed
-            let block = {
-                MIR.Label = startLabel
-                MIR.Instrs = startInstrs
-                MIR.Terminator = MIR.Ret operand
-            }
-            let builder' = { builder with Blocks = Map.add startLabel block builder.Blocks }
-            Ok (operand, Some startLabel, builder')
+        atomToOperand builder atom
+        |> Result.bind (fun operand ->
+            if List.isEmpty startInstrs then
+                Ok (operand, None, builder)
+            else
+                // Create a block with accumulated instructions
+                // Use temporary Ret terminator - caller will patch if needed
+                let block = {
+                    MIR.Label = startLabel
+                    MIR.Instrs = startInstrs
+                    MIR.Terminator = MIR.Ret operand
+                }
+                let builder' = { builder with Blocks = Map.add startLabel block builder.Blocks }
+                Ok (operand, Some startLabel, builder'))
 
     | ANF.Let (tempId, cexpr, rest) ->
         let destReg = tempToVReg tempId
@@ -437,67 +469,84 @@ and convertExprToOperand
         match cexpr with
         | ANF.IfValue (condAtom, thenAtom, elseAtom) ->
             // IfValue requires control flow - similar to convertExpr version
-            let condOp = atomToOperand builder condAtom
-            let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
-            let (elseLabel, labelGen2) = MIR.freshLabel labelGen1
-            let (joinLabel, labelGen3) = MIR.freshLabel labelGen2
+            atomToOperand builder condAtom
+            |> Result.bind (fun condOp ->
+                atomToOperand builder thenAtom
+                |> Result.bind (fun thenOp ->
+                    atomToOperand builder elseAtom
+                    |> Result.bind (fun elseOp ->
+                        let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
+                        let (elseLabel, labelGen2) = MIR.freshLabel labelGen1
+                        let (joinLabel, labelGen3) = MIR.freshLabel labelGen2
 
-            // Current block ends with branch
-            let startBlock = {
-                MIR.Label = startLabel
-                MIR.Instrs = startInstrs
-                MIR.Terminator = MIR.Branch (condOp, thenLabel, elseLabel)
-            }
+                        // Current block ends with branch
+                        let startBlock = {
+                            MIR.Label = startLabel
+                            MIR.Instrs = startInstrs
+                            MIR.Terminator = MIR.Branch (condOp, thenLabel, elseLabel)
+                        }
 
-            // Then block: assign thenAtom to destReg, jump to join
-            let thenBlock = {
-                MIR.Label = thenLabel
-                MIR.Instrs = [MIR.Mov (destReg, atomToOperand builder thenAtom)]
-                MIR.Terminator = MIR.Jump joinLabel
-            }
+                        // Then block: assign thenAtom to destReg, jump to join
+                        let thenBlock = {
+                            MIR.Label = thenLabel
+                            MIR.Instrs = [MIR.Mov (destReg, thenOp)]
+                            MIR.Terminator = MIR.Jump joinLabel
+                        }
 
-            // Else block: assign elseAtom to destReg, jump to join
-            let elseBlock = {
-                MIR.Label = elseLabel
-                MIR.Instrs = [MIR.Mov (destReg, atomToOperand builder elseAtom)]
-                MIR.Terminator = MIR.Jump joinLabel
-            }
+                        // Else block: assign elseAtom to destReg, jump to join
+                        let elseBlock = {
+                            MIR.Label = elseLabel
+                            MIR.Instrs = [MIR.Mov (destReg, elseOp)]
+                            MIR.Terminator = MIR.Jump joinLabel
+                        }
 
-            let builder' = {
-                builder with
-                    Blocks = builder.Blocks
-                             |> Map.add startLabel startBlock
-                             |> Map.add thenLabel thenBlock
-                             |> Map.add elseLabel elseBlock
-                    LabelGen = labelGen3
-            }
+                        let builder' = {
+                            builder with
+                                Blocks = builder.Blocks
+                                         |> Map.add startLabel startBlock
+                                         |> Map.add thenLabel thenBlock
+                                         |> Map.add elseLabel elseBlock
+                                LabelGen = labelGen3
+                        }
 
-            // Continue with rest in join block (no instructions yet)
-            convertExprToOperand rest joinLabel [] builder'
+                        // Continue with rest in join block (no instructions yet)
+                        convertExprToOperand rest joinLabel [] builder')))
 
         | _ ->
             // Simple CExpr: create instruction(s) and accumulate
             let instrsResult =
                 match cexpr with
                 | ANF.Atom atom ->
-                    Ok [MIR.Mov (destReg, atomToOperand builder atom)]
+                    atomToOperand builder atom
+                    |> Result.map (fun op -> [MIR.Mov (destReg, op)])
                 | ANF.Prim (op, leftAtom, rightAtom) ->
-                    Ok [MIR.BinOp (destReg, convertBinOp op, atomToOperand builder leftAtom, atomToOperand builder rightAtom)]
+                    atomToOperand builder leftAtom
+                    |> Result.bind (fun leftOp ->
+                        atomToOperand builder rightAtom
+                        |> Result.map (fun rightOp ->
+                            [MIR.BinOp (destReg, convertBinOp op, leftOp, rightOp)]))
                 | ANF.UnaryPrim (op, atom) ->
-                    Ok [MIR.UnaryOp (destReg, convertUnaryOp op, atomToOperand builder atom)]
+                    atomToOperand builder atom
+                    |> Result.map (fun operand ->
+                        [MIR.UnaryOp (destReg, convertUnaryOp op, operand)])
                 | ANF.Call (funcName, args) ->
-                    let argOperands = List.map (atomToOperand builder) args
-                    Ok [MIR.Call (destReg, funcName, argOperands)]
+                    args
+                    |> List.map (atomToOperand builder)
+                    |> sequenceResults
+                    |> Result.map (fun argOperands ->
+                        [MIR.Call (destReg, funcName, argOperands)])
                 | ANF.TupleAlloc elems ->
                     // Allocate heap space: 8 bytes per element
                     let sizeBytes = List.length elems * 8
                     let allocInstr = MIR.HeapAlloc (destReg, sizeBytes)
                     // Store each element at its offset
-                    let storeInstrs =
-                        elems
-                        |> List.mapi (fun i elem ->
-                            MIR.HeapStore (destReg, i * 8, atomToOperand builder elem))
-                    Ok (allocInstr :: storeInstrs)
+                    elems
+                    |> List.mapi (fun i elem -> (i, elem))
+                    |> List.map (fun (i, elem) ->
+                        atomToOperand builder elem
+                        |> Result.map (fun op -> MIR.HeapStore (destReg, i * 8, op)))
+                    |> sequenceResults
+                    |> Result.map (fun storeInstrs -> allocInstr :: storeInstrs)
                 | ANF.TupleGet (tupleAtom, index) ->
                     // Tuple should always be a variable in ANF
                     match tupleAtom with
@@ -518,91 +567,92 @@ and convertExprToOperand
 
     | ANF.If (condAtom, thenBranch, elseBranch) ->
         // If expression: creates blocks with branch/jump/join structure
-        let condOp = atomToOperand builder condAtom
-        let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
-        let (elseLabel, labelGen2) = MIR.freshLabel labelGen1
-        let (joinLabel, labelGen3) = MIR.freshLabel labelGen2
-        let (resultReg, regGen1) = MIR.freshReg builder.RegGen
+        atomToOperand builder condAtom
+        |> Result.bind (fun condOp ->
+            let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
+            let (elseLabel, labelGen2) = MIR.freshLabel labelGen1
+            let (joinLabel, labelGen3) = MIR.freshLabel labelGen2
+            let (resultReg, regGen1) = MIR.freshReg builder.RegGen
 
-        let startBlock = {
-            MIR.Label = startLabel
-            MIR.Instrs = startInstrs
-            MIR.Terminator = MIR.Branch (condOp, thenLabel, elseLabel)
-        }
+            let startBlock = {
+                MIR.Label = startLabel
+                MIR.Instrs = startInstrs
+                MIR.Terminator = MIR.Branch (condOp, thenLabel, elseLabel)
+            }
 
-        let builder1 = {
-            Blocks = Map.add startLabel startBlock builder.Blocks
-            LabelGen = labelGen3
-            RegGen = regGen1
-            StringLookup = builder.StringLookup
-            FloatLookup = builder.FloatLookup
-        }
+            let builder1 = {
+                Blocks = Map.add startLabel startBlock builder.Blocks
+                LabelGen = labelGen3
+                RegGen = regGen1
+                StringLookup = builder.StringLookup
+                FloatLookup = builder.FloatLookup
+            }
 
-        // Convert then-branch
-        match convertExprToOperand thenBranch thenLabel [] builder1 with
-        | Error err -> Error err
-        | Ok (thenResult, thenJoinOpt, builder2) ->
+            // Convert then-branch
+            match convertExprToOperand thenBranch thenLabel [] builder1 with
+            | Error err -> Error err
+            | Ok (thenResult, thenJoinOpt, builder2) ->
 
-        // If then-branch created blocks (nested if), patch its join block
-        // Otherwise, create a simple block that moves result and jumps
-        let builder3 =
-            match thenJoinOpt with
-            | Some nestedJoinLabel ->
-                // Patch the nested join block to jump to our join instead of returning
-                match Map.tryFind nestedJoinLabel builder2.Blocks with
-                | Some nestedJoinBlock ->
-                    let patchedBlock = {
-                        nestedJoinBlock with
-                            Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, thenResult)]
-                            Terminator = MIR.Jump joinLabel
+            // If then-branch created blocks (nested if), patch its join block
+            // Otherwise, create a simple block that moves result and jumps
+            let builder3 =
+                match thenJoinOpt with
+                | Some nestedJoinLabel ->
+                    // Patch the nested join block to jump to our join instead of returning
+                    match Map.tryFind nestedJoinLabel builder2.Blocks with
+                    | Some nestedJoinBlock ->
+                        let patchedBlock = {
+                            nestedJoinBlock with
+                                Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, thenResult)]
+                                Terminator = MIR.Jump joinLabel
+                        }
+                        { builder2 with Blocks = Map.add nestedJoinLabel patchedBlock builder2.Blocks }
+                    | None -> builder2  // Should not happen
+                | None ->
+                    // Simple expression - create block that moves result and jumps
+                    let thenBlock = {
+                        MIR.Label = thenLabel
+                        MIR.Instrs = [MIR.Mov (resultReg, thenResult)]
+                        MIR.Terminator = MIR.Jump joinLabel
                     }
-                    { builder2 with Blocks = Map.add nestedJoinLabel patchedBlock builder2.Blocks }
-                | None -> builder2  // Should not happen
-            | None ->
-                // Simple expression - create block that moves result and jumps
-                let thenBlock = {
-                    MIR.Label = thenLabel
-                    MIR.Instrs = [MIR.Mov (resultReg, thenResult)]
-                    MIR.Terminator = MIR.Jump joinLabel
-                }
-                { builder2 with Blocks = Map.add thenLabel thenBlock builder2.Blocks }
+                    { builder2 with Blocks = Map.add thenLabel thenBlock builder2.Blocks }
 
-        // Convert else-branch
-        match convertExprToOperand elseBranch elseLabel [] builder3 with
-        | Error err -> Error err
-        | Ok (elseResult, elseJoinOpt, builder4) ->
+            // Convert else-branch
+            match convertExprToOperand elseBranch elseLabel [] builder3 with
+            | Error err -> Error err
+            | Ok (elseResult, elseJoinOpt, builder4) ->
 
-        // Same logic for else-branch
-        let builder5 =
-            match elseJoinOpt with
-            | Some nestedJoinLabel ->
-                match Map.tryFind nestedJoinLabel builder4.Blocks with
-                | Some nestedJoinBlock ->
-                    let patchedBlock = {
-                        nestedJoinBlock with
-                            Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, elseResult)]
-                            Terminator = MIR.Jump joinLabel
+            // Same logic for else-branch
+            let builder5 =
+                match elseJoinOpt with
+                | Some nestedJoinLabel ->
+                    match Map.tryFind nestedJoinLabel builder4.Blocks with
+                    | Some nestedJoinBlock ->
+                        let patchedBlock = {
+                            nestedJoinBlock with
+                                Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, elseResult)]
+                                Terminator = MIR.Jump joinLabel
+                        }
+                        { builder4 with Blocks = Map.add nestedJoinLabel patchedBlock builder4.Blocks }
+                    | None -> builder4  // Should not happen
+                | None ->
+                    let elseBlock = {
+                        MIR.Label = elseLabel
+                        MIR.Instrs = [MIR.Mov (resultReg, elseResult)]
+                        MIR.Terminator = MIR.Jump joinLabel
                     }
-                    { builder4 with Blocks = Map.add nestedJoinLabel patchedBlock builder4.Blocks }
-                | None -> builder4  // Should not happen
-            | None ->
-                let elseBlock = {
-                    MIR.Label = elseLabel
-                    MIR.Instrs = [MIR.Mov (resultReg, elseResult)]
-                    MIR.Terminator = MIR.Jump joinLabel
-                }
-                { builder4 with Blocks = Map.add elseLabel elseBlock builder4.Blocks }
+                    { builder4 with Blocks = Map.add elseLabel elseBlock builder4.Blocks }
 
-        // Create join block
-        let joinBlock = {
-            MIR.Label = joinLabel
-            MIR.Instrs = []
-            MIR.Terminator = MIR.Ret (MIR.Register resultReg)
-        }
-        let builder6 = { builder5 with Blocks = Map.add joinLabel joinBlock builder5.Blocks }
+            // Create join block
+            let joinBlock = {
+                MIR.Label = joinLabel
+                MIR.Instrs = []
+                MIR.Terminator = MIR.Ret (MIR.Register resultReg)
+            }
+            let builder6 = { builder5 with Blocks = Map.add joinLabel joinBlock builder5.Blocks }
 
-        // Return result register and our join label for potential patching by caller
-        Ok (MIR.Register resultReg, Some joinLabel, builder6)
+            // Return result register and our join label for potential patching by caller
+            Ok (MIR.Register resultReg, Some joinLabel, builder6))
 
 /// Convert an ANF function to a MIR function
 let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: Map<string, int>) (fltLookup: Map<float, int>) : Result<MIR.Function * MIR.RegGen, string> =

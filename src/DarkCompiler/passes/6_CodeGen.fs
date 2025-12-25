@@ -92,18 +92,26 @@ let loadImmediate (dest: ARM64.Reg) (value: int64) : ARM64.Instr list =
 /// Generate ARM64 instructions to load a stack slot into a register
 /// Stack slots are accessed relative to FP (X29)
 /// Uses LDUR for signed offsets (stack slots are negative from FP)
-let loadStackSlot (dest: ARM64.Reg) (offset: int) : ARM64.Instr list =
+/// Returns Error if offset exceeds LDUR range (-256 to +255)
+let loadStackSlot (dest: ARM64.Reg) (offset: int) : Result<ARM64.Instr list, string> =
     // LDUR dest, [X29, #offset] - signed offset version
     // Offset is in bytes, can be negative (-256 to +255)
-    [ARM64.LDUR (dest, ARM64.X29, int16 offset)]
+    if offset < -256 || offset > 255 then
+        Error $"Stack offset {offset} exceeds LDUR range (-256 to +255)"
+    else
+        Ok [ARM64.LDUR (dest, ARM64.X29, int16 offset)]
 
 /// Generate ARM64 instructions to store a register to a stack slot
 /// Stack slots are accessed relative to FP (X29)
 /// Uses STUR for signed offsets (stack slots are negative from FP)
-let storeStackSlot (src: ARM64.Reg) (offset: int) : ARM64.Instr list =
+/// Returns Error if offset exceeds STUR range (-256 to +255)
+let storeStackSlot (src: ARM64.Reg) (offset: int) : Result<ARM64.Instr list, string> =
     // STUR src, [X29, #offset] - signed offset version
     // Offset is in bytes, can be negative (-256 to +255)
-    [ARM64.STUR (src, ARM64.X29, int16 offset)]
+    if offset < -256 || offset > 255 then
+        Error $"Stack offset {offset} exceeds STUR range (-256 to +255)"
+    else
+        Ok [ARM64.STUR (src, ARM64.X29, int16 offset)]
 
 /// Convert LIR operand to ARM64 register, loading from stack if needed
 /// Returns (register, instruction list to load it)
@@ -121,7 +129,8 @@ let operandToReg (operand: LIR.Operand) : Result<ARM64.Reg * ARM64.Instr list, s
         Error "Float code generation not yet implemented"
     | LIR.StackSlot offset ->
         // Load stack slot into X9
-        Ok (ARM64.X9, loadStackSlot ARM64.X9 offset)
+        loadStackSlot ARM64.X9 offset
+        |> Result.map (fun instrs -> (ARM64.X9, instrs))
     | LIR.StringRef _ ->
         // String address loading handled by PrintString instruction
         Error "StringRef cannot be directly used as register operand"
@@ -197,7 +206,7 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                 |> Result.map (fun srcARM64 -> [ARM64.MOV_reg (destReg, srcARM64)])
             | LIR.StackSlot offset ->
                 // Load from stack slot into destination register
-                Ok (loadStackSlot destReg offset)
+                loadStackSlot destReg offset
             | LIR.StringRef _ ->
                 Error "Cannot MOV string reference - use PrintString instruction"
             | LIR.FloatRef _ ->
@@ -206,7 +215,7 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
     | LIR.Store (offset, src) ->
         // Store register to stack slot
         lirRegToARM64Reg src
-        |> Result.map (fun srcReg -> storeStackSlot srcReg offset)
+        |> Result.bind (fun srcReg -> storeStackSlot srcReg offset)
 
     | LIR.Add (dest, left, right) ->
         lirRegToARM64Reg dest
@@ -229,7 +238,8 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                 | LIR.StackSlot offset ->
                     // Load stack slot into temp register, then add
                     let tempReg = ARM64.X9
-                    Ok (loadStackSlot tempReg offset @ [ARM64.ADD_reg (destReg, leftReg, tempReg)])
+                    loadStackSlot tempReg offset
+                    |> Result.map (fun loadInstrs -> loadInstrs @ [ARM64.ADD_reg (destReg, leftReg, tempReg)])
                 | LIR.StringRef _ ->
                     Error "Cannot use string reference in arithmetic operation"
                 | LIR.FloatRef _ ->
@@ -254,7 +264,8 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
                 | LIR.StackSlot offset ->
                     // Load stack slot into temp register, then subtract
                     let tempReg = ARM64.X9
-                    Ok (loadStackSlot tempReg offset @ [ARM64.SUB_reg (destReg, leftReg, tempReg)])
+                    loadStackSlot tempReg offset
+                    |> Result.map (fun loadInstrs -> loadInstrs @ [ARM64.SUB_reg (destReg, leftReg, tempReg)])
                 | LIR.StringRef _ ->
                     Error "Cannot use string reference in arithmetic operation"
                 | LIR.FloatRef _ ->
@@ -294,7 +305,8 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             | LIR.StackSlot offset ->
                 // Load stack slot into temp register, then compare
                 let tempReg = ARM64.X9
-                Ok (loadStackSlot tempReg offset @ [ARM64.CMP_reg (leftReg, tempReg)])
+                loadStackSlot tempReg offset
+                |> Result.map (fun loadInstrs -> loadInstrs @ [ARM64.CMP_reg (leftReg, tempReg)])
             | LIR.StringRef _ ->
                 Error "Cannot compare string references directly"
             | LIR.FloatRef _ ->
@@ -517,8 +529,9 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             | LIR.StackSlot slotOffset ->
                 // Load from stack slot into temp, then store to heap
                 let tempReg = ARM64.X9
-                Ok (loadStackSlot tempReg slotOffset @
-                    [ARM64.STR (tempReg, addrReg, int16 offset)])
+                loadStackSlot tempReg slotOffset
+                |> Result.map (fun loadInstrs ->
+                    loadInstrs @ [ARM64.STR (tempReg, addrReg, int16 offset)])
             | _ -> Error "Unsupported operand type in HeapStore")
 
     | LIR.HeapLoad (dest, addr, offset) ->
