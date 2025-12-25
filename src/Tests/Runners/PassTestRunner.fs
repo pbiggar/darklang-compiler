@@ -208,18 +208,23 @@ let loadMIR2LIRTest (path: string) : Result<MIR.Program * LIR.Program, string> =
 
 /// Run MIR→LIR test
 let runMIR2LIRTest (input: MIR.Program) (expected: LIR.Program) : PassTestResult =
-    let actual = MIR_to_LIR.toLIR input
-
-    if actual = expected then
-        { Success = true
-          Message = "Test passed"
-          Expected = None
-          Actual = None }
-    else
+    match MIR_to_LIR.toLIR input with
+    | Error err ->
         { Success = false
-          Message = "Output mismatch"
+          Message = $"LIR conversion error: {err}"
           Expected = Some (prettyPrintLIR expected)
-          Actual = Some (prettyPrintLIR actual) }
+          Actual = None }
+    | Ok actual ->
+        if actual = expected then
+            { Success = true
+              Message = "Test passed"
+              Expected = None
+              Actual = None }
+        else
+            { Success = false
+              Message = "Output mismatch"
+              Expected = Some (prettyPrintLIR expected)
+              Actual = Some (prettyPrintLIR actual) }
 
 /// Pretty-print ANF atom
 let prettyPrintANFAtom = function
@@ -323,18 +328,23 @@ let loadANF2MIRTest (path: string) : Result<ANF.Program * MIR.Program, string> =
 
 /// Run ANF→MIR test
 let runANF2MIRTest (input: ANF.Program) (expected: MIR.Program) : PassTestResult =
-    let (actual, _) = ANF_to_MIR.toMIR input MIR.initialRegGen
-
-    if actual = expected then
-        { Success = true
-          Message = "Test passed"
-          Expected = None
-          Actual = None }
-    else
+    match ANF_to_MIR.toMIR input MIR.initialRegGen with
+    | Error err ->
         { Success = false
-          Message = "Output mismatch"
+          Message = $"MIR conversion error: {err}"
           Expected = Some (prettyPrintMIR expected)
-          Actual = Some (prettyPrintMIR actual) }
+          Actual = None }
+    | Ok (actual, _) ->
+        if actual = expected then
+            { Success = true
+              Message = "Test passed"
+              Expected = None
+              Actual = None }
+        else
+            { Success = false
+              Message = "Output mismatch"
+              Expected = Some (prettyPrintMIR expected)
+              Actual = Some (prettyPrintMIR actual) }
 
 /// Pretty-print ARM64 register
 let prettyPrintARM64Reg = function

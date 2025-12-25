@@ -152,39 +152,36 @@ let selectInstr (instr: MIR.Instr) : LIR.Instr list =
         // ARM64 calling convention (AAPCS64):
         // - First 8 arguments in X0-X7
         // - Return value in X0
-        // For now, only support ≤8 arguments
-        if List.length args > 8 then
-            failwith "Functions with >8 parameters not yet supported"
-        else
-            let lirDest = vregToLIRReg dest
-            let argRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
+        // Note: >8 arguments are checked upfront in toLIR
+        let lirDest = vregToLIRReg dest
+        let argRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
 
-            // IMPORTANT: Save caller-saved registers BEFORE setting up arguments
-            // Because argument setup may clobber registers that hold live values
-            // We use a special SaveRegs/RestoreRegs instruction pair that CodeGen expands
-            let saveInstrs = [LIR.SaveRegs]
+        // IMPORTANT: Save caller-saved registers BEFORE setting up arguments
+        // Because argument setup may clobber registers that hold live values
+        // We use a special SaveRegs/RestoreRegs instruction pair that CodeGen expands
+        let saveInstrs = [LIR.SaveRegs]
 
-            // Move each argument to its corresponding register
-            // Take only as many registers as we have arguments
-            let moveInstrs =
-                List.zip args (List.take (List.length args) argRegs)
-                |> List.map (fun (arg, reg) ->
-                    let lirArg = convertOperand arg
-                    LIR.Mov (LIR.Physical reg, lirArg))
+        // Move each argument to its corresponding register
+        // Take only as many registers as we have arguments
+        let moveInstrs =
+            List.zip args (List.take (List.length args) argRegs)
+            |> List.map (fun (arg, reg) ->
+                let lirArg = convertOperand arg
+                LIR.Mov (LIR.Physical reg, lirArg))
 
-            // Call instruction (no longer handles caller-save - it's done above)
-            let callInstr = LIR.Call (lirDest, funcName, List.map convertOperand args)
+        // Call instruction (no longer handles caller-save - it's done above)
+        let callInstr = LIR.Call (lirDest, funcName, List.map convertOperand args)
 
-            // Restore caller-saved registers after the call
-            let restoreInstrs = [LIR.RestoreRegs]
+        // Restore caller-saved registers after the call
+        let restoreInstrs = [LIR.RestoreRegs]
 
-            // Move return value from X0 to destination (if not already X0)
-            let moveResult =
-                match lirDest with
-                | LIR.Physical LIR.X0 -> []
-                | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
+        // Move return value from X0 to destination (if not already X0)
+        let moveResult =
+            match lirDest with
+            | LIR.Physical LIR.X0 -> []
+            | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
 
-            saveInstrs @ moveInstrs @ [callInstr] @ restoreInstrs @ moveResult
+        saveInstrs @ moveInstrs @ [callInstr] @ restoreInstrs @ moveResult
 
     | MIR.HeapAlloc (dest, sizeBytes) ->
         let lirDest = vregToLIRReg dest
@@ -277,9 +274,46 @@ let selectCFG (cfg: MIR.CFG) (isEntryFunc: bool) (stringPool: MIR.StringPool) : 
         LIR.Blocks = lirBlocks
     }
 
+/// Check if any function has more than 8 parameters (ARM64 calling convention limit)
+let private checkParameterLimits (mirFuncs: MIR.Function list) : Result<unit, string> =
+    let funcWithTooManyParams =
+        mirFuncs
+        |> List.tryFind (fun f -> List.length f.Params > 8)
+    match funcWithTooManyParams with
+    | Some f ->
+        Error $"Function '{f.Name}' has {List.length f.Params} parameters, but only 8 are supported (ARM64 calling convention limit)"
+    | None -> Ok ()
+
+/// Check if any function call has more than 8 arguments
+let private checkCallArgLimits (mirFuncs: MIR.Function list) : Result<unit, string> =
+    let checkBlock (block: MIR.BasicBlock) =
+        block.Instrs
+        |> List.tryPick (fun instr ->
+            match instr with
+            | MIR.Call (_, funcName, args) when List.length args > 8 ->
+                Some $"Call to '{funcName}' has {List.length args} arguments, but only 8 are supported (ARM64 calling convention limit)"
+            | _ -> None)
+
+    let checkFunc (func: MIR.Function) =
+        func.CFG.Blocks
+        |> Map.toList
+        |> List.tryPick (fun (_, block) -> checkBlock block)
+
+    match mirFuncs |> List.tryPick checkFunc with
+    | Some err -> Error err
+    | None -> Ok ()
+
 /// Convert MIR program to LIR
-let toLIR (program: MIR.Program) : LIR.Program =
+let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
     let (MIR.Program (mirFuncs, stringPool, floatPool)) = program
+
+    // Pre-check: verify all functions have ≤8 parameters and calls have ≤8 arguments
+    match checkParameterLimits mirFuncs with
+    | Error err -> Error err
+    | Ok () ->
+    match checkCallArgLimits mirFuncs with
+    | Error err -> Error err
+    | Ok () ->
 
     // Convert each MIR function to LIR
     let lirFuncs =
@@ -297,4 +331,4 @@ let toLIR (program: MIR.Program) : LIR.Program =
                 LIR.UsedCalleeSaved = []  // Will be determined by register allocation
             })
 
-    LIR.Program (lirFuncs, stringPool, floatPool)
+    Ok (LIR.Program (lirFuncs, stringPool, floatPool))

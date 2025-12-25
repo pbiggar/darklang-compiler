@@ -177,18 +177,18 @@ type CFGBuilder = {
 }
 
 /// Convert ANF Atom to MIR Operand using lookups from builder
+/// Note: Float/string lookup failures are internal invariant violations - they indicate
+/// bugs in the pool collection phase and should never occur in correct code.
 let atomToOperand (builder: CFGBuilder) (atom: ANF.Atom) : MIR.Operand =
     match atom with
     | ANF.IntLiteral n -> MIR.IntConst n
     | ANF.BoolLiteral b -> MIR.BoolConst b
     | ANF.FloatLiteral f ->
-        match Map.tryFind f builder.FloatLookup with
-        | Some idx -> MIR.FloatRef idx
-        | None -> failwith $"Float not found in pool: {f}"
+        // Pool collection should have found all float literals
+        Map.find f builder.FloatLookup |> MIR.FloatRef
     | ANF.StringLiteral s ->
-        match Map.tryFind s builder.StringLookup with
-        | Some idx -> MIR.StringRef idx
-        | None -> failwith $"String not found in pool: {s}"
+        // Pool collection should have found all string literals
+        Map.find s builder.StringLookup |> MIR.StringRef
     | ANF.Var tempId -> MIR.Register (tempToVReg tempId)
 
 /// Convert ANF expression to CFG
@@ -626,7 +626,7 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
     (mirFunc, finalBuilder.RegGen)
 
 /// Convert ANF program to MIR program
-let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : MIR.Program * MIR.RegGen =
+let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : Result<MIR.Program * MIR.RegGen, string> =
     let (ANF.Program (functions, mainExpr)) = program
 
     // Phase 1: Collect all strings and floats, build pools and lookups
@@ -647,7 +647,7 @@ let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : MIR.Program * MIR.RegGen
             (funcs @ [mirFunc], rg')) ([], regGen)
 
     // Convert main expression (if any) to a synthetic "_start" function
-    let (allFuncs, finalRegGen) =
+    let startFuncResult =
         match mainExpr with
         | Some expr ->
             // Create _start function from main expression
@@ -669,7 +669,7 @@ let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : MIR.Program * MIR.RegGen
                 MIR.Params = []
                 MIR.CFG = cfg
             }
-            (mirFuncs @ [startFunc], finalBuilder.RegGen)
+            Ok (mirFuncs @ [startFunc], finalBuilder.RegGen)
         | None ->
             // No main expression - check if there's a main() function
             let hasMainFunc = functions |> List.exists (fun f -> f.Name = "main")
@@ -695,8 +695,11 @@ let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : MIR.Program * MIR.RegGen
                     MIR.Params = []
                     MIR.CFG = cfg
                 }
-                (mirFuncs @ [startFunc], regGen2)
+                Ok (mirFuncs @ [startFunc], regGen2)
             else
-                failwith "Program must have either a main expression or a main() function"
+                Error "Program must have either a main expression or a main() function"
 
-    (MIR.Program (allFuncs, stringPool, floatPool), finalRegGen)
+    match startFuncResult with
+    | Error err -> Error err
+    | Ok (allFuncs, finalRegGen) ->
+        Ok (MIR.Program (allFuncs, stringPool, floatPool), finalRegGen)

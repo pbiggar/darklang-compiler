@@ -97,7 +97,14 @@ let compile (verbosity: int) (source: string) : CompileResult =
 
                     // Pass 3: ANF → MIR
                     if verbosity >= 1 then println "  [3/8] ANF → MIR..."
-                    let (mirProgram, _) = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0)
+                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0)
+
+                    match mirResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"MIR conversion error: {err}" }
+                    | Ok (mirProgram, _) ->
 
                     // Show MIR
                     if verbosity >= 3 then
@@ -121,7 +128,14 @@ let compile (verbosity: int) (source: string) : CompileResult =
 
                     // Pass 4: MIR → LIR
                     if verbosity >= 1 then println "  [4/8] MIR → LIR..."
-                    let lirProgram = MIR_to_LIR.toLIR mirProgram
+                    let lirResult = MIR_to_LIR.toLIR mirProgram
+
+                    match lirResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"LIR conversion error: {err}" }
+                    | Ok lirProgram ->
 
                     // Show LIR
                     if verbosity >= 3 then
