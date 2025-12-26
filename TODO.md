@@ -62,7 +62,7 @@ The following are known simplifications or potential issues in the compiler code
 
 ### Documentation
 
-- [ ] Update README.md with new language features
+- [x] Update README.md with new language features
 
 ## Current Status
 
@@ -116,7 +116,7 @@ These are features that exist but have known limitations or incomplete implement
 
 ✅ Ref count field added to all heap allocations
 ✅ Ref count initialized to 1 at allocation time
-✅ All 709 tests pass with ref count headers
+✅ All 711 tests pass with ref count headers
 
 **History:**
 

@@ -239,13 +239,13 @@ dotnet clean                    # Clean build artifacts
 - Tuple patterns: `(a, b)`, `(x, _, z)`
 - Record patterns: `{ x = a, y = b }`
 - ADT patterns: `Some(n)`, `None`
-- List patterns: `[a, b]`, `[]`, `[_, x, _]`
+- List patterns: `[a, b]`, `[]`, `[_, x, _]` (exact-length matching)
 
 **Functions:**
 
 - Function definitions with type signatures:
   ```
-  fn add(x: int, y: int): int = x + y
+  def add(x: int, y: int) : int = x + y
   ```
 - Recursion support
 - Up to 8 parameters (ARM64 calling convention)
@@ -254,21 +254,25 @@ dotnet clean                    # Clean build artifacts
 
 ```
 // Factorial
-fn factorial(n: int): int =
+def factorial(n: int) : int =
   if n <= 1 then 1
   else n * factorial(n - 1)
-factorial(5)
+
+def main() : int = factorial(5)
 
 // Pattern matching on ADT
 type Option = None | Some of int
-match Some(42) with
-| Some(x) -> x * 2
-| None -> 0
 
-// List processing
-match [1, 2, 3] with
-| [a, b, c] -> a + b + c
-| _ -> 0
+def main() : int =
+  match Some(42) with
+  | Some(x) -> x * 2
+  | None -> 0
+
+// List processing (exact-length matching)
+def main() : int =
+  match [1, 2, 3] with
+  | [a, b, c] -> a + b + c  // matches exactly 3 elements
+  | _ -> 0
 ```
 
 ## Compiler Architecture
@@ -314,7 +318,7 @@ Source → Parser → TypeCheck → ANF → MIR → LIR → RegAlloc → CodeGen
 
 ### Test-Driven Development
 
-- 664+ tests covering all language features
+- 711 tests covering all language features
 - DSL-based E2E tests for quick iteration
 - Unit tests for each compiler phase
 - Tests document expected behavior
