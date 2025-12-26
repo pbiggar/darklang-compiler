@@ -128,6 +128,12 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
         AST.Match (applySubstToExpr subst scrutinee, List.map (fun (p, e) -> (p, applySubstToExpr subst e)) cases)
     | AST.ListLiteral elements ->
         AST.ListLiteral (List.map (applySubstToExpr subst) elements)
+    | AST.Lambda (parameters, body) ->
+        // Substitute types in parameter annotations and body
+        let substParams = parameters |> List.map (fun (name, ty) -> (name, applySubstToType subst ty))
+        AST.Lambda (substParams, applySubstToExpr subst body)
+    | AST.Apply (func, args) ->
+        AST.Apply (applySubstToExpr subst func, List.map (applySubstToExpr subst) args)
 
 /// Specialize a generic function definition with specific type arguments
 let specializeFunction (funcDef: AST.FunctionDef) (typeArgs: AST.Type list) : AST.FunctionDef =
@@ -180,6 +186,12 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
         Set.union scrutineeSpecs caseSpecs
     | AST.ListLiteral elements ->
         elements |> List.map collectTypeApps |> List.fold Set.union Set.empty
+    | AST.Lambda (_, body) ->
+        collectTypeApps body
+    | AST.Apply (func, args) ->
+        let funcSpecs = collectTypeApps func
+        let argsSpecs = args |> List.map collectTypeApps |> List.fold Set.union Set.empty
+        Set.union funcSpecs argsSpecs
 
 /// Collect TypeApps from a function definition
 let collectTypeAppsFromFunc (funcDef: AST.FunctionDef) : Set<SpecKey> =
@@ -218,6 +230,10 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
         AST.Match (replaceTypeApps scrutinee, List.map (fun (p, e) -> (p, replaceTypeApps e)) cases)
     | AST.ListLiteral elements ->
         AST.ListLiteral (List.map replaceTypeApps elements)
+    | AST.Lambda (parameters, body) ->
+        AST.Lambda (parameters, replaceTypeApps body)
+    | AST.Apply (func, args) ->
+        AST.Apply (replaceTypeApps func, List.map replaceTypeApps args)
 
 /// Replace TypeApp with Call in a function definition
 let replaceTypeAppsInFunc (funcDef: AST.FunctionDef) : AST.FunctionDef =
@@ -400,6 +416,19 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
     | AST.TypeApp (_funcName, _typeArgs, _args) ->
         // Generic function call - not yet implemented
         Error "Generic function calls not yet implemented"
+    | AST.Lambda (parameters, body) ->
+        // Lambda has function type (paramTypes) -> returnType
+        let paramTypes = parameters |> List.map snd
+        let typeEnv' = parameters |> List.fold (fun env (name, ty) -> Map.add name ty env) typeEnv
+        inferType body typeEnv' typeReg variantLookup funcReg
+        |> Result.map (fun returnType -> AST.TFunction (paramTypes, returnType))
+    | AST.Apply (func, _args) ->
+        // Apply result is the return type of the function
+        inferType func typeEnv typeReg variantLookup funcReg
+        |> Result.bind (fun funcType ->
+            match funcType with
+            | AST.TFunction (_, returnType) -> Ok returnType
+            | _ -> Error "Apply requires a function type")
 
 /// Convert AST expression to ANF
 /// env maps user variable names to ANF TempIds and their types
@@ -1006,6 +1035,35 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 let exprWithBindings = wrapBindings scrutineeBindings' chainExpr
                 (exprWithBindings, varGen2)))
 
+    | AST.Lambda (_parameters, _body) ->
+        // Lambda in expression position - closures not yet fully implemented
+        Error "Lambda expressions (closures) are not yet fully implemented"
+
+    | AST.Apply (func, args) ->
+        // Apply a function expression to arguments
+        // For now, only support immediate application of lambdas
+        match func with
+        | AST.Lambda (parameters, body) ->
+            // Immediate application: ((x: int) => x + 1)(5) becomes let x = 5 in x + 1
+            if List.length args <> List.length parameters then
+                Error $"Lambda expects {List.length parameters} arguments, got {List.length args}"
+            else
+                // Build nested let bindings: let p1 = arg1 in let p2 = arg2 in ... body
+                let rec buildLets (ps: (string * AST.Type) list) (as': AST.Expr list) : AST.Expr =
+                    match ps, as' with
+                    | [], [] -> body
+                    | (pName, _) :: restPs, argExpr :: restAs ->
+                        AST.Let (pName, argExpr, buildLets restPs restAs)
+                    | _ -> body  // Should not happen due to length check
+                let desugared = buildLets parameters args
+                toANF desugared varGen env typeReg variantLookup funcReg
+        | AST.Var name ->
+            // Calling a variable that holds a function - not yet supported
+            Error $"Cannot apply variable '{name}' as function - closures not yet fully implemented"
+        | _ ->
+            // Complex function expression - not yet supported
+            Error "Complex function application not yet fully implemented"
+
 /// Convert an AST expression to an atom, introducing let bindings as needed
 and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     match expr with
@@ -1258,6 +1316,29 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             // We need to extract that value into a temp variable
             // For now, just return an error - complex match in atom position needs more work
             Error "Match expressions in atom position not yet supported (use let binding)")
+
+    | AST.Lambda (_parameters, _body) ->
+        // Lambda in atom position - closures not yet fully implemented
+        Error "Lambda expressions (closures) are not yet fully implemented"
+
+    | AST.Apply (func, args) ->
+        // Apply in atom position - convert via toANF and extract result
+        match func with
+        | AST.Lambda (parameters, body) ->
+            // Immediate application: desugar to let bindings
+            if List.length args <> List.length parameters then
+                Error $"Lambda expects {List.length parameters} arguments, got {List.length args}"
+            else
+                let rec buildLets (ps: (string * AST.Type) list) (as': AST.Expr list) : AST.Expr =
+                    match ps, as' with
+                    | [], [] -> body
+                    | (pName, _) :: restPs, argExpr :: restAs ->
+                        AST.Let (pName, argExpr, buildLets restPs restAs)
+                    | _ -> body
+                let desugared = buildLets parameters args
+                toAtom desugared varGen env typeReg variantLookup funcReg
+        | _ ->
+            Error "Complex function application in atom position not yet supported"
 
 /// Wrap let bindings around an expression
 and wrapBindings (bindings: (ANF.TempId * ANF.CExpr) list) (expr: ANF.AExpr) : ANF.AExpr =

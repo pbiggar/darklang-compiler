@@ -48,6 +48,7 @@ type Token =
     | TMatch       // match (pattern matching)
     | TWith        // with (pattern matching)
     | TArrow       // -> (pattern matching)
+    | TFatArrow    // => (lambda)
     | TUnderscore  // _ (wildcard pattern)
     | TLBracket    // [ (list literal)
     | TRBracket    // ] (list literal)
@@ -76,6 +77,7 @@ let lex (input: string) : Result<Token list, string> =
         | '+' :: rest -> lexHelper rest (TPlus :: acc)
         | '-' :: '>' :: rest -> lexHelper rest (TArrow :: acc)
         | '-' :: rest -> lexHelper rest (TMinus :: acc)
+        | '=' :: '>' :: rest -> lexHelper rest (TFatArrow :: acc)
         | '*' :: rest -> lexHelper rest (TStar :: acc)
         | '/' :: rest -> lexHelper rest (TSlash :: acc)
         | '(' :: rest -> lexHelper rest (TLParen :: acc)
@@ -597,6 +599,31 @@ let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Tok
             | _ -> Error "Expected '->' after pattern")
     | _ -> Error "Expected '|' before pattern"
 
+/// Try to parse lambda parameters: (ident : type, ident : type, ...)
+/// Returns Some (params, remaining) if successful, None otherwise
+let tryParseLambdaParams (tokens: Token list) : ((string * Type) list * Token list) option =
+    let rec parseParams (toks: Token list) (acc: (string * Type) list) : ((string * Type) list * Token list) option =
+        match toks with
+        | TRParen :: rest ->
+            // End of parameters
+            Some (List.rev acc, rest)
+        | TIdent name :: TColon :: rest when not (System.Char.IsUpper(name.[0])) ->
+            // Parameter: name : type
+            match parseType rest with
+            | Ok (ty, remaining) ->
+                match remaining with
+                | TComma :: rest' ->
+                    // More parameters
+                    parseParams rest' ((name, ty) :: acc)
+                | TRParen :: rest' ->
+                    // End of parameters
+                    Some (List.rev ((name, ty) :: acc), rest')
+                | _ -> None  // Not a valid lambda
+            | Error _ -> None  // Type parse failed
+        | _ -> None  // Not a valid lambda parameter
+
+    parseParams tokens []
+
 /// Parser: convert tokens to AST
 let parse (tokens: Token list) : Result<Program, string> =
     // Recursive descent parser with operator precedence
@@ -829,17 +856,26 @@ let parse (tokens: Token list) : Result<Program, string> =
             // Variable reference (lowercase identifier)
             Ok (Var name, rest)
         | TLParen :: rest ->
-            // Either parenthesized expression or tuple literal
-            parseExpr rest
-            |> Result.bind (fun (firstExpr, remaining) ->
-                match remaining with
-                | TRParen :: rest' ->
-                    // Parenthesized expression (single element)
-                    Ok (firstExpr, rest')
-                | TComma :: rest' ->
-                    // Tuple literal: (expr, expr, ...)
-                    parseTupleElements rest' [firstExpr]
-                | _ -> Error "Expected ')' or ',' in tuple/parenthesized expression")
+            // Could be lambda, parenthesized expression, or tuple literal
+            // Check if it looks like lambda params: (ident : type, ...) =>
+            match tryParseLambdaParams rest with
+            | Some (lambdaParams, TFatArrow :: bodyStart) ->
+                // It's a lambda: (params) => body
+                parseExpr bodyStart
+                |> Result.map (fun (body, remaining) ->
+                    (Lambda (lambdaParams, body), remaining))
+            | _ ->
+                // Not a lambda - parse as expression/tuple
+                parseExpr rest
+                |> Result.bind (fun (firstExpr, remaining) ->
+                    match remaining with
+                    | TRParen :: rest' ->
+                        // Parenthesized expression (single element)
+                        Ok (firstExpr, rest')
+                    | TComma :: rest' ->
+                        // Tuple literal: (expr, expr, ...)
+                        parseTupleElements rest' [firstExpr]
+                    | _ -> Error "Expected ')' or ',' in tuple/parenthesized expression")
         | TLBrace :: _ ->
             // Anonymous record literal is no longer supported
             Error "Record literal requires type name: use 'TypeName { field = value, ... }'"
@@ -900,7 +936,7 @@ let parse (tokens: Token list) : Result<Program, string> =
                 | _ -> Error "Expected ',' or ']' in list literal")
 
     and parsePostfix (expr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
-        // Handle postfix operations: tuple access (.0, .1) or field access (.fieldName)
+        // Handle postfix operations: tuple access (.0, .1), field access (.fieldName), or function application (args)
         match toks with
         | TDot :: TInt index :: rest ->
             if index < 0L then
@@ -912,6 +948,24 @@ let parse (tokens: Token list) : Result<Program, string> =
             // Record field access
             let accessExpr = RecordAccess (expr, fieldName)
             parsePostfix accessExpr rest
+        | TLParen :: rest ->
+            // Function application: expr(args)
+            // Only allow if expr is not a simple named variable (those are handled by Call)
+            match expr with
+            | Var _ ->
+                // This is handled by Call in parsePrimaryBase, not Apply
+                // But if we get here with a Var, it means the Var came from a postfix
+                // chain (e.g., x.field(args)), so we should use Apply
+                parseCallArgs rest []
+                |> Result.bind (fun (args, remaining) ->
+                    let applyExpr = Apply (expr, args)
+                    parsePostfix applyExpr remaining)
+            | _ ->
+                // Lambda or other expression being applied
+                parseCallArgs rest []
+                |> Result.bind (fun (args, remaining) ->
+                    let applyExpr = Apply (expr, args)
+                    parsePostfix applyExpr remaining)
         | _ -> Ok (expr, toks)
 
     and parseCallArgs (toks: Token list) (acc: Expr list) : Result<Expr list * Token list, string> =

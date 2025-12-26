@@ -1,0 +1,106 @@
+// E2E tests for closures (anonymous functions with captured environment)
+
+// =====================================================
+// Immediate Lambda Application (no captures)
+// =====================================================
+
+// Simple lambda with one parameter
+((x: int) => x + 1)(5) = 6
+
+// Lambda with two parameters
+((x: int, y: int) => x + y)(10, 20) = 30
+
+// Lambda with multiplication
+((x: int, y: int) => x * y)(6, 7) = 42
+
+// Lambda returning parameter directly
+((x: int) => x)(42) = 42
+
+// Lambda with three parameters
+((a: int, b: int, c: int) => a + b + c)(1, 2, 3) = 6
+
+// Lambda with subtraction
+((x: int, y: int) => x - y)(50, 8) = 42
+
+// Lambda with division
+((x: int, y: int) => x / y)(84, 2) = 42
+
+// Lambda with complex expression
+((x: int) => x * 2 + x)(14) = 42
+
+// =====================================================
+// Lambda with Captured Variables
+// =====================================================
+
+// Capture single variable
+let y = 10 in ((x: int) => x + y)(5) = 15
+
+// Capture in multiplication
+let factor = 7 in ((x: int) => x * factor)(6) = 42
+
+// Capture multiple variables
+let a = 1 in let b = 2 in ((x: int) => a + b + x)(39) = 42
+
+// Capture and use in subtraction
+let offset = 8 in ((x: int) => x - offset)(50) = 42
+
+// Nested let with capture
+let outer = 10 in let inner = 20 in ((x: int) => outer + inner + x)(12) = 42
+
+// Capture computed value
+let base = 20 in let bonus = base * 2 in ((x: int) => x + bonus)(2) = 42
+
+// =====================================================
+// Lambda with Booleans
+// =====================================================
+
+// Lambda returning bool
+((x: int) => x > 0)(5) = stdout="true\n"
+
+// Lambda with comparison
+((x: int, y: int) => x == y)(42, 42) = stdout="true\n"
+
+// Lambda with captured comparison
+let threshold = 10 in ((x: int) => x >= threshold)(42) = stdout="true\n"
+
+// =====================================================
+// Lambda in Expression Context
+// =====================================================
+
+// Lambda result in arithmetic
+((x: int) => x * 2)(20) + 2 = 42
+
+// Lambda as operand
+1 + ((x: int) => x)(41) = 42
+
+// Multiple lambda applications
+((x: int) => x + 1)(20) + ((y: int) => y)(21) = 42
+
+// Lambda in conditional test
+if ((x: int) => x > 0)(5) then 42 else 0 = 42
+
+// Lambda in let binding value
+let result = ((x: int) => x * 2)(21) in result = 42
+
+// =====================================================
+// Nested Lambdas
+// =====================================================
+
+// Outer captures, inner uses
+let y = 10 in ((x: int) => ((z: int) => x + y + z)(2))(30) = 42
+
+// Chain of immediate applications
+((x: int) => ((y: int) => x + y)(10))(32) = 42
+
+// =====================================================
+// Edge Cases
+// =====================================================
+
+// Lambda with zero (identity-ish)
+((x: int) => x + 0)(42) = 42
+
+// Lambda with one parameter used multiple times
+((x: int) => x + x + x)(14) = 42
+
+// Capture shadowed by parameter
+let x = 100 in ((x: int) => x + 2)(40) = 42

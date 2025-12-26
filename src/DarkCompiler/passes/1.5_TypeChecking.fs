@@ -106,6 +106,81 @@ let buildSubstitution (typeParams: string list) (typeArgs: Type list) : Result<S
         Ok (List.zip typeParams typeArgs |> Map.ofList)
 
 // =============================================================================
+// Free Variable Analysis for Closures
+// =============================================================================
+// When compiling lambdas, we need to identify which variables from the
+// enclosing scope are referenced in the lambda body (free variables).
+// Only these need to be captured in the closure.
+
+/// Collect free variables in an expression.
+/// Returns the set of variable names that are referenced but not bound locally.
+/// bound: Set of names that are currently in scope (not free)
+let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
+    match expr with
+    | IntLiteral _ | BoolLiteral _ | StringLiteral _ | FloatLiteral _ ->
+        Set.empty
+    | Var name ->
+        if Set.contains name bound then Set.empty else Set.singleton name
+    | BinOp (_, left, right) ->
+        Set.union (collectFreeVars left bound) (collectFreeVars right bound)
+    | UnaryOp (_, inner) ->
+        collectFreeVars inner bound
+    | Let (name, value, body) ->
+        let valueFree = collectFreeVars value bound
+        let bodyFree = collectFreeVars body (Set.add name bound)
+        Set.union valueFree bodyFree
+    | If (cond, thenBranch, elseBranch) ->
+        let condFree = collectFreeVars cond bound
+        let thenFree = collectFreeVars thenBranch bound
+        let elseFree = collectFreeVars elseBranch bound
+        Set.union condFree (Set.union thenFree elseFree)
+    | Call (_, args) ->
+        args |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
+    | TypeApp (_, _, args) ->
+        args |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
+    | TupleLiteral elements ->
+        elements |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
+    | TupleAccess (tuple, _) ->
+        collectFreeVars tuple bound
+    | RecordLiteral (_, fields) ->
+        fields |> List.map (fun (_, e) -> collectFreeVars e bound) |> List.fold Set.union Set.empty
+    | RecordAccess (record, _) ->
+        collectFreeVars record bound
+    | Constructor (_, _, payload) ->
+        payload |> Option.map (fun e -> collectFreeVars e bound) |> Option.defaultValue Set.empty
+    | Match (scrutinee, cases) ->
+        let scrutineeFree = collectFreeVars scrutinee bound
+        let casesFree = cases |> List.map (fun (pattern, body) ->
+            let patternBindings = collectPatternBindings pattern
+            let bodyBound = Set.union bound patternBindings
+            collectFreeVars body bodyBound)
+        Set.union scrutineeFree (casesFree |> List.fold Set.union Set.empty)
+    | ListLiteral elements ->
+        elements |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
+    | Lambda (parameters, body) ->
+        let paramNames = parameters |> List.map fst |> Set.ofList
+        collectFreeVars body (Set.union bound paramNames)
+    | Apply (func, args) ->
+        let funcFree = collectFreeVars func bound
+        let argsFree = args |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
+        Set.union funcFree argsFree
+
+/// Collect variable names bound by a pattern
+and collectPatternBindings (pattern: Pattern) : Set<string> =
+    match pattern with
+    | PWildcard -> Set.empty
+    | PVar name -> Set.singleton name
+    | PLiteral _ | PBool _ | PString _ | PFloat _ -> Set.empty
+    | PConstructor (_, None) -> Set.empty
+    | PConstructor (_, Some payload) -> collectPatternBindings payload
+    | PTuple patterns ->
+        patterns |> List.map collectPatternBindings |> List.fold Set.union Set.empty
+    | PRecord (_, fields) ->
+        fields |> List.map (fun (_, p) -> collectPatternBindings p) |> List.fold Set.union Set.empty
+    | PList patterns ->
+        patterns |> List.map collectPatternBindings |> List.fold Set.union Set.empty
+
+// =============================================================================
 // Type Inference for Generic Function Calls
 // =============================================================================
 // When a generic function is called without explicit type arguments, we infer
@@ -794,6 +869,69 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     | Some other when other <> listType ->
                         Error (TypeMismatch (other, listType, "list literal"))
                     | _ -> Ok (listType, ListLiteral elements')))
+
+    | Lambda (parameters, body) ->
+        // Build environment with lambda parameters
+        let paramEnv =
+            parameters
+            |> List.fold (fun e (name, ty) -> Map.add name ty e) env
+
+        // Type-check the lambda body
+        checkExpr body paramEnv typeReg variantLookup genericFuncReg None
+        |> Result.bind (fun (bodyType, body') ->
+            let paramTypes = parameters |> List.map snd
+            let funcType = TFunction (paramTypes, bodyType)
+            match expectedType with
+            | Some (TFunction (expectedParams, expectedRet)) ->
+                // Verify parameter types match
+                if List.length expectedParams <> List.length paramTypes then
+                    Error (TypeMismatch (TFunction (expectedParams, expectedRet), funcType, "lambda parameter count"))
+                else
+                    let paramMismatch =
+                        List.zip expectedParams paramTypes
+                        |> List.tryFind (fun (expected, actual) -> expected <> actual)
+                    match paramMismatch with
+                    | Some (expected, actual) ->
+                        Error (TypeMismatch (expected, actual, "lambda parameter type"))
+                    | None when expectedRet <> bodyType ->
+                        Error (TypeMismatch (expectedRet, bodyType, "lambda return type"))
+                    | None ->
+                        Ok (funcType, Lambda (parameters, body'))
+            | Some other ->
+                Error (TypeMismatch (other, funcType, "lambda"))
+            | None ->
+                Ok (funcType, Lambda (parameters, body')))
+
+    | Apply (func, args) ->
+        // Type-check the function expression
+        checkExpr func env typeReg variantLookup genericFuncReg None
+        |> Result.bind (fun (funcType, func') ->
+            match funcType with
+            | TFunction (paramTypes, returnType) ->
+                // Check argument count
+                if List.length args <> List.length paramTypes then
+                    Error (GenericError $"Function expects {List.length paramTypes} arguments, got {List.length args}")
+                else
+                    // Check each argument against expected param type
+                    let rec checkArgs (argExprs: Expr list) (paramTys: Type list) (checkedArgs: Expr list) : Result<Expr list, TypeError> =
+                        match argExprs, paramTys with
+                        | [], [] -> Ok (List.rev checkedArgs)
+                        | arg :: restArgs, paramTy :: restParams ->
+                            checkExpr arg env typeReg variantLookup genericFuncReg (Some paramTy)
+                            |> Result.bind (fun (argType, arg') ->
+                                if argType = paramTy then
+                                    checkArgs restArgs restParams (arg' :: checkedArgs)
+                                else
+                                    Error (TypeMismatch (paramTy, argType, "function argument")))
+                        | _ -> Error (GenericError "Argument count mismatch")
+                    checkArgs args paramTypes []
+                    |> Result.bind (fun args' ->
+                        match expectedType with
+                        | Some expected when expected <> returnType ->
+                            Error (TypeMismatch (expected, returnType, "function application result"))
+                        | _ -> Ok (returnType, Apply (func', args')))
+            | _ ->
+                Error (GenericError $"Cannot apply non-function type: {typeToString funcType}"))
 
 /// Type-check a function definition
 /// Returns the transformed function body (with Call -> TypeApp transformations)

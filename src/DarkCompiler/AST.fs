@@ -89,6 +89,8 @@ type Expr =
     | Constructor of typeName:string * variantName:string * payload:Expr option  // Red, Some(42)
     | Match of scrutinee:Expr * cases:(Pattern * Expr) list  // match e with | p1 -> e1 | p2 -> e2
     | ListLiteral of Expr list                               // [1, 2, 3]
+    | Lambda of parameters:(string * Type) list * body:Expr  // (x: int) => x + 1
+    | Apply of func:Expr * args:Expr list                    // Apply function expr: f(x) where f is expression
 
 /// Function definition
 type FunctionDef = {
