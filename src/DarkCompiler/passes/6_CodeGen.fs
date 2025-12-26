@@ -36,6 +36,15 @@ let lirPhysRegToARM64Reg (physReg: LIR.PhysReg) : ARM64.Reg =
     | LIR.X13 -> ARM64.X13
     | LIR.X14 -> ARM64.X14
     | LIR.X15 -> ARM64.X15
+    | LIR.X19 -> ARM64.X19
+    | LIR.X20 -> ARM64.X20
+    | LIR.X21 -> ARM64.X21
+    | LIR.X22 -> ARM64.X22
+    | LIR.X23 -> ARM64.X23
+    | LIR.X24 -> ARM64.X24
+    | LIR.X25 -> ARM64.X25
+    | LIR.X26 -> ARM64.X26
+    | LIR.X27 -> ARM64.X27
     | LIR.X29 -> ARM64.X29
     | LIR.X30 -> ARM64.X30
     | LIR.SP -> ARM64.SP
@@ -138,13 +147,67 @@ let operandToReg (operand: LIR.Operand) : Result<ARM64.Reg * ARM64.Instr list, s
         // Float address loading handled by FLoad instruction
         Error "FloatRef cannot be directly used as register operand"
 
+/// Generate STP instructions to save callee-saved register pairs
+/// Returns instructions and total bytes pushed
+let generateCalleeSavedSaves (regs: LIR.PhysReg list) : ARM64.Instr list * int =
+    // Sort registers for consistent ordering and pair them
+    let sorted = regs |> List.sortBy (fun r ->
+        match r with
+        | LIR.X19 -> 19 | LIR.X20 -> 20 | LIR.X21 -> 21 | LIR.X22 -> 22
+        | LIR.X23 -> 23 | LIR.X24 -> 24 | LIR.X25 -> 25 | LIR.X26 -> 26
+        | LIR.X27 -> 27 | _ -> 99)
+
+    // Process in pairs. If odd number, pad with X27 (or just save single)
+    let rec savePairs (remaining: LIR.PhysReg list) (offset: int) (acc: ARM64.Instr list) =
+        match remaining with
+        | [] -> (List.rev acc, offset)
+        | [single] ->
+            // Single register: use STR instead of STP
+            let instr = ARM64.STR (lirPhysRegToARM64Reg single, ARM64.SP, int16 offset)
+            (List.rev (instr :: acc), offset + 8)
+        | r1 :: r2 :: rest ->
+            let instr = ARM64.STP (lirPhysRegToARM64Reg r1, lirPhysRegToARM64Reg r2, ARM64.SP, int16 offset)
+            savePairs rest (offset + 16) (instr :: acc)
+
+    if List.isEmpty sorted then
+        ([], 0)
+    else
+        savePairs sorted 0 []
+
+/// Generate LDP instructions to restore callee-saved register pairs
+let generateCalleeSavedRestores (regs: LIR.PhysReg list) : ARM64.Instr list =
+    let sorted = regs |> List.sortBy (fun r ->
+        match r with
+        | LIR.X19 -> 19 | LIR.X20 -> 20 | LIR.X21 -> 21 | LIR.X22 -> 22
+        | LIR.X23 -> 23 | LIR.X24 -> 24 | LIR.X25 -> 25 | LIR.X26 -> 26
+        | LIR.X27 -> 27 | _ -> 99)
+
+    let rec restorePairs (remaining: LIR.PhysReg list) (offset: int) (acc: ARM64.Instr list) =
+        match remaining with
+        | [] -> List.rev acc
+        | [single] ->
+            let instr = ARM64.LDR (lirPhysRegToARM64Reg single, ARM64.SP, int16 offset)
+            List.rev (instr :: acc)
+        | r1 :: r2 :: rest ->
+            let instr = ARM64.LDP (lirPhysRegToARM64Reg r1, lirPhysRegToARM64Reg r2, ARM64.SP, int16 offset)
+            restorePairs rest (offset + 16) (instr :: acc)
+
+    if List.isEmpty sorted then []
+    else restorePairs sorted 0 []
+
+/// Calculate stack space needed for callee-saved registers (16-byte aligned)
+let calleeSavedStackSpace (regs: LIR.PhysReg list) : int =
+    let count = List.length regs
+    if count = 0 then 0
+    else ((count * 8 + 15) / 16) * 16  // 16-byte aligned
+
 /// Generate function prologue
 /// Saves FP, LR, callee-saved registers, and allocates stack space
 let generatePrologue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM64.Instr list =
     // Prologue sequence:
     // 1. Decrement SP and save FP (X29) and LR (X30)
     // 2. Set FP = SP: MOV X29, SP
-    // 3. Save callee-saved registers (if any): STP X19, X20, [SP, #-16]! ...
+    // 3. Save callee-saved registers (if any)
     // 4. Allocate stack space for spills: SUB SP, SP, #stackSize
 
     let saveFpLr = [
@@ -153,8 +216,14 @@ let generatePrologue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM6
     ]
     let setFp = [ARM64.MOV_reg (ARM64.X29, ARM64.SP)]
 
-    // TODO: Save callee-saved registers when we add X19-X28 to LIR.PhysReg
-    let saveCalleeSaved = []
+    // Save callee-saved registers
+    let calleeSavedSpace = calleeSavedStackSpace usedCalleeSaved
+    let (saveCalleeSavedInstrs, _) = generateCalleeSavedSaves usedCalleeSaved
+    let allocCalleeSaved =
+        if calleeSavedSpace > 0 then
+            [ARM64.SUB_imm (ARM64.SP, ARM64.SP, uint16 calleeSavedSpace)]
+        else
+            []
 
     let allocStack =
         if stackSize > 0 then
@@ -162,16 +231,17 @@ let generatePrologue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM6
         else
             []
 
-    saveFpLr @ setFp @ saveCalleeSaved @ allocStack
+    saveFpLr @ setFp @ allocCalleeSaved @ saveCalleeSavedInstrs @ allocStack
 
 /// Generate function epilogue
 /// Restores callee-saved registers, FP, LR, and returns
 let generateEpilogue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM64.Instr list =
     // Epilogue sequence (reverse of prologue):
     // 1. Deallocate stack: ADD SP, SP, #stackSize
-    // 2. Restore callee-saved registers: LDP X19, X20, [SP], #16 ...
-    // 3. Restore FP and LR from [SP], then increment SP
-    // 4. Return: RET
+    // 2. Restore callee-saved registers
+    // 3. Deallocate callee-saved space
+    // 4. Restore FP and LR from [SP], then increment SP
+    // 5. Return: RET
 
     let deallocStack =
         if stackSize > 0 then
@@ -179,8 +249,14 @@ let generateEpilogue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM6
         else
             []
 
-    // TODO: Restore callee-saved registers when we add X19-X28 to LIR.PhysReg
-    let restoreCalleeSaved = []
+    // Restore callee-saved registers
+    let calleeSavedSpace = calleeSavedStackSpace usedCalleeSaved
+    let restoreCalleeSavedInstrs = generateCalleeSavedRestores usedCalleeSaved
+    let deallocCalleeSaved =
+        if calleeSavedSpace > 0 then
+            [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 calleeSavedSpace)]
+        else
+            []
 
     let restoreFpLr = [
         ARM64.LDP (ARM64.X29, ARM64.X30, ARM64.SP, 0s)  // Load from [SP]
@@ -188,7 +264,7 @@ let generateEpilogue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM6
     ]
     let ret = [ARM64.RET]
 
-    deallocStack @ restoreCalleeSaved @ restoreFpLr @ ret
+    deallocStack @ restoreCalleeSavedInstrs @ deallocCalleeSaved @ restoreFpLr @ ret
 
 /// Convert LIR instruction to ARM64 instructions
 let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =

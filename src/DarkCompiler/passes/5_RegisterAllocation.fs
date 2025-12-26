@@ -10,11 +10,14 @@
 //
 // Registers:
 // - X0: reserved for return values
-// - X1-X10: caller-saved (available for allocation)
+// - X1-X10: caller-saved (preferred for allocation)
 // - X11-X13: reserved as scratch registers for spill code
-// - X19-X28: callee-saved (future use)
+// - X19-X27: callee-saved (used when caller-saved exhausted)
+// - X28: reserved for heap pointer
 // - X29: frame pointer
 // - X30: link register
+//
+// Callee-saved registers (X19-X27) are saved/restored in function prologue/epilogue.
 
 module RegisterAllocation
 
@@ -281,11 +284,25 @@ let buildLiveIntervals (cfg: LIR.CFG) (liveness: Map<LIR.Label, BlockLiveness>) 
 // Linear Scan Register Allocation
 // ============================================================================
 
-/// Available registers for allocation (X1-X10)
-let allocatableRegs = [
+/// Caller-saved registers (X1-X10) - preferred for allocation
+let callerSavedRegs = [
     LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5
     LIR.X6; LIR.X7; LIR.X8; LIR.X9; LIR.X10
 ]
+
+/// Callee-saved registers (X19-X27) - used when caller-saved exhausted
+/// These must be saved/restored in function prologue/epilogue
+let calleeSavedRegs = [
+    LIR.X19; LIR.X20; LIR.X21; LIR.X22; LIR.X23
+    LIR.X24; LIR.X25; LIR.X26; LIR.X27
+]
+
+/// All allocatable registers - caller-saved first (preferred), then callee-saved
+let allocatableRegs = callerSavedRegs @ calleeSavedRegs
+
+/// Check if a register is callee-saved
+let isCalleeSaved (reg: LIR.PhysReg) : bool =
+    List.contains reg calleeSavedRegs
 
 /// Align to 16-byte boundary
 let alignTo16 (size: int) : int =
@@ -297,6 +314,7 @@ let linearScan (intervals: LiveInterval list) : AllocationResult =
     let mutable freeRegs = Set.ofList allocatableRegs
     let mutable nextStackSlot = -8
     let mutable mapping = Map.empty
+    let mutable usedCalleeSaved = Set.empty
 
     /// Expire old intervals that are no longer active
     let expireOldIntervals (currentStart: int) =
@@ -314,6 +332,11 @@ let linearScan (intervals: LiveInterval list) : AllocationResult =
         nextStackSlot <- nextStackSlot - 8
         mapping <- Map.add vregId (StackSlot slot) mapping
         slot
+
+    /// Track callee-saved register usage
+    let trackCalleeSaved (reg: LIR.PhysReg) =
+        if isCalleeSaved reg then
+            usedCalleeSaved <- Set.add reg usedCalleeSaved
 
     // Process intervals in order of start position
     for interval in intervals do
@@ -334,6 +357,7 @@ let linearScan (intervals: LiveInterval list) : AllocationResult =
                 nextStackSlot <- nextStackSlot - 8
                 mapping <- Map.add interval.VRegId (PhysReg reg) mapping
                 active <- (interval, reg) :: (active |> List.filter (fun (x, _) -> x.VRegId <> i.VRegId))
+                trackCalleeSaved reg
             | _ ->
                 spillToStack interval.VRegId |> ignore
         else
@@ -342,6 +366,7 @@ let linearScan (intervals: LiveInterval list) : AllocationResult =
             freeRegs <- Set.remove reg freeRegs
             mapping <- Map.add interval.VRegId (PhysReg reg) mapping
             active <- (interval, reg) :: active
+            trackCalleeSaved reg
 
     // Compute stack size (16-byte aligned)
     let stackSize =
@@ -351,7 +376,7 @@ let linearScan (intervals: LiveInterval list) : AllocationResult =
     {
         Mapping = mapping
         StackSize = stackSize
-        UsedCalleeSaved = []
+        UsedCalleeSaved = Set.toList usedCalleeSaved
     }
 
 // ============================================================================

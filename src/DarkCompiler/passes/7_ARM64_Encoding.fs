@@ -25,7 +25,10 @@ let encodeReg (reg: ARM64.Reg) : uint32 =
     | ARM64.X4 -> 4u | ARM64.X5 -> 5u | ARM64.X6 -> 6u | ARM64.X7 -> 7u
     | ARM64.X8 -> 8u | ARM64.X9 -> 9u | ARM64.X10 -> 10u | ARM64.X11 -> 11u
     | ARM64.X12 -> 12u | ARM64.X13 -> 13u | ARM64.X14 -> 14u | ARM64.X15 -> 15u
-    | ARM64.X16 -> 16u | ARM64.X28 -> 28u
+    | ARM64.X16 -> 16u
+    | ARM64.X19 -> 19u | ARM64.X20 -> 20u | ARM64.X21 -> 21u | ARM64.X22 -> 22u
+    | ARM64.X23 -> 23u | ARM64.X24 -> 24u | ARM64.X25 -> 25u | ARM64.X26 -> 26u
+    | ARM64.X27 -> 27u | ARM64.X28 -> 28u
     | ARM64.X29 -> 29u | ARM64.X30 -> 30u | ARM64.SP -> 31u
 
 /// Encode floating-point register to 5-bit value

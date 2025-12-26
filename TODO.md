@@ -33,10 +33,7 @@ The following are known simplifications or potential issues in the compiler code
 
 ### MEDIUM Priority (Incomplete features)
 
-#### 2. Callee-saved registers not implemented
-**Files:** `src/DarkCompiler/passes/5_RegisterAllocation.fs` (line 111), `6_CodeGen.fs` (lines 147, 173)
-**Issue:** `calleeSavedRegs` is empty list, X19-X28 not supported in LIR.PhysReg
-**Impact:** Suboptimal register allocation, more spilling than necessary
+(No current medium-priority issues)
 
 ### LOW Priority (Feature limitations, not bugs)
 
@@ -76,6 +73,7 @@ The following are known simplifications or potential issues in the compiler code
 - ✅ Lists (linked list implementation with [1, 2, 3] syntax and exact-length pattern matching)
 - ✅ Type checking (51 DSL tests + 8 unit tests)
 - ✅ 8-pass compiler pipeline (Parser → TypeCheck → ANF → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
+- ✅ Register allocation with callee-saved registers (X19-X27) for high register pressure
 - ✅ 711 passing tests
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
 - ✅ Type-directed record field lookup (no ambiguity when multiple record types have same field names)
