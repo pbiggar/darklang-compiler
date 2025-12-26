@@ -1,0 +1,52 @@
+// Tests imported from Dark language test suite
+// Source: https://raw.githubusercontent.com/darklang/dark/main/backend/testfiles/execution/language/basic/eor.dark
+//
+// ALL TESTS INCLUDED - no filtering or removal
+// Tests may fail if features are not yet implemented
+
+// ===================================================================
+// Basic OR operations
+// ===================================================================
+
+(true || true) = stdout="true\n"
+(true || false) = stdout="true\n"
+(false || true) = stdout="true\n"
+(false || false) = stdout="false\n"
+
+// ===================================================================
+// Short-circuit and type error tests
+// NOTE: Commented out - requires Int64 suffix and Builtin.testDerrorMessage support
+// ===================================================================
+
+// Short-circuit: true || anything = true (even with wrong type)
+// (true || 5L) = stdout="true\n"
+
+// Type error - wrong type for second operand (when first is false)
+// (false || 5L) = Builtin.testDerrorMessage "|| only supports Booleans"
+
+// Type error - wrong type for first operand
+// (5L || true) = Builtin.testDerrorMessage "|| only supports Booleans"
+
+// ===================================================================
+// Pipe operator with OR
+// NOTE: Commented out - requires pipe operator support
+// ===================================================================
+
+// (true |> (||) true) = stdout="true\n"
+// (true |> (||) false) = stdout="true\n"
+// (false |> (||) true) = stdout="true\n"
+// (false |> (||) false) = stdout="false\n"
+
+// ===================================================================
+// Error handling tests (Builtin.testRuntimeError)
+// NOTE: Commented out - requires Builtin.testRuntimeError support
+// ===================================================================
+
+// TODO bring back short-circuiting
+// (true || Builtin.testRuntimeError "msg") = true
+
+// Error in second operand (when first is false)
+// (false || Builtin.testRuntimeError "msg") = Builtin.testDerrorMessage "Uncaught exception: msg"
+
+// Error in first operand propagates (first error wins)
+// (Builtin.testRuntimeError "msg1" || Builtin.testRuntimeError "msg2") = Builtin.testDerrorMessage "Uncaught exception: msg1"

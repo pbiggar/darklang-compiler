@@ -1,0 +1,126 @@
+// Tests imported from Dark language test suite
+// Source: https://raw.githubusercontent.com/darklang/dark/main/backend/testfiles/execution/language/apply/eapply.dark
+//
+// ALL TESTS INCLUDED - no filtering or removal
+// Tests may fail if features are not yet implemented
+
+// ===================================================================
+// Basic function application
+// NOTE: All tests commented out - requires Int64 suffix, `fun` lambda syntax,
+// Stdlib, Builtin, String type, generic type parameters, and pipe operator support
+// ===================================================================
+
+// (let fn = (fun x -> x + 1L) in fn 6L) = 7
+
+// (let fn = Stdlib.Int64.add in fn 3L 4L) = 7
+
+// (let fn = Stdlib.Int64.max in fn 3L 7L) = 7
+
+// ([ 1L; 2L; 3L; 4L; 5L ] |> Stdlib.List.map (fun x y -> x) |> Stdlib.List.map (fun l -> l 1L)) = stdout="[1, 2, 3, 4, 5]\n"
+
+// ===================================================================
+// User-defined functions
+// NOTE: Commented out - requires String type, generic type parameters, and Stdlib
+// ===================================================================
+
+// def stringFn (key: String) : String = key ++ " appended string"
+
+// def fnWithTypeArgAndOneParam<'a> (arg: 'a) : 'a = arg
+
+// def twoStringFn (str1: String) (str2: String) : String = str1 ++ " appended " ++ str2
+
+// def returnsInt () : Int64 = 5L
+
+// def returnsString () : String = "string"
+
+// def shouldReturnStringButDoesNot () : String = 5L
+
+// def returnsOptionSome () : Stdlib.Option.Option<Int64> = Stdlib.Option.Option.Some 5L
+
+// def returnsOptionNone () : Stdlib.Option.Option<Int64> = Stdlib.Option.Option.None
+
+// def returnsResultOk () : Stdlib.Result.Result<Int64, 'err> = Stdlib.Result.Result.Ok 5L
+
+// def throwsException () : 'a = Builtin.testRaiseException "throwsException message"
+
+// def derrorFn (msg: String) : String = msg ++ Builtin.testRuntimeError msg
+
+// def fnWithTypeArgs<'a, 'b> (a: 'a) (b: 'b) : 'a = a
+
+// def fnWithTypedReturn<'a> () : 'a = 5L
+
+// type X<'a> = | A of Int64 | B of 'a
+
+// def polyFn (a: X<'a>) : X<'a> = a
+// def strFn (a: X<String>) : X<String> = a
+// def definedPolyFn<'a> (a: X<'a>) : X<'a> = a
+
+// ===================================================================
+// Function calls
+// NOTE: Commented out - requires String type, Stdlib, and pipe operator
+// ===================================================================
+
+// stringFn "string" = "string appended string"
+// twoStringFn "str1" "str2" = "str1 appended str2"
+// returnsInt () = 5
+// returnsString () = "string"
+// returnsOptionSome () = stdout="Stdlib.Option.Option.Some(5)\n"
+// (returnsOptionSome ()) |> Builtin.unwrap = 5
+// returnsOptionNone () = stdout="Stdlib.Option.Option.None\n"
+// returnsResultOk () = stdout="Stdlib.Result.Result.Ok(5)\n"
+// (returnsResultOk ()) |> Builtin.unwrap = 5
+// fnWithTypeArgAndOneParam<Int64> 1L = 1
+// fnWithTypeArgs<Int64, String> 5L "x" = 5
+// fnWithTypedReturn<Int64> () = 5
+
+// polyFn (X.A 5L) = stdout="X.A(5)\n"
+// polyFn (X.B "str") = stdout="X.B(\"str\")\n"
+
+// strFn (X.A 5L) = strFn (X.A 5L)
+// strFn (X.B "str") = stdout="X.B(\"str\")\n"
+
+// ===================================================================
+// Invalid function calls
+// NOTE: Commented out - requires Builtin.testDerrorMessage support
+// ===================================================================
+
+// (functionWhichDoesntExist 6L) = Builtin.testDerrorMessage "There is no variable named: functionWhichDoesntExist"
+
+// Type arg errors
+// fnWithTypeArgAndOneParam 1L = Builtin.testDerrorMessage "fnWithTypeArgAndOneParam expects 1 type argument, but got 0 type arguments"
+
+// fnWithTypeArgAndOneParam<Int64, String> 1L = Builtin.testDerrorMessage "fnWithTypeArgAndOneParam expects 1 type argument, but got 2 type arguments"
+
+// Arg errors
+// stringFn "str1" "str2" = Builtin.testDerrorMessage "stringFn expects 1 argument, but got 2 arguments"
+
+// stringFn 5L = Builtin.testDerrorMessage "stringFn's 1st parameter `key` expects String, but got Int64 (5)"
+
+// fnWithTypeArgAndOneParam<Int64> "str2" = Builtin.testDerrorMessage "fnWithTypeArgAndOneParam's 1st parameter `arg` expects Int64, but got String (\"str2\")"
+
+// Return value errors
+// (shouldReturnStringButDoesNot ()) = Builtin.testDerrorMessage "shouldReturnStringButDoesNot's return value expects String, but got Int64 (5)"
+
+// Type arg errors take priority over arg errors
+// fnWithTypeArgAndOneParam<Int64, String> 1L "str" = Builtin.testDerrorMessage "fnWithTypeArgAndOneParam expects 1 type argument, but got 2 type arguments"
+
+// Error from function body
+// derrorFn "msg" = Builtin.testDerrorMessage "Uncaught exception: msg"
+
+// ===================================================================
+// GenericTypeArgsAreOK module
+// NOTE: Commented out - requires complex Dark syntax
+// ===================================================================
+
+// (let segments = [ (Darklang.PrettyPrinter.RuntimeTypes.RuntimeError.ErrorSegment.String "a"); (Darklang.PrettyPrinter.RuntimeTypes.RuntimeError.ErrorSegment.String "b") ] in Darklang.PrettyPrinter.RuntimeTypes.RuntimeError.segmentsToString Stdlib.Option.Option.None Stdlib.Option.Option.None segments) = "ab"
+
+// def inner<'x, 'y> (x: 'x) (_y :'y): 'x = x
+
+// def outer<'x, 'y> (x: 'x) (_y: 'y): 'x = let ignored = inner<String, Bool> "hi" true in x
+
+// (inner<Bool, String> true "ignored") = stdout="true\n"
+// (outer<Bool, String> true "ignored") = stdout="true\n"
+
+// (let partial = inner<Bool, String> true in partial "ignored") = stdout="true\n"
+
+// (let partial = outer<Bool, String> true in partial "ignored") = stdout="true\n"

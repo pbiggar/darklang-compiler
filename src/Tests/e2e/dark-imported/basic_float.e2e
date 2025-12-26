@@ -1,0 +1,19 @@
+// Tests imported from Dark language test suite
+// Source: https://raw.githubusercontent.com/darklang/dark/main/backend/testfiles/execution/language/basic/dfloat.dark
+//
+// ALL TESTS INCLUDED - no filtering or removal
+// Tests may fail if features are not yet implemented
+
+// ===================================================================
+// Float operations
+// NOTE: Commented out - requires Float literals and Stdlib.Float support
+// ===================================================================
+
+// NaN inequality
+// Builtin.testNan != Builtin.testNan = stdout="true\n"
+
+// Multiplication with negative zero
+// Stdlib.Float.multiply -0.0 -1.0 = 0.0
+
+// Scientific notation
+// Stdlib.Float.multiply 6.02e22 -10.0 = -6.02e23

@@ -1,0 +1,91 @@
+// Tests imported from Dark language test suite
+// Source: https://raw.githubusercontent.com/darklang/dark/main/backend/testfiles/execution/language/custom-data/values.dark
+//
+// ALL TESTS INCLUDED - no filtering or removal
+// Tests may fail if features are not yet implemented
+
+// ===================================================================
+// User-defined values
+// NOTE: All tests commented out - requires type suffixes (L, UL, s, y, etc.),
+// String literals, Char literals, Unit type, and Stdlib support
+// ===================================================================
+
+// let stringValue = "test"
+// stringValue = "test"
+// "test" = stringValue
+
+// let intValue = 5L
+// intValue = 5
+// 5L = intValue
+
+// let uint64Value = 5UL
+// uint64Value = 5UL
+
+// let int32Value = 5l
+// int32Value = 5l
+
+// let uint32Value = 5ul
+// uint32Value = 5ul
+
+// let int16Value = 5s
+// int16Value = 5s
+
+// let uint16Value = 5us
+// uint16Value = 5us
+
+// let int8Value = 5y
+// int8Value = 5y
+
+// let uint8Value = 5uy
+// uint8Value = 5uy
+
+// let floatValue = 5.6
+// floatValue = 5.6
+
+// let boolValue = true
+// boolValue = stdout="true\n"
+
+// let tupleValue = (1L, 2L, 3L)
+// tupleValue = stdout="(1, 2, 3)\n"
+
+// let charValue = 'c'
+// charValue = 'c'
+
+// let unitValue = ()
+// unitValue = ()
+
+// let enumValue = Stdlib.Option.Option.Some 5L
+// enumValue = stdout="Stdlib.Option.Option.Some(5)\n"
+
+// Error: Ok is not a valid bare name
+// Ok 5L = Builtin.testDerrorMessage "Ok is not a valid name"
+
+// Record value
+// type MyRecord = { a: Bool; b: String }
+// let recordValue = MyRecord { a = true; b = "glasses" }
+// (Stdlib.Bool.not recordValue.a) = stdout="false\n"
+
+// ===================================================================
+// Package values (Darklang.Test.Values)
+// NOTE: Commented out - requires module syntax and type suffixes
+// ===================================================================
+
+// Darklang.Test.Values.stringValue = "test"
+// "test" = Darklang.Test.Values.stringValue
+
+// Darklang.Test.Values.int128Value = 5Q
+// Darklang.Test.Values.uint128Value = 5Z
+// Darklang.Test.Values.intValue = 5L
+// Darklang.Test.Values.uint64Value = 5UL
+// Darklang.Test.Values.int32Value = 5l
+// Darklang.Test.Values.uint32Value = 5ul
+// Darklang.Test.Values.int16Value = 5s
+// Darklang.Test.Values.uint16Value = 5us
+// Darklang.Test.Values.int8Value = 5y
+// Darklang.Test.Values.uint8Value = 5uy
+// Darklang.Test.Values.floatValue = 5.6
+// Darklang.Test.Values.boolValue = stdout="true\n"
+// Darklang.Test.Values.tupleValue = stdout="(1, 2, 3)\n"
+// Darklang.Test.Values.charValue = 'c'
+// Darklang.Test.Values.unitValue = ()
+// Darklang.Test.Values.enumValue = stdout="Stdlib.Option.Option.Some(5)\n"

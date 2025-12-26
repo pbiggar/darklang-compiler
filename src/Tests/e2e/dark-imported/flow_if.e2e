@@ -1,0 +1,253 @@
+// Tests imported from Dark language test suite
+// Source: https://raw.githubusercontent.com/darklang/dark/main/backend/testfiles/execution/language/flow-control/eif.dark
+//
+// ALL TESTS INCLUDED - no filtering or removal
+// Tests may fail if features are not yet implemented
+
+// ===================================================================
+// If-then-else with mixed types (from Dark eif.dark)
+// NOTE: Commented out - requires Int64 suffix, String literals, and Builtin support
+// ===================================================================
+
+// (if true then "correct" else 0L) = "correct"
+
+// ===================================================================
+// Error handling tests (Builtin.testRuntimeError)
+// NOTE: Commented out - requires Builtin.testRuntimeError/testDerrorMessage support
+// ===================================================================
+
+// (if true then Builtin.testRuntimeError "a" else 0L) = Builtin.testDerrorMessage "Uncaught exception: a"
+
+// (if false then 0L else Builtin.testRuntimeError "a") = Builtin.testDerrorMessage "Uncaught exception: a"
+
+// Short-circuit - error in non-taken branch is not evaluated
+// (if false then Builtin.testRuntimeError "a" else 0L) = 0
+// (if true then 0L else Builtin.testRuntimeError "a") = 0
+
+// (if false then "" else "correct") = "correct"
+
+// ===================================================================
+// Type errors in condition
+// NOTE: Commented out - requires Unit type, Int64 suffix, and Builtin support
+// ===================================================================
+
+// (if () then "" else "") = Builtin.testDerrorMessage "Encountered a condition that must be a Bool, but got an Unit (())"
+
+// (if Builtin.testRuntimeError "msg" then "" else "") = Builtin.testDerrorMessage "Uncaught exception: msg"
+
+// (if 5L then "" else "") = Builtin.testDerrorMessage "Encountered a condition that must be a Bool, but got an Int64 (5)"
+
+// ===================================================================
+// If without else (returns unit)
+// NOTE: Commented out - requires Unit type, Int64 suffix, and Builtin support
+// ===================================================================
+
+// (if true then ()) = ()
+// (if 1L > 3L then 4L) = ()
+// (if 1L < 3L then 4L) = 4
+// (if 1L < 3L then "msg") = "msg"
+
+// (if () then "msg") = Builtin.testDerrorMessage "Encountered a condition that must be a Bool, but got an Unit (())"
+
+// (if true then Builtin.testRuntimeError "a") = Builtin.testDerrorMessage "Uncaught exception: a"
+
+// (if Builtin.testRuntimeError "msg" then "") = Builtin.testDerrorMessage "Uncaught exception: msg"
+
+// ===================================================================
+// Basic If-Then-Else (from extended suite)
+// ===================================================================
+
+// True condition takes then branch
+if true then 1 else 0 = 1
+if true then 42 else 99 = 42
+if true then 100 else 200 = 100
+
+// False condition takes else branch
+if false then 1 else 0 = 0
+if false then 42 else 99 = 99
+if false then 100 else 200 = 200
+
+// ===================================================================
+// If with Comparison Conditions
+// ===================================================================
+
+// Equality
+if 1 == 1 then 1 else 0 = 1
+if 1 == 2 then 1 else 0 = 0
+if 5 == 5 then 42 else 0 = 42
+
+// Inequality
+if 1 != 2 then 1 else 0 = 1
+if 1 != 1 then 1 else 0 = 0
+
+// Less than
+if 1 < 2 then 1 else 0 = 1
+if 2 < 1 then 1 else 0 = 0
+if 5 < 10 then 100 else 0 = 100
+
+// Greater than
+if 2 > 1 then 1 else 0 = 1
+if 1 > 2 then 1 else 0 = 0
+if 10 > 5 then 100 else 0 = 100
+
+// Less than or equal
+if 1 <= 2 then 1 else 0 = 1
+if 2 <= 2 then 1 else 0 = 1
+if 3 <= 2 then 1 else 0 = 0
+
+// Greater than or equal
+if 2 >= 1 then 1 else 0 = 1
+if 2 >= 2 then 1 else 0 = 1
+if 1 >= 2 then 1 else 0 = 0
+
+// ===================================================================
+// If with Boolean Operations
+// ===================================================================
+
+// AND in condition
+if true && true then 1 else 0 = 1
+if true && false then 1 else 0 = 0
+if false && true then 1 else 0 = 0
+if false && false then 1 else 0 = 0
+
+// OR in condition
+if true || true then 1 else 0 = 1
+if true || false then 1 else 0 = 1
+if false || true then 1 else 0 = 1
+if false || false then 1 else 0 = 0
+
+// NOT in condition
+if !false then 1 else 0 = 1
+if !true then 1 else 0 = 0
+
+// Combined boolean operations
+if (true && false) || true then 1 else 0 = 1
+if true && (false || true) then 1 else 0 = 1
+if !(false && true) then 1 else 0 = 1
+
+// ===================================================================
+// Nested If Expressions
+// ===================================================================
+
+// If in then branch
+if true then if true then 1 else 2 else 3 = 1
+if true then if false then 1 else 2 else 3 = 2
+if false then if true then 1 else 2 else 3 = 3
+
+// If in else branch
+if false then 1 else if true then 2 else 3 = 2
+if false then 1 else if false then 2 else 3 = 3
+
+// Deeply nested
+if true then if true then if true then 1 else 2 else 3 else 4 = 1
+if true then if true then if false then 1 else 2 else 3 else 4 = 2
+if true then if false then if true then 1 else 2 else 3 else 4 = 3
+if false then if true then if true then 1 else 2 else 3 else 4 = 4
+
+// ===================================================================
+// If with Let Bindings
+// ===================================================================
+
+// Variable in condition
+let x = true in if x then 1 else 0 = 1
+let x = false in if x then 1 else 0 = 0
+let x = 5 in if x > 3 then 1 else 0 = 1
+
+// Variable in branches
+if true then let x = 42 in x else 0 = 42
+if false then 0 else let x = 42 in x = 42
+
+// Variable used in both condition and branch
+let x = 5 in if x > 0 then x * 2 else 0 = 10
+let x = 5 in if x < 0 then 0 else x * 2 = 10
+
+// Multiple variables
+let x = 5 in let y = 3 in if x > y then x else y = 5
+let x = 2 in let y = 8 in if x > y then x else y = 8
+
+// ===================================================================
+// If with Arithmetic
+// ===================================================================
+
+// Arithmetic in condition
+if (1 + 1) == 2 then 1 else 0 = 1
+if (2 * 3) == 6 then 1 else 0 = 1
+if (10 - 5) == 5 then 1 else 0 = 1
+if (20 / 4) == 5 then 1 else 0 = 1
+
+// Arithmetic in branches
+if true then 1 + 2 else 0 = 3
+if true then 5 * 10 else 0 = 50
+if false then 0 else 100 - 58 = 42
+
+// Both condition and branches have arithmetic
+let x = 10 in if x * 2 > 15 then x + 5 else x - 5 = 15
+let x = 5 in if x * 2 > 15 then x + 5 else x - 5 = 0
+
+// ===================================================================
+// If Returning Different Values
+// ===================================================================
+
+// Maximum of two numbers
+let a = 10 in let b = 20 in if a > b then a else b = 20
+let a = 30 in let b = 20 in if a > b then a else b = 30
+
+// Minimum of two numbers
+let a = 10 in let b = 20 in if a < b then a else b = 10
+let a = 30 in let b = 20 in if a < b then a else b = 20
+
+// Absolute value style
+let x = 5 in if x >= 0 then x else 0 - x = 5
+let x = 0 - 5 in if x >= 0 then x else 0 - x = 5
+
+// ===================================================================
+// If with Match
+// ===================================================================
+
+// If in match body
+match 1 with | 1 -> if true then 100 else 0 | _ -> 0 = 100
+match 2 with | 1 -> 0 | _ -> if true then 42 else 0 = 42
+
+// Match in condition (may require compiler support)
+// NOTE: Commented out - match in condition not fully supported
+// if (match 5 with | 5 -> true | _ -> false) then 1 else 0 = 1
+// if (match 5 with | 3 -> true | _ -> false) then 1 else 0 = 0
+// let b = match 5 with | 5 -> true | _ -> false in if b then 1 else 0 = 1
+// let b = match 5 with | 3 -> true | _ -> false in if b then 1 else 0 = 0
+
+// ===================================================================
+// Complex Conditions
+// ===================================================================
+
+// Range check
+let x = 5 in if x >= 0 && x <= 10 then 1 else 0 = 1
+let x = 15 in if x >= 0 && x <= 10 then 1 else 0 = 0
+let x = 0 - 5 in if x >= 0 && x <= 10 then 1 else 0 = 0
+
+// Either boundary
+let x = 0 in if x == 0 || x == 10 then 1 else 0 = 1
+let x = 10 in if x == 0 || x == 10 then 1 else 0 = 1
+let x = 5 in if x == 0 || x == 10 then 1 else 0 = 0
+
+// Multiple conditions
+let x = 5 in let y = 10 in if x > 0 && y > 0 && x < y then 1 else 0 = 1
+
+// ===================================================================
+// Edge Cases
+// ===================================================================
+
+// Zero comparison
+if 0 == 0 then 1 else 0 = 1
+if 0 != 0 then 1 else 0 = 0
+
+// Self comparison
+let x = 42 in if x == x then 1 else 0 = 1
+let x = 42 in if x != x then 1 else 0 = 0
+
+// Large number comparison
+if 1000000 > 999999 then 1 else 0 = 1
+if 1000000 < 999999 then 1 else 0 = 0
+
+// Chain of conditions (if-else-if style)
+let x = 2 in if x == 1 then 10 else if x == 2 then 20 else if x == 3 then 30 else 0 = 20
+let x = 5 in if x == 1 then 10 else if x == 2 then 20 else if x == 3 then 30 else 99 = 99

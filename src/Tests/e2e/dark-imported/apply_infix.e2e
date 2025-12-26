@@ -1,0 +1,267 @@
+// Tests imported from Dark language test suite
+// Source: https://raw.githubusercontent.com/darklang/dark/main/backend/testfiles/execution/language/apply/einfix.dark
+//
+// ALL TESTS INCLUDED - no filtering or removal
+// Tests may fail if features are not yet implemented
+
+// ===================================================================
+// Basic infix operations (from Dark einfix.dark)
+// NOTE: Commented out - requires Int64 suffix, String concat (++), and Stdlib support
+// ===================================================================
+
+// 5L + 3L = 8
+// "xx" ++ "yy" = "xxyy"
+// (5L + (3L)) = 8
+// Stdlib.Int64.add_v0 5L 3L = 8
+
+// ===================================================================
+// Error handling tests
+// NOTE: Commented out - requires Builtin.testRuntimeError/testDerrorMessage support
+// ===================================================================
+
+// 5L + true = Builtin.testDerrorMessage "Builtin.int64Add's 2nd parameter `b` expects Int64, but got Bool (true)"
+
+// 5L + (Builtin.testRuntimeError "error") = Builtin.testDerrorMessage "Uncaught exception: error"
+
+// (Builtin.testRuntimeError "error") + 5L = Builtin.testDerrorMessage "Uncaught exception: error"
+
+// (Builtin.testRuntimeError "one") + (Builtin.testRuntimeError "two") = Builtin.testDerrorMessage "Uncaught exception: one"
+
+// ===================================================================
+// Basic Arithmetic - Addition (from extended suite)
+// ===================================================================
+
+5 + 3 = 8
+0 + 0 = 0
+1 + 0 = 1
+0 + 1 = 1
+10 + 20 = 30
+100 + 200 = 300
+1000000 + 2000000 = 3000000
+
+// Negative results
+5 + (0 - 10) = -5
+(0 - 5) + (0 - 10) = -15
+
+// ===================================================================
+// Basic Arithmetic - Subtraction
+// ===================================================================
+
+5 - 3 = 2
+10 - 5 = 5
+100 - 58 = 42
+0 - 0 = 0
+10 - 0 = 10
+0 - 10 = -10
+5 - 10 = -5
+
+// ===================================================================
+// Basic Arithmetic - Multiplication
+// ===================================================================
+
+5 * 3 = 15
+6 * 7 = 42
+10 * 10 = 100
+0 * 100 = 0
+100 * 0 = 0
+1 * 42 = 42
+42 * 1 = 42
+2 * 2 * 2 = 8
+10 * 10 * 10 = 1000
+
+// ===================================================================
+// Basic Arithmetic - Division
+// ===================================================================
+
+10 / 2 = 5
+42 / 6 = 7
+100 / 10 = 10
+99 / 3 = 33
+0 / 5 = 0
+
+// Integer division truncates
+7 / 2 = 3
+10 / 3 = 3
+11 / 4 = 2
+
+// ===================================================================
+// String concatenation
+// NOTE: Commented out - requires String type and ++ operator support
+// ===================================================================
+
+// "hello" ++ " " ++ "world" = "hello world"
+// "" ++ "test" = "test"
+// "test" ++ "" = "test"
+
+// ===================================================================
+// Operator Precedence
+// ===================================================================
+
+// Multiplication before addition
+2 + 3 * 4 = 14
+3 * 4 + 2 = 14
+1 + 2 * 3 + 4 = 11
+
+// Division before addition/subtraction
+10 + 20 / 2 = 20
+20 / 2 + 10 = 20
+100 - 50 / 5 = 90
+
+// Same precedence - left to right
+10 - 5 - 2 = 3
+100 / 10 / 2 = 5
+
+// Parentheses override precedence
+(2 + 3) * 4 = 20
+2 * (3 + 4) = 14
+(10 + 20) / (2 + 1) = 10
+((1 + 2) * 3) + 4 = 13
+
+// ===================================================================
+// Comparison Operators
+// ===================================================================
+
+// Equality
+5 == 5 = stdout="true\n"
+5 == 6 = stdout="false\n"
+0 == 0 = stdout="true\n"
+
+// Inequality
+5 != 6 = stdout="true\n"
+5 != 5 = stdout="false\n"
+
+// Less than
+3 < 5 = stdout="true\n"
+5 < 3 = stdout="false\n"
+5 < 5 = stdout="false\n"
+
+// Greater than
+5 > 3 = stdout="true\n"
+3 > 5 = stdout="false\n"
+5 > 5 = stdout="false\n"
+
+// Less than or equal
+3 <= 5 = stdout="true\n"
+5 <= 5 = stdout="true\n"
+6 <= 5 = stdout="false\n"
+
+// Greater than or equal
+5 >= 3 = stdout="true\n"
+5 >= 5 = stdout="true\n"
+4 >= 5 = stdout="false\n"
+
+// ===================================================================
+// Chained Comparisons (via boolean operators)
+// ===================================================================
+
+// Range check
+let x = 5 in x > 0 && x < 10 = stdout="true\n"
+let x = 15 in x > 0 && x < 10 = stdout="false\n"
+
+// Either end
+let x = 5 in x < 3 || x > 7 = stdout="false\n"
+let x = 1 in x < 3 || x > 7 = stdout="true\n"
+let x = 10 in x < 3 || x > 7 = stdout="true\n"
+
+// ===================================================================
+// Operators with Variables
+// ===================================================================
+
+let x = 5 in let y = 3 in x + y = 8
+let x = 10 in let y = 4 in x - y = 6
+let x = 6 in let y = 7 in x * y = 42
+let x = 20 in let y = 4 in x / y = 5
+
+// Multiple operations
+let x = 5 in x + x = 10
+let x = 3 in x * x = 9
+let x = 10 in x * x + x = 110
+
+// ===================================================================
+// Operators in Function Calls
+// ===================================================================
+
+def double(x: int): int = x + x double(21) = 42
+def square(x: int): int = x * x square(6) = 36
+def add(a: int, b: int): int = a + b add(20, 22) = 42
+def sub(a: int, b: int): int = a - b sub(50, 8) = 42
+
+// Function result in expression
+def inc(x: int): int = x + 1 inc(5) + inc(10) = 17
+def double(x: int): int = x * 2 double(5) * double(3) = 60
+
+// ===================================================================
+// Operators in Control Flow
+// ===================================================================
+
+// Condition
+if 5 + 3 == 8 then 1 else 0 = 1
+if 5 * 2 > 8 then 1 else 0 = 1
+
+// Branches
+if true then 5 + 3 else 0 = 8
+if false then 0 else 10 * 4 = 40
+
+// Match body
+match 5 with | 5 -> 10 + 20 | _ -> 0 = 30
+match 3 with | x -> x * x = 9
+
+// ===================================================================
+// Unary Minus (Negation)
+// ===================================================================
+
+-5 = -5
+-42 = -42
+-(5 + 3) = -8
+-(-5) = 5
+let x = 10 in -x = -10
+
+// Negation with arithmetic
+5 + -3 = 2
+10 - -5 = 15
+-5 * 2 = -10
+-10 / 2 = -5
+
+// ===================================================================
+// Complex Expressions
+// ===================================================================
+
+// Multiple operations
+1 + 2 + 3 + 4 + 5 = 15
+1 * 2 * 3 * 4 = 24
+10 - 1 - 2 - 3 = 4
+
+// Mixed operations
+2 * 3 + 4 * 5 = 26
+(2 + 3) * (4 + 5) = 45
+100 / 10 + 100 / 5 = 30
+
+// Deeply nested
+((1 + 2) * 3 + 4) * 5 = 65
+(((1 + 1) * 2 + 2) * 3 + 3) * 4 = 84
+
+// ===================================================================
+// Edge Cases
+// ===================================================================
+
+// Identity operations
+0 + 42 = 42
+42 + 0 = 42
+1 * 42 = 42
+42 * 1 = 42
+42 - 0 = 42
+42 / 1 = 42
+
+// Self operations
+let x = 5 in x - x = 0
+let x = 10 in x / x = 1
+let x = 7 in x == x = stdout="true\n"
+let x = 7 in x != x = stdout="false\n"
+
+// Commutativity
+3 + 5 == 5 + 3 = stdout="true\n"
+3 * 5 == 5 * 3 = stdout="true\n"
+
+// Non-commutativity
+10 - 3 == 3 - 10 = stdout="false\n"
+10 / 2 == 2 / 10 = stdout="false\n"

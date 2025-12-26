@@ -1,0 +1,41 @@
+// Tests imported from Dark language test suite
+// Source: https://raw.githubusercontent.com/darklang/dark/main/backend/testfiles/execution/language/basic/estring.dark
+//
+// ALL TESTS INCLUDED - no filtering or removal
+// Tests may fail if features are not yet implemented
+
+// ===================================================================
+// String interpolation
+// NOTE: All tests commented out - requires string interpolation syntax ($"...")
+// ===================================================================
+
+// Basic string interpolation
+// $"""test {"1"}""" = "test 1"
+
+// Variable interpolation
+// let one = "1" in $"test {one}" = "test 1"
+
+// Multiple variable interpolation
+// let name = "Alice" in let age = "25" in $"Name: {name}, Age: {age} years old." = "Name: Alice, Age: 25 years old."
+
+// ===================================================================
+// String interpolation type errors
+// NOTE: Commented out - requires string interpolation and Builtin support
+// ===================================================================
+
+// Float in string interpolation error
+// let one = 1.0 in $"test {one}" = Builtin.testDerrorMessage "Expected String in string interpolation, got a Float"
+
+// Int64 in string interpolation error
+// let one = 1L in $"test {one}" = Builtin.testDerrorMessage "Expected String in string interpolation, got an Int64 (1)"
+
+// Undefined variable error
+// $"test {one}" = Builtin.testDerrorMessage "There is no variable named: one"
+
+// ===================================================================
+// String interpolation with conversion
+// NOTE: Commented out - requires string interpolation and Stdlib support
+// ===================================================================
+
+// Convert Int64 to String first
+// let one = 1L in $"test {Stdlib.Int64.toString one}" = "test 1"

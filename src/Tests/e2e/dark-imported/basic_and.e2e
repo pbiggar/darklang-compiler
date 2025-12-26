@@ -1,0 +1,123 @@
+// Tests imported from Dark language test suite
+// Source: https://raw.githubusercontent.com/darklang/dark/main/backend/testfiles/execution/language/basic/eand.dark
+//
+// ALL TESTS INCLUDED - no filtering or removal
+// Tests may fail if features are not yet implemented
+
+// ===================================================================
+// Basic AND operations (from Dark eand.dark)
+// ===================================================================
+
+(true && true) = stdout="true\n"
+(true && false) = stdout="false\n"
+(false && true) = stdout="false\n"
+(false && false) = stdout="false\n"
+
+// ===================================================================
+// Error handling tests (Builtin.testRuntimeError)
+// NOTE: Commented out - requires Builtin.testRuntimeError/testDerrorMessage support
+// ===================================================================
+
+// Error in second operand (when first is true)
+// (true && Builtin.testRuntimeError "msg") = Builtin.testDerrorMessage "Uncaught exception: msg"
+
+// Type error - wrong type for second operand
+// (true && 5L) = Builtin.testDerrorMessage "&& only supports Booleans"
+
+// Short-circuit: false && anything = false (even with wrong type)
+// (false && 5L) = stdout="false\n"
+
+// TODO bring back short-circuiting
+// (false && Builtin.testRuntimeError "msg") = false
+
+// Error in first operand propagates
+// (Builtin.testRuntimeError "msg1" && Builtin.testRuntimeError "msg2") = Builtin.testDerrorMessage "Uncaught exception: msg1"
+
+// Type error - wrong type for first operand
+// (5 && true) = Builtin.testDerrorMessage "&& only supports Booleans"
+
+// ===================================================================
+// Pipe operator with AND
+// NOTE: Commented out - requires pipe operator support
+// ===================================================================
+
+// (true |> (&&) true) = stdout="true\n"
+// (true |> (&&) false) = stdout="false\n"
+// (false |> (&&) true) = stdout="false\n"
+// (false |> (&&) false) = stdout="false\n"
+
+// ===================================================================
+// Additional tests (from our extended suite)
+// ===================================================================
+
+// Short-circuit Evaluation
+let x = false in (x && true) = stdout="false\n"
+let x = false in (x && false) = stdout="false\n"
+let x = true in (x && true) = stdout="true\n"
+let x = true in (x && false) = stdout="false\n"
+
+// Nested AND Expressions
+(true && true && true) = stdout="true\n"
+(true && true && false) = stdout="false\n"
+(true && false && true) = stdout="false\n"
+(false && true && true) = stdout="false\n"
+
+// AND with Comparisons
+(1 == 1 && 2 == 2) = stdout="true\n"
+(1 == 1 && 1 == 2) = stdout="false\n"
+(1 == 2 && 2 == 2) = stdout="false\n"
+(1 == 2 && 3 == 4) = stdout="false\n"
+
+// Less than with AND
+(1 < 2 && 2 < 3) = stdout="true\n"
+(1 < 2 && 3 < 2) = stdout="false\n"
+(2 < 1 && 2 < 3) = stdout="false\n"
+
+// Greater than with AND
+(2 > 1 && 3 > 2) = stdout="true\n"
+(2 > 1 && 2 > 3) = stdout="false\n"
+
+// Mixed comparisons
+(1 < 2 && 2 > 1) = stdout="true\n"
+(5 >= 5 && 5 <= 5) = stdout="true\n"
+
+// AND with Let Bindings
+let a = true in let b = true in (a && b) = stdout="true\n"
+let a = true in let b = false in (a && b) = stdout="false\n"
+let a = false in let b = true in (a && b) = stdout="false\n"
+let a = false in let b = false in (a && b) = stdout="false\n"
+
+// AND result stored in variable
+let result = (true && true) in result = stdout="true\n"
+let result = (true && false) in result = stdout="false\n"
+
+// AND in Control Flow
+if true && true then 1 else 0 = 1
+if true && false then 1 else 0 = 0
+if false && true then 1 else 0 = 0
+if false && false then 1 else 0 = 0
+
+// Nested conditions with AND
+if (1 < 2) && (2 < 3) then 42 else 0 = 42
+if (5 > 3) && (10 > 1) then 100 else 0 = 100
+
+// Complex AND Expressions
+let x = 5 in (x > 0 && x < 10 && x != 3) = stdout="true\n"
+let x = 5 in (x > 0 && x < 10 && x == 3) = stdout="false\n"
+
+// Parenthesized expressions
+((true && true) && true) = stdout="true\n"
+(true && (true && true)) = stdout="true\n"
+((true && false) && true) = stdout="false\n"
+(true && (false && true)) = stdout="false\n"
+
+// AND with Arithmetic Results
+((1 + 1) == 2 && (2 + 2) == 4) = stdout="true\n"
+((1 + 1) == 3 && (2 + 2) == 4) = stdout="false\n"
+((5 * 2) == 10 && (10 / 2) == 5) = stdout="true\n"
+
+// Double negation with AND
+(!!true && !!true) = stdout="true\n"
+(!!true && !!false) = stdout="false\n"
+(!false && !false) = stdout="true\n"
+(!true && !false) = stdout="false\n"

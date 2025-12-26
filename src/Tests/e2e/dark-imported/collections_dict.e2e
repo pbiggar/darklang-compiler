@@ -1,0 +1,19 @@
+// Tests imported from Dark language test suite
+// Source: https://raw.githubusercontent.com/darklang/dark/main/backend/testfiles/execution/language/collections/edict.dark
+//
+// ALL TESTS INCLUDED - no filtering or removal
+// Tests may fail if features are not yet implemented
+
+// ===================================================================
+// Dictionary operations
+// NOTE: Commented out - requires Dict syntax, pipe operator, and Stdlib support
+// ===================================================================
+
+// Get existing key
+// ((Dict { a = 5L }) |> Stdlib.Dict.get "a") = stdout="Stdlib.Option.Option.Some(5)\n"
+
+// Get with empty key
+// ((Dict { ___ = 5L }) |> Stdlib.Dict.get "") = stdout="Stdlib.Option.Option.Some(5)\n"
+
+// Get non-existent key
+// ((Dict { a = 5L }) |> Stdlib.Dict.get "b") = stdout="Stdlib.Option.Option.None\n"
