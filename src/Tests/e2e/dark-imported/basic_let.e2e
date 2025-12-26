@@ -49,9 +49,9 @@ Stdlib.Tuple2.second((1, 2)) = 2
 (let (a, b, c) = (true, 2, 3) in a + b) = error="Invalid operation '+' on types: bool"
 
 // Nested tuple destructuring
-// NOTE: Deeply nested tuple destructuring has a bug in ANF conversion
-// (let ((a, ((b, (c, d)), e)), f) = ((1, ((2, (3, 4)), 5)), 6) in c) = 3
-// (let ((a, ((b, cd), e)), f) = ((1, ((2, (3, 4)), 5)), 6) in cd) = stdout="(3, 4)\n"
+(let ((a, ((b, (c, d)), e)), f) = ((1, ((2, (3, 4)), 5)), 6) in c) = 3
+(let ((a, ((b, (c, d)), e)), f) = ((1, ((2, (3, 4)), 5)), 6) in d) = 4
+(let ((a, ((b, (c, d)), e)), f) = ((1, ((2, (3, 4)), 5)), 6) in a + b + c + d + e + f) = 21
 
 // ===================================================================
 // Nested let bindings
