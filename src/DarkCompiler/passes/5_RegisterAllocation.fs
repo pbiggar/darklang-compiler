@@ -98,6 +98,10 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         Set.ofList (a @ s)
     | LIR.HeapLoad (_, addr, _) ->
         regToVReg addr |> Option.toList |> Set.ofList
+    | LIR.RefCountInc (addr, _) ->
+        regToVReg addr |> Option.toList |> Set.ofList
+    | LIR.RefCountDec (addr, _) ->
+        regToVReg addr |> Option.toList |> Set.ofList
     | _ -> Set.empty
 
 /// Get virtual register ID defined (written) by an instruction
@@ -597,6 +601,14 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
             | _ -> []
         addrLoads @ [loadInstr] @ storeInstrs
+
+    | LIR.RefCountInc (addr, payloadSize) ->
+        let (addrReg, addrLoads) = loadSpilled mapping addr LIR.X12
+        addrLoads @ [LIR.RefCountInc (addrReg, payloadSize)]
+
+    | LIR.RefCountDec (addr, payloadSize) ->
+        let (addrReg, addrLoads) = loadSpilled mapping addr LIR.X12
+        addrLoads @ [LIR.RefCountDec (addrReg, payloadSize)]
 
 /// Apply allocation to terminator
 let applyToTerminator (mapping: Map<int, Allocation>) (term: LIR.Terminator)

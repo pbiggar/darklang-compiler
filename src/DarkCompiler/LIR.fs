@@ -90,6 +90,9 @@ type Instr =
     | HeapAlloc of dest:Reg * sizeBytes:int       // Allocate heap memory
     | HeapStore of addr:Reg * offset:int * src:Operand  // Store at heap[addr+offset]
     | HeapLoad of dest:Reg * addr:Reg * offset:int     // Load from heap[addr+offset]
+    // Reference counting operations
+    | RefCountInc of addr:Reg * payloadSize:int   // Increment ref count at [addr + payloadSize]
+    | RefCountDec of addr:Reg * payloadSize:int   // Decrement ref count, free if zero
 
 /// Basic block label
 type Label = string

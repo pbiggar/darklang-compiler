@@ -618,6 +618,31 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
             |> Result.map (fun addrReg ->
                 [ARM64.LDR (destReg, addrReg, int16 offset)]))
 
+    | LIR.RefCountInc (addr, payloadSize) ->
+        // Increment ref count at [addr + payloadSize]
+        // Use X15 as temp register
+        lirRegToARM64Reg addr
+        |> Result.map (fun addrReg ->
+            [
+                ARM64.LDR (ARM64.X15, addrReg, int16 payloadSize)   // Load ref count
+                ARM64.ADD_imm (ARM64.X15, ARM64.X15, 1us)           // Increment
+                ARM64.STR (ARM64.X15, addrReg, int16 payloadSize)   // Store back
+            ])
+
+    | LIR.RefCountDec (addr, payloadSize) ->
+        // Decrement ref count at [addr + payloadSize]
+        // Use X15 as temp register
+        // TODO: Add free list handling when ref count reaches 0
+        lirRegToARM64Reg addr
+        |> Result.map (fun addrReg ->
+            [
+                ARM64.LDR (ARM64.X15, addrReg, int16 payloadSize)   // Load ref count
+                ARM64.SUB_imm (ARM64.X15, ARM64.X15, 1us)           // Decrement
+                ARM64.STR (ARM64.X15, addrReg, int16 payloadSize)   // Store back
+                // When ref count hits 0, we could add to free list here
+                // For now, just leave the memory (bump allocator will eventually recycle)
+            ])
+
 /// Convert LIR terminator to ARM64 instructions
 /// epilogueLabel: the label to jump to for function return (handles stack cleanup)
 let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Result<ARM64.Instr list, string> =

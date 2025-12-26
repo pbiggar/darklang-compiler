@@ -227,6 +227,14 @@ let selectInstr (instr: MIR.Instr) : Result<LIR.Instr list, string> =
         let lirAddr = vregToLIRReg addr
         Ok [LIR.HeapLoad (lirDest, lirAddr, offset)]
 
+    | MIR.RefCountInc (addr, payloadSize) ->
+        let lirAddr = vregToLIRReg addr
+        Ok [LIR.RefCountInc (lirAddr, payloadSize)]
+
+    | MIR.RefCountDec (addr, payloadSize) ->
+        let lirAddr = vregToLIRReg addr
+        Ok [LIR.RefCountDec (lirAddr, payloadSize)]
+
 /// Convert MIR terminator to LIR terminator
 /// For Branch, need to convert operand to register (may add instructions)
 /// isEntryFunc: whether this is the entry function (_start) that should print the result

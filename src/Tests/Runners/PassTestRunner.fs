@@ -164,6 +164,11 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"HeapStore({prettyPrintLIRReg addr}, {offset}, {prettyPrintLIROperand src})"
     | LIR.HeapLoad (dest, addr, offset) ->
         $"{prettyPrintLIRReg dest} <- HeapLoad({prettyPrintLIRReg addr}, {offset})"
+    // Reference counting operations
+    | LIR.RefCountInc (addr, payloadSize) ->
+        $"RefCountInc({prettyPrintLIRReg addr}, {payloadSize})"
+    | LIR.RefCountDec (addr, payloadSize) ->
+        $"RefCountDec({prettyPrintLIRReg addr}, {payloadSize})"
 
 /// Pretty-print LIR terminator
 let prettyPrintLIRTerminator (term: LIR.Terminator) : string =
