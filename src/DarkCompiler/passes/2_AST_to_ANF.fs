@@ -24,7 +24,7 @@ type TypeRegistry = Map<string, (string * AST.Type) list>
 /// Variant lookup - maps variant names to (type name, tag index, payload type)
 type VariantLookup = Map<string, (string * int * AST.Type option)>
 
-/// Function registry - maps function names to their return types
+/// Function registry - maps function names to their FULL function types (TFunction)
 type FunctionRegistry = Map<string, AST.Type>
 
 /// Variable environment - maps variable names to their TempIds and types
@@ -646,12 +646,25 @@ let rec liftLambdasInProgram (program: AST.Program) : Result<AST.Program, string
     let initialState = { Counter = 0; LiftedFunctions = [] }
 
     // First pass: collect all function definitions and their parameters
-    let funcParams : Map<string, (string * AST.Type) list> =
+    let userFuncParams : Map<string, (string * AST.Type) list> =
         topLevels
         |> List.choose (function
             | AST.FunctionDef f -> Some (f.Name, f.Params)
             | _ -> None)
         |> Map.ofList
+
+    // Add module function parameters from Stdlib
+    let moduleRegistry = Stdlib.buildModuleRegistry ()
+    let moduleFuncParams : Map<string, (string * AST.Type) list> =
+        moduleRegistry
+        |> Map.toList
+        |> List.map (fun (qualifiedName, moduleFunc) ->
+            // Create parameter names like "arg0", "arg1" for each parameter type
+            let paramList = moduleFunc.ParamTypes |> List.mapi (fun i t -> ($"arg{i}", t))
+            (qualifiedName, paramList))
+        |> Map.ofList
+
+    let funcParams = Map.fold (fun acc k v -> Map.add k v acc) userFuncParams moduleFuncParams
 
     let rec processTopLevels (remaining: AST.TopLevel list) (state: LiftState) (acc: AST.TopLevel list) : Result<AST.TopLevel list * LiftState, string> =
         match remaining with
@@ -710,7 +723,12 @@ and collectFuncRefsInExpr (expr: AST.Expr) (knownFuncs: Map<string, (string * AS
             | AST.Var name when Map.containsKey name knownFuncs -> [name]
             | _ -> collectFuncRefsInExpr arg knownFuncs)
     | AST.Let (_, value, body) ->
-        collectFuncRefsInExpr value knownFuncs @ collectFuncRefsInExpr body knownFuncs
+        // Also check if value is a function reference being bound
+        let valueRefs =
+            match value with
+            | AST.Var name when Map.containsKey name knownFuncs -> [name]
+            | _ -> collectFuncRefsInExpr value knownFuncs
+        valueRefs @ collectFuncRefsInExpr body knownFuncs
     | AST.If (c, t, e) ->
         collectFuncRefsInExpr c knownFuncs @ collectFuncRefsInExpr t knownFuncs @ collectFuncRefsInExpr e knownFuncs
     | AST.BinOp (_, l, r) ->
@@ -874,7 +892,12 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
     | AST.Var name ->
         match Map.tryFind name typeEnv with
         | Some t -> Ok t
-        | None -> Error $"Cannot infer type: undefined variable '{name}'"
+        | None ->
+            // Check if it's a module function (e.g., Stdlib.Int64.add)
+            let moduleRegistry = Stdlib.buildModuleRegistry ()
+            match Stdlib.tryGetFunction moduleRegistry name with
+            | Some moduleFunc -> Ok (Stdlib.getFunctionType moduleFunc)
+            | None -> Error $"Cannot infer type: undefined variable '{name}'"
     | AST.RecordLiteral (typeName, fields) ->
         if typeName = "" then
             // Anonymous record literal - try to find matching type by field names
@@ -1017,15 +1040,29 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         match Map.tryFind name env with
         | Some (tempId, _) -> Ok (ANF.Return (ANF.Var tempId), varGen)
         | None ->
-            // Check if it's a function reference (function name used as value)
-            if Map.containsKey name funcReg then
-                Ok (ANF.Return (ANF.FuncRef name), varGen)
-            else
-                Error $"Undefined variable: {name}"
+            // Check if it's a module function (e.g., Stdlib.Int64.add)
+            let moduleRegistry = Stdlib.buildModuleRegistry ()
+            match Stdlib.tryGetFunction moduleRegistry name with
+            | Some _ ->
+                // Module function reference - wrap in closure for uniform calling convention
+                let (closureId, varGen') = ANF.freshVar varGen
+                let closureAlloc = ANF.ClosureAlloc (name, [])
+                Ok (ANF.Let (closureId, closureAlloc, ANF.Return (ANF.Var closureId)), varGen')
+            | None ->
+                // Check if it's a function reference (function name used as value)
+                if Map.containsKey name funcReg then
+                    // Wrap in closure for uniform calling convention
+                    let (closureId, varGen') = ANF.freshVar varGen
+                    let closureAlloc = ANF.ClosureAlloc (name, [])
+                    Ok (ANF.Let (closureId, closureAlloc, ANF.Return (ANF.Var closureId)), varGen')
+                else
+                    Error $"Undefined variable: {name}"
 
     | AST.FuncRef name ->
-        // Explicit function reference
-        Ok (ANF.Return (ANF.FuncRef name), varGen)
+        // Explicit function reference - wrap in closure for uniform calling convention
+        let (closureId, varGen') = ANF.freshVar varGen
+        let closureAlloc = ANF.ClosureAlloc (name, [])
+        Ok (ANF.Let (closureId, closureAlloc, ANF.Return (ANF.Var closureId)), varGen')
 
     | AST.Closure (funcName, captures) ->
         // Closure: allocate closure tuple with function address and captured values
@@ -1144,6 +1181,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     let (wrappedAtom, allBindings, vg'') = wrapFuncRefInClosure argAtom (accBindings @ argBindings) vg'
                     convertArgs rest vg'' (wrappedAtom :: accAtoms) allBindings)
 
+        // Regular function call (including module functions like Stdlib.Int64.add)
         convertArgs args varGen [] []
         |> Result.bind (fun (argAtoms, argBindings, varGen1) ->
             // Bind call result to fresh variable
@@ -1822,15 +1860,29 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         match Map.tryFind name env with
         | Some (tempId, _) -> Ok (ANF.Var tempId, [], varGen)
         | None ->
-            // Check if it's a function reference (function name used as value)
-            if Map.containsKey name funcReg then
-                Ok (ANF.FuncRef name, [], varGen)
-            else
-                Error $"Undefined variable: {name}"
+            // Check if it's a module function (e.g., Stdlib.Int64.add)
+            let moduleRegistry = Stdlib.buildModuleRegistry ()
+            match Stdlib.tryGetFunction moduleRegistry name with
+            | Some _ ->
+                // Module function reference - wrap in closure for uniform calling convention
+                let (closureId, varGen') = ANF.freshVar varGen
+                let closureAlloc = ANF.ClosureAlloc (name, [])
+                Ok (ANF.Var closureId, [(closureId, closureAlloc)], varGen')
+            | None ->
+                // Check if it's a function reference (function name used as value)
+                if Map.containsKey name funcReg then
+                    // Wrap in closure for uniform calling convention
+                    let (closureId, varGen') = ANF.freshVar varGen
+                    let closureAlloc = ANF.ClosureAlloc (name, [])
+                    Ok (ANF.Var closureId, [(closureId, closureAlloc)], varGen')
+                else
+                    Error $"Undefined variable: {name}"
 
     | AST.FuncRef name ->
-        // Explicit function reference
-        Ok (ANF.FuncRef name, [], varGen)
+        // Explicit function reference - wrap in closure for uniform calling convention
+        let (closureId, varGen') = ANF.freshVar varGen
+        let closureAlloc = ANF.ClosureAlloc (name, [])
+        Ok (ANF.Var closureId, [(closureId, closureAlloc)], varGen')
 
     | AST.Closure (funcName, captures) ->
         // Closure in atom position: convert captures and create ClosureAlloc binding
@@ -2186,17 +2238,33 @@ let convertProgramWithTypes (program: AST.Program) : Result<ConversionResult, st
     let functions = topLevels |> List.choose (function AST.FunctionDef f -> Some f | _ -> None)
     let expressions = topLevels |> List.choose (function AST.Expression e -> Some e | _ -> None)
 
-    // Build function registry - maps function names to their return types
+    // Build function registry - maps function names to their FULL function types
     let funcReg : FunctionRegistry =
         functions
-        |> List.map (fun f -> (f.Name, f.ReturnType))
+        |> List.map (fun f ->
+            let paramTypes = f.Params |> List.map snd
+            let funcType = AST.TFunction (paramTypes, f.ReturnType)
+            (f.Name, funcType))
         |> Map.ofList
 
-    // Build function parameters map
-    let funcParams : Map<string, (string * AST.Type) list> =
+    // Build function parameters map (includes user-defined and module functions)
+    let userFuncParams : Map<string, (string * AST.Type) list> =
         functions
         |> List.map (fun f -> (f.Name, f.Params))
         |> Map.ofList
+
+    // Add module function parameters from Stdlib
+    let moduleRegistry = Stdlib.buildModuleRegistry ()
+    let moduleFuncParams : Map<string, (string * AST.Type) list> =
+        moduleRegistry
+        |> Map.toList
+        |> List.map (fun (qualifiedName, moduleFunc) ->
+            // Create parameter names like "arg0", "arg1" for each parameter type
+            let paramList = moduleFunc.ParamTypes |> List.mapi (fun i t -> ($"arg{i}", t))
+            (qualifiedName, paramList))
+        |> Map.ofList
+
+    let funcParams = Map.fold (fun acc k v -> Map.add k v acc) userFuncParams moduleFuncParams
 
     // Convert all functions
     let rec convertFunctions (funcs: AST.FunctionDef list) (vg: ANF.VarGen) (acc: ANF.Function list) : Result<ANF.Function list * ANF.VarGen, string> =
@@ -2213,6 +2281,7 @@ let convertProgramWithTypes (program: AST.Program) : Result<ConversionResult, st
         Error "Function name 'main' is reserved"
     else
 
+    // Stdlib functions are now loaded from stdlib.dark and included as regular functions
     convertFunctions functions varGen []
     |> Result.bind (fun (anfFuncs, varGen1) ->
         match expressions with
@@ -2267,10 +2336,13 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
     let functions = topLevels |> List.choose (function AST.FunctionDef f -> Some f | _ -> None)
     let expressions = topLevels |> List.choose (function AST.Expression e -> Some e | _ -> None)
 
-    // Build function registry - maps function names to their return types
+    // Build function registry - maps function names to their FULL function types
     let funcReg : FunctionRegistry =
         functions
-        |> List.map (fun f -> (f.Name, f.ReturnType))
+        |> List.map (fun f ->
+            let paramTypes = f.Params |> List.map snd
+            let funcType = AST.TFunction (paramTypes, f.ReturnType)
+            (f.Name, funcType))
         |> Map.ofList
 
     // Convert all functions
@@ -2288,6 +2360,7 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
         Error "Function name 'main' is reserved"
     else
 
+    // Stdlib functions are now loaded from stdlib.dark and included as regular functions
     convertFunctions functions varGen []
     |> Result.bind (fun (anfFuncs, varGen1) ->
         match expressions with

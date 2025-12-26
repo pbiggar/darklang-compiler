@@ -123,3 +123,19 @@ type TopLevel =
 
 /// Program is a list of top-level definitions (functions and/or expressions)
 type Program = Program of TopLevel list
+
+/// Module function definition - a function within a module
+type ModuleFunc = {
+    Name: string                     // Function name (e.g., "add")
+    ParamTypes: Type list            // Parameter types
+    ReturnType: Type                 // Return type
+}
+
+/// Module definition - represents a namespace of functions
+type ModuleDef = {
+    Name: string                     // Full module path (e.g., "Stdlib.Int64")
+    Functions: ModuleFunc list       // Functions in this module
+}
+
+/// Module registry - maps full function paths to their definitions
+type ModuleRegistry = Map<string, ModuleFunc>

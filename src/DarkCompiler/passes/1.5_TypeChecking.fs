@@ -480,7 +480,17 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 Error (TypeMismatch (expected, varType, $"variable {name}"))
             | _ -> Ok (varType, expr)
         | None ->
-            Error (UndefinedVariable name)
+            // Check if it's a module function (e.g., Stdlib.Int64.add)
+            let moduleRegistry = Stdlib.buildModuleRegistry ()
+            match Stdlib.tryGetFunction moduleRegistry name with
+            | Some moduleFunc ->
+                let funcType = Stdlib.getFunctionType moduleFunc
+                match expectedType with
+                | Some expected when expected <> funcType ->
+                    Error (TypeMismatch (expected, funcType, $"variable {name}"))
+                | _ -> Ok (funcType, expr)
+            | None ->
+                Error (UndefinedVariable name)
 
     | If (cond, thenBranch, elseBranch) ->
         // If expression: condition must be bool, branches must have same type
@@ -564,7 +574,37 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         | Some other ->
             Error (GenericError $"{funcName} is not a function (has type {typeToString other})")
         | None ->
-            Error (UndefinedVariable funcName)
+            // Check if it's a module function (e.g., Stdlib.Int64.add)
+            let moduleRegistry = Stdlib.buildModuleRegistry ()
+            match Stdlib.tryGetFunction moduleRegistry funcName with
+            | Some moduleFunc ->
+                let paramTypes = moduleFunc.ParamTypes
+                let returnType = moduleFunc.ReturnType
+                // Check argument count
+                if List.length args <> List.length paramTypes then
+                    Error (GenericError $"Function {funcName} expects {List.length paramTypes} arguments, got {List.length args}")
+                else
+                    // Check each argument type and collect transformed args
+                    let rec checkArgsWithTypes remaining paramTys accArgs =
+                        match remaining, paramTys with
+                        | [], [] -> Ok (List.rev accArgs)
+                        | arg :: restArgs, paramT :: restParams ->
+                            checkExpr arg env typeReg variantLookup genericFuncReg (Some paramT)
+                            |> Result.bind (fun (argType, arg') ->
+                                if argType = paramT then
+                                    checkArgsWithTypes restArgs restParams (arg' :: accArgs)
+                                else
+                                    Error (TypeMismatch (paramT, argType, $"argument to {funcName}")))
+                        | _ -> Error (GenericError "Internal error: argument/param length mismatch")
+
+                    checkArgsWithTypes args paramTypes []
+                    |> Result.bind (fun args' ->
+                        match expectedType with
+                        | Some expected when expected <> returnType ->
+                            Error (TypeMismatch (expected, returnType, $"result of call to {funcName}"))
+                        | _ -> Ok (returnType, Call (funcName, args')))
+            | None ->
+                Error (UndefinedVariable funcName)
 
     | TypeApp (funcName, typeArgs, args) ->
         // Generic function call with explicit type arguments: func<Type1, Type2>(args)

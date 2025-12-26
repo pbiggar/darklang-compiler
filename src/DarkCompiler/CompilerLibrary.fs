@@ -8,6 +8,7 @@ module CompilerLibrary
 open System
 open System.IO
 open System.Diagnostics
+open System.Reflection
 open Output
 
 /// Result of compilation
@@ -36,6 +37,36 @@ let defaultOptions : CompilerOptions = {
     DisableFreeList = false
 }
 
+/// Load the stdlib.dark file
+/// Returns the stdlib AST or an error message
+let loadStdlib () : Result<AST.Program, string> =
+    // Find stdlib.dark relative to the executable
+    let exePath = Assembly.GetExecutingAssembly().Location
+    let exeDir = Path.GetDirectoryName(exePath)
+    // Try multiple locations for stdlib.dark
+    let possiblePaths = [
+        Path.Combine(exeDir, "stdlib.dark")
+        Path.Combine(exeDir, "..", "..", "..", "..", "..", "src", "DarkCompiler", "stdlib.dark")
+        Path.Combine(Environment.CurrentDirectory, "src", "DarkCompiler", "stdlib.dark")
+    ]
+    let stdlibPath =
+        possiblePaths
+        |> List.tryFind File.Exists
+    match stdlibPath with
+    | None ->
+        let pathsStr = String.Join(", ", possiblePaths)
+        Error $"Could not find stdlib.dark in any of: {pathsStr}"
+    | Some path ->
+        let source = File.ReadAllText(path)
+        Parser.parseString source
+        |> Result.mapError (fun err -> $"Error parsing stdlib.dark: {err}")
+
+/// Merge two programs - stdlib functions come first
+let mergePrograms (stdlib: AST.Program) (userProgram: AST.Program) : AST.Program =
+    let (AST.Program stdlibItems) = stdlib
+    let (AST.Program userItems) = userProgram
+    AST.Program (stdlibItems @ userItems)
+
 /// Compile source code to binary (in-memory, no file I/O)
 let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: string) : CompileResult =
     let sw = Stopwatch.StartNew()
@@ -53,7 +84,16 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
             { Binary = Array.empty
               Success = false
               ErrorMessage = Some $"Parse error: {err}" }
-        | Ok ast ->
+        | Ok userAst ->
+            // Load and merge stdlib
+            match loadStdlib () with
+            | Error err ->
+                { Binary = Array.empty
+                  Success = false
+                  ErrorMessage = Some err }
+            | Ok stdlibAst ->
+            let ast = mergePrograms stdlibAst userAst
+
             // Show AST
             if verbosity >= 3 then
                 println "\n=== AST ==="

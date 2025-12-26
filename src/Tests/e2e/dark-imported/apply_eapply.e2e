@@ -10,11 +10,11 @@
 // Stdlib, Builtin, String type, generic type parameters, and pipe operator support
 // ===================================================================
 
-// (let fn = (fun x -> x + 1L) in fn 6L) = 7
+let fn = (x: int) => x + 1 in fn(6) = 7
 
-// (let fn = Stdlib.Int64.add in fn 3L 4L) = 7
+let fn = Stdlib.Int64.add in fn(3, 4) = 7
 
-// (let fn = Stdlib.Int64.max in fn 3L 7L) = 7
+let fn = Stdlib.Int64.max in fn(3, 7) = 7
 
 // ([ 1L; 2L; 3L; 4L; 5L ] |> Stdlib.List.map (fun x y -> x) |> Stdlib.List.map (fun l -> l 1L)) = stdout="[1, 2, 3, 4, 5]\n"
 

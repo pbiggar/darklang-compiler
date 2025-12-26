@@ -80,6 +80,16 @@ let lex (input: string) : Result<Token list, string> =
         | '-' :: rest -> lexHelper rest (TMinus :: acc)
         | '=' :: '>' :: rest -> lexHelper rest (TFatArrow :: acc)
         | '*' :: rest -> lexHelper rest (TStar :: acc)
+        | '/' :: '/' :: rest ->
+            // Skip line comment: // ... until end of line
+            let rec skipToEndOfLine (cs: char list) : char list =
+                match cs with
+                | [] -> []
+                | '\n' :: remaining -> remaining
+                | '\r' :: '\n' :: remaining -> remaining
+                | '\r' :: remaining -> remaining
+                | _ :: remaining -> skipToEndOfLine remaining
+            lexHelper (skipToEndOfLine rest) acc
         | '/' :: rest -> lexHelper rest (TSlash :: acc)
         | '(' :: rest -> lexHelper rest (TLParen :: acc)
         | ')' :: rest -> lexHelper rest (TRParen :: acc)
@@ -437,79 +447,94 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
         Error $"Type name must start with uppercase letter: {name}"
     | _ -> Error "Expected type definition: type Name = { fields } or type Name = Variant1 | Variant2"
 
+/// Parse a qualified function name: name or Stdlib.Int64.add
+let rec parseQualifiedFuncName (firstName: string) (tokens: Token list) : string * Token list =
+    match tokens with
+    | TDot :: TIdent nextName :: rest ->
+        let (fullName, remaining) = parseQualifiedFuncName nextName rest
+        (firstName + "." + fullName, remaining)
+    | _ ->
+        (firstName, tokens)
+
 /// Parse a function definition: def name<T, U>(params) : type = body
 /// Type parameters are optional: def name(params) : type = body is also valid
+/// Qualified names supported: def Stdlib.Int64.add(params) : type = body
 let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr * Token list, string>) : Result<FunctionDef * Token list, string> =
     match tokens with
-    | TDef :: TIdent name :: TLt :: rest ->
-        // Generic function: def name<T, U>(...)
-        parseTypeParams rest []
-        |> Result.bind (fun (typeParams, afterTypeParams) ->
-            // Check for duplicate type parameters
-            if List.length typeParams <> (typeParams |> List.distinct |> List.length) then
-                Error "Duplicate type parameter names"
-            else
-            let typeParamsSet = Set.ofList typeParams
-            match afterTypeParams with
-            | TLParen :: paramsStart ->
-                // Parse parameters with type params in scope
-                let paramsResult =
-                    match paramsStart with
-                    | TRParen :: _ -> Ok ([], paramsStart)
-                    | _ -> parseParamsWithContext typeParamsSet paramsStart []
+    | TDef :: TIdent firstName :: rest ->
+        // Parse potentially qualified function name (e.g., Stdlib.Int64.add)
+        let (name, afterName) = parseQualifiedFuncName firstName rest
+        match afterName with
+        | TLt :: rest' ->
+            // Generic function: def name<T, U>(...)
+            parseTypeParams rest' []
+            |> Result.bind (fun (typeParams, afterTypeParams) ->
+                // Check for duplicate type parameters
+                if List.length typeParams <> (typeParams |> List.distinct |> List.length) then
+                    Error "Duplicate type parameter names"
+                else
+                let typeParamsSet = Set.ofList typeParams
+                match afterTypeParams with
+                | TLParen :: paramsStart ->
+                    // Parse parameters with type params in scope
+                    let paramsResult =
+                        match paramsStart with
+                        | TRParen :: _ -> Ok ([], paramsStart)
+                        | _ -> parseParamsWithContext typeParamsSet paramsStart []
 
-                paramsResult
-                |> Result.bind (fun (parameters, remaining) ->
-                    match remaining with
-                    | TRParen :: TColon :: rest' ->
-                        // Parse return type with type params in scope
-                        parseTypeWithContext typeParamsSet rest'
-                        |> Result.bind (fun (returnType, remaining') ->
-                            match remaining' with
-                            | TEquals :: rest'' ->
-                                // Parse body
-                                parseExpr rest''
-                                |> Result.map (fun (body, remaining'') ->
-                                    let funcDef = {
-                                        Name = name
-                                        TypeParams = typeParams
-                                        Params = parameters
-                                        ReturnType = returnType
-                                        Body = body
-                                    }
-                                    (funcDef, remaining''))
-                            | _ -> Error "Expected '=' after function return type")
-                    | _ -> Error "Expected ':' after function parameters")
-            | _ -> Error "Expected '(' after type parameters")
-    | TDef :: TIdent name :: TLParen :: rest ->
-        // Non-generic function: def name(...)
-        let paramsResult =
-            match rest with
-            | TRParen :: _ -> Ok ([], rest)
-            | _ -> parseParams rest []
+                    paramsResult
+                    |> Result.bind (fun (parameters, remaining) ->
+                        match remaining with
+                        | TRParen :: TColon :: rest'' ->
+                            // Parse return type with type params in scope
+                            parseTypeWithContext typeParamsSet rest''
+                            |> Result.bind (fun (returnType, remaining') ->
+                                match remaining' with
+                                | TEquals :: rest''' ->
+                                    // Parse body
+                                    parseExpr rest'''
+                                    |> Result.map (fun (body, remaining'') ->
+                                        let funcDef = {
+                                            Name = name
+                                            TypeParams = typeParams
+                                            Params = parameters
+                                            ReturnType = returnType
+                                            Body = body
+                                        }
+                                        (funcDef, remaining''))
+                                | _ -> Error "Expected '=' after function return type")
+                        | _ -> Error "Expected ':' after function parameters")
+                | _ -> Error "Expected '(' after type parameters")
+        | TLParen :: rest' ->
+            // Non-generic function: def name(...)
+            let paramsResult =
+                match rest' with
+                | TRParen :: _ -> Ok ([], rest')
+                | _ -> parseParams rest' []
 
-        paramsResult
-        |> Result.bind (fun (parameters, remaining) ->
-            match remaining with
-            | TRParen :: TColon :: rest' ->
-                // Parse return type
-                parseType rest'
-                |> Result.bind (fun (returnType, remaining') ->
-                    match remaining' with
-                    | TEquals :: rest'' ->
-                        // Parse body
-                        parseExpr rest''
-                        |> Result.map (fun (body, remaining'') ->
-                            let funcDef = {
-                                Name = name
-                                TypeParams = []
-                                Params = parameters
-                                ReturnType = returnType
-                                Body = body
-                            }
-                            (funcDef, remaining''))
-                    | _ -> Error "Expected '=' after function return type")
-            | _ -> Error "Expected ':' after function parameters")
+            paramsResult
+            |> Result.bind (fun (parameters, remaining) ->
+                match remaining with
+                | TRParen :: TColon :: rest'' ->
+                    // Parse return type
+                    parseType rest''
+                    |> Result.bind (fun (returnType, remaining') ->
+                        match remaining' with
+                        | TEquals :: rest''' ->
+                            // Parse body
+                            parseExpr rest'''
+                            |> Result.map (fun (body, remaining'') ->
+                                let funcDef = {
+                                    Name = name
+                                    TypeParams = []
+                                    Params = parameters
+                                    ReturnType = returnType
+                                    Body = body
+                                }
+                                (funcDef, remaining''))
+                        | _ -> Error "Expected '=' after function return type")
+                | _ -> Error "Expected ':' after function parameters")
+        | _ -> Error $"Expected '<' or '(' after function name '{name}'"
     | _ -> Error "Expected function definition (def name(params) : type = body)"
 
 /// Parse a pattern for pattern matching
@@ -845,6 +870,18 @@ let parse (tokens: Token list) : Result<Program, string> =
         |> Result.bind (fun (expr, remaining) ->
             parsePostfix expr remaining)
 
+    // Parse a qualified identifier chain: Stdlib.Int64.add
+    // Returns the full qualified name and remaining tokens
+    and parseQualifiedIdent (firstName: string) (toks: Token list) : string * Token list =
+        match toks with
+        | TDot :: TIdent nextName :: rest ->
+            // Continue the chain: firstName.nextName...
+            let (fullName, remaining) = parseQualifiedIdent nextName rest
+            (firstName + "." + fullName, remaining)
+        | _ ->
+            // End of chain
+            (firstName, toks)
+
     and parsePrimaryBase (toks: Token list) : Result<Expr * Token list, string> =
         match toks with
         | TInt n :: rest -> Ok (IntLiteral n, rest)
@@ -852,6 +889,21 @@ let parse (tokens: Token list) : Result<Program, string> =
         | TStringLit s :: rest -> Ok (StringLiteral s, rest)
         | TTrue :: rest -> Ok (BoolLiteral true, rest)
         | TFalse :: rest -> Ok (BoolLiteral false, rest)
+        // Qualified identifier: Stdlib.Int64.add or Module.func
+        | TIdent name :: TDot :: TIdent nextName :: rest when System.Char.IsUpper(name.[0]) ->
+            // Parse the full qualified name
+            let (qualifiedTail, afterQualified) = parseQualifiedIdent nextName rest
+            let fullName = name + "." + qualifiedTail
+            // Check what follows - function call or just a variable reference
+            match afterQualified with
+            | TLParen :: argsStart ->
+                // Qualified function call: Stdlib.Int64.add(args)
+                parseCallArgs argsStart []
+                |> Result.map (fun (args, remaining) ->
+                    (Call (fullName, args), remaining))
+            | _ ->
+                // Qualified variable reference (function as value)
+                Ok (Var fullName, afterQualified)
         | TIdent name :: TLt :: rest when not (System.Char.IsUpper(name.[0])) ->
             // Could be generic function call: name<type, ...>(args)
             // Or could be comparison: name < expr

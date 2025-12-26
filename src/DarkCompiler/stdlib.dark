@@ -1,0 +1,18 @@
+// Stdlib.dark - Standard Library Functions
+//
+// These functions are automatically included in all Dark programs.
+// They provide the built-in Stdlib modules.
+
+// Stdlib.Int64 - Integer operations
+
+def Stdlib.Int64.add(a: int, b: int) : int = a + b
+
+def Stdlib.Int64.sub(a: int, b: int) : int = a - b
+
+def Stdlib.Int64.mul(a: int, b: int) : int = a * b
+
+def Stdlib.Int64.div(a: int, b: int) : int = a / b
+
+def Stdlib.Int64.max(a: int, b: int) : int = if a > b then a else b
+
+def Stdlib.Int64.min(a: int, b: int) : int = if a < b then a else b
