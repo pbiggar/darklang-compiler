@@ -21,8 +21,8 @@ open ANF
 /// Type registry - maps record type names to their field definitions
 type TypeRegistry = Map<string, (string * AST.Type) list>
 
-/// Variant lookup - maps variant names to (type name, tag index, payload type)
-type VariantLookup = Map<string, (string * int * AST.Type option)>
+/// Variant lookup - maps variant names to (type name, type params, tag index, payload type)
+type VariantLookup = Map<string, (string * string list * int * AST.Type option)>
 
 /// Function registry - maps function names to their FULL function types (TFunction)
 type FunctionRegistry = Map<string, AST.Type>
@@ -65,7 +65,10 @@ let rec typeToMangledName (t: AST.Type) : string =
         let elemsStr = elemTypes |> List.map typeToMangledName |> String.concat "_"
         $"tup_{elemsStr}"
     | AST.TRecord name -> name
-    | AST.TSum name -> name
+    | AST.TSum (name, []) -> name
+    | AST.TSum (name, typeArgs) ->
+        let argsStr = typeArgs |> List.map typeToMangledName |> String.concat "_"
+        $"{name}_{argsStr}"
     | AST.TList elemType -> $"list_{typeToMangledName elemType}"
     | AST.TVar name -> name  // Should not appear after monomorphization
 
@@ -99,7 +102,7 @@ let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
 /// Apply a substitution to an expression, replacing type variables in type annotations
 let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
     match expr with
-    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
+    | AST.UnitLiteral | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
         expr  // No types to substitute in literals, variables, function references, and closures
     | AST.BinOp (op, left, right) ->
         AST.BinOp (op, applySubstToExpr subst left, applySubstToExpr subst right)
@@ -154,7 +157,7 @@ let specializeFunction (funcDef: AST.FunctionDef) (typeArgs: AST.Type list) : AS
 /// Collect all TypeApp call sites from an expression
 let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
     match expr with
-    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
+    | AST.UnitLiteral | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
         Set.empty
     | AST.BinOp (_, left, right) ->
         Set.union (collectTypeApps left) (collectTypeApps right)
@@ -200,7 +203,7 @@ let collectTypeAppsFromFunc (funcDef: AST.FunctionDef) : Set<SpecKey> =
 /// Replace TypeApp with Call using specialized name in an expression
 let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
     match expr with
-    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
+    | AST.UnitLiteral | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
         expr
     | AST.BinOp (op, left, right) ->
         AST.BinOp (op, replaceTypeApps left, replaceTypeApps right)
@@ -255,7 +258,7 @@ type LambdaEnv = Map<string, AST.Expr>
 /// Check if a variable occurs in an expression (for dead code elimination)
 let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
     match expr with
-    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ -> false
+    | AST.UnitLiteral | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ -> false
     | AST.Var n -> n = name
     | AST.BinOp (_, left, right) -> varOccursInExpr name left || varOccursInExpr name right
     | AST.UnaryOp (_, inner) -> varOccursInExpr name inner
@@ -292,7 +295,7 @@ let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
 /// lambdaEnv: maps variable names to their lambda expressions
 let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
     match expr with
-    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ ->
+    | AST.UnitLiteral | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ ->
         expr
     | AST.Var _ -> expr  // Variable references stay as-is (not at call position)
     | AST.BinOp (op, left, right) ->
@@ -389,7 +392,7 @@ type LiftState = {
 /// Collect free variables in an expression (variables not bound by let or lambda parameters)
 let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
     match expr with
-    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ -> Set.empty
+    | AST.UnitLiteral | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ -> Set.empty
     | AST.Var name -> if Set.contains name bound then Set.empty else Set.singleton name
     | AST.BinOp (_, left, right) -> Set.union (freeVars left bound) (freeVars right bound)
     | AST.UnaryOp (_, inner) -> freeVars inner bound
@@ -428,7 +431,7 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
 /// Lift lambdas in an expression, returning (transformed expr, new state)
 let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr * LiftState, string> =
     match expr with
-    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
+    | AST.UnitLiteral | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
         Ok (expr, state)
     | AST.BinOp (op, left, right) ->
         liftLambdasInExpr left state
@@ -885,6 +888,7 @@ let convertUnaryOp (op: AST.UnaryOp) : ANF.UnaryOp =
 /// Used for type-directed field lookup in record access
 let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) : Result<AST.Type, string> =
     match expr with
+    | AST.UnitLiteral -> Ok AST.TUnit
     | AST.IntLiteral _ -> Ok AST.TInt64
     | AST.BoolLiteral _ -> Ok AST.TBool
     | AST.StringLiteral _ -> Ok AST.TString
@@ -948,7 +952,7 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
             | _ -> Error "Cannot access index on non-tuple type")
     | AST.Constructor (_, variantName, _) ->
         match Map.tryFind variantName variantLookup with
-        | Some (typeName, _, _) -> Ok (AST.TSum typeName)
+        | Some (typeName, _, _, _) -> Ok (AST.TSum (typeName, []))  // Type args inferred during type checking
         | None -> Error $"Unknown constructor: {variantName}"
     | AST.ListLiteral elements ->
         match elements with
@@ -1019,6 +1023,10 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
 /// funcReg maps function names to their return types
 let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     match expr with
+    | AST.UnitLiteral ->
+        // Unit literal becomes return of unit value (represented as 0)
+        Ok (ANF.Return (ANF.UnitLiteral), varGen)
+
     | AST.IntLiteral n ->
         // Integer literal becomes return
         Ok (ANF.Return (ANF.IntLiteral n), varGen)
@@ -1301,13 +1309,13 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         match Map.tryFind variantName variantLookup with
         | None ->
             Error $"Unknown constructor: {variantName}"
-        | Some (typeName, tag, _) ->
+        | Some (typeName, _, tag, _) ->
             // Check if ANY variant in this type has a payload
             // If so, all variants must be heap-allocated for consistency
             // Note: We get typeName from variantLookup, not from AST (which may be empty)
             let typeHasPayloadVariants =
                 variantLookup
-                |> Map.exists (fun _ (tName, _, pType) -> tName = typeName && pType.IsSome)
+                |> Map.exists (fun _ (tName, _, _, pType) -> tName = typeName && pType.IsSome)
 
             match payload with
             | None when not typeHasPayloadVariants ->
@@ -1389,14 +1397,15 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             // This determines if values are heap-allocated or simple integers
             let typeHasAnyPayload (variantName: string) : bool =
                 match Map.tryFind variantName variantLookup with
-                | Some (typeName, _, _) ->
+                | Some (typeName, _, _, _) ->
                     variantLookup
-                    |> Map.exists (fun _ (tName, _, pType) -> tName = typeName && pType.IsSome)
+                    |> Map.exists (fun _ (tName, _, _, pType) -> tName = typeName && pType.IsSome)
                 | None -> false
 
             // Check if pattern always matches (wildcard or variable)
             let rec patternAlwaysMatches (pattern: AST.Pattern) : bool =
                 match pattern with
+                | AST.PUnit -> true
                 | AST.PWildcard -> true
                 | AST.PVar _ -> true
                 | _ -> false
@@ -1406,6 +1415,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             // for pattern variables requires scrutinee type analysis (future improvement)
             let rec extractAndCompileBody (pattern: AST.Pattern) (body: AST.Expr) (scrutAtom: ANF.Atom) (currentEnv: VarEnv) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
                 match pattern with
+                | AST.PUnit -> toANF body vg currentEnv typeReg variantLookup funcReg
                 | AST.PWildcard -> toANF body vg currentEnv typeReg variantLookup funcReg
                 | AST.PLiteral _ -> toANF body vg currentEnv typeReg variantLookup funcReg
                 | AST.PBool _ -> toANF body vg currentEnv typeReg variantLookup funcReg
@@ -1576,6 +1586,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             // Build comparison expression for a pattern
             let rec buildPatternComparison (pattern: AST.Pattern) (scrutAtom: ANF.Atom) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
                 match pattern with
+                | AST.PUnit -> Ok None  // Unit pattern always matches unit type
                 | AST.PWildcard -> Ok None
                 | AST.PVar _ -> Ok None
                 | AST.PLiteral n ->
@@ -1597,7 +1608,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                 | AST.PConstructor (variantName, _) ->
                     match Map.tryFind variantName variantLookup with
-                    | Some (_, tag, _) ->
+                    | Some (_, _, tag, _) ->
                         if typeHasAnyPayload variantName then
                             // Load tag from heap (index 0), then compare
                             let (tagVar, vg1) = ANF.freshVar vg
@@ -1843,6 +1854,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 /// Convert an AST expression to an atom, introducing let bindings as needed
 and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     match expr with
+    | AST.UnitLiteral ->
+        Ok (ANF.UnitLiteral, [], varGen)
+
     | AST.IntLiteral n ->
         Ok (ANF.IntLiteral n, [], varGen)
 
@@ -2083,12 +2097,12 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         match Map.tryFind variantName variantLookup with
         | None ->
             Error $"Unknown constructor: {variantName}"
-        | Some (typeName, tag, _) ->
+        | Some (typeName, _, tag, _) ->
             // Check if ANY variant in this type has a payload
             // Note: We get typeName from variantLookup, not from AST (which may be empty)
             let typeHasPayloadVariants =
                 variantLookup
-                |> Map.exists (fun _ (tName, _, pType) -> tName = typeName && pType.IsSome)
+                |> Map.exists (fun _ (tName, _, _, pType) -> tName = typeName && pType.IsSome)
 
             match payload with
             | None when not typeHasPayloadVariants ->
@@ -2215,23 +2229,25 @@ let convertProgramWithTypes (program: AST.Program) : Result<ConversionResult, st
     let varGen = ANF.VarGen 0
 
     // Build type registry from type definitions
+    // Note: typeParams are stored but not used for ANF conversion (monomorphized at use sites)
     let typeReg : TypeRegistry =
         topLevels
         |> List.choose (function
-            | AST.TypeDef (AST.RecordDef (name, fields)) -> Some (name, fields)
+            | AST.TypeDef (AST.RecordDef (name, _typeParams, fields)) -> Some (name, fields)
             | _ -> None)
         |> Map.ofList
 
     // Build variant lookup from sum type definitions
+    // Note: typeParams are stored but not used here (monomorphization happens elsewhere)
     let variantLookup : VariantLookup =
         topLevels
         |> List.choose (function
-            | AST.TypeDef (AST.SumTypeDef (typeName, variants)) ->
-                Some (typeName, variants)
+            | AST.TypeDef (AST.SumTypeDef (typeName, typeParams, variants)) ->
+                Some (typeName, typeParams, variants)
             | _ -> None)
-        |> List.collect (fun (typeName, variants) ->
+        |> List.collect (fun (typeName, typeParams, variants) ->
             variants
-            |> List.mapi (fun idx variant -> (variant.Name, (typeName, idx, variant.Payload))))
+            |> List.mapi (fun idx variant -> (variant.Name, (typeName, typeParams, idx, variant.Payload))))
         |> Map.ofList
 
     // Separate functions and expressions
@@ -2315,7 +2331,7 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
     let typeReg : TypeRegistry =
         topLevels
         |> List.choose (function
-            | AST.TypeDef (AST.RecordDef (name, fields)) -> Some (name, fields)
+            | AST.TypeDef (AST.RecordDef (name, _typeParams, fields)) -> Some (name, fields)
             | _ -> None)
         |> Map.ofList
 
@@ -2324,12 +2340,12 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
     let variantLookup : VariantLookup =
         topLevels
         |> List.choose (function
-            | AST.TypeDef (AST.SumTypeDef (typeName, variants)) ->
-                Some (typeName, variants)
+            | AST.TypeDef (AST.SumTypeDef (typeName, typeParams, variants)) ->
+                Some (typeName, typeParams, variants)
             | _ -> None)
-        |> List.collect (fun (typeName, variants) ->
+        |> List.collect (fun (typeName, typeParams, variants) ->
             variants
-            |> List.mapi (fun idx variant -> (variant.Name, (typeName, idx, variant.Payload))))
+            |> List.mapi (fun idx variant -> (variant.Name, (typeName, typeParams, idx, variant.Payload))))
         |> Map.ofList
 
     // Separate functions and expressions

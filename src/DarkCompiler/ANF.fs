@@ -25,6 +25,7 @@ type TempId = TempId of int
 
 /// Atomic expressions (cannot be decomposed further)
 type Atom =
+    | UnitLiteral            // Unit value: ()
     | IntLiteral of int64
     | BoolLiteral of bool
     | StringLiteral of string

@@ -278,18 +278,32 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
     | TIdent "Float" :: rest -> Ok (TFloat64, rest)
     | TIdent typeName :: rest when Set.contains typeName typeParams ->
         Ok (TVar typeName, rest)
+    | TIdent "List" :: TLBracket :: rest ->
+        // List type: List[ElementType]
+        parseTypeWithContext typeParams rest
+        |> Result.bind (fun (elemType, afterElem) ->
+            match afterElem with
+            | TRBracket :: remaining -> Ok (TList elemType, remaining)
+            | _ -> Error "Expected ']' after List element type")
     | TIdent typeName :: rest when System.Char.IsUpper(typeName.[0]) ->
         Ok (TRecord typeName, rest)
     | TLParen :: rest ->
         // Could be a function type: (int, int) -> bool
+        // Or a tuple type: (int, int)
         parseFunctionTypeParams typeParams rest []
         |> Result.bind (fun (paramTypes, afterParams) ->
             match afterParams with
             | TArrow :: returnRest ->
+                // Function type: (params) -> return
                 parseTypeWithContext typeParams returnRest
                 |> Result.map (fun (returnType, remaining) ->
                     (TFunction (paramTypes, returnType), remaining))
-            | _ -> Error "Expected '->' after function type parameters")
+            | _ ->
+                // Tuple type: (type, type, ...)
+                if List.length paramTypes < 2 then
+                    Error "Tuple type must have at least 2 elements"
+                else
+                    Ok (TTuple paramTypes, afterParams))
     | _ -> Error "Expected type annotation (Int64, Bool, String, Float, TypeName, type variable, or function type)"
 
 /// Parse a type annotation with context for type parameters in scope
@@ -411,40 +425,97 @@ let rec parseVariants (tokens: Token list) (acc: Variant list) : Result<Variant 
             Ok (List.rev (variant :: acc), rest)
     | _ -> Error "Expected variant name (must start with uppercase letter)"
 
-/// Parse a type definition: type Name = { fields } or type Name = Variant1 | Variant2 of Type | ...
-let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
+/// Parse sum type variants with type parameter context: Variant1 | Variant2 of t | ...
+/// Uses parseTypeWithContext to resolve type parameters
+let rec parseVariantsWithContext (typeParams: string list) (tokens: Token list) (acc: Variant list) : Result<Variant list * Token list, string> =
+    let typeParamSet = Set.ofList typeParams
     match tokens with
-    | TType :: TIdent name :: TEquals :: TLBrace :: rest when System.Char.IsUpper(name.[0]) ->
-        // Record type: type Name = { field: Type, ... }
-        parseRecordFields rest []
-        |> Result.map (fun (fields, remaining) ->
-            (RecordDef (name, fields), remaining))
-    | TType :: TIdent name :: TEquals :: TIdent variantName :: TOf :: rest when System.Char.IsUpper(name.[0]) && System.Char.IsUpper(variantName.[0]) ->
-        // Sum type with first variant having payload: type Name = Variant of Type | ...
-        parseType rest
+    | TIdent variantName :: TOf :: rest when System.Char.IsUpper(variantName.[0]) ->
+        // Variant with payload: Variant of Type
+        parseTypeWithContext typeParamSet rest
         |> Result.bind (fun (payloadType, afterType) ->
-            let firstVariant = { Name = variantName; Payload = Some payloadType }
+            let variant = { Name = variantName; Payload = Some payloadType }
             match afterType with
             | TBar :: rest' ->
                 // More variants
-                parseVariants rest' [firstVariant]
-                |> Result.map (fun (variants, remaining) ->
-                    (SumTypeDef (name, variants), remaining))
+                parseVariantsWithContext typeParams rest' (variant :: acc)
             | _ ->
-                // Single variant sum type
-                Ok (SumTypeDef (name, [firstVariant]), afterType))
-    | TType :: TIdent name :: TEquals :: TIdent variantName :: rest when System.Char.IsUpper(name.[0]) && System.Char.IsUpper(variantName.[0]) ->
-        // Sum type: type Name = Variant1 | Variant2 | ...
-        let firstVariant = { Name = variantName; Payload = None }
+                // End of variants
+                Ok (List.rev (variant :: acc), afterType))
+    | TIdent variantName :: rest when System.Char.IsUpper(variantName.[0]) ->
+        // Simple enum variant (no payload)
+        let variant = { Name = variantName; Payload = None }
         match rest with
         | TBar :: rest' ->
             // More variants
-            parseVariants rest' [firstVariant]
-            |> Result.map (fun (variants, remaining) ->
-                (SumTypeDef (name, variants), remaining))
+            parseVariantsWithContext typeParams rest' (variant :: acc)
         | _ ->
-            // Single variant sum type
-            Ok (SumTypeDef (name, [firstVariant]), rest)
+            // End of variants (next token is not a bar)
+            Ok (List.rev (variant :: acc), rest)
+    | _ -> Error "Expected variant name (must start with uppercase letter)"
+
+/// Parse a qualified type name: Name or Stdlib.Result.Result
+let rec parseQualifiedTypeName (firstName: string) (tokens: Token list) : string * Token list =
+    match tokens with
+    | TDot :: TIdent nextName :: rest when System.Char.IsUpper(nextName.[0]) ->
+        let (fullName, remaining) = parseQualifiedTypeName nextName rest
+        (firstName + "." + fullName, remaining)
+    | _ ->
+        (firstName, tokens)
+
+/// Parse a type definition: type Name = { fields } or type Name = Variant1 | Variant2 of Type | ...
+/// Supports qualified type names: type Stdlib.Result.Result = Ok of T | Error of E
+/// Supports generic types: type Result<t, e> = Ok of t | Error of e
+let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
+    match tokens with
+    | TType :: TIdent firstName :: rest when System.Char.IsUpper(firstName.[0]) ->
+        // Parse potentially qualified type name
+        let (typeName, afterName) = parseQualifiedTypeName firstName rest
+        // Check for type parameters: <t, e>
+        let parseBody typeParams afterTypeParams =
+            match afterTypeParams with
+            | TEquals :: TLBrace :: bodyRest ->
+                // Record type: type Name = { field: Type, ... }
+                parseRecordFields bodyRest []
+                |> Result.map (fun (fields, remaining) ->
+                    (RecordDef (typeName, typeParams, fields), remaining))
+            | TEquals :: TIdent variantName :: TOf :: bodyRest when System.Char.IsUpper(variantName.[0]) ->
+                // Sum type with first variant having payload: type Name = Variant of Type | ...
+                let typeParamSet = Set.ofList typeParams
+                parseTypeWithContext typeParamSet bodyRest
+                |> Result.bind (fun (payloadType, afterType) ->
+                    let firstVariant = { Name = variantName; Payload = Some payloadType }
+                    match afterType with
+                    | TBar :: rest' ->
+                        // More variants
+                        parseVariantsWithContext typeParams rest' [firstVariant]
+                        |> Result.map (fun (variants, remaining) ->
+                            (SumTypeDef (typeName, typeParams, variants), remaining))
+                    | _ ->
+                        // Single variant sum type
+                        Ok (SumTypeDef (typeName, typeParams, [firstVariant]), afterType))
+            | TEquals :: TIdent variantName :: bodyRest when System.Char.IsUpper(variantName.[0]) ->
+                // Sum type: type Name = Variant1 | Variant2 | ...
+                let firstVariant = { Name = variantName; Payload = None }
+                match bodyRest with
+                | TBar :: rest' ->
+                    // More variants
+                    parseVariantsWithContext typeParams rest' [firstVariant]
+                    |> Result.map (fun (variants, remaining) ->
+                        (SumTypeDef (typeName, typeParams, variants), remaining))
+                | _ ->
+                    // Single variant sum type
+                    Ok (SumTypeDef (typeName, typeParams, [firstVariant]), bodyRest)
+            | _ -> Error "Expected '=' after type name in type definition"
+        match afterName with
+        | TLt :: rest' ->
+            // Generic type: type Name<t, e> = ...
+            parseTypeParams rest' []
+            |> Result.bind (fun (typeParams, afterParams) ->
+                parseBody typeParams afterParams)
+        | _ ->
+            // Non-generic type
+            parseBody [] afterName
     | TType :: TIdent name :: _ when not (System.Char.IsUpper(name.[0])) ->
         Error $"Type name must start with uppercase letter: {name}"
     | _ -> Error "Expected type definition: type Name = { fields } or type Name = Variant1 | Variant2"
@@ -560,6 +631,9 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
     | TFloat f :: rest ->
         // Float literal pattern
         Ok (PFloat f, rest)
+    | TLParen :: TRParen :: rest ->
+        // Unit pattern: ()
+        Ok (PUnit, rest)
     | TLParen :: rest ->
         // Tuple pattern: (a, b, c)
         parseTuplePattern rest []
@@ -906,13 +980,33 @@ let parse (tokens: Token list) : Result<Program, string> =
         | TStringLit s :: rest -> Ok (StringLiteral s, rest)
         | TTrue :: rest -> Ok (BoolLiteral true, rest)
         | TFalse :: rest -> Ok (BoolLiteral false, rest)
-        // Qualified identifier: Stdlib.Int64.add or Module.func
+        // Qualified identifier: Stdlib.Int64.add, Module.func, or Stdlib.Result.Result.Ok
         | TIdent name :: TDot :: TIdent nextName :: rest when System.Char.IsUpper(name.[0]) ->
             // Parse the full qualified name
             let (qualifiedTail, afterQualified) = parseQualifiedIdent nextName rest
             let fullName = name + "." + qualifiedTail
-            // Check what follows - function call or just a variable reference
+            // Check if the last segment is uppercase (constructor) or lowercase (function)
+            let lastDotIdx = fullName.LastIndexOf('.')
+            let lastSegment = if lastDotIdx >= 0 then fullName.Substring(lastDotIdx + 1) else fullName
+            let isConstructor = System.Char.IsUpper(lastSegment.[0])
+            // Check what follows - function call, constructor, or variable reference
             match afterQualified with
+            | TLParen :: argsStart when isConstructor ->
+                // Qualified constructor with payload: Stdlib.Result.Result.Ok(5)
+                // Split into type name and variant name
+                let typeName = fullName.Substring(0, lastDotIdx)
+                let variantName = lastSegment
+                parseExpr argsStart
+                |> Result.bind (fun (payloadExpr, remaining) ->
+                    match remaining with
+                    | TRParen :: rest' ->
+                        Ok (Constructor (typeName, variantName, Some payloadExpr), rest')
+                    | _ -> Error "Expected ')' after constructor payload")
+            | _ when isConstructor ->
+                // Qualified constructor without payload: Stdlib.Color.Red
+                let typeName = fullName.Substring(0, lastDotIdx)
+                let variantName = lastSegment
+                Ok (Constructor (typeName, variantName, None), afterQualified)
             | TLParen :: argsStart ->
                 // Qualified function call: Stdlib.Int64.add(args)
                 parseCallArgs argsStart []
@@ -964,6 +1058,9 @@ let parse (tokens: Token list) : Result<Program, string> =
         | TIdent name :: rest ->
             // Variable reference (lowercase identifier)
             Ok (Var name, rest)
+        | TLParen :: TRParen :: rest ->
+            // Unit literal: ()
+            Ok (UnitLiteral, rest)
         | TLParen :: rest ->
             // Could be lambda, parenthesized expression, tuple literal, or operator section
             // Check for operator section: (&&), (||), (+), (-), (*), (/), etc.

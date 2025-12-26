@@ -16,3 +16,12 @@ def Stdlib.Int64.div(a: Int64, b: Int64) : Int64 = a / b
 def Stdlib.Int64.max(a: Int64, b: Int64) : Int64 = if a > b then a else b
 
 def Stdlib.Int64.min(a: Int64, b: Int64) : Int64 = if a < b then a else b
+
+// Stdlib.Tuple2 - 2-tuple operations
+
+def Stdlib.Tuple2.first<a, b>(t: (a, b)) : a = match t with | (x, y) -> x
+
+def Stdlib.Tuple2.second<a, b>(t: (a, b)) : b = match t with | (x, y) -> y
+
+// Stdlib.Result - Result type for error handling
+type Stdlib.Result.Result<t, e> = Ok of t | Error of e

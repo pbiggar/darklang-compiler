@@ -27,7 +27,7 @@ type Type =
     | TFunction of Type list * Type  // parameter types * return type
     | TTuple of Type list             // tuple type: (Int, Bool, String)
     | TRecord of string               // record type by name: Point, Color, etc.
-    | TSum of string                  // sum type by name: Option, Color, etc.
+    | TSum of string * Type list      // sum type by name with type args: Result<Int64, String>
     | TList of Type                    // List<T> - polymorphic list type
     | TVar of string                  // type variable: T, A, B, etc. (for generics)
 
@@ -58,6 +58,7 @@ type UnaryOp =
 
 /// Pattern matching patterns
 type Pattern =
+    | PUnit                                                // () - matches unit value
     | PWildcard                                            // _
     | PVar of string                                       // x (binds value to variable)
     | PConstructor of variantName:string * payload:Pattern option  // Red, Some(x)
@@ -72,6 +73,7 @@ type Pattern =
 
 /// Expression nodes
 type Expr =
+    | UnitLiteral                           // Unit value: ()
     | IntLiteral of int64
     | BoolLiteral of bool
     | StringLiteral of string
@@ -112,8 +114,8 @@ type Variant = {
 
 /// Type definition (record types, sum types, etc.)
 type TypeDef =
-    | RecordDef of name:string * fields:(string * Type) list  // type Point = { x: Int, y: Int }
-    | SumTypeDef of name:string * variants:Variant list       // type Color = Red | Green | Blue
+    | RecordDef of name:string * typeParams:string list * fields:(string * Type) list  // type Point<T> = { x: T, y: T }
+    | SumTypeDef of name:string * typeParams:string list * variants:Variant list       // type Result<T, E> = Ok of T | Error of E
 
 /// Top-level program elements
 type TopLevel =

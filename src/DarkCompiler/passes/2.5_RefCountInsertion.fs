@@ -45,6 +45,7 @@ let tryGetType (ctx: TypeContext) (tempId: TempId) : AST.Type option =
 /// Infer the type of a CExpr in the given context
 let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     match cexpr with
+    | Atom (UnitLiteral) -> Some AST.TUnit
     | Atom (IntLiteral _) -> Some AST.TInt64
     | Atom (BoolLiteral _) -> Some AST.TBool
     | Atom (StringLiteral _) -> Some AST.TString
@@ -64,6 +65,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         // Type is the type of the branches (should be the same)
         match thenAtom with
         | Var tid -> tryGetType ctx tid
+        | UnitLiteral -> Some AST.TUnit
         | IntLiteral _ -> Some AST.TInt64
         | BoolLiteral _ -> Some AST.TBool
         | StringLiteral _ -> Some AST.TString
@@ -88,6 +90,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         let elemTypes =
             elems
             |> List.map (function
+                | UnitLiteral -> AST.TUnit
                 | IntLiteral _ -> AST.TInt64
                 | BoolLiteral _ -> AST.TBool
                 | StringLiteral _ -> AST.TString

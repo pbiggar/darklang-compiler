@@ -283,6 +283,7 @@ let getPayloadSizeForAtom (builder: CFGBuilder) (atom: ANF.Atom) : Result<int, s
 /// Returns Error if float/string lookup fails (internal invariant violation)
 let atomToOperand (builder: CFGBuilder) (atom: ANF.Atom) : Result<MIR.Operand, string> =
     match atom with
+    | ANF.UnitLiteral -> Ok (MIR.IntConst 0L)  // Unit is represented as 0
     | ANF.IntLiteral n -> Ok (MIR.IntConst n)
     | ANF.BoolLiteral b -> Ok (MIR.BoolConst b)
     | ANF.FloatLiteral f ->

@@ -44,7 +44,10 @@ let rec typeToString (t: Type) : string =
         let elemsStr = elemTypes |> List.map typeToString |> String.concat ", "
         $"({elemsStr})"
     | TRecord name -> name
-    | TSum name -> name
+    | TSum (name, []) -> name
+    | TSum (name, typeArgs) ->
+        let argsStr = typeArgs |> List.map typeToString |> String.concat ", "
+        $"{name}<{argsStr}>"
     | TList elemType -> $"List<{typeToString elemType}>"
     | TVar name -> name  // Type variable (for generics)
 
@@ -72,8 +75,9 @@ type TypeRegistry = Map<string, (string * Type) list>
 /// Sum type registry - maps sum type names to their variant lists (name, tag, payload)
 type SumTypeRegistry = Map<string, (string * int * Type option) list>
 
-/// Variant lookup - maps variant names to (type name, tag index, payload type)
-type VariantLookup = Map<string, (string * int * Type option)>
+/// Variant lookup - maps variant names to (type name, type params, tag index, payload type)
+/// Type params are the generic type parameters of the containing sum type
+type VariantLookup = Map<string, (string * string list * int * Type option)>
 
 /// Generic function registry - maps function names to their type parameters
 /// Only contains entries for functions that have type parameters
@@ -95,7 +99,9 @@ let rec applySubst (subst: Substitution) (typ: Type) : Type =
         TTuple (List.map (applySubst subst) elemTypes)
     | TList elemType ->
         TList (applySubst subst elemType)
-    | TInt64 | TBool | TFloat64 | TString | TUnit | TRecord _ | TSum _ ->
+    | TSum (name, typeArgs) ->
+        TSum (name, List.map (applySubst subst) typeArgs)
+    | TInt64 | TBool | TFloat64 | TString | TUnit | TRecord _ ->
         typ  // Concrete types are unchanged
 
 /// Build a substitution from type parameters and type arguments
@@ -117,7 +123,7 @@ let buildSubstitution (typeParams: string list) (typeArgs: Type list) : Result<S
 /// bound: Set of names that are currently in scope (not free)
 let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
     match expr with
-    | IntLiteral _ | BoolLiteral _ | StringLiteral _ | FloatLiteral _ ->
+    | UnitLiteral | IntLiteral _ | BoolLiteral _ | StringLiteral _ | FloatLiteral _ ->
         Set.empty
     | Var name ->
         if Set.contains name bound then Set.empty else Set.singleton name
@@ -174,6 +180,7 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
 /// Collect variable names bound by a pattern
 and collectPatternBindings (pattern: Pattern) : Set<string> =
     match pattern with
+    | PUnit -> Set.empty
     | PWildcard -> Set.empty
     | PVar name -> Set.singleton name
     | PLiteral _ | PBool _ | PString _ | PFloat _ -> Set.empty
@@ -228,9 +235,20 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
     | TRecord name ->
         if actual = TRecord name then Ok []
         else Error $"Expected {name}, got {typeToString actual}"
-    | TSum name ->
-        if actual = TSum name then Ok []
-        else Error $"Expected {name}, got {typeToString actual}"
+    | TSum (name, patternArgs) ->
+        match actual with
+        | TSum (actualName, actualArgs) when name = actualName ->
+            if List.length patternArgs <> List.length actualArgs then
+                Error $"Sum type arity mismatch for {name}"
+            else
+                List.zip patternArgs actualArgs
+                |> List.map (fun (p, a) -> matchTypes p a)
+                |> List.fold (fun acc res ->
+                    match acc, res with
+                    | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
+                    | Error e, _ -> Error e
+                    | _, Error e -> Error e) (Ok [])
+        | _ -> Error $"Expected {name}, got {typeToString actual}"
     | TFunction (patternParams, patternRet) ->
         match actual with
         | TFunction (actualParams, actualRet) ->
@@ -277,6 +295,13 @@ let consolidateBindings (bindings: (string * Type) list) : Result<Map<string, Ty
                 else Error $"Type variable {name} has conflicting inferences: {typeToString existingType} vs {typeToString typ}"))
         (Ok Map.empty)
 
+/// Unify a type pattern (may contain TVar) with a concrete type.
+/// Returns a substitution mapping type variables to concrete types.
+/// Example: unifyTypes (TVar "t") TInt64 = Ok (Map.ofList [("t", TInt64)])
+let unifyTypes (pattern: Type) (actual: Type) : Result<Substitution, string> =
+    matchTypes pattern actual
+    |> Result.bind consolidateBindings
+
 /// Infer type arguments for a generic function call.
 /// Given type parameters, parameter types (with type variables), and actual argument types,
 /// returns the inferred type arguments in order matching typeParams.
@@ -320,6 +345,12 @@ let inferTypeArgs (typeParams: string list) (paramTypes: Type list) (argTypes: T
 ///   - Expr: The (possibly transformed) expression
 let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (genericFuncReg: GenericFuncRegistry) (expectedType: Type option) : Result<Type * Expr, TypeError> =
     match expr with
+    | UnitLiteral ->
+        // Unit literal is always TUnit
+        match expectedType with
+        | Some TUnit | None -> Ok (TUnit, expr)
+        | Some other -> Error (TypeMismatch (other, TUnit, "unit literal"))
+
     | IntLiteral _ ->
         // Integer literals are always TInt64
         match expectedType with
@@ -767,11 +798,12 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         match Map.tryFind variantName variantLookup with
         | None ->
             Error (GenericError $"Unknown constructor: {variantName}")
-        | Some (typeName, _tag, expectedPayload) ->
+        | Some (typeName, typeParams, _tag, expectedPayload) ->
             match expectedPayload, payload with
             | None, None ->
                 // Variant without payload, no payload provided - OK
-                let sumType = TSum typeName
+                // For non-generic types, use empty type args; for generic, all args are unresolved
+                let sumType = TSum (typeName, [])
                 match expectedType with
                 | Some expected when expected <> sumType ->
                     Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
@@ -783,17 +815,45 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 // Variant requires payload but none provided
                 Error (GenericError $"Constructor {variantName} requires a payload")
             | Some payloadType, Some payloadExpr ->
-                // Variant with payload - check payload has correct type
-                checkExpr payloadExpr env typeReg variantLookup genericFuncReg (Some payloadType)
-                |> Result.bind (fun (actualPayloadType, payloadExpr') ->
-                    if actualPayloadType <> payloadType then
-                        Error (TypeMismatch (payloadType, actualPayloadType, $"payload of {variantName}"))
-                    else
-                        let sumType = TSum typeName
-                        match expectedType with
-                        | Some expected when expected <> sumType ->
-                            Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
-                        | _ -> Ok (sumType, Constructor (constrTypeName, variantName, Some payloadExpr')))
+                // Variant with payload - check payload type
+                // For generic types, infer type variables from the payload
+                if List.isEmpty typeParams then
+                    // Non-generic type - check payload has exact type
+                    checkExpr payloadExpr env typeReg variantLookup genericFuncReg (Some payloadType)
+                    |> Result.bind (fun (actualPayloadType, payloadExpr') ->
+                        if actualPayloadType <> payloadType then
+                            Error (TypeMismatch (payloadType, actualPayloadType, $"payload of {variantName}"))
+                        else
+                            let sumType = TSum (typeName, [])
+                            match expectedType with
+                            | Some expected when expected <> sumType ->
+                                Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
+                            | _ -> Ok (sumType, Constructor (constrTypeName, variantName, Some payloadExpr')))
+                else
+                    // Generic type - infer type variables from payload
+                    // First, check the payload expression without expected type
+                    checkExpr payloadExpr env typeReg variantLookup genericFuncReg None
+                    |> Result.bind (fun (actualPayloadType, payloadExpr') ->
+                        // Try to unify payloadType (may contain TVar) with actualPayloadType
+                        match unifyTypes payloadType actualPayloadType with
+                        | Error msg ->
+                            Error (GenericError $"Type mismatch in {variantName} payload: {msg}")
+                        | Ok subst ->
+                            // Apply substitution to verify all type vars are resolved
+                            let concretePayloadType = applySubst subst payloadType
+                            if concretePayloadType <> actualPayloadType then
+                                Error (TypeMismatch (concretePayloadType, actualPayloadType, $"payload of {variantName}"))
+                            else
+                                // Build concrete type arguments from substitution
+                                let typeArgs = typeParams |> List.map (fun p ->
+                                    match Map.tryFind p subst with
+                                    | Some t -> t
+                                    | None -> TVar p)  // Unresolved type vars stay as TVar
+                                let sumType = TSum (typeName, typeArgs)
+                                match expectedType with
+                                | Some expected when expected <> sumType ->
+                                    Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
+                                | _ -> Ok (sumType, Constructor (constrTypeName, variantName, Some payloadExpr')))
 
     | Match (scrutinee, cases) ->
         // Type check the scrutinee first
@@ -802,6 +862,10 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
             // Extract bindings from a pattern based on scrutinee type
             let rec extractPatternBindings (pattern: Pattern) (patternType: Type) : Result<(string * Type) list, TypeError> =
                 match pattern with
+                | PUnit ->
+                    match patternType with
+                    | TUnit -> Ok []
+                    | _ -> Error (GenericError "Unit pattern can only match unit type")
                 | PWildcard -> Ok []
                 | PLiteral _ -> Ok []
                 | PBool _ -> Ok []
@@ -811,11 +875,24 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 | PConstructor (variantName, payloadPattern) ->
                     match Map.tryFind variantName variantLookup with
                     | None -> Error (GenericError $"Unknown variant in pattern: {variantName}")
-                    | Some (_, _, payloadType) ->
+                    | Some (typeName, typeParams, _, payloadType) ->
+                        // Get type arguments from scrutinee type to substitute into payload type
+                        let typeArgs =
+                            match patternType with
+                            | TSum (_, args) -> args
+                            | _ -> []
+                        // Build substitution from type params to type args
+                        let subst =
+                            if List.length typeParams = List.length typeArgs then
+                                List.zip typeParams typeArgs |> Map.ofList
+                            else
+                                Map.empty
                         match payloadPattern, payloadType with
                         | None, _ -> Ok []
                         | Some innerPattern, Some pType ->
-                            extractPatternBindings innerPattern pType
+                            // Apply substitution to get concrete payload type
+                            let concretePayloadType = applySubst subst pType
+                            extractPatternBindings innerPattern concretePayloadType
                         | Some _, None ->
                             Error (GenericError $"Variant {variantName} has no payload but pattern expects one")
                 | PTuple patterns ->
@@ -1064,24 +1141,26 @@ let checkProgram (program: Program) : Result<Type * Program, TypeError> =
     let (Program topLevels) = program
 
     // First pass: collect all type definitions (records)
+    // Note: typeParams are stored but not fully used yet (future: generic type instantiation)
     let typeReg : TypeRegistry =
         topLevels
         |> List.choose (function
-            | TypeDef (RecordDef (name, fields)) -> Some (name, fields)
+            | TypeDef (RecordDef (name, _typeParams, fields)) -> Some (name, fields)
             | _ -> None)
         |> Map.ofList
 
     // Collect sum type definitions and build variant lookup
-    // Maps variant name -> (type name, tag index, payload type)
+    // Maps variant name -> (type name, type params, tag index, payload type)
+    // Type params are included for generic type instantiation at constructor call sites
     let variantLookup : VariantLookup =
         topLevels
         |> List.choose (function
-            | TypeDef (SumTypeDef (typeName, variants)) ->
-                Some (typeName, variants)
+            | TypeDef (SumTypeDef (typeName, typeParams, variants)) ->
+                Some (typeName, typeParams, variants)
             | _ -> None)
-        |> List.collect (fun (typeName, variants) ->
+        |> List.collect (fun (typeName, typeParams, variants) ->
             variants
-            |> List.mapi (fun idx variant -> (variant.Name, (typeName, idx, variant.Payload))))
+            |> List.mapi (fun idx variant -> (variant.Name, (typeName, typeParams, idx, variant.Payload))))
         |> Map.ofList
 
     // Second pass: collect all function signatures
