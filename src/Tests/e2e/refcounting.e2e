@@ -1,48 +1,45 @@
 // Reference Counting Tests
 //
-// Tests for reference counting behavior. Some tests document known bugs.
+// Tests for reference counting behavior with memory reuse via free list.
 //
-// Current status:
-// - RefCountDec is inserted at START of scope instead of END (bug)
-// - Free list logic is disabled (causes segfaults when enabled)
-// - Memory is not actually reclaimed when ref count hits 0
+// Implementation status:
+// - RefCountDec is inserted at END of scope (before Return)
+// - Free list logic is fully implemented
+// - Memory is reclaimed and reused when ref count hits 0
+// - Borrowed values (TupleGet, aliases) don't get their own Dec
 
 // ===================================================================
 // Basic tuple creation and use - should work correctly
 // ===================================================================
 
-// Simple tuple - works because memory is never freed
+// Simple tuple
 let t = (1, 2) in t.0 + t.1 = stdout="3\n"
 
-// Tuple destructuring - works
+// Tuple destructuring
 let (a, b) = (10, 20) in a + b = stdout="30\n"
 
-// Multiple tuples - works
+// Multiple tuples
 let t1 = (1, 2) in let t2 = (3, 4) in t1.0 + t2.1 = stdout="5\n"
 
 // ===================================================================
-// Tests that expose RefCountDec placement bug
-// These pass only because free list is disabled
+// Tests for correct RefCountDec placement
+// Dec should happen at END of scope, not start
 // ===================================================================
 
-// BUG: Dec for 't' happens BEFORE 't' is used in destructuring
-// If memory were freed, this would be a use-after-free
+// Tuple used then destructured - Dec happens after use
 let t = (1, 2) in let (a, b) = t in a + b = stdout="3\n"
 
-// BUG: Dec for 'outer' happens before inner tuple is extracted
-// The intermediate tuple alias should keep the outer alive
+// Tuple aliased - alias is borrowed, original gets Dec
 let outer = (1, 2) in let inner = outer in inner.0 + inner.1 = stdout="3\n"
 
 // ===================================================================
-// Memory reuse tests - would fail when free list is enabled
+// Memory reuse tests - free list reclaims and reuses memory
 // ===================================================================
 
-// Allocate two tuples of same size - should reuse memory when first is freed
-// Currently passes because memory is not reused
+// Allocate two tuples of same size - second reuses freed memory
 let t1 = (1, 2) in let _ = t1.0 in let t2 = (3, 4) in t2.0 + t2.1 = stdout="7\n"
 
-// Allocate many tuples - tests memory pressure
-// Would fail if free list had bugs
+// Allocate many tuples - tests free list under pressure
 let a = (1, 1) in let b = (2, 2) in let c = (3, 3) in let d = (4, 4) in a.0 + b.0 + c.0 + d.0 = stdout="10\n"
 
 // ===================================================================
@@ -62,17 +59,17 @@ def add1(x: int) : int = x + 1 def main() : int = let a = add1(1) in let b = add
 // Records (also heap-allocated)
 // ===================================================================
 
-// Basic record - same issues as tuples
+// Basic record
 type Point = { x: int, y: int } let p = Point { x = 10, y = 20 } in p.x + p.y = stdout="30\n"
 
-// Record with destructuring
+// Record with aliasing
 type Point = { x: int, y: int } let p = Point { x = 5, y = 7 } in let q = p in q.x + q.y = stdout="12\n"
 
 // ===================================================================
 // Nested heap values
 // ===================================================================
 
-// Tuple containing tuples - inner tuples need separate RC
+// Tuple containing tuples - outer tuple owns nested refs
 let outer = ((1, 2), (3, 4)) in let (a, b) = outer in a.0 + b.1 = stdout="5\n"
 
 // Deeply nested tuple access (must use intermediate let bindings)
