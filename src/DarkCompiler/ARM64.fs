@@ -75,6 +75,7 @@ type Instr =
     | STUR of src:Reg * addr:Reg * offset:int16  // Store register (signed offset, -256 to +255): [addr + offset] = src (64-bit)
     | LDUR of dest:Reg * addr:Reg * offset:int16  // Load register (signed offset, -256 to +255): dest = [addr + offset] (64-bit)
     | BL of label:string  // Branch with link: call function at label (sets X30/LR to return address)
+    | BLR of reg:Reg  // Branch with link to register: call function at address in reg (indirect call)
     // Label-based branches (for compiler-generated code with CFG)
     | CBZ of reg:Reg * label:string  // Compare and branch if zero (label will be resolved)
     | CBNZ of reg:Reg * label:string  // Compare and branch if not zero
@@ -92,6 +93,7 @@ type Instr =
     // PC-relative addressing for .rodata access
     | ADRP of dest:Reg * label:string  // Address page: dest = PC-relative page address of label
     | ADD_label of dest:Reg * src:Reg * label:string  // Add label offset: dest = src + page offset of label
+    | ADR of dest:Reg * label:string  // PC-relative address: dest = address of label (±1MB range)
     // Floating-point instructions
     | LDR_fp of dest:FReg * addr:Reg * offset:int16  // Load double from [addr + offset]
     | STR_fp of src:FReg * addr:Reg * offset:int16   // Store double to [addr + offset]

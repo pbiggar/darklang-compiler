@@ -30,6 +30,7 @@ type Atom =
     | StringLiteral of string
     | FloatLiteral of float
     | Var of TempId
+    | FuncRef of string  // Reference to a function by name (for higher-order functions)
 
 /// Binary operations on atoms
 type BinOp =
@@ -60,7 +61,8 @@ type CExpr =
     | Prim of BinOp * Atom * Atom
     | UnaryPrim of UnaryOp * Atom
     | IfValue of cond:Atom * thenValue:Atom * elseValue:Atom  // If-expression that produces a value
-    | Call of funcName:string * args:Atom list  // Function call
+    | Call of funcName:string * args:Atom list  // Function call (direct: BL instruction)
+    | IndirectCall of func:Atom * args:Atom list  // Call through function variable (BLR instruction)
     | TupleAlloc of Atom list                   // Create tuple: (a, b, c)
     | TupleGet of tuple:Atom * index:int        // Get tuple element: t.0
     // String operations (heap-allocating)

@@ -240,21 +240,47 @@ let lex (input: string) : Result<Token list, string> =
 
     input |> Seq.toList |> fun cs -> lexHelper cs []
 
-/// Parse a type annotation with context for type parameters in scope
-let parseTypeWithContext (typeParams: Set<string>) (tokens: Token list) : Result<Type * Token list, string> =
+/// Parse function type parameters: type, type, ...) returning list and remaining tokens
+let rec parseFunctionTypeParams (typeParams: Set<string>) (tokens: Token list) (acc: Type list) : Result<Type list * Token list, string> =
+    match tokens with
+    | TRParen :: rest ->
+        // End of parameter list
+        Ok (List.rev acc, rest)
+    | _ ->
+        // Parse a type
+        parseTypeBase typeParams tokens
+        |> Result.bind (fun (ty, remaining) ->
+            match remaining with
+            | TRParen :: rest -> Ok (List.rev (ty :: acc), rest)
+            | TComma :: rest -> parseFunctionTypeParams typeParams rest (ty :: acc)
+            | _ -> Error "Expected ',' or ')' in function type parameters")
+
+/// Base type parser (no function types - used to parse function type components)
+and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type * Token list, string> =
     match tokens with
     | TIdent "int" :: rest -> Ok (TInt64, rest)
     | TIdent "bool" :: rest -> Ok (TBool, rest)
     | TIdent "string" :: rest -> Ok (TString, rest)
     | TIdent "float" :: rest -> Ok (TFloat64, rest)
     | TIdent typeName :: rest when Set.contains typeName typeParams ->
-        // Type variable in scope (e.g., T in def identity<T>(x: T))
         Ok (TVar typeName, rest)
     | TIdent typeName :: rest when System.Char.IsUpper(typeName.[0]) ->
-        // User-defined type reference (record or sum type - capitalized identifier)
-        // Note: We don't distinguish here; type checking resolves which it is
         Ok (TRecord typeName, rest)
-    | _ -> Error "Expected type annotation (int, bool, string, float, TypeName, or type variable)"
+    | TLParen :: rest ->
+        // Could be a function type: (int, int) -> bool
+        parseFunctionTypeParams typeParams rest []
+        |> Result.bind (fun (paramTypes, afterParams) ->
+            match afterParams with
+            | TArrow :: returnRest ->
+                parseTypeWithContext typeParams returnRest
+                |> Result.map (fun (returnType, remaining) ->
+                    (TFunction (paramTypes, returnType), remaining))
+            | _ -> Error "Expected '->' after function type parameters")
+    | _ -> Error "Expected type annotation (int, bool, string, float, TypeName, type variable, or function type)"
+
+/// Parse a type annotation with context for type parameters in scope
+and parseTypeWithContext (typeParams: Set<string>) (tokens: Token list) : Result<Type * Token list, string> =
+    parseTypeBase typeParams tokens
 
 /// Parse a type annotation (no type parameters in scope)
 let parseType (tokens: Token list) : Result<Type * Token list, string> =

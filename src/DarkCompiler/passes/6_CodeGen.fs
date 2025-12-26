@@ -163,6 +163,9 @@ let operandToReg (operand: LIR.Operand) : Result<ARM64.Reg * ARM64.Instr list, s
     | LIR.FloatRef _ ->
         // Float address loading handled by FLoad instruction
         Error "FloatRef cannot be directly used as register operand"
+    | LIR.FuncAddr funcName ->
+        // Load function address into X9 using ADR instruction
+        Ok (ARM64.X9, [ARM64.ADR (ARM64.X9, funcName)])
 
 /// Generate STP instructions to save callee-saved register pairs
 /// Returns instructions and total bytes pushed
@@ -346,7 +349,10 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     ])
                 | None -> Error $"String index {idx} not found in pool"
             | LIR.FloatRef _ ->
-                Error "Cannot MOV float reference - use FLoad instruction")
+                Error "Cannot MOV float reference - use FLoad instruction"
+            | LIR.FuncAddr funcName ->
+                // Load function address using ADR instruction
+                Ok [ARM64.ADR (destReg, funcName)])
 
     | LIR.Store (offset, src) ->
         // Store register to stack slot
@@ -379,7 +385,9 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 | LIR.StringRef _ ->
                     Error "Cannot use string reference in arithmetic operation"
                 | LIR.FloatRef _ ->
-                    Error "Cannot use float reference in integer arithmetic"))
+                    Error "Cannot use float reference in integer arithmetic"
+                | LIR.FuncAddr _ ->
+                    Error "Cannot use function address in arithmetic operation"))
 
     | LIR.Sub (dest, left, right) ->
         lirRegToARM64Reg dest
@@ -405,7 +413,9 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 | LIR.StringRef _ ->
                     Error "Cannot use string reference in arithmetic operation"
                 | LIR.FloatRef _ ->
-                    Error "Cannot use float reference in integer arithmetic"))
+                    Error "Cannot use float reference in integer arithmetic"
+                | LIR.FuncAddr _ ->
+                    Error "Cannot use function address in arithmetic operation"))
 
 
     | LIR.Mul (dest, left, right) ->
@@ -446,7 +456,9 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             | LIR.StringRef _ ->
                 Error "Cannot compare string references directly"
             | LIR.FloatRef _ ->
-                Error "Cannot compare float references directly - use FCmp")
+                Error "Cannot compare float references directly - use FCmp"
+            | LIR.FuncAddr _ ->
+                Error "Cannot compare function addresses directly")
 
     | LIR.Cset (dest, cond) ->
         lirRegToARM64Reg dest
@@ -496,6 +508,12 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         // Function call: arguments already moved to X0-X7 by preceding MOVs
         // Caller-save is handled by SaveRegs/RestoreRegs instructions
         Ok [ARM64.BL funcName]
+
+    | LIR.IndirectCall (dest, func, args) ->
+        // Indirect call: call through function pointer in register
+        // Use BLR instruction instead of BL
+        lirRegToARM64Reg func
+        |> Result.map (fun funcReg -> [ARM64.BLR funcReg])
 
     | LIR.SaveRegs ->
         // Save caller-saved registers (X1-X10) before call
@@ -905,6 +923,12 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 ARM64.ADD_imm (ARM64.X1, ARM64.X9, 8us)      // X1 = data pointer (X9 + 8)
                 ARM64.MOVZ (ARM64.X0, 1us, 0)                // X0 = stdout fd
             ] @ Runtime.generateWriteSyscall () @ restoreInstrs)
+
+    | LIR.LoadFuncAddr (dest, funcName) ->
+        // Load the address of a function into the destination register using ADR
+        lirRegToARM64Reg dest
+        |> Result.map (fun destReg ->
+            [ARM64.ADR (destReg, funcName)])
 
 /// Convert LIR terminator to ARM64 instructions
 /// epilogueLabel: the label to jump to for function return (handles stack cleanup)

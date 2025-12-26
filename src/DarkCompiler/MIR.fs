@@ -73,6 +73,7 @@ type Operand =
     | FloatRef of int   // Index into float pool
     | StringRef of int  // Index into string pool
     | Register of VReg
+    | FuncAddr of string  // Address of a function (for higher-order functions)
 
 /// Binary operations
 type BinOp =
@@ -102,7 +103,8 @@ type Instr =
     | Mov of dest:VReg * src:Operand
     | BinOp of dest:VReg * op:BinOp * left:Operand * right:Operand
     | UnaryOp of dest:VReg * op:UnaryOp * src:Operand
-    | Call of dest:VReg * funcName:string * args:Operand list
+    | Call of dest:VReg * funcName:string * args:Operand list  // Direct function call (BL instruction)
+    | IndirectCall of dest:VReg * func:Operand * args:Operand list  // Call through function pointer (BLR instruction)
     // Heap operations for tuples and other compound types
     | HeapAlloc of dest:VReg * sizeBytes:int       // Allocate heap memory
     | HeapStore of addr:VReg * offset:int * src:Operand  // Store at heap[addr+offset]

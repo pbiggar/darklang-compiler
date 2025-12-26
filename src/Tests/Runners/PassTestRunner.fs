@@ -37,6 +37,7 @@ let prettyPrintMIROperand = function
     | MIR.FloatRef idx -> $"float[{idx}]"
     | MIR.StringRef idx -> $"str[{idx}]"
     | MIR.Register (MIR.VReg n) -> $"v{n}"
+    | MIR.FuncAddr name -> $"&{name}"
 
 /// Pretty-print MIR operator
 let prettyPrintMIROp = function
@@ -99,6 +100,7 @@ let prettyPrintLIROperand = function
     | LIR.StackSlot n -> $"Stack {n}"
     | LIR.StringRef idx -> $"str[{idx}]"
     | LIR.FloatRef idx -> $"float[{idx}]"
+    | LIR.FuncAddr name -> $"&{name}"
 
 /// Pretty-print LIR instruction
 let prettyPrintLIRInstr (instr: LIR.Instr) : string =
@@ -128,6 +130,9 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
     | LIR.Call (dest, funcName, args) ->
         let argStr = args |> List.map prettyPrintLIROperand |> String.concat ", "
         $"{prettyPrintLIRReg dest} <- Call({funcName}, [{argStr}])"
+    | LIR.IndirectCall (dest, func, args) ->
+        let argStr = args |> List.map prettyPrintLIROperand |> String.concat ", "
+        $"{prettyPrintLIRReg dest} <- IndirectCall({prettyPrintLIRReg func}, [{argStr}])"
     | LIR.PrintInt reg ->
         $"PrintInt({prettyPrintLIRReg reg})"
     | LIR.PrintBool reg ->
@@ -174,6 +179,8 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- StringConcat({prettyPrintLIROperand left}, {prettyPrintLIROperand right})"
     | LIR.PrintHeapString reg ->
         $"PrintHeapString({prettyPrintLIRReg reg})"
+    | LIR.LoadFuncAddr (dest, funcName) ->
+        $"{prettyPrintLIRReg dest} <- LoadFuncAddr({funcName})"
     | LIR.Exit -> "Exit"
 
 /// Pretty-print LIR terminator
@@ -247,6 +254,7 @@ let prettyPrintANFAtom = function
     | ANF.StringLiteral s -> $"\"{s}\""
     | ANF.FloatLiteral f -> string f
     | ANF.Var (ANF.TempId n) -> $"t{n}"
+    | ANF.FuncRef name -> $"&{name}"
 
 /// Pretty-print ANF binary operator
 let prettyPrintANFOp = function
@@ -278,6 +286,9 @@ let prettyPrintANFCExpr = function
     | ANF.Call (funcName, args) ->
         let argStr = args |> List.map prettyPrintANFAtom |> String.concat ", "
         $"{funcName}({argStr})"
+    | ANF.IndirectCall (func, args) ->
+        let argStr = args |> List.map prettyPrintANFAtom |> String.concat ", "
+        $"IndirectCall({prettyPrintANFAtom func}, [{argStr}])"
     | ANF.IfValue (cond, thenAtom, elseAtom) ->
         $"if {prettyPrintANFAtom cond} then {prettyPrintANFAtom thenAtom} else {prettyPrintANFAtom elseAtom}"
     | ANF.TupleAlloc elems ->
@@ -452,6 +463,8 @@ let prettyPrintARM64Instr = function
         $"LDUR({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg addr}, {offset})"
     | ARM64.BL label ->
         $"BL({label})"
+    | ARM64.BLR reg ->
+        $"BLR({prettyPrintARM64Reg reg})"
     | ARM64.RET -> "RET"
     | ARM64.SVC imm -> $"SVC({imm})"
     | ARM64.Label label -> $"Label({label})"
@@ -459,6 +472,8 @@ let prettyPrintARM64Instr = function
         $"ADRP({prettyPrintARM64Reg dest}, {label})"
     | ARM64.ADD_label (dest, src, label) ->
         $"ADD_label({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {label})"
+    | ARM64.ADR (dest, label) ->
+        $"ADR({prettyPrintARM64Reg dest}, {label})"
     // Floating-point instructions
     | ARM64.LDR_fp (dest, addr, offset) ->
         $"LDR_fp({dest}, {prettyPrintARM64Reg addr}, {offset})"

@@ -1,0 +1,27 @@
+// E2E tests for higher-order functions (functions as arguments)
+
+// =====================================================
+// Named Function as Argument
+// =====================================================
+
+// Pass named function as argument and call it
+def apply(f: (int) -> int, x: int): int = f(x) def inc(n: int): int = n + 1 apply(inc, 5) = 6
+
+// Two-argument function passed as argument
+def apply2(f: (int, int) -> int, a: int, b: int): int = f(a, b) def add(x: int, y: int): int = x + y apply2(add, 3, 4) = 7
+
+// Pass named function and use with multiple values
+def twice(f: (int) -> int, x: int): int = f(f(x)) def double(n: int): int = n * 2 twice(double, 5) = 20
+
+// =====================================================
+// Lambda as Argument (no captures)
+// =====================================================
+
+// Pass simple lambda as argument
+def apply(f: (int) -> int, x: int): int = f(x) apply((y: int) => y + 1, 5) = 6
+
+// Lambda with multiplication
+def apply(f: (int) -> int, x: int): int = f(x) apply((y: int) => y * 2, 21) = 42
+
+// Two-argument lambda
+def apply2(f: (int, int) -> int, a: int, b: int): int = f(a, b) apply2((a: int, b: int) => a * b, 6, 7) = 42

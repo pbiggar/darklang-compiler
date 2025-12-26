@@ -78,6 +78,8 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
         max (maxTempIdInAtom cond) (max (maxTempIdInAtom thenVal) (maxTempIdInAtom elseVal))
     | ANF.Call (_, args) ->
         args |> List.map maxTempIdInAtom |> List.fold max -1
+    | ANF.IndirectCall (func, args) ->
+        max (maxTempIdInAtom func) (args |> List.map maxTempIdInAtom |> List.fold max -1)
     | ANF.TupleAlloc atoms ->
         atoms |> List.map maxTempIdInAtom |> List.fold max -1
     | ANF.TupleGet (tuple, _) -> maxTempIdInAtom tuple
@@ -139,6 +141,8 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
         collectStringsFromAtom elseAtom
     | ANF.Call (_, args) ->
         args |> List.collect collectStringsFromAtom
+    | ANF.IndirectCall (func, args) ->
+        collectStringsFromAtom func @ (args |> List.collect collectStringsFromAtom)
     | ANF.TupleAlloc elems ->
         elems |> List.collect collectStringsFromAtom
     | ANF.TupleGet (tupleAtom, _) ->
@@ -162,6 +166,8 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
         collectFloatsFromAtom elseAtom
     | ANF.Call (_, args) ->
         args |> List.collect collectFloatsFromAtom
+    | ANF.IndirectCall (func, args) ->
+        collectFloatsFromAtom func @ (args |> List.collect collectFloatsFromAtom)
     | ANF.TupleAlloc elems ->
         elems |> List.collect collectFloatsFromAtom
     | ANF.TupleGet (tupleAtom, _) ->
@@ -277,6 +283,7 @@ let atomToOperand (builder: CFGBuilder) (atom: ANF.Atom) : Result<MIR.Operand, s
         | Some idx -> Ok (MIR.StringRef idx)
         | None -> Error $"Internal error: string literal not found in pool"
     | ANF.Var tempId -> Ok (MIR.Register (tempToVReg tempId))
+    | ANF.FuncRef funcName -> Ok (MIR.FuncAddr funcName)
 
 /// Convert ANF expression to CFG
 /// Returns: Result of (final value operand, CFG builder with all blocks)
@@ -378,6 +385,14 @@ let rec convertExpr
                     |> sequenceResults
                     |> Result.map (fun argOperands ->
                         [MIR.Call (destReg, funcName, argOperands)])
+                | ANF.IndirectCall (func, args) ->
+                    atomToOperand builder func
+                    |> Result.bind (fun funcOp ->
+                        args
+                        |> List.map (atomToOperand builder)
+                        |> sequenceResults
+                        |> Result.map (fun argOperands ->
+                            [MIR.IndirectCall (destReg, funcOp, argOperands)]))
                 | ANF.TupleAlloc elems ->
                     // Allocate heap space: 8 bytes per element
                     let sizeBytes = List.length elems * 8
@@ -631,6 +646,14 @@ and convertExprToOperand
                     |> sequenceResults
                     |> Result.map (fun argOperands ->
                         [MIR.Call (destReg, funcName, argOperands)])
+                | ANF.IndirectCall (func, args) ->
+                    atomToOperand builder func
+                    |> Result.bind (fun funcOp ->
+                        args
+                        |> List.map (atomToOperand builder)
+                        |> sequenceResults
+                        |> Result.map (fun argOperands ->
+                            [MIR.IndirectCall (destReg, funcOp, argOperands)]))
                 | ANF.TupleAlloc elems ->
                     // Allocate heap space: 8 bytes per element
                     let sizeBytes = List.length elems * 8

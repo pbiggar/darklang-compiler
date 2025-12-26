@@ -91,6 +91,7 @@ type Expr =
     | ListLiteral of Expr list                               // [1, 2, 3]
     | Lambda of parameters:(string * Type) list * body:Expr  // (x: int) => x + 1
     | Apply of func:Expr * args:Expr list                    // Apply function expr: f(x) where f is expression
+    | FuncRef of funcName:string                             // Reference to a function (for passing as value)
 
 /// Function definition
 type FunctionDef = {

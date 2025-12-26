@@ -50,6 +50,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | Atom (StringLiteral _) -> Some AST.TString
     | Atom (FloatLiteral _) -> Some AST.TFloat64
     | Atom (Var tid) -> tryGetType ctx tid
+    | Atom (FuncRef funcName) -> Map.tryFind funcName ctx.FuncReg
     | Prim (op, _, _) ->
         // Binary ops return int or bool depending on op
         match op with
@@ -67,9 +68,14 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         | BoolLiteral _ -> Some AST.TBool
         | StringLiteral _ -> Some AST.TString
         | FloatLiteral _ -> Some AST.TFloat64
+        | FuncRef funcName -> Map.tryFind funcName ctx.FuncReg
     | Call (funcName, _) ->
         // Return type from function registry
         Map.tryFind funcName ctx.FuncReg
+    | IndirectCall (_, _) ->
+        // For indirect calls, we would need to track the function type
+        // For now, return None (no ref counting for indirect call results)
+        None
     | TupleAlloc elems ->
         // Infer element types and create TTuple
         let elemTypes =
@@ -79,7 +85,8 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                 | BoolLiteral _ -> AST.TBool
                 | StringLiteral _ -> AST.TString
                 | FloatLiteral _ -> AST.TFloat64
-                | Var tid -> tryGetType ctx tid |> Option.defaultValue AST.TInt64)
+                | Var tid -> tryGetType ctx tid |> Option.defaultValue AST.TInt64
+                | FuncRef funcName -> Map.tryFind funcName ctx.FuncReg |> Option.defaultValue AST.TInt64)
         Some (AST.TTuple elemTypes)
     | TupleGet (tupleAtom, index) ->
         // Get element type from tuple type

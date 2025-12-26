@@ -230,6 +230,10 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // Resolved in encodeWithLabels with computed label offsets
         []
 
+    | ARM64.ADR (dest, label) ->
+        // Resolved in encodeWithLabels with computed label offsets
+        []
+
     | ARM64.ADD_label (dest, src, label) ->
         // Resolved in encodeWithLabels with computed label offsets
         []
@@ -473,6 +477,13 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // Resolved via two-pass encoding like other label-based branches
         []
 
+    | ARM64.BLR reg ->
+        // BLR: Branch with Link to Register
+        // Encoding: 1101011 0 0 01 11111 0000 0 0 Rn 00000
+        // 0xD63F0000 | (Rn << 5)
+        let rn = encodeReg reg
+        [0xD63F0000u ||| (rn <<< 5)]
+
     | ARM64.RET ->
         // RET: 1101011 0 0 10 11111 0000 0 0 Rn=11110 00000
         // Default RET uses X30 (link register)
@@ -632,7 +643,7 @@ let computeLabelPositions (instructions: ARM64.Instr list) : Map<string, int> =
                 // Record this label's position, don't increment offset (pseudo-instruction)
                 loop rest offset (Map.add name offset labelMap)
             | ARM64.CBZ _ | ARM64.CBNZ _ | ARM64.B_label _ | ARM64.BL _
-            | ARM64.ADRP _ | ARM64.ADD_label _ ->
+            | ARM64.ADRP _ | ARM64.ADR _ | ARM64.ADD_label _ ->
                 // These will be resolved in pass 2, each is 4 bytes
                 loop rest (offset + 4) labelMap
             | _ ->
@@ -726,6 +737,26 @@ let encodeWithLabels (instr: ARM64.Instr) (currentOffset: int) (labelMap: Map<st
             let immlo = ((uint32 pageOffset) &&& 0b11u) <<< 29
             let immhi = ((uint32 pageOffset >>> 2) &&& 0x7FFFFu) <<< 5
             let op = 1u <<< 31  // ADRP (bit 31=1)
+            let opcode = 0b10000u <<< 24
+            [op ||| immlo ||| opcode ||| immhi ||| rd]
+        | None ->
+            // Label not found - return placeholder (will fail)
+            []
+
+    | ARM64.ADR (dest, label) ->
+        // ADR: form PC-relative address
+        // Encoding: 0 immlo(2) 10000 immhi(19) Rd(5)
+        // immlo is bits 0-1, immhi is bits 2-20 of the 21-bit signed offset
+        match Map.tryFind label labelMap with
+        | Some targetOffset ->
+            // Compute byte offset from current PC to label
+            let byteOffset = targetOffset - currentOffset
+            // ADR has a ±1MB range (21-bit signed immediate)
+            // Encode
+            let rd = encodeReg dest
+            let immlo = ((uint32 byteOffset) &&& 0b11u) <<< 29
+            let immhi = ((uint32 byteOffset >>> 2) &&& 0x7FFFFu) <<< 5
+            let op = 0u <<< 31  // ADR (bit 31=0, vs ADRP which has bit 31=1)
             let opcode = 0b10000u <<< 24
             [op ||| immlo ||| opcode ||| immhi ||| rd]
         | None ->

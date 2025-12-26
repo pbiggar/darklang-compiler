@@ -99,8 +99,8 @@ let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
 /// Apply a substitution to an expression, replacing type variables in type annotations
 let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
     match expr with
-    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ ->
-        expr  // No types to substitute in literals and variables
+    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ ->
+        expr  // No types to substitute in literals, variables, and function references
     | AST.BinOp (op, left, right) ->
         AST.BinOp (op, applySubstToExpr subst left, applySubstToExpr subst right)
     | AST.UnaryOp (op, inner) ->
@@ -137,16 +137,16 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
 
 /// Specialize a generic function definition with specific type arguments
 let specializeFunction (funcDef: AST.FunctionDef) (typeArgs: AST.Type list) : AST.FunctionDef =
-    // Build substitution from type params to type args
+    // Build substitution from type parameters to type args
     let subst = List.zip funcDef.TypeParams typeArgs |> Map.ofList
     // Generate specialized name
     let specializedName = specName funcDef.Name typeArgs
-    // Apply substitution to params, return type, and body
+    // Apply substitution to parameters, return type, and body
     let specializedParams = funcDef.Params |> List.map (fun (name, ty) -> (name, applySubstToType subst ty))
     let specializedReturnType = applySubstToType subst funcDef.ReturnType
     let specializedBody = applySubstToExpr subst funcDef.Body
     { Name = specializedName
-      TypeParams = []  // Specialized function has no type params
+      TypeParams = []  // Specialized function has no type parameters
       Params = specializedParams
       ReturnType = specializedReturnType
       Body = specializedBody }
@@ -154,7 +154,7 @@ let specializeFunction (funcDef: AST.FunctionDef) (typeArgs: AST.Type list) : AS
 /// Collect all TypeApp call sites from an expression
 let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
     match expr with
-    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ ->
+    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ ->
         Set.empty
     | AST.BinOp (_, left, right) ->
         Set.union (collectTypeApps left) (collectTypeApps right)
@@ -200,7 +200,7 @@ let collectTypeAppsFromFunc (funcDef: AST.FunctionDef) : Set<SpecKey> =
 /// Replace TypeApp with Call using specialized name in an expression
 let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
     match expr with
-    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ ->
+    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ ->
         expr
     | AST.BinOp (op, left, right) ->
         AST.BinOp (op, replaceTypeApps left, replaceTypeApps right)
@@ -282,6 +282,8 @@ let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
         else varOccursInExpr name body
     | AST.Apply (func, args) ->
         varOccursInExpr name func || List.exists (varOccursInExpr name) args
+    | AST.FuncRef _ ->
+        false  // Function references don't contain variable references
 
 /// Inline lambdas at Apply sites
 /// lambdaEnv: maps variable names to their lambda expressions
@@ -349,6 +351,9 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
         | _ ->
             // Non-variable function (could be lambda or other expr)
             AST.Apply (inlineLambdas func lambdaEnv, args')
+    | AST.FuncRef _ ->
+        // Function references don't need lambda inlining
+        expr
 
 /// Inline lambdas in a function definition
 let inlineLambdasInFunc (funcDef: AST.FunctionDef) : AST.FunctionDef =
@@ -364,6 +369,219 @@ let inlineLambdasInProgram (program: AST.Program) : AST.Program =
             | AST.Expression e -> AST.Expression (inlineLambdas e Map.empty)
             | AST.TypeDef t -> AST.TypeDef t)
     AST.Program topLevels'
+
+// ============================================================================
+// Lambda Lifting: Convert non-capturing lambdas to top-level functions
+// ============================================================================
+
+/// State for lambda lifting - tracks generated functions and counter
+type LiftState = {
+    Counter: int
+    LiftedFunctions: AST.FunctionDef list
+}
+
+/// Collect free variables in an expression (variables not bound by let or lambda parameters)
+let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
+    match expr with
+    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ -> Set.empty
+    | AST.Var name -> if Set.contains name bound then Set.empty else Set.singleton name
+    | AST.BinOp (_, left, right) -> Set.union (freeVars left bound) (freeVars right bound)
+    | AST.UnaryOp (_, inner) -> freeVars inner bound
+    | AST.Let (name, value, body) ->
+        let valueVars = freeVars value bound
+        let bodyVars = freeVars body (Set.add name bound)
+        Set.union valueVars bodyVars
+    | AST.If (cond, thenBr, elseBr) ->
+        Set.union (freeVars cond bound) (Set.union (freeVars thenBr bound) (freeVars elseBr bound))
+    | AST.Call (_, args) | AST.TypeApp (_, _, args) ->
+        args |> List.map (fun a -> freeVars a bound) |> List.fold Set.union Set.empty
+    | AST.TupleLiteral elems | AST.ListLiteral elems ->
+        elems |> List.map (fun e -> freeVars e bound) |> List.fold Set.union Set.empty
+    | AST.TupleAccess (tuple, _) -> freeVars tuple bound
+    | AST.RecordLiteral (_, fields) ->
+        fields |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
+    | AST.RecordAccess (record, _) -> freeVars record bound
+    | AST.Constructor (_, _, payload) ->
+        payload |> Option.map (fun e -> freeVars e bound) |> Option.defaultValue Set.empty
+    | AST.Match (scrutinee, cases) ->
+        let scrutineeVars = freeVars scrutinee bound
+        let caseVars = cases |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
+        Set.union scrutineeVars caseVars
+    | AST.Lambda (parameters, body) ->
+        let paramNames = parameters |> List.map fst |> Set.ofList
+        freeVars body (Set.union bound paramNames)
+    | AST.Apply (func, args) ->
+        let funcVars = freeVars func bound
+        let argVars = args |> List.map (fun a -> freeVars a bound) |> List.fold Set.union Set.empty
+        Set.union funcVars argVars
+    | AST.FuncRef _ -> Set.empty
+
+/// Lift lambdas in an expression, returning (transformed expr, new state)
+let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr * LiftState, string> =
+    match expr with
+    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ ->
+        Ok (expr, state)
+    | AST.BinOp (op, left, right) ->
+        liftLambdasInExpr left state
+        |> Result.bind (fun (left', state1) ->
+            liftLambdasInExpr right state1
+            |> Result.map (fun (right', state2) -> (AST.BinOp (op, left', right'), state2)))
+    | AST.UnaryOp (op, inner) ->
+        liftLambdasInExpr inner state
+        |> Result.map (fun (inner', state') -> (AST.UnaryOp (op, inner'), state'))
+    | AST.Let (name, value, body) ->
+        liftLambdasInExpr value state
+        |> Result.bind (fun (value', state1) ->
+            liftLambdasInExpr body state1
+            |> Result.map (fun (body', state2) -> (AST.Let (name, value', body'), state2)))
+    | AST.If (cond, thenBr, elseBr) ->
+        liftLambdasInExpr cond state
+        |> Result.bind (fun (cond', state1) ->
+            liftLambdasInExpr thenBr state1
+            |> Result.bind (fun (thenBr', state2) ->
+                liftLambdasInExpr elseBr state2
+                |> Result.map (fun (elseBr', state3) -> (AST.If (cond', thenBr', elseBr'), state3))))
+    | AST.Call (funcName, args) ->
+        // Process args, lifting any lambdas
+        liftLambdasInArgs args state
+        |> Result.map (fun (args', state') -> (AST.Call (funcName, args'), state'))
+    | AST.TypeApp (funcName, typeArgs, args) ->
+        liftLambdasInArgs args state
+        |> Result.map (fun (args', state') -> (AST.TypeApp (funcName, typeArgs, args'), state'))
+    | AST.TupleLiteral elems ->
+        liftLambdasInList elems state
+        |> Result.map (fun (elems', state') -> (AST.TupleLiteral elems', state'))
+    | AST.ListLiteral elems ->
+        liftLambdasInList elems state
+        |> Result.map (fun (elems', state') -> (AST.ListLiteral elems', state'))
+    | AST.TupleAccess (tuple, index) ->
+        liftLambdasInExpr tuple state
+        |> Result.map (fun (tuple', state') -> (AST.TupleAccess (tuple', index), state'))
+    | AST.RecordLiteral (typeName, fields) ->
+        liftLambdasInFields fields state
+        |> Result.map (fun (fields', state') -> (AST.RecordLiteral (typeName, fields'), state'))
+    | AST.RecordAccess (record, fieldName) ->
+        liftLambdasInExpr record state
+        |> Result.map (fun (record', state') -> (AST.RecordAccess (record', fieldName), state'))
+    | AST.Constructor (typeName, variantName, payload) ->
+        match payload with
+        | None -> Ok (expr, state)
+        | Some p ->
+            liftLambdasInExpr p state
+            |> Result.map (fun (p', state') -> (AST.Constructor (typeName, variantName, Some p'), state'))
+    | AST.Match (scrutinee, cases) ->
+        liftLambdasInExpr scrutinee state
+        |> Result.bind (fun (scrutinee', state1) ->
+            liftLambdasInCases cases state1
+            |> Result.map (fun (cases', state2) -> (AST.Match (scrutinee', cases'), state2)))
+    | AST.Lambda (parameters, body) ->
+        // Lambda not in argument position - just recurse into body
+        liftLambdasInExpr body state
+        |> Result.map (fun (body', state') -> (AST.Lambda (parameters, body'), state'))
+    | AST.Apply (func, args) ->
+        liftLambdasInExpr func state
+        |> Result.bind (fun (func', state1) ->
+            liftLambdasInArgs args state1
+            |> Result.map (fun (args', state2) -> (AST.Apply (func', args'), state2)))
+
+/// Lift lambdas in function arguments, converting lambdas to FuncRefs
+and liftLambdasInArgs (args: AST.Expr list) (state: LiftState) : Result<AST.Expr list * LiftState, string> =
+    let rec loop (remaining: AST.Expr list) (state: LiftState) (acc: AST.Expr list) =
+        match remaining with
+        | [] -> Ok (List.rev acc, state)
+        | arg :: rest ->
+            match arg with
+            | AST.Lambda (parameters, body) ->
+                // Check for free variables (captures)
+                let paramNames = parameters |> List.map fst |> Set.ofList
+                let freeVarsInBody = freeVars body paramNames
+                if not (Set.isEmpty freeVarsInBody) then
+                    let varList = freeVarsInBody |> Set.toList |> String.concat ", "
+                    Error $"Lambda captures variables [{varList}]. Closures are not yet supported."
+                else
+                    // Lift the lambda: create a new top-level function
+                    let funcName = $"__lambda_{state.Counter}"
+                    // Infer return type from body (simplified: use TInt64 for now, or could add type inference)
+                    // For now, we'll leave ReturnType as TInt64 and let type checking catch issues
+                    let funcDef : AST.FunctionDef = {
+                        Name = funcName
+                        TypeParams = []
+                        Params = parameters
+                        ReturnType = AST.TInt64  // Simplified: assume int return for now
+                        Body = body
+                    }
+                    let state' = {
+                        Counter = state.Counter + 1
+                        LiftedFunctions = funcDef :: state.LiftedFunctions
+                    }
+                    // Replace lambda with FuncRef
+                    loop rest state' (AST.FuncRef funcName :: acc)
+            | other ->
+                liftLambdasInExpr other state
+                |> Result.bind (fun (other', state') -> loop rest state' (other' :: acc))
+    loop args state []
+
+/// Helper to lift lambdas in a list of expressions
+and liftLambdasInList (exprs: AST.Expr list) (state: LiftState) : Result<AST.Expr list * LiftState, string> =
+    let rec loop (remaining: AST.Expr list) (state: LiftState) (acc: AST.Expr list) =
+        match remaining with
+        | [] -> Ok (List.rev acc, state)
+        | e :: rest ->
+            liftLambdasInExpr e state
+            |> Result.bind (fun (e', state') -> loop rest state' (e' :: acc))
+    loop exprs state []
+
+/// Helper to lift lambdas in record fields
+and liftLambdasInFields (fields: (string * AST.Expr) list) (state: LiftState) : Result<(string * AST.Expr) list * LiftState, string> =
+    let rec loop (remaining: (string * AST.Expr) list) (state: LiftState) (acc: (string * AST.Expr) list) =
+        match remaining with
+        | [] -> Ok (List.rev acc, state)
+        | (name, e) :: rest ->
+            liftLambdasInExpr e state
+            |> Result.bind (fun (e', state') -> loop rest state' ((name, e') :: acc))
+    loop fields state []
+
+/// Helper to lift lambdas in match cases
+and liftLambdasInCases (cases: (AST.Pattern * AST.Expr) list) (state: LiftState) : Result<(AST.Pattern * AST.Expr) list * LiftState, string> =
+    let rec loop (remaining: (AST.Pattern * AST.Expr) list) (state: LiftState) (acc: (AST.Pattern * AST.Expr) list) =
+        match remaining with
+        | [] -> Ok (List.rev acc, state)
+        | (pat, e) :: rest ->
+            liftLambdasInExpr e state
+            |> Result.bind (fun (e', state') -> loop rest state' ((pat, e') :: acc))
+    loop cases state []
+
+/// Lift lambdas in a function definition
+let liftLambdasInFunc (funcDef: AST.FunctionDef) (state: LiftState) : Result<AST.FunctionDef * LiftState, string> =
+    liftLambdasInExpr funcDef.Body state
+    |> Result.map (fun (body', state') -> ({ funcDef with Body = body' }, state'))
+
+/// Lift lambdas in a program, generating new top-level functions
+let liftLambdasInProgram (program: AST.Program) : Result<AST.Program, string> =
+    let (AST.Program topLevels) = program
+    let initialState = { Counter = 0; LiftedFunctions = [] }
+
+    let rec processTopLevels (remaining: AST.TopLevel list) (state: LiftState) (acc: AST.TopLevel list) : Result<AST.TopLevel list * LiftState, string> =
+        match remaining with
+        | [] -> Ok (List.rev acc, state)
+        | tl :: rest ->
+            match tl with
+            | AST.FunctionDef f ->
+                liftLambdasInFunc f state
+                |> Result.bind (fun (f', state') ->
+                    processTopLevels rest state' (AST.FunctionDef f' :: acc))
+            | AST.Expression e ->
+                liftLambdasInExpr e state
+                |> Result.bind (fun (e', state') ->
+                    processTopLevels rest state' (AST.Expression e' :: acc))
+            | AST.TypeDef t ->
+                processTopLevels rest state (AST.TypeDef t :: acc)
+
+    processTopLevels topLevels initialState []
+    |> Result.map (fun (topLevels', state') ->
+        // Add lifted functions to the program
+        let liftedFuncDefs = state'.LiftedFunctions |> List.rev |> List.map AST.FunctionDef
+        AST.Program (liftedFuncDefs @ topLevels'))
 
 /// Monomorphize a program: collect all specializations, generate specialized functions, replace TypeApps
 let monomorphize (program: AST.Program) : AST.Program =
@@ -555,6 +773,11 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
             match funcType with
             | AST.TFunction (_, returnType) -> Ok returnType
             | _ -> Error "Apply requires a function type")
+    | AST.FuncRef name ->
+        // Function reference has the function's type
+        match Map.tryFind name funcReg with
+        | Some returnType -> Ok returnType
+        | None -> Error $"Cannot infer type: undefined function '{name}'"
 
 /// Convert AST expression to ANF
 /// env maps user variable names to ANF TempIds and their types
@@ -583,7 +806,16 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         // Variable reference: look up in environment
         match Map.tryFind name env with
         | Some (tempId, _) -> Ok (ANF.Return (ANF.Var tempId), varGen)
-        | None -> Error $"Undefined variable: {name}"
+        | None ->
+            // Check if it's a function reference (function name used as value)
+            if Map.containsKey name funcReg then
+                Ok (ANF.Return (ANF.FuncRef name), varGen)
+            else
+                Error $"Undefined variable: {name}"
+
+    | AST.FuncRef name ->
+        // Explicit function reference
+        Ok (ANF.Return (ANF.FuncRef name), varGen)
 
     | AST.Let (name, value, body) ->
         // Let binding: convert value to atom, allocate fresh temp, convert body with extended env
@@ -669,14 +901,36 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     convertArgs rest vg' (argAtom :: accAtoms) (accBindings @ argBindings))
 
         convertArgs args varGen [] []
-        |> Result.map (fun (argAtoms, argBindings, varGen1) ->
+        |> Result.bind (fun (argAtoms, argBindings, varGen1) ->
             // Bind call result to fresh variable
             let (resultVar, varGen2) = ANF.freshVar varGen1
-            let callExpr = ANF.Call (funcName, argAtoms)
-            let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
-            let exprWithBindings = wrapBindings argBindings finalExpr
-
-            (exprWithBindings, varGen2))
+            // Check if funcName is a variable (indirect call) or a defined function (direct call)
+            match Map.tryFind funcName env with
+            | Some (tempId, AST.TFunction (_, _)) ->
+                // Variable with function type - use indirect call
+                let callExpr = ANF.IndirectCall (ANF.Var tempId, argAtoms)
+                let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
+                let exprWithBindings = wrapBindings argBindings finalExpr
+                Ok (exprWithBindings, varGen2)
+            | Some (_, varType) ->
+                // Variable exists but is not a function type
+                Error $"Cannot call '{funcName}' - it has type {varType}, not a function type"
+            | None ->
+                // Not a variable - check if it's a defined function
+                match Map.tryFind funcName funcReg with
+                | Some _ ->
+                    // Direct call to defined function
+                    let callExpr = ANF.Call (funcName, argAtoms)
+                    let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
+                    let exprWithBindings = wrapBindings argBindings finalExpr
+                    Ok (exprWithBindings, varGen2)
+                | None ->
+                    // Unknown function - could be error or forward reference
+                    // For now, assume it's a valid function (will fail at link time if not)
+                    let callExpr = ANF.Call (funcName, argAtoms)
+                    let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
+                    let exprWithBindings = wrapBindings argBindings finalExpr
+                    Ok (exprWithBindings, varGen2))
 
     | AST.TypeApp (_funcName, _typeArgs, _args) ->
         // Generic function call - not yet implemented
@@ -1209,7 +1463,16 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         // Variable reference: look up in environment
         match Map.tryFind name env with
         | Some (tempId, _) -> Ok (ANF.Var tempId, [], varGen)
-        | None -> Error $"Undefined variable: {name}"
+        | None ->
+            // Check if it's a function reference (function name used as value)
+            if Map.containsKey name funcReg then
+                Ok (ANF.FuncRef name, [], varGen)
+            else
+                Error $"Undefined variable: {name}"
+
+    | AST.FuncRef name ->
+        // Explicit function reference
+        Ok (ANF.FuncRef name, [], varGen)
 
     | AST.Let (name, value, body) ->
         // Let binding in atom position: need to evaluate and return the body as an atom
@@ -1291,13 +1554,24 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                     convertArgs rest vg' (argAtom :: accAtoms) (accBindings @ argBindings))
 
         convertArgs args varGen [] []
-        |> Result.map (fun (argAtoms, argBindings, varGen1) ->
+        |> Result.bind (fun (argAtoms, argBindings, varGen1) ->
             // Create a temporary for the call result
             let (tempVar, varGen2) = ANF.freshVar varGen1
-            let callCExpr = ANF.Call (funcName, argAtoms)
-            // Return temp as atom with all bindings
-            let allBindings = argBindings @ [(tempVar, callCExpr)]
-            (ANF.Var tempVar, allBindings, varGen2))
+            // Check if funcName is a variable (indirect call) or a defined function (direct call)
+            match Map.tryFind funcName env with
+            | Some (tempId, AST.TFunction (_, _)) ->
+                // Variable with function type - use indirect call
+                let callCExpr = ANF.IndirectCall (ANF.Var tempId, argAtoms)
+                let allBindings = argBindings @ [(tempVar, callCExpr)]
+                Ok (ANF.Var tempVar, allBindings, varGen2)
+            | Some (_, varType) ->
+                // Variable exists but is not a function type
+                Error $"Cannot call '{funcName}' - it has type {varType}, not a function type"
+            | None ->
+                // Not a variable - assume it's a defined function (direct call)
+                let callCExpr = ANF.Call (funcName, argAtoms)
+                let allBindings = argBindings @ [(tempVar, callCExpr)]
+                Ok (ANF.Var tempVar, allBindings, varGen2))
 
     | AST.TypeApp (_, _, _) ->
         // Placeholder: Generic instantiation not yet implemented
@@ -1505,7 +1779,10 @@ let convertProgramWithTypes (program: AST.Program) : Result<ConversionResult, st
     let monomorphizedProgram = monomorphize program
     // Then, inline lambdas at their call sites for first-class function support
     let inlinedProgram = inlineLambdasInProgram monomorphizedProgram
-    let (AST.Program topLevels) = inlinedProgram
+    // Then, lift non-capturing lambdas to top-level functions
+    liftLambdasInProgram inlinedProgram
+    |> Result.bind (fun liftedProgram ->
+    let (AST.Program topLevels) = liftedProgram
     let varGen = ANF.VarGen 0
 
     // Build type registry from type definitions
@@ -1574,7 +1851,7 @@ let convertProgramWithTypes (program: AST.Program) : Result<ConversionResult, st
         | [] ->
             Error "Program must have a main expression"
         | _ ->
-            Error "Multiple top-level expressions not allowed")
+            Error "Multiple top-level expressions not allowed"))
 
 /// Convert a program to ANF
 let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
@@ -1582,7 +1859,10 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
     let monomorphizedProgram = monomorphize program
     // Then, inline lambdas at their call sites for first-class function support
     let inlinedProgram = inlineLambdasInProgram monomorphizedProgram
-    let (AST.Program topLevels) = inlinedProgram
+    // Then, lift non-capturing lambdas to top-level functions
+    liftLambdasInProgram inlinedProgram
+    |> Result.bind (fun liftedProgram ->
+    let (AST.Program topLevels) = liftedProgram
     let varGen = ANF.VarGen 0
 
     // Build type registry from type definitions
@@ -1642,4 +1922,4 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
         | [] ->
             Error "Program must have a main expression"
         | _ ->
-            Error "Multiple top-level expressions not allowed")
+            Error "Multiple top-level expressions not allowed"))

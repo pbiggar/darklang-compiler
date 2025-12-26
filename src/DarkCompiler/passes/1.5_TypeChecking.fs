@@ -164,6 +164,9 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
         let funcFree = collectFreeVars func bound
         let argsFree = args |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
         Set.union funcFree argsFree
+    | FuncRef _ ->
+        // Function references don't contribute free variables
+        Set.empty
 
 /// Collect variable names bound by a pattern
 and collectPatternBindings (pattern: Pattern) : Set<string> =
@@ -932,6 +935,17 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         | _ -> Ok (returnType, Apply (func', args')))
             | _ ->
                 Error (GenericError $"Cannot apply non-function type: {typeToString funcType}"))
+
+    | FuncRef funcName ->
+        // Function reference: look up function signature
+        match Map.tryFind funcName env with
+        | Some funcType ->
+            match expectedType with
+            | Some expected when expected <> funcType ->
+                Error (TypeMismatch (expected, funcType, $"function reference {funcName}"))
+            | _ -> Ok (funcType, expr)
+        | None ->
+            Error (UndefinedVariable funcName)
 
 /// Type-check a function definition
 /// Returns the transformed function body (with Call -> TypeApp transformations)

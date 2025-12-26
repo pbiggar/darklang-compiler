@@ -47,6 +47,7 @@ type Operand =
     | StackSlot of int       // Stack offset (for spills)
     | StringRef of int       // Reference to string in pool (by index)
     | FloatRef of int        // Reference to float in pool (by index)
+    | FuncAddr of string     // Address of a function (for higher-order functions)
 
 /// Comparison conditions (for CSET)
 type Condition =
@@ -70,7 +71,8 @@ type Instr =
     | And of dest:Reg * left:Reg * right:Reg    // Bitwise AND (for boolean &&)
     | Orr of dest:Reg * left:Reg * right:Reg    // Bitwise OR (for boolean ||)
     | Mvn of dest:Reg * src:Reg                 // Bitwise NOT
-    | Call of dest:Reg * funcName:string * args:Operand list  // Function call
+    | Call of dest:Reg * funcName:string * args:Operand list  // Direct function call (BL instruction)
+    | IndirectCall of dest:Reg * func:Reg * args:Operand list  // Call through function pointer (BLR instruction)
     | SaveRegs                                   // Save caller-saved registers (X1-X10) before call
     | RestoreRegs                                // Restore caller-saved registers (X1-X10) after call
     | PrintInt of Reg                           // Print integer register to stdout (no exit)
@@ -97,6 +99,8 @@ type Instr =
     // String operations
     | StringConcat of dest:Reg * left:Operand * right:Operand  // Concatenate strings on heap
     | PrintHeapString of Reg                       // Print heap string [len:8][data:N]
+    // Higher-order function support
+    | LoadFuncAddr of dest:Reg * funcName:string   // Load address of a function (ADR instruction)
 
 /// Basic block label
 type Label = string

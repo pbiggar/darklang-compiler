@@ -90,6 +90,10 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         regToVReg src |> Option.toList |> Set.ofList
     | LIR.Call (_, _, args) ->
         args |> List.choose operandToVReg |> Set.ofList
+    | LIR.IndirectCall (_, func, args) ->
+        let funcVReg = regToVReg func |> Option.toList
+        let argsVRegs = args |> List.choose operandToVReg
+        Set.ofList (funcVReg @ argsVRegs)
     | LIR.PrintInt reg | LIR.PrintBool reg ->
         regToVReg reg |> Option.toList |> Set.ofList
     | LIR.HeapAlloc (_, _) -> Set.empty
@@ -126,6 +130,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.And (dest, _, _) | LIR.Orr (dest, _, _) -> regToVReg dest
     | LIR.Mvn (dest, _) -> regToVReg dest
     | LIR.Call (dest, _, _) -> regToVReg dest
+    | LIR.IndirectCall (dest, _, _) -> regToVReg dest
     | LIR.HeapAlloc (dest, _) -> regToVReg dest
     | LIR.HeapLoad (dest, _, _) -> regToVReg dest
     | LIR.StringConcat (dest, _, _) -> regToVReg dest
@@ -425,6 +430,7 @@ let applyToOperand (mapping: Map<int, Allocation>) (operand: LIR.Operand) (tempR
                 let loadInstr = LIR.Mov (LIR.Physical tempReg, LIR.StackSlot offset)
                 (LIR.Reg (LIR.Physical tempReg), [loadInstr])
             | None -> (LIR.Reg (LIR.Physical tempReg), [])
+    | LIR.FuncAddr name -> (LIR.FuncAddr name, [])
 
 /// Helper to load a spilled register
 let loadSpilled (mapping: Map<int, Allocation>) (reg: LIR.Reg) (tempReg: LIR.PhysReg)
@@ -562,6 +568,23 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
             | _ -> []
         argLoads @ [callInstr] @ storeInstrs
 
+    | LIR.IndirectCall (dest, func, args) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (funcReg, funcLoads) = loadSpilled mapping func LIR.X14
+        let allocatedArgs =
+            args |> List.mapi (fun i arg ->
+                let tempReg = if i = 0 then LIR.X12 else LIR.X13
+                applyToOperand mapping arg tempReg
+            )
+        let argLoads = allocatedArgs |> List.collect snd
+        let argOps = allocatedArgs |> List.map fst
+        let callInstr = LIR.IndirectCall (destReg, funcReg, argOps)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        funcLoads @ argLoads @ [callInstr] @ storeInstrs
+
     | LIR.SaveRegs -> [LIR.SaveRegs]
     | LIR.RestoreRegs -> [LIR.RestoreRegs]
 
@@ -633,6 +656,15 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
     | LIR.PrintHeapString reg ->
         let (regPhys, regLoads) = loadSpilled mapping reg LIR.X12
         regLoads @ [LIR.PrintHeapString regPhys]
+
+    | LIR.LoadFuncAddr (dest, funcName) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let loadInstr = LIR.LoadFuncAddr (destReg, funcName)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        [loadInstr] @ storeInstrs
 
     | LIR.Exit -> [LIR.Exit]
 

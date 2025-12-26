@@ -71,11 +71,13 @@ let formatMismatches (mismatches: (int * Instr * uint32 * uint32) list) : string
                     | STUR (src, addr, offset) -> $"STUR({src}, {addr}, {offset})"
                     | LDUR (dest, addr, offset) -> $"LDUR({dest}, {addr}, {offset})"
                     | BL label -> $"BL({label})"
+                    | BLR reg -> $"BLR({reg})"
                     | RET -> "RET"
                     | SVC imm -> $"SVC({imm})"
                     | Label label -> $"Label({label})"
                     | ADRP (dest, label) -> $"ADRP({dest}, {label})"
                     | ADD_label (dest, src, label) -> $"ADD_label({dest}, {src}, {label})"
+                    | ADR (dest, label) -> $"ADR({dest}, {label})"
                     // Floating-point instructions
                     | LDR_fp (dest, addr, offset) -> $"LDR_fp({dest}, {addr}, {offset})"
                     | STR_fp (src, addr, offset) -> $"STR_fp({src}, {addr}, {offset})"

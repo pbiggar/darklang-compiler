@@ -25,6 +25,7 @@ let convertOperand (operand: MIR.Operand) : LIR.Operand =
     | MIR.FloatRef idx -> LIR.FloatImm 0.0  // Placeholder - actual float loaded from pool later
     | MIR.StringRef idx -> LIR.StringRef idx
     | MIR.Register vreg -> LIR.Reg (vregToLIRReg vreg)
+    | MIR.FuncAddr name -> LIR.FuncAddr name  // Function address (for higher-order functions)
 
 /// Ensure operand is in a register (may need to load immediate)
 let ensureInRegister (operand: MIR.Operand) (tempReg: LIR.Reg) : Result<LIR.Instr list * LIR.Reg, string> =
@@ -43,6 +44,9 @@ let ensureInRegister (operand: MIR.Operand) (tempReg: LIR.Reg) : Result<LIR.Inst
         Error "Internal error: Cannot use string literal as arithmetic operand"
     | MIR.Register vreg ->
         Ok ([], vregToLIRReg vreg)
+    | MIR.FuncAddr name ->
+        // Load function address into register using ADR instruction
+        Ok ([LIR.LoadFuncAddr (tempReg, name)], tempReg)
 
 /// Convert MIR instruction to LIR instructions
 let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Instr list, string> =
@@ -212,6 +216,50 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
             | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
 
         Ok (saveInstrs @ moveInstrs @ [callInstr] @ restoreInstrs @ moveResult)
+
+    | MIR.IndirectCall (dest, func, args) ->
+        // Indirect call through function pointer (BLR instruction)
+        // Similar to direct call but uses function address in register
+        let lirDest = vregToLIRReg dest
+        let argRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
+
+        // Save caller-saved registers
+        let saveInstrs = [LIR.SaveRegs]
+
+        // IMPORTANT: Load function address into X9 FIRST, before setting up arguments.
+        // The function pointer might be in X0-X7 which will be overwritten by argument moves.
+        let funcOp = convertOperand func
+        let loadFuncInstrs =
+            match funcOp with
+            | LIR.Reg r ->
+                // Always copy to X9 in case the source register is overwritten by arg moves
+                [LIR.Mov (LIR.Physical LIR.X9, LIR.Reg r)]
+            | LIR.FuncAddr name ->
+                [LIR.LoadFuncAddr (LIR.Physical LIR.X9, name)]
+            | other ->
+                // Load operand into X9
+                [LIR.Mov (LIR.Physical LIR.X9, other)]
+
+        // Move arguments to X0-X7 (after function pointer is safely in X9)
+        let moveInstrs =
+            List.zip args (List.take (List.length args) argRegs)
+            |> List.map (fun (arg, reg) ->
+                let lirArg = convertOperand arg
+                LIR.Mov (LIR.Physical reg, lirArg))
+
+        // Call through X9 (always, since we always copy to X9 now)
+        let callInstr = LIR.IndirectCall (lirDest, LIR.Physical LIR.X9, List.map convertOperand args)
+
+        // Restore caller-saved registers
+        let restoreInstrs = [LIR.RestoreRegs]
+
+        // Move return value from X0 to destination
+        let moveResult =
+            match lirDest with
+            | LIR.Physical LIR.X0 -> []
+            | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
+
+        Ok (saveInstrs @ loadFuncInstrs @ moveInstrs @ [callInstr] @ restoreInstrs @ moveResult)
 
     | MIR.HeapAlloc (dest, sizeBytes) ->
         let lirDest = vregToLIRReg dest
@@ -439,6 +487,8 @@ let private checkCallArgLimits (mirFuncs: MIR.Function list) : Result<unit, stri
             match instr with
             | MIR.Call (_, funcName, args) when List.length args > 8 ->
                 Some $"Call to '{funcName}' has {List.length args} arguments, but only 8 are supported (ARM64 calling convention limit)"
+            | MIR.IndirectCall (_, _, args) when List.length args > 8 ->
+                Some $"Indirect call has {List.length args} arguments, but only 8 are supported (ARM64 calling convention limit)"
             | _ -> None)
 
     let checkFunc (func: MIR.Function) =
