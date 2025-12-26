@@ -6,7 +6,7 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 ## Things to add
 
 - polymorphism in types, functions
-- reference counting
+- string concatenation
 
 ### Phase 5b: String Concatenation (Later)
 
@@ -71,9 +71,10 @@ The following are known simplifications or potential issues in the compiler code
 - ✅ String literals with escape sequences
 - ✅ Lists (linked list implementation with [1, 2, 3] syntax and exact-length pattern matching)
 - ✅ Type checking (51 DSL tests + 8 unit tests)
-- ✅ 8-pass compiler pipeline (Parser → TypeCheck → ANF → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
+- ✅ 9-pass compiler pipeline (Parser → TypeCheck → ANF → RefCount → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
 - ✅ Register allocation with callee-saved registers (X19-X27) for high register pressure
-- ✅ 711 passing tests
+- ✅ Reference counting with free list memory reuse
+- ✅ 731 passing tests
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
 - ✅ Type-directed record field lookup (no ambiguity when multiple record types have same field names)
 - ✅ Function return type inference using function registry (enables type inference for let-bound function calls)
@@ -101,36 +102,26 @@ These are features that exist but have known limitations or incomplete implement
 
 ### 2. Reference Counting (Memory Management)
 
-**Status**: 🚧 Infrastructure Complete
+**Status**: ✅ Complete
 
-**Current Behavior:**
+**Implementation:**
 
-- Bump allocator for heap allocations
-- Ref count headers initialized to 1 for each allocation
+- Ref count headers initialized to 1 at HeapAlloc
 - Memory layout: `[payload: sizeBytes][refcount: 8 bytes]`
-- No deallocation yet (memory is never freed)
+- RefCountInc inserted after TupleGet (when extracting heap values)
+- RefCountDec inserted at end of scope (before Return) for owned values
+- Borrowed values (TupleGet, aliases) don't get Dec (parent owns memory)
+- Free list memory reuse: freed blocks added to size-segregated free lists
+- HeapAlloc checks free list first, falls back to bump allocator
 
-**What's Done:**
+**Architecture:**
 
-✅ Ref count field added to all heap allocations
-✅ Ref count initialized to 1 at allocation time
-✅ All 711 tests pass with ref count headers
+- X27 = free list heads base (32 size classes × 8 bytes = 256 bytes)
+- X28 = bump allocator pointer
+- Size class = payload size (8-byte aligned)
 
-**History:**
+**Testing:**
 
-Initially attempted layout `[refcount: 8 bytes][payload]` where the returned pointer
-would be offset by 8 bytes to the payload start. This caused mysterious segfaults
-with register spilling in list pattern matching (5+ elements or let-bound lists).
-
-**Solution:** Use layout `[payload][refcount: 8 bytes]` instead. The returned pointer
-points directly to the payload (unchanged), and the ref count is stored after it
-at offset `sizeBytes`. This avoids any pointer arithmetic on the returned value.
-
-**Remaining Work:**
-
-1. Add ref count increment when pointers are copied
-2. Add ref count decrement when pointers go out of scope
-3. Free memory when ref count reaches 0 (requires tracking free list or similar)
-4. Track heap pointer types through ANF/MIR/LIR for proper insertion of inc/dec
-
-**Impact**: Currently memory is never freed, but the bump allocator has 64KB of space which is sufficient for most test programs
+- Stress test: 5000 allocations of 24-byte tuples (120KB) with 64KB heap
+- Verified: passes with free list, crashes (exit 139) without (`--no-free-list` flag)
+- All 731 tests pass
