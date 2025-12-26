@@ -570,6 +570,8 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
         // 1. Save current heap pointer to dest (payload starts at X28)
         // 2. Store ref count (=1) at X28 + sizeBytes
         // 3. Bump X28 by (sizeBytes + 8), aligned to 8 bytes
+        //
+        // TODO: Check free list at X27 before bump allocating
         lirRegToARM64Reg dest
         |> Result.map (fun destReg ->
             // Total size includes 8 bytes for ref count, aligned to 8 bytes
@@ -632,15 +634,15 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
     | LIR.RefCountDec (addr, payloadSize) ->
         // Decrement ref count at [addr + payloadSize]
         // Use X15 as temp register
-        // TODO: Add free list handling when ref count reaches 0
+        //
+        // TODO: When ref count hits 0, add block to free list for memory reuse
+        // For now, just decrement - memory is not reclaimed
         lirRegToARM64Reg addr
         |> Result.map (fun addrReg ->
             [
                 ARM64.LDR (ARM64.X15, addrReg, int16 payloadSize)   // Load ref count
                 ARM64.SUB_imm (ARM64.X15, ARM64.X15, 1us)           // Decrement
                 ARM64.STR (ARM64.X15, addrReg, int16 payloadSize)   // Store back
-                // When ref count hits 0, we could add to free list here
-                // For now, just leave the memory (bump allocator will eventually recycle)
             ])
 
 /// Convert LIR terminator to ARM64 instructions
@@ -719,15 +721,51 @@ let convertCFG (epilogueLabel: string) (cfg: LIR.CFG) : Result<ARM64.Instr list,
         | _, Error err -> Error err) (Ok [])
 
 /// Generate heap initialization code for _start function
-/// Reserves 64KB of stack space for heap allocations and initializes X28
+/// Reserves 64KB of stack space for heap allocations and initializes X27/X28
+///
+/// Memory layout:
+///   X27 -> [free list heads: 256 bytes (32 entries × 8 bytes)]
+///   X28 -> [heap allocation area: rest of 64KB]
+///
+/// Free list heads are indexed by (totalSize / 8), where totalSize includes
+/// the 8-byte ref count. Size class 0 and 1 are unused (too small).
+/// Size class 2 = 16 bytes, class 3 = 24 bytes, etc.
+///
+/// X27 is the base for free list heads (constant after init)
+/// X28 is the bump pointer for new allocations
 let generateHeapInit () : ARM64.Instr list =
+    // Reserve 256 bytes for free list heads
+    let freeListSize = 256
     [
         // Allocate 64KB (0x10000) of stack space for heap
-        // SUB SP, SP, #0x10000 (in chunks since immediate is 12-bit max)
         ARM64.MOVZ (ARM64.X28, 0us, 0)  // Start with 0
         ARM64.MOVK (ARM64.X28, 0x1us, 1)  // 0x10000 = 65536
         ARM64.SUB_reg (ARM64.SP, ARM64.SP, ARM64.X28)  // SP -= 64KB
-        ARM64.MOV_reg (ARM64.X28, ARM64.SP)  // X28 = heap base (bottom of reserved area)
+        ARM64.MOV_reg (ARM64.X27, ARM64.SP)  // X27 = free list heads base
+        // X28 = X27 + 256 (skip free list heads area)
+        ARM64.ADD_imm (ARM64.X28, ARM64.X27, uint16 freeListSize)
+        // Initialize free list heads to 0 (all empty)
+        // We zero the first 256 bytes using a loop
+        // For simplicity, just zero the common size classes (first 128 bytes = 16 entries)
+        ARM64.MOVZ (ARM64.X15, 0us, 0)  // X15 = 0
+        // Store zeros at each free list head slot
+        // Size classes 2-17 (16 entries × 8 bytes = 128 bytes)
+        ARM64.STR (ARM64.X15, ARM64.X27, 0s)
+        ARM64.STR (ARM64.X15, ARM64.X27, 8s)
+        ARM64.STR (ARM64.X15, ARM64.X27, 16s)
+        ARM64.STR (ARM64.X15, ARM64.X27, 24s)
+        ARM64.STR (ARM64.X15, ARM64.X27, 32s)
+        ARM64.STR (ARM64.X15, ARM64.X27, 40s)
+        ARM64.STR (ARM64.X15, ARM64.X27, 48s)
+        ARM64.STR (ARM64.X15, ARM64.X27, 56s)
+        ARM64.STR (ARM64.X15, ARM64.X27, 64s)
+        ARM64.STR (ARM64.X15, ARM64.X27, 72s)
+        ARM64.STR (ARM64.X15, ARM64.X27, 80s)
+        ARM64.STR (ARM64.X15, ARM64.X27, 88s)
+        ARM64.STR (ARM64.X15, ARM64.X27, 96s)
+        ARM64.STR (ARM64.X15, ARM64.X27, 104s)
+        ARM64.STR (ARM64.X15, ARM64.X27, 112s)
+        ARM64.STR (ARM64.X15, ARM64.X27, 120s)
     ]
 
 /// Convert LIR function to ARM64 instructions with prologue and epilogue

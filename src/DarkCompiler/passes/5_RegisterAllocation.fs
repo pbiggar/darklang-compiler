@@ -12,12 +12,13 @@
 // - X0: reserved for return values
 // - X1-X10: caller-saved (preferred for allocation)
 // - X11-X13: reserved as scratch registers for spill code
-// - X19-X27: callee-saved (used when caller-saved exhausted)
-// - X28: reserved for heap pointer
+// - X19-X26: callee-saved (used when caller-saved exhausted)
+// - X27: reserved for free list base pointer
+// - X28: reserved for heap bump pointer
 // - X29: frame pointer
 // - X30: link register
 //
-// Callee-saved registers (X19-X27) are saved/restored in function prologue/epilogue.
+// Callee-saved registers (X19-X26) are saved/restored in function prologue/epilogue.
 
 module RegisterAllocation
 
@@ -294,11 +295,12 @@ let callerSavedRegs = [
     LIR.X6; LIR.X7; LIR.X8; LIR.X9; LIR.X10
 ]
 
-/// Callee-saved registers (X19-X27) - used when caller-saved exhausted
+/// Callee-saved registers (X19-X26) - used when caller-saved exhausted
 /// These must be saved/restored in function prologue/epilogue
+/// Note: X27 and X28 are reserved for free list base and heap pointer respectively
 let calleeSavedRegs = [
     LIR.X19; LIR.X20; LIR.X21; LIR.X22; LIR.X23
-    LIR.X24; LIR.X25; LIR.X26; LIR.X27
+    LIR.X24; LIR.X25; LIR.X26
 ]
 
 /// All allocatable registers - caller-saved first (preferred), then callee-saved
