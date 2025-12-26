@@ -266,6 +266,7 @@ type CFGBuilder = {
     FloatLookup: Map<float, int>
     TypeMap: ANF.TypeMap
     TypeReg: Map<string, (string * AST.Type) list>
+    FuncName: string  // For generating unique labels per function
 }
 
 /// Get payload size for an atom used in reference counting
@@ -335,9 +336,9 @@ let rec convertExpr
                 |> Result.bind (fun thenOp ->
                     atomToOperand builder elseAtom
                     |> Result.bind (fun elseOp ->
-                        let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
-                        let (elseLabel, labelGen2) = MIR.freshLabel labelGen1
-                        let (joinLabel, labelGen3) = MIR.freshLabel labelGen2
+                        let (thenLabel, labelGen1) = MIR.freshLabelWithPrefix builder.FuncName builder.LabelGen
+                        let (elseLabel, labelGen2) = MIR.freshLabelWithPrefix builder.FuncName labelGen1
+                        let (joinLabel, labelGen3) = MIR.freshLabelWithPrefix builder.FuncName labelGen2
 
                         // Current block ends with branch
                         let currentBlock = {
@@ -487,9 +488,9 @@ let rec convertExpr
         |> Result.bind (fun condOp ->
 
         // Generate labels for then, else, and join blocks
-        let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
-        let (elseLabel, labelGen2) = MIR.freshLabel labelGen1
-        let (joinLabel, labelGen3) = MIR.freshLabel labelGen2
+        let (thenLabel, labelGen1) = MIR.freshLabelWithPrefix builder.FuncName builder.LabelGen
+        let (elseLabel, labelGen2) = MIR.freshLabelWithPrefix builder.FuncName labelGen1
+        let (joinLabel, labelGen3) = MIR.freshLabelWithPrefix builder.FuncName labelGen2
 
         // Create a register to hold the result from both branches
         let (resultReg, regGen1) = MIR.freshReg builder.RegGen
@@ -509,6 +510,7 @@ let rec convertExpr
             FloatLookup = builder.FloatLookup
             TypeMap = builder.TypeMap
             TypeReg = builder.TypeReg
+            FuncName = builder.FuncName
         }
 
         // Convert then-branch: result goes into resultReg, then jump to join
@@ -620,9 +622,9 @@ and convertExprToOperand
                 |> Result.bind (fun thenOp ->
                     atomToOperand builder elseAtom
                     |> Result.bind (fun elseOp ->
-                        let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
-                        let (elseLabel, labelGen2) = MIR.freshLabel labelGen1
-                        let (joinLabel, labelGen3) = MIR.freshLabel labelGen2
+                        let (thenLabel, labelGen1) = MIR.freshLabelWithPrefix builder.FuncName builder.LabelGen
+                        let (elseLabel, labelGen2) = MIR.freshLabelWithPrefix builder.FuncName labelGen1
+                        let (joinLabel, labelGen3) = MIR.freshLabelWithPrefix builder.FuncName labelGen2
 
                         // Current block ends with branch
                         let startBlock = {
@@ -765,9 +767,9 @@ and convertExprToOperand
         // If expression: creates blocks with branch/jump/join structure
         atomToOperand builder condAtom
         |> Result.bind (fun condOp ->
-            let (thenLabel, labelGen1) = MIR.freshLabel builder.LabelGen
-            let (elseLabel, labelGen2) = MIR.freshLabel labelGen1
-            let (joinLabel, labelGen3) = MIR.freshLabel labelGen2
+            let (thenLabel, labelGen1) = MIR.freshLabelWithPrefix builder.FuncName builder.LabelGen
+            let (elseLabel, labelGen2) = MIR.freshLabelWithPrefix builder.FuncName labelGen1
+            let (joinLabel, labelGen3) = MIR.freshLabelWithPrefix builder.FuncName labelGen2
             let (resultReg, regGen1) = MIR.freshReg builder.RegGen
 
             let startBlock = {
@@ -784,6 +786,7 @@ and convertExprToOperand
                 FloatLookup = builder.FloatLookup
                 TypeMap = builder.TypeMap
                 TypeReg = builder.TypeReg
+                FuncName = builder.FuncName
             }
 
             // Convert then-branch
@@ -863,6 +866,7 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
         FloatLookup = fltLookup
         TypeMap = typeMap
         TypeReg = typeReg
+        FuncName = anfFunc.Name
     }
 
     // Create entry label for CFG (internal to function body)
@@ -933,6 +937,7 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
         FloatLookup = fltLookup
         TypeMap = typeMap
         TypeReg = typeReg
+        FuncName = "_start"
     }
     match convertExpr mainExpr entryLabel [] initialBuilder with
     | Error err -> Error err

@@ -62,14 +62,14 @@ The following are known simplifications or potential issues in the compiler code
 - ✅ Variables (let bindings with shadowing support)
 - ✅ Let-pattern matching with tuples (e.g., `let (a, b) = tuple in ...`)
 - ✅ Control flow (if/then/else expressions, including in atom position)
-- ✅ Functions with type signatures, calls, and recursion
+- ✅ Functions with type signatures, calls, recursion, and implicit mutual recursion
 - ✅ String literals with escape sequences
 - ✅ Lists (linked list implementation with [1, 2, 3] syntax and exact-length pattern matching)
 - ✅ Type checking (51 DSL tests + 8 unit tests)
 - ✅ 9-pass compiler pipeline (Parser → TypeCheck → ANF → RefCount → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
 - ✅ Register allocation with callee-saved registers (X19-X27) for high register pressure
 - ✅ Reference counting with free list memory reuse
-- ✅ 831 passing tests
+- ✅ 837 passing tests
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
 - ✅ Type-directed record field lookup (no ambiguity when multiple record types have same field names)
 - ✅ Function return type inference using function registry (enables type inference for let-bound function calls)

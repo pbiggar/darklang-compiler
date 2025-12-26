@@ -123,3 +123,26 @@ def add1(x: int) : int = x + 1 def add2(x: int) : int = x + 2 def add3(x: int) :
 
 // Test 35: Three calls using let bindings (workaround - should work)
 def h(x: int) : int = x * 2 let a = h(1) in let b = h(2) in let c = h(3) in a + b + c = 12
+
+// =====================================================
+// Mutual Recursion
+// =====================================================
+// All functions are implicitly mutually recursive - no 'rec' keyword needed
+
+// Test 36: Classic isEven/isOdd mutual recursion - isEven(4) should be true
+def isEven(n: int): int = if n == 0 then 1 else isOdd(n - 1) def isOdd(n: int): int = if n == 0 then 0 else isEven(n - 1) isEven(4) = 1
+
+// Test 37: isOdd returns true (1) for odd numbers
+def isEven(n: int): int = if n == 0 then 1 else isOdd(n - 1) def isOdd(n: int): int = if n == 0 then 0 else isEven(n - 1) isOdd(5) = 1
+
+// Test 38: isEven returns false (0) for odd numbers
+def isEven(n: int): int = if n == 0 then 1 else isOdd(n - 1) def isOdd(n: int): int = if n == 0 then 0 else isEven(n - 1) isEven(3) = 0
+
+// Test 39: Three-way mutual recursion
+def funcA(n: int): int = if n <= 0 then 1 else funcB(n - 1) def funcB(n: int): int = if n <= 0 then 2 else funcC(n - 1) def funcC(n: int): int = if n <= 0 then 3 else funcA(n - 1) funcA(3) = 1
+
+// Test 40: Three-way mutual recursion - start from funcB
+def funcA(n: int): int = if n <= 0 then 1 else funcB(n - 1) def funcB(n: int): int = if n <= 0 then 2 else funcC(n - 1) def funcC(n: int): int = if n <= 0 then 3 else funcA(n - 1) funcB(2) = 1
+
+// Test 41: Forward reference - funcX calls funcY defined after it
+def funcX(n: int): int = if n <= 0 then 100 else funcY(n - 1) + 1 def funcY(n: int): int = n * 2 funcX(5) = 9
