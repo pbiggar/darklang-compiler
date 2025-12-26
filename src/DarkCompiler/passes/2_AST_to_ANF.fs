@@ -1017,6 +1017,86 @@ let convertFunction (funcDef: AST.FunctionDef) (varGen: ANF.VarGen) (typeReg: Ty
     |> Result.map (fun (body, varGen2) ->
         ({ Name = funcDef.Name; Params = paramIds; Body = body }, varGen2))
 
+/// Result type that includes registries needed for later passes
+type ConversionResult = {
+    Program: ANF.Program
+    TypeReg: TypeRegistry
+    VariantLookup: VariantLookup
+    FuncReg: FunctionRegistry
+    FuncParams: Map<string, (string * AST.Type) list>  // Function name -> param list with types
+}
+
+/// Convert a program to ANF with type information for reference counting
+let convertProgramWithTypes (program: AST.Program) : Result<ConversionResult, string> =
+    let (AST.Program topLevels) = program
+    let varGen = ANF.VarGen 0
+
+    // Build type registry from type definitions
+    let typeReg : TypeRegistry =
+        topLevels
+        |> List.choose (function
+            | AST.TypeDef (AST.RecordDef (name, fields)) -> Some (name, fields)
+            | _ -> None)
+        |> Map.ofList
+
+    // Build variant lookup from sum type definitions
+    let variantLookup : VariantLookup =
+        topLevels
+        |> List.choose (function
+            | AST.TypeDef (AST.SumTypeDef (typeName, variants)) ->
+                Some (typeName, variants)
+            | _ -> None)
+        |> List.collect (fun (typeName, variants) ->
+            variants
+            |> List.mapi (fun idx variant -> (variant.Name, (typeName, idx, variant.Payload))))
+        |> Map.ofList
+
+    // Separate functions and expressions
+    let functions = topLevels |> List.choose (function AST.FunctionDef f -> Some f | _ -> None)
+    let expressions = topLevels |> List.choose (function AST.Expression e -> Some e | _ -> None)
+
+    // Build function registry - maps function names to their return types
+    let funcReg : FunctionRegistry =
+        functions
+        |> List.map (fun f -> (f.Name, f.ReturnType))
+        |> Map.ofList
+
+    // Build function parameters map
+    let funcParams : Map<string, (string * AST.Type) list> =
+        functions
+        |> List.map (fun f -> (f.Name, f.Params))
+        |> Map.ofList
+
+    // Convert all functions
+    let rec convertFunctions (funcs: AST.FunctionDef list) (vg: ANF.VarGen) (acc: ANF.Function list) : Result<ANF.Function list * ANF.VarGen, string> =
+        match funcs with
+        | [] -> Ok (List.rev acc, vg)
+        | func :: rest ->
+            convertFunction func vg typeReg variantLookup funcReg
+            |> Result.bind (fun (anfFunc, vg') ->
+                convertFunctions rest vg' (anfFunc :: acc))
+
+    convertFunctions functions varGen []
+    |> Result.bind (fun (anfFuncs, varGen1) ->
+        match expressions with
+        | [expr] ->
+            let emptyEnv : VarEnv = Map.empty
+            toANF expr varGen1 emptyEnv typeReg variantLookup funcReg
+            |> Result.map (fun (anfExpr, _) ->
+                { Program = ANF.Program (anfFuncs, Some anfExpr)
+                  TypeReg = typeReg
+                  VariantLookup = variantLookup
+                  FuncReg = funcReg
+                  FuncParams = funcParams })
+        | [] ->
+            Ok { Program = ANF.Program (anfFuncs, None)
+                 TypeReg = typeReg
+                 VariantLookup = variantLookup
+                 FuncReg = funcReg
+                 FuncParams = funcParams }
+        | _ ->
+            Error "Multiple top-level expressions not allowed")
+
 /// Convert a program to ANF
 let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
     let (AST.Program topLevels) = program
