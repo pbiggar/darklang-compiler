@@ -69,13 +69,18 @@ The following are known simplifications or potential issues in the compiler code
 - ✅ 9-pass compiler pipeline (Parser → TypeCheck → ANF → RefCount → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
 - ✅ Register allocation with callee-saved registers (X19-X27) for high register pressure
 - ✅ Reference counting with free list memory reuse
-- ✅ 731 passing tests
+- ✅ 826 passing tests
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
 - ✅ Type-directed record field lookup (no ambiguity when multiple record types have same field names)
 - ✅ Function return type inference using function registry (enables type inference for let-bound function calls)
 - ✅ Record literals require type name: `Point { x = 1, y = 2 }` syntax (no anonymous records)
 - ✅ Sum types (enums with payloads, pattern matching with extraction)
 - ✅ Boolean printing (both literals and computed expressions print as true/false)
+- ✅ Generic functions with type parameters (`def id<T>(x: T): T = x`)
+- ✅ Polymorphic lists (`List<T>` with type inference)
+- ✅ Lambda expressions with immediate application (`(x: int) => x + 1`)
+- ✅ First-class functions (store lambdas in variables, call later)
+- ✅ Higher-order functions (pass functions as arguments, lambda lifting for non-capturing lambdas)
 
 ## Implementation Notes
 
@@ -101,4 +106,4 @@ The following are known simplifications or potential issues in the compiler code
 
 - Stress test: 5000 allocations of 24-byte tuples (120KB) with 64KB heap
 - Verified: passes with free list, crashes (exit 139) without (`--no-free-list` flag)
-- All 731 tests pass
+- All tests pass
