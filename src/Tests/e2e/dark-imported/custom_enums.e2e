@@ -42,45 +42,45 @@ type Color = Red | Green | Blue match Blue with | Red -> 1 | Green -> 2 | _ -> 1
 // ===================================================================
 
 // Option-like type
-// type Option = None | Some of int Some(42) == Some(42) = stdout="true\n"
-// type Option = None | Some of int Some(42) == Some(43) = stdout="false\n"
-// type Option = None | Some of int None == None = stdout="true\n"
-// type Option = None | Some of int Some(42) == None = stdout="false\n"
+// type Option = None | Some of Int64 Some(42) == Some(42) = stdout="true\n"
+// type Option = None | Some of Int64 Some(42) == Some(43) = stdout="false\n"
+// type Option = None | Some of Int64 None == None = stdout="true\n"
+// type Option = None | Some of Int64 Some(42) == None = stdout="false\n"
 
 // Extract payload
-type Option = None | Some of int match Some(42) with | Some(x) -> x | None -> 0 = 42
-type Option = None | Some of int match None with | Some(x) -> x | None -> 99 = 99
+type Option = None | Some of Int64 match Some(42) with | Some(x) -> x | None -> 0 = 42
+type Option = None | Some of Int64 match None with | Some(x) -> x | None -> 99 = 99
 
 // Use extracted payload in expression
-type Option = None | Some of int match Some(10) with | Some(x) -> x * 2 | None -> 0 = 20
-type Option = None | Some of int match Some(5) with | Some(x) -> x + 10 | None -> 0 = 15
+type Option = None | Some of Int64 match Some(10) with | Some(x) -> x * 2 | None -> 0 = 20
+type Option = None | Some of Int64 match Some(5) with | Some(x) -> x + 10 | None -> 0 = 15
 
 // ===================================================================
 // Result-like Type
 // NOTE: Equality tests commented out - requires enum equality support
 // ===================================================================
 
-// type Result = Ok of int | Err of int Ok(42) == Ok(42) = stdout="true\n"
-// type Result = Ok of int | Err of int Ok(42) == Ok(43) = stdout="false\n"
-// type Result = Ok of int | Err of int Ok(42) == Err(42) = stdout="false\n"
-// type Result = Ok of int | Err of int Err(1) == Err(1) = stdout="true\n"
+// type Result = Ok of Int64 | Err of Int64 Ok(42) == Ok(42) = stdout="true\n"
+// type Result = Ok of Int64 | Err of Int64 Ok(42) == Ok(43) = stdout="false\n"
+// type Result = Ok of Int64 | Err of Int64 Ok(42) == Err(42) = stdout="false\n"
+// type Result = Ok of Int64 | Err of Int64 Err(1) == Err(1) = stdout="true\n"
 
 // Match on Result
-type Result = Ok of int | Err of int match Ok(100) with | Ok(v) -> v | Err(e) -> 0 - e = 100
-type Result = Ok of int | Err of int match Err(5) with | Ok(v) -> v | Err(e) -> 0 - e = -5
+type Result = Ok of Int64 | Err of Int64 match Ok(100) with | Ok(v) -> v | Err(e) -> 0 - e = 100
+type Result = Ok of Int64 | Err of Int64 match Err(5) with | Ok(v) -> v | Err(e) -> 0 - e = -5
 
 // ===================================================================
 // Either Type (Two Payload Variants)
 // NOTE: Equality tests commented out - requires enum equality support
 // ===================================================================
 
-// type Either = Left of int | Right of int Left(5) == Left(5) = stdout="true\n"
-// type Either = Left of int | Right of int Right(5) == Right(5) = stdout="true\n"
-// type Either = Left of int | Right of int Left(5) == Right(5) = stdout="false\n"
+// type Either = Left of Int64 | Right of Int64 Left(5) == Left(5) = stdout="true\n"
+// type Either = Left of Int64 | Right of Int64 Right(5) == Right(5) = stdout="true\n"
+// type Either = Left of Int64 | Right of Int64 Left(5) == Right(5) = stdout="false\n"
 
 // Pattern match Either
-type Either = Left of int | Right of int match Left(10) with | Left(x) -> x | Right(y) -> y * 2 = 10
-type Either = Left of int | Right of int match Right(10) with | Left(x) -> x | Right(y) -> y * 2 = 20
+type Either = Left of Int64 | Right of Int64 match Left(10) with | Left(x) -> x | Right(y) -> y * 2 = 10
+type Either = Left of Int64 | Right of Int64 match Right(10) with | Left(x) -> x | Right(y) -> y * 2 = 20
 
 // ===================================================================
 // Enums in Variables
@@ -88,7 +88,7 @@ type Either = Left of int | Right of int match Right(10) with | Left(x) -> x | R
 
 // Store in variable
 type Color = Red | Green | Blue let c = Red in match c with | Red -> 1 | _ -> 0 = 1
-type Option = None | Some of int let opt = Some(42) in match opt with | Some(x) -> x | None -> 0 = 42
+type Option = None | Some of Int64 let opt = Some(42) in match opt with | Some(x) -> x | None -> 0 = 42
 
 // Return from if
 type Color = Red | Green | Blue let c = if true then Red else Blue in match c with | Red -> 1 | Blue -> 2 | _ -> 0 = 1
@@ -99,10 +99,10 @@ type Color = Red | Green | Blue let c = if false then Red else Blue in match c w
 // ===================================================================
 
 // Nested match
-type Option = None | Some of int match Some(5) with | Some(x) -> match x with | 5 -> 100 | _ -> 0 | None -> 0 = 100
+type Option = None | Some of Int64 match Some(5) with | Some(x) -> match x with | 5 -> 100 | _ -> 0 | None -> 0 = 100
 
 // Enum in if body
-type Option = None | Some of int match Some(10) with | Some(x) -> if x > 5 then x * 2 else x | None -> 0 = 20
+type Option = None | Some of Int64 match Some(10) with | Some(x) -> if x > 5 then x * 2 else x | None -> 0 = 20
 
 // ===================================================================
 // Multiple Variants (More than 2 or 3)
@@ -117,19 +117,19 @@ type Direction = North | East | South | West match West with | North -> 0 | East
 // Enum with Let in Body
 // ===================================================================
 
-type Option = None | Some of int match Some(5) with | Some(x) -> let y = x * 2 in y + 1 | None -> 0 = 11
-type Result = Ok of int | Err of int match Ok(10) with | Ok(v) -> let doubled = v * 2 in doubled | Err(_) -> 0 = 20
+type Option = None | Some of Int64 match Some(5) with | Some(x) -> let y = x * 2 in y + 1 | None -> 0 = 11
+type Result = Ok of Int64 | Err of Int64 match Ok(10) with | Ok(v) -> let doubled = v * 2 in doubled | Err(_) -> 0 = 20
 
 // ===================================================================
 // Enum Construction in Expressions
 // ===================================================================
 
 // Construct with computed value
-type Option = None | Some of int let x = 20 in let opt = Some(x + 22) in match opt with | Some(v) -> v | None -> 0 = 42
+type Option = None | Some of Int64 let x = 20 in let opt = Some(x + 22) in match opt with | Some(v) -> v | None -> 0 = 42
 
 // Conditional construction
-type Option = None | Some of int let x = 5 in let opt = if x > 0 then Some(x) else None in match opt with | Some(v) -> v | None -> 0 = 5
-type Option = None | Some of int let x = 0 - 5 in let opt = if x > 0 then Some(x) else None in match opt with | Some(v) -> v | None -> 99 = 99
+type Option = None | Some of Int64 let x = 5 in let opt = if x > 0 then Some(x) else None in match opt with | Some(v) -> v | None -> 0 = 5
+type Option = None | Some of Int64 let x = 0 - 5 in let opt = if x > 0 then Some(x) else None in match opt with | Some(v) -> v | None -> 99 = 99
 
 // ===================================================================
 // Complex Enum Usage
@@ -137,16 +137,16 @@ type Option = None | Some of int let x = 0 - 5 in let opt = if x > 0 then Some(x
 // ===================================================================
 
 // Enum printing (pretty-printing of ADT values)
-// type Option = None | Some of int Some(20) = stdout="Some(20)\n"
-// type Option = None | Some of int None = stdout="None\n"
+// type Option = None | Some of Int64 Some(20) = stdout="Some(20)\n"
+// type Option = None | Some of Int64 None = stdout="None\n"
 // type Color = Red | Green | Blue Red = stdout="Red\n"
 // type Color = Red | Green | Blue Green = stdout="Green\n"
 
 // Map-like behavior (manual)
-type Option = None | Some of int let opt = Some(10) in match opt with | Some(x) -> match Some(x * 2) with | Some(v) -> v | None -> 0 | None -> 0 = 20
+type Option = None | Some of Int64 let opt = Some(10) in match opt with | Some(x) -> match Some(x * 2) with | Some(v) -> v | None -> 0 | None -> 0 = 20
 
 // Chained matching
-type Option = None | Some of int let opt1 = Some(5) in match opt1 with | Some(x) -> match Some(x + 5) with | Some(y) -> y | None -> 0 | None -> 0 = 10
+type Option = None | Some of Int64 let opt1 = Some(5) in match opt1 with | Some(x) -> match Some(x + 5) with | Some(y) -> y | None -> 0 | None -> 0 = 10
 
 // ===================================================================
 // Edge Cases
@@ -154,14 +154,14 @@ type Option = None | Some of int let opt1 = Some(5) in match opt1 with | Some(x)
 // ===================================================================
 
 // Zero payload
-// type Option = None | Some of int Some(0) == Some(0) = stdout="true\n"
-type Option = None | Some of int match Some(0) with | Some(x) -> x + 1 | None -> 0 = 1
+// type Option = None | Some of Int64 Some(0) == Some(0) = stdout="true\n"
+type Option = None | Some of Int64 match Some(0) with | Some(x) -> x + 1 | None -> 0 = 1
 
 // Negative payload (via subtraction)
-type Option = None | Some of int match Some(0 - 5) with | Some(x) -> x | None -> 0 = -5
+type Option = None | Some of Int64 match Some(0 - 5) with | Some(x) -> x | None -> 0 = -5
 
 // Large payload
-type Option = None | Some of int match Some(1000000) with | Some(x) -> x | None -> 0 = 1000000
+type Option = None | Some of Int64 match Some(1000000) with | Some(x) -> x | None -> 0 = 1000000
 
 // ===================================================================
 // Dark Enum Tests (from enums.dark)

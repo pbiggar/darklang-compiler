@@ -177,7 +177,7 @@ match [1, 2] with | [a, b] -> a + b | _ -> 99 = stdout="3\n"
 match [1, 2, 3] with | [a, b, c] -> a + b + c | _ -> 99 = stdout="6\n"
 
 // =====================================================
-// Polymorphic List Tests (List<T>)
+// Polymorphic List Tests (List<t>)
 // =====================================================
 
 // Bool list - single element
@@ -229,9 +229,9 @@ match [] with | [...t] -> 1 | _ -> 0 = 1
 match [1] with | [...t] -> 1 | _ -> 0 = 1
 
 // Recursive length using cons pattern
-// NOTE: Commented out - requires generic type parameters `List<int>`
-// def length(xs: List<int>) : int = match xs with | [] -> 0 | [_, ...t] -> 1 + length(t) length([1, 2, 3, 4, 5]) = 5
+// NOTE: Commented out - requires generic type parameters `List<Int64>`
+// def length(xs: List<Int64>) : Int64 = match xs with | [] -> 0 | [_, ...t] -> 1 + length(t) length([1, 2, 3, 4, 5]) = 5
 
 // Recursive sum using cons pattern
-// NOTE: Commented out - requires generic type parameters `List<int>`
-// def sum(xs: List<int>) : int = match xs with | [] -> 0 | [h, ...t] -> h + sum(t) sum([1, 2, 3, 4, 5]) = 15
+// NOTE: Commented out - requires generic type parameters `List<Int64>`
+// def sum(xs: List<Int64>) : Int64 = match xs with | [] -> 0 | [h, ...t] -> h + sum(t) sum([1, 2, 3, 4, 5]) = 15

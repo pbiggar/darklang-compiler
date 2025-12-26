@@ -159,8 +159,8 @@
 
 // Let with Functions
 // NOTE: Commented out - function definition + let expression on same line has parsing issue
-// def double(x: int): int = x * 2 (let x = 5 in double(x)) = 10
-// def add(a: int, b: int): int = a + b (let x = 3 in let y = 4 in add(x, y)) = 7
+// def double(x: Int64): Int64 = x * 2 (let x = 5 in double(x)) = 10
+// def add(a: Int64, b: Int64): Int64 = a + b (let x = 3 in let y = 4 in add(x, y)) = 7
 
 // Complex Expressions
 (let x = 5 in let y = x + 1 in let z = y * 2 in z) = 12

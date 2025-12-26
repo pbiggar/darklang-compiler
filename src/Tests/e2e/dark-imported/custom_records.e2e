@@ -10,34 +10,34 @@
 // NOTE: Commented out - requires record printing support
 // ===================================================================
 
-// type Point = { x: int, y: int } Point { x = 5, y = 10 } = stdout="Point { x = 5, y = 10 }\n"
-// type Point1 = { x: int } Point1 { x = 42 } = stdout="Point1 { x = 42 }\n"
-// type Vec3 = { x: int, y: int, z: int } Vec3 { x = 1, y = 2, z = 3 } = stdout="Vec3 { x = 1, y = 2, z = 3 }\n"
+// type Point = { x: Int64, y: Int64 } Point { x = 5, y = 10 } = stdout="Point { x = 5, y = 10 }\n"
+// type Point1 = { x: Int64 } Point1 { x = 42 } = stdout="Point1 { x = 42 }\n"
+// type Vec3 = { x: Int64, y: Int64, z: Int64 } Vec3 { x = 1, y = 2, z = 3 } = stdout="Vec3 { x = 1, y = 2, z = 3 }\n"
 
 // ===================================================================
 // Record Field Access
 // ===================================================================
 
 // Access single field
-type Point1 = { x: int } (Point1 { x = 42 }).x = 42
-type Point1 = { x: int } let p = Point1 { x = 100 } in p.x = 100
-type Point1 = { x: int } (Point1 { x = 5 }).x = 5
-type Point1 = { x: int } (Point1 { x = 0 }).x = 0
+type Point1 = { x: Int64 } (Point1 { x = 42 }).x = 42
+type Point1 = { x: Int64 } let p = Point1 { x = 100 } in p.x = 100
+type Point1 = { x: Int64 } (Point1 { x = 5 }).x = 5
+type Point1 = { x: Int64 } (Point1 { x = 0 }).x = 0
 
 // Access from two-field record
-type Point = { x: int, y: int } (Point { x = 10, y = 20 }).x = 10
-type Point = { x: int, y: int } (Point { x = 10, y = 20 }).y = 20
-type Point = { x: int, y: int } (Point { x = 0, y = 0 }).x = 0
-type Point = { x: int, y: int } (Point { x = 0, y = 0 }).y = 0
+type Point = { x: Int64, y: Int64 } (Point { x = 10, y = 20 }).x = 10
+type Point = { x: Int64, y: Int64 } (Point { x = 10, y = 20 }).y = 20
+type Point = { x: Int64, y: Int64 } (Point { x = 0, y = 0 }).x = 0
+type Point = { x: Int64, y: Int64 } (Point { x = 0, y = 0 }).y = 0
 
 // Access from three-field record
-type Vec3 = { x: int, y: int, z: int } (Vec3 { x = 1, y = 2, z = 3 }).x = 1
-type Vec3 = { x: int, y: int, z: int } (Vec3 { x = 1, y = 2, z = 3 }).y = 2
-type Vec3 = { x: int, y: int, z: int } (Vec3 { x = 1, y = 2, z = 3 }).z = 3
+type Vec3 = { x: Int64, y: Int64, z: Int64 } (Vec3 { x = 1, y = 2, z = 3 }).x = 1
+type Vec3 = { x: Int64, y: Int64, z: Int64 } (Vec3 { x = 1, y = 2, z = 3 }).y = 2
+type Vec3 = { x: Int64, y: Int64, z: Int64 } (Vec3 { x = 1, y = 2, z = 3 }).z = 3
 
 // Access via variable
-type Point = { x: int, y: int } let p = Point { x = 5, y = 10 } in p.x = 5
-type Point = { x: int, y: int } let p = Point { x = 5, y = 10 } in p.y = 10
+type Point = { x: Int64, y: Int64 } let p = Point { x = 5, y = 10 } in p.x = 5
+type Point = { x: Int64, y: Int64 } let p = Point { x = 5, y = 10 } in p.y = 10
 
 // ===================================================================
 // Record Equality
@@ -45,107 +45,107 @@ type Point = { x: int, y: int } let p = Point { x = 5, y = 10 } in p.y = 10
 // ===================================================================
 
 // Same records are equal
-// type Point = { x: int, y: int } Point { x = 1, y = 2 } == Point { x = 1, y = 2 } = stdout="true\n"
+// type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 2 } = stdout="true\n"
 
 // Different field values are not equal
-// type Point = { x: int, y: int } Point { x = 1, y = 2 } == Point { x = 1, y = 3 } = stdout="false\n"
-// type Point = { x: int, y: int } Point { x = 1, y = 2 } == Point { x = 2, y = 2 } = stdout="false\n"
+// type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 3 } = stdout="false\n"
+// type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 2, y = 2 } = stdout="false\n"
 
 // Inequality
-// type Point = { x: int, y: int } Point { x = 1, y = 2 } != Point { x = 3, y = 4 } = stdout="true\n"
-// type Point = { x: int, y: int } Point { x = 1, y = 2 } != Point { x = 1, y = 2 } = stdout="false\n"
+// type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 3, y = 4 } = stdout="true\n"
+// type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 1, y = 2 } = stdout="false\n"
 
 // ===================================================================
 // Record Pattern Matching
 // ===================================================================
 
 // Extract all fields
-type Point = { x: int, y: int } match Point { x = 10, y = 20 } with | Point { x = a, y = b } -> a + b = 30
+type Point = { x: Int64, y: Int64 } match Point { x = 10, y = 20 } with | Point { x = a, y = b } -> a + b = 30
 
 // Extract one field with wildcard
-type Point = { x: int, y: int } match Point { x = 5, y = 10 } with | Point { x = n, y = _ } -> n = 5
-type Point = { x: int, y: int } match Point { x = 5, y = 15 } with | Point { x = _, y = m } -> m = 15
+type Point = { x: Int64, y: Int64 } match Point { x = 5, y = 10 } with | Point { x = n, y = _ } -> n = 5
+type Point = { x: Int64, y: Int64 } match Point { x = 5, y = 15 } with | Point { x = _, y = m } -> m = 15
 
 // Three-field record extraction
-type Vec3 = { x: int, y: int, z: int } match Vec3 { x = 1, y = 2, z = 3 } with | Vec3 { x = a, y = b, z = c } -> a + b + c = 6
+type Vec3 = { x: Int64, y: Int64, z: Int64 } match Vec3 { x = 1, y = 2, z = 3 } with | Vec3 { x = a, y = b, z = c } -> a + b + c = 6
 
 // Use extracted values in expression
-type Point = { x: int, y: int } match Point { x = 3, y = 4 } with | Point { x = a, y = b } -> a * a + b * b = 25
-type Point = { x: int, y: int } match Point { x = 6, y = 8 } with | Point { x = a, y = b } -> a * b = 48
+type Point = { x: Int64, y: Int64 } match Point { x = 3, y = 4 } with | Point { x = a, y = b } -> a * a + b * b = 25
+type Point = { x: Int64, y: Int64 } match Point { x = 6, y = 8 } with | Point { x = a, y = b } -> a * b = 48
 
 // ===================================================================
 // Records in Variables
 // ===================================================================
 
-type Point = { x: int, y: int } let p = Point { x = 3, y = 4 } in p.x + p.y = 7
-type Point = { x: int, y: int } let p = Point { x = 3, y = 4 } in p.x * p.y = 12
+type Point = { x: Int64, y: Int64 } let p = Point { x = 3, y = 4 } in p.x + p.y = 7
+type Point = { x: Int64, y: Int64 } let p = Point { x = 3, y = 4 } in p.x * p.y = 12
 
 // Pattern match on variable
-type Point = { x: int, y: int } let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> a * a + b * b = 25
+type Point = { x: Int64, y: Int64 } let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> a * a + b * b = 25
 
 // Multiple records
-type Point = { x: int, y: int } let p1 = Point { x = 1, y = 2 } in let p2 = Point { x = 3, y = 4 } in p1.x + p2.x = 4
+type Point = { x: Int64, y: Int64 } let p1 = Point { x = 1, y = 2 } in let p2 = Point { x = 3, y = 4 } in p1.x + p2.x = 4
 
 // ===================================================================
 // Records with Computed Fields
 // ===================================================================
 
 // Expressions in field values - test via field access
-type Point = { x: int, y: int } (Point { x = 1 + 2, y = 3 + 4 }).x + (Point { x = 1 + 2, y = 3 + 4 }).y = 10
-type Point = { x: int, y: int } (Point { x = 5 * 2, y = 10 - 3 }).x = 10
-type Point = { x: int, y: int } (Point { x = 5 * 2, y = 10 - 3 }).y = 7
+type Point = { x: Int64, y: Int64 } (Point { x = 1 + 2, y = 3 + 4 }).x + (Point { x = 1 + 2, y = 3 + 4 }).y = 10
+type Point = { x: Int64, y: Int64 } (Point { x = 5 * 2, y = 10 - 3 }).x = 10
+type Point = { x: Int64, y: Int64 } (Point { x = 5 * 2, y = 10 - 3 }).y = 7
 
 // Variables in field values
-type Point = { x: int, y: int } let a = 10 in (Point { x = a, y = a * 2 }).x = 10
-type Point = { x: int, y: int } let a = 10 in (Point { x = a, y = a * 2 }).y = 20
+type Point = { x: Int64, y: Int64 } let a = 10 in (Point { x = a, y = a * 2 }).x = 10
+type Point = { x: Int64, y: Int64 } let a = 10 in (Point { x = a, y = a * 2 }).y = 20
 
 // Field from another record
-type Point = { x: int, y: int } let p1 = Point { x = 5, y = 10 } in (Point { x = p1.y, y = p1.x }).x = 10
-type Point = { x: int, y: int } let p1 = Point { x = 5, y = 10 } in (Point { x = p1.y, y = p1.x }).y = 5
+type Point = { x: Int64, y: Int64 } let p1 = Point { x = 5, y = 10 } in (Point { x = p1.y, y = p1.x }).x = 10
+type Point = { x: Int64, y: Int64 } let p1 = Point { x = 5, y = 10 } in (Point { x = p1.y, y = p1.x }).y = 5
 
 // ===================================================================
 // Records in Control Flow
 // ===================================================================
 
 // If returning record
-type Point = { x: int, y: int } let p = if true then Point { x = 1, y = 2 } else Point { x = 3, y = 4 } in p.x = 1
-type Point = { x: int, y: int } let p = if false then Point { x = 1, y = 2 } else Point { x = 3, y = 4 } in p.x = 3
+type Point = { x: Int64, y: Int64 } let p = if true then Point { x = 1, y = 2 } else Point { x = 3, y = 4 } in p.x = 1
+type Point = { x: Int64, y: Int64 } let p = if false then Point { x = 1, y = 2 } else Point { x = 3, y = 4 } in p.x = 3
 
 // Condition using record field
-type Point = { x: int, y: int } let p = Point { x = 10, y = 5 } in if p.x > p.y then p.x else p.y = 10
+type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 5 } in if p.x > p.y then p.x else p.y = 10
 
 // ===================================================================
 // Nested Records
 // ===================================================================
 
 // Record containing another record
-type Inner = { val: int } type Outer = { inner: int } let o = Outer { inner = 42 } in o.inner = 42
+type Inner = { val: Int64 } type Outer = { inner: Int64 } let o = Outer { inner = 42 } in o.inner = 42
 
 // Access nested field (via pattern matching)
-type Inner = { v: int } type Outer = { i: int } let o = Outer { i = 100 } in match o with | Outer { i = x } -> x = 100
+type Inner = { v: Int64 } type Outer = { i: Int64 } let o = Outer { i = 100 } in match o with | Outer { i = x } -> x = 100
 
 // ===================================================================
 // Records with Multiple Accesses
 // ===================================================================
 
 // Multiple field accesses in expression
-type Point = { x: int, y: int } let p = Point { x = 3, y = 4 } in (p.x + p.y) * (p.x - p.y) = -7
+type Point = { x: Int64, y: Int64 } let p = Point { x = 3, y = 4 } in (p.x + p.y) * (p.x - p.y) = -7
 
 // Access same field multiple times
-type Point1 = { x: int } let p = Point1 { x = 5 } in p.x + p.x + p.x = 15
+type Point1 = { x: Int64 } let p = Point1 { x = 5 } in p.x + p.x + p.x = 15
 
 // Different records same type
-type Point = { x: int, y: int } let p1 = Point { x = 1, y = 2 } in let p2 = Point { x = 10, y = 20 } in p1.x + p2.x = 11
+type Point = { x: Int64, y: Int64 } let p1 = Point { x = 1, y = 2 } in let p2 = Point { x = 10, y = 20 } in p1.x + p2.x = 11
 
 // ===================================================================
 // Records in Functions
 // ===================================================================
 
 // Function taking record (via destructuring)
-type Point = { x: int, y: int } def sum_point(p: Point): int = match p with | Point { x = a, y = b } -> a + b sum_point(Point { x = 5, y = 10 }) = 15
+type Point = { x: Int64, y: Int64 } def sum_point(p: Point): Int64 = match p with | Point { x = a, y = b } -> a + b sum_point(Point { x = 5, y = 10 }) = 15
 
 // Function using field access
-type Point = { x: int, y: int } def get_x(p: Point): int = p.x get_x(Point { x = 42, y = 99 }) = 42
+type Point = { x: Int64, y: Int64 } def get_x(p: Point): Int64 = p.x get_x(Point { x = 42, y = 99 }) = 42
 
 // ===================================================================
 // Complex Record Operations
@@ -153,30 +153,30 @@ type Point = { x: int, y: int } def get_x(p: Point): int = p.x get_x(Point { x =
 // ===================================================================
 
 // Manhattan distance
-// type Point = { x: int, y: int } let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> if a > 0 then a else 0 - a + if b > 0 then b else 0 - b = 7
+// type Point = { x: Int64, y: Int64 } let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> if a > 0 then a else 0 - a + if b > 0 then b else 0 - b = 7
 
 // Maximum coordinate
-type Point = { x: int, y: int } let p = Point { x = 5, y = 10 } in if p.x > p.y then p.x else p.y = 10
+type Point = { x: Int64, y: Int64 } let p = Point { x = 5, y = 10 } in if p.x > p.y then p.x else p.y = 10
 
 // ===================================================================
 // Edge Cases
 // ===================================================================
 
 // Zero values
-type Point = { x: int, y: int } Point { x = 0, y = 0 }.x = 0
-type Point = { x: int, y: int } Point { x = 0, y = 0 }.y = 0
+type Point = { x: Int64, y: Int64 } Point { x = 0, y = 0 }.x = 0
+type Point = { x: Int64, y: Int64 } Point { x = 0, y = 0 }.y = 0
 
 // Negative values (via subtraction)
-type Point = { x: int, y: int } Point { x = 0 - 5, y = 0 - 10 }.x = -5
+type Point = { x: Int64, y: Int64 } Point { x = 0 - 5, y = 0 - 10 }.x = -5
 
 // Large values
-type Point = { x: int, y: int } Point { x = 1000000, y = 2000000 }.x = 1000000
+type Point = { x: Int64, y: Int64 } Point { x = 1000000, y = 2000000 }.x = 1000000
 
 // Single access in let
-type Point1 = { x: int } let p = Point1 { x = 42 } in p.x = 42
+type Point1 = { x: Int64 } let p = Point1 { x = 42 } in p.x = 42
 
 // Self-referential computation (using same record's fields)
-type Point = { x: int, y: int } let p = Point { x = 3, y = 4 } in p.x * p.x + p.y * p.y = 25
+type Point = { x: Int64, y: Int64 } let p = Point { x = 3, y = 4 } in p.x * p.x + p.y * p.y = 25
 
 // ===================================================================
 // Dark Record Tests (from records.dark)

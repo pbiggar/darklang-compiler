@@ -5,110 +5,110 @@
 // =====================================================
 
 // Generic identity function with int
-def identity<T>(x: T) : T = x identity<int>(42) = 42
+def identity<t>(x: t) : t = x identity<Int64>(42) = 42
 
 // Identity with bool
-def id<T>(x: T) : T = x id<bool>(true) = stdout="true\n"
+def id<t>(x: t) : t = x id<Bool>(true) = stdout="true\n"
 
 // Identity with different int value
-def ident<T>(x: T) : T = x ident<int>(100) = 100
+def ident<t>(x: t) : t = x ident<Int64>(100) = 100
 
 // =====================================================
 // Multiple Instantiations
 // =====================================================
 
 // Using identity with different types in same expression
-def myid<T>(x: T) : T = x myid<int>(40) + myid<int>(2) = 42
+def myid<t>(x: t) : t = x myid<Int64>(40) + myid<Int64>(2) = 42
 
 // =====================================================
 // Generic Functions with Expressions
 // =====================================================
 
 // Generic function that uses its parameter
-def return_it<T>(value: T) : T = value return_it<int>(42) = 42
+def return_it<t>(value: t) : t = value return_it<Int64>(42) = 42
 
-def ret<T>(v: T) : T = v ret<bool>(false) = stdout="false\n"
+def ret<t>(v: t) : t = v ret<Bool>(false) = stdout="false\n"
 
 // =====================================================
 // Generic with Operations on Result
 // =====================================================
 
 // Use generic result in arithmetic
-def i<T>(x: T) : T = x i<int>(6) * i<int>(7) = 42
+def i<t>(x: t) : t = x i<Int64>(6) * i<Int64>(7) = 42
 
-def j<T>(x: T) : T = x j<int>(10) + 32 = 42
+def j<t>(x: t) : t = x j<Int64>(10) + 32 = 42
 
 // =====================================================
 // Generic with Let Bindings
 // =====================================================
 
 // Use generic in let binding
-def k<T>(x: T) : T = x let x = k<int>(21) in x * 2 = 42
+def k<t>(x: t) : t = x let x = k<Int64>(21) in x * 2 = 42
 
-def l<T>(x: T) : T = x let a = l<int>(10) in let b = l<int>(32) in a + b = 42
+def l<t>(x: t) : t = x let a = l<Int64>(10) in let b = l<Int64>(32) in a + b = 42
 
 // =====================================================
 // Type Inference at Call Sites
 // =====================================================
 
 // Basic inference - int inferred from argument
-def inf_id<T>(x: T) : T = x inf_id(42) = 42
+def inf_id<t>(x: t) : t = x inf_id(42) = 42
 
 // Bool inference
-def inf_bool<T>(x: T) : T = x inf_bool(true) = stdout="true\n"
+def inf_bool<t>(x: t) : t = x inf_bool(true) = stdout="true\n"
 
 // Inference with different int value
-def inf_int2<T>(x: T) : T = x inf_int2(100) = 100
+def inf_int2<t>(x: t) : t = x inf_int2(100) = 100
 
 // Multiple calls with inference in expression
-def inf_mult<T>(x: T) : T = x inf_mult(40) + inf_mult(2) = 42
+def inf_mult<t>(x: t) : t = x inf_mult(40) + inf_mult(2) = 42
 
 // Inference with operations on result
-def inf_op<T>(x: T) : T = x inf_op(6) * inf_op(7) = 42
+def inf_op<t>(x: t) : t = x inf_op(6) * inf_op(7) = 42
 
 // Inference with let binding
-def inf_let<T>(x: T) : T = x let y = inf_let(21) in y * 2 = 42
+def inf_let<t>(x: t) : t = x let y = inf_let(21) in y * 2 = 42
 
 // Mixed explicit and inferred - explicit still works
-def mixed<T>(x: T) : T = x mixed<int>(20) + mixed(22) = 42
+def mixed<t>(x: t) : t = x mixed<Int64>(20) + mixed(22) = 42
 
 // Inference with bool in conditional
-def inf_cond<T>(x: T) : T = x if inf_cond(true) then 42 else 0 = 42
+def inf_cond<t>(x: t) : t = x if inf_cond(true) then 42 else 0 = 42
 
 // =====================================================
 // Multiple Type Parameters
 // =====================================================
 
 // Two type parameters - return first
-def first<A, B>(a: A, b: B) : A = a first<int, bool>(42, true) = 42
+def first<a, b>(a: a, b: b) : a = a first<Int64, Bool>(42, true) = 42
 
 // Two type parameters - return second
-def second<A, B>(a: A, b: B) : B = b second<int, bool>(42, true) = stdout="true\n"
+def second<a, b>(a: a, b: b) : b = b second<Int64, Bool>(42, true) = stdout="true\n"
 
 // Three type parameters
-def pick1<A, B, C>(a: A, b: B, c: C) : A = a pick1<int, bool, int>(42, false, 99) = 42
+def pick1<a, b, c>(a: a, b: b, c: c) : a = a pick1<Int64, Bool, Int64>(42, false, 99) = 42
 
-def pick2<A, B, C>(a: A, b: B, c: C) : B = b pick2<int, bool, int>(99, true, 99) = stdout="true\n"
+def pick2<a, b, c>(a: a, b: b, c: c) : b = b pick2<Int64, Bool, Int64>(99, true, 99) = stdout="true\n"
 
-def pick3<A, B, C>(a: A, b: B, c: C) : C = c pick3<int, bool, int>(99, false, 42) = 42
+def pick3<a, b, c>(a: a, b: b, c: c) : c = c pick3<Int64, Bool, Int64>(99, false, 42) = 42
 
 // Type inference with multiple type parameters
-def fst<A, B>(a: A, b: B) : A = a fst(10, true) = 10
+def fst<a, b>(a: a, b: b) : a = a fst(10, true) = 10
 
-def snd<A, B>(a: A, b: B) : B = b snd(10, false) = stdout="false\n"
+def snd<a, b>(a: a, b: b) : b = b snd(10, false) = stdout="false\n"
 
 // Inference with three parameters
-def get1<A, B, C>(a: A, b: B, c: C) : A = a get1(42, true, false) = 42
+def get1<a, b, c>(a: a, b: b, c: c) : a = a get1(42, true, false) = 42
 
-def get2<A, B, C>(a: A, b: B, c: C) : B = b get2(99, true, false) = stdout="true\n"
+def get2<a, b, c>(a: a, b: b, c: c) : b = b get2(99, true, false) = stdout="true\n"
 
-def get3<A, B, C>(a: A, b: B, c: C) : C = c get3(99, true, false) = stdout="false\n"
+def get3<a, b, c>(a: a, b: b, c: c) : c = c get3(99, true, false) = stdout="false\n"
 
 // Multiple params with same type
-def both_int<A, B>(a: A, b: B) : A = a both_int<int, int>(42, 99) = 42
+def both_int<a, b>(a: a, b: b) : a = a both_int<Int64, Int64>(42, 99) = 42
 
 // Use result in expression
-def fst2<A, B>(a: A, b: B) : A = a fst2(40, true) + 2 = 42
+def fst2<a, b>(a: a, b: b) : a = a fst2(40, true) + 2 = 42
 
 // Multiple params in let binding
-def getfst<A, B>(a: A, b: B) : A = a let x = getfst(21, false) in x * 2 = 42
+def getfst<a, b>(a: a, b: b) : a = a let x = getfst(21, false) in x * 2 = 42

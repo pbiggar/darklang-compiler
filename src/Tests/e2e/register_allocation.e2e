@@ -80,7 +80,7 @@ let x = 100 in match 1 with | 1 -> x | _ -> 0 = 100
 let x = 10 in match (1, 2) with | (a, b) -> x + a + b = 13
 
 // ADT match with outer scope values
-type Option = None | Some of int let x = 100 in match Some(42) with | Some(n) -> x + n | None -> 0 = 142
+type Option = None | Some of Int64 let x = 100 in match Some(42) with | Some(n) -> x + n | None -> 0 = 142
 
 
 // ===================================================================

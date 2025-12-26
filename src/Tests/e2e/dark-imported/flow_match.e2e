@@ -136,32 +136,32 @@ type Color = Red | Green | Blue match Blue with | Red -> 1 | Green -> 2 | Blue -
 type Color = Red | Green | Blue match Green with | Red -> 1 | _ -> 99 = 99
 
 // Enum with payload
-type Option = None | Some of int match Some(42) with | Some(x) -> x | None -> 0 = 42
-type Option = None | Some of int match None with | Some(x) -> x | None -> 99 = 99
+type Option = None | Some of Int64 match Some(42) with | Some(x) -> x | None -> 0 = 42
+type Option = None | Some of Int64 match None with | Some(x) -> x | None -> 99 = 99
 
 // Extract and use payload
-type Option = None | Some of int match Some(10) with | Some(x) -> x * 2 | None -> 0 = 20
+type Option = None | Some of Int64 match Some(10) with | Some(x) -> x * 2 | None -> 0 = 20
 
 // Two payload variants
-type Either = Left of int | Right of int match Left(5) with | Left(x) -> x | Right(y) -> y = 5
-type Either = Left of int | Right of int match Right(7) with | Left(x) -> x | Right(y) -> y = 7
+type Either = Left of Int64 | Right of Int64 match Left(5) with | Left(x) -> x | Right(y) -> y = 5
+type Either = Left of Int64 | Right of Int64 match Right(7) with | Left(x) -> x | Right(y) -> y = 7
 
 // ===================================================================
 // Record Patterns
 // ===================================================================
 
 // Simple record
-type Point = { x: int, y: int } match Point { x = 10, y = 20 } with | Point { x = a, y = b } -> a + b = 30
+type Point = { x: Int64, y: Int64 } match Point { x = 10, y = 20 } with | Point { x = a, y = b } -> a + b = 30
 
 // Extract one field
-type Point = { x: int, y: int } match Point { x = 5, y = 10 } with | Point { x = n, y = _ } -> n = 5
-type Point = { x: int, y: int } match Point { x = 5, y = 15 } with | Point { x = _, y = m } -> m = 15
+type Point = { x: Int64, y: Int64 } match Point { x = 5, y = 10 } with | Point { x = n, y = _ } -> n = 5
+type Point = { x: Int64, y: Int64 } match Point { x = 5, y = 15 } with | Point { x = _, y = m } -> m = 15
 
 // Three-field record
-type Vec3 = { x: int, y: int, z: int } match Vec3 { x = 1, y = 2, z = 3 } with | Vec3 { x = a, y = b, z = c } -> a + b + c = 6
+type Vec3 = { x: Int64, y: Int64, z: Int64 } match Vec3 { x = 1, y = 2, z = 3 } with | Vec3 { x = a, y = b, z = c } -> a + b + c = 6
 
 // Record in variable
-type Point = { x: int, y: int } let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> a * a + b * b = 25
+type Point = { x: Int64, y: Int64 } let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> a * a + b * b = 25
 
 // ===================================================================
 // Nested Patterns
@@ -174,7 +174,7 @@ match 1 with | 1 -> match 2 with | 2 -> 100 | _ -> 0 | _ -> 0 = 100
 match 1 with | 1 -> match 2 with | 2 -> match 3 with | 3 -> 42 | _ -> 0 | _ -> 0 | _ -> 0 = 42
 
 // Tuple in ADT
-type Box = Empty | Pair of int match Pair(42) with | Pair(n) -> let t = (n, n + 1) in match t with | (a, b) -> a + b | Empty -> 0 = 85
+type Box = Empty | Pair of Int64 match Pair(42) with | Pair(n) -> let t = (n, n + 1) in match t with | (a, b) -> a + b | Empty -> 0 = 85
 
 // ===================================================================
 // Match with Computations in Body

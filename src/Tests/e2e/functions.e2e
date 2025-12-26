@@ -39,68 +39,68 @@ if true then if false then 0 else 42 else 0 = 42
 // =====================================================
 
 // Test 11: Simple function call - double
-def double(x: int) : int = x + x double(21) = 42
+def double(x: Int64) : Int64 = x + x double(21) = 42
 
 // Test 12: Function with two parameters
-def add(a: int, b: int) : int = a + b add(20, 22) = 42
+def add(a: Int64, b: Int64) : Int64 = a + b add(20, 22) = 42
 
 // Test 13: Function with three parameters
-def sum3(a: int, b: int, c: int) : int = a + b + c sum3(10, 12, 20) = 42
+def sum3(a: Int64, b: Int64, c: Int64) : Int64 = a + b + c sum3(10, 12, 20) = 42
 
 // Test 14: Function with let binding in body
-def compute(x: int, y: int) : int = let sum = x + y in sum * 2 compute(10, 11) = 42
+def compute(x: Int64, y: Int64) : Int64 = let sum = x + y in sum * 2 compute(10, 11) = 42
 
 // Test 15: Function with if expression
-def max(a: int, b: int) : int = if a > b then a else b max(42, 10) = 42
+def max(a: Int64, b: Int64) : Int64 = if a > b then a else b max(42, 10) = 42
 
 // Test 16: Multiple function calls in expression
-def inc(x: int) : int = x + 1 inc(inc(40)) = 42
+def inc(x: Int64) : Int64 = x + 1 inc(inc(40)) = 42
 
 // Test 17: Function with complex body
-def calculate(x: int, y: int, z: int) : int = let sum = x + y in let product = sum * z in product - 1 calculate(2, 3, 9) = 44
+def calculate(x: Int64, y: Int64, z: Int64) : Int64 = let sum = x + y in let product = sum * z in product - 1 calculate(2, 3, 9) = 44
 
 // Test 18: Function returning comparison result as int
-def isPositive(x: int) : int = if x > 0 then 1 else 0 isPositive(42) = 1
+def isPositive(x: Int64) : Int64 = if x > 0 then 1 else 0 isPositive(42) = 1
 
 // Test 19: Calling function multiple times
-def triple(x: int) : int = x * 3 triple(7) + triple(7) = 42
+def triple(x: Int64) : Int64 = x * 3 triple(7) + triple(7) = 42
 
 // Test 20: Four parameter function
-def sum4(a: int, b: int, c: int, d: int) : int = a + b + c + d sum4(10, 11, 12, 9) = 42
+def sum4(a: Int64, b: Int64, c: Int64, d: Int64) : Int64 = a + b + c + d sum4(10, 11, 12, 9) = 42
 
 // =====================================================
 // Recursive Functions (Milestone 5)
 // =====================================================
 
 // Test 21: Factorial - classic recursion
-def factorial(n: int) : int = if n <= 1 then 1 else n * factorial(n - 1) factorial(5) = 120
+def factorial(n: Int64) : Int64 = if n <= 1 then 1 else n * factorial(n - 1) factorial(5) = 120
 
 // Test 22: Fibonacci - double recursion
-def fib(n: int) : int = if n <= 1 then n else fib(n - 1) + fib(n - 2) fib(10) = 55
+def fib(n: Int64) : Int64 = if n <= 1 then n else fib(n - 1) + fib(n - 2) fib(10) = 55
 
 // Test 23: GCD - two parameter recursion
-def gcd(a: int, b: int) : int = if b == 0 then a else gcd(b, a - (a / b) * b) gcd(48, 18) = 6
+def gcd(a: Int64, b: Int64) : Int64 = if b == 0 then a else gcd(b, a - (a / b) * b) gcd(48, 18) = 6
 
 // Test 24: Sum from 1 to N
-def sumTo(n: int) : int = if n <= 0 then 0 else n + sumTo(n - 1) sumTo(10) = 55
+def sumTo(n: Int64) : Int64 = if n <= 0 then 0 else n + sumTo(n - 1) sumTo(10) = 55
 
 // Test 25: Power function (x^n)
-def power(x: int, n: int) : int = if n == 0 then 1 else x * power(x, n - 1) power(2, 6) = 64
+def power(x: Int64, n: Int64) : Int64 = if n == 0 then 1 else x * power(x, n - 1) power(2, 6) = 64
 
 // Test 26: Countdown (tests deep recursion with simple function)
-def countdown(n: int) : int = if n <= 0 then 0 else countdown(n - 1) countdown(100) = 0
+def countdown(n: Int64) : Int64 = if n <= 0 then 0 else countdown(n - 1) countdown(100) = 0
 
 // Test 27: Even check via recursion
-def isEven(n: int) : int = if n == 0 then 1 else if n == 1 then 0 else isEven(n - 2) isEven(42) = 1
+def isEven(n: Int64) : Int64 = if n == 0 then 1 else if n == 1 then 0 else isEven(n - 2) isEven(42) = 1
 
 // Test 28: Factorial of 6
-def fact(n: int) : int = if n <= 1 then 1 else n * fact(n - 1) fact(6) = 720
+def fact(n: Int64) : Int64 = if n <= 1 then 1 else n * fact(n - 1) fact(6) = 720
 
 // Test 29: Recursive with let binding
-def recWithLet(n: int) : int = if n <= 0 then 0 else let prev = recWithLet(n - 1) in n + prev recWithLet(5) = 15
+def recWithLet(n: Int64) : Int64 = if n <= 0 then 0 else let prev = recWithLet(n - 1) in n + prev recWithLet(5) = 15
 
 // Test 30: Ackermann-like (simplified)
-def ack(m: int, n: int) : int = if m == 0 then n + 1 else if n == 0 then ack(m - 1, 1) else ack(m - 1, ack(m, n - 1)) ack(2, 3) = 9
+def ack(m: Int64, n: Int64) : Int64 = if m == 0 then n + 1 else if n == 0 then ack(m - 1, 1) else ack(m - 1, ack(m, n - 1)) ack(2, 3) = 9
 
 // =====================================================
 // Multiple Function Calls in Single Expression
@@ -110,19 +110,19 @@ def ack(m: int, n: int) : int = if m == 0 then n + 1 else if n == 0 then ack(m -
 // SaveRegs/RestoreRegs stack offset corruption.
 
 // Test 31: Three function calls - direct sum
-def f(x: int) : int = x * 2 f(1) + f(2) + f(3) = 12
+def f(x: Int64) : Int64 = x * 2 f(1) + f(2) + f(3) = 12
 
 // Test 32: Four function calls
-def g(x: int) : int = x + 1 g(1) + g(2) + g(3) + g(4) = 14
+def g(x: Int64) : Int64 = x + 1 g(1) + g(2) + g(3) + g(4) = 14
 
 // Test 33: Tribonacci - triple recursive call
-def trib(n: int) : int = if n <= 0 then 0 else if n == 1 then 1 else if n == 2 then 1 else trib(n - 1) + trib(n - 2) + trib(n - 3) trib(7) = 24
+def trib(n: Int64) : Int64 = if n <= 0 then 0 else if n == 1 then 1 else if n == 2 then 1 else trib(n - 1) + trib(n - 2) + trib(n - 3) trib(7) = 24
 
 // Test 34: Three calls with different functions
-def add1(x: int) : int = x + 1 def add2(x: int) : int = x + 2 def add3(x: int) : int = x + 3 add1(10) + add2(10) + add3(10) = 36
+def add1(x: Int64) : Int64 = x + 1 def add2(x: Int64) : Int64 = x + 2 def add3(x: Int64) : Int64 = x + 3 add1(10) + add2(10) + add3(10) = 36
 
 // Test 35: Three calls using let bindings (workaround - should work)
-def h(x: int) : int = x * 2 let a = h(1) in let b = h(2) in let c = h(3) in a + b + c = 12
+def h(x: Int64) : Int64 = x * 2 let a = h(1) in let b = h(2) in let c = h(3) in a + b + c = 12
 
 // =====================================================
 // Mutual Recursion
@@ -130,19 +130,19 @@ def h(x: int) : int = x * 2 let a = h(1) in let b = h(2) in let c = h(3) in a + 
 // All functions are implicitly mutually recursive - no 'rec' keyword needed
 
 // Test 36: Classic isEven/isOdd mutual recursion - isEven(4) should be true
-def isEven(n: int): int = if n == 0 then 1 else isOdd(n - 1) def isOdd(n: int): int = if n == 0 then 0 else isEven(n - 1) isEven(4) = 1
+def isEven(n: Int64): Int64 = if n == 0 then 1 else isOdd(n - 1) def isOdd(n: Int64): Int64 = if n == 0 then 0 else isEven(n - 1) isEven(4) = 1
 
 // Test 37: isOdd returns true (1) for odd numbers
-def isEven(n: int): int = if n == 0 then 1 else isOdd(n - 1) def isOdd(n: int): int = if n == 0 then 0 else isEven(n - 1) isOdd(5) = 1
+def isEven(n: Int64): Int64 = if n == 0 then 1 else isOdd(n - 1) def isOdd(n: Int64): Int64 = if n == 0 then 0 else isEven(n - 1) isOdd(5) = 1
 
 // Test 38: isEven returns false (0) for odd numbers
-def isEven(n: int): int = if n == 0 then 1 else isOdd(n - 1) def isOdd(n: int): int = if n == 0 then 0 else isEven(n - 1) isEven(3) = 0
+def isEven(n: Int64): Int64 = if n == 0 then 1 else isOdd(n - 1) def isOdd(n: Int64): Int64 = if n == 0 then 0 else isEven(n - 1) isEven(3) = 0
 
 // Test 39: Three-way mutual recursion
-def funcA(n: int): int = if n <= 0 then 1 else funcB(n - 1) def funcB(n: int): int = if n <= 0 then 2 else funcC(n - 1) def funcC(n: int): int = if n <= 0 then 3 else funcA(n - 1) funcA(3) = 1
+def funcA(n: Int64): Int64 = if n <= 0 then 1 else funcB(n - 1) def funcB(n: Int64): Int64 = if n <= 0 then 2 else funcC(n - 1) def funcC(n: Int64): Int64 = if n <= 0 then 3 else funcA(n - 1) funcA(3) = 1
 
 // Test 40: Three-way mutual recursion - start from funcB
-def funcA(n: int): int = if n <= 0 then 1 else funcB(n - 1) def funcB(n: int): int = if n <= 0 then 2 else funcC(n - 1) def funcC(n: int): int = if n <= 0 then 3 else funcA(n - 1) funcB(2) = 1
+def funcA(n: Int64): Int64 = if n <= 0 then 1 else funcB(n - 1) def funcB(n: Int64): Int64 = if n <= 0 then 2 else funcC(n - 1) def funcC(n: Int64): Int64 = if n <= 0 then 3 else funcA(n - 1) funcB(2) = 1
 
 // Test 41: Forward reference - funcX calls funcY defined after it
-def funcX(n: int): int = if n <= 0 then 100 else funcY(n - 1) + 1 def funcY(n: int): int = n * 2 funcX(5) = 9
+def funcX(n: Int64): Int64 = if n <= 0 then 100 else funcY(n - 1) + 1 def funcY(n: Int64): Int64 = n * 2 funcX(5) = 9

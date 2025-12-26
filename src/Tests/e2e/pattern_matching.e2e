@@ -36,34 +36,34 @@ type Dir = North | East | South | West match South with | North -> 0 | East -> 1
 // === Milestone 6: Payload Extraction ===
 
 // Extract payload from Some variant
-type Option = None | Some of int match Some(42) with | Some(x) -> x | None -> 0 = stdout="42\n"
+type Option = None | Some of Int64 match Some(42) with | Some(x) -> x | None -> 0 = stdout="42\n"
 
 // Extract and use payload in arithmetic
-type Option = None | Some of int match Some(10) with | Some(x) -> x + 5 | None -> 0 = stdout="15\n"
+type Option = None | Some of Int64 match Some(10) with | Some(x) -> x + 5 | None -> 0 = stdout="15\n"
 
 // Match None case (no extraction)
-type Option = None | Some of int match None with | Some(x) -> x | None -> 99 = stdout="99\n"
+type Option = None | Some of Int64 match None with | Some(x) -> x | None -> 99 = stdout="99\n"
 
 // Variable binding on whole scrutinee
 type Color = Red | Green | Blue match Green with | x -> 1 = stdout="1\n"
 
 // Extract payload with different variant order
-type Result = Ok of int | Err match Ok(100) with | Ok(v) -> v | Err -> 0 = stdout="100\n"
+type Result = Ok of Int64 | Err match Ok(100) with | Ok(v) -> v | Err -> 0 = stdout="100\n"
 
 // Match second variant of Result
-type Result = Ok of int | Err match Err with | Ok(v) -> v | Err -> 1 = stdout="1\n"
+type Result = Ok of Int64 | Err match Err with | Ok(v) -> v | Err -> 1 = stdout="1\n"
 
 // Multiple payload variants - match first
-type Either = Left of int | Right of int match Left(5) with | Left(x) -> x | Right(y) -> y = stdout="5\n"
+type Either = Left of Int64 | Right of Int64 match Left(5) with | Left(x) -> x | Right(y) -> y = stdout="5\n"
 
 // Multiple payload variants - match second
-type Either = Left of int | Right of int match Right(7) with | Left(x) -> x | Right(y) -> y = stdout="7\n"
+type Either = Left of Int64 | Right of Int64 match Right(7) with | Left(x) -> x | Right(y) -> y = stdout="7\n"
 
 // Extract and multiply
-type Option = None | Some of int match Some(6) with | Some(x) -> x * 7 | None -> 0 = stdout="42\n"
+type Option = None | Some of Int64 match Some(6) with | Some(x) -> x * 7 | None -> 0 = stdout="42\n"
 
 // Extract with wildcard fallback
-type Option = None | Some of int match Some(123) with | Some(n) -> n | _ -> 0 = stdout="123\n"
+type Option = None | Some of Int64 match Some(123) with | Some(n) -> n | _ -> 0 = stdout="123\n"
 
 // === Integer Literal Patterns ===
 
@@ -143,35 +143,35 @@ match (1, 2, 3, 4, 5) with | (a, _, c, _, e) -> a + c + e = stdout="9\n"
 // === Record Patterns ===
 
 // Simple record extraction
-type Point = { x: int, y: int } match Point { x = 10, y = 20 } with | Point { x = a, y = b } -> a + b = stdout="30\n"
+type Point = { x: Int64, y: Int64 } match Point { x = 10, y = 20 } with | Point { x = a, y = b } -> a + b = stdout="30\n"
 
 // Record with one field extracted
-type Point = { x: int, y: int } match Point { x = 5, y = 10 } with | Point { x = n, y = _ } -> n = stdout="5\n"
+type Point = { x: Int64, y: Int64 } match Point { x = 5, y = 10 } with | Point { x = n, y = _ } -> n = stdout="5\n"
 
 // Record second field only
-type Point = { x: int, y: int } match Point { x = 5, y = 15 } with | Point { x = _, y = m } -> m = stdout="15\n"
+type Point = { x: Int64, y: Int64 } match Point { x = 5, y = 15 } with | Point { x = _, y = m } -> m = stdout="15\n"
 
 // Record from variable
-type Point = { x: int, y: int } let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> a * a + b * b = stdout="25\n"
+type Point = { x: Int64, y: Int64 } let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> a * a + b * b = stdout="25\n"
 
 // Three-field record
-type Vec3 = { x: int, y: int, z: int } match Vec3 { x = 1, y = 2, z = 3 } with | Vec3 { x = a, y = b, z = c } -> a + b + c = stdout="6\n"
+type Vec3 = { x: Int64, y: Int64, z: Int64 } match Vec3 { x = 1, y = 2, z = 3 } with | Vec3 { x = a, y = b, z = c } -> a + b + c = stdout="6\n"
 
 // === Nested ADT Patterns ===
 
 // Nested Option - Some(Some(x))
-type Option = None | Some of int type Nested = Empty | Wrap of int match Wrap(42) with | Wrap(x) -> x | Empty -> 0 = stdout="42\n"
+type Option = None | Some of Int64 type Nested = Empty | Wrap of Int64 match Wrap(42) with | Wrap(x) -> x | Empty -> 0 = stdout="42\n"
 
 // Deeply extract from nested variant
-type Box = Empty | Full of int match Full(99) with | Full(n) -> n * 2 | Empty -> 0 = stdout="198\n"
+type Box = Empty | Full of Int64 match Full(99) with | Full(n) -> n * 2 | Empty -> 0 = stdout="198\n"
 
 // === Complex Combinations ===
 
 // Tuple inside match case body
-type Option = None | Some of int match Some(5) with | Some(x) -> let t = (x, x * 2) in match t with | (a, b) -> a + b | None -> 0 = stdout="15\n"
+type Option = None | Some of Int64 match Some(5) with | Some(x) -> let t = (x, x * 2) in match t with | (a, b) -> a + b | None -> 0 = stdout="15\n"
 
 // Record access in match body
-type Point = { x: int, y: int } type Option = None | Some of int match Some(1) with | Some(_) -> let p = Point { x = 10, y = 20 } in p.x + p.y | None -> 0 = stdout="30\n"
+type Point = { x: Int64, y: Int64 } type Option = None | Some of Int64 match Some(1) with | Some(_) -> let p = Point { x = 10, y = 20 } in p.x + p.y | None -> 0 = stdout="30\n"
 
 // Match on tuple element
 match (1, 2) with | (a, _) -> match a with | 1 -> 100 | _ -> 0 = stdout="100\n"
@@ -186,7 +186,7 @@ match 5 with | 5 -> 100 + 1 | _ -> 0 = stdout="101\n"
 match 1 with | 1 -> match 2 with | 2 -> 10 + 20 | _ -> 0 | _ -> 0 = stdout="30\n"
 
 // Arithmetic on extracted values
-type Pair = MkPair of int match MkPair(7) with | MkPair(n) -> n * n + n = stdout="56\n"
+type Pair = MkPair of Int64 match MkPair(7) with | MkPair(n) -> n * n + n = stdout="56\n"
 
 // Boolean from comparison used in match
 let x = 42 in match x == 42 with | true -> 1 | false -> 0 = stdout="1\n"
@@ -209,10 +209,10 @@ match 1 with | 1 -> 100 | 2 -> 200 | _ -> 0 = stdout="100\n"
 match 99 with | 1 -> 100 | 2 -> 200 | n -> n = stdout="99\n"
 
 // Multiple wildcards in different positions
-type Triple = T of int match T(5) with | T(x) -> x + 1 = stdout="6\n"
+type Triple = T of Int64 match T(5) with | T(x) -> x + 1 = stdout="6\n"
 
 // Combine enum and payload extraction
-type MaybeInt = Nothing | Just of int match Just(10) with | Nothing -> 0 | Just(n) -> n + n = stdout="20\n"
+type MaybeInt = Nothing | Just of Int64 match Just(10) with | Nothing -> 0 | Just(n) -> n + n = stdout="20\n"
 
 // Mix patterns in same match
 match 2 with | 1 -> 10 | 2 -> 20 | x -> x * 100 = stdout="20\n"
@@ -230,18 +230,18 @@ match (true, false) with | (a, _) -> match a with | true -> 1 | false -> 0 = std
 
 // === Records with Complex Bodies ===
 
-type Point = { x: int, y: int } let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> (a + b) * (a - b) = stdout="-7\n"
+type Point = { x: Int64, y: Int64 } let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> (a + b) * (a - b) = stdout="-7\n"
 
 // Manhattan distance style
-type Point = { x: int, y: int } match Point { x = 3, y = 4 } with | Point { x = a, y = b } -> if a > b then a else b = stdout="4\n"
+type Point = { x: Int64, y: Int64 } match Point { x = 3, y = 4 } with | Point { x = a, y = b } -> if a > b then a else b = stdout="4\n"
 
 // === Wild Nested Combinations ===
 
 // Tuple in ADT payload then extracted
-type Box = Empty | Pair of int match Pair(42) with | Pair(n) -> let t = (n, n + 1) in match t with | (a, b) -> a + b | Empty -> 0 = stdout="85\n"
+type Box = Empty | Pair of Int64 match Pair(42) with | Pair(n) -> let t = (n, n + 1) in match t with | (a, b) -> a + b | Empty -> 0 = stdout="85\n"
 
 // ADT in tuple (via let)
-type Maybe = No | Yes of int let m = Yes(5) in let t = (m, 10) in match t with | (_, y) -> y = stdout="10\n"
+type Maybe = No | Yes of Int64 let m = Yes(5) in let t = (m, 10) in match t with | (_, y) -> y = stdout="10\n"
 
 // Deeply nested match cascade
 match 1 with | 1 -> match 2 with | 2 -> match 3 with | 3 -> 42 | _ -> 0 | _ -> 0 | _ -> 0 = stdout="42\n"

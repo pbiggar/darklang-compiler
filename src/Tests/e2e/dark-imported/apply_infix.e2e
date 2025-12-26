@@ -181,14 +181,14 @@ let x = 10 in x * x + x = 110
 // Operators in Function Calls
 // ===================================================================
 
-def double(x: int): int = x + x double(21) = 42
-def square(x: int): int = x * x square(6) = 36
-def add(a: int, b: int): int = a + b add(20, 22) = 42
-def sub(a: int, b: int): int = a - b sub(50, 8) = 42
+def double(x: Int64): Int64 = x + x double(21) = 42
+def square(x: Int64): Int64 = x * x square(6) = 36
+def add(a: Int64, b: Int64): Int64 = a + b add(20, 22) = 42
+def sub(a: Int64, b: Int64): Int64 = a - b sub(50, 8) = 42
 
 // Function result in expression
-def inc(x: int): int = x + 1 inc(5) + inc(10) = 17
-def double(x: int): int = x * 2 double(5) * double(3) = 60
+def inc(x: Int64): Int64 = x + 1 inc(5) + inc(10) = 17
+def double(x: Int64): Int64 = x * 2 double(5) * double(3) = 60
 
 // ===================================================================
 // Operators in Control Flow

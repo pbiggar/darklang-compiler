@@ -5,46 +5,46 @@
 // =====================================================
 
 // Pass named function as argument and call it
-def apply(f: (int) -> int, x: int): int = f(x) def inc(n: int): int = n + 1 apply(inc, 5) = 6
+def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) def inc(n: Int64): Int64 = n + 1 apply(inc, 5) = 6
 
 // Two-argument function passed as argument
-def apply2(f: (int, int) -> int, a: int, b: int): int = f(a, b) def add(x: int, y: int): int = x + y apply2(add, 3, 4) = 7
+def apply2(f: (Int64, Int64) -> Int64, a: Int64, b: Int64): Int64 = f(a, b) def add(x: Int64, y: Int64): Int64 = x + y apply2(add, 3, 4) = 7
 
 // Pass named function and use with multiple values
-def twice(f: (int) -> int, x: int): int = f(f(x)) def double(n: int): int = n * 2 twice(double, 5) = 20
+def twice(f: (Int64) -> Int64, x: Int64): Int64 = f(f(x)) def double(n: Int64): Int64 = n * 2 twice(double, 5) = 20
 
 // =====================================================
 // Lambda as Argument (no captures)
 // =====================================================
 
 // Pass simple lambda as argument
-def apply(f: (int) -> int, x: int): int = f(x) apply((y: int) => y + 1, 5) = 6
+def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) apply((y: Int64) => y + 1, 5) = 6
 
 // Lambda with multiplication
-def apply(f: (int) -> int, x: int): int = f(x) apply((y: int) => y * 2, 21) = 42
+def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) apply((y: Int64) => y * 2, 21) = 42
 
 // Two-argument lambda
-def apply2(f: (int, int) -> int, a: int, b: int): int = f(a, b) apply2((a: int, b: int) => a * b, 6, 7) = 42
+def apply2(f: (Int64, Int64) -> Int64, a: Int64, b: Int64): Int64 = f(a, b) apply2((a: Int64, b: Int64) => a * b, 6, 7) = 42
 
 // =====================================================
 // Lambda with Captures as Argument
 // =====================================================
 
 // Pass capturing lambda - closure support
-def apply(f: (int) -> int, x: int): int = f(x) let base = 10 in apply((y: int) => y + base, 5) = 15
+def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let base = 10 in apply((y: Int64) => y + base, 5) = 15
 
 // Two variables captured
-def apply(f: (int) -> int, x: int): int = f(x) let a = 10 in let b = 20 in apply((y: int) => y + a + b, 12) = 42
+def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let a = 10 in let b = 20 in apply((y: Int64) => y + a + b, 12) = 42
 
 // Capture and multiply
-def apply(f: (int) -> int, x: int): int = f(x) let factor = 7 in apply((y: int) => y * factor, 6) = 42
+def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) let factor = 7 in apply((y: Int64) => y * factor, 6) = 42
 
 // =====================================================
 // Composed Function Applications
 // =====================================================
 
 // Apply function twice using higher-order function
-def twice(f: (int) -> int, x: int): int = f(f(x)) twice((y: int) => y + 1, 5) = 7
+def twice(f: (Int64) -> Int64, x: Int64): Int64 = f(f(x)) twice((y: Int64) => y + 1, 5) = 7
 
 // Twice with capturing lambda
-def twice(f: (int) -> int, x: int): int = f(f(x)) let inc = 3 in twice((y: int) => y + inc, 5) = 11
+def twice(f: (Int64) -> Int64, x: Int64): Int64 = f(f(x)) let inc = 3 in twice((y: Int64) => y + inc, 5) = 11

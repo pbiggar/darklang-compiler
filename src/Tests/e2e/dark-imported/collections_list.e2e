@@ -124,13 +124,13 @@ match [1, 2, 3] with | [...t] -> 1 | _ -> 0 = 1
 
 // ===================================================================
 // Recursive List Functions
-// NOTE: Commented out - requires generic type parameters `List<int>`
+// NOTE: Commented out - requires generic type parameters `List<Int64>`
 // ===================================================================
 
-// def length(xs: List<int>) : int = match xs with | [] -> 0 | [_, ...t] -> 1 + length(t) length([1, 2, 3, 4, 5]) = 5
-// def sum(xs: List<int>) : int = match xs with | [] -> 0 | [h, ...t] -> h + sum(t) sum([1, 2, 3, 4, 5]) = 15
-// def length(xs: List<int>) : int = match xs with | [] -> 0 | [_, ...t] -> 1 + length(t) length([]) = 0
-// def sum(xs: List<int>) : int = match xs with | [] -> 0 | [h, ...t] -> h + sum(t) sum([42]) = 42
+// def length(xs: List<Int64>) : Int64 = match xs with | [] -> 0 | [_, ...t] -> 1 + length(t) length([1, 2, 3, 4, 5]) = 5
+// def sum(xs: List<Int64>) : Int64 = match xs with | [] -> 0 | [h, ...t] -> h + sum(t) sum([1, 2, 3, 4, 5]) = 15
+// def length(xs: List<Int64>) : Int64 = match xs with | [] -> 0 | [_, ...t] -> 1 + length(t) length([]) = 0
+// def sum(xs: List<Int64>) : Int64 = match xs with | [] -> 0 | [h, ...t] -> h + sum(t) sum([42]) = 42
 
 // ===================================================================
 // Lists in Let Bindings

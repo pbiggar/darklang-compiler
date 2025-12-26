@@ -270,10 +270,10 @@ let rec parseFunctionTypeParams (typeParams: Set<string>) (tokens: Token list) (
 /// Base type parser (no function types - used to parse function type components)
 and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type * Token list, string> =
     match tokens with
-    | TIdent "int" :: rest -> Ok (TInt64, rest)
-    | TIdent "bool" :: rest -> Ok (TBool, rest)
-    | TIdent "string" :: rest -> Ok (TString, rest)
-    | TIdent "float" :: rest -> Ok (TFloat64, rest)
+    | TIdent "Int64" :: rest -> Ok (TInt64, rest)
+    | TIdent "Bool" :: rest -> Ok (TBool, rest)
+    | TIdent "String" :: rest -> Ok (TString, rest)
+    | TIdent "Float" :: rest -> Ok (TFloat64, rest)
     | TIdent typeName :: rest when Set.contains typeName typeParams ->
         Ok (TVar typeName, rest)
     | TIdent typeName :: rest when System.Char.IsUpper(typeName.[0]) ->
@@ -288,7 +288,7 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
                 |> Result.map (fun (returnType, remaining) ->
                     (TFunction (paramTypes, returnType), remaining))
             | _ -> Error "Expected '->' after function type parameters")
-    | _ -> Error "Expected type annotation (int, bool, string, float, TypeName, type variable, or function type)"
+    | _ -> Error "Expected type annotation (Int64, Bool, String, Float, TypeName, type variable, or function type)"
 
 /// Parse a type annotation with context for type parameters in scope
 and parseTypeWithContext (typeParams: Set<string>) (tokens: Token list) : Result<Type * Token list, string> =
@@ -298,23 +298,23 @@ and parseTypeWithContext (typeParams: Set<string>) (tokens: Token list) : Result
 let parseType (tokens: Token list) : Result<Type * Token list, string> =
     parseTypeWithContext Set.empty tokens
 
-/// Parse type parameters: <T, U, V> (names only, for function definitions)
+/// Parse type parameters: <t, u, v> (names only, for function definitions)
 let rec parseTypeParams (tokens: Token list) (acc: string list) : Result<string list * Token list, string> =
     match tokens with
-    | TIdent name :: TGt :: rest when System.Char.IsUpper(name.[0]) ->
+    | TIdent name :: TGt :: rest when System.Char.IsLower(name.[0]) ->
         // Last type parameter
         Ok (List.rev (name :: acc), rest)
-    | TIdent name :: TComma :: rest when System.Char.IsUpper(name.[0]) ->
+    | TIdent name :: TComma :: rest when System.Char.IsLower(name.[0]) ->
         // More type parameters to come
         parseTypeParams rest (name :: acc)
-    | TIdent name :: _ when not (System.Char.IsUpper(name.[0])) ->
-        Error $"Type parameter must start with uppercase letter: {name}"
+    | TIdent name :: _ when not (System.Char.IsLower(name.[0])) ->
+        Error $"Type parameter must start with lowercase letter: {name}"
     | TGt :: rest when List.isEmpty acc ->
         // Empty type parameters: <>
         Ok ([], rest)
-    | _ -> Error "Expected type parameter name (uppercase identifier)"
+    | _ -> Error "Expected type parameter name (lowercase identifier)"
 
-/// Parse type arguments: <int, bool, Point> (concrete types, for call sites)
+/// Parse type arguments: <Int64, Bool, Point> (concrete types, for call sites)
 let rec parseTypeArgs (tokens: Token list) (acc: Type list) : Result<Type list * Token list, string> =
     parseType tokens
     |> Result.bind (fun (ty, remaining) ->
@@ -911,10 +911,6 @@ let parse (tokens: Token list) : Result<Program, string> =
             let looksLikeType =
                 match rest with
                 | TIdent typeName :: _ when System.Char.IsUpper(typeName.[0]) -> true  // Uppercase = type name
-                | TIdent "int" :: _ -> true
-                | TIdent "bool" :: _ -> true
-                | TIdent "string" :: _ -> true
-                | TIdent "float" :: _ -> true
                 | _ -> false
             if looksLikeType then
                 // Parse as generic call
