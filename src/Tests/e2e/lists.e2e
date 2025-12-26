@@ -175,3 +175,25 @@ match [1, 2, 3, 4] with | [a, b, c] -> a + b + c | _ -> 99 = stdout="99\n"
 // Verify exact matching works correctly
 match [1, 2] with | [a, b] -> a + b | _ -> 99 = stdout="3\n"
 match [1, 2, 3] with | [a, b, c] -> a + b + c | _ -> 99 = stdout="6\n"
+
+// =====================================================
+// Polymorphic List Tests (List<T>)
+// =====================================================
+
+// Bool list - single element
+let bs = [true] in match bs with | [x] -> if x then 1 else 0 | _ -> 99 = 1
+
+// Bool list - two elements
+let bs = [true, false] in match bs with | [a, b] -> if a then 1 else 0 | _ -> 99 = 1
+
+// Bool list - check second element
+let bs = [false, true] in match bs with | [a, b] -> if b then 1 else 0 | _ -> 99 = 1
+
+// Bool list - logical operations from extracted values
+let bs = [true, true] in match bs with | [a, b] -> if a && b then 42 else 0 | _ -> 99 = 42
+
+// Bool list - three elements
+let bs = [true, false, true] in match bs with | [a, b, c] -> if a && c then 1 else 0 | _ -> 99 = 1
+
+// Int lists still work as before
+let xs = [10, 20, 30] in match xs with | [a, b, c] -> a + b + c | _ -> 0 = 60

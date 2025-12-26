@@ -66,7 +66,7 @@ let rec typeToMangledName (t: AST.Type) : string =
         $"tup_{elemsStr}"
     | AST.TRecord name -> name
     | AST.TSum name -> name
-    | AST.TList -> "list"
+    | AST.TList elemType -> $"list_{typeToMangledName elemType}"
     | AST.TVar name -> name  // Should not appear after monomorphization
 
 /// Generate a specialized function name
@@ -91,7 +91,9 @@ let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
         AST.TFunction (List.map (applySubstToType subst) paramTypes, applySubstToType subst returnType)
     | AST.TTuple elemTypes ->
         AST.TTuple (List.map (applySubstToType subst) elemTypes)
-    | AST.TInt64 | AST.TBool | AST.TFloat64 | AST.TString | AST.TUnit | AST.TRecord _ | AST.TSum _ | AST.TList ->
+    | AST.TList elemType ->
+        AST.TList (applySubstToType subst elemType)
+    | AST.TInt64 | AST.TBool | AST.TFloat64 | AST.TString | AST.TUnit | AST.TRecord _ | AST.TSum _ ->
         typ  // Concrete types are unchanged
 
 /// Apply a substitution to an expression, replacing type variables in type annotations
@@ -362,7 +364,12 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
         match Map.tryFind variantName variantLookup with
         | Some (typeName, _, _) -> Ok (AST.TSum typeName)
         | None -> Error $"Unknown constructor: {variantName}"
-    | AST.ListLiteral _ -> Ok AST.TList
+    | AST.ListLiteral elements ->
+        match elements with
+        | [] -> Ok (AST.TList AST.TInt64)  // Default empty list to List<int>
+        | first :: _ ->
+            inferType first typeEnv typeReg variantLookup funcReg
+            |> Result.map (fun elemType -> AST.TList elemType)
     | AST.Let (name, value, body) ->
         inferType value typeEnv typeReg variantLookup funcReg
         |> Result.bind (fun valueType ->

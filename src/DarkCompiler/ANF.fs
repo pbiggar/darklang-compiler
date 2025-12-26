@@ -112,7 +112,7 @@ let isHeapType (t: AST.Type) : bool =
     match t with
     | AST.TTuple _ -> true
     | AST.TRecord _ -> true
-    | AST.TList -> true
+    | AST.TList _ -> true  // All lists are heap-allocated regardless of element type
     | AST.TSum _ -> true  // Conservative: sum types with payloads are heap-allocated
     | _ -> false
 
@@ -124,6 +124,6 @@ let payloadSize (t: AST.Type) (typeReg: Map<string, (string * AST.Type) list>) :
         match Map.tryFind name typeReg with
         | Some fields -> List.length fields * 8
         | None -> 16  // Fallback for unknown records
-    | AST.TList -> 24  // [tag, head, tail]
+    | AST.TList _ -> 24  // [tag, head, tail] - same size for all element types
     | AST.TSum _ -> 16  // [tag, payload]
     | _ -> 0  // Non-heap types

@@ -45,7 +45,7 @@ let rec typeToString (t: Type) : string =
         $"({elemsStr})"
     | TRecord name -> name
     | TSum name -> name
-    | TList -> "list"
+    | TList elemType -> $"List<{typeToString elemType}>"
     | TVar name -> name  // Type variable (for generics)
 
 /// Pretty-print a type error
@@ -93,7 +93,9 @@ let rec applySubst (subst: Substitution) (typ: Type) : Type =
         TFunction (List.map (applySubst subst) paramTypes, applySubst subst returnType)
     | TTuple elemTypes ->
         TTuple (List.map (applySubst subst) elemTypes)
-    | TInt64 | TBool | TFloat64 | TString | TUnit | TRecord _ | TSum _ | TList ->
+    | TList elemType ->
+        TList (applySubst subst elemType)
+    | TInt64 | TBool | TFloat64 | TString | TUnit | TRecord _ | TSum _ ->
         typ  // Concrete types are unchanged
 
 /// Build a substitution from type parameters and type arguments
@@ -134,9 +136,10 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
     | TUnit ->
         if actual = TUnit then Ok []
         else Error $"Expected unit, got {typeToString actual}"
-    | TList ->
-        if actual = TList then Ok []
-        else Error $"Expected list, got {typeToString actual}"
+    | TList patternElem ->
+        match actual with
+        | TList actualElem -> matchTypes patternElem actualElem
+        | _ -> Error $"Expected List<...>, got {typeToString actual}"
     | TRecord name ->
         if actual = TRecord name then Ok []
         else Error $"Expected {name}, got {typeToString actual}"
@@ -722,10 +725,10 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     | _ -> Error (GenericError "Record pattern used on non-record type")
                 | PList patterns ->
                     match patternType with
-                    | TList ->
-                        // Each element pattern binds int variables
+                    | TList elemType ->
+                        // Each element pattern binds variables of the list's element type
                         patterns
-                        |> List.map (fun p -> extractPatternBindings p TInt64)
+                        |> List.map (fun p -> extractPatternBindings p elemType)
                         |> List.fold (fun acc res ->
                             match acc, res with
                             | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
@@ -761,23 +764,36 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 | _ -> Ok (matchType, Match (scrutinee', cases'))))
 
     | ListLiteral elements ->
-        // Type-check each element (must all be int for now - monomorphic)
-        let rec checkElements elems accExprs =
-            match elems with
-            | [] -> Ok (List.rev accExprs)
-            | e :: rest ->
-                checkExpr e env typeReg variantLookup genericFuncReg (Some TInt64)
-                |> Result.bind (fun (elemType, e') ->
-                    if elemType <> TInt64 then
-                        Error (TypeMismatch (TInt64, elemType, "list element"))
-                    else
-                        checkElements rest (e' :: accExprs))
-
-        checkElements elements []
-        |> Result.bind (fun elements' ->
+        // Type-check elements and infer element type from first element
+        match elements with
+        | [] ->
+            // Empty list: use expected type or default to List<int> for backward compatibility
             match expectedType with
-            | Some TList | None -> Ok (TList, ListLiteral elements')
-            | Some other -> Error (TypeMismatch (other, TList, "list literal")))
+            | Some (TList elemType) -> Ok (TList elemType, ListLiteral [])
+            | Some other -> Error (TypeMismatch (other, TList TInt64, "empty list"))
+            | None -> Ok (TList TInt64, ListLiteral [])  // Default to List<int>
+        | first :: rest ->
+            // Infer element type from first element
+            checkExpr first env typeReg variantLookup genericFuncReg None
+            |> Result.bind (fun (elemType, first') ->
+                // Check remaining elements match the inferred type
+                let rec checkRest remaining acc =
+                    match remaining with
+                    | [] -> Ok (List.rev acc)
+                    | e :: rs ->
+                        checkExpr e env typeReg variantLookup genericFuncReg (Some elemType)
+                        |> Result.bind (fun (eType, e') ->
+                            if eType = elemType then checkRest rs (e' :: acc)
+                            else Error (TypeMismatch (elemType, eType, "list element")))
+                checkRest rest [first']
+                |> Result.bind (fun elements' ->
+                    let listType = TList elemType
+                    match expectedType with
+                    | Some (TList expectedElem) when expectedElem <> elemType ->
+                        Error (TypeMismatch (TList expectedElem, listType, "list literal"))
+                    | Some other when other <> listType ->
+                        Error (TypeMismatch (other, listType, "list literal"))
+                    | _ -> Ok (listType, ListLiteral elements')))
 
 /// Type-check a function definition
 /// Returns the transformed function body (with Call -> TypeApp transformations)

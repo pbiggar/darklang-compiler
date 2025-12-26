@@ -28,7 +28,7 @@ type Type =
     | TTuple of Type list             // tuple type: (Int, Bool, String)
     | TRecord of string               // record type by name: Point, Color, etc.
     | TSum of string                  // sum type by name: Option, Color, etc.
-    | TList                           // list of int (monomorphic for now)
+    | TList of Type                    // List<T> - polymorphic list type
     | TVar of string                  // type variable: T, A, B, etc. (for generics)
 
 /// Binary operators

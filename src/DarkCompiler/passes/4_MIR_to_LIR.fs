@@ -289,7 +289,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
                     | LIR.Reg (LIR.Physical LIR.X0) -> []
                     | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
                 Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
-        | AST.TTuple _ | AST.TRecord _ | AST.TList | AST.TSum _ ->
+        | AST.TTuple _ | AST.TRecord _ | AST.TList _ | AST.TSum _ ->
             // Heap types: print address for now
             let lirSrc = convertOperand src
             let moveToX0 =
