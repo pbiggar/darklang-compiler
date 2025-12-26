@@ -90,3 +90,11 @@ match [] with | [] -> 42 | _ -> 0 = stdout="42\n"
 
 // List allocation then match
 let xs = [1, 2] in match xs with | [a, b] -> a + b | _ -> 0 = stdout="3\n"
+
+// ===================================================================
+// Memory reuse stress test
+// ===================================================================
+
+// 5000 allocations of 24-byte tuples = 120KB, but heap is 64KB
+// This only works because freed memory is reused via free list
+def alloc_one() : int = let t = (1, 1) in t.0 + t.1 def loop(n: int, acc: int) : int = if n < 1 then acc else loop(n - 1, acc + alloc_one()) def main() : int = loop(5000, 0) = 10000
