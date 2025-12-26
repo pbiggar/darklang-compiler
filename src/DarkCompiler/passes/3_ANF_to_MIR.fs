@@ -61,6 +61,57 @@ let sequenceResults (results: Result<'a, string> list) : Result<'a list, string>
 /// Map ANF TempId to MIR virtual register
 let tempToVReg (ANF.TempId id) : MIR.VReg = MIR.VReg id
 
+/// Find the maximum TempId in an atom (returns -1 if no TempId)
+let maxTempIdInAtom (atom: ANF.Atom) : int =
+    match atom with
+    | ANF.Var (ANF.TempId id) -> id
+    | _ -> -1
+
+/// Find the maximum TempId in a CExpr
+let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
+    match cexpr with
+    | ANF.Atom atom -> maxTempIdInAtom atom
+    | ANF.Prim (_, left, right) ->
+        max (maxTempIdInAtom left) (maxTempIdInAtom right)
+    | ANF.UnaryPrim (_, atom) -> maxTempIdInAtom atom
+    | ANF.IfValue (cond, thenVal, elseVal) ->
+        max (maxTempIdInAtom cond) (max (maxTempIdInAtom thenVal) (maxTempIdInAtom elseVal))
+    | ANF.Call (_, args) ->
+        args |> List.map maxTempIdInAtom |> List.fold max -1
+    | ANF.TupleAlloc atoms ->
+        atoms |> List.map maxTempIdInAtom |> List.fold max -1
+    | ANF.TupleGet (tuple, _) -> maxTempIdInAtom tuple
+
+/// Find the maximum TempId in an AExpr
+let rec maxTempIdInAExpr (expr: ANF.AExpr) : int =
+    match expr with
+    | ANF.Let (ANF.TempId id, cexpr, body) ->
+        max id (max (maxTempIdInCExpr cexpr) (maxTempIdInAExpr body))
+    | ANF.Return atom -> maxTempIdInAtom atom
+    | ANF.If (cond, thenBranch, elseBranch) ->
+        max (maxTempIdInAtom cond) (max (maxTempIdInAExpr thenBranch) (maxTempIdInAExpr elseBranch))
+
+/// Find the maximum TempId in a function
+let maxTempIdInFunction (func: ANF.Function) : int =
+    let paramMax =
+        func.Params
+        |> List.map (fun (ANF.TempId id) -> id)
+        |> List.fold max -1
+    max paramMax (maxTempIdInAExpr func.Body)
+
+/// Find the maximum TempId in an ANF program
+let maxTempIdInProgram (program: ANF.Program) : int =
+    let (ANF.Program (functions, mainExpr)) = program
+    let funcMax =
+        functions
+        |> List.map maxTempIdInFunction
+        |> List.fold max -1
+    let mainMax =
+        match mainExpr with
+        | Some expr -> maxTempIdInAExpr expr
+        | None -> -1
+    max funcMax mainMax
+
 /// Collect all string literals from an ANF atom
 let collectStringsFromAtom (atom: ANF.Atom) : string list =
     match atom with
@@ -692,8 +743,13 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
     Ok (mirFunc, finalBuilder.RegGen)
 
 /// Convert ANF program to MIR program
-let toMIR (program: ANF.Program) (regGen: MIR.RegGen) : Result<MIR.Program * MIR.RegGen, string> =
+let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) : Result<MIR.Program * MIR.RegGen, string> =
     let (ANF.Program (functions, mainExpr)) = program
+
+    // Critical: freshReg must generate VRegs that don't conflict with TempId-derived VRegs.
+    // tempToVReg (TempId n) → VReg n, so freshReg must start past the max TempId used.
+    let maxId = maxTempIdInProgram program
+    let regGen = MIR.RegGen (maxId + 1)
 
     // Phase 1: Collect all strings and floats, build pools and lookups
     // Lookups are local (not mutable module-level) to avoid race conditions in parallel tests

@@ -29,24 +29,7 @@ The following are known simplifications or potential issues in the compiler code
 
 ### HIGH Priority (Can cause crashes or wrong results)
 
-#### 1. List pattern length matching is lenient
-**File:** `src/DarkCompiler/passes/2_AST_to_ANF.fs`
-**Status:** Partially fixed - crash eliminated, but matching is lenient
-**Current Behavior:** Pattern `[a, b]` will match lists with 2+ elements (takes first 2)
-**Example:** `match [1, 2, 3] with | [a, b] -> a + b | _ -> 99` returns 3 (not 99)
-
-**Root Cause (Investigated 2024-12):**
-Adding a `tail == 0` check at the end of list pattern extraction creates an extra nesting
-level that causes VReg reuse conflicts. Specifically, the same VReg is used for:
-1. The list head cons cell (defined in `_start_body`)
-2. The fallback result value (defined in fallback branches)
-
-With 5+ element patterns, this causes incorrect spilling where the list head pointer
-gets overwritten by fallback result stores, producing garbage output.
-
-**Risk:** Low - patterns match more than expected, but no crashes
-**Workaround:** Use more specific patterns first, or check length explicitly
-**Future Fix:** Requires ensuring ANF→MIR uses unique VRegs for conceptually different values
+(No current high-priority issues)
 
 ### MEDIUM Priority (Incomplete features)
 
@@ -90,10 +73,10 @@ gets overwritten by fallback result stores, producing garbage output.
 - ✅ Control flow (if/then/else expressions, including in atom position)
 - ✅ Functions with type signatures, calls, and recursion
 - ✅ String literals with escape sequences
-- ✅ Lists (linked list implementation with [1, 2, 3] syntax and pattern matching)
+- ✅ Lists (linked list implementation with [1, 2, 3] syntax and exact-length pattern matching)
 - ✅ Type checking (51 DSL tests + 8 unit tests)
 - ✅ 8-pass compiler pipeline (Parser → TypeCheck → ANF → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
-- ✅ 709 passing tests
+- ✅ 711 passing tests
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
 - ✅ Type-directed record field lookup (no ambiguity when multiple record types have same field names)
 - ✅ Function return type inference using function registry (enables type inference for let-bound function calls)

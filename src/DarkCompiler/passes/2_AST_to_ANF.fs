@@ -651,12 +651,14 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
                 match patterns with
                 | [] ->
-                    // All elements extracted - compile the body
-                    // Note: We don't check tail == 0 here, so lists with more elements
-                    // than the pattern will still match. This is a simplification to avoid
-                    // register allocation issues with deep nesting in 5+ element patterns.
-                    // The extra nesting from tail==0 check causes VReg reuse conflicts.
-                    toANF body vg currentEnv typeReg variantLookup funcReg
+                    // All elements extracted - check tail is nil for exact length matching
+                    // listAtom should be nil (0) if pattern matched exactly
+                    let (tailCheckVar, vg1) = ANF.freshVar vg
+                    let tailCheckExpr = ANF.Prim (ANF.Eq, listAtom, ANF.IntLiteral 0L)
+                    toANF body vg1 currentEnv typeReg variantLookup funcReg
+                    |> Result.map (fun (bodyExpr, vg2) ->
+                        let ifExpr = ANF.If (ANF.Var tailCheckVar, bodyExpr, elseExpr)
+                        (ANF.Let (tailCheckVar, tailCheckExpr, ifExpr), vg2))
 
                 | pat :: restPatterns ->
                     // Check current position is non-nil (list has at least one more element)

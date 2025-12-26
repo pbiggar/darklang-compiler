@@ -166,8 +166,12 @@ match [1, 2, 3] with | [a, b, c, d] -> a + b + c + d | _ -> 99 = stdout="99\n"
 // Pattern too long - 5 elements expected, 2 provided
 match [1, 2] with | [a, b, c, d, e] -> a | _ -> 99 = stdout="99\n"
 
-// === Known Limitation: Lenient matching ===
-// Pattern [a, b] will match lists with 2+ elements (takes first 2)
-// This is a simplification to avoid deep nesting issues with register allocation
-match [1, 2, 3] with | [a, b] -> a + b | _ -> 99 = stdout="3\n"
-match [1, 2, 3, 4] with | [a, b, c] -> a + b + c | _ -> 99 = stdout="6\n"
+// === Exact-length matching (fixed) ===
+// Pattern [a, b] now correctly matches only lists with exactly 2 elements
+// VReg conflict issue fixed by initializing RegGen past max TempId
+match [1, 2, 3] with | [a, b] -> a + b | _ -> 99 = stdout="99\n"
+match [1, 2, 3, 4] with | [a, b, c] -> a + b + c | _ -> 99 = stdout="99\n"
+
+// Verify exact matching works correctly
+match [1, 2] with | [a, b] -> a + b | _ -> 99 = stdout="3\n"
+match [1, 2, 3] with | [a, b, c] -> a + b + c | _ -> 99 = stdout="6\n"
