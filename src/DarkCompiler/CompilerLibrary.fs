@@ -69,7 +69,7 @@ let compile (verbosity: int) (source: string) : CompileResult =
 
                 // Pass 2: AST → ANF
                 if verbosity >= 1 then println "  [2/8] AST → ANF..."
-                let anfResult = AST_to_ANF.convertProgram ast
+                let anfResult = AST_to_ANF.convertProgramWithTypes ast
                 let anfTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime
                 if verbosity >= 2 then
                     let t = System.Math.Round(anfTime, 1)
@@ -80,10 +80,39 @@ let compile (verbosity: int) (source: string) : CompileResult =
                     { Binary = Array.empty
                       Success = false
                       ErrorMessage = Some $"ANF conversion error: {err}" }
-                | Ok anfProgram ->
-                    // Show ANF
+                | Ok convResult ->
+                    // Show ANF before RC insertion
                     if verbosity >= 3 then
-                        println "=== ANF ==="
+                        println "=== ANF (before RC insertion) ==="
+                        let (ANF.Program (funcs, mainExpr)) = convResult.Program
+                        for func in funcs do
+                            println $"Function: {func.Name}"
+                            println $"  Params: {func.Params}"
+                            println $"  Body: {func.Body}"
+                            println ""
+                        match mainExpr with
+                        | Some expr -> println $"Main: {expr}"
+                        | None -> ()
+                        println ""
+
+                    // Pass 2.5: Reference Count Insertion
+                    if verbosity >= 1 then println "  [2.5/8] Reference Count Insertion..."
+                    let rcResult = RefCountInsertion.insertRCInProgram convResult
+                    let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(rcTime, 1)
+                        println $"        {t}ms"
+
+                    match rcResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"Reference count insertion error: {err}" }
+                    | Ok anfProgram ->
+
+                    // Show ANF after RC insertion
+                    if verbosity >= 3 then
+                        println "=== ANF (after RC insertion) ==="
                         let (ANF.Program (funcs, mainExpr)) = anfProgram
                         for func in funcs do
                             println $"Function: {func.Name}"
@@ -124,7 +153,7 @@ let compile (verbosity: int) (source: string) : CompileResult =
                                 println $"  {block.Terminator}"
                         println ""
 
-                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime
+                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(mirTime, 1)
                         println $"        {t}ms"
@@ -155,7 +184,7 @@ let compile (verbosity: int) (source: string) : CompileResult =
                                 println $"  {block.Terminator}"
                         println ""
 
-                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - mirTime
+                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - mirTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(lirTime, 1)
                         println $"        {t}ms"
@@ -180,7 +209,7 @@ let compile (verbosity: int) (source: string) : CompileResult =
                                 println $"  {block.Terminator}"
                         println ""
 
-                    let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - mirTime - lirTime
+                    let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - mirTime - lirTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(allocTime, 1)
                         println $"        {t}ms"
@@ -188,7 +217,7 @@ let compile (verbosity: int) (source: string) : CompileResult =
                     // Pass 6: Code Generation (LIR → ARM64)
                     if verbosity >= 1 then println "  [6/8] Code Generation..."
                     let codegenResult = CodeGen.generateARM64 allocatedProgram
-                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - mirTime - lirTime - allocTime
+                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - mirTime - lirTime - allocTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(codegenTime, 1)
                         println $"        {t}ms"
@@ -255,7 +284,7 @@ let compile (verbosity: int) (source: string) : CompileResult =
                                     println $"  {i:X4}: {bytes}"
                             println $"Total: {machineCode.Length} bytes\n"
 
-                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - mirTime - lirTime - allocTime - codegenTime
+                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - mirTime - lirTime - allocTime - codegenTime
                         if verbosity >= 2 then
                             let t = System.Math.Round(encodeTime, 1)
                             println $"        {t}ms"
@@ -267,7 +296,7 @@ let compile (verbosity: int) (source: string) : CompileResult =
                             match os with
                             | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode stringPool floatPool
                             | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode stringPool floatPool
-                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
+                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
                         if verbosity >= 2 then
                             let t = System.Math.Round(binaryTime, 1)
                             println $"        {t}ms"
