@@ -279,10 +279,10 @@ let prettyPrintANFCExpr = function
         $"({elemsStr})"
     | ANF.TupleGet (tupleAtom, index) ->
         $"{prettyPrintANFAtom tupleAtom}.{index}"
-    | ANF.RefCountInc atom ->
-        $"rc_inc({prettyPrintANFAtom atom})"
-    | ANF.RefCountDec atom ->
-        $"rc_dec({prettyPrintANFAtom atom})"
+    | ANF.RefCountInc (atom, payloadSize) ->
+        $"rc_inc({prettyPrintANFAtom atom}, size={payloadSize})"
+    | ANF.RefCountDec (atom, payloadSize) ->
+        $"rc_dec({prettyPrintANFAtom atom}, size={payloadSize})"
 
 /// Pretty-print ANF expression (recursive)
 let rec prettyPrintANFExpr = function
@@ -340,7 +340,10 @@ let loadANF2MIRTest (path: string) : Result<ANF.Program * MIR.Program, string> =
 
 /// Run ANF→MIR test
 let runANF2MIRTest (input: ANF.Program) (expected: MIR.Program) : PassTestResult =
-    match ANF_to_MIR.toMIR input MIR.initialRegGen with
+    // Pass empty TypeMap and TypeReg since payload sizes are stored in instructions
+    let emptyTypeMap : ANF.TypeMap = Map.empty
+    let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
+    match ANF_to_MIR.toMIR input MIR.initialRegGen emptyTypeMap emptyTypeReg with
     | Error err ->
         { Success = false
           Message = $"MIR conversion error: {err}"

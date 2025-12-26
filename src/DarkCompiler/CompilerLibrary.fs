@@ -97,7 +97,10 @@ let compile (verbosity: int) (source: string) : CompileResult =
 
                     // Pass 3: ANF → MIR
                     if verbosity >= 1 then println "  [3/8] ANF → MIR..."
-                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0)
+                    // Pass empty TypeMap and TypeReg since payload sizes are now stored in instructions
+                    let emptyTypeMap : ANF.TypeMap = Map.empty
+                    let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
+                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) emptyTypeMap emptyTypeReg
 
                     match mirResult with
                     | Error err ->

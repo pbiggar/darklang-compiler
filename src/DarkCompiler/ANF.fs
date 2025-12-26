@@ -64,8 +64,8 @@ type CExpr =
     | TupleAlloc of Atom list                   // Create tuple: (a, b, c)
     | TupleGet of tuple:Atom * index:int        // Get tuple element: t.0
     // Reference counting operations
-    | RefCountInc of Atom                       // Increment ref count of heap value
-    | RefCountDec of Atom                       // Decrement ref count, free if zero
+    | RefCountInc of Atom * payloadSize:int    // Increment ref count of heap value
+    | RefCountDec of Atom * payloadSize:int    // Decrement ref count, free if zero
 
 /// ANF expressions with explicit sequencing
 type AExpr =

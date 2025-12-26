@@ -96,8 +96,8 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                 | _ -> None
             | _ -> None
         | _ -> None
-    | RefCountInc _ -> Some AST.TUnit
-    | RefCountDec _ -> Some AST.TUnit
+    | RefCountInc (_, _) -> Some AST.TUnit
+    | RefCountDec (_, _) -> Some AST.TUnit
 
 /// Check if an atom is returned in the expression
 let rec isAtomReturned (atom: Atom) (expr: AExpr) : bool =
@@ -113,11 +113,13 @@ let isTempReturned (tempId: TempId) (expr: AExpr) : bool =
 
 /// Wrap an expression with a RefCountDec for a TempId
 /// The Dec happens after computing the result but before returning
-let wrapWithDec (tempId: TempId) (expr: AExpr) (varGen: VarGen) : AExpr * VarGen =
+let wrapWithDec (tempId: TempId) (typ: AST.Type) (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * VarGen =
     // Create a dummy binding for the Dec operation
     let (dummyId, varGen') = freshVar varGen
+    // Compute payload size for this type
+    let size = payloadSize typ ctx.TypeReg
     // The Dec produces Unit, we ignore its result
-    (Let (dummyId, RefCountDec (Var tempId), expr), varGen')
+    (Let (dummyId, RefCountDec (Var tempId, size), expr), varGen')
 
 /// Insert reference counting operations into an AExpr
 let rec insertRC (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * VarGen =
@@ -144,16 +146,12 @@ let rec insertRC (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * Var
         let (body', varGen1) = insertRC ctx' body varGen
 
         // Check if this TempId is heap-typed and not returned
-        let needsDec =
-            match maybeType with
-            | Some t when isHeapType t && not (isTempReturned tempId body') -> true
-            | _ -> false
-
-        if needsDec then
+        match maybeType with
+        | Some t when isHeapType t && not (isTempReturned tempId body') ->
             // Insert Dec after body completes but value isn't returned
-            let (bodyWithDec, varGen2) = wrapWithDec tempId body' varGen1
+            let (bodyWithDec, varGen2) = wrapWithDec tempId t ctx' body' varGen1
             (Let (tempId, cexpr, bodyWithDec), varGen2)
-        else
+        | _ ->
             (Let (tempId, cexpr, body'), varGen1)
 
 /// Insert RC operations into a function

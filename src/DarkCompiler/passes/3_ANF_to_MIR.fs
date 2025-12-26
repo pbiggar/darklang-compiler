@@ -81,8 +81,8 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.TupleAlloc atoms ->
         atoms |> List.map maxTempIdInAtom |> List.fold max -1
     | ANF.TupleGet (tuple, _) -> maxTempIdInAtom tuple
-    | ANF.RefCountInc atom -> maxTempIdInAtom atom
-    | ANF.RefCountDec atom -> maxTempIdInAtom atom
+    | ANF.RefCountInc (atom, _) -> maxTempIdInAtom atom
+    | ANF.RefCountDec (atom, _) -> maxTempIdInAtom atom
 
 /// Find the maximum TempId in an AExpr
 let rec maxTempIdInAExpr (expr: ANF.AExpr) : int =
@@ -143,8 +143,8 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
         elems |> List.collect collectStringsFromAtom
     | ANF.TupleGet (tupleAtom, _) ->
         collectStringsFromAtom tupleAtom
-    | ANF.RefCountInc atom -> collectStringsFromAtom atom
-    | ANF.RefCountDec atom -> collectStringsFromAtom atom
+    | ANF.RefCountInc (atom, _) -> collectStringsFromAtom atom
+    | ANF.RefCountDec (atom, _) -> collectStringsFromAtom atom
 
 /// Collect all float literals from a CExpr
 let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
@@ -163,8 +163,8 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
         elems |> List.collect collectFloatsFromAtom
     | ANF.TupleGet (tupleAtom, _) ->
         collectFloatsFromAtom tupleAtom
-    | ANF.RefCountInc atom -> collectFloatsFromAtom atom
-    | ANF.RefCountDec atom -> collectFloatsFromAtom atom
+    | ANF.RefCountInc (atom, _) -> collectFloatsFromAtom atom
+    | ANF.RefCountDec (atom, _) -> collectFloatsFromAtom atom
 
 /// Collect all string literals from an ANF expression
 let rec collectStringsFromExpr (expr: ANF.AExpr) : string list =
@@ -242,7 +242,19 @@ type CFGBuilder = {
     RegGen: MIR.RegGen
     StringLookup: Map<string, int>
     FloatLookup: Map<float, int>
+    TypeMap: ANF.TypeMap
+    TypeReg: Map<string, (string * AST.Type) list>
 }
+
+/// Get payload size for an atom used in reference counting
+/// Returns Error if type lookup fails
+let getPayloadSizeForAtom (builder: CFGBuilder) (atom: ANF.Atom) : Result<int, string> =
+    match atom with
+    | ANF.Var tid ->
+        match Map.tryFind tid builder.TypeMap with
+        | Some typ -> Ok (ANF.payloadSize typ builder.TypeReg)
+        | None -> Error $"Internal error: type not found for {tid} in TypeMap"
+    | _ -> Error "Internal error: RefCount operation on non-variable atom"
 
 /// Convert ANF Atom to MIR Operand using lookups from builder
 /// Returns Error if float/string lookup fails (internal invariant violation)
@@ -383,12 +395,16 @@ let rec convertExpr
                 | ANF.IfValue _ ->
                     // This case is handled above; reaching here indicates a bug
                     Error "Internal error: IfValue should have been handled in outer match"
-                | ANF.RefCountInc _ ->
-                    // TODO: Will be implemented when MIR.RefCountInc is added
-                    Ok []  // No-op for now
-                | ANF.RefCountDec _ ->
-                    // TODO: Will be implemented when MIR.RefCountDec is added
-                    Ok []  // No-op for now
+                | ANF.RefCountInc (atom, payloadSize) ->
+                    match atom with
+                    | ANF.Var tid ->
+                        Ok [MIR.RefCountInc (tempToVReg tid, payloadSize)]
+                    | _ -> Error "Internal error: RefCountInc on non-variable"
+                | ANF.RefCountDec (atom, payloadSize) ->
+                    match atom with
+                    | ANF.Var tid ->
+                        Ok [MIR.RefCountDec (tempToVReg tid, payloadSize)]
+                    | _ -> Error "Internal error: RefCountDec on non-variable"
 
             match instrsResult with
             | Error err -> Error err
@@ -427,6 +443,8 @@ let rec convertExpr
             RegGen = regGen1
             StringLookup = builder.StringLookup
             FloatLookup = builder.FloatLookup
+            TypeMap = builder.TypeMap
+            TypeReg = builder.TypeReg
         }
 
         // Convert then-branch: result goes into resultReg, then jump to join
@@ -621,12 +639,16 @@ and convertExprToOperand
                 | ANF.IfValue _ ->
                     // This case is handled above; reaching here indicates a bug
                     Error "Internal error: IfValue should have been handled in outer match"
-                | ANF.RefCountInc _ ->
-                    // TODO: Will be implemented when MIR.RefCountInc is added
-                    Ok []  // No-op for now
-                | ANF.RefCountDec _ ->
-                    // TODO: Will be implemented when MIR.RefCountDec is added
-                    Ok []  // No-op for now
+                | ANF.RefCountInc (atom, payloadSize) ->
+                    match atom with
+                    | ANF.Var tid ->
+                        Ok [MIR.RefCountInc (tempToVReg tid, payloadSize)]
+                    | _ -> Error "Internal error: RefCountInc on non-variable"
+                | ANF.RefCountDec (atom, payloadSize) ->
+                    match atom with
+                    | ANF.Var tid ->
+                        Ok [MIR.RefCountDec (tempToVReg tid, payloadSize)]
+                    | _ -> Error "Internal error: RefCountDec on non-variable"
 
             // Let bindings accumulate instructions, pass through join label
             match instrsResult with
@@ -655,6 +677,8 @@ and convertExprToOperand
                 RegGen = regGen1
                 StringLookup = builder.StringLookup
                 FloatLookup = builder.FloatLookup
+                TypeMap = builder.TypeMap
+                TypeReg = builder.TypeReg
             }
 
             // Convert then-branch
@@ -724,7 +748,7 @@ and convertExprToOperand
             Ok (MIR.Register resultReg, Some joinLabel, builder6))
 
 /// Convert an ANF function to a MIR function
-let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: Map<string, int>) (fltLookup: Map<float, int>) : Result<MIR.Function * MIR.RegGen, string> =
+let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: Map<string, int>) (fltLookup: Map<float, int>) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) : Result<MIR.Function * MIR.RegGen, string> =
     // Create initial builder with lookups
     let initialBuilder = {
         RegGen = regGen
@@ -732,6 +756,8 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
         Blocks = Map.empty
         StringLookup = strLookup
         FloatLookup = fltLookup
+        TypeMap = typeMap
+        TypeReg = typeReg
     }
 
     // Create entry label for CFG (internal to function body)
@@ -761,7 +787,7 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
     Ok (mirFunc, finalBuilder.RegGen)
 
 /// Convert ANF program to MIR program
-let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) : Result<MIR.Program * MIR.RegGen, string> =
+let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) : Result<MIR.Program * MIR.RegGen, string> =
     let (ANF.Program (functions, mainExpr)) = program
 
     // Critical: freshReg must generate VRegs that don't conflict with TempId-derived VRegs.
@@ -784,7 +810,7 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) : Result<MIR.Program * MI
         match remaining with
         | [] -> Ok (funcs, rg)
         | anfFunc :: rest ->
-            match convertANFFunction anfFunc rg strLookup fltLookup with
+            match convertANFFunction anfFunc rg strLookup fltLookup typeMap typeReg with
             | Error err -> Error err
             | Ok (mirFunc, rg') -> convertFunctions (funcs @ [mirFunc]) rg' rest
 
@@ -804,6 +830,8 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) : Result<MIR.Program * MI
                 Blocks = Map.empty
                 StringLookup = strLookup
                 FloatLookup = fltLookup
+                TypeMap = typeMap
+                TypeReg = typeReg
             }
             match convertExpr expr entryLabel [] initialBuilder with
             | Error err -> Error err
