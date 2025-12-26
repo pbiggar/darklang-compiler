@@ -32,6 +32,14 @@ The following are known simplifications or potential issues in the compiler code
 
 - [x] Update README.md with new language features
 
+## Not Planned
+
+The following features are explicitly out of scope:
+
+- **REPL** - interactive mode
+- **Debugger support** - DWARF debug info
+- **Modules/imports** - multi-file programs
+
 ## Current Status
 
 - ✅ Integers with full arithmetic (+, -, \*, /)
