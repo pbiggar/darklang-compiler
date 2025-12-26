@@ -5,89 +5,82 @@
 // Tests may fail if features are not yet implemented
 
 // ===================================================================
-// Error propagation in let bindings (from Dark elet.dark)
-// NOTE: Commented out - requires Builtin.testRuntimeError support
-// ===================================================================
-
-// (let x = Builtin.testRuntimeError "a" in 5L) = Builtin.testDerrorMessage "Uncaught exception: a"
-
-// (let x = Builtin.testRuntimeError "a" in Builtin.testRuntimeError "b") = Builtin.testDerrorMessage "Uncaught exception: a"
-
-// ===================================================================
 // Simple variables
 // NOTE: Commented out - requires Int64 suffix support
 // ===================================================================
 
-// (let x = 5L in x) = 5
+(let x = 5 in x) = 5
 
 // ===================================================================
 // Unit type in let binding
-// NOTE: Commented out - requires Unit type and Stdlib support
+// NOTE: Requires Stdlib.Tuple2.first function
 // ===================================================================
 
-// (let () = Stdlib.Tuple2.first ((), 5L) in 5L) = 5
+// (let () = Stdlib.Tuple2.first ((), 5) in 5) = 5
 
 // ===================================================================
 // Tuple destructuring (from Dark)
-// NOTE: Commented out - requires Int64 suffix support
 // ===================================================================
 
-// (let (a, b) = (1L, 2L) in 2L) = 2
-// (let (a, b) = (1L, 2L) in b) = 2
-// (let (a, b) = (1L, 2L) in (b, a)) = stdout="(2, 1)\n"
-// (let (d, d) = (2L, 1L) in d) = 1
-// (let (_, _) = (1L, 2L) in 2L) = 2
+(let (a, b) = (1, 2) in 2) = 2
+(let (a, b) = (1, 2) in b) = 2
+// NOTE: Tuple printing not yet implemented
+// (let (a, b) = (1, 2) in (b, a)) = stdout="(2, 1)\n"
+(let (d, d) = (2, 1) in d) = 1
+(let (_, _) = (1, 2) in 2) = 2
 
-// (let (a, b, c) = (1L, 2L, 3L) in b) = 2
-// (let (a, b, c) = (1L, 2L, 3L) in (b, a)) = stdout="(2, 1)\n"
-// (let (d, d, d) = (2L, 1L, 3L) in d) = 3
-// (let (_, _, _) = (1L, 2L, 3L) in 2L) = 2
+(let (a, b, c) = (1, 2, 3) in b) = 2
+// NOTE: Tuple printing not yet implemented
+// (let (a, b, c) = (1, 2, 3) in (b, a)) = stdout="(2, 1)\n"
+(let (d, d, d) = (2, 1, 3) in d) = 3
+(let (_, _, _) = (1, 2, 3) in 2) = 2
 
-// Error in tuple element propagates
-// (let (_, _, _) = (1L, 2L, Builtin.testRuntimeError "test") in 2L) = Builtin.testDerrorMessage "Uncaught exception: test"
+// Type error in tuple element is caught at compile time
+(let (a, b, c) = (1, 2, true) in a + c) = error="Type mismatch in variable c: expected int, got bool"
 
-// First error in tuple propagates
-// (let (_, _, _) = (Builtin.testRuntimeError "test1", 2L, Builtin.testRuntimeError "test2") in 2L) = Builtin.testDerrorMessage "Uncaught exception: test1"
+// Type error in first tuple element is caught at compile time
+(let (a, b, c) = (true, 2, 3) in a + b) = error="Invalid operation '+' on types: bool"
 
 // Nested tuple destructuring
-// (let ((a, ((b, (c, d)), e)), f) = ((1L, ((2L, (3L, 4L)), 5L)), 6L) in c) = 3
-// (let ((a, ((b, cd), e)), f) = ((1L, ((2L, (3L, 4L)), 5L)), 6L) in cd) = stdout="(3, 4)\n"
+// NOTE: Deeply nested tuple destructuring has a bug in ANF conversion
+// (let ((a, ((b, (c, d)), e)), f) = ((1, ((2, (3, 4)), 5)), 6) in c) = 3
+// (let ((a, ((b, cd), e)), f) = ((1, ((2, (3, 4)), 5)), 6) in cd) = stdout="(3, 4)\n"
 
 // ===================================================================
 // Nested let bindings
-// NOTE: Commented out - requires Int64 suffix support
 // ===================================================================
 
-// (let x = let y = 1L in let z = 2L in y + z in x) = 3
+(let x = let y = 1 in let z = 2 in y + z in x) = 3
 
 // ===================================================================
 // Shadowing (from Dark)
-// NOTE: Commented out - requires Int64 suffix and Stdlib support
 // ===================================================================
 
-// (let x = 5L in let x = 6L in x) = 6
+(let x = 5 in let x = 6 in x) = 6
 
-// (let x = 35L in match 6L with | x -> x) = 6
+(let x = 35 in match 6 with | x -> x) = 6
 
-// (let x = 35L in match Stdlib.Result.Result.Ok 6L with | Ok x -> x) = 6
+// NOTE: Tests below require Stdlib.Result.Result type and Stdlib.List.map
+// These features need: generic types, namespaced types, and higher-order list functions
 
-// (let x = 35L in Stdlib.List.map_v0 [ 1L; 2L; 3L; 4L ] (fun x -> x + 2L)) = stdout="[3, 4, 5, 6]\n"
+// (let x = 35 in match Stdlib.Result.Result.Ok 6 with | Ok x -> x) = 6
 
-// (let x = 35L in match Stdlib.Result.Result.Ok 6L with | Ok x -> (Stdlib.List.map_v0 [ 1L; 2L; 3L; 4L ] (fun x -> x + 2L))) = stdout="[3, 4, 5, 6]\n"
+// (let x = 35 in Stdlib.List.map [ 1; 2; 3; 4 ] (fun x -> x + 2)) = stdout="[3, 4, 5, 6]\n"
 
-// (Stdlib.List.map_v0 [ 1L; 2L; 3L; 4L ] (fun x -> (let x = 35L in match Stdlib.Result.Result.Ok 6L with | Ok x -> x + 2L))) = stdout="[8, 8, 8, 8]\n"
+// (let x = 35 in match Stdlib.Result.Result.Ok 6 with | Ok x -> (Stdlib.List.map [ 1; 2; 3; 4 ] (fun x -> x + 2))) = stdout="[3, 4, 5, 6]\n"
 
-// (Stdlib.List.map_v0 [ 1L; 2L; 3L; 4L ] (fun x -> match Stdlib.Result.Result.Ok 6L with | Ok x -> let x = 9L in x + 2L)) = stdout="[11, 11, 11, 11]\n"
+// (Stdlib.List.map [ 1; 2; 3; 4 ] (fun x -> (let x = 35 in match Stdlib.Result.Result.Ok 6 with | Ok x -> x + 2))) = stdout="[8, 8, 8, 8]\n"
 
-// (Stdlib.List.map_v0 [ 1L; 2L; 3L; 4L ] (fun x -> (match Stdlib.Result.Result.Ok(Stdlib.Result.Result.Ok 6L) with | Ok(Ok x) -> let x = 9L in x + 2L))) = stdout="[11, 11, 11, 11]\n"
+// (Stdlib.List.map [ 1; 2; 3; 4 ] (fun x -> match Stdlib.Result.Result.Ok 6 with | Ok x -> let x = 9 in x + 2)) = stdout="[11, 11, 11, 11]\n"
+
+// (Stdlib.List.map [ 1; 2; 3; 4 ] (fun x -> (match Stdlib.Result.Result.Ok(Stdlib.Result.Result.Ok 6) with | Ok(Ok x) -> let x = 9 in x + 2))) = stdout="[11, 11, 11, 11]\n"
 
 // ===================================================================
 // Destructuring errors
-// NOTE: Commented out - requires Builtin.testDerrorMessage support
 // ===================================================================
 
-// (let (a, _) = 1 in a) = Builtin.testDerrorMessage "Could not deconstruct value 1 into pattern ([variable], [variable])"
-// (let (a, _) = (1, 2, 3) in a) = Builtin.testDerrorMessage "Could not deconstruct value (1, 2, 3) into pattern ([variable], [variable])"
+(let (a, _) = 1 in a) = error="Tuple pattern used on non-tuple type"
+(let (a, _) = (1, 2, 3) in a) = error="Tuple pattern has 2 elements but type has 3"
 
 // ===================================================================
 // Additional tests (from our extended suite)
@@ -158,9 +151,9 @@
 (let (_, _, z) = (1, 2, 3) in z) = 3
 
 // Let with Functions
-// NOTE: Commented out - function definition + let expression on same line has parsing issue
-// def double(x: Int64): Int64 = x * 2 (let x = 5 in double(x)) = 10
-// def add(a: Int64, b: Int64): Int64 = a + b (let x = 3 in let y = 4 in add(x, y)) = 7
+// NOTE: Cannot use parens around let expression after function def due to parsing ambiguity
+def double(x: Int64): Int64 = x * 2 let y = 5 in double(y) = 10
+def add(a: Int64, b: Int64): Int64 = a + b let x = 3 in let y = 4 in add(x, y) = 7
 
 // Complex Expressions
 (let x = 5 in let y = x + 1 in let z = y * 2 in z) = 12
