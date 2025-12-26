@@ -40,18 +40,19 @@ let getOptimalParallelism () : int =
     let totalMemoryGB = float gcMemoryInfo.TotalAvailableMemoryBytes / (1024.0 * 1024.0 * 1024.0)
 
     // Each E2E test needs roughly:
-    // - 1 CPU core for compilation + execution
-    // - ~200MB memory (compiler + generated binary + test overhead)
-    let estimatedMemoryPerTestGB = 0.2
+    // - Minimal CPU (tests are mostly I/O bound - compile + exec)
+    // - ~100MB memory (compiler + generated binary + test overhead)
+    let estimatedMemoryPerTestGB = 0.1
 
     // Calculate max based on memory
     let maxByMemory = int (totalMemoryGB / estimatedMemoryPerTestGB)
 
-    // Calculate max based on CPU (leave 1 core free for system)
-    let maxByCPU = max 1 (cpuCores - 1)
+    // Empirically, optimal parallelism is around CPU core count
+    // Too many threads causes contention; too few underutilizes resources
+    let maxByCPU = cpuCores
 
-    // Use the smaller of the two, with a minimum of 2 and maximum of 16
-    let optimal = min (min maxByMemory maxByCPU) 16 |> max 2
+    // Use the smaller of the two, with a minimum of 4
+    let optimal = min maxByMemory maxByCPU |> max 4
 
     optimal
 
@@ -71,9 +72,18 @@ let parallelMapWithLimit (maxDegree: int) (f: 'a -> 'b) (array: 'a array) : 'b a
 
     results
 
+// Parse command line for --parallel=N option
+let parseParallelArg (args: string array) : int option =
+    args
+    |> Array.tryFind (fun arg -> arg.StartsWith("--parallel="))
+    |> Option.map (fun arg -> arg.Substring(11) |> int)
+
 [<EntryPoint>]
 let main args =
     let totalTimer = Stopwatch.StartNew()
+
+    // Check for --parallel=N argument
+    let overrideParallel = parseParallelArg args
 
     println $"{Colors.bold}{Colors.cyan}🧪 Running DSL-based Tests{Colors.reset}"
     println ""
@@ -371,9 +381,10 @@ let main args =
                 let mutable nextToPrint = 0
                 let lockObj = obj()
 
-                // Determine optimal parallelism based on system resources
-                let maxParallel = getOptimalParallelism()
-                println $"  {Colors.gray}(Running with {maxParallel} parallel tests based on system resources){Colors.reset}"
+                // Determine parallelism level (use override if provided)
+                let maxParallel = overrideParallel |> Option.defaultWith getOptimalParallelism
+                let source = if overrideParallel.IsSome then "command line" else "system resources"
+                println $"  {Colors.gray}(Running with {maxParallel} parallel tests based on {source}){Colors.reset}"
                 println ""
 
                 // Helper function to print a test result
