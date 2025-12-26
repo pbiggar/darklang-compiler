@@ -316,39 +316,13 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 Error (GenericError $"Cannot access .{index} on non-tuple type {typeToString other}"))
 
     | RecordLiteral (typeName, fields) ->
-        // For anonymous records (typeName = ""), try to infer from expected type or field names
-        // For named records, look up type definition
-        // Returns Result to handle ambiguity detection
-        let recordTypeNameResult =
-            if typeName = "" then
-                match expectedType with
-                | Some (TRecord name) -> Ok name
-                | _ ->
-                    // Try to infer record type from field names
-                    // Find ALL matching types to detect ambiguity
-                    let fieldNames = fields |> List.map fst |> Set.ofList
-                    let matches =
-                        typeReg
-                        |> Map.toList
-                        |> List.choose (fun (recTypeName, typeFields) ->
-                            let typeFieldNames = typeFields |> List.map fst |> Set.ofList
-                            if typeFieldNames = fieldNames then Some recTypeName else None)
-
-                    match matches with
-                    | [single] -> Ok single
-                    | [] -> Error (GenericError "Cannot infer record type - no matching type definition found")
-                    | multiple ->
-                        let typeNames = String.concat ", " multiple
-                        Error (GenericError $"Ambiguous record literal - fields match multiple types: {typeNames}")
-            else
-                Ok typeName
-
-        match recordTypeNameResult with
-        | Error err -> Error err
-        | Ok name ->
-            match Map.tryFind name typeReg with
+        // Type name is required (parser enforces this, but check for safety)
+        if typeName = "" then
+            Error (GenericError "Record literal requires type name: use 'TypeName { field = value, ... }'")
+        else
+            match Map.tryFind typeName typeReg with
             | None ->
-                Error (GenericError $"Unknown record type: {name}")
+                Error (GenericError $"Unknown record type: {typeName}")
             | Some expectedFields ->
                 // Check that all fields are present and have correct types
                 let fieldMap = Map.ofList fields
@@ -386,7 +360,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                                         else Error (TypeMismatch (expectedFieldType, actualType, $"field {fname}")))
                                 | None -> Ok ())) // Already checked for missing fields
                             (Ok ())
-                        |> Result.map (fun () -> TRecord name)
+                        |> Result.map (fun () -> TRecord typeName)
 
     | RecordAccess (recordExpr, fieldName) ->
         // Check the record expression

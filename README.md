@@ -216,7 +216,7 @@ dotnet clean                    # Clean build artifacts
 - Logical operators: `&&`, `||`, `!`
 - Parentheses for grouping
 - Tuple construction: `(1, 2)`, `(a, b, c)`
-- Record construction: `{ x = 3, y = 4 }`
+- Record construction: `Point { x = 3, y = 4 }` (type name required)
 - List literals: `[1, 2, 3]`, `[]`
 - ADT constructors: `Some(42)`, `None`
 
@@ -237,7 +237,7 @@ dotnet clean                    # Clean build artifacts
 - Literal patterns: `42`, `true`, `"hello"`
 - Variable patterns: `x`, `_` (wildcard)
 - Tuple patterns: `(a, b)`, `(x, _, z)`
-- Record patterns: `{ x = a, y = b }`
+- Record patterns: `Point { x = a, y = b }` (type name required)
 - ADT patterns: `Some(n)`, `None`
 - List patterns: `[a, b]`, `[]`, `[_, x, _]` (exact-length matching)
 

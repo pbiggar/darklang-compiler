@@ -143,19 +143,19 @@ match (1, 2, 3, 4, 5) with | (a, _, c, _, e) -> a + c + e = stdout="9\n"
 // === Record Patterns ===
 
 // Simple record extraction
-type Point = { x: int, y: int } match { x = 10, y = 20 } with | { x = a, y = b } -> a + b = stdout="30\n"
+type Point = { x: int, y: int } match Point { x = 10, y = 20 } with | Point { x = a, y = b } -> a + b = stdout="30\n"
 
 // Record with one field extracted
-type Point = { x: int, y: int } match { x = 5, y = 10 } with | { x = n, y = _ } -> n = stdout="5\n"
+type Point = { x: int, y: int } match Point { x = 5, y = 10 } with | Point { x = n, y = _ } -> n = stdout="5\n"
 
 // Record second field only
-type Point = { x: int, y: int } match { x = 5, y = 15 } with | { x = _, y = m } -> m = stdout="15\n"
+type Point = { x: int, y: int } match Point { x = 5, y = 15 } with | Point { x = _, y = m } -> m = stdout="15\n"
 
 // Record from variable
-type Point = { x: int, y: int } let p = { x = 3, y = 4 } in match p with | { x = a, y = b } -> a * a + b * b = stdout="25\n"
+type Point = { x: int, y: int } let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> a * a + b * b = stdout="25\n"
 
 // Three-field record
-type Vec3 = { x: int, y: int, z: int } match { x = 1, y = 2, z = 3 } with | { x = a, y = b, z = c } -> a + b + c = stdout="6\n"
+type Vec3 = { x: int, y: int, z: int } match Vec3 { x = 1, y = 2, z = 3 } with | Vec3 { x = a, y = b, z = c } -> a + b + c = stdout="6\n"
 
 // === Nested ADT Patterns ===
 
@@ -171,7 +171,7 @@ type Box = Empty | Full of int match Full(99) with | Full(n) -> n * 2 | Empty ->
 type Option = None | Some of int match Some(5) with | Some(x) -> let t = (x, x * 2) in match t with | (a, b) -> a + b | None -> 0 = stdout="15\n"
 
 // Record access in match body
-type Point = { x: int, y: int } type Option = None | Some of int match Some(1) with | Some(_) -> let p = { x = 10, y = 20 } in p.x + p.y | None -> 0 = stdout="30\n"
+type Point = { x: int, y: int } type Option = None | Some of int match Some(1) with | Some(_) -> let p = Point { x = 10, y = 20 } in p.x + p.y | None -> 0 = stdout="30\n"
 
 // Match on tuple element
 match (1, 2) with | (a, _) -> match a with | 1 -> 100 | _ -> 0 = stdout="100\n"
@@ -230,10 +230,10 @@ match (true, false) with | (a, _) -> match a with | true -> 1 | false -> 0 = std
 
 // === Records with Complex Bodies ===
 
-type Point = { x: int, y: int } let p = { x = 3, y = 4 } in match p with | { x = a, y = b } -> (a + b) * (a - b) = stdout="-7\n"
+type Point = { x: int, y: int } let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> (a + b) * (a - b) = stdout="-7\n"
 
 // Manhattan distance style
-type Point = { x: int, y: int } match { x = 3, y = 4 } with | { x = a, y = b } -> if a > b then a else b = stdout="4\n"
+type Point = { x: int, y: int } match Point { x = 3, y = 4 } with | Point { x = a, y = b } -> if a > b then a else b = stdout="4\n"
 
 // === Wild Nested Combinations ===
 

@@ -418,9 +418,9 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
     | TLParen :: rest ->
         // Tuple pattern: (a, b, c)
         parseTuplePattern rest []
-    | TLBrace :: rest ->
-        // Record pattern: { x = a, y = b }
-        parseRecordPattern rest []
+    | TLBrace :: _ ->
+        // Anonymous record pattern is no longer supported
+        Error "Record pattern requires type name: use 'TypeName { field = pattern, ... }'"
     | TLBracket :: rest ->
         // List pattern: [a, b, c] or []
         parseListPattern rest []
@@ -432,6 +432,9 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
             | TRParen :: rest' ->
                 Ok (PConstructor (name, Some payloadPattern), rest')
             | _ -> Error "Expected ')' after constructor pattern payload")
+    | TIdent typeName :: TLBrace :: rest when System.Char.IsUpper(typeName.[0]) ->
+        // Record pattern with type name: Point { x = a, y = b }
+        parseRecordPatternWithTypeName typeName rest []
     | TIdent name :: rest when System.Char.IsUpper(name.[0]) ->
         // Constructor pattern without payload: Red, None
         Ok (PConstructor (name, None), rest)
@@ -453,8 +456,13 @@ and parseTuplePattern (tokens: Token list) (acc: Pattern list) : Result<Pattern 
             parseTuplePattern rest (pat :: acc)
         | _ -> Error "Expected ',' or ')' in tuple pattern")
 
-and parseRecordPattern (tokens: Token list) (acc: (string * Pattern) list) : Result<Pattern * Token list, string> =
+and parseRecordPatternWithTypeName (typeName: string) (tokens: Token list) (acc: (string * Pattern) list) : Result<Pattern * Token list, string> =
+    // Parse record pattern with explicit type name: TypeName { field = pattern, ... }
     match tokens with
+    | TRBrace :: rest ->
+        // Empty record or end of fields
+        let fields = List.rev acc
+        Ok (PRecord (typeName, fields), rest)
     | TIdent fieldName :: TEquals :: rest ->
         parsePattern rest
         |> Result.bind (fun (pat, remaining) ->
@@ -463,10 +471,10 @@ and parseRecordPattern (tokens: Token list) (acc: (string * Pattern) list) : Res
             | TRBrace :: rest' ->
                 // End of record pattern
                 let fields = List.rev (field :: acc)
-                Ok (PRecord ("", fields), rest')
+                Ok (PRecord (typeName, fields), rest')
             | TComma :: rest' ->
                 // More fields
-                parseRecordPattern rest' (field :: acc)
+                parseRecordPatternWithTypeName typeName rest' (field :: acc)
             | _ -> Error "Expected ',' or '}' in record pattern")
     | _ -> Error "Expected field name in record pattern"
 
@@ -694,6 +702,9 @@ let parse (tokens: Token list) : Result<Program, string> =
                 | TRParen :: rest' ->
                     Ok (Constructor ("", name, Some payloadExpr), rest')
                 | _ -> Error "Expected ')' after constructor payload")
+        | TIdent typeName :: TLBrace :: rest when System.Char.IsUpper(typeName.[0]) ->
+            // Record literal with type name: Point { x = 1, y = 2 }
+            parseRecordLiteralFieldsWithTypeName typeName rest []
         | TIdent name :: rest when System.Char.IsUpper(name.[0]) ->
             // Constructor without payload (enum variant)
             Ok (Constructor ("", name, None), rest)
@@ -712,10 +723,9 @@ let parse (tokens: Token list) : Result<Program, string> =
                     // Tuple literal: (expr, expr, ...)
                     parseTupleElements rest' [firstExpr]
                 | _ -> Error "Expected ')' or ',' in tuple/parenthesized expression")
-        | TLBrace :: rest ->
-            // Record literal: { x = 1, y = 2 }
-            // Note: Anonymous records need type inference, we'll use empty type name for now
-            parseRecordLiteralFields rest []
+        | TLBrace :: _ ->
+            // Anonymous record literal is no longer supported
+            Error "Record literal requires type name: use 'TypeName { field = value, ... }'"
         | TLBracket :: rest ->
             // List literal: [1, 2, 3] or []
             parseListLiteralElements rest []
@@ -735,22 +745,22 @@ let parse (tokens: Token list) : Result<Program, string> =
                 Ok (TupleLiteral elements, rest)
             | _ -> Error "Expected ',' or ')' in tuple literal")
 
-    and parseRecordLiteralFields (toks: Token list) (acc: (string * Expr) list) : Result<Expr * Token list, string> =
-        // Parse record literal fields: { name = expr, name = expr, ... }
+    and parseRecordLiteralFieldsWithTypeName (typeName: string) (toks: Token list) (acc: (string * Expr) list) : Result<Expr * Token list, string> =
+        // Parse record literal fields with explicit type name: TypeName { name = expr, ... }
         match toks with
         | TRBrace :: rest ->
             // Empty record or end of fields
-            Ok (RecordLiteral ("", List.rev acc), rest)
+            Ok (RecordLiteral (typeName, List.rev acc), rest)
         | TIdent fieldName :: TEquals :: rest ->
             parseExpr rest
             |> Result.bind (fun (value, remaining) ->
                 match remaining with
                 | TComma :: rest' ->
                     // More fields
-                    parseRecordLiteralFields rest' ((fieldName, value) :: acc)
+                    parseRecordLiteralFieldsWithTypeName typeName rest' ((fieldName, value) :: acc)
                 | TRBrace :: rest' ->
                     // End of record
-                    Ok (RecordLiteral ("", List.rev ((fieldName, value) :: acc)), rest')
+                    Ok (RecordLiteral (typeName, List.rev ((fieldName, value) :: acc)), rest')
                 | _ -> Error "Expected ',' or '}' after record field value")
         | _ -> Error "Expected field name in record literal"
 

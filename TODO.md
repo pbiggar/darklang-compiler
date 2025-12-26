@@ -5,7 +5,6 @@ See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design
 
 ## Things to add
 
-- require type name for record creation
 - polymorphism in types, functions
 - reference counting
 
@@ -78,6 +77,7 @@ The following are known simplifications or potential issues in the compiler code
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
 - ✅ Type-directed record field lookup (no ambiguity when multiple record types have same field names)
 - ✅ Function return type inference using function registry (enables type inference for let-bound function calls)
+- ✅ Record literals require type name: `Point { x = 1, y = 2 }` syntax (no anonymous records)
 
 ## Known Limitations & Partial Implementations
 
