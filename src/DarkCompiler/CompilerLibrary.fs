@@ -24,8 +24,20 @@ type ExecutionResult = {
     Stderr: string
 }
 
+/// Compiler options for controlling code generation behavior
+type CompilerOptions = {
+    /// Disable free list memory reuse (always bump allocate)
+    /// Useful for testing that free list is necessary
+    DisableFreeList: bool
+}
+
+/// Default compiler options
+let defaultOptions : CompilerOptions = {
+    DisableFreeList = false
+}
+
 /// Compile source code to binary (in-memory, no file I/O)
-let compile (verbosity: int) (source: string) : CompileResult =
+let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: string) : CompileResult =
     let sw = Stopwatch.StartNew()
     try
         // Pass 1: Parse
@@ -216,7 +228,10 @@ let compile (verbosity: int) (source: string) : CompileResult =
 
                     // Pass 6: Code Generation (LIR → ARM64)
                     if verbosity >= 1 then println "  [6/8] Code Generation..."
-                    let codegenResult = CodeGen.generateARM64 allocatedProgram
+                    let codegenOptions : CodeGen.CodeGenOptions = {
+                        DisableFreeList = options.DisableFreeList
+                    }
+                    let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
                     let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - mirTime - lirTime - allocTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(codegenTime, 1)
@@ -314,6 +329,10 @@ let compile (verbosity: int) (source: string) : CompileResult =
         { Binary = Array.empty
           Success = false
           ErrorMessage = Some $"Compilation failed: {ex.Message}" }
+
+/// Compile source code to binary (uses default options)
+let compile (verbosity: int) (source: string) : CompileResult =
+    compileWithOptions verbosity defaultOptions source
 
 /// Execute compiled binary and capture output
 let execute (verbosity: int) (binary: byte array) : ExecutionResult =
@@ -425,9 +444,9 @@ let execute (verbosity: int) (binary: byte array) : ExecutionResult =
         // Cleanup
         try File.Delete(tempPath) with | _ -> ()
 
-/// Compile and run source code (main entry point for E2E tests)
-let compileAndRun (verbosity: int) (source: string) : ExecutionResult =
-    let compileResult = compile verbosity source
+/// Compile and run source code with options
+let compileAndRunWithOptions (verbosity: int) (options: CompilerOptions) (source: string) : ExecutionResult =
+    let compileResult = compileWithOptions verbosity options source
 
     if not compileResult.Success then
         { ExitCode = 1
@@ -435,3 +454,7 @@ let compileAndRun (verbosity: int) (source: string) : ExecutionResult =
           Stderr = compileResult.ErrorMessage |> Option.defaultValue "Compilation failed" }
     else
         execute verbosity compileResult.Binary
+
+/// Compile and run source code (main entry point for E2E tests)
+let compileAndRun (verbosity: int) (source: string) : ExecutionResult =
+    compileAndRunWithOptions verbosity defaultOptions source

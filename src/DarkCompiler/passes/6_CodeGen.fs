@@ -17,6 +17,17 @@
 
 module CodeGen
 
+/// Code generation options
+type CodeGenOptions = {
+    /// Disable free list memory reuse (always bump allocate)
+    DisableFreeList: bool
+}
+
+/// Default code generation options
+let defaultOptions : CodeGenOptions = {
+    DisableFreeList = false
+}
+
 /// Convert LIR.PhysReg to ARM64.Reg
 let lirPhysRegToARM64Reg (physReg: LIR.PhysReg) : ARM64.Reg =
     match physReg with
@@ -267,7 +278,7 @@ let generateEpilogue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM6
     deallocStack @ restoreCalleeSavedInstrs @ deallocCalleeSaved @ restoreFpLr @ ret
 
 /// Convert LIR instruction to ARM64 instructions
-let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
+let convertInstr (options: CodeGenOptions) (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
     match instr with
     | LIR.Mov (dest, src) ->
         lirRegToARM64Reg dest
@@ -587,23 +598,33 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
         |> Result.map (fun destReg ->
             // Total size includes 8 bytes for ref count, aligned to 8 bytes
             let totalSize = ((sizeBytes + 8) + 7) &&& (~~~7)
-            [
-                // Check free list
-                ARM64.LDR (ARM64.X15, ARM64.X27, int16 sizeBytes)   // Load free list head
-                ARM64.CBZ_offset (ARM64.X15, 7)                     // If empty, skip to bump alloc
-                // Pop from free list
-                ARM64.MOV_reg (destReg, ARM64.X15)                  // dest = freed block
-                ARM64.LDR (ARM64.X14, ARM64.X15, 0s)                // Load next pointer
-                ARM64.STR (ARM64.X14, ARM64.X27, int16 sizeBytes)   // Update free list head
-                ARM64.MOVZ (ARM64.X14, 1us, 0)                      // X14 = 1 (initial ref count)
-                ARM64.STR (ARM64.X14, destReg, int16 sizeBytes)     // Store ref count
-                ARM64.B 4                                           // Skip bump allocator
-                // Bump allocator (fallback when free list empty)
-                ARM64.MOV_reg (destReg, ARM64.X28)                  // dest = current heap pointer
-                ARM64.MOVZ (ARM64.X15, 1us, 0)                      // X15 = 1 (initial ref count)
-                ARM64.STR (ARM64.X15, ARM64.X28, int16 sizeBytes)   // store ref count after payload
-                ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize) // bump pointer
-            ])
+            if options.DisableFreeList then
+                // Bump allocator only (no free list reuse)
+                [
+                    ARM64.MOV_reg (destReg, ARM64.X28)                  // dest = current heap pointer
+                    ARM64.MOVZ (ARM64.X15, 1us, 0)                      // X15 = 1 (initial ref count)
+                    ARM64.STR (ARM64.X15, ARM64.X28, int16 sizeBytes)   // store ref count after payload
+                    ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize) // bump pointer
+                ]
+            else
+                // Full allocator with free list support
+                [
+                    // Check free list
+                    ARM64.LDR (ARM64.X15, ARM64.X27, int16 sizeBytes)   // Load free list head
+                    ARM64.CBZ_offset (ARM64.X15, 7)                     // If empty, skip to bump alloc
+                    // Pop from free list
+                    ARM64.MOV_reg (destReg, ARM64.X15)                  // dest = freed block
+                    ARM64.LDR (ARM64.X14, ARM64.X15, 0s)                // Load next pointer
+                    ARM64.STR (ARM64.X14, ARM64.X27, int16 sizeBytes)   // Update free list head
+                    ARM64.MOVZ (ARM64.X14, 1us, 0)                      // X14 = 1 (initial ref count)
+                    ARM64.STR (ARM64.X14, destReg, int16 sizeBytes)     // Store ref count
+                    ARM64.B 4                                           // Skip bump allocator
+                    // Bump allocator (fallback when free list empty)
+                    ARM64.MOV_reg (destReg, ARM64.X28)                  // dest = current heap pointer
+                    ARM64.MOVZ (ARM64.X15, 1us, 0)                      // X15 = 1 (initial ref count)
+                    ARM64.STR (ARM64.X15, ARM64.X28, int16 sizeBytes)   // store ref count after payload
+                    ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize) // bump pointer
+                ])
 
     | LIR.HeapStore (addr, offset, src) ->
         // Store value at addr + offset (offset is in bytes)
@@ -708,12 +729,12 @@ let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Res
 
 /// Convert LIR basic block to ARM64 instructions (with label)
 /// epilogueLabel: passed through to terminator for Ret handling
-let convertBlock (epilogueLabel: string) (block: LIR.BasicBlock) : Result<ARM64.Instr list, string> =
+let convertBlock (options: CodeGenOptions) (epilogueLabel: string) (block: LIR.BasicBlock) : Result<ARM64.Instr list, string> =
     // Emit label for this block
     let labelInstr = ARM64.Label block.Label
 
     // Convert all instructions
-    let instrResults = block.Instrs |> List.map convertInstr
+    let instrResults = block.Instrs |> List.map (convertInstr options)
 
     // Convert terminator
     let termResult = convertTerminator epilogueLabel block.Terminator
@@ -734,7 +755,7 @@ let convertBlock (epilogueLabel: string) (block: LIR.BasicBlock) : Result<ARM64.
 
 /// Convert LIR CFG to ARM64 instructions
 /// epilogueLabel: passed through to blocks for Ret handling
-let convertCFG (epilogueLabel: string) (cfg: LIR.CFG) : Result<ARM64.Instr list, string> =
+let convertCFG (options: CodeGenOptions) (epilogueLabel: string) (cfg: LIR.CFG) : Result<ARM64.Instr list, string> =
     // Get blocks in a deterministic order (entry first, then sorted by label)
     let entryBlock =
         match Map.tryFind cfg.Entry cfg.Blocks with
@@ -752,7 +773,7 @@ let convertCFG (epilogueLabel: string) (cfg: LIR.CFG) : Result<ARM64.Instr list,
 
     // Convert each block
     allBlocks
-    |> List.map (convertBlock epilogueLabel)
+    |> List.map (convertBlock options epilogueLabel)
     |> List.fold (fun acc result ->
         match acc, result with
         | Ok instrs, Ok newInstrs -> Ok (instrs @ newInstrs)
@@ -808,12 +829,12 @@ let generateHeapInit () : ARM64.Instr list =
     ]
 
 /// Convert LIR function to ARM64 instructions with prologue and epilogue
-let convertFunction (func: LIR.Function) : Result<ARM64.Instr list, string> =
+let convertFunction (options: CodeGenOptions) (func: LIR.Function) : Result<ARM64.Instr list, string> =
     // Generate epilogue label for this function (passed to convertCFG for Ret terminators)
     let epilogueLabel = sprintf "_epilogue_%s" func.Name
 
     // Convert CFG to ARM64 instructions
-    match convertCFG epilogueLabel func.CFG with
+    match convertCFG options epilogueLabel func.CFG with
     | Error err -> Error err
     | Ok cfgInstrs ->
         // Generate prologue (save FP/LR, allocate stack)
@@ -862,8 +883,8 @@ let convertFunction (func: LIR.Function) : Result<ARM64.Instr list, string> =
         // All Ret terminators jump to the epilogue label
         Ok (functionEntryLabel @ prologue @ heapInit @ paramSetup @ cfgInstrs @ epilogueLabel @ epilogue)
 
-/// Convert LIR program to ARM64 instructions
-let generateARM64 (program: LIR.Program) : Result<ARM64.Instr list, string> =
+/// Convert LIR program to ARM64 instructions with options
+let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : Result<ARM64.Instr list, string> =
     let (LIR.Program (functions, _stringPool, _floatPool)) = program
     // Ensure _start is first (entry point)
     let sortedFunctions =
@@ -874,9 +895,13 @@ let generateARM64 (program: LIR.Program) : Result<ARM64.Instr list, string> =
         | None -> functions  // No _start, keep original order
 
     sortedFunctions
-    |> List.map convertFunction
+    |> List.map (convertFunction options)
     |> List.fold (fun acc result ->
         match acc, result with
         | Ok instrs, Ok newInstrs -> Ok (instrs @ newInstrs)
         | Error err, _ -> Error err
         | _, Error err -> Error err) (Ok [])
+
+/// Convert LIR program to ARM64 instructions (uses default options)
+let generateARM64 (program: LIR.Program) : Result<ARM64.Instr list, string> =
+    generateARM64WithOptions defaultOptions program

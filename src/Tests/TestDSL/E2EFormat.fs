@@ -20,6 +20,8 @@ type E2ETest = {
     ExpectedStdout: string option
     ExpectedStderr: string option
     ExpectedExitCode: int
+    /// Compiler options
+    DisableFreeList: bool
 }
 
 /// Parse string literal with escape sequences (\n, \t, \\, \")
@@ -57,16 +59,18 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, str
             (line, None)
 
     // Find the = that separates source from expectations
-    // It's the last = that's not inside quotes AND is followed by either:
-    // - A digit (simple format)
-    // - An attribute keyword (exit, stdout, stderr)
-    // - Whitespace then digit or attribute
+    // It's the last = that's not inside quotes AND:
+    // - Is preceded by whitespace (to distinguish from attr=value)
+    // - Is followed by either:
+    //   - A digit (simple format)
+    //   - An attribute keyword (exit, stdout, stderr, no_free_list)
+    //   - Whitespace then digit or attribute
     let findSeparatorIndex (s: string) : int option =
         let isExpectationStart (rest: string) : bool =
             let trimmed = rest.TrimStart()
             if trimmed.Length = 0 then false
             elif Char.IsDigit(trimmed.[0]) || trimmed.[0] = '-' then true
-            elif trimmed.StartsWith("exit") || trimmed.StartsWith("stdout") || trimmed.StartsWith("stderr") then true
+            elif trimmed.StartsWith("exit") || trimmed.StartsWith("stdout") || trimmed.StartsWith("stderr") || trimmed.StartsWith("no_free_list") then true
             else false
 
         let rec findLast (i: int) (inQuotes: bool) (lastEqualsIdx: int option) : int option =
@@ -75,10 +79,16 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, str
             elif s.[i] = '"' then
                 findLast (i + 1) (not inQuotes) lastEqualsIdx
             elif s.[i] = '=' && not inQuotes then
-                // Check if this = is followed by an expectation
-                let rest = s.Substring(i + 1)
-                if isExpectationStart rest then
-                    findLast (i + 1) inQuotes (Some i)
+                // Only consider this = as a separator if preceded by whitespace or )
+                // This distinguishes "source = expectations" from "exit=139"
+                let hasPrecedingSpace = i > 0 && (Char.IsWhiteSpace(s.[i - 1]) || s.[i - 1] = ')')
+                if hasPrecedingSpace then
+                    // Check if this = is followed by an expectation
+                    let rest = s.Substring(i + 1)
+                    if isExpectationStart rest then
+                        findLast (i + 1) inQuotes (Some i)
+                    else
+                        findLast (i + 1) inQuotes lastEqualsIdx
                 else
                     findLast (i + 1) inQuotes lastEqualsIdx
             else
@@ -93,7 +103,8 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, str
         let expectationsStr = lineWithoutComment.Substring(equalsIdx + 1).Trim()
 
         // Parse expectations - either old format (bare number) or new format (attributes)
-        let parseExpectations (exp: string) : Result<int * string option * string option, string> =
+        // Returns: (exitCode, stdout, stderr, disableFreeList)
+        let parseExpectations (exp: string) : Result<int * string option * string option * bool, string> =
             let trimmed = exp.Trim()
 
             // Check if old format (starts with digit or negative sign followed by digit)
@@ -123,7 +134,7 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, str
                         // Bare number format: expect stdout with exit=0
                         // e.g., "42 = 42" means stdout="42\n", exit=0
                         // The binary returns the value as exit code, but CompilerLibrary reports exit=0
-                        Ok (0, Some $"{value}\n", None)
+                        Ok (0, Some $"{value}\n", None, false)
                     else
                         // Mixed format error
                         Error "Cannot mix bare number with attributes. Use explicit attributes instead."
@@ -134,6 +145,7 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, str
                 let mutable exitCode = 0  // default
                 let mutable stdout = None
                 let mutable stderr = None
+                let mutable disableFreeList = false
                 let mutable errors = []
 
                 // Split by spaces, but respect quoted strings
@@ -159,22 +171,28 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, str
                                 match parseStringLiteral value with
                                 | Ok s -> stderr <- Some s
                                 | Error e -> errors <- e :: errors
+                            | "no_free_list" ->
+                                match value.ToLower() with
+                                | "true" | "1" -> disableFreeList <- true
+                                | "false" | "0" -> disableFreeList <- false
+                                | _ -> errors <- $"Invalid no_free_list value: {value} (expected true/false)" :: errors
                             | _ -> errors <- $"Unknown attribute: {key}" :: errors
                         | Error e -> errors <- e :: errors
 
                 if errors.Length > 0 then
                     Error (String.concat "; " (List.rev errors))
                 else
-                    Ok (exitCode, stdout, stderr)
+                    Ok (exitCode, stdout, stderr, disableFreeList)
 
         match parseExpectations expectationsStr with
-        | Ok (exitCode, stdout, stderr) ->
+        | Ok (exitCode, stdout, stderr, disableFreeList) ->
             Ok {
                 Name = comment |> Option.defaultValue $"Line {lineNumber}: {source}"
                 Source = source
                 ExpectedStdout = stdout
                 ExpectedStderr = stderr
                 ExpectedExitCode = exitCode
+                DisableFreeList = disableFreeList
             }
         | Error e ->
             Error $"Line {lineNumber}: {e}"
