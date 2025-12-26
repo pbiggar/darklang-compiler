@@ -62,6 +62,7 @@ type Token =
     | TAnd         // &&
     | TOr          // ||
     | TNot         // !
+    | TDotDotDot    // ... (rest pattern in lists)
     | TIdent of string
     | TEOF
 
@@ -88,6 +89,7 @@ let lex (input: string) : Result<Token list, string> =
         | ']' :: rest -> lexHelper rest (TRBracket :: acc)
         | ':' :: rest -> lexHelper rest (TColon :: acc)
         | ',' :: rest -> lexHelper rest (TComma :: acc)
+        | '.' :: '.' :: '.' :: rest -> lexHelper rest (TDotDotDot :: acc)
         | '.' :: rest -> lexHelper rest (TDot :: acc)
         | '=' :: '=' :: rest -> lexHelper rest (TEqEq :: acc)
         | '=' :: rest -> lexHelper rest (TEquals :: acc)
@@ -599,6 +601,14 @@ and parseListPattern (tokens: Token list) (acc: Pattern list) : Result<Pattern *
     | TRBracket :: rest ->
         // Empty list or end of list pattern
         Ok (PList (List.rev acc), rest)
+    | TDotDotDot :: rest ->
+        // Rest pattern at start: [...t]
+        parsePattern rest
+        |> Result.bind (fun (tailPat, remaining) ->
+            match remaining with
+            | TRBracket :: rest' ->
+                Ok (PListCons (List.rev acc, tailPat), rest')
+            | _ -> Error "Expected ']' after rest pattern")
     | _ ->
         parsePattern tokens
         |> Result.bind (fun (pat, remaining) ->
@@ -606,6 +616,14 @@ and parseListPattern (tokens: Token list) (acc: Pattern list) : Result<Pattern *
             | TRBracket :: rest ->
                 // End of list pattern
                 Ok (PList (List.rev (pat :: acc)), rest)
+            | TComma :: TDotDotDot :: rest ->
+                // Rest pattern after element: [a, b, ...t]
+                parsePattern rest
+                |> Result.bind (fun (tailPat, remaining') ->
+                    match remaining' with
+                    | TRBracket :: rest' ->
+                        Ok (PListCons (List.rev (pat :: acc), tailPat), rest')
+                    | _ -> Error "Expected ']' after rest pattern")
             | TComma :: rest ->
                 // More elements
                 parseListPattern rest (pat :: acc)

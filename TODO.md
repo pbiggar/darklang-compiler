@@ -10,7 +10,9 @@ The following are known simplifications or potential issues in the compiler code
 
 ### HIGH Priority (Can cause crashes or wrong results)
 
-(No current high-priority issues)
+- Flesh out the language.
+  - Add all tests from https://github.com/darklang/dark/tree/main/backend/testfiles/execution/language, adapting them for this implementation of the Darklang language.
+  - Determine what features are missing to allow them all to be compiled
 
 ### MEDIUM Priority (Incomplete features)
 
@@ -19,11 +21,13 @@ The following are known simplifications or potential issues in the compiler code
 ### LOW Priority (Feature limitations, not bugs)
 
 #### 1. ARM64 register subset
+
 **File:** `src/DarkCompiler/ARM64.fs` (line 26)
 **Issue:** Only subset of ARM64 registers implemented
 **Future:** Add more registers as needed
 
 #### 2. Parser structure limitations
+
 **File:** `src/DarkCompiler/passes/1_Parser.fs` (line 839)
 **Issue:** Only function definitions allowed after expressions
 **Future:** Expand module-level structure support
@@ -38,7 +42,6 @@ The following features are explicitly out of scope:
 
 - **REPL** - interactive mode
 - **Debugger support** - DWARF debug info
-- **Modules/imports** - multi-file programs
 
 ## Current Status
 

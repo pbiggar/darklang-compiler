@@ -185,6 +185,10 @@ and collectPatternBindings (pattern: Pattern) : Set<string> =
         fields |> List.map (fun (_, p) -> collectPatternBindings p) |> List.fold Set.union Set.empty
     | PList patterns ->
         patterns |> List.map collectPatternBindings |> List.fold Set.union Set.empty
+    | PListCons (headPatterns, tailPattern) ->
+        let headBindings = headPatterns |> List.map collectPatternBindings |> List.fold Set.union Set.empty
+        let tailBindings = collectPatternBindings tailPattern
+        Set.union headBindings tailBindings
 
 // =============================================================================
 // Type Inference for Generic Function Calls
@@ -816,6 +820,25 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             | Error e, _ -> Error e
                             | _, Error e -> Error e) (Ok [])
                     | _ -> Error (GenericError "List pattern used on non-list type")
+                | PListCons (headPatterns, tailPattern) ->
+                    match patternType with
+                    | TList elemType ->
+                        // Head patterns bind to element type
+                        let headBindings =
+                            headPatterns
+                            |> List.map (fun p -> extractPatternBindings p elemType)
+                            |> List.fold (fun acc res ->
+                                match acc, res with
+                                | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
+                                | Error e, _ -> Error e
+                                | _, Error e -> Error e) (Ok [])
+                        // Tail pattern binds to List<elemType>
+                        let tailBindings = extractPatternBindings tailPattern (TList elemType)
+                        match headBindings, tailBindings with
+                        | Ok hb, Ok tb -> Ok (hb @ tb)
+                        | Error e, _ -> Error e
+                        | _, Error e -> Error e
+                    | _ -> Error (GenericError "List cons pattern used on non-list type")
 
             // Type check each case and ensure they all return the same type
             // Returns (resultType, transformedCases)

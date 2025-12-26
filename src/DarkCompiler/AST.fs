@@ -67,7 +67,8 @@ type Pattern =
     | PFloat of float                                      // 3.14
     | PTuple of Pattern list                               // (a, b, c)
     | PRecord of typeName:string * fields:(string * Pattern) list  // { x = a, y = b }
-    | PList of Pattern list                                // [a, b, c]
+    | PList of Pattern list                                // [a, b, c] - exact length match
+    | PListCons of head:Pattern list * tail:Pattern        // [a, b, ...t] - head elements + rest
 
 /// Expression nodes
 type Expr =

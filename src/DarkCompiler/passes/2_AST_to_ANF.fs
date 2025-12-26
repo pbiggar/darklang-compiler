@@ -1491,6 +1491,49 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         |> Result.map (fun (bodyExpr, vg2) ->
                             let finalExpr = wrapBindings bindings bodyExpr
                             (finalExpr, vg2)))
+                | AST.PListCons (headPatterns, tailPattern) ->
+                    // Extract head elements and bind tail
+                    // List layout: Nil = 0, Cons = [tag=1, head, tail]
+                    let rec collectListConsBindings (pats: AST.Pattern list) (listAtom: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.Atom * ANF.VarGen, string> =
+                        match pats with
+                        | [] -> Ok (env, List.rev bindings, listAtom, vg)
+                        | pat :: rest ->
+                            // Extract head from current Cons cell (index 1)
+                            let (headVar, vg1) = ANF.freshVar vg
+                            let headExpr = ANF.TupleGet (listAtom, 1)
+                            let headBinding = (headVar, headExpr)
+                            // Extract tail from current Cons cell (index 2)
+                            let (tailVar, vg2) = ANF.freshVar vg1
+                            let tailExpr = ANF.TupleGet (listAtom, 2)
+                            let tailBinding = (tailVar, tailExpr)
+                            match pat with
+                            | AST.PVar name ->
+                                let newEnv = Map.add name (headVar, AST.TInt64) env
+                                collectListConsBindings rest (ANF.Var tailVar) newEnv (tailBinding :: headBinding :: bindings) vg2
+                            | AST.PWildcard ->
+                                collectListConsBindings rest (ANF.Var tailVar) env (tailBinding :: bindings) vg2
+                            | _ ->
+                                collectListConsBindings rest (ANF.Var tailVar) env (tailBinding :: headBinding :: bindings) vg2
+                    collectListConsBindings headPatterns scrutAtom currentEnv [] vg
+                    |> Result.bind (fun (newEnv, bindings, tailAtom, vg1) ->
+                        // Bind tail pattern
+                        match tailPattern with
+                        | AST.PVar name ->
+                            let (tailVar, vg2) = ANF.freshVar vg1
+                            // Tail is a list, use TList TInt64 as placeholder
+                            let newEnv' = Map.add name (tailVar, AST.TList AST.TInt64) newEnv
+                            toANF body vg2 newEnv' typeReg variantLookup funcReg
+                            |> Result.map (fun (bodyExpr, vg3) ->
+                                let tailBinding = (tailVar, ANF.Atom tailAtom)
+                                let allBindings = bindings @ [tailBinding]
+                                let finalExpr = wrapBindings allBindings bodyExpr
+                                (finalExpr, vg3))
+                        | AST.PWildcard ->
+                            toANF body vg1 newEnv typeReg variantLookup funcReg
+                            |> Result.map (fun (bodyExpr, vg2) ->
+                                let finalExpr = wrapBindings bindings bodyExpr
+                                (finalExpr, vg2))
+                        | _ -> Error "Tail pattern in list cons must be variable or wildcard")
 
             // Build comparison expression for a pattern
             let rec buildPatternComparison (pattern: AST.Pattern) (scrutAtom: ANF.Atom) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
@@ -1546,6 +1589,16 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         // We only check that it's a Cons (non-nil). Length matching
                         // is not fully validated here - mismatched lengths may crash
                         // when extracting elements. Full validation would need nested ifs.
+                        let (cmpVar, vg1) = ANF.freshVar vg
+                        let cmpExpr = ANF.Prim (ANF.Neq, scrutAtom, ANF.IntLiteral 0L)
+                        Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
+                | AST.PListCons (headPatterns, _) ->
+                    // List cons pattern: [...t] matches any list, [h, ...t] needs at least one element
+                    if List.isEmpty headPatterns then
+                        // [...t] matches any list including empty
+                        Ok None
+                    else
+                        // [h, ...t] or [a, b, ...t] - needs at least one element (non-nil)
                         let (cmpVar, vg1) = ANF.freshVar vg
                         let cmpExpr = ANF.Prim (ANF.Neq, scrutAtom, ANF.IntLiteral 0L)
                         Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
@@ -1606,6 +1659,57 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let ifExpr = ANF.If (ANF.Var checkVar, withHead, elseExpr)
                         (ANF.Let (checkVar, checkExpr, ifExpr), vg4))
 
+            // Compile a list cons pattern [h, ...t] with proper checks
+            let rec compileListConsPatternWithChecks
+                (headPatterns: AST.Pattern list)
+                (tailPattern: AST.Pattern)
+                (listAtom: ANF.Atom)
+                (currentEnv: VarEnv)
+                (body: AST.Expr)
+                (elseExpr: ANF.AExpr)
+                (vg: ANF.VarGen)
+                : Result<ANF.AExpr * ANF.VarGen, string> =
+
+                match headPatterns with
+                | [] ->
+                    // All head elements extracted - bind tail and compile body
+                    match tailPattern with
+                    | AST.PVar name ->
+                        let (tailVar, vg1) = ANF.freshVar vg
+                        let newEnv = Map.add name (tailVar, AST.TList AST.TInt64) currentEnv
+                        toANF body vg1 newEnv typeReg variantLookup funcReg
+                        |> Result.map (fun (bodyExpr, vg2) ->
+                            let withTail = ANF.Let (tailVar, ANF.Atom listAtom, bodyExpr)
+                            (withTail, vg2))
+                    | AST.PWildcard ->
+                        toANF body vg currentEnv typeReg variantLookup funcReg
+                    | _ -> Error "Tail pattern in list cons must be variable or wildcard"
+
+                | pat :: restPatterns ->
+                    // Check current position is non-nil
+                    let (checkVar, vg1) = ANF.freshVar vg
+                    let checkExpr = ANF.Prim (ANF.Neq, listAtom, ANF.IntLiteral 0L)
+
+                    // Extract head (index 1) and tail (index 2)
+                    let (headVar, vg2) = ANF.freshVar vg1
+                    let headExpr = ANF.TupleGet (listAtom, 1)
+                    let (tailVar, vg3) = ANF.freshVar vg2
+                    let tailExpr = ANF.TupleGet (listAtom, 2)
+
+                    // Update env based on head pattern
+                    let newEnv =
+                        match pat with
+                        | AST.PVar name -> Map.add name (headVar, AST.TInt64) currentEnv
+                        | _ -> currentEnv
+
+                    // Recursively compile rest
+                    compileListConsPatternWithChecks restPatterns tailPattern (ANF.Var tailVar) newEnv body elseExpr vg3
+                    |> Result.map (fun (innerExpr, vg4) ->
+                        let withTail = ANF.Let (tailVar, tailExpr, innerExpr)
+                        let withHead = ANF.Let (headVar, headExpr, withTail)
+                        let ifExpr = ANF.If (ANF.Var checkVar, withHead, elseExpr)
+                        (ANF.Let (checkVar, checkExpr, ifExpr), vg4))
+
             // Build the if-else chain from cases
             let rec buildChain (remaining: (AST.Pattern * AST.Expr) list) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
                 match remaining with
@@ -1622,6 +1726,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         // We generate an expression that returns 0 as a fallback (TODO: proper error)
                         let fallbackExpr = ANF.Return (ANF.IntLiteral 0L)
                         compileListPatternWithChecks listPatterns scrutineeAtom' env body fallbackExpr vg
+                    | AST.PListCons (headPatterns, tailPattern) ->
+                        // List cons pattern as last case
+                        let fallbackExpr = ANF.Return (ANF.IntLiteral 0L)
+                        compileListConsPatternWithChecks headPatterns tailPattern scrutineeAtom' env body fallbackExpr vg
                     | _ ->
                         // Other patterns - original behavior
                         extractAndCompileBody pattern body scrutineeAtom' env vg
@@ -1638,6 +1746,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             |> Result.bind (fun (elseExpr, vg1) ->
                                 // Use the new interleaved check-and-extract function
                                 compileListPatternWithChecks listPatterns scrutineeAtom' env body elseExpr vg1)
+                        | AST.PListCons (headPatterns, tailPattern) ->
+                            // List cons pattern - needs interleaved checks
+                            buildChain rest vg
+                            |> Result.bind (fun (elseExpr, vg1) ->
+                                compileListConsPatternWithChecks headPatterns tailPattern scrutineeAtom' env body elseExpr vg1)
                         | _ ->
                             // Original logic for other patterns
                             buildPatternComparison pattern scrutineeAtom' vg
