@@ -668,16 +668,13 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
     // Create entry label for CFG (internal to function body)
     let entryLabel = MIR.Label $"{anfFunc.Name}_body"
 
-    // Allocate VRegs for parameters
-    let (paramVRegs, builder1) =
-        anfFunc.Params
-        |> List.fold (fun (vregs, builder) _ ->
-            let (vreg, regGen') = MIR.freshReg builder.RegGen
-            (vregs @ [vreg], { builder with RegGen = regGen' }))
-            ([], initialBuilder)
+    // Convert ANF parameter TempIds to MIR VRegs
+    // Must use tempToVReg to preserve the TempId values, not fresh VRegs,
+    // because the body uses Var (TempId n) which converts to VReg n
+    let paramVRegs = anfFunc.Params |> List.map tempToVReg
 
     // Convert function body to CFG
-    match convertExpr anfFunc.Body entryLabel [] builder1 with
+    match convertExpr anfFunc.Body entryLabel [] initialBuilder with
     | Error err -> Error err
     | Ok (_, finalBuilder) ->
 

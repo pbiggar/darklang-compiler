@@ -101,3 +101,25 @@ def recWithLet(n: int) : int = if n <= 0 then 0 else let prev = recWithLet(n - 1
 
 // Test 30: Ackermann-like (simplified)
 def ack(m: int, n: int) : int = if m == 0 then n + 1 else if n == 0 then ack(m - 1, 1) else ack(m - 1, ack(m, n - 1)) def main() : int = ack(2, 3) = 9
+
+// =====================================================
+// Multiple Function Calls in Single Expression
+// =====================================================
+// These tests exercise the bug where 3+ function calls
+// in a single expression produce wrong results due to
+// SaveRegs/RestoreRegs stack offset corruption.
+
+// Test 31: Three function calls - direct sum
+def f(x: int) : int = x * 2 def main() : int = f(1) + f(2) + f(3) = 12
+
+// Test 32: Four function calls
+def g(x: int) : int = x + 1 def main() : int = g(1) + g(2) + g(3) + g(4) = 14
+
+// Test 33: Tribonacci - triple recursive call
+def trib(n: int) : int = if n <= 0 then 0 else if n == 1 then 1 else if n == 2 then 1 else trib(n - 1) + trib(n - 2) + trib(n - 3) def main() : int = trib(7) = 24
+
+// Test 34: Three calls with different functions
+def add1(x: int) : int = x + 1 def add2(x: int) : int = x + 2 def add3(x: int) : int = x + 3 def main() : int = add1(10) + add2(10) + add3(10) = 36
+
+// Test 35: Three calls using let bindings (workaround - should work)
+def h(x: int) : int = x * 2 def main() : int = let a = h(1) in let b = h(2) in let c = h(3) in a + b + c = 12

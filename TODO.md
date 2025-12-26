@@ -38,38 +38,31 @@ The following are known simplifications or potential issues in the compiler code
 **Risk:** Low - patterns match more than expected, but no crashes
 **Workaround:** Use more specific patterns first, or check length explicitly
 
-#### 2. Three or more function calls in single expression
-**File:** `src/DarkCompiler/passes/4_MIR_to_LIR.fs`, `5_RegisterAllocation.fs`
-**Issue:** Caller-save register management only handles 2 function calls per expression
-**Example:** `tribFull(n-1) + tribFull(n-2) + tribFull(n-3)` produces wrong result
-**Risk:** Wrong results when 3+ function calls combined with `+`, `-`, etc.
-**Workaround:** Use let bindings: `let a = f(x) in let b = g(y) in let c = h(z) in a + b + c`
-
 ### MEDIUM Priority (Incomplete features)
 
-#### 3. Callee-saved registers not implemented
+#### 2. Callee-saved registers not implemented
 **Files:** `src/DarkCompiler/passes/5_RegisterAllocation.fs` (line 111), `6_CodeGen.fs` (lines 147, 173)
 **Issue:** `calleeSavedRegs` is empty list, X19-X28 not supported in LIR.PhysReg
 **Impact:** Suboptimal register allocation, more spilling than necessary
 
 ### LOW Priority (Feature limitations, not bugs)
 
-#### 4. Monomorphic lists
+#### 3. Monomorphic lists
 **Files:** `src/DarkCompiler/AST.fs` (line 31), `1.5_TypeChecking.fs` (line 530)
 **Issue:** TList only supports int, not polymorphic types
 **Future:** Add type parameter support for lists
 
-#### 5. ARM64 register subset
+#### 4. ARM64 register subset
 **File:** `src/DarkCompiler/ARM64.fs` (line 26)
 **Issue:** Only subset of ARM64 registers implemented
 **Future:** Add more registers as needed
 
-#### 6. Parser structure limitations
+#### 5. Parser structure limitations
 **File:** `src/DarkCompiler/passes/1_Parser.fs` (line 839)
 **Issue:** Only function definitions allowed after expressions
 **Future:** Expand module-level structure support
 
-#### 7. MachO UUID hardcoded to zeros
+#### 6. MachO UUID hardcoded to zeros
 **File:** `src/DarkCompiler/passes/8_Binary_Generation_MachO.fs` (line 468)
 **Issue:** All binaries have identical UUID (all zeros)
 **Impact:** Cosmetic - doesn't affect functionality
@@ -90,7 +83,7 @@ The following are known simplifications or potential issues in the compiler code
 - ✅ Lists (linked list implementation with [1, 2, 3] syntax and pattern matching)
 - ✅ Type checking (51 DSL tests + 8 unit tests)
 - ✅ 8-pass compiler pipeline (Parser → TypeCheck → ANF → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
-- ✅ 705 passing tests
+- ✅ 709 passing tests
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
 - ✅ Type-directed record field lookup (no ambiguity when multiple record types have same field names)
 - ✅ Function return type inference using function registry (enables type inference for let-bound function calls)
@@ -130,7 +123,7 @@ These are features that exist but have known limitations or incomplete implement
 
 ✅ Ref count field added to all heap allocations
 ✅ Ref count initialized to 1 at allocation time
-✅ All 705 tests pass with ref count headers
+✅ All 709 tests pass with ref count headers
 
 **History:**
 
