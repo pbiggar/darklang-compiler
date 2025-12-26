@@ -1,0 +1,95 @@
+// Reference Counting Tests
+//
+// Tests for reference counting behavior. Some tests document known bugs.
+//
+// Current status:
+// - RefCountDec is inserted at START of scope instead of END (bug)
+// - Free list logic is disabled (causes segfaults when enabled)
+// - Memory is not actually reclaimed when ref count hits 0
+
+// ===================================================================
+// Basic tuple creation and use - should work correctly
+// ===================================================================
+
+// Simple tuple - works because memory is never freed
+let t = (1, 2) in t.0 + t.1 = stdout="3\n"
+
+// Tuple destructuring - works
+let (a, b) = (10, 20) in a + b = stdout="30\n"
+
+// Multiple tuples - works
+let t1 = (1, 2) in let t2 = (3, 4) in t1.0 + t2.1 = stdout="5\n"
+
+// ===================================================================
+// Tests that expose RefCountDec placement bug
+// These pass only because free list is disabled
+// ===================================================================
+
+// BUG: Dec for 't' happens BEFORE 't' is used in destructuring
+// If memory were freed, this would be a use-after-free
+let t = (1, 2) in let (a, b) = t in a + b = stdout="3\n"
+
+// BUG: Dec for 'outer' happens before inner tuple is extracted
+// The intermediate tuple alias should keep the outer alive
+let outer = (1, 2) in let inner = outer in inner.0 + inner.1 = stdout="3\n"
+
+// ===================================================================
+// Memory reuse tests - would fail when free list is enabled
+// ===================================================================
+
+// Allocate two tuples of same size - should reuse memory when first is freed
+// Currently passes because memory is not reused
+let t1 = (1, 2) in let _ = t1.0 in let t2 = (3, 4) in t2.0 + t2.1 = stdout="7\n"
+
+// Allocate many tuples - tests memory pressure
+// Would fail if free list had bugs
+let a = (1, 1) in let b = (2, 2) in let c = (3, 3) in let d = (4, 4) in a.0 + b.0 + c.0 + d.0 = stdout="10\n"
+
+// ===================================================================
+// Function calls with heap values
+// ===================================================================
+
+// Tuple passed to function and returned - ownership transfer
+def identity(t: int) : int = t def main() : int = identity(42) = 42
+
+// Tuple created in function and returned
+def make_value() : int = 42 def main() : int = make_value() = 42
+
+// Multiple function calls
+def add1(x: int) : int = x + 1 def main() : int = let a = add1(1) in let b = add1(10) in a + b = 13
+
+// ===================================================================
+// Records (also heap-allocated)
+// ===================================================================
+
+// Basic record - same issues as tuples
+type Point = { x: int, y: int } let p = Point { x = 10, y = 20 } in p.x + p.y = stdout="30\n"
+
+// Record with destructuring
+type Point = { x: int, y: int } let p = Point { x = 5, y = 7 } in let q = p in q.x + q.y = stdout="12\n"
+
+// ===================================================================
+// Nested heap values
+// ===================================================================
+
+// Tuple containing tuples - inner tuples need separate RC
+let outer = ((1, 2), (3, 4)) in let (a, b) = outer in a.0 + b.1 = stdout="5\n"
+
+// Deeply nested tuple access (must use intermediate let bindings)
+let t = ((10, 20), (30, 40)) in let a = t.0 in let b = t.1 in a.0 + b.1 = stdout="50\n"
+
+// ===================================================================
+// Lists (also heap-allocated)
+// ===================================================================
+
+// Simple list operations
+match [1, 2, 3] with | [x, _, _] -> x | _ -> 0 = stdout="1\n"
+
+// List with element extraction
+match [10, 20, 30] with | [x, y, z] -> x | _ -> 0 = stdout="10\n"
+
+// Empty list
+match [] with | [] -> 42 | _ -> 0 = stdout="42\n"
+
+// List allocation then match
+let xs = [1, 2] in match xs with | [a, b] -> a + b | _ -> 0 = stdout="3\n"
