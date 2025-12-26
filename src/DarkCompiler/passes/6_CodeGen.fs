@@ -515,6 +515,65 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         lirRegToARM64Reg func
         |> Result.map (fun funcReg -> [ARM64.BLR funcReg])
 
+    | LIR.ClosureAlloc (dest, funcName, captures) ->
+        // Allocate closure on heap: (func_ptr, cap1, cap2, ...)
+        // Each slot is 8 bytes
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            let numSlots = 1 + List.length captures  // func_ptr + captures
+            let sizeBytes = numSlots * 8
+            // Total size includes 8 bytes for ref count, aligned to 8 bytes
+            let totalSize = ((sizeBytes + 8) + 7) &&& (~~~7)
+
+            // Allocate using bump allocator
+            let allocInstrs = [
+                ARM64.MOV_reg (destReg, ARM64.X28)                      // dest = current heap pointer
+                ARM64.MOVZ (ARM64.X15, 1us, 0)                          // X15 = 1 (initial ref count)
+                ARM64.STR (ARM64.X15, ARM64.X28, int16 sizeBytes)       // store ref count after payload
+                ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)  // bump pointer
+            ]
+
+            // Store function address at offset 0
+            let storeFuncAddr = [
+                ARM64.ADR (ARM64.X15, funcName)                         // X15 = function address
+                ARM64.STR (ARM64.X15, destReg, 0s)                      // [dest] = func_ptr
+            ]
+
+            // Store captures at subsequent offsets
+            let storeCaptures =
+                captures
+                |> List.mapi (fun i cap -> (i, cap))
+                |> List.collect (fun (i, cap) ->
+                    let offset = (i + 1) * 8
+                    match cap with
+                    | LIR.Imm value ->
+                        loadImmediate ARM64.X15 value @
+                        [ARM64.STR (ARM64.X15, destReg, int16 offset)]
+                    | LIR.Reg reg ->
+                        match lirRegToARM64Reg reg with
+                        | Ok srcReg ->
+                            // Avoid storing dest into itself at offset
+                            if srcReg = destReg then
+                                [ARM64.MOV_reg (ARM64.X15, srcReg); ARM64.STR (ARM64.X15, destReg, int16 offset)]
+                            else
+                                [ARM64.STR (srcReg, destReg, int16 offset)]
+                        | Error _ -> []  // Shouldn't happen
+                    | LIR.FuncAddr fname ->
+                        [ARM64.ADR (ARM64.X15, fname); ARM64.STR (ARM64.X15, destReg, int16 offset)]
+                    | _ -> [])  // Other operand types not expected
+
+            Ok (allocInstrs @ storeFuncAddr @ storeCaptures))
+
+    | LIR.ClosureCall (dest, funcPtr, args) ->
+        // Call through closure - MIR_to_LIR already set up:
+        // - X9: function pointer (loaded from closure[0])
+        // - X0: closure
+        // - X1-X7: args
+        // Just do the BLR
+        lirRegToARM64Reg funcPtr
+        |> Result.map (fun funcPtrReg ->
+            [ARM64.BLR funcPtrReg])
+
     | LIR.SaveRegs ->
         // Save caller-saved registers (X1-X10) before call
         // Allocate 80 bytes (10 regs * 8 bytes), store pairs
@@ -724,6 +783,10 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 loadStackSlot tempReg slotOffset
                 |> Result.map (fun loadInstrs ->
                     loadInstrs @ [ARM64.STR (tempReg, addrReg, int16 offset)])
+            | LIR.FuncAddr funcName ->
+                // Load function address into temp, then store to heap
+                let tempReg = ARM64.X9
+                Ok [ARM64.ADR (tempReg, funcName); ARM64.STR (tempReg, addrReg, int16 offset)]
             | _ -> Error "Unsupported operand type in HeapStore")
 
     | LIR.HeapLoad (dest, addr, offset) ->

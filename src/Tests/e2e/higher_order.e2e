@@ -25,3 +25,26 @@ def apply(f: (int) -> int, x: int): int = f(x) apply((y: int) => y * 2, 21) = 42
 
 // Two-argument lambda
 def apply2(f: (int, int) -> int, a: int, b: int): int = f(a, b) apply2((a: int, b: int) => a * b, 6, 7) = 42
+
+// =====================================================
+// Lambda with Captures as Argument
+// =====================================================
+
+// Pass capturing lambda - closure support
+def apply(f: (int) -> int, x: int): int = f(x) let base = 10 in apply((y: int) => y + base, 5) = 15
+
+// Two variables captured
+def apply(f: (int) -> int, x: int): int = f(x) let a = 10 in let b = 20 in apply((y: int) => y + a + b, 12) = 42
+
+// Capture and multiply
+def apply(f: (int) -> int, x: int): int = f(x) let factor = 7 in apply((y: int) => y * factor, 6) = 42
+
+// =====================================================
+// Composed Function Applications
+// =====================================================
+
+// Apply function twice using higher-order function
+def twice(f: (int) -> int, x: int): int = f(f(x)) twice((y: int) => y + 1, 5) = 7
+
+// Twice with capturing lambda
+def twice(f: (int) -> int, x: int): int = f(f(x)) let inc = 3 in twice((y: int) => y + inc, 5) = 11

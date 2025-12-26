@@ -88,6 +88,10 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.RefCountInc (atom, _) -> maxTempIdInAtom atom
     | ANF.RefCountDec (atom, _) -> maxTempIdInAtom atom
     | ANF.Print (atom, _) -> maxTempIdInAtom atom
+    | ANF.ClosureAlloc (_, captures) ->
+        captures |> List.map maxTempIdInAtom |> List.fold max -1
+    | ANF.ClosureCall (closure, args) ->
+        max (maxTempIdInAtom closure) (args |> List.map maxTempIdInAtom |> List.fold max -1)
 
 /// Find the maximum TempId in an AExpr
 let rec maxTempIdInAExpr (expr: ANF.AExpr) : int =
@@ -152,6 +156,9 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.RefCountInc (atom, _) -> collectStringsFromAtom atom
     | ANF.RefCountDec (atom, _) -> collectStringsFromAtom atom
     | ANF.Print (atom, _) -> collectStringsFromAtom atom
+    | ANF.ClosureAlloc (_, captures) -> captures |> List.collect collectStringsFromAtom
+    | ANF.ClosureCall (closure, args) ->
+        collectStringsFromAtom closure @ (args |> List.collect collectStringsFromAtom)
 
 /// Collect all float literals from a CExpr
 let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
@@ -177,6 +184,9 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
     | ANF.RefCountInc (atom, _) -> collectFloatsFromAtom atom
     | ANF.RefCountDec (atom, _) -> collectFloatsFromAtom atom
     | ANF.Print (atom, _) -> collectFloatsFromAtom atom
+    | ANF.ClosureAlloc (_, captures) -> captures |> List.collect collectFloatsFromAtom
+    | ANF.ClosureCall (closure, args) ->
+        collectFloatsFromAtom closure @ (args |> List.collect collectFloatsFromAtom)
 
 /// Collect all string literals from an ANF expression
 let rec collectStringsFromExpr (expr: ANF.AExpr) : string list =
@@ -393,6 +403,30 @@ let rec convertExpr
                         |> sequenceResults
                         |> Result.map (fun argOperands ->
                             [MIR.IndirectCall (destReg, funcOp, argOperands)]))
+                | ANF.ClosureAlloc (funcName, captures) ->
+                    // Allocate closure: (func_addr, cap1, cap2, ...)
+                    let numSlots = 1 + List.length captures  // func_ptr + captures
+                    let sizeBytes = numSlots * 8
+                    let allocInstr = MIR.HeapAlloc (destReg, sizeBytes)
+                    // Store function pointer at offset 0
+                    let storeFuncInstr = MIR.HeapStore (destReg, 0, MIR.FuncAddr funcName)
+                    // Store captured values at offsets 8, 16, ...
+                    captures
+                    |> List.mapi (fun i cap -> (i, cap))
+                    |> List.map (fun (i, cap) ->
+                        atomToOperand builder cap
+                        |> Result.map (fun op -> MIR.HeapStore (destReg, (i + 1) * 8, op)))
+                    |> sequenceResults
+                    |> Result.map (fun storeInstrs -> allocInstr :: storeFuncInstr :: storeInstrs)
+                | ANF.ClosureCall (closure, args) ->
+                    // Call through closure: extract func_ptr, call with (closure, args...)
+                    atomToOperand builder closure
+                    |> Result.bind (fun closureOp ->
+                        args
+                        |> List.map (atomToOperand builder)
+                        |> sequenceResults
+                        |> Result.map (fun argOperands ->
+                            [MIR.ClosureCall (destReg, closureOp, argOperands)]))
                 | ANF.TupleAlloc elems ->
                     // Allocate heap space: 8 bytes per element
                     let sizeBytes = List.length elems * 8
@@ -654,6 +688,30 @@ and convertExprToOperand
                         |> sequenceResults
                         |> Result.map (fun argOperands ->
                             [MIR.IndirectCall (destReg, funcOp, argOperands)]))
+                | ANF.ClosureAlloc (funcName, captures) ->
+                    // Allocate closure: (func_addr, cap1, cap2, ...)
+                    let numSlots = 1 + List.length captures  // func_ptr + captures
+                    let sizeBytes = numSlots * 8
+                    let allocInstr = MIR.HeapAlloc (destReg, sizeBytes)
+                    // Store function pointer at offset 0
+                    let storeFuncInstr = MIR.HeapStore (destReg, 0, MIR.FuncAddr funcName)
+                    // Store captured values at offsets 8, 16, ...
+                    captures
+                    |> List.mapi (fun i cap -> (i, cap))
+                    |> List.map (fun (i, cap) ->
+                        atomToOperand builder cap
+                        |> Result.map (fun op -> MIR.HeapStore (destReg, (i + 1) * 8, op)))
+                    |> sequenceResults
+                    |> Result.map (fun storeInstrs -> allocInstr :: storeFuncInstr :: storeInstrs)
+                | ANF.ClosureCall (closure, args) ->
+                    // Call through closure: extract func_ptr, call with (closure, args...)
+                    atomToOperand builder closure
+                    |> Result.bind (fun closureOp ->
+                        args
+                        |> List.map (atomToOperand builder)
+                        |> sequenceResults
+                        |> Result.map (fun argOperands ->
+                            [MIR.ClosureCall (destReg, closureOp, argOperands)]))
                 | ANF.TupleAlloc elems ->
                     // Allocate heap space: 8 bytes per element
                     let sizeBytes = List.length elems * 8

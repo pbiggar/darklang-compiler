@@ -133,6 +133,12 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
     | LIR.IndirectCall (dest, func, args) ->
         let argStr = args |> List.map prettyPrintLIROperand |> String.concat ", "
         $"{prettyPrintLIRReg dest} <- IndirectCall({prettyPrintLIRReg func}, [{argStr}])"
+    | LIR.ClosureAlloc (dest, funcName, captures) ->
+        let capsStr = captures |> List.map prettyPrintLIROperand |> String.concat ", "
+        $"{prettyPrintLIRReg dest} <- ClosureAlloc({funcName}, [{capsStr}])"
+    | LIR.ClosureCall (dest, closure, args) ->
+        let argStr = args |> List.map prettyPrintLIROperand |> String.concat ", "
+        $"{prettyPrintLIRReg dest} <- ClosureCall({prettyPrintLIRReg closure}, [{argStr}])"
     | LIR.PrintInt reg ->
         $"PrintInt({prettyPrintLIRReg reg})"
     | LIR.PrintBool reg ->
@@ -289,6 +295,12 @@ let prettyPrintANFCExpr = function
     | ANF.IndirectCall (func, args) ->
         let argStr = args |> List.map prettyPrintANFAtom |> String.concat ", "
         $"IndirectCall({prettyPrintANFAtom func}, [{argStr}])"
+    | ANF.ClosureAlloc (funcName, captures) ->
+        let capsStr = captures |> List.map prettyPrintANFAtom |> String.concat ", "
+        $"ClosureAlloc({funcName}, [{capsStr}])"
+    | ANF.ClosureCall (closure, args) ->
+        let argStr = args |> List.map prettyPrintANFAtom |> String.concat ", "
+        $"ClosureCall({prettyPrintANFAtom closure}, [{argStr}])"
     | ANF.IfValue (cond, thenAtom, elseAtom) ->
         $"if {prettyPrintANFAtom cond} then {prettyPrintANFAtom thenAtom} else {prettyPrintANFAtom elseAtom}"
     | ANF.TupleAlloc elems ->

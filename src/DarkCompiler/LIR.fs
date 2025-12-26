@@ -73,6 +73,8 @@ type Instr =
     | Mvn of dest:Reg * src:Reg                 // Bitwise NOT
     | Call of dest:Reg * funcName:string * args:Operand list  // Direct function call (BL instruction)
     | IndirectCall of dest:Reg * func:Reg * args:Operand list  // Call through function pointer (BLR instruction)
+    | ClosureAlloc of dest:Reg * funcName:string * captures:Operand list  // Allocate closure: (func_addr, caps...)
+    | ClosureCall of dest:Reg * closure:Reg * args:Operand list  // Call through closure with hidden first arg
     | SaveRegs                                   // Save caller-saved registers (X1-X10) before call
     | RestoreRegs                                // Restore caller-saved registers (X1-X10) after call
     | PrintInt of Reg                           // Print integer register to stdout (no exit)

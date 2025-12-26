@@ -92,6 +92,7 @@ type Expr =
     | Lambda of parameters:(string * Type) list * body:Expr  // (x: int) => x + 1
     | Apply of func:Expr * args:Expr list                    // Apply function expr: f(x) where f is expression
     | FuncRef of funcName:string                             // Reference to a function (for passing as value)
+    | Closure of funcName:string * captures:Expr list        // Closure: function + captured values
 
 /// Function definition
 type FunctionDef = {

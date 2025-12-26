@@ -167,6 +167,9 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
     | FuncRef _ ->
         // Function references don't contribute free variables
         Set.empty
+    | Closure (_, captures) ->
+        // Closures capture expressions which may have free variables
+        captures |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
 
 /// Collect variable names bound by a pattern
 and collectPatternBindings (pattern: Pattern) : Set<string> =
@@ -946,6 +949,32 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
             | _ -> Ok (funcType, expr)
         | None ->
             Error (UndefinedVariable funcName)
+
+    | Closure (funcName, captures) ->
+        // Closure: function with captured values
+        // The closure has the same type as the underlying function (minus closure param)
+        // For now, just check the captures and return function type
+        let checkCapture (cap: Expr) : Result<Expr, TypeError> =
+            checkExpr cap env typeReg variantLookup genericFuncReg None
+            |> Result.map snd
+        let rec checkCaptures (caps: Expr list) (acc: Expr list) : Result<Expr list, TypeError> =
+            match caps with
+            | [] -> Ok (List.rev acc)
+            | cap :: rest ->
+                checkCapture cap |> Result.bind (fun cap' -> checkCaptures rest (cap' :: acc))
+        checkCaptures captures []
+        |> Result.bind (fun captures' ->
+            // Look up closure function type
+            match Map.tryFind funcName env with
+            | Some (TFunction (_ :: restParams, returnType)) ->
+                // The closure type is the function type without the closure param
+                let closureType = TFunction (restParams, returnType)
+                match expectedType with
+                | Some expected when expected <> closureType ->
+                    Error (TypeMismatch (expected, closureType, $"closure {funcName}"))
+                | _ -> Ok (closureType, Closure (funcName, captures'))
+            | Some funcType -> Ok (funcType, Closure (funcName, captures'))
+            | None -> Error (UndefinedVariable funcName))
 
 /// Type-check a function definition
 /// Returns the transformed function body (with Call -> TypeApp transformations)

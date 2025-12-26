@@ -69,7 +69,7 @@ The following are known simplifications or potential issues in the compiler code
 - ✅ 9-pass compiler pipeline (Parser → TypeCheck → ANF → RefCount → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
 - ✅ Register allocation with callee-saved registers (X19-X27) for high register pressure
 - ✅ Reference counting with free list memory reuse
-- ✅ 826 passing tests
+- ✅ 831 passing tests
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
 - ✅ Type-directed record field lookup (no ambiguity when multiple record types have same field names)
 - ✅ Function return type inference using function registry (enables type inference for let-bound function calls)
@@ -80,7 +80,8 @@ The following are known simplifications or potential issues in the compiler code
 - ✅ Polymorphic lists (`List<T>` with type inference)
 - ✅ Lambda expressions with immediate application (`(x: int) => x + 1`)
 - ✅ First-class functions (store lambdas in variables, call later)
-- ✅ Higher-order functions (pass functions as arguments, lambda lifting for non-capturing lambdas)
+- ✅ Higher-order functions (pass named functions or lambdas as arguments)
+- ✅ Closures (lambdas that capture variables from enclosing scope)
 
 ## Implementation Notes
 

@@ -99,8 +99,8 @@ let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
 /// Apply a substitution to an expression, replacing type variables in type annotations
 let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
     match expr with
-    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ ->
-        expr  // No types to substitute in literals, variables, and function references
+    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
+        expr  // No types to substitute in literals, variables, function references, and closures
     | AST.BinOp (op, left, right) ->
         AST.BinOp (op, applySubstToExpr subst left, applySubstToExpr subst right)
     | AST.UnaryOp (op, inner) ->
@@ -154,7 +154,7 @@ let specializeFunction (funcDef: AST.FunctionDef) (typeArgs: AST.Type list) : AS
 /// Collect all TypeApp call sites from an expression
 let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
     match expr with
-    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ ->
+    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
         Set.empty
     | AST.BinOp (_, left, right) ->
         Set.union (collectTypeApps left) (collectTypeApps right)
@@ -200,7 +200,7 @@ let collectTypeAppsFromFunc (funcDef: AST.FunctionDef) : Set<SpecKey> =
 /// Replace TypeApp with Call using specialized name in an expression
 let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
     match expr with
-    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ ->
+    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
         expr
     | AST.BinOp (op, left, right) ->
         AST.BinOp (op, replaceTypeApps left, replaceTypeApps right)
@@ -284,6 +284,9 @@ let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
         varOccursInExpr name func || List.exists (varOccursInExpr name) args
     | AST.FuncRef _ ->
         false  // Function references don't contain variable references
+    | AST.Closure (_, captures) ->
+        // Check if name occurs in captured expressions
+        List.exists (varOccursInExpr name) captures
 
 /// Inline lambdas at Apply sites
 /// lambdaEnv: maps variable names to their lambda expressions
@@ -354,6 +357,9 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
     | AST.FuncRef _ ->
         // Function references don't need lambda inlining
         expr
+    | AST.Closure (funcName, captures) ->
+        // Inline lambdas in captured expressions
+        AST.Closure (funcName, List.map (fun c -> inlineLambdas c lambdaEnv) captures)
 
 /// Inline lambdas in a function definition
 let inlineLambdasInFunc (funcDef: AST.FunctionDef) : AST.FunctionDef =
@@ -415,11 +421,14 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
         let argVars = args |> List.map (fun a -> freeVars a bound) |> List.fold Set.union Set.empty
         Set.union funcVars argVars
     | AST.FuncRef _ -> Set.empty
+    | AST.Closure (_, captures) ->
+        // Closure captures may contain free variables
+        captures |> List.map (fun c -> freeVars c bound) |> List.fold Set.union Set.empty
 
 /// Lift lambdas in an expression, returning (transformed expr, new state)
 let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr * LiftState, string> =
     match expr with
-    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ ->
+    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
         Ok (expr, state)
     | AST.BinOp (op, left, right) ->
         liftLambdasInExpr left state
@@ -484,7 +493,9 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
             liftLambdasInArgs args state1
             |> Result.map (fun (args', state2) -> (AST.Apply (func', args'), state2)))
 
-/// Lift lambdas in function arguments, converting lambdas to FuncRefs
+/// Lift lambdas in function arguments, converting all lambdas to Closures
+/// (even non-capturing lambdas become trivial closures for uniform calling convention)
+/// Also wraps FuncRef in closures for uniform calling convention
 and liftLambdasInArgs (args: AST.Expr list) (state: LiftState) : Result<AST.Expr list * LiftState, string> =
     let rec loop (remaining: AST.Expr list) (state: LiftState) (acc: AST.Expr list) =
         match remaining with
@@ -495,27 +506,69 @@ and liftLambdasInArgs (args: AST.Expr list) (state: LiftState) : Result<AST.Expr
                 // Check for free variables (captures)
                 let paramNames = parameters |> List.map fst |> Set.ofList
                 let freeVarsInBody = freeVars body paramNames
-                if not (Set.isEmpty freeVarsInBody) then
-                    let varList = freeVarsInBody |> Set.toList |> String.concat ", "
-                    Error $"Lambda captures variables [{varList}]. Closures are not yet supported."
-                else
-                    // Lift the lambda: create a new top-level function
-                    let funcName = $"__lambda_{state.Counter}"
-                    // Infer return type from body (simplified: use TInt64 for now, or could add type inference)
-                    // For now, we'll leave ReturnType as TInt64 and let type checking catch issues
-                    let funcDef : AST.FunctionDef = {
-                        Name = funcName
-                        TypeParams = []
-                        Params = parameters
-                        ReturnType = AST.TInt64  // Simplified: assume int return for now
-                        Body = body
-                    }
-                    let state' = {
-                        Counter = state.Counter + 1
-                        LiftedFunctions = funcDef :: state.LiftedFunctions
-                    }
-                    // Replace lambda with FuncRef
-                    loop rest state' (AST.FuncRef funcName :: acc)
+                let captures = Set.toList freeVarsInBody
+
+                // All lambdas become closures (even non-capturing ones) for uniform calling convention
+                // The lifted function takes closure as first param, then original params
+                let funcName = $"__closure_{state.Counter}"
+                let closureParam = ("__closure", AST.TTuple (List.replicate (List.length captures + 1) AST.TInt64))
+
+                // Build body that extracts captures from closure tuple:
+                // let cap1 = __closure.1 in let cap2 = __closure.2 in ... original_body
+                let bodyWithExtractions =
+                    if List.isEmpty captures then
+                        body  // No captures to extract
+                    else
+                        captures
+                        |> List.mapi (fun i capName ->
+                            // Capture at index i+1 (index 0 is the function pointer)
+                            (capName, AST.TupleAccess (AST.Var "__closure", i + 1)))
+                        |> List.foldBack (fun (capName, accessor) acc ->
+                            AST.Let (capName, accessor, acc)) <| body
+
+                let funcDef : AST.FunctionDef = {
+                    Name = funcName
+                    TypeParams = []
+                    Params = closureParam :: parameters  // Closure is always first param
+                    ReturnType = AST.TInt64
+                    Body = bodyWithExtractions
+                }
+                let state' = {
+                    Counter = state.Counter + 1
+                    LiftedFunctions = funcDef :: state.LiftedFunctions
+                }
+                // Replace lambda with Closure (captures may be empty for non-capturing lambdas)
+                let captureExprs = captures |> List.map AST.Var
+                loop rest state' (AST.Closure (funcName, captureExprs) :: acc)
+
+            | AST.FuncRef origFuncName ->
+                // Named function used as value - wrap in a closure for uniform calling convention
+                // Create wrapper: __funcref_wrapper_N(__closure, ...params) = origFunc(...params)
+                // For now, assume single int param and int return (will be generalized later)
+                let wrapperName = $"__funcref_wrapper_{state.Counter}"
+                let closureParam = ("__closure", AST.TTuple [AST.TInt64])
+                let argParam = ("__arg", AST.TInt64)
+                let wrapperBody = AST.Call (origFuncName, [AST.Var "__arg"])
+                let wrapperDef : AST.FunctionDef = {
+                    Name = wrapperName
+                    TypeParams = []
+                    Params = [closureParam; argParam]
+                    ReturnType = AST.TInt64
+                    Body = wrapperBody
+                }
+                let state' = {
+                    Counter = state.Counter + 1
+                    LiftedFunctions = wrapperDef :: state.LiftedFunctions
+                }
+                // Create trivial closure with no captures
+                loop rest state' (AST.Closure (wrapperName, []) :: acc)
+
+            | AST.Var varName ->
+                // Check if this is a function being passed as value
+                // For now, treat as potential function ref - will be handled at ANF level
+                liftLambdasInExpr arg state
+                |> Result.bind (fun (arg', state') -> loop rest state' (arg' :: acc))
+
             | other ->
                 liftLambdasInExpr other state
                 |> Result.bind (fun (other', state') -> loop rest state' (other' :: acc))
@@ -556,10 +609,49 @@ let liftLambdasInFunc (funcDef: AST.FunctionDef) (state: LiftState) : Result<AST
     liftLambdasInExpr funcDef.Body state
     |> Result.map (fun (body', state') -> ({ funcDef with Body = body' }, state'))
 
+/// State extended to include known function names and their parameters
+type LiftStateWithFuncs = {
+    State: LiftState
+    FuncParams: Map<string, (string * AST.Type) list>  // function name -> params (for generating wrappers)
+    GeneratedWrappers: Map<string, string>  // original func name -> wrapper name
+}
+
+/// Generate a wrapper for a named function used as a value
+let generateFuncWrapper (origFuncName: string) (funcParams: Map<string, (string * AST.Type) list>) (stateWithFuncs: LiftStateWithFuncs) : Result<(AST.FunctionDef * LiftStateWithFuncs), string> =
+    match Map.tryFind origFuncName funcParams with
+    | Some parameters ->
+        // Create wrapper: __funcref_wrapper_N(__closure, ...params) = origFunc(...params)
+        let wrapperName = $"__funcref_wrapper_{stateWithFuncs.State.Counter}"
+        let closureParam = ("__closure", AST.TTuple [AST.TInt64])
+        let wrapperBody = AST.Call (origFuncName, parameters |> List.map (fun (name, _) -> AST.Var name))
+        let wrapperDef : AST.FunctionDef = {
+            Name = wrapperName
+            TypeParams = []
+            Params = closureParam :: parameters
+            ReturnType = AST.TInt64  // Simplified
+            Body = wrapperBody
+        }
+        let newState = {
+            stateWithFuncs with
+                State = { stateWithFuncs.State with Counter = stateWithFuncs.State.Counter + 1 }
+                GeneratedWrappers = Map.add origFuncName wrapperName stateWithFuncs.GeneratedWrappers
+        }
+        Ok (wrapperDef, newState)
+    | None ->
+        Error $"Cannot find parameters for function '{origFuncName}'"
+
 /// Lift lambdas in a program, generating new top-level functions
-let liftLambdasInProgram (program: AST.Program) : Result<AST.Program, string> =
+let rec liftLambdasInProgram (program: AST.Program) : Result<AST.Program, string> =
     let (AST.Program topLevels) = program
     let initialState = { Counter = 0; LiftedFunctions = [] }
+
+    // First pass: collect all function definitions and their parameters
+    let funcParams : Map<string, (string * AST.Type) list> =
+        topLevels
+        |> List.choose (function
+            | AST.FunctionDef f -> Some (f.Name, f.Params)
+            | _ -> None)
+        |> Map.ofList
 
     let rec processTopLevels (remaining: AST.TopLevel list) (state: LiftState) (acc: AST.TopLevel list) : Result<AST.TopLevel list * LiftState, string> =
         match remaining with
@@ -578,10 +670,121 @@ let liftLambdasInProgram (program: AST.Program) : Result<AST.Program, string> =
                 processTopLevels rest state (AST.TypeDef t :: acc)
 
     processTopLevels topLevels initialState []
-    |> Result.map (fun (topLevels', state') ->
-        // Add lifted functions to the program
-        let liftedFuncDefs = state'.LiftedFunctions |> List.rev |> List.map AST.FunctionDef
-        AST.Program (liftedFuncDefs @ topLevels'))
+    |> Result.bind (fun (topLevels', state') ->
+        // Second pass: find all functions used as values and generate wrappers
+        // Look for Var references to known functions in Call arguments
+        let funcNamesUsedAsValues =
+            topLevels'
+            |> List.collect (function
+                | AST.FunctionDef f -> collectFuncRefsInExpr f.Body funcParams
+                | AST.Expression e -> collectFuncRefsInExpr e funcParams
+                | _ -> [])
+            |> List.distinct
+
+        // Generate wrappers for functions used as values
+        let stateWithFuncs = { State = state'; FuncParams = funcParams; GeneratedWrappers = Map.empty }
+        let rec generateWrappers (funcNames: string list) (st: LiftStateWithFuncs) (wrapperAcc: AST.FunctionDef list) =
+            match funcNames with
+            | [] -> Ok (wrapperAcc, st)
+            | name :: rest ->
+                generateFuncWrapper name funcParams st
+                |> Result.bind (fun (wrapperDef, st') ->
+                    generateWrappers rest st' (wrapperDef :: wrapperAcc))
+
+        generateWrappers funcNamesUsedAsValues stateWithFuncs []
+        |> Result.map (fun (wrappers, finalStateWithFuncs) ->
+            // Replace function references with wrapper references in the program
+            let topLevels'' = topLevels' |> List.map (replaceFuncRefsWithWrappers finalStateWithFuncs.GeneratedWrappers)
+            // Add wrappers and lifted functions to the program
+            let liftedFuncDefs = (wrappers @ finalStateWithFuncs.State.LiftedFunctions) |> List.rev |> List.map AST.FunctionDef
+            AST.Program (liftedFuncDefs @ topLevels'')))
+
+/// Collect function names that are used as values (not in Call position)
+and collectFuncRefsInExpr (expr: AST.Expr) (knownFuncs: Map<string, (string * AST.Type) list>) : string list =
+    match expr with
+    | AST.Call (_, args) ->
+        // Check if any arg is a reference to a known function
+        args
+        |> List.collect (fun arg ->
+            match arg with
+            | AST.Var name when Map.containsKey name knownFuncs -> [name]
+            | _ -> collectFuncRefsInExpr arg knownFuncs)
+    | AST.Let (_, value, body) ->
+        collectFuncRefsInExpr value knownFuncs @ collectFuncRefsInExpr body knownFuncs
+    | AST.If (c, t, e) ->
+        collectFuncRefsInExpr c knownFuncs @ collectFuncRefsInExpr t knownFuncs @ collectFuncRefsInExpr e knownFuncs
+    | AST.BinOp (_, l, r) ->
+        collectFuncRefsInExpr l knownFuncs @ collectFuncRefsInExpr r knownFuncs
+    | AST.UnaryOp (_, e) -> collectFuncRefsInExpr e knownFuncs
+    | AST.TupleLiteral es | AST.ListLiteral es ->
+        es |> List.collect (fun e -> collectFuncRefsInExpr e knownFuncs)
+    | AST.TupleAccess (e, _) -> collectFuncRefsInExpr e knownFuncs
+    | AST.RecordLiteral (_, fields) ->
+        fields |> List.collect (fun (_, e) -> collectFuncRefsInExpr e knownFuncs)
+    | AST.RecordAccess (e, _) -> collectFuncRefsInExpr e knownFuncs
+    | AST.Constructor (_, _, payload) ->
+        payload |> Option.map (fun e -> collectFuncRefsInExpr e knownFuncs) |> Option.defaultValue []
+    | AST.Match (scrut, cases) ->
+        collectFuncRefsInExpr scrut knownFuncs @ (cases |> List.collect (fun (_, e) -> collectFuncRefsInExpr e knownFuncs))
+    | AST.Lambda (_, body) -> collectFuncRefsInExpr body knownFuncs
+    | AST.Apply (f, args) ->
+        collectFuncRefsInExpr f knownFuncs @ (args |> List.collect (fun e -> collectFuncRefsInExpr e knownFuncs))
+    | AST.Closure (_, caps) ->
+        caps |> List.collect (fun e -> collectFuncRefsInExpr e knownFuncs)
+    | AST.TypeApp (_, _, args) ->
+        args |> List.collect (fun e -> collectFuncRefsInExpr e knownFuncs)
+    | _ -> []
+
+/// Replace function references with wrapper references in a TopLevel
+and replaceFuncRefsWithWrappers (wrapperMap: Map<string, string>) (topLevel: AST.TopLevel) : AST.TopLevel =
+    match topLevel with
+    | AST.FunctionDef f ->
+        AST.FunctionDef { f with Body = replaceInExpr wrapperMap f.Body }
+    | AST.Expression e ->
+        AST.Expression (replaceInExpr wrapperMap e)
+    | AST.TypeDef t -> AST.TypeDef t
+
+/// Replace function references with wrapper references in an expression
+and replaceInExpr (wrapperMap: Map<string, string>) (expr: AST.Expr) : AST.Expr =
+    match expr with
+    | AST.Var name when Map.containsKey name wrapperMap ->
+        // This is a function reference used as a value - replace with closure to wrapper
+        AST.Closure (Map.find name wrapperMap, [])
+    | AST.Closure (funcName, caps) ->
+        // If this closure references a known function, use the wrapper instead
+        let newFuncName = Map.tryFind funcName wrapperMap |> Option.defaultValue funcName
+        AST.Closure (newFuncName, caps |> List.map (replaceInExpr wrapperMap))
+    | AST.Call (name, args) ->
+        AST.Call (name, args |> List.map (replaceInExpr wrapperMap))
+    | AST.Let (n, v, b) ->
+        AST.Let (n, replaceInExpr wrapperMap v, replaceInExpr wrapperMap b)
+    | AST.If (c, t, e) ->
+        AST.If (replaceInExpr wrapperMap c, replaceInExpr wrapperMap t, replaceInExpr wrapperMap e)
+    | AST.BinOp (op, l, r) ->
+        AST.BinOp (op, replaceInExpr wrapperMap l, replaceInExpr wrapperMap r)
+    | AST.UnaryOp (op, e) ->
+        AST.UnaryOp (op, replaceInExpr wrapperMap e)
+    | AST.TupleLiteral es ->
+        AST.TupleLiteral (es |> List.map (replaceInExpr wrapperMap))
+    | AST.TupleAccess (e, i) ->
+        AST.TupleAccess (replaceInExpr wrapperMap e, i)
+    | AST.RecordLiteral (t, fields) ->
+        AST.RecordLiteral (t, fields |> List.map (fun (n, e) -> (n, replaceInExpr wrapperMap e)))
+    | AST.RecordAccess (e, f) ->
+        AST.RecordAccess (replaceInExpr wrapperMap e, f)
+    | AST.Constructor (t, v, payload) ->
+        AST.Constructor (t, v, payload |> Option.map (replaceInExpr wrapperMap))
+    | AST.Match (scrut, cases) ->
+        AST.Match (replaceInExpr wrapperMap scrut, cases |> List.map (fun (p, e) -> (p, replaceInExpr wrapperMap e)))
+    | AST.ListLiteral es ->
+        AST.ListLiteral (es |> List.map (replaceInExpr wrapperMap))
+    | AST.Lambda (ps, body) ->
+        AST.Lambda (ps, replaceInExpr wrapperMap body)
+    | AST.Apply (f, args) ->
+        AST.Apply (replaceInExpr wrapperMap f, args |> List.map (replaceInExpr wrapperMap))
+    | AST.TypeApp (n, ts, args) ->
+        AST.TypeApp (n, ts, args |> List.map (replaceInExpr wrapperMap))
+    | _ -> expr
 
 /// Monomorphize a program: collect all specializations, generate specialized functions, replace TypeApps
 let monomorphize (program: AST.Program) : AST.Program =
@@ -778,6 +981,13 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
         match Map.tryFind name funcReg with
         | Some returnType -> Ok returnType
         | None -> Error $"Cannot infer type: undefined function '{name}'"
+    | AST.Closure (funcName, _) ->
+        // Closure has function type (without the closure param)
+        match Map.tryFind funcName funcReg with
+        | Some (AST.TFunction (_ :: restParams, returnType)) ->
+            Ok (AST.TFunction (restParams, returnType))
+        | Some funcType -> Ok funcType
+        | None -> Error $"Cannot infer type: undefined closure function '{funcName}'"
 
 /// Convert AST expression to ANF
 /// env maps user variable names to ANF TempIds and their types
@@ -816,6 +1026,27 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
     | AST.FuncRef name ->
         // Explicit function reference
         Ok (ANF.Return (ANF.FuncRef name), varGen)
+
+    | AST.Closure (funcName, captures) ->
+        // Closure: allocate closure tuple with function address and captured values
+        // Convert each capture expression to an atom
+        let rec convertCaptures (caps: AST.Expr list) (vg: ANF.VarGen) (acc: (ANF.Atom * (ANF.TempId * ANF.CExpr) list) list) =
+            match caps with
+            | [] -> Ok (List.rev acc, vg)
+            | cap :: rest ->
+                toAtom cap vg env typeReg variantLookup funcReg
+                |> Result.bind (fun (capAtom, capBindings, vg') ->
+                    convertCaptures rest vg' ((capAtom, capBindings) :: acc))
+        convertCaptures captures varGen []
+        |> Result.map (fun (captureResults, varGen1) ->
+            let captureAtoms = captureResults |> List.map fst
+            let allBindings = captureResults |> List.collect snd
+            // Generate ClosureAlloc: allocate closure tuple
+            let (closureId, varGen2) = ANF.freshVar varGen1
+            let closureAlloc = ANF.ClosureAlloc (funcName, captureAtoms)
+            let finalExpr = ANF.Let (closureId, closureAlloc, ANF.Return (ANF.Var closureId))
+            let exprWithBindings = wrapBindings allBindings finalExpr
+            (exprWithBindings, varGen2))
 
     | AST.Let (name, value, body) ->
         // Let binding: convert value to atom, allocate fresh temp, convert body with extended env
@@ -892,13 +1123,26 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
     | AST.Call (funcName, args) ->
         // Function call: convert all arguments to atoms
+        // If an argument is a function reference, wrap it in a trivial closure for uniform calling convention
+        let wrapFuncRefInClosure (atom: ANF.Atom) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
+            match atom with
+            | ANF.FuncRef fnName ->
+                // Function reference needs to be wrapped in a closure
+                // Create a ClosureAlloc with no captures
+                let (closureId, vg') = ANF.freshVar vg
+                let closureAlloc = ANF.ClosureAlloc (fnName, [])
+                (ANF.Var closureId, bindings @ [(closureId, closureAlloc)], vg')
+            | _ -> (atom, bindings, vg)
+
         let rec convertArgs (argExprs: AST.Expr list) (vg: ANF.VarGen) (accAtoms: ANF.Atom list) (accBindings: (ANF.TempId * ANF.CExpr) list) : Result<ANF.Atom list * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
             match argExprs with
             | [] -> Ok (List.rev accAtoms, accBindings, vg)
             | arg :: rest ->
                 toAtom arg vg env typeReg variantLookup funcReg
                 |> Result.bind (fun (argAtom, argBindings, vg') ->
-                    convertArgs rest vg' (argAtom :: accAtoms) (accBindings @ argBindings))
+                    // Wrap function references in closures for uniform calling convention
+                    let (wrappedAtom, allBindings, vg'') = wrapFuncRefInClosure argAtom (accBindings @ argBindings) vg'
+                    convertArgs rest vg'' (wrappedAtom :: accAtoms) allBindings)
 
         convertArgs args varGen [] []
         |> Result.bind (fun (argAtoms, argBindings, varGen1) ->
@@ -907,8 +1151,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             // Check if funcName is a variable (indirect call) or a defined function (direct call)
             match Map.tryFind funcName env with
             | Some (tempId, AST.TFunction (_, _)) ->
-                // Variable with function type - use indirect call
-                let callExpr = ANF.IndirectCall (ANF.Var tempId, argAtoms)
+                // Variable with function type - use closure call
+                // All function values are now closures (even non-capturing ones)
+                let callExpr = ANF.ClosureCall (ANF.Var tempId, argAtoms)
                 let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
                 let exprWithBindings = wrapBindings argBindings finalExpr
                 Ok (exprWithBindings, varGen2)
@@ -1474,6 +1719,24 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         // Explicit function reference
         Ok (ANF.FuncRef name, [], varGen)
 
+    | AST.Closure (funcName, captures) ->
+        // Closure in atom position: convert captures and create ClosureAlloc binding
+        let rec convertCaptures (caps: AST.Expr list) (vg: ANF.VarGen) (acc: (ANF.Atom * (ANF.TempId * ANF.CExpr) list) list) =
+            match caps with
+            | [] -> Ok (List.rev acc, vg)
+            | cap :: rest ->
+                toAtom cap vg env typeReg variantLookup funcReg
+                |> Result.bind (fun (capAtom, capBindings, vg') ->
+                    convertCaptures rest vg' ((capAtom, capBindings) :: acc))
+        convertCaptures captures varGen []
+        |> Result.map (fun (captureResults, varGen1) ->
+            let captureAtoms = captureResults |> List.map fst
+            let allBindings = captureResults |> List.collect snd
+            // Create binding for ClosureAlloc
+            let (closureId, varGen2) = ANF.freshVar varGen1
+            let closureAlloc = ANF.ClosureAlloc (funcName, captureAtoms)
+            (ANF.Var closureId, allBindings @ [(closureId, closureAlloc)], varGen2))
+
     | AST.Let (name, value, body) ->
         // Let binding in atom position: need to evaluate and return the body as an atom
         // Infer the type of the value for type-directed field lookup
@@ -1560,8 +1823,9 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             // Check if funcName is a variable (indirect call) or a defined function (direct call)
             match Map.tryFind funcName env with
             | Some (tempId, AST.TFunction (_, _)) ->
-                // Variable with function type - use indirect call
-                let callCExpr = ANF.IndirectCall (ANF.Var tempId, argAtoms)
+                // Variable with function type - use closure call
+                // All function values are now closures (even non-capturing ones)
+                let callCExpr = ANF.ClosureCall (ANF.Var tempId, argAtoms)
                 let allBindings = argBindings @ [(tempVar, callCExpr)]
                 Ok (ANF.Var tempVar, allBindings, varGen2)
             | Some (_, varType) ->

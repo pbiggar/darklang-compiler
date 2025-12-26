@@ -76,6 +76,13 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         // For indirect calls, we would need to track the function type
         // For now, return None (no ref counting for indirect call results)
         None
+    | ClosureAlloc (_, captures) ->
+        // Closure is a tuple-like structure: (func_ptr, cap1, cap2, ...)
+        // Return a tuple type for ref counting purposes
+        Some (AST.TTuple (AST.TInt64 :: List.replicate (List.length captures) AST.TInt64))
+    | ClosureCall (_, _) ->
+        // Closure calls return unknown type for now
+        None
     | TupleAlloc elems ->
         // Infer element types and create TTuple
         let elemTypes =

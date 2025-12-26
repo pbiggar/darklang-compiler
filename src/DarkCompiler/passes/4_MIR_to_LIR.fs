@@ -261,6 +261,67 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
 
         Ok (saveInstrs @ loadFuncInstrs @ moveInstrs @ [callInstr] @ restoreInstrs @ moveResult)
 
+    | MIR.ClosureAlloc (dest, funcName, captures) ->
+        // Allocate closure: (func_addr, cap1, cap2, ...)
+        // This is similar to TupleAlloc but first element is a function address
+        let lirDest = vregToLIRReg dest
+        let numSlots = 1 + List.length captures
+        let sizeBytes = numSlots * 8
+        let allocInstr = LIR.HeapAlloc (lirDest, sizeBytes)
+        // Store function pointer at offset 0
+        let storeFuncInstr = LIR.HeapStore (lirDest, 0, LIR.FuncAddr funcName)
+        // Store captured values at offsets 8, 16, ...
+        let storeInstrs =
+            captures
+            |> List.mapi (fun i cap -> LIR.HeapStore (lirDest, (i + 1) * 8, convertOperand cap))
+        Ok (allocInstr :: storeFuncInstr :: storeInstrs)
+
+    | MIR.ClosureCall (dest, closure, args) ->
+        // Call through closure: extract func_ptr from closure[0], call with (closure, args...)
+        let lirDest = vregToLIRReg dest
+        let argRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
+
+        // Save caller-saved registers
+        let saveInstrs = [LIR.SaveRegs]
+
+        // Load closure into a temp register first
+        let closureOp = convertOperand closure
+        let closureReg = LIR.Physical LIR.X10  // Use X10 for closure (not an arg register)
+        let loadClosureInstr =
+            match closureOp with
+            | LIR.Reg r -> LIR.Mov (closureReg, LIR.Reg r)
+            | other -> LIR.Mov (closureReg, other)
+
+        // Load function pointer from closure[0] into X9
+        let loadFuncPtrInstr = LIR.HeapLoad (LIR.Physical LIR.X9, closureReg, 0)
+
+        // Move arguments to X1-X7 (closure goes to X0)
+        // First arg is the closure itself
+        let moveClosureToArg0 = LIR.Mov (LIR.Physical LIR.X0, LIR.Reg closureReg)
+        let moveInstrs =
+            if List.length args > 7 then
+                // Error: too many args for closure call (8 - 1 for closure = 7 max)
+                []  // Will be caught by validation
+            else
+                args
+                |> List.mapi (fun i arg -> (i, arg))
+                |> List.map (fun (i, arg) ->
+                    let targetReg = List.item (i + 1) argRegs  // X1, X2, ...
+                    LIR.Mov (LIR.Physical targetReg, convertOperand arg))
+
+        let callInstr = LIR.ClosureCall (lirDest, LIR.Physical LIR.X9, List.map convertOperand args)
+
+        // Restore caller-saved registers
+        let restoreInstrs = [LIR.RestoreRegs]
+
+        // Move return value from X0 to destination
+        let moveResult =
+            match lirDest with
+            | LIR.Physical LIR.X0 -> []
+            | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
+
+        Ok (saveInstrs @ [loadClosureInstr; loadFuncPtrInstr; moveClosureToArg0] @ moveInstrs @ [callInstr] @ restoreInstrs @ moveResult)
+
     | MIR.HeapAlloc (dest, sizeBytes) ->
         let lirDest = vregToLIRReg dest
         Ok [LIR.HeapAlloc (lirDest, sizeBytes)]

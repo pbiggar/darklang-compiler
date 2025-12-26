@@ -94,6 +94,12 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         let funcVReg = regToVReg func |> Option.toList
         let argsVRegs = args |> List.choose operandToVReg
         Set.ofList (funcVReg @ argsVRegs)
+    | LIR.ClosureAlloc (_, _, captures) ->
+        captures |> List.choose operandToVReg |> Set.ofList
+    | LIR.ClosureCall (_, closure, args) ->
+        let closureVReg = regToVReg closure |> Option.toList
+        let argsVRegs = args |> List.choose operandToVReg
+        Set.ofList (closureVReg @ argsVRegs)
     | LIR.PrintInt reg | LIR.PrintBool reg ->
         regToVReg reg |> Option.toList |> Set.ofList
     | LIR.HeapAlloc (_, _) -> Set.empty
@@ -131,6 +137,8 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.Mvn (dest, _) -> regToVReg dest
     | LIR.Call (dest, _, _) -> regToVReg dest
     | LIR.IndirectCall (dest, _, _) -> regToVReg dest
+    | LIR.ClosureAlloc (dest, _, _) -> regToVReg dest
+    | LIR.ClosureCall (dest, _, _) -> regToVReg dest
     | LIR.HeapAlloc (dest, _) -> regToVReg dest
     | LIR.HeapLoad (dest, _, _) -> regToVReg dest
     | LIR.StringConcat (dest, _, _) -> regToVReg dest
@@ -584,6 +592,39 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
             | _ -> []
         funcLoads @ argLoads @ [callInstr] @ storeInstrs
+
+    | LIR.ClosureAlloc (dest, funcName, captures) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let allocatedCaptures =
+            captures |> List.mapi (fun i cap ->
+                let tempReg = if i = 0 then LIR.X12 else LIR.X13
+                applyToOperand mapping cap tempReg
+            )
+        let capLoads = allocatedCaptures |> List.collect snd
+        let capOps = allocatedCaptures |> List.map fst
+        let allocInstr = LIR.ClosureAlloc (destReg, funcName, capOps)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        capLoads @ [allocInstr] @ storeInstrs
+
+    | LIR.ClosureCall (dest, closure, args) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (closureReg, closureLoads) = loadSpilled mapping closure LIR.X14
+        let allocatedArgs =
+            args |> List.mapi (fun i arg ->
+                let tempReg = if i = 0 then LIR.X12 else LIR.X13
+                applyToOperand mapping arg tempReg
+            )
+        let argLoads = allocatedArgs |> List.collect snd
+        let argOps = allocatedArgs |> List.map fst
+        let callInstr = LIR.ClosureCall (destReg, closureReg, argOps)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        closureLoads @ argLoads @ [callInstr] @ storeInstrs
 
     | LIR.SaveRegs -> [LIR.SaveRegs]
     | LIR.RestoreRegs -> [LIR.RestoreRegs]
