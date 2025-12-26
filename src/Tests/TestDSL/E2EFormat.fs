@@ -20,6 +20,10 @@ type E2ETest = {
     ExpectedStdout: string option
     ExpectedStderr: string option
     ExpectedExitCode: int
+    /// If true, expect the compiler to fail (type error, parse error, etc.)
+    ExpectCompileError: bool
+    /// Expected error message (substring match) when ExpectCompileError is true
+    ExpectedErrorMessage: string option
     /// Compiler options
     DisableFreeList: bool
 }
@@ -70,7 +74,7 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, str
             let trimmed = rest.TrimStart()
             if trimmed.Length = 0 then false
             elif Char.IsDigit(trimmed.[0]) || trimmed.[0] = '-' then true
-            elif trimmed.StartsWith("exit") || trimmed.StartsWith("stdout") || trimmed.StartsWith("stderr") || trimmed.StartsWith("no_free_list") then true
+            elif trimmed.StartsWith("exit") || trimmed.StartsWith("stdout") || trimmed.StartsWith("stderr") || trimmed.StartsWith("no_free_list") || trimmed.StartsWith("error") then true
             else false
 
         let rec findLast (i: int) (inQuotes: bool) (lastEqualsIdx: int option) : int option =
@@ -102,21 +106,24 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, str
         let source = lineWithoutComment.Substring(0, equalsIdx).Trim()
         let expectationsStr = lineWithoutComment.Substring(equalsIdx + 1).Trim()
 
-        // Parse expectations - either old format (bare number) or new format (attributes)
-        // Returns: (exitCode, stdout, stderr, disableFreeList)
-        let parseExpectations (exp: string) : Result<int * string option * string option * bool, string> =
+        // Parse expectations - either old format (bare number), new format (attributes), or error
+        // Returns: (exitCode, stdout, stderr, disableFreeList, expectError, errorMessage)
+        let parseExpectations (exp: string) : Result<int * string option * string option * bool * bool * string option, string> =
             let trimmed = exp.Trim()
 
+            // Check for "error" keyword (compiler error expected)
+            // Supports: error  or  error="message"
+            if trimmed.ToLower() = "error" then
+                // Expect compilation to fail with exit code 1, no specific message
+                Ok (1, None, None, false, true, None)
+            elif trimmed.ToLower().StartsWith("error=") then
+                // error="message" format
+                let msgPart = trimmed.Substring(6)  // Skip "error="
+                match parseStringLiteral msgPart with
+                | Ok msg -> Ok (1, None, None, false, true, Some msg)
+                | Error e -> Error $"Invalid error message: {e}"
             // Check if old format (starts with digit or negative sign followed by digit)
-            let isSimpleFormat =
-                if trimmed.Length > 0 && Char.IsDigit(trimmed.[0]) then
-                    true
-                elif trimmed.Length > 1 && trimmed.[0] = '-' && Char.IsDigit(trimmed.[1]) then
-                    true
-                else
-                    false
-
-            if isSimpleFormat then
+            elif trimmed.Length > 0 && Char.IsDigit(trimmed.[0]) then
                 // Old format: bare exit code (possibly followed by attributes - which is an error)
                 let spaceIdx = trimmed.IndexOf(' ')
                 let exitCodeStr =
@@ -134,9 +141,28 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, str
                         // Bare number format: expect stdout with exit=0
                         // e.g., "42 = 42" means stdout="42\n", exit=0
                         // The binary returns the value as exit code, but CompilerLibrary reports exit=0
-                        Ok (0, Some $"{value}\n", None, false)
+                        Ok (0, Some $"{value}\n", None, false, false, None)
                     else
                         // Mixed format error
+                        Error "Cannot mix bare number with attributes. Use explicit attributes instead."
+                | false, _ ->
+                    Error $"Invalid value: {exitCodeStr}"
+            elif trimmed.Length > 1 && trimmed.[0] = '-' && Char.IsDigit(trimmed.[1]) then
+                // Negative number
+                let spaceIdx = trimmed.IndexOf(' ')
+                let exitCodeStr =
+                    if spaceIdx >= 0 then trimmed.Substring(0, spaceIdx)
+                    else trimmed
+
+                match Int64.TryParse(exitCodeStr) with
+                | true, value ->
+                    let remaining =
+                        if spaceIdx >= 0 then trimmed.Substring(spaceIdx + 1).Trim()
+                        else ""
+
+                    if remaining.Length = 0 then
+                        Ok (0, Some $"{value}\n", None, false, false, None)
+                    else
                         Error "Cannot mix bare number with attributes. Use explicit attributes instead."
                 | false, _ ->
                     Error $"Invalid value: {exitCodeStr}"
@@ -146,6 +172,7 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, str
                 let mutable stdout = None
                 let mutable stderr = None
                 let mutable disableFreeList = false
+                let mutable expectError = false
                 let mutable errors = []
 
                 // Split by spaces, but respect quoted strings
@@ -182,16 +209,18 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, str
                 if errors.Length > 0 then
                     Error (String.concat "; " (List.rev errors))
                 else
-                    Ok (exitCode, stdout, stderr, disableFreeList)
+                    Ok (exitCode, stdout, stderr, disableFreeList, expectError, None)
 
         match parseExpectations expectationsStr with
-        | Ok (exitCode, stdout, stderr, disableFreeList) ->
+        | Ok (exitCode, stdout, stderr, disableFreeList, expectError, errorMessage) ->
             Ok {
                 Name = comment |> Option.defaultValue $"Line {lineNumber}: {source}"
                 Source = source
                 ExpectedStdout = stdout
                 ExpectedStderr = stderr
                 ExpectedExitCode = exitCode
+                ExpectCompileError = expectError
+                ExpectedErrorMessage = errorMessage
                 DisableFreeList = disableFreeList
             }
         | Error e ->

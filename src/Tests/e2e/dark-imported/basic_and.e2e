@@ -14,18 +14,14 @@
 (false && false) = stdout="false\n"
 
 // ===================================================================
-// Error handling tests (Builtin.testRuntimeError)
-// NOTE: Commented out - requires Builtin.testRuntimeError/testDerrorMessage support
+// Type error tests - compiler should reject these
 // ===================================================================
 
-// Error in second operand (when first is true)
-// (true && Builtin.testRuntimeError "msg") = Builtin.testDerrorMessage "Uncaught exception: msg"
-
 // Type error - wrong type for second operand
-// (true && 5L) = Builtin.testDerrorMessage "&& only supports Booleans"
+(true && 5) = error="expected bool, got int"
 
 // Type error - wrong type for first operand
-// (5 && true) = Builtin.testDerrorMessage "&& only supports Booleans"
+(5 && true) = error="expected bool, got int"
 
 // ===================================================================
 // Pipe operator with AND
