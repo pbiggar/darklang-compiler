@@ -81,6 +81,8 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.TupleAlloc atoms ->
         atoms |> List.map maxTempIdInAtom |> List.fold max -1
     | ANF.TupleGet (tuple, _) -> maxTempIdInAtom tuple
+    | ANF.RefCountInc atom -> maxTempIdInAtom atom
+    | ANF.RefCountDec atom -> maxTempIdInAtom atom
 
 /// Find the maximum TempId in an AExpr
 let rec maxTempIdInAExpr (expr: ANF.AExpr) : int =
@@ -141,6 +143,8 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
         elems |> List.collect collectStringsFromAtom
     | ANF.TupleGet (tupleAtom, _) ->
         collectStringsFromAtom tupleAtom
+    | ANF.RefCountInc atom -> collectStringsFromAtom atom
+    | ANF.RefCountDec atom -> collectStringsFromAtom atom
 
 /// Collect all float literals from a CExpr
 let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
@@ -159,6 +163,8 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
         elems |> List.collect collectFloatsFromAtom
     | ANF.TupleGet (tupleAtom, _) ->
         collectFloatsFromAtom tupleAtom
+    | ANF.RefCountInc atom -> collectFloatsFromAtom atom
+    | ANF.RefCountDec atom -> collectFloatsFromAtom atom
 
 /// Collect all string literals from an ANF expression
 let rec collectStringsFromExpr (expr: ANF.AExpr) : string list =
@@ -377,6 +383,12 @@ let rec convertExpr
                 | ANF.IfValue _ ->
                     // This case is handled above; reaching here indicates a bug
                     Error "Internal error: IfValue should have been handled in outer match"
+                | ANF.RefCountInc _ ->
+                    // TODO: Will be implemented when MIR.RefCountInc is added
+                    Ok []  // No-op for now
+                | ANF.RefCountDec _ ->
+                    // TODO: Will be implemented when MIR.RefCountDec is added
+                    Ok []  // No-op for now
 
             match instrsResult with
             | Error err -> Error err
@@ -609,6 +621,12 @@ and convertExprToOperand
                 | ANF.IfValue _ ->
                     // This case is handled above; reaching here indicates a bug
                     Error "Internal error: IfValue should have been handled in outer match"
+                | ANF.RefCountInc _ ->
+                    // TODO: Will be implemented when MIR.RefCountInc is added
+                    Ok []  // No-op for now
+                | ANF.RefCountDec _ ->
+                    // TODO: Will be implemented when MIR.RefCountDec is added
+                    Ok []  // No-op for now
 
             // Let bindings accumulate instructions, pass through join label
             match instrsResult with

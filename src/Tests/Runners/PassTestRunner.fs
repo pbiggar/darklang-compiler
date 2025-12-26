@@ -274,6 +274,10 @@ let prettyPrintANFCExpr = function
         $"({elemsStr})"
     | ANF.TupleGet (tupleAtom, index) ->
         $"{prettyPrintANFAtom tupleAtom}.{index}"
+    | ANF.RefCountInc atom ->
+        $"rc_inc({prettyPrintANFAtom atom})"
+    | ANF.RefCountDec atom ->
+        $"rc_dec({prettyPrintANFAtom atom})"
 
 /// Pretty-print ANF expression (recursive)
 let rec prettyPrintANFExpr = function

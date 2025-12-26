@@ -63,6 +63,9 @@ type CExpr =
     | Call of funcName:string * args:Atom list  // Function call
     | TupleAlloc of Atom list                   // Create tuple: (a, b, c)
     | TupleGet of tuple:Atom * index:int        // Get tuple element: t.0
+    // Reference counting operations
+    | RefCountInc of Atom                       // Increment ref count of heap value
+    | RefCountDec of Atom                       // Decrement ref count, free if zero
 
 /// ANF expressions with explicit sequencing
 type AExpr =
@@ -89,3 +92,34 @@ let freshVar (VarGen n) : TempId * VarGen =
 
 /// Initial variable generator
 let initialVarGen = VarGen 0
+
+/// Type map for tracking TempId -> Type mappings
+/// Used by reference counting pass to determine which values are heap-allocated
+type TypeMap = Map<TempId, AST.Type>
+
+/// Program with type information for reference counting
+type TypedProgram = {
+    Program: Program
+    TypeMap: TypeMap
+}
+
+/// Check if a type requires reference counting (heap-allocated)
+let isHeapType (t: AST.Type) : bool =
+    match t with
+    | AST.TTuple _ -> true
+    | AST.TRecord _ -> true
+    | AST.TList -> true
+    | AST.TSum _ -> true  // Conservative: sum types with payloads are heap-allocated
+    | _ -> false
+
+/// Calculate payload size in bytes for a heap-allocated type
+let payloadSize (t: AST.Type) (typeReg: Map<string, (string * AST.Type) list>) : int =
+    match t with
+    | AST.TTuple ts -> List.length ts * 8
+    | AST.TRecord name ->
+        match Map.tryFind name typeReg with
+        | Some fields -> List.length fields * 8
+        | None -> 16  // Fallback for unknown records
+    | AST.TList -> 24  // [tag, head, tail]
+    | AST.TSum _ -> 16  // [tag, payload]
+    | _ -> 0  // Non-heap types
