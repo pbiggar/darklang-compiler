@@ -169,6 +169,7 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"RefCountInc({prettyPrintLIRReg addr}, {payloadSize})"
     | LIR.RefCountDec (addr, payloadSize) ->
         $"RefCountDec({prettyPrintLIRReg addr}, {payloadSize})"
+    | LIR.Exit -> "Exit"
 
 /// Pretty-print LIR terminator
 let prettyPrintLIRTerminator (term: LIR.Terminator) : string =
@@ -283,6 +284,8 @@ let prettyPrintANFCExpr = function
         $"rc_inc({prettyPrintANFAtom atom}, size={payloadSize})"
     | ANF.RefCountDec (atom, payloadSize) ->
         $"rc_dec({prettyPrintANFAtom atom}, size={payloadSize})"
+    | ANF.Print (atom, valueType) ->
+        $"print({prettyPrintANFAtom atom}, type={valueType})"
 
 /// Pretty-print ANF expression (recursive)
 let rec prettyPrintANFExpr = function
@@ -305,15 +308,10 @@ let prettyPrintANF (ANF.Program (functions, mainExpr)) : string =
             $"Function {func.Name}:\n{prettyPrintANFExpr func.Body}")
         |> String.concat "\n\n"
 
-    let mainStr =
-        match mainExpr with
-        | Some expr -> prettyPrintANFExpr expr
-        | None -> ""
+    let mainStr = prettyPrintANFExpr mainExpr
 
     if List.isEmpty functions then
         mainStr
-    else if Option.isNone mainExpr then
-        funcStrs
     else
         funcStrs + "\n\nMain:\n" + mainStr
 
@@ -423,6 +421,8 @@ let prettyPrintARM64Instr = function
         $"TBNZ({prettyPrintARM64Reg reg}, {bit}, {offset})"
     | ARM64.B offset ->
         $"B({offset})"
+    | ARM64.B_cond (cond, offset) ->
+        $"B_cond({cond}, {offset})"
     | ARM64.B_label label ->
         $"B_label({label})"
     | ARM64.NEG (dest, src) ->

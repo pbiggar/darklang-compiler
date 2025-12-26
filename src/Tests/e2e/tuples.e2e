@@ -25,10 +25,9 @@ let t = (0, 1) in t.1 = stdout="1\n"
 // Nested tuple access (single level)
 let t = (100, 200) in t.0 + t.1 = stdout="300\n"
 
-// Tuple with boolean values - access as integers
-// Note: Type information is lost through tuples, so booleans are output as 1/0
-let t = (true, false) in t.0 = stdout="1\n"
-let t = (true, false) in t.1 = stdout="0\n"
+// Tuple with boolean values
+let t = (true, false) in t.0 = stdout="true\n"
+let t = (true, false) in t.1 = stdout="false\n"
 
 // Tuple elements in arithmetic
 let t = (5, 3) in t.0 - t.1 = stdout="2\n"

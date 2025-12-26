@@ -66,6 +66,8 @@ type CExpr =
     // Reference counting operations
     | RefCountInc of Atom * payloadSize:int    // Increment ref count of heap value
     | RefCountDec of Atom * payloadSize:int    // Decrement ref count, free if zero
+    // Output operations (for main expression result)
+    | Print of Atom * AST.Type                 // Print value with type-appropriate formatting
 
 /// ANF expressions with explicit sequencing
 type AExpr =
@@ -80,8 +82,8 @@ type Function = {
     Body: AExpr
 }
 
-/// ANF program (functions and optional main expression)
-type Program = Program of functions:Function list * main:AExpr option
+/// ANF program (functions and main expression)
+type Program = Program of functions:Function list * main:AExpr
 
 /// Fresh variable generator (functional style)
 type VarGen = VarGen of int

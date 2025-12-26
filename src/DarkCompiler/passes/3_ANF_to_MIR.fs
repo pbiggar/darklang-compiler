@@ -83,6 +83,7 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.TupleGet (tuple, _) -> maxTempIdInAtom tuple
     | ANF.RefCountInc (atom, _) -> maxTempIdInAtom atom
     | ANF.RefCountDec (atom, _) -> maxTempIdInAtom atom
+    | ANF.Print (atom, _) -> maxTempIdInAtom atom
 
 /// Find the maximum TempId in an AExpr
 let rec maxTempIdInAExpr (expr: ANF.AExpr) : int =
@@ -108,10 +109,7 @@ let maxTempIdInProgram (program: ANF.Program) : int =
         functions
         |> List.map maxTempIdInFunction
         |> List.fold max -1
-    let mainMax =
-        match mainExpr with
-        | Some expr -> maxTempIdInAExpr expr
-        | None -> -1
+    let mainMax = maxTempIdInAExpr mainExpr
     max funcMax mainMax
 
 /// Collect all string literals from an ANF atom
@@ -145,6 +143,7 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
         collectStringsFromAtom tupleAtom
     | ANF.RefCountInc (atom, _) -> collectStringsFromAtom atom
     | ANF.RefCountDec (atom, _) -> collectStringsFromAtom atom
+    | ANF.Print (atom, _) -> collectStringsFromAtom atom
 
 /// Collect all float literals from a CExpr
 let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
@@ -165,6 +164,7 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
         collectFloatsFromAtom tupleAtom
     | ANF.RefCountInc (atom, _) -> collectFloatsFromAtom atom
     | ANF.RefCountDec (atom, _) -> collectFloatsFromAtom atom
+    | ANF.Print (atom, _) -> collectFloatsFromAtom atom
 
 /// Collect all string literals from an ANF expression
 let rec collectStringsFromExpr (expr: ANF.AExpr) : string list =
@@ -200,14 +200,14 @@ let collectFloatsFromFunction (func: ANF.Function) : float list =
 let collectStringsFromProgram (program: ANF.Program) : string list =
     let (ANF.Program (functions, mainExpr)) = program
     let funcStrings = functions |> List.collect collectStringsFromFunction
-    let mainStrings = mainExpr |> Option.map collectStringsFromExpr |> Option.defaultValue []
+    let mainStrings = collectStringsFromExpr mainExpr
     funcStrings @ mainStrings
 
 /// Collect all float literals from an ANF program
 let collectFloatsFromProgram (program: ANF.Program) : float list =
     let (ANF.Program (functions, mainExpr)) = program
     let funcFloats = functions |> List.collect collectFloatsFromFunction
-    let mainFloats = mainExpr |> Option.map collectFloatsFromExpr |> Option.defaultValue []
+    let mainFloats = collectFloatsFromExpr mainExpr
     funcFloats @ mainFloats
 
 /// Build a string pool from a list of strings (deduplicates)
@@ -405,6 +405,9 @@ let rec convertExpr
                     | ANF.Var tid ->
                         Ok [MIR.RefCountDec (tempToVReg tid, payloadSize)]
                     | _ -> Error "Internal error: RefCountDec on non-variable"
+                | ANF.Print (atom, valueType) ->
+                    atomToOperand builder atom
+                    |> Result.map (fun op -> [MIR.Print (op, valueType)])
 
             match instrsResult with
             | Error err -> Error err
@@ -649,6 +652,9 @@ and convertExprToOperand
                     | ANF.Var tid ->
                         Ok [MIR.RefCountDec (tempToVReg tid, payloadSize)]
                     | _ -> Error "Internal error: RefCountDec on non-variable"
+                | ANF.Print (atom, valueType) ->
+                    atomToOperand builder atom
+                    |> Result.map (fun op -> [MIR.Print (op, valueType)])
 
             // Let bindings accumulate instructions, pass through join label
             match instrsResult with
@@ -818,64 +824,28 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
     | Error err -> Error err
     | Ok (mirFuncs, regGen1) ->
 
-    // Convert main expression (if any) to a synthetic "_start" function
-    let startFuncResult =
-        match mainExpr with
-        | Some expr ->
-            // Create _start function from main expression
-            let entryLabel = MIR.Label "_start_body"
-            let initialBuilder = {
-                RegGen = regGen1
-                LabelGen = MIR.initialLabelGen
-                Blocks = Map.empty
-                StringLookup = strLookup
-                FloatLookup = fltLookup
-                TypeMap = typeMap
-                TypeReg = typeReg
-            }
-            match convertExpr expr entryLabel [] initialBuilder with
-            | Error err -> Error err
-            | Ok (_, finalBuilder) ->
-            let cfg = {
-                MIR.Entry = entryLabel
-                MIR.Blocks = finalBuilder.Blocks
-            }
-            let startFunc = {
-                MIR.Name = "_start"
-                MIR.Params = []
-                MIR.CFG = cfg
-            }
-            Ok (mirFuncs @ [startFunc], finalBuilder.RegGen)
-        | None ->
-            // No main expression - check if there's a main() function
-            let hasMainFunc = functions |> List.exists (fun f -> f.Name = "main")
-            if hasMainFunc then
-                // Create _start function that calls main()
-                let entryLabel = MIR.Label "_start_body"
-                let (resultReg, regGen2) = MIR.freshReg regGen1
-
-                // Create block that calls main and returns result
-                let block = {
-                    MIR.Label = entryLabel
-                    MIR.Instrs = [MIR.Call (resultReg, "main", [])]
-                    MIR.Terminator = MIR.Ret (MIR.Register resultReg)
-                }
-
-                let cfg = {
-                    MIR.Entry = entryLabel
-                    MIR.Blocks = Map.ofList [(entryLabel, block)]
-                }
-
-                let startFunc = {
-                    MIR.Name = "_start"
-                    MIR.Params = []
-                    MIR.CFG = cfg
-                }
-                Ok (mirFuncs @ [startFunc], regGen2)
-            else
-                Error "Program must have either a main expression or a main() function"
-
-    match startFuncResult with
+    // Convert main expression to a synthetic "_start" function
+    let entryLabel = MIR.Label "_start_body"
+    let initialBuilder = {
+        RegGen = regGen1
+        LabelGen = MIR.initialLabelGen
+        Blocks = Map.empty
+        StringLookup = strLookup
+        FloatLookup = fltLookup
+        TypeMap = typeMap
+        TypeReg = typeReg
+    }
+    match convertExpr mainExpr entryLabel [] initialBuilder with
     | Error err -> Error err
-    | Ok (allFuncs, finalRegGen) ->
-        Ok (MIR.Program (allFuncs, stringPool, floatPool), finalRegGen)
+    | Ok (_, finalBuilder) ->
+    let cfg = {
+        MIR.Entry = entryLabel
+        MIR.Blocks = finalBuilder.Blocks
+    }
+    let startFunc = {
+        MIR.Name = "_start"
+        MIR.Params = []
+        MIR.CFG = cfg
+    }
+    let allFuncs = mirFuncs @ [startFunc]
+    Ok (MIR.Program (allFuncs, stringPool, floatPool), finalBuilder.RegGen)

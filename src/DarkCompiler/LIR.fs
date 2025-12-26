@@ -73,10 +73,11 @@ type Instr =
     | Call of dest:Reg * funcName:string * args:Operand list  // Function call
     | SaveRegs                                   // Save caller-saved registers (X1-X10) before call
     | RestoreRegs                                // Restore caller-saved registers (X1-X10) after call
-    | PrintInt of Reg                           // Print integer register to stdout
-    | PrintBool of Reg                          // Print boolean register to stdout
+    | PrintInt of Reg                           // Print integer register to stdout (no exit)
+    | PrintBool of Reg                          // Print boolean register to stdout (no exit)
     | PrintFloat of FReg                        // Print float from FP register to stdout
     | PrintString of stringIndex:int * stringLen:int  // Print string from pool to stdout
+    | Exit                                       // Exit program with code 0
     // Floating-point instructions
     | FMov of dest:FReg * src:FReg              // Move between FP registers
     | FLoad of dest:FReg * floatIdx:int         // Load float from pool into FP register

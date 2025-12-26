@@ -59,6 +59,7 @@ let formatMismatches (mismatches: (int * Instr * uint32 * uint32) list) : string
                     | CBNZ_offset (reg, offset) -> $"CBNZ_offset({reg}, {offset})"
                     | TBNZ (reg, bit, offset) -> $"TBNZ({reg}, {bit}, {offset})"
                     | B offset -> $"B({offset})"
+                    | B_cond (cond, offset) -> $"B_cond({cond}, {offset})"
                     | B_label label -> $"B_label({label})"
                     | NEG (dest, src) -> $"NEG({dest}, {src})"
                     | STP (reg1, reg2, addr, offset) -> $"STP({reg1}, {reg2}, {addr}, {offset})"

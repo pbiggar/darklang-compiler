@@ -535,3 +535,144 @@ let generateHeapData () : ARM64.Instr list =
         ARM64.Label "_heap_end"
         // Initial value 0
     ]
+
+/// Generate ARM64 instructions to exit with code 0
+let generateExit () : ARM64.Instr list =
+    let os =
+        match Platform.detectOS () with
+        | Ok platform -> platform
+        | Error _ -> Platform.Linux
+    let syscalls = Platform.getSyscallNumbers os
+    [
+        ARM64.MOVZ (ARM64.X0, 0us, 0)  // exit code = 0
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Exit, 0)
+        ARM64.SVC syscalls.SvcImmediate
+    ]
+
+/// Generate ARM64 instructions to print int64 in X0 to stdout with newline (NO EXIT)
+/// Same as generatePrintInt but returns instead of exiting
+let generatePrintIntNoExit () : ARM64.Instr list =
+    let os =
+        match Platform.detectOS () with
+        | Ok platform -> platform
+        | Error _ -> Platform.Linux
+    let syscalls = Platform.getSyscallNumbers os
+    [
+        // Allocate 32 bytes on stack for buffer
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
+
+        // Setup: X1 = buffer pointer, X2 = value
+        ARM64.ADD_imm (ARM64.X1, ARM64.SP, 31us)
+        ARM64.MOV_reg (ARM64.X2, ARM64.X0)
+
+        // Store newline at end of buffer
+        ARM64.MOVZ (ARM64.X3, 10us, 0)
+        ARM64.STRB (ARM64.X3, ARM64.X1, 0)
+
+        // Initialize: X6 = 0 (positive flag), X3 = 10 (divisor)
+        ARM64.MOVZ (ARM64.X6, 0us, 0)
+        ARM64.MOVZ (ARM64.X3, 10us, 0)
+
+        // Check for negative: if X2 < 0, branch to handle_negative (at instruction 33)
+        ARM64.CMP_imm (ARM64.X2, 0us)
+        ARM64.B_cond (ARM64.LT, 25)  // 33 - 8 = 25
+
+        // Check for zero: if X2 == 0, branch to print_zero (at instruction 29)
+        ARM64.CBZ_offset (ARM64.X2, 20)  // 29 - 9 = 20
+
+        // digit_loop: Extract digits
+        ARM64.UDIV (ARM64.X4, ARM64.X2, ARM64.X3)
+        ARM64.MSUB (ARM64.X5, ARM64.X4, ARM64.X3, ARM64.X2)
+        ARM64.ADD_imm (ARM64.X5, ARM64.X5, 48us)
+        ARM64.STRB (ARM64.X5, ARM64.X1, 0)
+        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)
+        ARM64.MOV_reg (ARM64.X2, ARM64.X4)
+        ARM64.CBNZ_offset (ARM64.X2, -6)
+
+        // store_minus_if_needed
+        ARM64.CBZ_offset (ARM64.X6, 4)
+        ARM64.MOVZ (ARM64.X3, 45us, 0)
+        ARM64.STRB (ARM64.X3, ARM64.X1, 0)
+        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)
+
+        // write_output
+        ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1us)
+        ARM64.ADD_imm (ARM64.X2, ARM64.SP, 32us)
+        ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1)
+        ARM64.MOVZ (ARM64.X0, 1us, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.SVC syscalls.SvcImmediate
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32us)  // Deallocate stack
+        ARM64.B (8)  // Skip past print_zero (4) and handle_negative (3) + 1 to exit runtime (8 instructions)
+
+        // print_zero (at instruction 29)
+        ARM64.MOVZ (ARM64.X2, 48us, 0)
+        ARM64.STRB (ARM64.X2, ARM64.X1, 0)
+        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)
+        ARM64.B (-15)  // Jump to store_minus_if_needed: 17 - 32 = -15
+
+        // handle_negative (at instruction 33)
+        ARM64.NEG (ARM64.X2, ARM64.X2)
+        ARM64.MOVZ (ARM64.X6, 1us, 0)
+        ARM64.B (-26)  // Jump to check_zero: 9 - 35 = -26
+    ]
+
+/// Generate ARM64 instructions to print boolean in X0 to stdout with newline (NO EXIT)
+/// Same as generatePrintBool but returns instead of exiting
+let generatePrintBoolNoExit () : ARM64.Instr list =
+    let os =
+        match Platform.detectOS () with
+        | Ok platform -> platform
+        | Error _ -> Platform.Linux
+    let syscalls = Platform.getSyscallNumbers os
+    [
+        // Allocate 16 bytes on stack for buffer
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
+
+        // Check if false (X0 == 0), branch to print_false (+17 instructions)
+        ARM64.CBZ_offset (ARM64.X0, 17)
+
+        // print_true: Store "true\n" on stack (5 bytes)
+        ARM64.MOVZ (ARM64.X3, 116us, 0)  // 't'
+        ARM64.STRB (ARM64.X3, ARM64.SP, 0)
+        ARM64.MOVZ (ARM64.X3, 114us, 0)  // 'r'
+        ARM64.STRB (ARM64.X3, ARM64.SP, 1)
+        ARM64.MOVZ (ARM64.X3, 117us, 0)  // 'u'
+        ARM64.STRB (ARM64.X3, ARM64.SP, 2)
+        ARM64.MOVZ (ARM64.X3, 101us, 0)  // 'e'
+        ARM64.STRB (ARM64.X3, ARM64.SP, 3)
+        ARM64.MOVZ (ARM64.X3, 10us, 0)   // '\n'
+        ARM64.STRB (ARM64.X3, ARM64.SP, 4)
+        ARM64.MOVZ (ARM64.X2, 5us, 0)    // length = 5
+
+        // Write and cleanup (no exit)
+        ARM64.MOV_reg (ARM64.X1, ARM64.SP)
+        ARM64.MOVZ (ARM64.X0, 1us, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.SVC syscalls.SvcImmediate
+        ARM64.B (18)  // Jump to cleanup (+18 instructions to skip false branch)
+
+        // print_false: Store "false\n" on stack (6 bytes)
+        ARM64.MOVZ (ARM64.X3, 102us, 0)  // 'f'
+        ARM64.STRB (ARM64.X3, ARM64.SP, 0)
+        ARM64.MOVZ (ARM64.X3, 97us, 0)   // 'a'
+        ARM64.STRB (ARM64.X3, ARM64.SP, 1)
+        ARM64.MOVZ (ARM64.X3, 108us, 0)  // 'l'
+        ARM64.STRB (ARM64.X3, ARM64.SP, 2)
+        ARM64.MOVZ (ARM64.X3, 115us, 0)  // 's'
+        ARM64.STRB (ARM64.X3, ARM64.SP, 3)
+        ARM64.MOVZ (ARM64.X3, 101us, 0)  // 'e'
+        ARM64.STRB (ARM64.X3, ARM64.SP, 4)
+        ARM64.MOVZ (ARM64.X3, 10us, 0)   // '\n'
+        ARM64.STRB (ARM64.X3, ARM64.SP, 5)
+        ARM64.MOVZ (ARM64.X2, 6us, 0)    // length = 6
+
+        // Write
+        ARM64.MOV_reg (ARM64.X1, ARM64.SP)
+        ARM64.MOVZ (ARM64.X0, 1us, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.SVC syscalls.SvcImmediate
+
+        // cleanup (no exit):
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
+    ]

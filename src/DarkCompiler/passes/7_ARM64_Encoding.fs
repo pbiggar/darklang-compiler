@@ -253,6 +253,21 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm26 = (uint32 offset) &&& 0x3FFFFFFu
         [op ||| imm26]
 
+    | ARM64.B_cond (cond, offset) ->
+        // B.cond: 01010100 imm19 0 cond
+        // Conditional branch based on condition flags
+        let op = 0b01010100u <<< 24
+        let imm19 = ((uint32 offset) &&& 0x7FFFFu) <<< 5
+        let condBits =
+            match cond with
+            | ARM64.EQ -> 0b0000u  // Equal (Z set)
+            | ARM64.NE -> 0b0001u  // Not equal (Z clear)
+            | ARM64.LT -> 0b1011u  // Less than (signed)
+            | ARM64.GT -> 0b1100u  // Greater than (signed)
+            | ARM64.LE -> 0b1101u  // Less than or equal (signed)
+            | ARM64.GE -> 0b1010u  // Greater than or equal (signed)
+        [op ||| imm19 ||| condBits]
+
     | ARM64.CMP_imm (src, imm) ->
         // CMP immediate is SUBS XZR, Rn, #imm (SUB with set flags, dest=XZR)
         // Encoding: sf=1 op=1 S=1 10001 shift(2) imm12(12) Rn(5) Rd=11111

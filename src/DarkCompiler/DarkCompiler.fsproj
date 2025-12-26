@@ -15,6 +15,7 @@
     <Compile Include="ANF.fs" />
     <Compile Include="passes/2_AST_to_ANF.fs" />
     <Compile Include="passes/2.5_RefCountInsertion.fs" />
+    <Compile Include="passes/2.6_PrintInsertion.fs" />
     <Compile Include="MIR.fs" />
     <Compile Include="passes/3_ANF_to_MIR.fs" />
     <Compile Include="LIR.fs" />

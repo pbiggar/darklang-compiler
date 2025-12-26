@@ -98,6 +98,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         | _ -> None
     | RefCountInc (_, _) -> Some AST.TUnit
     | RefCountDec (_, _) -> Some AST.TUnit
+    | Print (_, valueType) -> Some valueType  // Print returns the type it prints
 
 /// Check if an atom is returned in the expression
 let rec isAtomReturned (atom: Atom) (expr: AExpr) : bool =
@@ -208,12 +209,7 @@ let insertRCInProgram (result: ConversionResult) : Result<ANF.Program, string> =
 
     let (functions', varGen1) = processFuncs functions varGen []
 
-    // Process main expression if present
-    let mainExpr' =
-        match mainExpr with
-        | Some expr ->
-            let (expr', _) = insertRC ctx expr varGen1
-            Some expr'
-        | None -> None
+    // Process main expression
+    let (mainExpr', _) = insertRC ctx mainExpr varGen1
 
     Ok (ANF.Program (functions', mainExpr'))

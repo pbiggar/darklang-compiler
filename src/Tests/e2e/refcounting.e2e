@@ -47,13 +47,13 @@ let a = (1, 1) in let b = (2, 2) in let c = (3, 3) in let d = (4, 4) in a.0 + b.
 // ===================================================================
 
 // Tuple passed to function and returned - ownership transfer
-def identity(t: int) : int = t def main() : int = identity(42) = 42
+def identity(t: int) : int = t identity(42) = 42
 
 // Tuple created in function and returned
-def make_value() : int = 42 def main() : int = make_value() = 42
+def make_value() : int = 42 make_value() = 42
 
 // Multiple function calls
-def add1(x: int) : int = x + 1 def main() : int = let a = add1(1) in let b = add1(10) in a + b = 13
+def add1(x: int) : int = x + 1 let a = add1(1) in let b = add1(10) in a + b = 13
 
 // ===================================================================
 // Records (also heap-allocated)
@@ -97,8 +97,8 @@ let xs = [1, 2] in match xs with | [a, b] -> a + b | _ -> 0 = stdout="3\n"
 
 // 5000 allocations of 24-byte tuples = 120KB, but heap is 64KB
 // This only works because freed memory is reused via free list
-def alloc_one() : int = let t = (1, 1) in t.0 + t.1 def loop(n: int, acc: int) : int = if n < 1 then acc else loop(n - 1, acc + alloc_one()) def main() : int = loop(5000, 0) = 10000
+def alloc_one() : int = let t = (1, 1) in t.0 + t.1 def loop(n: int, acc: int) : int = if n < 1 then acc else loop(n - 1, acc + alloc_one()) loop(5000, 0) = 10000
 
 // Same test but with free list disabled - should crash (SIGSEGV = exit 139)
 // This proves that memory reuse via free list is necessary for the test above to pass
-def alloc_one() : int = let t = (1, 1) in t.0 + t.1 def loop(n: int, acc: int) : int = if n < 1 then acc else loop(n - 1, acc + alloc_one()) def main() : int = loop(5000, 0) = exit=139 no_free_list=true // Memory exhaustion crash
+def alloc_one() : int = let t = (1, 1) in t.0 + t.1 def loop(n: int, acc: int) : int = if n < 1 then acc else loop(n - 1, acc + alloc_one()) loop(5000, 0) = exit=139 no_free_list=true // Memory exhaustion crash

@@ -96,15 +96,13 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                     // Show ANF before RC insertion
                     if verbosity >= 3 then
                         println "=== ANF (before RC insertion) ==="
-                        let (ANF.Program (funcs, mainExpr)) = convResult.Program
+                        let (ANF.Program (funcs, mainExprDbg)) = convResult.Program
                         for func in funcs do
                             println $"Function: {func.Name}"
                             println $"  Params: {func.Params}"
                             println $"  Body: {func.Body}"
                             println ""
-                        match mainExpr with
-                        | Some expr -> println $"Main: {expr}"
-                        | None -> ()
+                        println $"Main: {mainExprDbg}"
                         println ""
 
                     // Pass 2.5: Reference Count Insertion
@@ -120,20 +118,39 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                         { Binary = Array.empty
                           Success = false
                           ErrorMessage = Some $"Reference count insertion error: {err}" }
-                    | Ok anfProgram ->
+                    | Ok anfAfterRC ->
 
                     // Show ANF after RC insertion
                     if verbosity >= 3 then
                         println "=== ANF (after RC insertion) ==="
-                        let (ANF.Program (funcs, mainExpr)) = anfProgram
+                        let (ANF.Program (funcs, mainExprDbg)) = anfAfterRC
                         for func in funcs do
                             println $"Function: {func.Name}"
                             println $"  Params: {func.Params}"
                             println $"  Body: {func.Body}"
                             println ""
-                        match mainExpr with
-                        | Some expr -> println $"Main: {expr}"
-                        | None -> ()
+                        println $"Main: {mainExprDbg}"
+                        println ""
+
+                    // Pass 2.6: Print Insertion (for main expression)
+                    if verbosity >= 1 then println "  [2.6/8] Print Insertion..."
+                    let (ANF.Program (functions, mainExpr)) = anfAfterRC
+                    let anfProgram = PrintInsertion.insertPrint functions mainExpr programType
+                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(printTime, 1)
+                        println $"        {t}ms"
+
+                    // Show ANF after Print insertion
+                    if verbosity >= 3 then
+                        println "=== ANF (after Print insertion) ==="
+                        let (ANF.Program (funcs, mainExprDbg)) = anfProgram
+                        for func in funcs do
+                            println $"Function: {func.Name}"
+                            println $"  Params: {func.Params}"
+                            println $"  Body: {func.Body}"
+                            println ""
+                        println $"Main: {mainExprDbg}"
                         println ""
 
                     // Pass 3: ANF → MIR
@@ -165,7 +182,7 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                                 println $"  {block.Terminator}"
                         println ""
 
-                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
+                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(mirTime, 1)
                         println $"        {t}ms"
@@ -196,7 +213,7 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                                 println $"  {block.Terminator}"
                         println ""
 
-                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - mirTime
+                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(lirTime, 1)
                         println $"        {t}ms"
@@ -221,7 +238,7 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                                 println $"  {block.Terminator}"
                         println ""
 
-                    let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - mirTime - lirTime
+                    let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(allocTime, 1)
                         println $"        {t}ms"
@@ -232,7 +249,7 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                         DisableFreeList = options.DisableFreeList
                     }
                     let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
-                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - mirTime - lirTime - allocTime
+                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(codegenTime, 1)
                         println $"        {t}ms"
@@ -299,7 +316,7 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                                     println $"  {i:X4}: {bytes}"
                             println $"Total: {machineCode.Length} bytes\n"
 
-                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - mirTime - lirTime - allocTime - codegenTime
+                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime
                         if verbosity >= 2 then
                             let t = System.Math.Round(encodeTime, 1)
                             println $"        {t}ms"
@@ -311,7 +328,7 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                             match os with
                             | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode stringPool floatPool
                             | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode stringPool floatPool
-                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
+                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
                         if verbosity >= 2 then
                             let t = System.Math.Round(binaryTime, 1)
                             println $"        {t}ms"

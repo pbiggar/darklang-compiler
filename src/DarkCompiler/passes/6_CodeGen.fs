@@ -435,13 +435,13 @@ let convertInstr (options: CodeGenOptions) (instr: LIR.Instr) : Result<ARM64.Ins
             |> Result.map (fun srcReg -> [ARM64.MVN (destReg, srcReg)]))
 
     | LIR.PrintBool reg ->
-        // Print booleans as "true" or "false"
+        // Print booleans as "true" or "false" (no exit)
         lirRegToARM64Reg reg
         |> Result.map (fun regARM64 ->
             if regARM64 <> ARM64.X0 then
-                [ARM64.MOV_reg (ARM64.X0, regARM64)] @ Runtime.generatePrintBool ()
+                [ARM64.MOV_reg (ARM64.X0, regARM64)] @ Runtime.generatePrintBoolNoExit ()
             else
-                Runtime.generatePrintBool ())
+                Runtime.generatePrintBoolNoExit ())
 
     | LIR.Call (dest, funcName, args) ->
         // Function call: arguments already moved to X0-X7 by preceding MOVs
@@ -472,14 +472,18 @@ let convertInstr (options: CodeGenOptions) (instr: LIR.Instr) : Result<ARM64.Ins
         ]
 
     | LIR.PrintInt reg ->
-        // Value to print should be in X0
+        // Value to print should be in X0 (no exit)
         lirRegToARM64Reg reg
         |> Result.map (fun regARM64 ->
             if regARM64 <> ARM64.X0 then
                 // Move to X0 if not already there
-                [ARM64.MOV_reg (ARM64.X0, regARM64)] @ Runtime.generatePrintInt ()
+                [ARM64.MOV_reg (ARM64.X0, regARM64)] @ Runtime.generatePrintIntNoExit ()
             else
-                Runtime.generatePrintInt ())
+                Runtime.generatePrintIntNoExit ())
+
+    | LIR.Exit ->
+        // Exit program with code 0
+        Ok (Runtime.generateExit ())
 
     | LIR.PrintFloat freg ->
         // Print float value from FP register
@@ -872,16 +876,23 @@ let convertFunction (options: CodeGenOptions) (func: LIR.Function) : Result<ARM6
 
         let paramSetup = saveToTemps @ moveFromTemps
 
-        // Generate epilogue (deallocate stack, restore FP/LR, return)
-        let epilogueLabel = [ARM64.Label (sprintf "_epilogue_%s" func.Name)]
-        let epilogue = generateEpilogue func.UsedCalleeSaved func.StackSize
+        // Generate epilogue (deallocate stack, restore FP/LR, return or exit)
+        let epilogueLabelInstr = [ARM64.Label (sprintf "_epilogue_%s" func.Name)]
+        let epilogue =
+            if func.Name = "_start" then
+                // For _start, exit instead of return
+                generateEpilogue func.UsedCalleeSaved func.StackSize
+                |> List.filter (function ARM64.RET -> false | _ -> true)  // Remove RET
+                |> fun instrs -> instrs @ Runtime.generateExit ()  // Add Exit syscall
+            else
+                generateEpilogue func.UsedCalleeSaved func.StackSize
 
         // Add function entry label (for BL to branch to)
         let functionEntryLabel = [ARM64.Label func.Name]
 
         // Combine: function label + prologue + heap init + param setup + CFG body + epilogue label + epilogue
         // All Ret terminators jump to the epilogue label
-        Ok (functionEntryLabel @ prologue @ heapInit @ paramSetup @ cfgInstrs @ epilogueLabel @ epilogue)
+        Ok (functionEntryLabel @ prologue @ heapInit @ paramSetup @ cfgInstrs @ epilogueLabelInstr @ epilogue)
 
 /// Convert LIR program to ARM64 instructions with options
 let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : Result<ARM64.Instr list, string> =

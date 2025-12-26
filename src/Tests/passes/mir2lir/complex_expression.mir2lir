@@ -16,5 +16,4 @@ v2 <- Add(v0, Reg v1)
 v3 <- Mov(Imm 4)
 v4 <- Mul(v2, Reg v3)
 X0 <- Mov(Reg v4)
-PrintInt(X0)
 Ret

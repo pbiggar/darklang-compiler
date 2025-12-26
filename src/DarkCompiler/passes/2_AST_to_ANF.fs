@@ -1076,6 +1076,12 @@ let convertProgramWithTypes (program: AST.Program) : Result<ConversionResult, st
             |> Result.bind (fun (anfFunc, vg') ->
                 convertFunctions rest vg' (anfFunc :: acc))
 
+    // Validate no function is named "main" (reserved for synthesized entry point)
+    let hasMainFunc = functions |> List.exists (fun f -> f.Name = "main")
+    if hasMainFunc then
+        Error "Function name 'main' is reserved"
+    else
+
     convertFunctions functions varGen []
     |> Result.bind (fun (anfFuncs, varGen1) ->
         match expressions with
@@ -1083,17 +1089,13 @@ let convertProgramWithTypes (program: AST.Program) : Result<ConversionResult, st
             let emptyEnv : VarEnv = Map.empty
             toANF expr varGen1 emptyEnv typeReg variantLookup funcReg
             |> Result.map (fun (anfExpr, _) ->
-                { Program = ANF.Program (anfFuncs, Some anfExpr)
+                { Program = ANF.Program (anfFuncs, anfExpr)
                   TypeReg = typeReg
                   VariantLookup = variantLookup
                   FuncReg = funcReg
                   FuncParams = funcParams })
         | [] ->
-            Ok { Program = ANF.Program (anfFuncs, None)
-                 TypeReg = typeReg
-                 VariantLookup = variantLookup
-                 FuncReg = funcReg
-                 FuncParams = funcParams }
+            Error "Program must have a main expression"
         | _ ->
             Error "Multiple top-level expressions not allowed")
 
@@ -1142,17 +1144,21 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
             |> Result.bind (fun (anfFunc, vg') ->
                 convertFunctions rest vg' (anfFunc :: acc))
 
+    // Validate no function is named "main" (reserved for synthesized entry point)
+    let hasMainFunc = functions |> List.exists (fun f -> f.Name = "main")
+    if hasMainFunc then
+        Error "Function name 'main' is reserved"
+    else
+
     convertFunctions functions varGen []
     |> Result.bind (fun (anfFuncs, varGen1) ->
-        // Convert main expression (if any)
         match expressions with
         | [expr] ->
             let emptyEnv : VarEnv = Map.empty
             toANF expr varGen1 emptyEnv typeReg variantLookup funcReg
             |> Result.map (fun (anfExpr, _) ->
-                ANF.Program (anfFuncs, Some anfExpr))
+                ANF.Program (anfFuncs, anfExpr))
         | [] ->
-            // No main expression - just functions
-            Ok (ANF.Program (anfFuncs, None))
+            Error "Program must have a main expression"
         | _ ->
             Error "Multiple top-level expressions not allowed")

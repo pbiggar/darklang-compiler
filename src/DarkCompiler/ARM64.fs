@@ -82,6 +82,7 @@ type Instr =
     | CBNZ_offset of reg:Reg * offset:int  // CBNZ with immediate offset
     | TBNZ of reg:Reg * bit:int * offset:int  // Test bit and branch if not zero
     | B of offset:int  // Unconditional branch with immediate offset
+    | B_cond of cond:Condition * offset:int  // Conditional branch with immediate offset
     | NEG of dest:Reg * src:Reg  // Negate: dest = 0 - src
     | RET
     | SVC of imm:uint16  // Supervisor call (syscall)

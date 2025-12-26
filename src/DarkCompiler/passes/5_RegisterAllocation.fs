@@ -612,6 +612,8 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
         let (addrReg, addrLoads) = loadSpilled mapping addr LIR.X12
         addrLoads @ [LIR.RefCountDec (addrReg, payloadSize)]
 
+    | LIR.Exit -> [LIR.Exit]
+
 /// Apply allocation to terminator
 let applyToTerminator (mapping: Map<int, Allocation>) (term: LIR.Terminator)
     : LIR.Instr list * LIR.Terminator =

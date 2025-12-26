@@ -110,6 +110,8 @@ type Instr =
     // Reference counting operations
     | RefCountInc of addr:VReg * payloadSize:int   // Increment ref count at [addr + payloadSize]
     | RefCountDec of addr:VReg * payloadSize:int   // Decrement ref count, free if zero
+    // Output operations (for main expression result printing)
+    | Print of src:Operand * valueType:AST.Type    // Print value with type-appropriate formatting
 
 /// Basic block label
 type Label = Label of string
