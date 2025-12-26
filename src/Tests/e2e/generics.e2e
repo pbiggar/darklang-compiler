@@ -1,0 +1,76 @@
+// E2E tests for parametric polymorphism (generics)
+
+// =====================================================
+// Basic Identity Function
+// =====================================================
+
+// Generic identity function with int
+def identity<T>(x: T) : T = x identity<int>(42) = 42
+
+// Identity with bool
+def id<T>(x: T) : T = x id<bool>(true) = stdout="true\n"
+
+// Identity with different int value
+def ident<T>(x: T) : T = x ident<int>(100) = 100
+
+// =====================================================
+// Multiple Instantiations
+// =====================================================
+
+// Using identity with different types in same expression
+def myid<T>(x: T) : T = x myid<int>(40) + myid<int>(2) = 42
+
+// =====================================================
+// Generic Functions with Expressions
+// =====================================================
+
+// Generic function that uses its parameter
+def return_it<T>(value: T) : T = value return_it<int>(42) = 42
+
+def ret<T>(v: T) : T = v ret<bool>(false) = stdout="false\n"
+
+// =====================================================
+// Generic with Operations on Result
+// =====================================================
+
+// Use generic result in arithmetic
+def i<T>(x: T) : T = x i<int>(6) * i<int>(7) = 42
+
+def j<T>(x: T) : T = x j<int>(10) + 32 = 42
+
+// =====================================================
+// Generic with Let Bindings
+// =====================================================
+
+// Use generic in let binding
+def k<T>(x: T) : T = x let x = k<int>(21) in x * 2 = 42
+
+def l<T>(x: T) : T = x let a = l<int>(10) in let b = l<int>(32) in a + b = 42
+
+// =====================================================
+// Type Inference at Call Sites
+// =====================================================
+
+// Basic inference - int inferred from argument
+def inf_id<T>(x: T) : T = x inf_id(42) = 42
+
+// Bool inference
+def inf_bool<T>(x: T) : T = x inf_bool(true) = stdout="true\n"
+
+// Inference with different int value
+def inf_int2<T>(x: T) : T = x inf_int2(100) = 100
+
+// Multiple calls with inference in expression
+def inf_mult<T>(x: T) : T = x inf_mult(40) + inf_mult(2) = 42
+
+// Inference with operations on result
+def inf_op<T>(x: T) : T = x inf_op(6) * inf_op(7) = 42
+
+// Inference with let binding
+def inf_let<T>(x: T) : T = x let y = inf_let(21) in y * 2 = 42
+
+// Mixed explicit and inferred - explicit still works
+def mixed<T>(x: T) : T = x mixed<int>(20) + mixed(22) = 42
+
+// Inference with bool in conditional
+def inf_cond<T>(x: T) : T = x if inf_cond(true) then 42 else 0 = 42

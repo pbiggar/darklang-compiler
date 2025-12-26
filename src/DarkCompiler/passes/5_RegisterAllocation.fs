@@ -103,6 +103,12 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         regToVReg addr |> Option.toList |> Set.ofList
     | LIR.RefCountDec (addr, _) ->
         regToVReg addr |> Option.toList |> Set.ofList
+    | LIR.StringConcat (_, left, right) ->
+        let l = operandToVReg left |> Option.toList
+        let r = operandToVReg right |> Option.toList
+        Set.ofList (l @ r)
+    | LIR.PrintHeapString reg ->
+        regToVReg reg |> Option.toList |> Set.ofList
     | _ -> Set.empty
 
 /// Get virtual register ID defined (written) by an instruction
@@ -122,6 +128,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.Call (dest, _, _) -> regToVReg dest
     | LIR.HeapAlloc (dest, _) -> regToVReg dest
     | LIR.HeapLoad (dest, _, _) -> regToVReg dest
+    | LIR.StringConcat (dest, _, _) -> regToVReg dest
     | _ -> None
 
 /// Get virtual register used by terminator
@@ -611,6 +618,21 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
     | LIR.RefCountDec (addr, payloadSize) ->
         let (addrReg, addrLoads) = loadSpilled mapping addr LIR.X12
         addrLoads @ [LIR.RefCountDec (addrReg, payloadSize)]
+
+    | LIR.StringConcat (dest, left, right) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (leftOp, leftLoads) = applyToOperand mapping left LIR.X12
+        let (rightOp, rightLoads) = applyToOperand mapping right LIR.X13
+        let concatInstr = LIR.StringConcat (destReg, leftOp, rightOp)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        leftLoads @ rightLoads @ [concatInstr] @ storeInstrs
+
+    | LIR.PrintHeapString reg ->
+        let (regPhys, regLoads) = loadSpilled mapping reg LIR.X12
+        regLoads @ [LIR.PrintHeapString regPhys]
 
     | LIR.Exit -> [LIR.Exit]
 

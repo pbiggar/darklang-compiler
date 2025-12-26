@@ -94,6 +94,9 @@ type Instr =
     // Reference counting operations
     | RefCountInc of addr:Reg * payloadSize:int   // Increment ref count at [addr + payloadSize]
     | RefCountDec of addr:Reg * payloadSize:int   // Decrement ref count, free if zero
+    // String operations
+    | StringConcat of dest:Reg * left:Operand * right:Operand  // Concatenate strings on heap
+    | PrintHeapString of Reg                       // Print heap string [len:8][data:N]
 
 /// Basic block label
 type Label = string

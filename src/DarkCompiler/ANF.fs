@@ -63,6 +63,8 @@ type CExpr =
     | Call of funcName:string * args:Atom list  // Function call
     | TupleAlloc of Atom list                   // Create tuple: (a, b, c)
     | TupleGet of tuple:Atom * index:int        // Get tuple element: t.0
+    // String operations (heap-allocating)
+    | StringConcat of left:Atom * right:Atom    // Concatenate strings: s1 ++ s2
     // Reference counting operations
     | RefCountInc of Atom * payloadSize:int    // Increment ref count of heap value
     | RefCountDec of Atom * payloadSize:int    // Decrement ref count, free if zero

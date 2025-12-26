@@ -268,17 +268,21 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
                     | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
                 Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
         | AST.TString ->
-            // String printing uses PrintString with index and length
+            // String printing uses PrintString for pool strings, PrintHeapString for heap strings
             match src with
             | MIR.StringRef idx ->
-                // Look up the string length from the pool
+                // Pool string: look up the string length from the pool
                 match Map.tryFind idx stringPool.Strings with
                 | Some (_, len) ->
                     Ok [LIR.PrintString (idx, len)]
                 | None ->
                     Error $"Internal error: String index {idx} not found in pool"
+            | MIR.Register vreg ->
+                // Heap string (from concatenation): use PrintHeapString
+                let lirReg = vregToLIRReg vreg
+                Ok [LIR.PrintHeapString lirReg]
             | _ ->
-                // If it's a computed string (not literal), print as address
+                // Other cases (shouldn't happen for strings)
                 let lirSrc = convertOperand src
                 let moveToX0 =
                     match lirSrc with
@@ -304,6 +308,15 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
                 | LIR.Reg (LIR.Physical LIR.X0) -> []
                 | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
             Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
+        | AST.TVar _ ->
+            // Type variables should be monomorphized away before reaching LIR
+            Error "Internal error: Type variable reached MIR_to_LIR (should be monomorphized)"
+
+    | MIR.StringConcat (dest, left, right) ->
+        let lirDest = vregToLIRReg dest
+        let lirLeft = convertOperand left
+        let lirRight = convertOperand right
+        Ok [LIR.StringConcat (lirDest, lirLeft, lirRight)]
 
 /// Convert MIR terminator to LIR terminator
 /// For Branch, need to convert operand to register (may add instructions)

@@ -33,3 +33,34 @@
 
 // Multiple newlines
 "a\nb\nc" = stdout="a\nb\nc\n"
+
+// =============================================================================
+// String Concatenation Tests (++ operator)
+// =============================================================================
+
+// Basic concatenation
+"hello" ++ " world" = stdout="hello world\n"
+"a" ++ "b" = stdout="ab\n"
+"foo" ++ "bar" = stdout="foobar\n"
+
+// Empty string concatenation
+"" ++ "test" = stdout="test\n"
+"test" ++ "" = stdout="test\n"
+"" ++ "" = stdout="\n"
+
+// Chained concatenation (left associative)
+"a" ++ "b" ++ "c" = stdout="abc\n"
+"hello" ++ " " ++ "world" = stdout="hello world\n"
+
+// Variables with concatenation
+let x = "hello" in x ++ " world" = stdout="hello world\n"
+let x = "a" in let y = "b" in x ++ y = stdout="ab\n"
+
+// Concatenation in let binding
+let result = "foo" ++ "bar" in result = stdout="foobar\n"
+
+// Longer strings
+"this is a" ++ " longer test" = stdout="this is a longer test\n"
+
+// Single character concatenation
+"a" ++ "b" ++ "c" ++ "d" = stdout="abcd\n"

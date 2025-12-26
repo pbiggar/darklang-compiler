@@ -265,7 +265,7 @@ let createStringData (stringPool: MIR.StringPool) : byte array * Map<string, int
         let (allBytes, labelMap, _finalOffset) =
             sortedStrings
             |> List.fold (fun (bytes, labels, offset) (idx, (str, _len)) ->
-                let label = sprintf "_str%d" idx
+                let label = sprintf "str_%d" idx  // Match label format in CodeGen
                 let strBytes = System.Text.Encoding.UTF8.GetBytes(str) |> Array.toList
                 let newBytes = bytes @ strBytes @ [0uy]  // null-terminated
                 let newLabels = Map.add label offset labels
@@ -461,11 +461,11 @@ let createExecutableWithPools (machineCode: uint32 list) (stringPool: MIR.String
         CompatibilityVersion = 0x00010000u  // 1.0.0
     }
 
-    // LC_UUID command
+    // LC_UUID command - generate unique UUID for each binary
     let uuidCommand : Binary.UuidCommand = {
         Command = Binary.LC_UUID
         CommandSize = uint32 uuidCommandSize
-        Uuid = Array.create 16 0uy  // Zero UUID for now (could generate random)
+        Uuid = System.Guid.NewGuid().ToByteArray()
     }
 
     // LC_BUILD_VERSION command

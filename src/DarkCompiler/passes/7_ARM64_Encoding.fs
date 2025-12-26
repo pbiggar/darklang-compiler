@@ -184,6 +184,30 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rt = encodeReg src
         [size ||| vOpc ||| imm12 ||| rn ||| rt]
 
+    | ARM64.LDRB (dest, baseReg, indexReg) ->
+        // LDRB (register offset): 00 111 000 01 1 Rm option S 10 Rn Rt
+        // Size=00 (byte), V=0, opc=01 (load unsigned), register offset mode
+        // option=011 (LSL), S=0 (no shift)
+        let size = 0u <<< 30  // Byte operation (bits 31-30 = 00)
+        let bits29to21 = 0b111000011u <<< 21  // 111 0 00 01 1 at bits 29-21
+        let rm = (encodeReg indexReg) <<< 16
+        let option = 0b011u <<< 13  // LSL extend
+        let s = 0u <<< 12  // No shift
+        let fixed2 = 0b10u <<< 10
+        let rn = (encodeReg baseReg) <<< 5
+        let rt = encodeReg dest
+        [size ||| bits29to21 ||| rm ||| option ||| s ||| fixed2 ||| rn ||| rt]
+
+    | ARM64.STRB_reg (src, addr) ->
+        // STRB (register): store byte to address in register
+        // Use immediate offset 0: 00 111 001 00 000000000000 Rn Rt
+        let size = 0u <<< 30  // Byte operation
+        let vOpc = 0b11100100u <<< 22  // Fixed bits for STRB unsigned offset
+        let imm12 = 0u <<< 10  // offset = 0
+        let rn = (encodeReg addr) <<< 5
+        let rt = encodeReg src
+        [size ||| vOpc ||| imm12 ||| rn ||| rt]
+
     // Label-based branches - resolved via two-pass encoding (see encodeWithLabels)
     // These return empty here because they are only used during label resolution
     | ARM64.CBZ (reg, label) ->
@@ -790,7 +814,7 @@ let computeStringLabels (codeFileOffset: int) (codeSize: int) (floatPoolSize: in
 
         sortedStrings
         |> List.fold (fun (offset, labelMap) (idx, (str, _len)) ->
-            let label = sprintf "_str%d" idx
+            let label = sprintf "str_%d" idx  // Match label format in CodeGen
             let newMap = Map.add label offset labelMap
             let strBytes = System.Text.Encoding.UTF8.GetBytes(str)
             (offset + strBytes.Length + 1, newMap))  // +1 for null terminator

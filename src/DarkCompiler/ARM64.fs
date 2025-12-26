@@ -65,6 +65,8 @@ type Instr =
     | MVN of dest:Reg * src:Reg  // Bitwise NOT
     | MOV_reg of dest:Reg * src:Reg
     | STRB of src:Reg * addr:Reg * offset:int  // Store byte [addr + offset] = src (lower 8 bits)
+    | LDRB of dest:Reg * baseAddr:Reg * index:Reg  // Load byte with register offset: dest = [baseAddr + index]
+    | STRB_reg of src:Reg * addr:Reg  // Store byte: [addr] = src (lower 8 bits)
     // Stack operations (for function calls and stack frames)
     | STP of reg1:Reg * reg2:Reg * addr:Reg * offset:int16  // Store pair: [addr + offset] = reg1, [addr + offset + 8] = reg2
     | LDP of reg1:Reg * reg2:Reg * addr:Reg * offset:int16  // Load pair: reg1 = [addr + offset], reg2 = [addr + offset + 8]

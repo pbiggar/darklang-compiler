@@ -81,6 +81,8 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.TupleAlloc atoms ->
         atoms |> List.map maxTempIdInAtom |> List.fold max -1
     | ANF.TupleGet (tuple, _) -> maxTempIdInAtom tuple
+    | ANF.StringConcat (left, right) ->
+        max (maxTempIdInAtom left) (maxTempIdInAtom right)
     | ANF.RefCountInc (atom, _) -> maxTempIdInAtom atom
     | ANF.RefCountDec (atom, _) -> maxTempIdInAtom atom
     | ANF.Print (atom, _) -> maxTempIdInAtom atom
@@ -141,6 +143,8 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
         elems |> List.collect collectStringsFromAtom
     | ANF.TupleGet (tupleAtom, _) ->
         collectStringsFromAtom tupleAtom
+    | ANF.StringConcat (left, right) ->
+        collectStringsFromAtom left @ collectStringsFromAtom right
     | ANF.RefCountInc (atom, _) -> collectStringsFromAtom atom
     | ANF.RefCountDec (atom, _) -> collectStringsFromAtom atom
     | ANF.Print (atom, _) -> collectStringsFromAtom atom
@@ -162,6 +166,8 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
         elems |> List.collect collectFloatsFromAtom
     | ANF.TupleGet (tupleAtom, _) ->
         collectFloatsFromAtom tupleAtom
+    | ANF.StringConcat (left, right) ->
+        collectFloatsFromAtom left @ collectFloatsFromAtom right
     | ANF.RefCountInc (atom, _) -> collectFloatsFromAtom atom
     | ANF.RefCountDec (atom, _) -> collectFloatsFromAtom atom
     | ANF.Print (atom, _) -> collectFloatsFromAtom atom
@@ -408,6 +414,12 @@ let rec convertExpr
                 | ANF.Print (atom, valueType) ->
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.Print (op, valueType)])
+                | ANF.StringConcat (leftAtom, rightAtom) ->
+                    atomToOperand builder leftAtom
+                    |> Result.bind (fun leftOp ->
+                        atomToOperand builder rightAtom
+                        |> Result.map (fun rightOp ->
+                            [MIR.StringConcat (destReg, leftOp, rightOp)]))
 
             match instrsResult with
             | Error err -> Error err
@@ -655,6 +667,12 @@ and convertExprToOperand
                 | ANF.Print (atom, valueType) ->
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.Print (op, valueType)])
+                | ANF.StringConcat (leftAtom, rightAtom) ->
+                    atomToOperand builder leftAtom
+                    |> Result.bind (fun leftOp ->
+                        atomToOperand builder rightAtom
+                        |> Result.map (fun rightOp ->
+                            [MIR.StringConcat (destReg, leftOp, rightOp)]))
 
             // Let bindings accumulate instructions, pass through join label
             match instrsResult with

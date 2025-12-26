@@ -74,14 +74,14 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                 { Binary = Array.empty
                   Success = false
                   ErrorMessage = Some $"Type error: {TypeChecking.typeErrorToString typeErr}" }
-            | Ok programType ->
+            | Ok (programType, transformedAst) ->
                 if verbosity >= 3 then
                     println $"Program type: {TypeChecking.typeToString programType}"
                     println ""
 
-                // Pass 2: AST → ANF
+                // Pass 2: AST → ANF (use transformed AST with type inference applied)
                 if verbosity >= 1 then println "  [2/8] AST → ANF..."
-                let anfResult = AST_to_ANF.convertProgramWithTypes ast
+                let anfResult = AST_to_ANF.convertProgramWithTypes transformedAst
                 let anfTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime
                 if verbosity >= 2 then
                     let t = System.Math.Round(anfTime, 1)

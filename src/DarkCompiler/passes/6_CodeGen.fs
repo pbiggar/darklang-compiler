@@ -28,6 +28,12 @@ let defaultOptions : CodeGenOptions = {
     DisableFreeList = false
 }
 
+/// Code generation context (passed through to instruction conversion)
+type CodeGenContext = {
+    Options: CodeGenOptions
+    StringPool: MIR.StringPool
+}
+
 /// Convert LIR.PhysReg to ARM64.Reg
 let lirPhysRegToARM64Reg (physReg: LIR.PhysReg) : ARM64.Reg =
     match physReg with
@@ -278,7 +284,7 @@ let generateEpilogue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM6
     deallocStack @ restoreCalleeSavedInstrs @ deallocCalleeSaved @ restoreFpLr @ ret
 
 /// Convert LIR instruction to ARM64 instructions
-let convertInstr (options: CodeGenOptions) (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
+let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
     match instr with
     | LIR.Mov (dest, src) ->
         lirRegToARM64Reg dest
@@ -294,8 +300,51 @@ let convertInstr (options: CodeGenOptions) (instr: LIR.Instr) : Result<ARM64.Ins
             | LIR.StackSlot offset ->
                 // Load from stack slot into destination register
                 loadStackSlot destReg offset
-            | LIR.StringRef _ ->
-                Error "Cannot MOV string reference - use PrintString instruction"
+            | LIR.StringRef idx ->
+                // Convert pool string to heap string format when storing in variable
+                // This ensures all string variables have consistent heap layout:
+                // [length:8][data:N][refcount:8]
+                //
+                // Algorithm:
+                // 1. Get pool string address and length
+                // 2. Allocate heap: length + 16 bytes
+                // 3. Store length at [heap]
+                // 4. Copy bytes from pool to [heap+8]
+                // 5. Store refcount=1 at [heap+8+length]
+                // 6. dest = heap address
+                match Map.tryFind idx ctx.StringPool.Strings with
+                | Some (_, len) ->
+                    let label = sprintf "str_%d" idx
+                    let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
+                    Ok ([
+                        // Load pool string address into X9
+                        ARM64.ADRP (ARM64.X9, label)
+                        ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                        // Allocate heap space (bump allocator)
+                        ARM64.MOV_reg (destReg, ARM64.X28)  // dest = current heap pointer
+                        ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)  // bump pointer
+                        // Store length
+                    ] @ loadImmediate ARM64.X10 (int64 len) @ [
+                        ARM64.STR (ARM64.X10, destReg, 0s)  // [dest] = length
+                        // Copy bytes: loop counter in X0
+                        ARM64.MOVZ (ARM64.X0, 0us, 0)  // X0 = 0
+                    ] @ loadImmediate ARM64.X11 (int64 len) @ [
+                        // Loop start (if X0 >= len, done)
+                        ARM64.CMP_reg (ARM64.X0, ARM64.X11)
+                        ARM64.B_cond (ARM64.GE, 7)  // Skip 7 instructions to exit loop (to after B)
+                        ARM64.LDRB (ARM64.X15, ARM64.X9, ARM64.X0)  // X15 = pool[X0]
+                        ARM64.ADD_imm (ARM64.X12, destReg, 8us)  // X12 = dest + 8
+                        ARM64.ADD_reg (ARM64.X12, ARM64.X12, ARM64.X0)  // X12 = dest + 8 + X0
+                        ARM64.STRB_reg (ARM64.X15, ARM64.X12)  // [X12] = byte
+                        ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)  // X0++
+                        ARM64.B (-7)  // Loop back to CMP
+                        // Store refcount
+                        ARM64.ADD_imm (ARM64.X12, destReg, 8us)
+                        ARM64.ADD_reg (ARM64.X12, ARM64.X12, ARM64.X10)  // X12 = dest + 8 + len
+                        ARM64.MOVZ (ARM64.X15, 1us, 0)
+                        ARM64.STR (ARM64.X15, ARM64.X12, 0s)  // [X12] = 1
+                    ])
+                | None -> Error $"String index {idx} not found in pool"
             | LIR.FloatRef _ ->
                 Error "Cannot MOV float reference - use FLoad instruction")
 
@@ -500,8 +549,8 @@ let convertInstr (options: CodeGenOptions) (instr: LIR.Instr) : Result<ARM64.Ins
         // To print a string, we need:
         // 1. ADRP + ADD to load string address into X0
         // 2. Call Runtime.generatePrintString which handles write syscall
-        // String labels are named "_str0", "_str1", etc.
-        let stringLabel = sprintf "_str%d" idx
+        // String labels are named "str_0", "str_1", etc.
+        let stringLabel = sprintf "str_%d" idx
         Ok ([
             ARM64.ADRP (ARM64.X0, stringLabel)  // Load page address of string
             ARM64.ADD_label (ARM64.X0, ARM64.X0, stringLabel)  // Add page offset
@@ -602,7 +651,7 @@ let convertInstr (options: CodeGenOptions) (instr: LIR.Instr) : Result<ARM64.Ins
         |> Result.map (fun destReg ->
             // Total size includes 8 bytes for ref count, aligned to 8 bytes
             let totalSize = ((sizeBytes + 8) + 7) &&& (~~~7)
-            if options.DisableFreeList then
+            if ctx.Options.DisableFreeList then
                 // Bump allocator only (no free list reuse)
                 [
                     ARM64.MOV_reg (destReg, ARM64.X28)                  // dest = current heap pointer
@@ -709,6 +758,154 @@ let convertInstr (options: CodeGenOptions) (instr: LIR.Instr) : Result<ARM64.Ins
                 ARM64.STR (addrReg, ARM64.X27, int16 payloadSize)   // Update free list head
             ])
 
+    | LIR.StringConcat (dest, left, right) ->
+        // String concatenation:
+        // Heap string layout: [length:8][data:N][refcount:8]
+        // Pool string layout: just raw bytes (no length/refcount)
+        //
+        // Register usage:
+        // X9  = left data address (for pool: string address, for heap: addr+8)
+        // X10 = left length
+        // X11 = right data address
+        // X12 = right length
+        // X13 = total length
+        // X14 = result pointer
+        // X15 = temp for byte copy
+        //
+        // Algorithm:
+        // 1. Load left address and length into X9, X10
+        // 2. Load right address and length into X11, X12
+        // 3. Calculate total length: X13 = X10 + X12
+        // 4. Allocate: total + 16 bytes using bump allocator
+        // 5. Store total length at [X14]
+        // 6. Copy left bytes to [X14+8]
+        // 7. Copy right bytes to [X14+8+len1]
+        // 8. Store refcount=1 at [X14+8+total]
+        // 9. Move result to dest
+
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            // Helper: load operand address and length into registers
+            let loadOperandInfo (operand: LIR.Operand) (addrReg: ARM64.Reg) (lenReg: ARM64.Reg) : Result<ARM64.Instr list, string> =
+                match operand with
+                | LIR.StringRef idx ->
+                    // Pool string: address via ADRP+ADD, length from pool (compile-time)
+                    match Map.tryFind idx ctx.StringPool.Strings with
+                    | Some (_, len) ->
+                        let label = sprintf "str_%d" idx
+                        Ok ([
+                            ARM64.ADRP (addrReg, label)
+                            ARM64.ADD_label (addrReg, addrReg, label)
+                        ] @ loadImmediate lenReg (int64 len))
+                    | None -> Error $"String index {idx} not found in pool"
+                | LIR.Reg reg ->
+                    // Heap string: address in reg, length at [reg], data at [reg+8]
+                    lirRegToARM64Reg reg
+                    |> Result.map (fun srcReg ->
+                        [
+                            ARM64.LDR (lenReg, srcReg, 0s)           // len = [srcReg]
+                            ARM64.ADD_imm (addrReg, srcReg, 8us)     // addr = srcReg + 8 (data start)
+                        ])
+                | _ -> Error "StringConcat requires StringRef or Reg operand"
+
+            // Load both operands
+            loadOperandInfo left ARM64.X9 ARM64.X10
+            |> Result.bind (fun leftInstrs ->
+                loadOperandInfo right ARM64.X11 ARM64.X12
+                |> Result.map (fun rightInstrs ->
+                    // Calculate total length
+                    let calcTotal = [ARM64.ADD_reg (ARM64.X13, ARM64.X10, ARM64.X12)]
+
+                    // Allocate: totalLen + 16 bytes (8 for length, 8 for refcount)
+                    // Using bump allocator (X28 = bump pointer)
+                    let allocate = [
+                        ARM64.ADD_imm (ARM64.X14, ARM64.X13, 16us)   // X14 = total + 16
+                        ARM64.ADD_imm (ARM64.X14, ARM64.X14, 7us)    // Align up
+                        ARM64.MOVZ (ARM64.X15, 0xFFF8us, 0)          // ~7 mask (lower bits)
+                        ARM64.MOVK (ARM64.X15, 0xFFFFus, 1)
+                        ARM64.MOVK (ARM64.X15, 0xFFFFus, 2)
+                        ARM64.MOVK (ARM64.X15, 0xFFFFus, 3)
+                        ARM64.AND_reg (ARM64.X14, ARM64.X14, ARM64.X15)  // X14 = aligned size
+                        ARM64.MOV_reg (ARM64.X14, ARM64.X28)            // X14 = current heap ptr (result)
+                        ARM64.ADD_imm (ARM64.X15, ARM64.X13, 16us)      // X15 = total + 16
+                        ARM64.ADD_imm (ARM64.X15, ARM64.X15, 7us)       // Align
+                        ARM64.MOVZ (ARM64.X0, 0xFFF8us, 0)              // ~7 mask again (X15 was clobbered)
+                        ARM64.MOVK (ARM64.X0, 0xFFFFus, 1)
+                        ARM64.MOVK (ARM64.X0, 0xFFFFus, 2)
+                        ARM64.MOVK (ARM64.X0, 0xFFFFus, 3)
+                        ARM64.AND_reg (ARM64.X15, ARM64.X15, ARM64.X0)
+                        ARM64.ADD_reg (ARM64.X28, ARM64.X28, ARM64.X15) // Bump heap pointer
+                    ]
+
+                    // Store total length at [X14]
+                    let storeLen = [ARM64.STR (ARM64.X13, ARM64.X14, 0s)]
+
+                    // Copy left bytes: loop copying X10 bytes from X9 to [X14+8]
+                    // Use X0 as loop counter, X15 as temp byte
+                    let copyLeft = [
+                        ARM64.MOVZ (ARM64.X0, 0us, 0)                    // 0: X0 = 0 (counter)
+                        // Loop: if X0 >= X10, done
+                        ARM64.CMP_reg (ARM64.X0, ARM64.X10)              // 1: compare
+                        ARM64.B_cond (ARM64.GE, 7)                       // 2: Skip 7 instructions to exit (to index 9)
+                        ARM64.LDRB (ARM64.X15, ARM64.X9, ARM64.X0)       // 3: X15 = byte at [X9 + X0]
+                        ARM64.ADD_imm (ARM64.X1, ARM64.X14, 8us)         // 4: X1 = X14 + 8 (dest base)
+                        ARM64.ADD_reg (ARM64.X1, ARM64.X1, ARM64.X0)     // 5: X1 = dest + counter
+                        ARM64.STRB_reg (ARM64.X15, ARM64.X1)             // 6: [X1] = byte
+                        ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)          // 7: X0++
+                        ARM64.B (-7)                                     // 8: Loop back to CMP (index 1)
+                    ]
+
+                    // Copy right bytes: loop copying X12 bytes from X11 to [X14+8+X10]
+                    let copyRight = [
+                        ARM64.MOVZ (ARM64.X0, 0us, 0)                    // X0 = 0 (counter)
+                        ARM64.ADD_imm (ARM64.X1, ARM64.X14, 8us)         // X1 = X14 + 8
+                        ARM64.ADD_reg (ARM64.X1, ARM64.X1, ARM64.X10)    // X1 = X14 + 8 + len1 (dest start for right)
+                        // Loop: if X0 >= X12, done
+                        ARM64.CMP_reg (ARM64.X0, ARM64.X12)
+                        ARM64.B_cond (ARM64.GE, 6)                       // Skip 6 instructions if done
+                        ARM64.LDRB (ARM64.X15, ARM64.X11, ARM64.X0)      // X15 = byte at [X11 + X0]
+                        ARM64.ADD_reg (ARM64.X2, ARM64.X1, ARM64.X0)     // X2 = dest + counter
+                        ARM64.STRB_reg (ARM64.X15, ARM64.X2)             // [X2] = byte
+                        ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)          // X0++
+                        ARM64.B (-6)                                     // Loop back
+                    ]
+
+                    // Store refcount=1 at [X14+8+total]
+                    let storeRefcount = [
+                        ARM64.ADD_imm (ARM64.X0, ARM64.X14, 8us)         // X0 = X14 + 8
+                        ARM64.ADD_reg (ARM64.X0, ARM64.X0, ARM64.X13)    // X0 = X14 + 8 + total
+                        ARM64.MOVZ (ARM64.X15, 1us, 0)                   // X15 = 1
+                        ARM64.STR (ARM64.X15, ARM64.X0, 0s)              // [X0] = 1
+                    ]
+
+                    // Move result to dest
+                    let moveResult = [ARM64.MOV_reg (destReg, ARM64.X14)]
+
+                    leftInstrs @ rightInstrs @ calcTotal @ allocate @ storeLen @ copyLeft @ copyRight @ storeRefcount @ moveResult
+                )))
+
+    | LIR.PrintHeapString reg ->
+        // Print heap string: layout is [len:8][data:N]
+        // Note: The syscall clobbers X0, X1, X2, X8. If the input register is one
+        // of these, we save it to X9 before and restore after so subsequent code
+        // can still use it.
+        // 1. Save input to X9
+        // 2. Load length from [X9] into X2
+        // 3. Compute data pointer (X9 + 8) into X1
+        // 4. Set X0 = 1 (stdout)
+        // 5. write syscall
+        // 6. Restore input register if it was clobbered
+        lirRegToARM64Reg reg
+        |> Result.map (fun regARM64 ->
+            let isClobbered = regARM64 = ARM64.X0 || regARM64 = ARM64.X1 || regARM64 = ARM64.X2 || regARM64 = ARM64.X8
+            let restoreInstrs = if isClobbered then [ARM64.MOV_reg (regARM64, ARM64.X9)] else []
+            [
+                ARM64.MOV_reg (ARM64.X9, regARM64)           // X9 = input (save in case regARM64 is X0/X1/X2)
+                ARM64.LDR (ARM64.X2, ARM64.X9, 0s)           // X2 = length
+                ARM64.ADD_imm (ARM64.X1, ARM64.X9, 8us)      // X1 = data pointer (X9 + 8)
+                ARM64.MOVZ (ARM64.X0, 1us, 0)                // X0 = stdout fd
+            ] @ Runtime.generateWriteSyscall () @ restoreInstrs)
+
 /// Convert LIR terminator to ARM64 instructions
 /// epilogueLabel: the label to jump to for function return (handles stack cleanup)
 let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Result<ARM64.Instr list, string> =
@@ -733,12 +930,12 @@ let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Res
 
 /// Convert LIR basic block to ARM64 instructions (with label)
 /// epilogueLabel: passed through to terminator for Ret handling
-let convertBlock (options: CodeGenOptions) (epilogueLabel: string) (block: LIR.BasicBlock) : Result<ARM64.Instr list, string> =
+let convertBlock (ctx: CodeGenContext) (epilogueLabel: string) (block: LIR.BasicBlock) : Result<ARM64.Instr list, string> =
     // Emit label for this block
     let labelInstr = ARM64.Label block.Label
 
     // Convert all instructions
-    let instrResults = block.Instrs |> List.map (convertInstr options)
+    let instrResults = block.Instrs |> List.map (convertInstr ctx)
 
     // Convert terminator
     let termResult = convertTerminator epilogueLabel block.Terminator
@@ -759,7 +956,7 @@ let convertBlock (options: CodeGenOptions) (epilogueLabel: string) (block: LIR.B
 
 /// Convert LIR CFG to ARM64 instructions
 /// epilogueLabel: passed through to blocks for Ret handling
-let convertCFG (options: CodeGenOptions) (epilogueLabel: string) (cfg: LIR.CFG) : Result<ARM64.Instr list, string> =
+let convertCFG (ctx: CodeGenContext) (epilogueLabel: string) (cfg: LIR.CFG) : Result<ARM64.Instr list, string> =
     // Get blocks in a deterministic order (entry first, then sorted by label)
     let entryBlock =
         match Map.tryFind cfg.Entry cfg.Blocks with
@@ -777,7 +974,7 @@ let convertCFG (options: CodeGenOptions) (epilogueLabel: string) (cfg: LIR.CFG) 
 
     // Convert each block
     allBlocks
-    |> List.map (convertBlock options epilogueLabel)
+    |> List.map (convertBlock ctx epilogueLabel)
     |> List.fold (fun acc result ->
         match acc, result with
         | Ok instrs, Ok newInstrs -> Ok (instrs @ newInstrs)
@@ -833,12 +1030,12 @@ let generateHeapInit () : ARM64.Instr list =
     ]
 
 /// Convert LIR function to ARM64 instructions with prologue and epilogue
-let convertFunction (options: CodeGenOptions) (func: LIR.Function) : Result<ARM64.Instr list, string> =
+let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64.Instr list, string> =
     // Generate epilogue label for this function (passed to convertCFG for Ret terminators)
     let epilogueLabel = sprintf "_epilogue_%s" func.Name
 
     // Convert CFG to ARM64 instructions
-    match convertCFG options epilogueLabel func.CFG with
+    match convertCFG ctx epilogueLabel func.CFG with
     | Error err -> Error err
     | Ok cfgInstrs ->
         // Generate prologue (save FP/LR, allocate stack)
@@ -896,7 +1093,11 @@ let convertFunction (options: CodeGenOptions) (func: LIR.Function) : Result<ARM6
 
 /// Convert LIR program to ARM64 instructions with options
 let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : Result<ARM64.Instr list, string> =
-    let (LIR.Program (functions, _stringPool, _floatPool)) = program
+    let (LIR.Program (functions, stringPool, _floatPool)) = program
+
+    // Create code generation context with options and string pool
+    let ctx = { Options = options; StringPool = stringPool }
+
     // Ensure _start is first (entry point)
     let sortedFunctions =
         match List.tryFind (fun (f: LIR.Function) -> f.Name = "_start") functions with
@@ -906,7 +1107,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         | None -> functions  // No _start, keep original order
 
     sortedFunctions
-    |> List.map (convertFunction options)
+    |> List.map (convertFunction ctx)
     |> List.fold (fun acc result ->
         match acc, result with
         | Ok instrs, Ok newInstrs -> Ok (instrs @ newInstrs)

@@ -25,6 +25,7 @@ type Token =
     | TTrue
     | TFalse
     | TPlus
+    | TPlusPlus    // ++ (string concatenation)
     | TMinus
     | TStar
     | TSlash
@@ -71,6 +72,7 @@ let lex (input: string) : Result<Token list, string> =
         | ' ' :: rest | '\t' :: rest | '\n' :: rest | '\r' :: rest ->
             // Skip whitespace
             lexHelper rest acc
+        | '+' :: '+' :: rest -> lexHelper rest (TPlusPlus :: acc)
         | '+' :: rest -> lexHelper rest (TPlus :: acc)
         | '-' :: '>' :: rest -> lexHelper rest (TArrow :: acc)
         | '-' :: rest -> lexHelper rest (TMinus :: acc)
@@ -236,45 +238,89 @@ let lex (input: string) : Result<Token list, string> =
 
     input |> Seq.toList |> fun cs -> lexHelper cs []
 
-/// Parse a type annotation
-let parseType (tokens: Token list) : Result<Type * Token list, string> =
+/// Parse a type annotation with context for type parameters in scope
+let parseTypeWithContext (typeParams: Set<string>) (tokens: Token list) : Result<Type * Token list, string> =
     match tokens with
     | TIdent "int" :: rest -> Ok (TInt64, rest)
     | TIdent "bool" :: rest -> Ok (TBool, rest)
     | TIdent "string" :: rest -> Ok (TString, rest)
     | TIdent "float" :: rest -> Ok (TFloat64, rest)
+    | TIdent typeName :: rest when Set.contains typeName typeParams ->
+        // Type variable in scope (e.g., T in def identity<T>(x: T))
+        Ok (TVar typeName, rest)
     | TIdent typeName :: rest when System.Char.IsUpper(typeName.[0]) ->
         // User-defined type reference (record or sum type - capitalized identifier)
         // Note: We don't distinguish here; type checking resolves which it is
         Ok (TRecord typeName, rest)
-    | _ -> Error "Expected type annotation (int, bool, string, float, or TypeName)"
+    | _ -> Error "Expected type annotation (int, bool, string, float, TypeName, or type variable)"
 
-/// Parse a single parameter: IDENT : type
-let parseParam (tokens: Token list) : Result<(string * Type) * Token list, string> =
+/// Parse a type annotation (no type parameters in scope)
+let parseType (tokens: Token list) : Result<Type * Token list, string> =
+    parseTypeWithContext Set.empty tokens
+
+/// Parse type parameters: <T, U, V> (names only, for function definitions)
+let rec parseTypeParams (tokens: Token list) (acc: string list) : Result<string list * Token list, string> =
+    match tokens with
+    | TIdent name :: TGt :: rest when System.Char.IsUpper(name.[0]) ->
+        // Last type parameter
+        Ok (List.rev (name :: acc), rest)
+    | TIdent name :: TComma :: rest when System.Char.IsUpper(name.[0]) ->
+        // More type parameters to come
+        parseTypeParams rest (name :: acc)
+    | TIdent name :: _ when not (System.Char.IsUpper(name.[0])) ->
+        Error $"Type parameter must start with uppercase letter: {name}"
+    | TGt :: rest when List.isEmpty acc ->
+        // Empty type parameters: <>
+        Ok ([], rest)
+    | _ -> Error "Expected type parameter name (uppercase identifier)"
+
+/// Parse type arguments: <int, bool, Point> (concrete types, for call sites)
+let rec parseTypeArgs (tokens: Token list) (acc: Type list) : Result<Type list * Token list, string> =
+    parseType tokens
+    |> Result.bind (fun (ty, remaining) ->
+        match remaining with
+        | TGt :: rest ->
+            // Last type argument
+            Ok (List.rev (ty :: acc), rest)
+        | TComma :: rest ->
+            // More type arguments to come
+            parseTypeArgs rest (ty :: acc)
+        | _ -> Error "Expected ',' or '>' after type argument")
+
+/// Parse a single parameter: IDENT : type (with type parameter context)
+let parseParamWithContext (typeParams: Set<string>) (tokens: Token list) : Result<(string * Type) * Token list, string> =
     match tokens with
     | TIdent name :: TColon :: rest ->
-        parseType rest
+        parseTypeWithContext typeParams rest
         |> Result.map (fun (ty, remaining) -> ((name, ty), remaining))
     | _ -> Error "Expected parameter (name : type)"
 
-/// Parse parameter list: param (, param)*
-let rec parseParams (tokens: Token list) (acc: (string * Type) list) : Result<(string * Type) list * Token list, string> =
+/// Parse a single parameter: IDENT : type (no type parameters in scope)
+let parseParam (tokens: Token list) : Result<(string * Type) * Token list, string> =
+    parseParamWithContext Set.empty tokens
+
+/// Parse parameter list: param (, param)* (with type parameter context)
+let rec parseParamsWithContext (typeParams: Set<string>) (tokens: Token list) (acc: (string * Type) list) : Result<(string * Type) list * Token list, string> =
     match tokens with
     | TRParen :: _ ->
         // End of parameters
         Ok (List.rev acc, tokens)
     | _ ->
         // Parse a parameter
-        parseParam tokens
+        parseParamWithContext typeParams tokens
         |> Result.bind (fun (param, remaining) ->
             match remaining with
             | TComma :: rest ->
                 // More parameters
-                parseParams rest (param :: acc)
+                parseParamsWithContext typeParams rest (param :: acc)
             | TRParen :: _ ->
                 // End of parameters
                 Ok (List.rev (param :: acc), remaining)
             | _ -> Error "Expected ',' or ')' after parameter")
+
+/// Parse parameter list: param (, param)* (no type parameters in scope)
+let rec parseParams (tokens: Token list) (acc: (string * Type) list) : Result<(string * Type) list * Token list, string> =
+    parseParamsWithContext Set.empty tokens acc
 
 /// Parse record fields in a type definition: { name: Type, name: Type, ... }
 let rec parseRecordFields (tokens: Token list) (acc: (string * Type) list) : Result<(string * Type) list * Token list, string> =
@@ -361,14 +407,51 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
         Error $"Type name must start with uppercase letter: {name}"
     | _ -> Error "Expected type definition: type Name = { fields } or type Name = Variant1 | Variant2"
 
-/// Parse a function definition: def name(params) : type = body
+/// Parse a function definition: def name<T, U>(params) : type = body
+/// Type parameters are optional: def name(params) : type = body is also valid
 let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr * Token list, string>) : Result<FunctionDef * Token list, string> =
     match tokens with
+    | TDef :: TIdent name :: TLt :: rest ->
+        // Generic function: def name<T, U>(...)
+        parseTypeParams rest []
+        |> Result.bind (fun (typeParams, afterTypeParams) ->
+            let typeParamsSet = Set.ofList typeParams
+            match afterTypeParams with
+            | TLParen :: paramsStart ->
+                // Parse parameters with type params in scope
+                let paramsResult =
+                    match paramsStart with
+                    | TRParen :: _ -> Ok ([], paramsStart)
+                    | _ -> parseParamsWithContext typeParamsSet paramsStart []
+
+                paramsResult
+                |> Result.bind (fun (parameters, remaining) ->
+                    match remaining with
+                    | TRParen :: TColon :: rest' ->
+                        // Parse return type with type params in scope
+                        parseTypeWithContext typeParamsSet rest'
+                        |> Result.bind (fun (returnType, remaining') ->
+                            match remaining' with
+                            | TEquals :: rest'' ->
+                                // Parse body
+                                parseExpr rest''
+                                |> Result.map (fun (body, remaining'') ->
+                                    let funcDef = {
+                                        Name = name
+                                        TypeParams = typeParams
+                                        Params = parameters
+                                        ReturnType = returnType
+                                        Body = body
+                                    }
+                                    (funcDef, remaining''))
+                            | _ -> Error "Expected '=' after function return type")
+                    | _ -> Error "Expected ':' after function parameters")
+            | _ -> Error "Expected '(' after type parameters")
     | TDef :: TIdent name :: TLParen :: rest ->
-        // Parse parameters
+        // Non-generic function: def name(...)
         let paramsResult =
             match rest with
-            | TRParen :: _ -> Ok ([], rest)  // No parameters
+            | TRParen :: _ -> Ok ([], rest)
             | _ -> parseParams rest []
 
         paramsResult
@@ -385,6 +468,7 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
                         |> Result.map (fun (body, remaining'') ->
                             let funcDef = {
                                 Name = name
+                                TypeParams = []
                                 Params = parameters
                                 ReturnType = returnType
                                 Body = body
@@ -646,6 +730,10 @@ let parse (tokens: Token list) : Result<Program, string> =
                     parseMultiplicative rest
                     |> Result.bind (fun (right, remaining') ->
                         parseAdditiveRest (BinOp (Sub, leftExpr, right)) remaining')
+                | TPlusPlus :: rest ->
+                    parseMultiplicative rest
+                    |> Result.bind (fun (right, remaining') ->
+                        parseAdditiveRest (BinOp (StringConcat, leftExpr, right)) remaining')
                 | _ -> Ok (leftExpr, toks)
             parseAdditiveRest left remaining)
 
@@ -689,6 +777,31 @@ let parse (tokens: Token list) : Result<Program, string> =
         | TStringLit s :: rest -> Ok (StringLiteral s, rest)
         | TTrue :: rest -> Ok (BoolLiteral true, rest)
         | TFalse :: rest -> Ok (BoolLiteral false, rest)
+        | TIdent name :: TLt :: rest when not (System.Char.IsUpper(name.[0])) ->
+            // Could be generic function call: name<type, ...>(args)
+            // Or could be comparison: name < expr
+            // Disambiguate by checking if next token looks like a type
+            let looksLikeType =
+                match rest with
+                | TIdent typeName :: _ when System.Char.IsUpper(typeName.[0]) -> true  // Uppercase = type name
+                | TIdent "int" :: _ -> true
+                | TIdent "bool" :: _ -> true
+                | TIdent "string" :: _ -> true
+                | TIdent "float" :: _ -> true
+                | _ -> false
+            if looksLikeType then
+                // Parse as generic call
+                parseTypeArgs rest []
+                |> Result.bind (fun (typeArgs, afterTypes) ->
+                    match afterTypes with
+                    | TLParen :: argsStart ->
+                        parseCallArgs argsStart []
+                        |> Result.map (fun (args, remaining) ->
+                            (TypeApp (name, typeArgs, args), remaining))
+                    | _ -> Error "Expected '(' after type arguments in generic call")
+            else
+                // Not a type application, treat name as variable and let comparison parsing handle <
+                Ok (Var name, TLt :: rest)
         | TIdent name :: TLParen :: rest when not (System.Char.IsUpper(name.[0])) ->
             // Function call: name(args) - only for lowercase names
             parseCallArgs rest []

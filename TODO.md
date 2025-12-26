@@ -51,11 +51,6 @@ The following are known simplifications or potential issues in the compiler code
 **Issue:** Only function definitions allowed after expressions
 **Future:** Expand module-level structure support
 
-#### 6. MachO UUID hardcoded to zeros
-**File:** `src/DarkCompiler/passes/8_Binary_Generation_MachO.fs` (line 468)
-**Issue:** All binaries have identical UUID (all zeros)
-**Impact:** Cosmetic - doesn't affect functionality
-
 ### Documentation
 
 - [x] Update README.md with new language features
@@ -79,30 +74,12 @@ The following are known simplifications or potential issues in the compiler code
 - ✅ Type-directed record field lookup (no ambiguity when multiple record types have same field names)
 - ✅ Function return type inference using function registry (enables type inference for let-bound function calls)
 - ✅ Record literals require type name: `Point { x = 1, y = 2 }` syntax (no anonymous records)
+- ✅ Sum types (enums with payloads, pattern matching with extraction)
+- ✅ Boolean printing (both literals and computed expressions print as true/false)
 
-## Known Limitations & Partial Implementations
+## Implementation Notes
 
-These are features that exist but have known limitations or incomplete implementations:
-
-### 1. Boolean Printing (Quality of Life)
-
-**Status**: ⚠️ Partial
-
-**Current Behavior:**
-
-- Boolean literals (`true`, `false`) print as "true" and "false"
-- Computed booleans (e.g., `5 > 3`) still print as `1` and `0`
-
-**Why Partial:**
-
-- Type information is lost during compilation for computed values
-- Full fix would require propagating type info through MIR/LIR
-
-**Impact**: Low - literal booleans work correctly, computed ones show numeric representation
-
-### 2. Reference Counting (Memory Management)
-
-**Status**: ✅ Complete
+### Reference Counting (Memory Management)
 
 **Implementation:**
 

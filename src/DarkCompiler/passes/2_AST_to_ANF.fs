@@ -35,7 +35,247 @@ type VarEnv = Map<string, ANF.TempId * AST.Type>
 let typeEnvFromVarEnv (varEnv: VarEnv) : Map<string, AST.Type> =
     varEnv |> Map.map (fun _ (_, t) -> t)
 
+// ============================================================================
+// Monomorphization Support for Generic Functions
+// ============================================================================
+
+/// Generic function registry - maps generic function names to their definitions
+type GenericFuncDefs = Map<string, AST.FunctionDef>
+
+/// Specialization key - a generic function instantiated with specific types
+type SpecKey = string * AST.Type list  // (funcName, typeArgs)
+
+/// Specialization registry - tracks which specializations are needed
+/// Maps (funcName, typeArgs) -> specialized name
+type SpecRegistry = Map<SpecKey, string>
+
+/// Convert a type to a string for name mangling
+let rec typeToMangledName (t: AST.Type) : string =
+    match t with
+    | AST.TInt64 -> "int"
+    | AST.TBool -> "bool"
+    | AST.TFloat64 -> "float"
+    | AST.TString -> "str"
+    | AST.TUnit -> "unit"
+    | AST.TFunction (paramTypes, retType) ->
+        let paramStr = paramTypes |> List.map typeToMangledName |> String.concat "_"
+        let retStr = typeToMangledName retType
+        $"fn_{paramStr}_to_{retStr}"
+    | AST.TTuple elemTypes ->
+        let elemsStr = elemTypes |> List.map typeToMangledName |> String.concat "_"
+        $"tup_{elemsStr}"
+    | AST.TRecord name -> name
+    | AST.TSum name -> name
+    | AST.TList -> "list"
+    | AST.TVar name -> name  // Should not appear after monomorphization
+
+/// Generate a specialized function name
+let specName (funcName: string) (typeArgs: AST.Type list) : string =
+    if List.isEmpty typeArgs then
+        funcName
+    else
+        let typeStr = typeArgs |> List.map typeToMangledName |> String.concat "_"
+        $"{funcName}_{typeStr}"
+
+/// Type substitution - maps type variable names to concrete types
+type Substitution = Map<string, AST.Type>
+
+/// Apply a substitution to a type, replacing type variables with concrete types
+let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
+    match typ with
+    | AST.TVar name ->
+        match Map.tryFind name subst with
+        | Some concreteType -> concreteType
+        | None -> typ  // Unbound type variable remains as-is
+    | AST.TFunction (paramTypes, returnType) ->
+        AST.TFunction (List.map (applySubstToType subst) paramTypes, applySubstToType subst returnType)
+    | AST.TTuple elemTypes ->
+        AST.TTuple (List.map (applySubstToType subst) elemTypes)
+    | AST.TInt64 | AST.TBool | AST.TFloat64 | AST.TString | AST.TUnit | AST.TRecord _ | AST.TSum _ | AST.TList ->
+        typ  // Concrete types are unchanged
+
+/// Apply a substitution to an expression, replacing type variables in type annotations
+let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
+    match expr with
+    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ ->
+        expr  // No types to substitute in literals and variables
+    | AST.BinOp (op, left, right) ->
+        AST.BinOp (op, applySubstToExpr subst left, applySubstToExpr subst right)
+    | AST.UnaryOp (op, inner) ->
+        AST.UnaryOp (op, applySubstToExpr subst inner)
+    | AST.Let (name, value, body) ->
+        AST.Let (name, applySubstToExpr subst value, applySubstToExpr subst body)
+    | AST.If (cond, thenBranch, elseBranch) ->
+        AST.If (applySubstToExpr subst cond, applySubstToExpr subst thenBranch, applySubstToExpr subst elseBranch)
+    | AST.Call (funcName, args) ->
+        AST.Call (funcName, List.map (applySubstToExpr subst) args)
+    | AST.TypeApp (funcName, typeArgs, args) ->
+        // Substitute in type arguments and value arguments
+        AST.TypeApp (funcName, List.map (applySubstToType subst) typeArgs, List.map (applySubstToExpr subst) args)
+    | AST.TupleLiteral elements ->
+        AST.TupleLiteral (List.map (applySubstToExpr subst) elements)
+    | AST.TupleAccess (tuple, index) ->
+        AST.TupleAccess (applySubstToExpr subst tuple, index)
+    | AST.RecordLiteral (typeName, fields) ->
+        AST.RecordLiteral (typeName, List.map (fun (n, e) -> (n, applySubstToExpr subst e)) fields)
+    | AST.RecordAccess (record, fieldName) ->
+        AST.RecordAccess (applySubstToExpr subst record, fieldName)
+    | AST.Constructor (typeName, variantName, payload) ->
+        AST.Constructor (typeName, variantName, Option.map (applySubstToExpr subst) payload)
+    | AST.Match (scrutinee, cases) ->
+        AST.Match (applySubstToExpr subst scrutinee, List.map (fun (p, e) -> (p, applySubstToExpr subst e)) cases)
+    | AST.ListLiteral elements ->
+        AST.ListLiteral (List.map (applySubstToExpr subst) elements)
+
+/// Specialize a generic function definition with specific type arguments
+let specializeFunction (funcDef: AST.FunctionDef) (typeArgs: AST.Type list) : AST.FunctionDef =
+    // Build substitution from type params to type args
+    let subst = List.zip funcDef.TypeParams typeArgs |> Map.ofList
+    // Generate specialized name
+    let specializedName = specName funcDef.Name typeArgs
+    // Apply substitution to params, return type, and body
+    let specializedParams = funcDef.Params |> List.map (fun (name, ty) -> (name, applySubstToType subst ty))
+    let specializedReturnType = applySubstToType subst funcDef.ReturnType
+    let specializedBody = applySubstToExpr subst funcDef.Body
+    { Name = specializedName
+      TypeParams = []  // Specialized function has no type params
+      Params = specializedParams
+      ReturnType = specializedReturnType
+      Body = specializedBody }
+
+/// Collect all TypeApp call sites from an expression
+let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
+    match expr with
+    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ ->
+        Set.empty
+    | AST.BinOp (_, left, right) ->
+        Set.union (collectTypeApps left) (collectTypeApps right)
+    | AST.UnaryOp (_, inner) ->
+        collectTypeApps inner
+    | AST.Let (_, value, body) ->
+        Set.union (collectTypeApps value) (collectTypeApps body)
+    | AST.If (cond, thenBranch, elseBranch) ->
+        Set.union (collectTypeApps cond) (Set.union (collectTypeApps thenBranch) (collectTypeApps elseBranch))
+    | AST.Call (_, args) ->
+        args |> List.map collectTypeApps |> List.fold Set.union Set.empty
+    | AST.TypeApp (funcName, typeArgs, args) ->
+        // This is a generic call - collect this specialization plus any in args
+        let argSpecs = args |> List.map collectTypeApps |> List.fold Set.union Set.empty
+        Set.add (funcName, typeArgs) argSpecs
+    | AST.TupleLiteral elements ->
+        elements |> List.map collectTypeApps |> List.fold Set.union Set.empty
+    | AST.TupleAccess (tuple, _) ->
+        collectTypeApps tuple
+    | AST.RecordLiteral (_, fields) ->
+        fields |> List.map (snd >> collectTypeApps) |> List.fold Set.union Set.empty
+    | AST.RecordAccess (record, _) ->
+        collectTypeApps record
+    | AST.Constructor (_, _, payload) ->
+        payload |> Option.map collectTypeApps |> Option.defaultValue Set.empty
+    | AST.Match (scrutinee, cases) ->
+        let scrutineeSpecs = collectTypeApps scrutinee
+        let caseSpecs = cases |> List.map (snd >> collectTypeApps) |> List.fold Set.union Set.empty
+        Set.union scrutineeSpecs caseSpecs
+    | AST.ListLiteral elements ->
+        elements |> List.map collectTypeApps |> List.fold Set.union Set.empty
+
+/// Collect TypeApps from a function definition
+let collectTypeAppsFromFunc (funcDef: AST.FunctionDef) : Set<SpecKey> =
+    collectTypeApps funcDef.Body
+
+/// Replace TypeApp with Call using specialized name in an expression
+let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
+    match expr with
+    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ ->
+        expr
+    | AST.BinOp (op, left, right) ->
+        AST.BinOp (op, replaceTypeApps left, replaceTypeApps right)
+    | AST.UnaryOp (op, inner) ->
+        AST.UnaryOp (op, replaceTypeApps inner)
+    | AST.Let (name, value, body) ->
+        AST.Let (name, replaceTypeApps value, replaceTypeApps body)
+    | AST.If (cond, thenBranch, elseBranch) ->
+        AST.If (replaceTypeApps cond, replaceTypeApps thenBranch, replaceTypeApps elseBranch)
+    | AST.Call (funcName, args) ->
+        AST.Call (funcName, List.map replaceTypeApps args)
+    | AST.TypeApp (funcName, typeArgs, args) ->
+        // Replace with a regular Call to the specialized name
+        let specializedName = specName funcName typeArgs
+        AST.Call (specializedName, List.map replaceTypeApps args)
+    | AST.TupleLiteral elements ->
+        AST.TupleLiteral (List.map replaceTypeApps elements)
+    | AST.TupleAccess (tuple, index) ->
+        AST.TupleAccess (replaceTypeApps tuple, index)
+    | AST.RecordLiteral (typeName, fields) ->
+        AST.RecordLiteral (typeName, List.map (fun (n, e) -> (n, replaceTypeApps e)) fields)
+    | AST.RecordAccess (record, fieldName) ->
+        AST.RecordAccess (replaceTypeApps record, fieldName)
+    | AST.Constructor (typeName, variantName, payload) ->
+        AST.Constructor (typeName, variantName, Option.map replaceTypeApps payload)
+    | AST.Match (scrutinee, cases) ->
+        AST.Match (replaceTypeApps scrutinee, List.map (fun (p, e) -> (p, replaceTypeApps e)) cases)
+    | AST.ListLiteral elements ->
+        AST.ListLiteral (List.map replaceTypeApps elements)
+
+/// Replace TypeApp with Call in a function definition
+let replaceTypeAppsInFunc (funcDef: AST.FunctionDef) : AST.FunctionDef =
+    { funcDef with Body = replaceTypeApps funcDef.Body }
+
+/// Monomorphize a program: collect all specializations, generate specialized functions, replace TypeApps
+let monomorphize (program: AST.Program) : AST.Program =
+    let (AST.Program topLevels) = program
+
+    // Collect generic function definitions
+    let genericFuncDefs : GenericFuncDefs =
+        topLevels
+        |> List.choose (function
+            | AST.FunctionDef f when not (List.isEmpty f.TypeParams) -> Some (f.Name, f)
+            | _ -> None)
+        |> Map.ofList
+
+    // Collect all specialization sites from all functions and expressions
+    let allSpecs : Set<SpecKey> =
+        topLevels
+        |> List.map (function
+            | AST.FunctionDef f -> collectTypeAppsFromFunc f
+            | AST.Expression e -> collectTypeApps e
+            | AST.TypeDef _ -> Set.empty)
+        |> List.fold Set.union Set.empty
+
+    // Generate specialized function definitions
+    let specializedFuncs : AST.FunctionDef list =
+        allSpecs
+        |> Set.toList
+        |> List.choose (fun (funcName, typeArgs) ->
+            match Map.tryFind funcName genericFuncDefs with
+            | Some funcDef ->
+                let specialized = specializeFunction funcDef typeArgs
+                // Also replace any TypeApps in the specialized body
+                Some (replaceTypeAppsInFunc specialized)
+            | None -> None)
+
+    // Replace TypeApps with Calls in all original top-levels (except generic function defs)
+    let transformedTopLevels =
+        topLevels
+        |> List.choose (function
+            | AST.FunctionDef f when not (List.isEmpty f.TypeParams) ->
+                // Skip generic function definitions (they're replaced by specializations)
+                None
+            | AST.FunctionDef f ->
+                Some (AST.FunctionDef (replaceTypeAppsInFunc f))
+            | AST.Expression e ->
+                Some (AST.Expression (replaceTypeApps e))
+            | AST.TypeDef td ->
+                Some (AST.TypeDef td))
+
+    // Add specialized functions to the program
+    let specializationTopLevels =
+        specializedFuncs |> List.map AST.FunctionDef
+
+    AST.Program (specializationTopLevels @ transformedTopLevels)
+
 /// Convert AST.BinOp to ANF.BinOp
+/// Note: StringConcat is handled separately as ANF.StringConcat CExpr
 let convertBinOp (op: AST.BinOp) : ANF.BinOp =
     match op with
     | AST.Add -> ANF.Add
@@ -50,6 +290,7 @@ let convertBinOp (op: AST.BinOp) : ANF.BinOp =
     | AST.Gte -> ANF.Gte
     | AST.And -> ANF.And
     | AST.Or -> ANF.Or
+    | AST.StringConcat -> ANF.Add  // Never reached - StringConcat handled as CExpr
 
 /// Convert AST.UnaryOp to ANF.UnaryOp
 let convertUnaryOp (op: AST.UnaryOp) : ANF.UnaryOp =
@@ -134,6 +375,7 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
         match op with
         | AST.Add | AST.Sub | AST.Mul | AST.Div -> Ok AST.TInt64
         | AST.Eq | AST.Neq | AST.Lt | AST.Gt | AST.Lte | AST.Gte | AST.And | AST.Or -> Ok AST.TBool
+        | AST.StringConcat -> Ok AST.TString
     | AST.UnaryOp (op, _) ->
         match op with
         | AST.Neg -> Ok AST.TInt64
@@ -148,6 +390,9 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
         match Map.tryFind funcName funcReg with
         | Some returnType -> Ok returnType
         | None -> Error $"Unknown function: '{funcName}'"
+    | AST.TypeApp (_funcName, _typeArgs, _args) ->
+        // Generic function call - not yet implemented
+        Error "Generic function calls not yet implemented"
 
 /// Convert AST expression to ANF
 /// env maps user variable names to ANF TempIds and their types
@@ -227,8 +472,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             toAtom right varGen1 env typeReg variantLookup funcReg |> Result.map (fun (rightAtom, rightBindings, varGen2) ->
                 // Create binop and bind to fresh variable
                 let (tempVar, varGen3) = ANF.freshVar varGen2
-                let anfOp = convertBinOp op
-                let cexpr = ANF.Prim (anfOp, leftAtom, rightAtom)
+                // StringConcat is a separate CExpr, not a Prim
+                let cexpr =
+                    match op with
+                    | AST.StringConcat -> ANF.StringConcat (leftAtom, rightAtom)
+                    | _ -> ANF.Prim (convertBinOp op, leftAtom, rightAtom)
 
                 // Build the expression: leftBindings + rightBindings + let tempVar = op
                 let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
@@ -267,6 +515,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             let exprWithBindings = wrapBindings argBindings finalExpr
 
             (exprWithBindings, varGen2))
+
+    | AST.TypeApp (_funcName, _typeArgs, _args) ->
+        // Generic function call - not yet implemented
+        Error "Generic function calls not yet implemented"
 
     | AST.TupleLiteral elements ->
         // Convert all elements to atoms
@@ -814,8 +1066,11 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             toAtom right varGen1 env typeReg variantLookup funcReg |> Result.map (fun (rightAtom, rightBindings, varGen2) ->
                 // Create the operation
                 let (tempVar, varGen3) = ANF.freshVar varGen2
-                let anfOp = convertBinOp op
-                let cexpr = ANF.Prim (anfOp, leftAtom, rightAtom)
+                // StringConcat is a separate CExpr, not a Prim
+                let cexpr =
+                    match op with
+                    | AST.StringConcat -> ANF.StringConcat (leftAtom, rightAtom)
+                    | _ -> ANF.Prim (convertBinOp op, leftAtom, rightAtom)
 
                 // Return the temp variable as atom, plus all bindings
                 let allBindings = leftBindings @ rightBindings @ [(tempVar, cexpr)]
@@ -852,6 +1107,10 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             // Return temp as atom with all bindings
             let allBindings = argBindings @ [(tempVar, callCExpr)]
             (ANF.Var tempVar, allBindings, varGen2))
+
+    | AST.TypeApp (_, _, _) ->
+        // Placeholder: Generic instantiation not yet implemented
+        Error "TypeApp (generic instantiation) not yet implemented in toAtom"
 
     | AST.TupleLiteral elements ->
         // Convert all elements to atoms
@@ -1028,7 +1287,9 @@ type ConversionResult = {
 
 /// Convert a program to ANF with type information for reference counting
 let convertProgramWithTypes (program: AST.Program) : Result<ConversionResult, string> =
-    let (AST.Program topLevels) = program
+    // First, monomorphize the program (specialize generic functions, replace TypeApp with Call)
+    let monomorphizedProgram = monomorphize program
+    let (AST.Program topLevels) = monomorphizedProgram
     let varGen = ANF.VarGen 0
 
     // Build type registry from type definitions
@@ -1101,7 +1362,9 @@ let convertProgramWithTypes (program: AST.Program) : Result<ConversionResult, st
 
 /// Convert a program to ANF
 let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
-    let (AST.Program topLevels) = program
+    // First, monomorphize the program (specialize generic functions, replace TypeApp with Call)
+    let monomorphizedProgram = monomorphize program
+    let (AST.Program topLevels) = monomorphizedProgram
     let varGen = ANF.VarGen 0
 
     // Build type registry from type definitions

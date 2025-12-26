@@ -50,7 +50,7 @@ let runTypeCheckingTest (test: TypeCheckingTest) : TypeCheckingTestResult =
         let typeCheckResult = checkProgram program
 
         match typeCheckResult, test.Expectation with
-        | Ok actualType, ExpectType expectedType ->
+        | Ok (actualType, _), ExpectType expectedType ->
             // Both succeeded - check if types match
             if actualType = expectedType then
                 { Success = true
@@ -67,7 +67,7 @@ let runTypeCheckingTest (test: TypeCheckingTest) : TypeCheckingTestResult =
                   ExpectedError = false
                   ActualError = None }
 
-        | Ok actualType, ExpectError ->
+        | Ok (actualType, _), ExpectError ->
             // Type check succeeded but error was expected
             { Success = false
               Message = $"Type check succeeded with {typeToString actualType} but error was expected"

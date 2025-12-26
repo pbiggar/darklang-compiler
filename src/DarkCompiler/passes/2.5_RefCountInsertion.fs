@@ -96,6 +96,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                 | _ -> None
             | _ -> None
         | _ -> None
+    | StringConcat (_, _) -> Some AST.TString  // String concatenation returns a string
     | RefCountInc (_, _) -> Some AST.TUnit
     | RefCountDec (_, _) -> Some AST.TUnit
     | Print (_, valueType) -> Some valueType  // Print returns the type it prints

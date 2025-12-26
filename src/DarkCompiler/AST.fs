@@ -29,6 +29,7 @@ type Type =
     | TRecord of string               // record type by name: Point, Color, etc.
     | TSum of string                  // sum type by name: Option, Color, etc.
     | TList                           // list of int (monomorphic for now)
+    | TVar of string                  // type variable: T, A, B, etc. (for generics)
 
 /// Binary operators
 type BinOp =
@@ -37,6 +38,8 @@ type BinOp =
     | Sub
     | Mul
     | Div
+    // String operations
+    | StringConcat  // ++
     // Comparisons (return bool)
     | Eq   // ==
     | Neq  // !=
@@ -78,6 +81,7 @@ type Expr =
     | Var of string  // Variable reference
     | If of cond:Expr * thenBranch:Expr * elseBranch:Expr  // If expression: if cond then thenBranch else elseBranch
     | Call of funcName:string * args:Expr list  // Function call: funcName(arg1, arg2, ...)
+    | TypeApp of funcName:string * typeArgs:Type list * args:Expr list  // Generic call: funcName<T, U>(args)
     | TupleLiteral of Expr list              // Tuple literal: (1, 2, 3)
     | TupleAccess of tuple:Expr * index:int  // Tuple access: t.0, t.1, etc.
     | RecordLiteral of typeName:string * fields:(string * Expr) list  // { x = 1, y = 2 }
@@ -89,8 +93,9 @@ type Expr =
 /// Function definition
 type FunctionDef = {
     Name: string
-    Params: (string * Type) list  // Parameter names with REQUIRED type annotations
-    ReturnType: Type               // REQUIRED return type annotation
+    TypeParams: string list           // Type parameters for generics: ["T", "U", etc.], empty for non-generic
+    Params: (string * Type) list      // Parameter names with REQUIRED type annotations
+    ReturnType: Type                  // REQUIRED return type annotation
     Body: Expr
 }
 

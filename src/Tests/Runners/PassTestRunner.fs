@@ -169,6 +169,11 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"RefCountInc({prettyPrintLIRReg addr}, {payloadSize})"
     | LIR.RefCountDec (addr, payloadSize) ->
         $"RefCountDec({prettyPrintLIRReg addr}, {payloadSize})"
+    // String operations
+    | LIR.StringConcat (dest, left, right) ->
+        $"{prettyPrintLIRReg dest} <- StringConcat({prettyPrintLIROperand left}, {prettyPrintLIROperand right})"
+    | LIR.PrintHeapString reg ->
+        $"PrintHeapString({prettyPrintLIRReg reg})"
     | LIR.Exit -> "Exit"
 
 /// Pretty-print LIR terminator
@@ -284,6 +289,8 @@ let prettyPrintANFCExpr = function
         $"rc_inc({prettyPrintANFAtom atom}, size={payloadSize})"
     | ANF.RefCountDec (atom, payloadSize) ->
         $"rc_dec({prettyPrintANFAtom atom}, size={payloadSize})"
+    | ANF.StringConcat (left, right) ->
+        $"{prettyPrintANFAtom left} ++ {prettyPrintANFAtom right}"
     | ANF.Print (atom, valueType) ->
         $"print({prettyPrintANFAtom atom}, type={valueType})"
 
@@ -397,6 +404,10 @@ let prettyPrintARM64Instr = function
         $"MOV_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
     | ARM64.STRB (src, addr, offset) ->
         $"STRB({prettyPrintARM64Reg src}, {prettyPrintARM64Reg addr}, {offset})"
+    | ARM64.LDRB (dest, baseAddr, index) ->
+        $"LDRB({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg baseAddr}, {prettyPrintARM64Reg index})"
+    | ARM64.STRB_reg (src, addr) ->
+        $"STRB_reg({prettyPrintARM64Reg src}, {prettyPrintARM64Reg addr})"
     | ARM64.CMP_imm (src, imm) ->
         $"CMP_imm({prettyPrintARM64Reg src}, {imm})"
     | ARM64.CMP_reg (src1, src2) ->

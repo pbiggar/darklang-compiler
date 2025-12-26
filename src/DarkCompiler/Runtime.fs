@@ -676,3 +676,22 @@ let generatePrintBoolNoExit () : ARM64.Instr list =
         // cleanup (no exit):
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
     ]
+
+/// Generate ARM64 instructions to perform write syscall only
+///
+/// Assumes caller has set up:
+/// - X0 = file descriptor (usually 1 for stdout)
+/// - X1 = buffer pointer
+/// - X2 = length
+///
+/// Does NOT print newline or exit - caller handles those if needed
+let generateWriteSyscall () : ARM64.Instr list =
+    let os =
+        match Platform.detectOS () with
+        | Ok platform -> platform
+        | Error _ -> Platform.Linux
+    let syscalls = Platform.getSyscallNumbers os
+    [
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.SVC syscalls.SvcImmediate
+    ]
