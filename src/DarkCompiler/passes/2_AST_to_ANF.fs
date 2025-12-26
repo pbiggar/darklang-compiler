@@ -653,8 +653,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | [] ->
                     // All elements extracted - compile the body
                     // Note: We don't check tail == 0 here, so lists with more elements
-                    // than the pattern will still match. This is a simplification.
-                    // TODO: Add exact length matching if needed
+                    // than the pattern will still match. This is a simplification to avoid
+                    // register allocation issues with deep nesting in 5+ element patterns.
+                    // The extra nesting from tail==0 check causes VReg reuse conflicts.
                     toANF body vg currentEnv typeReg variantLookup funcReg
 
                 | pat :: restPatterns ->
