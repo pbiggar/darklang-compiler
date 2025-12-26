@@ -239,6 +239,132 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
 let replaceTypeAppsInFunc (funcDef: AST.FunctionDef) : AST.FunctionDef =
     { funcDef with Body = replaceTypeApps funcDef.Body }
 
+// =============================================================================
+// Lambda Inlining
+// =============================================================================
+// For first-class function support, we inline lambdas at their call sites.
+// This transforms:
+//   let f = (x: int) => x + 1 in f(5)
+// Into:
+//   let f = (x: int) => x + 1 in ((x: int) => x + 1)(5)
+// Which is then handled by immediate application desugaring.
+
+/// Environment mapping variable names to their lambda definitions
+type LambdaEnv = Map<string, AST.Expr>
+
+/// Check if a variable occurs in an expression (for dead code elimination)
+let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
+    match expr with
+    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ -> false
+    | AST.Var n -> n = name
+    | AST.BinOp (_, left, right) -> varOccursInExpr name left || varOccursInExpr name right
+    | AST.UnaryOp (_, inner) -> varOccursInExpr name inner
+    | AST.Let (n, value, body) ->
+        varOccursInExpr name value || (n <> name && varOccursInExpr name body)
+    | AST.If (cond, thenBranch, elseBranch) ->
+        varOccursInExpr name cond || varOccursInExpr name thenBranch || varOccursInExpr name elseBranch
+    | AST.Call (funcName, args) ->
+        // funcName could be a lambda variable reference (parser can't distinguish)
+        funcName = name || List.exists (varOccursInExpr name) args
+    | AST.TypeApp (_, _, args) -> List.exists (varOccursInExpr name) args
+    | AST.TupleLiteral elements -> List.exists (varOccursInExpr name) elements
+    | AST.TupleAccess (tuple, _) -> varOccursInExpr name tuple
+    | AST.RecordLiteral (_, fields) -> List.exists (fun (_, e) -> varOccursInExpr name e) fields
+    | AST.RecordAccess (record, _) -> varOccursInExpr name record
+    | AST.Constructor (_, _, payload) -> Option.exists (varOccursInExpr name) payload
+    | AST.Match (scrutinee, cases) ->
+        varOccursInExpr name scrutinee || List.exists (fun (_, e) -> varOccursInExpr name e) cases
+    | AST.ListLiteral elements -> List.exists (varOccursInExpr name) elements
+    | AST.Lambda (parameters, body) ->
+        // If name is shadowed by a parameter, it doesn't occur
+        let paramNames = parameters |> List.map fst |> Set.ofList
+        if Set.contains name paramNames then false
+        else varOccursInExpr name body
+    | AST.Apply (func, args) ->
+        varOccursInExpr name func || List.exists (varOccursInExpr name) args
+
+/// Inline lambdas at Apply sites
+/// lambdaEnv: maps variable names to their lambda expressions
+let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
+    match expr with
+    | AST.IntLiteral _ | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ ->
+        expr
+    | AST.Var _ -> expr  // Variable references stay as-is (not at call position)
+    | AST.BinOp (op, left, right) ->
+        AST.BinOp (op, inlineLambdas left lambdaEnv, inlineLambdas right lambdaEnv)
+    | AST.UnaryOp (op, inner) ->
+        AST.UnaryOp (op, inlineLambdas inner lambdaEnv)
+    | AST.Let (name, value, body) ->
+        let value' = inlineLambdas value lambdaEnv
+        // If the value is a lambda, add it to the environment for the body
+        let lambdaEnv' =
+            match value' with
+            | AST.Lambda _ -> Map.add name value' lambdaEnv
+            | _ -> lambdaEnv
+        let body' = inlineLambdas body lambdaEnv'
+        // Dead lambda elimination: if the value was a lambda and the variable
+        // is no longer used in the body (all uses were inlined), drop the binding
+        match value' with
+        | AST.Lambda _ when not (varOccursInExpr name body') -> body'
+        | _ -> AST.Let (name, value', body')
+    | AST.If (cond, thenBranch, elseBranch) ->
+        AST.If (inlineLambdas cond lambdaEnv, inlineLambdas thenBranch lambdaEnv, inlineLambdas elseBranch lambdaEnv)
+    | AST.Call (funcName, args) ->
+        let args' = List.map (fun a -> inlineLambdas a lambdaEnv) args
+        // Check if funcName is actually a lambda variable (parser can't distinguish)
+        match Map.tryFind funcName lambdaEnv with
+        | Some lambdaExpr -> AST.Apply (lambdaExpr, args')
+        | None -> AST.Call (funcName, args')
+    | AST.TypeApp (funcName, typeArgs, args) ->
+        AST.TypeApp (funcName, typeArgs, List.map (fun a -> inlineLambdas a lambdaEnv) args)
+    | AST.TupleLiteral elements ->
+        AST.TupleLiteral (List.map (fun e -> inlineLambdas e lambdaEnv) elements)
+    | AST.TupleAccess (tuple, index) ->
+        AST.TupleAccess (inlineLambdas tuple lambdaEnv, index)
+    | AST.RecordLiteral (typeName, fields) ->
+        AST.RecordLiteral (typeName, List.map (fun (n, e) -> (n, inlineLambdas e lambdaEnv)) fields)
+    | AST.RecordAccess (record, fieldName) ->
+        AST.RecordAccess (inlineLambdas record lambdaEnv, fieldName)
+    | AST.Constructor (typeName, variantName, payload) ->
+        AST.Constructor (typeName, variantName, Option.map (fun e -> inlineLambdas e lambdaEnv) payload)
+    | AST.Match (scrutinee, cases) ->
+        AST.Match (inlineLambdas scrutinee lambdaEnv, List.map (fun (p, e) -> (p, inlineLambdas e lambdaEnv)) cases)
+    | AST.ListLiteral elements ->
+        AST.ListLiteral (List.map (fun e -> inlineLambdas e lambdaEnv) elements)
+    | AST.Lambda (parameters, body) ->
+        // Lambdas can reference outer lambdas, so inline in body
+        AST.Lambda (parameters, inlineLambdas body lambdaEnv)
+    | AST.Apply (func, args) ->
+        let args' = List.map (fun a -> inlineLambdas a lambdaEnv) args
+        match func with
+        | AST.Var name ->
+            // Check if this variable is a known lambda
+            match Map.tryFind name lambdaEnv with
+            | Some lambdaExpr ->
+                // Substitute the lambda at the call site
+                AST.Apply (lambdaExpr, args')
+            | None ->
+                // Unknown function variable - keep as-is (will error later if not valid)
+                AST.Apply (AST.Var name, args')
+        | _ ->
+            // Non-variable function (could be lambda or other expr)
+            AST.Apply (inlineLambdas func lambdaEnv, args')
+
+/// Inline lambdas in a function definition
+let inlineLambdasInFunc (funcDef: AST.FunctionDef) : AST.FunctionDef =
+    { funcDef with Body = inlineLambdas funcDef.Body Map.empty }
+
+/// Inline lambdas in a program
+let inlineLambdasInProgram (program: AST.Program) : AST.Program =
+    let (AST.Program topLevels) = program
+    let topLevels' =
+        topLevels
+        |> List.map (function
+            | AST.FunctionDef f -> AST.FunctionDef (inlineLambdasInFunc f)
+            | AST.Expression e -> AST.Expression (inlineLambdas e Map.empty)
+            | AST.TypeDef t -> AST.TypeDef t)
+    AST.Program topLevels'
+
 /// Monomorphize a program: collect all specializations, generate specialized functions, replace TypeApps
 let monomorphize (program: AST.Program) : AST.Program =
     let (AST.Program topLevels) = program
@@ -1377,7 +1503,9 @@ type ConversionResult = {
 let convertProgramWithTypes (program: AST.Program) : Result<ConversionResult, string> =
     // First, monomorphize the program (specialize generic functions, replace TypeApp with Call)
     let monomorphizedProgram = monomorphize program
-    let (AST.Program topLevels) = monomorphizedProgram
+    // Then, inline lambdas at their call sites for first-class function support
+    let inlinedProgram = inlineLambdasInProgram monomorphizedProgram
+    let (AST.Program topLevels) = inlinedProgram
     let varGen = ANF.VarGen 0
 
     // Build type registry from type definitions
@@ -1452,7 +1580,9 @@ let convertProgramWithTypes (program: AST.Program) : Result<ConversionResult, st
 let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
     // First, monomorphize the program (specialize generic functions, replace TypeApp with Call)
     let monomorphizedProgram = monomorphize program
-    let (AST.Program topLevels) = monomorphizedProgram
+    // Then, inline lambdas at their call sites for first-class function support
+    let inlinedProgram = inlineLambdasInProgram monomorphizedProgram
+    let (AST.Program topLevels) = inlinedProgram
     let varGen = ANF.VarGen 0
 
     // Build type registry from type definitions

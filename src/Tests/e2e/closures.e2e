@@ -104,3 +104,43 @@ let y = 10 in ((x: int) => ((z: int) => x + y + z)(2))(30) = 42
 
 // Capture shadowed by parameter
 let x = 100 in ((x: int) => x + 2)(40) = 42
+
+// =====================================================
+// First-Class Functions (stored in variables)
+// =====================================================
+
+// Simple lambda stored in variable
+let f = (x: int) => x + 1 in f(5) = 6
+
+// Two-parameter lambda in variable
+let add = (x: int, y: int) => x + y in add(10, 32) = 42
+
+// Lambda with capture stored in variable
+let factor = 6 in let mul = (x: int) => x * factor in mul(7) = 42
+
+// Multiple calls to same stored lambda
+let double = (x: int) => x * 2 in double(10) + double(11) = 42
+
+// Stored lambda with subtraction
+let sub = (x: int, y: int) => x - y in sub(50, 8) = 42
+
+// Lambda stored then used with captured values
+let base = 10 in let addBase = (x: int) => x + base in addBase(32) = 42
+
+// Multiple lambdas stored in separate variables
+let inc = (x: int) => x + 1 in let dec = (x: int) => x - 1 in inc(20) + dec(22) = 42
+
+// Nested captures with stored lambda
+let a = 5 in let b = 10 in let sum = (x: int) => a + b + x in sum(27) = 42
+
+// Stored lambda returning bool
+let isPositive = (x: int) => x > 0 in isPositive(42) = stdout="true\n"
+
+// Lambda used in conditional after storage
+let check = (x: int) => x > 0 in if check(5) then 42 else 0 = 42
+
+// Multiple uses of same lambda with different args
+let triple = (x: int) => x * 3 in triple(10) + triple(4) = 42
+
+// Lambda in arithmetic context after storage
+let sq = (x: int) => x * x in sq(6) + 6 = 42
