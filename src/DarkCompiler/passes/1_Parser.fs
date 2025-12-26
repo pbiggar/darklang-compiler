@@ -415,6 +415,10 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
         // Generic function: def name<T, U>(...)
         parseTypeParams rest []
         |> Result.bind (fun (typeParams, afterTypeParams) ->
+            // Check for duplicate type parameters
+            if List.length typeParams <> (typeParams |> List.distinct |> List.length) then
+                Error "Duplicate type parameter names"
+            else
             let typeParamsSet = Set.ofList typeParams
             match afterTypeParams with
             | TLParen :: paramsStart ->

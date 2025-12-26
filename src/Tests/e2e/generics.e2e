@@ -74,3 +74,41 @@ def mixed<T>(x: T) : T = x mixed<int>(20) + mixed(22) = 42
 
 // Inference with bool in conditional
 def inf_cond<T>(x: T) : T = x if inf_cond(true) then 42 else 0 = 42
+
+// =====================================================
+// Multiple Type Parameters
+// =====================================================
+
+// Two type parameters - return first
+def first<A, B>(a: A, b: B) : A = a first<int, bool>(42, true) = 42
+
+// Two type parameters - return second
+def second<A, B>(a: A, b: B) : B = b second<int, bool>(42, true) = stdout="true\n"
+
+// Three type parameters
+def pick1<A, B, C>(a: A, b: B, c: C) : A = a pick1<int, bool, int>(42, false, 99) = 42
+
+def pick2<A, B, C>(a: A, b: B, c: C) : B = b pick2<int, bool, int>(99, true, 99) = stdout="true\n"
+
+def pick3<A, B, C>(a: A, b: B, c: C) : C = c pick3<int, bool, int>(99, false, 42) = 42
+
+// Type inference with multiple type parameters
+def fst<A, B>(a: A, b: B) : A = a fst(10, true) = 10
+
+def snd<A, B>(a: A, b: B) : B = b snd(10, false) = stdout="false\n"
+
+// Inference with three parameters
+def get1<A, B, C>(a: A, b: B, c: C) : A = a get1(42, true, false) = 42
+
+def get2<A, B, C>(a: A, b: B, c: C) : B = b get2(99, true, false) = stdout="true\n"
+
+def get3<A, B, C>(a: A, b: B, c: C) : C = c get3(99, true, false) = stdout="false\n"
+
+// Multiple params with same type
+def both_int<A, B>(a: A, b: B) : A = a both_int<int, int>(42, 99) = 42
+
+// Use result in expression
+def fst2<A, B>(a: A, b: B) : A = a fst2(40, true) + 2 = 42
+
+// Multiple params in let binding
+def getfst<A, B>(a: A, b: B) : A = a let x = getfst(21, false) in x * 2 = 42
