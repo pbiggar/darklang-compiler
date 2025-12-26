@@ -3,24 +3,6 @@
 This TODO reflects the approved implementation plan for completing the Dark compiler.
 See `/home/paulbiggar/.claude/plans/lovely-swinging-crab.md` for detailed design.
 
-## Things to add
-
-- polymorphism in types, functions
-- string concatenation
-
-### Phase 5b: String Concatenation (Later)
-
-- [ ] Implement simple bump allocator
-- [ ] Add Concat operator
-- [ ] Add heap string allocation
-- [ ] Write E2E tests for concatenation
-
-## Testing Strategy
-
-### E2E Test Files
-
-5. [ ] strings.e2e (Phase 5)
-
 ## Code Quality Issues
 
 The following are known simplifications or potential issues in the compiler code.
@@ -36,17 +18,12 @@ The following are known simplifications or potential issues in the compiler code
 
 ### LOW Priority (Feature limitations, not bugs)
 
-#### 3. Monomorphic lists
-**Files:** `src/DarkCompiler/AST.fs` (line 31), `1.5_TypeChecking.fs` (line 530)
-**Issue:** TList only supports int, not polymorphic types
-**Future:** Add type parameter support for lists
-
-#### 4. ARM64 register subset
+#### 1. ARM64 register subset
 **File:** `src/DarkCompiler/ARM64.fs` (line 26)
 **Issue:** Only subset of ARM64 registers implemented
 **Future:** Add more registers as needed
 
-#### 5. Parser structure limitations
+#### 2. Parser structure limitations
 **File:** `src/DarkCompiler/passes/1_Parser.fs` (line 839)
 **Issue:** Only function definitions allowed after expressions
 **Future:** Expand module-level structure support
@@ -63,7 +40,7 @@ The following are known simplifications or potential issues in the compiler code
 - ✅ Let-pattern matching with tuples (e.g., `let (a, b) = tuple in ...`)
 - ✅ Control flow (if/then/else expressions, including in atom position)
 - ✅ Functions with type signatures, calls, recursion, and implicit mutual recursion
-- ✅ String literals with escape sequences
+- ✅ String literals with escape sequences and concatenation (`++` operator)
 - ✅ Lists (linked list implementation with [1, 2, 3] syntax and exact-length pattern matching)
 - ✅ Type checking (51 DSL tests + 8 unit tests)
 - ✅ 9-pass compiler pipeline (Parser → TypeCheck → ANF → RefCount → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
