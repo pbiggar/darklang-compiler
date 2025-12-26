@@ -24,15 +24,6 @@
 // Type error - wrong type for second operand
 // (true && 5L) = Builtin.testDerrorMessage "&& only supports Booleans"
 
-// Short-circuit: false && anything = false (even with wrong type)
-// (false && 5L) = stdout="false\n"
-
-// TODO bring back short-circuiting
-// (false && Builtin.testRuntimeError "msg") = false
-
-// Error in first operand propagates
-// (Builtin.testRuntimeError "msg1" && Builtin.testRuntimeError "msg2") = Builtin.testDerrorMessage "Uncaught exception: msg1"
-
 // Type error - wrong type for first operand
 // (5 && true) = Builtin.testDerrorMessage "&& only supports Booleans"
 
