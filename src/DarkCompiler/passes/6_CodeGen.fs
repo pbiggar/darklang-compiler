@@ -557,30 +557,52 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
 
     // Heap operations
     | LIR.HeapAlloc (dest, sizeBytes) ->
-        // Inline bump allocator using X28 as heap pointer
-        // X28 is reserved for heap allocation (initialized in _start prologue)
+        // Heap allocator with free list support
+        // X27 = free list heads base, X28 = bump allocator pointer
         //
         // Memory layout with reference counting:
         //   [payload: sizeBytes][refcount: 8 bytes]
         //
-        // The ref count is placed AFTER the payload to avoid modifying
-        // the returned pointer, which caused issues with spilling.
-        //
         // Algorithm:
-        // 1. Save current heap pointer to dest (payload starts at X28)
-        // 2. Store ref count (=1) at X28 + sizeBytes
-        // 3. Bump X28 by (sizeBytes + 8), aligned to 8 bytes
+        // 1. Check free list for this size class (sizeClassOffset = sizeBytes)
+        // 2. If free list non-empty: pop from list, initialize refcount, return
+        // 3. If empty: bump allocate from X28
         //
-        // TODO: Check free list at X27 before bump allocating
+        // Code structure (10 instructions):
+        //   LDR X15, [X27, sizeBytes]         ; Load free list head
+        //   CBZ X15, +5                       ; If empty, skip to bump alloc (5 instrs)
+        //   MOV dest, X15                     ; dest = freed block
+        //   LDR X14, [X15, 0]                 ; Load next pointer from freed block
+        //   STR X14, [X27, sizeBytes]         ; Update free list head
+        //   MOVZ X14, 1                       ; X14 = 1 (initial ref count)
+        //   STR X14, [dest, sizeBytes]        ; Store ref count
+        //   B +5                              ; Skip bump allocator (5 instrs)
+        //   ; Bump allocator:
+        //   MOV dest, X28                     ; dest = current heap pointer
+        //   MOVZ X15, 1                       ; X15 = 1 (initial ref count)
+        //   STR X15, [X28, sizeBytes]         ; store ref count after payload
+        //   ADD X28, X28, totalSize           ; bump pointer
+        //   (continue)
         lirRegToARM64Reg dest
         |> Result.map (fun destReg ->
             // Total size includes 8 bytes for ref count, aligned to 8 bytes
             let totalSize = ((sizeBytes + 8) + 7) &&& (~~~7)
             [
-                ARM64.MOV_reg (destReg, ARM64.X28)  // dest = current heap pointer (payload)
-                ARM64.MOVZ (ARM64.X15, 1us, 0)  // X15 = 1 (initial ref count)
-                ARM64.STR (ARM64.X15, ARM64.X28, int16 sizeBytes)  // store ref count after payload
-                ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)  // bump pointer
+                // Check free list
+                ARM64.LDR (ARM64.X15, ARM64.X27, int16 sizeBytes)   // Load free list head
+                ARM64.CBZ_offset (ARM64.X15, 7)                     // If empty, skip to bump alloc
+                // Pop from free list
+                ARM64.MOV_reg (destReg, ARM64.X15)                  // dest = freed block
+                ARM64.LDR (ARM64.X14, ARM64.X15, 0s)                // Load next pointer
+                ARM64.STR (ARM64.X14, ARM64.X27, int16 sizeBytes)   // Update free list head
+                ARM64.MOVZ (ARM64.X14, 1us, 0)                      // X14 = 1 (initial ref count)
+                ARM64.STR (ARM64.X14, destReg, int16 sizeBytes)     // Store ref count
+                ARM64.B 4                                           // Skip bump allocator
+                // Bump allocator (fallback when free list empty)
+                ARM64.MOV_reg (destReg, ARM64.X28)                  // dest = current heap pointer
+                ARM64.MOVZ (ARM64.X15, 1us, 0)                      // X15 = 1 (initial ref count)
+                ARM64.STR (ARM64.X15, ARM64.X28, int16 sizeBytes)   // store ref count after payload
+                ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize) // bump pointer
             ])
 
     | LIR.HeapStore (addr, offset, src) ->
@@ -633,16 +655,33 @@ let convertInstr (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
 
     | LIR.RefCountDec (addr, payloadSize) ->
         // Decrement ref count at [addr + payloadSize]
-        // Use X15 as temp register
+        // When ref count hits 0, add block to free list for memory reuse
         //
-        // TODO: When ref count hits 0, add block to free list for memory reuse
-        // For now, just decrement - memory is not reclaimed
+        // Free list structure:
+        // - X27 = base of free list heads (32 slots × 8 bytes = 256 bytes)
+        // - Slot N contains head of free list for blocks of size (N+1)*8 bytes
+        // - sizeClassOffset = payloadSize (for 8-aligned payloads)
+        // - Freed blocks use first 8 bytes as next pointer
+        //
+        // Code structure (7 instructions):
+        //   LDR X15, [addr, payloadSize]      ; Load ref count
+        //   SUB X15, X15, 1                   ; Decrement
+        //   STR X15, [addr, payloadSize]      ; Store back
+        //   CBNZ X15, +4                      ; If not zero, skip free list code (4 instrs)
+        //   LDR X14, [X27, payloadSize]       ; Load current free list head
+        //   STR X14, [addr, 0]                ; Store old head as next in freed block
+        //   STR addr, [X27, payloadSize]      ; Update free list head to freed block
+        //   (continue)
         lirRegToARM64Reg addr
         |> Result.map (fun addrReg ->
             [
                 ARM64.LDR (ARM64.X15, addrReg, int16 payloadSize)   // Load ref count
                 ARM64.SUB_imm (ARM64.X15, ARM64.X15, 1us)           // Decrement
                 ARM64.STR (ARM64.X15, addrReg, int16 payloadSize)   // Store back
+                ARM64.CBNZ_offset (ARM64.X15, 4)                    // If not zero, skip 4 instructions
+                ARM64.LDR (ARM64.X14, ARM64.X27, int16 payloadSize) // Load free list head
+                ARM64.STR (ARM64.X14, addrReg, 0s)                  // Store as next pointer in freed block
+                ARM64.STR (addrReg, ARM64.X27, int16 payloadSize)   // Update free list head
             ])
 
 /// Convert LIR terminator to ARM64 instructions

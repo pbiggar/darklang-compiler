@@ -111,15 +111,36 @@ let rec isAtomReturned (atom: Atom) (expr: AExpr) : bool =
 let isTempReturned (tempId: TempId) (expr: AExpr) : bool =
     isAtomReturned (Var tempId) expr
 
-/// Wrap an expression with a RefCountDec for a TempId
-/// The Dec happens after computing the result but before returning
+/// Insert RefCountDec before all Return points in an expression
+/// This ensures Dec happens AFTER the body is evaluated but BEFORE returning
+let rec insertDecBeforeReturn (tempId: TempId) (size: int) (expr: AExpr) (varGen: VarGen) : AExpr * VarGen =
+    match expr with
+    | Return atom ->
+        // Insert Dec right before Return
+        let (dummyId, varGen') = freshVar varGen
+        (Let (dummyId, RefCountDec (Var tempId, size), Return atom), varGen')
+    | Let (x, c, body) ->
+        // Recurse into body
+        let (body', varGen') = insertDecBeforeReturn tempId size body varGen
+        (Let (x, c, body'), varGen')
+    | If (cond, thenBr, elseBr) ->
+        // Insert in both branches
+        let (thenBr', varGen1) = insertDecBeforeReturn tempId size thenBr varGen
+        let (elseBr', varGen2) = insertDecBeforeReturn tempId size elseBr varGen1
+        (If (cond, thenBr', elseBr'), varGen2)
+
+/// Insert RefCountDec for a TempId at all return points
 let wrapWithDec (tempId: TempId) (typ: AST.Type) (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * VarGen =
-    // Create a dummy binding for the Dec operation
-    let (dummyId, varGen') = freshVar varGen
-    // Compute payload size for this type
     let size = payloadSize typ ctx.TypeReg
-    // The Dec produces Unit, we ignore its result
-    (Let (dummyId, RefCountDec (Var tempId, size), expr), varGen')
+    insertDecBeforeReturn tempId size expr varGen
+
+/// Check if a CExpr is a borrowing/aliasing operation
+/// Borrowed/aliased values should NOT get their own RefCountDec - the original value owns the memory
+let isBorrowingExpr (cexpr: CExpr) : bool =
+    match cexpr with
+    | TupleGet _ -> true           // Extracts pointer from tuple/list - borrowed from parent
+    | Atom (Var _) -> true         // Alias/copy of existing variable - don't double-dec
+    | _ -> false
 
 /// Insert reference counting operations into an AExpr
 let rec insertRC (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * VarGen =
@@ -145,9 +166,10 @@ let rec insertRC (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * Var
         // Process the body recursively
         let (body', varGen1) = insertRC ctx' body varGen
 
-        // Check if this TempId is heap-typed and not returned
+        // Check if this TempId is heap-typed, not returned, and not borrowed
+        // Borrowed values don't own their memory - the parent does
         match maybeType with
-        | Some t when isHeapType t && not (isTempReturned tempId body') ->
+        | Some t when isHeapType t && not (isTempReturned tempId body') && not (isBorrowingExpr cexpr) ->
             // Insert Dec after body completes but value isn't returned
             let (bodyWithDec, varGen2) = wrapWithDec tempId t ctx' body' varGen1
             (Let (tempId, cexpr, bodyWithDec), varGen2)
