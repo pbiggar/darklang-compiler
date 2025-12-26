@@ -62,6 +62,7 @@ type Token =
     | TAnd         // &&
     | TOr          // ||
     | TNot         // !
+    | TPipe        // |> (pipe operator)
     | TDotDotDot    // ... (rest pattern in lists)
     | TIdent of string
     | TEOF
@@ -112,6 +113,7 @@ let lex (input: string) : Result<Token list, string> =
         | '&' :: '&' :: rest -> lexHelper rest (TAnd :: acc)
         | '&' :: _ -> Error "Unexpected character: & (did you mean &&?)"
         | '|' :: '|' :: rest -> lexHelper rest (TOr :: acc)
+        | '|' :: '>' :: rest -> lexHelper rest (TPipe :: acc)
         | '|' :: rest -> lexHelper rest (TBar :: acc)
         | c :: _ when System.Char.IsLetter(c) || c = '_' ->
             // Parse identifier or keyword
@@ -760,7 +762,22 @@ let parse (tokens: Token list) : Result<Program, string> =
                         (Match (scrutinee, cases), remaining'))
                 | _ -> Error "Expected 'with' after match scrutinee")
         | _ ->
-            parseOr toks
+            parsePipe toks
+
+    and parsePipe (toks: Token list) : Result<Expr * Token list, string> =
+        // Pipe operator |> has lowest precedence, left-associative
+        // x |> f desugars to Apply(f, [x])
+        parseOr toks
+        |> Result.bind (fun (left, remaining) ->
+            let rec parsePipeRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
+                match toks with
+                | TPipe :: rest ->
+                    parseOr rest
+                    |> Result.bind (fun (right, remaining') ->
+                        // Desugar: left |> right becomes Apply(right, [left])
+                        parsePipeRest (Apply (right, [leftExpr])) remaining')
+                | _ -> Ok (leftExpr, toks)
+            parsePipeRest left remaining)
 
     and parseOr (toks: Token list) : Result<Expr * Token list, string> =
         parseAnd toks
@@ -948,26 +965,42 @@ let parse (tokens: Token list) : Result<Program, string> =
             // Variable reference (lowercase identifier)
             Ok (Var name, rest)
         | TLParen :: rest ->
-            // Could be lambda, parenthesized expression, or tuple literal
-            // Check if it looks like lambda params: (ident : type, ...) =>
-            match tryParseLambdaParams rest with
-            | Some (lambdaParams, TFatArrow :: bodyStart) ->
-                // It's a lambda: (params) => body
-                parseExpr bodyStart
-                |> Result.map (fun (body, remaining) ->
-                    (Lambda (lambdaParams, body), remaining))
+            // Could be lambda, parenthesized expression, tuple literal, or operator section
+            // Check for operator section: (&&), (||), (+), (-), (*), (/), etc.
+            match rest with
+            | TAnd :: TRParen :: afterOp ->
+                // (&&) - operator section, parse the right operand
+                parseUnary afterOp
+                |> Result.map (fun (rightArg, remaining) ->
+                    // Create lambda: \$x -> $x && rightArg
+                    let lambda = Lambda ([("$pipe_arg", TBool)], BinOp (And, Var "$pipe_arg", rightArg))
+                    (lambda, remaining))
+            | TOr :: TRParen :: afterOp ->
+                // (||) - operator section
+                parseUnary afterOp
+                |> Result.map (fun (rightArg, remaining) ->
+                    let lambda = Lambda ([("$pipe_arg", TBool)], BinOp (Or, Var "$pipe_arg", rightArg))
+                    (lambda, remaining))
             | _ ->
-                // Not a lambda - parse as expression/tuple
-                parseExpr rest
-                |> Result.bind (fun (firstExpr, remaining) ->
-                    match remaining with
-                    | TRParen :: rest' ->
-                        // Parenthesized expression (single element)
-                        Ok (firstExpr, rest')
-                    | TComma :: rest' ->
-                        // Tuple literal: (expr, expr, ...)
-                        parseTupleElements rest' [firstExpr]
-                    | _ -> Error "Expected ')' or ',' in tuple/parenthesized expression")
+                // Check if it looks like lambda params: (ident : type, ...) =>
+                match tryParseLambdaParams rest with
+                | Some (lambdaParams, TFatArrow :: bodyStart) ->
+                    // It's a lambda: (params) => body
+                    parseExpr bodyStart
+                    |> Result.map (fun (body, remaining) ->
+                        (Lambda (lambdaParams, body), remaining))
+                | _ ->
+                    // Not a lambda - parse as expression/tuple
+                    parseExpr rest
+                    |> Result.bind (fun (firstExpr, remaining) ->
+                        match remaining with
+                        | TRParen :: rest' ->
+                            // Parenthesized expression (single element)
+                            Ok (firstExpr, rest')
+                        | TComma :: rest' ->
+                            // Tuple literal: (expr, expr, ...)
+                            parseTupleElements rest' [firstExpr]
+                        | _ -> Error "Expected ')' or ',' in tuple/parenthesized expression")
         | TLBrace :: _ ->
             // Anonymous record literal is no longer supported
             Error "Record literal requires type name: use 'TypeName { field = value, ... }'"

@@ -29,13 +29,12 @@
 
 // ===================================================================
 // Pipe operator with AND
-// NOTE: Commented out - requires pipe operator support
 // ===================================================================
 
-// (true |> (&&) true) = stdout="true\n"
-// (true |> (&&) false) = stdout="false\n"
-// (false |> (&&) true) = stdout="false\n"
-// (false |> (&&) false) = stdout="false\n"
+(true |> (&&) true) = stdout="true\n"
+(true |> (&&) false) = stdout="false\n"
+(false |> (&&) true) = stdout="false\n"
+(false |> (&&) false) = stdout="false\n"
 
 // ===================================================================
 // Additional tests (from our extended suite)
