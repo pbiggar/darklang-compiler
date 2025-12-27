@@ -1,0 +1,38 @@
+// Tests for popcount function
+// popcount(x) counts the number of set bits (1s) in x
+
+// Zero has no set bits
+Stdlib.Int64.popcount(0) = 0
+Stdlib.Int64.popcount(1) = 1
+Stdlib.Int64.popcount(2) = 1
+Stdlib.Int64.popcount(3) = 2
+
+// Powers of 2 have exactly one bit set
+Stdlib.Int64.popcount(4) = 1
+Stdlib.Int64.popcount(8) = 1
+Stdlib.Int64.popcount(16) = 1
+Stdlib.Int64.popcount(32) = 1
+Stdlib.Int64.popcount(64) = 1
+Stdlib.Int64.popcount(128) = 1
+Stdlib.Int64.popcount(256) = 1
+
+// All bits set in various byte patterns
+Stdlib.Int64.popcount(255) = 8
+Stdlib.Int64.popcount(65535) = 16
+
+// Some specific values
+Stdlib.Int64.popcount(7) = 3
+Stdlib.Int64.popcount(15) = 4
+Stdlib.Int64.popcount(31) = 5
+Stdlib.Int64.popcount(63) = 6
+Stdlib.Int64.popcount(127) = 7
+
+// Alternating bits
+Stdlib.Int64.popcount(170) = 4
+Stdlib.Int64.popcount(85) = 4
+
+// Larger numbers
+Stdlib.Int64.popcount(1000) = 6
+Stdlib.Int64.popcount(12345) = 6
+Stdlib.Int64.popcount(65536) = 1
+Stdlib.Int64.popcount(1048575) = 20

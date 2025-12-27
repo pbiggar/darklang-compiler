@@ -41,6 +41,32 @@ def Stdlib.Int64.lessThan(a: Int64, b: Int64) : Bool = a < b
 
 def Stdlib.Int64.lessThanOrEqualTo(a: Int64, b: Int64) : Bool = a <= b
 
+// Bitwise operations
+def Stdlib.Int64.bitwiseAnd(a: Int64, b: Int64) : Int64 = a & b
+
+def Stdlib.Int64.bitwiseXor(a: Int64, b: Int64) : Int64 = a ^ b
+
+def Stdlib.Int64.shiftLeft(a: Int64, shift: Int64) : Int64 = a << shift
+
+def Stdlib.Int64.shiftRight(a: Int64, shift: Int64) : Int64 = a >> shift
+
+// Count number of set bits (population count)
+// Uses parallel bit counting algorithm (Brian Kernighan / SWAR)
+def Stdlib.Int64.popcount(x: Int64) : Int64 =
+    // Constants (in decimal):
+    // 0x5555555555555555 = 6148914691236517205
+    // 0x3333333333333333 = 3689348814741910323
+    // 0x0F0F0F0F0F0F0F0F = 1085102592571150095
+    // 0x0101010101010101 = 72340172838076673
+    let mask1 = 6148914691236517205 in
+    let mask2 = 3689348814741910323 in
+    let mask3 = 1085102592571150095 in
+    let mult = 72340172838076673 in
+    let x = x - ((x >> 1) & mask1) in
+    let x = (x & mask2) + ((x >> 2) & mask2) in
+    let x = (x + (x >> 4)) & mask3 in
+    (x * mult) >> 56
+
 // Convert a single digit (0-9) to its string representation
 def Stdlib.Int64.digitToString(n: Int64) : String =
     match n with
