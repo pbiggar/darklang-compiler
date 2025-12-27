@@ -69,8 +69,11 @@ type Instr =
     | Msub of dest:Reg * mulLeft:Reg * mulRight:Reg * sub:Reg  // dest = sub - mulLeft * mulRight
     | Cmp of left:Reg * right:Operand           // Compare (sets flags)
     | Cset of dest:Reg * cond:Condition         // Set register based on condition
-    | And of dest:Reg * left:Reg * right:Reg    // Bitwise AND (for boolean &&)
-    | Orr of dest:Reg * left:Reg * right:Reg    // Bitwise OR (for boolean ||)
+    | And of dest:Reg * left:Reg * right:Reg    // Bitwise AND (for boolean && and &)
+    | Orr of dest:Reg * left:Reg * right:Reg    // Bitwise OR (for boolean || and |)
+    | Eor of dest:Reg * left:Reg * right:Reg    // Bitwise XOR (^)
+    | Lsl of dest:Reg * src:Reg * shift:Reg     // Logical shift left (<<)
+    | Lsr of dest:Reg * src:Reg * shift:Reg     // Logical shift right (>>)
     | Mvn of dest:Reg * src:Reg                 // Bitwise NOT
     | Call of dest:Reg * funcName:string * args:Operand list  // Direct function call (BL instruction)
     | IndirectCall of dest:Reg * func:Reg * args:Operand list  // Call through function pointer (BLR instruction)

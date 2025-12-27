@@ -1001,6 +1001,11 @@ let convertBinOp (op: AST.BinOp) : ANF.BinOp =
     | AST.Mul -> ANF.Mul
     | AST.Div -> ANF.Div
     | AST.Mod -> ANF.Mod
+    | AST.Shl -> ANF.Shl
+    | AST.Shr -> ANF.Shr
+    | AST.BitAnd -> ANF.BitAnd
+    | AST.BitOr -> ANF.BitOr
+    | AST.BitXor -> ANF.BitXor
     | AST.Eq -> ANF.Eq
     | AST.Neq -> ANF.Neq
     | AST.Lt -> ANF.Lt
@@ -1113,7 +1118,8 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
         inferType thenExpr typeEnv typeReg variantLookup funcReg
     | AST.BinOp (op, _, _) ->
         match op with
-        | AST.Add | AST.Sub | AST.Mul | AST.Div | AST.Mod -> Ok AST.TInt64
+        | AST.Add | AST.Sub | AST.Mul | AST.Div | AST.Mod
+        | AST.Shl | AST.Shr | AST.BitAnd | AST.BitOr | AST.BitXor -> Ok AST.TInt64
         | AST.Eq | AST.Neq | AST.Lt | AST.Gt | AST.Lte | AST.Gte | AST.And | AST.Or -> Ok AST.TBool
         | AST.StringConcat -> Ok AST.TString
     | AST.UnaryOp (op, _) ->

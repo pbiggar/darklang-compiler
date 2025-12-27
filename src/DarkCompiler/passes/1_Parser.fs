@@ -79,6 +79,10 @@ and Token =
     | TPipe        // |> (pipe operator)
     | TDotDotDot    // ... (rest pattern in lists)
     | TPercent     // % (modulo)
+    | TShl         // << (left shift)
+    | TShr         // >> (right shift)
+    | TBitAnd      // & (bitwise and)
+    | TBitXor      // ^ (bitwise xor)
     | TIdent of string
     | TEOF
 
@@ -121,12 +125,15 @@ let lex (input: string) : Result<Token list, string> =
         | '=' :: rest -> lexHelper rest (TEquals :: acc)
         | '!' :: '=' :: rest -> lexHelper rest (TNeq :: acc)
         | '!' :: rest -> lexHelper rest (TNot :: acc)
+        | '<' :: '<' :: rest -> lexHelper rest (TShl :: acc)
         | '<' :: '=' :: rest -> lexHelper rest (TLte :: acc)
         | '<' :: rest -> lexHelper rest (TLt :: acc)
+        | '>' :: '>' :: rest -> lexHelper rest (TShr :: acc)
         | '>' :: '=' :: rest -> lexHelper rest (TGte :: acc)
         | '>' :: rest -> lexHelper rest (TGt :: acc)
         | '&' :: '&' :: rest -> lexHelper rest (TAnd :: acc)
-        | '&' :: _ -> Error "Unexpected character: & (did you mean &&?)"
+        | '&' :: rest -> lexHelper rest (TBitAnd :: acc)
+        | '^' :: rest -> lexHelper rest (TBitXor :: acc)
         | '%' :: rest -> lexHelper rest (TPercent :: acc)
         | '|' :: '|' :: rest -> lexHelper rest (TOr :: acc)
         | '|' :: '>' :: rest -> lexHelper rest (TPipe :: acc)
@@ -1149,47 +1156,89 @@ let parse (tokens: Token list) : Result<Program, string> =
             parseOrRest left remaining)
 
     and parseAnd (toks: Token list) : Result<Expr * Token list, string> =
-        parseComparison toks
+        // Note: parseBitOr was removed because `|` conflicts with pattern matching syntax.
+        // Use Stdlib.Int64.bitwiseOr function instead of `|` operator for bitwise OR.
+        parseBitXor toks
         |> Result.bind (fun (left, remaining) ->
             let rec parseAndRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
                 match toks with
                 | TAnd :: rest ->
-                    parseComparison rest
+                    parseBitXor rest
                     |> Result.bind (fun (right, remaining') ->
                         parseAndRest (BinOp (And, leftExpr, right)) remaining')
                 | _ -> Ok (leftExpr, toks)
             parseAndRest left remaining)
 
+    and parseBitXor (toks: Token list) : Result<Expr * Token list, string> =
+        parseBitAnd toks
+        |> Result.bind (fun (left, remaining) ->
+            let rec parseBitXorRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
+                match toks with
+                | TBitXor :: rest ->
+                    parseBitAnd rest
+                    |> Result.bind (fun (right, remaining') ->
+                        parseBitXorRest (BinOp (BitXor, leftExpr, right)) remaining')
+                | _ -> Ok (leftExpr, toks)
+            parseBitXorRest left remaining)
+
+    and parseBitAnd (toks: Token list) : Result<Expr * Token list, string> =
+        parseComparison toks
+        |> Result.bind (fun (left, remaining) ->
+            let rec parseBitAndRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
+                match toks with
+                | TBitAnd :: rest ->
+                    parseComparison rest
+                    |> Result.bind (fun (right, remaining') ->
+                        parseBitAndRest (BinOp (BitAnd, leftExpr, right)) remaining')
+                | _ -> Ok (leftExpr, toks)
+            parseBitAndRest left remaining)
+
     and parseComparison (toks: Token list) : Result<Expr * Token list, string> =
-        parseAdditive toks
+        parseShift toks
         |> Result.bind (fun (left, remaining) ->
             // Comparison operators are non-associative (no chaining)
             match remaining with
             | TEqEq :: rest ->
-                parseAdditive rest
+                parseShift rest
                 |> Result.map (fun (right, remaining') ->
                     (BinOp (Eq, left, right), remaining'))
             | TNeq :: rest ->
-                parseAdditive rest
+                parseShift rest
                 |> Result.map (fun (right, remaining') ->
                     (BinOp (Neq, left, right), remaining'))
             | TLt :: rest ->
-                parseAdditive rest
+                parseShift rest
                 |> Result.map (fun (right, remaining') ->
                     (BinOp (Lt, left, right), remaining'))
             | TGt :: rest ->
-                parseAdditive rest
+                parseShift rest
                 |> Result.map (fun (right, remaining') ->
                     (BinOp (Gt, left, right), remaining'))
             | TLte :: rest ->
-                parseAdditive rest
+                parseShift rest
                 |> Result.map (fun (right, remaining') ->
                     (BinOp (Lte, left, right), remaining'))
             | TGte :: rest ->
-                parseAdditive rest
+                parseShift rest
                 |> Result.map (fun (right, remaining') ->
                     (BinOp (Gte, left, right), remaining'))
             | _ -> Ok (left, remaining))
+
+    and parseShift (toks: Token list) : Result<Expr * Token list, string> =
+        parseAdditive toks
+        |> Result.bind (fun (left, remaining) ->
+            let rec parseShiftRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
+                match toks with
+                | TShl :: rest ->
+                    parseAdditive rest
+                    |> Result.bind (fun (right, remaining') ->
+                        parseShiftRest (BinOp (Shl, leftExpr, right)) remaining')
+                | TShr :: rest ->
+                    parseAdditive rest
+                    |> Result.bind (fun (right, remaining') ->
+                        parseShiftRest (BinOp (Shr, leftExpr, right)) remaining')
+                | _ -> Ok (leftExpr, toks)
+            parseShiftRest left remaining)
 
     and parseAdditive (toks: Token list) : Result<Expr * Token list, string> =
         parseMultiplicative toks

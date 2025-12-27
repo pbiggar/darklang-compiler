@@ -367,6 +367,37 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rd = encodeReg dest
         [sf ||| opc ||| op ||| shift ||| rm ||| rn ||| rd]
 
+    | ARM64.EOR_reg (dest, src1, src2) ->
+        // EOR register: sf=1 opc=10 01010 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
+        let sf = 1u <<< 31  // 64-bit
+        let opc = 2u <<< 29  // EOR (vs AND=00, ORR=01)
+        let op = 0b01010u <<< 24
+        let shift = 0u <<< 22  // No shift
+        let rm = (encodeReg src2) <<< 16
+        let rn = (encodeReg src1) <<< 5
+        let rd = encodeReg dest
+        [sf ||| opc ||| op ||| shift ||| rm ||| rn ||| rd]
+
+    | ARM64.LSL_reg (dest, src, shift) ->
+        // LSLV (variable shift left): sf=1 0 0 11010110 Rm(5) 001000 Rn(5) Rd(5)
+        let sf = 1u <<< 31  // 64-bit
+        let op = 0b11010110u <<< 21
+        let rm = (encodeReg shift) <<< 16
+        let fixedBits = 0b001000u <<< 10  // LSLV opcode
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeReg dest
+        [sf ||| op ||| rm ||| fixedBits ||| rn ||| rd]
+
+    | ARM64.LSR_reg (dest, src, shift) ->
+        // LSRV (variable shift right): sf=1 0 0 11010110 Rm(5) 001001 Rn(5) Rd(5)
+        let sf = 1u <<< 31  // 64-bit
+        let op = 0b11010110u <<< 21
+        let rm = (encodeReg shift) <<< 16
+        let fixedBits = 0b001001u <<< 10  // LSRV opcode
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeReg dest
+        [sf ||| op ||| rm ||| fixedBits ||| rn ||| rd]
+
     | ARM64.MVN (dest, src) ->
         // MVN is ORN Rd, XZR, Rm (OR NOT with Rn=XZR)
         // Encoding: sf=1 opc=01 01010 shift=00 1 Rm(5) imm6=000000 Rn=11111 Rd(5)

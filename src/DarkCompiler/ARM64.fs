@@ -62,6 +62,9 @@ type Instr =
     | CSET of dest:Reg * cond:Condition  // Set register to 1 if condition, 0 otherwise
     | AND_reg of dest:Reg * src1:Reg * src2:Reg  // Bitwise AND
     | ORR_reg of dest:Reg * src1:Reg * src2:Reg  // Bitwise OR
+    | EOR_reg of dest:Reg * src1:Reg * src2:Reg  // Bitwise XOR (exclusive or)
+    | LSL_reg of dest:Reg * src:Reg * shift:Reg  // Logical shift left by register
+    | LSR_reg of dest:Reg * src:Reg * shift:Reg  // Logical shift right by register
     | MVN of dest:Reg * src:Reg  // Bitwise NOT
     | MOV_reg of dest:Reg * src:Reg
     | STRB of src:Reg * addr:Reg * offset:int  // Store byte [addr + offset] = src (lower 8 bits)

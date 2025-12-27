@@ -83,6 +83,12 @@ type BinOp =
     | Mul
     | Div
     | Mod
+    // Bitwise
+    | Shl     // << (left shift)
+    | Shr     // >> (right shift)
+    | BitAnd  // & (bitwise and)
+    | BitOr   // | (bitwise or)
+    | BitXor  // ^ (bitwise xor)
     // Comparisons
     | Eq
     | Neq

@@ -295,6 +295,52 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
                 | Ok (rightInstrs, rightReg) ->
                     Ok (leftInstrs @ rightInstrs @ [LIR.Orr (lirDest, leftReg, rightReg)])
 
+        // Bitwise operators
+        | MIR.Shl ->
+            match ensureInRegister left (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+            match ensureInRegister right (LIR.Virtual 1001) with
+            | Error err -> Error err
+            | Ok (rightInstrs, rightReg) ->
+                Ok (leftInstrs @ rightInstrs @ [LIR.Lsl (lirDest, leftReg, rightReg)])
+
+        | MIR.Shr ->
+            match ensureInRegister left (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+            match ensureInRegister right (LIR.Virtual 1001) with
+            | Error err -> Error err
+            | Ok (rightInstrs, rightReg) ->
+                Ok (leftInstrs @ rightInstrs @ [LIR.Lsr (lirDest, leftReg, rightReg)])
+
+        | MIR.BitAnd ->
+            match ensureInRegister left (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+            match ensureInRegister right (LIR.Virtual 1001) with
+            | Error err -> Error err
+            | Ok (rightInstrs, rightReg) ->
+                Ok (leftInstrs @ rightInstrs @ [LIR.And (lirDest, leftReg, rightReg)])
+
+        | MIR.BitOr ->
+            match ensureInRegister left (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+            match ensureInRegister right (LIR.Virtual 1001) with
+            | Error err -> Error err
+            | Ok (rightInstrs, rightReg) ->
+                Ok (leftInstrs @ rightInstrs @ [LIR.Orr (lirDest, leftReg, rightReg)])
+
+        | MIR.BitXor ->
+            match ensureInRegister left (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+            match ensureInRegister right (LIR.Virtual 1001) with
+            | Error err -> Error err
+            | Ok (rightInstrs, rightReg) ->
+                Ok (leftInstrs @ rightInstrs @ [LIR.Eor (lirDest, leftReg, rightReg)])
+
     | MIR.UnaryOp (dest, op, src) ->
         let lirDest = vregToLIRReg dest
 

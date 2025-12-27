@@ -46,6 +46,11 @@ let prettyPrintMIROp = function
     | MIR.Mul -> "*"
     | MIR.Div -> "/"
     | MIR.Mod -> "%"
+    | MIR.Shl -> "<<"
+    | MIR.Shr -> ">>"
+    | MIR.BitAnd -> "&"
+    | MIR.BitOr -> "|"
+    | MIR.BitXor -> "^"
     | MIR.Eq -> "=="
     | MIR.Neq -> "!="
     | MIR.Lt -> "<"
@@ -128,6 +133,12 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- And({prettyPrintLIRReg left}, {prettyPrintLIRReg right})"
     | LIR.Orr (dest, left, right) ->
         $"{prettyPrintLIRReg dest} <- Orr({prettyPrintLIRReg left}, {prettyPrintLIRReg right})"
+    | LIR.Eor (dest, left, right) ->
+        $"{prettyPrintLIRReg dest} <- Eor({prettyPrintLIRReg left}, {prettyPrintLIRReg right})"
+    | LIR.Lsl (dest, src, shift) ->
+        $"{prettyPrintLIRReg dest} <- Lsl({prettyPrintLIRReg src}, {prettyPrintLIRReg shift})"
+    | LIR.Lsr (dest, src, shift) ->
+        $"{prettyPrintLIRReg dest} <- Lsr({prettyPrintLIRReg src}, {prettyPrintLIRReg shift})"
     | LIR.Mvn (dest, src) ->
         $"{prettyPrintLIRReg dest} <- Mvn({prettyPrintLIRReg src})"
     | LIR.Call (dest, funcName, args) ->
@@ -281,6 +292,11 @@ let prettyPrintANFOp = function
     | ANF.Mul -> "*"
     | ANF.Div -> "/"
     | ANF.Mod -> "%"
+    | ANF.Shl -> "<<"
+    | ANF.Shr -> ">>"
+    | ANF.BitAnd -> "&"
+    | ANF.BitOr -> "|"
+    | ANF.BitXor -> "^"
     | ANF.Eq -> "=="
     | ANF.Neq -> "!="
     | ANF.Lt -> "<"
@@ -462,6 +478,12 @@ let prettyPrintARM64Instr = function
         $"AND_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
     | ARM64.ORR_reg (dest, src1, src2) ->
         $"ORR_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
+    | ARM64.EOR_reg (dest, src1, src2) ->
+        $"EOR_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
+    | ARM64.LSL_reg (dest, src, shift) ->
+        $"LSL_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {prettyPrintARM64Reg shift})"
+    | ARM64.LSR_reg (dest, src, shift) ->
+        $"LSR_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {prettyPrintARM64Reg shift})"
     | ARM64.MVN (dest, src) ->
         $"MVN({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
     | ARM64.CBZ (reg, label) ->
