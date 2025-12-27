@@ -842,11 +842,32 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
         // Wildcard pattern: _
         Ok (PWildcard, rest)
     | TInt n :: rest ->
-        // Integer literal pattern
+        // Integer literal pattern (Int64)
         Ok (PLiteral n, rest)
+    | TInt8 n :: rest ->
+        // Int8 literal pattern (convert to int64 for pattern matching)
+        Ok (PLiteral (int64 n), rest)
+    | TInt16 n :: rest ->
+        Ok (PLiteral (int64 n), rest)
+    | TInt32 n :: rest ->
+        Ok (PLiteral (int64 n), rest)
+    | TUInt8 n :: rest ->
+        Ok (PLiteral (int64 n), rest)
+    | TUInt16 n :: rest ->
+        Ok (PLiteral (int64 n), rest)
+    | TUInt32 n :: rest ->
+        Ok (PLiteral (int64 n), rest)
+    | TUInt64 n :: rest ->
+        Ok (PLiteral (int64 n), rest)
     | TMinus :: TInt n :: rest ->
         // Negative integer literal pattern
         Ok (PLiteral (-n), rest)
+    | TMinus :: TInt8 n :: rest ->
+        Ok (PLiteral (int64 (-n)), rest)
+    | TMinus :: TInt16 n :: rest ->
+        Ok (PLiteral (int64 (-n)), rest)
+    | TMinus :: TInt32 n :: rest ->
+        Ok (PLiteral (int64 (-n)), rest)
     | TTrue :: rest ->
         // Boolean true pattern
         Ok (PBool true, rest)

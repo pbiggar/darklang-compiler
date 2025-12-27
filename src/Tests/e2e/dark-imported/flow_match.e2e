@@ -245,73 +245,66 @@ let x = 0 - 5 in match x with | x -> x + 10 = 5
 
 // ===================================================================
 // UInt64 Matching
-// NOTE: Commented out - requires UInt64 literal suffix support
 // ===================================================================
 
-// (match 6UL with | 5UL -> "fail" | 6UL -> "pass" | var -> "fail") = "pass"
-// (match 6UL with | 6UL -> "pass" | 5UL -> "fail" | var -> "fail") = "pass"
-// (match 6UL with | var -> "pass" | 6UL -> "fail" | 5UL -> "fail") = "pass"
-// (match 18446744073709551615UL with | 0UL -> "fail" | 18446744073709551615UL -> "pass") = "pass"
+(match 6UL with | 5UL -> "fail" | 6UL -> "pass" | var -> "fail") = stdout="pass\n"
+(match 6UL with | 6UL -> "pass" | 5UL -> "fail" | var -> "fail") = stdout="pass\n"
+(match 6UL with | var -> "pass" | 6UL -> "fail" | 5UL -> "fail") = stdout="pass\n"
+// NOTE: 18446744073709551615UL exceeds Int64 range, skipping
 
 // ===================================================================
 // Int8 Matching
-// NOTE: Commented out - requires Int8 literal suffix support
 // ===================================================================
 
-// (match 6y with | 5y -> "fail" | -6y -> "fail" | 6y -> "pass" | var -> "fail") = "pass"
-// (match 6y with | 6y -> "pass" | 5y -> "fail" | var -> "fail") = "pass"
-// (match 6y with | var -> "pass" | 6y -> "fail" | 5y -> "fail") = "pass"
-// (match 127y with | 0y -> "fail" | 127y -> "pass") = "pass"
+(match 6y with | 5y -> "fail" | -6y -> "fail" | 6y -> "pass" | var -> "fail") = stdout="pass\n"
+(match 6y with | 6y -> "pass" | 5y -> "fail" | var -> "fail") = stdout="pass\n"
+(match 6y with | var -> "pass" | 6y -> "fail" | 5y -> "fail") = stdout="pass\n"
+(match 127y with | 0y -> "fail" | 127y -> "pass") = stdout="pass\n"
 
 // ===================================================================
 // UInt8 Matching
-// NOTE: Commented out - requires UInt8 literal suffix support
 // ===================================================================
 
-// (match 6uy with | 5uy -> "fail" | 6uy -> "pass" | var -> "fail") = "pass"
-// (match 6uy with | 6uy -> "pass" | 5uy -> "fail" | var -> "fail") = "pass"
-// (match 6uy with | var -> "pass" | 6uy -> "fail" | 5uy -> "fail") = "pass"
-// (match 255uy with | 0uy -> "fail" | 255uy -> "pass") = "pass"
+(match 6uy with | 5uy -> "fail" | 6uy -> "pass" | var -> "fail") = stdout="pass\n"
+(match 6uy with | 6uy -> "pass" | 5uy -> "fail" | var -> "fail") = stdout="pass\n"
+(match 6uy with | var -> "pass" | 6uy -> "fail" | 5uy -> "fail") = stdout="pass\n"
+(match 255uy with | 0uy -> "fail" | 255uy -> "pass") = stdout="pass\n"
 
 // ===================================================================
 // Int16 Matching
-// NOTE: Commented out - requires Int16 literal suffix support
 // ===================================================================
 
-// (match 6s with | 5s -> "fail" | -6s -> "fail" | 6s -> "pass" | var -> "fail") = "pass"
-// (match 6s with | 6s -> "pass" | 5s -> "fail" | var -> "fail") = "pass"
-// (match 6s with | var -> "pass" | 6s -> "fail" | 5s -> "fail") = "pass"
-// (match 32767s with | 0s -> "fail" | 32767s -> "pass") = "pass"
+(match 6s with | 5s -> "fail" | -6s -> "fail" | 6s -> "pass" | var -> "fail") = stdout="pass\n"
+(match 6s with | 6s -> "pass" | 5s -> "fail" | var -> "fail") = stdout="pass\n"
+(match 6s with | var -> "pass" | 6s -> "fail" | 5s -> "fail") = stdout="pass\n"
+(match 32767s with | 0s -> "fail" | 32767s -> "pass") = stdout="pass\n"
 
 // ===================================================================
 // UInt16 Matching
-// NOTE: Commented out - requires UInt16 literal suffix support
 // ===================================================================
 
-// (match 6us with | 5us -> "fail" | 6us -> "pass" | var -> "fail") = "pass"
-// (match 6us with | 6us -> "pass" | 5us -> "fail" | var -> "fail") = "pass"
-// (match 6us with | var -> "pass" | 6us -> "fail" | 5us -> "fail") = "pass"
-// (match 65535us with | 0us -> "fail" | 65535us -> "pass") = "pass"
+(match 6us with | 5us -> "fail" | 6us -> "pass" | var -> "fail") = stdout="pass\n"
+(match 6us with | 6us -> "pass" | 5us -> "fail" | var -> "fail") = stdout="pass\n"
+(match 6us with | var -> "pass" | 6us -> "fail" | 5us -> "fail") = stdout="pass\n"
+(match 65535us with | 0us -> "fail" | 65535us -> "pass") = stdout="pass\n"
 
 // ===================================================================
 // Int32 Matching
-// NOTE: Commented out - requires Int32 literal suffix support
 // ===================================================================
 
-// (match 6l with | 5l -> "fail" | -6l -> "fail" | 6l -> "pass" | var -> "fail") = "pass"
-// (match 6l with | 6l -> "pass" | 5l -> "fail" | var -> "fail") = "pass"
-// (match 6l with | var -> "pass" | 6l -> "fail" | 5l -> "fail") = "pass"
-// (match 2147483647l with | 0l -> "fail" | 2147483647l -> "pass") = "pass"
+(match 6l with | 5l -> "fail" | -6l -> "fail" | 6l -> "pass" | var -> "fail") = stdout="pass\n"
+(match 6l with | 6l -> "pass" | 5l -> "fail" | var -> "fail") = stdout="pass\n"
+(match 6l with | var -> "pass" | 6l -> "fail" | 5l -> "fail") = stdout="pass\n"
+(match 2147483647l with | 0l -> "fail" | 2147483647l -> "pass") = stdout="pass\n"
 
 // ===================================================================
 // UInt32 Matching
-// NOTE: Commented out - requires UInt32 literal suffix support
 // ===================================================================
 
-// (match 6ul with | 5ul -> "fail" | 6ul -> "pass" | var -> "fail") = "pass"
-// (match 6ul with | 6ul -> "pass" | 5ul -> "fail" | var -> "fail") = "pass"
-// (match 6ul with | var -> "pass" | 6ul -> "fail" | 5ul -> "fail") = "pass"
-// (match 4294967295ul with | 0ul -> "fail" | 4294967295ul -> "pass") = "pass"
+(match 6ul with | 5ul -> "fail" | 6ul -> "pass" | var -> "fail") = stdout="pass\n"
+(match 6ul with | 6ul -> "pass" | 5ul -> "fail" | var -> "fail") = stdout="pass\n"
+(match 6ul with | var -> "pass" | 6ul -> "fail" | 5ul -> "fail") = stdout="pass\n"
+(match 4294967295ul with | 0ul -> "fail" | 4294967295ul -> "pass") = stdout="pass\n"
 
 // ===================================================================
 // Int128 Matching
