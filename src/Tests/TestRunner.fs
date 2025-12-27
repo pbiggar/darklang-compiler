@@ -23,6 +23,13 @@ module Colors =
     let gray = "\x1b[90m"
     let bold = "\x1b[1m"
 
+// Failed test info for summary at end
+type FailedTestInfo = {
+    Name: string
+    Message: string
+    Details: string list  // Additional details like expected/actual
+}
+
 // Format elapsed time
 let formatTime (elapsed: TimeSpan) =
     if elapsed.TotalMilliseconds < 1000.0 then
@@ -93,6 +100,7 @@ let main args =
 
     let mutable passed = 0
     let mutable failed = 0
+    let failedTests = ResizeArray<FailedTestInfo>()
 
     // Run ANF→MIR tests
     let anf2mirDir = Path.Combine(assemblyDir, "passes/anf2mir")
@@ -122,21 +130,26 @@ let main args =
                     else
                         println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         println $"    {result.Message}"
+                        let details = ResizeArray<string>()
                         match result.Expected, result.Actual with
                         | Some exp, Some act ->
                             println "    Expected:"
                             for line in exp.Split('\n') do
                                 println $"      {line}"
+                                details.Add($"Expected: {line}")
                             println "    Actual:"
                             for line in act.Split('\n') do
                                 println $"      {line}"
+                                details.Add($"Actual: {line}")
                         | _ -> ()
+                        failedTests.Add({ Name = $"ANF→MIR: {testName}"; Message = result.Message; Details = details |> Seq.toList })
                         failed <- failed + 1
                         sectionFailed <- sectionFailed + 1
                 | Error msg ->
                     testTimer.Stop()
                     println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                     println $"    Failed to load test: {msg}"
+                    failedTests.Add({ Name = $"ANF→MIR: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
                     failed <- failed + 1
                     sectionFailed <- sectionFailed + 1
 
@@ -176,21 +189,26 @@ let main args =
                     else
                         println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         println $"    {result.Message}"
+                        let details = ResizeArray<string>()
                         match result.Expected, result.Actual with
                         | Some exp, Some act ->
                             println "    Expected:"
                             for line in exp.Split('\n') do
                                 println $"      {line}"
+                                details.Add($"Expected: {line}")
                             println "    Actual:"
                             for line in act.Split('\n') do
                                 println $"      {line}"
+                                details.Add($"Actual: {line}")
                         | _ -> ()
+                        failedTests.Add({ Name = $"MIR→LIR: {testName}"; Message = result.Message; Details = details |> Seq.toList })
                         failed <- failed + 1
                         sectionFailed <- sectionFailed + 1
                 | Error msg ->
                     testTimer.Stop()
                     println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                     println $"    Failed to load test: {msg}"
+                    failedTests.Add({ Name = $"MIR→LIR: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
                     failed <- failed + 1
                     sectionFailed <- sectionFailed + 1
 
@@ -230,21 +248,26 @@ let main args =
                     else
                         println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         println $"    {result.Message}"
+                        let details = ResizeArray<string>()
                         match result.Expected, result.Actual with
                         | Some exp, Some act ->
                             println "    Expected:"
                             for line in exp.Split('\n') do
                                 println $"      {line}"
+                                details.Add($"Expected: {line}")
                             println "    Actual:"
                             for line in act.Split('\n') do
                                 println $"      {line}"
+                                details.Add($"Actual: {line}")
                         | _ -> ()
+                        failedTests.Add({ Name = $"LIR→ARM64: {testName}"; Message = result.Message; Details = details |> Seq.toList })
                         failed <- failed + 1
                         sectionFailed <- sectionFailed + 1
                 | Error msg ->
                     testTimer.Stop()
                     println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                     println $"    Failed to load test: {msg}"
+                    failedTests.Add({ Name = $"LIR→ARM64: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
                     failed <- failed + 1
                     sectionFailed <- sectionFailed + 1
 
@@ -284,12 +307,14 @@ let main args =
                     else
                         println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         println $"    {result.Message}"
+                        failedTests.Add({ Name = $"ARM64 Encoding: {testName}"; Message = result.Message; Details = [] })
                         failed <- failed + 1
                         sectionFailed <- sectionFailed + 1
                 | Error msg ->
                     testTimer.Stop()
                     println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                     println $"    Failed to load test: {msg}"
+                    failedTests.Add({ Name = $"ARM64 Encoding: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
                     failed <- failed + 1
                     sectionFailed <- sectionFailed + 1
 
@@ -332,11 +357,13 @@ let main args =
                             print $"  {typeDesc} ({fileName})... "
                             println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                             println $"    {result.Message}"
+                            failedTests.Add({ Name = $"Type Checking: {typeDesc} ({fileName})"; Message = result.Message; Details = [] })
                             sectionFailed <- sectionFailed + 1
                             failed <- failed + 1
                 | Error msg ->
                     println $"{Colors.red}✗ ERROR parsing {Path.GetFileName testFile}{Colors.reset}"
                     println $"    {msg}"
+                    failedTests.Add({ Name = $"Type Checking: {Path.GetFileName testFile}"; Message = msg; Details = [] })
                     sectionFailed <- sectionFailed + 1
                     failed <- failed + 1
 
@@ -371,6 +398,7 @@ let main args =
             for (fileName, msg) in parseErrors do
                 println $"{Colors.red}✗ ERROR parsing {fileName}{Colors.reset}"
                 println $"    {msg}"
+                failedTests.Add({ Name = $"E2E: {fileName}"; Message = msg; Details = [] })
                 failed <- failed + 1
 
             // Run tests in parallel (dynamically determined based on system resources) and print as they complete (in order)
@@ -397,11 +425,15 @@ let main args =
                         println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime elapsed}){Colors.reset}"
                         println $"    {result.Message}"
 
+                        let details = ResizeArray<string>()
+
                         // Show exit code mismatch
                         match result.ExitCode with
                         | Some code when code <> test.ExpectedExitCode ->
                             println $"    Expected exit code: {test.ExpectedExitCode}"
                             println $"    Actual exit code: {code}"
+                            details.Add($"Expected exit code: {test.ExpectedExitCode}")
+                            details.Add($"Actual exit code: {code}")
                         | _ -> ()
 
                         // Show stdout mismatch
@@ -411,14 +443,19 @@ let main args =
                             let actualDisplay = actual.Replace("\n", "\\n")
                             println $"    Expected stdout: {expectedDisplay}"
                             println $"    Actual stdout: {actualDisplay}"
+                            details.Add($"Expected stdout: {expectedDisplay}")
+                            details.Add($"Actual stdout: {actualDisplay}")
                         | Some expected, None ->
                             let expectedDisplay = expected.Replace("\n", "\\n")
                             println $"    Expected stdout: {expectedDisplay}"
                             println "    Actual: no stdout captured"
+                            details.Add($"Expected stdout: {expectedDisplay}")
+                            details.Add("Actual: no stdout captured")
                         | None, Some actual when actual.Trim() <> "" ->
                             // Unexpected stdout when none was expected
                             let actualDisplay = actual.Replace("\n", "\\n")
                             println $"    Unexpected stdout: {actualDisplay}"
+                            details.Add($"Unexpected stdout: {actualDisplay}")
                         | _ -> ()
 
                         // Show stderr mismatch
@@ -428,17 +465,25 @@ let main args =
                             let actualDisplay = actual.Replace("\n", "\\n")
                             println $"    Expected stderr: {expectedDisplay}"
                             println $"    Actual stderr: {actualDisplay}"
+                            details.Add($"Expected stderr: {expectedDisplay}")
+                            details.Add($"Actual stderr: {actualDisplay}")
                         | Some expected, None ->
                             let expectedDisplay = expected.Replace("\n", "\\n")
                             println $"    Expected stderr: {expectedDisplay}"
                             println "    Actual: no stderr captured"
+                            details.Add($"Expected stderr: {expectedDisplay}")
+                            details.Add("Actual: no stderr captured")
                         | None, Some actual when actual.Trim() <> "" ->
                             // Unexpected stderr when none was expected
                             let actualDisplay = actual.Replace("\n", "\\n")
                             println $"    Unexpected stderr: {actualDisplay}"
+                            details.Add($"Unexpected stderr: {actualDisplay}")
                         | _ -> ()
 
-                        lock lockObj (fun () -> failed <- failed + 1)
+                        lock lockObj (fun () ->
+                            failedTests.Add({ Name = $"E2E: {test.Name}"; Message = result.Message; Details = details |> Seq.toList })
+                            failed <- failed + 1
+                        )
 
                 // Helper to print all consecutive completed tests starting from nextToPrint
                 let printPendingResults () =
@@ -511,6 +556,7 @@ let main args =
         unitTestTimer.Stop()
         println $"  {Colors.red}✗ FAIL: Encoding tests{Colors.reset} {Colors.gray}({formatTime unitTestTimer.Elapsed}){Colors.reset}"
         println $"    {msg}"
+        failedTests.Add({ Name = "Unit: Encoding Tests"; Message = msg; Details = [] })
         failed <- failed + 1
         sectionFailed <- sectionFailed + 1
 
@@ -525,6 +571,7 @@ let main args =
         binaryTestTimer.Stop()
         println $"  {Colors.red}✗ FAIL: Binary tests{Colors.reset} {Colors.gray}({formatTime binaryTestTimer.Elapsed}){Colors.reset}"
         println $"    {msg}"
+        failedTests.Add({ Name = "Unit: Binary Tests"; Message = msg; Details = [] })
         failed <- failed + 1
         sectionFailed <- sectionFailed + 1
 
@@ -539,6 +586,7 @@ let main args =
         typeCheckingTestTimer.Stop()
         println $"  {Colors.red}✗ FAIL: Type checking tests{Colors.reset} {Colors.gray}({formatTime typeCheckingTestTimer.Elapsed}){Colors.reset}"
         println $"    {msg}"
+        failedTests.Add({ Name = "Unit: Type Checking Tests"; Message = msg; Details = [] })
         failed <- failed + 1
         sectionFailed <- sectionFailed + 1
 
@@ -561,5 +609,30 @@ let main args =
         println $"  {Colors.red}✗ Failed: {failed}{Colors.reset}"
     println $"  {Colors.gray}⏱  Total time: {formatTime totalTimer.Elapsed}{Colors.reset}"
     println $"{Colors.bold}{Colors.cyan}═══════════════════════════════════════{Colors.reset}"
+
+    // Print first 10 failing tests summary
+    if failedTests.Count > 0 then
+        println ""
+        println $"{Colors.bold}{Colors.red}═══════════════════════════════════════{Colors.reset}"
+        let displayCount = min 10 failedTests.Count
+        let moreCount = failedTests.Count - displayCount
+        if moreCount > 0 then
+            println $"{Colors.bold}{Colors.red}❌ First {displayCount} Failing Tests (of {failedTests.Count} total){Colors.reset}"
+        else
+            println $"{Colors.bold}{Colors.red}❌ Failing Tests ({failedTests.Count}){Colors.reset}"
+        println $"{Colors.bold}{Colors.red}═══════════════════════════════════════{Colors.reset}"
+        println ""
+
+        for i in 0 .. displayCount - 1 do
+            let test = failedTests.[i]
+            println $"{Colors.red}{i + 1}. {test.Name}{Colors.reset}"
+            println $"   {Colors.gray}{test.Message}{Colors.reset}"
+            for detail in test.Details do
+                println $"   {Colors.gray}{detail}{Colors.reset}"
+            println ""
+
+        if moreCount > 0 then
+            println $"{Colors.gray}... and {moreCount} more failing test(s){Colors.reset}"
+            println ""
 
     if failed = 0 then 0 else 1
