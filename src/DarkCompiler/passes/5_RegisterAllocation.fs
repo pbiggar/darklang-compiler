@@ -137,6 +137,19 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         let p = operandToVReg path |> Option.toList
         let c = operandToVReg content |> Option.toList
         Set.ofList (p @ c)
+    | LIR.RawAlloc (_, numBytes) ->
+        regToVReg numBytes |> Option.toList |> Set.ofList
+    | LIR.RawFree ptr ->
+        regToVReg ptr |> Option.toList |> Set.ofList
+    | LIR.RawGet (_, ptr, byteOffset) ->
+        let p = regToVReg ptr |> Option.toList
+        let o = regToVReg byteOffset |> Option.toList
+        Set.ofList (p @ o)
+    | LIR.RawSet (ptr, byteOffset, value) ->
+        let p = regToVReg ptr |> Option.toList
+        let o = regToVReg byteOffset |> Option.toList
+        let v = regToVReg value |> Option.toList
+        Set.ofList (p @ o @ v)
     | _ -> Set.empty
 
 /// Get virtual register ID defined (written) by an instruction
@@ -165,6 +178,10 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.FileExists (dest, _) -> regToVReg dest
     | LIR.FileWriteText (dest, _, _) -> regToVReg dest
     | LIR.FileAppendText (dest, _, _) -> regToVReg dest
+    | LIR.RawAlloc (dest, _) -> regToVReg dest
+    | LIR.RawGet (dest, _, _) -> regToVReg dest
+    | LIR.RawFree _ -> None
+    | LIR.RawSet _ -> None
     | _ -> None
 
 /// Get virtual register used by terminator
@@ -816,6 +833,37 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
             | _ -> []
         pathLoads @ contentLoads @ [fileInstr] @ storeInstrs
+
+    | LIR.RawAlloc (dest, numBytes) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (numBytesReg, numBytesLoads) = loadSpilled mapping numBytes LIR.X12
+        let allocInstr = LIR.RawAlloc (destReg, numBytesReg)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        numBytesLoads @ [allocInstr] @ storeInstrs
+
+    | LIR.RawFree ptr ->
+        let (ptrReg, ptrLoads) = loadSpilled mapping ptr LIR.X12
+        ptrLoads @ [LIR.RawFree ptrReg]
+
+    | LIR.RawGet (dest, ptr, byteOffset) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (ptrReg, ptrLoads) = loadSpilled mapping ptr LIR.X12
+        let (offsetReg, offsetLoads) = loadSpilled mapping byteOffset LIR.X13
+        let getInstr = LIR.RawGet (destReg, ptrReg, offsetReg)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        ptrLoads @ offsetLoads @ [getInstr] @ storeInstrs
+
+    | LIR.RawSet (ptr, byteOffset, value) ->
+        let (ptrReg, ptrLoads) = loadSpilled mapping ptr LIR.X12
+        let (offsetReg, offsetLoads) = loadSpilled mapping byteOffset LIR.X13
+        let (valueReg, valueLoads) = loadSpilled mapping value LIR.X14
+        ptrLoads @ offsetLoads @ valueLoads @ [LIR.RawSet (ptrReg, offsetReg, valueReg)]
 
     | LIR.Exit -> [LIR.Exit]
 

@@ -40,6 +40,7 @@ type Type =
     | TSum of string * Type list      // sum type by name with type args: Result<Int64, String>
     | TList of Type                    // List<T> - polymorphic list type
     | TVar of string                  // type variable: T, A, B, etc. (for generics)
+    | TRawPtr                         // Raw pointer to unmanaged memory (internal, for HAMT)
 
 /// Binary operators
 type BinOp =

@@ -92,6 +92,7 @@ let rec typeToMangledName (t: AST.Type) : string =
         $"{name}_{argsStr}"
     | AST.TList elemType -> $"list_{typeToMangledName elemType}"
     | AST.TVar name -> name  // Should not appear after monomorphization
+    | AST.TRawPtr -> "rawptr"  // Internal raw pointer type
 
 /// Generate a specialized function name
 let specName (funcName: string) (typeArgs: AST.Type list) : string =
@@ -119,7 +120,7 @@ let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
         AST.TList (applySubstToType subst elemType)
     | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
-    | AST.TBool | AST.TFloat64 | AST.TString | AST.TUnit | AST.TRecord _ | AST.TSum _ ->
+    | AST.TBool | AST.TFloat64 | AST.TString | AST.TUnit | AST.TRecord _ | AST.TSum _ | AST.TRawPtr ->
         typ  // Concrete types are unchanged
 
 /// Apply a substitution to an expression, replacing type variables in type annotations

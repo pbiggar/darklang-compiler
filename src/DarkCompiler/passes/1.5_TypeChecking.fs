@@ -57,6 +57,7 @@ let rec typeToString (t: Type) : string =
         $"{name}<{argsStr}>"
     | TList elemType -> $"List<{typeToString elemType}>"
     | TVar name -> name  // Type variable (for generics)
+    | TRawPtr -> "RawPtr"  // Internal raw pointer type
 
 /// Pretty-print a type error
 let typeErrorToString (err: TypeError) : string =
@@ -109,7 +110,7 @@ let rec applySubst (subst: Substitution) (typ: Type) : Type =
     | TSum (name, typeArgs) ->
         TSum (name, List.map (applySubst subst) typeArgs)
     | TInt8 | TInt16 | TInt32 | TInt64 | TUInt8 | TUInt16 | TUInt32 | TUInt64
-    | TBool | TFloat64 | TString | TUnit | TRecord _ ->
+    | TBool | TFloat64 | TString | TUnit | TRecord _ | TRawPtr ->
         typ  // Concrete types are unchanged
 
 /// Build a substitution from type parameters and type arguments
@@ -276,6 +277,9 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
     | TUnit ->
         if actual = TUnit then Ok []
         else Error $"Expected unit, got {typeToString actual}"
+    | TRawPtr ->
+        if actual = TRawPtr then Ok []
+        else Error $"Expected RawPtr, got {typeToString actual}"
     | TList patternElem ->
         match actual with
         | TList actualElem -> matchTypes patternElem actualElem

@@ -606,6 +606,14 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
                 | LIR.Reg (LIR.Physical LIR.X0) -> []
                 | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
             Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
+        | AST.TRawPtr ->
+            // Raw pointer: print address
+            let lirSrc = convertOperand src
+            let moveToX0 =
+                match lirSrc with
+                | LIR.Reg (LIR.Physical LIR.X0) -> []
+                | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
+            Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
         | AST.TVar _ ->
             // Type variables should be monomorphized away before reaching LIR
             Error "Internal error: Type variable reached MIR_to_LIR (should be monomorphized)"
@@ -637,6 +645,45 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
         let lirPath = convertOperand path
         let lirContent = convertOperand content
         Ok [LIR.FileAppendText (lirDest, lirPath, lirContent)]
+
+    | MIR.RawAlloc (dest, numBytes) ->
+        let lirDest = vregToLIRReg dest
+        // numBytes must be in a register for LIR
+        match ensureInRegister numBytes (LIR.Virtual 1000) with
+        | Error err -> Error err
+        | Ok (loadInstrs, numBytesReg) ->
+            Ok (loadInstrs @ [LIR.RawAlloc (lirDest, numBytesReg)])
+
+    | MIR.RawFree ptr ->
+        // ptr must be in a register
+        match ensureInRegister ptr (LIR.Virtual 1000) with
+        | Error err -> Error err
+        | Ok (loadInstrs, ptrReg) ->
+            Ok (loadInstrs @ [LIR.RawFree ptrReg])
+
+    | MIR.RawGet (dest, ptr, byteOffset) ->
+        let lirDest = vregToLIRReg dest
+        // Both ptr and byteOffset must be in registers
+        match ensureInRegister ptr (LIR.Virtual 1000) with
+        | Error err -> Error err
+        | Ok (ptrInstrs, ptrReg) ->
+        match ensureInRegister byteOffset (LIR.Virtual 1001) with
+        | Error err -> Error err
+        | Ok (offsetInstrs, offsetReg) ->
+            Ok (ptrInstrs @ offsetInstrs @ [LIR.RawGet (lirDest, ptrReg, offsetReg)])
+
+    | MIR.RawSet (ptr, byteOffset, value) ->
+        // All three operands must be in registers
+        match ensureInRegister ptr (LIR.Virtual 1000) with
+        | Error err -> Error err
+        | Ok (ptrInstrs, ptrReg) ->
+        match ensureInRegister byteOffset (LIR.Virtual 1001) with
+        | Error err -> Error err
+        | Ok (offsetInstrs, offsetReg) ->
+        match ensureInRegister value (LIR.Virtual 1002) with
+        | Error err -> Error err
+        | Ok (valueInstrs, valueReg) ->
+            Ok (ptrInstrs @ offsetInstrs @ valueInstrs @ [LIR.RawSet (ptrReg, offsetReg, valueReg)])
 
 /// Convert MIR terminator to LIR terminator
 /// For Branch, need to convert operand to register (may add instructions)

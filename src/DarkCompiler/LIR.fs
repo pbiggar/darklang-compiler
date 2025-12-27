@@ -112,6 +112,11 @@ type Instr =
     | FileExists of dest:Reg * path:Operand       // Check if file exists, returns Bool
     | FileWriteText of dest:Reg * path:Operand * content:Operand   // Write file, returns Result<Unit, String>
     | FileAppendText of dest:Reg * path:Operand * content:Operand  // Append to file, returns Result<Unit, String>
+    // Raw memory intrinsics (internal, for HAMT implementation)
+    | RawAlloc of dest:Reg * numBytes:Reg         // Allocate raw bytes (no header), returns RawPtr
+    | RawFree of ptr:Reg                          // Manually free raw memory
+    | RawGet of dest:Reg * ptr:Reg * byteOffset:Reg  // Read 8 bytes at offset
+    | RawSet of ptr:Reg * byteOffset:Reg * value:Reg  // Write 8 bytes at offset
 
 /// Basic block label
 type Label = string

@@ -87,6 +87,11 @@ type CExpr =
     | FileExists of path:Atom                 // Check if file exists, returns Bool
     | FileWriteText of path:Atom * content:Atom  // Write file, returns Result<Unit, String>
     | FileAppendText of path:Atom * content:Atom // Append to file, returns Result<Unit, String>
+    // Raw memory intrinsics (internal, for HAMT implementation)
+    | RawAlloc of numBytes:Atom               // Allocate raw bytes (no header), returns RawPtr
+    | RawFree of ptr:Atom                     // Manually free raw memory
+    | RawGet of ptr:Atom * byteOffset:Atom    // Read 8 bytes at offset, returns Int64
+    | RawSet of ptr:Atom * byteOffset:Atom * value:Atom  // Write 8 bytes at offset
 
 /// ANF expressions with explicit sequencing
 type AExpr =

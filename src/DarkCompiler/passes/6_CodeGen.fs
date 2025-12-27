@@ -1252,6 +1252,58 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 |> Result.map (fun (contentInstrs, contentReg) ->
                     pathInstrs @ contentInstrs @ Runtime.generateFileWriteText destReg pathReg contentReg true)))
 
+    | LIR.RawAlloc (dest, numBytes) ->
+        // Raw allocation: simple bump allocator without refcount header
+        // Just allocates numBytes and returns pointer
+        // numBytes is already in a physical register (from MIR_to_LIR)
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg numBytes
+            |> Result.map (fun numBytesReg ->
+                [
+                    // Align numBytes to 8 bytes
+                    ARM64.ADD_imm (ARM64.X15, numBytesReg, 7us)        // X15 = numBytes + 7
+                    ARM64.MOVZ (ARM64.X14, 0xFFF8us, 0)                // Lower 16 bits of ~7
+                    ARM64.MOVK (ARM64.X14, 0xFFFFus, 1)
+                    ARM64.MOVK (ARM64.X14, 0xFFFFus, 2)
+                    ARM64.MOVK (ARM64.X14, 0xFFFFus, 3)
+                    ARM64.AND_reg (ARM64.X15, ARM64.X15, ARM64.X14)    // X15 = aligned size
+                    // Bump allocate
+                    ARM64.MOV_reg (destReg, ARM64.X28)                 // dest = current heap pointer
+                    ARM64.ADD_reg (ARM64.X28, ARM64.X28, ARM64.X15)    // bump pointer by aligned size
+                ]))
+
+    | LIR.RawFree ptr ->
+        // Raw free: no-op for now (bump allocator doesn't support free)
+        // In future: could add to a raw memory free list
+        Ok []
+
+    | LIR.RawGet (dest, ptr, byteOffset) ->
+        // Load 8 bytes from ptr + byteOffset
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg ptr
+            |> Result.bind (fun ptrReg ->
+                lirRegToARM64Reg byteOffset
+                |> Result.map (fun offsetReg ->
+                    [
+                        ARM64.ADD_reg (ARM64.X15, ptrReg, offsetReg)   // X15 = ptr + offset
+                        ARM64.LDR (destReg, ARM64.X15, 0s)             // dest = [X15]
+                    ])))
+
+    | LIR.RawSet (ptr, byteOffset, value) ->
+        // Store 8 bytes at ptr + byteOffset
+        lirRegToARM64Reg ptr
+        |> Result.bind (fun ptrReg ->
+            lirRegToARM64Reg byteOffset
+            |> Result.bind (fun offsetReg ->
+                lirRegToARM64Reg value
+                |> Result.map (fun valueReg ->
+                    [
+                        ARM64.ADD_reg (ARM64.X15, ptrReg, offsetReg)   // X15 = ptr + offset
+                        ARM64.STR (valueReg, ARM64.X15, 0s)           // [X15] = value
+                    ])))
+
 /// Convert LIR terminator to ARM64 instructions
 /// epilogueLabel: the label to jump to for function return (handles stack cleanup)
 let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Result<ARM64.Instr list, string> =

@@ -209,6 +209,15 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- FileWriteText({prettyPrintLIROperand path}, {prettyPrintLIROperand content})"
     | LIR.FileAppendText (dest, path, content) ->
         $"{prettyPrintLIRReg dest} <- FileAppendText({prettyPrintLIROperand path}, {prettyPrintLIROperand content})"
+    // Raw memory operations
+    | LIR.RawAlloc (dest, numBytes) ->
+        $"{prettyPrintLIRReg dest} <- RawAlloc({prettyPrintLIRReg numBytes})"
+    | LIR.RawFree ptr ->
+        $"RawFree({prettyPrintLIRReg ptr})"
+    | LIR.RawGet (dest, ptr, byteOffset) ->
+        $"{prettyPrintLIRReg dest} <- RawGet({prettyPrintLIRReg ptr}, {prettyPrintLIRReg byteOffset})"
+    | LIR.RawSet (ptr, byteOffset, value) ->
+        $"RawSet({prettyPrintLIRReg ptr}, {prettyPrintLIRReg byteOffset}, {prettyPrintLIRReg value})"
     | LIR.Exit -> "Exit"
 
 /// Pretty-print LIR terminator
@@ -353,6 +362,15 @@ let prettyPrintANFCExpr = function
         $"FileWriteText({prettyPrintANFAtom path}, {prettyPrintANFAtom content})"
     | ANF.FileAppendText (path, content) ->
         $"FileAppendText({prettyPrintANFAtom path}, {prettyPrintANFAtom content})"
+    // Raw memory operations
+    | ANF.RawAlloc numBytes ->
+        $"RawAlloc({prettyPrintANFAtom numBytes})"
+    | ANF.RawFree ptr ->
+        $"RawFree({prettyPrintANFAtom ptr})"
+    | ANF.RawGet (ptr, byteOffset) ->
+        $"RawGet({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset})"
+    | ANF.RawSet (ptr, byteOffset, value) ->
+        $"RawSet({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset}, {prettyPrintANFAtom value})"
 
 /// Pretty-print ANF expression (recursive)
 let rec prettyPrintANFExpr = function

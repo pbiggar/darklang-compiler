@@ -102,6 +102,10 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.FileExists path -> maxTempIdInAtom path
     | ANF.FileWriteText (path, content) -> max (maxTempIdInAtom path) (maxTempIdInAtom content)
     | ANF.FileAppendText (path, content) -> max (maxTempIdInAtom path) (maxTempIdInAtom content)
+    | ANF.RawAlloc numBytes -> maxTempIdInAtom numBytes
+    | ANF.RawFree ptr -> maxTempIdInAtom ptr
+    | ANF.RawGet (ptr, offset) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom offset)
+    | ANF.RawSet (ptr, offset, value) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
 
 /// Find the maximum TempId in an AExpr
 let rec maxTempIdInAExpr (expr: ANF.AExpr) : int =
@@ -173,6 +177,10 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.FileExists path -> collectStringsFromAtom path
     | ANF.FileWriteText (path, content) -> collectStringsFromAtom path @ collectStringsFromAtom content
     | ANF.FileAppendText (path, content) -> collectStringsFromAtom path @ collectStringsFromAtom content
+    | ANF.RawAlloc numBytes -> collectStringsFromAtom numBytes
+    | ANF.RawFree ptr -> collectStringsFromAtom ptr
+    | ANF.RawGet (ptr, offset) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset
+    | ANF.RawSet (ptr, offset, value) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset @ collectStringsFromAtom value
 
 /// Collect all float literals from a CExpr
 let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
@@ -205,6 +213,10 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
     | ANF.FileExists path -> collectFloatsFromAtom path
     | ANF.FileWriteText (path, content) -> collectFloatsFromAtom path @ collectFloatsFromAtom content
     | ANF.FileAppendText (path, content) -> collectFloatsFromAtom path @ collectFloatsFromAtom content
+    | ANF.RawAlloc numBytes -> collectFloatsFromAtom numBytes
+    | ANF.RawFree ptr -> collectFloatsFromAtom ptr
+    | ANF.RawGet (ptr, offset) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset
+    | ANF.RawSet (ptr, offset, value) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset @ collectFloatsFromAtom value
 
 /// Collect all string literals from an ANF expression
 let rec collectStringsFromExpr (expr: ANF.AExpr) : string list =
@@ -540,6 +552,26 @@ let rec convertExpr
                         atomToOperand builder contentAtom
                         |> Result.map (fun contentOp ->
                             [MIR.FileAppendText (destReg, pathOp, contentOp)]))
+                | ANF.RawAlloc numBytesAtom ->
+                    atomToOperand builder numBytesAtom
+                    |> Result.map (fun numBytesOp -> [MIR.RawAlloc (destReg, numBytesOp)])
+                | ANF.RawFree ptrAtom ->
+                    atomToOperand builder ptrAtom
+                    |> Result.map (fun ptrOp -> [MIR.RawFree ptrOp])
+                | ANF.RawGet (ptrAtom, offsetAtom) ->
+                    atomToOperand builder ptrAtom
+                    |> Result.bind (fun ptrOp ->
+                        atomToOperand builder offsetAtom
+                        |> Result.map (fun offsetOp ->
+                            [MIR.RawGet (destReg, ptrOp, offsetOp)]))
+                | ANF.RawSet (ptrAtom, offsetAtom, valueAtom) ->
+                    atomToOperand builder ptrAtom
+                    |> Result.bind (fun ptrOp ->
+                        atomToOperand builder offsetAtom
+                        |> Result.bind (fun offsetOp ->
+                            atomToOperand builder valueAtom
+                            |> Result.map (fun valueOp ->
+                                [MIR.RawSet (ptrOp, offsetOp, valueOp)])))
 
             match instrsResult with
             | Error err -> Error err
@@ -858,6 +890,26 @@ and convertExprToOperand
                         atomToOperand builder contentAtom
                         |> Result.map (fun contentOp ->
                             [MIR.FileAppendText (destReg, pathOp, contentOp)]))
+                | ANF.RawAlloc numBytesAtom ->
+                    atomToOperand builder numBytesAtom
+                    |> Result.map (fun numBytesOp -> [MIR.RawAlloc (destReg, numBytesOp)])
+                | ANF.RawFree ptrAtom ->
+                    atomToOperand builder ptrAtom
+                    |> Result.map (fun ptrOp -> [MIR.RawFree ptrOp])
+                | ANF.RawGet (ptrAtom, offsetAtom) ->
+                    atomToOperand builder ptrAtom
+                    |> Result.bind (fun ptrOp ->
+                        atomToOperand builder offsetAtom
+                        |> Result.map (fun offsetOp ->
+                            [MIR.RawGet (destReg, ptrOp, offsetOp)]))
+                | ANF.RawSet (ptrAtom, offsetAtom, valueAtom) ->
+                    atomToOperand builder ptrAtom
+                    |> Result.bind (fun ptrOp ->
+                        atomToOperand builder offsetAtom
+                        |> Result.bind (fun offsetOp ->
+                            atomToOperand builder valueAtom
+                            |> Result.map (fun valueOp ->
+                                [MIR.RawSet (ptrOp, offsetOp, valueOp)])))
 
             // Let bindings accumulate instructions, pass through join label
             match instrsResult with

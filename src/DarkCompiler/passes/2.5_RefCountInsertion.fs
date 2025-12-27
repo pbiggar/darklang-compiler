@@ -121,6 +121,11 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | FileExists _ -> Some AST.TBool  // Bool
     | FileWriteText _ -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
     | FileAppendText _ -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
+    // Raw memory intrinsics (no ref counting - manually managed)
+    | RawAlloc _ -> Some AST.TRawPtr  // Returns raw pointer
+    | RawFree _ -> Some AST.TUnit  // Returns unit
+    | RawGet _ -> Some AST.TInt64  // Returns 8-byte value
+    | RawSet _ -> Some AST.TUnit  // Returns unit
 
 /// Check if an atom is returned in the expression
 let rec isAtomReturned (atom: Atom) (expr: AExpr) : bool =
