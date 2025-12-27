@@ -7,47 +7,47 @@
 // Stdlib.Bool.not - Returns the inverse of a boolean
 // ===================================================================
 
-// Stdlib.Bool.not(true) = stdout="false\n"
-// Stdlib.Bool.not(false) = stdout="true\n"
+Stdlib.Bool.not(true) = stdout="false\n"
+Stdlib.Bool.not(false) = stdout="true\n"
 
 // With variable
-// let b = true in Stdlib.Bool.not(b) = stdout="false\n"
-// let b = false in Stdlib.Bool.not(b) = stdout="true\n"
+let b = true in Stdlib.Bool.not(b) = stdout="false\n"
+let b = false in Stdlib.Bool.not(b) = stdout="true\n"
 
 // Double not
-// Stdlib.Bool.not(Stdlib.Bool.not(true)) = stdout="true\n"
-// Stdlib.Bool.not(Stdlib.Bool.not(false)) = stdout="false\n"
+Stdlib.Bool.not(Stdlib.Bool.not(true)) = stdout="true\n"
+Stdlib.Bool.not(Stdlib.Bool.not(false)) = stdout="false\n"
 
 // ===================================================================
 // Stdlib.Bool.and - Returns true if both a and b are true
 // ===================================================================
 
-// Stdlib.Bool.and(true, true) = stdout="true\n"
-// Stdlib.Bool.and(true, false) = stdout="false\n"
-// Stdlib.Bool.and(false, true) = stdout="false\n"
-// Stdlib.Bool.and(false, false) = stdout="false\n"
+Stdlib.Bool.and(true, true) = stdout="true\n"
+Stdlib.Bool.and(true, false) = stdout="false\n"
+Stdlib.Bool.and(false, true) = stdout="false\n"
+Stdlib.Bool.and(false, false) = stdout="false\n"
 
 // With expressions
-// Stdlib.Bool.and(8 >= 5, 6 <= 8) = stdout="true\n"
-// Stdlib.Bool.and(1 > 5, 2 < 8) = stdout="false\n"
+Stdlib.Bool.and(8 >= 5, 6 <= 8) = stdout="true\n"
+Stdlib.Bool.and(1 > 5, 2 < 8) = stdout="false\n"
 
 // ===================================================================
 // Stdlib.Bool.or - Returns true if either a or b is true
 // ===================================================================
 
-// Stdlib.Bool.or(true, true) = stdout="true\n"
-// Stdlib.Bool.or(true, false) = stdout="true\n"
-// Stdlib.Bool.or(false, true) = stdout="true\n"
-// Stdlib.Bool.or(false, false) = stdout="false\n"
+Stdlib.Bool.or(true, true) = stdout="true\n"
+Stdlib.Bool.or(true, false) = stdout="true\n"
+Stdlib.Bool.or(false, true) = stdout="true\n"
+Stdlib.Bool.or(false, false) = stdout="false\n"
 
 // ===================================================================
 // Stdlib.Bool.xor - Returns true if exactly one of a and b is true
 // ===================================================================
 
-// Stdlib.Bool.xor(true, true) = stdout="false\n"
-// Stdlib.Bool.xor(true, false) = stdout="true\n"
-// Stdlib.Bool.xor(false, true) = stdout="true\n"
-// Stdlib.Bool.xor(false, false) = stdout="false\n"
+Stdlib.Bool.xor(true, true) = stdout="false\n"
+Stdlib.Bool.xor(true, false) = stdout="true\n"
+Stdlib.Bool.xor(false, true) = stdout="true\n"
+Stdlib.Bool.xor(false, false) = stdout="false\n"
 
 // ===================================================================
 // Stdlib.Bool.toString - Convert bool to string
