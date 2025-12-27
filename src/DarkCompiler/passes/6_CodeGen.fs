@@ -348,17 +348,17 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         // Store length
                     ] @ loadImmediate ARM64.X10 (int64 len) @ [
                         ARM64.STR (ARM64.X10, destReg, 0s)  // [dest] = length
-                        // Copy bytes: loop counter in X0
-                        ARM64.MOVZ (ARM64.X0, 0us, 0)  // X0 = 0
+                        // Copy bytes: loop counter in X13 (avoid X0 which may be destReg)
+                        ARM64.MOVZ (ARM64.X13, 0us, 0)  // X13 = 0
                     ] @ loadImmediate ARM64.X11 (int64 len) @ [
-                        // Loop start (if X0 >= len, done)
-                        ARM64.CMP_reg (ARM64.X0, ARM64.X11)
+                        // Loop start (if X13 >= len, done)
+                        ARM64.CMP_reg (ARM64.X13, ARM64.X11)
                         ARM64.B_cond (ARM64.GE, 7)  // Skip 7 instructions to exit loop (to after B)
-                        ARM64.LDRB (ARM64.X15, ARM64.X9, ARM64.X0)  // X15 = pool[X0]
+                        ARM64.LDRB (ARM64.X15, ARM64.X9, ARM64.X13)  // X15 = pool[X13]
                         ARM64.ADD_imm (ARM64.X12, destReg, 8us)  // X12 = dest + 8
-                        ARM64.ADD_reg (ARM64.X12, ARM64.X12, ARM64.X0)  // X12 = dest + 8 + X0
+                        ARM64.ADD_reg (ARM64.X12, ARM64.X12, ARM64.X13)  // X12 = dest + 8 + X13
                         ARM64.STRB_reg (ARM64.X15, ARM64.X12)  // [X12] = byte
-                        ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)  // X0++
+                        ARM64.ADD_imm (ARM64.X13, ARM64.X13, 1us)  // X13++
                         ARM64.B (-7)  // Loop back to CMP
                         // Store refcount
                         ARM64.ADD_imm (ARM64.X12, destReg, 8us)
