@@ -441,6 +441,28 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
         let lirRight = convertOperand right
         Ok [LIR.StringConcat (lirDest, lirLeft, lirRight)]
 
+    | MIR.FileReadText (dest, path) ->
+        let lirDest = vregToLIRReg dest
+        let lirPath = convertOperand path
+        Ok [LIR.FileReadText (lirDest, lirPath)]
+
+    | MIR.FileExists (dest, path) ->
+        let lirDest = vregToLIRReg dest
+        let lirPath = convertOperand path
+        Ok [LIR.FileExists (lirDest, lirPath)]
+
+    | MIR.FileWriteText (dest, path, content) ->
+        let lirDest = vregToLIRReg dest
+        let lirPath = convertOperand path
+        let lirContent = convertOperand content
+        Ok [LIR.FileWriteText (lirDest, lirPath, lirContent)]
+
+    | MIR.FileAppendText (dest, path, content) ->
+        let lirDest = vregToLIRReg dest
+        let lirPath = convertOperand path
+        let lirContent = convertOperand content
+        Ok [LIR.FileAppendText (lirDest, lirPath, lirContent)]
+
 /// Convert MIR terminator to LIR terminator
 /// For Branch, need to convert operand to register (may add instructions)
 /// Printing is now handled by MIR.Print instruction, not in terminator

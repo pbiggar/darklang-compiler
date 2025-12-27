@@ -18,6 +18,20 @@ module AST_to_ANF
 
 open ANF
 
+/// Try to convert a function call to a file I/O intrinsic CExpr
+/// Returns Some CExpr if it's a file intrinsic, None otherwise
+let tryFileIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
+    match funcName, args with
+    | "Stdlib.File.readText", [pathAtom] ->
+        Some (ANF.FileReadText pathAtom)
+    | "Stdlib.File.exists", [pathAtom] ->
+        Some (ANF.FileExists pathAtom)
+    | "Stdlib.File.writeText", [pathAtom; contentAtom] ->
+        Some (ANF.FileWriteText (pathAtom, contentAtom))
+    | "Stdlib.File.appendText", [pathAtom; contentAtom] ->
+        Some (ANF.FileAppendText (pathAtom, contentAtom))
+    | _ -> None
+
 /// Type registry - maps record type names to their field definitions
 type TypeRegistry = Map<string, (string * AST.Type) list>
 
@@ -1058,7 +1072,12 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
         // Look up function return type from the function registry
         match Map.tryFind funcName funcReg with
         | Some returnType -> Ok returnType
-        | None -> Error $"Unknown function: '{funcName}'"
+        | None ->
+            // Check if it's a module function (e.g., Stdlib.File.exists)
+            let moduleRegistry = Stdlib.buildModuleRegistry ()
+            match Stdlib.tryGetFunction moduleRegistry funcName with
+            | Some moduleFunc -> Ok moduleFunc.ReturnType
+            | None -> Error $"Unknown function: '{funcName}'"
     | AST.TypeApp (_funcName, _typeArgs, _args) ->
         // Generic function call - not yet implemented
         Error "Generic function calls not yet implemented"
@@ -1282,21 +1301,29 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 // Variable exists but is not a function type
                 Error $"Cannot call '{funcName}' - it has type {varType}, not a function type"
             | None ->
-                // Not a variable - check if it's a defined function
-                match Map.tryFind funcName funcReg with
-                | Some _ ->
-                    // Direct call to defined function
-                    let callExpr = ANF.Call (funcName, argAtoms)
-                    let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
+                // Not a variable - check if it's a file intrinsic first
+                match tryFileIntrinsic funcName argAtoms with
+                | Some intrinsicExpr ->
+                    // File I/O intrinsic call
+                    let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
                     let exprWithBindings = wrapBindings argBindings finalExpr
                     Ok (exprWithBindings, varGen2)
                 | None ->
-                    // Unknown function - could be error or forward reference
-                    // For now, assume it's a valid function (will fail at link time if not)
-                    let callExpr = ANF.Call (funcName, argAtoms)
-                    let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
-                    let exprWithBindings = wrapBindings argBindings finalExpr
-                    Ok (exprWithBindings, varGen2))
+                    // Check if it's a defined function
+                    match Map.tryFind funcName funcReg with
+                    | Some _ ->
+                        // Direct call to defined function
+                        let callExpr = ANF.Call (funcName, argAtoms)
+                        let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
+                        let exprWithBindings = wrapBindings argBindings finalExpr
+                        Ok (exprWithBindings, varGen2)
+                    | None ->
+                        // Unknown function - could be error or forward reference
+                        // For now, assume it's a valid function (will fail at link time if not)
+                        let callExpr = ANF.Call (funcName, argAtoms)
+                        let finalExpr = ANF.Let (resultVar, callExpr, ANF.Return (ANF.Var resultVar))
+                        let exprWithBindings = wrapBindings argBindings finalExpr
+                        Ok (exprWithBindings, varGen2))
 
     | AST.TypeApp (_funcName, _typeArgs, _args) ->
         // Generic function call - not yet implemented
@@ -2304,10 +2331,17 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                 // Variable exists but is not a function type
                 Error $"Cannot call '{funcName}' - it has type {varType}, not a function type"
             | None ->
-                // Not a variable - assume it's a defined function (direct call)
-                let callCExpr = ANF.Call (funcName, argAtoms)
-                let allBindings = argBindings @ [(tempVar, callCExpr)]
-                Ok (ANF.Var tempVar, allBindings, varGen2))
+                // Not a variable - check if it's a file intrinsic first
+                match tryFileIntrinsic funcName argAtoms with
+                | Some intrinsicExpr ->
+                    // File I/O intrinsic call
+                    let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
+                    Ok (ANF.Var tempVar, allBindings, varGen2)
+                | None ->
+                    // Assume it's a defined function (direct call)
+                    let callCExpr = ANF.Call (funcName, argAtoms)
+                    let allBindings = argBindings @ [(tempVar, callCExpr)]
+                    Ok (ANF.Var tempVar, allBindings, varGen2))
 
     | AST.TypeApp (_, _, _) ->
         // Placeholder: Generic instantiation not yet implemented

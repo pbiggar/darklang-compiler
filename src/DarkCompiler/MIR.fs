@@ -119,6 +119,11 @@ type Instr =
     | RefCountDec of addr:VReg * payloadSize:int   // Decrement ref count, free if zero
     // Output operations (for main expression result printing)
     | Print of src:Operand * valueType:AST.Type    // Print value with type-appropriate formatting
+    // File I/O intrinsics (generate syscalls)
+    | FileReadText of dest:VReg * path:Operand    // Read file, returns Result<String, String>
+    | FileExists of dest:VReg * path:Operand      // Check if file exists, returns Bool
+    | FileWriteText of dest:VReg * path:Operand * content:Operand   // Write file, returns Result<Unit, String>
+    | FileAppendText of dest:VReg * path:Operand * content:Operand  // Append to file, returns Result<Unit, String>
 
 /// Basic block label
 type Label = Label of string

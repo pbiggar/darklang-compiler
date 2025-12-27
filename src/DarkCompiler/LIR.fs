@@ -104,6 +104,11 @@ type Instr =
     | PrintHeapString of Reg                       // Print heap string [len:8][data:N]
     // Higher-order function support
     | LoadFuncAddr of dest:Reg * funcName:string   // Load address of a function (ADR instruction)
+    // File I/O intrinsics (generate syscalls)
+    | FileReadText of dest:Reg * path:Operand     // Read file, returns Result<String, String>
+    | FileExists of dest:Reg * path:Operand       // Check if file exists, returns Bool
+    | FileWriteText of dest:Reg * path:Operand * content:Operand   // Write file, returns Result<Unit, String>
+    | FileAppendText of dest:Reg * path:Operand * content:Operand  // Append to file, returns Result<Unit, String>
 
 /// Basic block label
 type Label = string

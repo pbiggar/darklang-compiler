@@ -124,6 +124,18 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         Set.ofList (l @ r)
     | LIR.PrintHeapString reg ->
         regToVReg reg |> Option.toList |> Set.ofList
+    | LIR.FileReadText (_, path) ->
+        operandToVReg path |> Option.toList |> Set.ofList
+    | LIR.FileExists (_, path) ->
+        operandToVReg path |> Option.toList |> Set.ofList
+    | LIR.FileWriteText (_, path, content) ->
+        let p = operandToVReg path |> Option.toList
+        let c = operandToVReg content |> Option.toList
+        Set.ofList (p @ c)
+    | LIR.FileAppendText (_, path, content) ->
+        let p = operandToVReg path |> Option.toList
+        let c = operandToVReg content |> Option.toList
+        Set.ofList (p @ c)
     | _ -> Set.empty
 
 /// Get virtual register ID defined (written) by an instruction
@@ -147,6 +159,10 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.HeapAlloc (dest, _) -> regToVReg dest
     | LIR.HeapLoad (dest, _, _) -> regToVReg dest
     | LIR.StringConcat (dest, _, _) -> regToVReg dest
+    | LIR.FileReadText (dest, _) -> regToVReg dest
+    | LIR.FileExists (dest, _) -> regToVReg dest
+    | LIR.FileWriteText (dest, _, _) -> regToVReg dest
+    | LIR.FileAppendText (dest, _, _) -> regToVReg dest
     | _ -> None
 
 /// Get virtual register used by terminator
@@ -723,6 +739,48 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
             | _ -> []
         [loadInstr] @ storeInstrs
+
+    | LIR.FileReadText (dest, path) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (pathOp, pathLoads) = applyToOperand mapping path LIR.X12
+        let fileInstr = LIR.FileReadText (destReg, pathOp)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        pathLoads @ [fileInstr] @ storeInstrs
+
+    | LIR.FileExists (dest, path) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (pathOp, pathLoads) = applyToOperand mapping path LIR.X12
+        let fileInstr = LIR.FileExists (destReg, pathOp)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        pathLoads @ [fileInstr] @ storeInstrs
+
+    | LIR.FileWriteText (dest, path, content) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (pathOp, pathLoads) = applyToOperand mapping path LIR.X12
+        let (contentOp, contentLoads) = applyToOperand mapping content LIR.X13
+        let fileInstr = LIR.FileWriteText (destReg, pathOp, contentOp)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        pathLoads @ contentLoads @ [fileInstr] @ storeInstrs
+
+    | LIR.FileAppendText (dest, path, content) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (pathOp, pathLoads) = applyToOperand mapping path LIR.X12
+        let (contentOp, contentLoads) = applyToOperand mapping content LIR.X13
+        let fileInstr = LIR.FileAppendText (destReg, pathOp, contentOp)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        pathLoads @ contentLoads @ [fileInstr] @ storeInstrs
 
     | LIR.Exit -> [LIR.Exit]
 

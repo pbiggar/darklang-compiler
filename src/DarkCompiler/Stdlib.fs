@@ -20,9 +20,30 @@ let int64Module : ModuleDef = {
     ]
 }
 
+/// Helper to create Result<T, String> type
+let resultType (okType: Type) : Type =
+    TSum ("Stdlib.Result.Result", [okType; TString])
+
+/// Stdlib.File module - file I/O operations (intrinsics)
+/// These are special-cased in the compiler and generate syscalls
+let fileModule : ModuleDef = {
+    Name = "Stdlib.File"
+    Functions = [
+        // readText : (String) -> Result<String, String>
+        { Name = "readText"; ParamTypes = [TString]; ReturnType = resultType TString }
+        // exists : (String) -> Bool
+        { Name = "exists"; ParamTypes = [TString]; ReturnType = TBool }
+        // writeText : (String, String) -> Result<Unit, String>
+        { Name = "writeText"; ParamTypes = [TString; TString]; ReturnType = resultType TUnit }
+        // appendText : (String, String) -> Result<Unit, String>
+        { Name = "appendText"; ParamTypes = [TString; TString]; ReturnType = resultType TUnit }
+    ]
+}
+
 /// All available Stdlib modules
 let allModules : ModuleDef list = [
     int64Module
+    fileModule
 ]
 
 /// Build the module registry from all modules
@@ -41,3 +62,11 @@ let tryGetFunction (registry: ModuleRegistry) (qualifiedName: string) : ModuleFu
 /// Get the type of a module function as an AST.Type
 let getFunctionType (func: ModuleFunc) : Type =
     TFunction (func.ParamTypes, func.ReturnType)
+
+/// Check if a function name is a file I/O intrinsic
+/// These are special-cased in the compiler to generate syscalls
+let isFileIntrinsic (qualifiedName: string) : bool =
+    qualifiedName = "Stdlib.File.readText" ||
+    qualifiedName = "Stdlib.File.exists" ||
+    qualifiedName = "Stdlib.File.writeText" ||
+    qualifiedName = "Stdlib.File.appendText"

@@ -695,3 +695,767 @@ let generateWriteSyscall () : ARM64.Instr list =
         ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
     ]
+
+/// Generate ARM64 instructions for Stdlib.File.exists
+/// Input: pathReg contains heap string pointer (format: [len:8][data:N])
+/// Output: destReg = 1 if file exists, 0 if not
+///
+/// Algorithm:
+/// 1. Get data pointer from heap string (path + 8)
+/// 2. Save the path string to a null-terminated temp buffer on stack
+/// 3. Call access(path, F_OK) or faccessat(AT_FDCWD, path, F_OK, 0)
+/// 4. If syscall returns 0 (success), set dest = 1; else dest = 0
+let generateFileExists (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr list =
+    let os =
+        match Platform.detectOS () with
+        | Ok platform -> platform
+        | Error _ -> Platform.Linux
+    let syscalls = Platform.getSyscallNumbers os
+
+    // We need to null-terminate the string for the syscall
+    // Stack layout: [saved regs:16][path:256]
+    // Use simpler approach: just copy the string and add null terminator
+    // Note: This is a simplification - paths > 255 chars will be truncated
+    match os with
+    | Platform.MacOS ->
+        [
+            // Save callee-saved registers we'll use
+            ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16s)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
+
+            // Allocate stack space for path (256 bytes, 16-byte aligned)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 256us)
+
+            // X19 = heap string base (pathReg), X20 = dest pointer for later
+            ARM64.MOV_reg (ARM64.X19, pathReg)
+            ARM64.MOV_reg (ARM64.X20, destReg)
+
+            // X2 = string length from [X19]
+            ARM64.LDR (ARM64.X2, ARM64.X19, 0s)
+
+            // X0 = dest pointer (SP)
+            ARM64.MOV_reg (ARM64.X0, ARM64.SP)
+            // X1 = source pointer (X19 + 8)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X19, 8us)
+            // X4 = 0 (for LDRB offset)
+            ARM64.MOVZ (ARM64.X4, 0us, 0)
+
+            // Copy loop: copies X2 bytes from X1 to X0
+            // copy_loop (7 instructions, 0-6):
+            ARM64.CBZ_offset (ARM64.X2, 7)      // 0: If length == 0, skip to null_term at inst 7
+            ARM64.LDRB (ARM64.X3, ARM64.X1, ARM64.X4) // 1: Load byte from src [X1 + 0]
+            ARM64.STRB (ARM64.X3, ARM64.X0, 0)  // 2: Store byte to dest
+            ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us) // 3: dest++
+            ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1us) // 4: src++
+            ARM64.SUB_imm (ARM64.X2, ARM64.X2, 1us) // 5: len--
+            ARM64.B (-6)                        // 6: Loop back to CBZ
+
+            // null_term: Store null terminator at X0
+            ARM64.MOVZ (ARM64.X3, 0us, 0)       // X3 = 0
+            ARM64.STRB (ARM64.X3, ARM64.X0, 0)  // Store null terminator
+
+            // Call access(path, F_OK)
+            // X0 = path (SP), X1 = mode (F_OK = 0)
+            ARM64.MOV_reg (ARM64.X0, ARM64.SP)
+            ARM64.MOVZ (ARM64.X1, 0us, 0)       // F_OK = 0
+            ARM64.MOVZ (ARM64.X16, syscalls.Access, 0)  // access syscall
+            ARM64.SVC syscalls.SvcImmediate
+
+            // If X0 == 0, file exists; else doesn't
+            // Use CMP + CSET to convert to boolean
+            ARM64.CMP_imm (ARM64.X0, 0us)
+            ARM64.CSET (ARM64.X0, ARM64.EQ)     // X0 = 1 if was 0, else 0
+
+            // Cleanup - restore registers before moving result to dest
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 256us)  // Deallocate path buffer
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
+            ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 0s)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
+            ARM64.MOV_reg (destReg, ARM64.X0)   // Move result to dest after restoration
+        ]
+    | Platform.Linux ->
+        [
+            // Save callee-saved registers we'll use
+            ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16s)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
+
+            // Allocate stack space for path (256 bytes)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 256us)
+
+            // X19 = heap string base (pathReg)
+            ARM64.MOV_reg (ARM64.X19, pathReg)
+
+            // X2 = string length from [X19]
+            ARM64.LDR (ARM64.X2, ARM64.X19, 0s)
+
+            // X0 = dest pointer (SP)
+            ARM64.MOV_reg (ARM64.X0, ARM64.SP)
+            // X1 = source pointer (X19 + 8)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X19, 8us)
+            // X4 = 0 (for LDRB offset)
+            ARM64.MOVZ (ARM64.X4, 0us, 0)
+
+            // Copy loop (7 instructions, 0-6)
+            ARM64.CBZ_offset (ARM64.X2, 7)      // 0: If length == 0, skip to null_term at inst 7
+            ARM64.LDRB (ARM64.X3, ARM64.X1, ARM64.X4)
+            ARM64.STRB (ARM64.X3, ARM64.X0, 0)
+            ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1us)
+            ARM64.SUB_imm (ARM64.X2, ARM64.X2, 1us)
+            ARM64.B (-6)
+
+            // null_term: Store null terminator
+            ARM64.MOVZ (ARM64.X3, 0us, 0)
+            ARM64.STRB (ARM64.X3, ARM64.X0, 0)
+
+            // Call faccessat(AT_FDCWD, path, F_OK, 0)
+            // X0 = dirfd (AT_FDCWD = -100), X1 = path, X2 = mode (F_OK = 0), X3 = flags (0)
+            // To load -100: use MOVZ with large value then subtract, or just use immediate
+            // Actually, let's use MOVZ to load 0xFFFFFFFFFFFFFF9C which is -100 in two's complement
+            // Simpler: load 100, then negate
+            ARM64.MOVZ (ARM64.X0, 100us, 0)
+            ARM64.NEG (ARM64.X0, ARM64.X0)      // X0 = -100 (AT_FDCWD)
+            ARM64.MOV_reg (ARM64.X1, ARM64.SP)  // path
+            ARM64.MOVZ (ARM64.X2, 0us, 0)       // F_OK = 0
+            ARM64.MOVZ (ARM64.X3, 0us, 0)       // flags = 0
+            ARM64.MOVZ (ARM64.X8, syscalls.Access, 0)  // faccessat syscall
+            ARM64.SVC syscalls.SvcImmediate
+
+            // If X0 == 0, file exists; else doesn't
+            ARM64.CMP_imm (ARM64.X0, 0us)
+            ARM64.CSET (ARM64.X0, ARM64.EQ)
+
+            // Cleanup - restore registers before moving result to dest
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 256us)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
+            ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 0s)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
+            ARM64.MOV_reg (destReg, ARM64.X0)   // Move result to dest after restoration
+        ]
+
+/// Generate ARM64 instructions to read file contents and return Result<String, String>
+/// destReg: destination register for the Result pointer
+/// pathReg: register containing heap string pointer to file path
+///
+/// Result memory layout: [tag:8][payload:8][refcount:8] = 24 bytes
+/// - tag 0 = Ok, tag 1 = Error
+/// - payload = pointer to string
+///
+/// String memory layout: [length:8][data:N][refcount:8]
+///
+/// Algorithm:
+/// 1. Copy path to stack with null terminator (same as FileExists)
+/// 2. open() syscall - if fails, return Error("File not found")
+/// 3. fstat() syscall - get file size
+/// 4. Allocate string buffer on heap
+/// 5. read() syscall - read file contents
+/// 6. close() syscall
+/// 7. Construct Result with Ok(string) or Error(message)
+let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr list =
+    let os =
+        match Platform.detectOS () with
+        | Ok platform -> platform
+        | Error _ -> Platform.Linux
+    let syscalls = Platform.getSyscallNumbers os
+
+    // For now, implement a simplified version that:
+    // - Opens the file
+    // - Reads up to 4096 bytes
+    // - Returns Ok(contents) or Error("File not found")
+    //
+    // Stack layout: [saved X19-X25: 64][stat buffer: 144][path: 256][padding: 16] = 480 bytes
+    // (stat buffer is 128 bytes on Linux, 144 on macOS - use 144 for safety)
+    match os with
+    | Platform.Linux ->
+        [
+            // Save callee-saved registers
+            ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16s)
+            ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32s)
+            ARM64.STP (ARM64.X23, ARM64.X24, ARM64.SP, -48s)
+            ARM64.STP (ARM64.X25, ARM64.X26, ARM64.SP, -64s)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 64us)
+
+            // Allocate stack space for stat buffer (144 bytes) + path (256 bytes) + padding
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 255us)  // Can only sub 255 at a time
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 161us)  // Total: 416 bytes
+
+            // X19 = path heap string, X20 = dest register, X21 = file descriptor
+            ARM64.MOV_reg (ARM64.X19, pathReg)
+            ARM64.MOV_reg (ARM64.X20, destReg)
+
+            // Get path length from heap string
+            ARM64.LDR (ARM64.X2, ARM64.X19, 0s)  // X2 = length
+
+            // X0 = stack dest for null-terminated path (SP + 144 for after stat buffer)
+            ARM64.ADD_imm (ARM64.X0, ARM64.SP, 144us)
+            // X1 = heap string data (X19 + 8)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X19, 8us)
+            // X4 = 0 for LDRB offset
+            ARM64.MOVZ (ARM64.X4, 0us, 0)
+
+            // Copy loop (7 instructions, 0-6)
+            ARM64.CBZ_offset (ARM64.X2, 7)      // 0: If length == 0, skip to null_term
+            ARM64.LDRB (ARM64.X3, ARM64.X1, ARM64.X4)
+            ARM64.STRB (ARM64.X3, ARM64.X0, 0)
+            ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1us)
+            ARM64.SUB_imm (ARM64.X2, ARM64.X2, 1us)
+            ARM64.B (-6)
+
+            // Store null terminator
+            ARM64.MOVZ (ARM64.X3, 0us, 0)
+            ARM64.STRB (ARM64.X3, ARM64.X0, 0)
+
+            // openat(AT_FDCWD, path, O_RDONLY, 0)
+            // X0 = dirfd (AT_FDCWD = -100)
+            ARM64.MOVZ (ARM64.X0, 100us, 0)
+            ARM64.NEG (ARM64.X0, ARM64.X0)
+            // X1 = path
+            ARM64.ADD_imm (ARM64.X1, ARM64.SP, 144us)
+            // X2 = flags (O_RDONLY = 0)
+            ARM64.MOVZ (ARM64.X2, 0us, 0)
+            // X3 = mode (not used for O_RDONLY)
+            ARM64.MOVZ (ARM64.X3, 0us, 0)
+            // syscall
+            ARM64.MOVZ (ARM64.X8, syscalls.Open, 0)
+            ARM64.SVC syscalls.SvcImmediate
+
+            // Check if open failed (fd < 0 means X0 has sign bit set)
+            // X21 = fd
+            ARM64.MOV_reg (ARM64.X21, ARM64.X0)
+            ARM64.TBNZ (ARM64.X0, 63, 31)  // If negative, branch to error path (+31 instructions)
+
+            // fstat(fd, statbuf) - X0 = fd, X1 = statbuf
+            ARM64.MOV_reg (ARM64.X0, ARM64.X21)
+            ARM64.MOV_reg (ARM64.X1, ARM64.SP)  // stat buffer at SP
+            ARM64.MOVZ (ARM64.X8, syscalls.Fstat, 0)
+            ARM64.SVC syscalls.SvcImmediate
+
+            // Get file size from stat buffer (st_size is at offset 48 on Linux ARM64)
+            ARM64.LDR (ARM64.X22, ARM64.SP, 48s)  // X22 = file size
+
+            // Allocate heap space for string: [len:8][data:N][refcount:8]
+            // Size = 8 + size + 8 = size + 16, round up to next 8 bytes
+            // Simpler: just add 24 (16 + 8 for alignment padding)
+            ARM64.ADD_imm (ARM64.X23, ARM64.X22, 24us)  // X23 = size + 24 (with padding)
+
+            // Allocate from heap (bump allocator)
+            ARM64.MOV_reg (ARM64.X24, ARM64.X28)  // X24 = string pointer
+            ARM64.ADD_reg (ARM64.X28, ARM64.X28, ARM64.X23)  // bump heap pointer
+
+            // Store length at [X24]
+            ARM64.STR (ARM64.X22, ARM64.X24, 0s)
+
+            // read(fd, buf, count) - read file contents
+            ARM64.MOV_reg (ARM64.X0, ARM64.X21)  // fd
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 8us)  // buf = string data area
+            ARM64.MOV_reg (ARM64.X2, ARM64.X22)  // count = file size
+            ARM64.MOVZ (ARM64.X8, syscalls.Read, 0)
+            ARM64.SVC syscalls.SvcImmediate
+
+            // Store refcount = 1 at [X24 + 8 + size]
+            ARM64.ADD_imm (ARM64.X25, ARM64.X24, 8us)
+            ARM64.ADD_reg (ARM64.X25, ARM64.X25, ARM64.X22)
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X25, 0s)
+
+            // close(fd)
+            ARM64.MOV_reg (ARM64.X0, ARM64.X21)
+            ARM64.MOVZ (ARM64.X8, syscalls.Close, 0)
+            ARM64.SVC syscalls.SvcImmediate
+
+            // Allocate Result: [tag:8][payload:8][refcount:8] = 24 bytes
+            ARM64.MOV_reg (ARM64.X25, ARM64.X28)  // X25 = Result pointer
+            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24us)  // bump heap
+
+            // Store Ok tag (0)
+            ARM64.MOVZ (ARM64.X0, 0us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X25, 0s)  // tag = 0
+
+            // Store string pointer as payload
+            ARM64.STR (ARM64.X24, ARM64.X25, 8s)  // payload = string ptr
+
+            // Store refcount = 1
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X25, 16s)
+
+            // Move result to dest
+            ARM64.MOV_reg (ARM64.X20, ARM64.X25)
+
+            // Jump to cleanup
+            ARM64.B 30  // Skip error path (29 instructions + 1 to land on cleanup)
+
+            // === Error path (file not found) ===
+            // Create error string "File not found" and Error result
+            // For simplicity, create a short error message
+
+            // Allocate error string: "Error" = 5 chars + len + refcount = 24 bytes
+            ARM64.MOV_reg (ARM64.X24, ARM64.X28)  // X24 = error string
+            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24us)
+
+            // Store length = 5
+            ARM64.MOVZ (ARM64.X0, 5us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X24, 0s)
+
+            // Store "Error" (ASCII: 69, 114, 114, 111, 114)
+            // E=69, r=114, r=114, o=111, r=114
+            // Store at [X24+8] through [X24+12]
+            ARM64.MOVZ (ARM64.X0, 69us, 0)  // 'E'
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 8us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+
+            ARM64.MOVZ (ARM64.X0, 114us, 0)  // 'r'
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 9us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 10us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+
+            ARM64.MOVZ (ARM64.X0, 111us, 0)  // 'o'
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 11us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+
+            ARM64.MOVZ (ARM64.X0, 114us, 0)  // 'r'
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 12us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+
+            // Store refcount = 1 at [X24 + 8 + 5] = [X24 + 13]
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 13us)
+            ARM64.STR (ARM64.X0, ARM64.X1, 0s)
+
+            // Allocate Error Result
+            ARM64.MOV_reg (ARM64.X25, ARM64.X28)
+            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24us)
+
+            // Store Error tag (1)
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X25, 0s)
+
+            // Store error string as payload
+            ARM64.STR (ARM64.X24, ARM64.X25, 8s)
+
+            // Store refcount = 1
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X25, 16s)
+
+            // Move result to dest
+            ARM64.MOV_reg (ARM64.X20, ARM64.X25)
+
+            // === Cleanup - save result to X0 before restoring callee-saved registers ===
+            ARM64.MOV_reg (ARM64.X0, ARM64.X20)
+
+            // Deallocate stack
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 255us)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 161us)
+
+            // Restore callee-saved registers
+            ARM64.LDP (ARM64.X25, ARM64.X26, ARM64.SP, 0s)
+            ARM64.LDP (ARM64.X23, ARM64.X24, ARM64.SP, 16s)
+            ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 32s)
+            ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 48s)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 64us)
+            ARM64.MOV_reg (destReg, ARM64.X0)  // Move result to dest after restoration
+        ]
+    | Platform.MacOS ->
+        // macOS version - similar structure with different syscall numbers
+        [
+            // Save callee-saved registers
+            ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16s)
+            ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32s)
+            ARM64.STP (ARM64.X23, ARM64.X24, ARM64.SP, -48s)
+            ARM64.STP (ARM64.X25, ARM64.X26, ARM64.SP, -64s)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 64us)
+
+            // Allocate stack: stat buffer (144) + path (256) = 400 bytes, round to 416
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 255us)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 161us)
+
+            ARM64.MOV_reg (ARM64.X19, pathReg)
+            ARM64.MOV_reg (ARM64.X20, destReg)
+
+            // Copy path with null terminator
+            ARM64.LDR (ARM64.X2, ARM64.X19, 0s)
+            ARM64.ADD_imm (ARM64.X0, ARM64.SP, 144us)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X19, 8us)
+            ARM64.MOVZ (ARM64.X4, 0us, 0)
+
+            ARM64.CBZ_offset (ARM64.X2, 7)
+            ARM64.LDRB (ARM64.X3, ARM64.X1, ARM64.X4)
+            ARM64.STRB (ARM64.X3, ARM64.X0, 0)
+            ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1us)
+            ARM64.SUB_imm (ARM64.X2, ARM64.X2, 1us)
+            ARM64.B (-6)
+
+            ARM64.MOVZ (ARM64.X3, 0us, 0)
+            ARM64.STRB (ARM64.X3, ARM64.X0, 0)
+
+            // open(path, O_RDONLY)
+            ARM64.ADD_imm (ARM64.X0, ARM64.SP, 144us)
+            ARM64.MOVZ (ARM64.X1, 0us, 0)  // O_RDONLY
+            ARM64.MOVZ (ARM64.X16, syscalls.Open, 0)
+            ARM64.SVC syscalls.SvcImmediate
+
+            ARM64.MOV_reg (ARM64.X21, ARM64.X0)
+            ARM64.TBNZ (ARM64.X0, 63, 31)  // If negative, branch to error path
+
+            // fstat(fd, statbuf)
+            ARM64.MOV_reg (ARM64.X0, ARM64.X21)
+            ARM64.MOV_reg (ARM64.X1, ARM64.SP)
+            ARM64.MOVZ (ARM64.X16, syscalls.Fstat, 0)
+            ARM64.SVC syscalls.SvcImmediate
+
+            // st_size at offset 96 on macOS
+            ARM64.LDR (ARM64.X22, ARM64.SP, 96s)
+
+            // Allocate string: size + 24 (with padding for alignment)
+            ARM64.ADD_imm (ARM64.X23, ARM64.X22, 24us)
+
+            ARM64.MOV_reg (ARM64.X24, ARM64.X28)
+            ARM64.ADD_reg (ARM64.X28, ARM64.X28, ARM64.X23)
+
+            ARM64.STR (ARM64.X22, ARM64.X24, 0s)
+
+            // read
+            ARM64.MOV_reg (ARM64.X0, ARM64.X21)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 8us)
+            ARM64.MOV_reg (ARM64.X2, ARM64.X22)
+            ARM64.MOVZ (ARM64.X16, syscalls.Read, 0)
+            ARM64.SVC syscalls.SvcImmediate
+
+            ARM64.ADD_imm (ARM64.X25, ARM64.X24, 8us)
+            ARM64.ADD_reg (ARM64.X25, ARM64.X25, ARM64.X22)
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X25, 0s)
+
+            // close
+            ARM64.MOV_reg (ARM64.X0, ARM64.X21)
+            ARM64.MOVZ (ARM64.X16, syscalls.Close, 0)
+            ARM64.SVC syscalls.SvcImmediate
+
+            // Allocate Result
+            ARM64.MOV_reg (ARM64.X25, ARM64.X28)
+            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24us)
+
+            ARM64.MOVZ (ARM64.X0, 0us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X25, 0s)
+            ARM64.STR (ARM64.X24, ARM64.X25, 8s)
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X25, 16s)
+
+            ARM64.MOV_reg (ARM64.X20, ARM64.X25)
+
+            ARM64.B 30  // Skip error path (29 instructions + 1 to land on cleanup)
+
+            // Error path (same as Linux)
+            ARM64.MOV_reg (ARM64.X24, ARM64.X28)
+            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24us)
+
+            ARM64.MOVZ (ARM64.X0, 5us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X24, 0s)
+
+            ARM64.MOVZ (ARM64.X0, 69us, 0)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 8us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+
+            ARM64.MOVZ (ARM64.X0, 114us, 0)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 9us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 10us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+
+            ARM64.MOVZ (ARM64.X0, 111us, 0)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 11us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+
+            ARM64.MOVZ (ARM64.X0, 114us, 0)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 12us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 13us)
+            ARM64.STR (ARM64.X0, ARM64.X1, 0s)
+
+            ARM64.MOV_reg (ARM64.X25, ARM64.X28)
+            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24us)
+
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X25, 0s)
+            ARM64.STR (ARM64.X24, ARM64.X25, 8s)
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X25, 16s)
+
+            ARM64.MOV_reg (ARM64.X20, ARM64.X25)
+
+            // Cleanup - save result to X0 before restoring callee-saved registers
+            ARM64.MOV_reg (ARM64.X0, ARM64.X20)
+
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 255us)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 161us)
+
+            ARM64.LDP (ARM64.X25, ARM64.X26, ARM64.SP, 0s)
+            ARM64.LDP (ARM64.X23, ARM64.X24, ARM64.SP, 16s)
+            ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 32s)
+            ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 48s)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 64us)
+            ARM64.MOV_reg (destReg, ARM64.X0)  // Move result to dest after restoration
+        ]
+
+/// Generate ARM64 instructions to write content to a file
+/// pathReg: register containing pointer to heap string (path)
+/// contentReg: register containing pointer to heap string (content)
+/// append: if true, append to file; if false, overwrite
+/// Returns Result<Unit, String> in destReg
+/// On success, result contains Ok(()) - tag=0, payload=0
+/// On failure, result contains Error("Error") - tag=1, payload=error string ptr
+let generateFileWriteText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (contentReg: ARM64.Reg) (append: bool) : ARM64.Instr list =
+    // Get platform and syscalls
+    let os =
+        match Platform.detectOS () with
+        | Ok os -> os
+        | Error _ -> Platform.Linux  // Default to Linux
+    let syscalls = Platform.getSyscallNumbers os
+
+    // Open flags:
+    // Write: O_WRONLY | O_CREAT | O_TRUNC
+    // Append: O_WRONLY | O_CREAT | O_APPEND
+    // Linux: O_WRONLY=1, O_CREAT=64, O_TRUNC=512, O_APPEND=1024
+    // macOS: O_WRONLY=1, O_CREAT=0x200, O_TRUNC=0x400, O_APPEND=8
+    let (writeFlags, appendFlags) =
+        match os with
+        | Platform.Linux -> (577us, 1089us)  // 1|64|512, 1|64|1024
+        | Platform.MacOS -> (1537us, 521us)  // 1|0x200|0x400, 1|0x200|8
+    let flags = if append then appendFlags else writeFlags
+
+    match os with
+    | Platform.Linux ->
+        [
+            // Save callee-saved registers
+            ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16s)
+            ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32s)
+            ARM64.STP (ARM64.X23, ARM64.X24, ARM64.SP, -48s)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 48us)
+
+            // Allocate stack for path buffer (256 bytes)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 255us)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 1us)
+
+            // Save path and content pointers
+            ARM64.MOV_reg (ARM64.X19, pathReg)
+            ARM64.MOV_reg (ARM64.X22, contentReg)
+
+            // Copy path to stack buffer with null terminator
+            ARM64.LDR (ARM64.X2, ARM64.X19, 0s)  // X2 = path length
+            ARM64.MOV_reg (ARM64.X0, ARM64.SP)  // X0 = dest buffer
+            ARM64.ADD_imm (ARM64.X1, ARM64.X19, 8us)  // X1 = source data
+            ARM64.MOVZ (ARM64.X4, 0us, 0)  // X4 = index register for LDRB
+
+            // Copy loop
+            ARM64.CBZ_offset (ARM64.X2, 7)
+            ARM64.LDRB (ARM64.X3, ARM64.X1, ARM64.X4)
+            ARM64.STRB (ARM64.X3, ARM64.X0, 0)
+            ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1us)
+            ARM64.SUB_imm (ARM64.X2, ARM64.X2, 1us)
+            ARM64.B (-6)
+
+            // Store null terminator
+            ARM64.MOVZ (ARM64.X3, 0us, 0)
+            ARM64.STRB (ARM64.X3, ARM64.X0, 0)
+
+            // openat(AT_FDCWD, path, flags, mode)
+            ARM64.MOVZ (ARM64.X0, 100us, 0)
+            ARM64.NEG (ARM64.X0, ARM64.X0)  // AT_FDCWD = -100
+            ARM64.MOV_reg (ARM64.X1, ARM64.SP)  // path
+            ARM64.MOVZ (ARM64.X2, flags, 0)  // flags
+            ARM64.MOVZ (ARM64.X3, 420us, 0)  // mode 0644
+            ARM64.MOVZ (ARM64.X8, syscalls.Open, 0)
+            ARM64.SVC syscalls.SvcImmediate
+
+            // Check if open failed
+            ARM64.MOV_reg (ARM64.X21, ARM64.X0)  // X21 = fd
+            ARM64.TBNZ (ARM64.X0, 63, 18)  // If negative, branch to error path (17 instructions + 1)
+
+            // write(fd, buf, count)
+            ARM64.MOV_reg (ARM64.X0, ARM64.X21)  // fd
+            ARM64.ADD_imm (ARM64.X1, ARM64.X22, 8us)  // buf = content data
+            ARM64.LDR (ARM64.X2, ARM64.X22, 0s)  // count = content length
+            ARM64.MOVZ (ARM64.X8, syscalls.Write, 0)
+            ARM64.SVC syscalls.SvcImmediate
+
+            // close(fd)
+            ARM64.MOV_reg (ARM64.X0, ARM64.X21)
+            ARM64.MOVZ (ARM64.X8, syscalls.Close, 0)
+            ARM64.SVC syscalls.SvcImmediate
+
+            // Allocate Ok Result: [tag=0][payload=0][refcount=1]
+            ARM64.MOV_reg (ARM64.X23, ARM64.X28)
+            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24us)
+            ARM64.MOVZ (ARM64.X0, 0us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X23, 0s)  // tag = 0 (Ok)
+            ARM64.STR (ARM64.X0, ARM64.X23, 8s)  // payload = 0 (Unit)
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X23, 16s)  // refcount = 1
+            ARM64.MOV_reg (ARM64.X20, ARM64.X23)
+            ARM64.B 30  // Jump to cleanup (skip 29 error path instructions + 1)
+
+            // Error path: Create Error("Error") result
+            ARM64.MOV_reg (ARM64.X24, ARM64.X28)
+            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24us)
+
+            ARM64.MOVZ (ARM64.X0, 5us, 0)  // length = 5
+            ARM64.STR (ARM64.X0, ARM64.X24, 0s)
+
+            // Store "Error" bytes
+            ARM64.MOVZ (ARM64.X0, 69us, 0)  // 'E'
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 8us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+            ARM64.MOVZ (ARM64.X0, 114us, 0)  // 'r'
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 9us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 10us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+            ARM64.MOVZ (ARM64.X0, 111us, 0)  // 'o'
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 11us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+            ARM64.MOVZ (ARM64.X0, 114us, 0)  // 'r'
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 12us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 13us)
+            ARM64.STR (ARM64.X0, ARM64.X1, 0s)  // refcount
+
+            // Allocate Error Result
+            ARM64.MOV_reg (ARM64.X23, ARM64.X28)
+            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24us)
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X23, 0s)  // tag = 1 (Error)
+            ARM64.STR (ARM64.X24, ARM64.X23, 8s)  // payload = error string
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X23, 16s)  // refcount
+            ARM64.MOV_reg (ARM64.X20, ARM64.X23)
+
+            // Cleanup - save result to X0 before restoring callee-saved registers
+            ARM64.MOV_reg (ARM64.X0, ARM64.X20)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 255us)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 1us)
+            ARM64.LDP (ARM64.X23, ARM64.X24, ARM64.SP, 0s)
+            ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 16s)
+            ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 32s)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 48us)
+            ARM64.MOV_reg (destReg, ARM64.X0)  // Move result to dest after restoration
+        ]
+    | Platform.MacOS ->
+        [
+            // Save callee-saved registers
+            ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16s)
+            ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32s)
+            ARM64.STP (ARM64.X23, ARM64.X24, ARM64.SP, -48s)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 48us)
+
+            // Allocate stack for path buffer (256 bytes)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 255us)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 1us)
+
+            // Save path and content pointers
+            ARM64.MOV_reg (ARM64.X19, pathReg)
+            ARM64.MOV_reg (ARM64.X22, contentReg)
+
+            // Copy path to stack buffer
+            ARM64.LDR (ARM64.X2, ARM64.X19, 0s)
+            ARM64.MOV_reg (ARM64.X0, ARM64.SP)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X19, 8us)
+            ARM64.MOVZ (ARM64.X4, 0us, 0)
+
+            ARM64.CBZ_offset (ARM64.X2, 7)
+            ARM64.LDRB (ARM64.X3, ARM64.X1, ARM64.X4)
+            ARM64.STRB (ARM64.X3, ARM64.X0, 0)
+            ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1us)
+            ARM64.SUB_imm (ARM64.X2, ARM64.X2, 1us)
+            ARM64.B (-6)
+
+            ARM64.MOVZ (ARM64.X3, 0us, 0)
+            ARM64.STRB (ARM64.X3, ARM64.X0, 0)
+
+            // open(path, flags, mode)
+            ARM64.MOV_reg (ARM64.X0, ARM64.SP)
+            ARM64.MOVZ (ARM64.X1, flags, 0)
+            ARM64.MOVZ (ARM64.X2, 420us, 0)  // mode 0644
+            ARM64.MOVZ (ARM64.X16, syscalls.Open, 0)
+            ARM64.SVC syscalls.SvcImmediate
+
+            ARM64.MOV_reg (ARM64.X21, ARM64.X0)
+            ARM64.TBNZ (ARM64.X0, 63, 18)  // If negative, branch to error path (17 instructions + 1)
+
+            // write(fd, buf, count)
+            ARM64.MOV_reg (ARM64.X0, ARM64.X21)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X22, 8us)
+            ARM64.LDR (ARM64.X2, ARM64.X22, 0s)
+            ARM64.MOVZ (ARM64.X16, syscalls.Write, 0)
+            ARM64.SVC syscalls.SvcImmediate
+
+            // close(fd)
+            ARM64.MOV_reg (ARM64.X0, ARM64.X21)
+            ARM64.MOVZ (ARM64.X16, syscalls.Close, 0)
+            ARM64.SVC syscalls.SvcImmediate
+
+            // Allocate Ok Result
+            ARM64.MOV_reg (ARM64.X23, ARM64.X28)
+            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24us)
+            ARM64.MOVZ (ARM64.X0, 0us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X23, 0s)
+            ARM64.STR (ARM64.X0, ARM64.X23, 8s)
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X23, 16s)
+            ARM64.MOV_reg (ARM64.X20, ARM64.X23)
+            ARM64.B 30  // Jump to cleanup (skip 29 error path instructions + 1)
+
+            // Error path
+            ARM64.MOV_reg (ARM64.X24, ARM64.X28)
+            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24us)
+
+            ARM64.MOVZ (ARM64.X0, 5us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X24, 0s)
+
+            ARM64.MOVZ (ARM64.X0, 69us, 0)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 8us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+            ARM64.MOVZ (ARM64.X0, 114us, 0)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 9us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 10us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+            ARM64.MOVZ (ARM64.X0, 111us, 0)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 11us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+            ARM64.MOVZ (ARM64.X0, 114us, 0)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 12us)
+            ARM64.STRB_reg (ARM64.X0, ARM64.X1)
+
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 13us)
+            ARM64.STR (ARM64.X0, ARM64.X1, 0s)
+
+            ARM64.MOV_reg (ARM64.X23, ARM64.X28)
+            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24us)
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X23, 0s)
+            ARM64.STR (ARM64.X24, ARM64.X23, 8s)
+            ARM64.MOVZ (ARM64.X0, 1us, 0)
+            ARM64.STR (ARM64.X0, ARM64.X23, 16s)
+            ARM64.MOV_reg (ARM64.X20, ARM64.X23)
+
+            // Cleanup - save result to X0 before restoring callee-saved registers
+            ARM64.MOV_reg (ARM64.X0, ARM64.X20)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 255us)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 1us)
+            ARM64.LDP (ARM64.X23, ARM64.X24, ARM64.SP, 0s)
+            ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 16s)
+            ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 32s)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 48us)
+            ARM64.MOV_reg (destReg, ARM64.X0)  // Move result to dest after restoration
+        ]

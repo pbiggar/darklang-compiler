@@ -93,6 +93,10 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
         captures |> List.map maxTempIdInAtom |> List.fold max -1
     | ANF.ClosureCall (closure, args) ->
         max (maxTempIdInAtom closure) (args |> List.map maxTempIdInAtom |> List.fold max -1)
+    | ANF.FileReadText path -> maxTempIdInAtom path
+    | ANF.FileExists path -> maxTempIdInAtom path
+    | ANF.FileWriteText (path, content) -> max (maxTempIdInAtom path) (maxTempIdInAtom content)
+    | ANF.FileAppendText (path, content) -> max (maxTempIdInAtom path) (maxTempIdInAtom content)
 
 /// Find the maximum TempId in an AExpr
 let rec maxTempIdInAExpr (expr: ANF.AExpr) : int =
@@ -160,6 +164,10 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.ClosureAlloc (_, captures) -> captures |> List.collect collectStringsFromAtom
     | ANF.ClosureCall (closure, args) ->
         collectStringsFromAtom closure @ (args |> List.collect collectStringsFromAtom)
+    | ANF.FileReadText path -> collectStringsFromAtom path
+    | ANF.FileExists path -> collectStringsFromAtom path
+    | ANF.FileWriteText (path, content) -> collectStringsFromAtom path @ collectStringsFromAtom content
+    | ANF.FileAppendText (path, content) -> collectStringsFromAtom path @ collectStringsFromAtom content
 
 /// Collect all float literals from a CExpr
 let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
@@ -188,6 +196,10 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
     | ANF.ClosureAlloc (_, captures) -> captures |> List.collect collectFloatsFromAtom
     | ANF.ClosureCall (closure, args) ->
         collectFloatsFromAtom closure @ (args |> List.collect collectFloatsFromAtom)
+    | ANF.FileReadText path -> collectFloatsFromAtom path
+    | ANF.FileExists path -> collectFloatsFromAtom path
+    | ANF.FileWriteText (path, content) -> collectFloatsFromAtom path @ collectFloatsFromAtom content
+    | ANF.FileAppendText (path, content) -> collectFloatsFromAtom path @ collectFloatsFromAtom content
 
 /// Collect all string literals from an ANF expression
 let rec collectStringsFromExpr (expr: ANF.AExpr) : string list =
@@ -472,6 +484,24 @@ let rec convertExpr
                         atomToOperand builder rightAtom
                         |> Result.map (fun rightOp ->
                             [MIR.StringConcat (destReg, leftOp, rightOp)]))
+                | ANF.FileReadText pathAtom ->
+                    atomToOperand builder pathAtom
+                    |> Result.map (fun pathOp -> [MIR.FileReadText (destReg, pathOp)])
+                | ANF.FileExists pathAtom ->
+                    atomToOperand builder pathAtom
+                    |> Result.map (fun pathOp -> [MIR.FileExists (destReg, pathOp)])
+                | ANF.FileWriteText (pathAtom, contentAtom) ->
+                    atomToOperand builder pathAtom
+                    |> Result.bind (fun pathOp ->
+                        atomToOperand builder contentAtom
+                        |> Result.map (fun contentOp ->
+                            [MIR.FileWriteText (destReg, pathOp, contentOp)]))
+                | ANF.FileAppendText (pathAtom, contentAtom) ->
+                    atomToOperand builder pathAtom
+                    |> Result.bind (fun pathOp ->
+                        atomToOperand builder contentAtom
+                        |> Result.map (fun contentOp ->
+                            [MIR.FileAppendText (destReg, pathOp, contentOp)]))
 
             match instrsResult with
             | Error err -> Error err
@@ -758,6 +788,24 @@ and convertExprToOperand
                         atomToOperand builder rightAtom
                         |> Result.map (fun rightOp ->
                             [MIR.StringConcat (destReg, leftOp, rightOp)]))
+                | ANF.FileReadText pathAtom ->
+                    atomToOperand builder pathAtom
+                    |> Result.map (fun pathOp -> [MIR.FileReadText (destReg, pathOp)])
+                | ANF.FileExists pathAtom ->
+                    atomToOperand builder pathAtom
+                    |> Result.map (fun pathOp -> [MIR.FileExists (destReg, pathOp)])
+                | ANF.FileWriteText (pathAtom, contentAtom) ->
+                    atomToOperand builder pathAtom
+                    |> Result.bind (fun pathOp ->
+                        atomToOperand builder contentAtom
+                        |> Result.map (fun contentOp ->
+                            [MIR.FileWriteText (destReg, pathOp, contentOp)]))
+                | ANF.FileAppendText (pathAtom, contentAtom) ->
+                    atomToOperand builder pathAtom
+                    |> Result.bind (fun pathOp ->
+                        atomToOperand builder contentAtom
+                        |> Result.map (fun contentOp ->
+                            [MIR.FileAppendText (destReg, pathOp, contentOp)]))
 
             // Let bindings accumulate instructions, pass through join label
             match instrsResult with

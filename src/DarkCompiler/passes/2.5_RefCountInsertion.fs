@@ -117,6 +117,10 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | RefCountInc (_, _) -> Some AST.TUnit
     | RefCountDec (_, _) -> Some AST.TUnit
     | Print (_, valueType) -> Some valueType  // Print returns the type it prints
+    | FileReadText _ -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TString; AST.TString]))  // Result<String, String>
+    | FileExists _ -> Some AST.TBool  // Bool
+    | FileWriteText _ -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
+    | FileAppendText _ -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
 
 /// Check if an atom is returned in the expression
 let rec isAtomReturned (atom: Atom) (expr: AExpr) : bool =

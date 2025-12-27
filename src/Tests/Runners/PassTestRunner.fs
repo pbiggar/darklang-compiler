@@ -190,6 +190,14 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"PrintHeapString({prettyPrintLIRReg reg})"
     | LIR.LoadFuncAddr (dest, funcName) ->
         $"{prettyPrintLIRReg dest} <- LoadFuncAddr({funcName})"
+    | LIR.FileReadText (dest, path) ->
+        $"{prettyPrintLIRReg dest} <- FileReadText({prettyPrintLIROperand path})"
+    | LIR.FileExists (dest, path) ->
+        $"{prettyPrintLIRReg dest} <- FileExists({prettyPrintLIROperand path})"
+    | LIR.FileWriteText (dest, path, content) ->
+        $"{prettyPrintLIRReg dest} <- FileWriteText({prettyPrintLIROperand path}, {prettyPrintLIROperand content})"
+    | LIR.FileAppendText (dest, path, content) ->
+        $"{prettyPrintLIRReg dest} <- FileAppendText({prettyPrintLIROperand path}, {prettyPrintLIROperand content})"
     | LIR.Exit -> "Exit"
 
 /// Pretty-print LIR terminator
@@ -321,6 +329,14 @@ let prettyPrintANFCExpr = function
         $"{prettyPrintANFAtom left} ++ {prettyPrintANFAtom right}"
     | ANF.Print (atom, valueType) ->
         $"print({prettyPrintANFAtom atom}, type={valueType})"
+    | ANF.FileReadText path ->
+        $"FileReadText({prettyPrintANFAtom path})"
+    | ANF.FileExists path ->
+        $"FileExists({prettyPrintANFAtom path})"
+    | ANF.FileWriteText (path, content) ->
+        $"FileWriteText({prettyPrintANFAtom path}, {prettyPrintANFAtom content})"
+    | ANF.FileAppendText (path, content) ->
+        $"FileAppendText({prettyPrintANFAtom path}, {prettyPrintANFAtom content})"
 
 /// Pretty-print ANF expression (recursive)
 let rec prettyPrintANFExpr = function

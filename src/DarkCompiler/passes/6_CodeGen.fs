@@ -1005,6 +1005,207 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         |> Result.map (fun destReg ->
             [ARM64.ADR (destReg, funcName)])
 
+    | LIR.FileReadText (dest, path) ->
+        // File reading: generates syscall sequence to read file contents
+        // Returns Result<String, String>
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            match path with
+            | LIR.Reg pathReg ->
+                // Already a heap string pointer
+                lirRegToARM64Reg pathReg
+                |> Result.map (fun pathARM64 ->
+                    Runtime.generateFileReadText destReg pathARM64)
+            | LIR.StringRef idx ->
+                // Pool string - convert to heap format first (same as FileExists)
+                match Map.tryFind idx ctx.StringPool.Strings with
+                | Some (_, len) ->
+                    let label = sprintf "str_%d" idx
+                    let totalSize = ((len + 16) + 7) &&& (~~~7)
+                    Ok ([
+                        ARM64.MOV_reg (ARM64.X15, ARM64.X28)
+                        ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)
+                        ARM64.ADRP (ARM64.X9, label)
+                        ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                    ] @ loadImmediate ARM64.X10 (int64 len) @ [
+                        ARM64.STR (ARM64.X10, ARM64.X15, 0s)
+                        ARM64.MOVZ (ARM64.X0, 0us, 0)
+                    ] @ loadImmediate ARM64.X11 (int64 len) @ [
+                        ARM64.CMP_reg (ARM64.X0, ARM64.X11)
+                        ARM64.B_cond (ARM64.GE, 7)
+                        ARM64.LDRB (ARM64.X12, ARM64.X9, ARM64.X0)
+                        ARM64.ADD_imm (ARM64.X13, ARM64.X15, 8us)
+                        ARM64.ADD_reg (ARM64.X13, ARM64.X13, ARM64.X0)
+                        ARM64.STRB_reg (ARM64.X12, ARM64.X13)
+                        ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)
+                        ARM64.B (-7)
+                        ARM64.ADD_imm (ARM64.X13, ARM64.X15, 8us)
+                        ARM64.ADD_reg (ARM64.X13, ARM64.X13, ARM64.X10)
+                        ARM64.MOVZ (ARM64.X12, 1us, 0)
+                        ARM64.STR (ARM64.X12, ARM64.X13, 0s)
+                    ] @ Runtime.generateFileReadText destReg ARM64.X15)
+                | None -> Error $"String index {idx} not found in pool"
+            | LIR.StackSlot offset ->
+                loadStackSlot ARM64.X15 offset
+                |> Result.map (fun loadInstrs ->
+                    loadInstrs @ Runtime.generateFileReadText destReg ARM64.X15)
+            | _ -> Error "FileReadText requires string operand")
+
+    | LIR.FileExists (dest, path) ->
+        // File exists check: generates syscall sequence to check file accessibility
+        // Uses access/faccessat syscall to check if path exists
+        // Path can be either a Reg (heap string pointer) or StringRef (pool string)
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            match path with
+            | LIR.Reg pathReg ->
+                // Already a heap string pointer
+                lirRegToARM64Reg pathReg
+                |> Result.map (fun pathARM64 ->
+                    Runtime.generateFileExists destReg pathARM64)
+            | LIR.StringRef idx ->
+                // Pool string - convert to heap format first, then call FileExists
+                // Heap format: [length:8][data:N][refcount:8]
+                match Map.tryFind idx ctx.StringPool.Strings with
+                | Some (_, len) ->
+                    let label = sprintf "str_%d" idx
+                    let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
+                    // Use X15 as temp to hold heap string pointer
+                    Ok ([
+                        // Allocate heap space for converted string
+                        ARM64.MOV_reg (ARM64.X15, ARM64.X28)  // X15 = heap pointer
+                        ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)  // bump allocator
+                        // Load pool string address into X9
+                        ARM64.ADRP (ARM64.X9, label)
+                        ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                        // Store length at [X15]
+                    ] @ loadImmediate ARM64.X10 (int64 len) @ [
+                        ARM64.STR (ARM64.X10, ARM64.X15, 0s)  // [X15] = length
+                        // Copy bytes from pool string to heap
+                        ARM64.MOVZ (ARM64.X0, 0us, 0)  // X0 = loop counter
+                    ] @ loadImmediate ARM64.X11 (int64 len) @ [
+                        // Copy loop
+                        ARM64.CMP_reg (ARM64.X0, ARM64.X11)
+                        ARM64.B_cond (ARM64.GE, 7)  // Exit if counter >= len
+                        ARM64.LDRB (ARM64.X12, ARM64.X9, ARM64.X0)  // X12 = pool[X0]
+                        ARM64.ADD_imm (ARM64.X13, ARM64.X15, 8us)  // X13 = X15 + 8
+                        ARM64.ADD_reg (ARM64.X13, ARM64.X13, ARM64.X0)  // X13 = X15 + 8 + X0
+                        ARM64.STRB_reg (ARM64.X12, ARM64.X13)  // [X13] = byte
+                        ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)  // X0++
+                        ARM64.B (-7)  // Loop back
+                        // Store refcount = 1 at [X15 + 8 + len]
+                        ARM64.ADD_imm (ARM64.X13, ARM64.X15, 8us)
+                        ARM64.ADD_reg (ARM64.X13, ARM64.X13, ARM64.X10)  // X13 = X15 + 8 + len
+                        ARM64.MOVZ (ARM64.X12, 1us, 0)
+                        ARM64.STR (ARM64.X12, ARM64.X13, 0s)  // [X13] = 1
+                    ] @ Runtime.generateFileExists destReg ARM64.X15)
+                | None -> Error $"String index {idx} not found in pool"
+            | LIR.StackSlot offset ->
+                // Load heap string from stack slot
+                loadStackSlot ARM64.X15 offset
+                |> Result.map (fun loadInstrs ->
+                    loadInstrs @ Runtime.generateFileExists destReg ARM64.X15)
+            | _ -> Error "FileExists requires string operand")
+
+    | LIR.FileWriteText (dest, path, content) ->
+        // File write: writes content string to file at path
+        // Returns Result<Unit, String>
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            // Helper to get operand into a register
+            let getOperandReg operand tempReg =
+                match operand with
+                | LIR.Reg reg ->
+                    lirRegToARM64Reg reg |> Result.map (fun r -> ([], r))
+                | LIR.StringRef idx ->
+                    // Pool string - convert to heap format
+                    match Map.tryFind idx ctx.StringPool.Strings with
+                    | Some (_, len) ->
+                        let label = sprintf "str_%d" idx
+                        let totalSize = ((len + 16) + 7) &&& (~~~7)
+                        Ok ([
+                            ARM64.MOV_reg (tempReg, ARM64.X28)
+                            ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)
+                            ARM64.ADRP (ARM64.X9, label)
+                            ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                        ] @ loadImmediate ARM64.X10 (int64 len) @ [
+                            ARM64.STR (ARM64.X10, tempReg, 0s)
+                            ARM64.MOVZ (ARM64.X0, 0us, 0)
+                        ] @ loadImmediate ARM64.X11 (int64 len) @ [
+                            ARM64.CMP_reg (ARM64.X0, ARM64.X11)
+                            ARM64.B_cond (ARM64.GE, 7)
+                            ARM64.LDRB (ARM64.X12, ARM64.X9, ARM64.X0)
+                            ARM64.ADD_imm (ARM64.X13, tempReg, 8us)
+                            ARM64.ADD_reg (ARM64.X13, ARM64.X13, ARM64.X0)
+                            ARM64.STRB_reg (ARM64.X12, ARM64.X13)
+                            ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)
+                            ARM64.B (-7)  // Jump back to CMP
+                            // Store refcount = 1 at [tempReg + 8 + len]
+                            ARM64.ADD_imm (ARM64.X13, tempReg, 8us)
+                            ARM64.ADD_reg (ARM64.X13, ARM64.X13, ARM64.X10)
+                            ARM64.MOVZ (ARM64.X12, 1us, 0)
+                            ARM64.STR (ARM64.X12, ARM64.X13, 0s)
+                        ], tempReg)
+                    | None -> Error $"String index {idx} not found in pool"
+                | LIR.StackSlot offset ->
+                    loadStackSlot tempReg offset |> Result.map (fun instrs -> (instrs, tempReg))
+                | _ -> Error "FileWriteText requires string operands"
+
+            getOperandReg path ARM64.X15
+            |> Result.bind (fun (pathInstrs, pathReg) ->
+                getOperandReg content ARM64.X14
+                |> Result.map (fun (contentInstrs, contentReg) ->
+                    pathInstrs @ contentInstrs @ Runtime.generateFileWriteText destReg pathReg contentReg false)))
+
+    | LIR.FileAppendText (dest, path, content) ->
+        // File append: appends content string to file at path
+        // Returns Result<Unit, String>
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            // Same helper as FileWriteText
+            let getOperandReg operand tempReg =
+                match operand with
+                | LIR.Reg reg ->
+                    lirRegToARM64Reg reg |> Result.map (fun r -> ([], r))
+                | LIR.StringRef idx ->
+                    match Map.tryFind idx ctx.StringPool.Strings with
+                    | Some (_, len) ->
+                        let label = sprintf "str_%d" idx
+                        let totalSize = ((len + 16) + 7) &&& (~~~7)
+                        Ok ([
+                            ARM64.MOV_reg (tempReg, ARM64.X28)
+                            ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)
+                            ARM64.ADRP (ARM64.X9, label)
+                            ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                        ] @ loadImmediate ARM64.X10 (int64 len) @ [
+                            ARM64.STR (ARM64.X10, tempReg, 0s)
+                            ARM64.MOVZ (ARM64.X0, 0us, 0)
+                        ] @ loadImmediate ARM64.X11 (int64 len) @ [
+                            ARM64.CMP_reg (ARM64.X0, ARM64.X11)
+                            ARM64.B_cond (ARM64.GE, 7)
+                            ARM64.LDRB (ARM64.X12, ARM64.X9, ARM64.X0)
+                            ARM64.ADD_imm (ARM64.X13, tempReg, 8us)
+                            ARM64.ADD_reg (ARM64.X13, ARM64.X13, ARM64.X0)
+                            ARM64.STRB_reg (ARM64.X12, ARM64.X13)
+                            ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)
+                            ARM64.B (-7)  // Jump back to CMP
+                            // Store refcount = 1 at [tempReg + 8 + len]
+                            ARM64.ADD_imm (ARM64.X13, tempReg, 8us)
+                            ARM64.ADD_reg (ARM64.X13, ARM64.X13, ARM64.X10)
+                            ARM64.MOVZ (ARM64.X12, 1us, 0)
+                            ARM64.STR (ARM64.X12, ARM64.X13, 0s)
+                        ], tempReg)
+                    | None -> Error $"String index {idx} not found in pool"
+                | LIR.StackSlot offset ->
+                    loadStackSlot tempReg offset |> Result.map (fun instrs -> (instrs, tempReg))
+                | _ -> Error "FileAppendText requires string operands"
+
+            getOperandReg path ARM64.X15
+            |> Result.bind (fun (pathInstrs, pathReg) ->
+                getOperandReg content ARM64.X14
+                |> Result.map (fun (contentInstrs, contentReg) ->
+                    pathInstrs @ contentInstrs @ Runtime.generateFileWriteText destReg pathReg contentReg true)))
+
 /// Convert LIR terminator to ARM64 instructions
 /// epilogueLabel: the label to jump to for function return (handles stack cleanup)
 let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Result<ARM64.Instr list, string> =
