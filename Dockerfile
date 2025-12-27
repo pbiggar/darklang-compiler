@@ -1,6 +1,6 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0-noble
 
-# Install development tools and curl for Claude Code installation
+# Install development tools, benchmarking dependencies, and curl for Claude Code installation
 RUN apt-get update && apt-get install -y \
     git \
     vim \
@@ -8,6 +8,10 @@ RUN apt-get update && apt-get install -y \
     less \
     curl \
     sudo \
+    # Benchmarking tools
+    python3 \
+    hyperfine \
+    gcc \
     && rm -rf /var/lib/apt/lists/*
 
 # Create project directory structure as root
@@ -26,8 +30,11 @@ RUN curl -fsSL https://claude.ai/install.sh -o /tmp/install.sh && \
     bash /tmp/install.sh && \
     rm /tmp/install.sh
 
-# Add Claude Code to PATH
-ENV PATH="/home/paulbiggar/.local/bin:${PATH}"
+# Install Rust for benchmarking
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+
+# Add Claude Code and Rust to PATH
+ENV PATH="/home/paulbiggar/.local/bin:/home/paulbiggar/.cargo/bin:${PATH}"
 
 # Set working directory to match host path
 WORKDIR /Users/paulbiggar/projects/compiler-for-dark
