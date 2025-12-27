@@ -41,9 +41,8 @@ The following work is needed to complete the standard library:
 - **Json** - JSON parsing/serialization
 - **Crypto** - hashing, encoding
 
-Note: Remaining compiler bugs:
-1. Type checker bug with generic enum nullary constructors (e.g., `None` in `Option<t>`)
-   - Pattern matching on `Some(v)` works, but `None` fails with type mismatch
+Note: All major compiler bugs fixed:
+1. ~~Type checker bug with generic enum nullary constructors~~ ✅ FIXED - `None` in `Option<t>` now works
 2. ~~List construction with spread syntax~~ ✅ FIXED - `[a, b, ...rest]` now works
 3. ~~String parameter codegen bug~~ ✅ FIXED - String parameters now work correctly
 

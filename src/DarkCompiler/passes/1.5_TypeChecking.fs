@@ -350,6 +350,42 @@ let unifyTypes (pattern: Type) (actual: Type) : Result<Substitution, string> =
     matchTypes pattern actual
     |> Result.bind consolidateBindings
 
+/// Check if a type contains type variables
+let rec containsTVar (typ: Type) : bool =
+    match typ with
+    | TVar _ -> true
+    | TList elemType -> containsTVar elemType
+    | TTuple elemTypes -> List.exists containsTVar elemTypes
+    | TSum (_, typeArgs) -> List.exists containsTVar typeArgs
+    | TFunction (paramTypes, retType) ->
+        List.exists containsTVar paramTypes || containsTVar retType
+    | _ -> false
+
+/// Reconcile two types where one might contain type variables.
+/// If one type is concrete and the other has type variables that can unify with it,
+/// returns the concrete type. If both are concrete and equal, returns the type.
+/// If both are concrete and different, returns None.
+let reconcileTypes (t1: Type) (t2: Type) : Type option =
+    if t1 = t2 then
+        Some t1
+    elif containsTVar t1 && not (containsTVar t2) then
+        // t2 is concrete, check if t1 can unify with it
+        match unifyTypes t1 t2 with
+        | Ok _ -> Some t2  // Return the concrete type
+        | Error _ -> None
+    elif not (containsTVar t1) && containsTVar t2 then
+        // t1 is concrete, check if t2 can unify with it
+        match unifyTypes t2 t1 with
+        | Ok _ -> Some t1  // Return the concrete type
+        | Error _ -> None
+    elif containsTVar t1 && containsTVar t2 then
+        // Both have type variables - try to unify
+        match unifyTypes t1 t2 with
+        | Ok subst -> Some (applySubst subst t1)
+        | Error _ -> None
+    else
+        None
+
 /// Infer type arguments for a generic function call.
 /// Given type parameters, parameter types (with type variables), and actual argument types,
 /// returns the inferred type arguments in order matching typeParams.
@@ -403,7 +439,11 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         // Integer literals are always TInt64
         match expectedType with
         | Some TInt64 | None -> Ok (TInt64, expr)
-        | Some other -> Error (TypeMismatch (other, TInt64, "integer literal"))
+        | Some other ->
+            // Handle type variables (e.g., when expected is TVar "t")
+            match reconcileTypes other TInt64 with
+            | Some TInt64 -> Ok (TInt64, expr)
+            | _ -> Error (TypeMismatch (other, TInt64, "integer literal"))
 
     | Int8Literal _ ->
         match expectedType with
@@ -630,9 +670,12 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         match Map.tryFind name env with
         | Some varType ->
             match expectedType with
-            | Some expected when expected <> varType ->
-                Error (TypeMismatch (expected, varType, $"variable {name}"))
-            | _ -> Ok (varType, expr)
+            | Some expected ->
+                // Use reconcileTypes to handle type variables
+                match reconcileTypes expected varType with
+                | Some reconciledType -> Ok (reconciledType, expr)
+                | None -> Error (TypeMismatch (expected, varType, $"variable {name}"))
+            | None -> Ok (varType, expr)
         | None ->
             // Check if it's a module function (e.g., Stdlib.Int64.add)
             let moduleRegistry = Stdlib.buildModuleRegistry ()
@@ -640,9 +683,11 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
             | Some moduleFunc ->
                 let funcType = Stdlib.getFunctionType moduleFunc
                 match expectedType with
-                | Some expected when expected <> funcType ->
-                    Error (TypeMismatch (expected, funcType, $"variable {name}"))
-                | _ -> Ok (funcType, expr)
+                | Some expected ->
+                    match reconcileTypes expected funcType with
+                    | Some reconciledType -> Ok (reconciledType, expr)
+                    | None -> Error (TypeMismatch (expected, funcType, $"variable {name}"))
+                | None -> Ok (funcType, expr)
             | None ->
                 Error (UndefinedVariable name)
 
@@ -925,12 +970,30 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
             match expectedPayload, payload with
             | None, None ->
                 // Variant without payload, no payload provided - OK
-                // For non-generic types, use empty type args; for generic, all args are unresolved
-                let sumType = TSum (typeName, [])
-                match expectedType with
-                | Some expected when expected <> sumType ->
-                    Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
-                | _ -> Ok (sumType, expr)
+                if List.isEmpty typeParams then
+                    // Non-generic type - simple case
+                    let sumType = TSum (typeName, [])
+                    match expectedType with
+                    | Some expected when expected <> sumType ->
+                        Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
+                    | _ -> Ok (sumType, expr)
+                else
+                    // Generic type with nullary constructor (e.g., None in Option<t>)
+                    // Try to get type arguments from expectedType
+                    match expectedType with
+                    | Some (TSum (expectedName, args)) when expectedName = typeName && List.length args = List.length typeParams ->
+                        // Use type args from expected type
+                        let sumType = TSum (typeName, args)
+                        Ok (sumType, expr)
+                    | Some expected ->
+                        // Expected type doesn't match - error
+                        let sumTypeWithVars = TSum (typeName, typeParams |> List.map TVar)
+                        Error (TypeMismatch (expected, sumTypeWithVars, $"constructor {variantName}"))
+                    | None ->
+                        // No expected type - return type with unresolved type variables
+                        // This allows type inference to resolve them later from context
+                        let sumType = TSum (typeName, typeParams |> List.map TVar)
+                        Ok (sumType, expr)
             | None, Some _ ->
                 // Variant doesn't take payload but one was provided
                 Error (GenericError $"Constructor {variantName} does not take a payload")
@@ -1123,15 +1186,24 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                                 let newCase = { Patterns = matchCase.Patterns; Guard = guard'; Body = body' }
                                 match resultType with
                                 | None -> checkCases rest (Some bodyType) (newCase :: accCases)
-                                | Some expected when expected = bodyType -> checkCases rest resultType (newCase :: accCases)
-                                | Some expected -> Error (TypeMismatch (expected, bodyType, "match case")))))
+                                | Some expected ->
+                                    // Use reconcileTypes to handle type variables
+                                    match reconcileTypes expected bodyType with
+                                    | Some reconciledType ->
+                                        // Update resultType to the reconciled (concrete) type
+                                        checkCases rest (Some reconciledType) (newCase :: accCases)
+                                    | None ->
+                                        Error (TypeMismatch (expected, bodyType, "match case")))))
 
             checkCases cases None []
             |> Result.bind (fun (matchType, cases') ->
                 match expectedType with
-                | Some expected when expected <> matchType ->
-                    Error (TypeMismatch (expected, matchType, "match expression"))
-                | _ -> Ok (matchType, Match (scrutinee', cases'))))
+                | Some expected ->
+                    // Use reconcileTypes for expected type check too
+                    match reconcileTypes expected matchType with
+                    | Some reconciledType -> Ok (reconciledType, Match (scrutinee', cases'))
+                    | None -> Error (TypeMismatch (expected, matchType, "match expression"))
+                | None -> Ok (matchType, Match (scrutinee', cases'))))
 
     | ListLiteral elements ->
         // Type-check elements and infer element type from first element
