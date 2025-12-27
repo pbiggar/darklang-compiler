@@ -209,8 +209,7 @@ match [1, 2, 3] with | [h, ...t] -> h | [] -> 0 = 1
 match [1, 2, 3] with | [h, ...t] -> match t with | [a, b] -> a + b | _ -> 0 | [] -> 0 = 5
 
 // Empty list doesn't match [h, ...t]
-// NOTE: Commented out - MIR conversion error for empty list with cons pattern
-// match [] with | [h, ...t] -> 1 | [] -> 0 = 0
+match [] with | [h, ...t] -> 1 | [] -> 0 = 0
 
 // Single element - tail is empty
 match [42] with | [h, ...t] -> match t with | [] -> h | _ -> 0 | [] -> 0 = 42

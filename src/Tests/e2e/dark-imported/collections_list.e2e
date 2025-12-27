@@ -113,8 +113,7 @@ match [1, 2] with | [a, b, c] -> 1 | [a, b] -> 2 | [a] -> 3 | _ -> 99 = 2
 match [1, 2, 3] with | [h, ...t] -> h | [] -> 0 = 1
 match [1, 2, 3] with | [h, ...t] -> match t with | [a, b] -> a + b | _ -> 0 | [] -> 0 = 5
 match [42] with | [h, ...t] -> match t with | [] -> h | _ -> 0 | [] -> 0 = 42
-// NOTE: Commented out - MIR conversion error for empty list with cons pattern
-// match [] with | [h, ...t] -> 1 | [] -> 0 = 0
+match [] with | [h, ...t] -> 1 | [] -> 0 = 0
 match [1, 2, 3, 4] with | [a, b, ...t] -> a + b | [] -> 0 | _ -> 0 = 3
 match [1, 2, 3] with | [_, ...t] -> match t with | [a, b] -> a + b | _ -> 0 | [] -> 0 = 5
 match [1, 2, 3] with | [h, ..._] -> h | [] -> 0 = 1

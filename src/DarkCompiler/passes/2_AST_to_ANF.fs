@@ -1382,6 +1382,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 cases |> List.exists (fun (pat, _) ->
                     match pat with
                     | AST.PList (_ :: _) -> true
+                    | AST.PListCons (_ :: _, _) -> true  // [h, ...t] also needs list access
                     | _ -> false)
 
             // If there are non-empty list patterns, bind the scrutinee to a variable
