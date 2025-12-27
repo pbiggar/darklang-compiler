@@ -415,11 +415,8 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
                     | _ -> Error "Expected ',' or '>' after type argument in generic type")
             parseTypeArgsInType typeArgsStart []
             |> Result.map (fun (typeArgs, remaining) ->
-                // For now, store type args in a generic record representation
-                // The type is still stored as the name, typeArgs are tracked separately
-                // We'll use TRecord for the base and let type checking resolve it
-                // TODO: Add a proper TGeneric type constructor if needed
-                (TRecord fullTypeName, remaining))  // Type args are discarded for now
+                // Store as TSum with type arguments - type checker will validate
+                (TSum (fullTypeName, typeArgs), remaining))
         | _ ->
             // Simple type without type arguments
             Ok (TRecord fullTypeName, afterTypeName)
