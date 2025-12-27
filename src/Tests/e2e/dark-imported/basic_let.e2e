@@ -43,10 +43,10 @@ Stdlib.Tuple2.second((1, 2)) = 2
 (let (_, _, _) = (1, 2, 3) in 2) = 2
 
 // Type error in tuple element is caught at compile time
-(let (a, b, c) = (1, 2, true) in a + c) = error="Type mismatch in variable c: expected int, got bool"
+(let (a, b, c) = (1, 2, true) in a + c) = error="Type mismatch in variable c: expected Int64, got Bool"
 
 // Type error in first tuple element is caught at compile time
-(let (a, b, c) = (true, 2, 3) in a + b) = error="Invalid operation '+' on types: bool"
+(let (a, b, c) = (true, 2, 3) in a + b) = error="Invalid operation '+' on types: Bool"
 
 // Nested tuple destructuring
 (let ((a, ((b, (c, d)), e)), f) = ((1, ((2, (3, 4)), 5)), 6) in c) = 3
