@@ -13,28 +13,32 @@ HISTORY_FILE = "HISTORY.md"
 
 DEFAULT_HEADER = """# Benchmark History
 
-Performance history of Darklang compiler across versions.
+Performance history of Darklang compiler across versions (instruction counts via Cachegrind).
 
 """
 
 
-def format_time(seconds: float) -> str:
-    """Format time in human-readable format."""
-    if seconds < 0.001:
-        return f"{seconds * 1_000_000:.1f} us"
-    elif seconds < 1:
-        return f"{seconds * 1000:.1f} ms"
+def format_number(n: int) -> str:
+    """Format large numbers with commas."""
+    return f"{n:,}"
+
+
+def format_ratio(value: float) -> str:
+    """Format ratio for display."""
+    if value == 1.0:
+        return "baseline"
     else:
-        return f"{seconds:.2f} s"
+        return f"{value:.2f}x"
 
 
 def load_results(results_dir: Path) -> dict:
-    """Load all hyperfine JSON results."""
+    """Load all cachegrind JSON results."""
     results = {}
-    for json_file in results_dir.glob("*_hyperfine.json"):
-        benchmark_name = json_file.stem.replace("_hyperfine", "")
+    for json_file in results_dir.glob("*_cachegrind.json"):
+        benchmark_name = json_file.stem.replace("_cachegrind", "")
         with open(json_file) as f:
-            results[benchmark_name] = json.load(f)
+            data = json.load(f)
+            results[benchmark_name] = data.get("results", [])
     return results
 
 
@@ -74,61 +78,49 @@ def generate_entry(results: dict, metadata: dict) -> str:
         "",
     ]
 
-    for benchmark_name, benchmark_result in sorted(results.items()):
+    for benchmark_name, benchmark_results in sorted(results.items()):
         lines.append(f"### {benchmark_name}")
         lines.append("")
 
-        times = []
-        for result in benchmark_result.get("results", []):
-            times.append({
-                "name": result["command"],
-                "mean": result["mean"],
-                "stddev": result["stddev"],
-                "min": result["min"],
-                "max": result["max"],
-                "median": result["median"],
-            })
-        times = sorted(times, key=lambda x: x["mean"])
-
-        if not times:
+        if not benchmark_results:
             lines.append("No results available.")
             lines.append("")
             continue
 
+        # Sort by instruction count
+        sorted_results = sorted(benchmark_results, key=lambda x: x.get("instructions", 0))
+
         # Find Rust baseline
         baseline = None
-        for t in times:
-            if "Rust" in t["name"] or "rust" in t["name"]:
-                baseline = t
+        for r in sorted_results:
+            if r.get("language", "").lower() == "rust":
+                baseline = r
                 break
         if baseline is None:
-            baseline = times[0]
+            baseline = sorted_results[0]
 
-        lines.append("| Language | Mean | Stddev | Min | Max | Median | vs Rust |")
-        lines.append("|----------|------|--------|-----|-----|--------|---------|")
+        baseline_instrs = baseline.get("instructions", 1)
 
-        for t in times:
-            name = t["name"]
-            if "Dark" in name or "dark" in name:
-                lang = "Dark"
-            elif "Rust" in name or "rust" in name:
-                lang = "Rust"
-            elif "Python" in name or "python" in name:
-                lang = "Python"
-            else:
-                lang = name
+        lines.append("| Language | Instructions | vs Rust | Data Refs | L1 Miss | LL Miss | Branches | Mispred |")
+        lines.append("|----------|-------------|---------|-----------|---------|---------|----------|---------|")
 
-            ratio = t["mean"] / baseline["mean"]
-            if ratio == 1.0:
-                ratio_str = "baseline"
-            else:
-                ratio_str = f"{ratio:.1f}x"
+        for r in sorted_results:
+            lang = r.get("language", "unknown").capitalize()
+            instrs = r.get("instructions", 0)
+            data_refs = r.get("data_refs", 0)
+            d1_misses = r.get("d1_misses", 0)
+            ll_misses = r.get("ll_misses", 0)
+            branches = r.get("branches", 0)
+            mispreds = r.get("branch_mispredicts", 0)
+
+            ratio = instrs / baseline_instrs if baseline_instrs > 0 else 0
+            mispred_rate = (mispreds / branches * 100) if branches > 0 else 0
 
             lines.append(
-                f"| {lang} | {format_time(t['mean'])} | "
-                f"{format_time(t['stddev'])} | {format_time(t['min'])} | "
-                f"{format_time(t['max'])} | {format_time(t['median'])} | "
-                f"{ratio_str} |"
+                f"| {lang} | {format_number(instrs)} | "
+                f"{format_ratio(ratio)} | {format_number(data_refs)} | "
+                f"{format_number(d1_misses)} | {format_number(ll_misses)} | "
+                f"{format_number(branches)} | {mispred_rate:.1f}% |"
             )
 
         lines.append("")
@@ -178,7 +170,7 @@ def main():
 
     results = load_results(results_dir)
     if not results:
-        print("No benchmark results found, skipping history update.")
+        print("No cachegrind results found, skipping history update.")
         sys.exit(0)
 
     metadata = get_run_metadata(results_dir)

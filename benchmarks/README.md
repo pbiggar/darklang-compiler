@@ -7,9 +7,13 @@ Cross-language benchmarking system to measure runtime performance of compiled Da
 Install before running benchmarks:
 
 ```bash
-# hyperfine (benchmarking tool)
+# hyperfine (timing benchmarks)
 brew install hyperfine  # macOS
-# or: cargo install hyperfine
+sudo apt-get install hyperfine  # Linux
+
+# valgrind (instruction count benchmarks)
+sudo apt-get install valgrind  # Linux
+brew install valgrind  # macOS (may require extra setup)
 
 # Rust compiler
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -21,12 +25,27 @@ python3 --version
 ## Quick Start
 
 ```bash
-# Run all benchmarks
+# Run all benchmarks (timing via hyperfine)
 ./benchmarks/run_benchmarks.sh
 
 # Run a specific benchmark
 ./benchmarks/run_benchmarks.sh fib
+
+# Run with Cachegrind for deterministic instruction counts
+./benchmarks/run_benchmarks.sh --cachegrind
+./benchmarks/run_benchmarks.sh --cachegrind fib
 ```
+
+## Benchmark Modes
+
+### Timing Mode (default)
+Uses **hyperfine** to measure wall-clock execution time. Fast but results vary between runs.
+
+### Cachegrind Mode (`--cachegrind`)
+Uses **Valgrind Cachegrind** to count instructions. Slower (~50x) but deterministic - same input always produces identical counts. Useful for:
+- Detecting performance regressions in CI
+- Comparing instruction efficiency between languages
+- Tracking optimization improvements over time
 
 ## Available Benchmarks
 
@@ -46,8 +65,11 @@ benchmarks/
   infrastructure/
     build_all.sh             # Compile Dark and Rust implementations
     validate_all.sh          # Verify correctness before benchmarking
-    hyperfine_runner.sh      # Run hyperfine with proper flags
-    result_processor.py      # Generate summary reports
+    hyperfine_runner.sh      # Run hyperfine timing benchmarks
+    cachegrind_runner.sh     # Run Cachegrind instruction counts
+    result_processor.py      # Generate timing summary
+    cachegrind_processor.py  # Generate instruction count summary
+    history_updater.py       # Append results to HISTORY.md
 
   problems/
     fib/                     # Each benchmark has its own directory

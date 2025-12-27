@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     # Benchmarking tools
     python3 \
     hyperfine \
+    valgrind \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 

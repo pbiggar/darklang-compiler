@@ -1,32 +1,34 @@
 # Benchmark History
 
-Performance history of Darklang compiler across versions.
+Performance history of Darklang compiler across versions (instruction counts via Cachegrind).
 
 ---
 
-## 2025-12-27 11:03:18
+## 2025-12-27 11:31:02
 
-**Commit:** `4eb27503` - Add benchmarking tools to Docker image
+**Commit:** `603035f7` - Add persistent benchmark history log
 
 ### factorial
 
-| Language | Mean | Stddev | Min | Max | Median | vs Rust |
-|----------|------|--------|-----|-----|--------|---------|
-| Rust | 716.4 us | 967.1 us | 143.8 us | 3.2 ms | 326.6 us | baseline |
-| Dark | 959.7 us | 600.9 us | 456.3 us | 2.5 ms | 766.2 us | 1.3x |
-| Python | 25.9 ms | 4.5 ms | 20.6 ms | 31.5 ms | 24.4 ms | 36.2x |
----
-
-
-## 2025-12-27 11:02:54
-
-**Commit:** `4eb27503` - Add benchmarking tools to Docker image
+| Language | Instructions | vs Rust | Data Refs | L1 Miss | LL Miss | Branches | Mispred |
+|----------|-------------|---------|-----------|---------|---------|----------|---------|
+| Rust | 255,726 | baseline | 100,023 | 3,563 | 3,925 | 45,590 | 9.9% |
+| Dark | 6,920,218 | 27.06x | 4,440,060 | 29,808 | 25,982 | 210,024 | 4.8% |
+| Python | 181,972,927 | 711.59x | 76,313,681 | 830,088 | 427,050 | 25,480,601 | 5.9% |
 
 ### fib
 
-| Language | Mean | Stddev | Min | Max | Median | vs Rust |
-|----------|------|--------|-----|-----|--------|---------|
-| Rust | 17.3 ms | 844.1 us | 16.3 ms | 18.9 ms | 17.1 ms | baseline |
-| Dark | 39.9 ms | 2.0 ms | 38.2 ms | 45.0 ms | 39.5 ms | 2.3x |
-| Python | 944.5 ms | 121.2 ms | 779.2 ms | 1.16 s | 959.5 ms | 54.5x |
+| Language | Instructions | vs Rust | Data Refs | L1 Miss | LL Miss | Branches | Mispred |
+|----------|-------------|---------|-----------|---------|---------|----------|---------|
+| Rust | 272,526,559 | baseline | 119,542,835 | 3,566 | 3,934 | 29,906,298 | 9.0% |
+| Dark | 955,542,595 | 3.51x | 642,005,141 | 55 | 66 | 29,860,714 | 9.0% |
+| Python | 15,135,205,293 | 55.54x | 6,347,493,181 | 717,441 | 362,161 | 1,932,965,367 | 6.4% |
+
+### sum_to_n
+
+| Language | Instructions | vs Rust | Data Refs | L1 Miss | LL Miss | Branches | Mispred |
+|----------|-------------|---------|-----------|---------|---------|----------|---------|
+| Rust | 255,662 | baseline | 100,008 | 3,563 | 3,924 | 45,597 | 9.9% |
+| Dark | 36,006,941 | 140.84x | 22,004,549 | 2,949,758 | 2,185,612 | 1,000,213 | 0.0% |
+| Python | 940,718,267 | 3679.54x | 400,722,251 | 6,787,208 | 5,593,580 | 131,739,821 | 3.4% |
 ---
