@@ -118,9 +118,7 @@ match [1, 2, 3] with | [_, y, _] -> y | _ -> 0 = 2
 
 // Cons patterns
 match [1, 2, 3] with | [h, ...t] -> h | [] -> 0 = 1
-// NOTE: Empty list matching cons pattern triggers MIR conversion bug
-// "Tuple access on non-variable (ANF invariant violated)"
-// match [] with | [h, ...t] -> h | [] -> 0 = 0
+match [] with | [h, ...t] -> h | [] -> 0 = 0
 match [42] with | [h, ...t] -> h | [] -> 0 = 42
 
 // ===================================================================
@@ -237,13 +235,13 @@ let x = 0 - 5 in match x with | x -> x + 10 = 5
 
 // ===================================================================
 // Int64 Matching (from Dark ematch.dark)
-// NOTE: Commented out - requires Int64 literal suffix support
+// Converted: removed L suffix (Int64 is default)
 // ===================================================================
 
-// (match 6L with | 5L -> "fail" | -6L -> "fail" | 6L -> "pass" | var -> "fail") = "pass"
-// (match 6L with | 6L -> "pass" | 5L -> "fail" | var -> "fail") = "pass"
-// (match 6L with | var -> "pass" | 6L -> "fail" | 5L -> "fail") = "pass"
-// (match 999999999999999L with | 0L -> "fail" | 999999999999999L -> "pass") = "pass"
+(match 6 with | 5 -> "fail" | -6 -> "fail" | 6 -> "pass" | var -> "fail") = stdout="pass\n"
+(match 6 with | 6 -> "pass" | 5 -> "fail" | var -> "fail") = stdout="pass\n"
+(match 6 with | var -> "pass" | 6 -> "fail" | 5 -> "fail") = stdout="pass\n"
+(match 999999999999999 with | 0 -> "fail" | 999999999999999 -> "pass") = stdout="pass\n"
 
 // ===================================================================
 // UInt64 Matching

@@ -619,6 +619,9 @@ let rec parsePattern (tokens: Token list) : Result<Pattern * Token list, string>
     | TInt n :: rest ->
         // Integer literal pattern
         Ok (PLiteral n, rest)
+    | TMinus :: TInt n :: rest ->
+        // Negative integer literal pattern
+        Ok (PLiteral (-n), rest)
     | TTrue :: rest ->
         // Boolean true pattern
         Ok (PBool true, rest)
