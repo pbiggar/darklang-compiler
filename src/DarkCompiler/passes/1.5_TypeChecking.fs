@@ -32,11 +32,18 @@ type TypeError =
 /// Pretty-print a type for error messages
 let rec typeToString (t: Type) : string =
     match t with
-    | TInt64 -> "int"
-    | TBool -> "bool"
-    | TFloat64 -> "float"
-    | TString -> "string"
-    | TUnit -> "unit"
+    | TInt8 -> "Int8"
+    | TInt16 -> "Int16"
+    | TInt32 -> "Int32"
+    | TInt64 -> "Int64"
+    | TUInt8 -> "UInt8"
+    | TUInt16 -> "UInt16"
+    | TUInt32 -> "UInt32"
+    | TUInt64 -> "UInt64"
+    | TBool -> "Bool"
+    | TFloat64 -> "Float"
+    | TString -> "String"
+    | TUnit -> "Unit"
     | TFunction (params', ret) ->
         let paramStr = params' |> List.map typeToString |> String.concat ", "
         $"({paramStr}) -> {typeToString ret}"
@@ -101,7 +108,8 @@ let rec applySubst (subst: Substitution) (typ: Type) : Type =
         TList (applySubst subst elemType)
     | TSum (name, typeArgs) ->
         TSum (name, List.map (applySubst subst) typeArgs)
-    | TInt64 | TBool | TFloat64 | TString | TUnit | TRecord _ ->
+    | TInt8 | TInt16 | TInt32 | TInt64 | TUInt8 | TUInt16 | TUInt32 | TUInt64
+    | TBool | TFloat64 | TString | TUnit | TRecord _ ->
         typ  // Concrete types are unchanged
 
 /// Build a substitution from type parameters and type arguments
@@ -123,7 +131,9 @@ let buildSubstitution (typeParams: string list) (typeArgs: Type list) : Result<S
 /// bound: Set of names that are currently in scope (not free)
 let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
     match expr with
-    | UnitLiteral | IntLiteral _ | BoolLiteral _ | StringLiteral _ | FloatLiteral _ ->
+    | UnitLiteral | IntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
+    | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _
+    | BoolLiteral _ | StringLiteral _ | FloatLiteral _ ->
         Set.empty
     | Var name ->
         if Set.contains name bound then Set.empty else Set.singleton name
@@ -226,12 +236,33 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
     | TVar name ->
         // Type variable matches anything - record the binding
         Ok [(name, actual)]
+    | TInt8 ->
+        if actual = TInt8 then Ok []
+        else Error $"Expected Int8, got {typeToString actual}"
+    | TInt16 ->
+        if actual = TInt16 then Ok []
+        else Error $"Expected Int16, got {typeToString actual}"
+    | TInt32 ->
+        if actual = TInt32 then Ok []
+        else Error $"Expected Int32, got {typeToString actual}"
     | TInt64 ->
         if actual = TInt64 then Ok []
-        else Error $"Expected int, got {typeToString actual}"
+        else Error $"Expected Int64, got {typeToString actual}"
+    | TUInt8 ->
+        if actual = TUInt8 then Ok []
+        else Error $"Expected UInt8, got {typeToString actual}"
+    | TUInt16 ->
+        if actual = TUInt16 then Ok []
+        else Error $"Expected UInt16, got {typeToString actual}"
+    | TUInt32 ->
+        if actual = TUInt32 then Ok []
+        else Error $"Expected UInt32, got {typeToString actual}"
+    | TUInt64 ->
+        if actual = TUInt64 then Ok []
+        else Error $"Expected UInt64, got {typeToString actual}"
     | TBool ->
         if actual = TBool then Ok []
-        else Error $"Expected bool, got {typeToString actual}"
+        else Error $"Expected Bool, got {typeToString actual}"
     | TFloat64 ->
         if actual = TFloat64 then Ok []
         else Error $"Expected float, got {typeToString actual}"
@@ -369,6 +400,41 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         match expectedType with
         | Some TInt64 | None -> Ok (TInt64, expr)
         | Some other -> Error (TypeMismatch (other, TInt64, "integer literal"))
+
+    | Int8Literal _ ->
+        match expectedType with
+        | Some TInt8 | None -> Ok (TInt8, expr)
+        | Some other -> Error (TypeMismatch (other, TInt8, "Int8 literal"))
+
+    | Int16Literal _ ->
+        match expectedType with
+        | Some TInt16 | None -> Ok (TInt16, expr)
+        | Some other -> Error (TypeMismatch (other, TInt16, "Int16 literal"))
+
+    | Int32Literal _ ->
+        match expectedType with
+        | Some TInt32 | None -> Ok (TInt32, expr)
+        | Some other -> Error (TypeMismatch (other, TInt32, "Int32 literal"))
+
+    | UInt8Literal _ ->
+        match expectedType with
+        | Some TUInt8 | None -> Ok (TUInt8, expr)
+        | Some other -> Error (TypeMismatch (other, TUInt8, "UInt8 literal"))
+
+    | UInt16Literal _ ->
+        match expectedType with
+        | Some TUInt16 | None -> Ok (TUInt16, expr)
+        | Some other -> Error (TypeMismatch (other, TUInt16, "UInt16 literal"))
+
+    | UInt32Literal _ ->
+        match expectedType with
+        | Some TUInt32 | None -> Ok (TUInt32, expr)
+        | Some other -> Error (TypeMismatch (other, TUInt32, "UInt32 literal"))
+
+    | UInt64Literal _ ->
+        match expectedType with
+        | Some TUInt64 | None -> Ok (TUInt64, expr)
+        | Some other -> Error (TypeMismatch (other, TUInt64, "UInt64 literal"))
 
     | BoolLiteral _ ->
         // Boolean literals are always TBool

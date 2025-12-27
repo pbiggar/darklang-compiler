@@ -24,7 +24,14 @@ type InterpPart =
 
 /// Token types for lexer
 and Token =
-    | TInt of int64
+    | TInt of int64         // Default integer (Int64)
+    | TInt8 of sbyte        // 8-bit signed: 1y
+    | TInt16 of int16       // 16-bit signed: 1s
+    | TInt32 of int32       // 32-bit signed: 1l
+    | TUInt8 of byte        // 8-bit unsigned: 1uy
+    | TUInt16 of uint16     // 16-bit unsigned: 1us
+    | TUInt32 of uint32     // 32-bit unsigned: 1ul
+    | TUInt64 of uint64     // 64-bit unsigned: 1UL
     | TFloat of float
     | TStringLit of string  // String literal token (named to avoid conflict with AST.TString type)
     | TInterpString of InterpPart list  // Interpolated string: $"Hello {name}!"
@@ -207,21 +214,69 @@ let lex (input: string) : Result<Token list, string> =
                     | (true, value) -> lexHelper remaining (TFloat value :: acc)
                     | (false, _) -> Error $"Invalid float literal: {numStr}"
             | _ ->
-                // Integer
+                // Integer with optional type suffix
                 let numStr = System.String(List.toArray intDigits)
-                // Try to parse as int64
-                match System.Int64.TryParse(numStr) with
-                | (true, value) -> lexHelper afterInt (TInt value :: acc)
-                | (false, _) ->
-                    // Check for INT64_MIN special case: "9223372036854775808"
-                    // This value is > INT64_MAX but equals |INT64_MIN|
-                    // It's only valid when preceded by minus: -9223372036854775808
-                    if numStr = "9223372036854775808" then
-                        // Return INT64_MIN directly - this is a special sentinel
-                        // The parser will only accept this when it's negated
-                        lexHelper afterInt (TInt System.Int64.MinValue :: acc)
-                    else
-                        Error $"Integer literal too large: {numStr}"
+
+                // Check for type suffix: y, uy, s, us, l, ul, L, UL
+                match afterInt with
+                | 'u' :: 'y' :: rest ->
+                    // UInt8 suffix: 1uy
+                    match System.Byte.TryParse(numStr) with
+                    | (true, value) -> lexHelper rest (TUInt8 value :: acc)
+                    | (false, _) -> Error $"Value {numStr} is out of range for UInt8 (0 to 255)"
+                | 'y' :: rest ->
+                    // Int8 suffix: 1y
+                    match System.SByte.TryParse(numStr) with
+                    | (true, value) -> lexHelper rest (TInt8 value :: acc)
+                    | (false, _) -> Error $"Value {numStr} is out of range for Int8 (-128 to 127)"
+                | 'u' :: 's' :: rest ->
+                    // UInt16 suffix: 1us
+                    match System.UInt16.TryParse(numStr) with
+                    | (true, value) -> lexHelper rest (TUInt16 value :: acc)
+                    | (false, _) -> Error $"Value {numStr} is out of range for UInt16 (0 to 65535)"
+                | 's' :: rest ->
+                    // Int16 suffix: 1s
+                    match System.Int16.TryParse(numStr) with
+                    | (true, value) -> lexHelper rest (TInt16 value :: acc)
+                    | (false, _) -> Error $"Value {numStr} is out of range for Int16 (-32768 to 32767)"
+                | 'u' :: 'l' :: rest ->
+                    // UInt32 suffix: 1ul
+                    match System.UInt32.TryParse(numStr) with
+                    | (true, value) -> lexHelper rest (TUInt32 value :: acc)
+                    | (false, _) -> Error $"Value {numStr} is out of range for UInt32 (0 to 4294967295)"
+                | 'l' :: rest ->
+                    // Int32 suffix: 1l
+                    match System.Int32.TryParse(numStr) with
+                    | (true, value) -> lexHelper rest (TInt32 value :: acc)
+                    | (false, _) -> Error $"Value {numStr} is out of range for Int32 (-2147483648 to 2147483647)"
+                | 'U' :: 'L' :: rest ->
+                    // UInt64 suffix: 1UL
+                    match System.UInt64.TryParse(numStr) with
+                    | (true, value) -> lexHelper rest (TUInt64 value :: acc)
+                    | (false, _) -> Error $"Value {numStr} is out of range for UInt64"
+                | 'L' :: rest ->
+                    // Int64 explicit suffix: 1L (same as default)
+                    match System.Int64.TryParse(numStr) with
+                    | (true, value) -> lexHelper rest (TInt value :: acc)
+                    | (false, _) ->
+                        if numStr = "9223372036854775808" then
+                            lexHelper rest (TInt System.Int64.MinValue :: acc)
+                        else
+                            Error $"Integer literal too large: {numStr}"
+                | _ ->
+                    // No suffix: default Int64
+                    match System.Int64.TryParse(numStr) with
+                    | (true, value) -> lexHelper afterInt (TInt value :: acc)
+                    | (false, _) ->
+                        // Check for INT64_MIN special case: "9223372036854775808"
+                        // This value is > INT64_MAX but equals |INT64_MIN|
+                        // It's only valid when preceded by minus: -9223372036854775808
+                        if numStr = "9223372036854775808" then
+                            // Return INT64_MIN directly - this is a special sentinel
+                            // The parser will only accept this when it's negated
+                            lexHelper afterInt (TInt System.Int64.MinValue :: acc)
+                        else
+                            Error $"Integer literal too large: {numStr}"
         | '$' :: '"' :: rest ->
             // Parse interpolated string: $"Hello {name}!"
             // Returns TInterpString token with parts list
@@ -379,10 +434,17 @@ let rec parseFunctionTypeParams (typeParams: Set<string>) (tokens: Token list) (
 /// Base type parser (no function types - used to parse function type components)
 and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type * Token list, string> =
     match tokens with
-    | TIdent "Int64" :: rest -> Ok (TInt64, rest)
-    | TIdent "Bool" :: rest -> Ok (TBool, rest)
-    | TIdent "String" :: rest -> Ok (TString, rest)
-    | TIdent "Float" :: rest -> Ok (TFloat64, rest)
+    | TIdent "Int8" :: rest -> Ok (AST.TInt8, rest)
+    | TIdent "Int16" :: rest -> Ok (AST.TInt16, rest)
+    | TIdent "Int32" :: rest -> Ok (AST.TInt32, rest)
+    | TIdent "Int64" :: rest -> Ok (AST.TInt64, rest)
+    | TIdent "UInt8" :: rest -> Ok (AST.TUInt8, rest)
+    | TIdent "UInt16" :: rest -> Ok (AST.TUInt16, rest)
+    | TIdent "UInt32" :: rest -> Ok (AST.TUInt32, rest)
+    | TIdent "UInt64" :: rest -> Ok (AST.TUInt64, rest)
+    | TIdent "Bool" :: rest -> Ok (AST.TBool, rest)
+    | TIdent "String" :: rest -> Ok (AST.TString, rest)
+    | TIdent "Float" :: rest -> Ok (AST.TFloat64, rest)
     | TIdent typeName :: rest when Set.contains typeName typeParams ->
         Ok (TVar typeName, rest)
     | TIdent "List" :: TLt :: rest ->
@@ -467,10 +529,17 @@ let rec parseTypeParams (tokens: Token list) (acc: string list) : Result<string 
 /// This is used when parsing call sites like func<t>(args) where t is a type variable
 let rec parseTypeArgType (tokens: Token list) : Result<Type * Token list, string> =
     match tokens with
-    | TIdent "Int64" :: rest -> Ok (TInt64, rest)
-    | TIdent "Bool" :: rest -> Ok (TBool, rest)
-    | TIdent "String" :: rest -> Ok (TString, rest)
-    | TIdent "Float" :: rest -> Ok (TFloat64, rest)
+    | TIdent "Int8" :: rest -> Ok (AST.TInt8, rest)
+    | TIdent "Int16" :: rest -> Ok (AST.TInt16, rest)
+    | TIdent "Int32" :: rest -> Ok (AST.TInt32, rest)
+    | TIdent "Int64" :: rest -> Ok (AST.TInt64, rest)
+    | TIdent "UInt8" :: rest -> Ok (AST.TUInt8, rest)
+    | TIdent "UInt16" :: rest -> Ok (AST.TUInt16, rest)
+    | TIdent "UInt32" :: rest -> Ok (AST.TUInt32, rest)
+    | TIdent "UInt64" :: rest -> Ok (AST.TUInt64, rest)
+    | TIdent "Bool" :: rest -> Ok (AST.TBool, rest)
+    | TIdent "String" :: rest -> Ok (AST.TString, rest)
+    | TIdent "Float" :: rest -> Ok (AST.TFloat64, rest)
     | TIdent "List" :: TLt :: rest ->
         // List type: List<ElementType>
         parseTypeArgType rest
@@ -1173,6 +1242,13 @@ let parse (tokens: Token list) : Result<Program, string> =
     and parsePrimaryBase (toks: Token list) : Result<Expr * Token list, string> =
         match toks with
         | TInt n :: rest -> Ok (IntLiteral n, rest)
+        | TInt8 n :: rest -> Ok (Int8Literal n, rest)
+        | TInt16 n :: rest -> Ok (Int16Literal n, rest)
+        | TInt32 n :: rest -> Ok (Int32Literal n, rest)
+        | TUInt8 n :: rest -> Ok (UInt8Literal n, rest)
+        | TUInt16 n :: rest -> Ok (UInt16Literal n, rest)
+        | TUInt32 n :: rest -> Ok (UInt32Literal n, rest)
+        | TUInt64 n :: rest -> Ok (UInt64Literal n, rest)
         | TFloat f :: rest -> Ok (FloatLiteral f, rest)
         | TStringLit s :: rest -> Ok (StringLiteral s, rest)
         | TInterpString parts :: rest ->

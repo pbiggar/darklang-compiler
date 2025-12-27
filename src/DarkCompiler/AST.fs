@@ -19,7 +19,17 @@ module AST
 
 /// Type system - will be used for type checking in Phase 0+
 type Type =
+    // Signed integers
+    | TInt8
+    | TInt16
+    | TInt32
     | TInt64
+    // Unsigned integers
+    | TUInt8
+    | TUInt16
+    | TUInt32
+    | TUInt64
+    // Other primitives
     | TBool
     | TFloat64
     | TString
@@ -80,7 +90,14 @@ type StringPart =
 /// Expression nodes
 and Expr =
     | UnitLiteral                           // Unit value: ()
-    | IntLiteral of int64
+    | IntLiteral of int64                   // 64-bit signed (default): 42, 42L
+    | Int8Literal of sbyte                  // 8-bit signed: 42y
+    | Int16Literal of int16                 // 16-bit signed: 42s
+    | Int32Literal of int32                 // 32-bit signed: 42l
+    | UInt8Literal of byte                  // 8-bit unsigned: 42uy
+    | UInt16Literal of uint16               // 16-bit unsigned: 42us
+    | UInt32Literal of uint32               // 32-bit unsigned: 42ul
+    | UInt64Literal of uint64               // 64-bit unsigned: 42UL
     | BoolLiteral of bool
     | StringLiteral of string
     | FloatLiteral of float
