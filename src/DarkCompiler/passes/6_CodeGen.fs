@@ -251,7 +251,7 @@ let generatePrologue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM6
         else
             []
 
-    saveFpLr @ setFp @ allocCalleeSaved @ saveCalleeSavedInstrs @ allocStack
+    saveFpLr @ setFp @ allocStack @ allocCalleeSaved @ saveCalleeSavedInstrs
 
 /// Generate function epilogue
 /// Restores callee-saved registers, FP, LR, and returns
@@ -284,7 +284,7 @@ let generateEpilogue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM6
     ]
     let ret = [ARM64.RET]
 
-    deallocStack @ restoreCalleeSavedInstrs @ deallocCalleeSaved @ restoreFpLr @ ret
+    restoreCalleeSavedInstrs @ deallocCalleeSaved @ deallocStack @ restoreFpLr @ ret
 
 /// Convert LIR instruction to ARM64 instructions
 let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
