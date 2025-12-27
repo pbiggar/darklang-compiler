@@ -183,6 +183,12 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
     | Closure (_, captures) ->
         // Closures capture expressions which may have free variables
         captures |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
+    | InterpolatedString parts ->
+        parts |> List.choose (fun part ->
+            match part with
+            | StringText _ -> None
+            | StringExpr e -> Some (collectFreeVars e bound))
+        |> List.fold Set.union Set.empty
 
 /// Collect variable names bound by a pattern
 and collectPatternBindings (pattern: Pattern) : Set<string> =
@@ -375,6 +381,28 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         match expectedType with
         | Some TString | None -> Ok (TString, expr)
         | Some other -> Error (TypeMismatch (other, TString, "string literal"))
+
+    | InterpolatedString parts ->
+        // Interpolated strings are always TString
+        // Check that all expression parts are strings
+        let rec checkParts (parts: StringPart list) (checkedParts: StringPart list) : Result<StringPart list, TypeError> =
+            match parts with
+            | [] -> Ok (List.rev checkedParts)
+            | StringText s :: rest ->
+                checkParts rest (StringText s :: checkedParts)
+            | StringExpr e :: rest ->
+                checkExpr e env typeReg variantLookup genericFuncReg (Some TString)
+                |> Result.bind (fun (partType, checkedExpr) ->
+                    if partType = TString then
+                        checkParts rest (StringExpr checkedExpr :: checkedParts)
+                    else
+                        Error (TypeMismatch (TString, partType, "interpolated expression")))
+        match checkParts parts [] with
+        | Ok checkedParts ->
+            match expectedType with
+            | Some TString | None -> Ok (TString, InterpolatedString checkedParts)
+            | Some other -> Error (TypeMismatch (other, TString, "interpolated string"))
+        | Error err -> Error err
 
     | FloatLiteral _ ->
         // Float literals are always TFloat64

@@ -17,11 +17,17 @@ module Parser
 
 open AST
 
+/// Part of an interpolated string token
+type InterpPart =
+    | InterpText of string       // Literal text
+    | InterpTokens of Token list // Tokens for an expression (will be parsed later)
+
 /// Token types for lexer
-type Token =
+and Token =
     | TInt of int64
     | TFloat of float
     | TStringLit of string  // String literal token (named to avoid conflict with AST.TString type)
+    | TInterpString of InterpPart list  // Interpolated string: $"Hello {name}!"
     | TTrue
     | TFalse
     | TPlus
@@ -217,8 +223,8 @@ let lex (input: string) : Result<Token list, string> =
                     else
                         Error $"Integer literal too large: {numStr}"
         | '$' :: '"' :: rest ->
-            // Parse interpolated string: $"Hello {name}, you are {age}!"
-            // Desugars to: "Hello " ++ name ++ ", you are " ++ age ++ "!"
+            // Parse interpolated string: $"Hello {name}!"
+            // Returns TInterpString token with parts list
 
             // Helper to parse escape sequences (same as regular strings)
             let parseEscape (cs: char list) : Result<char * char list, string> =
@@ -280,18 +286,23 @@ let lex (input: string) : Result<Token list, string> =
                 | c :: remaining ->
                     collectExprChars remaining depth (c :: chars)
 
-            // Parse all parts of the interpolated string
-            let rec parseInterpParts (cs: char list) (parts: (bool * string) list) : Result<(bool * string) list * char list, string> =
+            // Parse all parts and build InterpPart list
+            let rec parseInterpParts (cs: char list) (parts: InterpPart list) : Result<InterpPart list * char list, string> =
                 match cs with
                 | '"' :: remaining ->
                     // End of interpolated string
                     Ok (List.rev parts, remaining)
                 | '{' :: remaining ->
-                    // Expression part
+                    // Expression part - collect chars and lex them
                     match collectExprChars remaining 0 [] with
                     | Ok (exprChars, afterExpr) ->
                         let exprStr = System.String(exprChars |> List.toArray)
-                        parseInterpParts afterExpr ((true, exprStr) :: parts)  // true = is expression
+                        // Lex the expression
+                        match lexHelper (exprStr |> Seq.toList) [] with
+                        | Ok tokens ->
+                            let tokens' = tokens |> List.filter (fun t -> t <> TEOF)
+                            parseInterpParts afterExpr (InterpTokens tokens' :: parts)
+                        | Error err -> Error $"Error in interpolated expression: {err}"
                     | Error err -> Error err
                 | _ ->
                     // Literal part
@@ -300,51 +311,12 @@ let lex (input: string) : Result<Token list, string> =
                         if str = "" then
                             parseInterpParts afterLit parts
                         else
-                            parseInterpParts afterLit ((false, str) :: parts)  // false = is literal
-                    | Error err -> Error err
-
-            // Convert parts to tokens (desugar to concatenation)
-            let buildTokens (parts: (bool * string) list) : Result<Token list, string> =
-                match parts with
-                | [] -> Ok [TStringLit ""]  // Empty interpolated string
-                | [(false, s)] -> Ok [TStringLit s]  // Just a literal
-                | _ ->
-                    // Build concatenation: part1 ++ part2 ++ part3 ...
-                    let rec buildConcat (parts: (bool * string) list) (first: bool) (acc: Token list) : Result<Token list, string> =
-                        match parts with
-                        | [] -> Ok (List.rev acc)
-                        | (isExpr, s) :: rest ->
-                            let tokensForPart =
-                                if isExpr then
-                                    // Lex the expression using lexHelper directly
-                                    let exprChars = s |> Seq.toList
-                                    match lexHelper exprChars [] with
-                                    | Ok tokens ->
-                                        // Remove TEOF from the end
-                                        let tokens' = tokens |> List.filter (fun t -> t <> TEOF)
-                                        Ok tokens'
-                                    | Error err -> Error $"Error in interpolated expression: {err}"
-                                else
-                                    Ok [TStringLit s]
-                            match tokensForPart with
-                            | Error err -> Error err
-                            | Ok partTokens ->
-                                let newAcc =
-                                    if first then
-                                        (List.rev partTokens) @ acc
-                                    else
-                                        (List.rev partTokens) @ (TPlusPlus :: acc)
-                                buildConcat rest false newAcc
-                    // Wrap in parentheses for safety
-                    match buildConcat parts true [] with
-                    | Ok tokens -> Ok (TLParen :: tokens @ [TRParen])
+                            parseInterpParts afterLit (InterpText str :: parts)
                     | Error err -> Error err
 
             match parseInterpParts rest [] with
             | Ok (parts, remaining) ->
-                match buildTokens parts with
-                | Ok tokens -> lexHelper remaining (List.rev tokens @ acc)
-                | Error err -> Error err
+                lexHelper remaining (TInterpString parts :: acc)
             | Error err -> Error err
 
         | '"' :: rest ->
@@ -1206,6 +1178,25 @@ let parse (tokens: Token list) : Result<Program, string> =
         | TInt n :: rest -> Ok (IntLiteral n, rest)
         | TFloat f :: rest -> Ok (FloatLiteral f, rest)
         | TStringLit s :: rest -> Ok (StringLiteral s, rest)
+        | TInterpString parts :: rest ->
+            // Parse interpolated string into AST.InterpolatedString
+            let rec parseInterpParts (parts: InterpPart list) (acc: AST.StringPart list) : Result<AST.StringPart list, string> =
+                match parts with
+                | [] -> Ok (List.rev acc)
+                | InterpText s :: remaining ->
+                    parseInterpParts remaining (AST.StringText s :: acc)
+                | InterpTokens tokens :: remaining ->
+                    // Parse the tokens as an expression
+                    match parseExpr (tokens @ [TEOF]) with
+                    | Ok (expr, [TEOF]) ->
+                        parseInterpParts remaining (AST.StringExpr expr :: acc)
+                    | Ok (_, leftover) ->
+                        Error $"Unexpected tokens after interpolated expression: {leftover}"
+                    | Error err ->
+                        Error $"Error parsing interpolated expression: {err}"
+            match parseInterpParts parts [] with
+            | Ok astParts -> Ok (InterpolatedString astParts, rest)
+            | Error err -> Error err
         | TTrue :: rest -> Ok (BoolLiteral true, rest)
         | TFalse :: rest -> Ok (BoolLiteral false, rest)
         // Qualified identifier: Stdlib.Int64.add, Module.func, or Stdlib.Result.Result.Ok

@@ -138,6 +138,12 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
         AST.Lambda (substParams, applySubstToExpr subst body)
     | AST.Apply (func, args) ->
         AST.Apply (applySubstToExpr subst func, List.map (applySubstToExpr subst) args)
+    | AST.InterpolatedString parts ->
+        let substPart part =
+            match part with
+            | AST.StringText s -> AST.StringText s
+            | AST.StringExpr e -> AST.StringExpr (applySubstToExpr subst e)
+        AST.InterpolatedString (List.map substPart parts)
 
 /// Specialize a generic function definition with specific type arguments
 let specializeFunction (funcDef: AST.FunctionDef) (typeArgs: AST.Type list) : AST.FunctionDef =
@@ -198,6 +204,12 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
         let funcSpecs = collectTypeApps func
         let argsSpecs = args |> List.map collectTypeApps |> List.fold Set.union Set.empty
         Set.union funcSpecs argsSpecs
+    | AST.InterpolatedString parts ->
+        parts |> List.choose (fun part ->
+            match part with
+            | AST.StringText _ -> None
+            | AST.StringExpr e -> Some (collectTypeApps e))
+        |> List.fold Set.union Set.empty
 
 /// Collect TypeApps from a function definition
 let collectTypeAppsFromFunc (funcDef: AST.FunctionDef) : Set<SpecKey> =
@@ -241,6 +253,12 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
         AST.Lambda (parameters, replaceTypeApps body)
     | AST.Apply (func, args) ->
         AST.Apply (replaceTypeApps func, List.map replaceTypeApps args)
+    | AST.InterpolatedString parts ->
+        let replacePart part =
+            match part with
+            | AST.StringText s -> AST.StringText s
+            | AST.StringExpr e -> AST.StringExpr (replaceTypeApps e)
+        AST.InterpolatedString (List.map replacePart parts)
 
 /// Replace TypeApp with Call in a function definition
 let replaceTypeAppsInFunc (funcDef: AST.FunctionDef) : AST.FunctionDef =
@@ -297,6 +315,11 @@ let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
     | AST.Closure (_, captures) ->
         // Check if name occurs in captured expressions
         List.exists (varOccursInExpr name) captures
+    | AST.InterpolatedString parts ->
+        parts |> List.exists (fun part ->
+            match part with
+            | AST.StringText _ -> false
+            | AST.StringExpr e -> varOccursInExpr name e)
 
 /// Inline lambdas at Apply sites
 /// lambdaEnv: maps variable names to their lambda expressions
@@ -371,6 +394,12 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
     | AST.Closure (funcName, captures) ->
         // Inline lambdas in captured expressions
         AST.Closure (funcName, List.map (fun c -> inlineLambdas c lambdaEnv) captures)
+    | AST.InterpolatedString parts ->
+        let inlinePart part =
+            match part with
+            | AST.StringText s -> AST.StringText s
+            | AST.StringExpr e -> AST.StringExpr (inlineLambdas e lambdaEnv)
+        AST.InterpolatedString (List.map inlinePart parts)
 
 /// Inline lambdas in a function definition
 let inlineLambdasInFunc (funcDef: AST.FunctionDef) : AST.FunctionDef =
@@ -437,6 +466,12 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
     | AST.Closure (_, captures) ->
         // Closure captures may contain free variables
         captures |> List.map (fun c -> freeVars c bound) |> List.fold Set.union Set.empty
+    | AST.InterpolatedString parts ->
+        parts |> List.choose (fun part ->
+            match part with
+            | AST.StringText _ -> None
+            | AST.StringExpr e -> Some (freeVars e bound))
+        |> List.fold Set.union Set.empty
 
 /// Lift lambdas in an expression, returning (transformed expr, new state)
 let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr * LiftState, string> =
@@ -505,6 +540,18 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
         |> Result.bind (fun (func', state1) ->
             liftLambdasInArgs args state1
             |> Result.map (fun (args', state2) -> (AST.Apply (func', args'), state2)))
+    | AST.InterpolatedString parts ->
+        let rec liftParts (ps: AST.StringPart list) (st: LiftState) (acc: AST.StringPart list) : Result<AST.StringPart list * LiftState, string> =
+            match ps with
+            | [] -> Ok (List.rev acc, st)
+            | AST.StringText s :: rest ->
+                liftParts rest st (AST.StringText s :: acc)
+            | AST.StringExpr e :: rest ->
+                liftLambdasInExpr e st
+                |> Result.bind (fun (e', st') ->
+                    liftParts rest st' (AST.StringExpr e' :: acc))
+        liftParts parts state []
+        |> Result.map (fun (parts', state') -> (AST.InterpolatedString parts', state'))
 
 /// Lift lambdas in function arguments, converting all lambdas to Closures
 /// (even non-capturing lambdas become trivial closures for uniform calling convention)
@@ -1040,6 +1087,9 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
             Ok (AST.TFunction (restParams, returnType))
         | Some funcType -> Ok funcType
         | None -> Error $"Cannot infer type: undefined closure function '{funcName}'"
+    | AST.InterpolatedString _ ->
+        // Interpolated strings are always String type
+        Ok AST.TString
 
 /// Convert AST expression to ANF
 /// env maps user variable names to ANF TempIds and their types
@@ -2042,6 +2092,29 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 let exprWithBindings = wrapBindings scrutineeBindings' chainExpr
                 (exprWithBindings, varGen2)))
 
+    | AST.InterpolatedString parts ->
+        // Desugar interpolated string to StringConcat chain
+        // $"Hello {name}!" → "Hello " ++ name ++ "!"
+        let partToExpr (part: AST.StringPart) : AST.Expr =
+            match part with
+            | AST.StringText s -> AST.StringLiteral s
+            | AST.StringExpr e -> e
+        match parts with
+        | [] ->
+            // Empty interpolated string → empty string
+            Ok (ANF.Return (ANF.StringLiteral ""), varGen)
+        | [single] ->
+            // Single part → convert directly
+            toANF (partToExpr single) varGen env typeReg variantLookup funcReg
+        | first :: rest ->
+            // Multiple parts → fold with StringConcat
+            let desugared =
+                rest
+                |> List.fold (fun acc part ->
+                    AST.BinOp (AST.StringConcat, acc, partToExpr part))
+                    (partToExpr first)
+            toANF desugared varGen env typeReg variantLookup funcReg
+
     | AST.Lambda (_parameters, _body) ->
         // Lambda in expression position - closures not yet fully implemented
         Error "Lambda expressions (closures) are not yet fully implemented"
@@ -2370,6 +2443,28 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         else
             // Build the list starting with Nil
             buildList elements varGen (ANF.IntLiteral 0L) []
+
+    | AST.InterpolatedString parts ->
+        // Desugar interpolated string to StringConcat chain
+        let partToExpr (part: AST.StringPart) : AST.Expr =
+            match part with
+            | AST.StringText s -> AST.StringLiteral s
+            | AST.StringExpr e -> e
+        match parts with
+        | [] ->
+            // Empty interpolated string → empty string
+            Ok (ANF.StringLiteral "", [], varGen)
+        | [single] ->
+            // Single part → convert directly
+            toAtom (partToExpr single) varGen env typeReg variantLookup funcReg
+        | first :: rest ->
+            // Multiple parts → desugar to StringConcat and convert
+            let desugared =
+                rest
+                |> List.fold (fun acc part ->
+                    AST.BinOp (AST.StringConcat, acc, partToExpr part))
+                    (partToExpr first)
+            toAtom desugared varGen env typeReg variantLookup funcReg
 
     | AST.Match (scrutinee, cases) ->
         // Match in atom position - compile and extract result

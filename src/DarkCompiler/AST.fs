@@ -72,13 +72,19 @@ type Pattern =
     | PList of Pattern list                                // [a, b, c] - exact length match
     | PListCons of head:Pattern list * tail:Pattern        // [a, b, ...t] - head elements + rest
 
+/// Part of an interpolated string: either a literal or an expression
+type StringPart =
+    | StringText of string    // Literal text: "Hello "
+    | StringExpr of Expr      // Interpolated expression: {name}
+
 /// Expression nodes
-type Expr =
+and Expr =
     | UnitLiteral                           // Unit value: ()
     | IntLiteral of int64
     | BoolLiteral of bool
     | StringLiteral of string
     | FloatLiteral of float
+    | InterpolatedString of StringPart list // $"Hello {name}!"
     | BinOp of BinOp * Expr * Expr
     | UnaryOp of UnaryOp * Expr
     | Let of name:string * value:Expr * body:Expr  // Let binding: let name = value in body
