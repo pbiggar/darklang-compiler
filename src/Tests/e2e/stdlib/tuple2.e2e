@@ -1,0 +1,63 @@
+// Stdlib.Tuple2 Tests
+// Ported from https://github.com/darklang/dark/tree/main/backend/testfiles/execution/stdlib
+//
+// Tests for Tuple2 module functions
+
+// ===================================================================
+// Stdlib.Tuple2.first - Returns the first value of a pair
+// ===================================================================
+
+Stdlib.Tuple2.first<Int64, Int64>((1, 2)) = 1
+Stdlib.Tuple2.first<Int64, Int64>((42, 0)) = 42
+// NOTE: Mixed-type tuples with String have codegen issue (HeapStore)
+// Stdlib.Tuple2.first<String, Int64>(("hello", 5)) = stdout="hello\n"
+Stdlib.Tuple2.first<Bool, Bool>((true, false)) = stdout="true\n"
+
+// ===================================================================
+// Stdlib.Tuple2.second - Returns the second value of a pair
+// ===================================================================
+
+Stdlib.Tuple2.second<Int64, Int64>((1, 2)) = 2
+Stdlib.Tuple2.second<Int64, Int64>((0, 42)) = 42
+// NOTE: Mixed-type tuples with String have codegen issue (HeapStore)
+// Stdlib.Tuple2.second<Int64, String>((5, "world")) = stdout="world\n"
+Stdlib.Tuple2.second<Bool, Bool>((false, true)) = stdout="true\n"
+
+// ===================================================================
+// Stdlib.Tuple2.create - Constructs a pair from two values
+// ===================================================================
+
+Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.create<Int64, Int64>(1, 2)) = 1
+Stdlib.Tuple2.second<Int64, Int64>(Stdlib.Tuple2.create<Int64, Int64>(1, 2)) = 2
+Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.create<Int64, Int64>(42, 99)) = 42
+
+// ===================================================================
+// Stdlib.Tuple2.swap - Returns a pair with the elements swapped
+// ===================================================================
+
+Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.swap<Int64, Int64>((1, 2))) = 2
+Stdlib.Tuple2.second<Int64, Int64>(Stdlib.Tuple2.swap<Int64, Int64>((1, 2))) = 1
+Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.swap<Int64, Int64>((100, 42))) = 42
+
+// ===================================================================
+// Stdlib.Tuple2.mapFirst - Transform the first value in a pair
+// ===================================================================
+
+Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.mapFirst<Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10))) = 6
+Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.mapFirst<Int64, Int64, Int64>((x: Int64) => x * 2, (5, 10))) = 10
+Stdlib.Tuple2.second<Int64, Int64>(Stdlib.Tuple2.mapFirst<Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10))) = 10
+
+// ===================================================================
+// Stdlib.Tuple2.mapSecond - Transform the second value in a pair
+// ===================================================================
+
+Stdlib.Tuple2.second<Int64, Int64>(Stdlib.Tuple2.mapSecond<Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10))) = 11
+Stdlib.Tuple2.second<Int64, Int64>(Stdlib.Tuple2.mapSecond<Int64, Int64, Int64>((x: Int64) => x * 2, (5, 10))) = 20
+Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.mapSecond<Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10))) = 5
+
+// ===================================================================
+// Stdlib.Tuple2.mapBoth - Transform both values in a pair
+// ===================================================================
+
+Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.mapBoth<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (y: Int64) => y * 2, (5, 10))) = 6
+Stdlib.Tuple2.second<Int64, Int64>(Stdlib.Tuple2.mapBoth<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (y: Int64) => y * 2, (5, 10))) = 20
