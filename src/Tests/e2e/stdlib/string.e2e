@@ -1,0 +1,101 @@
+// Stdlib.String Tests
+// Ported from https://github.com/darklang/dark/tree/main/backend/testfiles/execution/stdlib
+//
+// Tests for String module functions
+//
+// NOTE: Most String functions are commented out because they require
+// runtime builtins that don't exist yet (length, slice, contains, etc.)
+
+// ===================================================================
+// Stdlib.String.append - Append two strings (wrapper for ++)
+// ===================================================================
+
+// NOTE: These tests are commented out due to a codegen bug where
+// functions with String parameters that perform ++ cause segfault
+// Stdlib.String.append("hello", " world") = stdout="hello world\n"
+// Stdlib.String.append("", "") = stdout="\n"
+// Stdlib.String.append("a", "b") = stdout="ab\n"
+// Stdlib.String.append("foo", "bar") = stdout="foobar\n"
+
+// ===================================================================
+// Stdlib.String.prepend - Prepend first string to second
+// ===================================================================
+
+// NOTE: Same segfault issue as append
+// Stdlib.String.prepend(" world", "hello") = stdout="hello world\n"
+// Stdlib.String.prepend("bar", "foo") = stdout="foobar\n"
+
+// ===================================================================
+// Stdlib.String.newline - Returns newline character
+// ===================================================================
+
+// Test that newline returns "\n"
+Stdlib.String.newline() = stdout="\n\n"
+
+// ===================================================================
+// NOTE: Functions not yet implemented due to missing runtime builtins
+// ===================================================================
+
+// Stdlib.String.length - needs strlen builtin
+// Stdlib.String.length("hello") = stdout="5\n"
+// Stdlib.String.length("") = stdout="0\n"
+
+// Stdlib.String.isEmpty - needs length builtin
+// Stdlib.String.isEmpty("") = stdout="true\n"
+// Stdlib.String.isEmpty("hello") = stdout="false\n"
+
+// Stdlib.String.toUppercase - needs runtime builtin
+// Stdlib.String.toUppercase("hello") = stdout="HELLO\n"
+
+// Stdlib.String.toLowercase - needs runtime builtin
+// Stdlib.String.toLowercase("HELLO") = stdout="hello\n"
+
+// Stdlib.String.contains - needs runtime builtin
+// Stdlib.String.contains("hello world", "world") = stdout="true\n"
+// Stdlib.String.contains("hello", "xyz") = stdout="false\n"
+
+// Stdlib.String.startsWith - needs runtime builtin
+// Stdlib.String.startsWith("hello world", "hello") = stdout="true\n"
+
+// Stdlib.String.endsWith - needs runtime builtin
+// Stdlib.String.endsWith("hello world", "world") = stdout="true\n"
+
+// Stdlib.String.trim - needs runtime builtin
+// Stdlib.String.trim("  hello  ") = stdout="hello\n"
+
+// Stdlib.String.slice - needs runtime builtin
+// Stdlib.String.slice("hello", 0, 2) = stdout="he\n"
+
+// Stdlib.String.first - needs runtime builtin
+// Stdlib.String.first("hello", 3) = stdout="hel\n"
+
+// Stdlib.String.last - needs runtime builtin
+// Stdlib.String.last("hello", 3) = stdout="llo\n"
+
+// Stdlib.String.reverse - needs runtime builtin
+// Stdlib.String.reverse("hello") = stdout="olleh\n"
+
+// Stdlib.String.replaceAll - needs runtime builtin
+// Stdlib.String.replaceAll("hello world", "world", "there") = stdout="hello there\n"
+
+// ===================================================================
+// NOTE: Functions blocked by Option/Result type checker bug
+// ===================================================================
+
+// Stdlib.String.indexOf - needs Option return
+// Stdlib.String.indexOf("hello", "l") = Stdlib.Option.Option.Some(2)
+// Stdlib.String.indexOf("hello", "x") = Stdlib.Option.Option.None
+
+// Stdlib.String.head - needs Option return
+// Stdlib.String.head("hello") = Stdlib.Option.Option.Some('h')
+// Stdlib.String.head("") = Stdlib.Option.Option.None
+
+// ===================================================================
+// NOTE: Functions blocked by missing list construction
+// ===================================================================
+
+// Stdlib.String.split - returns List<String>
+// Stdlib.String.split("a,b,c", ",") = ["a", "b", "c"]
+
+// Stdlib.String.toList - returns List<Char>
+// Stdlib.String.toList("abc") = ['a', 'b', 'c']
