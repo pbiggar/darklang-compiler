@@ -156,10 +156,17 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
         payload |> Option.map (fun e -> collectFreeVars e bound) |> Option.defaultValue Set.empty
     | Match (scrutinee, cases) ->
         let scrutineeFree = collectFreeVars scrutinee bound
-        let casesFree = cases |> List.map (fun (pattern, body) ->
-            let patternBindings = collectPatternBindings pattern
+        let casesFree = cases |> List.map (fun matchCase ->
+            // Collect bindings from all patterns (all patterns in a group bind same vars)
+            let patternBindings =
+                matchCase.Patterns
+                |> List.map collectPatternBindings
+                |> List.fold Set.union Set.empty
             let bodyBound = Set.union bound patternBindings
-            collectFreeVars body bodyBound)
+            // Include guard free vars if present
+            let guardFree = matchCase.Guard |> Option.map (fun g -> collectFreeVars g bodyBound) |> Option.defaultValue Set.empty
+            let bodyFree = collectFreeVars matchCase.Body bodyBound
+            Set.union guardFree bodyFree)
         Set.union scrutineeFree (casesFree |> List.fold Set.union Set.empty)
     | ListLiteral elements ->
         elements |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
@@ -959,23 +966,39 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
 
             // Type check each case and ensure they all return the same type
             // Returns (resultType, transformedCases)
-            let rec checkCases (remaining: (Pattern * Expr) list) (resultType: Type option) (accCases: (Pattern * Expr) list) : Result<Type * (Pattern * Expr) list, TypeError> =
+            let rec checkCases (remaining: MatchCase list) (resultType: Type option) (accCases: MatchCase list) : Result<Type * MatchCase list, TypeError> =
                 match remaining with
                 | [] ->
                     match resultType with
                     | Some t -> Ok (t, List.rev accCases)
                     | None -> Error (GenericError "Match expression must have at least one case")
-                | (pattern, body) :: rest ->
-                    // Extract bindings from pattern and add to environment
-                    extractPatternBindings pattern scrutineeType
+                | matchCase :: rest ->
+                    // Extract bindings from first pattern (all patterns in group bind same vars)
+                    // For pattern grouping, we check the first pattern's bindings
+                    let firstPattern = List.head matchCase.Patterns
+                    extractPatternBindings firstPattern scrutineeType
                     |> Result.bind (fun bindings ->
-                        let bodyEnv = List.fold (fun e (name, ty) -> Map.add name ty e) env bindings
-                        checkExpr body bodyEnv typeReg variantLookup genericFuncReg resultType
-                        |> Result.bind (fun (bodyType, body') ->
-                            match resultType with
-                            | None -> checkCases rest (Some bodyType) ((pattern, body') :: accCases)
-                            | Some expected when expected = bodyType -> checkCases rest resultType ((pattern, body') :: accCases)
-                            | Some expected -> Error (TypeMismatch (expected, bodyType, "match case"))))
+                        let caseEnv = List.fold (fun e (name, ty) -> Map.add name ty e) env bindings
+                        // Type check guard if present (must be Bool)
+                        let guardResult =
+                            match matchCase.Guard with
+                            | None -> Ok None
+                            | Some guardExpr ->
+                                checkExpr guardExpr caseEnv typeReg variantLookup genericFuncReg (Some TBool)
+                                |> Result.bind (fun (guardType, guard') ->
+                                    if guardType = TBool then
+                                        Ok (Some guard')
+                                    else
+                                        Error (TypeMismatch (TBool, guardType, "guard clause")))
+                        guardResult
+                        |> Result.bind (fun guard' ->
+                            checkExpr matchCase.Body caseEnv typeReg variantLookup genericFuncReg resultType
+                            |> Result.bind (fun (bodyType, body') ->
+                                let newCase = { Patterns = matchCase.Patterns; Guard = guard'; Body = body' }
+                                match resultType with
+                                | None -> checkCases rest (Some bodyType) (newCase :: accCases)
+                                | Some expected when expected = bodyType -> checkCases rest resultType (newCase :: accCases)
+                                | Some expected -> Error (TypeMismatch (expected, bodyType, "match case")))))
 
             checkCases cases None []
             |> Result.bind (fun (matchType, cases') ->

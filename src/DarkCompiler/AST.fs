@@ -90,12 +90,20 @@ type Expr =
     | RecordLiteral of typeName:string * fields:(string * Expr) list  // { x = 1, y = 2 }
     | RecordAccess of record:Expr * fieldName:string                  // p.x, p.y
     | Constructor of typeName:string * variantName:string * payload:Expr option  // Red, Some(42)
-    | Match of scrutinee:Expr * cases:(Pattern * Expr) list  // match e with | p1 -> e1 | p2 -> e2
+    | Match of scrutinee:Expr * cases:MatchCase list  // match e with | p1 when g -> e1 | p2 -> e2
     | ListLiteral of Expr list                               // [1, 2, 3]
     | Lambda of parameters:(string * Type) list * body:Expr  // (x: int) => x + 1
     | Apply of func:Expr * args:Expr list                    // Apply function expr: f(x) where f is expression
     | FuncRef of funcName:string                             // Reference to a function (for passing as value)
     | Closure of funcName:string * captures:Expr list        // Closure: function + captured values
+
+/// Match case with optional guard clause and pattern grouping
+/// Syntax: | pat1 | pat2 when guard -> body
+and MatchCase = {
+    Patterns: Pattern list    // One or more patterns (pattern grouping via |)
+    Guard: Expr option        // Optional guard clause (when condition)
+    Body: Expr                // Body expression
+}
 
 /// Function definition
 type FunctionDef = {

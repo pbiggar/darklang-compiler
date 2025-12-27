@@ -50,6 +50,7 @@ type Token =
     | TArrow       // -> (pattern matching)
     | TFatArrow    // => (lambda)
     | TUnderscore  // _ (wildcard pattern)
+    | TWhen        // when (guard clause in pattern matching)
     | TLBracket    // [ (list literal)
     | TRBracket    // ] (list literal)
     | TEquals      // = (assignment in let)
@@ -138,6 +139,7 @@ let lex (input: string) : Result<Token list, string> =
                 | "of" -> TOf
                 | "match" -> TMatch
                 | "with" -> TWith
+                | "when" -> TWhen
                 | "true" -> TTrue
                 | "false" -> TFalse
                 | "_" -> TUnderscore
@@ -733,19 +735,47 @@ and parseListPattern (tokens: Token list) (acc: Pattern list) : Result<Pattern *
                 parseListPattern rest (pat :: acc)
             | _ -> Error "Expected ',' or ']' in list pattern")
 
-/// Parse a single case: | pattern -> expr
-let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Token list, string>) : Result<(Pattern * Expr) * Token list, string> =
-    match tokens with
-    | TBar :: rest ->
-        parsePattern rest
-        |> Result.bind (fun (pattern, remaining) ->
-            match remaining with
-            | TArrow :: rest' ->
-                parseExprFn rest'
-                |> Result.map (fun (body, remaining') ->
-                    ((pattern, body), remaining'))
-            | _ -> Error "Expected '->' after pattern")
-    | _ -> Error "Expected '|' before pattern"
+/// Parse a single case: | pat1 | pat2 when guard -> expr
+/// Supports multiple patterns (pattern grouping) and optional guard clause
+let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Token list, string>) : Result<MatchCase * Token list, string> =
+    // Parse patterns until we see TWhen or TArrow
+    let rec parsePatterns (toks: Token list) (acc: Pattern list) : Result<Pattern list * Token list, string> =
+        match toks with
+        | TBar :: rest ->
+            parsePattern rest
+            |> Result.bind (fun (pattern, remaining) ->
+                // Check what comes next
+                match remaining with
+                | TBar :: _ ->
+                    // Another pattern in the group
+                    parsePatterns remaining (pattern :: acc)
+                | TWhen :: _ | TArrow :: _ ->
+                    // End of patterns, followed by guard or body
+                    Ok (List.rev (pattern :: acc), remaining)
+                | _ -> Error "Expected '|', 'when', or '->' after pattern")
+        | _ -> Error "Expected '|' before pattern"
+
+    parsePatterns tokens []
+    |> Result.bind (fun (patterns, remaining) ->
+        // Parse optional guard
+        match remaining with
+        | TWhen :: rest' ->
+            // Parse guard expression
+            parseExprFn rest'
+            |> Result.bind (fun (guard, remaining') ->
+                match remaining' with
+                | TArrow :: rest'' ->
+                    // Parse body
+                    parseExprFn rest''
+                    |> Result.map (fun (body, remaining''') ->
+                        ({ Patterns = patterns; Guard = Some guard; Body = body }, remaining'''))
+                | _ -> Error "Expected '->' after guard expression")
+        | TArrow :: rest' ->
+            // No guard, parse body directly
+            parseExprFn rest'
+            |> Result.map (fun (body, remaining') ->
+                ({ Patterns = patterns; Guard = None; Body = body }, remaining'))
+        | _ -> Error "Expected 'when' or '->' after pattern")
 
 /// Try to parse lambda parameters: (ident : type, ident : type, ...)
 /// Returns Some (params, remaining) if successful, None otherwise
@@ -778,7 +808,7 @@ let parse (tokens: Token list) : Result<Program, string> =
     // Precedence (low to high): or < and < comparison < +/- < */ < unary
 
     /// Parse multiple cases for pattern matching: | p1 -> e1 | p2 -> e2 ...
-    let rec parseCases (toks: Token list) (acc: (Pattern * Expr) list) : Result<(Pattern * Expr) list * Token list, string> =
+    let rec parseCases (toks: Token list) (acc: MatchCase list) : Result<MatchCase list * Token list, string> =
         match toks with
         | TBar :: _ ->
             // Another case
@@ -810,7 +840,7 @@ let parse (tokens: Token list) : Result<Program, string> =
                                 // If pattern is just PVar, use Let; otherwise desugar to Match
                                 match pattern with
                                 | PVar name -> (Let (name, value, body), remaining'')
-                                | _ -> (Match (value, [(pattern, body)]), remaining''))
+                                | _ -> (Match (value, [{ Patterns = [pattern]; Guard = None; Body = body }]), remaining''))
                         | _ -> Error "Expected 'in' after let binding value")
                 | _ -> Error "Expected '=' after let binding pattern")
         | TIf :: rest ->

@@ -128,7 +128,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
     | AST.Constructor (typeName, variantName, payload) ->
         AST.Constructor (typeName, variantName, Option.map (applySubstToExpr subst) payload)
     | AST.Match (scrutinee, cases) ->
-        AST.Match (applySubstToExpr subst scrutinee, List.map (fun (p, e) -> (p, applySubstToExpr subst e)) cases)
+        AST.Match (applySubstToExpr subst scrutinee,
+                   cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map (applySubstToExpr subst); Body = applySubstToExpr subst mc.Body }))
     | AST.ListLiteral elements ->
         AST.ListLiteral (List.map (applySubstToExpr subst) elements)
     | AST.Lambda (parameters, body) ->
@@ -185,7 +186,9 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
         payload |> Option.map collectTypeApps |> Option.defaultValue Set.empty
     | AST.Match (scrutinee, cases) ->
         let scrutineeSpecs = collectTypeApps scrutinee
-        let caseSpecs = cases |> List.map (snd >> collectTypeApps) |> List.fold Set.union Set.empty
+        let caseSpecs = cases |> List.map (fun mc ->
+            let guardSpecs = mc.Guard |> Option.map collectTypeApps |> Option.defaultValue Set.empty
+            Set.union guardSpecs (collectTypeApps mc.Body)) |> List.fold Set.union Set.empty
         Set.union scrutineeSpecs caseSpecs
     | AST.ListLiteral elements ->
         elements |> List.map collectTypeApps |> List.fold Set.union Set.empty
@@ -230,7 +233,8 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
     | AST.Constructor (typeName, variantName, payload) ->
         AST.Constructor (typeName, variantName, Option.map replaceTypeApps payload)
     | AST.Match (scrutinee, cases) ->
-        AST.Match (replaceTypeApps scrutinee, List.map (fun (p, e) -> (p, replaceTypeApps e)) cases)
+        AST.Match (replaceTypeApps scrutinee,
+                   cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map replaceTypeApps; Body = replaceTypeApps mc.Body }))
     | AST.ListLiteral elements ->
         AST.ListLiteral (List.map replaceTypeApps elements)
     | AST.Lambda (parameters, body) ->
@@ -276,7 +280,10 @@ let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
     | AST.RecordAccess (record, _) -> varOccursInExpr name record
     | AST.Constructor (_, _, payload) -> Option.exists (varOccursInExpr name) payload
     | AST.Match (scrutinee, cases) ->
-        varOccursInExpr name scrutinee || List.exists (fun (_, e) -> varOccursInExpr name e) cases
+        varOccursInExpr name scrutinee ||
+        List.exists (fun (mc: AST.MatchCase) ->
+            (mc.Guard |> Option.map (varOccursInExpr name) |> Option.defaultValue false) ||
+            varOccursInExpr name mc.Body) cases
     | AST.ListLiteral elements -> List.exists (varOccursInExpr name) elements
     | AST.Lambda (parameters, body) ->
         // If name is shadowed by a parameter, it doesn't occur
@@ -336,7 +343,8 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
     | AST.Constructor (typeName, variantName, payload) ->
         AST.Constructor (typeName, variantName, Option.map (fun e -> inlineLambdas e lambdaEnv) payload)
     | AST.Match (scrutinee, cases) ->
-        AST.Match (inlineLambdas scrutinee lambdaEnv, List.map (fun (p, e) -> (p, inlineLambdas e lambdaEnv)) cases)
+        AST.Match (inlineLambdas scrutinee lambdaEnv,
+                   cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map (fun g -> inlineLambdas g lambdaEnv); Body = inlineLambdas mc.Body lambdaEnv }))
     | AST.ListLiteral elements ->
         AST.ListLiteral (List.map (fun e -> inlineLambdas e lambdaEnv) elements)
     | AST.Lambda (parameters, body) ->
@@ -414,7 +422,9 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
         payload |> Option.map (fun e -> freeVars e bound) |> Option.defaultValue Set.empty
     | AST.Match (scrutinee, cases) ->
         let scrutineeVars = freeVars scrutinee bound
-        let caseVars = cases |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
+        let caseVars = cases |> List.map (fun mc ->
+            let guardVars = mc.Guard |> Option.map (fun g -> freeVars g bound) |> Option.defaultValue Set.empty
+            Set.union guardVars (freeVars mc.Body bound)) |> List.fold Set.union Set.empty
         Set.union scrutineeVars caseVars
     | AST.Lambda (parameters, body) ->
         let paramNames = parameters |> List.map fst |> Set.ofList
@@ -598,13 +608,24 @@ and liftLambdasInFields (fields: (string * AST.Expr) list) (state: LiftState) : 
     loop fields state []
 
 /// Helper to lift lambdas in match cases
-and liftLambdasInCases (cases: (AST.Pattern * AST.Expr) list) (state: LiftState) : Result<(AST.Pattern * AST.Expr) list * LiftState, string> =
-    let rec loop (remaining: (AST.Pattern * AST.Expr) list) (state: LiftState) (acc: (AST.Pattern * AST.Expr) list) =
+and liftLambdasInCases (cases: AST.MatchCase list) (state: LiftState) : Result<AST.MatchCase list * LiftState, string> =
+    let rec loop (remaining: AST.MatchCase list) (state: LiftState) (acc: AST.MatchCase list) =
         match remaining with
         | [] -> Ok (List.rev acc, state)
-        | (pat, e) :: rest ->
-            liftLambdasInExpr e state
-            |> Result.bind (fun (e', state') -> loop rest state' ((pat, e') :: acc))
+        | mc :: rest ->
+            // Lift lambdas in guard if present
+            let guardResult =
+                match mc.Guard with
+                | None -> Ok (None, state)
+                | Some g ->
+                    liftLambdasInExpr g state
+                    |> Result.map (fun (g', s) -> (Some g', s))
+            guardResult
+            |> Result.bind (fun (guard', state1) ->
+                liftLambdasInExpr mc.Body state1
+                |> Result.bind (fun (body', state2) ->
+                    let newCase = { mc with Guard = guard'; Body = body' }
+                    loop rest state2 (newCase :: acc)))
     loop cases state []
 
 /// Lift lambdas in a function definition
@@ -746,7 +767,9 @@ and collectFuncRefsInExpr (expr: AST.Expr) (knownFuncs: Map<string, (string * AS
     | AST.Constructor (_, _, payload) ->
         payload |> Option.map (fun e -> collectFuncRefsInExpr e knownFuncs) |> Option.defaultValue []
     | AST.Match (scrut, cases) ->
-        collectFuncRefsInExpr scrut knownFuncs @ (cases |> List.collect (fun (_, e) -> collectFuncRefsInExpr e knownFuncs))
+        collectFuncRefsInExpr scrut knownFuncs @ (cases |> List.collect (fun mc ->
+            (mc.Guard |> Option.map (fun g -> collectFuncRefsInExpr g knownFuncs) |> Option.defaultValue []) @
+            collectFuncRefsInExpr mc.Body knownFuncs))
     | AST.Lambda (_, body) -> collectFuncRefsInExpr body knownFuncs
     | AST.Apply (f, args) ->
         collectFuncRefsInExpr f knownFuncs @ (args |> List.collect (fun e -> collectFuncRefsInExpr e knownFuncs))
@@ -796,7 +819,8 @@ and replaceInExpr (wrapperMap: Map<string, string>) (expr: AST.Expr) : AST.Expr 
     | AST.Constructor (t, v, payload) ->
         AST.Constructor (t, v, payload |> Option.map (replaceInExpr wrapperMap))
     | AST.Match (scrut, cases) ->
-        AST.Match (replaceInExpr wrapperMap scrut, cases |> List.map (fun (p, e) -> (p, replaceInExpr wrapperMap e)))
+        AST.Match (replaceInExpr wrapperMap scrut,
+                   cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map (replaceInExpr wrapperMap); Body = replaceInExpr wrapperMap mc.Body }))
     | AST.ListLiteral es ->
         AST.ListLiteral (es |> List.map (replaceInExpr wrapperMap))
     | AST.Lambda (ps, body) ->
@@ -980,7 +1004,7 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
     | AST.Match (_, cases) ->
         // Infer from first case body
         match cases with
-        | (_, body) :: _ -> inferType body typeEnv typeReg variantLookup funcReg
+        | mc :: _ -> inferType mc.Body typeEnv typeReg variantLookup funcReg
         | [] -> Error "Empty match expression"
     | AST.Call (funcName, _) ->
         // Look up function return type from the function registry
@@ -1379,11 +1403,12 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             // Check if any pattern needs to access list structure
             // If so, we must ensure scrutinee is a variable (can't TupleGet on literal)
             let hasNonEmptyListPattern =
-                cases |> List.exists (fun (pat, _) ->
-                    match pat with
-                    | AST.PList (_ :: _) -> true
-                    | AST.PListCons (_ :: _, _) -> true  // [h, ...t] also needs list access
-                    | _ -> false)
+                cases |> List.exists (fun mc ->
+                    mc.Patterns |> List.exists (fun pat ->
+                        match pat with
+                        | AST.PList (_ :: _) -> true
+                        | AST.PListCons (_ :: _, _) -> true  // [h, ...t] also needs list access
+                        | _ -> false))
 
             // If there are non-empty list patterns, bind the scrutinee to a variable
             let (scrutineeAtom', scrutineeBindings', varGen1') =
@@ -1639,6 +1664,70 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 (finalExpr, vg2))
                         | _ -> Error "Tail pattern in list cons must be variable or wildcard")
 
+            // Extract pattern bindings, check guard, and compile body
+            // Returns: if guard is true, execute body; otherwise execute elseExpr
+            and extractAndCompileBodyWithGuard (pattern: AST.Pattern) (guardExpr: AST.Expr) (body: AST.Expr) (scrutAtom: ANF.Atom) (currentEnv: VarEnv) (vg: ANF.VarGen) (elseExpr: ANF.AExpr) : Result<ANF.AExpr * ANF.VarGen, string> =
+                // First, we need to extract bindings from the pattern
+                // Then compile the guard with those bindings in scope
+                // Then compile the body with those bindings in scope
+                // Finally, generate: let <bindings> in if <guard> then <body> else <elseExpr>
+
+                // Helper to collect pattern variable bindings (simplified version for common patterns)
+                let rec collectBindings (pat: AST.Pattern) (sourceAtom: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
+                    match pat with
+                    | AST.PUnit | AST.PWildcard | AST.PLiteral _ | AST.PBool _ | AST.PString _ | AST.PFloat _ ->
+                        (env, bindings, vg)
+                    | AST.PVar name ->
+                        let (tempId, vg1) = ANF.freshVar vg
+                        let binding = (tempId, ANF.Atom sourceAtom)
+                        let newEnv = Map.add name (tempId, AST.TInt64) env
+                        (newEnv, binding :: bindings, vg1)
+                    | AST.PTuple innerPatterns ->
+                        let rec collectFromTuple pats idx env bindings vg =
+                            match pats with
+                            | [] -> (env, bindings, vg)
+                            | p :: rest ->
+                                let (elemVar, vg1) = ANF.freshVar vg
+                                let elemExpr = ANF.TupleGet (sourceAtom, idx)
+                                let (env', bindings', vg') = collectBindings p (ANF.Var elemVar) env ((elemVar, elemExpr) :: bindings) vg1
+                                collectFromTuple rest (idx + 1) env' bindings' vg'
+                        collectFromTuple innerPatterns 0 env bindings vg
+                    | AST.PConstructor (_, Some innerPat) ->
+                        let (payloadVar, vg1) = ANF.freshVar vg
+                        let payloadExpr = ANF.TupleGet (sourceAtom, 1)
+                        collectBindings innerPat (ANF.Var payloadVar) env ((payloadVar, payloadExpr) :: bindings) vg1
+                    | AST.PConstructor (_, None) ->
+                        (env, bindings, vg)
+                    | AST.PRecord (_, fieldPatterns) ->
+                        let rec collectFromRecord fields idx env bindings vg =
+                            match fields with
+                            | [] -> (env, bindings, vg)
+                            | (_, p) :: rest ->
+                                let (fieldVar, vg1) = ANF.freshVar vg
+                                let fieldExpr = ANF.TupleGet (sourceAtom, idx)
+                                let (env', bindings', vg') = collectBindings p (ANF.Var fieldVar) env ((fieldVar, fieldExpr) :: bindings) vg1
+                                collectFromRecord rest (idx + 1) env' bindings' vg'
+                        collectFromRecord fieldPatterns 0 env bindings vg
+                    | AST.PList _ | AST.PListCons _ ->
+                        // List patterns with guards - simplified handling
+                        (env, bindings, vg)
+
+                let (newEnv, bindings, vg1) = collectBindings pattern scrutAtom currentEnv [] vg
+
+                // Compile guard expression in the extended environment
+                toAtom guardExpr vg1 newEnv typeReg variantLookup funcReg
+                |> Result.bind (fun (guardAtom, guardBindings, vg2) ->
+                    // Compile body expression in the extended environment
+                    toANF body vg2 newEnv typeReg variantLookup funcReg
+                    |> Result.map (fun (bodyExpr, vg3) ->
+                        // Build: if guard then body else elseExpr
+                        let ifExpr = ANF.If (guardAtom, bodyExpr, elseExpr)
+                        // Wrap guard bindings
+                        let withGuardBindings = wrapBindings guardBindings ifExpr
+                        // Wrap pattern bindings (in reverse order since we accumulated in reverse)
+                        let finalExpr = wrapBindings (List.rev bindings) withGuardBindings
+                        (finalExpr, vg3)))
+
             // Build comparison expression for a pattern
             let rec buildPatternComparison (pattern: AST.Pattern) (scrutAtom: ANF.Atom) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
                 match pattern with
@@ -1815,14 +1904,54 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let ifExpr = ANF.If (ANF.Var checkVar, withHead, elseExpr)
                         (ANF.Let (checkVar, checkExpr, ifExpr), vg4))
 
+            // Build OR of multiple pattern conditions for pattern grouping
+            // Returns: combined condition atom, all bindings, updated vargen
+            let buildPatternGroupComparison (patterns: AST.Pattern list) (scrutAtom: ANF.Atom) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
+                match patterns with
+                | [] -> Ok None
+                | [single] -> buildPatternComparison single scrutAtom vg
+                | multiple ->
+                    // Build comparison for each pattern, then OR them together
+                    let rec buildOr (pats: AST.Pattern list) (accCondOpt: ANF.Atom option) (accBindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
+                        match pats with
+                        | [] ->
+                            match accCondOpt with
+                            | None -> Ok None
+                            | Some cond -> Ok (Some (cond, accBindings, vg))
+                        | pat :: rest ->
+                            buildPatternComparison pat scrutAtom vg
+                            |> Result.bind (fun cmpOpt ->
+                                match cmpOpt with
+                                | None ->
+                                    // Pattern always matches (wildcard/var) - the whole group always matches
+                                    Ok None
+                                | Some (condAtom, bindings, vg1) ->
+                                    let (newCondOpt, newBindings, vg2) =
+                                        match accCondOpt with
+                                        | None ->
+                                            // First condition
+                                            (Some condAtom, bindings @ accBindings, vg1)
+                                        | Some accCond ->
+                                            // OR with previous conditions
+                                            // Put bindings in dependency order: comparison bindings first, OR at end
+                                            // (foldBack makes first binding outermost, so dependencies must come first)
+                                            let (orVar, vg') = ANF.freshVar vg1
+                                            let orExpr = ANF.Prim (ANF.Or, accCond, condAtom)
+                                            (Some (ANF.Var orVar), accBindings @ bindings @ [(orVar, orExpr)], vg')
+                                    buildOr rest newCondOpt newBindings vg2)
+                    buildOr multiple None [] vg
+
             // Build the if-else chain from cases
-            let rec buildChain (remaining: (AST.Pattern * AST.Expr) list) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
+            let rec buildChain (remaining: AST.MatchCase list) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
                 match remaining with
                 | [] ->
                     // No cases left - shouldn't happen if we have wildcard/var
                     Error "Non-exhaustive pattern match"
-                | [(pattern, body)] ->
+                | [mc] ->
                     // Last case - for most patterns just compile the body
+                    // For now, use first pattern (pattern grouping not yet fully supported)
+                    let pattern = List.head mc.Patterns
+                    let body = mc.Body
                     // For non-empty list patterns, we still need proper length checking
                     match pattern with
                     | AST.PList (_ :: _ as listPatterns) ->
@@ -1837,14 +1966,31 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         compileListConsPatternWithChecks headPatterns tailPattern scrutineeAtom' env body fallbackExpr vg
                     | _ ->
                         // Other patterns - original behavior
-                        extractAndCompileBody pattern body scrutineeAtom' env vg
-                | (pattern, body) :: rest ->
-                    if patternAlwaysMatches pattern then
-                        // Wildcard or var - matches everything, no more cases
-                        extractAndCompileBody pattern body scrutineeAtom' env vg
+                        // Handle guard if present
+                        match mc.Guard with
+                        | None ->
+                            extractAndCompileBody pattern body scrutineeAtom' env vg
+                        | Some guardExpr ->
+                            // With guard: compile pattern match with guard check
+                            let fallbackExpr = ANF.Return (ANF.IntLiteral 0L)
+                            extractAndCompileBodyWithGuard pattern guardExpr body scrutineeAtom' env vg fallbackExpr
+                | mc :: rest ->
+                    // For pattern grouping, use first pattern for bindings but OR all patterns for comparison
+                    let firstPattern = List.head mc.Patterns
+                    let body = mc.Body
+                    if patternAlwaysMatches firstPattern then
+                        // Wildcard or var - matches everything, but may still need guard
+                        match mc.Guard with
+                        | None ->
+                            extractAndCompileBody firstPattern body scrutineeAtom' env vg
+                        | Some guardExpr ->
+                            // Wildcard with guard - still need to check guard, fall through if false
+                            buildChain rest vg
+                            |> Result.bind (fun (elseExpr, vg1) ->
+                                extractAndCompileBodyWithGuard firstPattern guardExpr body scrutineeAtom' env vg1 elseExpr)
                     else
                         // Non-empty list patterns need special handling with interleaved checks
-                        match pattern with
+                        match firstPattern with
                         | AST.PList (_ :: _ as listPatterns) ->
                             // Build the else branch first (rest of cases)
                             buildChain rest vg
@@ -1857,21 +2003,38 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             |> Result.bind (fun (elseExpr, vg1) ->
                                 compileListConsPatternWithChecks headPatterns tailPattern scrutineeAtom' env body elseExpr vg1)
                         | _ ->
-                            // Original logic for other patterns
-                            buildPatternComparison pattern scrutineeAtom' vg
+                            // Use pattern grouping: OR all patterns in the group
+                            buildPatternGroupComparison mc.Patterns scrutineeAtom' vg
                             |> Result.bind (fun cmpOpt ->
                                 match cmpOpt with
                                 | None ->
                                     // Pattern always matches
-                                    extractAndCompileBody pattern body scrutineeAtom' env vg
+                                    match mc.Guard with
+                                    | None ->
+                                        extractAndCompileBody firstPattern body scrutineeAtom' env vg
+                                    | Some guardExpr ->
+                                        buildChain rest vg
+                                        |> Result.bind (fun (elseExpr, vg1) ->
+                                            extractAndCompileBodyWithGuard firstPattern guardExpr body scrutineeAtom' env vg1 elseExpr)
                                 | Some (condAtom, bindings, vg1) ->
-                                    extractAndCompileBody pattern body scrutineeAtom' env vg1
-                                    |> Result.bind (fun (thenExpr, vg2) ->
-                                        buildChain rest vg2
-                                        |> Result.map (fun (elseExpr, vg3) ->
-                                            let ifExpr = ANF.If (condAtom, thenExpr, elseExpr)
-                                            let finalExpr = wrapBindings bindings ifExpr
-                                            (finalExpr, vg3))))
+                                    match mc.Guard with
+                                    | None ->
+                                        extractAndCompileBody firstPattern body scrutineeAtom' env vg1
+                                        |> Result.bind (fun (thenExpr, vg2) ->
+                                            buildChain rest vg2
+                                            |> Result.map (fun (elseExpr, vg3) ->
+                                                let ifExpr = ANF.If (condAtom, thenExpr, elseExpr)
+                                                let finalExpr = wrapBindings bindings ifExpr
+                                                (finalExpr, vg3)))
+                                    | Some guardExpr ->
+                                        // Pattern match + guard: if pattern matches, bind, check guard
+                                        buildChain rest vg1
+                                        |> Result.bind (fun (elseExpr, vg2) ->
+                                            extractAndCompileBodyWithGuard firstPattern guardExpr body scrutineeAtom' env vg2 elseExpr
+                                            |> Result.map (fun (guardedBody, vg3) ->
+                                                let ifExpr = ANF.If (condAtom, guardedBody, elseExpr)
+                                                let finalExpr = wrapBindings bindings ifExpr
+                                                (finalExpr, vg3))))
 
             buildChain cases varGen1'
             |> Result.map (fun (chainExpr, varGen2) ->

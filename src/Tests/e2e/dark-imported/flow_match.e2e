@@ -357,9 +357,28 @@ let x = 0 - 5 in match x with | x -> x + 10 = 5
 
 // ===================================================================
 // Guard Clauses (when expressions)
-// NOTE: Commented out - requires guard clause support
 // ===================================================================
 
+// Basic guard clause tests (without L suffix since Int64 is default)
+match 5 with | x when x > 0 -> 1 | _ -> 0 = 1
+match 0 - 5 with | x when x > 0 -> 1 | _ -> 0 = 0
+match 10 with | x when x > 5 -> 100 | _ -> 0 = 100
+match 3 with | x when x > 5 -> 100 | _ -> 0 = 0
+
+// Guard with variable pattern that falls through
+match 5 with | x when x < 0 -> 1 | y -> y + 10 = 15
+match 0 - 10 with | x when x < 0 -> 1 | y -> y + 10 = 1
+
+// Multiple guards
+match 5 with | x when x > 10 -> 1 | x when x > 0 -> 2 | _ -> 3 = 2
+match 15 with | x when x > 10 -> 1 | x when x > 0 -> 2 | _ -> 3 = 1
+match 0 - 5 with | x when x > 10 -> 1 | x when x > 0 -> 2 | _ -> 3 = 3
+
+// Guard with tuple pattern
+match (5, 10) with | (a, b) when a + b > 10 -> 1 | _ -> 0 = 1
+match (2, 3) with | (a, b) when a + b > 10 -> 1 | _ -> 0 = 0
+
+// NOTE: Original Dark tests with L suffix (commented for reference)
 // (match 5L with | x when x > 0L -> true | _ -> false) = stdout="true\n"
 // (match -5L with | x when x > 0L -> true | _ -> false) = stdout="false\n"
 // (match 6L with | x when x == 5L -> "fail" | -6L -> "fail" | 6L -> "pass" | var -> "fail") = "pass"
@@ -377,9 +396,23 @@ let x = 0 - 5 in match x with | x -> x + 10 = 5
 
 // ===================================================================
 // Pattern Grouping (| in patterns)
-// NOTE: Commented out - requires pattern grouping support
 // ===================================================================
 
+// Basic pattern grouping tests (without L suffix)
+// NOTE: Pattern grouping with literals works by ORing conditions
+match 1 with | 1 | 2 | 3 -> 100 | _ -> 0 = 100
+match 2 with | 1 | 2 | 3 -> 100 | _ -> 0 = 100
+match 3 with | 1 | 2 | 3 -> 100 | _ -> 0 = 100
+match 4 with | 1 | 2 | 3 -> 100 | _ -> 0 = 0
+
+// Pattern grouping as fallback
+match 5 with | 1 -> 10 | 2 | 3 | 4 -> 20 | _ -> 99 = 99
+match 2 with | 1 -> 10 | 2 | 3 | 4 -> 20 | _ -> 99 = 20
+
+// Multiple groups
+match 6 with | 1 | 2 -> 10 | 3 | 4 -> 20 | 5 | 6 -> 30 | _ -> 0 = 30
+
+// NOTE: Original Dark tests with L suffix (commented for reference)
 // (match (1L,2L) with | (1L,2L) | (2L,1L) -> "pass" | _ -> "fail") = "pass"
 // (match (1L,3L) with | (1L,2L) | (2L,1L) -> "pass" | _ -> "fail") = "fail"
 // (match (1L,2L) with | (1L,_) | (_,1L) -> "pass" | _ -> "fail") = "pass"
