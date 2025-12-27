@@ -19,6 +19,28 @@ def Stdlib.Int64.min(a: Int64, b: Int64) : Int64 = if a < b then a else b
 
 def Stdlib.Int64.mod(a: Int64, b: Int64) : Int64 = a % b
 
+def Stdlib.Int64.absoluteValue(a: Int64) : Int64 = if a < 0 then 0 - a else a
+
+def Stdlib.Int64.negate(a: Int64) : Int64 = 0 - a
+
+def Stdlib.Int64.power(base: Int64, exponent: Int64) : Int64 =
+    if exponent == 0 then 1
+    else if exponent == 1 then base
+    else base * Stdlib.Int64.power(base, exponent - 1)
+
+def Stdlib.Int64.clamp(value: Int64, limitA: Int64, limitB: Int64) : Int64 =
+    let lower = Stdlib.Int64.min(limitA, limitB) in
+    let upper = Stdlib.Int64.max(limitA, limitB) in
+    Stdlib.Int64.max(lower, Stdlib.Int64.min(upper, value))
+
+def Stdlib.Int64.greaterThan(a: Int64, b: Int64) : Bool = a > b
+
+def Stdlib.Int64.greaterThanOrEqualTo(a: Int64, b: Int64) : Bool = a >= b
+
+def Stdlib.Int64.lessThan(a: Int64, b: Int64) : Bool = a < b
+
+def Stdlib.Int64.lessThanOrEqualTo(a: Int64, b: Int64) : Bool = a <= b
+
 // Convert a single digit (0-9) to its string representation
 def Stdlib.Int64.digitToString(n: Int64) : String =
     match n with
