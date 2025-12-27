@@ -10,20 +10,17 @@
 // Stdlib.String.append - Append two strings (wrapper for ++)
 // ===================================================================
 
-// NOTE: These tests are commented out due to a codegen bug where
-// functions with String parameters that perform ++ cause segfault
-// Stdlib.String.append("hello", " world") = stdout="hello world\n"
-// Stdlib.String.append("", "") = stdout="\n"
-// Stdlib.String.append("a", "b") = stdout="ab\n"
-// Stdlib.String.append("foo", "bar") = stdout="foobar\n"
+Stdlib.String.append("hello", " world") = stdout="hello world\n"
+Stdlib.String.append("", "") = stdout="\n"
+Stdlib.String.append("a", "b") = stdout="ab\n"
+Stdlib.String.append("foo", "bar") = stdout="foobar\n"
 
 // ===================================================================
 // Stdlib.String.prepend - Prepend first string to second
 // ===================================================================
 
-// NOTE: Same segfault issue as append
-// Stdlib.String.prepend(" world", "hello") = stdout="hello world\n"
-// Stdlib.String.prepend("bar", "foo") = stdout="foobar\n"
+Stdlib.String.prepend(" world", "hello") = stdout="hello world\n"
+Stdlib.String.prepend("bar", "foo") = stdout="foobar\n"
 
 // ===================================================================
 // Stdlib.String.newline - Returns newline character
