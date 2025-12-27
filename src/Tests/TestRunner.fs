@@ -85,6 +85,18 @@ let parseParallelArg (args: string array) : int option =
     |> Array.tryFind (fun arg -> arg.StartsWith("--parallel="))
     |> Option.map (fun arg -> arg.Substring(11) |> int)
 
+// Parse command line for --filter=PATTERN option
+let parseFilterArg (args: string array) : string option =
+    args
+    |> Array.tryFind (fun arg -> arg.StartsWith("--filter="))
+    |> Option.map (fun arg -> arg.Substring(9))
+
+// Check if a test name matches the filter (case-insensitive substring match)
+let matchesFilter (filter: string option) (testName: string) : bool =
+    match filter with
+    | None -> true
+    | Some pattern -> testName.ToLowerInvariant().Contains(pattern.ToLowerInvariant())
+
 [<EntryPoint>]
 let main args =
     let totalTimer = Stopwatch.StartNew()
@@ -92,7 +104,13 @@ let main args =
     // Check for --parallel=N argument
     let overrideParallel = parseParallelArg args
 
+    // Check for --filter=PATTERN argument
+    let filter = parseFilterArg args
+
     println $"{Colors.bold}{Colors.cyan}🧪 Running DSL-based Tests{Colors.reset}"
+    match filter with
+    | Some pattern -> println $"{Colors.gray}  Filter: {pattern}{Colors.reset}"
+    | None -> ()
     println ""
 
     // Get the directory where the assembly is located (where test files are copied)
@@ -116,42 +134,43 @@ let main args =
 
             for testPath in anf2mirTests do
                 let testName = Path.GetFileName testPath
-                let testTimer = Stopwatch.StartNew()
-                print $"  {testName}... "
+                if matchesFilter filter testName then
+                    let testTimer = Stopwatch.StartNew()
+                    print $"  {testName}... "
 
-                match loadANF2MIRTest testPath with
-                | Ok (input, expected) ->
-                    let result = runANF2MIRTest input expected
-                    testTimer.Stop()
-                    if result.Success then
-                        println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                        passed <- passed + 1
-                        sectionPassed <- sectionPassed + 1
-                    else
-                        println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                        println $"    {result.Message}"
-                        let details = ResizeArray<string>()
-                        match result.Expected, result.Actual with
-                        | Some exp, Some act ->
-                            println "    Expected:"
-                            for line in exp.Split('\n') do
-                                println $"      {line}"
-                                details.Add($"Expected: {line}")
-                            println "    Actual:"
-                            for line in act.Split('\n') do
-                                println $"      {line}"
-                                details.Add($"Actual: {line}")
-                        | _ -> ()
-                        failedTests.Add({ Name = $"ANF→MIR: {testName}"; Message = result.Message; Details = details |> Seq.toList })
+                    match loadANF2MIRTest testPath with
+                    | Ok (input, expected) ->
+                        let result = runANF2MIRTest input expected
+                        testTimer.Stop()
+                        if result.Success then
+                            println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                            passed <- passed + 1
+                            sectionPassed <- sectionPassed + 1
+                        else
+                            println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                            println $"    {result.Message}"
+                            let details = ResizeArray<string>()
+                            match result.Expected, result.Actual with
+                            | Some exp, Some act ->
+                                println "    Expected:"
+                                for line in exp.Split('\n') do
+                                    println $"      {line}"
+                                    details.Add($"Expected: {line}")
+                                println "    Actual:"
+                                for line in act.Split('\n') do
+                                    println $"      {line}"
+                                    details.Add($"Actual: {line}")
+                            | _ -> ()
+                            failedTests.Add({ Name = $"ANF→MIR: {testName}"; Message = result.Message; Details = details |> Seq.toList })
+                            failed <- failed + 1
+                            sectionFailed <- sectionFailed + 1
+                    | Error msg ->
+                        testTimer.Stop()
+                        println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                        println $"    Failed to load test: {msg}"
+                        failedTests.Add({ Name = $"ANF→MIR: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
                         failed <- failed + 1
                         sectionFailed <- sectionFailed + 1
-                | Error msg ->
-                    testTimer.Stop()
-                    println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                    println $"    Failed to load test: {msg}"
-                    failedTests.Add({ Name = $"ANF→MIR: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
-                    failed <- failed + 1
-                    sectionFailed <- sectionFailed + 1
 
             sectionTimer.Stop()
             if sectionFailed = 0 then
@@ -175,42 +194,43 @@ let main args =
 
             for testPath in mir2lirTests do
                 let testName = Path.GetFileName testPath
-                let testTimer = Stopwatch.StartNew()
-                print $"  {testName}... "
+                if matchesFilter filter testName then
+                    let testTimer = Stopwatch.StartNew()
+                    print $"  {testName}... "
 
-                match loadMIR2LIRTest testPath with
-                | Ok (input, expected) ->
-                    let result = runMIR2LIRTest input expected
-                    testTimer.Stop()
-                    if result.Success then
-                        println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                        passed <- passed + 1
-                        sectionPassed <- sectionPassed + 1
-                    else
-                        println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                        println $"    {result.Message}"
-                        let details = ResizeArray<string>()
-                        match result.Expected, result.Actual with
-                        | Some exp, Some act ->
-                            println "    Expected:"
-                            for line in exp.Split('\n') do
-                                println $"      {line}"
-                                details.Add($"Expected: {line}")
-                            println "    Actual:"
-                            for line in act.Split('\n') do
-                                println $"      {line}"
-                                details.Add($"Actual: {line}")
-                        | _ -> ()
-                        failedTests.Add({ Name = $"MIR→LIR: {testName}"; Message = result.Message; Details = details |> Seq.toList })
+                    match loadMIR2LIRTest testPath with
+                    | Ok (input, expected) ->
+                        let result = runMIR2LIRTest input expected
+                        testTimer.Stop()
+                        if result.Success then
+                            println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                            passed <- passed + 1
+                            sectionPassed <- sectionPassed + 1
+                        else
+                            println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                            println $"    {result.Message}"
+                            let details = ResizeArray<string>()
+                            match result.Expected, result.Actual with
+                            | Some exp, Some act ->
+                                println "    Expected:"
+                                for line in exp.Split('\n') do
+                                    println $"      {line}"
+                                    details.Add($"Expected: {line}")
+                                println "    Actual:"
+                                for line in act.Split('\n') do
+                                    println $"      {line}"
+                                    details.Add($"Actual: {line}")
+                            | _ -> ()
+                            failedTests.Add({ Name = $"MIR→LIR: {testName}"; Message = result.Message; Details = details |> Seq.toList })
+                            failed <- failed + 1
+                            sectionFailed <- sectionFailed + 1
+                    | Error msg ->
+                        testTimer.Stop()
+                        println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                        println $"    Failed to load test: {msg}"
+                        failedTests.Add({ Name = $"MIR→LIR: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
                         failed <- failed + 1
                         sectionFailed <- sectionFailed + 1
-                | Error msg ->
-                    testTimer.Stop()
-                    println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                    println $"    Failed to load test: {msg}"
-                    failedTests.Add({ Name = $"MIR→LIR: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
-                    failed <- failed + 1
-                    sectionFailed <- sectionFailed + 1
 
             sectionTimer.Stop()
             if sectionFailed = 0 then
@@ -234,42 +254,43 @@ let main args =
 
             for testPath in lir2arm64Tests do
                 let testName = Path.GetFileName testPath
-                let testTimer = Stopwatch.StartNew()
-                print $"  {testName}... "
+                if matchesFilter filter testName then
+                    let testTimer = Stopwatch.StartNew()
+                    print $"  {testName}... "
 
-                match loadLIR2ARM64Test testPath with
-                | Ok (input, expected) ->
-                    let result = runLIR2ARM64Test input expected
-                    testTimer.Stop()
-                    if result.Success then
-                        println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                        passed <- passed + 1
-                        sectionPassed <- sectionPassed + 1
-                    else
-                        println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                        println $"    {result.Message}"
-                        let details = ResizeArray<string>()
-                        match result.Expected, result.Actual with
-                        | Some exp, Some act ->
-                            println "    Expected:"
-                            for line in exp.Split('\n') do
-                                println $"      {line}"
-                                details.Add($"Expected: {line}")
-                            println "    Actual:"
-                            for line in act.Split('\n') do
-                                println $"      {line}"
-                                details.Add($"Actual: {line}")
-                        | _ -> ()
-                        failedTests.Add({ Name = $"LIR→ARM64: {testName}"; Message = result.Message; Details = details |> Seq.toList })
+                    match loadLIR2ARM64Test testPath with
+                    | Ok (input, expected) ->
+                        let result = runLIR2ARM64Test input expected
+                        testTimer.Stop()
+                        if result.Success then
+                            println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                            passed <- passed + 1
+                            sectionPassed <- sectionPassed + 1
+                        else
+                            println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                            println $"    {result.Message}"
+                            let details = ResizeArray<string>()
+                            match result.Expected, result.Actual with
+                            | Some exp, Some act ->
+                                println "    Expected:"
+                                for line in exp.Split('\n') do
+                                    println $"      {line}"
+                                    details.Add($"Expected: {line}")
+                                println "    Actual:"
+                                for line in act.Split('\n') do
+                                    println $"      {line}"
+                                    details.Add($"Actual: {line}")
+                            | _ -> ()
+                            failedTests.Add({ Name = $"LIR→ARM64: {testName}"; Message = result.Message; Details = details |> Seq.toList })
+                            failed <- failed + 1
+                            sectionFailed <- sectionFailed + 1
+                    | Error msg ->
+                        testTimer.Stop()
+                        println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                        println $"    Failed to load test: {msg}"
+                        failedTests.Add({ Name = $"LIR→ARM64: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
                         failed <- failed + 1
                         sectionFailed <- sectionFailed + 1
-                | Error msg ->
-                    testTimer.Stop()
-                    println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                    println $"    Failed to load test: {msg}"
-                    failedTests.Add({ Name = $"LIR→ARM64: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
-                    failed <- failed + 1
-                    sectionFailed <- sectionFailed + 1
 
             sectionTimer.Stop()
             if sectionFailed = 0 then
@@ -293,30 +314,31 @@ let main args =
 
             for testPath in arm64encTests do
                 let testName = Path.GetFileName testPath
-                let testTimer = Stopwatch.StartNew()
-                print $"  {testName}... "
+                if matchesFilter filter testName then
+                    let testTimer = Stopwatch.StartNew()
+                    print $"  {testName}... "
 
-                match TestDSL.ARM64EncodingTestRunner.loadARM64EncodingTest testPath with
-                | Ok test ->
-                    let result = TestDSL.ARM64EncodingTestRunner.runARM64EncodingTest test
-                    testTimer.Stop()
-                    if result.Success then
-                        println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                        passed <- passed + 1
-                        sectionPassed <- sectionPassed + 1
-                    else
-                        println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                        println $"    {result.Message}"
-                        failedTests.Add({ Name = $"ARM64 Encoding: {testName}"; Message = result.Message; Details = [] })
+                    match TestDSL.ARM64EncodingTestRunner.loadARM64EncodingTest testPath with
+                    | Ok test ->
+                        let result = TestDSL.ARM64EncodingTestRunner.runARM64EncodingTest test
+                        testTimer.Stop()
+                        if result.Success then
+                            println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                            passed <- passed + 1
+                            sectionPassed <- sectionPassed + 1
+                        else
+                            println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                            println $"    {result.Message}"
+                            failedTests.Add({ Name = $"ARM64 Encoding: {testName}"; Message = result.Message; Details = [] })
+                            failed <- failed + 1
+                            sectionFailed <- sectionFailed + 1
+                    | Error msg ->
+                        testTimer.Stop()
+                        println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                        println $"    Failed to load test: {msg}"
+                        failedTests.Add({ Name = $"ARM64 Encoding: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
                         failed <- failed + 1
                         sectionFailed <- sectionFailed + 1
-                | Error msg ->
-                    testTimer.Stop()
-                    println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                    println $"    Failed to load test: {msg}"
-                    failedTests.Add({ Name = $"ARM64 Encoding: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
-                    failed <- failed + 1
-                    sectionFailed <- sectionFailed + 1
 
             sectionTimer.Stop()
             if sectionFailed = 0 then
@@ -341,31 +363,32 @@ let main args =
 
             for testFile in typecheckTestFiles do
                 let fileName = Path.GetFileNameWithoutExtension testFile
-                match TestDSL.TypeCheckingTestRunner.runTypeCheckingTestFile testFile with
-                | Ok results ->
-                    for result in results do
-                        let testTimer = Stopwatch.StartNew()
-                        match result.Success with
-                        | true ->
-                            sectionPassed <- sectionPassed + 1
-                            passed <- passed + 1
-                        | false ->
-                            let typeDesc =
-                                match result.ExpectedType with
-                                | Some t -> TypeChecking.typeToString t
-                                | None -> "error"
-                            print $"  {typeDesc} ({fileName})... "
-                            println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                            println $"    {result.Message}"
-                            failedTests.Add({ Name = $"Type Checking: {typeDesc} ({fileName})"; Message = result.Message; Details = [] })
-                            sectionFailed <- sectionFailed + 1
-                            failed <- failed + 1
-                | Error msg ->
-                    println $"{Colors.red}✗ ERROR parsing {Path.GetFileName testFile}{Colors.reset}"
-                    println $"    {msg}"
-                    failedTests.Add({ Name = $"Type Checking: {Path.GetFileName testFile}"; Message = msg; Details = [] })
-                    sectionFailed <- sectionFailed + 1
-                    failed <- failed + 1
+                if matchesFilter filter fileName then
+                    match TestDSL.TypeCheckingTestRunner.runTypeCheckingTestFile testFile with
+                    | Ok results ->
+                        for result in results do
+                            let testTimer = Stopwatch.StartNew()
+                            match result.Success with
+                            | true ->
+                                sectionPassed <- sectionPassed + 1
+                                passed <- passed + 1
+                            | false ->
+                                let typeDesc =
+                                    match result.ExpectedType with
+                                    | Some t -> TypeChecking.typeToString t
+                                    | None -> "error"
+                                print $"  {typeDesc} ({fileName})... "
+                                println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
+                                println $"    {result.Message}"
+                                failedTests.Add({ Name = $"Type Checking: {typeDesc} ({fileName})"; Message = result.Message; Details = [] })
+                                sectionFailed <- sectionFailed + 1
+                                failed <- failed + 1
+                    | Error msg ->
+                        println $"{Colors.red}✗ ERROR parsing {Path.GetFileName testFile}{Colors.reset}"
+                        println $"    {msg}"
+                        failedTests.Add({ Name = $"Type Checking: {Path.GetFileName testFile}"; Message = msg; Details = [] })
+                        sectionFailed <- sectionFailed + 1
+                        failed <- failed + 1
 
             sectionTimer.Stop()
             if sectionFailed = 0 then
@@ -403,7 +426,10 @@ let main args =
 
             // Run tests in parallel (dynamically determined based on system resources) and print as they complete (in order)
             if allTests.Count > 0 then
-                let testsArray = allTests.ToArray()
+                // Apply filter to tests
+                let testsArray =
+                    allTests.ToArray()
+                    |> Array.filter (fun test -> matchesFilter filter test.Name)
                 let numTests = testsArray.Length
                 let results = Array.zeroCreate<option<E2ETest * E2ETestResult * TimeSpan>> numTests
                 let mutable nextToPrint = 0
@@ -545,50 +571,53 @@ let main args =
     let mutable sectionPassed = 0
     let mutable sectionFailed = 0
 
-    let unitTestTimer = Stopwatch.StartNew()
-    match EncodingTests.runAll() with
-    | Ok () ->
-        unitTestTimer.Stop()
-        println $"  {Colors.green}✓ Encoding Tests{Colors.reset} {Colors.gray}({formatTime unitTestTimer.Elapsed}){Colors.reset}"
-        passed <- passed + 1
-        sectionPassed <- sectionPassed + 1
-    | Error msg ->
-        unitTestTimer.Stop()
-        println $"  {Colors.red}✗ FAIL: Encoding tests{Colors.reset} {Colors.gray}({formatTime unitTestTimer.Elapsed}){Colors.reset}"
-        println $"    {msg}"
-        failedTests.Add({ Name = "Unit: Encoding Tests"; Message = msg; Details = [] })
-        failed <- failed + 1
-        sectionFailed <- sectionFailed + 1
+    if matchesFilter filter "Encoding Tests" then
+        let unitTestTimer = Stopwatch.StartNew()
+        match EncodingTests.runAll() with
+        | Ok () ->
+            unitTestTimer.Stop()
+            println $"  {Colors.green}✓ Encoding Tests{Colors.reset} {Colors.gray}({formatTime unitTestTimer.Elapsed}){Colors.reset}"
+            passed <- passed + 1
+            sectionPassed <- sectionPassed + 1
+        | Error msg ->
+            unitTestTimer.Stop()
+            println $"  {Colors.red}✗ FAIL: Encoding tests{Colors.reset} {Colors.gray}({formatTime unitTestTimer.Elapsed}){Colors.reset}"
+            println $"    {msg}"
+            failedTests.Add({ Name = "Unit: Encoding Tests"; Message = msg; Details = [] })
+            failed <- failed + 1
+            sectionFailed <- sectionFailed + 1
 
-    let binaryTestTimer = Stopwatch.StartNew()
-    match BinaryTests.runAll() with
-    | Ok () ->
-        binaryTestTimer.Stop()
-        println $"  {Colors.green}✓ Binary Tests{Colors.reset} {Colors.gray}({formatTime binaryTestTimer.Elapsed}){Colors.reset}"
-        passed <- passed + 11  // 11 tests in BinaryTests
-        sectionPassed <- sectionPassed + 11
-    | Error msg ->
-        binaryTestTimer.Stop()
-        println $"  {Colors.red}✗ FAIL: Binary tests{Colors.reset} {Colors.gray}({formatTime binaryTestTimer.Elapsed}){Colors.reset}"
-        println $"    {msg}"
-        failedTests.Add({ Name = "Unit: Binary Tests"; Message = msg; Details = [] })
-        failed <- failed + 1
-        sectionFailed <- sectionFailed + 1
+    if matchesFilter filter "Binary Tests" then
+        let binaryTestTimer = Stopwatch.StartNew()
+        match BinaryTests.runAll() with
+        | Ok () ->
+            binaryTestTimer.Stop()
+            println $"  {Colors.green}✓ Binary Tests{Colors.reset} {Colors.gray}({formatTime binaryTestTimer.Elapsed}){Colors.reset}"
+            passed <- passed + 11  // 11 tests in BinaryTests
+            sectionPassed <- sectionPassed + 11
+        | Error msg ->
+            binaryTestTimer.Stop()
+            println $"  {Colors.red}✗ FAIL: Binary tests{Colors.reset} {Colors.gray}({formatTime binaryTestTimer.Elapsed}){Colors.reset}"
+            println $"    {msg}"
+            failedTests.Add({ Name = "Unit: Binary Tests"; Message = msg; Details = [] })
+            failed <- failed + 1
+            sectionFailed <- sectionFailed + 1
 
-    let typeCheckingTestTimer = Stopwatch.StartNew()
-    match TypeCheckingTests.runAll() with
-    | Ok () ->
-        typeCheckingTestTimer.Stop()
-        println $"  {Colors.green}✓ Type Checking Tests{Colors.reset} {Colors.gray}({formatTime typeCheckingTestTimer.Elapsed}){Colors.reset}"
-        passed <- passed + 8  // 8 tests in TypeCheckingTests
-        sectionPassed <- sectionPassed + 8
-    | Error msg ->
-        typeCheckingTestTimer.Stop()
-        println $"  {Colors.red}✗ FAIL: Type checking tests{Colors.reset} {Colors.gray}({formatTime typeCheckingTestTimer.Elapsed}){Colors.reset}"
-        println $"    {msg}"
-        failedTests.Add({ Name = "Unit: Type Checking Tests"; Message = msg; Details = [] })
-        failed <- failed + 1
-        sectionFailed <- sectionFailed + 1
+    if matchesFilter filter "Type Checking Tests" then
+        let typeCheckingTestTimer = Stopwatch.StartNew()
+        match TypeCheckingTests.runAll() with
+        | Ok () ->
+            typeCheckingTestTimer.Stop()
+            println $"  {Colors.green}✓ Type Checking Tests{Colors.reset} {Colors.gray}({formatTime typeCheckingTestTimer.Elapsed}){Colors.reset}"
+            passed <- passed + 8  // 8 tests in TypeCheckingTests
+            sectionPassed <- sectionPassed + 8
+        | Error msg ->
+            typeCheckingTestTimer.Stop()
+            println $"  {Colors.red}✗ FAIL: Type checking tests{Colors.reset} {Colors.gray}({formatTime typeCheckingTestTimer.Elapsed}){Colors.reset}"
+            println $"    {msg}"
+            failedTests.Add({ Name = "Unit: Type Checking Tests"; Message = msg; Details = [] })
+            failed <- failed + 1
+            sectionFailed <- sectionFailed + 1
 
     sectionTimer.Stop()
     if sectionFailed = 0 then
