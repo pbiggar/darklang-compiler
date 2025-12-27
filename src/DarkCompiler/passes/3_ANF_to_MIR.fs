@@ -280,6 +280,7 @@ type CFGBuilder = {
     TypeMap: ANF.TypeMap
     TypeReg: Map<string, (string * AST.Type) list>
     FuncName: string  // For generating unique labels per function
+    FloatRegs: Set<int>  // VReg IDs that hold float values
 }
 
 /// Get payload size for an atom used in reference counting
@@ -309,6 +310,32 @@ let atomToOperand (builder: CFGBuilder) (atom: ANF.Atom) : Result<MIR.Operand, s
         | None -> Error $"Internal error: string literal not found in pool"
     | ANF.Var tempId -> Ok (MIR.Register (tempToVReg tempId))
     | ANF.FuncRef funcName -> Ok (MIR.FuncAddr funcName)
+
+/// Get the type of an ANF Atom (for generating type-specific instructions)
+let atomType (builder: CFGBuilder) (atom: ANF.Atom) : AST.Type =
+    match atom with
+    | ANF.UnitLiteral -> AST.TUnit
+    | ANF.IntLiteral _ -> AST.TInt64
+    | ANF.BoolLiteral _ -> AST.TBool
+    | ANF.StringLiteral _ -> AST.TString
+    | ANF.FloatLiteral _ -> AST.TFloat64
+    | ANF.Var (ANF.TempId id) ->
+        // Check if this VReg is known to hold a float
+        if Set.contains id builder.FloatRegs then AST.TFloat64
+        else
+            match Map.tryFind (ANF.TempId id) builder.TypeMap with
+            | Some t -> t
+            | None -> AST.TInt64  // Fallback
+    | ANF.FuncRef _ -> AST.TInt64  // Function addresses are pointer-sized
+
+/// Get the operand type for a binary operation (checks both operands)
+/// If either operand is float, the operation is float
+let binOpType (builder: CFGBuilder) (leftAtom: ANF.Atom) (rightAtom: ANF.Atom) : AST.Type =
+    let leftType = atomType builder leftAtom
+    let rightType = atomType builder rightAtom
+    match leftType, rightType with
+    | AST.TFloat64, _ | _, AST.TFloat64 -> AST.TFloat64
+    | _ -> leftType
 
 /// Convert ANF expression to CFG
 /// Returns: Result of (final value operand, CFG builder with all blocks)
@@ -364,14 +391,14 @@ let rec convertExpr
                         // Then block: assign thenAtom to destReg, jump to join
                         let thenBlock = {
                             MIR.Label = thenLabel
-                            MIR.Instrs = [MIR.Mov (destReg, thenOp)]
+                            MIR.Instrs = [MIR.Mov (destReg, thenOp, None)]
                             MIR.Terminator = MIR.Jump joinLabel
                         }
 
                         // Else block: assign elseAtom to destReg, jump to join
                         let elseBlock = {
                             MIR.Label = elseLabel
-                            MIR.Instrs = [MIR.Mov (destReg, elseOp)]
+                            MIR.Instrs = [MIR.Mov (destReg, elseOp, None)]
                             MIR.Terminator = MIR.Jump joinLabel
                         }
 
@@ -389,17 +416,23 @@ let rec convertExpr
 
         | _ ->
             // Simple CExpr: add instruction(s) to current block, continue
+            // Track if dest is float type for later builder update
+            let destType = ref AST.TInt64
             let instrsResult =
                 match cexpr with
                 | ANF.Atom atom ->
+                    let aType = atomType builder atom
+                    destType := aType
                     atomToOperand builder atom
-                    |> Result.map (fun op -> [MIR.Mov (destReg, op)])
+                    |> Result.map (fun op -> [MIR.Mov (destReg, op, Some aType)])
                 | ANF.Prim (op, leftAtom, rightAtom) ->
+                    let opType = binOpType builder leftAtom rightAtom
+                    destType := opType
                     atomToOperand builder leftAtom
                     |> Result.bind (fun leftOp ->
                         atomToOperand builder rightAtom
                         |> Result.map (fun rightOp ->
-                            [MIR.BinOp (destReg, convertBinOp op, leftOp, rightOp)]))
+                            [MIR.BinOp (destReg, convertBinOp op, leftOp, rightOp, opType)]))
                 | ANF.UnaryPrim (op, atom) ->
                     atomToOperand builder atom
                     |> Result.map (fun operand ->
@@ -507,7 +540,14 @@ let rec convertExpr
             | Error err -> Error err
             | Ok instrs ->
                 let newInstrs = currentInstrs @ instrs
-                convertExpr rest currentLabel newInstrs builder
+                // Update FloatRegs if this dest is a float
+                let (MIR.VReg destId) = destReg
+                let builder' =
+                    if !destType = AST.TFloat64 then
+                        { builder with FloatRegs = Set.add destId builder.FloatRegs }
+                    else
+                        builder
+                convertExpr rest currentLabel newInstrs builder'
 
     | ANF.If (condAtom, thenBranch, elseBranch) ->
         // If expression:
@@ -543,6 +583,7 @@ let rec convertExpr
             TypeMap = builder.TypeMap
             TypeReg = builder.TypeReg
             FuncName = builder.FuncName
+            FloatRegs = builder.FloatRegs
         }
 
         // Convert then-branch: result goes into resultReg, then jump to join
@@ -560,7 +601,7 @@ let rec convertExpr
                 | Some nestedJoinBlock ->
                     let patchedBlock = {
                         nestedJoinBlock with
-                            Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, thenResult)]
+                            Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, thenResult, None)]
                             Terminator = MIR.Jump joinLabel
                     }
                     { builder2 with Blocks = Map.add nestedJoinLabel patchedBlock builder2.Blocks }
@@ -569,7 +610,7 @@ let rec convertExpr
                 // Simple expression - create block that moves result and jumps
                 let thenBlock = {
                     MIR.Label = thenLabel
-                    MIR.Instrs = [MIR.Mov (resultReg, thenResult)]
+                    MIR.Instrs = [MIR.Mov (resultReg, thenResult, None)]
                     MIR.Terminator = MIR.Jump joinLabel
                 }
                 { builder2 with Blocks = Map.add thenLabel thenBlock builder2.Blocks }
@@ -587,7 +628,7 @@ let rec convertExpr
                 | Some nestedJoinBlock ->
                     let patchedBlock = {
                         nestedJoinBlock with
-                            Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, elseResult)]
+                            Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, elseResult, None)]
                             Terminator = MIR.Jump joinLabel
                     }
                     { builder4 with Blocks = Map.add nestedJoinLabel patchedBlock builder4.Blocks }
@@ -595,7 +636,7 @@ let rec convertExpr
             | None ->
                 let elseBlock = {
                     MIR.Label = elseLabel
-                    MIR.Instrs = [MIR.Mov (resultReg, elseResult)]
+                    MIR.Instrs = [MIR.Mov (resultReg, elseResult, None)]
                     MIR.Terminator = MIR.Jump joinLabel
                 }
                 { builder4 with Blocks = Map.add elseLabel elseBlock builder4.Blocks }
@@ -668,14 +709,14 @@ and convertExprToOperand
                         // Then block: assign thenAtom to destReg, jump to join
                         let thenBlock = {
                             MIR.Label = thenLabel
-                            MIR.Instrs = [MIR.Mov (destReg, thenOp)]
+                            MIR.Instrs = [MIR.Mov (destReg, thenOp, None)]
                             MIR.Terminator = MIR.Jump joinLabel
                         }
 
                         // Else block: assign elseAtom to destReg, jump to join
                         let elseBlock = {
                             MIR.Label = elseLabel
-                            MIR.Instrs = [MIR.Mov (destReg, elseOp)]
+                            MIR.Instrs = [MIR.Mov (destReg, elseOp, None)]
                             MIR.Terminator = MIR.Jump joinLabel
                         }
 
@@ -693,17 +734,23 @@ and convertExprToOperand
 
         | _ ->
             // Simple CExpr: create instruction(s) and accumulate
+            // Track if dest is float type for later builder update
+            let destType = ref AST.TInt64
             let instrsResult =
                 match cexpr with
                 | ANF.Atom atom ->
+                    let aType = atomType builder atom
+                    destType := aType
                     atomToOperand builder atom
-                    |> Result.map (fun op -> [MIR.Mov (destReg, op)])
+                    |> Result.map (fun op -> [MIR.Mov (destReg, op, Some aType)])
                 | ANF.Prim (op, leftAtom, rightAtom) ->
+                    let opType = binOpType builder leftAtom rightAtom
+                    destType := opType
                     atomToOperand builder leftAtom
                     |> Result.bind (fun leftOp ->
                         atomToOperand builder rightAtom
                         |> Result.map (fun rightOp ->
-                            [MIR.BinOp (destReg, convertBinOp op, leftOp, rightOp)]))
+                            [MIR.BinOp (destReg, convertBinOp op, leftOp, rightOp, opType)]))
                 | ANF.UnaryPrim (op, atom) ->
                     atomToOperand builder atom
                     |> Result.map (fun operand ->
@@ -811,7 +858,14 @@ and convertExprToOperand
             match instrsResult with
             | Error err -> Error err
             | Ok instrs ->
-                convertExprToOperand rest startLabel (startInstrs @ instrs) builder
+                // Update FloatRegs if this dest is a float
+                let (MIR.VReg destId) = destReg
+                let builder' =
+                    if !destType = AST.TFloat64 then
+                        { builder with FloatRegs = Set.add destId builder.FloatRegs }
+                    else
+                        builder
+                convertExprToOperand rest startLabel (startInstrs @ instrs) builder'
 
     | ANF.If (condAtom, thenBranch, elseBranch) ->
         // If expression: creates blocks with branch/jump/join structure
@@ -837,6 +891,7 @@ and convertExprToOperand
                 TypeMap = builder.TypeMap
                 TypeReg = builder.TypeReg
                 FuncName = builder.FuncName
+                FloatRegs = builder.FloatRegs
             }
 
             // Convert then-branch
@@ -854,7 +909,7 @@ and convertExprToOperand
                     | Some nestedJoinBlock ->
                         let patchedBlock = {
                             nestedJoinBlock with
-                                Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, thenResult)]
+                                Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, thenResult, None)]
                                 Terminator = MIR.Jump joinLabel
                         }
                         { builder2 with Blocks = Map.add nestedJoinLabel patchedBlock builder2.Blocks }
@@ -863,7 +918,7 @@ and convertExprToOperand
                     // Simple expression - create block that moves result and jumps
                     let thenBlock = {
                         MIR.Label = thenLabel
-                        MIR.Instrs = [MIR.Mov (resultReg, thenResult)]
+                        MIR.Instrs = [MIR.Mov (resultReg, thenResult, None)]
                         MIR.Terminator = MIR.Jump joinLabel
                     }
                     { builder2 with Blocks = Map.add thenLabel thenBlock builder2.Blocks }
@@ -881,7 +936,7 @@ and convertExprToOperand
                     | Some nestedJoinBlock ->
                         let patchedBlock = {
                             nestedJoinBlock with
-                                Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, elseResult)]
+                                Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, elseResult, None)]
                                 Terminator = MIR.Jump joinLabel
                         }
                         { builder4 with Blocks = Map.add nestedJoinLabel patchedBlock builder4.Blocks }
@@ -889,7 +944,7 @@ and convertExprToOperand
                 | None ->
                     let elseBlock = {
                         MIR.Label = elseLabel
-                        MIR.Instrs = [MIR.Mov (resultReg, elseResult)]
+                        MIR.Instrs = [MIR.Mov (resultReg, elseResult, None)]
                         MIR.Terminator = MIR.Jump joinLabel
                     }
                     { builder4 with Blocks = Map.add elseLabel elseBlock builder4.Blocks }
@@ -917,6 +972,7 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
         TypeMap = typeMap
         TypeReg = typeReg
         FuncName = anfFunc.Name
+        FloatRegs = Set.empty
     }
 
     // Create entry label for CFG (internal to function body)
@@ -988,6 +1044,7 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
         TypeMap = typeMap
         TypeReg = typeReg
         FuncName = "_start"
+        FloatRegs = Set.empty
     }
     match convertExpr mainExpr entryLabel [] initialBuilder with
     | Error err -> Error err

@@ -26,3 +26,18 @@
 -3.14 = stdout="-3.14\n"
 -0.50 = stdout="-0.50\n"
 -0.01 = stdout="-0.01\n"
+
+// Float arithmetic
+1.0 + 2.0 = stdout="3.00\n"
+3.0 - 1.0 = stdout="2.00\n"
+2.0 * 3.0 = stdout="6.00\n"
+6.0 / 2.0 = stdout="3.00\n"
+
+// Chained float operations
+1.0 + 2.0 + 3.0 = stdout="6.00\n"
+10.0 / 2.0 / 2.0 = stdout="2.50\n"
+
+// Nested float operations with let bindings
+let a = 1.0 + 2.0 in a = stdout="3.00\n"
+let a = 1.0 + 2.0 in let b = 3.0 - 1.0 in a * b = stdout="6.00\n"
+(1.0 + 2.0) * (3.0 - 1.0) = stdout="6.00\n"

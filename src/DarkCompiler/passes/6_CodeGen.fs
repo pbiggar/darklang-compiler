@@ -86,11 +86,30 @@ let lirPhysFPRegToARM64FReg (physReg: LIR.PhysFPReg) : ARM64.FReg =
     | LIR.D14 -> ARM64.D14
     | LIR.D15 -> ARM64.D15
 
-/// Convert LIR.FReg to ARM64.FReg (assumes physical registers only)
+/// Convert LIR.FReg to ARM64.FReg
+/// For FVirtual, we use a simple allocation scheme:
+/// - FVirtual 1000 -> D1 (left operand temp)
+/// - FVirtual 1001 -> D2 (right operand temp)
+/// - FVirtual n (n < 100) -> D(n % 8) for computed results
 let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64.FReg, string> =
     match freg with
     | LIR.FPhysical physReg -> Ok (lirPhysFPRegToARM64FReg physReg)
-    | LIR.FVirtual vreg -> Error $"Virtual FP register {vreg} should have been allocated"
+    | LIR.FVirtual 1000 -> Ok ARM64.D1  // Left temp
+    | LIR.FVirtual 1001 -> Ok ARM64.D2  // Right temp
+    | LIR.FVirtual n ->
+        // Map virtual FP registers to physical D0-D7
+        let regIdx = n % 8
+        let physReg =
+            match regIdx with
+            | 0 -> ARM64.D0
+            | 1 -> ARM64.D1
+            | 2 -> ARM64.D2
+            | 3 -> ARM64.D3
+            | 4 -> ARM64.D4
+            | 5 -> ARM64.D5
+            | 6 -> ARM64.D6
+            | _ -> ARM64.D7
+        Ok physReg
 
 /// Convert LIR.Reg to ARM64.Reg (assumes physical registers only)
 let lirRegToARM64Reg (reg: LIR.Reg) : Result<ARM64.Reg, string> =

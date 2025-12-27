@@ -78,7 +78,7 @@ let parseInstructionOrTerminator (lineNum: int) (line: string) : Result<Choice<I
                 | Ok op ->
                     match parseOperand binopMatch.Groups.[4].Value with
                     | Error e -> Error $"Line {lineNum}: {e}"
-                    | Ok right -> Ok (Choice1Of2 (BinOp (dest, op, left, right)))
+                    | Ok right -> Ok (Choice1Of2 (BinOp (dest, op, left, right, AST.TInt64)))
     else
 
     // Try move pattern: "v0 <- 42" or "v0 <- v1"
@@ -89,7 +89,7 @@ let parseInstructionOrTerminator (lineNum: int) (line: string) : Result<Choice<I
         | Ok dest ->
             match parseOperand movMatch.Groups.[2].Value with
             | Error e -> Error $"Line {lineNum}: {e}"
-            | Ok src -> Ok (Choice1Of2 (Mov (dest, src)))
+            | Ok src -> Ok (Choice1Of2 (Mov (dest, src, None)))
     else
         Error $"Line {lineNum}: Invalid instruction format '{line}'"
 

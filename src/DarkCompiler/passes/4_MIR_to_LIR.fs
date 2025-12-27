@@ -17,6 +17,9 @@ module MIR_to_LIR
 /// Convert MIR.VReg to LIR.Reg (virtual)
 let vregToLIRReg (MIR.VReg id) : LIR.Reg = LIR.Virtual id
 
+/// Convert MIR.VReg to LIR.FReg (virtual float register)
+let vregToLIRFReg (MIR.VReg id) : LIR.FReg = LIR.FVirtual id
+
 /// Convert MIR.Operand to LIR.Operand
 let convertOperand (operand: MIR.Operand) : LIR.Operand =
     match operand with
@@ -48,123 +51,249 @@ let ensureInRegister (operand: MIR.Operand) (tempReg: LIR.Reg) : Result<LIR.Inst
         // Load function address into register using ADR instruction
         Ok ([LIR.LoadFuncAddr (tempReg, name)], tempReg)
 
+/// Ensure float operand is in an FP register
+let ensureInFRegister (operand: MIR.Operand) (tempFReg: LIR.FReg) : Result<LIR.Instr list * LIR.FReg, string> =
+    match operand with
+    | MIR.FloatRef idx ->
+        // Load float constant from pool into FP register
+        Ok ([LIR.FLoad (tempFReg, idx)], tempFReg)
+    | MIR.Register vreg ->
+        // Float value already in a virtual register - treat it as FVirtual
+        Ok ([], vregToLIRFReg vreg)
+    | MIR.IntConst _ | MIR.BoolConst _ ->
+        Error "Internal error: Cannot use integer/boolean as float operand"
+    | MIR.StringRef _ ->
+        Error "Internal error: Cannot use string as float operand"
+    | MIR.FuncAddr _ ->
+        Error "Internal error: Cannot use function address as float operand"
+
 /// Convert MIR instruction to LIR instructions
 let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Instr list, string> =
     match instr with
-    | MIR.Mov (dest, src) ->
-        let lirDest = vregToLIRReg dest
-        let lirSrc = convertOperand src
-        Ok [LIR.Mov (lirDest, lirSrc)]
+    | MIR.Mov (dest, src, valueType) ->
+        match valueType with
+        | Some AST.TFloat64 ->
+            // Float move - use FP registers
+            let lirFDest = vregToLIRFReg dest
+            match src with
+            | MIR.FloatRef idx ->
+                // Load float constant from pool
+                Ok [LIR.FLoad (lirFDest, idx)]
+            | MIR.Register vreg ->
+                // Move between float registers
+                let srcFReg = vregToLIRFReg vreg
+                Ok [LIR.FMov (lirFDest, srcFReg)]
+            | _ ->
+                Error "Internal error: non-float operand in float Mov"
+        | _ ->
+            // Integer/other move
+            let lirDest = vregToLIRReg dest
+            let lirSrc = convertOperand src
+            Ok [LIR.Mov (lirDest, lirSrc)]
 
-    | MIR.BinOp (dest, op, left, right) ->
+    | MIR.BinOp (dest, op, left, right, operandType) ->
         let lirDest = vregToLIRReg dest
+        let lirFDest = vregToLIRFReg dest
         let rightOp = convertOperand right
 
-        match op with
-        | MIR.Add ->
-            // ADD can have immediate or register as right operand
-            // Left operand must be in a register
-            match ensureInRegister left lirDest with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-                Ok (leftInstrs @ [LIR.Add (lirDest, leftReg, rightOp)])
+        // Check if this is a float operation
+        match operandType with
+        | AST.TFloat64 ->
+            // Float operations - use FP registers and instructions
+            match op with
+            | MIR.Add ->
+                match ensureInFRegister left (LIR.FVirtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftFReg) ->
+                match ensureInFRegister right (LIR.FVirtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightFReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.FAdd (lirFDest, leftFReg, rightFReg)])
+            | MIR.Sub ->
+                match ensureInFRegister left (LIR.FVirtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftFReg) ->
+                match ensureInFRegister right (LIR.FVirtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightFReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.FSub (lirFDest, leftFReg, rightFReg)])
+            | MIR.Mul ->
+                match ensureInFRegister left (LIR.FVirtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftFReg) ->
+                match ensureInFRegister right (LIR.FVirtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightFReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.FMul (lirFDest, leftFReg, rightFReg)])
+            | MIR.Div ->
+                match ensureInFRegister left (LIR.FVirtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftFReg) ->
+                match ensureInFRegister right (LIR.FVirtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightFReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.FDiv (lirFDest, leftFReg, rightFReg)])
+            | MIR.Mod ->
+                Error "Float modulo not yet supported"
+            // Float comparisons - result goes in integer register
+            | MIR.Eq ->
+                match ensureInFRegister left (LIR.FVirtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftFReg) ->
+                match ensureInFRegister right (LIR.FVirtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightFReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.FCmp (leftFReg, rightFReg); LIR.Cset (lirDest, LIR.EQ)])
+            | MIR.Neq ->
+                match ensureInFRegister left (LIR.FVirtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftFReg) ->
+                match ensureInFRegister right (LIR.FVirtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightFReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.FCmp (leftFReg, rightFReg); LIR.Cset (lirDest, LIR.NE)])
+            | MIR.Lt ->
+                match ensureInFRegister left (LIR.FVirtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftFReg) ->
+                match ensureInFRegister right (LIR.FVirtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightFReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.FCmp (leftFReg, rightFReg); LIR.Cset (lirDest, LIR.LT)])
+            | MIR.Gt ->
+                match ensureInFRegister left (LIR.FVirtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftFReg) ->
+                match ensureInFRegister right (LIR.FVirtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightFReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.FCmp (leftFReg, rightFReg); LIR.Cset (lirDest, LIR.GT)])
+            | MIR.Lte ->
+                match ensureInFRegister left (LIR.FVirtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftFReg) ->
+                match ensureInFRegister right (LIR.FVirtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightFReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.FCmp (leftFReg, rightFReg); LIR.Cset (lirDest, LIR.LE)])
+            | MIR.Gte ->
+                match ensureInFRegister left (LIR.FVirtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftFReg) ->
+                match ensureInFRegister right (LIR.FVirtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightFReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.FCmp (leftFReg, rightFReg); LIR.Cset (lirDest, LIR.GE)])
+            | MIR.And | MIR.Or ->
+                Error "Boolean operations not supported on floats"
 
-        | MIR.Sub ->
-            // SUB can have immediate or register as right operand
-            match ensureInRegister left lirDest with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-                Ok (leftInstrs @ [LIR.Sub (lirDest, leftReg, rightOp)])
+        | _ ->
+            // Integer operations - existing logic
+            match op with
+            | MIR.Add ->
+                // ADD can have immediate or register as right operand
+                // Left operand must be in a register
+                match ensureInRegister left lirDest with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                    Ok (leftInstrs @ [LIR.Add (lirDest, leftReg, rightOp)])
 
-        | MIR.Mul ->
-            // MUL requires both operands in registers
-            match ensureInRegister left (LIR.Virtual 1000) with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-            match ensureInRegister right (LIR.Virtual 1001) with
-            | Error err -> Error err
-            | Ok (rightInstrs, rightReg) ->
-                Ok (leftInstrs @ rightInstrs @ [LIR.Mul (lirDest, leftReg, rightReg)])
+            | MIR.Sub ->
+                // SUB can have immediate or register as right operand
+                match ensureInRegister left lirDest with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                    Ok (leftInstrs @ [LIR.Sub (lirDest, leftReg, rightOp)])
 
-        | MIR.Div ->
-            // SDIV requires both operands in registers
-            match ensureInRegister left (LIR.Virtual 1000) with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-            match ensureInRegister right (LIR.Virtual 1001) with
-            | Error err -> Error err
-            | Ok (rightInstrs, rightReg) ->
-                Ok (leftInstrs @ rightInstrs @ [LIR.Sdiv (lirDest, leftReg, rightReg)])
+            | MIR.Mul ->
+                // MUL requires both operands in registers
+                match ensureInRegister left (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                match ensureInRegister right (LIR.Virtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.Mul (lirDest, leftReg, rightReg)])
 
-        | MIR.Mod ->
-            // Modulo: a % b = a - (a / b) * b
-            // ARM64: sdiv temp, left, right; msub dest, temp, right, left
-            match ensureInRegister left (LIR.Virtual 1000) with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-            match ensureInRegister right (LIR.Virtual 1001) with
-            | Error err -> Error err
-            | Ok (rightInstrs, rightReg) ->
-                let quotReg = LIR.Virtual 1002  // temp for quotient
-                Ok (leftInstrs @ rightInstrs @
-                    [LIR.Sdiv (quotReg, leftReg, rightReg);
-                     LIR.Msub (lirDest, quotReg, rightReg, leftReg)])
+            | MIR.Div ->
+                // SDIV requires both operands in registers
+                match ensureInRegister left (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                match ensureInRegister right (LIR.Virtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.Sdiv (lirDest, leftReg, rightReg)])
 
-        // Comparisons: CMP + CSET sequence
-        | MIR.Eq ->
-            match ensureInRegister left (LIR.Virtual 1000) with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-                Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.EQ)])
+            | MIR.Mod ->
+                // Modulo: a % b = a - (a / b) * b
+                // ARM64: sdiv temp, left, right; msub dest, temp, right, left
+                match ensureInRegister left (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                match ensureInRegister right (LIR.Virtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightReg) ->
+                    let quotReg = LIR.Virtual 1002  // temp for quotient
+                    Ok (leftInstrs @ rightInstrs @
+                        [LIR.Sdiv (quotReg, leftReg, rightReg);
+                         LIR.Msub (lirDest, quotReg, rightReg, leftReg)])
 
-        | MIR.Neq ->
-            match ensureInRegister left (LIR.Virtual 1000) with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-                Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.NE)])
+            // Comparisons: CMP + CSET sequence
+            | MIR.Eq ->
+                match ensureInRegister left (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                    Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.EQ)])
 
-        | MIR.Lt ->
-            match ensureInRegister left (LIR.Virtual 1000) with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-                Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.LT)])
+            | MIR.Neq ->
+                match ensureInRegister left (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                    Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.NE)])
 
-        | MIR.Gt ->
-            match ensureInRegister left (LIR.Virtual 1000) with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-                Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.GT)])
+            | MIR.Lt ->
+                match ensureInRegister left (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                    Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.LT)])
 
-        | MIR.Lte ->
-            match ensureInRegister left (LIR.Virtual 1000) with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-                Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.LE)])
+            | MIR.Gt ->
+                match ensureInRegister left (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                    Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.GT)])
 
-        | MIR.Gte ->
-            match ensureInRegister left (LIR.Virtual 1000) with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-                Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.GE)])
+            | MIR.Lte ->
+                match ensureInRegister left (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                    Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.LE)])
 
-        // Boolean operations (bitwise for 0/1 values)
-        | MIR.And ->
-            match ensureInRegister left (LIR.Virtual 1000) with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-            match ensureInRegister right (LIR.Virtual 1001) with
-            | Error err -> Error err
-            | Ok (rightInstrs, rightReg) ->
-                Ok (leftInstrs @ rightInstrs @ [LIR.And (lirDest, leftReg, rightReg)])
+            | MIR.Gte ->
+                match ensureInRegister left (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                    Ok (leftInstrs @ [LIR.Cmp (leftReg, rightOp); LIR.Cset (lirDest, LIR.GE)])
 
-        | MIR.Or ->
-            match ensureInRegister left (LIR.Virtual 1000) with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-            match ensureInRegister right (LIR.Virtual 1001) with
-            | Error err -> Error err
-            | Ok (rightInstrs, rightReg) ->
-                Ok (leftInstrs @ rightInstrs @ [LIR.Orr (lirDest, leftReg, rightReg)])
+            // Boolean operations (bitwise for 0/1 values)
+            | MIR.And ->
+                match ensureInRegister left (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                match ensureInRegister right (LIR.Virtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.And (lirDest, leftReg, rightReg)])
+
+            | MIR.Or ->
+                match ensureInRegister left (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                match ensureInRegister right (LIR.Virtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.Orr (lirDest, leftReg, rightReg)])
 
     | MIR.UnaryOp (dest, op, src) ->
         let lirDest = vregToLIRReg dest
@@ -377,20 +506,19 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
                 | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
             Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
         | AST.TFloat64 ->
-            // Float needs to be in D0 - handle FloatRef specially
+            // Float needs to be in D0 for printing
             match src with
             | MIR.FloatRef idx ->
+                // Literal float - load from pool
                 Ok [LIR.FLoad (LIR.FPhysical LIR.D0, idx)
                     LIR.PrintFloat (LIR.FPhysical LIR.D0)]
+            | MIR.Register vreg ->
+                // Computed float - it's in an FVirtual register, move to D0 for printing
+                let srcFReg = vregToLIRFReg vreg
+                Ok [LIR.FMov (LIR.FPhysical LIR.D0, srcFReg)
+                    LIR.PrintFloat (LIR.FPhysical LIR.D0)]
             | _ ->
-                // Computed float should already be in FP reg, but we're receiving general operand
-                // For now, just print as int (raw bits)
-                let lirSrc = convertOperand src
-                let moveToX0 =
-                    match lirSrc with
-                    | LIR.Reg (LIR.Physical LIR.X0) -> []
-                    | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
-                Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
+                Error "Internal error: unexpected operand type for float print"
         | AST.TString ->
             // String printing uses PrintString for pool strings, PrintHeapString for heap strings
             match src with

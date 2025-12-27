@@ -101,8 +101,8 @@ type UnaryOp =
 
 /// Instructions (non-control-flow)
 type Instr =
-    | Mov of dest:VReg * src:Operand
-    | BinOp of dest:VReg * op:BinOp * left:Operand * right:Operand
+    | Mov of dest:VReg * src:Operand * valueType:AST.Type option  // valueType for float/int distinction
+    | BinOp of dest:VReg * op:BinOp * left:Operand * right:Operand * operandType:AST.Type
     | UnaryOp of dest:VReg * op:UnaryOp * src:Operand
     | Call of dest:VReg * funcName:string * args:Operand list  // Direct function call (BL instruction)
     | IndirectCall of dest:VReg * func:Operand * args:Operand list  // Call through function pointer (BLR instruction)
