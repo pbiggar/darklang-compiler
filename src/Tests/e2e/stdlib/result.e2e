@@ -1,0 +1,65 @@
+// Stdlib.Result Tests
+// Ported from https://github.com/darklang/dark/tree/main/backend/testfiles/execution/stdlib
+//
+// Tests for Result module functions
+//
+// NOTE: All Result function tests are commented out because pattern matching
+// on Result<t, e> causes a type checker bug: "Type mismatch in variable v: expected a, got t"
+// This needs to be fixed in the type checker before Result functions can be implemented.
+
+// ===================================================================
+// Stdlib.Result.isOk - Returns true if the result is Ok
+// ===================================================================
+
+// Stdlib.Result.isOk<Int64, String>(Stdlib.Result.Result.Ok(5)) = stdout="true\n"
+// Stdlib.Result.isOk<Int64, String>(Stdlib.Result.Result.Error("err")) = stdout="false\n"
+
+// ===================================================================
+// Stdlib.Result.isError - Returns true if the result is Error
+// ===================================================================
+
+// Stdlib.Result.isError<Int64, String>(Stdlib.Result.Result.Ok(5)) = stdout="false\n"
+// Stdlib.Result.isError<Int64, String>(Stdlib.Result.Result.Error("err")) = stdout="true\n"
+
+// ===================================================================
+// Stdlib.Result.withDefault - Returns the value or a default
+// ===================================================================
+
+// Stdlib.Result.withDefault<Int64, String>(Stdlib.Result.Result.Ok(5), 0) = 5
+// Stdlib.Result.withDefault<Int64, String>(Stdlib.Result.Result.Error("err"), 42) = 42
+
+// ===================================================================
+// Stdlib.Result.map - Apply a function to the Ok value
+// ===================================================================
+
+// Stdlib.Result.map<Int64, Int64, String>((x: Int64) => x + 1, Stdlib.Result.Result.Ok(5)) |> Stdlib.Result.withDefault<Int64, String>(0) = 6
+// Stdlib.Result.map<Int64, Int64, String>((x: Int64) => x + 1, Stdlib.Result.Result.Error("err")) |> Stdlib.Result.isError<Int64, String>() = stdout="true\n"
+
+// ===================================================================
+// Stdlib.Result.mapError - Apply a function to the Error value
+// ===================================================================
+
+// Stdlib.Result.mapError<Int64, String, String>((e: String) => e ++ "!", Stdlib.Result.Result.Error("err")) |> Stdlib.Result.isError<Int64, String>() = stdout="true\n"
+// Stdlib.Result.mapError<Int64, String, String>((e: String) => e ++ "!", Stdlib.Result.Result.Ok(5)) |> Stdlib.Result.withDefault<Int64, String>(0) = 5
+
+// ===================================================================
+// Stdlib.Result.andThen - Chain Result computations
+// ===================================================================
+
+// Stdlib.Result.andThen<Int64, Int64, String>((x: Int64) => Stdlib.Result.Result.Ok(x * 2), Stdlib.Result.Result.Ok(5)) |> Stdlib.Result.withDefault<Int64, String>(0) = 10
+// Stdlib.Result.andThen<Int64, Int64, String>((x: Int64) => Stdlib.Result.Result.Ok(x * 2), Stdlib.Result.Result.Error("err")) |> Stdlib.Result.isError<Int64, String>() = stdout="true\n"
+// Stdlib.Result.andThen<Int64, Int64, String>((x: Int64) => Stdlib.Result.Result.Error("fail"), Stdlib.Result.Result.Ok(5)) |> Stdlib.Result.isError<Int64, String>() = stdout="true\n"
+
+// ===================================================================
+// Stdlib.Result.toOption - Convert Result to Option
+// ===================================================================
+
+// Stdlib.Result.toOption<Int64, String>(Stdlib.Result.Result.Ok(42)) |> Stdlib.Option.isSome<Int64>() = stdout="true\n"
+// Stdlib.Result.toOption<Int64, String>(Stdlib.Result.Result.Error("err")) |> Stdlib.Option.isNone<Int64>() = stdout="true\n"
+
+// ===================================================================
+// Stdlib.Result.toList - Convert to a list
+// ===================================================================
+
+// Stdlib.Result.toList<Int64, String>(Stdlib.Result.Result.Ok(42)) |> Stdlib.List.length<Int64>() = stdout="1\n"
+// Stdlib.Result.toList<Int64, String>(Stdlib.Result.Result.Error("err")) |> Stdlib.List.isEmpty<Int64>() = stdout="true\n"
