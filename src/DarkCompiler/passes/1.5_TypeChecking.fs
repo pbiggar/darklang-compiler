@@ -898,10 +898,20 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                                 Error (TypeMismatch (concretePayloadType, actualPayloadType, $"payload of {variantName}"))
                             else
                                 // Build concrete type arguments from substitution
-                                let typeArgs = typeParams |> List.map (fun p ->
+                                // For unresolved type vars, try to get them from expectedType
+                                let expectedArgs =
+                                    match expectedType with
+                                    | Some (TSum (expectedName, args)) when expectedName = typeName && List.length args = List.length typeParams ->
+                                        Some args
+                                    | _ -> None
+                                let typeArgs = typeParams |> List.mapi (fun i p ->
                                     match Map.tryFind p subst with
                                     | Some t -> t
-                                    | None -> TVar p)  // Unresolved type vars stay as TVar
+                                    | None ->
+                                        // Try to get from expected type args
+                                        match expectedArgs with
+                                        | Some args -> List.item i args
+                                        | None -> TVar p)
                                 let sumType = TSum (typeName, typeArgs)
                                 match expectedType with
                                 | Some expected when expected <> sumType ->
