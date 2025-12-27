@@ -1,0 +1,51 @@
+// Stdlib.Option Tests
+// Ported from https://github.com/darklang/dark/tree/main/backend/testfiles/execution/stdlib
+//
+// Tests for Option module functions
+//
+// NOTE: All Option function tests are commented out because pattern matching
+// on Option<t> causes a type checker bug: "Type mismatch in variable v: expected a, got t"
+// This needs to be fixed in the type checker before Option functions can be implemented.
+
+// ===================================================================
+// Stdlib.Option.isSome - Returns true if the option is Some
+// ===================================================================
+
+// Stdlib.Option.isSome<Int64>(Stdlib.Option.Option.Some(5)) = stdout="true\n"
+// Stdlib.Option.isSome<Int64>(Stdlib.Option.Option.None) = stdout="false\n"
+
+// ===================================================================
+// Stdlib.Option.isNone - Returns true if the option is None
+// ===================================================================
+
+// Stdlib.Option.isNone<Int64>(Stdlib.Option.Option.Some(5)) = stdout="false\n"
+// Stdlib.Option.isNone<Int64>(Stdlib.Option.Option.None) = stdout="true\n"
+
+// ===================================================================
+// Stdlib.Option.withDefault - Returns the value or a default
+// ===================================================================
+
+// Stdlib.Option.withDefault<Int64>(Stdlib.Option.Option.Some(5), 0) = 5
+// Stdlib.Option.withDefault<Int64>(Stdlib.Option.Option.None, 42) = 42
+
+// ===================================================================
+// Stdlib.Option.map - Apply a function to the value if Some
+// ===================================================================
+
+// Stdlib.Option.map<Int64, Int64>((x: Int64) => x + 1, Stdlib.Option.Option.Some(5)) |> Stdlib.Option.withDefault<Int64>(0) = 6
+// Stdlib.Option.map<Int64, Int64>((x: Int64) => x + 1, Stdlib.Option.Option.None) |> Stdlib.Option.isNone<Int64>() = stdout="true\n"
+
+// ===================================================================
+// Stdlib.Option.andThen - Chain Option computations
+// ===================================================================
+
+// Stdlib.Option.andThen<Int64, Int64>((x: Int64) => Stdlib.Option.Option.Some(x * 2), Stdlib.Option.Option.Some(5)) |> Stdlib.Option.withDefault<Int64>(0) = 10
+// Stdlib.Option.andThen<Int64, Int64>((x: Int64) => Stdlib.Option.Option.Some(x * 2), Stdlib.Option.Option.None) |> Stdlib.Option.isNone<Int64>() = stdout="true\n"
+// Stdlib.Option.andThen<Int64, Int64>((x: Int64) => Stdlib.Option.Option.None, Stdlib.Option.Option.Some(5)) |> Stdlib.Option.isNone<Int64>() = stdout="true\n"
+
+// ===================================================================
+// Stdlib.Option.toList - Convert to a list
+// ===================================================================
+
+// Stdlib.Option.toList<Int64>(Stdlib.Option.Option.Some(42)) |> Stdlib.List.length<Int64>() = stdout="1\n"
+// Stdlib.Option.toList<Int64>(Stdlib.Option.Option.None) |> Stdlib.List.isEmpty<Int64>() = stdout="true\n"
