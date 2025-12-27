@@ -25,3 +25,6 @@ def Stdlib.Tuple2.second<a, b>(t: (a, b)) : b = match t with | (x, y) -> y
 
 // Stdlib.Result - Result type for error handling
 type Stdlib.Result.Result<t, e> = Ok of t | Error of e
+
+// Stdlib.Option - Optional values
+type Stdlib.Option.Option<t> = Some of t | None
