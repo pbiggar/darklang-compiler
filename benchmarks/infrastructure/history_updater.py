@@ -68,6 +68,60 @@ def get_run_metadata(results_dir: Path) -> dict:
     }
 
 
+def generate_table(benchmark_results: list, baseline_instrs: int) -> list[str]:
+    """Generate aligned markdown table for benchmark results."""
+    # Headers
+    headers = ["Language", "Instructions", "vs Rust", "Data Refs", "L1 Miss", "LL Miss", "Branches", "Mispred"]
+
+    # Build rows data
+    rows = []
+    for r in benchmark_results:
+        lang = r.get("language", "unknown").capitalize()
+        instrs = r.get("instructions", 0)
+        data_refs = r.get("data_refs", 0)
+        d1_misses = r.get("d1_misses", 0)
+        ll_misses = r.get("ll_misses", 0)
+        branches = r.get("branches", 0)
+        mispreds = r.get("branch_mispredicts", 0)
+
+        ratio = instrs / baseline_instrs if baseline_instrs > 0 else 0
+        mispred_rate = (mispreds / branches * 100) if branches > 0 else 0
+
+        rows.append([
+            lang,
+            format_number(instrs),
+            format_ratio(ratio),
+            format_number(data_refs),
+            format_number(d1_misses),
+            format_number(ll_misses),
+            format_number(branches),
+            f"{mispred_rate:.1f}%",
+        ])
+
+    # Calculate column widths
+    widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            widths[i] = max(widths[i], len(cell))
+
+    # Format header
+    header_line = "|"
+    separator_line = "|"
+    for i, h in enumerate(headers):
+        header_line += f" {h:<{widths[i]}} |"
+        separator_line += "-" * (widths[i] + 2) + "|"
+
+    # Format rows
+    table_lines = [header_line, separator_line]
+    for row in rows:
+        row_line = "|"
+        for i, cell in enumerate(row):
+            row_line += f" {cell:>{widths[i]}} |"
+        table_lines.append(row_line)
+
+    return table_lines
+
+
 def generate_entry(results: dict, metadata: dict) -> str:
     """Generate markdown entry for this benchmark run."""
     lines = [
@@ -101,28 +155,8 @@ def generate_entry(results: dict, metadata: dict) -> str:
 
         baseline_instrs = baseline.get("instructions", 1)
 
-        lines.append("| Language | Instructions | vs Rust | Data Refs | L1 Miss | LL Miss | Branches | Mispred |")
-        lines.append("|----------|-------------|---------|-----------|---------|---------|----------|---------|")
-
-        for r in sorted_results:
-            lang = r.get("language", "unknown").capitalize()
-            instrs = r.get("instructions", 0)
-            data_refs = r.get("data_refs", 0)
-            d1_misses = r.get("d1_misses", 0)
-            ll_misses = r.get("ll_misses", 0)
-            branches = r.get("branches", 0)
-            mispreds = r.get("branch_mispredicts", 0)
-
-            ratio = instrs / baseline_instrs if baseline_instrs > 0 else 0
-            mispred_rate = (mispreds / branches * 100) if branches > 0 else 0
-
-            lines.append(
-                f"| {lang} | {format_number(instrs)} | "
-                f"{format_ratio(ratio)} | {format_number(data_refs)} | "
-                f"{format_number(d1_misses)} | {format_number(ll_misses)} | "
-                f"{format_number(branches)} | {mispred_rate:.1f}% |"
-            )
-
+        table_lines = generate_table(sorted_results, baseline_instrs)
+        lines.extend(table_lines)
         lines.append("")
 
     return "\n".join(lines)

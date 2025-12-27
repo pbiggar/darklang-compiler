@@ -44,3 +44,4 @@ docker-compose.override.yml
 examples/*.out
 examples/output
 dark.out
+cachegrind.out.*
