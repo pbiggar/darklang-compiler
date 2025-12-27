@@ -423,3 +423,98 @@ def Stdlib.Dict.__copyChildrenWithInsert(oldPtr: RawPtr, newPtr: RawPtr, oldNumC
 
 def Stdlib.Dict.set(dict: Int64, key: Int64, value: Int64) : Int64 =
     Stdlib.Dict.__setHelper(dict, key, value, 0)
+
+// =============================================================================
+// Dict.remove - remove a key from the dictionary
+// =============================================================================
+// Returns a new dictionary without the key (or unchanged if key not present)
+
+// Copy internal node excluding one child
+def Stdlib.Dict.__copyChildrenExcluding(oldPtr: RawPtr, newPtr: RawPtr, oldNumChildren: Int64, excludeIdx: Int64, oldI: Int64, newI: Int64) : Int64 =
+    if oldI >= oldNumChildren then
+        Stdlib.Dict.__setTag(__rawptr_to_int64(newPtr), 1)
+    else if oldI == excludeIdx then
+        // Skip this child
+        Stdlib.Dict.__copyChildrenExcluding(oldPtr, newPtr, oldNumChildren, excludeIdx, oldI + 1, newI)
+    else
+        // Copy this child
+        let oldOffset = 8 + (oldI * 8) in
+        let newOffset = 8 + (newI * 8) in
+        let child = __raw_get(oldPtr, oldOffset) in
+        let _ = __raw_set(newPtr, newOffset, child) in
+        Stdlib.Dict.__copyChildrenExcluding(oldPtr, newPtr, oldNumChildren, excludeIdx, oldI + 1, newI + 1)
+
+// Copy internal node with one child removed
+def Stdlib.Dict.__copyInternalWithRemove(oldPtr: RawPtr, oldBitmap: Int64, newBitmap: Int64, removeIdx: Int64) : Int64 =
+    let oldNumChildren = Stdlib.Int64.popcount(oldBitmap) in
+    let newNumChildren = oldNumChildren - 1 in
+    if newNumChildren == 0 then
+        // No children left - return empty
+        0
+    else
+        let newNode = Stdlib.Dict.__allocInternal(newBitmap, newNumChildren) in
+        Stdlib.Dict.__copyChildrenExcluding(oldPtr, newNode, oldNumChildren, removeIdx, 0, 0)
+
+// Remove helper - recursive removal
+def Stdlib.Dict.__removeHelper(node: Int64, key: Int64, level: Int64) : Int64 =
+    if node == 0 then
+        // Empty - key not found, return empty
+        0
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            // Leaf node
+            let storedKey = __raw_get(ptr, 0) in
+            if storedKey == key then
+                // Found the key - return empty to remove it
+                0
+            else
+                // Different key - not found, return unchanged
+                node
+        else if tag == 1 then
+            // Internal node
+            let chunk = Stdlib.Dict.hashChunk(key, level) in
+            let bitmap = __raw_get(ptr, 0) in
+            if Stdlib.Dict.hasBit(bitmap, chunk) then
+                let idx = Stdlib.Dict.childIndex(bitmap, chunk) in
+                let oldChild = __raw_get(ptr, 8 + (idx * 8)) in
+                let newChild = Stdlib.Dict.__removeHelper(oldChild, key, level + 1) in
+                if newChild == 0 then
+                    // Child was removed - need to update this node
+                    let numChildren = Stdlib.Int64.popcount(bitmap) in
+                    if numChildren == 1 then
+                        // This was the only child - return empty
+                        0
+                    else if numChildren == 2 then
+                        // Two children, one being removed - check if we can collapse
+                        // Get the other child index (0 if we're removing 1, 1 if removing 0)
+                        let otherIdx = 1 - idx in
+                        let otherChild = __raw_get(ptr, 8 + (otherIdx * 8)) in
+                        let otherTag = Stdlib.Dict.__getTag(otherChild) in
+                        if otherTag == 2 then
+                            // Other child is a leaf - collapse to it
+                            otherChild
+                        else
+                            // Other child is internal - can't collapse, create new node
+                            let newBitmap = Stdlib.Dict.clearBit(bitmap, chunk) in
+                            Stdlib.Dict.__copyInternalWithRemove(ptr, bitmap, newBitmap, idx)
+                    else
+                        // More than 2 children - create new node without removed child
+                        let newBitmap = Stdlib.Dict.clearBit(bitmap, chunk) in
+                        Stdlib.Dict.__copyInternalWithRemove(ptr, bitmap, newBitmap, idx)
+                else if newChild == oldChild then
+                    // Child unchanged - return unchanged
+                    node
+                else
+                    // Child was modified (but not removed) - update
+                    Stdlib.Dict.__copyInternalWithUpdate(ptr, bitmap, idx, newChild)
+            else
+                // Bit not set - key not in this subtree
+                node
+        else
+            // Unknown tag - return unchanged
+            node
+
+def Stdlib.Dict.remove(dict: Int64, key: Int64) : Int64 =
+    Stdlib.Dict.__removeHelper(dict, key, 0)
