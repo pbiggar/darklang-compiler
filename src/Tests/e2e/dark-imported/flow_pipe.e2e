@@ -5,6 +5,49 @@
 // Tests may fail if features are not yet implemented
 
 // ===================================================================
+// Basic pipe operations (working tests with current syntax)
+// ===================================================================
+
+// Pipe with lambda (our syntax)
+5 |> ((x: Int64) => x + 1) = 6
+10 |> ((x: Int64) => x * 2) = 20
+
+// Multiple pipes with lambdas
+5 |> ((x: Int64) => x + 1) |> ((y: Int64) => y * 3) = 18
+
+// Pipe with expression as input
+(3 + 2) |> ((x: Int64) => x + 1) = 6
+(10 - 5) |> ((x: Int64) => x * 2) = 10
+
+// Pipe in let binding
+let f = (x: Int64) => x + 1 in 5 |> f = 6
+let f = (x: Int64) => x + 1 in let g = (x: Int64) => x * 2 in 5 |> f |> g = 12
+
+// Pipe with bool result lambda (convert to int for testing)
+5 |> ((x: Int64) => if x > 0 then 1 else 0) = 1
+(0 - 5) |> ((x: Int64) => if x > 0 then 1 else 0) = 0
+
+// Pipe with string lambda
+"hello" |> ((s: String) => s ++ "!") = stdout="hello!\n"
+
+// Nested pipe in expression
+let f = (x: Int64) => x + 1 in let g = (x: Int64) => x * 2 in (5 |> f) + (10 |> g) = 26
+
+// Pipe with named function (function defined inline)
+def addOne(x: Int64): Int64 = x + 1 let result = 5 |> addOne in result = 6
+
+// Pipe chain with named functions
+def addOne(x: Int64): Int64 = x + 1 def double(x: Int64): Int64 = x * 2 let result = 5 |> addOne |> double in result = 12
+
+// Pipe with tuple (using lambdas since function def + tuple expression is ambiguous)
+(1, 2) |> ((t: (Int64, Int64)) => t.0) = 1
+(1, 2) |> ((t: (Int64, Int64)) => t.1) = 2
+
+// ===================================================================
+// Original Dark tests (commented - require additional features)
+// ===================================================================
+
+// ===================================================================
 // Basic pipe operations
 // NOTE: All tests commented out - requires pipe operator, Int64 suffix, and Stdlib support
 // ===================================================================

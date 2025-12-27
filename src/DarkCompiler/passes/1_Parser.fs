@@ -873,7 +873,7 @@ let parse (tokens: Token list) : Result<Program, string> =
 
     and parsePipe (toks: Token list) : Result<Expr * Token list, string> =
         // Pipe operator |> has lowest precedence, left-associative
-        // x |> f desugars to Apply(f, [x])
+        // x |> f desugars to f(x) - Call if f is a name, Apply if f is an expression
         parseOr toks
         |> Result.bind (fun (left, remaining) ->
             let rec parsePipeRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
@@ -881,8 +881,14 @@ let parse (tokens: Token list) : Result<Program, string> =
                 | TPipe :: rest ->
                     parseOr rest
                     |> Result.bind (fun (right, remaining') ->
-                        // Desugar: left |> right becomes Apply(right, [left])
-                        parsePipeRest (Apply (right, [leftExpr])) remaining')
+                        // Desugar: left |> right
+                        // If right is a variable (function name), use Call
+                        // Otherwise use Apply (for lambdas or other expressions)
+                        let pipedExpr =
+                            match right with
+                            | Var funcName -> Call (funcName, [leftExpr])
+                            | _ -> Apply (right, [leftExpr])
+                        parsePipeRest pipedExpr remaining')
                 | _ -> Ok (leftExpr, toks)
             parsePipeRest left remaining)
 
