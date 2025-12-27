@@ -253,3 +253,34 @@ Stdlib.List.length<Int64>([1, 2, 3, 4, 5]) = stdout="5\n"
 
 // Stdlib.List.length with different types
 Stdlib.List.length<Bool>([true, false, true]) = stdout="3\n"
+
+// =====================================================
+// List Spread Construction Tests [a, b, ...rest]
+// =====================================================
+
+// Basic spread construction - prepend single element
+let x = [2, 3] in Stdlib.List.length<Int64>([1, ...x]) = stdout="3\n"
+
+// Prepend multiple elements
+let x = [3, 4] in Stdlib.List.length<Int64>([1, 2, ...x]) = stdout="4\n"
+
+// Empty spread - just return tail
+let x = [1, 2, 3] in Stdlib.List.length<Int64>([...x]) = stdout="3\n"
+
+// Spread with empty tail (use function to get typed empty list)
+def emptyList() : List<Int64> = [] Stdlib.List.length<Int64>([1, 2, ...emptyList()]) = stdout="2\n"
+
+// Verify element values with pattern matching
+let x = [2, 3] in match [1, ...x] with | [a, b, c] -> a + b + c | _ -> 0 = stdout="6\n"
+
+// Prepend computed value
+let x = [2, 3] in match [10 + 1, ...x] with | [a, b, c] -> a | _ -> 0 = stdout="11\n"
+
+// Use in match case body
+match [1, 2, 3] with | [h, ...rest] -> Stdlib.List.length<Int64>([h, ...rest]) | [] -> 0 = stdout="3\n"
+
+// Rebuild list with modified head
+match [1, 2, 3] with | [h, ...rest] -> match [h + 10, ...rest] with | [a, b, c] -> a + b + c | _ -> 0 | [] -> 0 = stdout="16\n"
+
+// Chain of spreads
+let a = [3] in let b = [2, ...a] in Stdlib.List.length<Int64>([1, ...b]) = stdout="3\n"

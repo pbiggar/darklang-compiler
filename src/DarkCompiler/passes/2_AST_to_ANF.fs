@@ -157,8 +157,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
                    cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map (applySubstToExpr subst); Body = applySubstToExpr subst mc.Body }))
     | AST.ListLiteral elements ->
         AST.ListLiteral (List.map (applySubstToExpr subst) elements)
-    | AST.ListCons (heads, tail) ->
-        AST.ListCons (List.map (applySubstToExpr subst) heads, applySubstToExpr subst tail)
+    | AST.ListCons (headElements, tail) ->
+        AST.ListCons (List.map (applySubstToExpr subst) headElements, applySubstToExpr subst tail)
     | AST.Lambda (parameters, body) ->
         // Substitute types in parameter annotations and body
         let substParams = parameters |> List.map (fun (name, ty) -> (name, applySubstToType subst ty))
@@ -227,8 +227,8 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
         Set.union scrutineeSpecs caseSpecs
     | AST.ListLiteral elements ->
         elements |> List.map collectTypeApps |> List.fold Set.union Set.empty
-    | AST.ListCons (heads, tail) ->
-        let headsSpecs = heads |> List.map collectTypeApps |> List.fold Set.union Set.empty
+    | AST.ListCons (headElements, tail) ->
+        let headsSpecs = headElements |> List.map collectTypeApps |> List.fold Set.union Set.empty
         Set.union headsSpecs (collectTypeApps tail)
     | AST.Lambda (_, body) ->
         collectTypeApps body
@@ -283,8 +283,8 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
                    cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map replaceTypeApps; Body = replaceTypeApps mc.Body }))
     | AST.ListLiteral elements ->
         AST.ListLiteral (List.map replaceTypeApps elements)
-    | AST.ListCons (heads, tail) ->
-        AST.ListCons (List.map replaceTypeApps heads, replaceTypeApps tail)
+    | AST.ListCons (headElements, tail) ->
+        AST.ListCons (List.map replaceTypeApps headElements, replaceTypeApps tail)
     | AST.Lambda (parameters, body) ->
         AST.Lambda (parameters, replaceTypeApps body)
     | AST.Apply (func, args) ->
@@ -341,8 +341,8 @@ let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
             (mc.Guard |> Option.map (varOccursInExpr name) |> Option.defaultValue false) ||
             varOccursInExpr name mc.Body) cases
     | AST.ListLiteral elements -> List.exists (varOccursInExpr name) elements
-    | AST.ListCons (heads, tail) ->
-        List.exists (varOccursInExpr name) heads || varOccursInExpr name tail
+    | AST.ListCons (headElements, tail) ->
+        List.exists (varOccursInExpr name) headElements || varOccursInExpr name tail
     | AST.Lambda (parameters, body) ->
         // If name is shadowed by a parameter, it doesn't occur
         let paramNames = parameters |> List.map fst |> Set.ofList
@@ -412,8 +412,8 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
                    cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map (fun g -> inlineLambdas g lambdaEnv); Body = inlineLambdas mc.Body lambdaEnv }))
     | AST.ListLiteral elements ->
         AST.ListLiteral (List.map (fun e -> inlineLambdas e lambdaEnv) elements)
-    | AST.ListCons (heads, tail) ->
-        AST.ListCons (List.map (fun e -> inlineLambdas e lambdaEnv) heads, inlineLambdas tail lambdaEnv)
+    | AST.ListCons (headElements, tail) ->
+        AST.ListCons (List.map (fun e -> inlineLambdas e lambdaEnv) headElements, inlineLambdas tail lambdaEnv)
     | AST.Lambda (parameters, body) ->
         // Lambdas can reference outer lambdas, so inline in body
         AST.Lambda (parameters, inlineLambdas body lambdaEnv)
@@ -489,9 +489,9 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
         args |> List.map (fun a -> freeVars a bound) |> List.fold Set.union Set.empty
     | AST.TupleLiteral elems | AST.ListLiteral elems ->
         elems |> List.map (fun e -> freeVars e bound) |> List.fold Set.union Set.empty
-    | AST.ListCons (heads, tail) ->
-        let headsVars = heads |> List.map (fun e -> freeVars e bound) |> List.fold Set.union Set.empty
-        Set.union headsVars (freeVars tail bound)
+    | AST.ListCons (headElements, tail) ->
+        let headsFree = headElements |> List.map (fun e -> freeVars e bound) |> List.fold Set.union Set.empty
+        Set.union headsFree (freeVars tail bound)
     | AST.TupleAccess (tuple, _) -> freeVars tuple bound
     | AST.RecordLiteral (_, fields) ->
         fields |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
@@ -562,11 +562,11 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
     | AST.ListLiteral elems ->
         liftLambdasInList elems state
         |> Result.map (fun (elems', state') -> (AST.ListLiteral elems', state'))
-    | AST.ListCons (heads, tail) ->
-        liftLambdasInList heads state
-        |> Result.bind (fun (heads', state1) ->
-            liftLambdasInExpr tail state1
-            |> Result.map (fun (tail', state2) -> (AST.ListCons (heads', tail'), state2)))
+    | AST.ListCons (headElements, tail) ->
+        liftLambdasInList headElements state
+        |> Result.bind (fun (heads', state') ->
+            liftLambdasInExpr tail state'
+            |> Result.map (fun (tail', state'') -> (AST.ListCons (heads', tail'), state'')))
     | AST.TupleAccess (tuple, index) ->
         liftLambdasInExpr tuple state
         |> Result.map (fun (tuple', state') -> (AST.TupleAccess (tuple', index), state'))
@@ -863,8 +863,8 @@ and collectFuncRefsInExpr (expr: AST.Expr) (knownFuncs: Map<string, (string * AS
     | AST.UnaryOp (_, e) -> collectFuncRefsInExpr e knownFuncs
     | AST.TupleLiteral es | AST.ListLiteral es ->
         es |> List.collect (fun e -> collectFuncRefsInExpr e knownFuncs)
-    | AST.ListCons (heads, tail) ->
-        (heads |> List.collect (fun e -> collectFuncRefsInExpr e knownFuncs)) @
+    | AST.ListCons (headElements, tail) ->
+        (headElements |> List.collect (fun e -> collectFuncRefsInExpr e knownFuncs)) @
         collectFuncRefsInExpr tail knownFuncs
     | AST.TupleAccess (e, _) -> collectFuncRefsInExpr e knownFuncs
     | AST.RecordLiteral (_, fields) ->
@@ -929,6 +929,8 @@ and replaceInExpr (wrapperMap: Map<string, string>) (expr: AST.Expr) : AST.Expr 
                    cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map (replaceInExpr wrapperMap); Body = replaceInExpr wrapperMap mc.Body }))
     | AST.ListLiteral es ->
         AST.ListLiteral (es |> List.map (replaceInExpr wrapperMap))
+    | AST.ListCons (headElements, tail) ->
+        AST.ListCons (headElements |> List.map (replaceInExpr wrapperMap), replaceInExpr wrapperMap tail)
     | AST.Lambda (ps, body) ->
         AST.Lambda (ps, replaceInExpr wrapperMap body)
     | AST.Apply (f, args) ->
@@ -1098,8 +1100,8 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
         | first :: _ ->
             inferType first typeEnv typeReg variantLookup funcReg
             |> Result.map (fun elemType -> AST.TList elemType)
-    | AST.ListCons (heads, tail) ->
-        // ListCons has the type of the tail (which should be a list)
+    | AST.ListCons (_, tail) ->
+        // List cons has same type as tail
         inferType tail typeEnv typeReg variantLookup funcReg
     | AST.Let (name, value, body) ->
         inferType value typeEnv typeReg variantLookup funcReg
@@ -1552,18 +1554,18 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 let exprWithBindings = wrapBindings listBindings finalExpr
                 (exprWithBindings, varGen1))
 
-    | AST.ListCons (heads, tail) ->
-        // Compile [h1, h2, ...tail] as Cons(h1, Cons(h2, tail))
-        // First convert the tail expression to an atom
+    | AST.ListCons (headElements, tail) ->
+        // Compile list cons: [a, b, ...tail] prepends elements to tail
+        // First convert tail to atom
         toAtom tail varGen env typeReg variantLookup funcReg
         |> Result.bind (fun (tailAtom, tailBindings, varGen1) ->
-            // Now build the cons chain using the same helper
-            let rec buildList (elems: AST.Expr list) (vg: ANF.VarGen) (tailAtom: ANF.Atom) (allBindings: (ANF.TempId * ANF.CExpr) list) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+            // Use same buildList helper but start with tail instead of Nil
+            let rec buildList (elems: AST.Expr list) (vg: ANF.VarGen) (currentTail: ANF.Atom) (allBindings: (ANF.TempId * ANF.CExpr) list) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                 match elems with
-                | [] -> Ok (tailAtom, allBindings, vg)
+                | [] -> Ok (currentTail, allBindings, vg)
                 | elem :: rest ->
                     // First build the rest of the list
-                    buildList rest vg tailAtom allBindings
+                    buildList rest vg currentTail allBindings
                     |> Result.bind (fun (restAtom, restBindings, vg1) ->
                         // Now add this element: Cons(elem, rest)
                         toAtom elem vg1 env typeReg variantLookup funcReg
@@ -1574,15 +1576,14 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             let newBindings = restBindings @ elemBindings @ [(consVar, consExpr)]
                             (ANF.Var consVar, newBindings, vg3)))
 
-            if List.isEmpty heads then
-                // [...tail] - just return the tail
-                Ok (ANF.Return tailAtom, varGen1)
-                |> Result.map (fun (expr, vg) ->
-                    let exprWithBindings = wrapBindings tailBindings expr
-                    (exprWithBindings, vg))
+            if List.isEmpty headElements then
+                // No head elements, just return tail
+                let finalExpr = ANF.Return tailAtom
+                let exprWithBindings = wrapBindings tailBindings finalExpr
+                Ok (exprWithBindings, varGen1)
             else
-                // [h1, h2, ...tail] - build cons chain with tail as the base
-                buildList heads varGen1 tailAtom tailBindings
+                // Build the list starting with tail
+                buildList headElements varGen1 tailAtom tailBindings
                 |> Result.map (fun (listAtom, listBindings, varGen2) ->
                     let finalExpr = ANF.Return listAtom
                     let exprWithBindings = wrapBindings listBindings finalExpr
@@ -2614,15 +2615,15 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             // Build the list starting with Nil
             buildList elements varGen (ANF.IntLiteral 0L) []
 
-    | AST.ListCons (heads, tail) ->
-        // Compile [h1, h2, ...tail] as Cons(h1, Cons(h2, tail)) in atom position
+    | AST.ListCons (headElements, tail) ->
+        // Compile list cons in atom position: [a, b, ...tail] prepends elements to tail
         toAtom tail varGen env typeReg variantLookup funcReg
         |> Result.bind (fun (tailAtom, tailBindings, varGen1) ->
-            let rec buildList (elems: AST.Expr list) (vg: ANF.VarGen) (tailAtom: ANF.Atom) (allBindings: (ANF.TempId * ANF.CExpr) list) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+            let rec buildList (elems: AST.Expr list) (vg: ANF.VarGen) (currentTail: ANF.Atom) (allBindings: (ANF.TempId * ANF.CExpr) list) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                 match elems with
-                | [] -> Ok (tailAtom, allBindings, vg)
+                | [] -> Ok (currentTail, allBindings, vg)
                 | elem :: rest ->
-                    buildList rest vg tailAtom allBindings
+                    buildList rest vg currentTail allBindings
                     |> Result.bind (fun (restAtom, restBindings, vg1) ->
                         toAtom elem vg1 env typeReg variantLookup funcReg
                         |> Result.map (fun (elemAtom, elemBindings, vg2) ->
@@ -2631,10 +2632,10 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                             let newBindings = restBindings @ elemBindings @ [(consVar, consExpr)]
                             (ANF.Var consVar, newBindings, vg3)))
 
-            if List.isEmpty heads then
+            if List.isEmpty headElements then
                 Ok (tailAtom, tailBindings, varGen1)
             else
-                buildList heads varGen1 tailAtom tailBindings)
+                buildList headElements varGen1 tailAtom tailBindings)
 
     | AST.InterpolatedString parts ->
         // Desugar interpolated string to StringConcat chain

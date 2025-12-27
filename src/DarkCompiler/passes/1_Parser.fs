@@ -1500,30 +1500,25 @@ let parse (tokens: Token list) : Result<Program, string> =
         | _ -> Error "Expected field name in record literal"
 
     and parseListLiteralElements (toks: Token list) (acc: Expr list) : Result<Expr * Token list, string> =
-        // Parse list literal elements: [expr, expr, ...] or [] or [expr, ...tail]
+        // Parse list literal elements: [expr, expr, ...] or [] or [a, b, ...rest]
         match toks with
         | TRBracket :: rest ->
             // Empty list or end of list
             Ok (ListLiteral (List.rev acc), rest)
         | TDotDotDot :: rest ->
-            // Spread at start: [...tail] - just the tail expression
+            // Spread at start: [...tail]
             parseExpr rest
             |> Result.bind (fun (tailExpr, remaining) ->
                 match remaining with
                 | TRBracket :: rest' ->
-                    if List.isEmpty acc then
-                        // [...tail] - just return the tail expression (it's already a list)
-                        Ok (tailExpr, rest')
-                    else
-                        // [a, b, ...tail] - create ListCons
-                        Ok (ListCons (List.rev acc, tailExpr), rest')
+                    Ok (ListCons (List.rev acc, tailExpr), rest')
                 | _ -> Error "Expected ']' after spread expression")
         | _ ->
             parseExpr toks
             |> Result.bind (fun (expr, remaining) ->
                 match remaining with
                 | TComma :: TDotDotDot :: rest ->
-                    // Spread after element: [a, b, ...tail]
+                    // Spread after elements: [a, b, ...tail]
                     parseExpr rest
                     |> Result.bind (fun (tailExpr, remaining') ->
                         match remaining' with

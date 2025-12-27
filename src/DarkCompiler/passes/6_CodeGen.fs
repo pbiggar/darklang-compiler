@@ -334,6 +334,9 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 // 4. Copy bytes from pool to [heap+8]
                 // 5. Store refcount=1 at [heap+8+length]
                 // 6. dest = heap address
+                //
+                // IMPORTANT: Use X13 for loop counter, not X0!
+                // If destReg is X0, using X0 as loop counter would clobber the result.
                 match Map.tryFind idx ctx.StringPool.Strings with
                 | Some (_, len) ->
                     let label = sprintf "str_%d" idx
@@ -348,7 +351,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         // Store length
                     ] @ loadImmediate ARM64.X10 (int64 len) @ [
                         ARM64.STR (ARM64.X10, destReg, 0s)  // [dest] = length
-                        // Copy bytes: loop counter in X13 (avoid X0 which may be destReg)
+                        // Copy bytes: loop counter in X13 (NOT X0 - it might be destReg!)
                         ARM64.MOVZ (ARM64.X13, 0us, 0)  // X13 = 0
                     ] @ loadImmediate ARM64.X11 (int64 len) @ [
                         // Loop start (if X13 >= len, done)

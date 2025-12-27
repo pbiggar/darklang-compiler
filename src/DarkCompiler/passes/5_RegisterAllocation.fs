@@ -826,6 +826,9 @@ let applyToCFG (mapping: Map<int, Allocation>) (cfg: LIR.CFG) : LIR.CFG =
 // Main Entry Point
 // ============================================================================
 
+/// Parameter registers per ARM64 calling convention (X0-X7)
+let parameterRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
+
 /// Allocate registers for a function
 let allocateRegisters (func: LIR.Function) : LIR.Function =
     // Step 1: Compute liveness
@@ -837,24 +840,60 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
     // Step 3: Run linear scan allocation
     let result = linearScan intervals
 
-    // Step 4: Apply allocation to CFG
-    let allocatedCFG = applyToCFG result.Mapping func.CFG
-
-    // Step 5: Apply allocation to parameters
-    let allocatedParams =
+    // Step 4: Create parameter pre-coloring - parameters must be in X0, X1, etc.
+    // This overrides whatever linearScan allocated for parameters
+    let paramPrecoloring =
         func.Params
-        |> List.map (fun reg ->
+        |> List.mapi (fun i reg ->
+            match reg with
+            | LIR.Virtual id -> Some (id, PhysReg (List.item i parameterRegs))
+            | LIR.Physical _ -> None)
+        |> List.choose id
+        |> Map.ofList
+
+    // Step 5: Build mapping that copies parameters from calling convention registers
+    // to wherever linearScan allocated them
+    // IMPORTANT: Process in REVERSE order to avoid clobbering registers that haven't been copied yet
+    // Example: if param0 -> X1 and param1 -> X2, we must copy X1->X2 BEFORE X0->X1
+    let paramCopyInstrs =
+        func.Params
+        |> List.mapi (fun i reg ->
             match reg with
             | LIR.Virtual id ->
+                let paramReg = List.item i parameterRegs
                 match Map.tryFind id result.Mapping with
-                | Some (PhysReg physReg) -> LIR.Physical physReg
-                | _ -> reg
-            | LIR.Physical _ -> reg)
+                | Some (PhysReg allocatedReg) when allocatedReg <> paramReg ->
+                    // Parameter was allocated to a different register, need to copy
+                    Some (LIR.Mov (LIR.Physical allocatedReg, LIR.Reg (LIR.Physical paramReg)))
+                | Some (StackSlot offset) ->
+                    // Parameter was spilled, need to store to stack
+                    Some (LIR.Store (offset, LIR.Physical paramReg))
+                | _ -> None
+            | LIR.Physical _ -> None)
+        |> List.choose id
+        |> List.rev  // Reverse to avoid clobbering: copy later params first
+
+    // Step 6: Apply allocation to CFG
+    let allocatedCFG = applyToCFG result.Mapping func.CFG
+
+    // Step 7: Insert parameter copy instructions at the start of the entry block
+    let entryBlock = Map.find func.CFG.Entry allocatedCFG.Blocks
+    let entryBlockWithCopies = {
+        entryBlock with
+            Instrs = paramCopyInstrs @ entryBlock.Instrs
+    }
+    let updatedBlocks = Map.add func.CFG.Entry entryBlockWithCopies allocatedCFG.Blocks
+    let cfgWithParamCopies = { allocatedCFG with Blocks = updatedBlocks }
+
+    // Step 8: Set parameters to calling convention registers
+    let allocatedParams =
+        func.Params
+        |> List.mapi (fun i _ -> LIR.Physical (List.item i parameterRegs))
 
     {
         LIR.Name = func.Name
         LIR.Params = allocatedParams
-        LIR.CFG = allocatedCFG
+        LIR.CFG = cfgWithParamCopies
         LIR.StackSize = result.StackSize
         LIR.UsedCalleeSaved = result.UsedCalleeSaved
     }

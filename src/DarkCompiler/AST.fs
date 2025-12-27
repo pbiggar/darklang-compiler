@@ -115,8 +115,8 @@ and Expr =
     | RecordAccess of record:Expr * fieldName:string                  // p.x, p.y
     | Constructor of typeName:string * variantName:string * payload:Expr option  // Red, Some(42)
     | Match of scrutinee:Expr * cases:MatchCase list  // match e with | p1 when g -> e1 | p2 -> e2
-    | ListLiteral of Expr list                                     // [1, 2, 3]
-    | ListCons of heads:Expr list * tail:Expr                     // [1, 2, ...rest]
+    | ListLiteral of Expr list                               // [1, 2, 3]
+    | ListCons of head:Expr list * tail:Expr                 // [a, b, ...rest]
     | Lambda of parameters:(string * Type) list * body:Expr  // (x: int) => x + 1
     | Apply of func:Expr * args:Expr list                    // Apply function expr: f(x) where f is expression
     | FuncRef of funcName:string                             // Reference to a function (for passing as value)
