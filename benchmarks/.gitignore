@@ -1,0 +1,10 @@
+# Compiled binaries
+problems/*/dark/main
+problems/*/rust/main
+problems/*/haskell/main
+problems/*/ocaml/main
+problems/*/go/main
+problems/*/c/main
+
+# Results directory (generated output)
+results/

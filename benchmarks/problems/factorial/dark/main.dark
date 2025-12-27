@@ -1,0 +1,9 @@
+def factorial(n: Int64) : Int64 =
+    if n <= 1 then 1
+    else n * factorial(n - 1)
+
+def repeat(n: Int64, acc: Int64) : Int64 =
+    if n <= 0 then acc
+    else repeat(n - 1, factorial(20))
+
+repeat(10000, 0)
