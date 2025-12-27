@@ -25,27 +25,27 @@ python3 --version
 ## Quick Start
 
 ```bash
-# Run all benchmarks (timing via hyperfine)
+# Run all benchmarks (instruction counts via cachegrind)
 ./benchmarks/run_benchmarks.sh
 
 # Run a specific benchmark
 ./benchmarks/run_benchmarks.sh fib
 
-# Run with Cachegrind for deterministic instruction counts
-./benchmarks/run_benchmarks.sh --cachegrind
-./benchmarks/run_benchmarks.sh --cachegrind fib
+# Run with hyperfine for timing instead
+./benchmarks/run_benchmarks.sh --hyperfine
+./benchmarks/run_benchmarks.sh --hyperfine fib
 ```
 
 ## Benchmark Modes
 
-### Timing Mode (default)
-Uses **hyperfine** to measure wall-clock execution time. Fast but results vary between runs.
-
-### Cachegrind Mode (`--cachegrind`)
+### Cachegrind Mode (default)
 Uses **Valgrind Cachegrind** to count instructions. Slower (~50x) but deterministic - same input always produces identical counts. Useful for:
 - Detecting performance regressions in CI
 - Comparing instruction efficiency between languages
 - Tracking optimization improvements over time
+
+### Timing Mode (`--hyperfine`)
+Uses **hyperfine** to measure wall-clock execution time. Fast but results vary between runs.
 
 ## Available Benchmarks
 

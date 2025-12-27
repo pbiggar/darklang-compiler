@@ -1,10 +1,9 @@
 #!/bin/bash
 # Main entry point for running benchmarks
-# Usage: ./benchmarks/run_benchmarks.sh [--cachegrind] [benchmark_name|all]
+# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [benchmark_name|all]
 #
 # Options:
-#   --cachegrind  Use Valgrind Cachegrind for deterministic instruction counts
-#                 (default: use hyperfine for timing)
+#   --hyperfine   Use hyperfine for timing (default: cachegrind for instruction counts)
 
 set -e
 
@@ -12,13 +11,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Parse options
-USE_CACHEGRIND=false
+USE_CACHEGRIND=true
 BENCHMARK="all"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --cachegrind)
-            USE_CACHEGRIND=true
+        --hyperfine)
+            USE_CACHEGRIND=false
             shift
             ;;
         *)
