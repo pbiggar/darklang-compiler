@@ -27,6 +27,10 @@ Stdlib.Tuple2.second<Bool, Bool>((false, true)) = stdout="true\n"
 // Stdlib.Tuple2.create - Constructs a pair from two values
 // ===================================================================
 
+// NOTE: Pipe with partial function application not supported - use nested calls
+// Stdlib.Tuple2.create<Int64, Int64>(1, 2) |> Stdlib.Tuple2.first<Int64, Int64>() = 1
+// Stdlib.Tuple2.create<Int64, Int64>(1, 2) |> Stdlib.Tuple2.second<Int64, Int64>() = 2
+// Stdlib.Tuple2.create<String, Int64>("test", 5) |> Stdlib.Tuple2.first<String, Int64>() = stdout="test\n"
 Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.create<Int64, Int64>(1, 2)) = 1
 Stdlib.Tuple2.second<Int64, Int64>(Stdlib.Tuple2.create<Int64, Int64>(1, 2)) = 2
 Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.create<Int64, Int64>(42, 99)) = 42
@@ -35,6 +39,11 @@ Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.create<Int64, Int64>(42, 99)) = 
 // Stdlib.Tuple2.swap - Returns a pair with the elements swapped
 // ===================================================================
 
+// NOTE: Pipe with partial function application not supported - use nested calls
+// Stdlib.Tuple2.swap<Int64, Int64>((1, 2)) |> Stdlib.Tuple2.first<Int64, Int64>() = 2
+// Stdlib.Tuple2.swap<Int64, Int64>((1, 2)) |> Stdlib.Tuple2.second<Int64, Int64>() = 1
+// Stdlib.Tuple2.swap<String, Int64>(("hello", 42)) |> Stdlib.Tuple2.first<Int64, String>() = 42
+// Stdlib.Tuple2.swap<String, Int64>(("hello", 42)) |> Stdlib.Tuple2.second<Int64, String>() = stdout="hello\n"
 Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.swap<Int64, Int64>((1, 2))) = 2
 Stdlib.Tuple2.second<Int64, Int64>(Stdlib.Tuple2.swap<Int64, Int64>((1, 2))) = 1
 Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.swap<Int64, Int64>((100, 42))) = 42
@@ -43,6 +52,10 @@ Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.swap<Int64, Int64>((100, 42))) =
 // Stdlib.Tuple2.mapFirst - Transform the first value in a pair
 // ===================================================================
 
+// NOTE: Pipe with partial function application not supported - use nested calls
+// Stdlib.Tuple2.mapFirst<Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10)) |> Stdlib.Tuple2.first<Int64, Int64>() = 6
+// Stdlib.Tuple2.mapFirst<Int64, Int64, Int64>((x: Int64) => x * 2, (5, 10)) |> Stdlib.Tuple2.first<Int64, Int64>() = 10
+// Stdlib.Tuple2.mapFirst<Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10)) |> Stdlib.Tuple2.second<Int64, Int64>() = 10
 Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.mapFirst<Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10))) = 6
 Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.mapFirst<Int64, Int64, Int64>((x: Int64) => x * 2, (5, 10))) = 10
 Stdlib.Tuple2.second<Int64, Int64>(Stdlib.Tuple2.mapFirst<Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10))) = 10
@@ -51,6 +64,10 @@ Stdlib.Tuple2.second<Int64, Int64>(Stdlib.Tuple2.mapFirst<Int64, Int64, Int64>((
 // Stdlib.Tuple2.mapSecond - Transform the second value in a pair
 // ===================================================================
 
+// NOTE: Pipe with partial function application not supported - use nested calls
+// Stdlib.Tuple2.mapSecond<Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10)) |> Stdlib.Tuple2.second<Int64, Int64>() = 11
+// Stdlib.Tuple2.mapSecond<Int64, Int64, Int64>((x: Int64) => x * 2, (5, 10)) |> Stdlib.Tuple2.second<Int64, Int64>() = 20
+// Stdlib.Tuple2.mapSecond<Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10)) |> Stdlib.Tuple2.first<Int64, Int64>() = 5
 Stdlib.Tuple2.second<Int64, Int64>(Stdlib.Tuple2.mapSecond<Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10))) = 11
 Stdlib.Tuple2.second<Int64, Int64>(Stdlib.Tuple2.mapSecond<Int64, Int64, Int64>((x: Int64) => x * 2, (5, 10))) = 20
 Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.mapSecond<Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10))) = 5
@@ -59,5 +76,8 @@ Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.mapSecond<Int64, Int64, Int64>((
 // Stdlib.Tuple2.mapBoth - Transform both values in a pair
 // ===================================================================
 
+// NOTE: Pipe with partial function application not supported - use nested calls
+// Stdlib.Tuple2.mapBoth<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (y: Int64) => y * 2, (5, 10)) |> Stdlib.Tuple2.first<Int64, Int64>() = 6
+// Stdlib.Tuple2.mapBoth<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (y: Int64) => y * 2, (5, 10)) |> Stdlib.Tuple2.second<Int64, Int64>() = 20
 Stdlib.Tuple2.first<Int64, Int64>(Stdlib.Tuple2.mapBoth<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (y: Int64) => y * 2, (5, 10))) = 6
 Stdlib.Tuple2.second<Int64, Int64>(Stdlib.Tuple2.mapBoth<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (y: Int64) => y * 2, (5, 10))) = 20
