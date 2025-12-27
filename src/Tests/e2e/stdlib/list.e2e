@@ -16,15 +16,33 @@ Stdlib.List.length<Int64>(Stdlib.List.singleton<Int64>(42)) = stdout="1\n"
 match Stdlib.List.singleton<Int64>(5) with | [x] -> x | _ -> 0 = 5
 
 // ===================================================================
-// NOTE: Functions below are blocked by missing list construction with spread
+// List spread syntax - [h, ...rest] in expressions
 // ===================================================================
 
-// Stdlib.List.append - Append two lists
+// Test basic spread syntax
+let rest = [3, 4, 5] in Stdlib.List.length<Int64>([1, 2, ...rest]) = stdout="5\n"
+
+// Test spread with empty list (need type annotation via function call)
+Stdlib.List.length<Int64>([1, ...[]]) = stdout="1\n"
+
+// Test spread with single element head
+let tail = [2, 3] in match [1, ...tail] with | [a, b, c] -> a + b + c | _ -> 0 = 6
+
+// ===================================================================
+// Stdlib.List.push - Add element to front of list
+// ===================================================================
+
+match Stdlib.List.push<Int64>([2, 3], 1) with | [a, b, c] -> a | _ -> 0 = 1
+Stdlib.List.length<Int64>(Stdlib.List.push<Int64>([1, 2], 0)) = stdout="3\n"
+
+// ===================================================================
+// NOTE: Most List functions are blocked by type checker bug with generic recursion
+// The type checker doesn't properly handle recursive calls that return List<T>
+// ===================================================================
+
+// Stdlib.List.append - blocked by type checker
 // Stdlib.List.length<Int64>(Stdlib.List.append<Int64>([1, 2, 3], [4, 5, 6])) = stdout="6\n"
 // match Stdlib.List.append<Int64>([1, 2], [3, 4]) with | [a, b, c, d] -> a + b + c + d | _ -> 0 = 10
-
-// Stdlib.List.push - Add element to front of list
-// match Stdlib.List.push<Int64>([2, 3], 1) with | [a, b, c] -> a | _ -> 0 = 1
 
 // Stdlib.List.pushBack - Add element to end of list
 // match Stdlib.List.pushBack<Int64>([1, 2], 3) with | [a, b, c] -> c | _ -> 0 = 3

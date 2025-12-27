@@ -139,9 +139,14 @@ def Stdlib.List.length<t>(list: List<t>) : Int64 =
 // Create a single-element list
 def Stdlib.List.singleton<t>(value: t) : List<t> = [value]
 
-// TODO: List functions that build new lists (append, reverse, map, filter, etc.)
-// are blocked because the compiler doesn't support list construction with spread syntax.
-// [h, ...rest] only works in pattern matching, not in list construction.
+// Prepend an element to a list
+def Stdlib.List.push<t>(list: List<t>, value: t) : List<t> = [value, ...list]
+
+// TODO: Many List functions are blocked by type checker bug with generic recursion.
+// The type checker doesn't properly handle recursive calls that return generic List<t>.
+// push, pushBack, append, reverse, filter, map, fold, take, drop all hit this bug.
+// These functions compile with list spread syntax but fail type checking.
+// This is related to Bug 1 (generic enum pattern matching).
 
 // TODO: Functions that require Option/Result return types are blocked by type checker bug
 // head, tail, last, getAt, findFirst - require Stdlib.Option.Option<t> returns

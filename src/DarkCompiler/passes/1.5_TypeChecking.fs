@@ -180,6 +180,10 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
         Set.union scrutineeFree (casesFree |> List.fold Set.union Set.empty)
     | ListLiteral elements ->
         elements |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
+    | ListCons (heads, tail) ->
+        let headsFree = heads |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty
+        let tailFree = collectFreeVars tail bound
+        Set.union headsFree tailFree
     | Lambda (parameters, body) ->
         let paramNames = parameters |> List.map fst |> Set.ofList
         collectFreeVars body (Set.union bound paramNames)
@@ -1160,6 +1164,34 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     | Some other when other <> listType ->
                         Error (TypeMismatch (other, listType, "list literal"))
                     | _ -> Ok (listType, ListLiteral elements')))
+
+    | ListCons (heads, tail) ->
+        // Type-check [head1, head2, ...tail] construction
+        // First check the tail - it must be a list
+        // Pass expected type to help type inference with empty lists
+        checkExpr tail env typeReg variantLookup genericFuncReg expectedType
+        |> Result.bind (fun (tailType, tail') ->
+            match tailType with
+            | TList elemType ->
+                // Check all head elements match the element type
+                let rec checkHeads remaining acc =
+                    match remaining with
+                    | [] -> Ok (List.rev acc)
+                    | h :: hs ->
+                        checkExpr h env typeReg variantLookup genericFuncReg (Some elemType)
+                        |> Result.bind (fun (hType, h') ->
+                            if hType = elemType then checkHeads hs (h' :: acc)
+                            else Error (TypeMismatch (elemType, hType, "list cons head element")))
+                checkHeads heads []
+                |> Result.bind (fun heads' ->
+                    let listType = TList elemType
+                    match expectedType with
+                    | Some (TList expectedElem) when expectedElem <> elemType ->
+                        Error (TypeMismatch (TList expectedElem, listType, "list cons"))
+                    | Some other when other <> listType ->
+                        Error (TypeMismatch (other, listType, "list cons"))
+                    | _ -> Ok (listType, ListCons (heads', tail')))
+            | other -> Error (TypeMismatch (TList (TVar "T"), other, "list cons tail must be a list")))
 
     | Lambda (parameters, body) ->
         // Build environment with lambda parameters
