@@ -136,6 +136,12 @@ def Stdlib.List.length<t>(list: List<t>) : Int64 =
     | [] -> 0
     | [h, ...rest] -> 1 + Stdlib.List.length<t>(rest)
 
-// TODO: These functions require generic return types to be properly supported by type checker
-// head, tail - require Stdlib.Option.Option<t> or Stdlib.Option.Option<List<t>> returns
-// map, fold, filter, all, any - require higher-order functions with generic types
+// Create a single-element list
+def Stdlib.List.singleton<t>(value: t) : List<t> = [value]
+
+// TODO: List functions that build new lists (append, reverse, map, filter, etc.)
+// are blocked because the compiler doesn't support list construction with spread syntax.
+// [h, ...rest] only works in pattern matching, not in list construction.
+
+// TODO: Functions that require Option/Result return types are blocked by type checker bug
+// head, tail, last, getAt, findFirst - require Stdlib.Option.Option<t> returns
