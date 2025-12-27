@@ -6,13 +6,14 @@
 
 // ===================================================================
 // Basic infix operations (from Dark einfix.dark)
-// NOTE: Commented out - requires Int64 suffix, String concat (++), and Stdlib support
 // ===================================================================
 
-// 5L + 3L = 8
-// "xx" ++ "yy" = "xxyy"
-// (5L + (3L)) = 8
-// Stdlib.Int64.add_v0 5L 3L = 8
+// NOTE: Int64 suffix not needed (Int64 is default)
+5 + 3 = 8
+"xx" ++ "yy" = stdout="xxyy\n"
+(5 + (3)) = 8
+// NOTE: Stdlib.Int64.add_v0 not yet implemented
+// Stdlib.Int64.add_v0 5 3 = 8
 
 // ===================================================================
 // Error handling tests
@@ -86,12 +87,11 @@
 
 // ===================================================================
 // String concatenation
-// NOTE: Commented out - requires String type and ++ operator support
 // ===================================================================
 
-// "hello" ++ " " ++ "world" = "hello world"
-// "" ++ "test" = "test"
-// "test" ++ "" = "test"
+"hello" ++ " " ++ "world" = stdout="hello world\n"
+"" ++ "test" = stdout="test\n"
+"test" ++ "" = stdout="test\n"
 
 // ===================================================================
 // Operator Precedence
