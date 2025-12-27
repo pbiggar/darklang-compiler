@@ -96,6 +96,20 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
             | Ok (rightInstrs, rightReg) ->
                 Ok (leftInstrs @ rightInstrs @ [LIR.Sdiv (lirDest, leftReg, rightReg)])
 
+        | MIR.Mod ->
+            // Modulo: a % b = a - (a / b) * b
+            // ARM64: sdiv temp, left, right; msub dest, temp, right, left
+            match ensureInRegister left (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (leftInstrs, leftReg) ->
+            match ensureInRegister right (LIR.Virtual 1001) with
+            | Error err -> Error err
+            | Ok (rightInstrs, rightReg) ->
+                let quotReg = LIR.Virtual 1002  // temp for quotient
+                Ok (leftInstrs @ rightInstrs @
+                    [LIR.Sdiv (quotReg, leftReg, rightReg);
+                     LIR.Msub (lirDest, quotReg, rightReg, leftReg)])
+
         // Comparisons: CMP + CSET sequence
         | MIR.Eq ->
             match ensureInRegister left (LIR.Virtual 1000) with

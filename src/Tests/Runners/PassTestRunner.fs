@@ -45,6 +45,7 @@ let prettyPrintMIROp = function
     | MIR.Sub -> "-"
     | MIR.Mul -> "*"
     | MIR.Div -> "/"
+    | MIR.Mod -> "%"
     | MIR.Eq -> "=="
     | MIR.Neq -> "!="
     | MIR.Lt -> "<"
@@ -117,6 +118,8 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- Mul({prettyPrintLIRReg left}, Reg {prettyPrintLIRReg right})"
     | LIR.Sdiv (dest, left, right) ->
         $"{prettyPrintLIRReg dest} <- Sdiv({prettyPrintLIRReg left}, Reg {prettyPrintLIRReg right})"
+    | LIR.Msub (dest, mulLeft, mulRight, sub) ->
+        $"{prettyPrintLIRReg dest} <- Msub({prettyPrintLIRReg mulLeft}, {prettyPrintLIRReg mulRight}, {prettyPrintLIRReg sub})"
     | LIR.Cmp (left, right) ->
         $"Cmp({prettyPrintLIRReg left}, {prettyPrintLIROperand right})"
     | LIR.Cset (dest, cond) ->
@@ -269,6 +272,7 @@ let prettyPrintANFOp = function
     | ANF.Sub -> "-"
     | ANF.Mul -> "*"
     | ANF.Div -> "/"
+    | ANF.Mod -> "%"
     | ANF.Eq -> "=="
     | ANF.Neq -> "!="
     | ANF.Lt -> "<"

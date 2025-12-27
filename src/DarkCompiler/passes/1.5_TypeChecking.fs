@@ -385,13 +385,14 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
     | BinOp (op, left, right) ->
         match op with
         // Arithmetic operators: T -> T -> T (where T is int or float)
-        | Add | Sub | Mul | Div ->
+        | Add | Sub | Mul | Div | Mod ->
             let opName =
                 match op with
                 | Add -> "+"
                 | Sub -> "-"
                 | Mul -> "*"
                 | Div -> "/"
+                | Mod -> "%"
                 | _ -> "?"
 
             // Check left operand to determine numeric type
@@ -412,7 +413,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 | other ->
                     Error (InvalidOperation (opName, [other])))
 
-        // Comparison operators: T -> T -> bool (where T is int or float)
+        // Comparison operators: T -> T -> bool
+        // Eq and Neq: work on any type (structural equality for complex types)
+        // Lt, Gt, Lte, Gte: only work on numeric types
         | Eq | Neq | Lt | Gt | Lte | Gte ->
             let opName =
                 match op with
@@ -424,22 +427,37 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 | Gte -> ">="
                 | _ -> "?"
 
-            // Check left operand to determine numeric type
+            // Check left operand to determine type
             checkExpr left env typeReg variantLookup genericFuncReg None
             |> Result.bind (fun (leftType, left') ->
-                match leftType with
-                | TInt64 | TFloat64 ->
-                    // Right operand must be same type
+                match op with
+                | Eq | Neq ->
+                    // Equality works on any type - both operands must be same type
                     checkExpr right env typeReg variantLookup genericFuncReg (Some leftType)
                     |> Result.bind (fun (rightType, right') ->
+                        // Check types are compatible (same structure)
                         if rightType <> leftType then
                             Error (TypeMismatch (leftType, rightType, $"right operand of {opName}"))
                         else
                             match expectedType with
                             | Some TBool | None -> Ok (TBool, BinOp (op, left', right'))
                             | Some other -> Error (TypeMismatch (other, TBool, $"result of {opName}")))
-                | other ->
-                    Error (InvalidOperation (opName, [other])))
+                | Lt | Gt | Lte | Gte ->
+                    // Ordering only works on numeric types
+                    match leftType with
+                    | TInt64 | TFloat64 ->
+                        checkExpr right env typeReg variantLookup genericFuncReg (Some leftType)
+                        |> Result.bind (fun (rightType, right') ->
+                            if rightType <> leftType then
+                                Error (TypeMismatch (leftType, rightType, $"right operand of {opName}"))
+                            else
+                                match expectedType with
+                                | Some TBool | None -> Ok (TBool, BinOp (op, left', right'))
+                                | Some other -> Error (TypeMismatch (other, TBool, $"result of {opName}")))
+                    | other ->
+                        Error (InvalidOperation (opName, [other]))
+                | _ ->
+                    Error (GenericError $"Unexpected comparison operator: {opName}"))
 
         // Boolean operators: bool -> bool -> bool
         | And | Or ->

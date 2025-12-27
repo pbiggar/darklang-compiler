@@ -55,7 +55,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | Prim (op, _, _) ->
         // Binary ops return int or bool depending on op
         match op with
-        | Add | Sub | Mul | Div -> Some AST.TInt64
+        | Add | Sub | Mul | Div | Mod -> Some AST.TInt64
         | Eq | Neq | Lt | Gt | Lte | Gte | And | Or -> Some AST.TBool
     | UnaryPrim (op, _) ->
         match op with

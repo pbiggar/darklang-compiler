@@ -64,3 +64,76 @@ let result = "foo" ++ "bar" in result = stdout="foobar\n"
 
 // Single character concatenation
 "a" ++ "b" ++ "c" ++ "d" = stdout="abcd\n"
+
+// =============================================================================
+// Int64.toString Tests
+// =============================================================================
+
+// Single digit conversion
+Stdlib.Int64.digitToString(0) = stdout="0\n"
+Stdlib.Int64.digitToString(5) = stdout="5\n"
+Stdlib.Int64.digitToString(9) = stdout="9\n"
+
+// Basic integer to string
+Stdlib.Int64.toString(0) = stdout="0\n"
+Stdlib.Int64.toString(1) = stdout="1\n"
+Stdlib.Int64.toString(9) = stdout="9\n"
+Stdlib.Int64.toString(10) = stdout="10\n"
+Stdlib.Int64.toString(42) = stdout="42\n"
+Stdlib.Int64.toString(100) = stdout="100\n"
+Stdlib.Int64.toString(999) = stdout="999\n"
+Stdlib.Int64.toString(1234) = stdout="1234\n"
+Stdlib.Int64.toString(12345) = stdout="12345\n"
+
+// Negative numbers
+Stdlib.Int64.toString(-1) = stdout="-1\n"
+Stdlib.Int64.toString(-42) = stdout="-42\n"
+Stdlib.Int64.toString(-100) = stdout="-100\n"
+Stdlib.Int64.toString(-12345) = stdout="-12345\n"
+
+// Large numbers
+Stdlib.Int64.toString(1000000) = stdout="1000000\n"
+Stdlib.Int64.toString(2147483647) = stdout="2147483647\n"
+
+// Concatenation with toString
+"Value: " ++ Stdlib.Int64.toString(42) = stdout="Value: 42\n"
+"Answer is " ++ Stdlib.Int64.toString(42) ++ "!" = stdout="Answer is 42!\n"
+
+// =============================================================================
+// Bool.toString Tests
+// =============================================================================
+
+Stdlib.Bool.toString(true) = stdout="true\n"
+Stdlib.Bool.toString(false) = stdout="false\n"
+"The answer is " ++ Stdlib.Bool.toString(true) = stdout="The answer is true\n"
+"Flag: " ++ Stdlib.Bool.toString(1 > 0) = stdout="Flag: true\n"
+
+// =============================================================================
+// String Interpolation Tests
+// =============================================================================
+
+// Basic interpolation with string variable
+let name = "Alice" in $"Hello {name}" = stdout="Hello Alice\n"
+
+// Just interpolation (no literal parts)
+let name = "Dave" in $"{name}" = stdout="Dave\n"
+
+// Escape sequences in interpolated strings
+$"Hello\nWorld" = stdout="Hello\nWorld\n"
+$"Tab\there" = stdout="Tab\there\n"
+
+// No interpolation (just like regular string)
+$"plain string" = stdout="plain string\n"
+
+// Empty interpolated string
+$"" = stdout="\n"
+
+// Interpolation with string literals
+$"{"hello"}" = stdout="hello\n"
+$"Say: {"hi"}" = stdout="Say: hi\n"
+
+// Expression with operators (string concat inside interpolation)
+$"{"a" ++ "b"}" = stdout="ab\n"
+
+// NOTE: Multiple interpolations like $"{x} and {y}" trigger a pre-existing bug
+// in chained string concatenation code generation - to be fixed separately

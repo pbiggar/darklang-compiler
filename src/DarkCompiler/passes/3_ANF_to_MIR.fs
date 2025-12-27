@@ -32,6 +32,7 @@ let convertBinOp (op: ANF.BinOp) : MIR.BinOp =
     | ANF.Sub -> MIR.Sub
     | ANF.Mul -> MIR.Mul
     | ANF.Div -> MIR.Div
+    | ANF.Mod -> MIR.Mod
     | ANF.Eq -> MIR.Eq
     | ANF.Neq -> MIR.Neq
     | ANF.Lt -> MIR.Lt

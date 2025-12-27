@@ -17,6 +17,33 @@ def Stdlib.Int64.max(a: Int64, b: Int64) : Int64 = if a > b then a else b
 
 def Stdlib.Int64.min(a: Int64, b: Int64) : Int64 = if a < b then a else b
 
+def Stdlib.Int64.mod(a: Int64, b: Int64) : Int64 = a % b
+
+// Convert a single digit (0-9) to its string representation
+def Stdlib.Int64.digitToString(n: Int64) : String =
+    match n with
+    | 0 -> "0"
+    | 1 -> "1"
+    | 2 -> "2"
+    | 3 -> "3"
+    | 4 -> "4"
+    | 5 -> "5"
+    | 6 -> "6"
+    | 7 -> "7"
+    | 8 -> "8"
+    | 9 -> "9"
+    | _ -> "?"
+
+// Convert an integer to its string representation
+def Stdlib.Int64.toString(n: Int64) : String =
+    if n < 0 then "-" ++ Stdlib.Int64.toString(0 - n)
+    else if n < 10 then Stdlib.Int64.digitToString(n)
+    else Stdlib.Int64.toString(n / 10) ++ Stdlib.Int64.digitToString(n % 10)
+
+// Stdlib.Bool - Boolean operations
+
+def Stdlib.Bool.toString(b: Bool) : String = if b then "true" else "false"
+
 // Stdlib.Tuple2 - 2-tuple operations
 
 def Stdlib.Tuple2.first<a, b>(t: (a, b)) : a = match t with | (x, y) -> x
@@ -28,3 +55,22 @@ type Stdlib.Result.Result<t, e> = Ok of t | Error of e
 
 // Stdlib.Option - Optional values
 type Stdlib.Option.Option<t> = Some of t | None
+
+// Stdlib.List - List operations
+// Lists are represented as: Nil = 0, Cons = [tag=1, head, tail]
+
+// Check if list is empty
+def Stdlib.List.isEmpty<t>(list: List<t>) : Bool =
+    match list with
+    | [] -> true
+    | _ -> false
+
+// Get the length of a list
+def Stdlib.List.length<t>(list: List<t>) : Int64 =
+    match list with
+    | [] -> 0
+    | [h, ...rest] -> 1 + Stdlib.List.length<t>(rest)
+
+// TODO: These functions require generic return types to be properly supported by type checker
+// head, tail - require Stdlib.Option.Option<t> or Stdlib.Option.Option<List<t>> returns
+// map, fold, filter, all, any - require higher-order functions with generic types

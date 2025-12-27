@@ -1,0 +1,54 @@
+// Equality Tests - Structural equality for different types
+//
+// Tests covering:
+// - Integer equality (already works)
+// - Boolean equality
+// - Tuple equality
+// - Record equality
+// - Enum equality
+
+// ===================================================================
+// Integer Equality (already works)
+// ===================================================================
+1 == 1 = stdout="true\n"
+1 == 2 = stdout="false\n"
+5 == 5 = stdout="true\n"
+0 == 0 = stdout="true\n"
+
+1 != 2 = stdout="true\n"
+1 != 1 = stdout="false\n"
+
+// ===================================================================
+// Boolean Equality
+// ===================================================================
+true == true = stdout="true\n"
+true == false = stdout="false\n"
+false == false = stdout="true\n"
+false == true = stdout="false\n"
+
+true != false = stdout="true\n"
+true != true = stdout="false\n"
+
+// ===================================================================
+// Tuple Equality
+// ===================================================================
+// TODO: Implement structural equality for tuples
+// (1, 2) == (1, 2) = stdout="true\n"
+// (1, 2) == (1, 3) = stdout="false\n"
+// (1, 2) == (2, 2) = stdout="false\n"
+// (1, 2) != (1, 3) = stdout="true\n"
+
+// ===================================================================
+// Record Equality
+// ===================================================================
+// TODO: Implement structural equality for records
+// type Point = { x: Int64, y: Int64 } let a = Point { x = 1, y = 2 } in let b = Point { x = 1, y = 2 } in a == b = stdout="true\n"
+// type Point = { x: Int64, y: Int64 } let a = Point { x = 1, y = 2 } in let b = Point { x = 1, y = 3 } in a == b = stdout="false\n"
+
+// ===================================================================
+// Enum Equality (simple - no payload)
+// ===================================================================
+// TODO: Implement structural equality for enums
+// type Color = Red | Green | Blue Red == Red = stdout="true\n"
+// type Color = Red | Green | Blue Red == Blue = stdout="false\n"
+// type Color = Red | Green | Blue Green == Green = stdout="true\n"

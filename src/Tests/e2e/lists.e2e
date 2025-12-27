@@ -234,3 +234,22 @@ match [1] with | [...t] -> 1 | _ -> 0 = 1
 // Recursive sum using cons pattern
 // NOTE: Commented out - requires generic type parameters `List<Int64>`
 // def sum(xs: List<Int64>) : Int64 = match xs with | [] -> 0 | [h, ...t] -> h + sum(t) sum([1, 2, 3, 4, 5]) = 15
+
+// =====================================================
+// Stdlib.List Function Tests
+// =====================================================
+
+// Stdlib.List.isEmpty
+Stdlib.List.isEmpty<Int64>([]) = stdout="true\n"
+Stdlib.List.isEmpty<Int64>([1]) = stdout="false\n"
+Stdlib.List.isEmpty<Int64>([1, 2, 3]) = stdout="false\n"
+
+// Stdlib.List.length
+Stdlib.List.length<Int64>([]) = stdout="0\n"
+Stdlib.List.length<Int64>([1]) = stdout="1\n"
+Stdlib.List.length<Int64>([1, 2]) = stdout="2\n"
+Stdlib.List.length<Int64>([1, 2, 3]) = stdout="3\n"
+Stdlib.List.length<Int64>([1, 2, 3, 4, 5]) = stdout="5\n"
+
+// Stdlib.List.length with different types
+Stdlib.List.length<Bool>([true, false, true]) = stdout="3\n"

@@ -65,6 +65,7 @@ type Token =
     | TNot         // !
     | TPipe        // |> (pipe operator)
     | TDotDotDot    // ... (rest pattern in lists)
+    | TPercent     // % (modulo)
     | TIdent of string
     | TEOF
 
@@ -113,6 +114,7 @@ let lex (input: string) : Result<Token list, string> =
         | '>' :: rest -> lexHelper rest (TGt :: acc)
         | '&' :: '&' :: rest -> lexHelper rest (TAnd :: acc)
         | '&' :: _ -> Error "Unexpected character: & (did you mean &&?)"
+        | '%' :: rest -> lexHelper rest (TPercent :: acc)
         | '|' :: '|' :: rest -> lexHelper rest (TOr :: acc)
         | '|' :: '>' :: rest -> lexHelper rest (TPipe :: acc)
         | '|' :: rest -> lexHelper rest (TBar :: acc)
@@ -214,6 +216,137 @@ let lex (input: string) : Result<Token list, string> =
                         lexHelper afterInt (TInt System.Int64.MinValue :: acc)
                     else
                         Error $"Integer literal too large: {numStr}"
+        | '$' :: '"' :: rest ->
+            // Parse interpolated string: $"Hello {name}, you are {age}!"
+            // Desugars to: "Hello " ++ name ++ ", you are " ++ age ++ "!"
+
+            // Helper to parse escape sequences (same as regular strings)
+            let parseEscape (cs: char list) : Result<char * char list, string> =
+                match cs with
+                | 'n' :: remaining -> Ok ('\n', remaining)
+                | 't' :: remaining -> Ok ('\t', remaining)
+                | 'r' :: remaining -> Ok ('\r', remaining)
+                | '\\' :: remaining -> Ok ('\\', remaining)
+                | '"' :: remaining -> Ok ('"', remaining)
+                | '0' :: remaining -> Ok ('\000', remaining)
+                | '{' :: remaining -> Ok ('{', remaining)  // Escape { as \{
+                | '}' :: remaining -> Ok ('}', remaining)  // Escape } as \}
+                | 'x' :: h1 :: h2 :: remaining ->
+                    let hexStr = System.String([| h1; h2 |])
+                    match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
+                    | (true, value) -> Ok (char value, remaining)
+                    | (false, _) -> Error $"Invalid hex escape sequence: \\x{hexStr}"
+                | c :: _ -> Error $"Unknown escape sequence: \\{c}"
+                | [] -> Error "Unterminated escape sequence"
+
+            // Helper to collect characters until { or closing "
+            let rec collectLiteralPart (cs: char list) (chars: char list) : Result<string * char list, string> =
+                match cs with
+                | [] -> Error "Unterminated interpolated string"
+                | '"' :: remaining ->
+                    let str = System.String(List.rev chars |> List.toArray)
+                    Ok (str, '"' :: remaining)  // Put " back for caller to detect end
+                | '{' :: remaining ->
+                    let str = System.String(List.rev chars |> List.toArray)
+                    Ok (str, '{' :: remaining)  // Put { back for caller to detect expression
+                | '\\' :: escRest ->
+                    match parseEscape escRest with
+                    | Ok (c, remaining) -> collectLiteralPart remaining (c :: chars)
+                    | Error err -> Error err
+                | c :: remaining ->
+                    collectLiteralPart remaining (c :: chars)
+
+            // Helper to collect expression chars until matching }
+            let rec collectExprChars (cs: char list) (depth: int) (chars: char list) : Result<char list * char list, string> =
+                match cs with
+                | [] -> Error "Unterminated interpolated expression"
+                | '}' :: remaining when depth = 0 ->
+                    Ok (List.rev chars, remaining)
+                | '}' :: remaining ->
+                    collectExprChars remaining (depth - 1) ('}' :: chars)
+                | '{' :: remaining ->
+                    collectExprChars remaining (depth + 1) ('{' :: chars)
+                | '"' :: remaining ->
+                    // Skip strings inside the expression
+                    let rec skipString (cs: char list) (acc: char list) =
+                        match cs with
+                        | [] -> Error "Unterminated string in interpolated expression"
+                        | '"' :: rest -> Ok ('"' :: acc, rest)
+                        | '\\' :: c :: rest -> skipString rest (c :: '\\' :: acc)
+                        | c :: rest -> skipString rest (c :: acc)
+                    match skipString remaining ('"' :: chars) with
+                    | Ok (acc', rest') -> collectExprChars rest' depth acc'
+                    | Error err -> Error err
+                | c :: remaining ->
+                    collectExprChars remaining depth (c :: chars)
+
+            // Parse all parts of the interpolated string
+            let rec parseInterpParts (cs: char list) (parts: (bool * string) list) : Result<(bool * string) list * char list, string> =
+                match cs with
+                | '"' :: remaining ->
+                    // End of interpolated string
+                    Ok (List.rev parts, remaining)
+                | '{' :: remaining ->
+                    // Expression part
+                    match collectExprChars remaining 0 [] with
+                    | Ok (exprChars, afterExpr) ->
+                        let exprStr = System.String(exprChars |> List.toArray)
+                        parseInterpParts afterExpr ((true, exprStr) :: parts)  // true = is expression
+                    | Error err -> Error err
+                | _ ->
+                    // Literal part
+                    match collectLiteralPart cs [] with
+                    | Ok (str, afterLit) ->
+                        if str = "" then
+                            parseInterpParts afterLit parts
+                        else
+                            parseInterpParts afterLit ((false, str) :: parts)  // false = is literal
+                    | Error err -> Error err
+
+            // Convert parts to tokens (desugar to concatenation)
+            let buildTokens (parts: (bool * string) list) : Result<Token list, string> =
+                match parts with
+                | [] -> Ok [TStringLit ""]  // Empty interpolated string
+                | [(false, s)] -> Ok [TStringLit s]  // Just a literal
+                | _ ->
+                    // Build concatenation: part1 ++ part2 ++ part3 ...
+                    let rec buildConcat (parts: (bool * string) list) (first: bool) (acc: Token list) : Result<Token list, string> =
+                        match parts with
+                        | [] -> Ok (List.rev acc)
+                        | (isExpr, s) :: rest ->
+                            let tokensForPart =
+                                if isExpr then
+                                    // Lex the expression using lexHelper directly
+                                    let exprChars = s |> Seq.toList
+                                    match lexHelper exprChars [] with
+                                    | Ok tokens ->
+                                        // Remove TEOF from the end
+                                        let tokens' = tokens |> List.filter (fun t -> t <> TEOF)
+                                        Ok tokens'
+                                    | Error err -> Error $"Error in interpolated expression: {err}"
+                                else
+                                    Ok [TStringLit s]
+                            match tokensForPart with
+                            | Error err -> Error err
+                            | Ok partTokens ->
+                                let newAcc =
+                                    if first then
+                                        (List.rev partTokens) @ acc
+                                    else
+                                        (List.rev partTokens) @ (TPlusPlus :: acc)
+                                buildConcat rest false newAcc
+                    // Wrap in parentheses for safety
+                    match buildConcat parts true [] with
+                    | Ok tokens -> Ok (TLParen :: tokens @ [TRParen])
+                    | Error err -> Error err
+
+            match parseInterpParts rest [] with
+            | Ok (parts, remaining) ->
+                match buildTokens parts with
+                | Ok tokens -> lexHelper remaining (List.rev tokens @ acc)
+                | Error err -> Error err
+            | Error err -> Error err
+
         | '"' :: rest ->
             // Parse string literal with escape sequences
             let rec parseString (cs: char list) (chars: char list) : Result<string * char list, string> =
@@ -280,15 +413,44 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
     | TIdent "Float" :: rest -> Ok (TFloat64, rest)
     | TIdent typeName :: rest when Set.contains typeName typeParams ->
         Ok (TVar typeName, rest)
-    | TIdent "List" :: TLBracket :: rest ->
-        // List type: List[ElementType]
+    | TIdent "List" :: TLt :: rest ->
+        // List type: List<ElementType>
         parseTypeWithContext typeParams rest
         |> Result.bind (fun (elemType, afterElem) ->
             match afterElem with
-            | TRBracket :: remaining -> Ok (TList elemType, remaining)
-            | _ -> Error "Expected ']' after List element type")
+            | TGt :: remaining -> Ok (TList elemType, remaining)
+            | _ -> Error "Expected '>' after List element type")
     | TIdent typeName :: rest when System.Char.IsUpper(typeName.[0]) ->
-        Ok (TRecord typeName, rest)
+        // Could be a simple type or a qualified type like Stdlib.Option.Option
+        // First parse the full qualified name
+        let rec parseQualTypeName (name: string) (toks: Token list) : string * Token list =
+            match toks with
+            | TDot :: TIdent nextName :: remaining when System.Char.IsUpper(nextName.[0]) ->
+                parseQualTypeName (name + "." + nextName) remaining
+            | _ -> (name, toks)
+        let (fullTypeName, afterTypeName) = parseQualTypeName typeName rest
+        // Check for type arguments <...>
+        match afterTypeName with
+        | TLt :: typeArgsStart ->
+            // Generic type: TypeName<args>
+            // Need to parse type args allowing lowercase type variables
+            let rec parseTypeArgsInType (toks: Token list) (acc: Type list) : Result<Type list * Token list, string> =
+                parseTypeWithContext typeParams toks
+                |> Result.bind (fun (ty, remaining) ->
+                    match remaining with
+                    | TGt :: rest -> Ok (List.rev (ty :: acc), rest)
+                    | TComma :: rest -> parseTypeArgsInType rest (ty :: acc)
+                    | _ -> Error "Expected ',' or '>' after type argument in generic type")
+            parseTypeArgsInType typeArgsStart []
+            |> Result.map (fun (typeArgs, remaining) ->
+                // For now, store type args in a generic record representation
+                // The type is still stored as the name, typeArgs are tracked separately
+                // We'll use TRecord for the base and let type checking resolve it
+                // TODO: Add a proper TGeneric type constructor if needed
+                (TRecord fullTypeName, remaining))  // Type args are discarded for now
+        | _ ->
+            // Simple type without type arguments
+            Ok (TRecord fullTypeName, afterTypeName)
     | TLParen :: rest ->
         // Could be a function type: (int, int) -> bool
         // Or a tuple type: (int, int)
@@ -332,9 +494,32 @@ let rec parseTypeParams (tokens: Token list) (acc: string list) : Result<string 
         Ok ([], rest)
     | _ -> Error "Expected type parameter name (lowercase identifier)"
 
-/// Parse type arguments: <Int64, Bool, Point> (concrete types, for call sites)
+/// Parse type for type arguments context (allows lowercase as type variables)
+/// This is used when parsing call sites like func<t>(args) where t is a type variable
+let rec parseTypeArgType (tokens: Token list) : Result<Type * Token list, string> =
+    match tokens with
+    | TIdent "Int64" :: rest -> Ok (TInt64, rest)
+    | TIdent "Bool" :: rest -> Ok (TBool, rest)
+    | TIdent "String" :: rest -> Ok (TString, rest)
+    | TIdent "Float" :: rest -> Ok (TFloat64, rest)
+    | TIdent "List" :: TLt :: rest ->
+        // List type: List<ElementType>
+        parseTypeArgType rest
+        |> Result.bind (fun (elemType, afterElem) ->
+            match afterElem with
+            | TGt :: remaining -> Ok (TList elemType, remaining)
+            | _ -> Error "Expected '>' after List element type in type argument")
+    | TIdent typeName :: rest when System.Char.IsLower(typeName.[0]) ->
+        // Lowercase identifier is a type variable in type argument context
+        Ok (TVar typeName, rest)
+    | TIdent typeName :: rest when System.Char.IsUpper(typeName.[0]) ->
+        // Uppercase identifier is a concrete type (record/sum type)
+        Ok (TRecord typeName, rest)
+    | _ -> Error "Expected type in type argument"
+
+/// Parse type arguments: <Int64, Bool, Point, t> (concrete types or type vars, for call sites)
 let rec parseTypeArgs (tokens: Token list) (acc: Type list) : Result<Type list * Token list, string> =
-    parseType tokens
+    parseTypeArgType tokens
     |> Result.bind (fun (ty, remaining) ->
         match remaining with
         | TGt :: rest ->
@@ -980,6 +1165,10 @@ let parse (tokens: Token list) : Result<Program, string> =
                     parseUnary rest
                     |> Result.bind (fun (right, remaining') ->
                         parseMultiplicativeRest (BinOp (Div, leftExpr, right)) remaining')
+                | TPercent :: rest ->
+                    parseUnary rest
+                    |> Result.bind (fun (right, remaining') ->
+                        parseMultiplicativeRest (BinOp (Mod, leftExpr, right)) remaining')
                 | _ -> Ok (leftExpr, toks)
             parseMultiplicativeRest left remaining)
 
@@ -1046,6 +1235,38 @@ let parse (tokens: Token list) : Result<Program, string> =
                 let typeName = fullName.Substring(0, lastDotIdx)
                 let variantName = lastSegment
                 Ok (Constructor (typeName, variantName, None), afterQualified)
+            | TLt :: typeArgsStart ->
+                // Qualified generic function call: Stdlib.List.length<t>(args)
+                // Check if this looks like type arguments (ident followed by > or ,)
+                let rec looksLikeTypeArgs tokens =
+                    match tokens with
+                    | TIdent _ :: TGt :: TLParen :: _ -> true
+                    | TIdent _ :: TComma :: rest -> looksLikeTypeArgs rest
+                    | TIdent "List" :: TLt :: rest ->  // Nested List<...>
+                        let rec skipNested toks depth =
+                            match toks with
+                            | TGt :: remaining when depth = 1 -> Some remaining
+                            | TGt :: remaining -> skipNested remaining (depth - 1)
+                            | TLt :: remaining -> skipNested remaining (depth + 1)
+                            | _ :: remaining -> skipNested remaining depth
+                            | [] -> None
+                        match skipNested rest 1 with
+                        | Some (TGt :: TLParen :: _) -> true
+                        | Some (TComma :: rest') -> looksLikeTypeArgs rest'
+                        | _ -> false
+                    | _ -> false
+                if looksLikeTypeArgs typeArgsStart then
+                    parseTypeArgs typeArgsStart []
+                    |> Result.bind (fun (typeArgs, afterTypes) ->
+                        match afterTypes with
+                        | TLParen :: argsStart ->
+                            parseCallArgs argsStart []
+                            |> Result.map (fun (args, remaining) ->
+                                (TypeApp (fullName, typeArgs, args), remaining))
+                        | _ -> Error $"Expected '(' after type arguments in generic call to {fullName}")
+                else
+                    // Not type args, treat as variable reference and leave < for comparison
+                    Ok (Var fullName, TLt :: typeArgsStart)
             | TLParen :: argsStart ->
                 // Qualified function call: Stdlib.Int64.add(args)
                 parseCallArgs argsStart []
@@ -1057,12 +1278,27 @@ let parse (tokens: Token list) : Result<Program, string> =
         | TIdent name :: TLt :: rest when not (System.Char.IsUpper(name.[0])) ->
             // Could be generic function call: name<type, ...>(args)
             // Or could be comparison: name < expr
-            // Disambiguate by checking if next token looks like a type
-            let looksLikeType =
-                match rest with
-                | TIdent typeName :: _ when System.Char.IsUpper(typeName.[0]) -> true  // Uppercase = type name
+            // Disambiguate by looking for pattern: ident (> | ,ident)* > (
+            // i.e., a sequence of identifiers/types followed by > and then (
+            let rec looksLikeGenericCall tokens =
+                match tokens with
+                | TIdent _ :: TGt :: TLParen :: _ -> true   // Single type arg: name<t>(
+                | TIdent _ :: TComma :: rest -> looksLikeGenericCall rest  // More args: name<t, ...
+                | TIdent "List" :: TLt :: rest ->  // Nested List<...>
+                    // Skip past nested generic type
+                    let rec skipNested toks depth =
+                        match toks with
+                        | TGt :: remaining when depth = 1 -> Some remaining
+                        | TGt :: remaining -> skipNested remaining (depth - 1)
+                        | TLt :: remaining -> skipNested remaining (depth + 1)
+                        | _ :: remaining -> skipNested remaining depth
+                        | [] -> None
+                    match skipNested rest 1 with
+                    | Some (TGt :: TLParen :: _) -> true
+                    | Some (TComma :: rest') -> looksLikeGenericCall rest'
+                    | _ -> false
                 | _ -> false
-            if looksLikeType then
+            if looksLikeGenericCall rest then
                 // Parse as generic call
                 parseTypeArgs rest []
                 |> Result.bind (fun (typeArgs, afterTypes) ->

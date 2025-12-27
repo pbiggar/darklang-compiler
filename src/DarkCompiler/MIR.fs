@@ -82,6 +82,7 @@ type BinOp =
     | Sub
     | Mul
     | Div
+    | Mod
     // Comparisons
     | Eq
     | Neq

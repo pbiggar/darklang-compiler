@@ -81,6 +81,11 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         let l = regToVReg left |> Option.toList
         let r = regToVReg right |> Option.toList
         Set.ofList (l @ r)
+    | LIR.Msub (_, mulLeft, mulRight, sub) ->
+        let ml = regToVReg mulLeft |> Option.toList
+        let mr = regToVReg mulRight |> Option.toList
+        let s = regToVReg sub |> Option.toList
+        Set.ofList (ml @ mr @ s)
     | LIR.Cmp (left, right) ->
         let l = regToVReg left |> Option.toList
         let r = operandToVReg right |> Option.toList
@@ -131,7 +136,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     match instr with
     | LIR.Mov (dest, _) -> regToVReg dest
     | LIR.Add (dest, _, _) | LIR.Sub (dest, _, _) -> regToVReg dest
-    | LIR.Mul (dest, _, _) | LIR.Sdiv (dest, _, _) -> regToVReg dest
+    | LIR.Mul (dest, _, _) | LIR.Sdiv (dest, _, _) | LIR.Msub (dest, _, _, _) -> regToVReg dest
     | LIR.Cset (dest, _) -> regToVReg dest
     | LIR.And (dest, _, _) | LIR.Orr (dest, _, _) -> regToVReg dest
     | LIR.Mvn (dest, _) -> regToVReg dest
@@ -513,6 +518,18 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
             | _ -> []
         leftLoads @ rightLoads @ [divInstr] @ storeInstrs
+
+    | LIR.Msub (dest, mulLeft, mulRight, sub) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (mulLeftReg, mulLeftLoads) = loadSpilled mapping mulLeft LIR.X12
+        let (mulRightReg, mulRightLoads) = loadSpilled mapping mulRight LIR.X13
+        let (subReg, subLoads) = loadSpilled mapping sub LIR.X14
+        let msubInstr = LIR.Msub (destReg, mulLeftReg, mulRightReg, subReg)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        mulLeftLoads @ mulRightLoads @ subLoads @ [msubInstr] @ storeInstrs
 
     | LIR.Cmp (left, right) ->
         let (leftReg, leftLoads) = loadSpilled mapping left LIR.X12

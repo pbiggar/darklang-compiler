@@ -38,6 +38,7 @@ type BinOp =
     | Sub
     | Mul
     | Div
+    | Mod  // %
     // String operations
     | StringConcat  // ++
     // Comparisons (return bool)
