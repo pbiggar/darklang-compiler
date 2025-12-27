@@ -16,7 +16,35 @@ The following are known simplifications or potential issues in the compiler code
 
 ### MEDIUM Priority (Incomplete features)
 
-(No current medium-priority issues)
+#### Stdlib Completion
+
+The following work is needed to complete the standard library:
+
+**4. String runtime builtins** (need native/syscall implementation)
+- `length` - string length
+- `slice` - substring extraction
+- `contains`, `startsWith`, `endsWith` - search
+- `toUppercase`, `toLowercase` - case conversion
+- `trim`, `trimStart`, `trimEnd` - whitespace handling
+- Impact: ~20+ String functions
+
+**5. Float type and builtins**
+- Enables: Int64.sqrt, Int64.toFloat, Float module
+- Impact: Numeric computing functions
+
+**6. Additional Stdlib Modules** (after compiler blockers fixed)
+- **Char** - character operations
+- **Dict** - dictionary/map operations
+- **Bytes** - byte array operations
+- **DateTime** - date/time handling
+- **UUID** - unique identifier generation
+- **Json** - JSON parsing/serialization
+- **Crypto** - hashing, encoding
+
+Note: Priorities 1-3 are compiler bugs tracked elsewhere:
+1. Type checker bug with generic enum pattern matching (blocks Option/Result functions)
+2. List construction with spread syntax (blocks List.append, map, filter, etc.)
+3. String parameter codegen bug (segfault with String params using ++)
 
 ### LOW Priority (Feature limitations, not bugs)
 
@@ -57,7 +85,7 @@ The following features are explicitly out of scope:
 - ✅ 9-pass compiler pipeline (Parser → TypeCheck → ANF → RefCount → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
 - ✅ Register allocation with callee-saved registers (X19-X27) and stack spilling for high register pressure
 - ✅ Reference counting with free list memory reuse
-- ✅ 1607 passing tests
+- ✅ 1737 passing tests
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
 - ✅ Type-directed record field lookup (no ambiguity when multiple record types have same field names)
 - ✅ Function return type inference using function registry (enables type inference for let-bound function calls)
