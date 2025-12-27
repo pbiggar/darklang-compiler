@@ -1,0 +1,53 @@
+// Tests for Dict (HAMT) implementation
+
+// Empty dict
+Stdlib.Dict.empty() = 0
+
+// Get from empty dict returns -1 (not found)
+Stdlib.Dict.get(Stdlib.Dict.empty(), 42) = -1
+
+// Set and get single value
+Stdlib.Dict.get(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 100), 1) = 100
+
+// Get non-existent key from non-empty dict
+Stdlib.Dict.get(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 100), 2) = -1
+
+// Set multiple values
+let d1 = Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 100) in
+let d2 = Stdlib.Dict.set(d1, 2, 200) in
+Stdlib.Dict.get(d2, 1) = 100
+
+let d1 = Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 100) in
+let d2 = Stdlib.Dict.set(d1, 2, 200) in
+Stdlib.Dict.get(d2, 2) = 200
+
+// Update existing key
+let d1 = Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 100) in
+let d2 = Stdlib.Dict.set(d1, 1, 999) in
+Stdlib.Dict.get(d2, 1) = 999
+
+// Three values
+let d1 = Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 10) in
+let d2 = Stdlib.Dict.set(d1, 2, 20) in
+let d3 = Stdlib.Dict.set(d2, 3, 30) in
+Stdlib.Dict.get(d3, 1) = 10
+
+let d1 = Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 10) in
+let d2 = Stdlib.Dict.set(d1, 2, 20) in
+let d3 = Stdlib.Dict.set(d2, 3, 30) in
+Stdlib.Dict.get(d3, 2) = 20
+
+let d1 = Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 10) in
+let d2 = Stdlib.Dict.set(d1, 2, 20) in
+let d3 = Stdlib.Dict.set(d2, 3, 30) in
+Stdlib.Dict.get(d3, 3) = 30
+
+// Keys with same hash chunk at level 0 (testing internal node expansion)
+// Keys 0 and 64 have the same 6-bit chunk at level 0 (both are 0 & 63 = 0)
+let d1 = Stdlib.Dict.set(Stdlib.Dict.empty(), 0, 1000) in
+let d2 = Stdlib.Dict.set(d1, 64, 2000) in
+Stdlib.Dict.get(d2, 0) = 1000
+
+let d1 = Stdlib.Dict.set(Stdlib.Dict.empty(), 0, 1000) in
+let d2 = Stdlib.Dict.set(d1, 64, 2000) in
+Stdlib.Dict.get(d2, 64) = 2000

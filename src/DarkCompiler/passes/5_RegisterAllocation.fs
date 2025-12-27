@@ -714,6 +714,17 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
     | LIR.SaveRegs -> [LIR.SaveRegs]
     | LIR.RestoreRegs -> [LIR.RestoreRegs]
 
+    | LIR.ArgMoves moves ->
+        // Apply allocation to each operand in the arg moves
+        let allocatedMoves =
+            moves |> List.map (fun (destReg, srcOp) ->
+                let (allocatedOp, loads) = applyToOperand mapping srcOp LIR.X12
+                (destReg, allocatedOp, loads))
+        // Collect all load instructions and the allocated moves
+        let allLoads = allocatedMoves |> List.collect (fun (_, _, loads) -> loads)
+        let finalMoves = allocatedMoves |> List.map (fun (destReg, op, _) -> (destReg, op))
+        allLoads @ [LIR.ArgMoves finalMoves]
+
     | LIR.PrintInt reg ->
         let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12
         regLoads @ [LIR.PrintInt regFinal]

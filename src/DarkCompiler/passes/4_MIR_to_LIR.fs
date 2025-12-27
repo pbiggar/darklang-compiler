@@ -186,6 +186,8 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
                     Ok (leftInstrs @ rightInstrs @ [LIR.FCmp (leftFReg, rightFReg); LIR.Cset (lirDest, LIR.GE)])
             | MIR.And | MIR.Or ->
                 Error "Boolean operations not supported on floats"
+            | MIR.Shl | MIR.Shr | MIR.BitAnd | MIR.BitOr | MIR.BitXor ->
+                Error "Bitwise operations not supported on floats"
 
         | _ ->
             // Integer operations - existing logic
@@ -295,51 +297,51 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
                 | Ok (rightInstrs, rightReg) ->
                     Ok (leftInstrs @ rightInstrs @ [LIR.Orr (lirDest, leftReg, rightReg)])
 
-        // Bitwise operators
-        | MIR.Shl ->
-            match ensureInRegister left (LIR.Virtual 1000) with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-            match ensureInRegister right (LIR.Virtual 1001) with
-            | Error err -> Error err
-            | Ok (rightInstrs, rightReg) ->
-                Ok (leftInstrs @ rightInstrs @ [LIR.Lsl (lirDest, leftReg, rightReg)])
+            // Bitwise operators
+            | MIR.Shl ->
+                match ensureInRegister left (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                match ensureInRegister right (LIR.Virtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.Lsl (lirDest, leftReg, rightReg)])
 
-        | MIR.Shr ->
-            match ensureInRegister left (LIR.Virtual 1000) with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-            match ensureInRegister right (LIR.Virtual 1001) with
-            | Error err -> Error err
-            | Ok (rightInstrs, rightReg) ->
-                Ok (leftInstrs @ rightInstrs @ [LIR.Lsr (lirDest, leftReg, rightReg)])
+            | MIR.Shr ->
+                match ensureInRegister left (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                match ensureInRegister right (LIR.Virtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.Lsr (lirDest, leftReg, rightReg)])
 
-        | MIR.BitAnd ->
-            match ensureInRegister left (LIR.Virtual 1000) with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-            match ensureInRegister right (LIR.Virtual 1001) with
-            | Error err -> Error err
-            | Ok (rightInstrs, rightReg) ->
-                Ok (leftInstrs @ rightInstrs @ [LIR.And (lirDest, leftReg, rightReg)])
+            | MIR.BitAnd ->
+                match ensureInRegister left (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                match ensureInRegister right (LIR.Virtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.And (lirDest, leftReg, rightReg)])
 
-        | MIR.BitOr ->
-            match ensureInRegister left (LIR.Virtual 1000) with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-            match ensureInRegister right (LIR.Virtual 1001) with
-            | Error err -> Error err
-            | Ok (rightInstrs, rightReg) ->
-                Ok (leftInstrs @ rightInstrs @ [LIR.Orr (lirDest, leftReg, rightReg)])
+            | MIR.BitOr ->
+                match ensureInRegister left (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                match ensureInRegister right (LIR.Virtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.Orr (lirDest, leftReg, rightReg)])
 
-        | MIR.BitXor ->
-            match ensureInRegister left (LIR.Virtual 1000) with
-            | Error err -> Error err
-            | Ok (leftInstrs, leftReg) ->
-            match ensureInRegister right (LIR.Virtual 1001) with
-            | Error err -> Error err
-            | Ok (rightInstrs, rightReg) ->
-                Ok (leftInstrs @ rightInstrs @ [LIR.Eor (lirDest, leftReg, rightReg)])
+            | MIR.BitXor ->
+                match ensureInRegister left (LIR.Virtual 1000) with
+                | Error err -> Error err
+                | Ok (leftInstrs, leftReg) ->
+                match ensureInRegister right (LIR.Virtual 1001) with
+                | Error err -> Error err
+                | Ok (rightInstrs, rightReg) ->
+                    Ok (leftInstrs @ rightInstrs @ [LIR.Eor (lirDest, leftReg, rightReg)])
 
     | MIR.UnaryOp (dest, op, src) ->
         let lirDest = vregToLIRReg dest
@@ -384,13 +386,15 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
         // We use a special SaveRegs/RestoreRegs instruction pair that CodeGen expands
         let saveInstrs = [LIR.SaveRegs]
 
-        // Move each argument to its corresponding register
-        // Take only as many registers as we have arguments
-        let moveInstrs =
-            List.zip args (List.take (List.length args) argRegs)
-            |> List.map (fun (arg, reg) ->
-                let lirArg = convertOperand arg
-                LIR.Mov (LIR.Physical reg, lirArg))
+        // Use ArgMoves for parallel move - handles register clobbering correctly
+        // The code generator will emit moves in a safe order, using SaveRegs stack when needed
+        let argMoves =
+            if List.isEmpty args then []
+            else
+                let argPairs =
+                    List.zip args (List.take (List.length args) argRegs)
+                    |> List.map (fun (arg, reg) -> (reg, convertOperand arg))
+                [LIR.ArgMoves argPairs]
 
         // Call instruction (no longer handles caller-save - it's done above)
         let callInstr = LIR.Call (lirDest, funcName, List.map convertOperand args)
@@ -404,7 +408,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
             | LIR.Physical LIR.X0 -> []
             | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
 
-        Ok (saveInstrs @ moveInstrs @ [callInstr] @ restoreInstrs @ moveResult)
+        Ok (saveInstrs @ argMoves @ [callInstr] @ restoreInstrs @ moveResult)
 
     | MIR.IndirectCall (dest, func, args) ->
         // Indirect call through function pointer (BLR instruction)
@@ -429,12 +433,14 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
                 // Load operand into X9
                 [LIR.Mov (LIR.Physical LIR.X9, other)]
 
-        // Move arguments to X0-X7 (after function pointer is safely in X9)
-        let moveInstrs =
-            List.zip args (List.take (List.length args) argRegs)
-            |> List.map (fun (arg, reg) ->
-                let lirArg = convertOperand arg
-                LIR.Mov (LIR.Physical reg, lirArg))
+        // Use ArgMoves for parallel move - handles register clobbering correctly
+        let argMoves =
+            if List.isEmpty args then []
+            else
+                let argPairs =
+                    List.zip args (List.take (List.length args) argRegs)
+                    |> List.map (fun (arg, reg) -> (reg, convertOperand arg))
+                [LIR.ArgMoves argPairs]
 
         // Call through X9 (always, since we always copy to X9 now)
         let callInstr = LIR.IndirectCall (lirDest, LIR.Physical LIR.X9, List.map convertOperand args)
@@ -448,7 +454,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
             | LIR.Physical LIR.X0 -> []
             | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
 
-        Ok (saveInstrs @ loadFuncInstrs @ moveInstrs @ [callInstr] @ restoreInstrs @ moveResult)
+        Ok (saveInstrs @ loadFuncInstrs @ argMoves @ [callInstr] @ restoreInstrs @ moveResult)
 
     | MIR.ClosureAlloc (dest, funcName, captures) ->
         // Allocate closure: (func_addr, cap1, cap2, ...)
@@ -484,19 +490,20 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
         // Load function pointer from closure[0] into X9
         let loadFuncPtrInstr = LIR.HeapLoad (LIR.Physical LIR.X9, closureReg, 0)
 
-        // Move arguments to X1-X7 (closure goes to X0)
-        // First arg is the closure itself
-        let moveClosureToArg0 = LIR.Mov (LIR.Physical LIR.X0, LIR.Reg closureReg)
-        let moveInstrs =
+        // Use ArgMoves for parallel move - closure goes to X0, args to X1-X7
+        // Closure is already safe in X10, include it in the ArgMoves
+        let argMoves =
             if List.length args > 7 then
                 // Error: too many args for closure call (8 - 1 for closure = 7 max)
                 []  // Will be caught by validation
             else
-                args
-                |> List.mapi (fun i arg -> (i, arg))
-                |> List.map (fun (i, arg) ->
-                    let targetReg = List.item (i + 1) argRegs  // X1, X2, ...
-                    LIR.Mov (LIR.Physical targetReg, convertOperand arg))
+                let closureMove = (LIR.X0, LIR.Reg closureReg)
+                let regularArgMoves =
+                    args
+                    |> List.mapi (fun i arg ->
+                        let targetReg = List.item (i + 1) argRegs  // X1, X2, ...
+                        (targetReg, convertOperand arg))
+                [LIR.ArgMoves (closureMove :: regularArgMoves)]
 
         let callInstr = LIR.ClosureCall (lirDest, LIR.Physical LIR.X9, List.map convertOperand args)
 
@@ -509,7 +516,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
             | LIR.Physical LIR.X0 -> []
             | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
 
-        Ok (saveInstrs @ [loadClosureInstr; loadFuncPtrInstr; moveClosureToArg0] @ moveInstrs @ [callInstr] @ restoreInstrs @ moveResult)
+        Ok (saveInstrs @ [loadClosureInstr; loadFuncPtrInstr] @ argMoves @ [callInstr] @ restoreInstrs @ moveResult)
 
     | MIR.HeapAlloc (dest, sizeBytes) ->
         let lirDest = vregToLIRReg dest
@@ -587,7 +594,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
                     | LIR.Reg (LIR.Physical LIR.X0) -> []
                     | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
                 Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
-        | AST.TTuple _ | AST.TRecord _ | AST.TList _ | AST.TSum _ ->
+        | AST.TTuple _ | AST.TRecord _ | AST.TList _ | AST.TSum _ | AST.TDict _ ->
             // Heap types: print address for now
             let lirSrc = convertOperand src
             let moveToX0 =

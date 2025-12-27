@@ -58,6 +58,7 @@ let rec typeToString (t: Type) : string =
     | TList elemType -> $"List<{typeToString elemType}>"
     | TVar name -> name  // Type variable (for generics)
     | TRawPtr -> "RawPtr"  // Internal raw pointer type
+    | TDict (keyType, valueType) -> $"Dict<{typeToString keyType}, {typeToString valueType}>"
 
 /// Pretty-print a type error
 let typeErrorToString (err: TypeError) : string =
@@ -109,6 +110,8 @@ let rec applySubst (subst: Substitution) (typ: Type) : Type =
         TList (applySubst subst elemType)
     | TSum (name, typeArgs) ->
         TSum (name, List.map (applySubst subst) typeArgs)
+    | TDict (keyType, valueType) ->
+        TDict (applySubst subst keyType, applySubst subst valueType)
     | TInt8 | TInt16 | TInt32 | TInt64 | TUInt8 | TUInt16 | TUInt32 | TUInt64
     | TBool | TFloat64 | TString | TUnit | TRecord _ | TRawPtr ->
         typ  // Concrete types are unchanged
@@ -333,6 +336,15 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
                     | Error e, _ -> Error e
                     | _, Error e -> Error e) (Ok [])
         | _ -> Error $"Expected tuple, got {typeToString actual}"
+    | TDict (patternKey, patternValue) ->
+        match actual with
+        | TDict (actualKey, actualValue) ->
+            // Match both key and value types
+            match matchTypes patternKey actualKey, matchTypes patternValue actualValue with
+            | Ok keyBindings, Ok valueBindings -> Ok (keyBindings @ valueBindings)
+            | Error e, _ -> Error e
+            | _, Error e -> Error e
+        | _ -> Error $"Expected Dict<...>, got {typeToString actual}"
 
 /// Consolidate bindings, checking for conflicts where the same type variable
 /// is bound to different types. Returns a map from type var name to concrete type.

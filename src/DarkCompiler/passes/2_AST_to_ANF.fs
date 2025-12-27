@@ -45,6 +45,11 @@ let tryRawMemoryIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr o
         Some (ANF.RawGet (ptrAtom, offsetAtom))
     | "__raw_set", [ptrAtom; offsetAtom; valueAtom] ->
         Some (ANF.RawSet (ptrAtom, offsetAtom, valueAtom))
+    // Cast operations are no-ops at runtime - just pass through the value
+    | "__rawptr_to_int64", [ptrAtom] ->
+        Some (ANF.Atom ptrAtom)
+    | "__int64_to_rawptr", [intAtom] ->
+        Some (ANF.Atom intAtom)
     | _ -> None
 
 /// Type registry - maps record type names to their field definitions
@@ -106,6 +111,7 @@ let rec typeToMangledName (t: AST.Type) : string =
         let argsStr = typeArgs |> List.map typeToMangledName |> String.concat "_"
         $"{name}_{argsStr}"
     | AST.TList elemType -> $"list_{typeToMangledName elemType}"
+    | AST.TDict (keyType, valueType) -> $"dict_{typeToMangledName keyType}_{typeToMangledName valueType}"
     | AST.TVar name -> name  // Should not appear after monomorphization
     | AST.TRawPtr -> "rawptr"  // Internal raw pointer type
 
@@ -133,6 +139,8 @@ let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
         AST.TTuple (List.map (applySubstToType subst) elemTypes)
     | AST.TList elemType ->
         AST.TList (applySubstToType subst elemType)
+    | AST.TDict (keyType, valueType) ->
+        AST.TDict (applySubstToType subst keyType, applySubstToType subst valueType)
     | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
     | AST.TBool | AST.TFloat64 | AST.TString | AST.TUnit | AST.TRecord _ | AST.TSum _ | AST.TRawPtr ->

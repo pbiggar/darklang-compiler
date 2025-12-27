@@ -655,6 +655,86 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             ARM64.ADD_imm (ARM64.SP, ARM64.SP, 80us)
         ]
 
+    | LIR.ArgMoves moves ->
+        // Parallel move resolution for function arguments
+        // After SaveRegs, X1-X10 are saved at [SP+0..SP+72]
+        // If source is in X1-X7 and could be clobbered, load from stack instead
+        //
+        // Stack layout after SaveRegs: X1@[SP+0], X2@[SP+8], ..., X10@[SP+72]
+        let saveRegsOffset (reg: LIR.PhysReg) : int option =
+            match reg with
+            | LIR.X1 -> Some 0
+            | LIR.X2 -> Some 8
+            | LIR.X3 -> Some 16
+            | LIR.X4 -> Some 24
+            | LIR.X5 -> Some 32
+            | LIR.X6 -> Some 40
+            | LIR.X7 -> Some 48
+            | LIR.X8 -> Some 56
+            | LIR.X9 -> Some 64
+            | LIR.X10 -> Some 72
+            | _ -> None
+
+        // Find which destination registers (X0-X7) will be written
+        let destRegs = moves |> List.map fst |> Set.ofList
+
+        // For each move, determine how to execute it safely
+        let generateMove (destReg: LIR.PhysReg, srcOp: LIR.Operand) : Result<ARM64.Instr list, string> =
+            let destARM64 = lirPhysRegToARM64Reg destReg
+            match srcOp with
+            | LIR.Imm value ->
+                Ok (loadImmediate destARM64 value)
+            | LIR.Reg (LIR.Physical srcPhysReg) ->
+                // Check if source register will be clobbered by an earlier move
+                // A register is clobbered if it's a destination of a move to a LOWER index
+                // (since we process X0, X1, X2, ... in order)
+                let srcWillBeClobbered =
+                    match srcPhysReg with
+                    | LIR.X1 | LIR.X2 | LIR.X3 | LIR.X4 | LIR.X5 | LIR.X6 | LIR.X7 ->
+                        Set.contains srcPhysReg destRegs
+                    | _ -> false
+                if srcWillBeClobbered then
+                    // Load from SaveRegs stack instead of live register
+                    match saveRegsOffset srcPhysReg with
+                    | Some offset ->
+                        Ok [ARM64.LDR (destARM64, ARM64.SP, int16 offset)]
+                    | None ->
+                        // Shouldn't happen, but fall back to MOV
+                        let srcARM64 = lirPhysRegToARM64Reg srcPhysReg
+                        Ok [ARM64.MOV_reg (destARM64, srcARM64)]
+                else
+                    let srcARM64 = lirPhysRegToARM64Reg srcPhysReg
+                    Ok [ARM64.MOV_reg (destARM64, srcARM64)]
+            | LIR.Reg (LIR.Virtual _) ->
+                Error "Virtual register in ArgMoves - should have been allocated"
+            | LIR.StackSlot offset ->
+                loadStackSlot destARM64 offset
+            | LIR.StringRef idx ->
+                // Load string address into register (for string arguments)
+                match Map.tryFind idx ctx.StringPool.Strings with
+                | Some (_, _) ->
+                    let label = sprintf "_str_%d" idx
+                    Ok [ARM64.ADR (destARM64, label)]
+                | None -> Error $"String index {idx} not found in pool"
+            | LIR.FuncAddr funcName ->
+                Ok [ARM64.ADR (destARM64, funcName)]
+            | LIR.FloatImm _ | LIR.FloatRef _ ->
+                Error "Float in ArgMoves not yet supported"
+
+        // Generate all moves in order (X0, X1, X2, ...)
+        moves
+        |> List.sortBy (fun (destReg, _) ->
+            match destReg with
+            | LIR.X0 -> 0 | LIR.X1 -> 1 | LIR.X2 -> 2 | LIR.X3 -> 3
+            | LIR.X4 -> 4 | LIR.X5 -> 5 | LIR.X6 -> 6 | LIR.X7 -> 7
+            | _ -> 100)
+        |> List.map generateMove
+        |> List.fold (fun acc r ->
+            match acc, r with
+            | Ok instrs, Ok newInstrs -> Ok (instrs @ newInstrs)
+            | Error e, _ -> Error e
+            | _, Error e -> Error e) (Ok [])
+
     | LIR.PrintInt reg ->
         // Value to print should be in X0 (no exit)
         lirRegToARM64Reg reg
@@ -1264,9 +1344,9 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     // Align numBytes to 8 bytes
                     ARM64.ADD_imm (ARM64.X15, numBytesReg, 7us)        // X15 = numBytes + 7
                     ARM64.MOVZ (ARM64.X14, 0xFFF8us, 0)                // Lower 16 bits of ~7
-                    ARM64.MOVK (ARM64.X14, 0xFFFFus, 1)
-                    ARM64.MOVK (ARM64.X14, 0xFFFFus, 2)
-                    ARM64.MOVK (ARM64.X14, 0xFFFFus, 3)
+                    ARM64.MOVK (ARM64.X14, 0xFFFFus, 16)               // Bits 16-31
+                    ARM64.MOVK (ARM64.X14, 0xFFFFus, 32)               // Bits 32-47
+                    ARM64.MOVK (ARM64.X14, 0xFFFFus, 48)               // Bits 48-63
                     ARM64.AND_reg (ARM64.X15, ARM64.X15, ARM64.X14)    // X15 = aligned size
                     // Bump allocate
                     ARM64.MOV_reg (destReg, ARM64.X28)                 // dest = current heap pointer

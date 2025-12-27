@@ -41,6 +41,7 @@ type Type =
     | TList of Type                    // List<T> - polymorphic list type
     | TVar of string                  // type variable: T, A, B, etc. (for generics)
     | TRawPtr                         // Raw pointer to unmanaged memory (internal, for HAMT)
+    | TDict of keyType:Type * valueType:Type  // Dict<K, V> - HAMT dictionary (K=Int64 for now)
 
 /// Binary operators
 type BinOp =

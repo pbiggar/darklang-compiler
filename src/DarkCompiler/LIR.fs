@@ -81,6 +81,7 @@ type Instr =
     | ClosureCall of dest:Reg * closure:Reg * args:Operand list  // Call through closure with hidden first arg
     | SaveRegs                                   // Save caller-saved registers (X1-X10) before call
     | RestoreRegs                                // Restore caller-saved registers (X1-X10) after call
+    | ArgMoves of (PhysReg * Operand) list       // Move arguments to X0-X7 (parallel move - handles clobber issues)
     | PrintInt of Reg                           // Print integer register to stdout (no exit)
     | PrintBool of Reg                          // Print boolean register to stdout (no exit)
     | PrintFloat of FReg                        // Print float from FP register to stdout

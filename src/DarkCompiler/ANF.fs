@@ -136,6 +136,7 @@ let isHeapType (t: AST.Type) : bool =
     | AST.TRecord _ -> true
     | AST.TList _ -> true  // All lists are heap-allocated regardless of element type
     | AST.TSum _ -> true  // Conservative: sum types with payloads are heap-allocated
+    | AST.TDict _ -> true  // Dict root pointer is heap-allocated
     | _ -> false
 
 /// Calculate payload size in bytes for a heap-allocated type
@@ -148,4 +149,5 @@ let payloadSize (t: AST.Type) (typeReg: Map<string, (string * AST.Type) list>) :
         | None -> 16  // Fallback for unknown records
     | AST.TList _ -> 24  // [tag, head, tail] - same size for all element types
     | AST.TSum _ -> 16  // [tag, payload]
+    | AST.TDict _ -> 8  // Root pointer only (HAMT structure is variable-sized raw memory)
     | _ -> 0  // Non-heap types
