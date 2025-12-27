@@ -1,0 +1,66 @@
+// Stdlib.Tuple3 Tests
+// Ported from https://github.com/darklang/dark/tree/main/backend/testfiles/execution/stdlib
+//
+// Tests for Tuple3 module functions
+
+// ===================================================================
+// Stdlib.Tuple3.create - Constructs a triple from three values
+// ===================================================================
+
+Stdlib.Tuple3.first<Int64, Int64, Int64>(Stdlib.Tuple3.create<Int64, Int64, Int64>(1, 2, 3)) = 1
+Stdlib.Tuple3.second<Int64, Int64, Int64>(Stdlib.Tuple3.create<Int64, Int64, Int64>(1, 2, 3)) = 2
+Stdlib.Tuple3.third<Int64, Int64, Int64>(Stdlib.Tuple3.create<Int64, Int64, Int64>(1, 2, 3)) = 3
+
+// ===================================================================
+// Stdlib.Tuple3.first - Returns the first value of a triple
+// ===================================================================
+
+Stdlib.Tuple3.first<Int64, Int64, Int64>((1, 2, 3)) = 1
+Stdlib.Tuple3.first<Int64, Int64, Int64>((42, 0, 99)) = 42
+Stdlib.Tuple3.first<Bool, Bool, Bool>((true, false, true)) = stdout="true\n"
+
+// ===================================================================
+// Stdlib.Tuple3.second - Returns the second value of a triple
+// ===================================================================
+
+Stdlib.Tuple3.second<Int64, Int64, Int64>((1, 2, 3)) = 2
+Stdlib.Tuple3.second<Int64, Int64, Int64>((0, 42, 99)) = 42
+
+// ===================================================================
+// Stdlib.Tuple3.third - Returns the third value of a triple
+// ===================================================================
+
+Stdlib.Tuple3.third<Int64, Int64, Int64>((1, 2, 3)) = 3
+Stdlib.Tuple3.third<Int64, Int64, Int64>((0, 0, 42)) = 42
+
+// ===================================================================
+// Stdlib.Tuple3.mapFirst - Transform the first value in a triple
+// ===================================================================
+
+Stdlib.Tuple3.first<Int64, Int64, Int64>(Stdlib.Tuple3.mapFirst<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10, 15))) = 6
+Stdlib.Tuple3.second<Int64, Int64, Int64>(Stdlib.Tuple3.mapFirst<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10, 15))) = 10
+Stdlib.Tuple3.third<Int64, Int64, Int64>(Stdlib.Tuple3.mapFirst<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10, 15))) = 15
+
+// ===================================================================
+// Stdlib.Tuple3.mapSecond - Transform the second value in a triple
+// ===================================================================
+
+Stdlib.Tuple3.first<Int64, Int64, Int64>(Stdlib.Tuple3.mapSecond<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10, 15))) = 5
+Stdlib.Tuple3.second<Int64, Int64, Int64>(Stdlib.Tuple3.mapSecond<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10, 15))) = 11
+Stdlib.Tuple3.third<Int64, Int64, Int64>(Stdlib.Tuple3.mapSecond<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10, 15))) = 15
+
+// ===================================================================
+// Stdlib.Tuple3.mapThird - Transform the third value in a triple
+// ===================================================================
+
+Stdlib.Tuple3.first<Int64, Int64, Int64>(Stdlib.Tuple3.mapThird<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10, 15))) = 5
+Stdlib.Tuple3.second<Int64, Int64, Int64>(Stdlib.Tuple3.mapThird<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10, 15))) = 10
+Stdlib.Tuple3.third<Int64, Int64, Int64>(Stdlib.Tuple3.mapThird<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10, 15))) = 16
+
+// ===================================================================
+// Stdlib.Tuple3.mapAllThree - Transform all three values in a triple
+// ===================================================================
+
+Stdlib.Tuple3.first<Int64, Int64, Int64>(Stdlib.Tuple3.mapAllThree<Int64, Int64, Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (y: Int64) => y * 2, (z: Int64) => z - 1, (5, 10, 15))) = 6
+Stdlib.Tuple3.second<Int64, Int64, Int64>(Stdlib.Tuple3.mapAllThree<Int64, Int64, Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (y: Int64) => y * 2, (z: Int64) => z - 1, (5, 10, 15))) = 20
+Stdlib.Tuple3.third<Int64, Int64, Int64>(Stdlib.Tuple3.mapAllThree<Int64, Int64, Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (y: Int64) => y * 2, (z: Int64) => z - 1, (5, 10, 15))) = 14
