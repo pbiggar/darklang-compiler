@@ -41,10 +41,13 @@ The following work is needed to complete the standard library:
 - **Json** - JSON parsing/serialization
 - **Crypto** - hashing, encoding
 
-Note: Priorities 1-3 are compiler bugs tracked elsewhere:
-1. Type checker bug with generic enum pattern matching (blocks Option/Result functions)
-2. List construction with spread syntax (blocks List.append, map, filter, etc.)
-3. String parameter codegen bug (segfault with String params using ++)
+Note: Priority 1 is a remaining compiler bug:
+1. Type checker bug with generic enum pattern matching (blocks Option/Result, and
+   List functions with recursive generic returns like map, fold, append, etc.)
+
+Resolved bugs:
+- ✅ List construction with spread syntax - now works ([h, ...rest] in expressions)
+- ✅ String parameter codegen bug - fixed register conflict in StringRef conversion
 
 ### LOW Priority (Feature limitations, not bugs)
 
@@ -85,7 +88,7 @@ The following features are explicitly out of scope:
 - ✅ 9-pass compiler pipeline (Parser → TypeCheck → ANF → RefCount → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
 - ✅ Register allocation with callee-saved registers (X19-X27) and stack spilling for high register pressure
 - ✅ Reference counting with free list memory reuse
-- ✅ 1737 passing tests
+- ✅ 1748 passing tests
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
 - ✅ Type-directed record field lookup (no ambiguity when multiple record types have same field names)
 - ✅ Function return type inference using function registry (enables type inference for let-bound function calls)
