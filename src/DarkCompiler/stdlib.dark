@@ -191,3 +191,27 @@ def Stdlib.String.prepend(s2: String, s1: String) : String = s1 ++ s2
 // TODO: Most String functions require runtime builtins that don't exist yet
 // length, isEmpty, toUppercase, toLowercase, contains, startsWith, endsWith,
 // trim, slice, first, last, reverse, replaceAll, etc.
+
+// =============================================================================
+// Stdlib.Dict - Immutable Dictionary using HAMT (Hash Array Mapped Trie)
+// =============================================================================
+
+// HAMT internal helper functions for working with bitmaps
+// These are the building blocks for the Dict implementation
+
+// Get 6-bit chunk of hash at given level (0-10)
+// For a 64-bit hash, there are up to 11 levels (6 bits per level)
+def Stdlib.Dict.hashChunk(hash: Int64, level: Int64) : Int64 =
+    (hash >> (level * 6)) & 63
+
+// Check if bit is set in bitmap
+def Stdlib.Dict.hasBit(bitmap: Int64, bit: Int64) : Bool =
+    ((bitmap >> bit) & 1) == 1
+
+// Count bits below position in bitmap (for compressed array index)
+def Stdlib.Dict.childIndex(bitmap: Int64, bit: Int64) : Int64 =
+    Stdlib.Int64.popcount(bitmap & ((1 << bit) - 1))
+
+// Set a bit in bitmap
+def Stdlib.Dict.setBit(bitmap: Int64, bit: Int64) : Int64 =
+    bitmap ^ (1 << bit)

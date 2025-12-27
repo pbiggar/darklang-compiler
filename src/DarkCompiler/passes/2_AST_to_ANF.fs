@@ -32,6 +32,21 @@ let tryFileIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option
         Some (ANF.FileAppendText (pathAtom, contentAtom))
     | _ -> None
 
+/// Try to convert a function call to a raw memory intrinsic CExpr
+/// These are internal-only functions for implementing HAMT data structures
+/// Returns Some CExpr if it's a raw memory intrinsic, None otherwise
+let tryRawMemoryIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
+    match funcName, args with
+    | "__raw_alloc", [numBytesAtom] ->
+        Some (ANF.RawAlloc numBytesAtom)
+    | "__raw_free", [ptrAtom] ->
+        Some (ANF.RawFree ptrAtom)
+    | "__raw_get", [ptrAtom; offsetAtom] ->
+        Some (ANF.RawGet (ptrAtom, offsetAtom))
+    | "__raw_set", [ptrAtom; offsetAtom; valueAtom] ->
+        Some (ANF.RawSet (ptrAtom, offsetAtom, valueAtom))
+    | _ -> None
+
 /// Type registry - maps record type names to their field definitions
 type TypeRegistry = Map<string, (string * AST.Type) list>
 
@@ -1397,6 +1412,14 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     let exprWithBindings = wrapBindings argBindings finalExpr
                     Ok (exprWithBindings, varGen2)
                 | None ->
+                    // Check if it's a raw memory intrinsic
+                    match tryRawMemoryIntrinsic funcName argAtoms with
+                    | Some intrinsicExpr ->
+                        // Raw memory intrinsic call
+                        let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
+                        let exprWithBindings = wrapBindings argBindings finalExpr
+                        Ok (exprWithBindings, varGen2)
+                    | None ->
                     // Check if it's a defined function
                     match Map.tryFind funcName funcReg with
                     | Some _ ->
@@ -2482,10 +2505,17 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                     let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
                     Ok (ANF.Var tempVar, allBindings, varGen2)
                 | None ->
-                    // Assume it's a defined function (direct call)
-                    let callCExpr = ANF.Call (funcName, argAtoms)
-                    let allBindings = argBindings @ [(tempVar, callCExpr)]
-                    Ok (ANF.Var tempVar, allBindings, varGen2))
+                    // Check if it's a raw memory intrinsic
+                    match tryRawMemoryIntrinsic funcName argAtoms with
+                    | Some intrinsicExpr ->
+                        // Raw memory intrinsic call
+                        let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
+                        Ok (ANF.Var tempVar, allBindings, varGen2)
+                    | None ->
+                        // Assume it's a defined function (direct call)
+                        let callCExpr = ANF.Call (funcName, argAtoms)
+                        let allBindings = argBindings @ [(tempVar, callCExpr)]
+                        Ok (ANF.Var tempVar, allBindings, varGen2))
 
     | AST.TypeApp (_, _, _) ->
         // Placeholder: Generic instantiation not yet implemented

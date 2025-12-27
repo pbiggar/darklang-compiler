@@ -40,6 +40,20 @@ let fileModule : ModuleDef = {
     ]
 }
 
+/// Raw memory intrinsics - internal only for HAMT implementation
+/// These functions bypass the type system and should only be used in stdlib code
+/// The names start with __ to indicate they are internal
+let rawMemoryIntrinsics : ModuleFunc list = [
+    // __raw_alloc : (Int64) -> RawPtr - allocate raw bytes
+    { Name = "__raw_alloc"; ParamTypes = [TInt64]; ReturnType = TRawPtr }
+    // __raw_free : (RawPtr) -> Unit - free raw memory
+    { Name = "__raw_free"; ParamTypes = [TRawPtr]; ReturnType = TUnit }
+    // __raw_get : (RawPtr, Int64) -> Int64 - read 8 bytes at offset
+    { Name = "__raw_get"; ParamTypes = [TRawPtr; TInt64]; ReturnType = TInt64 }
+    // __raw_set : (RawPtr, Int64, Int64) -> Unit - write 8 bytes at offset
+    { Name = "__raw_set"; ParamTypes = [TRawPtr; TInt64; TInt64]; ReturnType = TUnit }
+]
+
 /// All available Stdlib modules
 let allModules : ModuleDef list = [
     int64Module
@@ -49,10 +63,16 @@ let allModules : ModuleDef list = [
 /// Build the module registry from all modules
 /// Maps qualified function names (e.g., "Stdlib.Int64.add") to their definitions
 let buildModuleRegistry () : ModuleRegistry =
-    allModules
-    |> List.collect (fun m ->
-        m.Functions
-        |> List.map (fun f -> ($"{m.Name}.{f.Name}", f)))
+    let moduleFuncs =
+        allModules
+        |> List.collect (fun m ->
+            m.Functions
+            |> List.map (fun f -> ($"{m.Name}.{f.Name}", f)))
+    // Add raw memory intrinsics directly (no module prefix)
+    let rawMemFuncs =
+        rawMemoryIntrinsics
+        |> List.map (fun f -> (f.Name, f))
+    (moduleFuncs @ rawMemFuncs)
     |> Map.ofList
 
 /// Get a function from the registry by its full qualified name
