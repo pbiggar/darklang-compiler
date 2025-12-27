@@ -97,8 +97,33 @@ let matchesFilter (filter: string option) (testName: string) : bool =
     | None -> true
     | Some pattern -> testName.ToLowerInvariant().Contains(pattern.ToLowerInvariant())
 
+// Check if --help flag is present
+let hasHelpArg (args: string array) : bool =
+    args |> Array.exists (fun arg -> arg = "--help" || arg = "-h")
+
+// Print help message
+let printHelp () =
+    println "Usage: Tests [OPTIONS]"
+    println ""
+    println "Options:"
+    println "  --filter=PATTERN   Run only tests matching PATTERN (case-insensitive substring)"
+    println "  --parallel=N       Run with N parallel test workers"
+    println "  --help, -h         Show this help message"
+    println ""
+    println "Examples:"
+    println "  Tests                      Run all tests"
+    println "  Tests --filter=tuple       Run tests with 'tuple' in the name"
+    println "  Tests --filter=string      Run tests with 'string' in the name"
+    println "  Tests --parallel=4         Run with 4 parallel workers"
+
 [<EntryPoint>]
 let main args =
+    // Check for --help flag
+    if hasHelpArg args then
+        printHelp ()
+        0
+    else
+
     let totalTimer = Stopwatch.StartNew()
 
     // Check for --parallel=N argument
