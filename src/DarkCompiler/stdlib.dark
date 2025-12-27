@@ -145,3 +145,18 @@ def Stdlib.List.singleton<t>(value: t) : List<t> = [value]
 
 // TODO: Functions that require Option/Result return types are blocked by type checker bug
 // head, tail, last, getAt, findFirst - require Stdlib.Option.Option<t> returns
+
+// Stdlib.String - String operations
+
+// Newline constant (nullary function)
+def Stdlib.String.newline() : String = "\n"
+
+// Append two strings
+def Stdlib.String.append(s1: String, s2: String) : String = s1 ++ s2
+
+// Prepend first string to second
+def Stdlib.String.prepend(s2: String, s1: String) : String = s1 ++ s2
+
+// TODO: Most String functions require runtime builtins that don't exist yet
+// length, isEmpty, toUppercase, toLowercase, contains, startsWith, endsWith,
+// trim, slice, first, last, reverse, replaceAll, etc.
