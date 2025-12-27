@@ -128,6 +128,66 @@ Source → AST → ANF → MIR → LIR → ARM64 → Binary
 - Immediate value constraints require careful handling
 - Caller-saved vs callee-saved register conventions affect allocation strategy
 
+## HAMT-Based Immutable Dictionary
+
+**Decision**: Implement `Stdlib.Dict` using a Hash Array Mapped Trie (HAMT) data structure with raw memory primitives.
+
+**What is HAMT?**
+
+A HAMT is a persistent (immutable) hash table that provides near-O(1) lookups while supporting efficient structural sharing for updates. It's the data structure behind Clojure's maps, Scala's immutable maps, and many functional language implementations.
+
+**Key concepts**:
+- A 64-bit hash is divided into 6-bit chunks (11 levels max)
+- Each node has a 64-bit bitmap indicating which of 64 possible children exist
+- Children are stored in a compressed array (only present children occupy space)
+- Updates create new path from root to modified leaf, sharing unchanged subtrees
+
+**Why HAMT for Dark?**
+
+1. **Immutability**: Darklang uses immutable values; HAMT enables efficient "updates" via structural sharing
+2. **Performance**: O(log64 n) ≈ O(1) for practical sizes (7 levels handles billions of entries)
+3. **Memory efficiency**: Compressed nodes avoid sparse array waste
+4. **Proven design**: Battle-tested in Clojure, Scala, Haskell, etc.
+
+**Implementation approach**:
+
+The implementation is split into two parts:
+
+1. **Compiler intrinsics** (low-level memory operations):
+   - `__raw_alloc(size: Int64) -> RawPtr` - allocate unmanaged memory
+   - `__raw_free(ptr: RawPtr) -> Unit` - free memory
+   - `__raw_get(ptr: RawPtr, offset: Int64) -> Int64` - read 8 bytes
+   - `__raw_set(ptr: RawPtr, offset: Int64, value: Int64) -> Unit` - write 8 bytes
+
+2. **Pure Dark stdlib** (HAMT algorithms):
+   - `hashChunk(hash, level)` - extract 6-bit chunk at level
+   - `hasBit(bitmap, bit)` - check if child exists
+   - `childIndex(bitmap, bit)` - compute compressed array index using popcount
+   - `setBit(bitmap, bit)` - set bit in bitmap
+
+**Memory layout** (planned):
+
+```
+HAMT Node (variable size):
+  [0..7]   bitmap    : Int64     - 64-bit bitmap indicating present children
+  [8..15]  child[0]  : RawPtr    - first present child (if bitmap bit 0+ set)
+  [16..23] child[1]  : RawPtr    - second present child
+  ...
+
+Leaf Node:
+  [0..7]   hash      : Int64     - full hash of key
+  [8..15]  key       : RawPtr    - pointer to key value
+  [16..23] value     : RawPtr    - pointer to value
+```
+
+**Trade-offs**:
+
+- **TRawPtr type**: Internal type not exposed to users, enables unsafe memory ops
+- **No GC integration**: Raw memory bypasses reference counting (HAMT manages its own memory)
+- **Complexity**: HAMT is more complex than simple hash tables, but necessary for immutability
+
+**Current status**: Phase 4 in progress - bitwise operators and popcount implemented, raw memory intrinsics added, HAMT helper functions in stdlib.dark.
+
 ## Test-Driven Development
 
 **Decision**: Write tests first, use end-to-end tests as primary validation.
