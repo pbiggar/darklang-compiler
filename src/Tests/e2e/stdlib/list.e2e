@@ -1,0 +1,80 @@
+// Stdlib.List Tests
+// Ported from https://github.com/darklang/dark/tree/main/backend/testfiles/execution/stdlib
+//
+// Tests for List module functions
+//
+// NOTE: Many List functions are commented out because the compiler doesn't support
+// list construction with spread syntax. [h, ...rest] only works in pattern matching,
+// not in list construction. Functions like append, reverse, map, filter that build
+// new lists cannot be implemented without this feature.
+
+// ===================================================================
+// Stdlib.List.singleton - Create a single-element list
+// ===================================================================
+
+Stdlib.List.length<Int64>(Stdlib.List.singleton<Int64>(42)) = stdout="1\n"
+match Stdlib.List.singleton<Int64>(5) with | [x] -> x | _ -> 0 = 5
+
+// ===================================================================
+// NOTE: Functions below are blocked by missing list construction with spread
+// ===================================================================
+
+// Stdlib.List.append - Append two lists
+// Stdlib.List.length<Int64>(Stdlib.List.append<Int64>([1, 2, 3], [4, 5, 6])) = stdout="6\n"
+// match Stdlib.List.append<Int64>([1, 2], [3, 4]) with | [a, b, c, d] -> a + b + c + d | _ -> 0 = 10
+
+// Stdlib.List.push - Add element to front of list
+// match Stdlib.List.push<Int64>([2, 3], 1) with | [a, b, c] -> a | _ -> 0 = 1
+
+// Stdlib.List.pushBack - Add element to end of list
+// match Stdlib.List.pushBack<Int64>([1, 2], 3) with | [a, b, c] -> c | _ -> 0 = 3
+
+// Stdlib.List.reverse - Reverse a list
+// match Stdlib.List.reverse<Int64>([1, 2, 3]) with | [a, b, c] -> a | _ -> 0 = 3
+
+// Stdlib.List.range - Generate a range of integers
+// Stdlib.List.length<Int64>(Stdlib.List.range(1, 5)) = stdout="5\n"
+
+// Stdlib.List.map - Apply a function to each element
+// match Stdlib.List.map<Int64, Int64>((x: Int64) => x + 1, [1, 2, 3]) with | [a, b, c] -> a + b + c | _ -> 0 = 9
+
+// Stdlib.List.filter - Keep elements that match predicate
+// Stdlib.List.length<Int64>(Stdlib.List.filter<Int64>((x: Int64) => x > 2, [1, 2, 3, 4, 5])) = stdout="3\n"
+
+// Stdlib.List.fold - Reduce list with accumulator
+// Stdlib.List.fold<Int64, Int64>((acc: Int64, x: Int64) => acc + x, 0, [1, 2, 3, 4, 5]) = 15
+
+// Stdlib.List.all - Check if all elements satisfy predicate
+// Stdlib.List.all<Int64>((x: Int64) => x > 0, [1, 2, 3]) = stdout="true\n"
+
+// Stdlib.List.any - Check if any element satisfies predicate
+// Stdlib.List.any<Int64>((x: Int64) => x > 2, [1, 2, 3]) = stdout="true\n"
+
+// Stdlib.List.drop - Drop first n elements
+// Stdlib.List.length<Int64>(Stdlib.List.drop<Int64>([1, 2, 3, 4, 5], 2)) = stdout="3\n"
+
+// Stdlib.List.take - Take first n elements
+// Stdlib.List.length<Int64>(Stdlib.List.take<Int64>([1, 2, 3, 4, 5], 3)) = stdout="3\n"
+
+// ===================================================================
+// NOTE: Functions not yet implemented due to Option/Result type checker bug
+// ===================================================================
+
+// Stdlib.List.head - needs Option return (blocked by type checker bug)
+// Stdlib.List.head<Int64>([1, 2, 3]) = Stdlib.Option.Option.Some(1)
+// Stdlib.List.head<Int64>([]) = Stdlib.Option.Option.None
+
+// Stdlib.List.tail - needs Option return (blocked by type checker bug)
+// Stdlib.List.tail<Int64>([1, 2, 3]) = Stdlib.Option.Option.Some([2, 3])
+// Stdlib.List.tail<Int64>([]) = Stdlib.Option.Option.None
+
+// Stdlib.List.last - needs Option return (blocked by type checker bug)
+// Stdlib.List.last<Int64>([1, 2, 3]) = Stdlib.Option.Option.Some(3)
+// Stdlib.List.last<Int64>([]) = Stdlib.Option.Option.None
+
+// Stdlib.List.getAt - needs Option return (blocked by type checker bug)
+// Stdlib.List.getAt<Int64>([1, 2, 3], 0) = Stdlib.Option.Option.Some(1)
+// Stdlib.List.getAt<Int64>([1, 2, 3], 10) = Stdlib.Option.Option.None
+
+// Stdlib.List.findFirst - needs Option return (blocked by type checker bug)
+// Stdlib.List.findFirst<Int64>((x: Int64) => x > 2, [1, 2, 3, 4]) = Stdlib.Option.Option.Some(3)
