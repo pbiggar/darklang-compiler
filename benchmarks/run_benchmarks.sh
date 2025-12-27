@@ -47,6 +47,9 @@ done
 echo "Processing results..."
 python3 "$SCRIPT_DIR/infrastructure/result_processor.py" "$OUTPUT_DIR"
 
+# Update history log
+python3 "$SCRIPT_DIR/infrastructure/history_updater.py" "$OUTPUT_DIR"
+
 echo ""
 echo "Results saved to: $OUTPUT_DIR"
 echo "Summary: $OUTPUT_DIR/summary.md"
