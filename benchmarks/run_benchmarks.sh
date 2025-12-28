@@ -1,9 +1,10 @@
 #!/bin/bash
 # Main entry point for running benchmarks
-# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [benchmark_name|all]
+# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--refresh-baseline] [benchmark_name|all]
 #
 # Options:
-#   --hyperfine   Use hyperfine for timing (default: cachegrind for instruction counts)
+#   --hyperfine         Use hyperfine for timing (default: cachegrind for instruction counts)
+#   --refresh-baseline  Re-run Rust and Python (default: use cached values from HISTORY.md)
 
 set -e
 
@@ -12,12 +13,17 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Parse options
 USE_CACHEGRIND=true
+export REFRESH_BASELINE=false
 BENCHMARK="all"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --hyperfine)
             USE_CACHEGRIND=false
+            shift
+            ;;
+        --refresh-baseline)
+            export REFRESH_BASELINE=true
             shift
             ;;
         *)
@@ -43,7 +49,11 @@ else
 fi
 
 if [ "$USE_CACHEGRIND" = true ]; then
-    echo "Mode: Cachegrind (instruction counts)"
+    if [ "$REFRESH_BASELINE" = "true" ]; then
+        echo "Mode: Cachegrind (instruction counts) - refreshing all baselines"
+    else
+        echo "Mode: Cachegrind (instruction counts) - using cached Rust/Python baselines"
+    fi
 else
     echo "Mode: Hyperfine (timing)"
 fi
@@ -74,7 +84,11 @@ done
 # Process results
 echo "Processing results..."
 if [ "$USE_CACHEGRIND" = true ]; then
-    python3 "$SCRIPT_DIR/infrastructure/cachegrind_processor.py" "$OUTPUT_DIR"
+    if [ "$REFRESH_BASELINE" = "true" ]; then
+        python3 "$SCRIPT_DIR/infrastructure/cachegrind_processor.py" "$OUTPUT_DIR"
+    else
+        python3 "$SCRIPT_DIR/infrastructure/cachegrind_processor.py" "$OUTPUT_DIR" --use-baseline
+    fi
     # Update history log with cachegrind results
     python3 "$SCRIPT_DIR/infrastructure/history_updater.py" "$OUTPUT_DIR"
 else

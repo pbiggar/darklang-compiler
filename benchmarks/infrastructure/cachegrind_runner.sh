@@ -1,6 +1,9 @@
 #!/bin/bash
 # Run cachegrind benchmark for a given problem
 # Usage: ./cachegrind_runner.sh <benchmark_name> <output_dir>
+#
+# By default, only runs Dark and uses cached Rust/Python baselines from HISTORY.md.
+# Set REFRESH_BASELINE=true to re-run Rust and Python.
 
 set -e
 
@@ -31,8 +34,15 @@ echo "{\"benchmark\": \"$BENCHMARK\", \"results\": [" > "$RESULTS_FILE"
 
 FIRST=true
 
+# Determine which implementations to run
+if [ "$REFRESH_BASELINE" = "true" ]; then
+    IMPLS="dark rust"
+else
+    IMPLS="dark"
+fi
+
 # Run cachegrind for each implementation
-for impl in dark rust; do
+for impl in $IMPLS; do
     BINARY="$PROBLEM_DIR/$impl/main"
     if [ -x "$BINARY" ]; then
         echo "  Running cachegrind on $impl..."
@@ -74,8 +84,8 @@ EOF
     fi
 done
 
-# Handle Python separately (run via interpreter)
-if [ -f "$PROBLEM_DIR/python/main.py" ]; then
+# Handle Python separately (run via interpreter) - only if refreshing baseline
+if [ "$REFRESH_BASELINE" = "true" ] && [ -f "$PROBLEM_DIR/python/main.py" ]; then
     if command -v python3 &> /dev/null; then
         echo "  Running cachegrind on python..."
 

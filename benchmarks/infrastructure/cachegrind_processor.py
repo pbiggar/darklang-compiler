@@ -1,12 +1,77 @@
 #!/usr/bin/env python3
 """
 Process cachegrind benchmark results and generate summary reports.
-Usage: python3 cachegrind_processor.py <results_dir>
+Usage: python3 cachegrind_processor.py <results_dir> [--use-baseline]
+
+When --use-baseline is passed, reads Rust/Python baselines from HISTORY.md
+instead of requiring them in the results directory.
 """
 
 import json
+import re
 import sys
 from pathlib import Path
+
+
+def parse_history_baselines(history_path: Path) -> dict:
+    """Parse HISTORY.md to extract the most recent Rust/Python baselines per benchmark.
+
+    Searches through history entries to find the most recent one that has Rust/Python data.
+    """
+    if not history_path.exists():
+        return {}
+
+    content = history_path.read_text()
+
+    # Split by --- to get entries (first part is header)
+    parts = content.split("\n---\n")
+    if len(parts) < 2:
+        return {}
+
+    baselines = {}
+
+    # Search through entries to find ones with Rust/Python data
+    for entry in parts[1:]:  # Skip header
+        current_benchmark = None
+        for line in entry.split("\n"):
+            # Match benchmark header (### factorial, ### fib, etc.)
+            header_match = re.match(r"^###\s+(\w+)", line)
+            if header_match:
+                current_benchmark = header_match.group(1)
+                if current_benchmark not in baselines:
+                    baselines[current_benchmark] = []
+                continue
+
+            if current_benchmark and line.startswith("|"):
+                # Parse table row
+                cols = [p.strip() for p in line.split("|")]
+                if len(cols) >= 9 and cols[1].lower() in ("rust", "python"):
+                    lang = cols[1].lower()
+                    # Skip if we already have this language for this benchmark
+                    if any(b["language"] == lang for b in baselines.get(current_benchmark, [])):
+                        continue
+                    try:
+                        instrs = int(cols[2].replace(",", ""))
+                        data_refs = int(cols[4].replace(",", ""))
+                        d1_misses = int(cols[5].replace(",", ""))
+                        ll_misses = int(cols[6].replace(",", ""))
+                        branches = int(cols[7].replace(",", ""))
+                        mispred_pct = float(cols[8].replace("%", ""))
+                        mispreds = int(branches * mispred_pct / 100)
+
+                        baselines[current_benchmark].append({
+                            "language": lang,
+                            "instructions": instrs,
+                            "data_refs": data_refs,
+                            "d1_misses": d1_misses,
+                            "ll_misses": ll_misses,
+                            "branches": branches,
+                            "branch_mispredicts": mispreds,
+                        })
+                    except (ValueError, IndexError):
+                        pass
+
+    return baselines
 
 
 def format_number(n: int) -> str:
@@ -191,12 +256,25 @@ def update_history(results: dict, output_dir: Path, benchmarks_dir: Path):
         print(f"Cachegrind results appended to: {history_path}")
 
 
+def merge_with_baselines(results: dict, baselines: dict) -> dict:
+    """Merge fresh Dark results with cached Rust/Python baselines."""
+    merged = {}
+    for benchmark, dark_results in results.items():
+        merged[benchmark] = list(dark_results)  # Copy Dark results
+        if benchmark in baselines:
+            # Add Rust/Python from baselines
+            merged[benchmark].extend(baselines[benchmark])
+    return merged
+
+
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python3 cachegrind_processor.py <results_dir>")
+        print("Usage: python3 cachegrind_processor.py <results_dir> [--use-baseline]")
         sys.exit(1)
 
     results_dir = Path(sys.argv[1])
+    use_baseline = "--use-baseline" in sys.argv
+
     if not results_dir.exists():
         print(f"Error: Results directory not found: {results_dir}")
         sys.exit(1)
@@ -208,6 +286,14 @@ def main():
     if not results:
         print("No cachegrind results found.")
         sys.exit(0)
+
+    # If using baseline, merge with cached Rust/Python from history
+    if use_baseline:
+        history_path = benchmarks_dir / "HISTORY.md"
+        baselines = parse_history_baselines(history_path)
+        if baselines:
+            print(f"  Using cached baselines from HISTORY.md")
+            results = merge_with_baselines(results, baselines)
 
     generate_summary(results, results_dir)
     update_history(results, results_dir, benchmarks_dir)
