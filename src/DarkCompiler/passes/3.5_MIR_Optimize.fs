@@ -345,7 +345,8 @@ let tryFoldBinOp (op: BinOp) (left: Operand) (right: Operand) : Operand option =
     | Add, IntConst a, IntConst b -> Some (IntConst (a + b))
     | Sub, IntConst a, IntConst b -> Some (IntConst (a - b))
     | Mul, IntConst a, IntConst b -> Some (IntConst (a * b))
-    | Div, IntConst a, IntConst b when b <> 0L -> Some (IntConst (a / b))
+    // Division: avoid divide by zero and INT64_MIN / -1 overflow
+    | Div, IntConst a, IntConst b when b <> 0L && not (a = System.Int64.MinValue && b = -1L) -> Some (IntConst (a / b))
     | Mod, IntConst a, IntConst b when b <> 0L -> Some (IntConst (a % b))
 
     // Comparisons

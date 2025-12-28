@@ -259,9 +259,9 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                         let t = System.Math.Round(ssaTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 3.5: MIR Optimizations (on SSA form) - DISABLED for now
-                    if verbosity >= 1 then println "  [3.5/8] MIR Optimizations... (disabled)"
-                    let optimizedProgram = ssaProgram
+                    // Pass 3.5: MIR Optimizations (on SSA form)
+                    if verbosity >= 1 then println "  [3.5/8] MIR Optimizations..."
+                    let optimizedProgram = MIR_Optimize.optimizeProgram ssaProgram
 
                     let mirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime
                     if verbosity >= 2 then
