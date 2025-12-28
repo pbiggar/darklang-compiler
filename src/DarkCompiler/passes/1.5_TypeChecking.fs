@@ -525,7 +525,6 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         | Some other -> Error (TypeMismatch (other, TUnit, "unit literal"))
 
     | IntLiteral _ ->
-        // Integer literals are always TInt64
         match expectedType with
         | Some TInt64 | None -> Ok (TInt64, expr)
         | Some other ->

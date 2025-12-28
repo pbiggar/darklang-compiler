@@ -463,6 +463,18 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
             match afterElem with
             | TGt :: remaining -> Ok (TList elemType, remaining)
             | _ -> Error "Expected '>' after List element type")
+    | TIdent "Dict" :: TLt :: rest ->
+        // Dict type: Dict<KeyType, ValueType>
+        parseTypeWithContext typeParams rest
+        |> Result.bind (fun (keyType, afterKey) ->
+            match afterKey with
+            | TComma :: valueRest ->
+                parseTypeWithContext typeParams valueRest
+                |> Result.bind (fun (valueType, afterValue) ->
+                    match afterValue with
+                    | TGt :: remaining -> Ok (TDict (keyType, valueType), remaining)
+                    | _ -> Error "Expected '>' after Dict value type")
+            | _ -> Error "Expected ',' after Dict key type")
     | TIdent typeName :: rest when System.Char.IsUpper(typeName.[0]) ->
         // Could be a simple type or a qualified type like Stdlib.Option.Option
         // First parse the full qualified name
@@ -558,6 +570,18 @@ let rec parseTypeArgType (tokens: Token list) : Result<Type * Token list, string
             match afterElem with
             | TGt :: remaining -> Ok (TList elemType, remaining)
             | _ -> Error "Expected '>' after List element type in type argument")
+    | TIdent "Dict" :: TLt :: rest ->
+        // Dict type: Dict<KeyType, ValueType>
+        parseTypeArgType rest
+        |> Result.bind (fun (keyType, afterKey) ->
+            match afterKey with
+            | TComma :: valueRest ->
+                parseTypeArgType valueRest
+                |> Result.bind (fun (valueType, afterValue) ->
+                    match afterValue with
+                    | TGt :: remaining -> Ok (TDict (keyType, valueType), remaining)
+                    | _ -> Error "Expected '>' after Dict value type in type argument")
+            | _ -> Error "Expected ',' after Dict key type in type argument")
     | TIdent typeName :: rest when System.Char.IsLower(typeName.[0]) ->
         // Lowercase identifier is a type variable in type argument context
         Ok (TVar typeName, rest)
