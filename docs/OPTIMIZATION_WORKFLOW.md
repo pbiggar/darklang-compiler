@@ -107,9 +107,9 @@ src/DarkCompiler/passes/
 ### Implemented (in 3.5_MIR_Optimize.fs)
 - **Dead Code Elimination (DCE)**: Remove unused computations
 - **Constant Folding**: Evaluate constant expressions at compile time
+- **Copy Propagation**: Replace uses with original definitions (note: copies are not propagated into phi sources to preserve control flow semantics)
 - **CFG Simplification**: Remove empty/unreachable blocks
 
 ### Planned
-- **Copy Propagation**: Replace uses with original definitions
 - **Common Subexpression Elimination (CSE)**: Reuse identical computations
 - **Strength Reduction**: Replace expensive ops with cheaper equivalents

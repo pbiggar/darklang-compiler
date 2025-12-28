@@ -245,7 +245,9 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | FileExists (dest, path) -> FileExists (dest, p path)
     | FileWriteText (dest, path, content) -> FileWriteText (dest, p path, p content)
     | FileAppendText (dest, path, content) -> FileAppendText (dest, p path, p content)
-    | Phi (dest, sources) -> Phi (dest, sources |> List.map (fun (src, lbl) -> (p src, lbl)))
+    // Don't propagate copies into phi sources - phis are merge points and their
+    // sources represent values flowing from specific predecessor blocks
+    | Phi (dest, sources) -> Phi (dest, sources)
     | RawAlloc (dest, numBytes) -> RawAlloc (dest, p numBytes)
     | RawFree ptr -> RawFree (p ptr)
     | RawGet (dest, ptr, byteOffset) -> RawGet (dest, p ptr, p byteOffset)
@@ -411,9 +413,9 @@ let applyConstantFolding (cfg: CFG) : CFG * bool =
 /// Run all optimizations until fixed point
 let optimizeCFG (cfg: CFG) : CFG =
     let (cfg1, _) = applyConstantFolding cfg
-    // Copy propagation disabled - still has bugs with ADT patterns
-    let (cfg2, _) = eliminateDeadCode cfg1
-    cfg2
+    let (cfg2, _) = applyCopyPropagation cfg1
+    let (cfg3, _) = eliminateDeadCode cfg2
+    cfg3
 
 /// Optimize a function
 let optimizeFunction (func: Function) : Function =
