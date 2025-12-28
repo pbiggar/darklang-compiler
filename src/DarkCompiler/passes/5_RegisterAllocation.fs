@@ -1052,7 +1052,10 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
     // Float parameters use FVirtual registers (same ID as Virtual)
     // and don't go through linear scan - they map directly in CodeGen
     let floatParamCopyInstrs =
+        // Reverse the order to avoid clobbering: copy from higher-indexed params first
+        // E.g., if D0→D1 and D1→D2, we must do D1→D2 first, then D0→D1
         floatParams
+        |> List.rev
         |> List.map (fun (reg, paramIdx) ->
             match reg with
             | LIR.Virtual id ->

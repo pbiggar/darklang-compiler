@@ -124,10 +124,33 @@ let getPhiNodes (block: BasicBlock) : Instr list =
 let getNonPhiInstrs (block: BasicBlock) : Instr list =
     block.Instrs |> List.filter (fun i -> match i with Phi _ -> false | _ -> true)
 
+/// Build a map from VReg to Type by scanning all Mov instructions with type info
+let buildTypeMap (cfg: CFG) : Map<VReg, AST.Type> =
+    cfg.Blocks
+    |> Map.fold (fun typeMap _ block ->
+        block.Instrs
+        |> List.fold (fun tm instr ->
+            match instr with
+            | Mov (dest, _, Some t) -> Map.add dest t tm
+            | BinOp (dest, _, _, _, operandType) when operandType = AST.TFloat64 ->
+                Map.add dest AST.TFloat64 tm
+            | Call (dest, _, _, _, returnType) when returnType = AST.TFloat64 ->
+                Map.add dest AST.TFloat64 tm
+            | _ -> tm
+        ) typeMap
+    ) Map.empty
+
+/// Infer the type of an operand using the type map
+let inferOperandType (typeMap: Map<VReg, AST.Type>) (src: Operand) : AST.Type option =
+    match src with
+    | FloatRef _ -> Some AST.TFloat64
+    | Register vreg -> Map.tryFind vreg typeMap
+    | _ -> None
+
 /// Insert a copy instruction at the end of a block (before terminator)
 /// For phi node: dest = phi[(v1, L1), (v2, L2), ...]
 /// In predecessor L1: insert "dest = v1" at end
-let insertCopyInPredecessor (cfg: CFG) (predLabel: Label) (dest: VReg) (src: Operand) (_funcName: string) : CFG =
+let insertCopyInPredecessor (cfg: CFG) (predLabel: Label) (dest: VReg) (src: Operand) (typeMap: Map<VReg, AST.Type>) (_funcName: string) : CFG =
     // Skip if source equals dest (self-referential phi)
     let skip =
         match src with
@@ -147,8 +170,11 @@ let insertCopyInPredecessor (cfg: CFG) (predLabel: Label) (dest: VReg) (src: Ope
     else
         let predBlock = Map.find predLabel cfg.Blocks
 
-        // Create copy instruction (Mov with no type - will be handled by LIR)
-        let copyInstr = Mov (dest, src, None)
+        // Infer the type from the source operand
+        let valueType = inferOperandType typeMap src
+
+        // Create copy instruction with inferred type
+        let copyInstr = Mov (dest, src, valueType)
 
         // Add copy at end of predecessor's instructions
         let predBlock' = { predBlock with Instrs = predBlock.Instrs @ [copyInstr] }
@@ -235,6 +261,9 @@ let eliminatePhiNodes (cfg: CFG) (funcName: string) : CFG =
     // Get set of properly defined VRegs
     let definedVRegs = collectProperlyDefinedVRegs cfg
 
+    // Build type map to infer types for phi resolution copies
+    let typeMap = buildTypeMap cfg
+
     cfg.Blocks
     |> Map.fold (fun cfg' label _ ->
         // IMPORTANT: Get the current version of the block from cfg', not the original
@@ -256,7 +285,7 @@ let eliminatePhiNodes (cfg: CFG) (funcName: string) : CFG =
                 | Phi (dest, sources) ->
                     sources
                     |> List.fold (fun c' (src, predLabel) ->
-                        insertCopyInPredecessor c' predLabel dest src funcName
+                        insertCopyInPredecessor c' predLabel dest src typeMap funcName
                     ) c
                 | _ -> c
             ) cfg'

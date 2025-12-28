@@ -93,28 +93,28 @@ def floatChainedOps(x: Float) : Float = (x + 1.0) * 2.0 floatChainedOps(2.0) = s
 // Float comparisons in functions
 // =====================================================
 
-// BUG: Float comparison with parameter fails (register collision)
-// Literals work fine but using float param in comparison gives wrong result
-// def isPositiveFloat(x: Float) : Bool = x > 0.0 isPositiveFloat(1.0) = stdout="true\n"
-// def isPositiveFloat(x: Float) : Bool = x > 0.0 isPositiveFloat(-1.0) = stdout="false\n"
+// Float comparison returning bool
+def isPositiveFloat(x: Float) : Bool = x > 0.0 isPositiveFloat(1.0) = stdout="true\n"
+def isPositiveFloat(x: Float) : Bool = x > 0.0 isPositiveFloat(-1.0) = stdout="false\n"
 
-// BUG: Float equality with parameters fails
-// def floatEq(a: Float, b: Float) : Bool = a == b floatEq(1.0, 1.0) = stdout="true\n"
-// def floatEq(a: Float, b: Float) : Bool = a == b floatEq(1.0, 2.0) = stdout="false\n"
+// Float equality
+def floatEq(a: Float, b: Float) : Bool = a == b floatEq(1.0, 1.0) = stdout="true\n"
+def floatEq(a: Float, b: Float) : Bool = a == b floatEq(1.0, 2.0) = stdout="false\n"
 
-// =====================================================
-// KNOWN BUGS - Float in control flow (NOT YET FIXED)
-// These tests are commented out until the bugs are fixed
-// =====================================================
+// Float less than
+def floatLt(a: Float, b: Float) : Bool = a < b floatLt(1.0, 2.0) = stdout="true\n"
+def floatLt(a: Float, b: Float) : Bool = a < b floatLt(2.0, 1.0) = stdout="false\n"
 
-// BUG: Float in if-then-else fails with "Float code generation not yet implemented"
-// The issue is that MIR.Mov for phi-node-like values doesn't track float types
-// def floatIfThen(a: Int64, b: Int64, c: Float) : Float = if a >= b then c else 0.0 floatIfThen(1, 1, 5.0) = stdout="5.00\n"
-// def floatIfElse(a: Int64, b: Int64, c: Float) : Float = if a >= b then c else 0.0 floatIfElse(0, 1, 5.0) = stdout="0.00\n"
+// Float greater than or equal
+def floatGte(a: Float, b: Float) : Bool = a >= b floatGte(2.0, 2.0) = stdout="true\n"
+def floatGte(a: Float, b: Float) : Bool = a >= b floatGte(1.0, 2.0) = stdout="false\n"
 
-// BUG: Recursive function with float accumulator returns 0.00
-// Same root cause - float values in control flow not handled
-// def floatSumLoop(i: Int64, n: Int64, acc: Float) : Float = if i >= n then acc else floatSumLoop(i + 1, n, acc + 1.0) floatSumLoop(0, 5, 0.0) = stdout="5.00\n"
+// Float in if-then-else with parameters
+def floatIfThen(a: Int64, b: Int64, c: Float) : Float = if a >= b then c else 0.0 floatIfThen(1, 1, 5.0) = stdout="5.00\n"
+def floatIfElse(a: Int64, b: Int64, c: Float) : Float = if a >= b then c else 0.0 floatIfElse(0, 1, 5.0) = stdout="0.00\n"
 
-// BUG: Leibniz pi approximation (uses float in recursive control flow)
-// def leibnizLoop(i: Int64, n: Int64, sum: Float, sign: Float) : Float = if i >= n then sum * 4.0 else let term = sign / Stdlib.Int64.toFloat(2 * i + 1) in leibnizLoop(i + 1, n, sum + term, Stdlib.Float.negate(sign)) def leibnizPi(n: Int64) : Float = leibnizLoop(0, n, 0.0, 1.0) leibnizPi(10) = stdout="3.04\n"
+// Recursive function with float accumulator
+def floatSumLoop(i: Int64, n: Int64, acc: Float) : Float = if i >= n then acc else floatSumLoop(i + 1, n, acc + 1.0) floatSumLoop(0, 5, 0.0) = stdout="5.00\n"
+
+// Leibniz pi approximation (uses float in recursive control flow)
+def leibnizLoop(i: Int64, n: Int64, sum: Float, sign: Float) : Float = if i >= n then sum * 4.0 else let term = sign / Stdlib.Int64.toFloat(2 * i + 1) in leibnizLoop(i + 1, n, sum + term, Stdlib.Float.negate(sign)) def leibnizPi(n: Int64) : Float = leibnizLoop(0, n, 0.0, 1.0) leibnizPi(10) = stdout="3.04\n"

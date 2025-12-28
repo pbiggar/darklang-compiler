@@ -323,11 +323,21 @@ let isFloatAtom (floatRegs: Set<int>) (atom: ANF.Atom) : bool =
 /// Helper to check if a CExpr produces a float value
 let cexprProducesFloat (floatRegs: Set<int>) (cexpr: ANF.CExpr) : bool =
     match cexpr with
-    | ANF.Prim (_, left, right) ->
-        // Binary op is float if either operand is float
-        isFloatAtom floatRegs left || isFloatAtom floatRegs right
+    | ANF.Prim (op, left, right) ->
+        // Comparisons and boolean ops always produce Bool, not Float
+        match op with
+        | ANF.Eq | ANF.Neq | ANF.Lt | ANF.Gt | ANF.Lte | ANF.Gte
+        | ANF.And | ANF.Or -> false
+        // Arithmetic ops produce float if either operand is float
+        | ANF.Add | ANF.Sub | ANF.Mul | ANF.Div | ANF.Mod
+        | ANF.Shl | ANF.Shr | ANF.BitAnd | ANF.BitOr | ANF.BitXor ->
+            isFloatAtom floatRegs left || isFloatAtom floatRegs right
     | ANF.FloatSqrt _ | ANF.FloatAbs _ | ANF.FloatNeg _ | ANF.IntToFloat _ -> true
     | ANF.Atom atom -> isFloatAtom floatRegs atom
+    | ANF.IfValue (_, thenAtom, _) ->
+        // IfValue produces a float if either branch produces a float
+        // (then and else should have the same type, so we check then)
+        isFloatAtom floatRegs thenAtom
     | _ -> false
 
 /// Compute return type for an ANF function by analyzing return statements
@@ -450,6 +460,19 @@ let binOpType (builder: CFGBuilder) (leftAtom: ANF.Atom) (rightAtom: ANF.Atom) :
     | AST.TFloat64, _ | _, AST.TFloat64 -> AST.TFloat64
     | _ -> leftType
 
+/// Get the type of an MIR operand (for generating type-specific instructions)
+let operandType (builder: CFGBuilder) (operand: MIR.Operand) : AST.Type =
+    match operand with
+    | MIR.IntConst _ -> AST.TInt64
+    | MIR.BoolConst _ -> AST.TBool
+    | MIR.FloatRef _ -> AST.TFloat64
+    | MIR.StringRef _ -> AST.TString
+    | MIR.FuncAddr _ -> AST.TInt64  // Function addresses are pointer-sized
+    | MIR.Register (MIR.VReg id) ->
+        // Check if this VReg is known to hold a float
+        if Set.contains id builder.FloatRegs then AST.TFloat64
+        else AST.TInt64  // Default to integer
+
 /// Convert ANF expression to CFG
 /// Returns: Result of (final value operand, CFG builder with all blocks)
 let rec convertExpr
@@ -501,17 +524,20 @@ let rec convertExpr
                             MIR.Terminator = MIR.Branch (condOp, thenLabel, elseLabel)
                         }
 
+                        // Determine the type of the if result (then/else should have same type)
+                        let resultType = atomType builder thenAtom
+
                         // Then block: assign thenAtom to destReg, jump to join
                         let thenBlock = {
                             MIR.Label = thenLabel
-                            MIR.Instrs = [MIR.Mov (destReg, thenOp, None)]
+                            MIR.Instrs = [MIR.Mov (destReg, thenOp, Some resultType)]
                             MIR.Terminator = MIR.Jump joinLabel
                         }
 
                         // Else block: assign elseAtom to destReg, jump to join
                         let elseBlock = {
                             MIR.Label = elseLabel
-                            MIR.Instrs = [MIR.Mov (destReg, elseOp, None)]
+                            MIR.Instrs = [MIR.Mov (destReg, elseOp, Some resultType)]
                             MIR.Terminator = MIR.Jump joinLabel
                         }
 
@@ -766,6 +792,7 @@ let rec convertExpr
 
         // If then-branch created blocks (nested if), patch its join block
         // Otherwise, create a simple block that moves result and jumps
+        let thenResultType = operandType builder2 thenResult
         let builder3 =
             match thenJoinOpt with
             | Some nestedJoinLabel ->
@@ -774,7 +801,7 @@ let rec convertExpr
                 | Some nestedJoinBlock ->
                     let patchedBlock = {
                         nestedJoinBlock with
-                            Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, thenResult, None)]
+                            Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, thenResult, Some thenResultType)]
                             Terminator = MIR.Jump joinLabel
                     }
                     { builder2 with Blocks = Map.add nestedJoinLabel patchedBlock builder2.Blocks }
@@ -783,7 +810,7 @@ let rec convertExpr
                 // Simple expression - create block that moves result and jumps
                 let thenBlock = {
                     MIR.Label = thenLabel
-                    MIR.Instrs = [MIR.Mov (resultReg, thenResult, None)]
+                    MIR.Instrs = [MIR.Mov (resultReg, thenResult, Some thenResultType)]
                     MIR.Terminator = MIR.Jump joinLabel
                 }
                 { builder2 with Blocks = Map.add thenLabel thenBlock builder2.Blocks }
@@ -794,6 +821,7 @@ let rec convertExpr
         | Ok (elseResult, elseJoinOpt, builder4) ->
 
         // Same logic for else-branch
+        let elseResultType = operandType builder4 elseResult
         let builder5 =
             match elseJoinOpt with
             | Some nestedJoinLabel ->
@@ -801,7 +829,7 @@ let rec convertExpr
                 | Some nestedJoinBlock ->
                     let patchedBlock = {
                         nestedJoinBlock with
-                            Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, elseResult, None)]
+                            Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, elseResult, Some elseResultType)]
                             Terminator = MIR.Jump joinLabel
                     }
                     { builder4 with Blocks = Map.add nestedJoinLabel patchedBlock builder4.Blocks }
@@ -809,7 +837,7 @@ let rec convertExpr
             | None ->
                 let elseBlock = {
                     MIR.Label = elseLabel
-                    MIR.Instrs = [MIR.Mov (resultReg, elseResult, None)]
+                    MIR.Instrs = [MIR.Mov (resultReg, elseResult, Some elseResultType)]
                     MIR.Terminator = MIR.Jump joinLabel
                 }
                 { builder4 with Blocks = Map.add elseLabel elseBlock builder4.Blocks }
@@ -879,17 +907,20 @@ and convertExprToOperand
                             MIR.Terminator = MIR.Branch (condOp, thenLabel, elseLabel)
                         }
 
+                        // Determine the type of the if result (then/else should have same type)
+                        let resultType = atomType builder thenAtom
+
                         // Then block: assign thenAtom to destReg, jump to join
                         let thenBlock = {
                             MIR.Label = thenLabel
-                            MIR.Instrs = [MIR.Mov (destReg, thenOp, None)]
+                            MIR.Instrs = [MIR.Mov (destReg, thenOp, Some resultType)]
                             MIR.Terminator = MIR.Jump joinLabel
                         }
 
                         // Else block: assign elseAtom to destReg, jump to join
                         let elseBlock = {
                             MIR.Label = elseLabel
-                            MIR.Instrs = [MIR.Mov (destReg, elseOp, None)]
+                            MIR.Instrs = [MIR.Mov (destReg, elseOp, Some resultType)]
                             MIR.Terminator = MIR.Jump joinLabel
                         }
 
@@ -1134,6 +1165,7 @@ and convertExprToOperand
 
             // If then-branch created blocks (nested if), patch its join block
             // Otherwise, create a simple block that moves result and jumps
+            let thenResultType = operandType builder2 thenResult
             let builder3 =
                 match thenJoinOpt with
                 | Some nestedJoinLabel ->
@@ -1142,7 +1174,7 @@ and convertExprToOperand
                     | Some nestedJoinBlock ->
                         let patchedBlock = {
                             nestedJoinBlock with
-                                Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, thenResult, None)]
+                                Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, thenResult, Some thenResultType)]
                                 Terminator = MIR.Jump joinLabel
                         }
                         { builder2 with Blocks = Map.add nestedJoinLabel patchedBlock builder2.Blocks }
@@ -1151,7 +1183,7 @@ and convertExprToOperand
                     // Simple expression - create block that moves result and jumps
                     let thenBlock = {
                         MIR.Label = thenLabel
-                        MIR.Instrs = [MIR.Mov (resultReg, thenResult, None)]
+                        MIR.Instrs = [MIR.Mov (resultReg, thenResult, Some thenResultType)]
                         MIR.Terminator = MIR.Jump joinLabel
                     }
                     { builder2 with Blocks = Map.add thenLabel thenBlock builder2.Blocks }
@@ -1162,6 +1194,7 @@ and convertExprToOperand
             | Ok (elseResult, elseJoinOpt, builder4) ->
 
             // Same logic for else-branch
+            let elseResultType = operandType builder4 elseResult
             let builder5 =
                 match elseJoinOpt with
                 | Some nestedJoinLabel ->
@@ -1169,7 +1202,7 @@ and convertExprToOperand
                     | Some nestedJoinBlock ->
                         let patchedBlock = {
                             nestedJoinBlock with
-                                Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, elseResult, None)]
+                                Instrs = nestedJoinBlock.Instrs @ [MIR.Mov (resultReg, elseResult, Some elseResultType)]
                                 Terminator = MIR.Jump joinLabel
                         }
                         { builder4 with Blocks = Map.add nestedJoinLabel patchedBlock builder4.Blocks }
@@ -1177,7 +1210,7 @@ and convertExprToOperand
                 | None ->
                     let elseBlock = {
                         MIR.Label = elseLabel
-                        MIR.Instrs = [MIR.Mov (resultReg, elseResult, None)]
+                        MIR.Instrs = [MIR.Mov (resultReg, elseResult, Some elseResultType)]
                         MIR.Terminator = MIR.Jump joinLabel
                     }
                     { builder4 with Blocks = Map.add elseLabel elseBlock builder4.Blocks }
