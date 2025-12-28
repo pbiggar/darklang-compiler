@@ -83,6 +83,16 @@ type SpecKey = string * AST.Type list  // (funcName, typeArgs)
 /// Maps (funcName, typeArgs) -> specialized name
 type SpecRegistry = Map<SpecKey, string>
 
+/// Extract generic function definitions (functions with type parameters)
+/// from a program. Used for on-demand monomorphization of stdlib generics.
+let extractGenericFuncDefs (program: AST.Program) : GenericFuncDefs =
+    let (AST.Program topLevels) = program
+    topLevels
+    |> List.choose (function
+        | AST.FunctionDef f when not (List.isEmpty f.TypeParams) -> Some (f.Name, f)
+        | _ -> None)
+    |> Map.ofList
+
 /// Convert a type to a string for name mangling
 let rec typeToMangledName (t: AST.Type) : string =
     match t with
@@ -974,6 +984,61 @@ let monomorphize (program: AST.Program) : AST.Program =
             | AST.FunctionDef f when not (List.isEmpty f.TypeParams) -> Some (f.Name, f)
             | _ -> None)
         |> Map.ofList
+
+    // Collect all specialization sites from all functions and expressions
+    let allSpecs : Set<SpecKey> =
+        topLevels
+        |> List.map (function
+            | AST.FunctionDef f -> collectTypeAppsFromFunc f
+            | AST.Expression e -> collectTypeApps e
+            | AST.TypeDef _ -> Set.empty)
+        |> List.fold Set.union Set.empty
+
+    // Generate specialized function definitions
+    let specializedFuncs : AST.FunctionDef list =
+        allSpecs
+        |> Set.toList
+        |> List.choose (fun (funcName, typeArgs) ->
+            match Map.tryFind funcName genericFuncDefs with
+            | Some funcDef ->
+                let specialized = specializeFunction funcDef typeArgs
+                // Also replace any TypeApps in the specialized body
+                Some (replaceTypeAppsInFunc specialized)
+            | None -> None)
+
+    // Replace TypeApps with Calls in all original top-levels (except generic function defs)
+    let transformedTopLevels =
+        topLevels
+        |> List.choose (function
+            | AST.FunctionDef f when not (List.isEmpty f.TypeParams) ->
+                // Skip generic function definitions (they're replaced by specializations)
+                None
+            | AST.FunctionDef f ->
+                Some (AST.FunctionDef (replaceTypeAppsInFunc f))
+            | AST.Expression e ->
+                Some (AST.Expression (replaceTypeApps e))
+            | AST.TypeDef td ->
+                Some (AST.TypeDef td))
+
+    // Add specialized functions to the program
+    let specializationTopLevels =
+        specializedFuncs |> List.map AST.FunctionDef
+
+    AST.Program (specializationTopLevels @ transformedTopLevels)
+
+/// Monomorphize a program with access to external generic function definitions.
+/// Used when user code needs to specialize stdlib generics - the stdlib generic
+/// function bodies are passed in as externalGenericDefs so they can be specialized
+/// without merging the full stdlib AST with user code.
+let monomorphizeWithExternalDefs (externalGenericDefs: GenericFuncDefs) (program: AST.Program) : AST.Program =
+    let (AST.Program topLevels) = program
+
+    // Collect generic function definitions from this program
+    let localGenericDefs = extractGenericFuncDefs program
+
+    // Merge external defs with local defs (local takes precedence)
+    let genericFuncDefs =
+        Map.fold (fun acc k v -> Map.add k v acc) externalGenericDefs localGenericDefs
 
     // Collect all specialization sites from all functions and expressions
     let allSpecs : Set<SpecKey> =
@@ -2908,11 +2973,16 @@ let convertProgramWithTypes (program: AST.Program) : Result<ConversionResult, st
 /// Merge two maps, with overlay taking precedence on conflicts
 let private mergeMaps m1 m2 = Map.fold (fun acc k v -> Map.add k v acc) m1 m2
 
-/// Convert user program to ANF and concatenate with pre-compiled stdlib ANF
-/// This avoids re-processing stdlib functions during user compilation
-let convertUserWithStdlib (stdlibResult: ConversionResult) (userProgram: AST.Program) : Result<ConversionResult, string> =
-    // 1. Run transformations on user code only
-    let monomorphizedProgram = monomorphize userProgram
+/// Convert user program to ANF and concatenate with pre-compiled stdlib ANF.
+/// This avoids re-processing stdlib functions during user compilation.
+/// stdlibGenericDefs: Generic function definitions from stdlib needed for specialization
+/// when user code calls generic stdlib functions like Stdlib.List.length<Int64>.
+let convertUserWithStdlib
+    (stdlibGenericDefs: GenericFuncDefs)
+    (stdlibResult: ConversionResult)
+    (userProgram: AST.Program) : Result<ConversionResult, string> =
+    // 1. Run transformations on user code only (with access to stdlib generics)
+    let monomorphizedProgram = monomorphizeWithExternalDefs stdlibGenericDefs userProgram
     let inlinedProgram = inlineLambdasInProgram monomorphizedProgram
     liftLambdasInProgram inlinedProgram
     |> Result.bind (fun liftedProgram ->

@@ -47,6 +47,9 @@ type StdlibResult = {
     TypeCheckEnv: TypeChecking.TypeCheckEnv
     /// ANF conversion result
     ANFResult: AST_to_ANF.ConversionResult
+    /// Generic function definitions for on-demand monomorphization
+    /// (e.g., Stdlib.List.length<t> needs to be specialized when user calls it with Int64)
+    GenericFuncDefs: AST_to_ANF.GenericFuncDefs
 }
 
 /// Load the stdlib.dark file
@@ -101,6 +104,8 @@ let compileStdlib () : Result<StdlibResult, string> =
         match TypeChecking.checkProgramWithEnv withMain with
         | Error e -> Error (TypeChecking.typeErrorToString e)
         | Ok (_, typedStdlib, typeCheckEnv) ->
+            // Extract generic function definitions for on-demand monomorphization
+            let genericFuncDefs = AST_to_ANF.extractGenericFuncDefs typedStdlib
             match AST_to_ANF.convertProgramWithTypes typedStdlib with
             | Error e -> Error e
             | Ok anfResult ->
@@ -109,6 +114,7 @@ let compileStdlib () : Result<StdlibResult, string> =
                     TypedAST = typedStdlib
                     TypeCheckEnv = typeCheckEnv
                     ANFResult = anfResult
+                    GenericFuncDefs = genericFuncDefs
                 }
 
 /// Internal: Compile user code with stdlib AST (shared implementation)
@@ -523,16 +529,15 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     println $"Program type: {TypeChecking.typeToString programType}"
                     println ""
 
-                // Merge stdlib typed AST with user typed AST for ANF conversion
-                // NOTE: Monomorphization requires access to generic function bodies,
-                // so we must merge ASTs before running transformations when user code
-                // calls generic stdlib functions (like Stdlib.List.length<Int64>).
-                // Full separate ANF compilation would require pre-specializing stdlib generics.
-                let mergedTypedAst = mergeTypedPrograms stdlib.TypedAST typedUserAst
-
-                // Pass 2: AST → ANF
-                if verbosity >= 1 then println "  [2/8] AST → ANF..."
-                let anfResult = AST_to_ANF.convertProgramWithTypes mergedTypedAst
+                // Pass 2: AST → ANF (separate compilation)
+                // User code is converted with access to stdlib's generic function definitions
+                // for on-demand specialization, then concatenated with pre-compiled stdlib ANF.
+                if verbosity >= 1 then println "  [2/8] AST → ANF (separate)..."
+                let anfResult =
+                    AST_to_ANF.convertUserWithStdlib
+                        stdlib.GenericFuncDefs
+                        stdlib.ANFResult
+                        typedUserAst
                 let anfTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime
                 if verbosity >= 2 then
                     let t = System.Math.Round(anfTime, 1)
