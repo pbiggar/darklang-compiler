@@ -189,12 +189,141 @@ let getAllDefs (cfg: CFG) : Map<VReg, Set<Label>> =
         ) defSites
     ) Map.empty
 
+/// Extract VRegs used in an operand
+let getOperandUses (op: Operand) : Set<VReg> =
+    match op with
+    | Register vreg -> Set.singleton vreg
+    | _ -> Set.empty
+
+/// Get all variables used (read) in a basic block
+/// Returns set of VRegs that are read in the block
+let getBlockUses (block: BasicBlock) : Set<VReg> =
+    let instrUses =
+        block.Instrs
+        |> List.fold (fun uses instr ->
+            match instr with
+            | Mov (_, src, _) -> Set.union uses (getOperandUses src)
+            | BinOp (_, _, left, right, _) ->
+                uses |> Set.union (getOperandUses left) |> Set.union (getOperandUses right)
+            | UnaryOp (_, _, src) -> Set.union uses (getOperandUses src)
+            | Call (_, _, args) ->
+                args |> List.fold (fun u a -> Set.union u (getOperandUses a)) uses
+            | IndirectCall (_, func, args) ->
+                let funcUses = getOperandUses func
+                let argUses = args |> List.fold (fun u a -> Set.union u (getOperandUses a)) Set.empty
+                uses |> Set.union funcUses |> Set.union argUses
+            | ClosureAlloc (_, _, captures) ->
+                captures |> List.fold (fun u c -> Set.union u (getOperandUses c)) uses
+            | ClosureCall (_, closure, args) ->
+                let closureUses = getOperandUses closure
+                let argUses = args |> List.fold (fun u a -> Set.union u (getOperandUses a)) Set.empty
+                uses |> Set.union closureUses |> Set.union argUses
+            | HeapAlloc _ -> uses
+            | HeapStore (addr, _, src) ->
+                uses |> Set.add addr |> Set.union (getOperandUses src)
+            | HeapLoad (_, addr, _) -> Set.add addr uses
+            | StringConcat (_, left, right) ->
+                uses |> Set.union (getOperandUses left) |> Set.union (getOperandUses right)
+            | RefCountInc (addr, _) -> Set.add addr uses
+            | RefCountDec (addr, _) -> Set.add addr uses
+            | Print (src, _) -> Set.union uses (getOperandUses src)
+            | FileReadText (_, path) -> Set.union uses (getOperandUses path)
+            | FileExists (_, path) -> Set.union uses (getOperandUses path)
+            | FileWriteText (_, path, content) ->
+                uses |> Set.union (getOperandUses path) |> Set.union (getOperandUses content)
+            | FileAppendText (_, path, content) ->
+                uses |> Set.union (getOperandUses path) |> Set.union (getOperandUses content)
+            | Phi (_, sources) ->
+                sources |> List.fold (fun u (src, _) -> Set.union u (getOperandUses src)) uses
+            | RawAlloc (_, numBytes) -> Set.union uses (getOperandUses numBytes)
+            | RawFree ptr -> Set.union uses (getOperandUses ptr)
+            | RawGet (_, ptr, offset) ->
+                uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset)
+            | RawSet (ptr, offset, value) ->
+                uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset) |> Set.union (getOperandUses value)
+        ) Set.empty
+
+    // Also include uses in terminator
+    let termUses =
+        match block.Terminator with
+        | Ret op -> getOperandUses op
+        | Branch (cond, _, _) -> getOperandUses cond
+        | Jump _ -> Set.empty
+
+    Set.union instrUses termUses
+
+/// Get successor labels of a block
+let getSuccessors (block: BasicBlock) : Label list =
+    match block.Terminator with
+    | Ret _ -> []
+    | Jump target -> [target]
+    | Branch (_, trueLabel, falseLabel) -> [trueLabel; falseLabel]
+
+/// Compute liveness information for the CFG
+/// Returns (liveIn, liveOut) maps from Label to Set<VReg>
+/// A variable is live-in at a block if it may be used before being defined
+/// A variable is live-out at a block if it's live-in at any successor
+let computeLiveness (cfg: CFG) : Map<Label, Set<VReg>> * Map<Label, Set<VReg>> =
+    let labels = cfg.Blocks |> Map.keys |> List.ofSeq
+
+    // Precompute uses and defs for each block
+    let blockUses = labels |> List.map (fun l -> (l, getBlockUses (Map.find l cfg.Blocks))) |> Map.ofList
+    let blockDefs = labels |> List.map (fun l -> (l, getBlockDefs (Map.find l cfg.Blocks))) |> Map.ofList
+
+    // Initialize live-out to empty
+    let initialLiveOut = labels |> List.map (fun l -> (l, Set.empty)) |> Map.ofList
+
+    // Iterative dataflow analysis (backward)
+    let rec fixpoint (liveOut: Map<Label, Set<VReg>>) =
+        let (changed, liveOut') =
+            labels
+            |> List.fold (fun (changed, lo) label ->
+                let block = Map.find label cfg.Blocks
+                let successors = getSuccessors block
+
+                // Live-out = union of live-in of all successors
+                let newLiveOut =
+                    successors
+                    |> List.fold (fun acc succ ->
+                        // Live-in of successor = uses + (live-out - defs)
+                        let succUses = Map.find succ blockUses
+                        let succDefs = Map.find succ blockDefs
+                        let succLiveOut = Map.tryFind succ lo |> Option.defaultValue Set.empty
+                        let succLiveIn = Set.union succUses (Set.difference succLiveOut succDefs)
+                        Set.union acc succLiveIn
+                    ) Set.empty
+
+                let oldLiveOut = Map.find label lo
+                if newLiveOut = oldLiveOut then
+                    (changed, lo)
+                else
+                    (true, Map.add label newLiveOut lo)
+            ) (false, liveOut)
+
+        if changed then fixpoint liveOut' else liveOut'
+
+    let finalLiveOut = fixpoint initialLiveOut
+
+    // Compute live-in from live-out
+    let liveIn =
+        labels
+        |> List.map (fun label ->
+            let uses = Map.find label blockUses
+            let defs = Map.find label blockDefs
+            let lo = Map.find label finalLiveOut
+            let li = Set.union uses (Set.difference lo defs)
+            (label, li)
+        )
+        |> Map.ofList
+
+    (liveIn, finalLiveOut)
+
 /// Insert phi nodes at dominance frontiers
 /// For each variable v defined in block b:
 ///   For each block d in DF(b):
-///     Insert phi node for v in d (if not already present)
+///     Insert phi node for v in d (if not already present AND v is live-in at d)
 ///     This also counts as a definition, so recursively process
-let insertPhiNodes (cfg: CFG) (df: DominanceFrontier) (preds: Predecessors) : CFG =
+let insertPhiNodes (cfg: CFG) (df: DominanceFrontier) (preds: Predecessors) (liveIn: Map<Label, Set<VReg>>) (_funcName: string) : CFG =
     let allDefs = getAllDefs cfg
 
     // Worklist algorithm: for each variable, propagate phi insertion
@@ -208,29 +337,34 @@ let insertPhiNodes (cfg: CFG) (df: DominanceFrontier) (preds: Predecessors) : CF
             // Get dominance frontier of this block
             let frontier = Map.tryFind block df |> Option.defaultValue Set.empty
 
-            // For each block in the frontier, insert phi if not already there
+            // For each block in the frontier, insert phi if not already there AND variable is live
             let (worklist'', phiBlocks', cfg'') =
                 frontier
                 |> Set.fold (fun (wl, pb, c) dfBlock ->
                     if Set.contains dfBlock pb then
                         (wl, pb, c)  // Already has phi for this var
                     else
-                        // Insert phi node
-                        let blockPreds = Map.tryFind dfBlock preds |> Option.defaultValue []
-                        // Create phi with placeholder sources (will be renamed later)
-                        let phiSources = blockPreds |> List.map (fun p -> (Register vreg, p))
-                        let phiInstr = Phi (vreg, phiSources)
+                        // Only insert phi if variable is live-in at this block
+                        let blockLiveIn = Map.tryFind dfBlock liveIn |> Option.defaultValue Set.empty
+                        if not (Set.contains vreg blockLiveIn) then
+                            (wl, pb, c)  // Variable not live here, skip phi
+                        else
+                            // Insert phi node
+                            let blockPreds = Map.tryFind dfBlock preds |> Option.defaultValue []
+                            // Create phi with placeholder sources (will be renamed later)
+                            let phiSources = blockPreds |> List.map (fun p -> (Register vreg, p))
+                            let phiInstr = Phi (vreg, phiSources)
 
-                        // Add to block (at the beginning)
-                        let existingBlock = Map.find dfBlock c.Blocks
-                        let newBlock = { existingBlock with Instrs = phiInstr :: existingBlock.Instrs }
-                        let c' = { c with Blocks = Map.add dfBlock newBlock c.Blocks }
+                            // Add to block (at the beginning)
+                            let existingBlock = Map.find dfBlock c.Blocks
+                            let newBlock = { existingBlock with Instrs = phiInstr :: existingBlock.Instrs }
+                            let c' = { c with Blocks = Map.add dfBlock newBlock c.Blocks }
 
-                        // Add to worklist (phi is a definition, may need more phis)
-                        let wl' = Set.add dfBlock wl
-                        let pb' = Set.add dfBlock pb
+                            // Add to worklist (phi is a definition, may need more phis)
+                            let wl' = Set.add dfBlock wl
+                            let pb' = Set.add dfBlock pb
 
-                        (wl', pb', c')
+                            (wl', pb', c')
                 ) (worklist', phiBlocks, cfg')
 
             insertForVar vreg worklist'' phiBlocks' cfg''
@@ -540,7 +674,8 @@ let renameCFG (cfg: CFG) (idoms: Dominators) : CFG =
     let domTree = buildDomTree idoms
 
     // DFS traversal of dominator tree
-    let rec visit (label: Label) (state: RenamingState) (cfg': CFG) : CFG =
+    // Returns (cfg, state) where state has updated NextVersion for siblings
+    let rec visit (label: Label) (state: RenamingState) (cfg': CFG) : CFG * RenamingState =
         let block = Map.find label cfg'.Blocks
 
         // Rename this block
@@ -551,19 +686,27 @@ let renameCFG (cfg: CFG) (idoms: Dominators) : CFG =
         let cfg''' = updatePhiSourcesForSuccessors cfg'' label state'
 
         // Visit children in dominator tree
+        // Thread the state through to preserve NextVersion across siblings
         let children = Map.tryFind label domTree |> Option.defaultValue []
-        let cfg'''' =
+        let (cfg'''', finalState) =
             children
-            |> List.fold (fun c child ->
-                visit child state' c
-            ) cfg'''
+            |> List.fold (fun (c, s) child ->
+                // Each child inherits current versions from state', but uses s.NextVersion
+                let childState = { state' with NextVersion = s.NextVersion }
+                let (c', s') = visit child childState c
+                (c', s')
+            ) (cfg''', state')
 
-        // Pop versions (for backtracking - but in this DFS we don't actually backtrack)
-        cfg''''
+        // Pop versions for backtracking (restore CurrentVersion/VersionStack from before this block)
+        // but keep the NextVersion from children
+        let stateAfterPop = { popVersions finalState block' with NextVersion = finalState.NextVersion }
+
+        (cfg'''', stateAfterPop)
 
     // Start from entry with initial state based on CFG's existing VRegs
     let initialState = createInitialRenamingState cfg
-    visit cfg.Entry initialState cfg
+    let (resultCfg, _) = visit cfg.Entry initialState cfg
+    resultCfg
 
 /// Convert a function to SSA form
 let convertFunctionToSSA (func: Function) : Function =
@@ -572,8 +715,12 @@ let convertFunctionToSSA (func: Function) : Function =
     let idoms = computeDominators cfg preds
     let df = computeDominanceFrontier cfg preds idoms
 
-    // Insert phi nodes
-    let cfgWithPhis = insertPhiNodes cfg df preds
+    // Compute liveness to only insert phi nodes for live variables
+    let (liveIn, _) = computeLiveness cfg
+
+
+    // Insert phi nodes (only for live variables)
+    let cfgWithPhis = insertPhiNodes cfg df preds liveIn func.Name
 
     // Rename variables
     let ssaCFG = renameCFG cfgWithPhis idoms

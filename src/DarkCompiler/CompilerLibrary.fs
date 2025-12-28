@@ -250,12 +250,9 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                         let t = System.Math.Round(mirTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 3.1: SSA Construction - DISABLED
-                    // SSA is disabled because phi node insertion creates invalid phis
-                    // for variables that aren't live on all paths. This requires
-                    // liveness analysis to fix properly.
-                    if verbosity >= 1 then println "  [3.1/8] SSA Construction... (disabled)"
-                    let ssaProgram = mirProgram
+                    // Pass 3.1: SSA Construction (with liveness-aware phi insertion)
+                    if verbosity >= 1 then println "  [3.1/8] SSA Construction..."
+                    let ssaProgram = SSA_Construction.convertToSSA mirProgram
 
                     let ssaTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime
                     if verbosity >= 2 then
@@ -271,9 +268,9 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                         let t = System.Math.Round(mirOptTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 3.9: SSA Destruction - DISABLED (SSA not used)
-                    if verbosity >= 1 then println "  [3.9/8] SSA Destruction... (disabled)"
-                    let mirAfterSSA = optimizedProgram
+                    // Pass 3.9: SSA Destruction
+                    if verbosity >= 1 then println "  [3.9/8] SSA Destruction..."
+                    let mirAfterSSA = SSA_Destruction.destructSSA optimizedProgram
 
                     let ssaDestructTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime - mirOptTime
                     if verbosity >= 2 then

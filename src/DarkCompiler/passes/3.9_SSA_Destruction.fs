@@ -127,7 +127,7 @@ let getNonPhiInstrs (block: BasicBlock) : Instr list =
 /// Insert a copy instruction at the end of a block (before terminator)
 /// For phi node: dest = phi[(v1, L1), (v2, L2), ...]
 /// In predecessor L1: insert "dest = v1" at end
-let insertCopyInPredecessor (cfg: CFG) (predLabel: Label) (dest: VReg) (src: Operand) : CFG =
+let insertCopyInPredecessor (cfg: CFG) (predLabel: Label) (dest: VReg) (src: Operand) (_funcName: string) : CFG =
     // Skip if source equals dest (self-referential phi)
     let skip =
         match src with
@@ -142,11 +142,7 @@ let insertCopyInPredecessor (cfg: CFG) (predLabel: Label) (dest: VReg) (src: Ope
         | Register (VReg id) -> id < 10000
         | _ -> false
 
-    if skip then
-        cfg
-    elif isUnrenamed then
-        // Debug: print skipped unrenamed copies
-        // printfn "    Skipping unrenamed copy in %A: %A = %A" predLabel dest src
+    if skip || isUnrenamed then
         cfg
     else
         let predBlock = Map.find predLabel cfg.Blocks
@@ -235,12 +231,14 @@ let collectProperlyDefinedVRegs (cfg: CFG) : Set<VReg> =
     fixpoint nonPhiDefs
 
 /// Replace phi nodes with copies in predecessors
-let eliminatePhiNodes (cfg: CFG) : CFG =
+let eliminatePhiNodes (cfg: CFG) (funcName: string) : CFG =
     // Get set of properly defined VRegs
     let definedVRegs = collectProperlyDefinedVRegs cfg
 
     cfg.Blocks
-    |> Map.fold (fun cfg' label block ->
+    |> Map.fold (fun cfg' label _ ->
+        // IMPORTANT: Get the current version of the block from cfg', not the original
+        let block = Map.find label cfg'.Blocks
         let phis = getPhiNodes block
 
         // Filter to only phi nodes whose destinations are properly defined
@@ -258,14 +256,16 @@ let eliminatePhiNodes (cfg: CFG) : CFG =
                 | Phi (dest, sources) ->
                     sources
                     |> List.fold (fun c' (src, predLabel) ->
-                        insertCopyInPredecessor c' predLabel dest src
+                        insertCopyInPredecessor c' predLabel dest src funcName
                     ) c
                 | _ -> c
             ) cfg'
 
         // Remove ALL phi nodes from this block (including invalid ones)
-        let nonPhis = getNonPhiInstrs block
-        let block' = { block with Instrs = nonPhis }
+        // IMPORTANT: Get the current version of the block again (may have changed)
+        let updatedBlock = Map.find label cfg''.Blocks
+        let nonPhis = getNonPhiInstrs updatedBlock
+        let block' = { updatedBlock with Instrs = nonPhis }
         { cfg'' with Blocks = Map.add label block' cfg''.Blocks }
     ) cfg
 
@@ -275,7 +275,7 @@ let destructSSAInFunction (func: Function) (labelGen: LabelGen) : Function * Lab
     let (cfg', labelGen') = splitCriticalEdges func.CFG labelGen
 
     // Eliminate phi nodes
-    let cfg'' = eliminatePhiNodes cfg'
+    let cfg'' = eliminatePhiNodes cfg' func.Name
 
     ({ func with CFG = cfg'' }, labelGen')
 

@@ -4,6 +4,30 @@ Performance history of Darklang compiler across versions (instruction counts via
 
 ---
 
+## 2025-12-28 11:12:39
+
+**Commit:** `550a9f37` - Fix ARM64 stack offsets, improve SSA phi handling
+
+### factorial
+
+| Language | Instructions | vs Rust  | Data Refs | L1 Miss | LL Miss | Branches | Mispred |
+|----------|--------------|----------|-----------|---------|---------|----------|---------|
+|     Dark |    7,350,221 | baseline | 4,440,060 |  29,807 |  25,982 |  210,024 |    4.8% |
+
+### fib
+
+| Language | Instructions  | vs Rust  | Data Refs   | L1 Miss | LL Miss | Branches   | Mispred |
+|----------|---------------|----------|-------------|---------|---------|------------|---------|
+|     Dark | 1,015,264,001 | baseline | 642,005,141 |      55 |      67 | 29,860,714 |    9.0% |
+
+### sum_to_n
+
+| Language | Instructions | vs Rust  | Data Refs  | L1 Miss   | LL Miss   | Branches  | Mispred |
+|----------|--------------|----------|------------|-----------|-----------|-----------|---------|
+|     Dark |   39,007,544 | baseline | 21,004,549 | 2,949,759 | 2,185,615 | 1,000,213 |    0.0% |
+---
+
+
 ## 2025-12-28 09:58:08
 
 **Commit:** `40f939c3` - Cache Rust/Python benchmark baselines from HISTORY.md
@@ -25,6 +49,23 @@ Performance history of Darklang compiler across versions (instruction counts via
 | Language | Instructions | vs Rust  | Data Refs  | L1 Miss   | LL Miss   | Branches  | Mispred |
 |----------|--------------|----------|------------|-----------|-----------|-----------|---------|
 |     Dark |   38,007,343 | baseline | 22,004,649 | 2,949,759 | 2,185,614 | 1,000,213 |    0.0% |
+#### Instruction Counts (Cachegrind)
+
+**factorial:**
+- Rust: 255,726 (0.03x)
+- Dark: 7,350,221 (baseline)
+- Python: 182,064,112 (24.8x)
+
+**fib:**
+- Rust: 272,526,559 (0.27x)
+- Dark: 1,015,264,001 (baseline)
+- Python: 15,135,188,032 (14.9x)
+
+**sum_to_n:**
+- Rust: 255,662 (0.01x)
+- Dark: 39,007,544 (baseline)
+- Python: 940,685,845 (24.1x)
+
 ---
 
 
