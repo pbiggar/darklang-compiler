@@ -1411,12 +1411,15 @@ let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: M
     let floatPool = buildFloatPool allFloats
     let fltLookup = buildFloatLookup floatPool
 
+    // Build return type registry for all functions (needed for caller to know return type)
+    let returnTypeReg = buildReturnTypeReg functions typeMap typeReg
+
     // Phase 2: Convert all functions to MIR (skip main/_start)
     let rec convertFunctions funcs rg remaining =
         match remaining with
         | [] -> Ok (funcs, rg)
         | anfFunc :: rest ->
-            match convertANFFunction anfFunc rg strLookup fltLookup typeMap typeReg with
+            match convertANFFunction anfFunc rg strLookup fltLookup typeMap typeReg returnTypeReg with
             | Error err -> Error err
             | Ok (mirFunc, rg') -> convertFunctions (funcs @ [mirFunc]) rg' rest
 
@@ -1450,8 +1453,8 @@ let private offsetInstr (strOffset: int) (fltOffset: int) (instr: MIR.Instr) : M
     | MIR.Mov (dest, src, vt) -> MIR.Mov (dest, offsetOperand strOffset fltOffset src, vt)
     | MIR.BinOp (dest, op, left, right, t) -> MIR.BinOp (dest, op, offsetOperand strOffset fltOffset left, offsetOperand strOffset fltOffset right, t)
     | MIR.UnaryOp (dest, op, src) -> MIR.UnaryOp (dest, op, offsetOperand strOffset fltOffset src)
-    | MIR.Call (dest, name, args) -> MIR.Call (dest, name, offsetOperands strOffset fltOffset args)
-    | MIR.IndirectCall (dest, func, args) -> MIR.IndirectCall (dest, offsetOperand strOffset fltOffset func, offsetOperands strOffset fltOffset args)
+    | MIR.Call (dest, name, args, argTypes, retType) -> MIR.Call (dest, name, offsetOperands strOffset fltOffset args, argTypes, retType)
+    | MIR.IndirectCall (dest, func, args, argTypes, retType) -> MIR.IndirectCall (dest, offsetOperand strOffset fltOffset func, offsetOperands strOffset fltOffset args, argTypes, retType)
     | MIR.ClosureAlloc (dest, name, caps) -> MIR.ClosureAlloc (dest, name, offsetOperands strOffset fltOffset caps)
     | MIR.ClosureCall (dest, closure, args) -> MIR.ClosureCall (dest, offsetOperand strOffset fltOffset closure, offsetOperands strOffset fltOffset args)
     | MIR.HeapAlloc (dest, size) -> MIR.HeapAlloc (dest, size)
@@ -1500,6 +1503,8 @@ let private offsetFunction (strOffset: int) (fltOffset: int) (func: MIR.Function
         |> Map.map (fun _ block -> offsetBlock strOffset fltOffset block)
     { Name = func.Name
       Params = func.Params
+      ParamTypes = func.ParamTypes
+      ReturnType = func.ReturnType
       CFG = { Entry = func.CFG.Entry; Blocks = offsetBlocks } }
 
 /// Append a user string pool to stdlib string pool with offset

@@ -1076,7 +1076,7 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.FNeg _ | LIR.FAbs _ | LIR.FSqrt _ | LIR.FCmp _ | LIR.IntToFloat _ | LIR.FloatToInt _
     | LIR.HeapAlloc _ | LIR.HeapLoad _ | LIR.RefCountInc _ | LIR.RefCountDec _
     | LIR.PrintHeapString _ | LIR.LoadFuncAddr _ | LIR.RawAlloc _ | LIR.RawFree _
-    | LIR.RawGet _ | LIR.RawSet _ -> instr
+    | LIR.RawGet _ | LIR.RawSet _ | LIR.FArgMoves _ -> instr
 
 /// Offset pool references in an LIR basic block
 let private offsetLIRBlock (strOffset: int) (fltOffset: int) (block: LIR.BasicBlock) : LIR.BasicBlock =
@@ -1091,6 +1091,7 @@ let offsetLIRFunction (strOffset: int) (fltOffset: int) (func: LIR.Function) : L
         |> Map.map (fun _ block -> offsetLIRBlock strOffset fltOffset block)
     { Name = func.Name
       Params = func.Params
+      ParamTypes = func.ParamTypes
       CFG = { Entry = func.CFG.Entry; Blocks = offsetBlocks }
       StackSize = func.StackSize
       UsedCalleeSaved = func.UsedCalleeSaved }
