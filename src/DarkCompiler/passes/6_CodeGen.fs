@@ -1021,26 +1021,53 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             [ARM64.BLR funcPtrReg])
 
     | LIR.SaveRegs ->
-        // Save caller-saved registers (X1-X10) before call
-        // Allocate 80 bytes (10 regs * 8 bytes), store pairs
+        // Save caller-saved registers (X1-X10 and D0-D7) before call
+        // D0 is saved because it may contain a live float parameter.
+        // The return value is captured BEFORE RestoreRegs runs, so D0 can be
+        // safely restored to its pre-call value.
+        // Layout: X1-X10 at SP+0..SP+72, D0-D7 at SP+80..SP+136
+        // Total: 144 bytes (aligned for 16-byte requirement)
         Ok [
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 80us)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 144us)
+            // Save integer registers X1-X10
             ARM64.STP (ARM64.X1, ARM64.X2, ARM64.SP, 0s)
             ARM64.STP (ARM64.X3, ARM64.X4, ARM64.SP, 16s)
             ARM64.STP (ARM64.X5, ARM64.X6, ARM64.SP, 32s)
             ARM64.STP (ARM64.X7, ARM64.X8, ARM64.SP, 48s)
             ARM64.STP (ARM64.X9, ARM64.X10, ARM64.SP, 64s)
+            // Save float registers D0-D7 (caller-saved per AAPCS64)
+            ARM64.STR_fp (ARM64.D0, ARM64.SP, 80s)
+            ARM64.STR_fp (ARM64.D1, ARM64.SP, 88s)
+            ARM64.STR_fp (ARM64.D2, ARM64.SP, 96s)
+            ARM64.STR_fp (ARM64.D3, ARM64.SP, 104s)
+            ARM64.STR_fp (ARM64.D4, ARM64.SP, 112s)
+            ARM64.STR_fp (ARM64.D5, ARM64.SP, 120s)
+            ARM64.STR_fp (ARM64.D6, ARM64.SP, 128s)
+            ARM64.STR_fp (ARM64.D7, ARM64.SP, 136s)
         ]
 
     | LIR.RestoreRegs ->
-        // Restore caller-saved registers (X1-X10) after call
+        // Restore caller-saved registers (X1-X10 and D0-D7) after call
+        // The return value has already been captured to its destination before
+        // RestoreRegs runs, so D0 can be safely restored to preserve any live
+        // float parameter that was in D0 before the call.
         Ok [
+            // Restore integer registers X1-X10
             ARM64.LDP (ARM64.X1, ARM64.X2, ARM64.SP, 0s)
             ARM64.LDP (ARM64.X3, ARM64.X4, ARM64.SP, 16s)
             ARM64.LDP (ARM64.X5, ARM64.X6, ARM64.SP, 32s)
             ARM64.LDP (ARM64.X7, ARM64.X8, ARM64.SP, 48s)
             ARM64.LDP (ARM64.X9, ARM64.X10, ARM64.SP, 64s)
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 80us)
+            // Restore float registers D0-D7
+            ARM64.LDR_fp (ARM64.D0, ARM64.SP, 80s)
+            ARM64.LDR_fp (ARM64.D1, ARM64.SP, 88s)
+            ARM64.LDR_fp (ARM64.D2, ARM64.SP, 96s)
+            ARM64.LDR_fp (ARM64.D3, ARM64.SP, 104s)
+            ARM64.LDR_fp (ARM64.D4, ARM64.SP, 112s)
+            ARM64.LDR_fp (ARM64.D5, ARM64.SP, 120s)
+            ARM64.LDR_fp (ARM64.D6, ARM64.SP, 128s)
+            ARM64.LDR_fp (ARM64.D7, ARM64.SP, 136s)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 144us)
         ]
 
     | LIR.ArgMoves moves ->

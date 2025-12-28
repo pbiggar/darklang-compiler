@@ -438,18 +438,29 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         let restoreInstrs = [LIR.RestoreRegs]
 
         // Move return value from X0 or D0 to destination based on return type
+        // For float returns, we use D8 (callee-saved) as intermediate to avoid conflicts:
+        // - Save D0 to D8 BEFORE RestoreRegs (which clobbers D0)
+        // - After RestoreRegs, copy from D8 to destination
+        // This handles the case where destFReg maps to D0 (which would be clobbered by RestoreRegs).
         let moveResult =
             if returnType = AST.TFloat64 then
-                // Float return: value is in D0, move to FVirtual
+                // Float return: value is in D0, use D8 as safe intermediate
                 let destFReg = vregToLIRFReg dest
-                [LIR.FMov (destFReg, LIR.FPhysical LIR.D0)]
+                // First save D0 to D8 (callee-saved, not touched by RestoreRegs)
+                let saveToD8 = [LIR.FMov (LIR.FPhysical LIR.D8, LIR.FPhysical LIR.D0)]
+                // After RestoreRegs, copy from D8 to actual destination
+                let copyToFinal = [LIR.FMov (destFReg, LIR.FPhysical LIR.D8)]
+                (saveToD8, copyToFinal)
             else
                 // Integer return: value is in X0
-                match lirDest with
-                | LIR.Physical LIR.X0 -> []
-                | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
+                let intMove =
+                    match lirDest with
+                    | LIR.Physical LIR.X0 -> []
+                    | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
+                ([], intMove)
 
-        Ok (saveInstrs @ intArgMoves @ floatArgMoves @ [callInstr] @ restoreInstrs @ moveResult)
+        let (saveReturnValue, copyReturnValue) = moveResult
+        Ok (saveInstrs @ intArgMoves @ floatArgMoves @ [callInstr] @ saveReturnValue @ restoreInstrs @ copyReturnValue)
 
     | MIR.IndirectCall (dest, func, args, _argTypes, returnType) ->
         // Indirect call through function pointer (BLR instruction)
