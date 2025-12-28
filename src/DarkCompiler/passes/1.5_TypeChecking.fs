@@ -1132,8 +1132,66 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             Error (TypeMismatch (expected, partialType, $"partial application of {funcName}"))
                         | _ -> Ok (partialType, lambdaExpr))
                 else if numArgs < numParams then
-                    // Partial application of generic module function not yet supported
-                    Error (GenericError $"Partial application of generic function {funcName} not yet supported")
+                    // Partial application of generic module function
+                    let providedParamTypes = List.take numArgs paramTypes
+                    let remainingParamTypes = List.skip numArgs paramTypes
+
+                    // Type-check provided arguments and collect bindings for type inference
+                    let rec checkArgsAndInfer remaining paramTys accArgs accBindings =
+                        match remaining, paramTys with
+                        | [], [] -> Ok (List.rev accArgs, accBindings)
+                        | arg :: restArgs, paramT :: restParams ->
+                            checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
+                            |> Result.bind (fun (argType, arg') ->
+                                // Match param type against arg type to get type variable bindings
+                                match matchTypes paramT argType with
+                                | Ok bindings ->
+                                    checkArgsAndInfer restArgs restParams (arg' :: accArgs) (accBindings @ bindings)
+                                | Error msg ->
+                                    Error (TypeMismatch (paramT, argType, $"argument to {funcName}: {msg}")))
+                        | _ -> Error (GenericError "Internal error: argument/param length mismatch")
+
+                    checkArgsAndInfer args providedParamTypes [] []
+                    |> Result.bind (fun (args', bindings) ->
+                        // Consolidate bindings and build substitution
+                        consolidateBindings bindings
+                        |> Result.mapError GenericError
+                        |> Result.bind (fun bindingMap ->
+                            // Build type arguments list from inferred bindings
+                            // For partial application, some type params may not be inferrable yet
+                            let inferredTypeArgs =
+                                typeParams
+                                |> List.map (fun paramName ->
+                                    match Map.tryFind paramName bindingMap with
+                                    | Some typ -> typ
+                                    | None -> TVar paramName)  // Keep as type variable if not inferred
+
+                            // Build full substitution (inferred types only, not type vars)
+                            let subst = bindingMap
+
+                            // Apply substitution to remaining param types and return type
+                            let concreteRemainingTypes = remainingParamTypes |> List.map (applySubst subst)
+                            let concreteReturnType = applySubst subst returnType
+
+                            // Create unique parameter names for the remaining parameters
+                            let remainingParams =
+                                concreteRemainingTypes
+                                |> List.map (fun t -> (freshPartialParam (), t))
+
+                            // Create the lambda body: TypeApp call with all args
+                            let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
+                            let lambdaBody = TypeApp (funcName, inferredTypeArgs, allArgs)
+
+                            // Create the lambda
+                            let lambdaExpr = Lambda (remainingParams, lambdaBody)
+
+                            // The resulting type is a function from remaining params to return type
+                            let partialType = TFunction (concreteRemainingTypes, concreteReturnType)
+
+                            match expectedType with
+                            | Some expected when not (typesCompatible expected partialType) ->
+                                Error (TypeMismatch (expected, partialType, $"partial application of {funcName}"))
+                            | _ -> Ok (partialType, lambdaExpr)))
                 else if not (List.isEmpty typeParams) then
                     // Generic module function: infer type arguments from actual argument types
                     // First, type-check all arguments with expected parameter types
@@ -1204,9 +1262,50 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     let concreteParamTypes = List.map (applySubst subst) paramTypes
                     let concreteReturnType = applySubst subst returnType
 
-                    // 5. Check argument count
-                    if List.length args <> List.length concreteParamTypes then
-                        Error (GenericError $"Function {funcName} expects {List.length concreteParamTypes} arguments, got {List.length args}")
+                    // 5. Check argument count - allow partial application
+                    let numArgs = List.length args
+                    let numParams = List.length concreteParamTypes
+                    if numArgs > numParams then
+                        Error (GenericError $"Function {funcName} expects {numParams} arguments, got {numArgs}")
+                    else if numArgs < numParams then
+                        // Partial application with explicit type args
+                        let providedParamTypes = List.take numArgs concreteParamTypes
+                        let remainingParamTypes = List.skip numArgs concreteParamTypes
+
+                        // Type-check the provided arguments
+                        let rec checkProvidedArgs remaining paramTys accArgs =
+                            match remaining, paramTys with
+                            | [], [] -> Ok (List.rev accArgs)
+                            | arg :: restArgs, paramT :: restParams ->
+                                checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
+                                |> Result.bind (fun (argType, arg') ->
+                                    if typesEqual aliasReg argType paramT then
+                                        checkProvidedArgs restArgs restParams (arg' :: accArgs)
+                                    else
+                                        Error (TypeMismatch (paramT, argType, $"argument to {funcName}")))
+                            | _ -> Error (GenericError "Internal error: argument/param length mismatch")
+
+                        checkProvidedArgs args providedParamTypes []
+                        |> Result.bind (fun args' ->
+                            // Create unique parameter names for the remaining parameters
+                            let remainingParams =
+                                remainingParamTypes
+                                |> List.map (fun t -> (freshPartialParam (), t))
+
+                            // Create the lambda body: TypeApp call with all args
+                            let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
+                            let lambdaBody = TypeApp (funcName, typeArgs, allArgs)
+
+                            // Create the lambda
+                            let lambdaExpr = Lambda (remainingParams, lambdaBody)
+
+                            // The resulting type is a function from remaining params to return type
+                            let partialType = TFunction (remainingParamTypes, concreteReturnType)
+
+                            match expectedType with
+                            | Some expected when not (typesCompatible expected partialType) ->
+                                Error (TypeMismatch (expected, partialType, $"partial application of {funcName}"))
+                            | _ -> Ok (partialType, lambdaExpr))
                     else
                         // 6. Type check each argument and collect transformed args
                         let rec checkArgsWithTypes remaining paramTys accArgs =
@@ -1248,9 +1347,50 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     let concreteParamTypes = List.map (applySubst subst) paramTypes
                     let concreteReturnType = applySubst subst returnType
 
-                    // Check argument count
-                    if List.length args <> List.length concreteParamTypes then
-                        Error (GenericError $"Function {funcName} expects {List.length concreteParamTypes} arguments, got {List.length args}")
+                    // Check argument count - allow partial application
+                    let numArgs = List.length args
+                    let numParams = List.length concreteParamTypes
+                    if numArgs > numParams then
+                        Error (GenericError $"Function {funcName} expects {numParams} arguments, got {numArgs}")
+                    else if numArgs < numParams then
+                        // Partial application with explicit type args
+                        let providedParamTypes = List.take numArgs concreteParamTypes
+                        let remainingParamTypes = List.skip numArgs concreteParamTypes
+
+                        // Type-check the provided arguments
+                        let rec checkProvidedArgs remaining paramTys accArgs =
+                            match remaining, paramTys with
+                            | [], [] -> Ok (List.rev accArgs)
+                            | arg :: restArgs, paramT :: restParams ->
+                                checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
+                                |> Result.bind (fun (argType, arg') ->
+                                    if typesEqual aliasReg argType paramT then
+                                        checkProvidedArgs restArgs restParams (arg' :: accArgs)
+                                    else
+                                        Error (TypeMismatch (paramT, argType, $"argument to {funcName}")))
+                            | _ -> Error (GenericError "Internal error: argument/param length mismatch")
+
+                        checkProvidedArgs args providedParamTypes []
+                        |> Result.bind (fun args' ->
+                            // Create unique parameter names for the remaining parameters
+                            let remainingParams =
+                                remainingParamTypes
+                                |> List.map (fun t -> (freshPartialParam (), t))
+
+                            // Create the lambda body: TypeApp call with all args
+                            let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
+                            let lambdaBody = TypeApp (funcName, typeArgs, allArgs)
+
+                            // Create the lambda
+                            let lambdaExpr = Lambda (remainingParams, lambdaBody)
+
+                            // The resulting type is a function from remaining params to return type
+                            let partialType = TFunction (remainingParamTypes, concreteReturnType)
+
+                            match expectedType with
+                            | Some expected when not (typesCompatible expected partialType) ->
+                                Error (TypeMismatch (expected, partialType, $"partial application of {funcName}"))
+                            | _ -> Ok (partialType, lambdaExpr))
                     else
                         // Type check each argument and collect transformed args
                         let rec checkArgsWithTypes remaining paramTys accArgs =

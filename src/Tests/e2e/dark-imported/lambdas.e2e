@@ -161,6 +161,10 @@ def g(a: Int64, b: Int64, c: Int64): Int64 = a + b + c let g1 = g(1) in let g2 =
 // Partial application of lambda
 let addL = (x: Int64, y: Int64) => x + y in let add10 = addL(10) in add10(5) = 15
 
+// Partial application of generic stdlib function
+// fold<a, b>(list, init, fn) - partially apply list and init, then provide fn
+let sumList = Stdlib.List.fold<Int64, Int64>([1, 2, 3], 0) in sumList((acc: Int64, x: Int64) => acc + x) = 6
+
 // ===================================================================
 // Lambda with Boolean Operations
 // ===================================================================
