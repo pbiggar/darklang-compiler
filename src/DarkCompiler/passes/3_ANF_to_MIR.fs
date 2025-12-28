@@ -1357,7 +1357,8 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
 /// Convert ANF program to MIR program
 /// mainExprType: the type of the main expression (used for _start's return type)
 /// variantLookup: mapping from variant names to type info (for enum printing)
-let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (mainExprType: AST.Type) (variantLookup: AST_to_ANF.VariantLookup) : Result<MIR.Program * MIR.RegGen, string> =
+/// recordRegistry: mapping from record type names to field info (for record printing)
+let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (mainExprType: AST.Type) (variantLookup: AST_to_ANF.VariantLookup) (recordRegistry: MIR.RecordRegistry) : Result<MIR.Program * MIR.RegGen, string> =
     let (ANF.Program (functions, mainExpr)) = program
 
     // Critical: freshReg must generate VRegs that don't conflict with TempId-derived VRegs.
@@ -1423,12 +1424,13 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
     }
     let allFuncs = mirFuncs @ [startFunc]
     let variantRegistry = buildVariantRegistry variantLookup
-    Ok (MIR.Program (allFuncs, stringPool, floatPool, variantRegistry), finalBuilder.RegGen)
+    // recordRegistry is passed in from ConversionResult.TypeReg
+    Ok (MIR.Program (allFuncs, stringPool, floatPool, variantRegistry, recordRegistry), finalBuilder.RegGen)
 
 /// Convert ANF program to MIR (functions only, no _start)
 /// Use for stdlib where there's no real main expression to convert.
-/// Returns just the function list, pools, and variant registry without wrapping in MIR.Program.
-let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (variantLookup: AST_to_ANF.VariantLookup) : Result<MIR.Function list * MIR.StringPool * MIR.FloatPool * MIR.VariantRegistry, string> =
+/// Returns just the function list, pools, variant registry, and record registry without wrapping in MIR.Program.
+let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (variantLookup: AST_to_ANF.VariantLookup) (recordRegistry: MIR.RecordRegistry) : Result<MIR.Function list * MIR.StringPool * MIR.FloatPool * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     let (ANF.Program (functions, _mainExpr)) = program
 
     // Same regGen calculation as toMIR
@@ -1460,7 +1462,7 @@ let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: M
     | Error err -> Error err
     | Ok (mirFuncs, _) ->
         let variantRegistry = buildVariantRegistry variantLookup
-        Ok (mirFuncs, stringPool, floatPool, variantRegistry)
+        Ok (mirFuncs, stringPool, floatPool, variantRegistry, recordRegistry)
 
 // ============================================================================
 // MIR Program Merging (for stdlib MIR caching optimization)
@@ -1583,8 +1585,8 @@ let appendFloatPools (stdlibPool: MIR.FloatPool) (userPool: MIR.FloatPool) : MIR
 /// Offsets user's StringRef/FloatRef indices to account for stdlib pools.
 /// Excludes stdlib's _start function (user's _start is the entry point).
 let mergeMIRPrograms (stdlibMIR: MIR.Program) (userMIR: MIR.Program) : MIR.Program =
-    let (MIR.Program (stdlibFuncs, stdlibStrings, stdlibFloats, stdlibVariants)) = stdlibMIR
-    let (MIR.Program (userFuncs, userStrings, userFloats, userVariants)) = userMIR
+    let (MIR.Program (stdlibFuncs, stdlibStrings, stdlibFloats, stdlibVariants, stdlibRecords)) = stdlibMIR
+    let (MIR.Program (userFuncs, userStrings, userFloats, userVariants, userRecords)) = userMIR
 
     let stringOffset = stdlibStrings.NextId
     let floatOffset = stdlibFloats.NextId
@@ -1602,4 +1604,7 @@ let mergeMIRPrograms (stdlibMIR: MIR.Program) (userMIR: MIR.Program) : MIR.Progr
     // Merge variant registries (user overrides stdlib for same type names)
     let mergedVariants = Map.fold (fun acc k v -> Map.add k v acc) stdlibVariants userVariants
 
-    MIR.Program (stdlibFuncsNoStart @ offsetUserFuncs, mergedStrings, mergedFloats, mergedVariants)
+    // Merge record registries (user overrides stdlib for same type names)
+    let mergedRecords = Map.fold (fun acc k v -> Map.add k v acc) stdlibRecords userRecords
+
+    MIR.Program (stdlibFuncsNoStart @ offsetUserFuncs, mergedStrings, mergedFloats, mergedVariants, mergedRecords)

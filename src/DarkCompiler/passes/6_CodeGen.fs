@@ -887,6 +887,69 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
 
             setup @ variantCode @ printNewline)
 
+    | LIR.PrintRecord (recordPtr, typeName, fields) ->
+        // Print record: TypeName { field1 = val1, field2 = val2, ... }\n
+        // Record layout: [field0, field1, field2, ...] on heap (each 8 bytes)
+        lirRegToARM64Reg recordPtr
+        |> Result.map (fun recordReg ->
+            let os =
+                match Platform.detectOS () with
+                | Ok platform -> platform
+                | Error _ -> Platform.Linux
+            let syscalls = Platform.getSyscallNumbers os
+
+            // Helper: generate code to print a string literal
+            let printLiteral (s: string) =
+                let bytes = System.Text.Encoding.UTF8.GetBytes(s)
+                if bytes.Length = 0 then []
+                else
+                    let alignedSize = max 16 ((bytes.Length + 15) &&& ~~~15)
+                    [ARM64.SUB_imm (ARM64.SP, ARM64.SP, uint16 alignedSize)] @
+                    (bytes |> Array.toList |> List.mapi (fun i b ->
+                        [ARM64.MOVZ (ARM64.X0, uint16 b, 0); ARM64.STRB (ARM64.X0, ARM64.SP, i)]
+                    ) |> List.concat) @
+                    [ARM64.MOVZ (ARM64.X0, 1us, 0);
+                     ARM64.MOV_reg (ARM64.X1, ARM64.SP);
+                     ARM64.MOVZ (ARM64.X2, uint16 bytes.Length, 0);
+                     ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0);
+                     ARM64.SVC syscalls.SvcImmediate;
+                     ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 alignedSize)]
+
+            // Save record pointer in callee-saved register X19
+            let setup = [ARM64.MOV_reg (ARM64.X19, recordReg)]
+
+            // Print type name and opening brace
+            let printHeader = printLiteral (typeName + " { ")
+
+            // Print each field: "fieldName = value" with ", " separator between fields
+            let printFields =
+                fields
+                |> List.mapi (fun i (fieldName, fieldType) ->
+                    let printFieldName = printLiteral (fieldName + " = ")
+                    let offset = int16 (i * 8)  // Each field is 8 bytes
+                    let loadField = [ARM64.LDR (ARM64.X0, ARM64.X19, offset)]
+                    let printValue =
+                        match fieldType with
+                        | AST.TInt64 -> Runtime.generatePrintIntNoNewline ()
+                        | AST.TBool -> Runtime.generatePrintBoolNoNewline ()
+                        | AST.TFloat64 ->
+                            [ARM64.FMOV_from_gp (ARM64.D0, ARM64.X0)] @ Runtime.generatePrintFloatNoNewline ()
+                        | AST.TString ->
+                            // String is a pointer: load length, compute data ptr, print
+                            [ARM64.LDR (ARM64.X10, ARM64.X0, 0s); ARM64.ADD_imm (ARM64.X9, ARM64.X0, 8us)] @
+                            Runtime.generatePrintStringNoNewline ()
+                        | _ -> Runtime.generatePrintIntNoNewline ()  // Fallback: print as int
+                    let separator =
+                        if i < List.length fields - 1 then printLiteral ", "
+                        else []
+                    printFieldName @ loadField @ printValue @ separator)
+                |> List.concat
+
+            // Print closing brace and newline
+            let printFooter = printLiteral " }\n"
+
+            setup @ printHeader @ printFields @ printFooter)
+
     | LIR.Call (dest, funcName, args) ->
         // Function call: arguments already moved to X0-X7 by preceding MOVs
         // Caller-save is handled by SaveRegs/RestoreRegs instructions

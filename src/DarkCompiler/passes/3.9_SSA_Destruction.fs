@@ -311,7 +311,7 @@ let destructSSAInFunction (func: Function) (labelGen: LabelGen) : Function * Lab
 
 /// Convert a program out of SSA form
 let destructSSA (program: Program) : Program =
-    let (Program (functions, strings, floats, variants)) = program
+    let (Program (functions, strings, floats, variants, records)) = program
 
     let (functions', _) =
         functions
@@ -320,4 +320,4 @@ let destructSSA (program: Program) : Program =
             (acc @ [func'], lg')
         ) ([], LabelGen 10000)  // Start high to avoid conflicts
 
-    Program (functions', strings, floats, variants)
+    Program (functions', strings, floats, variants, records)

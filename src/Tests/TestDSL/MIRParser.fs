@@ -150,6 +150,6 @@ let parseMIR (text: string) : Result<MIR.Program, string> =
                     ReturnType = AST.TInt64
                     CFG = cfg
                 }
-                Ok (Program ([func], MIR.emptyStringPool, MIR.emptyFloatPool, Map.empty))
+                Ok (Program ([func], MIR.emptyStringPool, MIR.emptyFloatPool, Map.empty, Map.empty))
         | Choice1Of2 _ ->
             Error "Last instruction must be a terminator (ret)"

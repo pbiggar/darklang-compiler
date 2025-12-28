@@ -190,8 +190,12 @@ type Function = {
 /// Maps type name -> list of (variant name, tag index, payload type)
 type VariantRegistry = Map<string, (string * int * AST.Type option) list>
 
+/// Record field info for record printing
+/// Maps type name -> list of (field name, field type)
+type RecordRegistry = Map<string, (string * AST.Type) list>
+
 /// MIR program (list of functions with string and float pools)
-type Program = Program of functions:Function list * strings:StringPool * floats:FloatPool * variants:VariantRegistry
+type Program = Program of functions:Function list * strings:StringPool * floats:FloatPool * variants:VariantRegistry * records:RecordRegistry
 
 /// Fresh register generator
 type RegGen = RegGen of int

@@ -156,11 +156,11 @@ let compileStdlib () : Result<StdlibResult, string> =
                     // Convert stdlib ANF to MIR (functions only, no _start)
                     let emptyTypeMap : ANF.TypeMap = Map.empty
                     let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
-                    match ANF_to_MIR.toMIRFunctionsOnly anfAfterRC emptyTypeMap emptyTypeReg anfResult.VariantLookup with
+                    match ANF_to_MIR.toMIRFunctionsOnly anfAfterRC emptyTypeMap emptyTypeReg anfResult.VariantLookup Map.empty with
                     | Error e -> Error e
-                    | Ok (mirFuncs, stringPool, floatPool, variantRegistry) ->
+                    | Ok (mirFuncs, stringPool, floatPool, variantRegistry, recordRegistry) ->
                         // Wrap in MIR.Program for LIR conversion
-                        let mirProgram = MIR.Program (mirFuncs, stringPool, floatPool, variantRegistry)
+                        let mirProgram = MIR.Program (mirFuncs, stringPool, floatPool, variantRegistry, recordRegistry)
                         // Convert stdlib MIR to LIR (cached for reuse)
                         match MIR_to_LIR.toLIR mirProgram with
                         | Error e -> Error e
@@ -372,14 +372,17 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                     if verbosity >= 1 then println "  [3/8] ANF → MIR..."
                     // Build typeReg from AST function definitions (for float/int parameter distinction)
                     let emptyTypeMap : ANF.TypeMap = Map.empty
-                    let typeReg =
+                    // Build func params from function defs (for float param handling)
+                    let funcParams =
                         let (AST.Program topLevels) = transformedAst
                         topLevels
                         |> List.choose (function
                             | AST.FunctionDef funcDef -> Some (funcDef.Name, funcDef.Params)
                             | _ -> None)
                         |> Map.ofList
-                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) emptyTypeMap typeReg programType convResultOptimized.VariantLookup
+                    // Use funcParams for MIR conversion (float param handling)
+                    // TypeReg from ConversionResult contains record type definitions for printing
+                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) emptyTypeMap funcParams programType convResultOptimized.VariantLookup convResultOptimized.TypeReg
 
                     match mirResult with
                     | Error err ->
@@ -390,7 +393,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
 
                     // Show MIR
                     if verbosity >= 3 then
-                        let (MIR.Program (functions, _, _, _)) = mirProgram
+                        let (MIR.Program (functions, _, _, _, _)) = mirProgram
                         println "=== MIR (Control Flow Graph) ==="
                         for func in functions do
                             println $"\nFunction: {func.Name}"
@@ -700,7 +703,8 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     if verbosity >= 1 then println "  [3/8] ANF → MIR (user only)..."
                     let emptyTypeMap : ANF.TypeMap = Map.empty
                     // Use FuncParams (maps function names to param types) for correct float param handling
-                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) emptyTypeMap userOnly.FuncParams programType userConvResult.VariantLookup
+                    // Use TypeReg from ConversionResult for record type definitions (for record printing)
+                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) emptyTypeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg
 
                     match userMirResult with
                     | Error err ->
@@ -949,20 +953,20 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                     let emptyFloatPool : MIR.FloatPool = { Floats = Map.empty; FloatToId = Map.empty; NextId = 0 }
                     let stdlibMirResult =
                         if List.isEmpty reachableStdlibFuncs then
-                            Ok ([], emptyStringPool, emptyFloatPool, Map.empty)
+                            Ok ([], emptyStringPool, emptyFloatPool, Map.empty, Map.empty)
                         else
                             let stdlibAnfProgram = ANF.Program (reachableStdlibFuncs, ANF.Return ANF.UnitLiteral)
-                            ANF_to_MIR.toMIRFunctionsOnly stdlibAnfProgram emptyTypeMap emptyTypeReg Map.empty
+                            ANF_to_MIR.toMIRFunctionsOnly stdlibAnfProgram emptyTypeMap emptyTypeReg Map.empty Map.empty
 
                     match stdlibMirResult with
                     | Error err ->
                         { Binary = Array.empty
                           Success = false
                           ErrorMessage = Some $"Stdlib MIR conversion error: {err}" }
-                    | Ok (stdlibMirFuncs, stdlibStrings, stdlibFloats, stdlibVariants) ->
+                    | Ok (stdlibMirFuncs, stdlibStrings, stdlibFloats, stdlibVariants, stdlibRecords) ->
 
                     // Convert reachable stdlib to LIR
-                    let stdlibMirProgram = MIR.Program (stdlibMirFuncs, stdlibStrings, stdlibFloats, stdlibVariants)
+                    let stdlibMirProgram = MIR.Program (stdlibMirFuncs, stdlibStrings, stdlibFloats, stdlibVariants, stdlibRecords)
                     let stdlibLirResult = MIR_to_LIR.toLIR stdlibMirProgram
 
                     match stdlibLirResult with
@@ -978,8 +982,8 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
 
                     // Pass 3: ANF → MIR (user code only)
                     if verbosity >= 1 then println "  [3/8] ANF → MIR (user only)..."
-                    // Use FuncParams for correct float param handling, and VariantLookup for enum printing
-                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) emptyTypeMap userOnly.FuncParams programType userConvResult.VariantLookup
+                    // Use FuncParams for correct float param handling, VariantLookup for enum printing, TypeReg for record printing
+                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) emptyTypeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg
                     let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(mirTime, 1)

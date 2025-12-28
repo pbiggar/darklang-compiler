@@ -7,12 +7,11 @@
 
 // ===================================================================
 // Record Printing (Pretty-printing of record values)
-// NOTE: Commented out - requires record printing support
 // ===================================================================
 
-// type Point = { x: Int64, y: Int64 } Point { x = 5, y = 10 } = stdout="Point { x = 5, y = 10 }\n"
-// type Point1 = { x: Int64 } Point1 { x = 42 } = stdout="Point1 { x = 42 }\n"
-// type Vec3 = { x: Int64, y: Int64, z: Int64 } Vec3 { x = 1, y = 2, z = 3 } = stdout="Vec3 { x = 1, y = 2, z = 3 }\n"
+type Point = { x: Int64, y: Int64 } Point { x = 5, y = 10 } = stdout="Point { x = 5, y = 10 }\n"
+type Point1 = { x: Int64 } Point1 { x = 42 } = stdout="Point1 { x = 42 }\n"
+type Vec3 = { x: Int64, y: Int64, z: Int64 } Vec3 { x = 1, y = 2, z = 3 } = stdout="Vec3 { x = 1, y = 2, z = 3 }\n"
 
 // ===================================================================
 // Record Field Access
