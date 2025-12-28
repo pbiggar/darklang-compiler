@@ -1480,16 +1480,263 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
 
     | LIR.RawSet (ptr, byteOffset, value) ->
         // Store 8 bytes at ptr + byteOffset
+        // IMPORTANT: If any input reg is X15, use X14 as temp instead
         lirRegToARM64Reg ptr
         |> Result.bind (fun ptrReg ->
             lirRegToARM64Reg byteOffset
             |> Result.bind (fun offsetReg ->
                 lirRegToARM64Reg value
                 |> Result.map (fun valueReg ->
+                    let tempReg =
+                        if ptrReg = ARM64.X15 || offsetReg = ARM64.X15 || valueReg = ARM64.X15 then
+                            ARM64.X14
+                        else
+                            ARM64.X15
                     [
-                        ARM64.ADD_reg (ARM64.X15, ptrReg, offsetReg)   // X15 = ptr + offset
-                        ARM64.STR (valueReg, ARM64.X15, 0s)           // [X15] = value
+                        ARM64.ADD_reg (tempReg, ptrReg, offsetReg)   // temp = ptr + offset
+                        ARM64.STR (valueReg, tempReg, 0s)            // [temp] = value
                     ])))
+
+    | LIR.StringHash (dest, str) ->
+        // FNV-1a hash of string
+        // Heap string layout: [length:8][data:N][refcount:8]
+        // Pool string layout: [length:8][data:N]
+        //
+        // FNV-1a constants:
+        // FNV_OFFSET_BASIS = 14695981039346656037 (0xcbf29ce484222325)
+        // FNV_PRIME = 1099511628211 (0x100000001b3)
+        //
+        // Register usage:
+        // X9 = data address
+        // X10 = length
+        // X11 = hash accumulator
+        // X12 = FNV prime
+        // X13 = loop counter
+        // X14 = temp byte
+
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            // Helper to load string address and length
+            let loadStringInfo (operand: LIR.Operand) : Result<ARM64.Instr list, string> =
+                match operand with
+                | LIR.StringRef idx ->
+                    // Pool string: address via ADRP+ADD, then read length from memory
+                    let label = sprintf "str_%d" idx
+                    Ok [
+                        ARM64.ADRP (ARM64.X15, label)
+                        ARM64.ADD_label (ARM64.X15, ARM64.X15, label)
+                        ARM64.LDR (ARM64.X10, ARM64.X15, 0s)      // X10 = length
+                        ARM64.ADD_imm (ARM64.X9, ARM64.X15, 8us)  // X9 = data address
+                    ]
+                | LIR.Reg reg ->
+                    // Heap string or passed pool string: length at [reg], data at [reg+8]
+                    lirRegToARM64Reg reg
+                    |> Result.map (fun srcReg ->
+                        if srcReg = ARM64.X9 || srcReg = ARM64.X10 then
+                            // Copy to X15 first to avoid clobbering the source
+                            [
+                                ARM64.MOV_reg (ARM64.X15, srcReg)
+                                ARM64.LDR (ARM64.X10, ARM64.X15, 0s)       // X10 = length
+                                ARM64.ADD_imm (ARM64.X9, ARM64.X15, 8us)   // X9 = data address
+                            ]
+                        else
+                            [
+                                ARM64.LDR (ARM64.X10, srcReg, 0s)          // X10 = length
+                                ARM64.ADD_imm (ARM64.X9, srcReg, 8us)      // X9 = data address
+                            ])
+                | _ -> Error "StringHash requires StringRef or Reg operand"
+
+            loadStringInfo str
+            |> Result.map (fun loadInstrs ->
+                // FNV offset basis: 0xcbf29ce484222325
+                let loadOffsetBasis = [
+                    ARM64.MOVZ (ARM64.X11, 0x2325us, 0)
+                    ARM64.MOVK (ARM64.X11, 0x8422us, 16)
+                    ARM64.MOVK (ARM64.X11, 0x9ce4us, 32)
+                    ARM64.MOVK (ARM64.X11, 0xcbf2us, 48)
+                ]
+
+                // FNV prime: 0x100000001b3
+                let loadPrime = [
+                    ARM64.MOVZ (ARM64.X12, 0x01b3us, 0)
+                    ARM64.MOVK (ARM64.X12, 0x0000us, 16)
+                    ARM64.MOVK (ARM64.X12, 0x0001us, 32)
+                    ARM64.MOVK (ARM64.X12, 0x0000us, 48)
+                ]
+
+                // Hash loop
+                let hashLoop = [
+                    ARM64.MOVZ (ARM64.X13, 0us, 0)                    // X13 = 0 (counter)
+                    // Loop: if X13 >= X10, done
+                    ARM64.CMP_reg (ARM64.X13, ARM64.X10)              // compare counter with length
+                    ARM64.B_cond (ARM64.GE, 6)                        // skip 6 instructions if done (to moveResult)
+                    ARM64.LDRB (ARM64.X14, ARM64.X9, ARM64.X13)       // X14 = byte at [X9 + X13]
+                    ARM64.EOR_reg (ARM64.X11, ARM64.X11, ARM64.X14)   // hash ^= byte
+                    ARM64.MUL (ARM64.X11, ARM64.X11, ARM64.X12)       // hash *= prime
+                    ARM64.ADD_imm (ARM64.X13, ARM64.X13, 1us)         // counter++
+                    ARM64.B (-6)                                      // loop back to CMP
+                ]
+
+                // Move result to dest
+                let moveResult = [ARM64.MOV_reg (destReg, ARM64.X11)]
+
+                loadInstrs @ loadOffsetBasis @ loadPrime @ hashLoop @ moveResult))
+
+    | LIR.StringEq (dest, left, right) ->
+        // Byte-wise string equality comparison
+        // Returns 1 (true) if equal, 0 (false) if not
+        //
+        // Register usage:
+        // X9 = left data address
+        // X10 = left length
+        // X11 = right data address
+        // X12 = right length
+        // X13 = loop counter
+        // X14 = left byte
+        // X15 = right byte
+
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            // Helper to load string address and length into specified registers
+            let loadStringInfo (operand: LIR.Operand) (addrReg: ARM64.Reg) (lenReg: ARM64.Reg) (tempReg: ARM64.Reg) : Result<ARM64.Instr list, string> =
+                match operand with
+                | LIR.StringRef idx ->
+                    // Pool string: address via ADRP+ADD, then read length from memory
+                    let label = sprintf "str_%d" idx
+                    Ok [
+                        ARM64.ADRP (tempReg, label)
+                        ARM64.ADD_label (tempReg, tempReg, label)
+                        ARM64.LDR (lenReg, tempReg, 0s)       // length at offset 0
+                        ARM64.ADD_imm (addrReg, tempReg, 8us) // data at offset 8
+                    ]
+                | LIR.Reg reg ->
+                    lirRegToARM64Reg reg
+                    |> Result.map (fun srcReg ->
+                        if srcReg = addrReg || srcReg = lenReg then
+                            // Use tempReg as scratch to avoid clobbering
+                            [
+                                ARM64.MOV_reg (tempReg, srcReg)
+                                ARM64.LDR (lenReg, tempReg, 0s)
+                                ARM64.ADD_imm (addrReg, tempReg, 8us)
+                            ]
+                        else
+                            [
+                                ARM64.LDR (lenReg, srcReg, 0s)
+                                ARM64.ADD_imm (addrReg, srcReg, 8us)
+                            ])
+                | _ -> Error "StringEq requires StringRef or Reg operand"
+
+            // Use X8 as temp for left, X7 for right (won't conflict with X9-X15)
+            loadStringInfo left ARM64.X9 ARM64.X10 ARM64.X8
+            |> Result.bind (fun leftInstrs ->
+                loadStringInfo right ARM64.X11 ARM64.X12 ARM64.X7
+                |> Result.map (fun rightInstrs ->
+                    // Compare lengths first
+                    let compareLengths = [
+                        ARM64.CMP_reg (ARM64.X10, ARM64.X12)
+                        ARM64.B_cond (ARM64.NE, 12)                   // If lengths differ, jump to false (skip 12 instrs)
+                    ]
+
+                    // Byte comparison loop
+                    let compareLoop = [
+                        ARM64.MOVZ (ARM64.X13, 0us, 0)                // X13 = 0 (counter)
+                        // Loop: if X13 >= X10, all bytes matched -> true
+                        ARM64.CMP_reg (ARM64.X13, ARM64.X10)
+                        ARM64.B_cond (ARM64.GE, 7)                    // If done, jump to true (skip 7 instrs)
+                        ARM64.LDRB (ARM64.X14, ARM64.X9, ARM64.X13)   // X14 = left[X13]
+                        ARM64.LDRB (ARM64.X15, ARM64.X11, ARM64.X13)  // X15 = right[X13]
+                        ARM64.CMP_reg (ARM64.X14, ARM64.X15)
+                        ARM64.B_cond (ARM64.NE, 5)                    // If bytes differ, jump to false (skip 5 instrs)
+                        ARM64.ADD_imm (ARM64.X13, ARM64.X13, 1us)     // counter++
+                        ARM64.B (-7)                                  // loop back to CMP
+                    ]
+
+                    // True result
+                    let trueResult = [
+                        ARM64.MOVZ (destReg, 1us, 0)                  // dest = 1 (true)
+                        ARM64.B 2                                     // skip false
+                    ]
+
+                    // False result
+                    let falseResult = [
+                        ARM64.MOVZ (destReg, 0us, 0)                  // dest = 0 (false)
+                    ]
+
+                    leftInstrs @ rightInstrs @ compareLengths @ compareLoop @ trueResult @ falseResult)))
+
+    | LIR.RefCountIncString str ->
+        // Increment refcount for a heap string
+        // Heap string layout: [length:8][data:N][padding:P][refcount:8] where P aligns to 8
+        // Pool strings have refcount = INT64_MAX as sentinel (don't modify read-only memory)
+        match str with
+        | LIR.StringRef _ ->
+            // Pool string - no refcount, no-op
+            Ok []
+        | LIR.Reg reg ->
+            // Heap or pool string - refcount is at [addr + 8 + aligned(length)]
+            lirRegToARM64Reg reg
+            |> Result.map (fun addrReg ->
+                [
+                    // Save address to X12 in case addrReg is X13/X14/X15 which we clobber
+                    ARM64.MOV_reg (ARM64.X12, addrReg)               // X12 = string address
+                    ARM64.LDR (ARM64.X15, ARM64.X12, 0s)             // X15 = length
+                    // Align length: X15 = ((X15 + 7) >> 3) << 3
+                    ARM64.ADD_imm (ARM64.X15, ARM64.X15, 7us)        // X15 = length + 7
+                    ARM64.MOVZ (ARM64.X13, 3us, 0)                   // X13 = 3 (shift amount)
+                    ARM64.LSR_reg (ARM64.X15, ARM64.X15, ARM64.X13)  // X15 = (length + 7) >> 3
+                    ARM64.LSL_reg (ARM64.X15, ARM64.X15, ARM64.X13)  // X15 = aligned(length)
+                    ARM64.ADD_imm (ARM64.X14, ARM64.X12, 8us)        // X14 = addr + 8
+                    ARM64.ADD_reg (ARM64.X14, ARM64.X14, ARM64.X15)  // X14 = addr + 8 + aligned(length) (refcount addr)
+                    ARM64.LDR (ARM64.X15, ARM64.X14, 0s)             // X15 = refcount
+                    // Load sentinel value 0x7FFFFFFFFFFFFFFF (INT64_MAX) into X13
+                    ARM64.MOVZ (ARM64.X13, 0xFFFFus, 0)
+                    ARM64.MOVK (ARM64.X13, 0xFFFFus, 16)
+                    ARM64.MOVK (ARM64.X13, 0xFFFFus, 32)
+                    ARM64.MOVK (ARM64.X13, 0x7FFFus, 48)
+                    ARM64.CMP_reg (ARM64.X15, ARM64.X13)             // Compare with sentinel
+                    ARM64.B_cond (ARM64.EQ, 3)                       // If pool string, skip to end
+                    ARM64.ADD_imm (ARM64.X15, ARM64.X15, 1us)        // X15++
+                    ARM64.STR (ARM64.X15, ARM64.X14, 0s)             // store back
+                ])
+        | _ -> Error "RefCountIncString requires StringRef or Reg operand"
+
+    | LIR.RefCountDecString str ->
+        // Decrement refcount for a heap string
+        // Heap string layout: [length:8][data:N][padding:P][refcount:8] where P aligns to 8
+        // Pool strings have refcount = INT64_MAX as sentinel (don't modify read-only memory)
+        match str with
+        | LIR.StringRef _ ->
+            // Pool string - no refcount, no-op
+            Ok []
+        | LIR.Reg reg ->
+            // Heap or pool string - refcount is at [addr + 8 + aligned(length)]
+            lirRegToARM64Reg reg
+            |> Result.map (fun addrReg ->
+                [
+                    // Save address to X12 in case addrReg is X13/X14/X15 which we clobber
+                    ARM64.MOV_reg (ARM64.X12, addrReg)               // X12 = string address
+                    ARM64.LDR (ARM64.X15, ARM64.X12, 0s)             // X15 = length
+                    // Align length: X15 = ((X15 + 7) >> 3) << 3
+                    ARM64.ADD_imm (ARM64.X15, ARM64.X15, 7us)        // X15 = length + 7
+                    ARM64.MOVZ (ARM64.X13, 3us, 0)                   // X13 = 3 (shift amount)
+                    ARM64.LSR_reg (ARM64.X15, ARM64.X15, ARM64.X13)  // X15 = (length + 7) >> 3
+                    ARM64.LSL_reg (ARM64.X15, ARM64.X15, ARM64.X13)  // X15 = aligned(length)
+                    ARM64.ADD_imm (ARM64.X14, ARM64.X12, 8us)        // X14 = addr + 8
+                    ARM64.ADD_reg (ARM64.X14, ARM64.X14, ARM64.X15)  // X14 = addr + 8 + aligned(length) (refcount addr)
+                    ARM64.LDR (ARM64.X15, ARM64.X14, 0s)             // X15 = refcount
+                    // Load sentinel value 0x7FFFFFFFFFFFFFFF (INT64_MAX) into X13
+                    ARM64.MOVZ (ARM64.X13, 0xFFFFus, 0)
+                    ARM64.MOVK (ARM64.X13, 0xFFFFus, 16)
+                    ARM64.MOVK (ARM64.X13, 0xFFFFus, 32)
+                    ARM64.MOVK (ARM64.X13, 0x7FFFus, 48)
+                    ARM64.CMP_reg (ARM64.X15, ARM64.X13)             // Compare with sentinel
+                    ARM64.B_cond (ARM64.EQ, 3)                       // If pool string, skip to end
+                    ARM64.SUB_imm (ARM64.X15, ARM64.X15, 1us)        // X15--
+                    ARM64.STR (ARM64.X15, ARM64.X14, 0s)             // store back
+                    // Note: When refcount hits 0, we should free the memory.
+                    // For now, we skip this as strings have variable size.
+                ])
+        | _ -> Error "RefCountDecString requires StringRef or Reg operand"
 
 /// Convert LIR terminator to ARM64 instructions
 /// epilogueLabel: the label to jump to for function return (handles stack cleanup)

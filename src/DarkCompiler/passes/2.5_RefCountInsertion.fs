@@ -132,6 +132,12 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | FloatNeg _ -> Some AST.TFloat64
     | IntToFloat _ -> Some AST.TFloat64
     | FloatToInt _ -> Some AST.TInt64
+    // String intrinsics
+    | StringHash _ -> Some AST.TInt64  // Returns hash as Int64
+    | StringEq _ -> Some AST.TBool  // Returns Bool
+    // String refcount intrinsics
+    | RefCountIncString _ -> Some AST.TUnit  // Returns unit
+    | RefCountDecString _ -> Some AST.TUnit  // Returns unit
 
 /// Check if an atom is returned in the expression
 let rec isAtomReturned (atom: Atom) (expr: AExpr) : bool =

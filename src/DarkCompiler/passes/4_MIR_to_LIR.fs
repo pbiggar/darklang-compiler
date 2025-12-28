@@ -729,6 +729,25 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
         | Ok (srcInstrs, srcFReg) ->
             Ok (srcInstrs @ [LIR.FloatToInt (lirDest, srcFReg)])
 
+    | MIR.StringHash (dest, str) ->
+        let lirDest = vregToLIRReg dest
+        let lirStr = convertOperand str
+        Ok [LIR.StringHash (lirDest, lirStr)]
+
+    | MIR.StringEq (dest, left, right) ->
+        let lirDest = vregToLIRReg dest
+        let lirLeft = convertOperand left
+        let lirRight = convertOperand right
+        Ok [LIR.StringEq (lirDest, lirLeft, lirRight)]
+
+    | MIR.RefCountIncString str ->
+        let lirStr = convertOperand str
+        Ok [LIR.RefCountIncString lirStr]
+
+    | MIR.RefCountDecString str ->
+        let lirStr = convertOperand str
+        Ok [LIR.RefCountDecString lirStr]
+
     | MIR.Phi _ ->
         // Phi nodes should be eliminated by SSA destruction (pass 3.9) before MIR-to-LIR
         Error "Internal error: Phi node reached MIR-to-LIR. SSA destruction pass should have removed it."

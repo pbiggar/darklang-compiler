@@ -58,3 +58,55 @@ let d1 = Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 10) in let d2 = Stdlib.Dict.set
 
 // Remove from empty dict (no-op)
 Stdlib.Dict.get(Stdlib.Dict.remove(Stdlib.Dict.empty(), 1), 1) = -1
+
+// ========== String-keyed Dict tests ==========
+
+// Get from empty dict with string key
+Stdlib.Dict.get_str(Stdlib.Dict.empty(), "hello") = -1
+
+// Set and get single string key
+Stdlib.Dict.get_str(Stdlib.Dict.set_str(Stdlib.Dict.empty(), "hello", 100), "hello") = 100
+
+// Get non-existent string key from non-empty dict
+Stdlib.Dict.get_str(Stdlib.Dict.set_str(Stdlib.Dict.empty(), "hello", 100), "world") = -1
+
+// Set multiple string keys
+let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "one", 1) in let d2 = Stdlib.Dict.set_str(d1, "two", 2) in Stdlib.Dict.get_str(d2, "one") = 1
+
+let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "one", 1) in let d2 = Stdlib.Dict.set_str(d1, "two", 2) in Stdlib.Dict.get_str(d2, "two") = 2
+
+// Update existing string key
+let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "key", 100) in let d2 = Stdlib.Dict.set_str(d1, "key", 999) in Stdlib.Dict.get_str(d2, "key") = 999
+
+// Three string keys
+let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 10) in let d2 = Stdlib.Dict.set_str(d1, "b", 20) in let d3 = Stdlib.Dict.set_str(d2, "c", 30) in Stdlib.Dict.get_str(d3, "a") = 10
+
+let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 10) in let d2 = Stdlib.Dict.set_str(d1, "b", 20) in let d3 = Stdlib.Dict.set_str(d2, "c", 30) in Stdlib.Dict.get_str(d3, "b") = 20
+
+let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 10) in let d2 = Stdlib.Dict.set_str(d1, "b", 20) in let d3 = Stdlib.Dict.set_str(d2, "c", 30) in Stdlib.Dict.get_str(d3, "c") = 30
+
+// ========== String Dict remove tests ==========
+
+// Remove from single-entry dict
+let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "key", 100) in let d2 = Stdlib.Dict.remove_str(d1, "key") in Stdlib.Dict.get_str(d2, "key") = -1
+
+// Remove non-existent key (dict unchanged)
+let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "key", 100) in let d2 = Stdlib.Dict.remove_str(d1, "other") in Stdlib.Dict.get_str(d2, "key") = 100
+
+// Remove one key, other keys remain
+let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 100) in let d2 = Stdlib.Dict.set_str(d1, "b", 200) in let d3 = Stdlib.Dict.set_str(d2, "c", 300) in let d4 = Stdlib.Dict.remove_str(d3, "b") in Stdlib.Dict.get_str(d4, "a") = 100
+
+let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 100) in let d2 = Stdlib.Dict.set_str(d1, "b", 200) in let d3 = Stdlib.Dict.set_str(d2, "c", 300) in let d4 = Stdlib.Dict.remove_str(d3, "b") in Stdlib.Dict.get_str(d4, "b") = -1
+
+let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 100) in let d2 = Stdlib.Dict.set_str(d1, "b", 200) in let d3 = Stdlib.Dict.set_str(d2, "c", 300) in let d4 = Stdlib.Dict.remove_str(d3, "b") in Stdlib.Dict.get_str(d4, "c") = 300
+
+// Immutability: original dict unchanged after remove
+let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "key", 100) in let d2 = Stdlib.Dict.remove_str(d1, "key") in Stdlib.Dict.get_str(d1, "key") = 100
+
+// Empty string as key
+Stdlib.Dict.get_str(Stdlib.Dict.set_str(Stdlib.Dict.empty(), "", 42), "") = 42
+
+// Edge case: keys that differ only in length
+let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "ab", 1) in let d2 = Stdlib.Dict.set_str(d1, "abc", 2) in Stdlib.Dict.get_str(d2, "ab") = 1
+
+let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "ab", 1) in let d2 = Stdlib.Dict.set_str(d1, "abc", 2) in Stdlib.Dict.get_str(d2, "abc") = 2

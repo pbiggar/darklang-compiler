@@ -153,6 +153,16 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
     // IntToFloat uses an integer source register
     | LIR.IntToFloat (_, src) ->
         regToVReg src |> Option.toList |> Set.ofList
+    | LIR.StringHash (_, str) ->
+        operandToVReg str |> Option.toList |> Set.ofList
+    | LIR.StringEq (_, left, right) ->
+        let l = operandToVReg left |> Option.toList
+        let r = operandToVReg right |> Option.toList
+        Set.ofList (l @ r)
+    | LIR.RefCountIncString str ->
+        operandToVReg str |> Option.toList |> Set.ofList
+    | LIR.RefCountDecString str ->
+        operandToVReg str |> Option.toList |> Set.ofList
     | _ -> Set.empty
 
 /// Get virtual register ID defined (written) by an instruction
@@ -187,6 +197,10 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.RawSet _ -> None
     // FloatToInt defines an integer destination register
     | LIR.FloatToInt (dest, _) -> regToVReg dest
+    | LIR.StringHash (dest, _) -> regToVReg dest
+    | LIR.StringEq (dest, _, _) -> regToVReg dest
+    | LIR.RefCountIncString _ -> None
+    | LIR.RefCountDecString _ -> None
     | _ -> None
 
 /// Get virtual register used by terminator
@@ -354,10 +368,11 @@ let buildLiveIntervals (cfg: LIR.CFG) (liveness: Map<LIR.Label, BlockLiveness>) 
 // Linear Scan Register Allocation
 // ============================================================================
 
-/// Caller-saved registers (X1-X10) - preferred for allocation
+/// Caller-saved registers (X1-X8) - preferred for allocation
+/// Note: X9-X10 are excluded because StringHash/StringEq use them internally
 let callerSavedRegs = [
     LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5
-    LIR.X6; LIR.X7; LIR.X8; LIR.X9; LIR.X10
+    LIR.X6; LIR.X7; LIR.X8
 ]
 
 /// Callee-saved registers (X19-X26) - used when caller-saved exhausted
@@ -895,6 +910,35 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
         let (offsetReg, offsetLoads) = loadSpilled mapping byteOffset LIR.X13
         let (valueReg, valueLoads) = loadSpilled mapping value LIR.X14
         ptrLoads @ offsetLoads @ valueLoads @ [LIR.RawSet (ptrReg, offsetReg, valueReg)]
+
+    | LIR.StringHash (dest, str) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (strOp, strLoads) = applyToOperand mapping str LIR.X12
+        let hashInstr = LIR.StringHash (destReg, strOp)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        strLoads @ [hashInstr] @ storeInstrs
+
+    | LIR.StringEq (dest, left, right) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (leftOp, leftLoads) = applyToOperand mapping left LIR.X12
+        let (rightOp, rightLoads) = applyToOperand mapping right LIR.X13
+        let eqInstr = LIR.StringEq (destReg, leftOp, rightOp)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        leftLoads @ rightLoads @ [eqInstr] @ storeInstrs
+
+    | LIR.RefCountIncString str ->
+        let (strOp, strLoads) = applyToOperand mapping str LIR.X12
+        strLoads @ [LIR.RefCountIncString strOp]
+
+    | LIR.RefCountDecString str ->
+        let (strOp, strLoads) = applyToOperand mapping str LIR.X12
+        strLoads @ [LIR.RefCountDecString strOp]
 
     | LIR.Exit -> [LIR.Exit]
 

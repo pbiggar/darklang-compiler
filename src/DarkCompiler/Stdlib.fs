@@ -68,6 +68,18 @@ let rawMemoryIntrinsics : ModuleFunc list = [
     { Name = "__rawptr_to_int64"; ParamTypes = [TRawPtr]; ReturnType = TInt64 }
     // __int64_to_rawptr : (Int64) -> RawPtr - cast int to pointer (for memory ops)
     { Name = "__int64_to_rawptr"; ParamTypes = [TInt64]; ReturnType = TRawPtr }
+    // __string_hash : (String) -> Int64 - FNV-1a hash of string contents
+    { Name = "__string_hash"; ParamTypes = [TString]; ReturnType = TInt64 }
+    // __string_eq : (String, String) -> Bool - byte-wise string equality
+    { Name = "__string_eq"; ParamTypes = [TString; TString]; ReturnType = TBool }
+    // __refcount_inc_string : (String) -> Unit - increment string refcount
+    { Name = "__refcount_inc_string"; ParamTypes = [TString]; ReturnType = TUnit }
+    // __refcount_dec_string : (String) -> Unit - decrement string refcount, free if 0
+    { Name = "__refcount_dec_string"; ParamTypes = [TString]; ReturnType = TUnit }
+    // __string_to_int64 : (String) -> Int64 - cast string pointer to int (for storage)
+    { Name = "__string_to_int64"; ParamTypes = [TString]; ReturnType = TInt64 }
+    // __int64_to_string : (Int64) -> String - cast int to string pointer (for retrieval)
+    { Name = "__int64_to_string"; ParamTypes = [TInt64]; ReturnType = TString }
 ]
 
 /// All available Stdlib modules

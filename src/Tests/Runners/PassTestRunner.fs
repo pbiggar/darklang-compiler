@@ -229,6 +229,15 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- RawGet({prettyPrintLIRReg ptr}, {prettyPrintLIRReg byteOffset})"
     | LIR.RawSet (ptr, byteOffset, value) ->
         $"RawSet({prettyPrintLIRReg ptr}, {prettyPrintLIRReg byteOffset}, {prettyPrintLIRReg value})"
+    // String intrinsics
+    | LIR.StringHash (dest, str) ->
+        $"{prettyPrintLIRReg dest} <- StringHash({prettyPrintLIROperand str})"
+    | LIR.StringEq (dest, left, right) ->
+        $"{prettyPrintLIRReg dest} <- StringEq({prettyPrintLIROperand left}, {prettyPrintLIROperand right})"
+    | LIR.RefCountIncString str ->
+        $"RefCountIncString({prettyPrintLIROperand str})"
+    | LIR.RefCountDecString str ->
+        $"RefCountDecString({prettyPrintLIROperand str})"
     | LIR.Exit -> "Exit"
 
 /// Pretty-print LIR terminator
@@ -393,6 +402,15 @@ let prettyPrintANFCExpr = function
         $"IntToFloat({prettyPrintANFAtom atom})"
     | ANF.FloatToInt atom ->
         $"FloatToInt({prettyPrintANFAtom atom})"
+    // String intrinsics
+    | ANF.StringHash str ->
+        $"StringHash({prettyPrintANFAtom str})"
+    | ANF.StringEq (left, right) ->
+        $"StringEq({prettyPrintANFAtom left}, {prettyPrintANFAtom right})"
+    | ANF.RefCountIncString str ->
+        $"RefCountIncString({prettyPrintANFAtom str})"
+    | ANF.RefCountDecString str ->
+        $"RefCountDecString({prettyPrintANFAtom str})"
 
 /// Pretty-print ANF expression (recursive)
 let rec prettyPrintANFExpr = function

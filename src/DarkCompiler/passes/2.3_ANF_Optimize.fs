@@ -139,6 +139,10 @@ let hasSideEffects (cexpr: CExpr) : bool =
     | FloatNeg _ -> false   // Pure float operation
     | IntToFloat _ -> false // Pure conversion
     | FloatToInt _ -> false // Pure conversion
+    | StringHash _ -> false  // Pure
+    | StringEq _ -> false    // Pure
+    | RefCountIncString _ -> true   // Mutates refcount
+    | RefCountDecString _ -> true   // Mutates refcount
 
 /// Collect all TempIds used in an atom
 let collectAtomUses (atom: Atom) : Set<TempId> =
@@ -179,6 +183,10 @@ let collectCExprUses (cexpr: CExpr) : Set<TempId> =
     | FloatNeg atom -> collectAtomUses atom
     | IntToFloat atom -> collectAtomUses atom
     | FloatToInt atom -> collectAtomUses atom
+    | StringHash str -> collectAtomUses str
+    | StringEq (left, right) -> Set.union (collectAtomUses left) (collectAtomUses right)
+    | RefCountIncString str -> collectAtomUses str
+    | RefCountDecString str -> collectAtomUses str
 
 /// Collect all TempIds used in an AExpr
 let rec collectAExprUses (aexpr: AExpr) : Set<TempId> =
@@ -226,6 +234,10 @@ let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | FloatNeg atom -> FloatNeg (s atom)
     | IntToFloat atom -> IntToFloat (s atom)
     | FloatToInt atom -> FloatToInt (s atom)
+    | StringHash str -> StringHash (s str)
+    | StringEq (left, right) -> StringEq (s left, s right)
+    | RefCountIncString str -> RefCountIncString (s str)
+    | RefCountDecString str -> RefCountDecString (s str)
 
 /// Optimize a CExpr with constant folding
 let optimizeCExpr (env: ConstEnv) (cexpr: CExpr) : CExpr * bool =

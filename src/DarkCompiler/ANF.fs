@@ -98,6 +98,12 @@ type CExpr =
     | RawFree of ptr:Atom                     // Manually free raw memory
     | RawGet of ptr:Atom * byteOffset:Atom    // Read 8 bytes at offset, returns Int64
     | RawSet of ptr:Atom * byteOffset:Atom * value:Atom  // Write 8 bytes at offset
+    // String intrinsics (for Dict with string keys)
+    | StringHash of str:Atom                  // FNV-1a hash of string, returns Int64
+    | StringEq of left:Atom * right:Atom      // Byte-wise string equality, returns Bool
+    // String reference counting (at dynamic offset)
+    | RefCountIncString of Atom               // Increment string ref count
+    | RefCountDecString of Atom               // Decrement string ref count, free if zero
 
 /// ANF expressions with explicit sequencing
 type AExpr =

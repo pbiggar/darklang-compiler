@@ -66,6 +66,21 @@ let tryRawMemoryIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr o
         Some (ANF.Atom ptrAtom)
     | "__int64_to_rawptr", [intAtom] ->
         Some (ANF.Atom intAtom)
+    // String intrinsics for Dict with string keys
+    | "__string_hash", [strAtom] ->
+        Some (ANF.StringHash strAtom)
+    | "__string_eq", [leftAtom; rightAtom] ->
+        Some (ANF.StringEq (leftAtom, rightAtom))
+    // String refcount intrinsics (for Dict with string keys)
+    | "__refcount_inc_string", [strAtom] ->
+        Some (ANF.RefCountIncString strAtom)
+    | "__refcount_dec_string", [strAtom] ->
+        Some (ANF.RefCountDecString strAtom)
+    // String pointer cast operations are no-ops at runtime - just pass through the value
+    | "__string_to_int64", [strAtom] ->
+        Some (ANF.Atom strAtom)
+    | "__int64_to_string", [intAtom] ->
+        Some (ANF.Atom intAtom)
     | _ -> None
 
 /// Type registry - maps record type names to their field definitions

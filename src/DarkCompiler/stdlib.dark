@@ -664,3 +664,255 @@ def Stdlib.Dict.__removeHelper(node: Int64, key: Int64, level: Int64) : Int64 =
 
 def Stdlib.Dict.remove(dict: Int64, key: Int64) : Int64 =
     Stdlib.Dict.__removeHelper(dict, key, 0)
+
+// =============================================================================
+// String-keyed Dict functions
+// =============================================================================
+// These variants support String keys instead of Int64 keys.
+// They manage reference counting for string keys stored in the Dict.
+
+// Allocate a leaf node with string key: [keyPtr:8][value:8] = 16 bytes
+// Increments refcount on the key since Dict now owns a reference to it
+def Stdlib.Dict.__allocLeaf_str(key: String, value: Int64) : Int64 =
+    let ptr = __raw_alloc(16) in
+    let _ = __raw_set(ptr, 0, __string_to_int64(key)) in
+    let _ = __raw_set(ptr, 8, value) in
+    let _ = __refcount_inc_string(key) in
+    Stdlib.Dict.__setTag(__rawptr_to_int64(ptr), 2)
+
+// Get helper for string keys - recursive lookup
+def Stdlib.Dict.__getHelper_str(node: Int64, key: String, keyHash: Int64, level: Int64) : Int64 =
+    if node == 0 then
+        // Empty - key not found
+        0 - 1
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            // Leaf node
+            let storedKeyPtr = __raw_get(ptr, 0) in
+            let storedKey = __int64_to_string(storedKeyPtr) in
+            if __string_eq(storedKey, key) then
+                __raw_get(ptr, 8)
+            else
+                0 - 1
+        else if tag == 1 then
+            // Internal node
+            let chunk = Stdlib.Dict.hashChunk(keyHash, level) in
+            let bitmap = __raw_get(ptr, 0) in
+            if Stdlib.Dict.hasBit(bitmap, chunk) then
+                let idx = Stdlib.Dict.childIndex(bitmap, chunk) in
+                let child = __raw_get(ptr, 8 + (idx * 8)) in
+                Stdlib.Dict.__getHelper_str(child, key, keyHash, level + 1)
+            else
+                0 - 1
+        else
+            // Unknown tag
+            0 - 1
+
+def Stdlib.Dict.get_str(dict: Int64, key: String) : Int64 =
+    let keyHash = __string_hash(key) in
+    Stdlib.Dict.__getHelper_str(dict, key, keyHash, 0)
+
+// Expand a leaf to an internal node when two string keys collide
+def Stdlib.Dict.__expandLeaf_str(key1: String, val1: Int64, key2: String, val2: Int64, level: Int64) : Int64 =
+    let hash1 = __string_hash(key1) in
+    let hash2 = __string_hash(key2) in
+    let chunk1 = Stdlib.Dict.hashChunk(hash1, level) in
+    let chunk2 = Stdlib.Dict.hashChunk(hash2, level) in
+    if chunk1 == chunk2 then
+        // Same chunk - need to go deeper
+        if level >= 10 then
+            // Max depth reached - just keep key2 (overwrites key1)
+            // Decrement refcount on key1 since it's being removed
+            let _ = __refcount_dec_string(key1) in
+            Stdlib.Dict.__allocLeaf_str(key2, val2)
+        else
+            // Create internal node with single child (recursive case)
+            let child = Stdlib.Dict.__expandLeaf_str(key1, val1, key2, val2, level + 1) in
+            let bitmap = Stdlib.Dict.setBit(0, chunk1) in
+            let newNode = Stdlib.Dict.__allocInternal(bitmap, 1) in
+            let _ = __raw_set(newNode, 8, child) in
+            Stdlib.Dict.__setTag(__rawptr_to_int64(newNode), 1)
+    else
+        // Different chunks - create internal node with both leaves
+        let leaf1 = Stdlib.Dict.__allocLeaf_str(key1, val1) in
+        let leaf2 = Stdlib.Dict.__allocLeaf_str(key2, val2) in
+        let bitmap = Stdlib.Dict.setBit(Stdlib.Dict.setBit(0, chunk1), chunk2) in
+        let newNode = Stdlib.Dict.__allocInternal(bitmap, 2) in
+        // Store children in order of their chunks
+        if chunk1 < chunk2 then
+            let _ = __raw_set(newNode, 8, leaf1) in
+            let _ = __raw_set(newNode, 16, leaf2) in
+            Stdlib.Dict.__setTag(__rawptr_to_int64(newNode), 1)
+        else
+            let _ = __raw_set(newNode, 8, leaf2) in
+            let _ = __raw_set(newNode, 16, leaf1) in
+            Stdlib.Dict.__setTag(__rawptr_to_int64(newNode), 1)
+
+// Set helper for string keys - recursive insert
+def Stdlib.Dict.__setHelper_str(node: Int64, key: String, value: Int64, keyHash: Int64, level: Int64) : Int64 =
+    if node == 0 then
+        // Empty - create a new leaf
+        Stdlib.Dict.__allocLeaf_str(key, value)
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            // Leaf node - check if same key or need to expand
+            let storedKeyPtr = __raw_get(ptr, 0) in
+            let storedKey = __int64_to_string(storedKeyPtr) in
+            if __string_eq(storedKey, key) then
+                // Same key - replace value (create new leaf)
+                // Decrement old key's refcount (it's being replaced)
+                let _ = __refcount_dec_string(storedKey) in
+                Stdlib.Dict.__allocLeaf_str(key, value)
+            else
+                // Different key - need to expand to internal node
+                let storedValue = __raw_get(ptr, 8) in
+                Stdlib.Dict.__expandLeaf_str(storedKey, storedValue, key, value, level)
+        else if tag == 1 then
+            // Internal node - recurse into appropriate child
+            let chunk = Stdlib.Dict.hashChunk(keyHash, level) in
+            let bitmap = __raw_get(ptr, 0) in
+            let idx = Stdlib.Dict.childIndex(bitmap, chunk) in
+            if Stdlib.Dict.hasBit(bitmap, chunk) then
+                // Child exists - update it
+                let oldChild = __raw_get(ptr, 8 + (idx * 8)) in
+                let newChild = Stdlib.Dict.__setHelper_str(oldChild, key, value, keyHash, level + 1) in
+                Stdlib.Dict.__copyInternalWithUpdate(ptr, bitmap, idx, newChild)
+            else
+                // No child at this position - insert new leaf
+                let newLeaf = Stdlib.Dict.__allocLeaf_str(key, value) in
+                let newBitmap = Stdlib.Dict.setBit(bitmap, chunk) in
+                Stdlib.Dict.__copyInternalWithInsert(ptr, bitmap, newBitmap, idx, newLeaf)
+        else
+            // Unknown tag - return node unchanged
+            node
+
+def Stdlib.Dict.set_str(dict: Int64, key: String, value: Int64) : Int64 =
+    let keyHash = __string_hash(key) in
+    Stdlib.Dict.__setHelper_str(dict, key, value, keyHash, 0)
+
+// Remove helper for string keys
+def Stdlib.Dict.__removeHelper_str(node: Int64, key: String, keyHash: Int64, level: Int64) : Int64 =
+    if node == 0 then
+        0
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            let storedKeyPtr = __raw_get(ptr, 0) in
+            let storedKey = __int64_to_string(storedKeyPtr) in
+            if __string_eq(storedKey, key) then
+                let _ = __refcount_dec_string(storedKey) in
+                0
+            else
+                node
+        else if tag == 1 then
+            // Internal node
+            let chunk = Stdlib.Dict.hashChunk(keyHash, level) in
+            let bitmap = __raw_get(ptr, 0) in
+            if Stdlib.Dict.hasBit(bitmap, chunk) then
+                let idx = Stdlib.Dict.childIndex(bitmap, chunk) in
+                let oldChild = __raw_get(ptr, 8 + (idx * 8)) in
+                let newChild = Stdlib.Dict.__removeHelper_str(oldChild, key, keyHash, level + 1) in
+                if newChild == 0 then
+                    // Child was removed - need to update this node
+                    let numChildren = Stdlib.Int64.popcount(bitmap) in
+                    if numChildren == 1 then
+                        // This was the only child - return empty
+                        0
+                    else if numChildren == 2 then
+                        // Two children, one being removed - check if we can collapse
+                        let otherIdx = 1 - idx in
+                        let otherChild = __raw_get(ptr, 8 + (otherIdx * 8)) in
+                        let otherTag = Stdlib.Dict.__getTag(otherChild) in
+                        if otherTag == 2 then
+                            // Other child is a leaf - collapse to it
+                            otherChild
+                        else
+                            // Other child is internal - can't collapse
+                            let newBitmap = Stdlib.Dict.clearBit(bitmap, chunk) in
+                            Stdlib.Dict.__copyInternalWithRemove(ptr, bitmap, newBitmap, idx)
+                    else
+                        // More than 2 children - create new node without removed child
+                        let newBitmap = Stdlib.Dict.clearBit(bitmap, chunk) in
+                        Stdlib.Dict.__copyInternalWithRemove(ptr, bitmap, newBitmap, idx)
+                else if newChild == oldChild then
+                    // Child unchanged - return unchanged
+                    node
+                else
+                    // Child was modified (but not removed) - update
+                    Stdlib.Dict.__copyInternalWithUpdate(ptr, bitmap, idx, newChild)
+            else
+                // Bit not set - key not in this subtree
+                node
+        else
+            // Unknown tag - return unchanged
+            node
+
+def Stdlib.Dict.remove_str(dict: Int64, key: String) : Int64 =
+    let keyHash = __string_hash(key) in
+    Stdlib.Dict.__removeHelper_str(dict, key, keyHash, 0)
+
+// =============================================================================
+// Dict cleanup for string keys
+// =============================================================================
+// When a Dict with string keys is freed, we need to traverse the entire HAMT
+// and decrement refcounts on all stored string keys, then free the nodes.
+
+// Cleanup a leaf node - decrement key refcount and free
+def Stdlib.Dict.__cleanupLeaf_str(ptr: RawPtr) : Unit =
+    let keyPtr = __raw_get(ptr, 0) in
+    let key = __int64_to_string(keyPtr) in
+    let _ = __refcount_dec_string(key) in
+    __raw_free(ptr)
+
+// Helper to clean a single child node inline
+def Stdlib.Dict.__cleanupChild_str(child: Int64) : Unit =
+    if child == 0 then
+        ()
+    else
+        let childTag = Stdlib.Dict.__getTag(child) in
+        let childPtr = __int64_to_rawptr(Stdlib.Dict.__clearTag(child)) in
+        if childTag == 2 then
+            // Leaf - clean it up
+            Stdlib.Dict.__cleanupLeaf_str(childPtr)
+        else if childTag == 1 then
+            // Internal - recursively clean its children first
+            let childBitmap = __raw_get(childPtr, 0) in
+            let _ = Stdlib.Dict.__cleanupInternalChildren_str(childPtr, childBitmap, 0) in
+            __raw_free(childPtr)
+        else
+            ()
+
+// Cleanup internal node's children one by one
+def Stdlib.Dict.__cleanupInternalChildren_str(ptr: RawPtr, bitmap: Int64, bit: Int64) : Unit =
+    if bit >= 64 then
+        ()
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get(ptr, 8 + (idx * 8)) in
+        let _ = Stdlib.Dict.__cleanupChild_str(child) in
+        Stdlib.Dict.__cleanupInternalChildren_str(ptr, bitmap, bit + 1)
+    else
+        Stdlib.Dict.__cleanupInternalChildren_str(ptr, bitmap, bit + 1)
+
+// Main cleanup function - traverses entire HAMT and frees all nodes
+def Stdlib.Dict.__cleanup_str(node: Int64) : Unit =
+    if node == 0 then
+        ()
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            // Leaf node - decrement key refcount and free node
+            Stdlib.Dict.__cleanupLeaf_str(ptr)
+        else if tag == 1 then
+            // Internal node - recurse on all children, then free
+            let bitmap = __raw_get(ptr, 0) in
+            let _ = Stdlib.Dict.__cleanupInternalChildren_str(ptr, bitmap, 0) in
+            __raw_free(ptr)
+        else
+            ()

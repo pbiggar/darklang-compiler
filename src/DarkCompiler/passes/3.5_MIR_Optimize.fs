@@ -44,6 +44,10 @@ let hasSideEffects (instr: Instr) : bool =
     | FloatNeg _ -> false   // Pure float operation
     | IntToFloat _ -> false // Pure conversion
     | FloatToInt _ -> false // Pure conversion
+    | StringHash _ -> false  // Pure
+    | StringEq _ -> false    // Pure
+    | RefCountIncString _ -> true   // Mutates refcount
+    | RefCountDecString _ -> true   // Mutates refcount
 
 /// Get the destination VReg of an instruction (if any)
 let getInstrDest (instr: Instr) : VReg option =
@@ -70,12 +74,16 @@ let getInstrDest (instr: Instr) : VReg option =
     | FloatNeg (dest, _) -> Some dest
     | IntToFloat (dest, _) -> Some dest
     | FloatToInt (dest, _) -> Some dest
+    | StringHash (dest, _) -> Some dest
+    | StringEq (dest, _, _) -> Some dest
     | HeapStore _ -> None
     | RefCountInc _ -> None
     | RefCountDec _ -> None
     | Print _ -> None
     | RawFree _ -> None
     | RawSet _ -> None
+    | RefCountIncString _ -> None
+    | RefCountDecString _ -> None
 
 /// Get all VRegs used by an instruction
 let getInstrUses (instr: Instr) : Set<VReg> =
@@ -113,6 +121,10 @@ let getInstrUses (instr: Instr) : Set<VReg> =
     | FloatNeg (_, src) -> fromOperand src
     | IntToFloat (_, src) -> fromOperand src
     | FloatToInt (_, src) -> fromOperand src
+    | StringHash (_, str) -> fromOperand str
+    | StringEq (_, left, right) -> Set.union (fromOperand left) (fromOperand right)
+    | RefCountIncString str -> fromOperand str
+    | RefCountDecString str -> fromOperand str
 
 /// Get VRegs used by terminator
 let getTerminatorUses (term: Terminator) : Set<VReg> =
@@ -272,6 +284,10 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | FloatNeg (dest, src) -> FloatNeg (dest, p src)
     | IntToFloat (dest, src) -> IntToFloat (dest, p src)
     | FloatToInt (dest, src) -> FloatToInt (dest, p src)
+    | StringHash (dest, str) -> StringHash (dest, p str)
+    | StringEq (dest, left, right) -> StringEq (dest, p left, p right)
+    | RefCountIncString str -> RefCountIncString (p str)
+    | RefCountDecString str -> RefCountDecString (p str)
 
 /// Apply copy propagation to terminator
 let propagateCopyTerminator (copies: CopyMap) (term: Terminator) : Terminator =

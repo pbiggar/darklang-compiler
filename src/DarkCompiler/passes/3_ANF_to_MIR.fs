@@ -111,6 +111,10 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.FloatNeg atom -> maxTempIdInAtom atom
     | ANF.IntToFloat atom -> maxTempIdInAtom atom
     | ANF.FloatToInt atom -> maxTempIdInAtom atom
+    | ANF.StringHash str -> maxTempIdInAtom str
+    | ANF.StringEq (left, right) -> max (maxTempIdInAtom left) (maxTempIdInAtom right)
+    | ANF.RefCountIncString str -> maxTempIdInAtom str
+    | ANF.RefCountDecString str -> maxTempIdInAtom str
 
 /// Find the maximum TempId in an AExpr
 let rec maxTempIdInAExpr (expr: ANF.AExpr) : int =
@@ -191,6 +195,10 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.FloatNeg atom -> collectStringsFromAtom atom
     | ANF.IntToFloat atom -> collectStringsFromAtom atom
     | ANF.FloatToInt atom -> collectStringsFromAtom atom
+    | ANF.StringHash str -> collectStringsFromAtom str
+    | ANF.StringEq (left, right) -> collectStringsFromAtom left @ collectStringsFromAtom right
+    | ANF.RefCountIncString str -> collectStringsFromAtom str
+    | ANF.RefCountDecString str -> collectStringsFromAtom str
 
 /// Collect all float literals from a CExpr
 let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
@@ -232,6 +240,10 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
     | ANF.FloatNeg atom -> collectFloatsFromAtom atom
     | ANF.IntToFloat atom -> collectFloatsFromAtom atom
     | ANF.FloatToInt atom -> collectFloatsFromAtom atom
+    | ANF.StringHash str -> collectFloatsFromAtom str
+    | ANF.StringEq (left, right) -> collectFloatsFromAtom left @ collectFloatsFromAtom right
+    | ANF.RefCountIncString str -> collectFloatsFromAtom str
+    | ANF.RefCountDecString str -> collectFloatsFromAtom str
 
 /// Collect all string literals from an ANF expression
 let rec collectStringsFromExpr (expr: ANF.AExpr) : string list =
@@ -606,6 +618,21 @@ let rec convertExpr
                 | ANF.FloatToInt atom ->
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.FloatToInt (destReg, op)])
+                | ANF.StringHash strAtom ->
+                    atomToOperand builder strAtom
+                    |> Result.map (fun strOp -> [MIR.StringHash (destReg, strOp)])
+                | ANF.StringEq (leftAtom, rightAtom) ->
+                    atomToOperand builder leftAtom
+                    |> Result.bind (fun leftOp ->
+                        atomToOperand builder rightAtom
+                        |> Result.map (fun rightOp ->
+                            [MIR.StringEq (destReg, leftOp, rightOp)]))
+                | ANF.RefCountIncString strAtom ->
+                    atomToOperand builder strAtom
+                    |> Result.map (fun strOp -> [MIR.RefCountIncString strOp])
+                | ANF.RefCountDecString strAtom ->
+                    atomToOperand builder strAtom
+                    |> Result.map (fun strOp -> [MIR.RefCountDecString strOp])
 
             match instrsResult with
             | Error err -> Error err
@@ -963,6 +990,21 @@ and convertExprToOperand
                 | ANF.FloatToInt atom ->
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.FloatToInt (destReg, op)])
+                | ANF.StringHash strAtom ->
+                    atomToOperand builder strAtom
+                    |> Result.map (fun strOp -> [MIR.StringHash (destReg, strOp)])
+                | ANF.StringEq (leftAtom, rightAtom) ->
+                    atomToOperand builder leftAtom
+                    |> Result.bind (fun leftOp ->
+                        atomToOperand builder rightAtom
+                        |> Result.map (fun rightOp ->
+                            [MIR.StringEq (destReg, leftOp, rightOp)]))
+                | ANF.RefCountIncString strAtom ->
+                    atomToOperand builder strAtom
+                    |> Result.map (fun strOp -> [MIR.RefCountIncString strOp])
+                | ANF.RefCountDecString strAtom ->
+                    atomToOperand builder strAtom
+                    |> Result.map (fun strOp -> [MIR.RefCountDecString strOp])
 
             // Let bindings accumulate instructions, pass through join label
             match instrsResult with

@@ -122,6 +122,12 @@ type Instr =
     | RawFree of ptr:Reg                          // Manually free raw memory
     | RawGet of dest:Reg * ptr:Reg * byteOffset:Reg  // Read 8 bytes at offset
     | RawSet of ptr:Reg * byteOffset:Reg * value:Reg  // Write 8 bytes at offset
+    // String intrinsics (for Dict with string keys)
+    | StringHash of dest:Reg * str:Operand        // FNV-1a hash of string, returns Int64
+    | StringEq of dest:Reg * left:Operand * right:Operand // Byte-wise string equality
+    // String reference counting (at dynamic offset)
+    | RefCountIncString of str:Operand            // Increment string ref count (at [str + 8 + len])
+    | RefCountDecString of str:Operand            // Decrement string ref count, free if zero
 
 /// Basic block label
 type Label = string
