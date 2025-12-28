@@ -99,8 +99,9 @@ let lirPhysFPRegToARM64FReg (physReg: LIR.PhysFPReg) : ARM64.FReg =
 let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64.FReg, string> =
     match freg with
     | LIR.FPhysical physReg -> Ok (lirPhysFPRegToARM64FReg physReg)
-    | LIR.FVirtual 1000 -> Ok ARM64.D10  // Left temp for binary ops
-    | LIR.FVirtual 1001 -> Ok ARM64.D11  // Right temp for binary ops
+    // Binary op temps use D0-D1 (caller-saved) to avoid conflicts with FVirtual 0-7 (D8-D15)
+    | LIR.FVirtual 1000 -> Ok ARM64.D0  // Left temp for binary ops
+    | LIR.FVirtual 1001 -> Ok ARM64.D1  // Right temp for binary ops
     | LIR.FVirtual n when n >= 3000 && n < 4000 ->
         // Temps for float call arguments - use D12, D13, D14, D15
         let tempIdx = n - 3000

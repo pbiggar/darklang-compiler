@@ -2,24 +2,27 @@
 // Computes partial sum of 1/k^2 series (converges to pi^2/6)
 // From: Julia micro-benchmarks
 //
-// STATUS: NOT YET IMPLEMENTABLE
-// MISSING FEATURES:
-// - Float division (1.0 / x)
-// - Int64 to Float conversion
-//
 // This benchmark tests:
 // - Floating point arithmetic
-// - Simple loops
+// - Simple loops (via recursion)
 // - Numerical precision
 
-// TODO: Implement when float division works
-//
-// def pisum(n: Int64) : Float =
-//     let mutable s = 0.0
-//     for _ in 1..500 do
-//         s = 0.0
-//         for k in 1..n do
-//             s = s + 1.0 / Stdlib.Int64.toFloat(k * k)
-//     s
+// Compute sum of 1/k^2 from k=1 to n
+def innerSum(k: Int64, n: Int64, acc: Float) : Float =
+    if k > n then
+        acc
+    else
+        let kf = Stdlib.Int64.toFloat(k) in
+        innerSum(k + 1, n, acc + 1.0 / (kf * kf))
 
-0
+// Run the inner sum 'rounds' times, returning the last result
+def pisum(rounds: Int64, n: Int64, lastResult: Float) : Float =
+    if rounds <= 0 then
+        lastResult
+    else
+        pisum(rounds - 1, n, innerSum(1, n, 0.0))
+
+// Run with smaller values until TCO is implemented
+// Original: 500 rounds with n=10000
+// Current: 5 rounds with n=1000 (to avoid stack overflow)
+pisum(5, 1000, 0.0)

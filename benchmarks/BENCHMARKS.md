@@ -22,6 +22,7 @@ Comprehensive benchmark suite for the Darklang compiler, inspired by standard be
 | tak | Recursion | Takeuchi function, nested calls |
 | binary_trees | Memory | Heap allocation, tree traversal |
 | primes | Arithmetic | Integer ops, conditionals, loops |
+| pisum | Numerical | Float division, Int64 to Float (reduced size for no-TCO) |
 
 ---
 
@@ -32,16 +33,15 @@ but the Dark implementation is a stub pending required language features.
 
 | Benchmark | Category | Missing Features |
 |-----------|----------|------------------|
-| nbody | Physics/Float | Float sqrt, Float comparisons |
-| mandelbrot | Numerical | Float comparisons (>, <, >=, <=) |
+| nbody | Physics/Float | Float register allocation bug (complex expressions) |
+| mandelbrot | Numerical | Float register allocation bug (complex expressions) |
 | spectral_norm | Matrix/Numerical | Float sqrt, Float division, Array indexing |
 | fannkuch | Permutation | Mutable arrays, In-place reversal |
 | quicksort | Sorting | List filtering with closures |
 | nqueen | Backtracking | Bit manipulation tricks (two's complement) |
 | matmul | Numerical | 2D array indexing, nested iteration |
-| pisum | Numerical | Float division, Int to Float conversion |
 | collatz | Iteration | TCO (implementable but may stack overflow) |
-| leibniz | Numerical | Float division, Float negation, TCO |
+| leibniz | Numerical | Float register allocation bug, TCO |
 
 ---
 
