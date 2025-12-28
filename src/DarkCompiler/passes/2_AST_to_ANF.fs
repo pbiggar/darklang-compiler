@@ -3169,6 +3169,18 @@ type ConversionResult = {
     ModuleRegistry: AST.ModuleRegistry
 }
 
+/// Result type for user-only ANF conversion (functions not merged with stdlib)
+/// Used for Phase 4 optimization: cache stdlib MIR separately
+type UserOnlyResult = {
+    UserFunctions: ANF.Function list   // Only user functions, not merged with stdlib
+    MainExpr: ANF.AExpr                // User's main expression
+    TypeReg: TypeRegistry              // Merged registries (for lookups)
+    VariantLookup: VariantLookup
+    FuncReg: FunctionRegistry
+    FuncParams: Map<string, (string * AST.Type) list>
+    ModuleRegistry: AST.ModuleRegistry
+}
+
 /// Convert a program to ANF with type information for reference counting
 let convertProgramWithTypes (program: AST.Program) : Result<ConversionResult, string> =
     // First, monomorphize the program (specialize generic functions, replace TypeApp with Call)
@@ -3365,6 +3377,108 @@ let convertUserWithStdlib
                 // 5. Concatenate stdlib ANF functions with user ANF functions
                 let (ANF.Program (stdlibFuncs, _stdlibMain)) = stdlibResult.Program
                 { Program = ANF.Program (stdlibFuncs @ userAnfFuncs, anfExpr)
+                  TypeReg = mergedTypeReg
+                  VariantLookup = mergedVariantLookup
+                  FuncReg = mergedFuncReg
+                  FuncParams = mergedFuncParams
+                  ModuleRegistry = moduleRegistry })
+        | [] ->
+            Error "Program must have a main expression"
+        | _ ->
+            Error "Multiple top-level expressions not allowed"))
+
+/// Convert user program to ANF WITHOUT merging with stdlib functions.
+/// Returns user functions separately for MIR-level caching optimization.
+/// The registries are still merged to allow proper lookups during conversion.
+let convertUserOnly
+    (stdlibGenericDefs: GenericFuncDefs)
+    (stdlibResult: ConversionResult)
+    (userProgram: AST.Program) : Result<UserOnlyResult, string> =
+    // 1. Run transformations on user code only (with access to stdlib generics)
+    let monomorphizedProgram = monomorphizeWithExternalDefs stdlibGenericDefs userProgram
+    let inlinedProgram = inlineLambdasInProgram monomorphizedProgram
+    liftLambdasInProgram inlinedProgram
+    |> Result.bind (fun liftedProgram ->
+    let (AST.Program topLevels) = liftedProgram
+    let varGen = ANF.VarGen 0
+
+    // 2. Build registries from user code only
+    let userTypeReg : TypeRegistry =
+        topLevels
+        |> List.choose (function
+            | AST.TypeDef (AST.RecordDef (name, _typeParams, fields)) -> Some (name, fields)
+            | _ -> None)
+        |> Map.ofList
+
+    let userVariantLookup : VariantLookup =
+        topLevels
+        |> List.choose (function
+            | AST.TypeDef (AST.SumTypeDef (typeName, typeParams, variants)) ->
+                Some (typeName, typeParams, variants)
+            | _ -> None)
+        |> List.collect (fun (typeName, typeParams, variants) ->
+            variants
+            |> List.mapi (fun idx variant -> (variant.Name, (typeName, typeParams, idx, variant.Payload))))
+        |> Map.ofList
+
+    let functions = topLevels |> List.choose (function AST.FunctionDef f -> Some f | _ -> None)
+    let expressions = topLevels |> List.choose (function AST.Expression e -> Some e | _ -> None)
+
+    let userFuncReg : FunctionRegistry =
+        functions
+        |> List.map (fun f ->
+            let paramTypes = f.Params |> List.map snd
+            let funcType = AST.TFunction (paramTypes, f.ReturnType)
+            (f.Name, funcType))
+        |> Map.ofList
+
+    let userFuncParams : Map<string, (string * AST.Type) list> =
+        functions
+        |> List.map (fun f -> (f.Name, f.Params))
+        |> Map.ofList
+
+    // 3. Merge with stdlib registries (stdlib first, user overlays)
+    let mergedTypeReg = mergeMaps stdlibResult.TypeReg userTypeReg
+    let mergedVariantLookup = mergeMaps stdlibResult.VariantLookup userVariantLookup
+    let mergedFuncReg = mergeMaps stdlibResult.FuncReg userFuncReg
+
+    // Get module function parameters from cached stdlib result
+    let moduleRegistry = stdlibResult.ModuleRegistry
+    let moduleFuncParams : Map<string, (string * AST.Type) list> =
+        moduleRegistry
+        |> Map.toList
+        |> List.map (fun (qualifiedName, moduleFunc) ->
+            let paramList = moduleFunc.ParamTypes |> List.mapi (fun i t -> ($"arg{i}", t))
+            (qualifiedName, paramList))
+        |> Map.ofList
+
+    let mergedFuncParams = mergeMaps stdlibResult.FuncParams (mergeMaps userFuncParams moduleFuncParams)
+
+    // 4. Convert user functions with merged registries for lookups
+    let rec convertFunctions (funcs: AST.FunctionDef list) (vg: ANF.VarGen) (acc: ANF.Function list) : Result<ANF.Function list * ANF.VarGen, string> =
+        match funcs with
+        | [] -> Ok (List.rev acc, vg)
+        | func :: rest ->
+            convertFunction func vg mergedTypeReg mergedVariantLookup mergedFuncReg moduleRegistry
+            |> Result.bind (fun (anfFunc, vg') ->
+                convertFunctions rest vg' (anfFunc :: acc))
+
+    // Validate no function is named "main" (reserved for synthesized entry point)
+    let hasMainFunc = functions |> List.exists (fun f -> f.Name = "main")
+    if hasMainFunc then
+        Error "Function name 'main' is reserved"
+    else
+
+    convertFunctions functions varGen []
+    |> Result.bind (fun (userAnfFuncs, varGen1) ->
+        match expressions with
+        | [expr] ->
+            let emptyEnv : VarEnv = Map.empty
+            toANF expr varGen1 emptyEnv mergedTypeReg mergedVariantLookup mergedFuncReg moduleRegistry
+            |> Result.map (fun (anfExpr, _) ->
+                // Return user functions ONLY (not merged with stdlib)
+                { UserFunctions = userAnfFuncs
+                  MainExpr = anfExpr
                   TypeReg = mergedTypeReg
                   VariantLookup = mergedVariantLookup
                   FuncReg = mergedFuncReg

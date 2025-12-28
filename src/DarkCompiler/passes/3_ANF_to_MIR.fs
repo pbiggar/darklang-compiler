@@ -1212,3 +1212,126 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
     }
     let allFuncs = mirFuncs @ [startFunc]
     Ok (MIR.Program (allFuncs, stringPool, floatPool), finalBuilder.RegGen)
+
+// ============================================================================
+// MIR Program Merging (for stdlib MIR caching optimization)
+// ============================================================================
+
+/// Offset pool references in an operand
+let private offsetOperand (strOffset: int) (fltOffset: int) (op: MIR.Operand) : MIR.Operand =
+    match op with
+    | MIR.StringRef idx -> MIR.StringRef (idx + strOffset)
+    | MIR.FloatRef idx -> MIR.FloatRef (idx + fltOffset)
+    | other -> other
+
+/// Offset pool references in a list of operands
+let private offsetOperands strOffset fltOffset ops =
+    List.map (offsetOperand strOffset fltOffset) ops
+
+/// Offset pool references in a phi source
+let private offsetPhiSource strOffset fltOffset (op, label) =
+    (offsetOperand strOffset fltOffset op, label)
+
+/// Offset pool references in an instruction
+let private offsetInstr (strOffset: int) (fltOffset: int) (instr: MIR.Instr) : MIR.Instr =
+    match instr with
+    | MIR.Mov (dest, src, vt) -> MIR.Mov (dest, offsetOperand strOffset fltOffset src, vt)
+    | MIR.BinOp (dest, op, left, right, t) -> MIR.BinOp (dest, op, offsetOperand strOffset fltOffset left, offsetOperand strOffset fltOffset right, t)
+    | MIR.UnaryOp (dest, op, src) -> MIR.UnaryOp (dest, op, offsetOperand strOffset fltOffset src)
+    | MIR.Call (dest, name, args) -> MIR.Call (dest, name, offsetOperands strOffset fltOffset args)
+    | MIR.IndirectCall (dest, func, args) -> MIR.IndirectCall (dest, offsetOperand strOffset fltOffset func, offsetOperands strOffset fltOffset args)
+    | MIR.ClosureAlloc (dest, name, caps) -> MIR.ClosureAlloc (dest, name, offsetOperands strOffset fltOffset caps)
+    | MIR.ClosureCall (dest, closure, args) -> MIR.ClosureCall (dest, offsetOperand strOffset fltOffset closure, offsetOperands strOffset fltOffset args)
+    | MIR.HeapAlloc (dest, size) -> MIR.HeapAlloc (dest, size)
+    | MIR.HeapStore (addr, offset, src) -> MIR.HeapStore (addr, offset, offsetOperand strOffset fltOffset src)
+    | MIR.HeapLoad (dest, addr, offset) -> MIR.HeapLoad (dest, addr, offset)
+    | MIR.StringConcat (dest, left, right) -> MIR.StringConcat (dest, offsetOperand strOffset fltOffset left, offsetOperand strOffset fltOffset right)
+    | MIR.RefCountInc (addr, size) -> MIR.RefCountInc (addr, size)
+    | MIR.RefCountDec (addr, size) -> MIR.RefCountDec (addr, size)
+    | MIR.Print (src, vt) -> MIR.Print (offsetOperand strOffset fltOffset src, vt)
+    | MIR.FileReadText (dest, path) -> MIR.FileReadText (dest, offsetOperand strOffset fltOffset path)
+    | MIR.FileExists (dest, path) -> MIR.FileExists (dest, offsetOperand strOffset fltOffset path)
+    | MIR.FileWriteText (dest, path, content) -> MIR.FileWriteText (dest, offsetOperand strOffset fltOffset path, offsetOperand strOffset fltOffset content)
+    | MIR.FileAppendText (dest, path, content) -> MIR.FileAppendText (dest, offsetOperand strOffset fltOffset path, offsetOperand strOffset fltOffset content)
+    | MIR.FloatSqrt (dest, src) -> MIR.FloatSqrt (dest, offsetOperand strOffset fltOffset src)
+    | MIR.FloatAbs (dest, src) -> MIR.FloatAbs (dest, offsetOperand strOffset fltOffset src)
+    | MIR.FloatNeg (dest, src) -> MIR.FloatNeg (dest, offsetOperand strOffset fltOffset src)
+    | MIR.IntToFloat (dest, src) -> MIR.IntToFloat (dest, offsetOperand strOffset fltOffset src)
+    | MIR.FloatToInt (dest, src) -> MIR.FloatToInt (dest, offsetOperand strOffset fltOffset src)
+    | MIR.RawAlloc (dest, numBytes) -> MIR.RawAlloc (dest, offsetOperand strOffset fltOffset numBytes)
+    | MIR.RawFree ptr -> MIR.RawFree (offsetOperand strOffset fltOffset ptr)
+    | MIR.RawGet (dest, ptr, offset) -> MIR.RawGet (dest, offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset offset)
+    | MIR.RawSet (ptr, offset, value) -> MIR.RawSet (offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset offset, offsetOperand strOffset fltOffset value)
+    | MIR.StringHash (dest, str) -> MIR.StringHash (dest, offsetOperand strOffset fltOffset str)
+    | MIR.StringEq (dest, left, right) -> MIR.StringEq (dest, offsetOperand strOffset fltOffset left, offsetOperand strOffset fltOffset right)
+    | MIR.RefCountIncString str -> MIR.RefCountIncString (offsetOperand strOffset fltOffset str)
+    | MIR.RefCountDecString str -> MIR.RefCountDecString (offsetOperand strOffset fltOffset str)
+    | MIR.Phi (dest, sources) -> MIR.Phi (dest, List.map (offsetPhiSource strOffset fltOffset) sources)
+
+/// Offset pool references in a terminator
+let private offsetTerminator (strOffset: int) (fltOffset: int) (term: MIR.Terminator) : MIR.Terminator =
+    match term with
+    | MIR.Ret op -> MIR.Ret (offsetOperand strOffset fltOffset op)
+    | MIR.Branch (cond, trueL, falseL) -> MIR.Branch (offsetOperand strOffset fltOffset cond, trueL, falseL)
+    | MIR.Jump label -> MIR.Jump label
+
+/// Offset pool references in a basic block
+let private offsetBlock (strOffset: int) (fltOffset: int) (block: MIR.BasicBlock) : MIR.BasicBlock =
+    { Label = block.Label
+      Instrs = List.map (offsetInstr strOffset fltOffset) block.Instrs
+      Terminator = offsetTerminator strOffset fltOffset block.Terminator }
+
+/// Offset pool references in a function
+let private offsetFunction (strOffset: int) (fltOffset: int) (func: MIR.Function) : MIR.Function =
+    let offsetBlocks =
+        func.CFG.Blocks
+        |> Map.map (fun _ block -> offsetBlock strOffset fltOffset block)
+    { Name = func.Name
+      Params = func.Params
+      CFG = { Entry = func.CFG.Entry; Blocks = offsetBlocks } }
+
+/// Append a user string pool to stdlib string pool with offset
+let private appendStringPools (stdlibPool: MIR.StringPool) (userPool: MIR.StringPool) : MIR.StringPool =
+    let offset = stdlibPool.NextId
+    let offsetUserStrings =
+        userPool.Strings
+        |> Map.toList
+        |> List.map (fun (idx, value) -> (idx + offset, value))
+        |> Map.ofList
+    let mergedStrings = Map.fold (fun acc k v -> Map.add k v acc) stdlibPool.Strings offsetUserStrings
+    { Strings = mergedStrings
+      NextId = stdlibPool.NextId + userPool.NextId }
+
+/// Append a user float pool to stdlib float pool with offset
+let private appendFloatPools (stdlibPool: MIR.FloatPool) (userPool: MIR.FloatPool) : MIR.FloatPool =
+    let offset = stdlibPool.NextId
+    let offsetUserFloats =
+        userPool.Floats
+        |> Map.toList
+        |> List.map (fun (idx, value) -> (idx + offset, value))
+        |> Map.ofList
+    let mergedFloats = Map.fold (fun acc k v -> Map.add k v acc) stdlibPool.Floats offsetUserFloats
+    { Floats = mergedFloats
+      NextId = stdlibPool.NextId + userPool.NextId }
+
+/// Merge user MIR with cached stdlib MIR.
+/// Offsets user's StringRef/FloatRef indices to account for stdlib pools.
+/// Excludes stdlib's _start function (user's _start is the entry point).
+let mergeMIRPrograms (stdlibMIR: MIR.Program) (userMIR: MIR.Program) : MIR.Program =
+    let (MIR.Program (stdlibFuncs, stdlibStrings, stdlibFloats)) = stdlibMIR
+    let (MIR.Program (userFuncs, userStrings, userFloats)) = userMIR
+
+    let stringOffset = stdlibStrings.NextId
+    let floatOffset = stdlibFloats.NextId
+
+    // Exclude stdlib's _start function (user's _start is the real entry point)
+    let stdlibFuncsNoStart = stdlibFuncs |> List.filter (fun f -> f.Name <> "_start")
+
+    // Offset user function pool references
+    let offsetUserFuncs = userFuncs |> List.map (offsetFunction stringOffset floatOffset)
+
+    // Merge pools (stdlib first, user appended with offset)
+    let mergedStrings = appendStringPools stdlibStrings userStrings
+    let mergedFloats = appendFloatPools stdlibFloats userFloats
+
+    MIR.Program (stdlibFuncsNoStart @ offsetUserFuncs, mergedStrings, mergedFloats)

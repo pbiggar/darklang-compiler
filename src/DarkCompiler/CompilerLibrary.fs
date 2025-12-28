@@ -52,6 +52,8 @@ type StdlibResult = {
     GenericFuncDefs: AST_to_ANF.GenericFuncDefs
     /// Module registry for stdlib intrinsics (built once, reused)
     ModuleRegistry: AST.ModuleRegistry
+    /// Cached MIR program (avoids re-converting stdlib ANF to MIR each compilation)
+    MIRProgram: MIR.Program
 }
 
 /// Load the stdlib.dark file
@@ -113,14 +115,25 @@ let compileStdlib () : Result<StdlibResult, string> =
             match AST_to_ANF.convertProgramWithTypes typedStdlib with
             | Error e -> Error e
             | Ok anfResult ->
-                Ok {
-                    AST = stdlibAst
-                    TypedAST = typedStdlib
-                    TypeCheckEnv = typeCheckEnv
-                    ANFResult = anfResult
-                    GenericFuncDefs = genericFuncDefs
-                    ModuleRegistry = moduleRegistry
-                }
+                // Run RC insertion on stdlib ANF (stdlib functions need ref counting too)
+                match RefCountInsertion.insertRCInProgram anfResult with
+                | Error e -> Error e
+                | Ok anfAfterRC ->
+                    // Convert stdlib ANF to MIR (cached for reuse)
+                    let emptyTypeMap : ANF.TypeMap = Map.empty
+                    let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
+                    match ANF_to_MIR.toMIR anfAfterRC (MIR.RegGen 0) emptyTypeMap emptyTypeReg with
+                    | Error e -> Error e
+                    | Ok (mirProgram, _) ->
+                        Ok {
+                            AST = stdlibAst
+                            TypedAST = typedStdlib
+                            TypeCheckEnv = typeCheckEnv
+                            ANFResult = anfResult
+                            GenericFuncDefs = genericFuncDefs
+                            ModuleRegistry = moduleRegistry
+                            MIRProgram = mirProgram
+                        }
 
 /// Internal: Compile user code with stdlib AST (shared implementation)
 /// This is the core compilation pipeline that does one pass of type-checking and ANF conversion
@@ -534,12 +547,12 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     println $"Program type: {TypeChecking.typeToString programType}"
                     println ""
 
-                // Pass 2: AST → ANF (separate compilation)
-                // User code is converted with access to stdlib's generic function definitions
-                // for on-demand specialization, then concatenated with pre-compiled stdlib ANF.
-                if verbosity >= 1 then println "  [2/8] AST → ANF (separate)..."
-                let anfResult =
-                    AST_to_ANF.convertUserWithStdlib
+                // Pass 2: AST → ANF (user only, separate from stdlib)
+                // User code is converted with access to stdlib's registries for lookups.
+                // User ANF is kept separate for MIR-level caching optimization.
+                if verbosity >= 1 then println "  [2/8] AST → ANF (user only)..."
+                let userOnlyResult =
+                    AST_to_ANF.convertUserOnly
                         stdlib.GenericFuncDefs
                         stdlib.ANFResult
                         typedUserAst
@@ -548,16 +561,25 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     let t = System.Math.Round(anfTime, 1)
                     println $"        {t}ms"
 
-                match anfResult with
+                match userOnlyResult with
                 | Error err ->
                     { Binary = Array.empty
                       Success = false
                       ErrorMessage = Some $"ANF conversion error: {err}" }
-                | Ok convResult ->
-                    // Continue with the rest of the pipeline (same as compileWithStdlibAST)
-                    // Pass 2.5: Reference Count Insertion
+                | Ok userOnly ->
+                    // Create ConversionResult for RC insertion (user functions only)
+                    let userConvResult : AST_to_ANF.ConversionResult = {
+                        Program = ANF.Program (userOnly.UserFunctions, userOnly.MainExpr)
+                        TypeReg = userOnly.TypeReg
+                        VariantLookup = userOnly.VariantLookup
+                        FuncReg = userOnly.FuncReg
+                        FuncParams = userOnly.FuncParams
+                        ModuleRegistry = userOnly.ModuleRegistry
+                    }
+
+                    // Pass 2.5: Reference Count Insertion (user code only)
                     if verbosity >= 1 then println "  [2.5/8] Reference Count Insertion..."
-                    let rcResult = RefCountInsertion.insertRCInProgram convResult
+                    let rcResult = RefCountInsertion.insertRCInProgram userConvResult
                     let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(rcTime, 1)
@@ -568,29 +590,32 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                         { Binary = Array.empty
                           Success = false
                           ErrorMessage = Some $"Reference count insertion error: {err}" }
-                    | Ok anfAfterRC ->
+                    | Ok userAnfAfterRC ->
 
-                    // Pass 2.6: Print Insertion
+                    // Pass 2.6: Print Insertion (user code only)
                     if verbosity >= 1 then println "  [2.6/8] Print Insertion..."
-                    let (ANF.Program (functions, mainExpr)) = anfAfterRC
-                    let anfProgram = PrintInsertion.insertPrint functions mainExpr programType
+                    let (ANF.Program (userFunctions, userMainExpr)) = userAnfAfterRC
+                    let userAnfProgram = PrintInsertion.insertPrint userFunctions userMainExpr programType
                     let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(printTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 3: ANF → MIR
-                    if verbosity >= 1 then println "  [3/8] ANF → MIR..."
+                    // Pass 3: ANF → MIR (user code only, then merge with cached stdlib MIR)
+                    if verbosity >= 1 then println "  [3/8] ANF → MIR (user + cached stdlib)..."
                     let emptyTypeMap : ANF.TypeMap = Map.empty
                     let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
-                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) emptyTypeMap emptyTypeReg
+                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) emptyTypeMap emptyTypeReg
 
-                    match mirResult with
+                    match userMirResult with
                     | Error err ->
                         { Binary = Array.empty
                           Success = false
                           ErrorMessage = Some $"MIR conversion error: {err}" }
-                    | Ok (mirProgram, _) ->
+                    | Ok (userMirProgram, _) ->
+
+                    // Merge user MIR with cached stdlib MIR (offsets pool indices)
+                    let mirProgram = ANF_to_MIR.mergeMIRPrograms stdlib.MIRProgram userMirProgram
 
                     let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime
                     if verbosity >= 2 then
