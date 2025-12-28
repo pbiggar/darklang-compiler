@@ -917,3 +917,94 @@ let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
     | Error err -> Error err
     | Ok lirFuncs ->
         Ok (LIR.Program (lirFuncs, stringPool, floatPool))
+
+// ============================================================================
+// LIR Program Merging (for stdlib LIR caching optimization)
+// ============================================================================
+
+/// Offset pool references in an LIR operand
+let private offsetLIROperand (strOffset: int) (fltOffset: int) (op: LIR.Operand) : LIR.Operand =
+    match op with
+    | LIR.StringRef idx -> LIR.StringRef (idx + strOffset)
+    | LIR.FloatRef idx -> LIR.FloatRef (idx + fltOffset)
+    | other -> other
+
+/// Offset pool references in a list of LIR operands
+let private offsetLIROperands strOffset fltOffset ops =
+    List.map (offsetLIROperand strOffset fltOffset) ops
+
+/// Offset pool references in an LIR instruction
+let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) : LIR.Instr =
+    match instr with
+    // Instructions with Operand fields that may contain StringRef/FloatRef
+    | LIR.Mov (dest, src) -> LIR.Mov (dest, offsetLIROperand strOffset fltOffset src)
+    | LIR.Add (dest, left, right) -> LIR.Add (dest, left, offsetLIROperand strOffset fltOffset right)
+    | LIR.Sub (dest, left, right) -> LIR.Sub (dest, left, offsetLIROperand strOffset fltOffset right)
+    | LIR.Cmp (left, right) -> LIR.Cmp (left, offsetLIROperand strOffset fltOffset right)
+    | LIR.Call (dest, name, args) -> LIR.Call (dest, name, offsetLIROperands strOffset fltOffset args)
+    | LIR.IndirectCall (dest, func, args) -> LIR.IndirectCall (dest, func, offsetLIROperands strOffset fltOffset args)
+    | LIR.ClosureAlloc (dest, name, caps) -> LIR.ClosureAlloc (dest, name, offsetLIROperands strOffset fltOffset caps)
+    | LIR.ClosureCall (dest, closure, args) -> LIR.ClosureCall (dest, closure, offsetLIROperands strOffset fltOffset args)
+    | LIR.ArgMoves moves -> LIR.ArgMoves (moves |> List.map (fun (reg, op) -> (reg, offsetLIROperand strOffset fltOffset op)))
+    | LIR.HeapStore (addr, offset, src) -> LIR.HeapStore (addr, offset, offsetLIROperand strOffset fltOffset src)
+    | LIR.StringConcat (dest, left, right) -> LIR.StringConcat (dest, offsetLIROperand strOffset fltOffset left, offsetLIROperand strOffset fltOffset right)
+    | LIR.FileReadText (dest, path) -> LIR.FileReadText (dest, offsetLIROperand strOffset fltOffset path)
+    | LIR.FileExists (dest, path) -> LIR.FileExists (dest, offsetLIROperand strOffset fltOffset path)
+    | LIR.FileWriteText (dest, path, content) -> LIR.FileWriteText (dest, offsetLIROperand strOffset fltOffset path, offsetLIROperand strOffset fltOffset content)
+    | LIR.FileAppendText (dest, path, content) -> LIR.FileAppendText (dest, offsetLIROperand strOffset fltOffset path, offsetLIROperand strOffset fltOffset content)
+    | LIR.StringHash (dest, str) -> LIR.StringHash (dest, offsetLIROperand strOffset fltOffset str)
+    | LIR.StringEq (dest, left, right) -> LIR.StringEq (dest, offsetLIROperand strOffset fltOffset left, offsetLIROperand strOffset fltOffset right)
+    | LIR.RefCountIncString str -> LIR.RefCountIncString (offsetLIROperand strOffset fltOffset str)
+    | LIR.RefCountDecString str -> LIR.RefCountDecString (offsetLIROperand strOffset fltOffset str)
+    // Instructions with direct pool indices
+    | LIR.PrintString (strIdx, strLen) -> LIR.PrintString (strIdx + strOffset, strLen)
+    | LIR.FLoad (dest, floatIdx) -> LIR.FLoad (dest, floatIdx + fltOffset)
+    // Instructions without pool references - pass through unchanged
+    | LIR.Store _ | LIR.Mul _ | LIR.Sdiv _ | LIR.Msub _ | LIR.Cset _
+    | LIR.And _ | LIR.Orr _ | LIR.Eor _ | LIR.Lsl _ | LIR.Lsr _ | LIR.Mvn _
+    | LIR.SaveRegs | LIR.RestoreRegs | LIR.PrintInt _ | LIR.PrintBool _ | LIR.PrintFloat _
+    | LIR.Exit | LIR.FMov _ | LIR.FAdd _ | LIR.FSub _ | LIR.FMul _ | LIR.FDiv _
+    | LIR.FNeg _ | LIR.FAbs _ | LIR.FSqrt _ | LIR.FCmp _ | LIR.IntToFloat _ | LIR.FloatToInt _
+    | LIR.HeapAlloc _ | LIR.HeapLoad _ | LIR.RefCountInc _ | LIR.RefCountDec _
+    | LIR.PrintHeapString _ | LIR.LoadFuncAddr _ | LIR.RawAlloc _ | LIR.RawFree _
+    | LIR.RawGet _ | LIR.RawSet _ -> instr
+
+/// Offset pool references in an LIR basic block
+let private offsetLIRBlock (strOffset: int) (fltOffset: int) (block: LIR.BasicBlock) : LIR.BasicBlock =
+    { Label = block.Label
+      Instrs = List.map (offsetLIRInstr strOffset fltOffset) block.Instrs
+      Terminator = block.Terminator }  // Terminators don't contain pool refs in LIR
+
+/// Offset pool references in an LIR function
+let private offsetLIRFunction (strOffset: int) (fltOffset: int) (func: LIR.Function) : LIR.Function =
+    let offsetBlocks =
+        func.CFG.Blocks
+        |> Map.map (fun _ block -> offsetLIRBlock strOffset fltOffset block)
+    { Name = func.Name
+      Params = func.Params
+      CFG = { Entry = func.CFG.Entry; Blocks = offsetBlocks }
+      StackSize = func.StackSize
+      UsedCalleeSaved = func.UsedCalleeSaved }
+
+/// Merge user LIR with cached stdlib LIR.
+/// Offsets user's StringRef/FloatRef indices to account for stdlib pools.
+/// Excludes stdlib's _start function (user's _start is the entry point).
+let mergeLIRPrograms (stdlibLIR: LIR.Program) (userLIR: LIR.Program) : LIR.Program =
+    let (LIR.Program (stdlibFuncs, stdlibStrings, stdlibFloats)) = stdlibLIR
+    let (LIR.Program (userFuncs, userStrings, userFloats)) = userLIR
+
+    let stringOffset = stdlibStrings.NextId
+    let floatOffset = stdlibFloats.NextId
+
+    // Exclude stdlib's _start function (user's _start is the real entry point)
+    let stdlibFuncsNoStart = stdlibFuncs |> List.filter (fun f -> f.Name <> "_start")
+
+    // Offset user function pool references
+    let offsetUserFuncs = userFuncs |> List.map (offsetLIRFunction stringOffset floatOffset)
+
+    // Merge pools (stdlib first, user appended with offset)
+    // Reuse the pool merging functions from ANF_to_MIR
+    let mergedStrings = ANF_to_MIR.appendStringPools stdlibStrings userStrings
+    let mergedFloats = ANF_to_MIR.appendFloatPools stdlibFloats userFloats
+
+    LIR.Program (stdlibFuncsNoStart @ offsetUserFuncs, mergedStrings, mergedFloats)

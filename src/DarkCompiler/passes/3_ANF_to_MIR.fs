@@ -1291,7 +1291,7 @@ let private offsetFunction (strOffset: int) (fltOffset: int) (func: MIR.Function
       CFG = { Entry = func.CFG.Entry; Blocks = offsetBlocks } }
 
 /// Append a user string pool to stdlib string pool with offset
-let private appendStringPools (stdlibPool: MIR.StringPool) (userPool: MIR.StringPool) : MIR.StringPool =
+let appendStringPools (stdlibPool: MIR.StringPool) (userPool: MIR.StringPool) : MIR.StringPool =
     let offset = stdlibPool.NextId
     let offsetUserStrings =
         userPool.Strings
@@ -1303,7 +1303,7 @@ let private appendStringPools (stdlibPool: MIR.StringPool) (userPool: MIR.String
       NextId = stdlibPool.NextId + userPool.NextId }
 
 /// Append a user float pool to stdlib float pool with offset
-let private appendFloatPools (stdlibPool: MIR.FloatPool) (userPool: MIR.FloatPool) : MIR.FloatPool =
+let appendFloatPools (stdlibPool: MIR.FloatPool) (userPool: MIR.FloatPool) : MIR.FloatPool =
     let offset = stdlibPool.NextId
     let offsetUserFloats =
         userPool.Floats

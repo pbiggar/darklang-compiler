@@ -54,6 +54,8 @@ type StdlibResult = {
     ModuleRegistry: AST.ModuleRegistry
     /// Cached MIR program (avoids re-converting stdlib ANF to MIR each compilation)
     MIRProgram: MIR.Program
+    /// Cached LIR program (avoids re-converting stdlib MIR to LIR each compilation)
+    LIRProgram: LIR.Program
 }
 
 /// Load the stdlib.dark file
@@ -125,15 +127,20 @@ let compileStdlib () : Result<StdlibResult, string> =
                     match ANF_to_MIR.toMIR anfAfterRC (MIR.RegGen 0) emptyTypeMap emptyTypeReg with
                     | Error e -> Error e
                     | Ok (mirProgram, _) ->
-                        Ok {
-                            AST = stdlibAst
-                            TypedAST = typedStdlib
-                            TypeCheckEnv = typeCheckEnv
-                            ANFResult = anfResult
-                            GenericFuncDefs = genericFuncDefs
-                            ModuleRegistry = moduleRegistry
-                            MIRProgram = mirProgram
-                        }
+                        // Convert stdlib MIR to LIR (cached for reuse)
+                        match MIR_to_LIR.toLIR mirProgram with
+                        | Error e -> Error e
+                        | Ok lirProgram ->
+                            Ok {
+                                AST = stdlibAst
+                                TypedAST = typedStdlib
+                                TypeCheckEnv = typeCheckEnv
+                                ANFResult = anfResult
+                                GenericFuncDefs = genericFuncDefs
+                                ModuleRegistry = moduleRegistry
+                                MIRProgram = mirProgram
+                                LIRProgram = lirProgram
+                            }
 
 /// Internal: Compile user code with stdlib AST (shared implementation)
 /// This is the core compilation pipeline that does one pass of type-checking and ANF conversion
@@ -601,8 +608,8 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                         let t = System.Math.Round(printTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 3: ANF → MIR (user code only, then merge with cached stdlib MIR)
-                    if verbosity >= 1 then println "  [3/8] ANF → MIR (user + cached stdlib)..."
+                    // Pass 3: ANF → MIR (user code only)
+                    if verbosity >= 1 then println "  [3/8] ANF → MIR (user only)..."
                     let emptyTypeMap : ANF.TypeMap = Map.empty
                     let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
                     let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) emptyTypeMap emptyTypeReg
@@ -614,24 +621,24 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                           ErrorMessage = Some $"MIR conversion error: {err}" }
                     | Ok (userMirProgram, _) ->
 
-                    // Merge user MIR with cached stdlib MIR (offsets pool indices)
-                    let mirProgram = ANF_to_MIR.mergeMIRPrograms stdlib.MIRProgram userMirProgram
-
                     let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(mirTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 4: MIR → LIR
-                    if verbosity >= 1 then println "  [4/8] MIR → LIR..."
-                    let lirResult = MIR_to_LIR.toLIR mirProgram
+                    // Pass 4: MIR → LIR (user code only, then merge with cached stdlib LIR)
+                    if verbosity >= 1 then println "  [4/8] MIR → LIR (user + cached stdlib)..."
+                    let userLirResult = MIR_to_LIR.toLIR userMirProgram
 
-                    match lirResult with
+                    match userLirResult with
                     | Error err ->
                         { Binary = Array.empty
                           Success = false
                           ErrorMessage = Some $"LIR conversion error: {err}" }
-                    | Ok lirProgram ->
+                    | Ok userLirProgram ->
+
+                    // Merge user LIR with cached stdlib LIR (offsets pool indices)
+                    let lirProgram = MIR_to_LIR.mergeLIRPrograms stdlib.LIRProgram userLirProgram
 
                     let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime
                     if verbosity >= 2 then
