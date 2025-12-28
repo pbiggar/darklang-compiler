@@ -451,9 +451,13 @@ let main args =
 
             // Run tests in parallel (dynamically determined based on system resources) and print as they complete (in order)
             if allTests.Count > 0 then
-                // Stdlib cache currently disabled - it adds overhead without benefit
-                // because compileWithStdlib still type-checks and ANF-converts the full program
-                println $"  {Colors.gray}(Stdlib cache disabled - needs incremental compilation){Colors.reset}"
+                // Initialize stdlib cache before running tests (compiles stdlib once)
+                // Uses incremental type checking - stdlib TypeCheckEnv is reused
+                match TestDSL.E2ETestRunner.initializeStdlibCache() with
+                | Error e ->
+                    println $"  {Colors.gray}(Stdlib cache init failed: {e}){Colors.reset}"
+                | Ok () ->
+                    println $"  {Colors.gray}(Stdlib cache initialized - incremental type checking){Colors.reset}"
 
                 // Apply filter to tests
                 let testsArray =

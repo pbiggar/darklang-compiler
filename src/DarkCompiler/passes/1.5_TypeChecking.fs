@@ -108,6 +108,17 @@ type TypeCheckEnv = {
     GenericFuncReg: GenericFuncRegistry
 }
 
+/// Merge two TypeCheckEnv, with overlay taking precedence on conflicts
+/// Used for separate compilation: merge stdlib env with user env
+let mergeTypeCheckEnv (baseEnv: TypeCheckEnv) (overlay: TypeCheckEnv) : TypeCheckEnv =
+    let mergeMap m1 m2 = Map.fold (fun acc k v -> Map.add k v acc) m1 m2
+    {
+        TypeReg = mergeMap baseEnv.TypeReg overlay.TypeReg
+        VariantLookup = mergeMap baseEnv.VariantLookup overlay.VariantLookup
+        FuncEnv = mergeMap baseEnv.FuncEnv overlay.FuncEnv
+        GenericFuncReg = mergeMap baseEnv.GenericFuncReg overlay.GenericFuncReg
+    }
+
 /// Apply a substitution to a type, replacing type variables with concrete types
 let rec applySubst (subst: Substitution) (typ: Type) : Type =
     match typ with
@@ -1478,13 +1489,14 @@ let checkFunctionDef (funcDef: FunctionDef) (env: TypeEnv) (typeReg: TypeRegistr
             Error (TypeMismatch (funcDef.ReturnType, bodyType, $"function {funcDef.Name} body")))
 
 /// Internal: Type-check a program and return the type checking environment
-/// This is the core implementation used by both checkProgram and checkProgramWithEnv
-let private checkProgramInternal (program: Program) : Result<Type * Program * TypeCheckEnv, TypeError> =
+/// This is the core implementation used by checkProgram, checkProgramWithEnv, and checkProgramWithBaseEnv
+/// When baseEnv is provided, registries are merged with it (for separate compilation)
+let private checkProgramInternal (baseEnv: TypeCheckEnv option) (program: Program) : Result<Type * Program * TypeCheckEnv, TypeError> =
     let (Program topLevels) = program
 
-    // First pass: collect all type definitions (records)
+    // First pass: collect all type definitions (records) from THIS program
     // Note: typeParams are stored but not fully used yet (future: generic type instantiation)
-    let typeReg : TypeRegistry =
+    let programTypeReg : TypeRegistry =
         topLevels
         |> List.choose (function
             | TypeDef (RecordDef (name, _typeParams, fields)) -> Some (name, fields)
@@ -1499,10 +1511,10 @@ let private checkProgramInternal (program: Program) : Result<Type * Program * Ty
             | _ -> None)
         |> Map.ofList
 
-    // Collect sum type definitions and build variant lookup
+    // Collect sum type definitions and build variant lookup from THIS program
     // Maps variant name -> (type name, type params, tag index, payload type)
     // Type params are included for generic type instantiation at constructor call sites
-    let variantLookup : VariantLookup =
+    let programVariantLookup : VariantLookup =
         topLevels
         |> List.choose (function
             | TypeDef (SumTypeDef (typeName, typeParams, variants)) ->
@@ -1513,7 +1525,7 @@ let private checkProgramInternal (program: Program) : Result<Type * Program * Ty
             |> List.mapi (fun idx variant -> (variant.Name, (typeName, typeParams, idx, variant.Payload))))
         |> Map.ofList
 
-    // Second pass: collect all function signatures
+    // Second pass: collect all function signatures from THIS program
     let funcSigs =
         topLevels
         |> List.choose (function
@@ -1522,13 +1534,13 @@ let private checkProgramInternal (program: Program) : Result<Type * Program * Ty
             | _ -> None)
         |> Map.ofList
 
-    // Build environment with function signatures
-    let funcEnv =
+    // Build environment with function signatures from THIS program
+    let programFuncEnv =
         funcSigs
         |> Map.map (fun _ (paramTypes, returnType) -> TFunction (paramTypes, returnType))
 
-    // Build generic function registry - maps function names to type parameters
-    let genericFuncReg : GenericFuncRegistry =
+    // Build generic function registry from THIS program - maps function names to type parameters
+    let programGenericFuncReg : GenericFuncRegistry =
         topLevels
         |> List.choose (function
             | FunctionDef funcDef when not (List.isEmpty funcDef.TypeParams) ->
@@ -1536,13 +1548,25 @@ let private checkProgramInternal (program: Program) : Result<Type * Program * Ty
             | _ -> None)
         |> Map.ofList
 
-    // Build the type check environment
-    let typeCheckEnv : TypeCheckEnv = {
-        TypeReg = typeReg
-        VariantLookup = variantLookup
-        FuncEnv = funcEnv
-        GenericFuncReg = genericFuncReg
+    // Build the type check environment for THIS program
+    let programEnv : TypeCheckEnv = {
+        TypeReg = programTypeReg
+        VariantLookup = programVariantLookup
+        FuncEnv = programFuncEnv
+        GenericFuncReg = programGenericFuncReg
     }
+
+    // Merge with base environment if provided (for separate compilation)
+    let typeCheckEnv =
+        match baseEnv with
+        | Some existingEnv -> mergeTypeCheckEnv existingEnv programEnv
+        | None -> programEnv
+
+    // Extract the merged registries for use in type checking
+    let typeReg = typeCheckEnv.TypeReg
+    let variantLookup = typeCheckEnv.VariantLookup
+    let funcEnv = typeCheckEnv.FuncEnv
+    let genericFuncReg = typeCheckEnv.GenericFuncReg
 
     // Third pass: type check all function definitions and collect transformed top-levels
     let rec checkAllTopLevels remaining accTopLevels =
@@ -1585,10 +1609,16 @@ let private checkProgramInternal (program: Program) : Result<Type * Program * Ty
 /// Returns the type of the main expression and the transformed program
 /// The transformed program has Call nodes converted to TypeApp where type inference was applied
 let checkProgram (program: Program) : Result<Type * Program, TypeError> =
-    checkProgramInternal program
+    checkProgramInternal None program
     |> Result.map (fun (typ, prog, _env) -> (typ, prog))
 
 /// Type-check a program and return the type checking environment
 /// Use this when you need to reuse the environment (e.g., for stdlib caching)
 let checkProgramWithEnv (program: Program) : Result<Type * Program * TypeCheckEnv, TypeError> =
-    checkProgramInternal program
+    checkProgramInternal None program
+
+/// Type-check a program with a pre-populated base environment (for separate compilation)
+/// The program's definitions are merged with the base environment, allowing lookups
+/// of types/functions from both the base (e.g., stdlib) and the program (e.g., user code)
+let checkProgramWithBaseEnv (baseEnv: TypeCheckEnv) (program: Program) : Result<Type * Program * TypeCheckEnv, TypeError> =
+    checkProgramInternal (Some baseEnv) program

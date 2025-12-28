@@ -79,6 +79,15 @@ let mergePrograms (stdlib: AST.Program) (userProgram: AST.Program) : AST.Program
     let (AST.Program userItems) = userProgram
     AST.Program (stdlibItems @ userItems)
 
+/// Merge typed stdlib with typed user program for ANF conversion
+/// Excludes stdlib's dummy expression - only user's main expression is kept
+let mergeTypedPrograms (stdlibTyped: AST.Program) (userTyped: AST.Program) : AST.Program =
+    let (AST.Program stdlibItems) = stdlibTyped
+    let (AST.Program userItems) = userTyped
+    // Filter out any Expression items from stdlib (dummy main)
+    let stdlibDefsOnly = stdlibItems |> List.filter (function AST.Expression _ -> false | _ -> true)
+    AST.Program (stdlibDefsOnly @ userItems)
+
 /// Compile stdlib in isolation, returning reusable result
 /// This can be called once and the result reused for multiple user program compilations
 let compileStdlib () : Result<StdlibResult, string> =
@@ -476,12 +485,207 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
           Success = false
           ErrorMessage = Some $"Compilation failed: {ex.Message}" }
 
-/// Compile user code with pre-compiled stdlib
-/// This is the main compilation entry point when stdlib is pre-loaded
-/// Note: Currently uses only stdlib.AST; the TypeCheckEnv and ANFResult fields
-/// are not yet utilized for incremental compilation
+/// Compile user code with pre-compiled stdlib (separate compilation)
+/// Uses stdlib.TypeCheckEnv for type checking user code, avoiding re-type-checking stdlib
+/// Still merges typed ASTs for ANF conversion (Phase 2 will optimize that)
 let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (source: string) : CompileResult =
-    compileWithStdlibAST verbosity options stdlib.AST source
+    let sw = Stopwatch.StartNew()
+    try
+        // Pass 1: Parse user code only
+        if verbosity >= 1 then println "  [1/8] Parse..."
+        let parseResult = Parser.parseString source
+        let parseTime = sw.Elapsed.TotalMilliseconds
+        if verbosity >= 2 then
+            let t = System.Math.Round(parseTime, 1)
+            println $"        {t}ms"
+
+        match parseResult with
+        | Error err ->
+            { Binary = Array.empty
+              Success = false
+              ErrorMessage = Some $"Parse error: {err}" }
+        | Ok userAst ->
+            // Pass 1.5: Type Checking (separate - user code with stdlib's TypeCheckEnv)
+            if verbosity >= 1 then println "  [1.5/8] Type Checking (incremental)..."
+            let typeCheckResult = TypeChecking.checkProgramWithBaseEnv stdlib.TypeCheckEnv userAst
+            let typeCheckTime = sw.Elapsed.TotalMilliseconds - parseTime
+            if verbosity >= 2 then
+                let t = System.Math.Round(typeCheckTime, 1)
+                println $"        {t}ms"
+
+            match typeCheckResult with
+            | Error typeErr ->
+                { Binary = Array.empty
+                  Success = false
+                  ErrorMessage = Some $"Type error: {TypeChecking.typeErrorToString typeErr}" }
+            | Ok (programType, typedUserAst, _userEnv) ->
+                if verbosity >= 3 then
+                    println $"Program type: {TypeChecking.typeToString programType}"
+                    println ""
+
+                // Merge stdlib.TypedAST with typedUserAst for ANF conversion
+                // (Phase 2 will optimize this by concatenating ANF directly)
+                // Use mergeTypedPrograms to exclude stdlib's dummy expression
+                let mergedTypedAst = mergeTypedPrograms stdlib.TypedAST typedUserAst
+
+                // Pass 2: AST → ANF
+                if verbosity >= 1 then println "  [2/8] AST → ANF..."
+                let anfResult = AST_to_ANF.convertProgramWithTypes mergedTypedAst
+                let anfTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime
+                if verbosity >= 2 then
+                    let t = System.Math.Round(anfTime, 1)
+                    println $"        {t}ms"
+
+                match anfResult with
+                | Error err ->
+                    { Binary = Array.empty
+                      Success = false
+                      ErrorMessage = Some $"ANF conversion error: {err}" }
+                | Ok convResult ->
+                    // Continue with the rest of the pipeline (same as compileWithStdlibAST)
+                    // Pass 2.5: Reference Count Insertion
+                    if verbosity >= 1 then println "  [2.5/8] Reference Count Insertion..."
+                    let rcResult = RefCountInsertion.insertRCInProgram convResult
+                    let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(rcTime, 1)
+                        println $"        {t}ms"
+
+                    match rcResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"Reference count insertion error: {err}" }
+                    | Ok anfAfterRC ->
+
+                    // Pass 2.6: Print Insertion
+                    if verbosity >= 1 then println "  [2.6/8] Print Insertion..."
+                    let (ANF.Program (functions, mainExpr)) = anfAfterRC
+                    let anfProgram = PrintInsertion.insertPrint functions mainExpr programType
+                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(printTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 3: ANF → MIR
+                    if verbosity >= 1 then println "  [3/8] ANF → MIR..."
+                    let emptyTypeMap : ANF.TypeMap = Map.empty
+                    let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
+                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) emptyTypeMap emptyTypeReg
+
+                    match mirResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"MIR conversion error: {err}" }
+                    | Ok (mirProgram, _) ->
+
+                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(mirTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 4: MIR → LIR
+                    if verbosity >= 1 then println "  [4/8] MIR → LIR..."
+                    let lirResult = MIR_to_LIR.toLIR mirProgram
+
+                    match lirResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"LIR conversion error: {err}" }
+                    | Ok lirProgram ->
+
+                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(lirTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 5: Register Allocation
+                    if verbosity >= 1 then println "  [5/8] Register Allocation..."
+                    let (LIR.Program (funcs, stringPool, floatPool)) = lirProgram
+                    let allocatedFuncs = funcs |> List.map RegisterAllocation.allocateRegisters
+                    let allocatedProgram = LIR.Program (allocatedFuncs, stringPool, floatPool)
+
+                    let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(allocTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 6: Code Generation
+                    if verbosity >= 1 then println "  [6/8] Code Generation..."
+                    let codegenOptions : CodeGen.CodeGenOptions = { DisableFreeList = options.DisableFreeList }
+                    let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
+                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(codegenTime, 1)
+                        println $"        {t}ms"
+
+                    match codegenResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"Code generation error: {err}" }
+                    | Ok arm64Instructions ->
+                        let osResult = Platform.detectOS ()
+                        match osResult with
+                        | Error err ->
+                            { Binary = Array.empty
+                              Success = false
+                              ErrorMessage = Some $"Platform detection error: {err}" }
+                        | Ok os ->
+
+                        // Pass 7: ARM64 Encoding
+                        if verbosity >= 1 then println "  [7/8] ARM64 Encoding..."
+                        let codeFileOffset =
+                            match os with
+                            | Platform.Linux -> 64 + 56
+                            | Platform.MacOS ->
+                                let headerSize = 32
+                                let pageZeroCommandSize = 72
+                                let numTextSections = if stringPool.Strings.IsEmpty then 1 else 2
+                                let textSegmentCommandSize = 72 + (80 * numTextSections)
+                                let linkeditSegmentCommandSize = 72
+                                let dylinkerCommandSize = 32
+                                let dylibCommandSize = 56
+                                let symtabCommandSize = 24
+                                let dysymtabCommandSize = 80
+                                let uuidCommandSize = 24
+                                let buildVersionCommandSize = 24
+                                let mainCommandSize = 24
+                                let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + dylibCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
+                                (headerSize + commandsSize + 200 + 7) &&& (~~~7)
+                        let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions stringPool floatPool codeFileOffset
+
+                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime
+                        if verbosity >= 2 then
+                            let t = System.Math.Round(encodeTime, 1)
+                            println $"        {t}ms"
+
+                        // Pass 8: Binary Generation
+                        let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
+                        if verbosity >= 1 then println $"  [8/8] Binary Generation ({formatName})..."
+                        let binary =
+                            match os with
+                            | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode stringPool floatPool
+                            | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode stringPool floatPool
+                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
+                        if verbosity >= 2 then
+                            let t = System.Math.Round(binaryTime, 1)
+                            println $"        {t}ms"
+
+                        sw.Stop()
+                        if verbosity >= 1 then
+                            println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
+
+                        { Binary = binary
+                          Success = true
+                          ErrorMessage = None }
+    with
+    | ex ->
+        { Binary = Array.empty
+          Success = false
+          ErrorMessage = Some $"Compilation failed: {ex.Message}" }
 
 /// Compile source code to binary (in-memory, no file I/O)
 /// This loads stdlib and compiles it together with user code in one pass
