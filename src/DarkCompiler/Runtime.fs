@@ -797,6 +797,137 @@ let generatePrintBoolNoNewline () : ARM64.Instr list =
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
     ]
 
+/// Generate ARM64 instructions to print float in D0 to stdout WITHOUT newline
+/// For use in tuple/list element printing
+/// Similar to generatePrintFloat but doesn't add newline or exit
+let generatePrintFloatNoNewline () : ARM64.Instr list =
+    let os =
+        match Platform.detectOS () with
+        | Ok platform -> platform
+        | Error _ -> Platform.Linux
+    let syscalls = Platform.getSyscallNumbers os
+    [
+        // Allocate 48 bytes on stack for buffer
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 48us)
+
+        // Save D0 at [SP+32]
+        ARM64.STR_fp (ARM64.D0, ARM64.SP, 32s)
+
+        // Check if negative using D0's sign bit
+        ARM64.MOVZ (ARM64.X6, 0us, 0)  // X6 = 0 (assume positive)
+        ARM64.FMOV_to_gp (ARM64.X0, ARM64.D0)  // Get bit pattern
+        ARM64.TBNZ (ARM64.X0, 63, 2)  // If sign bit set, set X6 = 1
+        ARM64.B (2)  // Skip setting X6
+        ARM64.MOVZ (ARM64.X6, 1us, 0)  // X6 = 1 (negative)
+
+        // Setup: X1 = buffer pointer (start at end)
+        ARM64.ADD_imm (ARM64.X1, ARM64.SP, 31us)
+
+        // Extract integer part
+        ARM64.FCVTZS (ARM64.X0, ARM64.D0)
+        ARM64.TBNZ (ARM64.X0, 63, 3)
+        ARM64.MOV_reg (ARM64.X2, ARM64.X0)
+        ARM64.B (2)
+        ARM64.NEG (ARM64.X2, ARM64.X0)
+
+        // Check if integer part is zero
+        ARM64.CBZ_offset (ARM64.X2, 51)  // Branch to print_zero_int
+
+        // convert_int_loop
+        ARM64.MOVZ (ARM64.X3, 10us, 0)
+        ARM64.UDIV (ARM64.X4, ARM64.X2, ARM64.X3)
+        ARM64.MSUB (ARM64.X5, ARM64.X4, ARM64.X3, ARM64.X2)
+        ARM64.ADD_imm (ARM64.X5, ARM64.X5, 48us)
+        ARM64.STRB (ARM64.X5, ARM64.X1, 0)
+        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)
+        ARM64.MOV_reg (ARM64.X2, ARM64.X4)
+        ARM64.CBZ_offset (ARM64.X2, 2)
+        ARM64.B (-8)
+
+        // store_minus_if_needed
+        ARM64.CBZ_offset (ARM64.X6, 4)
+        ARM64.MOVZ (ARM64.X3, 45us, 0)
+        ARM64.STRB (ARM64.X3, ARM64.X1, 0)
+        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)
+
+        // print_integer_part
+        ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1us)
+        ARM64.ADD_imm (ARM64.X2, ARM64.SP, 32us)
+        ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1)
+        ARM64.STR (ARM64.X6, ARM64.SP, 40s)
+        ARM64.MOVZ (ARM64.X0, 1us, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.SVC syscalls.SvcImmediate
+
+        // print_decimal_point
+        ARM64.MOVZ (ARM64.X3, 46us, 0)
+        ARM64.STRB (ARM64.X3, ARM64.SP, 0)
+        ARM64.MOVZ (ARM64.X0, 1us, 0)
+        ARM64.MOV_reg (ARM64.X1, ARM64.SP)
+        ARM64.MOVZ (ARM64.X2, 1us, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.SVC syscalls.SvcImmediate
+
+        // Extract and print fractional part (2 decimal places)
+        ARM64.LDR_fp (ARM64.D0, ARM64.SP, 32s)
+        ARM64.FCVTZS (ARM64.X0, ARM64.D0)
+        ARM64.SCVTF (ARM64.D1, ARM64.X0)
+        ARM64.FSUB (ARM64.D0, ARM64.D0, ARM64.D1)
+        ARM64.MOVZ (ARM64.X0, 100us, 0)
+        ARM64.SCVTF (ARM64.D1, ARM64.X0)
+        ARM64.FMUL (ARM64.D0, ARM64.D0, ARM64.D1)
+        ARM64.FCVTZS (ARM64.X7, ARM64.D0)
+
+        // Take absolute value of X7
+        ARM64.TBNZ (ARM64.X7, 63, 2)
+        ARM64.B (2)
+        ARM64.NEG (ARM64.X7, ARM64.X7)
+
+        // Extract digits
+        ARM64.MOVZ (ARM64.X3, 10us, 0)
+        ARM64.UDIV (ARM64.X4, ARM64.X7, ARM64.X3)
+        ARM64.MSUB (ARM64.X5, ARM64.X4, ARM64.X3, ARM64.X7)
+        ARM64.ADD_imm (ARM64.X4, ARM64.X4, 48us)
+        ARM64.STRB (ARM64.X4, ARM64.SP, 1)
+        ARM64.ADD_imm (ARM64.X5, ARM64.X5, 48us)
+        ARM64.STRB (ARM64.X5, ARM64.SP, 2)
+
+        // Print both digits
+        ARM64.MOVZ (ARM64.X0, 1us, 0)
+        ARM64.ADD_imm (ARM64.X1, ARM64.SP, 1us)
+        ARM64.MOVZ (ARM64.X2, 2us, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.SVC syscalls.SvcImmediate
+
+        // Cleanup (no newline, no exit)
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 48us)
+        ARM64.B (4)  // Skip past print_zero_int
+
+        // print_zero_int
+        ARM64.MOVZ (ARM64.X2, 48us, 0)
+        ARM64.STRB (ARM64.X2, ARM64.X1, 0)
+        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)
+        ARM64.B (-44)  // Branch back to store_minus_if_needed
+    ]
+
+/// Generate ARM64 instructions to print heap string WITHOUT newline
+/// Expects: X9 = data address, X10 = length
+/// For use in tuple/list element printing
+let generatePrintStringNoNewline () : ARM64.Instr list =
+    let os =
+        match Platform.detectOS () with
+        | Ok platform -> platform
+        | Error _ -> Platform.Linux
+    let syscalls = Platform.getSyscallNumbers os
+    [
+        // Write string to stdout
+        ARM64.MOVZ (ARM64.X0, 1us, 0)        // fd = stdout
+        ARM64.MOV_reg (ARM64.X1, ARM64.X9)   // buffer = X9
+        ARM64.MOV_reg (ARM64.X2, ARM64.X10)  // length = X10
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.SVC syscalls.SvcImmediate
+    ]
+
 /// Generate ARM64 instructions to print a sequence of literal characters
 /// Used for printing delimiters like "(", ")", "[", "]", ", " etc.
 ///

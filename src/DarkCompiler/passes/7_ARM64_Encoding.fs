@@ -658,6 +658,18 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rd = encodeReg dest
         [sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd]
 
+    | ARM64.FMOV_from_gp (dest, src) ->
+        // FMOV (general to scalar, double): 1001 1110 01 1 00111 000000 Rn Vd
+        // sf=1, ftype=01 (double), rmode=00, opcode=111
+        // Move GP register to 64-bit FP register (bit-for-bit)
+        let sf = 1u <<< 31
+        let fixedBits = 0b0011110011u <<< 21
+        let opcode1 = 0b00111u <<< 16  // FMOV from general
+        let opcode2 = 0b000000u <<< 10
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeFReg dest
+        [sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd]
+
     | ARM64.SCVTF (dest, src) ->
         // SCVTF (scalar, integer to FP, double): 1001 1110 01 1 00010 000000 Rn Rd
         // sf=1 (64-bit int), ftype=01 (double), rmode=00, opcode=010

@@ -697,7 +697,17 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
             let closeParenNewline = [LIR.PrintChars [byte ')'; byte '\n']]
             Ok (saveTupleAddr @ openParen @ elemInstrs @ closeParenNewline)
 
-        | AST.TRecord _ | AST.TList _ | AST.TSum _ | AST.TDict _ ->
+        | AST.TList elemType ->
+            // Print list as [elem1, elem2, ...]
+            let lirSrc = convertOperand src
+            let moveToX19 =
+                match lirSrc with
+                | LIR.Reg (LIR.Physical LIR.X19) -> []
+                | LIR.Reg r -> [LIR.Mov (LIR.Physical LIR.X19, LIR.Reg r)]
+                | other -> [LIR.Mov (LIR.Physical LIR.X19, other)]
+            Ok (moveToX19 @ [LIR.PrintList (LIR.Physical LIR.X19, elemType)])
+
+        | AST.TRecord _ | AST.TSum _ | AST.TDict _ ->
             // Other heap types: print address for now
             let lirSrc = convertOperand src
             let moveToX0 =
@@ -1071,7 +1081,8 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.Store _ | LIR.Mul _ | LIR.Sdiv _ | LIR.Msub _ | LIR.Cset _
     | LIR.And _ | LIR.Orr _ | LIR.Eor _ | LIR.Lsl _ | LIR.Lsr _ | LIR.Mvn _
     | LIR.SaveRegs | LIR.RestoreRegs | LIR.PrintInt _ | LIR.PrintBool _ | LIR.PrintFloat _
-    | LIR.PrintIntNoNewline _ | LIR.PrintBoolNoNewline _
+    | LIR.PrintIntNoNewline _ | LIR.PrintBoolNoNewline _ | LIR.PrintFloatNoNewline _
+    | LIR.PrintHeapStringNoNewline _ | LIR.PrintList _
     | LIR.PrintChars _ | LIR.Exit | LIR.FMov _ | LIR.FAdd _ | LIR.FSub _ | LIR.FMul _ | LIR.FDiv _
     | LIR.FNeg _ | LIR.FAbs _ | LIR.FSqrt _ | LIR.FCmp _ | LIR.IntToFloat _ | LIR.FloatToInt _
     | LIR.HeapAlloc _ | LIR.HeapLoad _ | LIR.RefCountInc _ | LIR.RefCountDec _

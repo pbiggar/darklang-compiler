@@ -107,8 +107,10 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         let argsVRegs = args |> List.choose operandToVReg
         Set.ofList (closureVReg @ argsVRegs)
     | LIR.PrintInt reg | LIR.PrintBool reg
-    | LIR.PrintIntNoNewline reg | LIR.PrintBoolNoNewline reg ->
+    | LIR.PrintIntNoNewline reg | LIR.PrintBoolNoNewline reg
+    | LIR.PrintHeapStringNoNewline reg | LIR.PrintList (reg, _) ->
         regToVReg reg |> Option.toList |> Set.ofList
+    | LIR.PrintFloatNoNewline _ -> Set.empty  // FP register, not GP
     | LIR.PrintChars _ -> Set.empty  // No registers used
     | LIR.HeapAlloc (_, _) -> Set.empty
     | LIR.HeapStore (addr, _, src) ->
@@ -766,6 +768,16 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
     | LIR.PrintBoolNoNewline reg ->
         let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12
         regLoads @ [LIR.PrintBoolNoNewline regFinal]
+
+    | LIR.PrintFloatNoNewline freg -> [LIR.PrintFloatNoNewline freg]
+
+    | LIR.PrintHeapStringNoNewline reg ->
+        let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12
+        regLoads @ [LIR.PrintHeapStringNoNewline regFinal]
+
+    | LIR.PrintList (listPtr, elemType) ->
+        let (ptrFinal, ptrLoads) = loadSpilled mapping listPtr LIR.X12
+        ptrLoads @ [LIR.PrintList (ptrFinal, elemType)]
 
     | LIR.PrintFloat freg -> [LIR.PrintFloat freg]
     | LIR.PrintString (idx, len) -> [LIR.PrintString (idx, len)]

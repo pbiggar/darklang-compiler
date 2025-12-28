@@ -88,8 +88,11 @@ type Instr =
     | PrintIntNoNewline of Reg                  // Print integer without newline (for tuple elements)
     | PrintBoolNoNewline of Reg                 // Print boolean without newline (for tuple elements)
     | PrintFloat of FReg                        // Print float from FP register to stdout
+    | PrintFloatNoNewline of FReg               // Print float without newline (for tuple/list elements)
     | PrintString of stringIndex:int * stringLen:int  // Print string from pool to stdout
+    | PrintHeapStringNoNewline of Reg           // Print heap string without newline (for tuple/list elements)
     | PrintChars of byte list                   // Print literal characters (for tuple/list delimiters)
+    | PrintList of listPtr:Reg * elemType:AST.Type  // Print list [elem1, elem2, ...] with proper element formatting
     | Exit                                       // Exit program with code 0
     // Floating-point instructions
     | FMov of dest:FReg * src:FReg              // Move between FP registers

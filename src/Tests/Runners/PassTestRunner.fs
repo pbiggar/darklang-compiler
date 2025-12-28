@@ -168,6 +168,12 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"PrintIntNoNewline({prettyPrintLIRReg reg})"
     | LIR.PrintBoolNoNewline reg ->
         $"PrintBoolNoNewline({prettyPrintLIRReg reg})"
+    | LIR.PrintFloatNoNewline freg ->
+        $"PrintFloatNoNewline({prettyPrintLIRFReg freg})"
+    | LIR.PrintHeapStringNoNewline reg ->
+        $"PrintHeapStringNoNewline({prettyPrintLIRReg reg})"
+    | LIR.PrintList (listPtr, elemType) ->
+        $"PrintList({prettyPrintLIRReg listPtr}, {elemType})"
     | LIR.SaveRegs ->
         "SaveRegs"
     | LIR.RestoreRegs ->
@@ -623,6 +629,8 @@ let prettyPrintARM64Instr = function
         $"FMOV_reg({dest}, {src})"
     | ARM64.FMOV_to_gp (dest, src) ->
         $"FMOV_to_gp({prettyPrintARM64Reg dest}, {src})"
+    | ARM64.FMOV_from_gp (dest, src) ->
+        $"FMOV_from_gp({dest}, {prettyPrintARM64Reg src})"
     | ARM64.FSQRT (dest, src) ->
         $"FSQRT({dest}, {src})"
     | ARM64.SCVTF (dest, src) ->
