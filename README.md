@@ -13,7 +13,7 @@ dotnet build
 **Run tests:**
 
 ```bash
-dotnet test
+./run-tests
 ```
 
 **Quick test an expression:**
@@ -97,10 +97,24 @@ dotnet clean
 dotnet clean && dotnet build
 ```
 
-**Run specific test:**
+**Run specific tests:**
 
 ```bash
-dotnet test --filter "TestName~<pattern>"
+# Filter by pattern (case-insensitive substring match)
+./run-tests --filter=tuple       # Run tuple tests
+./run-tests --filter=string      # Run string tests
+./run-tests --filter=List.map    # Run List.map tests
+
+# Parallel execution
+./run-tests --parallel=8         # Use 8 parallel workers
+
+# Combine options
+./run-tests --filter=list --parallel=4
+
+# Other options
+./run-tests --help               # Show all options
+./run-tests --build-only         # Just build, don't run
+./run-tests --no-build           # Skip build, run directly
 ```
 
 **Check binary structure (macOS):**

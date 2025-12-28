@@ -34,6 +34,14 @@ Tests:
 - if at decision points, it seems the tests are failing, fix the tests if possible
 - never disable failing tests, or change test cases to no longer hit the bug
 
+Running tests:
+
+- Use `./run-tests` to build and run all tests
+- Use `./run-tests --filter=PATTERN` to run only tests matching PATTERN (case-insensitive)
+- Use `./run-tests --parallel=N` to run with N parallel workers
+- Use `./run-tests --help` for full usage information
+- Common filter patterns: tuple, record, list, string, float, closure, match, adt, generic, stdlib
+
 Best-practices:
 
 - Keep README.md, TODO.md, and docs/ files updated

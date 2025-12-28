@@ -1,0 +1,120 @@
+#!/bin/bash
+# run-tests - Wrapper script to build and run the Dark compiler test suite
+#
+# Usage: ./run-tests [OPTIONS]
+#
+# Options:
+#   --filter=PATTERN   Run only tests matching PATTERN (case-insensitive)
+#   --parallel=N       Run with N parallel test workers
+#   --build-only       Only build, don't run tests
+#   --no-build         Skip building, run tests directly
+#   -h, --help         Show this help message
+#
+# Examples:
+#   ./run-tests                      Run all tests
+#   ./run-tests --filter=tuple       Run tests with 'tuple' in the name
+#   ./run-tests --filter=string      Run tests with 'string' in the name
+#   ./run-tests --parallel=4         Run with 4 parallel workers
+#   ./run-tests --filter=list --parallel=8
+
+set -e
+
+# Parse arguments
+FILTER=""
+PARALLEL=""
+BUILD_ONLY=false
+NO_BUILD=false
+HELP=false
+TEST_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --filter=*)
+            FILTER="${1#*=}"
+            TEST_ARGS+=("--filter=$FILTER")
+            shift
+            ;;
+        --parallel=*)
+            PARALLEL="${1#*=}"
+            TEST_ARGS+=("--parallel=$PARALLEL")
+            shift
+            ;;
+        --build-only)
+            BUILD_ONLY=true
+            shift
+            ;;
+        --no-build)
+            NO_BUILD=true
+            shift
+            ;;
+        -h|--help)
+            HELP=true
+            shift
+            ;;
+        *)
+            # Pass unknown args to test runner
+            TEST_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Show help
+if [ "$HELP" = true ]; then
+    echo "Usage: ./run-tests [OPTIONS]"
+    echo ""
+    echo "Build and run the Dark compiler test suite."
+    echo ""
+    echo "Options:"
+    echo "  --filter=PATTERN   Run only tests matching PATTERN (case-insensitive substring)"
+    echo "  --parallel=N       Run with N parallel test workers"
+    echo "  --build-only       Only build, don't run tests"
+    echo "  --no-build         Skip building, run tests directly"
+    echo "  -h, --help         Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  ./run-tests                          Run all tests"
+    echo "  ./run-tests --filter=tuple           Run tests with 'tuple' in the name"
+    echo "  ./run-tests --filter=string          Run tests with 'string' in the name"
+    echo "  ./run-tests --filter=List.map        Run List.map tests"
+    echo "  ./run-tests --parallel=4             Run with 4 parallel workers"
+    echo "  ./run-tests --filter=list --parallel=8"
+    echo ""
+    echo "Test categories matched by filter:"
+    echo "  tuple, record, list, string, float, int, bool"
+    echo "  closure, match, adt, generic, stdlib"
+    echo "  ANF, MIR, LIR, ARM64, Encoding, Binary"
+    exit 0
+fi
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Build if needed
+if [ "$NO_BUILD" = false ]; then
+    echo "Building..."
+    if ! timeout 120 dotnet build --verbosity quiet 2>&1; then
+        echo "Build failed!"
+        exit 1
+    fi
+    echo "Build complete."
+    echo ""
+fi
+
+if [ "$BUILD_ONLY" = true ]; then
+    echo "Build-only mode, skipping tests."
+    exit 0
+fi
+
+# Find and run the test executable
+TEST_EXE="$SCRIPT_DIR/bin/Tests/Debug/net9.0/Tests"
+
+if [ ! -f "$TEST_EXE" ]; then
+    echo "Error: Test executable not found at $TEST_EXE"
+    echo "Try running without --no-build first."
+    exit 1
+fi
+
+# Run tests
+exec "$TEST_EXE" "${TEST_ARGS[@]}"
