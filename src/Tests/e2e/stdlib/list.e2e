@@ -36,63 +36,88 @@ match Stdlib.List.push<Int64>([2, 3], 1) with | [a, b, c] -> a | _ -> 0 = 1
 Stdlib.List.length<Int64>(Stdlib.List.push<Int64>([1, 2], 0)) = stdout="3\n"
 
 // ===================================================================
-// NOTE: Most List functions are blocked by type checker bug with generic recursion
-// The type checker doesn't properly handle recursive calls that return List<T>
+// Stdlib.List.append - Concatenate two lists
 // ===================================================================
 
-// Stdlib.List.append - blocked by type checker
-// Stdlib.List.length<Int64>(Stdlib.List.append<Int64>([1, 2, 3], [4, 5, 6])) = stdout="6\n"
-// match Stdlib.List.append<Int64>([1, 2], [3, 4]) with | [a, b, c, d] -> a + b + c + d | _ -> 0 = 10
+Stdlib.List.length<Int64>(Stdlib.List.append<Int64>([1, 2, 3], [4, 5, 6])) = stdout="6\n"
+match Stdlib.List.append<Int64>([1, 2], [3, 4]) with | [a, b, c, d] -> a + b + c + d | _ -> 0 = 10
 
+// ===================================================================
 // Stdlib.List.pushBack - Add element to end of list
-// match Stdlib.List.pushBack<Int64>([1, 2], 3) with | [a, b, c] -> c | _ -> 0 = 3
+// ===================================================================
 
+match Stdlib.List.pushBack<Int64>([1, 2], 3) with | [a, b, c] -> c | _ -> 0 = 3
+
+// ===================================================================
 // Stdlib.List.reverse - Reverse a list
+// NOTE: Currently has a bug - returns unreversed list. Needs investigation.
+// ===================================================================
+
 // match Stdlib.List.reverse<Int64>([1, 2, 3]) with | [a, b, c] -> a | _ -> 0 = 3
 
-// Stdlib.List.range - Generate a range of integers
-// Stdlib.List.length<Int64>(Stdlib.List.range(1, 5)) = stdout="5\n"
-
+// ===================================================================
 // Stdlib.List.map - Apply a function to each element
-// match Stdlib.List.map<Int64, Int64>((x: Int64) => x + 1, [1, 2, 3]) with | [a, b, c] -> a + b + c | _ -> 0 = 9
+// ===================================================================
 
+match Stdlib.List.map<Int64, Int64>([1, 2, 3], (x: Int64) => x + 1) with | [a, b, c] -> a + b + c | _ -> 0 = 9
+Stdlib.List.length<Int64>(Stdlib.List.map<Int64, Int64>([1, 2, 3, 4], (x: Int64) => x * 2)) = stdout="4\n"
+
+// ===================================================================
 // Stdlib.List.filter - Keep elements that match predicate
-// Stdlib.List.length<Int64>(Stdlib.List.filter<Int64>((x: Int64) => x > 2, [1, 2, 3, 4, 5])) = stdout="3\n"
+// ===================================================================
 
+Stdlib.List.length<Int64>(Stdlib.List.filter<Int64>([1, 2, 3, 4, 5], (x: Int64) => x > 2)) = stdout="3\n"
+
+// ===================================================================
 // Stdlib.List.fold - Reduce list with accumulator
-// Stdlib.List.fold<Int64, Int64>((acc: Int64, x: Int64) => acc + x, 0, [1, 2, 3, 4, 5]) = 15
+// ===================================================================
 
-// Stdlib.List.all - Check if all elements satisfy predicate
-// Stdlib.List.all<Int64>((x: Int64) => x > 0, [1, 2, 3]) = stdout="true\n"
+Stdlib.List.fold<Int64, Int64>([1, 2, 3, 4, 5], 0, (acc: Int64, x: Int64) => acc + x) = 15
+Stdlib.List.fold<Int64, Int64>([1, 2, 3, 4], 1, (acc: Int64, x: Int64) => acc * x) = 24
 
-// Stdlib.List.any - Check if any element satisfies predicate
-// Stdlib.List.any<Int64>((x: Int64) => x > 2, [1, 2, 3]) = stdout="true\n"
-
+// ===================================================================
 // Stdlib.List.drop - Drop first n elements
-// Stdlib.List.length<Int64>(Stdlib.List.drop<Int64>([1, 2, 3, 4, 5], 2)) = stdout="3\n"
+// ===================================================================
 
+Stdlib.List.length<Int64>(Stdlib.List.drop<Int64>([1, 2, 3, 4, 5], 2)) = stdout="3\n"
+Stdlib.List.length<Int64>(Stdlib.List.drop<Int64>([1, 2, 3], 0)) = stdout="3\n"
+Stdlib.List.length<Int64>(Stdlib.List.drop<Int64>([1, 2, 3], 10)) = stdout="0\n"
+
+// ===================================================================
 // Stdlib.List.take - Take first n elements
-// Stdlib.List.length<Int64>(Stdlib.List.take<Int64>([1, 2, 3, 4, 5], 3)) = stdout="3\n"
-
-// ===================================================================
-// NOTE: Functions not yet implemented due to Option/Result type checker bug
 // ===================================================================
 
-// Stdlib.List.head - needs Option return (blocked by type checker bug)
-// Stdlib.List.head<Int64>([1, 2, 3]) = Stdlib.Option.Option.Some(1)
-// Stdlib.List.head<Int64>([]) = Stdlib.Option.Option.None
+Stdlib.List.length<Int64>(Stdlib.List.take<Int64>([1, 2, 3, 4, 5], 3)) = stdout="3\n"
+Stdlib.List.length<Int64>(Stdlib.List.take<Int64>([1, 2, 3], 0)) = stdout="0\n"
+Stdlib.List.length<Int64>(Stdlib.List.take<Int64>([1, 2], 10)) = stdout="2\n"
 
-// Stdlib.List.tail - needs Option return (blocked by type checker bug)
-// Stdlib.List.tail<Int64>([1, 2, 3]) = Stdlib.Option.Option.Some([2, 3])
-// Stdlib.List.tail<Int64>([]) = Stdlib.Option.Option.None
+// ===================================================================
+// Stdlib.List.head - Get first element or None
+// ===================================================================
 
-// Stdlib.List.last - needs Option return (blocked by type checker bug)
-// Stdlib.List.last<Int64>([1, 2, 3]) = Stdlib.Option.Option.Some(3)
-// Stdlib.List.last<Int64>([]) = Stdlib.Option.Option.None
+Stdlib.Option.withDefault<Int64>(Stdlib.List.head<Int64>([1, 2, 3]), 0) = 1
+Stdlib.Option.isNone<Int64>(Stdlib.List.head<Int64>([])) = stdout="true\n"
 
-// Stdlib.List.getAt - needs Option return (blocked by type checker bug)
-// Stdlib.List.getAt<Int64>([1, 2, 3], 0) = Stdlib.Option.Option.Some(1)
-// Stdlib.List.getAt<Int64>([1, 2, 3], 10) = Stdlib.Option.Option.None
+// ===================================================================
+// Stdlib.List.getAt - Get element at index
+// ===================================================================
 
-// Stdlib.List.findFirst - needs Option return (blocked by type checker bug)
-// Stdlib.List.findFirst<Int64>((x: Int64) => x > 2, [1, 2, 3, 4]) = Stdlib.Option.Option.Some(3)
+Stdlib.Option.withDefault<Int64>(Stdlib.List.getAt<Int64>([10, 20, 30], 0), 0) = 10
+Stdlib.Option.withDefault<Int64>(Stdlib.List.getAt<Int64>([10, 20, 30], 2), 0) = 30
+Stdlib.Option.isNone<Int64>(Stdlib.List.getAt<Int64>([1, 2, 3], 10)) = stdout="true\n"
+
+// ===================================================================
+// Stdlib.List.findFirst - Find first element matching predicate
+// ===================================================================
+
+Stdlib.Option.withDefault<Int64>(Stdlib.List.findFirst<Int64>([1, 2, 3, 4], (x: Int64) => x > 2), 0) = 3
+Stdlib.Option.isNone<Int64>(Stdlib.List.findFirst<Int64>([1, 2, 3], (x: Int64) => x > 10)) = stdout="true\n"
+
+// ===================================================================
+// NOTE: Functions not yet implemented
+// ===================================================================
+
+// Stdlib.List.tail - blocked by parser (can't parse Option<List<a>>)
+// Stdlib.List.last - not yet implemented
+// Stdlib.List.range - not yet implemented
+// Stdlib.List.all/any - not yet implemented
