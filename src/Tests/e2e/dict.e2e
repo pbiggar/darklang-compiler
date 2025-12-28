@@ -160,7 +160,49 @@ let d = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.set<String, Int64>(Stdlib.Dic
 Stdlib.List.length<Int64>(Stdlib.Dict.values<String, Int64>(Stdlib.Dict.empty<String, Int64>())) = 0
 Stdlib.List.length<Int64>(Stdlib.Dict.values<String, Int64>(Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "a", 100))) = 1
 
-// TODO: entries, fold, map, filter tests require parser support for:
-// - Tuple types in generics: List<(k, v)>
-// - Multi-arg function types: (a, k, v) -> a
-// These will be added once the parser is extended.
+// ========== Dict.entries tests ==========
+
+// entries on empty dict
+Stdlib.List.length<(Int64, Int64)>(Stdlib.Dict.entries<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>())) = 0
+
+// entries on single-entry dict
+Stdlib.List.length<(Int64, Int64)>(Stdlib.Dict.entries<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100))) = 1
+
+// entries on two-entry dict
+let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10), 2, 20) in Stdlib.List.length<(Int64, Int64)>(Stdlib.Dict.entries<Int64, Int64>(d)) = 2
+
+// ========== Dict.fold tests ==========
+
+// fold to sum values
+let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10), 2, 20) in Stdlib.Dict.fold<Int64, Int64, Int64>(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + v) = 30
+
+// fold to sum keys
+let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10), 2, 20) in Stdlib.Dict.fold<Int64, Int64, Int64>(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + k) = 3
+
+// fold on empty dict
+Stdlib.Dict.fold<Int64, Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 100, (acc: Int64, k: Int64, v: Int64) => acc + v) = 100
+
+// ========== Dict.map tests ==========
+
+// map to double values
+let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10) in let d2 = Stdlib.Dict.map<Int64, Int64, Int64>(d, (k: Int64, v: Int64) => v * 2) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(d2, 1), -1) = 20
+
+// map preserves structure
+let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10), 2, 20) in Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.map<Int64, Int64, Int64>(d, (k: Int64, v: Int64) => v + k)) = 2
+
+// map on empty dict
+Stdlib.Dict.isEmpty<Int64, Int64>(Stdlib.Dict.map<Int64, Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), (k: Int64, v: Int64) => v * 2)) = stdout="true\n"
+
+// ========== Dict.filter tests ==========
+
+// filter to keep values > 15
+let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10), 2, 20) in Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.filter<Int64, Int64>(d, (k: Int64, v: Int64) => v > 15)) = 1
+
+// filter on empty dict
+Stdlib.Dict.isEmpty<Int64, Int64>(Stdlib.Dict.filter<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), (k: Int64, v: Int64) => v > 0)) = stdout="true\n"
+
+// filter to keep all
+let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10), 2, 20) in Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.filter<Int64, Int64>(d, (k: Int64, v: Int64) => true)) = 2
+
+// filter to keep none
+Stdlib.Dict.isEmpty<Int64, Int64>(Stdlib.Dict.filter<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10), (k: Int64, v: Int64) => false)) = stdout="true\n"

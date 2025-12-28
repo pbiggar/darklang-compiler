@@ -593,7 +593,38 @@ let rec parseTypeArgType (tokens: Token list) : Result<Type * Token list, string
     | TIdent typeName :: rest when System.Char.IsUpper(typeName.[0]) ->
         // Uppercase identifier is a concrete type (record/sum type)
         Ok (TRecord typeName, rest)
+    | TLParen :: rest ->
+        // Tuple type or function type: (Type1, Type2, ...) or (Type1, Type2) -> RetType
+        parseTypeArgTupleElements rest []
+        |> Result.bind (fun (elemTypes, afterElems) ->
+            match afterElems with
+            | TArrow :: returnRest ->
+                // Function type: (params) -> return
+                parseTypeArgType returnRest
+                |> Result.map (fun (returnType, remaining) ->
+                    (TFunction (elemTypes, returnType), remaining))
+            | _ ->
+                // Tuple type: (type, type, ...)
+                if List.length elemTypes < 2 then
+                    Error "Tuple type must have at least 2 elements"
+                else
+                    Ok (TTuple elemTypes, afterElems))
     | _ -> Error "Expected type in type argument"
+
+/// Parse tuple elements in type argument context: Type1, Type2, ... )
+and parseTypeArgTupleElements (tokens: Token list) (acc: Type list) : Result<Type list * Token list, string> =
+    match tokens with
+    | TRParen :: rest ->
+        // End of tuple/parameter list
+        Ok (List.rev acc, rest)
+    | _ ->
+        // Parse a type
+        parseTypeArgType tokens
+        |> Result.bind (fun (ty, remaining) ->
+            match remaining with
+            | TRParen :: rest -> Ok (List.rev (ty :: acc), rest)
+            | TComma :: rest -> parseTypeArgTupleElements rest (ty :: acc)
+            | _ -> Error "Expected ',' or ')' in tuple type")
 
 /// Parse type arguments: <Int64, Bool, Point, t> (concrete types or type vars, for call sites)
 let rec parseTypeArgs (tokens: Token list) (acc: Type list) : Result<Type list * Token list, string> =
@@ -1489,6 +1520,21 @@ let parse (tokens: Token list) : Result<Program, string> =
                         | Some (TShr :: _) -> true  // >> followed by ( - TShr has one > left for outer
                         | Some (TComma :: rest') -> looksLikeTypeArgs rest'
                         | _ -> false
+                    | TLParen :: rest ->  // Tuple type: (Type1, Type2, ...)
+                        // Skip until matching )
+                        let rec skipParens toks depth =
+                            match toks with
+                            | TRParen :: remaining when depth = 1 -> Some remaining
+                            | TRParen :: remaining -> skipParens remaining (depth - 1)
+                            | TLParen :: remaining -> skipParens remaining (depth + 1)
+                            | _ :: remaining -> skipParens remaining depth
+                            | [] -> None
+                        match skipParens rest 1 with
+                        | Some (TGt :: TLParen :: _) -> true  // (T1, T2)>(
+                        | Some (TShr :: _) -> true  // >> followed by ( - TShr has one > left for outer
+                        | Some (TComma :: rest') -> looksLikeTypeArgs rest'  // (T1, T2), more types
+                        | Some (TArrow :: _) -> true  // Function type: (T1, T2) -> R
+                        | _ -> false
                     | _ -> false
                 if looksLikeTypeArgs typeArgsStart then
                     parseTypeArgs typeArgsStart []
@@ -1552,6 +1598,21 @@ let parse (tokens: Token list) : Result<Program, string> =
                     | Some (TGt :: TLParen :: _) -> true
                     | Some (TShr :: _) -> true  // >> followed by ( - TShr has one > left for outer
                     | Some (TComma :: rest') -> looksLikeGenericCall rest'
+                    | _ -> false
+                | TLParen :: rest ->  // Tuple type: (Type1, Type2, ...)
+                    // Skip until matching )
+                    let rec skipParens toks depth =
+                        match toks with
+                        | TRParen :: remaining when depth = 1 -> Some remaining
+                        | TRParen :: remaining -> skipParens remaining (depth - 1)
+                        | TLParen :: remaining -> skipParens remaining (depth + 1)
+                        | _ :: remaining -> skipParens remaining depth
+                        | [] -> None
+                    match skipParens rest 1 with
+                    | Some (TGt :: TLParen :: _) -> true  // (T1, T2)>(
+                    | Some (TShr :: _) -> true  // >> followed by ( - TShr has one > left for outer
+                    | Some (TComma :: rest') -> looksLikeGenericCall rest'  // (T1, T2), more types
+                    | Some (TArrow :: _) -> true  // Function type: (T1, T2) -> R
                     | _ -> false
                 | _ -> false
             if looksLikeGenericCall rest then

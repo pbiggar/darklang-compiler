@@ -1576,6 +1576,10 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
         match Map.tryFind funcName funcReg with
         | Some returnType -> Ok returnType
         | None ->
+            // Check if it's a function parameter (variable with function type)
+            match Map.tryFind funcName typeEnv with
+            | Some (AST.TFunction (_, returnType)) -> Ok returnType
+            | _ ->
             // Check if it's a module function (e.g., Stdlib.File.exists)
             match Stdlib.tryGetFunction moduleRegistry funcName with
             | Some moduleFunc -> Ok moduleFunc.ReturnType

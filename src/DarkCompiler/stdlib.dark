@@ -817,7 +817,127 @@ def Stdlib.Dict.__collectValuesFromChildren<k, v>(ptr: RawPtr, bitmap: Int64, bi
     else
         Stdlib.Dict.__collectValuesFromChildren<k, v>(ptr, bitmap, bit + 1, acc)
 
-// TODO: entries, fold, map, filter functions require parser support for:
-// - Tuple types in generics: List<(k, v)>
-// - Multi-arg function types: (a, k, v) -> a
-// These will be added once the parser is extended.
+// Get all entries from dict as key-value tuples
+def Stdlib.Dict.entries<k, v>(dict: Dict<k, v>) : List<(k, v)> =
+    Stdlib.Dict.__entriesHelper<k, v>(dict, [])
+
+def Stdlib.Dict.__entriesHelper<k, v>(node: Dict<k, v>, acc: List<(k, v)>) : List<(k, v)> =
+    if __dict_is_null<k, v>(node) then
+        acc
+    else
+        let tag = Stdlib.Dict.__getTag<k, v>(node) in
+        let ptr = Stdlib.Dict.__clearTag<k, v>(node) in
+        if tag == 2 then
+            let key = __raw_get<k>(ptr, 0) in
+            let value = __raw_get<v>(ptr, 8) in
+            [(key, value), ...acc]
+        else if tag == 1 then
+            let bitmap = __raw_get<Int64>(ptr, 0) in
+            Stdlib.Dict.__collectEntriesFromChildren<k, v>(ptr, bitmap, 0, acc)
+        else
+            acc
+
+def Stdlib.Dict.__collectEntriesFromChildren<k, v>(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: List<(k, v)>) : List<(k, v)> =
+    if bit >= 64 then
+        acc
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get<Dict<k, v>>(ptr, 8 + (idx * 8)) in
+        let newAcc = Stdlib.Dict.__entriesHelper<k, v>(child, acc) in
+        Stdlib.Dict.__collectEntriesFromChildren<k, v>(ptr, bitmap, bit + 1, newAcc)
+    else
+        Stdlib.Dict.__collectEntriesFromChildren<k, v>(ptr, bitmap, bit + 1, acc)
+
+// Fold over all entries in the dictionary
+def Stdlib.Dict.fold<k, v, a>(dict: Dict<k, v>, init: a, f: (a, k, v) -> a) : a =
+    Stdlib.Dict.__foldHelper<k, v, a>(dict, init, f)
+
+def Stdlib.Dict.__foldHelper<k, v, a>(node: Dict<k, v>, acc: a, f: (a, k, v) -> a) : a =
+    if __dict_is_null<k, v>(node) then
+        acc
+    else
+        let tag = Stdlib.Dict.__getTag<k, v>(node) in
+        let ptr = Stdlib.Dict.__clearTag<k, v>(node) in
+        if tag == 2 then
+            let key = __raw_get<k>(ptr, 0) in
+            let value = __raw_get<v>(ptr, 8) in
+            f(acc, key, value)
+        else if tag == 1 then
+            let bitmap = __raw_get<Int64>(ptr, 0) in
+            Stdlib.Dict.__foldChildren<k, v, a>(ptr, bitmap, 0, acc, f)
+        else
+            acc
+
+def Stdlib.Dict.__foldChildren<k, v, a>(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: a, f: (a, k, v) -> a) : a =
+    if bit >= 64 then
+        acc
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get<Dict<k, v>>(ptr, 8 + (idx * 8)) in
+        let newAcc = Stdlib.Dict.__foldHelper<k, v, a>(child, acc, f) in
+        Stdlib.Dict.__foldChildren<k, v, a>(ptr, bitmap, bit + 1, newAcc, f)
+    else
+        Stdlib.Dict.__foldChildren<k, v, a>(ptr, bitmap, bit + 1, acc, f)
+
+// Map over all values in the dictionary
+def Stdlib.Dict.map<k, v, w>(dict: Dict<k, v>, f: (k, v) -> w) : Dict<k, w> =
+    Stdlib.Dict.__mapHelper<k, v, w>(dict, f)
+
+def Stdlib.Dict.__mapHelper<k, v, w>(node: Dict<k, v>, f: (k, v) -> w) : Dict<k, w> =
+    if __dict_is_null<k, v>(node) then
+        __empty_dict<k, w>()
+    else
+        let tag = Stdlib.Dict.__getTag<k, v>(node) in
+        let ptr = Stdlib.Dict.__clearTag<k, v>(node) in
+        if tag == 2 then
+            let key = __raw_get<k>(ptr, 0) in
+            let value = __raw_get<v>(ptr, 8) in
+            let newValue = f(key, value) in
+            Stdlib.Dict.__allocLeaf<k, w>(key, newValue)
+        else if tag == 1 then
+            let bitmap = __raw_get<Int64>(ptr, 0) in
+            let numChildren = Stdlib.Int64.popcount(bitmap) in
+            let newPtr = Stdlib.Dict.__allocInternal(bitmap, numChildren) in
+            Stdlib.Dict.__mapChildren<k, v, w>(ptr, newPtr, bitmap, 0, numChildren, f)
+        else
+            __empty_dict<k, w>()
+
+def Stdlib.Dict.__mapChildren<k, v, w>(oldPtr: RawPtr, newPtr: RawPtr, bitmap: Int64, idx: Int64, numChildren: Int64, f: (k, v) -> w) : Dict<k, w> =
+    if idx >= numChildren then
+        Stdlib.Dict.__setTag<k, w>(newPtr, 1)
+    else
+        let child = __raw_get<Dict<k, v>>(oldPtr, 8 + (idx * 8)) in
+        let mappedChild = Stdlib.Dict.__mapHelper<k, v, w>(child, f) in
+        let _ = __raw_set<Dict<k, w>>(newPtr, 8 + (idx * 8), mappedChild) in
+        Stdlib.Dict.__mapChildren<k, v, w>(oldPtr, newPtr, bitmap, idx + 1, numChildren, f)
+
+// Filter entries in the dictionary
+def Stdlib.Dict.filter<k, v>(dict: Dict<k, v>, f: (k, v) -> Bool) : Dict<k, v> =
+    Stdlib.Dict.__filterHelper<k, v>(dict, Stdlib.Dict.empty<k, v>(), f)
+
+def Stdlib.Dict.__filterHelper<k, v>(node: Dict<k, v>, acc: Dict<k, v>, f: (k, v) -> Bool) : Dict<k, v> =
+    if __dict_is_null<k, v>(node) then
+        acc
+    else
+        let tag = Stdlib.Dict.__getTag<k, v>(node) in
+        let ptr = Stdlib.Dict.__clearTag<k, v>(node) in
+        if tag == 2 then
+            let key = __raw_get<k>(ptr, 0) in
+            let value = __raw_get<v>(ptr, 8) in
+            if f(key, value) then Stdlib.Dict.set<k, v>(acc, key, value) else acc
+        else if tag == 1 then
+            let bitmap = __raw_get<Int64>(ptr, 0) in
+            Stdlib.Dict.__filterChildren<k, v>(ptr, bitmap, 0, acc, f)
+        else
+            acc
+
+def Stdlib.Dict.__filterChildren<k, v>(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: Dict<k, v>, f: (k, v) -> Bool) : Dict<k, v> =
+    if bit >= 64 then
+        acc
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get<Dict<k, v>>(ptr, 8 + (idx * 8)) in
+        let newAcc = Stdlib.Dict.__filterHelper<k, v>(child, acc, f) in
+        Stdlib.Dict.__filterChildren<k, v>(ptr, bitmap, bit + 1, newAcc, f)
+    else
+        Stdlib.Dict.__filterChildren<k, v>(ptr, bitmap, bit + 1, acc, f)
