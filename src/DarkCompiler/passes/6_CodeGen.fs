@@ -1001,6 +1001,24 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 // Load function address into temp, then store to heap
                 let tempReg = ARM64.X9
                 Ok [ARM64.ADR (tempReg, funcName); ARM64.STR (tempReg, addrReg, int16 offset)]
+            | LIR.StringRef idx ->
+                // Load string address from pool into temp, then store to heap
+                let tempReg = ARM64.X9
+                let stringLabel = sprintf "str_%d" idx
+                Ok [
+                    ARM64.ADRP (tempReg, stringLabel)
+                    ARM64.ADD_label (tempReg, tempReg, stringLabel)
+                    ARM64.STR (tempReg, addrReg, int16 offset)
+                ]
+            | LIR.FloatRef idx ->
+                // Load float address from pool into temp, then store to heap
+                let tempReg = ARM64.X9
+                let floatLabel = sprintf "_float%d" idx
+                Ok [
+                    ARM64.ADRP (tempReg, floatLabel)
+                    ARM64.ADD_label (tempReg, tempReg, floatLabel)
+                    ARM64.STR (tempReg, addrReg, int16 offset)
+                ]
             | _ -> Error "Unsupported operand type in HeapStore")
 
     | LIR.HeapLoad (dest, addr, offset) ->
