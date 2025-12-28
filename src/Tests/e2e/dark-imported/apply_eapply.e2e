@@ -20,16 +20,18 @@ let fn = Stdlib.Int64.max in fn(3, 7) = 7
 
 // ===================================================================
 // User-defined functions
-// NOTE: Commented out - requires String type, generic type parameters, and Stdlib
+// NOTE: Partially enabled - some tests require String type
 // ===================================================================
 
 // def stringFn (key: String) : String = key ++ " appended string"
 
-// def fnWithTypeArgAndOneParam<'a> (arg: 'a) : 'a = arg
+// Generic function with type parameter (converted from Dark: 'a -> a)
+def fnWithTypeArgAndOneParam<a>(arg: a): a = arg fnWithTypeArgAndOneParam<Int64>(1) = 1
 
 // def twoStringFn (str1: String) (str2: String) : String = str1 ++ " appended " ++ str2
 
-// def returnsInt () : Int64 = 5L
+// Simple function returning Int64 (converted from Dark: 5L -> 5)
+def returnsInt(): Int64 = 5 returnsInt() = 5
 
 // def returnsString () : String = "string"
 
