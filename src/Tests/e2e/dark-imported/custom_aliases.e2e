@@ -5,6 +5,32 @@
 // Tests may fail if features are not yet implemented
 
 // ===================================================================
+// Working type alias tests (Int64 fields)
+// ===================================================================
+
+// Simple record alias
+type PointBase = { x: Int64, y: Int64 } type MyPoint = PointBase MyPoint { x = 1, y = 2 }.x = 1
+type PointBase = { x: Int64, y: Int64 } type MyPoint = PointBase MyPoint { x = 1, y = 2 }.y = 2
+
+// Aliased record field access
+type PointBase = { x: Int64, y: Int64 } type AliasedPoint = PointBase let p = AliasedPoint { x = 10, y = 20 } in p.x = 10
+type PointBase = { x: Int64, y: Int64 } type AliasedPoint = PointBase let p = AliasedPoint { x = 10, y = 20 } in p.y = 20
+
+// Aliased record with computed fields
+type PointBase = { x: Int64, y: Int64 } type AliasedPoint = PointBase AliasedPoint { x = 3 * 2, y = 4 + 1 }.x = 6
+type PointBase = { x: Int64, y: Int64 } type AliasedPoint = PointBase AliasedPoint { x = 3 * 2, y = 4 + 1 }.y = 5
+
+// Aliased records are structurally equal to base type
+type PointBase = { x: Int64, y: Int64 } type AliasedPoint = PointBase PointBase { x = 5, y = 6 } == AliasedPoint { x = 5, y = 6 } = stdout="true\n"
+type PointBase = { x: Int64, y: Int64 } type AliasedPoint = PointBase AliasedPoint { x = 5, y = 6 } == PointBase { x = 5, y = 6 } = stdout="true\n"
+
+// Multiple aliases to same type
+type PointBase = { x: Int64, y: Int64 } type Alias1 = PointBase type Alias2 = PointBase Alias1 { x = 1, y = 2 } == Alias2 { x = 1, y = 2 } = stdout="true\n"
+
+// Record update through alias
+type PointBase = { x: Int64, y: Int64 } type AliasedPoint = PointBase let p = AliasedPoint { x = 1, y = 2 } in { p with x = 100 }.x = 100
+
+// ===================================================================
 // Simple alias
 // NOTE: All tests commented out - requires type aliases, String literals,
 // Int64 suffix, generic type parameters, Stdlib, and Builtin support
