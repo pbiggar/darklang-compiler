@@ -112,5 +112,8 @@ src/DarkCompiler/passes/
 - **CFG Simplification**: Remove empty/unreachable blocks
 
 ### Planned
-- **Strength Reduction**: Replace expensive ops with cheaper equivalents
+- **Tail Call Optimization**: Convert tail recursion to loops (major improvement for sum_to_n)
 - **Loop-Invariant Code Motion**: Move invariant computations out of loops
+
+### Notes on Current Optimizations
+- **Algebraic Simplifications** (part of constant folding): x-x=0, x/x=1, x%1=0, bitwise identities, shift identities

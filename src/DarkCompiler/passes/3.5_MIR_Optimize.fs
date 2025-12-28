@@ -367,11 +367,38 @@ let tryFoldBinOp (op: BinOp) (left: Operand) (right: Operand) : Operand option =
     | Add, IntConst 0L, x -> Some x
     | Add, x, IntConst 0L -> Some x
     | Sub, x, IntConst 0L -> Some x
+    | Sub, x, y when x = y -> Some (IntConst 0L)  // x - x = 0
     | Mul, IntConst 1L, x -> Some x
     | Mul, x, IntConst 1L -> Some x
     | Mul, IntConst 0L, _ -> Some (IntConst 0L)
     | Mul, _, IntConst 0L -> Some (IntConst 0L)
+    | Mul, IntConst -1L, x -> None  // Could transform to Neg, but need instruction change
+    | Mul, x, IntConst -1L -> None  // Could transform to Neg
     | Div, x, IntConst 1L -> Some x
+    | Div, x, y when x = y && y <> IntConst 0L -> Some (IntConst 1L)  // x / x = 1 (if x != 0)
+    | Mod, _, IntConst 1L -> Some (IntConst 0L)  // x % 1 = 0
+    | Mod, x, y when x = y && y <> IntConst 0L -> Some (IntConst 0L)  // x % x = 0 (if x != 0)
+
+    // Bitwise identities
+    | BitAnd, IntConst 0L, _ -> Some (IntConst 0L)
+    | BitAnd, _, IntConst 0L -> Some (IntConst 0L)
+    | BitAnd, IntConst -1L, x -> Some x  // -1 = all bits set
+    | BitAnd, x, IntConst -1L -> Some x
+    | BitAnd, x, y when x = y -> Some x  // x & x = x
+    | BitOr, IntConst 0L, x -> Some x
+    | BitOr, x, IntConst 0L -> Some x
+    | BitOr, IntConst -1L, _ -> Some (IntConst -1L)
+    | BitOr, _, IntConst -1L -> Some (IntConst -1L)
+    | BitOr, x, y when x = y -> Some x  // x | x = x
+    | BitXor, IntConst 0L, x -> Some x
+    | BitXor, x, IntConst 0L -> Some x
+    | BitXor, x, y when x = y -> Some (IntConst 0L)  // x ^ x = 0
+
+    // Shift identities
+    | Shl, x, IntConst 0L -> Some x  // x << 0 = x
+    | Shr, x, IntConst 0L -> Some x  // x >> 0 = x
+    | Shl, IntConst 0L, _ -> Some (IntConst 0L)  // 0 << n = 0
+    | Shr, IntConst 0L, _ -> Some (IntConst 0L)  // 0 >> n = 0
 
     // Boolean short-circuit
     | And, BoolConst false, _ -> Some (BoolConst false)
