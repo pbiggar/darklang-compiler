@@ -11,6 +11,7 @@
 module SSA_Destruction
 
 open MIR
+open Output
 
 /// Check if an edge is critical
 /// Critical = source has multiple successors AND target has multiple predecessors
@@ -62,7 +63,7 @@ let splitEdge (cfg: CFG) (labelGen: LabelGen) (from: Label) (toLabel: Label) : C
                 Branch (cond, newLabel, falseLabel)
             else
                 Branch (cond, trueLabel, newLabel)
-        | Ret _ -> failwith "Cannot split edge from Ret"
+        | Ret _ -> crash "Cannot split edge from Ret"
 
     let fromBlock' = { fromBlock with Terminator = newTerminator }
 

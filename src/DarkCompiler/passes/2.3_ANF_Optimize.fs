@@ -31,22 +31,13 @@ let resolveAtom (env: ConstEnv) (atom: Atom) : Atom =
     | _ -> atom
 
 /// Fold a binary operation on constants
-/// Uses try-catch for overflow cases to preserve runtime semantics
 let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     match op, left, right with
-    // Integer arithmetic - catch potential overflows and don't fold in those cases
-    | Add, IntLiteral a, IntLiteral b ->
-        try Some (Atom (IntLiteral (Checked.(+) a b)))
-        with :? System.OverflowException -> None
-    | Sub, IntLiteral a, IntLiteral b ->
-        try Some (Atom (IntLiteral (Checked.(-) a b)))
-        with :? System.OverflowException -> None
-    | Mul, IntLiteral a, IntLiteral b ->
-        try Some (Atom (IntLiteral (Checked.(*) a b)))
-        with :? System.OverflowException -> None
-    | Div, IntLiteral a, IntLiteral b when b <> 0L ->
-        try Some (Atom (IntLiteral (a / b)))
-        with :? System.OverflowException -> None
+    // Integer arithmetic (unchecked - overflow wraps)
+    | Add, IntLiteral a, IntLiteral b -> Some (Atom (IntLiteral (a + b)))
+    | Sub, IntLiteral a, IntLiteral b -> Some (Atom (IntLiteral (a - b)))
+    | Mul, IntLiteral a, IntLiteral b -> Some (Atom (IntLiteral (a * b)))
+    | Div, IntLiteral a, IntLiteral b when b <> 0L -> Some (Atom (IntLiteral (a / b)))
     | Mod, IntLiteral a, IntLiteral b when b <> 0L -> Some (Atom (IntLiteral (a % b)))
 
     // Float arithmetic
@@ -100,10 +91,8 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
 /// Fold a unary operation on constants
 let foldUnaryOp (op: UnaryOp) (src: Atom) : CExpr option =
     match op, src with
-    // Catch overflow on INT64_MIN negation
-    | Neg, IntLiteral n ->
-        try Some (Atom (IntLiteral (Checked.(~-) n)))
-        with :? System.OverflowException -> None
+    // Integer negation (unchecked - INT64_MIN wraps to itself)
+    | Neg, IntLiteral n -> Some (Atom (IntLiteral (-n)))
     | Neg, FloatLiteral f -> Some (Atom (FloatLiteral (-f)))
     | Not, BoolLiteral b -> Some (Atom (BoolLiteral (not b)))
     | _ -> None

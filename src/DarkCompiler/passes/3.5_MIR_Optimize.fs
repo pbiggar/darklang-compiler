@@ -11,6 +11,7 @@
 module MIR_Optimize
 
 open MIR
+open Output
 
 /// Check if an instruction has side effects (must be preserved even if unused)
 let hasSideEffects (instr: Instr) : bool =
@@ -338,7 +339,7 @@ let simplifyEmptyBlocks (cfg: CFG) : CFG * bool =
         |> Map.map (fun _ block ->
             match block.Terminator with
             | Jump target -> target
-            | _ -> failwith "Expected Jump"
+            | _ -> crash "Expected Jump"
         )
 
     if Map.isEmpty emptyBlocks then

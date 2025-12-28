@@ -17,6 +17,7 @@
 module AST_to_ANF
 
 open ANF
+open Output
 
 /// Try to convert a function call to a file I/O intrinsic CExpr
 /// Returns Some CExpr if it's a file intrinsic, None otherwise
@@ -1260,7 +1261,7 @@ let rec generateStructuralEquality
                     // Chain ANDs: result = r0 && r1 && r2 ...
                     let rec chainAnds results accBindings vg =
                         match results with
-                        | [] -> failwith "empty results in chainAnds"
+                        | [] -> crash "empty results in chainAnds"
                         | [last] -> (accBindings, last, vg)
                         | a :: b :: rest ->
                             let (andVar, vg') = ANF.freshVar vg
@@ -1311,7 +1312,7 @@ let rec generateStructuralEquality
                     | first :: rest ->
                         let rec chainAnds results accBindings vg =
                             match results with
-                            | [] -> failwith "empty results in chainAnds"
+                            | [] -> crash "empty results in chainAnds"
                             | [last] -> (accBindings, last, vg)
                             | a :: b :: rest ->
                                 let (andVar, vg') = ANF.freshVar vg

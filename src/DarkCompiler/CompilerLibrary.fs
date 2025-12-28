@@ -79,6 +79,17 @@ type LazyStdlibResult = {
     StdlibANFCallGraph: Map<string, Set<string>>
 }
 
+// Helper functions for exception-to-Result conversion (Darklang compatibility)
+
+/// Try to delete a file, ignoring any errors
+let tryDeleteFile (path: string) : unit =
+    try File.Delete(path) with _ -> ()
+
+/// Try to start a process, returning Result instead of throwing
+let tryStartProcess (info: ProcessStartInfo) : Result<Process, string> =
+    try Ok (Process.Start(info))
+    with ex -> Error ex.Message
+
 /// Load the stdlib.dark file
 /// Returns the stdlib AST or an error message
 let loadStdlib () : Result<AST.Program, string> =
@@ -1191,40 +1202,45 @@ let execute (verbosity: int) (binary: byte array) : ExecutionResult =
 
             // Retry up to 3 times with small delay if we get "Text file busy"
             let rec startWithRetry attempts =
-                try
-                    Process.Start(execInfo)
-                with
-                | :? System.ComponentModel.Win32Exception as ex when ex.Message.Contains("Text file busy") && attempts > 0 ->
+                match tryStartProcess execInfo with
+                | Ok proc -> Ok proc
+                | Error msg when msg.Contains("Text file busy") && attempts > 0 ->
                     Threading.Thread.Sleep(10)  // Wait 10ms before retry
                     startWithRetry (attempts - 1)
+                | Error msg -> Error msg
 
-            use execProc = startWithRetry 3
+            match startWithRetry 3 with
+            | Error msg ->
+                { ExitCode = -1
+                  Stdout = ""
+                  Stderr = $"Failed to start process: {msg}" }
+            | Ok execProc ->
+                use proc = execProc
+                // Start async reads immediately to avoid blocking
+                let stdoutTask = proc.StandardOutput.ReadToEndAsync()
+                let stderrTask = proc.StandardError.ReadToEndAsync()
 
-            // Start async reads immediately to avoid blocking
-            let stdoutTask = execProc.StandardOutput.ReadToEndAsync()
-            let stderrTask = execProc.StandardError.ReadToEndAsync()
+                // Wait for process to complete
+                proc.WaitForExit()
 
-            // Wait for process to complete
-            execProc.WaitForExit()
+                // Now wait for output to be fully read
+                let stdout = stdoutTask.Result
+                let stderr = stderrTask.Result
 
-            // Now wait for output to be fully read
-            let stdout = stdoutTask.Result
-            let stderr = stderrTask.Result
+                let execTime = sw.Elapsed.TotalMilliseconds - execStart
+                if verbosity >= 2 then println $"      {System.Math.Round(execTime, 1)}ms"
 
-            let execTime = sw.Elapsed.TotalMilliseconds - execStart
-            if verbosity >= 2 then println $"      {System.Math.Round(execTime, 1)}ms"
+                sw.Stop()
 
-            sw.Stop()
+                if verbosity >= 1 then
+                    println $"  ✓ Execution complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
 
-            if verbosity >= 1 then
-                println $"  ✓ Execution complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
-
-            { ExitCode = execProc.ExitCode
-              Stdout = stdout
-              Stderr = stderr }
+                { ExitCode = proc.ExitCode
+                  Stdout = stdout
+                  Stderr = stderr }
     finally
-        // Cleanup
-        try File.Delete(tempPath) with | _ -> ()
+        // Cleanup - ignore deletion errors
+        tryDeleteFile tempPath
 
 /// Compile and run source code with options
 let compileAndRunWithOptions (verbosity: int) (options: CompilerOptions) (source: string) : ExecutionResult =
