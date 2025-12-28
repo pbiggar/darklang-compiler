@@ -385,6 +385,80 @@ let tryFoldBinOp (op: BinOp) (left: Operand) (right: Operand) : Operand option =
 
     | _ -> None
 
+/// Common Subexpression Elimination (CSE)
+/// Detect identical computations and replace with reference to first result
+
+/// Expression key for CSE - represents a pure computation
+type ExprKey =
+    | BinExpr of BinOp * Operand * Operand * AST.Type
+    | UnaryExpr of UnaryOp * Operand
+
+/// Check if a binary operation is commutative (order of operands doesn't matter)
+let isCommutative (op: BinOp) : bool =
+    match op with
+    | Add | Mul | And | Or | Eq | Neq | BitAnd | BitOr | BitXor -> true
+    | Sub | Div | Mod | Lt | Gt | Lte | Gte | Shl | Shr -> false
+
+/// Normalize operand order for commutative operations (for consistent hashing)
+let normalizeOperands (op: BinOp) (left: Operand) (right: Operand) : Operand * Operand =
+    if isCommutative op then
+        // Use structural comparison to ensure consistent ordering
+        if compare left right <= 0 then (left, right) else (right, left)
+    else
+        (left, right)
+
+/// Build expression key for a BinOp
+let makeBinExprKey (op: BinOp) (left: Operand) (right: Operand) (opType: AST.Type) : ExprKey =
+    let (l, r) = normalizeOperands op left right
+    BinExpr (op, l, r, opType)
+
+/// Build expression key for a UnaryOp
+let makeUnaryExprKey (op: UnaryOp) (src: Operand) : ExprKey =
+    UnaryExpr (op, src)
+
+/// Apply CSE to a CFG
+/// Note: This is a local CSE within each basic block (not global)
+let applyCSE (cfg: CFG) : CFG * bool =
+    let (blocks', changed) =
+        cfg.Blocks
+        |> Map.fold (fun (acc, ch) label block ->
+            // For each block, track expressions we've seen
+            let (instrs', _, instrChanged) =
+                block.Instrs
+                |> List.fold (fun (acc', exprMap: Map<ExprKey, VReg>, ch') instr ->
+                    match instr with
+                    | BinOp (dest, op, left, right, opType) ->
+                        let key = makeBinExprKey op left right opType
+                        match Map.tryFind key exprMap with
+                        | Some prevDest ->
+                            // Found a previous computation - replace with copy
+                            let copy = Mov (dest, Register prevDest, None)
+                            (acc' @ [copy], exprMap, true)
+                        | None ->
+                            // New expression - add to map
+                            let exprMap' = Map.add key dest exprMap
+                            (acc' @ [instr], exprMap', ch')
+                    | UnaryOp (dest, op, src) ->
+                        let key = makeUnaryExprKey op src
+                        match Map.tryFind key exprMap with
+                        | Some prevDest ->
+                            // Found a previous computation - replace with copy
+                            let copy = Mov (dest, Register prevDest, None)
+                            (acc' @ [copy], exprMap, true)
+                        | None ->
+                            // New expression - add to map
+                            let exprMap' = Map.add key dest exprMap
+                            (acc' @ [instr], exprMap', ch')
+                    | _ ->
+                        (acc' @ [instr], exprMap, ch')
+                ) ([], Map.empty, false)
+
+            let block' = { block with Instrs = instrs' }
+            (Map.add label block' acc, ch || instrChanged)
+        ) (Map.empty, false)
+
+    ({ cfg with Blocks = blocks' }, changed)
+
 /// Apply constant folding to a CFG
 let applyConstantFolding (cfg: CFG) : CFG * bool =
     let (blocks', changed) =
@@ -413,9 +487,10 @@ let applyConstantFolding (cfg: CFG) : CFG * bool =
 /// Run all optimizations until fixed point
 let optimizeCFG (cfg: CFG) : CFG =
     let (cfg1, _) = applyConstantFolding cfg
-    let (cfg2, _) = applyCopyPropagation cfg1
-    let (cfg3, _) = eliminateDeadCode cfg2
-    cfg3
+    let (cfg2, _) = applyCSE cfg1
+    let (cfg3, _) = applyCopyPropagation cfg2
+    let (cfg4, _) = eliminateDeadCode cfg3
+    cfg4
 
 /// Optimize a function
 let optimizeFunction (func: Function) : Function =

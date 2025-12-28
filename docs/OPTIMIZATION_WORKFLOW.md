@@ -108,8 +108,9 @@ src/DarkCompiler/passes/
 - **Dead Code Elimination (DCE)**: Remove unused computations
 - **Constant Folding**: Evaluate constant expressions at compile time
 - **Copy Propagation**: Replace uses with original definitions (note: copies are not propagated into phi sources to preserve control flow semantics)
+- **Common Subexpression Elimination (CSE)**: Replace duplicate computations with references to first result (local within each basic block, handles commutative ops)
 - **CFG Simplification**: Remove empty/unreachable blocks
 
 ### Planned
-- **Common Subexpression Elimination (CSE)**: Reuse identical computations
 - **Strength Reduction**: Replace expensive ops with cheaper equivalents
+- **Loop-Invariant Code Motion**: Move invariant computations out of loops
