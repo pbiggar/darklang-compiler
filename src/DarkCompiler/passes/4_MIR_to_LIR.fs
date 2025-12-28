@@ -922,6 +922,10 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         let lirStr = convertOperand str
         Ok [LIR.RefCountDecString lirStr]
 
+    | MIR.RandomInt64 dest ->
+        let lirDest = vregToLIRReg dest
+        Ok [LIR.RandomInt64 lirDest]
+
     | MIR.Phi _ ->
         // Phi nodes should be eliminated by SSA destruction (pass 3.9) before MIR-to-LIR
         Error "Internal error: Phi node reached MIR-to-LIR. SSA destruction pass should have removed it."
@@ -1137,6 +1141,7 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.StringEq (dest, left, right) -> LIR.StringEq (dest, offsetLIROperand strOffset fltOffset left, offsetLIROperand strOffset fltOffset right)
     | LIR.RefCountIncString str -> LIR.RefCountIncString (offsetLIROperand strOffset fltOffset str)
     | LIR.RefCountDecString str -> LIR.RefCountDecString (offsetLIROperand strOffset fltOffset str)
+    | LIR.RandomInt64 dest -> LIR.RandomInt64 dest  // No operands to offset
     // Instructions with direct pool indices
     | LIR.PrintString (strIdx, strLen) -> LIR.PrintString (strIdx + strOffset, strLen)
     | LIR.FLoad (dest, floatIdx) -> LIR.FLoad (dest, floatIdx + fltOffset)

@@ -139,6 +139,8 @@ type Instr =
     // String reference counting (at dynamic offset)
     | RefCountIncString of str:Operand            // Increment string ref count (at [str + 8 + len])
     | RefCountDecString of str:Operand            // Decrement string ref count, free if zero
+    // Random intrinsics
+    | RandomInt64 of dest:Reg                     // Get 8 random bytes as Int64
 
 /// Basic block label
 type Label = string

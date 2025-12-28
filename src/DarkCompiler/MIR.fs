@@ -156,6 +156,8 @@ type Instr =
     // String reference counting (at dynamic offset)
     | RefCountIncString of str:Operand             // Increment string ref count (at [str + 8 + len])
     | RefCountDecString of str:Operand             // Decrement string ref count, free if zero
+    // Random intrinsics
+    | RandomInt64 of dest:VReg                     // Get 8 random bytes as Int64
     // SSA phi node - merges values from different predecessor blocks
     // Phi nodes must appear at the beginning of a basic block, before other instructions
     | Phi of dest:VReg * sources:(Operand * Label) list

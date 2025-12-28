@@ -87,6 +87,16 @@ let platformModule : ModuleDef = {
     ]
 }
 
+/// Stdlib.Random module - random number generation (intrinsics)
+/// These are special-cased in the compiler and generate syscalls
+let randomModule : ModuleDef = {
+    Name = "Stdlib.Random"
+    Functions = [
+        // int64 : () -> Int64 - returns 8 random bytes as Int64
+        { Name = "int64"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
+    ]
+}
+
 /// Raw memory intrinsics - internal only for HAMT implementation
 /// These functions bypass the type system and should only be used in stdlib code
 /// The names start with __ to indicate they are internal
@@ -143,6 +153,7 @@ let allModules : ModuleDef list = [
     fileModule
     pathModule
     platformModule
+    randomModule
 ]
 
 /// Build the module registry from all modules
@@ -177,3 +188,8 @@ let isFileIntrinsic (qualifiedName: string) : bool =
     qualifiedName = "Stdlib.File.appendText" ||
     qualifiedName = "Stdlib.File.delete" ||
     qualifiedName = "Stdlib.File.setExecutable"
+
+/// Check if a function name is a random intrinsic
+/// These are special-cased in the compiler to generate syscalls
+let isRandomIntrinsic (qualifiedName: string) : bool =
+    qualifiedName = "Stdlib.Random.int64"

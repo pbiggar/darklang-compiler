@@ -2178,3 +2178,74 @@ let generateFileWriteText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (contentReg:
             ARM64.ADD_imm (ARM64.SP, ARM64.SP, 48us)
             ARM64.MOV_reg (destReg, ARM64.X0)  // Move result to dest after restoration
         ]
+
+/// Generate ARM64 instructions to get 8 random bytes as Int64
+/// destReg: destination register for the random Int64
+/// Uses getrandom (Linux) or getentropy (macOS) syscall
+/// Note: This function saves/restores caller-saved registers X1, X2, X8
+/// that may contain live values, since the syscall clobbers them.
+let generateRandomInt64 (destReg: ARM64.Reg) : ARM64.Instr list =
+    let os =
+        match Platform.detectOS () with
+        | Ok platform -> platform
+        | Error _ -> Platform.Linux
+    let syscalls = Platform.getSyscallNumbers os
+
+    match os with
+    | Platform.MacOS ->
+        [
+            // Save X1 (caller-saved, may contain live value)
+            // Allocate 32 bytes: 8 for X1, 8 for buffer, 16 for alignment
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
+            ARM64.STR (ARM64.X1, ARM64.SP, 24s)  // Save X1 at SP+24
+
+            // Call getentropy(buffer, 8)
+            // X0 = buffer pointer (SP), X1 = length (8)
+            ARM64.MOV_reg (ARM64.X0, ARM64.SP)
+            ARM64.MOVZ (ARM64.X1, 8us, 0)
+            ARM64.MOVZ (ARM64.X16, syscalls.Getrandom, 0)
+            ARM64.SVC syscalls.SvcImmediate
+
+            // Load 8 bytes from buffer into X0
+            ARM64.LDR (ARM64.X0, ARM64.SP, 0s)
+
+            // Restore X1
+            ARM64.LDR (ARM64.X1, ARM64.SP, 24s)
+
+            // Cleanup stack
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32us)
+
+            // Move result to destination
+            ARM64.MOV_reg (destReg, ARM64.X0)
+        ]
+    | Platform.Linux ->
+        [
+            // Save X1, X2, X8 (caller-saved, may contain live values)
+            // Allocate 48 bytes: 8 for buffer, 8 each for X1/X2/X8 = 32, 16 for alignment
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 48us)
+            ARM64.STR (ARM64.X1, ARM64.SP, 40s)  // Save X1 at SP+40
+            ARM64.STR (ARM64.X2, ARM64.SP, 32s)  // Save X2 at SP+32
+            ARM64.STR (ARM64.X8, ARM64.SP, 24s)  // Save X8 at SP+24
+
+            // Call getrandom(buffer, 8, flags=0)
+            // X0 = buffer pointer (SP), X1 = length (8), X2 = flags (0)
+            ARM64.MOV_reg (ARM64.X0, ARM64.SP)
+            ARM64.MOVZ (ARM64.X1, 8us, 0)
+            ARM64.MOVZ (ARM64.X2, 0us, 0)
+            ARM64.MOVZ (ARM64.X8, syscalls.Getrandom, 0)
+            ARM64.SVC syscalls.SvcImmediate
+
+            // Load 8 bytes from buffer into X0
+            ARM64.LDR (ARM64.X0, ARM64.SP, 0s)
+
+            // Restore X1, X2, X8
+            ARM64.LDR (ARM64.X1, ARM64.SP, 40s)
+            ARM64.LDR (ARM64.X2, ARM64.SP, 32s)
+            ARM64.LDR (ARM64.X8, ARM64.SP, 24s)
+
+            // Cleanup stack
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 48us)
+
+            // Move result to destination
+            ARM64.MOV_reg (destReg, ARM64.X0)
+        ]

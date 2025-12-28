@@ -60,6 +60,7 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
         extractFromAtom left @ extractFromAtom right
     | ANF.RefCountIncString atom -> extractFromAtom atom
     | ANF.RefCountDecString atom -> extractFromAtom atom
+    | ANF.RandomInt64 -> []  // No atoms
 
 /// Extract function names from an ANF expression
 let rec private extractFromAExpr (aexpr: ANF.AExpr) : string list =

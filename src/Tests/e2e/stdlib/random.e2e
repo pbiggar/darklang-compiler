@@ -1,0 +1,13 @@
+// Stdlib.Random Tests
+//
+// Tests for Random module functions
+
+// ===================================================================
+// Stdlib.Random.int64 - Get 8 random bytes as Int64
+// ===================================================================
+
+// Random.int64 returns an Int64 (type check via addition succeeds if it's an Int64)
+(let x = Stdlib.Random.int64() in Stdlib.Int64.add(x, 0) == x) = stdout="true\n"
+
+// Multiple calls return different values (probabilistic, but extremely unlikely to fail)
+(Stdlib.Random.int64() != Stdlib.Random.int64()) = stdout="true\n"

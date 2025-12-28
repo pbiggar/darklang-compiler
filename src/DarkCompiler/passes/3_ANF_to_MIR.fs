@@ -131,6 +131,7 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.StringEq (left, right) -> max (maxTempIdInAtom left) (maxTempIdInAtom right)
     | ANF.RefCountIncString str -> maxTempIdInAtom str
     | ANF.RefCountDecString str -> maxTempIdInAtom str
+    | ANF.RandomInt64 -> -1  // No atoms, so no TempIds
 
 /// Find the maximum TempId in an AExpr
 let rec maxTempIdInAExpr (expr: ANF.AExpr) : int =
@@ -217,6 +218,7 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.StringEq (left, right) -> collectStringsFromAtom left @ collectStringsFromAtom right
     | ANF.RefCountIncString str -> collectStringsFromAtom str
     | ANF.RefCountDecString str -> collectStringsFromAtom str
+    | ANF.RandomInt64 -> []  // No atoms, so no strings
 
 /// Collect all float literals from a CExpr
 let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
@@ -264,6 +266,7 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
     | ANF.StringEq (left, right) -> collectFloatsFromAtom left @ collectFloatsFromAtom right
     | ANF.RefCountIncString str -> collectFloatsFromAtom str
     | ANF.RefCountDecString str -> collectFloatsFromAtom str
+    | ANF.RandomInt64 -> []  // No atoms, so no floats
 
 /// Collect all string literals from an ANF expression
 let rec collectStringsFromExpr (expr: ANF.AExpr) : string list =
@@ -778,6 +781,8 @@ let rec convertExpr
                 | ANF.RefCountDecString strAtom ->
                     atomToOperand builder strAtom
                     |> Result.map (fun strOp -> [MIR.RefCountDecString strOp])
+                | ANF.RandomInt64 ->
+                    Ok [MIR.RandomInt64 destReg]
 
             match instrsResult with
             | Error err -> Error err
@@ -1168,6 +1173,8 @@ and convertExprToOperand
                 | ANF.RefCountDecString strAtom ->
                     atomToOperand builder strAtom
                     |> Result.map (fun strOp -> [MIR.RefCountDecString strOp])
+                | ANF.RandomInt64 ->
+                    Ok [MIR.RandomInt64 destReg]
 
             // Let bindings accumulate instructions, pass through join label
             match instrsResult with
@@ -1544,6 +1551,7 @@ let private offsetInstr (strOffset: int) (fltOffset: int) (instr: MIR.Instr) : M
     | MIR.StringEq (dest, left, right) -> MIR.StringEq (dest, offsetOperand strOffset fltOffset left, offsetOperand strOffset fltOffset right)
     | MIR.RefCountIncString str -> MIR.RefCountIncString (offsetOperand strOffset fltOffset str)
     | MIR.RefCountDecString str -> MIR.RefCountDecString (offsetOperand strOffset fltOffset str)
+    | MIR.RandomInt64 dest -> MIR.RandomInt64 dest  // No operands to offset
     | MIR.Phi (dest, sources) -> MIR.Phi (dest, List.map (offsetPhiSource strOffset fltOffset) sources)
 
 /// Offset pool references in a terminator

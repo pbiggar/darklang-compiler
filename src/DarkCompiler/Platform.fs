@@ -27,6 +27,7 @@ type SyscallNumbers = {
     Access: uint16 // Check file accessibility (for exists)
     Unlink: uint16 // Delete file (or unlinkat on Linux with AT_FDCWD)
     Chmod: uint16  // Change file mode (or fchmodat on Linux with AT_FDCWD)
+    Getrandom: uint16 // Get random bytes (getentropy on macOS, getrandom on Linux)
     SvcImmediate: uint16  // SVC instruction immediate value
     SyscallRegister: ARM64.Reg  // Register to hold syscall number (X16 for macOS, X8 for Linux)
 }
@@ -55,6 +56,7 @@ let getSyscallNumbers (os: OS) : SyscallNumbers =
           Access = 33us    // access(path, mode)
           Unlink = 10us    // unlink(path)
           Chmod = 15us     // chmod(path, mode)
+          Getrandom = 439us // getentropy(buffer, length)
           SvcImmediate = 0x80us
           SyscallRegister = ARM64.X16 }
     | Linux ->
@@ -69,6 +71,7 @@ let getSyscallNumbers (os: OS) : SyscallNumbers =
           Access = 48us    // faccessat(dirfd, path, mode, flags) - use AT_FDCWD=-100
           Unlink = 35us    // unlinkat(dirfd, path, flags) - use AT_FDCWD=-100
           Chmod = 53us     // fchmodat(dirfd, path, mode, flags) - use AT_FDCWD=-100
+          Getrandom = 278us // getrandom(buffer, length, flags)
           SvcImmediate = 0us
           SyscallRegister = ARM64.X8 }
 

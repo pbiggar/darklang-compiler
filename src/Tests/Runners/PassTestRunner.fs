@@ -262,6 +262,8 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"RefCountIncString({prettyPrintLIROperand str})"
     | LIR.RefCountDecString str ->
         $"RefCountDecString({prettyPrintLIROperand str})"
+    | LIR.RandomInt64 dest ->
+        $"{prettyPrintLIRReg dest} <- RandomInt64()"
     | LIR.Exit -> "Exit"
 
 /// Pretty-print LIR terminator
@@ -439,6 +441,7 @@ let prettyPrintANFCExpr = function
         $"RefCountIncString({prettyPrintANFAtom str})"
     | ANF.RefCountDecString str ->
         $"RefCountDecString({prettyPrintANFAtom str})"
+    | ANF.RandomInt64 -> "RandomInt64()"
 
 /// Pretty-print ANF expression (recursive)
 let rec prettyPrintANFExpr = function

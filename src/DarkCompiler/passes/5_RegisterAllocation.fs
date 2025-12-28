@@ -172,6 +172,8 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         operandToVReg str |> Option.toList |> Set.ofList
     | LIR.RefCountDecString str ->
         operandToVReg str |> Option.toList |> Set.ofList
+    | LIR.RandomInt64 _ ->
+        Set.empty  // No operands to read
     | _ -> Set.empty
 
 /// Get virtual register ID defined (written) by an instruction
@@ -212,6 +214,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.StringEq (dest, _, _) -> regToVReg dest
     | LIR.RefCountIncString _ -> None
     | LIR.RefCountDecString _ -> None
+    | LIR.RandomInt64 dest -> regToVReg dest
     | _ -> None
 
 /// Get virtual register used by terminator
@@ -1001,6 +1004,15 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
     | LIR.RefCountDecString str ->
         let (strOp, strLoads) = applyToOperand mapping str LIR.X12
         strLoads @ [LIR.RefCountDecString strOp]
+
+    | LIR.RandomInt64 dest ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let randomInstr = LIR.RandomInt64 destReg
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        [randomInstr] @ storeInstrs
 
     | LIR.Exit -> [LIR.Exit]
 

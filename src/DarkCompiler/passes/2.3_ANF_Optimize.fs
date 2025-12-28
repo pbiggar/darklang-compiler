@@ -134,6 +134,7 @@ let hasSideEffects (cexpr: CExpr) : bool =
     | StringEq _ -> false    // Pure
     | RefCountIncString _ -> true   // Mutates refcount
     | RefCountDecString _ -> true   // Mutates refcount
+    | RandomInt64 -> true   // Reads from OS random source
 
 /// Collect all TempIds used in an atom
 let collectAtomUses (atom: Atom) : Set<TempId> =
@@ -180,6 +181,7 @@ let collectCExprUses (cexpr: CExpr) : Set<TempId> =
     | StringEq (left, right) -> Set.union (collectAtomUses left) (collectAtomUses right)
     | RefCountIncString str -> collectAtomUses str
     | RefCountDecString str -> collectAtomUses str
+    | RandomInt64 -> Set.empty  // No atoms
 
 /// Collect all TempIds used in an AExpr
 let rec collectAExprUses (aexpr: AExpr) : Set<TempId> =
@@ -233,6 +235,7 @@ let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | StringEq (left, right) -> StringEq (s left, s right)
     | RefCountIncString str -> RefCountIncString (s str)
     | RefCountDecString str -> RefCountDecString (s str)
+    | RandomInt64 -> RandomInt64
 
 /// Optimize a CExpr with constant folding
 let optimizeCExpr (env: ConstEnv) (cexpr: CExpr) : CExpr * bool =

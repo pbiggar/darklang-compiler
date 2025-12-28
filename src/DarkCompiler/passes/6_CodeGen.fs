@@ -2256,6 +2256,12 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 ])
         | _ -> Error "RefCountDecString requires StringRef or Reg operand"
 
+    | LIR.RandomInt64 dest ->
+        // Generate random 8 bytes as Int64
+        lirRegToARM64Reg dest
+        |> Result.map (fun destReg ->
+            Runtime.generateRandomInt64 destReg)
+
 /// Convert LIR terminator to ARM64 instructions
 /// epilogueLabel: the label to jump to for function return (handles stack cleanup)
 let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Result<ARM64.Instr list, string> =

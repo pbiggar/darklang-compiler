@@ -106,6 +106,8 @@ type CExpr =
     // String reference counting (at dynamic offset)
     | RefCountIncString of Atom               // Increment string ref count
     | RefCountDecString of Atom               // Decrement string ref count, free if zero
+    // Random intrinsics
+    | RandomInt64                             // Get 8 random bytes as Int64
 
 /// ANF expressions with explicit sequencing
 type AExpr =

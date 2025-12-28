@@ -51,6 +51,7 @@ let hasSideEffects (instr: Instr) : bool =
     | StringEq _ -> false    // Pure
     | RefCountIncString _ -> true   // Mutates refcount
     | RefCountDecString _ -> true   // Mutates refcount
+    | RandomInt64 _ -> true  // Syscall
 
 /// Get the destination VReg of an instruction (if any)
 let getInstrDest (instr: Instr) : VReg option =
@@ -89,6 +90,7 @@ let getInstrDest (instr: Instr) : VReg option =
     | RawSet _ -> None
     | RefCountIncString _ -> None
     | RefCountDecString _ -> None
+    | RandomInt64 dest -> Some dest
 
 /// Get all VRegs used by an instruction
 let getInstrUses (instr: Instr) : Set<VReg> =
@@ -132,6 +134,7 @@ let getInstrUses (instr: Instr) : Set<VReg> =
     | StringEq (_, left, right) -> Set.union (fromOperand left) (fromOperand right)
     | RefCountIncString str -> fromOperand str
     | RefCountDecString str -> fromOperand str
+    | RandomInt64 _ -> Set.empty  // No operand uses
 
 /// Get VRegs used by terminator
 let getTerminatorUses (term: Terminator) : Set<VReg> =
@@ -297,6 +300,7 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | StringEq (dest, left, right) -> StringEq (dest, p left, p right)
     | RefCountIncString str -> RefCountIncString (p str)
     | RefCountDecString str -> RefCountDecString (p str)
+    | RandomInt64 dest -> RandomInt64 dest
 
 /// Apply copy propagation to terminator
 let propagateCopyTerminator (copies: CopyMap) (term: Terminator) : Terminator =

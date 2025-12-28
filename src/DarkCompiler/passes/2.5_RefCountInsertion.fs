@@ -127,6 +127,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | RawAlloc _ -> Some AST.TRawPtr  // Returns raw pointer
     | RawFree _ -> Some AST.TUnit  // Returns unit
     | RawGet _ -> Some AST.TInt64  // Returns 8-byte value
+    | RandomInt64 -> Some AST.TInt64  // Returns random Int64
     | RawSet _ -> Some AST.TUnit  // Returns unit
     // Float intrinsics
     | FloatSqrt _ -> Some AST.TFloat64
