@@ -26,6 +26,7 @@
     <Compile Include="LIR.fs" />
     <Compile Include="passes/4_MIR_to_LIR.fs" />
     <Compile Include="passes/4.5_LIR_Optimize.fs" />
+    <Compile Include="passes/DeadCodeElimination.fs" />
     <Compile Include="passes/5_RegisterAllocation.fs" />
     <Compile Include="ARM64.fs" />
     <Compile Include="Platform.fs" />

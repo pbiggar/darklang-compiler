@@ -85,7 +85,7 @@ The following features are explicitly out of scope:
 - ✅ 9-pass compiler pipeline (Parser → TypeCheck → ANF → RefCount → MIR → LIR → RegAlloc → CodeGen → ARM64Enc → Binary)
 - ✅ Register allocation with callee-saved registers (X19-X27) and stack spilling for high register pressure
 - ✅ Reference counting with free list memory reuse
-- ✅ 1801 passing tests
+- ✅ 2157 passing tests
 - ✅ Cross-platform (Linux ELF, macOS Mach-O)
 - ✅ Type-directed record field lookup (no ambiguity when multiple record types have same field names)
 - ✅ Function return type inference using function registry (enables type inference for let-bound function calls)

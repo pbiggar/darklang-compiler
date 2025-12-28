@@ -58,6 +58,8 @@ type StdlibResult = {
     LIRProgram: LIR.Program
     /// Pre-allocated stdlib functions (physical registers assigned, ready for merge)
     AllocatedFunctions: LIR.Function list
+    /// Call graph for dead code elimination (which stdlib funcs call which other funcs)
+    StdlibCallGraph: Map<string, Set<string>>
 }
 
 /// Load the stdlib.dark file
@@ -138,6 +140,8 @@ let compileStdlib () : Result<StdlibResult, string> =
                             // Pre-allocate stdlib functions (cached for reuse)
                             let (LIR.Program (lirFuncs, lirStrings, lirFloats)) = lirProgram
                             let allocatedFuncs = lirFuncs |> List.map RegisterAllocation.allocateRegisters
+                            // Build call graph for dead code elimination
+                            let stdlibCallGraph = DeadCodeElimination.buildCallGraph allocatedFuncs
                             Ok {
                                 AST = stdlibAst
                                 TypedAST = typedStdlib
@@ -148,6 +152,7 @@ let compileStdlib () : Result<StdlibResult, string> =
                                 MIRProgram = mirProgram
                                 LIRProgram = lirProgram
                                 AllocatedFunctions = allocatedFuncs
+                                StdlibCallGraph = stdlibCallGraph
                             }
 
 /// Internal: Compile user code with stdlib AST (shared implementation)
@@ -667,8 +672,15 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     // Offset pool refs in allocated user functions
                     let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
 
-                    // Combine pre-allocated stdlib functions with user functions
-                    let allFuncs = stdlib.AllocatedFunctions @ offsetUserFuncs
+                    // Filter stdlib functions to only include reachable ones (dead code elimination)
+                    let reachableStdlib =
+                        DeadCodeElimination.filterFunctions
+                            stdlib.StdlibCallGraph
+                            offsetUserFuncs
+                            stdlib.AllocatedFunctions
+
+                    // Combine reachable stdlib functions with user functions
+                    let allFuncs = reachableStdlib @ offsetUserFuncs
                     let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
 
                     let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime
