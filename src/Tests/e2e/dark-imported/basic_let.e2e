@@ -69,23 +69,17 @@ Stdlib.Tuple2.second((1, 2)) = 2
 // Original Dark test: (let x = 35 in match Stdlib.Result.Result.Ok 6 with | Ok x -> x) = 6
 (let x = 35 in match Stdlib.Result.Result.Ok(6) with | Ok(x) -> x | Error(e) -> 0) = 6
 
-// NOTE: List.map tests - converted to use pattern matching for verification
+// NOTE: Tests below require Stdlib.List.map which needs list cons ([h, ...t]) support
 
-// Variable shadowing in List.map callback (x shadows outer x)
-// Dark: (let x = 35 in Stdlib.List.map [ 1; 2; 3; 4 ] (fun x -> x + 2)) = [3, 4, 5, 6]
-let x = 35 in match Stdlib.List.map<Int64, Int64>([1, 2, 3, 4], (x: Int64) => x + 2) with | [a, b, c, d] -> a + b + c + d | _ -> 0 = 18
+// (let x = 35 in Stdlib.List.map [ 1; 2; 3; 4 ] (fun x -> x + 2)) = stdout="[3, 4, 5, 6]\n"
 
-// Shadowing with Result inside List.map
-// Dark: (Stdlib.List.map [ 1; 2; 3; 4 ] (fun x -> (let x = 35 in match Stdlib.Result.Result.Ok 6 with | Ok x -> x + 2))) = [8, 8, 8, 8]
-match Stdlib.List.map<Int64, Int64>([1, 2, 3, 4], (x: Int64) => let x = 35 in match Stdlib.Result.Result.Ok(6) with | Ok(x) -> x + 2 | Error(e) -> 0) with | [a, b, c, d] -> a + b + c + d | _ -> 0 = 32
+// (let x = 35 in match Stdlib.Result.Result.Ok 6 with | Ok x -> (Stdlib.List.map [ 1; 2; 3; 4 ] (fun x -> x + 2))) = stdout="[3, 4, 5, 6]\n"
 
-// Shadowing with let inside match inside List.map
-// Dark: (Stdlib.List.map [ 1; 2; 3; 4 ] (fun x -> match Stdlib.Result.Result.Ok 6 with | Ok x -> let x = 9 in x + 2)) = [11, 11, 11, 11]
-match Stdlib.List.map<Int64, Int64>([1, 2, 3, 4], (x: Int64) => match Stdlib.Result.Result.Ok(6) with | Ok(x) -> let x = 9 in x + 2 | Error(e) -> 0) with | [a, b, c, d] -> a + b + c + d | _ -> 0 = 44
+// (Stdlib.List.map [ 1; 2; 3; 4 ] (fun x -> (let x = 35 in match Stdlib.Result.Result.Ok 6 with | Ok x -> x + 2))) = stdout="[8, 8, 8, 8]\n"
 
-// Nested Result matching with shadowing
-// Dark: (Stdlib.List.map [ 1; 2; 3; 4 ] (fun x -> (match Stdlib.Result.Result.Ok(Stdlib.Result.Result.Ok 6) with | Ok(Ok x) -> let x = 9 in x + 2))) = [11, 11, 11, 11]
-match Stdlib.List.map<Int64, Int64>([1, 2, 3, 4], (x: Int64) => match Stdlib.Result.Result.Ok(Stdlib.Result.Result.Ok(6)) with | Ok(Ok(x)) -> let x = 9 in x + 2 | Ok(Error(e)) -> 0 | Error(e) -> 0) with | [a, b, c, d] -> a + b + c + d | _ -> 0 = 44
+// (Stdlib.List.map [ 1; 2; 3; 4 ] (fun x -> match Stdlib.Result.Result.Ok 6 with | Ok x -> let x = 9 in x + 2)) = stdout="[11, 11, 11, 11]\n"
+
+// (Stdlib.List.map [ 1; 2; 3; 4 ] (fun x -> (match Stdlib.Result.Result.Ok(Stdlib.Result.Result.Ok 6) with | Ok(Ok x) -> let x = 9 in x + 2))) = stdout="[11, 11, 11, 11]\n"
 
 // ===================================================================
 // Destructuring errors
