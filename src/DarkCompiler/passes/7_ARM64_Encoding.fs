@@ -198,6 +198,16 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rt = encodeReg dest
         [size ||| bits29to21 ||| rm ||| option ||| s ||| fixed2 ||| rn ||| rt]
 
+    | ARM64.LDRB_imm (dest, baseReg, offset) ->
+        // LDRB (unsigned offset): 00 111 001 01 imm12 Rn Rt
+        // Size=00 (byte), V=0, opc=01 (load unsigned), unsigned offset mode
+        let size = 0u <<< 30  // Byte operation
+        let vOpc = 0b11100101u <<< 22  // Fixed bits for LDRB unsigned offset (opc=01)
+        let imm12 = (uint32 offset &&& 0xFFFu) <<< 10
+        let rn = (encodeReg baseReg) <<< 5
+        let rt = encodeReg dest
+        [size ||| vOpc ||| imm12 ||| rn ||| rt]
+
     | ARM64.STRB_reg (src, addr) ->
         // STRB (register): store byte to address in register
         // Use immediate offset 0: 00 111 001 00 000000000000 Rn Rt

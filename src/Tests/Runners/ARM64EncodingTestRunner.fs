@@ -57,6 +57,7 @@ let formatMismatches (mismatches: (int * Instr * uint32 * uint32) list) : string
                     | MOV_reg (dest, src) -> $"MOV_reg({dest}, {src})"
                     | STRB (src, addr, offset) -> $"STRB({src}, {addr}, {offset})"
                     | LDRB (dest, baseAddr, index) -> $"LDRB({dest}, {baseAddr}, {index})"
+                    | LDRB_imm (dest, baseAddr, offset) -> $"LDRB_imm({dest}, {baseAddr}, {offset})"
                     | STRB_reg (src, addr) -> $"STRB_reg({src}, {addr})"
                     | CBZ (reg, label) -> $"CBZ({reg}, {label})"
                     | CBZ_offset (reg, offset) -> $"CBZ_offset({reg}, {offset})"

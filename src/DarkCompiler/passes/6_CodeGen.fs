@@ -710,11 +710,42 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             | LIR.StackSlot offset ->
                 loadStackSlot destARM64 offset
             | LIR.StringRef idx ->
-                // Load string address into register (for string arguments)
+                // Convert pool string to heap string format for function arguments
+                // Pool strings have layout [data:N], but functions expect heap layout:
+                // [length:8][data:N][refcount:8]
                 match Map.tryFind idx ctx.StringPool.Strings with
-                | Some (_, _) ->
-                    let label = sprintf "_str_%d" idx
-                    Ok [ARM64.ADR (destARM64, label)]
+                | Some (_, len) ->
+                    let label = sprintf "str_%d" idx
+                    let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
+                    Ok ([
+                        // Load pool string address into X9
+                        ARM64.ADRP (ARM64.X9, label)
+                        ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                        // Allocate heap space (bump allocator)
+                        ARM64.MOV_reg (destARM64, ARM64.X28)  // dest = current heap pointer
+                        ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)  // bump pointer
+                        // Store length
+                    ] @ loadImmediate ARM64.X10 (int64 len) @ [
+                        ARM64.STR (ARM64.X10, destARM64, 0s)  // [dest] = length
+                        // Copy bytes: loop counter in X13
+                        ARM64.MOVZ (ARM64.X13, 0us, 0)  // X13 = 0
+                    ] @ loadImmediate ARM64.X11 (int64 len) @ [
+                        // Loop: copy bytes from pool to heap
+                        // Index:  0: CMP, 1: B_cond, 2-6: loop body, 7: B, 8+: refcount
+                        ARM64.CMP_reg (ARM64.X13, ARM64.X11)           // 0: compare counter with len
+                        ARM64.B_cond (ARM64.GE, 7)                     // 1: if counter >= len, skip 7 to index 8
+                        ARM64.LDRB (ARM64.X15, ARM64.X9, ARM64.X13)    // 2: X15 = pool[X13]
+                        ARM64.ADD_imm (ARM64.X12, destARM64, 8us)      // 3: X12 = dest + 8
+                        ARM64.ADD_reg (ARM64.X12, ARM64.X12, ARM64.X13) // 4: X12 = dest + 8 + X13
+                        ARM64.STRB_reg (ARM64.X15, ARM64.X12)          // 5: [X12] = byte
+                        ARM64.ADD_imm (ARM64.X13, ARM64.X13, 1us)      // 6: X13++
+                        ARM64.B (-7)                                   // 7: Loop back to CMP (index 0)
+                        // Store refcount
+                        ARM64.ADD_imm (ARM64.X12, destARM64, 8us)
+                        ARM64.ADD_reg (ARM64.X12, ARM64.X12, ARM64.X10)  // X12 = dest + 8 + len
+                        ARM64.MOVZ (ARM64.X15, 1us, 0)
+                        ARM64.STR (ARM64.X15, ARM64.X12, 0s)  // [X12] = 1
+                    ])
                 | None -> Error $"String index {idx} not found in pool"
             | LIR.FuncAddr funcName ->
                 Ok [ARM64.ADR (destARM64, funcName)]
@@ -1060,47 +1091,60 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     let storeLen = [ARM64.STR (ARM64.X13, ARM64.X14, 0s)]
 
                     // Copy left bytes: loop copying X10 bytes from X9 to [X14+8]
-                    // Use X0 as loop counter, X15 as temp byte
+                    // IMPORTANT: Don't use X0-X7 as temps - they may hold function arguments!
+                    // Strategy: Use pointer-bumping loops instead of indexed addressing
+                    // X15 = source pointer (starts at X9, bumped each iteration)
+                    // X16 = dest pointer (starts at X14+8, bumped each iteration)
+                    // X13 = remaining count (starts at X10, decremented, reused since we stored total already)
                     let copyLeft = [
-                        ARM64.MOVZ (ARM64.X0, 0us, 0)                    // 0: X0 = 0 (counter)
-                        // Loop: if X0 >= X10, done
-                        ARM64.CMP_reg (ARM64.X0, ARM64.X10)              // 1: compare
-                        ARM64.B_cond (ARM64.GE, 7)                       // 2: Skip 7 instructions to exit (to index 9)
-                        ARM64.LDRB (ARM64.X15, ARM64.X9, ARM64.X0)       // 3: X15 = byte at [X9 + X0]
-                        ARM64.ADD_imm (ARM64.X1, ARM64.X14, 8us)         // 4: X1 = X14 + 8 (dest base)
-                        ARM64.ADD_reg (ARM64.X1, ARM64.X1, ARM64.X0)     // 5: X1 = dest + counter
-                        ARM64.STRB_reg (ARM64.X15, ARM64.X1)             // 6: [X1] = byte
-                        ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)          // 7: X0++
-                        ARM64.B (-7)                                     // 8: Loop back to CMP (index 1)
+                        ARM64.MOV_reg (ARM64.X15, ARM64.X9)              // 0: X15 = src ptr
+                        ARM64.ADD_imm (ARM64.X16, ARM64.X14, 8us)        // 1: X16 = dest ptr (X14 + 8)
+                        ARM64.MOV_reg (ARM64.X13, ARM64.X10)             // 2: X13 = remaining = len1
+                        // Loop: if X13 == 0, done (skip 7 instructions to exit past B at index 9)
+                        ARM64.CBZ_offset (ARM64.X13, 7)                  // 3: Skip 7 instructions if done -> index 10 (past end)
+                        ARM64.LDRB_imm (ARM64.X8, ARM64.X15, 0)          // 4: X8 = byte at [X15]
+                        ARM64.STRB_reg (ARM64.X8, ARM64.X16)             // 5: [X16] = byte
+                        ARM64.ADD_imm (ARM64.X15, ARM64.X15, 1us)        // 6: X15++ (src ptr)
+                        ARM64.ADD_imm (ARM64.X16, ARM64.X16, 1us)        // 7: X16++ (dest ptr)
+                        ARM64.SUB_imm (ARM64.X13, ARM64.X13, 1us)        // 8: X13-- (remaining)
+                        ARM64.B (-6)                                     // 9: Loop back to CBZ (index 3)
                     ]
 
                     // Copy right bytes: loop copying X12 bytes from X11 to [X14+8+X10]
+                    // X15 = source pointer (starts at X11)
+                    // X16 = dest pointer (starts at X14+8+X10, already in X16 from copyLeft end)
+                    // X13 = remaining count (use X12)
+                    // Note: X16 is already at X14+8+len1 after copyLeft loop ends!
                     let copyRight = [
-                        ARM64.MOVZ (ARM64.X0, 0us, 0)                    // X0 = 0 (counter)
-                        ARM64.ADD_imm (ARM64.X1, ARM64.X14, 8us)         // X1 = X14 + 8
-                        ARM64.ADD_reg (ARM64.X1, ARM64.X1, ARM64.X10)    // X1 = X14 + 8 + len1 (dest start for right)
-                        // Loop: if X0 >= X12, done
-                        ARM64.CMP_reg (ARM64.X0, ARM64.X12)
-                        ARM64.B_cond (ARM64.GE, 6)                       // Skip 6 instructions if done
-                        ARM64.LDRB (ARM64.X15, ARM64.X11, ARM64.X0)      // X15 = byte at [X11 + X0]
-                        ARM64.ADD_reg (ARM64.X2, ARM64.X1, ARM64.X0)     // X2 = dest + counter
-                        ARM64.STRB_reg (ARM64.X15, ARM64.X2)             // [X2] = byte
-                        ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)          // X0++
-                        ARM64.B (-6)                                     // Loop back
+                        ARM64.MOV_reg (ARM64.X15, ARM64.X11)             // 0: X15 = src ptr (right string)
+                        ARM64.MOV_reg (ARM64.X13, ARM64.X12)             // 1: X13 = remaining = len2
+                        // Loop: if X13 == 0, done (skip 7 instructions to exit past B at index 8)
+                        ARM64.CBZ_offset (ARM64.X13, 7)                  // 2: Skip 7 instructions if done -> index 9 (past end)
+                        ARM64.LDRB_imm (ARM64.X8, ARM64.X15, 0)          // 3: X8 = byte at [X15]
+                        ARM64.STRB_reg (ARM64.X8, ARM64.X16)             // 4: [X16] = byte
+                        ARM64.ADD_imm (ARM64.X15, ARM64.X15, 1us)        // 5: X15++ (src ptr)
+                        ARM64.ADD_imm (ARM64.X16, ARM64.X16, 1us)        // 6: X16++ (dest ptr)
+                        ARM64.SUB_imm (ARM64.X13, ARM64.X13, 1us)        // 7: X13-- (remaining)
+                        ARM64.B (-6)                                     // 8: Loop back to CBZ (index 2)
+                    ]
+
+                    // Recompute total length since we clobbered X13
+                    let recomputeTotal = [
+                        ARM64.ADD_reg (ARM64.X13, ARM64.X10, ARM64.X12)  // X13 = len1 + len2
                     ]
 
                     // Store refcount=1 at [X14+8+total]
                     let storeRefcount = [
-                        ARM64.ADD_imm (ARM64.X0, ARM64.X14, 8us)         // X0 = X14 + 8
-                        ARM64.ADD_reg (ARM64.X0, ARM64.X0, ARM64.X13)    // X0 = X14 + 8 + total
-                        ARM64.MOVZ (ARM64.X15, 1us, 0)                   // X15 = 1
-                        ARM64.STR (ARM64.X15, ARM64.X0, 0s)              // [X0] = 1
+                        ARM64.ADD_imm (ARM64.X15, ARM64.X14, 8us)        // X15 = X14 + 8
+                        ARM64.ADD_reg (ARM64.X15, ARM64.X15, ARM64.X13)  // X15 = X14 + 8 + total
+                        ARM64.MOVZ (ARM64.X16, 1us, 0)                   // X16 = 1
+                        ARM64.STR (ARM64.X16, ARM64.X15, 0s)             // [X15] = 1
                     ]
 
                     // Move result to dest
                     let moveResult = [ARM64.MOV_reg (destReg, ARM64.X14)]
 
-                    leftInstrs @ rightInstrs @ calcTotal @ allocate @ storeLen @ copyLeft @ copyRight @ storeRefcount @ moveResult
+                    leftInstrs @ rightInstrs @ calcTotal @ allocate @ storeLen @ copyLeft @ copyRight @ recomputeTotal @ storeRefcount @ moveResult
                 )))
 
     | LIR.PrintHeapString reg ->

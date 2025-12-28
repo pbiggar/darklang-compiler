@@ -487,6 +487,8 @@ let prettyPrintARM64Instr = function
         $"STRB({prettyPrintARM64Reg src}, {prettyPrintARM64Reg addr}, {offset})"
     | ARM64.LDRB (dest, baseAddr, index) ->
         $"LDRB({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg baseAddr}, {prettyPrintARM64Reg index})"
+    | ARM64.LDRB_imm (dest, baseAddr, offset) ->
+        $"LDRB_imm({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg baseAddr}, {offset})"
     | ARM64.STRB_reg (src, addr) ->
         $"STRB_reg({prettyPrintARM64Reg src}, {prettyPrintARM64Reg addr})"
     | ARM64.CMP_imm (src, imm) ->
