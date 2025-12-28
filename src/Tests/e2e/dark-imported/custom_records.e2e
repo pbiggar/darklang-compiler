@@ -41,19 +41,18 @@ type Point = { x: Int64, y: Int64 } let p = Point { x = 5, y = 10 } in p.y = 10
 
 // ===================================================================
 // Record Equality
-// NOTE: Commented out - requires record equality support
 // ===================================================================
 
 // Same records are equal
-// type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 2 } = stdout="true\n"
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 2 } = stdout="true\n"
 
 // Different field values are not equal
-// type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 3 } = stdout="false\n"
-// type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 2, y = 2 } = stdout="false\n"
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 3 } = stdout="false\n"
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 2, y = 2 } = stdout="false\n"
 
 // Inequality
-// type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 3, y = 4 } = stdout="true\n"
-// type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 1, y = 2 } = stdout="false\n"
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 3, y = 4 } = stdout="true\n"
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 1, y = 2 } = stdout="false\n"
 
 // ===================================================================
 // Record Pattern Matching

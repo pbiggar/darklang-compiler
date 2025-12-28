@@ -1,14 +1,14 @@
 // Equality Tests - Structural equality for different types
 //
 // Tests covering:
-// - Integer equality (already works)
+// - Integer equality
 // - Boolean equality
 // - Tuple equality
 // - Record equality
 // - Enum equality
 
 // ===================================================================
-// Integer Equality (already works)
+// Integer Equality
 // ===================================================================
 1 == 1 = stdout="true\n"
 1 == 2 = stdout="false\n"
@@ -32,23 +32,84 @@ true != true = stdout="false\n"
 // ===================================================================
 // Tuple Equality
 // ===================================================================
-// TODO: Implement structural equality for tuples
-// (1, 2) == (1, 2) = stdout="true\n"
-// (1, 2) == (1, 3) = stdout="false\n"
-// (1, 2) == (2, 2) = stdout="false\n"
-// (1, 2) != (1, 3) = stdout="true\n"
+
+// Two-element tuples
+(1, 2) == (1, 2) = stdout="true\n"
+(1, 2) == (1, 3) = stdout="false\n"
+(1, 2) == (2, 2) = stdout="false\n"
+(1, 2) != (1, 3) = stdout="true\n"
+(1, 2) != (1, 2) = stdout="false\n"
+
+// Three-element tuples
+(1, 2, 3) == (1, 2, 3) = stdout="true\n"
+(1, 2, 3) == (1, 2, 4) = stdout="false\n"
+(1, 2, 3) != (1, 2, 4) = stdout="true\n"
+
+// Tuples with booleans
+(true, false) == (true, false) = stdout="true\n"
+(true, false) == (false, true) = stdout="false\n"
+
+// Tuples in variables
+let a = (1, 2) in let b = (1, 2) in a == b = stdout="true\n"
+let a = (1, 2) in let b = (1, 3) in a == b = stdout="false\n"
+
+// Tuple equality in conditionals
+if (1, 2) == (1, 2) then 1 else 0 = 1
+if (1, 2) == (1, 3) then 1 else 0 = 0
 
 // ===================================================================
 // Record Equality
 // ===================================================================
-// TODO: Implement structural equality for records
-// type Point = { x: Int64, y: Int64 } let a = Point { x = 1, y = 2 } in let b = Point { x = 1, y = 2 } in a == b = stdout="true\n"
-// type Point = { x: Int64, y: Int64 } let a = Point { x = 1, y = 2 } in let b = Point { x = 1, y = 3 } in a == b = stdout="false\n"
+
+// Same records are equal
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 2 } = stdout="true\n"
+
+// Different field values are not equal
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 3 } = stdout="false\n"
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 2, y = 2 } = stdout="false\n"
+
+// Inequality
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 3, y = 4 } = stdout="true\n"
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 1, y = 2 } = stdout="false\n"
+
+// Records in variables
+type Point = { x: Int64, y: Int64 } let a = Point { x = 1, y = 2 } in let b = Point { x = 1, y = 2 } in a == b = stdout="true\n"
+type Point = { x: Int64, y: Int64 } let a = Point { x = 1, y = 2 } in let b = Point { x = 1, y = 3 } in a == b = stdout="false\n"
+
+// Three-field records
+type Vec3 = { x: Int64, y: Int64, z: Int64 } Vec3 { x = 1, y = 2, z = 3 } == Vec3 { x = 1, y = 2, z = 3 } = stdout="true\n"
+type Vec3 = { x: Int64, y: Int64, z: Int64 } Vec3 { x = 1, y = 2, z = 3 } == Vec3 { x = 1, y = 2, z = 4 } = stdout="false\n"
+
+// Record equality in conditionals
+type Point = { x: Int64, y: Int64 } if Point { x = 1, y = 2 } == Point { x = 1, y = 2 } then 1 else 0 = 1
+type Point = { x: Int64, y: Int64 } if Point { x = 1, y = 2 } == Point { x = 1, y = 3 } then 1 else 0 = 0
 
 // ===================================================================
 // Enum Equality (simple - no payload)
 // ===================================================================
-// TODO: Implement structural equality for enums
-// type Color = Red | Green | Blue Red == Red = stdout="true\n"
-// type Color = Red | Green | Blue Red == Blue = stdout="false\n"
-// type Color = Red | Green | Blue Green == Green = stdout="true\n"
+type Color = Red | Green | Blue Red == Red = stdout="true\n"
+type Color = Red | Green | Blue Red == Blue = stdout="false\n"
+type Color = Red | Green | Blue Green == Green = stdout="true\n"
+type Color = Red | Green | Blue Red != Blue = stdout="true\n"
+type Color = Red | Green | Blue Red != Red = stdout="false\n"
+
+// Enum in variables
+type Color = Red | Green | Blue let a = Red in let b = Red in a == b = stdout="true\n"
+type Color = Red | Green | Blue let a = Red in let b = Blue in a == b = stdout="false\n"
+
+// Enum in conditionals
+type Color = Red | Green | Blue if Red == Red then 1 else 0 = 1
+type Color = Red | Green | Blue if Red == Blue then 1 else 0 = 0
+
+// ===================================================================
+// Nested Structural Equality
+// ===================================================================
+
+// Tuple of tuples
+((1, 2), (3, 4)) == ((1, 2), (3, 4)) = stdout="true\n"
+((1, 2), (3, 4)) == ((1, 2), (3, 5)) = stdout="false\n"
+
+// Record with tuple field
+type PointPair = { p1: (Int64, Int64), p2: (Int64, Int64) } PointPair { p1 = (1, 2), p2 = (3, 4) } == PointPair { p1 = (1, 2), p2 = (3, 4) } = stdout="true\n"
+type PointPair = { p1: (Int64, Int64), p2: (Int64, Int64) } PointPair { p1 = (1, 2), p2 = (3, 4) } == PointPair { p1 = (1, 2), p2 = (3, 5) } = stdout="false\n"
+
