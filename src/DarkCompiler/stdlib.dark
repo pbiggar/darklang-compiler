@@ -242,14 +242,86 @@ def Stdlib.List.singleton<t>(value: t) : List<t> = [value]
 // Prepend an element to a list
 def Stdlib.List.push<t>(list: List<t>, value: t) : List<t> = [value, ...list]
 
-// TODO: Many List functions are blocked by type checker bug with generic recursion.
-// The type checker doesn't properly handle recursive calls that return generic List<t>.
-// push, pushBack, append, reverse, filter, map, fold, take, drop all hit this bug.
-// These functions compile with list spread syntax but fail type checking.
-// This is related to Bug 1 (generic enum pattern matching).
+// Apply a function to each element of a list
+def Stdlib.List.map<a, b>(list: List<a>, fn: (a) -> b) : List<b> =
+    match list with
+    | [] -> []
+    | [h, ...t] -> [fn(h), ...Stdlib.List.map<a, b>(t, fn)]
 
-// TODO: Functions that require Option/Result return types are blocked by type checker bug
-// head, tail, last, getAt, findFirst - require Stdlib.Option.Option<t> returns
+// Keep only elements that satisfy a predicate
+def Stdlib.List.filter<a>(list: List<a>, fn: (a) -> Bool) : List<a> =
+    match list with
+    | [] -> []
+    | [h, ...t] ->
+        if fn(h) then [h, ...Stdlib.List.filter<a>(t, fn)]
+        else Stdlib.List.filter<a>(t, fn)
+
+// Append an element to the end of a list
+def Stdlib.List.pushBack<a>(list: List<a>, value: a) : List<a> =
+    match list with
+    | [] -> [value]
+    | [h, ...t] -> [h, ...Stdlib.List.pushBack<a>(t, value)]
+
+// Concatenate two lists
+def Stdlib.List.append<a>(list1: List<a>, list2: List<a>) : List<a> =
+    match list1 with
+    | [] -> list2
+    | [h, ...t] -> [h, ...Stdlib.List.append<a>(t, list2)]
+
+// Reverse a list
+def Stdlib.List.reverse<a>(list: List<a>) : List<a> =
+    Stdlib.List.__reverseHelper<a>(list, [])
+
+def Stdlib.List.__reverseHelper<a>(list: List<a>, acc: List<a>) : List<a> =
+    match list with
+    | [] -> acc
+    | [h, ...t] -> Stdlib.List.__reverseHelper<a>(t, [h, ...acc])
+
+// Fold left (reduce) over a list
+def Stdlib.List.fold<a, b>(list: List<a>, init: b, fn: (b, a) -> b) : b =
+    match list with
+    | [] -> init
+    | [h, ...t] -> Stdlib.List.fold<a, b>(t, fn(init, h), fn)
+
+// Get head of list or return None
+def Stdlib.List.head<a>(list: List<a>) : Stdlib.Option.Option<a> =
+    match list with
+    | [] -> None
+    | [h, ...t] -> Some(h)
+
+// Get tail of list or return None
+// TODO: Blocked by parser - can't handle nested generics like Stdlib.Option.Option<List<a>>
+// def Stdlib.List.tail<a>(list: List<a>) : Stdlib.Option.Option<List<a>> =
+//     match list with
+//     | [] -> None
+//     | [h, ...t] -> Some(t)
+
+// Get element at index (0-based)
+def Stdlib.List.getAt<a>(list: List<a>, index: Int64) : Stdlib.Option.Option<a> =
+    if index < 0 then None
+    else match list with
+    | [] -> None
+    | [h, ...t] -> if index == 0 then Some(h) else Stdlib.List.getAt<a>(t, index - 1)
+
+// Find first element satisfying a predicate
+def Stdlib.List.findFirst<a>(list: List<a>, fn: (a) -> Bool) : Stdlib.Option.Option<a> =
+    match list with
+    | [] -> None
+    | [h, ...t] -> if fn(h) then Some(h) else Stdlib.List.findFirst<a>(t, fn)
+
+// Take first n elements
+def Stdlib.List.take<a>(list: List<a>, n: Int64) : List<a> =
+    if n <= 0 then []
+    else match list with
+    | [] -> []
+    | [h, ...t] -> [h, ...Stdlib.List.take<a>(t, n - 1)]
+
+// Drop first n elements
+def Stdlib.List.drop<a>(list: List<a>, n: Int64) : List<a> =
+    if n <= 0 then list
+    else match list with
+    | [] -> []
+    | [h, ...t] -> Stdlib.List.drop<a>(t, n - 1)
 
 // Stdlib.String - String operations
 

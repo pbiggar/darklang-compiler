@@ -1297,7 +1297,8 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                                     | None ->
                                         Error (TypeMismatch (expected, bodyType, "match case")))))
 
-            checkCases cases None []
+            // Pass expectedType to first case so empty lists, None, etc. get the right type
+            checkCases cases expectedType []
             |> Result.bind (fun (matchType, cases') ->
                 match expectedType with
                 | Some expected ->
