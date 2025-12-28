@@ -1,0 +1,16 @@
+// Tak (Takeuchi) Benchmark
+// Tests recursion and function call overhead
+//
+// The Takeuchi function creates deeply nested recursive calls.
+// tak(24, 16, 8) makes millions of calls.
+
+def tak(x: Int64, y: Int64, z: Int64) : Int64 =
+    if x <= y then z
+    else tak(tak(x - 1, y, z), tak(y - 1, z, x), tak(z - 1, x, y))
+
+// Repeat multiple times for meaningful measurement
+def repeat(n: Int64, acc: Int64) : Int64 =
+    if n <= 0 then acc
+    else repeat(n - 1, tak(24, 16, 8))
+
+repeat(10, 0)

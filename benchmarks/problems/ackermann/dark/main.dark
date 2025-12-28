@@ -1,0 +1,14 @@
+// Ackermann Benchmark
+// Tests deep recursion and function call overhead
+//
+// The Ackermann function is a classic recursion stress test.
+// A(3, n) creates exponentially many recursive calls.
+
+def ackermann(m: Int64, n: Int64) : Int64 =
+    if m == 0 then n + 1
+    else if n == 0 then ackermann(m - 1, 1)
+    else ackermann(m - 1, ackermann(m, n - 1))
+
+// A(3, 12) = 32765
+// This creates millions of recursive calls
+ackermann(3, 12)

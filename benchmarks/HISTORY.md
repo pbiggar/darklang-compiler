@@ -4,6 +4,146 @@ Performance history of Darklang compiler across versions (instruction counts via
 
 ---
 
+## 2025-12-28 12:28:19
+
+**Commit:** `0f060e54` - Add algebraic simplifications and bitwise identities
+
+### ackermann
+
+| Language | Instructions   | vs Rust  | Data Refs      | L1 Miss       | LL Miss     | Branches      | Mispred |
+|----------|----------------|----------|----------------|---------------|-------------|---------------|---------|
+|     Dark | 29,700,141,739 | baseline | 15,744,544,522 | 1,057,124,891 | 840,212,509 | 1,073,512,521 |    0.0% |
+
+### binary_trees
+
+| Language | Instructions | vs Rust  | Data Refs   | L1 Miss | LL Miss | Branches  | Mispred |
+|----------|--------------|----------|-------------|---------|---------|-----------|---------|
+|     Dark |  226,099,941 | baseline | 140,902,648 |     177 |     192 | 6,553,612 |   12.6% |
+
+### factorial
+
+| Language | Instructions | vs Rust  | Data Refs | L1 Miss | LL Miss | Branches | Mispred |
+|----------|--------------|----------|-----------|---------|---------|----------|---------|
+|     Dark |    7,350,221 | baseline | 4,440,060 |  29,807 |  25,982 |  210,024 |    4.8% |
+
+### fib
+
+| Language | Instructions  | vs Rust  | Data Refs   | L1 Miss | LL Miss | Branches   | Mispred |
+|----------|---------------|----------|-------------|---------|---------|------------|---------|
+|     Dark | 1,015,264,001 | baseline | 642,005,141 |      55 |      67 | 29,860,714 |    9.0% |
+
+### primes
+
+| Language | Instructions | vs Rust  | Data Refs | L1 Miss | LL Miss | Branches | Mispred |
+|----------|--------------|----------|-----------|---------|---------|----------|---------|
+|     Dark |   22,470,125 | baseline | 9,695,513 |  29,747 |  25,934 |  932,988 |    1.2% |
+
+### sum_to_n
+
+| Language | Instructions | vs Rust  | Data Refs  | L1 Miss   | LL Miss   | Branches  | Mispred |
+|----------|--------------|----------|------------|-----------|-----------|-----------|---------|
+|     Dark |   39,007,544 | baseline | 21,004,549 | 2,949,759 | 2,185,615 | 1,000,213 |    0.0% |
+
+### tak
+
+| Language | Instructions  | vs Rust  | Data Refs   | L1 Miss | LL Miss | Branches   | Mispred |
+|----------|---------------|----------|-------------|---------|---------|------------|---------|
+|     Dark | 1,022,273,555 | baseline | 573,470,532 |      53 |      71 | 24,933,506 |   17.4% |
+---
+
+
+## 2025-12-28 12:28:07
+
+**Commit:** `0f060e54` - Add algebraic simplifications and bitwise identities
+
+### primes
+
+| Language | Instructions | vs Rust  | Data Refs | L1 Miss | LL Miss | Branches | Mispred |
+|----------|--------------|----------|-----------|---------|---------|----------|---------|
+|     Dark |   22,470,125 | baseline | 9,695,513 |  29,747 |  25,934 |  932,988 |    1.2% |
+#### Instruction Counts (Cachegrind)
+
+**ackermann:**
+- Dark: 29,700,141,739 (baseline)
+
+**binary_trees:**
+- Dark: 226,099,941 (baseline)
+
+**factorial:**
+- Rust: 255,726 (0.03x)
+- Dark: 7,350,221 (baseline)
+- Python: 182,064,112 (24.8x)
+
+**fib:**
+- Rust: 272,526,559 (0.27x)
+- Dark: 1,015,264,001 (baseline)
+- Python: 15,135,188,032 (14.9x)
+
+**primes:**
+- Dark: 22,470,125 (baseline)
+
+**sum_to_n:**
+- Rust: 255,662 (0.01x)
+- Dark: 39,007,544 (baseline)
+- Python: 940,685,845 (24.1x)
+
+**tak:**
+- Dark: 1,022,273,555 (baseline)
+
+---
+
+
+## 2025-12-28 12:25:08
+
+**Commit:** `0f060e54` - Add algebraic simplifications and bitwise identities
+
+### tak
+
+| Language | Instructions  | vs Rust  | Data Refs   | L1 Miss | LL Miss | Branches   | Mispred |
+|----------|---------------|----------|-------------|---------|---------|------------|---------|
+|     Dark | 1,022,273,555 | baseline | 573,470,532 |      53 |      71 | 24,933,506 |   17.4% |
+#### Instruction Counts (Cachegrind)
+
+**primes:**
+- Dark: 22,470,125 (baseline)
+
+---
+
+
+## 2025-12-28 12:22:23
+
+**Commit:** `0f060e54` - Add algebraic simplifications and bitwise identities
+
+### ackermann
+
+| Language | Instructions   | vs Rust  | Data Refs      | L1 Miss       | LL Miss     | Branches      | Mispred |
+|----------|----------------|----------|----------------|---------------|-------------|---------------|---------|
+|     Dark | 29,700,141,739 | baseline | 15,744,544,522 | 1,057,124,891 | 840,212,509 | 1,073,512,521 |    0.0% |
+#### Instruction Counts (Cachegrind)
+
+**tak:**
+- Dark: 1,022,273,555 (baseline)
+
+---
+
+
+## 2025-12-28 12:22:12
+
+**Commit:** `0f060e54` - Add algebraic simplifications and bitwise identities
+
+### binary_trees
+
+| Language | Instructions | vs Rust  | Data Refs   | L1 Miss | LL Miss | Branches  | Mispred |
+|----------|--------------|----------|-------------|---------|---------|-----------|---------|
+|     Dark |  226,099,941 | baseline | 140,902,648 |     177 |     192 | 6,553,612 |   12.6% |
+#### Instruction Counts (Cachegrind)
+
+**ackermann:**
+- Dark: 29,700,141,739 (baseline)
+
+---
+
+
 ## 2025-12-28 12:05:04
 
 **Commit:** `d118287a` - Add Common Subexpression Elimination (CSE) optimization
@@ -25,6 +165,11 @@ Performance history of Darklang compiler across versions (instruction counts via
 | Language | Instructions | vs Rust  | Data Refs  | L1 Miss   | LL Miss   | Branches  | Mispred |
 |----------|--------------|----------|------------|-----------|-----------|-----------|---------|
 |     Dark |   39,007,544 | baseline | 21,004,549 | 2,949,759 | 2,185,615 | 1,000,213 |    0.0% |
+#### Instruction Counts (Cachegrind)
+
+**binary_trees:**
+- Dark: 226,099,941 (baseline)
+
 ---
 
 
