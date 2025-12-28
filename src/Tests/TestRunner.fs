@@ -484,10 +484,11 @@ let main args =
                         currentFile <- test.SourceFile
                         let fileName = System.IO.Path.GetFileName(test.SourceFile)
                         println $"  {Colors.yellow}── {fileName} ──{Colors.reset}"
-                    // Truncate long test names
+                    // Clean up test name: remove Stdlib. prefix and truncate long names
+                    let cleanName = test.Name.Replace("Stdlib.", "")
                     let displayName =
-                        if test.Name.Length > 60 then test.Name.Substring(0, 57) + "..."
-                        else test.Name
+                        if cleanName.Length > 75 then cleanName.Substring(0, 72) + "..."
+                        else cleanName
                     print $"  {displayName}... "
                     if result.Success then
                         println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime elapsed}){Colors.reset}"

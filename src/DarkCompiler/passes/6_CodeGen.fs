@@ -1804,14 +1804,15 @@ let convertCFG (ctx: CodeGenContext) (epilogueLabel: string) (cfg: LIR.CFG) : Re
 
     let allBlocks = entryBlock @ otherBlocks
 
-    // Convert each block
-    allBlocks
-    |> List.map (convertBlock ctx epilogueLabel)
-    |> List.fold (fun acc result ->
-        match acc, result with
-        | Ok instrs, Ok newInstrs -> Ok (instrs @ newInstrs)
-        | Error err, _ -> Error err
-        | _, Error err -> Error err) (Ok [])
+    // Convert each block (accumulate in reverse to avoid O(n²) list concat)
+    let rec convertBlocks acc remaining =
+        match remaining with
+        | [] -> Ok (List.rev acc)
+        | block :: rest ->
+            match convertBlock ctx epilogueLabel block with
+            | Error err -> Error err
+            | Ok instrs -> convertBlocks (List.rev instrs @ acc) rest
+    convertBlocks [] allBlocks
 
 /// Generate heap initialization code for _start function
 /// Reserves 64KB of stack space for heap allocations and initializes X27/X28

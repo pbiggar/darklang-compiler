@@ -1332,7 +1332,14 @@ let appendStringPools (stdlibPool: MIR.StringPool) (userPool: MIR.StringPool) : 
         |> List.map (fun (idx, value) -> (idx + offset, value))
         |> Map.ofList
     let mergedStrings = Map.fold (fun acc k v -> Map.add k v acc) stdlibPool.Strings offsetUserStrings
+    // Build reverse index from merged strings
+    let mergedStringToId =
+        mergedStrings
+        |> Map.toSeq
+        |> Seq.map (fun (idx, (s, _)) -> (s, idx))
+        |> Map.ofSeq
     { Strings = mergedStrings
+      StringToId = mergedStringToId
       NextId = stdlibPool.NextId + userPool.NextId }
 
 /// Append a user float pool to stdlib float pool with offset
@@ -1344,7 +1351,14 @@ let appendFloatPools (stdlibPool: MIR.FloatPool) (userPool: MIR.FloatPool) : MIR
         |> List.map (fun (idx, value) -> (idx + offset, value))
         |> Map.ofList
     let mergedFloats = Map.fold (fun acc k v -> Map.add k v acc) stdlibPool.Floats offsetUserFloats
+    // Build reverse index from merged floats
+    let mergedFloatToId =
+        mergedFloats
+        |> Map.toSeq
+        |> Seq.map (fun (idx, f) -> (f, idx))
+        |> Map.ofSeq
     { Floats = mergedFloats
+      FloatToId = mergedFloatToId
       NextId = stdlibPool.NextId + userPool.NextId }
 
 /// Merge user MIR with cached stdlib MIR.

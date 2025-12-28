@@ -22,48 +22,52 @@ type VReg = VReg of int
 /// Maps pool index to (string value, length)
 type StringPool = {
     Strings: Map<int, string * int>  // index -> (string, length)
+    StringToId: Map<string, int>     // reverse index for O(log n) lookup
     NextId: int
 }
 
 /// Empty string pool
-let emptyStringPool = { Strings = Map.empty; NextId = 0 }
+let emptyStringPool = { Strings = Map.empty; StringToId = Map.empty; NextId = 0 }
 
 /// Add a string to the pool, returning its index
 /// If string already exists, returns existing index
 let addString (pool: StringPool) (s: string) : int * StringPool =
-    // Check if string already exists
-    let existing =
-        pool.Strings
-        |> Map.tryFindKey (fun _ (str, _) -> str = s)
-    match existing with
+    // O(log n) lookup via reverse index
+    match Map.tryFind s pool.StringToId with
     | Some idx -> (idx, pool)
     | None ->
         let idx = pool.NextId
-        let pool' = { Strings = Map.add idx (s, String.length s) pool.Strings; NextId = idx + 1 }
+        let pool' = {
+            Strings = Map.add idx (s, String.length s) pool.Strings
+            StringToId = Map.add s idx pool.StringToId
+            NextId = idx + 1
+        }
         (idx, pool')
 
 /// Float pool for storing float constants in data section
 /// Maps pool index to float value
 type FloatPool = {
-    Floats: Map<int, float>  // index -> float value
+    Floats: Map<int, float>    // index -> float value
+    FloatToId: Map<float, int> // reverse index for O(log n) lookup
     NextId: int
 }
 
 /// Empty float pool
-let emptyFloatPool = { Floats = Map.empty; NextId = 0 }
+let emptyFloatPool = { Floats = Map.empty; FloatToId = Map.empty; NextId = 0 }
 
 /// Add a float to the pool, returning its index
 /// If float already exists, returns existing index
 let addFloat (pool: FloatPool) (f: float) : int * FloatPool =
-    // Check if float already exists
-    let existing =
-        pool.Floats
-        |> Map.tryFindKey (fun _ v -> v = f)
-    match existing with
+    // O(log n) lookup via reverse index
+    match Map.tryFind f pool.FloatToId with
     | Some idx -> (idx, pool)
     | None ->
         let idx = pool.NextId
-        let pool' = { Floats = Map.add idx f pool.Floats; NextId = idx + 1 }
+        let pool' = {
+            Floats = Map.add idx f pool.Floats
+            FloatToId = Map.add f idx pool.FloatToId
+            NextId = idx + 1
+        }
         (idx, pool')
 
 /// Operands
