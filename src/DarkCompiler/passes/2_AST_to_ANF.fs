@@ -1334,7 +1334,7 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
             Ok (AST.TRecord typeName)
     | AST.RecordUpdate (recordExpr, _) ->
         // Record update returns the same type as the record being updated
-        inferType recordExpr typeEnv typeReg variantLookup funcReg
+        inferType recordExpr typeEnv typeReg variantLookup funcReg moduleRegistry
     | AST.RecordAccess (recordExpr, fieldName) ->
         inferType recordExpr typeEnv typeReg variantLookup funcReg moduleRegistry
         |> Result.bind (fun recordType ->
@@ -1825,7 +1825,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         // Record update: { record with field1 = val1, field2 = val2 }
         // Desugar to creating a new record with updated fields
         let typeEnv = typeEnvFromVarEnv env
-        inferType recordExpr typeEnv typeReg variantLookup funcReg
+        inferType recordExpr typeEnv typeReg variantLookup funcReg moduleRegistry
         |> Result.bind (fun recordType ->
             match recordType with
             | AST.TRecord typeName ->
@@ -1841,7 +1841,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             | Some updateExpr -> (fname, updateExpr)
                             | None -> (fname, AST.RecordAccess (recordExpr, fname)))
                     // Create a new record literal with the combined fields
-                    toANF (AST.RecordLiteral (typeName, newFields)) varGen env typeReg variantLookup funcReg
+                    toANF (AST.RecordLiteral (typeName, newFields)) varGen env typeReg variantLookup funcReg moduleRegistry
                 | None ->
                     Error $"Unknown record type: {typeName}"
             | _ ->
@@ -2958,7 +2958,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
     | AST.RecordUpdate (recordExpr, updates) ->
         // Desugar to RecordLiteral: build new record with updated fields
         let typeEnv = typeEnvFromVarEnv env
-        inferType recordExpr typeEnv typeReg variantLookup funcReg
+        inferType recordExpr typeEnv typeReg variantLookup funcReg moduleRegistry
         |> Result.bind (fun recordType ->
             match recordType with
             | AST.TRecord typeName ->
@@ -2971,7 +2971,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                             match Map.tryFind fname updateMap with
                             | Some updateExpr -> (fname, updateExpr)
                             | None -> (fname, AST.RecordAccess (recordExpr, fname)))
-                    toAtom (AST.RecordLiteral (typeName, newFields)) varGen env typeReg variantLookup funcReg
+                    toAtom (AST.RecordLiteral (typeName, newFields)) varGen env typeReg variantLookup funcReg moduleRegistry
                 | None -> Error $"Unknown record type: {typeName}"
             | _ -> Error "Cannot use record update syntax on non-record type")
 
