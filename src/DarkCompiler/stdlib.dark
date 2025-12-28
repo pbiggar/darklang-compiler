@@ -144,8 +144,88 @@ def Stdlib.Tuple3.mapAllThree<a, b, c, d, e, f>(fnFirst: (a) -> d, fnSecond: (b)
 // Stdlib.Result - Result type for error handling
 type Stdlib.Result.Result<t, e> = Ok of t | Error of e
 
+// Check if result is Ok
+def Stdlib.Result.isOk<t, e>(result: Stdlib.Result.Result<t, e>) : Bool =
+    match result with
+    | Ok(_) -> true
+    | Error(_) -> false
+
+// Check if result is Error
+def Stdlib.Result.isError<t, e>(result: Stdlib.Result.Result<t, e>) : Bool =
+    match result with
+    | Ok(_) -> false
+    | Error(_) -> true
+
+// Get the Ok value or return a default
+// NOTE: Temporarily disabled - type checker has issue with type parameter `t`
+// def Stdlib.Result.withDefault<t, e>(result: Stdlib.Result.Result<t, e>, default: t) : t =
+//     match result with
+//     | Ok(v) -> v
+//     | Error(_) -> default
+
+// Transform the Ok value with a function
+// NOTE: Temporarily disabled - type checker has issue with type parameter `t`
+// def Stdlib.Result.map<t, u, e>(fn: (t) -> u, result: Stdlib.Result.Result<t, e>) : Stdlib.Result.Result<u, e> =
+//     match result with
+//     | Ok(v) -> Ok(fn(v))
+//     | Error(err) -> Error(err)
+
+// Transform the Error value with a function
+// NOTE: Blocked by type checker - constructor doesn't pick up return type annotation
+// def Stdlib.Result.mapError<t, e, f>(fn: (e) -> f, result: Stdlib.Result.Result<t, e>) : Stdlib.Result.Result<t, f> =
+//     match result with
+//     | Ok(v) -> Ok(v)
+//     | Error(err) -> Error(fn(err))
+
+// Chain Result computations
+// NOTE: Temporarily disabled - type checker has issue with type parameter `t`
+// def Stdlib.Result.andThen<t, u, e>(fn: (t) -> Stdlib.Result.Result<u, e>, result: Stdlib.Result.Result<t, e>) : Stdlib.Result.Result<u, e> =
+//     match result with
+//     | Ok(v) -> fn(v)
+//     | Error(err) -> Error(err)
+
 // Stdlib.Option - Optional values
 type Stdlib.Option.Option<t> = Some of t | None
+
+// Check if option has a value
+def Stdlib.Option.isSome<t>(opt: Stdlib.Option.Option<t>) : Bool =
+    match opt with
+    | Some(_) -> true
+    | None -> false
+
+// Check if option is empty
+def Stdlib.Option.isNone<t>(opt: Stdlib.Option.Option<t>) : Bool =
+    match opt with
+    | Some(_) -> false
+    | None -> true
+
+// Get the value or return a default
+// NOTE: Temporarily disabled - type checker has issue with type parameter `t`
+// def Stdlib.Option.withDefault<t>(opt: Stdlib.Option.Option<t>, default: t) : t =
+//     match opt with
+//     | Some(v) -> v
+//     | None -> default
+
+// Transform the value with a function if present
+// NOTE: Temporarily disabled - type checker has issue with type parameter `t`
+// def Stdlib.Option.map<t, u>(fn: (t) -> u, opt: Stdlib.Option.Option<t>) : Stdlib.Option.Option<u> =
+//     match opt with
+//     | Some(v) -> Some(fn(v))
+//     | None -> None
+
+// Chain Option computations
+// NOTE: Temporarily disabled - type checker has issue with type parameter `t`
+// def Stdlib.Option.andThen<t, u>(fn: (t) -> Stdlib.Option.Option<u>, opt: Stdlib.Option.Option<t>) : Stdlib.Option.Option<u> =
+//     match opt with
+//     | Some(v) -> fn(v)
+//     | None -> None
+
+// Convert Option to a single-element or empty list
+// NOTE: Temporarily disabled - type checker has issue with type parameter `t`
+// def Stdlib.Option.toList<t>(opt: Stdlib.Option.Option<t>) : List<t> =
+//     match opt with
+//     | Some(v) -> [v]
+//     | None -> []
 
 // Stdlib.List - List operations
 // Lists are represented as: Nil = 0, Cons = [tag=1, head, tail]
