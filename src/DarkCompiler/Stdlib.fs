@@ -11,13 +11,13 @@ open AST
 let int64Module : ModuleDef = {
     Name = "Stdlib.Int64"
     Functions = [
-        { Name = "add"; ParamTypes = [TInt64; TInt64]; ReturnType = TInt64 }
-        { Name = "sub"; ParamTypes = [TInt64; TInt64]; ReturnType = TInt64 }
-        { Name = "mul"; ParamTypes = [TInt64; TInt64]; ReturnType = TInt64 }
-        { Name = "div"; ParamTypes = [TInt64; TInt64]; ReturnType = TInt64 }
-        { Name = "max"; ParamTypes = [TInt64; TInt64]; ReturnType = TInt64 }
-        { Name = "min"; ParamTypes = [TInt64; TInt64]; ReturnType = TInt64 }
-        { Name = "toFloat"; ParamTypes = [TInt64]; ReturnType = TFloat64 }
+        { Name = "add"; TypeParams = []; ParamTypes = [TInt64; TInt64]; ReturnType = TInt64 }
+        { Name = "sub"; TypeParams = []; ParamTypes = [TInt64; TInt64]; ReturnType = TInt64 }
+        { Name = "mul"; TypeParams = []; ParamTypes = [TInt64; TInt64]; ReturnType = TInt64 }
+        { Name = "div"; TypeParams = []; ParamTypes = [TInt64; TInt64]; ReturnType = TInt64 }
+        { Name = "max"; TypeParams = []; ParamTypes = [TInt64; TInt64]; ReturnType = TInt64 }
+        { Name = "min"; TypeParams = []; ParamTypes = [TInt64; TInt64]; ReturnType = TInt64 }
+        { Name = "toFloat"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TFloat64 }
     ]
 }
 
@@ -25,10 +25,10 @@ let int64Module : ModuleDef = {
 let floatModule : ModuleDef = {
     Name = "Stdlib.Float"
     Functions = [
-        { Name = "sqrt"; ParamTypes = [TFloat64]; ReturnType = TFloat64 }
-        { Name = "abs"; ParamTypes = [TFloat64]; ReturnType = TFloat64 }
-        { Name = "negate"; ParamTypes = [TFloat64]; ReturnType = TFloat64 }
-        { Name = "toInt"; ParamTypes = [TFloat64]; ReturnType = TInt64 }
+        { Name = "sqrt"; TypeParams = []; ParamTypes = [TFloat64]; ReturnType = TFloat64 }
+        { Name = "abs"; TypeParams = []; ParamTypes = [TFloat64]; ReturnType = TFloat64 }
+        { Name = "negate"; TypeParams = []; ParamTypes = [TFloat64]; ReturnType = TFloat64 }
+        { Name = "toInt"; TypeParams = []; ParamTypes = [TFloat64]; ReturnType = TInt64 }
     ]
 }
 
@@ -42,13 +42,13 @@ let fileModule : ModuleDef = {
     Name = "Stdlib.File"
     Functions = [
         // readText : (String) -> Result<String, String>
-        { Name = "readText"; ParamTypes = [TString]; ReturnType = resultType TString }
+        { Name = "readText"; TypeParams = []; ParamTypes = [TString]; ReturnType = resultType TString }
         // exists : (String) -> Bool
-        { Name = "exists"; ParamTypes = [TString]; ReturnType = TBool }
+        { Name = "exists"; TypeParams = []; ParamTypes = [TString]; ReturnType = TBool }
         // writeText : (String, String) -> Result<Unit, String>
-        { Name = "writeText"; ParamTypes = [TString; TString]; ReturnType = resultType TUnit }
+        { Name = "writeText"; TypeParams = []; ParamTypes = [TString; TString]; ReturnType = resultType TUnit }
         // appendText : (String, String) -> Result<Unit, String>
-        { Name = "appendText"; ParamTypes = [TString; TString]; ReturnType = resultType TUnit }
+        { Name = "appendText"; TypeParams = []; ParamTypes = [TString; TString]; ReturnType = resultType TUnit }
     ]
 }
 
@@ -57,29 +57,29 @@ let fileModule : ModuleDef = {
 /// The names start with __ to indicate they are internal
 let rawMemoryIntrinsics : ModuleFunc list = [
     // __raw_alloc : (Int64) -> RawPtr - allocate raw bytes
-    { Name = "__raw_alloc"; ParamTypes = [TInt64]; ReturnType = TRawPtr }
+    { Name = "__raw_alloc"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TRawPtr }
     // __raw_free : (RawPtr) -> Unit - free raw memory
-    { Name = "__raw_free"; ParamTypes = [TRawPtr]; ReturnType = TUnit }
-    // __raw_get : (RawPtr, Int64) -> Int64 - read 8 bytes at offset
-    { Name = "__raw_get"; ParamTypes = [TRawPtr; TInt64]; ReturnType = TInt64 }
-    // __raw_set : (RawPtr, Int64, Int64) -> Unit - write 8 bytes at offset
-    { Name = "__raw_set"; ParamTypes = [TRawPtr; TInt64; TInt64]; ReturnType = TUnit }
+    { Name = "__raw_free"; TypeParams = []; ParamTypes = [TRawPtr]; ReturnType = TUnit }
+    // __raw_get<v> : (RawPtr, Int64) -> v - read 8 bytes at offset, typed as v
+    { Name = "__raw_get"; TypeParams = ["v"]; ParamTypes = [TRawPtr; TInt64]; ReturnType = TVar "v" }
+    // __raw_set<v> : (RawPtr, Int64, v) -> Unit - write 8 bytes at offset
+    { Name = "__raw_set"; TypeParams = ["v"]; ParamTypes = [TRawPtr; TInt64; TVar "v"]; ReturnType = TUnit }
     // __rawptr_to_int64 : (RawPtr) -> Int64 - cast pointer to int (for tagging)
-    { Name = "__rawptr_to_int64"; ParamTypes = [TRawPtr]; ReturnType = TInt64 }
+    { Name = "__rawptr_to_int64"; TypeParams = []; ParamTypes = [TRawPtr]; ReturnType = TInt64 }
     // __int64_to_rawptr : (Int64) -> RawPtr - cast int to pointer (for memory ops)
-    { Name = "__int64_to_rawptr"; ParamTypes = [TInt64]; ReturnType = TRawPtr }
+    { Name = "__int64_to_rawptr"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TRawPtr }
     // __string_hash : (String) -> Int64 - FNV-1a hash of string contents
-    { Name = "__string_hash"; ParamTypes = [TString]; ReturnType = TInt64 }
+    { Name = "__string_hash"; TypeParams = []; ParamTypes = [TString]; ReturnType = TInt64 }
     // __string_eq : (String, String) -> Bool - byte-wise string equality
-    { Name = "__string_eq"; ParamTypes = [TString; TString]; ReturnType = TBool }
+    { Name = "__string_eq"; TypeParams = []; ParamTypes = [TString; TString]; ReturnType = TBool }
     // __refcount_inc_string : (String) -> Unit - increment string refcount
-    { Name = "__refcount_inc_string"; ParamTypes = [TString]; ReturnType = TUnit }
+    { Name = "__refcount_inc_string"; TypeParams = []; ParamTypes = [TString]; ReturnType = TUnit }
     // __refcount_dec_string : (String) -> Unit - decrement string refcount, free if 0
-    { Name = "__refcount_dec_string"; ParamTypes = [TString]; ReturnType = TUnit }
+    { Name = "__refcount_dec_string"; TypeParams = []; ParamTypes = [TString]; ReturnType = TUnit }
     // __string_to_int64 : (String) -> Int64 - cast string pointer to int (for storage)
-    { Name = "__string_to_int64"; ParamTypes = [TString]; ReturnType = TInt64 }
+    { Name = "__string_to_int64"; TypeParams = []; ParamTypes = [TString]; ReturnType = TInt64 }
     // __int64_to_string : (Int64) -> String - cast int to string pointer (for retrieval)
-    { Name = "__int64_to_string"; ParamTypes = [TInt64]; ReturnType = TString }
+    { Name = "__int64_to_string"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TString }
 ]
 
 /// All available Stdlib modules

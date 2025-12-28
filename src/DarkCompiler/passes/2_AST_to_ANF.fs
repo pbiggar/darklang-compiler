@@ -51,15 +51,19 @@ let tryFloatIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr optio
 /// Try to convert a function call to a raw memory intrinsic CExpr
 /// These are internal-only functions for implementing HAMT data structures
 /// Returns Some CExpr if it's a raw memory intrinsic, None otherwise
+/// Note: __raw_get and __raw_set are generic and become monomorphized names like
+/// __raw_get_i64, __raw_get_str, __raw_set_i64, etc.
 let tryRawMemoryIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
     match funcName, args with
     | "__raw_alloc", [numBytesAtom] ->
         Some (ANF.RawAlloc numBytesAtom)
     | "__raw_free", [ptrAtom] ->
         Some (ANF.RawFree ptrAtom)
-    | "__raw_get", [ptrAtom; offsetAtom] ->
+    | name, [ptrAtom; offsetAtom] when name = "__raw_get" || name.StartsWith("__raw_get_") ->
+        // Generic __raw_get<v> monomorphizes to __raw_get_i64, __raw_get_str, etc.
         Some (ANF.RawGet (ptrAtom, offsetAtom))
-    | "__raw_set", [ptrAtom; offsetAtom; valueAtom] ->
+    | name, [ptrAtom; offsetAtom; valueAtom] when name = "__raw_set" || name.StartsWith("__raw_set_") ->
+        // Generic __raw_set<v> monomorphizes to __raw_set_i64, __raw_set_str, etc.
         Some (ANF.RawSet (ptrAtom, offsetAtom, valueAtom))
     // Cast operations are no-ops at runtime - just pass through the value
     | "__rawptr_to_int64", [ptrAtom] ->
@@ -155,6 +159,18 @@ let rec typeToMangledName (t: AST.Type) : string =
     | AST.TDict (keyType, valueType) -> $"dict_{typeToMangledName keyType}_{typeToMangledName valueType}"
     | AST.TVar name -> name  // Should not appear after monomorphization
     | AST.TRawPtr -> "rawptr"  // Internal raw pointer type
+
+/// Check if a type is concrete (no type variables)
+let rec isConcrete (ty: AST.Type) : bool =
+    match ty with
+    | AST.TVar _ -> false
+    | AST.TFunction (paramTypes, retType) ->
+        List.forall isConcrete paramTypes && isConcrete retType
+    | AST.TTuple elemTypes -> List.forall isConcrete elemTypes
+    | AST.TSum (_, typeArgs) -> List.forall isConcrete typeArgs
+    | AST.TList elemType -> isConcrete elemType
+    | AST.TDict (keyType, valueType) -> isConcrete keyType && isConcrete valueType
+    | _ -> true
 
 /// Generate a specialized function name
 let specName (funcName: string) (typeArgs: AST.Type list) : string =
@@ -274,8 +290,12 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
         args |> List.map collectTypeApps |> List.fold Set.union Set.empty
     | AST.TypeApp (funcName, typeArgs, args) ->
         // This is a generic call - collect this specialization plus any in args
+        // Only collect if all type arguments are concrete (no TVar)
         let argSpecs = args |> List.map collectTypeApps |> List.fold Set.union Set.empty
-        Set.add (funcName, typeArgs) argSpecs
+        if List.forall isConcrete typeArgs then
+            Set.add (funcName, typeArgs) argSpecs
+        else
+            argSpecs
     | AST.TupleLiteral elements ->
         elements |> List.map collectTypeApps |> List.fold Set.union Set.empty
     | AST.TupleAccess (tuple, _) ->
@@ -1026,6 +1046,7 @@ and replaceInExpr (wrapperMap: Map<string, string>) (expr: AST.Expr) : AST.Expr 
     | _ -> expr
 
 /// Monomorphize a program: collect all specializations, generate specialized functions, replace TypeApps
+/// Uses iterative approach: keep specializing until no new concrete TypeApps are found
 let monomorphize (program: AST.Program) : AST.Program =
     let (AST.Program topLevels) = program
 
@@ -1037,26 +1058,45 @@ let monomorphize (program: AST.Program) : AST.Program =
             | _ -> None)
         |> Map.ofList
 
-    // Collect all specialization sites from all functions and expressions
-    let allSpecs : Set<SpecKey> =
+    // Collect initial specialization sites from non-generic functions and expressions
+    let initialSpecs : Set<SpecKey> =
         topLevels
         |> List.map (function
-            | AST.FunctionDef f -> collectTypeAppsFromFunc f
+            | AST.FunctionDef f when List.isEmpty f.TypeParams -> collectTypeAppsFromFunc f
             | AST.Expression e -> collectTypeApps e
-            | AST.TypeDef _ -> Set.empty)
+            | _ -> Set.empty)
         |> List.fold Set.union Set.empty
 
-    // Generate specialized function definitions
-    let specializedFuncs : AST.FunctionDef list =
-        allSpecs
-        |> Set.toList
-        |> List.choose (fun (funcName, typeArgs) ->
-            match Map.tryFind funcName genericFuncDefs with
-            | Some funcDef ->
-                let specialized = specializeFunction funcDef typeArgs
-                // Also replace any TypeApps in the specialized body
-                Some (replaceTypeAppsInFunc specialized)
-            | None -> None)
+    // Iterate: specialize, collect new TypeApps from specialized bodies, repeat
+    let rec iterate (pendingSpecs: Set<SpecKey>) (processedSpecs: Set<SpecKey>) (accFuncs: AST.FunctionDef list) =
+        // Filter to only specs not yet processed
+        let newSpecs = Set.difference pendingSpecs processedSpecs
+        if Set.isEmpty newSpecs then
+            // No new specs, we're done
+            accFuncs
+        else
+            // Generate specialized functions for new specs
+            let (newFuncs, newPendingSpecs) =
+                newSpecs
+                |> Set.toList
+                |> List.fold (fun (funcs, pending) (funcName, typeArgs) ->
+                    match Map.tryFind funcName genericFuncDefs with
+                    | Some funcDef ->
+                        let specialized = specializeFunction funcDef typeArgs
+                        // Collect TypeApps from the specialized body (these may be new specs)
+                        let bodySpecs = collectTypeAppsFromFunc specialized
+                        (specialized :: funcs, Set.union pending bodySpecs)
+                    | None ->
+                        (funcs, pending)) ([], Set.empty)
+
+            // Continue with new pending specs
+            iterate newPendingSpecs (Set.union processedSpecs newSpecs) (newFuncs @ accFuncs)
+
+    // Run iterative specialization
+    let specializedFuncs = iterate initialSpecs Set.empty []
+
+    // Now replace all TypeApps with Calls in all specialized functions
+    let specializedFuncsReplaced = specializedFuncs |> List.map replaceTypeAppsInFunc
 
     // Replace TypeApps with Calls in all original top-levels (except generic function defs)
     let transformedTopLevels =
@@ -1074,7 +1114,7 @@ let monomorphize (program: AST.Program) : AST.Program =
 
     // Add specialized functions to the program
     let specializationTopLevels =
-        specializedFuncs |> List.map AST.FunctionDef
+        specializedFuncsReplaced |> List.map AST.FunctionDef
 
     AST.Program (specializationTopLevels @ transformedTopLevels)
 
@@ -1082,6 +1122,7 @@ let monomorphize (program: AST.Program) : AST.Program =
 /// Used when user code needs to specialize stdlib generics - the stdlib generic
 /// function bodies are passed in as externalGenericDefs so they can be specialized
 /// without merging the full stdlib AST with user code.
+/// Uses iterative approach: keep specializing until no new concrete TypeApps are found
 let monomorphizeWithExternalDefs (externalGenericDefs: GenericFuncDefs) (program: AST.Program) : AST.Program =
     let (AST.Program topLevels) = program
 
@@ -1092,26 +1133,45 @@ let monomorphizeWithExternalDefs (externalGenericDefs: GenericFuncDefs) (program
     let genericFuncDefs =
         Map.fold (fun acc k v -> Map.add k v acc) externalGenericDefs localGenericDefs
 
-    // Collect all specialization sites from all functions and expressions
-    let allSpecs : Set<SpecKey> =
+    // Collect initial specialization sites from non-generic functions and expressions
+    let initialSpecs : Set<SpecKey> =
         topLevels
         |> List.map (function
-            | AST.FunctionDef f -> collectTypeAppsFromFunc f
+            | AST.FunctionDef f when List.isEmpty f.TypeParams -> collectTypeAppsFromFunc f
             | AST.Expression e -> collectTypeApps e
-            | AST.TypeDef _ -> Set.empty)
+            | _ -> Set.empty)
         |> List.fold Set.union Set.empty
 
-    // Generate specialized function definitions
-    let specializedFuncs : AST.FunctionDef list =
-        allSpecs
-        |> Set.toList
-        |> List.choose (fun (funcName, typeArgs) ->
-            match Map.tryFind funcName genericFuncDefs with
-            | Some funcDef ->
-                let specialized = specializeFunction funcDef typeArgs
-                // Also replace any TypeApps in the specialized body
-                Some (replaceTypeAppsInFunc specialized)
-            | None -> None)
+    // Iterate: specialize, collect new TypeApps from specialized bodies, repeat
+    let rec iterate (pendingSpecs: Set<SpecKey>) (processedSpecs: Set<SpecKey>) (accFuncs: AST.FunctionDef list) =
+        // Filter to only specs not yet processed
+        let newSpecs = Set.difference pendingSpecs processedSpecs
+        if Set.isEmpty newSpecs then
+            // No new specs, we're done
+            accFuncs
+        else
+            // Generate specialized functions for new specs
+            let (newFuncs, newPendingSpecs) =
+                newSpecs
+                |> Set.toList
+                |> List.fold (fun (funcs, pending) (funcName, typeArgs) ->
+                    match Map.tryFind funcName genericFuncDefs with
+                    | Some funcDef ->
+                        let specialized = specializeFunction funcDef typeArgs
+                        // Collect TypeApps from the specialized body (these may be new specs)
+                        let bodySpecs = collectTypeAppsFromFunc specialized
+                        (specialized :: funcs, Set.union pending bodySpecs)
+                    | None ->
+                        (funcs, pending)) ([], Set.empty)
+
+            // Continue with new pending specs
+            iterate newPendingSpecs (Set.union processedSpecs newSpecs) (newFuncs @ accFuncs)
+
+    // Run iterative specialization
+    let specializedFuncs = iterate initialSpecs Set.empty []
+
+    // Now replace all TypeApps with Calls in all specialized functions
+    let specializedFuncsReplaced = specializedFuncs |> List.map replaceTypeAppsInFunc
 
     // Replace TypeApps with Calls in all original top-levels (except generic function defs)
     let transformedTopLevels =
@@ -1129,7 +1189,7 @@ let monomorphizeWithExternalDefs (externalGenericDefs: GenericFuncDefs) (program
 
     // Add specialized functions to the program
     let specializationTopLevels =
-        specializedFuncs |> List.map AST.FunctionDef
+        specializedFuncsReplaced |> List.map AST.FunctionDef
 
     AST.Program (specializationTopLevels @ transformedTopLevels)
 
@@ -1437,7 +1497,17 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
             // Check if it's a module function (e.g., Stdlib.File.exists)
             match Stdlib.tryGetFunction moduleRegistry funcName with
             | Some moduleFunc -> Ok moduleFunc.ReturnType
-            | None -> Error $"Unknown function: '{funcName}'"
+            | None ->
+                // Check if it's a monomorphized intrinsic (e.g., __raw_get_i64)
+                // These are raw memory operations that work with 8-byte values
+                if funcName.StartsWith("__raw_get_") then
+                    // __raw_get<T> returns T, but at ANF level it's just Int64 (8 bytes)
+                    Ok AST.TInt64
+                elif funcName.StartsWith("__raw_set_") then
+                    // __raw_set<T> returns Unit
+                    Ok AST.TUnit
+                else
+                    Error $"Unknown function: '{funcName}'"
     | AST.TypeApp (_funcName, _typeArgs, _args) ->
         // Generic function call - not yet implemented
         Error "Generic function calls not yet implemented"

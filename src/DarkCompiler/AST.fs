@@ -172,8 +172,9 @@ type Program = Program of TopLevel list
 /// Module function definition - a function within a module
 type ModuleFunc = {
     Name: string                     // Function name (e.g., "add")
-    ParamTypes: Type list            // Parameter types
-    ReturnType: Type                 // Return type
+    TypeParams: string list          // Type parameters (e.g., ["v"] for generic intrinsics)
+    ParamTypes: Type list            // Parameter types (may contain TVar references)
+    ReturnType: Type                 // Return type (may contain TVar references)
 }
 
 /// Module definition - represents a namespace of functions

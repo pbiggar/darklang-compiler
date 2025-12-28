@@ -890,16 +890,46 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         | Some other ->
             Error (GenericError $"{funcName} is not a function (has type {typeToString other})")
         | None ->
-            // Check if it's a module function (e.g., Stdlib.Int64.add)
+            // Check if it's a module function (e.g., Stdlib.Int64.add, __raw_get)
             let moduleRegistry = Stdlib.buildModuleRegistry ()
             match Stdlib.tryGetFunction moduleRegistry funcName with
             | Some moduleFunc ->
                 let paramTypes = moduleFunc.ParamTypes
                 let returnType = moduleFunc.ReturnType
+                let typeParams = moduleFunc.TypeParams
                 // Check argument count
                 if List.length args <> List.length paramTypes then
                     Error (GenericError $"Function {funcName} expects {List.length paramTypes} arguments, got {List.length args}")
+                else if not (List.isEmpty typeParams) then
+                    // Generic module function: infer type arguments from actual argument types
+                    // First, type-check all arguments to get their types
+                    let rec checkArgs remaining accTypes accExprs =
+                        match remaining with
+                        | [] -> Ok (List.rev accTypes, List.rev accExprs)
+                        | arg :: rest ->
+                            checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry None
+                            |> Result.bind (fun (argType, arg') ->
+                                checkArgs rest (argType :: accTypes) (arg' :: accExprs))
+
+                    checkArgs args [] []
+                    |> Result.bind (fun (argTypes, args') ->
+                        // Infer type arguments from parameter types and argument types
+                        inferTypeArgs typeParams paramTypes argTypes
+                        |> Result.mapError GenericError
+                        |> Result.bind (fun inferredTypeArgs ->
+                            // Build substitution and compute concrete types
+                            buildSubstitution typeParams inferredTypeArgs
+                            |> Result.mapError GenericError
+                            |> Result.bind (fun subst ->
+                                let concreteReturnType = applySubst subst returnType
+                                match expectedType with
+                                | Some expected when expected <> concreteReturnType ->
+                                    Error (TypeMismatch (expected, concreteReturnType, $"result of call to {funcName}"))
+                                | _ ->
+                                    // Transform Call to TypeApp with inferred type arguments
+                                    Ok (concreteReturnType, TypeApp (funcName, inferredTypeArgs, args')))))
                 else
+                    // Non-generic module function: regular call
                     // Check each argument type and collect transformed args
                     let rec checkArgsWithTypes remaining paramTys accArgs =
                         match remaining, paramTys with
@@ -967,7 +997,48 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         | Some other ->
             Error (GenericError $"{funcName} is not a function (has type {typeToString other})")
         | None ->
-            Error (UndefinedVariable funcName)
+            // Check if it's a generic module function (e.g., __raw_get<v>)
+            let moduleRegistry = Stdlib.buildModuleRegistry ()
+            match Stdlib.tryGetFunction moduleRegistry funcName with
+            | Some moduleFunc when not (List.isEmpty moduleFunc.TypeParams) ->
+                let typeParams = moduleFunc.TypeParams
+                let paramTypes = moduleFunc.ParamTypes
+                let returnType = moduleFunc.ReturnType
+                // Build substitution from type params to type args
+                buildSubstitution typeParams typeArgs
+                |> Result.mapError GenericError
+                |> Result.bind (fun subst ->
+                    // Apply substitution to get concrete types
+                    let concreteParamTypes = List.map (applySubst subst) paramTypes
+                    let concreteReturnType = applySubst subst returnType
+
+                    // Check argument count
+                    if List.length args <> List.length concreteParamTypes then
+                        Error (GenericError $"Function {funcName} expects {List.length concreteParamTypes} arguments, got {List.length args}")
+                    else
+                        // Type check each argument and collect transformed args
+                        let rec checkArgsWithTypes remaining paramTys accArgs =
+                            match remaining, paramTys with
+                            | [], [] -> Ok (List.rev accArgs)
+                            | arg :: restArgs, paramT :: restParams ->
+                                checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry (Some paramT)
+                                |> Result.bind (fun (argType, arg') ->
+                                    if argType = paramT then
+                                        checkArgsWithTypes restArgs restParams (arg' :: accArgs)
+                                    else
+                                        Error (TypeMismatch (paramT, argType, $"argument to {funcName}")))
+                            | _ -> Error (GenericError "Internal error: argument/param length mismatch")
+
+                        checkArgsWithTypes args concreteParamTypes []
+                        |> Result.bind (fun args' ->
+                            match expectedType with
+                            | Some expected when expected <> concreteReturnType ->
+                                Error (TypeMismatch (expected, concreteReturnType, $"result of call to {funcName}"))
+                            | _ -> Ok (concreteReturnType, TypeApp (funcName, typeArgs, args'))))
+            | Some _ ->
+                Error (GenericError $"Function {funcName} is not generic, use regular call syntax")
+            | None ->
+                Error (UndefinedVariable funcName)
 
     | TupleLiteral elements ->
         // Type-check each element and build tuple type
