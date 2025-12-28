@@ -133,12 +133,18 @@ let tryRawMemoryIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr o
     // __hash<String> uses string hash
     | "__hash_str", [keyAtom] ->
         Some (ANF.StringHash keyAtom)
+    // __hash<Bool> - Bool is 0 or 1, valid hash value
+    | "__hash_bool", [keyAtom] ->
+        Some (ANF.Atom keyAtom)
     // __key_eq<Int64> uses integer equality
     | "__key_eq_i64", [leftAtom; rightAtom] ->
         Some (ANF.Prim (ANF.Eq, leftAtom, rightAtom))
     // __key_eq<String> uses string equality
     | "__key_eq_str", [leftAtom; rightAtom] ->
         Some (ANF.StringEq (leftAtom, rightAtom))
+    // __key_eq<Bool> uses integer equality (0 or 1)
+    | "__key_eq_bool", [leftAtom; rightAtom] ->
+        Some (ANF.Prim (ANF.Eq, leftAtom, rightAtom))
 
     | _ -> None
 

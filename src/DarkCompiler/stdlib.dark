@@ -941,3 +941,60 @@ def Stdlib.Dict.__filterChildren<k, v>(ptr: RawPtr, bitmap: Int64, bit: Int64, a
         Stdlib.Dict.__filterChildren<k, v>(ptr, bitmap, bit + 1, newAcc, f)
     else
         Stdlib.Dict.__filterChildren<k, v>(ptr, bitmap, bit + 1, acc, f)
+
+// =============================================================================
+// Dict.merge - Combine two dictionaries
+// =============================================================================
+// Second dictionary's values win on key conflicts
+
+def Stdlib.Dict.merge<k, v>(dict1: Dict<k, v>, dict2: Dict<k, v>) : Dict<k, v> =
+    Stdlib.Dict.__mergeHelper<k, v>(dict2, dict1)
+
+def Stdlib.Dict.__mergeHelper<k, v>(source: Dict<k, v>, target: Dict<k, v>) : Dict<k, v> =
+    if __dict_is_null<k, v>(source) then
+        target
+    else
+        let tag = Stdlib.Dict.__getTag<k, v>(source) in
+        let ptr = Stdlib.Dict.__clearTag<k, v>(source) in
+        if tag == 2 then
+            let key = __raw_get<k>(ptr, 0) in
+            let value = __raw_get<v>(ptr, 8) in
+            Stdlib.Dict.set<k, v>(target, key, value)
+        else if tag == 1 then
+            let bitmap = __raw_get<Int64>(ptr, 0) in
+            Stdlib.Dict.__mergeChildren<k, v>(ptr, bitmap, 0, target)
+        else
+            target
+
+def Stdlib.Dict.__mergeChildren<k, v>(ptr: RawPtr, bitmap: Int64, bit: Int64, target: Dict<k, v>) : Dict<k, v> =
+    if bit >= 64 then
+        target
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get<Dict<k, v>>(ptr, 8 + (idx * 8)) in
+        let newTarget = Stdlib.Dict.__mergeHelper<k, v>(child, target) in
+        Stdlib.Dict.__mergeChildren<k, v>(ptr, bitmap, bit + 1, newTarget)
+    else
+        Stdlib.Dict.__mergeChildren<k, v>(ptr, bitmap, bit + 1, target)
+
+// =============================================================================
+// Dict.fromList - Construct dictionary from list of pairs
+// =============================================================================
+
+def Stdlib.Dict.fromList<k, v>(pairs: List<(k, v)>) : Dict<k, v> =
+    Stdlib.Dict.__fromListHelper<k, v>(pairs, Stdlib.Dict.empty<k, v>())
+
+def Stdlib.Dict.__fromListHelper<k, v>(pairs: List<(k, v)>, acc: Dict<k, v>) : Dict<k, v> =
+    match pairs with
+    | [] -> acc
+    | [pair, ...rest] ->
+        let key = Stdlib.Tuple2.first<k, v>(pair) in
+        let value = Stdlib.Tuple2.second<k, v>(pair) in
+        Stdlib.Dict.__fromListHelper<k, v>(rest, Stdlib.Dict.set<k, v>(acc, key, value))
+
+// =============================================================================
+// Dict.getOrDefault - Get value with fallback
+// =============================================================================
+
+def Stdlib.Dict.getOrDefault<k, v>(dict: Dict<k, v>, key: k, default: v) : v =
+    Stdlib.Option.withDefault<v>(Stdlib.Dict.get<k, v>(dict, key), default)
