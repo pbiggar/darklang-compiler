@@ -572,41 +572,11 @@ let convertFunctionToSSA (func: Function) : Function =
     let idoms = computeDominators cfg preds
     let df = computeDominanceFrontier cfg preds idoms
 
-    // Debug output disabled for performance
-    // Uncomment to debug SSA construction:
-    // let blockCount = Map.count cfg.Blocks
-    // let isListFunc = func.Name.StartsWith("Stdlib.List")
-    // if (blockCount <= 6 && func.Name <> "_start") || isListFunc then
-    //     printfn "SSA Debug for %s:" func.Name
-    //     printfn "  Predecessors: %A" preds
-    //     printfn "  Dominators: %A" idoms
-    //     printfn "  Dominance Frontier: %A" df
-    //     let allDefs = getAllDefs cfg
-    //     printfn "  Variable Defs: %A" allDefs
-    let blockCount = Map.count cfg.Blocks
-    let isListFunc = false  // Disable debug
-
     // Insert phi nodes
     let cfgWithPhis = insertPhiNodes cfg df preds
 
-    // Debug output disabled for performance
-    // if (blockCount <= 6 && func.Name <> "_start") || isListFunc then
-    //     printfn "  After phi insertion:"
-    //     for kvp in cfgWithPhis.Blocks do
-    //         let phis = kvp.Value.Instrs |> List.filter (fun i -> match i with Phi _ -> true | _ -> false)
-    //         if not (List.isEmpty phis) then
-    //             printfn "    %A has phis: %A" kvp.Key phis
-
     // Rename variables
     let ssaCFG = renameCFG cfgWithPhis idoms
-
-    // Debug output disabled for performance
-    // if (blockCount <= 6 && func.Name <> "_start") || isListFunc then
-    //     printfn "  After renaming:"
-    //     for kvp in ssaCFG.Blocks do
-    //         let phis = kvp.Value.Instrs |> List.filter (fun i -> match i with Phi _ -> true | _ -> false)
-    //         if not (List.isEmpty phis) then
-    //             printfn "    %A has phis: %A" kvp.Key phis
 
     { func with CFG = ssaCFG }
 

@@ -136,27 +136,49 @@ let loadImmediate (dest: ARM64.Reg) (value: int64) : ARM64.Instr list =
 
 /// Generate ARM64 instructions to load a stack slot into a register
 /// Stack slots are accessed relative to FP (X29)
-/// Uses LDUR for signed offsets (stack slots are negative from FP)
-/// Returns Error if offset exceeds LDUR range (-256 to +255)
+/// Uses LDUR for small offsets (-256 to +255), computes address for larger offsets
 let loadStackSlot (dest: ARM64.Reg) (offset: int) : Result<ARM64.Instr list, string> =
-    // LDUR dest, [X29, #offset] - signed offset version
-    // Offset is in bytes, can be negative (-256 to +255)
-    if offset < -256 || offset > 255 then
-        Error $"Stack offset {offset} exceeds LDUR range (-256 to +255)"
-    else
+    if offset >= -256 && offset <= 255 then
+        // Small offset: use LDUR directly
         Ok [ARM64.LDUR (dest, ARM64.X29, int16 offset)]
+    elif offset < 0 && -offset <= 4095 then
+        // Larger negative offset: compute address into X10, then load
+        // X10 = X29 - (-offset), then LDR dest, [X10, #0]
+        Ok [
+            ARM64.SUB_imm (ARM64.X10, ARM64.X29, uint16 (-offset))
+            ARM64.LDR (dest, ARM64.X10, 0s)
+        ]
+    elif offset > 0 && offset <= 4095 then
+        // Larger positive offset: compute address into X10, then load
+        Ok [
+            ARM64.ADD_imm (ARM64.X10, ARM64.X29, uint16 offset)
+            ARM64.LDR (dest, ARM64.X10, 0s)
+        ]
+    else
+        Error $"Stack offset {offset} exceeds supported range (-4095 to +4095)"
 
 /// Generate ARM64 instructions to store a register to a stack slot
 /// Stack slots are accessed relative to FP (X29)
-/// Uses STUR for signed offsets (stack slots are negative from FP)
-/// Returns Error if offset exceeds STUR range (-256 to +255)
+/// Uses STUR for small offsets (-256 to +255), computes address for larger offsets
 let storeStackSlot (src: ARM64.Reg) (offset: int) : Result<ARM64.Instr list, string> =
-    // STUR src, [X29, #offset] - signed offset version
-    // Offset is in bytes, can be negative (-256 to +255)
-    if offset < -256 || offset > 255 then
-        Error $"Stack offset {offset} exceeds STUR range (-256 to +255)"
-    else
+    if offset >= -256 && offset <= 255 then
+        // Small offset: use STUR directly
         Ok [ARM64.STUR (src, ARM64.X29, int16 offset)]
+    elif offset < 0 && -offset <= 4095 then
+        // Larger negative offset: compute address into X10, then store
+        // X10 = X29 - (-offset), then STR src, [X10, #0]
+        Ok [
+            ARM64.SUB_imm (ARM64.X10, ARM64.X29, uint16 (-offset))
+            ARM64.STR (src, ARM64.X10, 0s)
+        ]
+    elif offset > 0 && offset <= 4095 then
+        // Larger positive offset: compute address into X10, then store
+        Ok [
+            ARM64.ADD_imm (ARM64.X10, ARM64.X29, uint16 offset)
+            ARM64.STR (src, ARM64.X10, 0s)
+        ]
+    else
+        Error $"Stack offset {offset} exceeds supported range (-4095 to +4095)"
 
 /// Convert LIR operand to ARM64 register, loading from stack if needed
 /// Returns (register, instruction list to load it)

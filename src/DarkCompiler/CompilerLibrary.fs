@@ -250,7 +250,10 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                         let t = System.Math.Round(mirTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 3.1: SSA Construction - DISABLED (bugs with complex control flow)
+                    // Pass 3.1: SSA Construction - DISABLED
+                    // SSA is disabled because phi node insertion creates invalid phis
+                    // for variables that aren't live on all paths. This requires
+                    // liveness analysis to fix properly.
                     if verbosity >= 1 then println "  [3.1/8] SSA Construction... (disabled)"
                     let ssaProgram = mirProgram
 
@@ -259,7 +262,7 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                         let t = System.Math.Round(ssaTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 3.5: MIR Optimizations (on SSA form) - DISABLED (SSA disabled)
+                    // Pass 3.5: MIR Optimizations (on SSA form) - DISABLED for now
                     if verbosity >= 1 then println "  [3.5/8] MIR Optimizations... (disabled)"
                     let optimizedProgram = ssaProgram
 
@@ -268,7 +271,7 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                         let t = System.Math.Round(mirOptTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 3.9: SSA Destruction - DISABLED (SSA disabled)
+                    // Pass 3.9: SSA Destruction - DISABLED (SSA not used)
                     if verbosity >= 1 then println "  [3.9/8] SSA Destruction... (disabled)"
                     let mirAfterSSA = optimizedProgram
 

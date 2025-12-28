@@ -134,7 +134,19 @@ let insertCopyInPredecessor (cfg: CFG) (predLabel: Label) (dest: VReg) (src: Ope
         | Register srcReg -> srcReg = dest
         | _ -> false
 
+    // Skip if source is an unrenamed VReg (< 10000), meaning the variable
+    // was never defined on this path. This happens when phi nodes are inserted
+    // for variables that aren't live on all incoming paths.
+    let isUnrenamed =
+        match src with
+        | Register (VReg id) -> id < 10000
+        | _ -> false
+
     if skip then
+        cfg
+    elif isUnrenamed then
+        // Debug: print skipped unrenamed copies
+        // printfn "    Skipping unrenamed copy in %A: %A = %A" predLabel dest src
         cfg
     else
         let predBlock = Map.find predLabel cfg.Blocks
@@ -147,15 +159,100 @@ let insertCopyInPredecessor (cfg: CFG) (predLabel: Label) (dest: VReg) (src: Ope
 
         { cfg with Blocks = Map.add predLabel predBlock' cfg.Blocks }
 
+/// Collect all VRegs that are properly defined (not from unrenamed phi sources)
+/// A VReg is properly defined if:
+/// 1. It's defined by a non-phi instruction (Mov, BinOp, Call, etc.)
+/// 2. It's defined by a phi where ALL sources are properly defined
+let collectProperlyDefinedVRegs (cfg: CFG) : Set<VReg> =
+    // First, collect all VRegs defined by non-phi instructions
+    let nonPhiDefs =
+        cfg.Blocks
+        |> Map.fold (fun defs _ block ->
+            block.Instrs
+            |> List.fold (fun d instr ->
+                match instr with
+                | Mov (dest, _, _) -> Set.add dest d
+                | BinOp (dest, _, _, _, _) -> Set.add dest d
+                | UnaryOp (dest, _, _) -> Set.add dest d
+                | Call (dest, _, _) -> Set.add dest d
+                | IndirectCall (dest, _, _) -> Set.add dest d
+                | ClosureAlloc (dest, _, _) -> Set.add dest d
+                | ClosureCall (dest, _, _) -> Set.add dest d
+                | HeapAlloc (dest, _) -> Set.add dest d
+                | HeapLoad (dest, _, _) -> Set.add dest d
+                | StringConcat (dest, _, _) -> Set.add dest d
+                | FileReadText (dest, _) -> Set.add dest d
+                | FileExists (dest, _) -> Set.add dest d
+                | FileWriteText (dest, _, _) -> Set.add dest d
+                | FileAppendText (dest, _, _) -> Set.add dest d
+                | RawAlloc (dest, _) -> Set.add dest d
+                | RawGet (dest, _, _) -> Set.add dest d
+                | Phi _ -> d  // Skip phi nodes
+                | _ -> d
+            ) defs
+        ) Set.empty
+
+    // Now iteratively add phi destinations that have all sources defined
+    let allPhis =
+        cfg.Blocks
+        |> Map.fold (fun phis _ block ->
+            block.Instrs
+            |> List.fold (fun ps instr ->
+                match instr with
+                | Phi (dest, sources) -> (dest, sources) :: ps
+                | _ -> ps
+            ) phis
+        ) []
+
+    let rec fixpoint (defined: Set<VReg>) =
+        let newDefined =
+            allPhis
+            |> List.fold (fun d (dest, sources) ->
+                if Set.contains dest d then
+                    d  // Already defined
+                else
+                    // Check if all sources are either:
+                    // 1. Already defined
+                    // 2. Not a register (constant)
+                    // 3. A renamed register (>= 10000) that is in defined set
+                    let allSourcesValid =
+                        sources |> List.forall (fun (src, _) ->
+                            match src with
+                            | Register vreg ->
+                                let (VReg id) = vreg
+                                // Unrenamed VRegs (< 10000) are invalid
+                                // Renamed VRegs must be in the defined set
+                                id >= 10000 && Set.contains vreg d
+                            | _ -> true  // Constants are always valid
+                        )
+                    if allSourcesValid then
+                        Set.add dest d
+                    else
+                        d
+            ) defined
+        if newDefined = defined then defined else fixpoint newDefined
+
+    fixpoint nonPhiDefs
+
 /// Replace phi nodes with copies in predecessors
 let eliminatePhiNodes (cfg: CFG) : CFG =
+    // Get set of properly defined VRegs
+    let definedVRegs = collectProperlyDefinedVRegs cfg
+
     cfg.Blocks
     |> Map.fold (fun cfg' label block ->
         let phis = getPhiNodes block
 
-        // For each phi node, insert copies in predecessors
+        // Filter to only phi nodes whose destinations are properly defined
+        let validPhis = phis |> List.filter (fun phi ->
+            match phi with
+            | Phi (dest, _) -> Set.contains dest definedVRegs
+            | _ -> false
+        )
+
+        // For each valid phi node, insert copies in predecessors
         let cfg'' =
-            phis
+            validPhis
             |> List.fold (fun c phi ->
                 match phi with
                 | Phi (dest, sources) ->
@@ -166,7 +263,7 @@ let eliminatePhiNodes (cfg: CFG) : CFG =
                 | _ -> c
             ) cfg'
 
-        // Remove phi nodes from this block
+        // Remove ALL phi nodes from this block (including invalid ones)
         let nonPhis = getNonPhiInstrs block
         let block' = { block with Instrs = nonPhis }
         { cfg'' with Blocks = Map.add label block' cfg''.Blocks }
