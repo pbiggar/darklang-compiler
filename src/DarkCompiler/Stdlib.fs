@@ -64,6 +64,29 @@ let fileModule : ModuleDef = {
     ]
 }
 
+/// Stdlib.Path module - path operations
+/// combine is defined in stdlib.dark, tempDir is constant-folded at compile time
+let pathModule : ModuleDef = {
+    Name = "Stdlib.Path"
+    Functions = [
+        // tempDir : () -> String - returns system temp directory
+        { Name = "tempDir"; TypeParams = []; ParamTypes = []; ReturnType = TString }
+        // combine is defined in stdlib.dark
+    ]
+}
+
+/// Stdlib.Platform module - platform detection
+/// These are constant-folded at compile time based on target platform
+let platformModule : ModuleDef = {
+    Name = "Stdlib.Platform"
+    Functions = [
+        // isMacOS : () -> Bool
+        { Name = "isMacOS"; TypeParams = []; ParamTypes = []; ReturnType = TBool }
+        // isLinux : () -> Bool
+        { Name = "isLinux"; TypeParams = []; ParamTypes = []; ReturnType = TBool }
+    ]
+}
+
 /// Raw memory intrinsics - internal only for HAMT implementation
 /// These functions bypass the type system and should only be used in stdlib code
 /// The names start with __ to indicate they are internal
@@ -100,6 +123,8 @@ let allModules : ModuleDef list = [
     floatModule
     stringModule
     fileModule
+    pathModule
+    platformModule
 ]
 
 /// Build the module registry from all modules

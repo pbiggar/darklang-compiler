@@ -53,6 +53,24 @@ let tryFloatIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr optio
         Some (ANF.IntToFloat xAtom)
     | _ -> None
 
+/// Try to constant-fold platform/path intrinsics at compile time
+/// Returns Some CExpr if it's a constant-foldable intrinsic, None otherwise
+let tryConstantFoldIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
+    match funcName, args with
+    | "Stdlib.Platform.isMacOS", [] ->
+        // Constant-fold based on target platform using .NET runtime detection
+        let isMac = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+            System.Runtime.InteropServices.OSPlatform.OSX)
+        Some (ANF.Atom (ANF.BoolLiteral isMac))
+    | "Stdlib.Platform.isLinux", [] ->
+        let isLinux = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+            System.Runtime.InteropServices.OSPlatform.Linux)
+        Some (ANF.Atom (ANF.BoolLiteral isLinux))
+    | "Stdlib.Path.tempDir", [] ->
+        // Both macOS and Linux use /tmp
+        Some (ANF.Atom (ANF.StringLiteral "/tmp"))
+    | _ -> None
+
 /// Try to convert a function call to a raw memory intrinsic CExpr
 /// These are internal-only functions for implementing HAMT data structures
 /// Returns Some CExpr if it's a raw memory intrinsic, None otherwise
@@ -1881,6 +1899,14 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let exprWithBindings = wrapBindings argBindings finalExpr
                         Ok (exprWithBindings, varGen2)
                     | None ->
+                    // Check if it's a constant-fold intrinsic (Platform, Path)
+                    match tryConstantFoldIntrinsic funcName argAtoms with
+                    | Some intrinsicExpr ->
+                        // Constant-folded intrinsic
+                        let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
+                        let exprWithBindings = wrapBindings argBindings finalExpr
+                        Ok (exprWithBindings, varGen2)
+                    | None ->
                     // Check if it's a defined function
                     match Map.tryFind funcName funcReg with
                     | Some _ ->
@@ -3242,10 +3268,17 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                             let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
                             Ok (ANF.Var tempVar, allBindings, varGen2)
                         | None ->
-                            // Assume it's a defined function (direct call)
-                            let callCExpr = ANF.Call (funcName, argAtoms)
-                            let allBindings = argBindings @ [(tempVar, callCExpr)]
-                            Ok (ANF.Var tempVar, allBindings, varGen2))
+                            // Check if it's a constant-fold intrinsic (Platform, Path)
+                            match tryConstantFoldIntrinsic funcName argAtoms with
+                            | Some intrinsicExpr ->
+                                // Constant-folded intrinsic
+                                let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
+                                Ok (ANF.Var tempVar, allBindings, varGen2)
+                            | None ->
+                                // Assume it's a defined function (direct call)
+                                let callCExpr = ANF.Call (funcName, argAtoms)
+                                let allBindings = argBindings @ [(tempVar, callCExpr)]
+                                Ok (ANF.Var tempVar, allBindings, varGen2))
 
     | AST.TypeApp (_, _, _) ->
         // Placeholder: Generic instantiation not yet implemented

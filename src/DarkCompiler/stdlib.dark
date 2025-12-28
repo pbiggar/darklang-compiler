@@ -323,6 +323,24 @@ def Stdlib.List.drop<a>(list: List<a>, n: Int64) : List<a> =
     | [] -> []
     | [h, ...t] -> Stdlib.List.drop<a>(t, n - 1)
 
+// Stdlib.Path - Path operations
+
+// Combine two path segments
+def Stdlib.Path.combine(a: String, b: String) : String = a ++ "/" ++ b
+
+// Get system temp directory (constant-folded at compile time)
+// This is an intrinsic that returns "/tmp" on both macOS and Linux
+// Note: The actual implementation is in the compiler, this is just type info
+def Stdlib.Path.tempDir() : String = "/tmp"
+
+// Stdlib.Platform - Platform detection (constant-folded at compile time)
+
+// Check if running on macOS
+def Stdlib.Platform.isMacOS() : Bool = false
+
+// Check if running on Linux
+def Stdlib.Platform.isLinux() : Bool = false
+
 // Stdlib.String - String operations
 
 // Newline constant (nullary function)
