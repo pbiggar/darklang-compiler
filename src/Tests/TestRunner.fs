@@ -451,6 +451,10 @@ let main args =
 
             // Run tests in parallel (dynamically determined based on system resources) and print as they complete (in order)
             if allTests.Count > 0 then
+                // Stdlib cache currently disabled - it adds overhead without benefit
+                // because compileWithStdlib still type-checks and ANF-converts the full program
+                println $"  {Colors.gray}(Stdlib cache disabled - needs incremental compilation){Colors.reset}"
+
                 // Apply filter to tests
                 let testsArray =
                     allTests.ToArray()

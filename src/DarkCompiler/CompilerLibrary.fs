@@ -102,9 +102,9 @@ let compileStdlib () : Result<StdlibResult, string> =
                     ANFResult = anfResult
                 }
 
-/// Compile user code with pre-compiled stdlib
-/// This is the main compilation entry point when stdlib is pre-loaded
-let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (source: string) : CompileResult =
+/// Internal: Compile user code with stdlib AST (shared implementation)
+/// This is the core compilation pipeline that does one pass of type-checking and ANF conversion
+let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (stdlibAst: AST.Program) (source: string) : CompileResult =
     let sw = Stopwatch.StartNew()
     try
         // Pass 1: Parse user code
@@ -121,8 +121,8 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
               Success = false
               ErrorMessage = Some $"Parse error: {err}" }
         | Ok userAst ->
-            // Merge user AST with pre-compiled stdlib AST
-            let ast = mergePrograms stdlib.AST userAst
+            // Merge user AST with stdlib AST
+            let ast = mergePrograms stdlibAst userAst
 
             // Show AST
             if verbosity >= 3 then
@@ -476,18 +476,24 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
           Success = false
           ErrorMessage = Some $"Compilation failed: {ex.Message}" }
 
+/// Compile user code with pre-compiled stdlib
+/// This is the main compilation entry point when stdlib is pre-loaded
+/// Note: Currently uses only stdlib.AST; the TypeCheckEnv and ANFResult fields
+/// are not yet utilized for incremental compilation
+let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (source: string) : CompileResult =
+    compileWithStdlibAST verbosity options stdlib.AST source
+
 /// Compile source code to binary (in-memory, no file I/O)
-/// This compiles stdlib first, then uses it to compile the user code
+/// This loads stdlib and compiles it together with user code in one pass
 let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: string) : CompileResult =
-    // Compile stdlib first
-    match compileStdlib() with
+    // Load stdlib AST and compile directly (no separate stdlib compilation)
+    match loadStdlib() with
     | Error err ->
         { Binary = Array.empty
           Success = false
           ErrorMessage = Some err }
-    | Ok stdlib ->
-        // Then compile user code with pre-compiled stdlib
-        compileWithStdlib verbosity options stdlib source
+    | Ok stdlibAst ->
+        compileWithStdlibAST verbosity options stdlibAst source
 
 /// Compile source code to binary (uses default options)
 let compile (verbosity: int) (source: string) : CompileResult =
@@ -606,6 +612,17 @@ let execute (verbosity: int) (binary: byte array) : ExecutionResult =
 /// Compile and run source code with options
 let compileAndRunWithOptions (verbosity: int) (options: CompilerOptions) (source: string) : ExecutionResult =
     let compileResult = compileWithOptions verbosity options source
+
+    if not compileResult.Success then
+        { ExitCode = 1
+          Stdout = ""
+          Stderr = compileResult.ErrorMessage |> Option.defaultValue "Compilation failed" }
+    else
+        execute verbosity compileResult.Binary
+
+/// Compile and run source code with pre-compiled stdlib
+let compileAndRunWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (source: string) : ExecutionResult =
+    let compileResult = compileWithStdlib verbosity options stdlib source
 
     if not compileResult.Success then
         { ExitCode = 1
