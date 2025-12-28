@@ -6,22 +6,21 @@
 
 // ===================================================================
 // Simple Enums (No Payload)
-// NOTE: Commented out - requires enum equality support
 // ===================================================================
 
 // Basic enum definition and equality
-// type Color = Red | Green | Blue Red == Red = stdout="true\n"
-// type Color = Red | Green | Blue Green == Green = stdout="true\n"
-// type Color = Red | Green | Blue Blue == Blue = stdout="true\n"
+type Color = Red | Green | Blue Red == Red = stdout="true\n"
+type Color = Red | Green | Blue Green == Green = stdout="true\n"
+type Color = Red | Green | Blue Blue == Blue = stdout="true\n"
 
 // Different variants are not equal
-// type Color = Red | Green | Blue Red == Green = stdout="false\n"
-// type Color = Red | Green | Blue Red == Blue = stdout="false\n"
-// type Color = Red | Green | Blue Green == Blue = stdout="false\n"
+type Color = Red | Green | Blue Red == Green = stdout="false\n"
+type Color = Red | Green | Blue Red == Blue = stdout="false\n"
+type Color = Red | Green | Blue Green == Blue = stdout="false\n"
 
 // Inequality
-// type Color = Red | Green | Blue Red != Green = stdout="true\n"
-// type Color = Red | Green | Blue Red != Red = stdout="false\n"
+type Color = Red | Green | Blue Red != Green = stdout="true\n"
+type Color = Red | Green | Blue Red != Red = stdout="false\n"
 
 // ===================================================================
 // Enum Pattern Matching
