@@ -26,6 +26,8 @@ type E2ETest = {
     ExpectedErrorMessage: string option
     /// Compiler options
     DisableFreeList: bool
+    /// Source file this test came from (for grouping in output)
+    SourceFile: string
 }
 
 /// Parse string literal with escape sequences (\n, \t, \\, \")
@@ -52,7 +54,7 @@ let private parseAttribute (attr: string) : Result<string * string, string> =
 /// Supports two formats:
 ///   Old: source = exit_code  // comment
 ///   New: source = [exit=N] [stdout="..."] [stderr="..."]  // comment
-let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, string> =
+let private parseTestLine (line: string) (lineNumber: int) (filePath: string) : Result<E2ETest, string> =
     // First, remove any comment
     let lineWithoutComment, comment =
         let commentIdx = line.IndexOf("//")
@@ -213,8 +215,9 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, str
 
         match parseExpectations expectationsStr with
         | Ok (exitCode, stdout, stderr, disableFreeList, expectError, errorMessage) ->
+            let displayName = comment |> Option.defaultValue source
             Ok {
-                Name = comment |> Option.defaultValue $"Line {lineNumber}: {source}"
+                Name = $"L{lineNumber}: {displayName}"
                 Source = source
                 ExpectedStdout = stdout
                 ExpectedStderr = stderr
@@ -222,6 +225,7 @@ let private parseTestLine (line: string) (lineNumber: int) : Result<E2ETest, str
                 ExpectCompileError = expectError
                 ExpectedErrorMessage = errorMessage
                 DisableFreeList = disableFreeList
+                SourceFile = filePath
             }
         | Error e ->
             Error $"Line {lineNumber}: {e}"
@@ -242,7 +246,7 @@ let parseE2ETestFile (path: string) : Result<E2ETest list, string> =
 
             // Skip blank lines and comments
             if line.Length > 0 && not (line.StartsWith("//")) then
-                match parseTestLine line lineNumber with
+                match parseTestLine line lineNumber path with
                 | Ok test -> tests <- test :: tests
                 | Error err -> errors <- err :: errors
 

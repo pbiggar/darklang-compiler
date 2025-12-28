@@ -474,9 +474,21 @@ let main args =
                 println $"  {Colors.gray}(Running with {maxParallel} parallel tests based on {source}){Colors.reset}"
                 println ""
 
+                // Track current file for printing headers
+                let mutable currentFile = ""
+
                 // Helper function to print a test result
                 let printTestResult (test: E2ETest) (result: E2ETestResult) (elapsed: TimeSpan) =
-                    print $"  {test.Name}... "
+                    // Print file header if we're moving to a new file
+                    if test.SourceFile <> currentFile then
+                        currentFile <- test.SourceFile
+                        let fileName = System.IO.Path.GetFileName(test.SourceFile)
+                        println $"  {Colors.yellow}── {fileName} ──{Colors.reset}"
+                    // Truncate long test names
+                    let displayName =
+                        if test.Name.Length > 60 then test.Name.Substring(0, 57) + "..."
+                        else test.Name
+                    print $"  {displayName}... "
                     if result.Success then
                         println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime elapsed}){Colors.reset}"
                         lock lockObj (fun () -> passed <- passed + 1)
