@@ -143,6 +143,25 @@ let f = (x: Int64) => (y: Int64) => (z: Int64) => x + y + z in f(1)(2)(3) = 6
 ((t: (Int64, Int64)) => match t with | (a, b) -> match (b, a) with | (x, y) -> x + y)((1, 2)) = 3
 
 // ===================================================================
+// Partial Application
+// ===================================================================
+
+// Basic partial application of user-defined function
+def add(x: Int64, y: Int64): Int64 = x + y let add5 = add(5) in add5(3) = 8
+
+// Partial application of stdlib function
+let mul10 = Stdlib.Int64.mul(10) in mul10(4) = 40
+
+// Multiple partial applications
+def f(a: Int64, b: Int64, c: Int64): Int64 = a * b + c let f1 = f(2) in f1(3, 4) = 10
+
+// Chained partial application
+def g(a: Int64, b: Int64, c: Int64): Int64 = a + b + c let g1 = g(1) in let g2 = g1(2) in g2(3) = 6
+
+// Partial application of lambda
+let addL = (x: Int64, y: Int64) => x + y in let add10 = addL(10) in add10(5) = 15
+
+// ===================================================================
 // Lambda with Boolean Operations
 // ===================================================================
 
