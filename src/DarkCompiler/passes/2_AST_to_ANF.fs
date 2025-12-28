@@ -1111,6 +1111,132 @@ let convertUnaryOp (op: AST.UnaryOp) : ANF.UnaryOp =
     | AST.Neg -> ANF.Neg
     | AST.Not -> ANF.Not
 
+/// Check if a type requires structural equality (compound types)
+let isCompoundType (typ: AST.Type) : bool =
+    match typ with
+    | AST.TTuple _ -> true
+    | AST.TRecord _ -> true
+    | AST.TSum _ -> true
+    | _ -> false
+
+/// Generate structural equality comparison for compound types.
+/// Returns a list of bindings and the final result atom that holds the comparison result.
+let rec generateStructuralEquality
+    (leftAtom: ANF.Atom)
+    (rightAtom: ANF.Atom)
+    (typ: AST.Type)
+    (varGen: ANF.VarGen)
+    (typeReg: TypeRegistry)
+    : (ANF.TempId * ANF.CExpr) list * ANF.Atom * ANF.VarGen =
+
+    match typ with
+    | AST.TTuple elemTypes ->
+        // Compare each tuple element and AND the results
+        let rec compareElements index types accBindings accResults vg =
+            match types with
+            | [] ->
+                // AND all results together
+                match accResults with
+                | [] ->
+                    // Empty tuple - always equal
+                    let (trueVar, vg') = ANF.freshVar vg
+                    (accBindings @ [(trueVar, ANF.Atom (ANF.BoolLiteral true))], ANF.Var trueVar, vg')
+                | [single] ->
+                    (accBindings, single, vg)
+                | first :: rest ->
+                    // Chain ANDs: result = r0 && r1 && r2 ...
+                    let rec chainAnds results accBindings vg =
+                        match results with
+                        | [] -> failwith "empty results in chainAnds"
+                        | [last] -> (accBindings, last, vg)
+                        | a :: b :: rest ->
+                            let (andVar, vg') = ANF.freshVar vg
+                            let andExpr = ANF.Prim (ANF.And, a, b)
+                            chainAnds (ANF.Var andVar :: rest) (accBindings @ [(andVar, andExpr)]) vg'
+                    chainAnds (first :: rest) accBindings vg
+
+            | elemType :: restTypes ->
+                // Get left[index] and right[index]
+                let (leftElemVar, vg1) = ANF.freshVar vg
+                let leftGet = ANF.TupleGet (leftAtom, index)
+                let (rightElemVar, vg2) = ANF.freshVar vg1
+                let rightGet = ANF.TupleGet (rightAtom, index)
+
+                let baseBindings = accBindings @ [(leftElemVar, leftGet); (rightElemVar, rightGet)]
+
+                // Check if element type is also compound
+                if isCompoundType elemType then
+                    // Recursive structural comparison
+                    let (nestedBindings, resultAtom, vg3) =
+                        generateStructuralEquality (ANF.Var leftElemVar) (ANF.Var rightElemVar) elemType vg2 typeReg
+                    compareElements (index + 1) restTypes (baseBindings @ nestedBindings) (accResults @ [resultAtom]) vg3
+                else
+                    // Primitive comparison
+                    let (cmpVar, vg3) = ANF.freshVar vg2
+                    let cmpExpr = ANF.Prim (ANF.Eq, ANF.Var leftElemVar, ANF.Var rightElemVar)
+                    compareElements (index + 1) restTypes (baseBindings @ [(cmpVar, cmpExpr)]) (accResults @ [ANF.Var cmpVar]) vg3
+
+        compareElements 0 elemTypes [] [] varGen
+
+    | AST.TRecord typeName ->
+        // Compare each record field and AND the results
+        match Map.tryFind typeName typeReg with
+        | None ->
+            // Unknown record type - fall back to pointer comparison
+            let (cmpVar, vg') = ANF.freshVar varGen
+            ([(cmpVar, ANF.Prim (ANF.Eq, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
+        | Some fields ->
+            let rec compareFields index fieldList accBindings accResults vg =
+                match fieldList with
+                | [] ->
+                    match accResults with
+                    | [] ->
+                        let (trueVar, vg') = ANF.freshVar vg
+                        (accBindings @ [(trueVar, ANF.Atom (ANF.BoolLiteral true))], ANF.Var trueVar, vg')
+                    | [single] ->
+                        (accBindings, single, vg)
+                    | first :: rest ->
+                        let rec chainAnds results accBindings vg =
+                            match results with
+                            | [] -> failwith "empty results in chainAnds"
+                            | [last] -> (accBindings, last, vg)
+                            | a :: b :: rest ->
+                                let (andVar, vg') = ANF.freshVar vg
+                                let andExpr = ANF.Prim (ANF.And, a, b)
+                                chainAnds (ANF.Var andVar :: rest) (accBindings @ [(andVar, andExpr)]) vg'
+                        chainAnds (first :: rest) accBindings vg
+
+                | (_, fieldType) :: restFields ->
+                    // Get left.field and right.field (using TupleGet with field index)
+                    let (leftFieldVar, vg1) = ANF.freshVar vg
+                    let leftGet = ANF.TupleGet (leftAtom, index)
+                    let (rightFieldVar, vg2) = ANF.freshVar vg1
+                    let rightGet = ANF.TupleGet (rightAtom, index)
+
+                    let baseBindings = accBindings @ [(leftFieldVar, leftGet); (rightFieldVar, rightGet)]
+
+                    if isCompoundType fieldType then
+                        let (nestedBindings, resultAtom, vg3) =
+                            generateStructuralEquality (ANF.Var leftFieldVar) (ANF.Var rightFieldVar) fieldType vg2 typeReg
+                        compareFields (index + 1) restFields (baseBindings @ nestedBindings) (accResults @ [resultAtom]) vg3
+                    else
+                        let (cmpVar, vg3) = ANF.freshVar vg2
+                        let cmpExpr = ANF.Prim (ANF.Eq, ANF.Var leftFieldVar, ANF.Var rightFieldVar)
+                        compareFields (index + 1) restFields (baseBindings @ [(cmpVar, cmpExpr)]) (accResults @ [ANF.Var cmpVar]) vg3
+
+            compareFields 0 fields [] [] varGen
+
+    | AST.TSum _ ->
+        // For sum types, compare directly (tags are integers for simple enums)
+        // Full structural equality for payloads would need more complex logic
+        let (cmpVar, vg') = ANF.freshVar varGen
+        ([(cmpVar, ANF.Prim (ANF.Eq, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
+
+    | _ ->
+        // Primitive types - simple comparison
+        let (cmpVar, vg') = ANF.freshVar varGen
+        ([(cmpVar, ANF.Prim (ANF.Eq, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
+
 /// Infer the type of an expression using type environment and registries
 /// Used for type-directed field lookup in record access
 let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) : Result<AST.Type, string> =
@@ -1427,21 +1553,55 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
     | AST.BinOp (op, left, right) ->
         // Convert operands to atoms
         toAtom left varGen env typeReg variantLookup funcReg |> Result.bind (fun (leftAtom, leftBindings, varGen1) ->
-            toAtom right varGen1 env typeReg variantLookup funcReg |> Result.map (fun (rightAtom, rightBindings, varGen2) ->
-                // Create binop and bind to fresh variable
-                let (tempVar, varGen3) = ANF.freshVar varGen2
-                // StringConcat is a separate CExpr, not a Prim
-                let cexpr =
-                    match op with
-                    | AST.StringConcat -> ANF.StringConcat (leftAtom, rightAtom)
-                    | _ -> ANF.Prim (convertBinOp op, leftAtom, rightAtom)
-
-                // Build the expression: leftBindings + rightBindings + let tempVar = op
-                let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
-                let exprWithRight = wrapBindings rightBindings finalExpr
-                let exprWithLeft = wrapBindings leftBindings exprWithRight
-
-                (exprWithLeft, varGen3)))
+            toAtom right varGen1 env typeReg variantLookup funcReg |> Result.bind (fun (rightAtom, rightBindings, varGen2) ->
+                // Check if this is an equality comparison on compound types
+                let typeEnv = typeEnvFromVarEnv env
+                match op with
+                | AST.Eq | AST.Neq ->
+                    // Infer type of left operand to check if structural comparison is needed
+                    match inferType left typeEnv typeReg variantLookup funcReg with
+                    | Ok operandType when isCompoundType operandType ->
+                        // Generate structural equality
+                        let (eqBindings, eqResultAtom, varGen3) =
+                            generateStructuralEquality leftAtom rightAtom operandType varGen2 typeReg
+                        // For Neq, negate the result
+                        let (finalAtom, finalBindings, varGen4) =
+                            if op = AST.Neq then
+                                let (negVar, vg) = ANF.freshVar varGen3
+                                let negExpr = ANF.UnaryPrim (ANF.Not, eqResultAtom)
+                                (ANF.Var negVar, eqBindings @ [(negVar, negExpr)], vg)
+                            else
+                                (eqResultAtom, eqBindings, varGen3)
+                        // Build expression with all bindings
+                        let finalExpr = ANF.Return finalAtom
+                        let exprWithEq = wrapBindings finalBindings finalExpr
+                        let exprWithRight = wrapBindings rightBindings exprWithEq
+                        let exprWithLeft = wrapBindings leftBindings exprWithRight
+                        Ok (exprWithLeft, varGen4)
+                    | _ ->
+                        // Primitive type or type inference failed - use simple comparison
+                        let (tempVar, varGen3) = ANF.freshVar varGen2
+                        let cexpr = ANF.Prim (convertBinOp op, leftAtom, rightAtom)
+                        let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
+                        let exprWithRight = wrapBindings rightBindings finalExpr
+                        let exprWithLeft = wrapBindings leftBindings exprWithRight
+                        Ok (exprWithLeft, varGen3)
+                | AST.StringConcat ->
+                    // String concatenation
+                    let (tempVar, varGen3) = ANF.freshVar varGen2
+                    let cexpr = ANF.StringConcat (leftAtom, rightAtom)
+                    let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
+                    let exprWithRight = wrapBindings rightBindings finalExpr
+                    let exprWithLeft = wrapBindings leftBindings exprWithRight
+                    Ok (exprWithLeft, varGen3)
+                | _ ->
+                    // Other binary operations - use simple primitive
+                    let (tempVar, varGen3) = ANF.freshVar varGen2
+                    let cexpr = ANF.Prim (convertBinOp op, leftAtom, rightAtom)
+                    let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
+                    let exprWithRight = wrapBindings rightBindings finalExpr
+                    let exprWithLeft = wrapBindings leftBindings exprWithRight
+                    Ok (exprWithLeft, varGen3)))
 
     | AST.If (cond, thenBranch, elseBranch) ->
         // If expression: convert condition to atom, both branches to ANF
@@ -2556,18 +2716,43 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
     | AST.BinOp (op, left, right) ->
         // Complex expression: convert operands to atoms, create binding
         toAtom left varGen env typeReg variantLookup funcReg |> Result.bind (fun (leftAtom, leftBindings, varGen1) ->
-            toAtom right varGen1 env typeReg variantLookup funcReg |> Result.map (fun (rightAtom, rightBindings, varGen2) ->
-                // Create the operation
-                let (tempVar, varGen3) = ANF.freshVar varGen2
-                // StringConcat is a separate CExpr, not a Prim
-                let cexpr =
-                    match op with
-                    | AST.StringConcat -> ANF.StringConcat (leftAtom, rightAtom)
-                    | _ -> ANF.Prim (convertBinOp op, leftAtom, rightAtom)
-
-                // Return the temp variable as atom, plus all bindings
-                let allBindings = leftBindings @ rightBindings @ [(tempVar, cexpr)]
-                (ANF.Var tempVar, allBindings, varGen3)))
+            toAtom right varGen1 env typeReg variantLookup funcReg |> Result.bind (fun (rightAtom, rightBindings, varGen2) ->
+                // Check if this is an equality comparison on compound types
+                let typeEnv = typeEnvFromVarEnv env
+                match op with
+                | AST.Eq | AST.Neq ->
+                    match inferType left typeEnv typeReg variantLookup funcReg with
+                    | Ok operandType when isCompoundType operandType ->
+                        // Generate structural equality
+                        let (eqBindings, eqResultAtom, varGen3) =
+                            generateStructuralEquality leftAtom rightAtom operandType varGen2 typeReg
+                        // For Neq, negate the result
+                        let (finalAtom, finalBindings, varGen4) =
+                            if op = AST.Neq then
+                                let (negVar, vg) = ANF.freshVar varGen3
+                                let negExpr = ANF.UnaryPrim (ANF.Not, eqResultAtom)
+                                (ANF.Var negVar, eqBindings @ [(negVar, negExpr)], vg)
+                            else
+                                (eqResultAtom, eqBindings, varGen3)
+                        let allBindings = leftBindings @ rightBindings @ finalBindings
+                        Ok (finalAtom, allBindings, varGen4)
+                    | _ ->
+                        // Primitive type - simple comparison
+                        let (tempVar, varGen3) = ANF.freshVar varGen2
+                        let cexpr = ANF.Prim (convertBinOp op, leftAtom, rightAtom)
+                        let allBindings = leftBindings @ rightBindings @ [(tempVar, cexpr)]
+                        Ok (ANF.Var tempVar, allBindings, varGen3)
+                | AST.StringConcat ->
+                    let (tempVar, varGen3) = ANF.freshVar varGen2
+                    let cexpr = ANF.StringConcat (leftAtom, rightAtom)
+                    let allBindings = leftBindings @ rightBindings @ [(tempVar, cexpr)]
+                    Ok (ANF.Var tempVar, allBindings, varGen3)
+                | _ ->
+                    // Other binary operations
+                    let (tempVar, varGen3) = ANF.freshVar varGen2
+                    let cexpr = ANF.Prim (convertBinOp op, leftAtom, rightAtom)
+                    let allBindings = leftBindings @ rightBindings @ [(tempVar, cexpr)]
+                    Ok (ANF.Var tempVar, allBindings, varGen3)))
 
     | AST.If (condExpr, thenExpr, elseExpr) ->
         // If expression in atom position: convert all parts to atoms, create IfValue
