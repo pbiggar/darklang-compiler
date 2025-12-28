@@ -110,3 +110,96 @@ Stdlib.Dict.get_str(Stdlib.Dict.set_str(Stdlib.Dict.empty(), "", 42), "") = 42
 let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "ab", 1) in let d2 = Stdlib.Dict.set_str(d1, "abc", 2) in Stdlib.Dict.get_str(d2, "ab") = 1
 
 let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "ab", 1) in let d2 = Stdlib.Dict.set_str(d1, "abc", 2) in Stdlib.Dict.get_str(d2, "abc") = 2
+
+// ========== Dict utility functions ==========
+
+// isEmpty tests
+Stdlib.Dict.isEmpty(Stdlib.Dict.empty()) = stdout="true\n"
+Stdlib.Dict.isEmpty(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 100)) = stdout="false\n"
+
+// contains tests (int-keyed)
+Stdlib.Dict.contains(Stdlib.Dict.empty(), 1) = stdout="false\n"
+Stdlib.Dict.contains(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 100), 1) = stdout="true\n"
+Stdlib.Dict.contains(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 100), 2) = stdout="false\n"
+
+// contains_str tests (string-keyed)
+Stdlib.Dict.contains_str(Stdlib.Dict.empty(), "hello") = stdout="false\n"
+Stdlib.Dict.contains_str(Stdlib.Dict.set_str(Stdlib.Dict.empty(), "hello", 100), "hello") = stdout="true\n"
+Stdlib.Dict.contains_str(Stdlib.Dict.set_str(Stdlib.Dict.empty(), "hello", 100), "world") = stdout="false\n"
+
+// size tests
+Stdlib.Dict.size(Stdlib.Dict.empty()) = 0
+Stdlib.Dict.size(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 100)) = 1
+let d1 = Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 10) in let d2 = Stdlib.Dict.set(d1, 2, 20) in Stdlib.Dict.size(d2) = 2
+let d1 = Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 10) in let d2 = Stdlib.Dict.set(d1, 2, 20) in let d3 = Stdlib.Dict.set(d2, 3, 30) in Stdlib.Dict.size(d3) = 3
+
+// size with string keys (same underlying structure)
+Stdlib.Dict.size(Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 1)) = 1
+let d1 = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 1) in let d2 = Stdlib.Dict.set_str(d1, "b", 2) in Stdlib.Dict.size(d2) = 2
+
+// ========== Dict enumeration (Int64-keyed) ==========
+
+// keys tests
+Stdlib.List.length<Int64>(Stdlib.Dict.keys(Stdlib.Dict.empty())) = 0
+Stdlib.List.length<Int64>(Stdlib.Dict.keys(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 100))) = 1
+let d = Stdlib.Dict.set(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 10), 2, 20) in Stdlib.List.length<Int64>(Stdlib.Dict.keys(d)) = 2
+
+// values tests
+Stdlib.List.length<Int64>(Stdlib.Dict.values(Stdlib.Dict.empty())) = 0
+Stdlib.List.length<Int64>(Stdlib.Dict.values(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 100))) = 1
+let d = Stdlib.Dict.set(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 10), 2, 20) in Stdlib.List.length<Int64>(Stdlib.Dict.values(d)) = 2
+
+// entries tests - test via isEmpty on the resulting list
+Stdlib.Dict.entries(Stdlib.Dict.empty()) == [] = stdout="true\n"
+Stdlib.Dict.entries(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 100)) == [] = stdout="false\n"
+
+// ========== Dict enumeration (String-keyed) ==========
+
+// keys_str tests
+Stdlib.List.length<String>(Stdlib.Dict.keys_str(Stdlib.Dict.empty())) = 0
+Stdlib.List.length<String>(Stdlib.Dict.keys_str(Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 100))) = 1
+let d = Stdlib.Dict.set_str(Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 10), "b", 20) in Stdlib.List.length<String>(Stdlib.Dict.keys_str(d)) = 2
+
+// values_str tests (same as values since values are Int64)
+Stdlib.List.length<Int64>(Stdlib.Dict.values_str(Stdlib.Dict.empty())) = 0
+Stdlib.List.length<Int64>(Stdlib.Dict.values_str(Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 100))) = 1
+
+// entries_str tests
+Stdlib.Dict.entries_str(Stdlib.Dict.empty()) == [] = stdout="true\n"
+Stdlib.Dict.entries_str(Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 100)) == [] = stdout="false\n"
+
+// ========== Dict functional operations (Int64-keyed) ==========
+
+// fold tests - sum all values
+Stdlib.Dict.fold(Stdlib.Dict.empty(), 0, (acc: Int64, k: Int64, v: Int64) => acc + v) = 0
+Stdlib.Dict.fold(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 100), 0, (acc: Int64, k: Int64, v: Int64) => acc + v) = 100
+let d = Stdlib.Dict.set(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 10), 2, 20) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + v) = 30
+
+// fold tests - sum all keys
+let d = Stdlib.Dict.set(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 10), 2, 20) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + k) = 3
+
+// map tests - double all values
+let d = Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 10) in let d2 = Stdlib.Dict.map(d, (v: Int64) => v * 2) in Stdlib.Dict.get(d2, 1) = 20
+let d = Stdlib.Dict.set(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 10), 2, 20) in let d2 = Stdlib.Dict.map(d, (v: Int64) => v * 2) in Stdlib.Dict.get(d2, 2) = 40
+
+// filter tests - keep values > 15
+let d = Stdlib.Dict.set(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 10), 2, 20) in let d2 = Stdlib.Dict.filter(d, (k: Int64, v: Int64) => v > 15) in Stdlib.Dict.contains(d2, 1) = stdout="false\n"
+let d = Stdlib.Dict.set(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 10), 2, 20) in let d2 = Stdlib.Dict.filter(d, (k: Int64, v: Int64) => v > 15) in Stdlib.Dict.contains(d2, 2) = stdout="true\n"
+
+// filter tests - keep keys > 1
+let d = Stdlib.Dict.set(Stdlib.Dict.set(Stdlib.Dict.empty(), 1, 10), 2, 20) in let d2 = Stdlib.Dict.filter(d, (k: Int64, v: Int64) => k > 1) in Stdlib.Dict.size(d2) = 1
+
+// ========== Dict functional operations (String-keyed) ==========
+
+// fold_str tests - sum all values
+Stdlib.Dict.fold_str(Stdlib.Dict.empty(), 0, (acc: Int64, k: String, v: Int64) => acc + v) = 0
+Stdlib.Dict.fold_str(Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 100), 0, (acc: Int64, k: String, v: Int64) => acc + v) = 100
+let d = Stdlib.Dict.set_str(Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 10), "b", 20) in Stdlib.Dict.fold_str(d, 0, (acc: Int64, k: String, v: Int64) => acc + v) = 30
+
+// map_str tests - double all values
+let d = Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 10) in let d2 = Stdlib.Dict.map_str(d, (v: Int64) => v * 2) in Stdlib.Dict.get_str(d2, "a") = 20
+let d = Stdlib.Dict.set_str(Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 10), "b", 20) in let d2 = Stdlib.Dict.map_str(d, (v: Int64) => v * 2) in Stdlib.Dict.get_str(d2, "b") = 40
+
+// filter_str tests - keep values > 15
+let d = Stdlib.Dict.set_str(Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 10), "b", 20) in let d2 = Stdlib.Dict.filter_str(d, (k: String, v: Int64) => v > 15) in Stdlib.Dict.contains_str(d2, "a") = stdout="false\n"
+let d = Stdlib.Dict.set_str(Stdlib.Dict.set_str(Stdlib.Dict.empty(), "a", 10), "b", 20) in let d2 = Stdlib.Dict.filter_str(d, (k: String, v: Int64) => v > 15) in Stdlib.Dict.contains_str(d2, "b") = stdout="true\n"

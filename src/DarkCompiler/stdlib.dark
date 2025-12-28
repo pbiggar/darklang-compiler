@@ -916,3 +916,407 @@ def Stdlib.Dict.__cleanup_str(node: Int64) : Unit =
             __raw_free(ptr)
         else
             ()
+
+// ============ Dict Utility Functions ============
+
+// Check if dict is empty (works for both int and string-keyed)
+def Stdlib.Dict.isEmpty(dict: Int64) : Bool = dict == 0
+
+// Check if dict contains an int key
+def Stdlib.Dict.contains(dict: Int64, key: Int64) : Bool =
+    Stdlib.Dict.get(dict, key) != -1
+
+// Check if dict contains a string key
+def Stdlib.Dict.contains_str(dict: Int64, key: String) : Bool =
+    Stdlib.Dict.get_str(dict, key) != -1
+
+// Count entries in dict (works for both int and string-keyed)
+def Stdlib.Dict.size(dict: Int64) : Int64 =
+    Stdlib.Dict.__sizeHelper(dict)
+
+def Stdlib.Dict.__sizeHelper(node: Int64) : Int64 =
+    if node == 0 then
+        0
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            1
+        else if tag == 1 then
+            let bitmap = __raw_get(ptr, 0) in
+            Stdlib.Dict.__countChildren(ptr, bitmap, 0)
+        else
+            0
+
+def Stdlib.Dict.__countChildren(ptr: RawPtr, bitmap: Int64, bit: Int64) : Int64 =
+    if bit >= 64 then
+        0
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get(ptr, 8 + (idx * 8)) in
+        Stdlib.Dict.__sizeHelper(child) + Stdlib.Dict.__countChildren(ptr, bitmap, bit + 1)
+    else
+        Stdlib.Dict.__countChildren(ptr, bitmap, bit + 1)
+
+// ============ Dict Enumeration (Int64-keyed) ============
+
+// Get all keys from dict
+def Stdlib.Dict.keys(dict: Int64) : List<Int64> =
+    Stdlib.Dict.__keysHelper(dict, [])
+
+def Stdlib.Dict.__keysHelper(node: Int64, acc: List<Int64>) : List<Int64> =
+    if node == 0 then
+        acc
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            let key = __raw_get(ptr, 0) in
+            [key, ...acc]
+        else if tag == 1 then
+            let bitmap = __raw_get(ptr, 0) in
+            Stdlib.Dict.__collectKeysFromChildren(ptr, bitmap, 0, acc)
+        else
+            acc
+
+def Stdlib.Dict.__collectKeysFromChildren(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: List<Int64>) : List<Int64> =
+    if bit >= 64 then
+        acc
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get(ptr, 8 + (idx * 8)) in
+        let newAcc = Stdlib.Dict.__keysHelper(child, acc) in
+        Stdlib.Dict.__collectKeysFromChildren(ptr, bitmap, bit + 1, newAcc)
+    else
+        Stdlib.Dict.__collectKeysFromChildren(ptr, bitmap, bit + 1, acc)
+
+// Get all values from dict
+def Stdlib.Dict.values(dict: Int64) : List<Int64> =
+    Stdlib.Dict.__valuesHelper(dict, [])
+
+def Stdlib.Dict.__valuesHelper(node: Int64, acc: List<Int64>) : List<Int64> =
+    if node == 0 then
+        acc
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            let value = __raw_get(ptr, 8) in
+            [value, ...acc]
+        else if tag == 1 then
+            let bitmap = __raw_get(ptr, 0) in
+            Stdlib.Dict.__collectValuesFromChildren(ptr, bitmap, 0, acc)
+        else
+            acc
+
+def Stdlib.Dict.__collectValuesFromChildren(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: List<Int64>) : List<Int64> =
+    if bit >= 64 then
+        acc
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get(ptr, 8 + (idx * 8)) in
+        let newAcc = Stdlib.Dict.__valuesHelper(child, acc) in
+        Stdlib.Dict.__collectValuesFromChildren(ptr, bitmap, bit + 1, newAcc)
+    else
+        Stdlib.Dict.__collectValuesFromChildren(ptr, bitmap, bit + 1, acc)
+
+// Get all key-value pairs from dict
+def Stdlib.Dict.entries(dict: Int64) : List<(Int64, Int64)> =
+    Stdlib.Dict.__entriesHelper(dict, [])
+
+def Stdlib.Dict.__entriesHelper(node: Int64, acc: List<(Int64, Int64)>) : List<(Int64, Int64)> =
+    if node == 0 then
+        acc
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            let key = __raw_get(ptr, 0) in
+            let value = __raw_get(ptr, 8) in
+            [(key, value), ...acc]
+        else if tag == 1 then
+            let bitmap = __raw_get(ptr, 0) in
+            Stdlib.Dict.__collectEntriesFromChildren(ptr, bitmap, 0, acc)
+        else
+            acc
+
+def Stdlib.Dict.__collectEntriesFromChildren(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: List<(Int64, Int64)>) : List<(Int64, Int64)> =
+    if bit >= 64 then
+        acc
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get(ptr, 8 + (idx * 8)) in
+        let newAcc = Stdlib.Dict.__entriesHelper(child, acc) in
+        Stdlib.Dict.__collectEntriesFromChildren(ptr, bitmap, bit + 1, newAcc)
+    else
+        Stdlib.Dict.__collectEntriesFromChildren(ptr, bitmap, bit + 1, acc)
+
+// ============ Dict Enumeration (String-keyed) ============
+
+// Get all string keys from dict
+def Stdlib.Dict.keys_str(dict: Int64) : List<String> =
+    Stdlib.Dict.__keysHelper_str(dict, [])
+
+def Stdlib.Dict.__keysHelper_str(node: Int64, acc: List<String>) : List<String> =
+    if node == 0 then
+        acc
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            let keyPtr = __raw_get(ptr, 0) in
+            let key = __int64_to_string(keyPtr) in
+            [key, ...acc]
+        else if tag == 1 then
+            let bitmap = __raw_get(ptr, 0) in
+            Stdlib.Dict.__collectKeysFromChildren_str(ptr, bitmap, 0, acc)
+        else
+            acc
+
+def Stdlib.Dict.__collectKeysFromChildren_str(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: List<String>) : List<String> =
+    if bit >= 64 then
+        acc
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get(ptr, 8 + (idx * 8)) in
+        let newAcc = Stdlib.Dict.__keysHelper_str(child, acc) in
+        Stdlib.Dict.__collectKeysFromChildren_str(ptr, bitmap, bit + 1, newAcc)
+    else
+        Stdlib.Dict.__collectKeysFromChildren_str(ptr, bitmap, bit + 1, acc)
+
+// Get all values from string-keyed dict (values are still Int64)
+def Stdlib.Dict.values_str(dict: Int64) : List<Int64> =
+    Stdlib.Dict.values(dict)
+
+// Get all key-value pairs from string-keyed dict
+def Stdlib.Dict.entries_str(dict: Int64) : List<(String, Int64)> =
+    Stdlib.Dict.__entriesHelper_str(dict, [])
+
+def Stdlib.Dict.__entriesHelper_str(node: Int64, acc: List<(String, Int64)>) : List<(String, Int64)> =
+    if node == 0 then
+        acc
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            let keyPtr = __raw_get(ptr, 0) in
+            let key = __int64_to_string(keyPtr) in
+            let value = __raw_get(ptr, 8) in
+            [(key, value), ...acc]
+        else if tag == 1 then
+            let bitmap = __raw_get(ptr, 0) in
+            Stdlib.Dict.__collectEntriesFromChildren_str(ptr, bitmap, 0, acc)
+        else
+            acc
+
+def Stdlib.Dict.__collectEntriesFromChildren_str(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: List<(String, Int64)>) : List<(String, Int64)> =
+    if bit >= 64 then
+        acc
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get(ptr, 8 + (idx * 8)) in
+        let newAcc = Stdlib.Dict.__entriesHelper_str(child, acc) in
+        Stdlib.Dict.__collectEntriesFromChildren_str(ptr, bitmap, bit + 1, newAcc)
+    else
+        Stdlib.Dict.__collectEntriesFromChildren_str(ptr, bitmap, bit + 1, acc)
+
+// ============ Dict Functional Operations (Int64-keyed) ============
+
+// Fold over all entries in dict (non-generic version for Int64 accumulator)
+def Stdlib.Dict.fold(dict: Int64, init: Int64, fn: (Int64, Int64, Int64) -> Int64) : Int64 =
+    Stdlib.Dict.__foldHelper(dict, init, fn)
+
+def Stdlib.Dict.__foldHelper(node: Int64, acc: Int64, fn: (Int64, Int64, Int64) -> Int64) : Int64 =
+    if node == 0 then
+        acc
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            let key = __raw_get(ptr, 0) in
+            let value = __raw_get(ptr, 8) in
+            fn(acc, key, value)
+        else if tag == 1 then
+            let bitmap = __raw_get(ptr, 0) in
+            Stdlib.Dict.__foldChildren(ptr, bitmap, 0, acc, fn)
+        else
+            acc
+
+def Stdlib.Dict.__foldChildren(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: Int64, fn: (Int64, Int64, Int64) -> Int64) : Int64 =
+    if bit >= 64 then
+        acc
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get(ptr, 8 + (idx * 8)) in
+        let newAcc = Stdlib.Dict.__foldHelper(child, acc, fn) in
+        Stdlib.Dict.__foldChildren(ptr, bitmap, bit + 1, newAcc, fn)
+    else
+        Stdlib.Dict.__foldChildren(ptr, bitmap, bit + 1, acc, fn)
+
+// Map over values in dict, keeping keys the same
+def Stdlib.Dict.map(dict: Int64, fn: (Int64) -> Int64) : Int64 =
+    Stdlib.Dict.__mapHelper(dict, fn)
+
+def Stdlib.Dict.__mapHelper(node: Int64, fn: (Int64) -> Int64) : Int64 =
+    if node == 0 then
+        0
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            let key = __raw_get(ptr, 0) in
+            let value = __raw_get(ptr, 8) in
+            Stdlib.Dict.__allocLeaf(key, fn(value))
+        else if tag == 1 then
+            let bitmap = __raw_get(ptr, 0) in
+            let numChildren = Stdlib.Int64.popcount(bitmap) in
+            let newNode = Stdlib.Dict.__allocInternal(bitmap, numChildren) in
+            let _ = Stdlib.Dict.__mapChildren(ptr, newNode, bitmap, 0, fn) in
+            Stdlib.Dict.__setTag(__rawptr_to_int64(newNode), 1)
+        else
+            0
+
+def Stdlib.Dict.__mapChildren(oldPtr: RawPtr, newPtr: RawPtr, bitmap: Int64, bit: Int64, fn: (Int64) -> Int64) : Unit =
+    if bit >= 64 then
+        ()
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get(oldPtr, 8 + (idx * 8)) in
+        let newChild = Stdlib.Dict.__mapHelper(child, fn) in
+        let _ = __raw_set(newPtr, 8 + (idx * 8), newChild) in
+        Stdlib.Dict.__mapChildren(oldPtr, newPtr, bitmap, bit + 1, fn)
+    else
+        Stdlib.Dict.__mapChildren(oldPtr, newPtr, bitmap, bit + 1, fn)
+
+// Filter entries in dict based on predicate
+def Stdlib.Dict.filter(dict: Int64, fn: (Int64, Int64) -> Bool) : Int64 =
+    Stdlib.Dict.__filterHelper(dict, Stdlib.Dict.empty(), fn)
+
+def Stdlib.Dict.__filterHelper(node: Int64, acc: Int64, fn: (Int64, Int64) -> Bool) : Int64 =
+    if node == 0 then
+        acc
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            let key = __raw_get(ptr, 0) in
+            let value = __raw_get(ptr, 8) in
+            if fn(key, value) then Stdlib.Dict.set(acc, key, value) else acc
+        else if tag == 1 then
+            let bitmap = __raw_get(ptr, 0) in
+            Stdlib.Dict.__filterChildren(ptr, bitmap, 0, acc, fn)
+        else
+            acc
+
+def Stdlib.Dict.__filterChildren(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: Int64, fn: (Int64, Int64) -> Bool) : Int64 =
+    if bit >= 64 then
+        acc
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get(ptr, 8 + (idx * 8)) in
+        let newAcc = Stdlib.Dict.__filterHelper(child, acc, fn) in
+        Stdlib.Dict.__filterChildren(ptr, bitmap, bit + 1, newAcc, fn)
+    else
+        Stdlib.Dict.__filterChildren(ptr, bitmap, bit + 1, acc, fn)
+
+// ============ Dict Functional Operations (String-keyed) ============
+
+// Fold over all entries in string-keyed dict
+def Stdlib.Dict.fold_str(dict: Int64, init: Int64, fn: (Int64, String, Int64) -> Int64) : Int64 =
+    Stdlib.Dict.__foldHelper_str(dict, init, fn)
+
+def Stdlib.Dict.__foldHelper_str(node: Int64, acc: Int64, fn: (Int64, String, Int64) -> Int64) : Int64 =
+    if node == 0 then
+        acc
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            let keyPtr = __raw_get(ptr, 0) in
+            let key = __int64_to_string(keyPtr) in
+            let value = __raw_get(ptr, 8) in
+            fn(acc, key, value)
+        else if tag == 1 then
+            let bitmap = __raw_get(ptr, 0) in
+            Stdlib.Dict.__foldChildren_str(ptr, bitmap, 0, acc, fn)
+        else
+            acc
+
+def Stdlib.Dict.__foldChildren_str(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: Int64, fn: (Int64, String, Int64) -> Int64) : Int64 =
+    if bit >= 64 then
+        acc
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get(ptr, 8 + (idx * 8)) in
+        let newAcc = Stdlib.Dict.__foldHelper_str(child, acc, fn) in
+        Stdlib.Dict.__foldChildren_str(ptr, bitmap, bit + 1, newAcc, fn)
+    else
+        Stdlib.Dict.__foldChildren_str(ptr, bitmap, bit + 1, acc, fn)
+
+// Map over values in string-keyed dict
+def Stdlib.Dict.map_str(dict: Int64, fn: (Int64) -> Int64) : Int64 =
+    Stdlib.Dict.__mapHelper_str(dict, fn)
+
+def Stdlib.Dict.__mapHelper_str(node: Int64, fn: (Int64) -> Int64) : Int64 =
+    if node == 0 then
+        0
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            let keyPtr = __raw_get(ptr, 0) in
+            let key = __int64_to_string(keyPtr) in
+            let value = __raw_get(ptr, 8) in
+            Stdlib.Dict.__allocLeaf_str(key, fn(value))
+        else if tag == 1 then
+            let bitmap = __raw_get(ptr, 0) in
+            let numChildren = Stdlib.Int64.popcount(bitmap) in
+            let newNode = Stdlib.Dict.__allocInternal(bitmap, numChildren) in
+            let _ = Stdlib.Dict.__mapChildren_str(ptr, newNode, bitmap, 0, fn) in
+            Stdlib.Dict.__setTag(__rawptr_to_int64(newNode), 1)
+        else
+            0
+
+def Stdlib.Dict.__mapChildren_str(oldPtr: RawPtr, newPtr: RawPtr, bitmap: Int64, bit: Int64, fn: (Int64) -> Int64) : Unit =
+    if bit >= 64 then
+        ()
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get(oldPtr, 8 + (idx * 8)) in
+        let newChild = Stdlib.Dict.__mapHelper_str(child, fn) in
+        let _ = __raw_set(newPtr, 8 + (idx * 8), newChild) in
+        Stdlib.Dict.__mapChildren_str(oldPtr, newPtr, bitmap, bit + 1, fn)
+    else
+        Stdlib.Dict.__mapChildren_str(oldPtr, newPtr, bitmap, bit + 1, fn)
+
+// Filter entries in string-keyed dict
+def Stdlib.Dict.filter_str(dict: Int64, fn: (String, Int64) -> Bool) : Int64 =
+    Stdlib.Dict.__filterHelper_str(dict, Stdlib.Dict.empty(), fn)
+
+def Stdlib.Dict.__filterHelper_str(node: Int64, acc: Int64, fn: (String, Int64) -> Bool) : Int64 =
+    if node == 0 then
+        acc
+    else
+        let tag = Stdlib.Dict.__getTag(node) in
+        let ptr = __int64_to_rawptr(Stdlib.Dict.__clearTag(node)) in
+        if tag == 2 then
+            let keyPtr = __raw_get(ptr, 0) in
+            let key = __int64_to_string(keyPtr) in
+            let value = __raw_get(ptr, 8) in
+            if fn(key, value) then Stdlib.Dict.set_str(acc, key, value) else acc
+        else if tag == 1 then
+            let bitmap = __raw_get(ptr, 0) in
+            Stdlib.Dict.__filterChildren_str(ptr, bitmap, 0, acc, fn)
+        else
+            acc
+
+def Stdlib.Dict.__filterChildren_str(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: Int64, fn: (String, Int64) -> Bool) : Int64 =
+    if bit >= 64 then
+        acc
+    else if Stdlib.Dict.hasBit(bitmap, bit) then
+        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+        let child = __raw_get(ptr, 8 + (idx * 8)) in
+        let newAcc = Stdlib.Dict.__filterHelper_str(child, acc, fn) in
+        Stdlib.Dict.__filterChildren_str(ptr, bitmap, bit + 1, newAcc, fn)
+    else
+        Stdlib.Dict.__filterChildren_str(ptr, bitmap, bit + 1, acc, fn)
