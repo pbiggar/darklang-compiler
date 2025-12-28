@@ -127,19 +127,11 @@ let getNonPhiInstrs (block: BasicBlock) : Instr list =
 /// Insert a copy instruction at the end of a block (before terminator)
 /// For phi node: dest = phi[(v1, L1), (v2, L2), ...]
 /// In predecessor L1: insert "dest = v1" at end
-/// Skips copies for undefined sources (original VRegs that weren't renamed)
 let insertCopyInPredecessor (cfg: CFG) (predLabel: Label) (dest: VReg) (src: Operand) : CFG =
     // Skip if source equals dest (self-referential phi)
-    // Also skip if source is an original (unrenamed) VReg - indicates no definition on this path
-    // SSA-renamed VRegs have high numbers (>= 10000), originals have low numbers
     let skip =
         match src with
-        | Register srcReg ->
-            let (VReg srcN) = srcReg
-            let (VReg destN) = dest
-            // Skip if self-referential or if source is an original (low-numbered) VReg
-            // while dest is an SSA-renamed (high-numbered) VReg
-            srcReg = dest || (srcN < 10000 && destN >= 10000)
+        | Register srcReg -> srcReg = dest
         | _ -> false
 
     if skip then

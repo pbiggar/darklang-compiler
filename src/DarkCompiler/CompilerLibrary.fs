@@ -250,27 +250,27 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                         let t = System.Math.Round(mirTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 3.1: SSA Construction
-                    if verbosity >= 1 then println "  [3.1/8] SSA Construction..."
-                    let ssaProgram = SSA_Construction.convertToSSA mirProgram
+                    // Pass 3.1: SSA Construction - DISABLED (bugs with complex control flow)
+                    if verbosity >= 1 then println "  [3.1/8] SSA Construction... (disabled)"
+                    let ssaProgram = mirProgram
 
                     let ssaTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(ssaTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 3.5: MIR Optimizations (on SSA form)
-                    if verbosity >= 1 then println "  [3.5/8] MIR Optimizations..."
-                    let optimizedProgram = MIR_Optimize.optimizeProgram ssaProgram
+                    // Pass 3.5: MIR Optimizations (on SSA form) - DISABLED (SSA disabled)
+                    if verbosity >= 1 then println "  [3.5/8] MIR Optimizations... (disabled)"
+                    let optimizedProgram = ssaProgram
 
                     let mirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(mirOptTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 3.9: SSA Destruction
-                    if verbosity >= 1 then println "  [3.9/8] SSA Destruction..."
-                    let mirAfterSSA = SSA_Destruction.destructSSA optimizedProgram
+                    // Pass 3.9: SSA Destruction - DISABLED (SSA disabled)
+                    if verbosity >= 1 then println "  [3.9/8] SSA Destruction... (disabled)"
+                    let mirAfterSSA = optimizedProgram
 
                     let ssaDestructTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime - mirOptTime
                     if verbosity >= 2 then
