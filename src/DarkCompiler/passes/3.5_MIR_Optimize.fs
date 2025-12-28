@@ -36,6 +36,8 @@ let hasSideEffects (instr: Instr) : bool =
     | FileExists _ -> true
     | FileWriteText _ -> true
     | FileAppendText _ -> true
+    | FileDelete _ -> true
+    | FileSetExecutable _ -> true
     | RawAlloc _ -> true  // Allocates memory
     | RawFree _ -> true   // Frees memory
     | RawGet _ -> false   // Pure memory read
@@ -67,6 +69,8 @@ let getInstrDest (instr: Instr) : VReg option =
     | FileExists (dest, _) -> Some dest
     | FileWriteText (dest, _, _) -> Some dest
     | FileAppendText (dest, _, _) -> Some dest
+    | FileDelete (dest, _) -> Some dest
+    | FileSetExecutable (dest, _) -> Some dest
     | Phi (dest, _) -> Some dest
     | RawAlloc (dest, _) -> Some dest
     | RawGet (dest, _, _) -> Some dest
@@ -112,6 +116,8 @@ let getInstrUses (instr: Instr) : Set<VReg> =
     | FileExists (_, path) -> fromOperand path
     | FileWriteText (_, path, content) -> Set.union (fromOperand path) (fromOperand content)
     | FileAppendText (_, path, content) -> Set.union (fromOperand path) (fromOperand content)
+    | FileDelete (_, path) -> fromOperand path
+    | FileSetExecutable (_, path) -> fromOperand path
     | Phi (_, sources) -> sources |> List.map (fun (op, _) -> fromOperand op) |> Set.unionMany
     | RawAlloc (_, numBytes) -> fromOperand numBytes
     | RawFree ptr -> fromOperand ptr
@@ -273,6 +279,8 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | FileExists (dest, path) -> FileExists (dest, p path)
     | FileWriteText (dest, path, content) -> FileWriteText (dest, p path, p content)
     | FileAppendText (dest, path, content) -> FileAppendText (dest, p path, p content)
+    | FileDelete (dest, path) -> FileDelete (dest, p path)
+    | FileSetExecutable (dest, path) -> FileSetExecutable (dest, p path)
     // Don't propagate copies into phi sources - phis are merge points and their
     // sources represent values flowing from specific predecessor blocks
     | Phi (dest, sources) -> Phi (dest, sources)

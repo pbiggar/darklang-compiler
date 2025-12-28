@@ -87,6 +87,8 @@ type CExpr =
     | FileExists of path:Atom                 // Check if file exists, returns Bool
     | FileWriteText of path:Atom * content:Atom  // Write file, returns Result<Unit, String>
     | FileAppendText of path:Atom * content:Atom // Append to file, returns Result<Unit, String>
+    | FileDelete of path:Atom                     // Delete file, returns Result<Unit, String>
+    | FileSetExecutable of path:Atom             // Set executable bit, returns Result<Unit, String>
     // Float intrinsics
     | FloatSqrt of Atom                       // Square root: sqrt(x)
     | FloatAbs of Atom                        // Absolute value: |x|

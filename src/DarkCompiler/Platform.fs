@@ -25,6 +25,8 @@ type SyscallNumbers = {
     Close: uint16  // Close file descriptor
     Fstat: uint16  // Get file status (for file size)
     Access: uint16 // Check file accessibility (for exists)
+    Unlink: uint16 // Delete file (or unlinkat on Linux with AT_FDCWD)
+    Chmod: uint16  // Change file mode (or fchmodat on Linux with AT_FDCWD)
     SvcImmediate: uint16  // SVC instruction immediate value
     SyscallRegister: ARM64.Reg  // Register to hold syscall number (X16 for macOS, X8 for Linux)
 }
@@ -51,6 +53,8 @@ let getSyscallNumbers (os: OS) : SyscallNumbers =
           Close = 6us      // close(fd)
           Fstat = 339us    // fstat(fd, statbuf) - uses fstat64 on macOS
           Access = 33us    // access(path, mode)
+          Unlink = 10us    // unlink(path)
+          Chmod = 15us     // chmod(path, mode)
           SvcImmediate = 0x80us
           SyscallRegister = ARM64.X16 }
     | Linux ->
@@ -63,6 +67,8 @@ let getSyscallNumbers (os: OS) : SyscallNumbers =
           Close = 57us     // close(fd)
           Fstat = 80us     // fstat(fd, statbuf)
           Access = 48us    // faccessat(dirfd, path, mode, flags) - use AT_FDCWD=-100
+          Unlink = 35us    // unlinkat(dirfd, path, flags) - use AT_FDCWD=-100
+          Chmod = 53us     // fchmodat(dirfd, path, mode, flags) - use AT_FDCWD=-100
           SvcImmediate = 0us
           SyscallRegister = ARM64.X8 }
 

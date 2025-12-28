@@ -142,6 +142,10 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         let p = operandToVReg path |> Option.toList
         let c = operandToVReg content |> Option.toList
         Set.ofList (p @ c)
+    | LIR.FileDelete (_, path) ->
+        operandToVReg path |> Option.toList |> Set.ofList
+    | LIR.FileSetExecutable (_, path) ->
+        operandToVReg path |> Option.toList |> Set.ofList
     | LIR.RawAlloc (_, numBytes) ->
         regToVReg numBytes |> Option.toList |> Set.ofList
     | LIR.RawFree ptr ->
@@ -196,6 +200,8 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.FileExists (dest, _) -> regToVReg dest
     | LIR.FileWriteText (dest, _, _) -> regToVReg dest
     | LIR.FileAppendText (dest, _, _) -> regToVReg dest
+    | LIR.FileDelete (dest, _) -> regToVReg dest
+    | LIR.FileSetExecutable (dest, _) -> regToVReg dest
     | LIR.RawAlloc (dest, _) -> regToVReg dest
     | LIR.RawGet (dest, _, _) -> regToVReg dest
     | LIR.RawFree _ -> None
@@ -915,6 +921,26 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
             | _ -> []
         pathLoads @ contentLoads @ [fileInstr] @ storeInstrs
+
+    | LIR.FileDelete (dest, path) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (pathOp, pathLoads) = applyToOperand mapping path LIR.X12
+        let fileInstr = LIR.FileDelete (destReg, pathOp)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        pathLoads @ [fileInstr] @ storeInstrs
+
+    | LIR.FileSetExecutable (dest, path) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (pathOp, pathLoads) = applyToOperand mapping path LIR.X12
+        let fileInstr = LIR.FileSetExecutable (destReg, pathOp)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        pathLoads @ [fileInstr] @ storeInstrs
 
     | LIR.RawAlloc (dest, numBytes) ->
         let (destReg, destAlloc) = applyToReg mapping dest

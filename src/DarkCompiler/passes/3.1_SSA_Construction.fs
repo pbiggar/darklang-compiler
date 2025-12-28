@@ -170,6 +170,8 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | FileExists (dest, _) -> Set.add dest defs
         | FileWriteText (dest, _, _) -> Set.add dest defs
         | FileAppendText (dest, _, _) -> Set.add dest defs
+        | FileDelete (dest, _) -> Set.add dest defs
+        | FileSetExecutable (dest, _) -> Set.add dest defs
         | Phi (dest, _) -> Set.add dest defs
         | RawAlloc (dest, _) -> Set.add dest defs
         | RawFree _ -> defs
@@ -242,6 +244,8 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
                 uses |> Set.union (getOperandUses path) |> Set.union (getOperandUses content)
             | FileAppendText (_, path, content) ->
                 uses |> Set.union (getOperandUses path) |> Set.union (getOperandUses content)
+            | FileDelete (_, path) -> Set.union uses (getOperandUses path)
+            | FileSetExecutable (_, path) -> Set.union uses (getOperandUses path)
             | Phi (_, sources) ->
                 sources |> List.fold (fun u (src, _) -> Set.union u (getOperandUses src)) uses
             | RawAlloc (_, numBytes) -> Set.union uses (getOperandUses numBytes)
@@ -432,6 +436,8 @@ let createInitialRenamingState (cfg: CFG) : RenamingState =
                     | FileExists (VReg n, _) -> max m n
                     | FileWriteText (VReg n, _, _) -> max m n
                     | FileAppendText (VReg n, _, _) -> max m n
+                    | FileDelete (VReg n, _) -> max m n
+                    | FileSetExecutable (VReg n, _) -> max m n
                     | Phi (VReg n, _) -> max m n
                     | _ -> m
                 ) 0
@@ -580,6 +586,16 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let content' = renameOperand state content
         let (_, newDest, state') = newVersion state dest
         (FileAppendText (newDest, path', content'), state')
+
+    | FileDelete (dest, path) ->
+        let path' = renameOperand state path
+        let (_, newDest, state') = newVersion state dest
+        (FileDelete (newDest, path'), state')
+
+    | FileSetExecutable (dest, path) ->
+        let path' = renameOperand state path
+        let (_, newDest, state') = newVersion state dest
+        (FileSetExecutable (newDest, path'), state')
 
     | Phi (dest, sources) ->
         // Phi sources are renamed when processing predecessors

@@ -806,6 +806,16 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         let lirContent = convertOperand content
         Ok [LIR.FileAppendText (lirDest, lirPath, lirContent)]
 
+    | MIR.FileDelete (dest, path) ->
+        let lirDest = vregToLIRReg dest
+        let lirPath = convertOperand path
+        Ok [LIR.FileDelete (lirDest, lirPath)]
+
+    | MIR.FileSetExecutable (dest, path) ->
+        let lirDest = vregToLIRReg dest
+        let lirPath = convertOperand path
+        Ok [LIR.FileSetExecutable (lirDest, lirPath)]
+
     | MIR.RawAlloc (dest, numBytes) ->
         let lirDest = vregToLIRReg dest
         // numBytes must be in a register for LIR
@@ -1110,6 +1120,8 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.FileExists (dest, path) -> LIR.FileExists (dest, offsetLIROperand strOffset fltOffset path)
     | LIR.FileWriteText (dest, path, content) -> LIR.FileWriteText (dest, offsetLIROperand strOffset fltOffset path, offsetLIROperand strOffset fltOffset content)
     | LIR.FileAppendText (dest, path, content) -> LIR.FileAppendText (dest, offsetLIROperand strOffset fltOffset path, offsetLIROperand strOffset fltOffset content)
+    | LIR.FileDelete (dest, path) -> LIR.FileDelete (dest, offsetLIROperand strOffset fltOffset path)
+    | LIR.FileSetExecutable (dest, path) -> LIR.FileSetExecutable (dest, offsetLIROperand strOffset fltOffset path)
     | LIR.StringHash (dest, str) -> LIR.StringHash (dest, offsetLIROperand strOffset fltOffset str)
     | LIR.StringEq (dest, left, right) -> LIR.StringEq (dest, offsetLIROperand strOffset fltOffset left, offsetLIROperand strOffset fltOffset right)
     | LIR.RefCountIncString str -> LIR.RefCountIncString (offsetLIROperand strOffset fltOffset str)

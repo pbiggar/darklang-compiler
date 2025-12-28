@@ -57,6 +57,10 @@ let fileModule : ModuleDef = {
         { Name = "writeText"; TypeParams = []; ParamTypes = [TString; TString]; ReturnType = resultType TUnit }
         // appendText : (String, String) -> Result<Unit, String>
         { Name = "appendText"; TypeParams = []; ParamTypes = [TString; TString]; ReturnType = resultType TUnit }
+        // delete : (String) -> Result<Unit, String>
+        { Name = "delete"; TypeParams = []; ParamTypes = [TString]; ReturnType = resultType TUnit }
+        // setExecutable : (String) -> Result<Unit, String>
+        { Name = "setExecutable"; TypeParams = []; ParamTypes = [TString]; ReturnType = resultType TUnit }
     ]
 }
 
@@ -127,4 +131,6 @@ let isFileIntrinsic (qualifiedName: string) : bool =
     qualifiedName = "Stdlib.File.readText" ||
     qualifiedName = "Stdlib.File.exists" ||
     qualifiedName = "Stdlib.File.writeText" ||
-    qualifiedName = "Stdlib.File.appendText"
+    qualifiedName = "Stdlib.File.appendText" ||
+    qualifiedName = "Stdlib.File.delete" ||
+    qualifiedName = "Stdlib.File.setExecutable"

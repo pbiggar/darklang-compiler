@@ -240,6 +240,10 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- FileWriteText({prettyPrintLIROperand path}, {prettyPrintLIROperand content})"
     | LIR.FileAppendText (dest, path, content) ->
         $"{prettyPrintLIRReg dest} <- FileAppendText({prettyPrintLIROperand path}, {prettyPrintLIROperand content})"
+    | LIR.FileDelete (dest, path) ->
+        $"{prettyPrintLIRReg dest} <- FileDelete({prettyPrintLIROperand path})"
+    | LIR.FileSetExecutable (dest, path) ->
+        $"{prettyPrintLIRReg dest} <- FileSetExecutable({prettyPrintLIROperand path})"
     // Raw memory operations
     | LIR.RawAlloc (dest, numBytes) ->
         $"{prettyPrintLIRReg dest} <- RawAlloc({prettyPrintLIRReg numBytes})"
@@ -402,6 +406,10 @@ let prettyPrintANFCExpr = function
         $"FileWriteText({prettyPrintANFAtom path}, {prettyPrintANFAtom content})"
     | ANF.FileAppendText (path, content) ->
         $"FileAppendText({prettyPrintANFAtom path}, {prettyPrintANFAtom content})"
+    | ANF.FileDelete path ->
+        $"FileDelete({prettyPrintANFAtom path})"
+    | ANF.FileSetExecutable path ->
+        $"FileSetExecutable({prettyPrintANFAtom path})"
     // Raw memory operations
     | ANF.RawAlloc numBytes ->
         $"RawAlloc({prettyPrintANFAtom numBytes})"

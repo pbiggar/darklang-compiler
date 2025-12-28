@@ -1828,6 +1828,109 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 |> Result.map (fun (contentInstrs, contentReg) ->
                     pathInstrs @ contentInstrs @ Runtime.generateFileWriteText destReg pathReg contentReg true)))
 
+    | LIR.FileDelete (dest, path) ->
+        // File delete: deletes file at path
+        // Uses unlink syscall to remove file
+        // Returns Result<Unit, String>
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            match path with
+            | LIR.Reg pathReg ->
+                // Already a heap string pointer
+                lirRegToARM64Reg pathReg
+                |> Result.map (fun pathARM64 ->
+                    Runtime.generateFileDelete destReg pathARM64)
+            | LIR.StringRef idx ->
+                // Pool string - convert to heap format first, then call FileDelete
+                // Heap format: [length:8][data:N][refcount:8]
+                match Map.tryFind idx ctx.StringPool.Strings with
+                | Some (_, len) ->
+                    let label = "str_" + string idx
+                    let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
+                    // Use X15 as temp to hold heap string pointer
+                    Ok ([
+                        // Allocate heap space for converted string
+                        ARM64.MOV_reg (ARM64.X15, ARM64.X28)  // X15 = heap pointer
+                        ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)  // bump allocator
+                        // Load pool string address into X9
+                        ARM64.ADRP (ARM64.X9, label)
+                        ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                        // Store length at [X15]
+                    ] @ loadImmediate ARM64.X10 (int64 len) @ [
+                        ARM64.STR (ARM64.X10, ARM64.X15, 0s)  // [X15] = length
+                        // Copy bytes from pool string to heap
+                        ARM64.MOVZ (ARM64.X0, 0us, 0)  // X0 = loop counter
+                    ] @ loadImmediate ARM64.X11 (int64 len) @ [
+                        // Copy loop
+                        ARM64.CMP_reg (ARM64.X0, ARM64.X11)
+                        ARM64.B_cond (ARM64.GE, 7)  // Exit if counter >= len
+                        ARM64.LDRB (ARM64.X12, ARM64.X9, ARM64.X0)  // X12 = pool[X0]
+                        ARM64.ADD_imm (ARM64.X13, ARM64.X15, 8us)  // X13 = X15 + 8
+                        ARM64.ADD_reg (ARM64.X13, ARM64.X13, ARM64.X0)  // X13 = X15 + 8 + X0
+                        ARM64.STRB_reg (ARM64.X12, ARM64.X13)  // [X13] = byte
+                        ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)  // X0++
+                        ARM64.B (-7)  // Loop back
+                        // Store refcount = 1 at [X15 + 8 + len]
+                        ARM64.ADD_imm (ARM64.X13, ARM64.X15, 8us)
+                        ARM64.ADD_reg (ARM64.X13, ARM64.X13, ARM64.X10)  // X13 = X15 + 8 + len
+                        ARM64.MOVZ (ARM64.X12, 1us, 0)
+                        ARM64.STR (ARM64.X12, ARM64.X13, 0s)  // [X13] = 1
+                    ] @ Runtime.generateFileDelete destReg ARM64.X15)
+                | None -> Error ("String index " + string idx + " not found in pool")
+            | LIR.StackSlot offset ->
+                // Load heap string from stack slot
+                loadStackSlot ARM64.X15 offset
+                |> Result.map (fun loadInstrs ->
+                    loadInstrs @ Runtime.generateFileDelete destReg ARM64.X15)
+            | _ -> Error "FileDelete requires string operand")
+
+    | LIR.FileSetExecutable (dest, path) ->
+        // File set executable: sets executable bit on file at path
+        // Uses chmod syscall with executable permission
+        // Returns Result<Unit, String>
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            match path with
+            | LIR.Reg pathReg ->
+                // Already a heap string pointer
+                lirRegToARM64Reg pathReg
+                |> Result.map (fun pathARM64 ->
+                    Runtime.generateFileSetExecutable destReg pathARM64)
+            | LIR.StringRef idx ->
+                // Pool string - convert to heap format first
+                match Map.tryFind idx ctx.StringPool.Strings with
+                | Some (_, len) ->
+                    let label = "str_" + string idx
+                    let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
+                    Ok ([
+                        ARM64.MOV_reg (ARM64.X15, ARM64.X28)
+                        ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)
+                        ARM64.ADRP (ARM64.X9, label)
+                        ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                    ] @ loadImmediate ARM64.X10 (int64 len) @ [
+                        ARM64.STR (ARM64.X10, ARM64.X15, 0s)
+                        ARM64.MOVZ (ARM64.X0, 0us, 0)
+                    ] @ loadImmediate ARM64.X11 (int64 len) @ [
+                        ARM64.CMP_reg (ARM64.X0, ARM64.X11)
+                        ARM64.B_cond (ARM64.GE, 7)
+                        ARM64.LDRB (ARM64.X12, ARM64.X9, ARM64.X0)
+                        ARM64.ADD_imm (ARM64.X13, ARM64.X15, 8us)
+                        ARM64.ADD_reg (ARM64.X13, ARM64.X13, ARM64.X0)
+                        ARM64.STRB_reg (ARM64.X12, ARM64.X13)
+                        ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)
+                        ARM64.B (-7)
+                        ARM64.ADD_imm (ARM64.X13, ARM64.X15, 8us)
+                        ARM64.ADD_reg (ARM64.X13, ARM64.X13, ARM64.X10)
+                        ARM64.MOVZ (ARM64.X12, 1us, 0)
+                        ARM64.STR (ARM64.X12, ARM64.X13, 0s)
+                    ] @ Runtime.generateFileSetExecutable destReg ARM64.X15)
+                | None -> Error ("String index " + string idx + " not found in pool")
+            | LIR.StackSlot offset ->
+                loadStackSlot ARM64.X15 offset
+                |> Result.map (fun loadInstrs ->
+                    loadInstrs @ Runtime.generateFileSetExecutable destReg ARM64.X15)
+            | _ -> Error "FileSetExecutable requires string operand")
+
     | LIR.RawAlloc (dest, numBytes) ->
         // Raw allocation: simple bump allocator without refcount header
         // Just allocates numBytes and returns pointer

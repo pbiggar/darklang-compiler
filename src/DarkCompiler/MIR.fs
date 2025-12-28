@@ -137,6 +137,8 @@ type Instr =
     | FileExists of dest:VReg * path:Operand      // Check if file exists, returns Bool
     | FileWriteText of dest:VReg * path:Operand * content:Operand   // Write file, returns Result<Unit, String>
     | FileAppendText of dest:VReg * path:Operand * content:Operand  // Append to file, returns Result<Unit, String>
+    | FileDelete of dest:VReg * path:Operand      // Delete file, returns Result<Unit, String>
+    | FileSetExecutable of dest:VReg * path:Operand  // Set executable bit, returns Result<Unit, String>
     // Float intrinsics
     | FloatSqrt of dest:VReg * src:Operand        // Square root: sqrt(x)
     | FloatAbs of dest:VReg * src:Operand         // Absolute value: |x|

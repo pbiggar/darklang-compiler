@@ -42,6 +42,8 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
         extractFromAtom path @ extractFromAtom content
     | ANF.FileAppendText (path, content) ->
         extractFromAtom path @ extractFromAtom content
+    | ANF.FileDelete path -> extractFromAtom path
+    | ANF.FileSetExecutable path -> extractFromAtom path
     | ANF.FloatSqrt atom -> extractFromAtom atom
     | ANF.FloatAbs atom -> extractFromAtom atom
     | ANF.FloatNeg atom -> extractFromAtom atom

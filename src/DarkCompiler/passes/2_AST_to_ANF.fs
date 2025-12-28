@@ -31,6 +31,10 @@ let tryFileIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option
         Some (ANF.FileWriteText (pathAtom, contentAtom))
     | "Stdlib.File.appendText", [pathAtom; contentAtom] ->
         Some (ANF.FileAppendText (pathAtom, contentAtom))
+    | "Stdlib.File.delete", [pathAtom] ->
+        Some (ANF.FileDelete pathAtom)
+    | "Stdlib.File.setExecutable", [pathAtom] ->
+        Some (ANF.FileSetExecutable pathAtom)
     | _ -> None
 
 /// Try to convert a function call to a Float intrinsic CExpr
