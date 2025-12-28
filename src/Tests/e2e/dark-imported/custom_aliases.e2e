@@ -73,6 +73,19 @@ type Point = { x: Int64, y: Int64 } type Vec = Point def makeVec(x: Int64, y: In
 type UserRole = Admin | User | Guest type AdminRole = UserRole type GuestRole = UserRole (GuestRole.Guest == AdminRole.Guest) = stdout="true\n"
 
 // ===================================================================
+// Generic type aliases (aliasing generic types like List<Int64>)
+// ===================================================================
+
+// Alias for List<Int64> - variable with alias type passed to stdlib function
+type IntList = List<Int64> def getLength(xs: IntList): Int64 = Stdlib.List.length<Int64>(xs) getLength([1, 2, 3]) = 3
+
+// Alias for tuple with type parameter
+type Pair<a> = (a, a) def makePair(x: Int64): Pair<Int64> = (x, x + 1) match makePair(5) with | (a, b) -> a + b = 11
+
+// Alias for tuple - function returning aliased type
+type Pair<a> = (a, a) def fstPair(p: Pair<Int64>): Int64 = match p with | (a, b) -> a fstPair((10, 20)) = 10
+
+// ===================================================================
 // NestedAlias module
 // NOTE: Commented out - requires type aliases, String, pipe operator, and Stdlib
 // ===================================================================

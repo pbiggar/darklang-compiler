@@ -569,23 +569,28 @@ let rec containsTVar (typ: Type) : bool =
 /// If one type is concrete and the other has type variables that can unify with it,
 /// returns the concrete type. If both are concrete and equal, returns the type.
 /// If both are concrete and different, returns None.
-let reconcileTypes (t1: Type) (t2: Type) : Type option =
-    if t1 = t2 then
-        Some t1
-    elif containsTVar t1 && not (containsTVar t2) then
+/// The optional aliasReg parameter allows type alias resolution before comparison.
+let reconcileTypes (aliasReg: AliasRegistry option) (t1: Type) (t2: Type) : Type option =
+    // Resolve type aliases if registry is provided
+    let t1' = aliasReg |> Option.map (fun reg -> resolveType reg t1) |> Option.defaultValue t1
+    let t2' = aliasReg |> Option.map (fun reg -> resolveType reg t2) |> Option.defaultValue t2
+
+    if t1' = t2' then
+        Some t1'
+    elif containsTVar t1' && not (containsTVar t2') then
         // t2 is concrete, check if t1 can unify with it
-        match unifyTypes t1 t2 with
-        | Ok _ -> Some t2  // Return the concrete type
+        match unifyTypes t1' t2' with
+        | Ok _ -> Some t2'  // Return the concrete type
         | Error _ -> None
-    elif not (containsTVar t1) && containsTVar t2 then
+    elif not (containsTVar t1') && containsTVar t2' then
         // t1 is concrete, check if t2 can unify with it
-        match unifyTypes t2 t1 with
-        | Ok _ -> Some t1  // Return the concrete type
+        match unifyTypes t2' t1' with
+        | Ok _ -> Some t1'  // Return the concrete type
         | Error _ -> None
-    elif containsTVar t1 && containsTVar t2 then
+    elif containsTVar t1' && containsTVar t2' then
         // Both have type variables - try to unify
-        match unifyTypes t1 t2 with
-        | Ok subst -> Some (applySubst subst t1)
+        match unifyTypes t1' t2' with
+        | Ok subst -> Some (applySubst subst t1')
         | Error _ -> None
     else
         None
@@ -651,7 +656,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         | Some TInt64 | None -> Ok (TInt64, expr)
         | Some other ->
             // Handle type variables (e.g., when expected is TVar "t")
-            match reconcileTypes other TInt64 with
+            match reconcileTypes (Some aliasReg) other TInt64 with
             | Some TInt64 -> Ok (TInt64, expr)
             | _ -> Error (TypeMismatch (other, TInt64, "integer literal"))
 
@@ -907,8 +912,8 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         | Some varType ->
             match expectedType with
             | Some expected ->
-                // Use reconcileTypes to handle type variables
-                match reconcileTypes expected varType with
+                // Use reconcileTypes to handle type variables and type aliases
+                match reconcileTypes (Some aliasReg) expected varType with
                 | Some reconciledType -> Ok (reconciledType, expr)
                 | None -> Error (TypeMismatch (expected, varType, $"variable {name}"))
             | None -> Ok (varType, expr)
@@ -920,7 +925,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 let funcType = Stdlib.getFunctionType moduleFunc
                 match expectedType with
                 | Some expected ->
-                    match reconcileTypes expected funcType with
+                    match reconcileTypes (Some aliasReg) expected funcType with
                     | Some reconciledType -> Ok (reconciledType, expr)
                     | None -> Error (TypeMismatch (expected, funcType, $"variable {name}"))
                 | None -> Ok (funcType, expr)
@@ -940,7 +945,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     // This allows e.g. if true then Some(42) else None to work even when None has unbound TVars
                     checkExpr elseBranch env typeReg variantLookup genericFuncReg moduleRegistry aliasReg expectedType
                     |> Result.bind (fun (elseType, else') ->
-                        match reconcileTypes thenType elseType with
+                        match reconcileTypes (Some aliasReg) thenType elseType with
                         | None ->
                             Error (TypeMismatch (thenType, elseType, "if branches must have same type"))
                         | Some reconciledType ->
@@ -1191,9 +1196,14 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         |> Result.bind (fun (elemTypes, elements') ->
             let tupleType = TTuple elemTypes
             match expectedType with
-            | Some expected when not (typesCompatible expected tupleType) ->
-                Error (TypeMismatch (expected, tupleType, "tuple literal"))
-            | _ -> Ok (tupleType, TupleLiteral elements'))
+            | Some expected ->
+                // Use typesEqual to resolve type aliases before comparison
+                // This allows Pair<Int64> to match (Int64, Int64) when Pair<a> = (a, a)
+                if typesEqual aliasReg expected tupleType then
+                    Ok (tupleType, TupleLiteral elements')
+                else
+                    Error (TypeMismatch (expected, tupleType, "tuple literal"))
+            | None -> Ok (tupleType, TupleLiteral elements'))
 
     | TupleAccess (tupleExpr, index) ->
         // Check the tuple expression
@@ -1466,7 +1476,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         | Some _, None ->
                             Error (GenericError $"Variant {variantName} has no payload but pattern expects one")
                 | PTuple patterns ->
-                    match patternType with
+                    // Resolve type alias before matching (e.g., Pair<Int64> -> (Int64, Int64))
+                    let resolvedPatternType = resolveType aliasReg patternType
+                    match resolvedPatternType with
                     | TTuple elementTypes when List.length patterns = List.length elementTypes ->
                         List.zip patterns elementTypes
                         |> List.map (fun (p, t) -> extractPatternBindings p t)
@@ -1563,8 +1575,8 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                                 match resultType with
                                 | None -> checkCases rest (Some bodyType) (newCase :: accCases)
                                 | Some expected ->
-                                    // Use reconcileTypes to handle type variables
-                                    match reconcileTypes expected bodyType with
+                                    // Use reconcileTypes to handle type variables and type aliases
+                                    match reconcileTypes (Some aliasReg) expected bodyType with
                                     | Some reconciledType ->
                                         // Update resultType to the reconciled (concrete) type
                                         checkCases rest (Some reconciledType) (newCase :: accCases)
@@ -1577,7 +1589,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 match expectedType with
                 | Some expected ->
                     // Use reconcileTypes for expected type check too
-                    match reconcileTypes expected matchType with
+                    match reconcileTypes (Some aliasReg) expected matchType with
                     | Some reconciledType -> Ok (reconciledType, Match (scrutinee', cases'))
                     | None -> Error (TypeMismatch (expected, matchType, "match expression"))
                 | None -> Ok (matchType, Match (scrutinee', cases'))))
@@ -1608,9 +1620,10 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 |> Result.bind (fun elements' ->
                     let listType = TList elemType
                     match expectedType with
-                    | Some (TList expectedElem) when expectedElem <> elemType ->
+                    | Some (TList expectedElem) when not (typesEqual aliasReg expectedElem elemType) ->
                         Error (TypeMismatch (TList expectedElem, listType, "list literal"))
-                    | Some other when other <> listType ->
+                    | Some other when not (typesEqual aliasReg other listType) ->
+                        // Resolve type alias before comparing (e.g., IntList = List<Int64>)
                         Error (TypeMismatch (other, listType, "list literal"))
                     | _ -> Ok (listType, ListLiteral elements')))
 
@@ -1664,9 +1677,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     | Some (expected, actual) ->
                         Error (TypeMismatch (expected, actual, "lambda parameter type"))
                     | None ->
-                        // Use reconcileTypes to handle generic type unification
+                        // Use reconcileTypes to handle generic type unification and type aliases
                         // e.g., Option<t> should unify with Option<Int64>
-                        match reconcileTypes expectedRet bodyType with
+                        match reconcileTypes (Some aliasReg) expectedRet bodyType with
                         | None ->
                             Error (TypeMismatch (expectedRet, bodyType, "lambda return type"))
                         | Some reconciledRetType ->
