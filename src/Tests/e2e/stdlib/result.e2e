@@ -18,21 +18,40 @@ Stdlib.Result.isError<Int64, Int64>(Stdlib.Result.Result.Ok(5)) = stdout="false\
 Stdlib.Result.isError<Int64, Int64>(Stdlib.Result.Result.Error(99)) = stdout="true\n"
 
 // ===================================================================
-// NOTE: Functions below are blocked by a type checker issue where
-// functions returning generic types (t, Result<t,e>) fail to compile
-// when the user's program contains concrete types like Int64.
+// Stdlib.Result.withDefault - Returns the value or a default
 // ===================================================================
 
-// Stdlib.Result.withDefault - Returns the value or a default
-// Stdlib.Result.withDefault<Int64, String>(Stdlib.Result.Result.Ok(5), 0) = 5
-// Stdlib.Result.withDefault<Int64, String>(Stdlib.Result.Result.Error("err"), 42) = 42
+Stdlib.Result.withDefault<Int64, Int64>(Stdlib.Result.Result.Ok(5), 0) = 5
+Stdlib.Result.withDefault<Int64, Int64>(Stdlib.Result.Result.Error(99), 42) = 42
 
+// ===================================================================
 // Stdlib.Result.map - Apply a function to the Ok value
-// Stdlib.Result.withDefault<Int64, String>(Stdlib.Result.map<Int64, Int64, String>((x: Int64) => x + 1, Stdlib.Result.Result.Ok(5)), 0) = 6
+// ===================================================================
 
+Stdlib.Result.withDefault<Int64, Int64>(Stdlib.Result.map<Int64, Int64, Int64>(Stdlib.Result.Result.Ok(5), (x: Int64) => x + 1), 0) = 6
+Stdlib.Result.isError<Int64, Int64>(Stdlib.Result.map<Int64, Int64, Int64>(Stdlib.Result.Result.Error(99), (x: Int64) => x + 1)) = stdout="true\n"
+
+// ===================================================================
 // Stdlib.Result.mapError - Apply a function to the Error value
-// Also blocked by constructor type annotation issue
-// Stdlib.Result.mapError<Int64, String, String>((e: String) => e ++ "!", Stdlib.Result.Result.Error("err"))
+// NOTE: Blocked by type checker - constructor doesn't pick up return type annotation
+// When changing error type from e to f, the Error constructor gets the wrong type
+// ===================================================================
 
+// Stdlib.Result.mapError<Int64, Int64, Int64>(Stdlib.Result.Result.Error(99), (e: Int64) => e + 1)
+
+// ===================================================================
 // Stdlib.Result.andThen - Chain Result computations
-// Stdlib.Result.withDefault<Int64, String>(Stdlib.Result.andThen<Int64, Int64, String>((x: Int64) => Stdlib.Result.Result.Ok(x * 2), Stdlib.Result.Result.Ok(5)), 0) = 10
+// ===================================================================
+
+Stdlib.Result.withDefault<Int64, Int64>(Stdlib.Result.andThen<Int64, Int64, Int64>(Stdlib.Result.Result.Ok(5), (x: Int64) => Stdlib.Result.Result.Ok(x * 2)), 0) = 10
+Stdlib.Result.isError<Int64, Int64>(Stdlib.Result.andThen<Int64, Int64, Int64>(Stdlib.Result.Result.Error(99), (x: Int64) => Stdlib.Result.Result.Ok(x * 2))) = stdout="true\n"
+Stdlib.Result.isError<Int64, Int64>(Stdlib.Result.andThen<Int64, Int64, Int64>(Stdlib.Result.Result.Ok(5), (x: Int64) => Stdlib.Result.Result.Error(99))) = stdout="true\n"
+
+// ===================================================================
+// Pipe operator with Result functions
+// ===================================================================
+
+Stdlib.Result.Result.Ok(42) |> Stdlib.Result.isOk<Int64, Int64>() = stdout="true\n"
+Stdlib.Result.Result.Error(99) |> Stdlib.Result.isError<Int64, Int64>() = stdout="true\n"
+Stdlib.Result.Result.Ok(10) |> Stdlib.Result.map<Int64, Int64, Int64>((x: Int64) => x * 2) |> Stdlib.Result.withDefault<Int64, Int64>(0) = 20
+

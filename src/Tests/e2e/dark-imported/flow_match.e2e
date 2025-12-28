@@ -134,11 +134,11 @@ type Color = Red | Green | Blue match Blue with | Red -> 1 | Green -> 2 | Blue -
 type Color = Red | Green | Blue match Green with | Red -> 1 | _ -> 99 = 99
 
 // Enum with payload
-type Option = None | Some of Int64 match Some(42) with | Some(x) -> x | None -> 0 = 42
-type Option = None | Some of Int64 match None with | Some(x) -> x | None -> 99 = 99
+type MyOption = MyNone | MySome of Int64 match MySome(42) with | MySome(x) -> x | MyNone -> 0 = 42
+type MyOption = MyNone | MySome of Int64 match MyNone with | MySome(x) -> x | MyNone -> 99 = 99
 
 // Extract and use payload
-type Option = None | Some of Int64 match Some(10) with | Some(x) -> x * 2 | None -> 0 = 20
+type MyOption = MyNone | MySome of Int64 match MySome(10) with | MySome(x) -> x * 2 | MyNone -> 0 = 20
 
 // Two payload variants
 type Either = Left of Int64 | Right of Int64 match Left(5) with | Left(x) -> x | Right(y) -> y = 5

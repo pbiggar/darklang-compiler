@@ -18,20 +18,39 @@ Stdlib.Option.isNone<Int64>(Stdlib.Option.Option.Some(5)) = stdout="false\n"
 Stdlib.Option.isNone<Int64>(Stdlib.Option.Option.None) = stdout="true\n"
 
 // ===================================================================
-// NOTE: Functions below are blocked by a type checker issue where
-// functions returning generic types (t, List<t>, Option<t>) fail to
-// compile when the user's program contains concrete types like Int64.
+// Stdlib.Option.withDefault - Returns the value or a default
 // ===================================================================
 
-// Stdlib.Option.withDefault - Returns the value or a default
-// Stdlib.Option.withDefault<Int64>(Stdlib.Option.Option.Some(5), 0) = 5
-// Stdlib.Option.withDefault<Int64>(Stdlib.Option.Option.None, 42) = 42
+Stdlib.Option.withDefault<Int64>(Stdlib.Option.Option.Some(5), 0) = 5
+Stdlib.Option.withDefault<Int64>(Stdlib.Option.Option.None, 42) = 42
 
+// ===================================================================
 // Stdlib.Option.map - Apply a function to the value if Some
-// Stdlib.Option.withDefault<Int64>(Stdlib.Option.map<Int64, Int64>((x: Int64) => x + 1, Stdlib.Option.Option.Some(5)), 0) = 6
+// ===================================================================
 
+Stdlib.Option.withDefault<Int64>(Stdlib.Option.map<Int64, Int64>(Stdlib.Option.Option.Some(5), (x: Int64) => x + 1), 0) = 6
+Stdlib.Option.isNone<Int64>(Stdlib.Option.map<Int64, Int64>(Stdlib.Option.Option.None, (x: Int64) => x + 1)) = stdout="true\n"
+
+// ===================================================================
 // Stdlib.Option.andThen - Chain Option computations
-// Stdlib.Option.withDefault<Int64>(Stdlib.Option.andThen<Int64, Int64>((x: Int64) => Stdlib.Option.Option.Some(x * 2), Stdlib.Option.Option.Some(5)), 0) = 10
+// ===================================================================
 
+Stdlib.Option.withDefault<Int64>(Stdlib.Option.andThen<Int64, Int64>(Stdlib.Option.Option.Some(5), (x: Int64) => Stdlib.Option.Option.Some(x * 2)), 0) = 10
+Stdlib.Option.isNone<Int64>(Stdlib.Option.andThen<Int64, Int64>(Stdlib.Option.Option.None, (x: Int64) => Stdlib.Option.Option.Some(x * 2))) = stdout="true\n"
+Stdlib.Option.isNone<Int64>(Stdlib.Option.andThen<Int64, Int64>(Stdlib.Option.Option.Some(5), (x: Int64) => Stdlib.Option.Option.None)) = stdout="true\n"
+
+// ===================================================================
 // Stdlib.Option.toList - Convert to a list
-// Stdlib.List.length<Int64>(Stdlib.Option.toList<Int64>(Stdlib.Option.Option.Some(42))) = stdout="1\n"
+// ===================================================================
+
+Stdlib.List.length<Int64>(Stdlib.Option.toList<Int64>(Stdlib.Option.Option.Some(42))) = stdout="1\n"
+Stdlib.List.isEmpty<Int64>(Stdlib.Option.toList<Int64>(Stdlib.Option.Option.None)) = stdout="true\n"
+
+// ===================================================================
+// Pipe operator with Option functions
+// ===================================================================
+
+Stdlib.Option.Option.Some(42) |> Stdlib.Option.isSome<Int64>() = stdout="true\n"
+Stdlib.Option.Option.None |> Stdlib.Option.isNone<Int64>() = stdout="true\n"
+Stdlib.Option.Option.Some(10) |> Stdlib.Option.map<Int64, Int64>((x: Int64) => x * 2) |> Stdlib.Option.withDefault<Int64>(0) = 20
+

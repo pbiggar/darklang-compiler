@@ -1170,12 +1170,22 @@ let parse (tokens: Token list) : Result<Program, string> =
                     parseOr rest
                     |> Result.bind (fun (right, remaining') ->
                         // Desugar: left |> right
-                        // If right is a variable (function name), use Call
-                        // Otherwise use Apply (for lambdas or other expressions)
+                        // Pipe passes left as the FIRST argument to right
+                        // This matches Dark/Darklang convention where data comes first
                         let pipedExpr =
                             match right with
-                            | Var funcName -> Call (funcName, [leftExpr])
-                            | _ -> Apply (right, [leftExpr])
+                            | Var funcName ->
+                                // Simple function reference: f becomes f(left)
+                                Call (funcName, [leftExpr])
+                            | Call (funcName, args) ->
+                                // Partial application: f(a) becomes f(left, a)
+                                Call (funcName, leftExpr :: args)
+                            | TypeApp (funcName, typeArgs, args) ->
+                                // Generic partial application: f<T>(a) becomes f<T>(left, a)
+                                TypeApp (funcName, typeArgs, leftExpr :: args)
+                            | _ ->
+                                // Lambda or other expression: apply left to it
+                                Apply (right, [leftExpr])
                         parsePipeRest pipedExpr remaining')
                 | _ -> Ok (leftExpr, toks)
             parsePipeRest left remaining)

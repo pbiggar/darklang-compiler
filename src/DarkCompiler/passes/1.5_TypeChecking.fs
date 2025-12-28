@@ -1369,10 +1369,15 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     match paramMismatch with
                     | Some (expected, actual) ->
                         Error (TypeMismatch (expected, actual, "lambda parameter type"))
-                    | None when expectedRet <> bodyType ->
-                        Error (TypeMismatch (expectedRet, bodyType, "lambda return type"))
                     | None ->
-                        Ok (funcType, Lambda (parameters, body'))
+                        // Use reconcileTypes to handle generic type unification
+                        // e.g., Option<t> should unify with Option<Int64>
+                        match reconcileTypes expectedRet bodyType with
+                        | None ->
+                            Error (TypeMismatch (expectedRet, bodyType, "lambda return type"))
+                        | Some reconciledRetType ->
+                            let reconciledFuncType = TFunction (paramTypes, reconciledRetType)
+                            Ok (reconciledFuncType, Lambda (parameters, body'))
             | Some other ->
                 Error (TypeMismatch (other, funcType, "lambda"))
             | None ->

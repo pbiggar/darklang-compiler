@@ -1,10 +1,10 @@
 // Sum type (ADT) tests with payloads for Phase 7 Milestone 4
 
 // None case - verify through pattern matching
-type Option = None | Some of Int64 match None with | None -> 0 | Some(x) -> 1 = stdout="0\n"
+type MyOption = MyNone | MySome of Int64 match MyNone with | MyNone -> 0 | MySome(x) -> 1 = stdout="0\n"
 
 // Err case - verify through pattern matching
-type Result = Ok of Int64 | Err match Err with | Err -> 1 | Ok(x) -> 0 = stdout="1\n"
+type MyResult = MyOk of Int64 | MyErr match MyErr with | MyErr -> 1 | MyOk(x) -> 0 = stdout="1\n"
 
 // Variant ordering - A is first variant
 type Three = A | B of Int64 | C match A with | A -> 0 | B(x) -> 1 | C -> 2 = stdout="0\n"
@@ -13,13 +13,13 @@ type Three = A | B of Int64 | C match A with | A -> 0 | B(x) -> 1 | C -> 2 = std
 type Three = A | B of Int64 | C match C with | A -> 0 | B(x) -> 1 | C -> 2 = stdout="2\n"
 
 // Multiple payload types in let binding
-type Option = None | Some of Int64 let n = None in match n with | None -> 0 | Some(x) -> x = stdout="0\n"
+type MyOption = MyNone | MySome of Int64 let n = MyNone in match n with | MyNone -> 0 | MySome(x) -> x = stdout="0\n"
 
-// Verify Some(42) returns payload
-type Option = None | Some of Int64 match Some(42) with | None -> 0 | Some(x) -> x = stdout="42\n"
+// Verify MySome(42) returns payload
+type MyOption = MyNone | MySome of Int64 match MySome(42) with | MyNone -> 0 | MySome(x) -> x = stdout="42\n"
 
-// Verify Ok(100) returns payload
-type Result = Ok of Int64 | Err match Ok(100) with | Ok(v) -> v | Err -> 0 = stdout="100\n"
+// Verify MyOk(100) returns payload
+type MyResult = MyOk of Int64 | MyErr match MyOk(100) with | MyOk(v) -> v | MyErr -> 0 = stdout="100\n"
 
 // Verify B(77) returns payload
 type Three = A | B of Int64 | C match B(77) with | A -> 0 | B(x) -> x | C -> 0 = stdout="77\n"

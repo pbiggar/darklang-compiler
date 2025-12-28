@@ -35,23 +35,23 @@ type Dir = North | East | South | West match South with | North -> 0 | East -> 1
 
 // === Milestone 6: Payload Extraction ===
 
-// Extract payload from Some variant
-type Option = None | Some of Int64 match Some(42) with | Some(x) -> x | None -> 0 = stdout="42\n"
+// Extract payload from MySome variant
+type MyOption = MyNone | MySome of Int64 match MySome(42) with | MySome(x) -> x | MyNone -> 0 = stdout="42\n"
 
 // Extract and use payload in arithmetic
-type Option = None | Some of Int64 match Some(10) with | Some(x) -> x + 5 | None -> 0 = stdout="15\n"
+type MyOption = MyNone | MySome of Int64 match MySome(10) with | MySome(x) -> x + 5 | MyNone -> 0 = stdout="15\n"
 
-// Match None case (no extraction)
-type Option = None | Some of Int64 match None with | Some(x) -> x | None -> 99 = stdout="99\n"
+// Match MyNone case (no extraction)
+type MyOption = MyNone | MySome of Int64 match MyNone with | MySome(x) -> x | MyNone -> 99 = stdout="99\n"
 
 // Variable binding on whole scrutinee
 type Color = Red | Green | Blue match Green with | x -> 1 = stdout="1\n"
 
 // Extract payload with different variant order
-type Result = Ok of Int64 | Err match Ok(100) with | Ok(v) -> v | Err -> 0 = stdout="100\n"
+type MyResult = MyOk of Int64 | MyErr match MyOk(100) with | MyOk(v) -> v | MyErr -> 0 = stdout="100\n"
 
-// Match second variant of Result
-type Result = Ok of Int64 | Err match Err with | Ok(v) -> v | Err -> 1 = stdout="1\n"
+// Match second variant of MyResult
+type MyResult = MyOk of Int64 | MyErr match MyErr with | MyOk(v) -> v | MyErr -> 1 = stdout="1\n"
 
 // Multiple payload variants - match first
 type Either = Left of Int64 | Right of Int64 match Left(5) with | Left(x) -> x | Right(y) -> y = stdout="5\n"
@@ -60,10 +60,10 @@ type Either = Left of Int64 | Right of Int64 match Left(5) with | Left(x) -> x |
 type Either = Left of Int64 | Right of Int64 match Right(7) with | Left(x) -> x | Right(y) -> y = stdout="7\n"
 
 // Extract and multiply
-type Option = None | Some of Int64 match Some(6) with | Some(x) -> x * 7 | None -> 0 = stdout="42\n"
+type MyOption = MyNone | MySome of Int64 match MySome(6) with | MySome(x) -> x * 7 | MyNone -> 0 = stdout="42\n"
 
 // Extract with wildcard fallback
-type Option = None | Some of Int64 match Some(123) with | Some(n) -> n | _ -> 0 = stdout="123\n"
+type MyOption = MyNone | MySome of Int64 match MySome(123) with | MySome(n) -> n | _ -> 0 = stdout="123\n"
 
 // === Integer Literal Patterns ===
 
@@ -159,8 +159,8 @@ type Vec3 = { x: Int64, y: Int64, z: Int64 } match Vec3 { x = 1, y = 2, z = 3 } 
 
 // === Nested ADT Patterns ===
 
-// Nested Option - Some(Some(x))
-type Option = None | Some of Int64 type Nested = Empty | Wrap of Int64 match Wrap(42) with | Wrap(x) -> x | Empty -> 0 = stdout="42\n"
+// Nested - testing Wrap type
+type MyOption = MyNone | MySome of Int64 type Nested = Empty | Wrap of Int64 match Wrap(42) with | Wrap(x) -> x | Empty -> 0 = stdout="42\n"
 
 // Deeply extract from nested variant
 type Box = Empty | Full of Int64 match Full(99) with | Full(n) -> n * 2 | Empty -> 0 = stdout="198\n"
@@ -168,10 +168,10 @@ type Box = Empty | Full of Int64 match Full(99) with | Full(n) -> n * 2 | Empty 
 // === Complex Combinations ===
 
 // Tuple inside match case body
-type Option = None | Some of Int64 match Some(5) with | Some(x) -> let t = (x, x * 2) in match t with | (a, b) -> a + b | None -> 0 = stdout="15\n"
+type MyOption = MyNone | MySome of Int64 match MySome(5) with | MySome(x) -> let t = (x, x * 2) in match t with | (a, b) -> a + b | MyNone -> 0 = stdout="15\n"
 
 // Record access in match body
-type Point = { x: Int64, y: Int64 } type Option = None | Some of Int64 match Some(1) with | Some(_) -> let p = Point { x = 10, y = 20 } in p.x + p.y | None -> 0 = stdout="30\n"
+type Point = { x: Int64, y: Int64 } type MyOption = MyNone | MySome of Int64 match MySome(1) with | MySome(_) -> let p = Point { x = 10, y = 20 } in p.x + p.y | MyNone -> 0 = stdout="30\n"
 
 // Match on tuple element
 match (1, 2) with | (a, _) -> match a with | 1 -> 100 | _ -> 0 = stdout="100\n"
