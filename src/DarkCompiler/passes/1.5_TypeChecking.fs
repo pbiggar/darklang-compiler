@@ -204,6 +204,11 @@ let rec resolveType (aliasReg: AliasRegistry) (typ: Type) : Type =
     | TBool | TFloat64 | TString | TUnit | TRawPtr ->
         typ  // Primitive types and type variables are unchanged
 
+/// Compare two types for equality, resolving type aliases first
+/// This allows "Vec" and "Point" to be considered equal when Vec aliases Point
+let typesEqual (aliasReg: AliasRegistry) (t1: Type) (t2: Type) : bool =
+    resolveType aliasReg t1 = resolveType aliasReg t2
+
 // =============================================================================
 // Free Variable Analysis for Closures
 // =============================================================================
@@ -874,7 +879,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         | arg :: restArgs, paramT :: restParams ->
                             checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
                             |> Result.bind (fun (argType, arg') ->
-                                if argType = paramT then
+                                if typesEqual aliasReg argType paramT then
                                     checkArgsWithTypes restArgs restParams (arg' :: accArgs)
                                 else
                                     Error (TypeMismatch (paramT, argType, $"argument to {funcName}")))
@@ -883,7 +888,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     checkArgsWithTypes args paramTypes []
                     |> Result.bind (fun args' ->
                         match expectedType with
-                        | Some expected when expected <> returnType ->
+                        | Some expected when not (typesEqual aliasReg expected returnType) ->
                             Error (TypeMismatch (expected, returnType, $"result of call to {funcName}"))
                         | _ -> Ok (returnType, Call (funcName, args')))
         | Some other ->
@@ -936,7 +941,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         | arg :: restArgs, paramT :: restParams ->
                             checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
                             |> Result.bind (fun (argType, arg') ->
-                                if argType = paramT then
+                                if typesEqual aliasReg argType paramT then
                                     checkArgsWithTypes restArgs restParams (arg' :: accArgs)
                                 else
                                     Error (TypeMismatch (paramT, argType, $"argument to {funcName}")))
@@ -945,7 +950,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     checkArgsWithTypes args paramTypes []
                     |> Result.bind (fun args' ->
                         match expectedType with
-                        | Some expected when expected <> returnType ->
+                        | Some expected when not (typesEqual aliasReg expected returnType) ->
                             Error (TypeMismatch (expected, returnType, $"result of call to {funcName}"))
                         | _ -> Ok (returnType, Call (funcName, args')))
             | None ->
@@ -978,7 +983,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             | arg :: restArgs, paramT :: restParams ->
                                 checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
                                 |> Result.bind (fun (argType, arg') ->
-                                    if argType = paramT then
+                                    if typesEqual aliasReg argType paramT then
                                         checkArgsWithTypes restArgs restParams (arg' :: accArgs)
                                     else
                                         Error (TypeMismatch (paramT, argType, $"argument to {funcName}")))
@@ -988,7 +993,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         |> Result.bind (fun args' ->
                             // 7. Return the concrete return type
                             match expectedType with
-                            | Some expected when expected <> concreteReturnType ->
+                            | Some expected when not (typesEqual aliasReg expected concreteReturnType) ->
                                 Error (TypeMismatch (expected, concreteReturnType, $"result of call to {funcName}"))
                             | _ -> Ok (concreteReturnType, TypeApp (funcName, typeArgs, args'))))
             | None ->
@@ -1022,7 +1027,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             | arg :: restArgs, paramT :: restParams ->
                                 checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
                                 |> Result.bind (fun (argType, arg') ->
-                                    if argType = paramT then
+                                    if typesEqual aliasReg argType paramT then
                                         checkArgsWithTypes restArgs restParams (arg' :: accArgs)
                                     else
                                         Error (TypeMismatch (paramT, argType, $"argument to {funcName}")))
@@ -1031,7 +1036,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         checkArgsWithTypes args concreteParamTypes []
                         |> Result.bind (fun args' ->
                             match expectedType with
-                            | Some expected when expected <> concreteReturnType ->
+                            | Some expected when not (typesEqual aliasReg expected concreteReturnType) ->
                                 Error (TypeMismatch (expected, concreteReturnType, $"result of call to {funcName}"))
                             | _ -> Ok (concreteReturnType, TypeApp (funcName, typeArgs, args'))))
             | Some _ ->
@@ -1135,7 +1140,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         |> Result.bind (fun (recordType, recordExpr') ->
             match recordType with
             | TRecord typeName ->
-                match Map.tryFind typeName typeReg with
+                // Resolve type alias before looking up in typeReg
+                let resolvedTypeName = resolveTypeName aliasReg typeName
+                match Map.tryFind resolvedTypeName typeReg with
                 | None ->
                     Error (GenericError $"Unknown record type: {typeName}")
                 | Some expectedFields ->
@@ -1180,7 +1187,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         |> Result.bind (fun (recordType, recordExpr') ->
             match recordType with
             | TRecord typeName ->
-                match Map.tryFind typeName typeReg with
+                // Resolve type alias before looking up in typeReg
+                let resolvedTypeName = resolveTypeName aliasReg typeName
+                match Map.tryFind resolvedTypeName typeReg with
                 | None ->
                     Error (GenericError $"Unknown record type: {typeName}")
                 | Some fields ->
@@ -1341,7 +1350,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 | PRecord (_, fieldPatterns) ->
                     match patternType with
                     | TRecord recordName ->
-                        match Map.tryFind recordName typeReg with
+                        // Resolve type alias before looking up in typeReg
+                        let resolvedRecordName = resolveTypeName aliasReg recordName
+                        match Map.tryFind resolvedRecordName typeReg with
                         | Some fields ->
                             fieldPatterns
                             |> List.map (fun (fieldName, pat) ->
@@ -1614,9 +1625,13 @@ let checkFunctionDef (funcDef: FunctionDef) (env: TypeEnv) (typeReg: TypeRegistr
     // Check body has return type
     checkExpr funcDef.Body paramEnv typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some funcDef.ReturnType)
     |> Result.bind (fun (bodyType, body') ->
+        // Resolve both types through alias registry for comparison
+        // This allows "Vec" and "Point" to be considered equal when Vec aliases Point
+        let resolvedBodyType = resolveType aliasReg bodyType
+        let resolvedReturnType = resolveType aliasReg funcDef.ReturnType
         // For generic functions, we need to compare types considering type variables
         // For now, if the body type contains type variables, just check structural equality
-        if bodyType = funcDef.ReturnType then
+        if resolvedBodyType = resolvedReturnType then
             Ok { funcDef with Body = body' }
         else
             Error (TypeMismatch (funcDef.ReturnType, bodyType, $"function {funcDef.Name} body")))

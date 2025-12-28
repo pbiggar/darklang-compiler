@@ -30,6 +30,12 @@ type PointBase = { x: Int64, y: Int64 } type Alias1 = PointBase type Alias2 = Po
 // Record update through alias
 type PointBase = { x: Int64, y: Int64 } type AliasedPoint = PointBase let p = AliasedPoint { x = 1, y = 2 } in { p with x = 100 }.x = 100
 
+// Function with aliased parameter types
+type Point = { x: Int64, y: Int64 } type Vec = Point def addVecs(a: Vec, b: Vec): Vec = Vec { x = a.x + b.x, y = a.y + b.y } addVecs(Vec { x = 1, y = 2 }, Vec { x = 3, y = 4 }) = stdout="Vec { x = 4, y = 6 }\n"
+
+// Function with aliased return type
+type Point = { x: Int64, y: Int64 } type Vec = Point def makeVec(x: Int64, y: Int64): Vec = Vec { x = x, y = y } makeVec(10, 20) = stdout="Vec { x = 10, y = 20 }\n"
+
 // ===================================================================
 // Simple alias
 // NOTE: All tests commented out - requires type aliases, String literals,

@@ -101,6 +101,33 @@ type VariantLookup = Map<string, (string * string list * int * AST.Type option)>
 /// Function registry - maps function names to their FULL function types (TFunction)
 type FunctionRegistry = Map<string, AST.Type>
 
+/// Alias registry - maps type alias names to their target types
+/// For simple record aliases: "Vec" -> TRecord "Point"
+type AliasRegistry = Map<string, AST.Type>
+
+/// Resolve a type name through the alias registry
+/// If the name is an alias for a record type, returns the resolved record name
+/// Otherwise returns the original name
+let rec resolveRecordTypeName (aliasReg: AliasRegistry) (typeName: string) : string =
+    match Map.tryFind typeName aliasReg with
+    | Some (AST.TRecord targetName) -> resolveRecordTypeName aliasReg targetName
+    | Some (AST.TSum (targetName, _)) -> resolveRecordTypeName aliasReg targetName
+    | _ -> typeName
+
+/// Expand a type registry to include alias entries
+/// If "Vec" aliases to "Point" and "Point" has fields [x, y], then "Vec" also gets [x, y]
+let expandTypeRegWithAliases (typeReg: TypeRegistry) (aliasReg: AliasRegistry) : TypeRegistry =
+    aliasReg
+    |> Map.fold (fun accReg aliasName targetType ->
+        match targetType with
+        | AST.TRecord targetName ->
+            let resolvedName = resolveRecordTypeName aliasReg targetName
+            match Map.tryFind resolvedName typeReg with
+            | Some fields -> Map.add aliasName fields accReg
+            | None -> accReg  // Target not found, skip
+        | _ -> accReg  // Not a record alias, skip
+    ) typeReg
+
 /// Variable environment - maps variable names to their TempIds and types
 /// The type information is used for type-directed field lookup in record access
 type VarEnv = Map<string, ANF.TempId * AST.Type>
@@ -3627,6 +3654,17 @@ let convertProgramWithTypes (program: AST.Program) : Result<ConversionResult, st
             |> List.mapi (fun idx variant -> (variant.Name, (typeName, typeParams, idx, variant.Payload))))
         |> Map.ofList
 
+    // Build alias registry from type alias definitions
+    let aliasReg : AliasRegistry =
+        topLevels
+        |> List.choose (function
+            | AST.TypeDef (AST.TypeAlias (name, [], targetType)) -> Some (name, targetType)
+            | _ -> None)
+        |> Map.ofList
+
+    // Expand typeReg with alias entries so "Vec" can be looked up when it aliases "Point"
+    let typeReg = expandTypeRegWithAliases typeReg aliasReg
+
     // Separate functions and expressions
     let functions = topLevels |> List.choose (function AST.FunctionDef f -> Some f | _ -> None)
     let expressions = topLevels |> List.choose (function AST.Expression e -> Some e | _ -> None)
@@ -3713,7 +3751,7 @@ let convertUserWithStdlib
     let varGen = ANF.VarGen 0
 
     // 2. Build registries from user code only
-    let userTypeReg : TypeRegistry =
+    let userTypeRegBase : TypeRegistry =
         topLevels
         |> List.choose (function
             | AST.TypeDef (AST.RecordDef (name, _typeParams, fields)) -> Some (name, fields)
@@ -3730,6 +3768,17 @@ let convertUserWithStdlib
             variants
             |> List.mapi (fun idx variant -> (variant.Name, (typeName, typeParams, idx, variant.Payload))))
         |> Map.ofList
+
+    // Build alias registry from type alias definitions
+    let userAliasReg : AliasRegistry =
+        topLevels
+        |> List.choose (function
+            | AST.TypeDef (AST.TypeAlias (name, [], targetType)) -> Some (name, targetType)
+            | _ -> None)
+        |> Map.ofList
+
+    // Expand userTypeReg with alias entries so "Vec" can be looked up when it aliases "Point"
+    let userTypeReg = expandTypeRegWithAliases userTypeRegBase userAliasReg
 
     let functions = topLevels |> List.choose (function AST.FunctionDef f -> Some f | _ -> None)
     let expressions = topLevels |> List.choose (function AST.Expression e -> Some e | _ -> None)
@@ -3815,7 +3864,7 @@ let convertUserOnly
     let varGen = ANF.VarGen 0
 
     // 2. Build registries from user code only
-    let userTypeReg : TypeRegistry =
+    let userTypeRegBase : TypeRegistry =
         topLevels
         |> List.choose (function
             | AST.TypeDef (AST.RecordDef (name, _typeParams, fields)) -> Some (name, fields)
@@ -3832,6 +3881,17 @@ let convertUserOnly
             variants
             |> List.mapi (fun idx variant -> (variant.Name, (typeName, typeParams, idx, variant.Payload))))
         |> Map.ofList
+
+    // Build alias registry from type alias definitions
+    let userAliasReg : AliasRegistry =
+        topLevels
+        |> List.choose (function
+            | AST.TypeDef (AST.TypeAlias (name, [], targetType)) -> Some (name, targetType)
+            | _ -> None)
+        |> Map.ofList
+
+    // Expand userTypeReg with alias entries so "Vec" can be looked up when it aliases "Point"
+    let userTypeReg = expandTypeRegWithAliases userTypeRegBase userAliasReg
 
     let functions = topLevels |> List.choose (function AST.FunctionDef f -> Some f | _ -> None)
     let expressions = topLevels |> List.choose (function AST.Expression e -> Some e | _ -> None)
@@ -3936,6 +3996,17 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
             variants
             |> List.mapi (fun idx variant -> (variant.Name, (typeName, typeParams, idx, variant.Payload))))
         |> Map.ofList
+
+    // Build alias registry from type alias definitions
+    let aliasReg : AliasRegistry =
+        topLevels
+        |> List.choose (function
+            | AST.TypeDef (AST.TypeAlias (name, [], targetType)) -> Some (name, targetType)
+            | _ -> None)
+        |> Map.ofList
+
+    // Expand typeReg with alias entries so "Vec" can be looked up when it aliases "Point"
+    let typeReg = expandTypeRegWithAliases typeReg aliasReg
 
     // Separate functions and expressions
     let functions = topLevels |> List.choose (function AST.FunctionDef f -> Some f | _ -> None)
