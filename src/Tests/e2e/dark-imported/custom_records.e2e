@@ -239,29 +239,34 @@ type Point = { x: Int64, y: Int64 } let p = Point { x = 3, y = 4 } in p.x * p.x 
 
 // ===================================================================
 // Record Update Syntax
-// NOTE: Commented out - requires record update syntax ({ ... with ... })
 // ===================================================================
 
-// type RecordForUpdate = { x: Int64, y: Int64 }
+// Basic record update - update single field
+type RecordForUpdate = { x: Int64, y: Int64 } let r = RecordForUpdate { x = 4, y = 1 } in { r with y = 2 }.y = 2
+type RecordForUpdate = { x: Int64, y: Int64 } let r = RecordForUpdate { x = 4, y = 1 } in { r with y = 2 }.x = 4
 
-// ({ RecordForUpdate { x = 4L; y = 1L } with y = 2L }) = stdout="RecordForUpdate { x = 4; y = 2 }\n"
+// Record update preserves unchanged fields
+type RecordForUpdate = { x: Int64, y: Int64 } let r = RecordForUpdate { x = 10, y = 20 } in { r with x = 100 }.y = 20
 
-// let myRec = RecordForUpdate { x = 4L; y = 1L } in ({ myRec with y = 2L }) = stdout="RecordForUpdate { x = 4; y = 2 }\n"
+// Original record is unchanged (immutable)
+type RecordForUpdate = { x: Int64, y: Int64 } let r = RecordForUpdate { x = 5, y = 6 } in let r2 = { r with x = 50 } in r.x = 5
 
-// let myRec = RecordForUpdate { x = 4L; y = 1L } in ({ myRec with y = 22L; y = 42L }) = stdout="RecordForUpdate { x = 4; y = 42 }\n"
+// Inline record update without variable binding
+type RecordForUpdate = { x: Int64, y: Int64 } { RecordForUpdate { x = 1, y = 2 } with y = 99 }.y = 99
 
 // ===================================================================
 // Record Update with Multiple Fields
-// NOTE: Commented out - requires record update syntax
 // ===================================================================
 
-// type RecordForUpdateMultiple = { x: Int64, y: Int64, z: Int64 }
+// Update two fields
+type RecordForUpdateMultiple = { x: Int64, y: Int64, z: Int64 } let r = RecordForUpdateMultiple { x = 4, y = 1, z = 0 } in { r with y = 2, z = 42 }.y = 2
+type RecordForUpdateMultiple = { x: Int64, y: Int64, z: Int64 } let r = RecordForUpdateMultiple { x = 4, y = 1, z = 0 } in { r with y = 2, z = 42 }.z = 42
+type RecordForUpdateMultiple = { x: Int64, y: Int64, z: Int64 } let r = RecordForUpdateMultiple { x = 4, y = 1, z = 0 } in { r with y = 2, z = 42 }.x = 4
 
-// let myRec = RecordForUpdateMultiple { x = 4L; y = 1L; z = 0L } in ({ myRec with y = 2L; z = 42L }) = stdout="RecordForUpdateMultiple { x = 4; y = 2; z = 42 }\n"
-
-// let myRec = RecordForUpdateMultiple { x = 4L; y = 1L; z = 0L } in ({ myRec with z = 3L; x = 42L }) = stdout="RecordForUpdateMultiple { x = 42; y = 1; z = 3 }\n"
-
-// let myRec = RecordForUpdateMultiple { x = 4L; y = 1L; z = 0L } in ({ myRec with z = 3L; x = 42L; y = 11L }) = stdout="RecordForUpdateMultiple { x = 42; y = 11; z = 3 }\n"
+// Update all three fields
+type RecordForUpdateMultiple = { x: Int64, y: Int64, z: Int64 } let r = RecordForUpdateMultiple { x = 1, y = 2, z = 3 } in { r with x = 10, y = 20, z = 30 }.x = 10
+type RecordForUpdateMultiple = { x: Int64, y: Int64, z: Int64 } let r = RecordForUpdateMultiple { x = 1, y = 2, z = 3 } in { r with x = 10, y = 20, z = 30 }.y = 20
+type RecordForUpdateMultiple = { x: Int64, y: Int64, z: Int64 } let r = RecordForUpdateMultiple { x = 1, y = 2, z = 3 } in { r with x = 10, y = 20, z = 30 }.z = 30
 
 // ===================================================================
 // Record Update Errors

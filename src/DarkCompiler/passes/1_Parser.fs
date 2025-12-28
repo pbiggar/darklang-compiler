@@ -1556,9 +1556,18 @@ let parse (tokens: Token list) : Result<Program, string> =
                             // Tuple literal: (expr, expr, ...)
                             parseTupleElements rest' [firstExpr]
                         | _ -> Error "Expected ')' or ',' in tuple/parenthesized expression")
-        | TLBrace :: _ ->
-            // Anonymous record literal is no longer supported
-            Error "Record literal requires type name: use 'TypeName { field = value, ... }'"
+        | TLBrace :: rest ->
+            // Check for record update syntax: { record with field = value, ... }
+            // First, try to parse an expression, then check for 'with'
+            parseExpr rest
+            |> Result.bind (fun (recordExpr, afterExpr) ->
+                match afterExpr with
+                | TWith :: afterWith ->
+                    // Record update: { record with field = value, ... }
+                    parseRecordUpdateFields afterWith []
+                    |> Result.map (fun (updates, remaining) ->
+                        (RecordUpdate (recordExpr, updates), remaining))
+                | _ -> Error "Record update requires 'with' keyword: use '{ record with field = value, ... }'")
         | TLBracket :: rest ->
             // List literal: [1, 2, 3] or []
             parseListLiteralElements rest []
@@ -1596,6 +1605,25 @@ let parse (tokens: Token list) : Result<Program, string> =
                     Ok (RecordLiteral (typeName, List.rev ((fieldName, value) :: acc)), rest')
                 | _ -> Error "Expected ',' or '}' after record field value")
         | _ -> Error "Expected field name in record literal"
+
+    and parseRecordUpdateFields (toks: Token list) (acc: (string * Expr) list) : Result<(string * Expr) list * Token list, string> =
+        // Parse record update fields: field = expr, field = expr, ... }
+        match toks with
+        | TRBrace :: rest ->
+            // End of fields
+            Ok (List.rev acc, rest)
+        | TIdent fieldName :: TEquals :: rest ->
+            parseExpr rest
+            |> Result.bind (fun (value, remaining) ->
+                match remaining with
+                | TComma :: rest' ->
+                    // More fields
+                    parseRecordUpdateFields rest' ((fieldName, value) :: acc)
+                | TRBrace :: rest' ->
+                    // End of record update
+                    Ok (List.rev ((fieldName, value) :: acc), rest')
+                | _ -> Error "Expected ',' or '}' after record update field value")
+        | _ -> Error "Expected field name in record update"
 
     and parseListLiteralElements (toks: Token list) (acc: Expr list) : Result<Expr * Token list, string> =
         // Parse list literal elements: [expr, expr, ...] or [] or [a, b, ...rest]

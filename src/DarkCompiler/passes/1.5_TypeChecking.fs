@@ -236,6 +236,10 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
         collectFreeVars tuple bound
     | RecordLiteral (_, fields) ->
         fields |> List.map (fun (_, e) -> collectFreeVars e bound) |> List.fold Set.union Set.empty
+    | RecordUpdate (record, updates) ->
+        let recordFree = collectFreeVars record bound
+        let updatesFree = updates |> List.map (fun (_, e) -> collectFreeVars e bound) |> List.fold Set.union Set.empty
+        Set.union recordFree updatesFree
     | RecordAccess (record, _) ->
         collectFreeVars record bound
     | Constructor (_, _, payload) ->
@@ -1043,6 +1047,51 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
 
                         checkFieldsInOrder expectedFields []
                         |> Result.map (fun fields' -> (TRecord typeName, RecordLiteral (typeName, fields')))
+
+    | RecordUpdate (recordExpr, updates) ->
+        // Check the record expression to get its type
+        checkExpr recordExpr env typeReg variantLookup genericFuncReg None
+        |> Result.bind (fun (recordType, recordExpr') ->
+            match recordType with
+            | TRecord typeName ->
+                match Map.tryFind typeName typeReg with
+                | None ->
+                    Error (GenericError $"Unknown record type: {typeName}")
+                | Some expectedFields ->
+                    // Check for unknown fields in update
+                    let expectedFieldNames = expectedFields |> List.map fst |> Set.ofList
+                    let unknownFields =
+                        updates
+                        |> List.filter (fun (fname, _) -> not (Set.contains fname expectedFieldNames))
+                        |> List.map fst
+
+                    if not (List.isEmpty unknownFields) then
+                        let unknownStr = String.concat ", " unknownFields
+                        Error (GenericError $"Unknown fields in record update: {unknownStr}")
+                    else
+                        // Build a map from field name to expected type
+                        let fieldTypeMap = expectedFields |> Map.ofList
+
+                        // Type check each update field
+                        let rec checkUpdates remaining accUpdates =
+                            match remaining with
+                            | [] -> Ok (List.rev accUpdates)
+                            | (fname, updateExpr) :: rest ->
+                                match Map.tryFind fname fieldTypeMap with
+                                | Some expectedFieldType ->
+                                    checkExpr updateExpr env typeReg variantLookup genericFuncReg (Some expectedFieldType)
+                                    |> Result.bind (fun (actualType, updateExpr') ->
+                                        if actualType = expectedFieldType then
+                                            checkUpdates rest ((fname, updateExpr') :: accUpdates)
+                                        else
+                                            Error (TypeMismatch (expectedFieldType, actualType, $"field {fname} in record update")))
+                                | None ->
+                                    Error (GenericError $"Field {fname} not found in record type {typeName}")
+
+                        checkUpdates updates []
+                        |> Result.map (fun updates' -> (TRecord typeName, RecordUpdate (recordExpr', updates')))
+            | other ->
+                Error (GenericError $"Cannot use record update syntax on non-record type {typeToString other}"))
 
     | RecordAccess (recordExpr, fieldName) ->
         // Check the record expression

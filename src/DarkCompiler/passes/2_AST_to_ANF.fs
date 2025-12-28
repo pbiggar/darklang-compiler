@@ -213,6 +213,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
         AST.TupleAccess (applySubstToExpr subst tuple, index)
     | AST.RecordLiteral (typeName, fields) ->
         AST.RecordLiteral (typeName, List.map (fun (n, e) -> (n, applySubstToExpr subst e)) fields)
+    | AST.RecordUpdate (record, updates) ->
+        AST.RecordUpdate (applySubstToExpr subst record, List.map (fun (n, e) -> (n, applySubstToExpr subst e)) updates)
     | AST.RecordAccess (record, fieldName) ->
         AST.RecordAccess (applySubstToExpr subst record, fieldName)
     | AST.Constructor (typeName, variantName, payload) ->
@@ -280,6 +282,10 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
         collectTypeApps tuple
     | AST.RecordLiteral (_, fields) ->
         fields |> List.map (snd >> collectTypeApps) |> List.fold Set.union Set.empty
+    | AST.RecordUpdate (record, updates) ->
+        let recordSpecs = collectTypeApps record
+        let updatesSpecs = updates |> List.map (snd >> collectTypeApps) |> List.fold Set.union Set.empty
+        Set.union recordSpecs updatesSpecs
     | AST.RecordAccess (record, _) ->
         collectTypeApps record
     | AST.Constructor (_, _, payload) ->
@@ -339,6 +345,8 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
         AST.TupleAccess (replaceTypeApps tuple, index)
     | AST.RecordLiteral (typeName, fields) ->
         AST.RecordLiteral (typeName, List.map (fun (n, e) -> (n, replaceTypeApps e)) fields)
+    | AST.RecordUpdate (record, updates) ->
+        AST.RecordUpdate (replaceTypeApps record, List.map (fun (n, e) -> (n, replaceTypeApps e)) updates)
     | AST.RecordAccess (record, fieldName) ->
         AST.RecordAccess (replaceTypeApps record, fieldName)
     | AST.Constructor (typeName, variantName, payload) ->
@@ -398,6 +406,8 @@ let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
     | AST.TupleLiteral elements -> List.exists (varOccursInExpr name) elements
     | AST.TupleAccess (tuple, _) -> varOccursInExpr name tuple
     | AST.RecordLiteral (_, fields) -> List.exists (fun (_, e) -> varOccursInExpr name e) fields
+    | AST.RecordUpdate (record, updates) ->
+        varOccursInExpr name record || List.exists (fun (_, e) -> varOccursInExpr name e) updates
     | AST.RecordAccess (record, _) -> varOccursInExpr name record
     | AST.Constructor (_, _, payload) -> Option.exists (varOccursInExpr name) payload
     | AST.Match (scrutinee, cases) ->
@@ -468,6 +478,8 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
         AST.TupleAccess (inlineLambdas tuple lambdaEnv, index)
     | AST.RecordLiteral (typeName, fields) ->
         AST.RecordLiteral (typeName, List.map (fun (n, e) -> (n, inlineLambdas e lambdaEnv)) fields)
+    | AST.RecordUpdate (record, updates) ->
+        AST.RecordUpdate (inlineLambdas record lambdaEnv, List.map (fun (n, e) -> (n, inlineLambdas e lambdaEnv)) updates)
     | AST.RecordAccess (record, fieldName) ->
         AST.RecordAccess (inlineLambdas record lambdaEnv, fieldName)
     | AST.Constructor (typeName, variantName, payload) ->
@@ -560,6 +572,10 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
     | AST.TupleAccess (tuple, _) -> freeVars tuple bound
     | AST.RecordLiteral (_, fields) ->
         fields |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
+    | AST.RecordUpdate (record, updates) ->
+        let recordVars = freeVars record bound
+        let updateVars = updates |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
+        Set.union recordVars updateVars
     | AST.RecordAccess (record, _) -> freeVars record bound
     | AST.Constructor (_, _, payload) ->
         payload |> Option.map (fun e -> freeVars e bound) |> Option.defaultValue Set.empty
@@ -638,6 +654,11 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
     | AST.RecordLiteral (typeName, fields) ->
         liftLambdasInFields fields state
         |> Result.map (fun (fields', state') -> (AST.RecordLiteral (typeName, fields'), state'))
+    | AST.RecordUpdate (record, updates) ->
+        liftLambdasInExpr record state
+        |> Result.bind (fun (record', state1) ->
+            liftLambdasInFields updates state1
+            |> Result.map (fun (updates', state2) -> (AST.RecordUpdate (record', updates'), state2)))
     | AST.RecordAccess (record, fieldName) ->
         liftLambdasInExpr record state
         |> Result.map (fun (record', state') -> (AST.RecordAccess (record', fieldName), state'))
@@ -1311,6 +1332,9 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                 Error $"Ambiguous record literal: matches multiple types: {names}"
         else
             Ok (AST.TRecord typeName)
+    | AST.RecordUpdate (recordExpr, _) ->
+        // Record update returns the same type as the record being updated
+        inferType recordExpr typeEnv typeReg variantLookup funcReg
     | AST.RecordAccess (recordExpr, fieldName) ->
         inferType recordExpr typeEnv typeReg variantLookup funcReg moduleRegistry
         |> Result.bind (fun recordType ->
@@ -1796,6 +1820,32 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
         // Convert to TupleLiteral and reuse tuple handling
         toANF (AST.TupleLiteral orderedValues) varGen env typeReg variantLookup funcReg moduleRegistry
+
+    | AST.RecordUpdate (recordExpr, updates) ->
+        // Record update: { record with field1 = val1, field2 = val2 }
+        // Desugar to creating a new record with updated fields
+        let typeEnv = typeEnvFromVarEnv env
+        inferType recordExpr typeEnv typeReg variantLookup funcReg
+        |> Result.bind (fun recordType ->
+            match recordType with
+            | AST.TRecord typeName ->
+                match Map.tryFind typeName typeReg with
+                | Some typeFields ->
+                    // Build a map of updates
+                    let updateMap = Map.ofList updates
+                    // For each field in the type, use update value or access from original record
+                    let newFields =
+                        typeFields
+                        |> List.map (fun (fname, _) ->
+                            match Map.tryFind fname updateMap with
+                            | Some updateExpr -> (fname, updateExpr)
+                            | None -> (fname, AST.RecordAccess (recordExpr, fname)))
+                    // Create a new record literal with the combined fields
+                    toANF (AST.RecordLiteral (typeName, newFields)) varGen env typeReg variantLookup funcReg
+                | None ->
+                    Error $"Unknown record type: {typeName}"
+            | _ ->
+                Error "Cannot use record update syntax on non-record type")
 
     | AST.RecordAccess (recordExpr, fieldName) ->
         // Records are compiled like tuples - field access becomes TupleGet
@@ -2904,6 +2954,26 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
 
         // Reuse tuple handling
         toAtom (AST.TupleLiteral orderedValues) varGen env typeReg variantLookup funcReg moduleRegistry
+
+    | AST.RecordUpdate (recordExpr, updates) ->
+        // Desugar to RecordLiteral: build new record with updated fields
+        let typeEnv = typeEnvFromVarEnv env
+        inferType recordExpr typeEnv typeReg variantLookup funcReg
+        |> Result.bind (fun recordType ->
+            match recordType with
+            | AST.TRecord typeName ->
+                match Map.tryFind typeName typeReg with
+                | Some typeFields ->
+                    let updateMap = Map.ofList updates
+                    let newFields =
+                        typeFields
+                        |> List.map (fun (fname, _) ->
+                            match Map.tryFind fname updateMap with
+                            | Some updateExpr -> (fname, updateExpr)
+                            | None -> (fname, AST.RecordAccess (recordExpr, fname)))
+                    toAtom (AST.RecordLiteral (typeName, newFields)) varGen env typeReg variantLookup funcReg
+                | None -> Error $"Unknown record type: {typeName}"
+            | _ -> Error "Cannot use record update syntax on non-record type")
 
     | AST.RecordAccess (recordExpr, fieldName) ->
         // Records are compiled like tuples - field access becomes TupleGet
