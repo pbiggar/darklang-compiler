@@ -119,15 +119,14 @@ def addTwo(a: Int64, b: Int64): Int64 = a + b let h = (x: Int64, y: Int64) => ad
 def incr(x: Int64): Int64 = x + 1 let f = (x: Int64) => incr(incr(x)) in f(5) = 7
 
 // ===================================================================
-// Nested Lambdas
-// NOTE: Curried lambdas (returning lambdas) not yet fully supported
+// Nested Lambdas (Currying)
 // ===================================================================
 
 // Lambda returning lambda (currying)
-// let add = (x: Int64) => (y: Int64) => x + y in add(10)(32) = 42
+let add = (x: Int64) => (y: Int64) => x + y in add(10)(32) = 42
 
 // Apply nested lambda
-// let f = (x: Int64) => (y: Int64) => (z: Int64) => x + y + z in f(1)(2)(3) = 6
+let f = (x: Int64) => (y: Int64) => (z: Int64) => x + y + z in f(1)(2)(3) = 6
 
 // ===================================================================
 // Lambda with Tuples

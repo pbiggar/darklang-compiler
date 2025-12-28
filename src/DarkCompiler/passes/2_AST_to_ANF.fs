@@ -2769,11 +2769,151 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 let desugared = buildLets parameters args
                 toANF desugared varGen env typeReg variantLookup funcReg moduleRegistry
         | AST.Var name ->
-            // Calling a variable that holds a function - not yet supported
-            Error $"Cannot apply variable '{name}' as function - closures not yet fully implemented"
+            // Calling a variable that might hold a closure
+            match Map.tryFind name env with
+            | Some (tempId, _) ->
+                // Variable exists - treat as closure call
+                let rec convertArgs (remaining: AST.Expr list) (vg: ANF.VarGen) (acc: (ANF.Atom * (ANF.TempId * ANF.CExpr) list) list) =
+                    match remaining with
+                    | [] -> Ok (List.rev acc, vg)
+                    | arg :: rest ->
+                        toAtom arg vg env typeReg variantLookup funcReg moduleRegistry
+                        |> Result.bind (fun (argAtom, argBindings, vg') ->
+                            convertArgs rest vg' ((argAtom, argBindings) :: acc))
+                convertArgs args varGen []
+                |> Result.bind (fun (argResults, varGen1) ->
+                    let argAtoms = argResults |> List.map fst
+                    let allBindings = argResults |> List.collect snd
+                    // Generate closure call
+                    let (resultId, varGen2) = ANF.freshVar varGen1
+                    let closureCall = ANF.ClosureCall (ANF.Var tempId, argAtoms)
+                    let finalBindings = allBindings @ [(resultId, closureCall)]
+                    Ok (ANF.Return (ANF.Var resultId), varGen2)
+                    |> Result.map (fun (expr, vg) ->
+                        (wrapBindings finalBindings expr, vg)))
+            | None ->
+                Error $"Cannot apply variable '{name}' as function - variable not in scope"
+
+        | AST.Apply (_, _) ->
+            // Nested application: ((x) => (y) => ...)(a)(b)(c)...
+            // Flatten all nested applies first, then desugar from innermost out
+            let rec flattenApplies expr argLists =
+                match expr with
+                | AST.Apply (innerFunc, innerArgs) -> flattenApplies innerFunc (innerArgs :: argLists)
+                | other -> (other, argLists)
+
+            let (baseFunc, allArgLists) = flattenApplies func [args]
+            // allArgLists is a list of arg lists, from innermost to outermost
+            // e.g., for f(1)(2)(3), we get ([1], [2], [3])
+
+            match baseFunc with
+            | AST.Lambda _ ->
+                // Desugar all nested lambda applications at once
+                let rec desugaAll (currentFunc: AST.Expr) (remainingArgLists: AST.Expr list list) : AST.Expr =
+                    match remainingArgLists with
+                    | [] -> currentFunc
+                    | currentArgs :: restArgLists ->
+                        match currentFunc with
+                        | AST.Lambda (lambdaParams, body) ->
+                            if List.length currentArgs <> List.length lambdaParams then
+                                // Will error later, just wrap in Apply for now
+                                desugaAll (AST.Apply (currentFunc, currentArgs)) restArgLists
+                            else
+                                // Desugar: let p1 = a1 in let p2 = a2 in ... body
+                                let rec buildLets (ps: (string * AST.Type) list) (as': AST.Expr list) : AST.Expr =
+                                    match ps, as' with
+                                    | [], [] -> body
+                                    | (pName, _) :: restPs, argExpr :: restAs ->
+                                        AST.Let (pName, argExpr, buildLets restPs restAs)
+                                    | _ -> body
+                                let desugared = buildLets lambdaParams currentArgs
+                                desugaAll desugared restArgLists
+                        | AST.Let (name, value, innerBody) ->
+                            // Float let out: Apply(let x = v in body, args) → let x = v in Apply(body, args)
+                            AST.Let (name, value, desugaAll innerBody (currentArgs :: restArgLists))
+                        | _ ->
+                            // Non-lambda function - wrap remaining in Apply
+                            let applied = AST.Apply (currentFunc, currentArgs)
+                            desugaAll applied restArgLists
+
+                let desugared = desugaAll baseFunc allArgLists
+                toANF desugared varGen env typeReg variantLookup funcReg moduleRegistry
+
+            | _ ->
+                // Base function is not a lambda - evaluate and call as closure
+                // But first, we need to apply args one by one in case each returns a closure
+                let rec applyAll (currentExpr: AST.Expr) (remainingArgLists: AST.Expr list list) : AST.Expr =
+                    match remainingArgLists with
+                    | [] -> currentExpr
+                    | currentArgs :: rest -> applyAll (AST.Apply (currentExpr, currentArgs)) rest
+                let fullApply = applyAll baseFunc allArgLists
+                // Now convert this - it will eventually hit the Var or Closure cases
+                match fullApply with
+                | AST.Apply (funcExpr, applyArgs) when not (match funcExpr with AST.Apply _ -> true | _ -> false) ->
+                    // Single-level apply, handle directly
+                    toAtom funcExpr varGen env typeReg variantLookup funcReg moduleRegistry
+                    |> Result.bind (fun (closureAtom, closureBindings, varGen1) ->
+                        let rec convertArgs (remaining: AST.Expr list) (vg: ANF.VarGen) (acc: (ANF.Atom * (ANF.TempId * ANF.CExpr) list) list) =
+                            match remaining with
+                            | [] -> Ok (List.rev acc, vg)
+                            | arg :: rest ->
+                                toAtom arg vg env typeReg variantLookup funcReg moduleRegistry
+                                |> Result.bind (fun (argAtom, argBindings, vg') ->
+                                    convertArgs rest vg' ((argAtom, argBindings) :: acc))
+                        convertArgs applyArgs varGen1 []
+                        |> Result.bind (fun (argResults, varGen2) ->
+                            let argAtoms = argResults |> List.map fst
+                            let argBindings = argResults |> List.collect snd
+                            let (resultId, varGen3) = ANF.freshVar varGen2
+                            let closureCall = ANF.ClosureCall (closureAtom, argAtoms)
+                            let allBindings = closureBindings @ argBindings @ [(resultId, closureCall)]
+                            Ok (wrapBindings allBindings (ANF.Return (ANF.Var resultId)), varGen3)))
+                | _ ->
+                    Error $"Complex nested function application not yet supported"
+
+        | AST.Let (letName, letValue, letBody) ->
+            // Apply(let x = v in body, args) → let x = v in Apply(body, args)
+            // Float the let binding out
+            toANF (AST.Let (letName, letValue, AST.Apply (letBody, args))) varGen env typeReg variantLookup funcReg moduleRegistry
+
+        | AST.Closure (funcName, captures) ->
+            // Closure being called directly - convert to ClosureCall
+            // First, convert captures to atoms
+            let rec convertCaptures (caps: AST.Expr list) (vg: ANF.VarGen) (acc: (ANF.Atom * (ANF.TempId * ANF.CExpr) list) list) =
+                match caps with
+                | [] -> Ok (List.rev acc, vg)
+                | cap :: rest ->
+                    toAtom cap vg env typeReg variantLookup funcReg moduleRegistry
+                    |> Result.bind (fun (capAtom, capBindings, vg') ->
+                        convertCaptures rest vg' ((capAtom, capBindings) :: acc))
+            convertCaptures captures varGen []
+            |> Result.bind (fun (captureResults, varGen1) ->
+                let captureAtoms = captureResults |> List.map fst
+                let captureBindings = captureResults |> List.collect snd
+                // Allocate closure
+                let (closureId, varGen2) = ANF.freshVar varGen1
+                let closureAlloc = ANF.ClosureAlloc (funcName, captureAtoms)
+                // Convert args
+                let rec convertArgs (remaining: AST.Expr list) (vg: ANF.VarGen) (acc: (ANF.Atom * (ANF.TempId * ANF.CExpr) list) list) =
+                    match remaining with
+                    | [] -> Ok (List.rev acc, vg)
+                    | arg :: rest ->
+                        toAtom arg vg env typeReg variantLookup funcReg moduleRegistry
+                        |> Result.bind (fun (argAtom, argBindings, vg') ->
+                            convertArgs rest vg' ((argAtom, argBindings) :: acc))
+                convertArgs args varGen2 []
+                |> Result.bind (fun (argResults, varGen3) ->
+                    let argAtoms = argResults |> List.map fst
+                    let argBindings = argResults |> List.collect snd
+                    // Generate closure call
+                    let (resultId, varGen4) = ANF.freshVar varGen3
+                    let closureCall = ANF.ClosureCall (ANF.Var closureId, argAtoms)
+                    let allBindings = captureBindings @ [(closureId, closureAlloc)] @ argBindings @ [(resultId, closureCall)]
+                    Ok (wrapBindings allBindings (ANF.Return (ANF.Var resultId)), varGen4)))
+
         | _ ->
-            // Complex function expression - not yet supported
-            Error "Complex function application not yet fully implemented"
+            // Other complex function expressions not yet supported
+            Error $"Complex function application not yet fully implemented: {func}"
 
 /// Convert an AST expression to an atom, introducing let bindings as needed
 and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
@@ -3236,8 +3376,102 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                     | _ -> body
                 let desugared = buildLets parameters args
                 toAtom desugared varGen env typeReg variantLookup funcReg moduleRegistry
+
+        | AST.Apply (innerFunc, innerArgs) ->
+            // Nested application in atom position: ((x) => (y) => ...)(a)(b)
+            match innerFunc with
+            | AST.Lambda (innerParams, innerBody) ->
+                if List.length innerArgs <> List.length innerParams then
+                    Error $"Inner lambda expects {List.length innerParams} arguments, got {List.length innerArgs}"
+                else
+                    let rec buildLets (ps: (string * AST.Type) list) (as': AST.Expr list) : AST.Expr =
+                        match ps, as' with
+                        | [], [] -> innerBody
+                        | (pName, _) :: restPs, argExpr :: restAs ->
+                            AST.Let (pName, argExpr, buildLets restPs restAs)
+                        | _ -> innerBody
+                    let desugaredInner = buildLets innerParams innerArgs
+                    toAtom (AST.Apply (desugaredInner, args)) varGen env typeReg variantLookup funcReg moduleRegistry
+            | _ ->
+                // Inner is complex - evaluate inner, then call as closure
+                toAtom (AST.Apply (innerFunc, innerArgs)) varGen env typeReg variantLookup funcReg moduleRegistry
+                |> Result.bind (fun (closureAtom, closureBindings, varGen1) ->
+                    let rec convertArgs (remaining: AST.Expr list) (vg: ANF.VarGen) (acc: (ANF.Atom * (ANF.TempId * ANF.CExpr) list) list) =
+                        match remaining with
+                        | [] -> Ok (List.rev acc, vg)
+                        | arg :: rest ->
+                            toAtom arg vg env typeReg variantLookup funcReg moduleRegistry
+                            |> Result.bind (fun (argAtom, argBindings, vg') ->
+                                convertArgs rest vg' ((argAtom, argBindings) :: acc))
+                    convertArgs args varGen1 []
+                    |> Result.bind (fun (argResults, varGen2) ->
+                        let argAtoms = argResults |> List.map fst
+                        let argBindings = argResults |> List.collect snd
+                        let (resultId, varGen3) = ANF.freshVar varGen2
+                        let closureCall = ANF.ClosureCall (closureAtom, argAtoms)
+                        let allBindings = closureBindings @ argBindings @ [(resultId, closureCall)]
+                        Ok (ANF.Var resultId, allBindings, varGen3)))
+
+        | AST.Let (letName, letValue, letBody) ->
+            // Apply(let x = v in body, args) in atom position
+            // Float the let out and recurse
+            toAtom (AST.Let (letName, letValue, AST.Apply (letBody, args))) varGen env typeReg variantLookup funcReg moduleRegistry
+
+        | AST.Var name ->
+            // Variable call in atom position - treat as closure call
+            match Map.tryFind name env with
+            | Some (tempId, _) ->
+                let rec convertArgs (remaining: AST.Expr list) (vg: ANF.VarGen) (acc: (ANF.Atom * (ANF.TempId * ANF.CExpr) list) list) =
+                    match remaining with
+                    | [] -> Ok (List.rev acc, vg)
+                    | arg :: rest ->
+                        toAtom arg vg env typeReg variantLookup funcReg moduleRegistry
+                        |> Result.bind (fun (argAtom, argBindings, vg') ->
+                            convertArgs rest vg' ((argAtom, argBindings) :: acc))
+                convertArgs args varGen []
+                |> Result.bind (fun (argResults, varGen1) ->
+                    let argAtoms = argResults |> List.map fst
+                    let allBindings = argResults |> List.collect snd
+                    let (resultId, varGen2) = ANF.freshVar varGen1
+                    let closureCall = ANF.ClosureCall (ANF.Var tempId, argAtoms)
+                    let finalBindings = allBindings @ [(resultId, closureCall)]
+                    Ok (ANF.Var resultId, finalBindings, varGen2))
+            | None ->
+                Error $"Cannot apply variable '{name}' as function in atom position - variable not in scope"
+
+        | AST.Closure (funcName, captures) ->
+            // Closure call in atom position
+            let rec convertCaptures (caps: AST.Expr list) (vg: ANF.VarGen) (acc: (ANF.Atom * (ANF.TempId * ANF.CExpr) list) list) =
+                match caps with
+                | [] -> Ok (List.rev acc, vg)
+                | cap :: rest ->
+                    toAtom cap vg env typeReg variantLookup funcReg moduleRegistry
+                    |> Result.bind (fun (capAtom, capBindings, vg') ->
+                        convertCaptures rest vg' ((capAtom, capBindings) :: acc))
+            convertCaptures captures varGen []
+            |> Result.bind (fun (captureResults, varGen1) ->
+                let captureAtoms = captureResults |> List.map fst
+                let captureBindings = captureResults |> List.collect snd
+                let (closureId, varGen2) = ANF.freshVar varGen1
+                let closureAlloc = ANF.ClosureAlloc (funcName, captureAtoms)
+                let rec convertArgs (remaining: AST.Expr list) (vg: ANF.VarGen) (acc: (ANF.Atom * (ANF.TempId * ANF.CExpr) list) list) =
+                    match remaining with
+                    | [] -> Ok (List.rev acc, vg)
+                    | arg :: rest ->
+                        toAtom arg vg env typeReg variantLookup funcReg moduleRegistry
+                        |> Result.bind (fun (argAtom, argBindings, vg') ->
+                            convertArgs rest vg' ((argAtom, argBindings) :: acc))
+                convertArgs args varGen2 []
+                |> Result.bind (fun (argResults, varGen3) ->
+                    let argAtoms = argResults |> List.map fst
+                    let argBindings = argResults |> List.collect snd
+                    let (resultId, varGen4) = ANF.freshVar varGen3
+                    let closureCall = ANF.ClosureCall (ANF.Var closureId, argAtoms)
+                    let allBindings = captureBindings @ [(closureId, closureAlloc)] @ argBindings @ [(resultId, closureCall)]
+                    Ok (ANF.Var resultId, allBindings, varGen4)))
+
         | _ ->
-            Error "Complex function application in atom position not yet supported"
+            Error $"Complex function application in atom position not yet supported: {func}"
 
 /// Wrap let bindings around an expression
 and wrapBindings (bindings: (ANF.TempId * ANF.CExpr) list) (expr: ANF.AExpr) : ANF.AExpr =
