@@ -37,6 +37,18 @@ let defaultOptions : CompilerOptions = {
     DisableFreeList = false
 }
 
+/// Result of compiling stdlib - can be reused across compilations
+type StdlibResult = {
+    /// Parsed stdlib AST (for merging with user AST)
+    AST: AST.Program
+    /// Type-checked stdlib with inferred types
+    TypedAST: AST.Program
+    /// Type checking environment (registries for types, variants, functions)
+    TypeCheckEnv: TypeChecking.TypeCheckEnv
+    /// ANF conversion result
+    ANFResult: AST_to_ANF.ConversionResult
+}
+
 /// Load the stdlib.dark file
 /// Returns the stdlib AST or an error message
 let loadStdlib () : Result<AST.Program, string> =
@@ -67,11 +79,35 @@ let mergePrograms (stdlib: AST.Program) (userProgram: AST.Program) : AST.Program
     let (AST.Program userItems) = userProgram
     AST.Program (stdlibItems @ userItems)
 
-/// Compile source code to binary (in-memory, no file I/O)
-let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: string) : CompileResult =
+/// Compile stdlib in isolation, returning reusable result
+/// This can be called once and the result reused for multiple user program compilations
+let compileStdlib () : Result<StdlibResult, string> =
+    match loadStdlib() with
+    | Error e -> Error e
+    | Ok stdlibAst ->
+        // Add dummy main expression for type checking (stdlib has no main)
+        let (AST.Program items) = stdlibAst
+        let withMain = AST.Program (items @ [AST.Expression AST.UnitLiteral])
+
+        match TypeChecking.checkProgramWithEnv withMain with
+        | Error e -> Error (TypeChecking.typeErrorToString e)
+        | Ok (_, typedStdlib, typeCheckEnv) ->
+            match AST_to_ANF.convertProgramWithTypes typedStdlib with
+            | Error e -> Error e
+            | Ok anfResult ->
+                Ok {
+                    AST = stdlibAst
+                    TypedAST = typedStdlib
+                    TypeCheckEnv = typeCheckEnv
+                    ANFResult = anfResult
+                }
+
+/// Compile user code with pre-compiled stdlib
+/// This is the main compilation entry point when stdlib is pre-loaded
+let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (source: string) : CompileResult =
     let sw = Stopwatch.StartNew()
     try
-        // Pass 1: Parse
+        // Pass 1: Parse user code
         if verbosity >= 1 then println "  [1/8] Parse..."
         let parseResult = Parser.parseString source
         let parseTime = sw.Elapsed.TotalMilliseconds
@@ -85,14 +121,8 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
               Success = false
               ErrorMessage = Some $"Parse error: {err}" }
         | Ok userAst ->
-            // Load and merge stdlib
-            match loadStdlib () with
-            | Error err ->
-                { Binary = Array.empty
-                  Success = false
-                  ErrorMessage = Some err }
-            | Ok stdlibAst ->
-            let ast = mergePrograms stdlibAst userAst
+            // Merge user AST with pre-compiled stdlib AST
+            let ast = mergePrograms stdlib.AST userAst
 
             // Show AST
             if verbosity >= 3 then
@@ -445,6 +475,19 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
         { Binary = Array.empty
           Success = false
           ErrorMessage = Some $"Compilation failed: {ex.Message}" }
+
+/// Compile source code to binary (in-memory, no file I/O)
+/// This compiles stdlib first, then uses it to compile the user code
+let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: string) : CompileResult =
+    // Compile stdlib first
+    match compileStdlib() with
+    | Error err ->
+        { Binary = Array.empty
+          Success = false
+          ErrorMessage = Some err }
+    | Ok stdlib ->
+        // Then compile user code with pre-compiled stdlib
+        compileWithStdlib verbosity options stdlib source
 
 /// Compile source code to binary (uses default options)
 let compile (verbosity: int) (source: string) : CompileResult =

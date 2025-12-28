@@ -100,6 +100,14 @@ type AliasRegistry = Map<string, (string list * Type)>
 /// Type substitution - maps type variable names to concrete types
 type Substitution = Map<string, Type>
 
+/// Collected type checking environment - can be passed to compile user code with stdlib
+type TypeCheckEnv = {
+    TypeReg: TypeRegistry
+    VariantLookup: VariantLookup
+    FuncEnv: TypeEnv
+    GenericFuncReg: GenericFuncRegistry
+}
+
 /// Apply a substitution to a type, replacing type variables with concrete types
 let rec applySubst (subst: Substitution) (typ: Type) : Type =
     match typ with
@@ -1469,10 +1477,9 @@ let checkFunctionDef (funcDef: FunctionDef) (env: TypeEnv) (typeReg: TypeRegistr
         else
             Error (TypeMismatch (funcDef.ReturnType, bodyType, $"function {funcDef.Name} body")))
 
-/// Type-check a program
-/// Returns the type of the main expression and the transformed program
-/// The transformed program has Call nodes converted to TypeApp where type inference was applied
-let checkProgram (program: Program) : Result<Type * Program, TypeError> =
+/// Internal: Type-check a program and return the type checking environment
+/// This is the core implementation used by both checkProgram and checkProgramWithEnv
+let private checkProgramInternal (program: Program) : Result<Type * Program * TypeCheckEnv, TypeError> =
     let (Program topLevels) = program
 
     // First pass: collect all type definitions (records)
@@ -1529,6 +1536,14 @@ let checkProgram (program: Program) : Result<Type * Program, TypeError> =
             | _ -> None)
         |> Map.ofList
 
+    // Build the type check environment
+    let typeCheckEnv : TypeCheckEnv = {
+        TypeReg = typeReg
+        VariantLookup = variantLookup
+        FuncEnv = funcEnv
+        GenericFuncReg = genericFuncReg
+    }
+
     // Third pass: type check all function definitions and collect transformed top-levels
     let rec checkAllTopLevels remaining accTopLevels =
         match remaining with
@@ -1557,11 +1572,23 @@ let checkProgram (program: Program) : Result<Type * Program, TypeError> =
         | Some expr ->
             // Re-check to get type (we already have transformed expr in topLevels')
             checkExpr expr funcEnv typeReg variantLookup genericFuncReg None
-            |> Result.map (fun (typ, _) -> (typ, Program topLevels'))
+            |> Result.map (fun (typ, _) -> (typ, Program topLevels', typeCheckEnv))
         | None ->
             // No main expression - just functions
             // For now, require a "main" function with signature () -> int
             match Map.tryFind "main" funcSigs with
-            | Some ([], TInt64) -> Ok (TInt64, Program topLevels')
+            | Some ([], TInt64) -> Ok (TInt64, Program topLevels', typeCheckEnv)
             | Some _ -> Error (GenericError "main function must have signature () -> int")
             | None -> Error (GenericError "Program must have either a main expression or a main() : int function"))
+
+/// Type-check a program
+/// Returns the type of the main expression and the transformed program
+/// The transformed program has Call nodes converted to TypeApp where type inference was applied
+let checkProgram (program: Program) : Result<Type * Program, TypeError> =
+    checkProgramInternal program
+    |> Result.map (fun (typ, prog, _env) -> (typ, prog))
+
+/// Type-check a program and return the type checking environment
+/// Use this when you need to reuse the environment (e.g., for stdlib caching)
+let checkProgramWithEnv (program: Program) : Result<Type * Program * TypeCheckEnv, TypeError> =
+    checkProgramInternal program
