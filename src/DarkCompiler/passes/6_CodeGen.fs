@@ -389,7 +389,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 // If destReg is X0, using X0 as loop counter would clobber the result.
                 match Map.tryFind idx ctx.StringPool.Strings with
                 | Some (_, len) ->
-                    let label = sprintf "str_%d" idx
+                    let label = "str_" + string idx
                     let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
                     Ok ([
                         // Load pool string address into X9
@@ -1040,7 +1040,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 // Pool strings are just raw data, so we must convert
                 match Map.tryFind idx ctx.StringPool.Strings with
                 | Some (_, len) ->
-                    let label = sprintf "str_%d" idx
+                    let label = "str_" + string idx
                     let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
                     Ok ([
                         // Load pool string address into X9
@@ -1143,7 +1143,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         // 1. ADRP + ADD to load string address into X0
         // 2. Call Runtime.generatePrintString which handles write syscall
         // String labels are named "str_0", "str_1", etc.
-        let stringLabel = sprintf "str_%d" idx
+        let stringLabel = "str_" + string idx
         Ok ([
             ARM64.ADRP (ARM64.X0, stringLabel)  // Load page address of string
             ARM64.ADD_label (ARM64.X0, ARM64.X0, stringLabel)  // Add page offset
@@ -1161,7 +1161,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         // Float labels are named "_float0", "_float1", etc.
         lirFRegToARM64FReg dest
         |> Result.map (fun destReg ->
-            let floatLabel = sprintf "_float%d" idx
+            let floatLabel = "_float" + string idx
             [
                 ARM64.ADRP (ARM64.X9, floatLabel)           // Load page address of float
                 ARM64.ADD_label (ARM64.X9, ARM64.X9, floatLabel)  // Add page offset
@@ -1330,7 +1330,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             | LIR.StringRef idx ->
                 // Load string address from pool into temp, then store to heap
                 let tempReg = ARM64.X9
-                let stringLabel = sprintf "str_%d" idx
+                let stringLabel = "str_" + string idx
                 Ok [
                     ARM64.ADRP (tempReg, stringLabel)
                     ARM64.ADD_label (tempReg, tempReg, stringLabel)
@@ -1339,7 +1339,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             | LIR.FloatRef idx ->
                 // Load float address from pool into temp, then store to heap
                 let tempReg = ARM64.X9
-                let floatLabel = sprintf "_float%d" idx
+                let floatLabel = "_float" + string idx
                 Ok [
                     ARM64.ADRP (tempReg, floatLabel)
                     ARM64.ADD_label (tempReg, tempReg, floatLabel)
@@ -1431,7 +1431,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     // Pool string: address via ADRP+ADD, length from pool (compile-time)
                     match Map.tryFind idx ctx.StringPool.Strings with
                     | Some (_, len) ->
-                        let label = sprintf "str_%d" idx
+                        let label = "str_" + string idx
                         Ok ([
                             ARM64.ADRP (addrReg, label)
                             ARM64.ADD_label (addrReg, addrReg, label)
@@ -1579,7 +1579,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 // Pool string - convert to heap format first (same as FileExists)
                 match Map.tryFind idx ctx.StringPool.Strings with
                 | Some (_, len) ->
-                    let label = sprintf "str_%d" idx
+                    let label = "str_" + string idx
                     let totalSize = ((len + 16) + 7) &&& (~~~7)
                     Ok ([
                         ARM64.MOV_reg (ARM64.X15, ARM64.X28)
@@ -1627,7 +1627,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 // Heap format: [length:8][data:N][refcount:8]
                 match Map.tryFind idx ctx.StringPool.Strings with
                 | Some (_, len) ->
-                    let label = sprintf "str_%d" idx
+                    let label = "str_" + string idx
                     let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
                     // Use X15 as temp to hold heap string pointer
                     Ok ([
@@ -1680,7 +1680,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     // Pool string - convert to heap format
                     match Map.tryFind idx ctx.StringPool.Strings with
                     | Some (_, len) ->
-                        let label = sprintf "str_%d" idx
+                        let label = "str_" + string idx
                         let totalSize = ((len + 16) + 7) &&& (~~~7)
                         Ok ([
                             ARM64.MOV_reg (tempReg, ARM64.X28)
@@ -1729,7 +1729,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 | LIR.StringRef idx ->
                     match Map.tryFind idx ctx.StringPool.Strings with
                     | Some (_, len) ->
-                        let label = sprintf "str_%d" idx
+                        let label = "str_" + string idx
                         let totalSize = ((len + 16) + 7) &&& (~~~7)
                         Ok ([
                             ARM64.MOV_reg (tempReg, ARM64.X28)
@@ -1847,7 +1847,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 match operand with
                 | LIR.StringRef idx ->
                     // Pool string: address via ADRP+ADD, then read length from memory
-                    let label = sprintf "str_%d" idx
+                    let label = "str_" + string idx
                     Ok [
                         ARM64.ADRP (ARM64.X15, label)
                         ARM64.ADD_label (ARM64.X15, ARM64.X15, label)
@@ -1928,7 +1928,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 match operand with
                 | LIR.StringRef idx ->
                     // Pool string: address via ADRP+ADD, then read length from memory
-                    let label = sprintf "str_%d" idx
+                    let label = "str_" + string idx
                     Ok [
                         ARM64.ADRP (tempReg, label)
                         ARM64.ADD_label (tempReg, tempReg, label)
@@ -2191,7 +2191,7 @@ let generateHeapInit () : ARM64.Instr list =
 /// Convert LIR function to ARM64 instructions with prologue and epilogue
 let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64.Instr list, string> =
     // Generate epilogue label for this function (passed to convertCFG for Ret terminators)
-    let epilogueLabel = sprintf "_epilogue_%s" func.Name
+    let epilogueLabel = "_epilogue_" + func.Name
 
     // Convert CFG to ARM64 instructions
     match convertCFG ctx epilogueLabel func.CFG with
@@ -2252,7 +2252,7 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64.In
         let paramSetup = saveToTemps @ moveFromTemps
 
         // Generate epilogue (deallocate stack, restore FP/LR, return or exit)
-        let epilogueLabelInstr = [ARM64.Label (sprintf "_epilogue_%s" func.Name)]
+        let epilogueLabelInstr = [ARM64.Label ("_epilogue_" + func.Name)]
         let epilogue =
             if func.Name = "_start" then
                 // For _start, exit instead of return

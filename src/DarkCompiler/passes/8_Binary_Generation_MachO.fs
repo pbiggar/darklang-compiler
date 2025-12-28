@@ -265,7 +265,7 @@ let createStringData (stringPool: MIR.StringPool) : byte array * Map<string, int
         let (allBytes, labelMap, _finalOffset) =
             sortedStrings
             |> List.fold (fun (bytes, labels, offset) (idx, (str, _len)) ->
-                let label = sprintf "str_%d" idx  // Match label format in CodeGen
+                let label = "str_" + string idx  // Match label format in CodeGen
                 let strBytes = System.Text.Encoding.UTF8.GetBytes(str) |> Array.toList
                 let newBytes = bytes @ strBytes @ [0uy]  // null-terminated
                 let newLabels = Map.add label offset labels

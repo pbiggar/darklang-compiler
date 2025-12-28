@@ -878,7 +878,7 @@ let computeFloatLabels (codeFileOffset: int) (codeSize: int) (floatPool: MIR.Flo
 
         sortedFloats
         |> List.fold (fun (offset, labelMap) (idx, _floatVal) ->
-            let label = sprintf "_float%d" idx
+            let label = "_float" + string idx
             let newMap = Map.add label offset labelMap
             (offset + 8, newMap))  // Each double is 8 bytes
             (alignedStart, Map.empty)
@@ -909,7 +909,7 @@ let computeStringLabels (codeFileOffset: int) (codeSize: int) (floatPoolSize: in
 
         sortedStrings
         |> List.fold (fun (offset, labelMap) (idx, (str, _len)) ->
-            let label = sprintf "str_%d" idx  // Match label format in CodeGen
+            let label = "str_" + string idx  // Match label format in CodeGen
             let newMap = Map.add label offset labelMap
             let strBytes = System.Text.Encoding.UTF8.GetBytes(str)
             (offset + strBytes.Length + 1, newMap))  // +1 for null terminator
