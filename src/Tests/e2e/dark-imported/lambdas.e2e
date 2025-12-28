@@ -189,13 +189,17 @@ def incr(x: Int64): Int64 = x + 1 let f = (x: Int64) => incr(incr(x)) in f(5) = 
 
 // ===================================================================
 // Dark Lambda Tests (from elambda.dark)
-// NOTE: Commented out - requires Stdlib.List.map and Dark-specific syntax
+// NOTE: Partially enabled - some tests require list printing support
 // ===================================================================
 
 // (let y = (fun x ___ -> x + 1L) Stdlib.List.map_v0 [ 1L; 2L; 3L; 4L ] y) = stdout="[2, 3, 4, 5]\n"
 // (let y = (fun x -> x + 1L) Stdlib.List.map_v0 [ 1L; 2L; 3L; 4L ] y) = stdout="[2, 3, 4, 5]\n"
-// (let y = (fun a b -> a + b) in y 2L 3L) = 5
-// (let y = (fun (a, b) -> a + b) in y (2L, 3L)) = 5
+
+// Multi-arg lambda (converted from Dark: fun a b -> a + b)
+let y = (a: Int64, b: Int64) => a + b in y(2, 3) = 5
+
+// Tuple lambda (converted from Dark: fun (a, b) -> a + b)
+let y = (t: (Int64, Int64)) => match t with | (a, b) -> a + b in y((2, 3)) = 5
 
 // ===================================================================
 // Stdlib.List.map with Lambdas
