@@ -6,6 +6,8 @@ Comprehensive benchmark suite for the Darklang compiler, inspired by standard be
 - [Computer Language Benchmarks Game](https://benchmarksgame-team.pages.debian.net/benchmarksgame/)
 - [kostya/benchmarks](https://github.com/kostya/benchmarks)
 - [Programming Language Benchmarks](https://programming-language-benchmarks.vercel.app/)
+- [plb2 (Programming Language Benchmark v2)](https://github.com/attractivechaos/plb2)
+- [Julia Micro-Benchmarks](https://julialang.org/benchmarks/)
 
 ---
 
@@ -35,6 +37,11 @@ but the Dark implementation is a stub pending required language features.
 | spectral_norm | Matrix/Numerical | Float sqrt, Float division, Array indexing |
 | fannkuch | Permutation | Mutable arrays, In-place reversal |
 | quicksort | Sorting | List filtering with closures |
+| nqueen | Backtracking | Bit manipulation tricks (two's complement) |
+| matmul | Numerical | 2D array indexing, nested iteration |
+| pisum | Numerical | Float division, Int to Float conversion |
+| collatz | Iteration | TCO (implementable but may stack overflow) |
+| leibniz | Numerical | Float division, Float negation, TCO |
 
 ---
 
@@ -136,12 +143,6 @@ but the Dark implementation is a stub pending required language features.
 **Category:** Parsing
 **Tests:** JSON parsing, tree construction
 **Features Needed:** String processing, ADTs
-**Priority:** MEDIUM
-
-### matmul
-**Category:** Numerical
-**Tests:** Matrix multiplication, nested loops
-**Features Needed:** 2D arrays or nested lists, floats
 **Priority:** MEDIUM
 
 ### mergesort

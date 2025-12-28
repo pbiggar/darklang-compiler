@@ -1,0 +1,25 @@
+// Pi Summation Benchmark
+// Computes partial sum of 1/k^2 series (converges to pi^2/6)
+// From: Julia micro-benchmarks
+//
+// STATUS: NOT YET IMPLEMENTABLE
+// MISSING FEATURES:
+// - Float division (1.0 / x)
+// - Int64 to Float conversion
+//
+// This benchmark tests:
+// - Floating point arithmetic
+// - Simple loops
+// - Numerical precision
+
+// TODO: Implement when float division works
+//
+// def pisum(n: Int64) : Float =
+//     let mutable s = 0.0
+//     for _ in 1..500 do
+//         s = 0.0
+//         for k in 1..n do
+//             s = s + 1.0 / Stdlib.Int64.toFloat(k * k)
+//     s
+
+0

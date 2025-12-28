@@ -1,0 +1,23 @@
+// Leibniz Pi Benchmark
+// Computes pi using Leibniz formula: pi/4 = 1 - 1/3 + 1/5 - 1/7 + ...
+//
+// STATUS: NOT YET IMPLEMENTABLE
+// MISSING FEATURES:
+// - Float division (1.0 / x)
+// - Float negation
+// - Tail call optimization (for 100M iterations)
+//
+// This benchmark tests:
+// - Floating point arithmetic
+// - Simple loops with alternating signs
+// - Numerical precision
+
+// TODO: Implement when float operations work
+//
+// def leibnizPi(n: Int64) : Float =
+//     def loop(i: Int64, s: Float, sign: Float) : Float =
+//         if i >= n then s * 4.0
+//         else loop(i + 1, s + sign / Stdlib.Int64.toFloat(2 * i + 1), -sign)
+//     loop(0, 0.0, 1.0)
+
+0

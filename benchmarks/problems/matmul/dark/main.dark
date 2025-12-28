@@ -1,0 +1,25 @@
+// Matrix Multiplication Benchmark
+// Multiplies two NxN matrices using naive O(n^3) algorithm
+// From: plb2 and Julia micro-benchmarks
+//
+// STATUS: NOT YET IMPLEMENTABLE
+// MISSING FEATURES:
+// - 2D array/list indexing (list of lists)
+// - Efficient nested iteration
+// - Mutable arrays for result
+//
+// This benchmark tests:
+// - Nested loop performance
+// - Array/memory access patterns
+// - Integer arithmetic
+// - Cache behavior
+
+// TODO: Implement when 2D array operations are available
+//
+// The algorithm is the naive O(n^3) matrix multiplication:
+// C[i][j] = sum(A[i][k] * B[k][j] for k in 0..n)
+//
+// def matmul(a: List<List<Int64>>, b: List<List<Int64>>, n: Int64) : List<List<Int64>> =
+//     // Need efficient 2D indexing and construction
+
+0

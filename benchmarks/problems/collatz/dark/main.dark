@@ -1,0 +1,25 @@
+// Collatz Benchmark
+// Counts steps in Collatz sequences for numbers 1 to n
+//
+// STATUS: IMPLEMENTABLE (but needs TCO for large n)
+// MISSING FEATURES:
+// - Tail call optimization (for large sequences)
+//
+// This benchmark tests:
+// - Integer arithmetic (mod, div, mul)
+// - Conditionals
+// - Recursion/iteration
+// - Loop performance
+
+def collatzSteps(n: Int64, steps: Int64) : Int64 =
+    if n == 1 then steps
+    else if n % 2 == 0 then collatzSteps(n / 2, steps + 1)
+    else collatzSteps(3 * n + 1, steps + 1)
+
+def sumCollatzRange(i: Int64, limit: Int64, total: Int64) : Int64 =
+    if i > limit then total
+    else sumCollatzRange(i + 1, limit, total + collatzSteps(i, 0))
+
+// Sum steps for numbers 1 to 100000
+// NOTE: May stack overflow without TCO - use smaller n for testing
+sumCollatzRange(1, 100000, 0)
