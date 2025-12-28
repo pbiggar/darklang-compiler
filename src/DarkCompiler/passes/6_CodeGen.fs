@@ -1956,18 +1956,37 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64.In
         // This must come AFTER the prologue but BEFORE the function body
         // Strategy: Save all source registers to temp regs first to avoid clobbering
         // Use X9, X10, X11, X12, X13, X14, X15 as temps
+        // NOTE: Only for INTEGER parameters. Float params are handled via FMov in entry block.
         let argRegs = [ARM64.X0; ARM64.X1; ARM64.X2; ARM64.X3; ARM64.X4; ARM64.X5; ARM64.X6; ARM64.X7]
         let tempRegs = [ARM64.X9; ARM64.X10; ARM64.X11; ARM64.X12; ARM64.X13; ARM64.X14; ARM64.X15]
 
-        // Step 1: Save all calling convention registers to temps
+        // Filter to only integer parameters (AAPCS64: int and float use separate register counters)
+        let paramsWithTypes = List.zip func.Params func.ParamTypes
+        let intParamsWithIdx =
+            paramsWithTypes
+            |> List.indexed
+            |> List.fold (fun (intIdx, acc) (_, (param, typ)) ->
+                if typ = AST.TFloat64 then
+                    (intIdx, acc)  // Skip float params
+                else
+                    (intIdx + 1, (param, intIdx) :: acc)
+            ) (0, [])
+            |> snd
+            |> List.rev
+
+        // Step 1: Save integer calling convention registers to temps
         let saveToTemps =
-            List.zip (List.take (List.length func.Params) argRegs) (List.take (List.length func.Params) tempRegs)
-            |> List.map (fun (argReg, tempReg) -> ARM64.MOV_reg (tempReg, argReg))
+            intParamsWithIdx
+            |> List.map (fun (_, intIdx) ->
+                let argReg = List.item intIdx argRegs
+                let tempReg = List.item intIdx tempRegs
+                ARM64.MOV_reg (tempReg, argReg))
 
         // Step 2: Move from temps to allocated parameter registers
         let moveFromTemps =
-            List.zip func.Params (List.take (List.length func.Params) tempRegs)
-            |> List.map (fun (paramReg, tempReg) ->
+            intParamsWithIdx
+            |> List.map (fun (paramReg, intIdx) ->
+                let tempReg = List.item intIdx tempRegs
                 match lirRegToARM64Reg paramReg with
                 | Ok paramArm64 ->
                     if paramArm64 = tempReg then

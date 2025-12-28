@@ -88,7 +88,7 @@ let loadStdlib () : Result<AST.Program, string> =
     // Try multiple locations for stdlib.dark
     let possiblePaths = [
         Path.Combine(exeDir, "stdlib.dark")
-        Path.Combine(exeDir, "..", "..", "..", "..", "..", "src", "DarkCompiler", "stdlib.dark")
+        Path.Combine(exeDir, "..", "..", "..", "..", "src", "DarkCompiler", "stdlib.dark")
         Path.Combine(Environment.CurrentDirectory, "src", "DarkCompiler", "stdlib.dark")
     ]
     let stdlibPath =
@@ -368,7 +368,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                             | AST.FunctionDef funcDef -> Some (funcDef.Name, funcDef.Params)
                             | _ -> None)
                         |> Map.ofList
-                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) emptyTypeMap typeReg
+                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) emptyTypeMap typeReg programType
 
                     match mirResult with
                     | Error err ->
@@ -688,8 +688,8 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     // Pass 3: ANF → MIR (user code only)
                     if verbosity >= 1 then println "  [3/8] ANF → MIR (user only)..."
                     let emptyTypeMap : ANF.TypeMap = Map.empty
-                    let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
-                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) emptyTypeMap emptyTypeReg
+                    // Use FuncParams (maps function names to param types) for correct float param handling
+                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) emptyTypeMap userOnly.FuncParams programType
 
                     match userMirResult with
                     | Error err ->

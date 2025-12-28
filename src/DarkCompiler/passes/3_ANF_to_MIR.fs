@@ -340,6 +340,34 @@ let cexprProducesFloat (floatRegs: Set<int>) (cexpr: ANF.CExpr) : bool =
         isFloatAtom floatRegs thenAtom
     | _ -> false
 
+/// Analyze return statements in an ANF expression, tracking float temps
+/// Returns the type of the expression's result
+let rec getExprReturnType (floatRegs: Set<int>) (typeMap: ANF.TypeMap) (expr: ANF.AExpr) : AST.Type =
+    match expr with
+    | ANF.Return atom ->
+        match atom with
+        | ANF.FloatLiteral _ -> AST.TFloat64
+        | ANF.IntLiteral _ -> AST.TInt64
+        | ANF.BoolLiteral _ -> AST.TBool
+        | ANF.StringLiteral _ -> AST.TString
+        | ANF.UnitLiteral -> AST.TUnit
+        | ANF.Var (ANF.TempId id) ->
+            if Set.contains id floatRegs then AST.TFloat64
+            else
+                match Map.tryFind (ANF.TempId id) typeMap with
+                | Some t -> t
+                | None -> AST.TInt64
+        | ANF.FuncRef _ -> AST.TInt64
+    | ANF.Let (ANF.TempId destId, cexpr, rest) ->
+        // Update floatRegs if this binding produces a float
+        let floatRegs' =
+            if cexprProducesFloat floatRegs cexpr then
+                Set.add destId floatRegs
+            else
+                floatRegs
+        getExprReturnType floatRegs' typeMap rest
+    | ANF.If (_, thenBranch, _) -> getExprReturnType floatRegs typeMap thenBranch
+
 /// Compute return type for an ANF function by analyzing return statements
 /// Uses typeReg to determine which parameters are floats
 let computeReturnType (anfFunc: ANF.Function) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) : AST.Type =
@@ -356,34 +384,7 @@ let computeReturnType (anfFunc: ANF.Function) (typeMap: ANF.TypeMap) (typeReg: M
             |> Set.ofList
         else
             Set.empty
-
-    // Analyze return statements in the function body, tracking float temps
-    let rec getReturnType (floatRegs: Set<int>) (expr: ANF.AExpr) : AST.Type =
-        match expr with
-        | ANF.Return atom ->
-            match atom with
-            | ANF.FloatLiteral _ -> AST.TFloat64
-            | ANF.IntLiteral _ -> AST.TInt64
-            | ANF.BoolLiteral _ -> AST.TBool
-            | ANF.StringLiteral _ -> AST.TString
-            | ANF.UnitLiteral -> AST.TUnit
-            | ANF.Var (ANF.TempId id) ->
-                if Set.contains id floatRegs then AST.TFloat64
-                else
-                    match Map.tryFind (ANF.TempId id) typeMap with
-                    | Some t -> t
-                    | None -> AST.TInt64
-            | ANF.FuncRef _ -> AST.TInt64
-        | ANF.Let (ANF.TempId destId, cexpr, rest) ->
-            // Update floatRegs if this binding produces a float
-            let floatRegs' =
-                if cexprProducesFloat floatRegs cexpr then
-                    Set.add destId floatRegs
-                else
-                    floatRegs
-            getReturnType floatRegs' rest
-        | ANF.If (_, thenBranch, _) -> getReturnType floatRegs thenBranch
-    getReturnType floatParamIds anfFunc.Body
+    getExprReturnType floatParamIds typeMap anfFunc.Body
 
 /// Build a map from function name to return type for all functions
 let buildReturnTypeReg (functions: ANF.Function list) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) : Map<string, AST.Type> =
@@ -1327,7 +1328,8 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
     Ok (mirFunc, finalBuilder.RegGen)
 
 /// Convert ANF program to MIR program
-let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) : Result<MIR.Program * MIR.RegGen, string> =
+/// mainExprType: the type of the main expression (used for _start's return type)
+let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (mainExprType: AST.Type) : Result<MIR.Program * MIR.RegGen, string> =
     let (ANF.Program (functions, mainExpr)) = program
 
     // Critical: freshReg must generate VRegs that don't conflict with TempId-derived VRegs.
@@ -1382,11 +1384,13 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
         MIR.Entry = entryLabel
         MIR.Blocks = finalBuilder.Blocks
     }
+    // Use the passed mainExprType for _start's return type
+    // This is needed for proper float handling in the Ret terminator
     let startFunc = {
         MIR.Name = "_start"
         MIR.Params = []
         MIR.ParamTypes = []
-        MIR.ReturnType = AST.TInt64  // Entry point return type (not used for function calls)
+        MIR.ReturnType = mainExprType
         MIR.CFG = cfg
     }
     let allFuncs = mirFuncs @ [startFunc]

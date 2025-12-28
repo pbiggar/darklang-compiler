@@ -474,9 +474,10 @@ let loadANF2MIRTest (path: string) : Result<ANF.Program * MIR.Program, string> =
 /// Run ANF→MIR test
 let runANF2MIRTest (input: ANF.Program) (expected: MIR.Program) : PassTestResult =
     // Pass empty TypeMap and TypeReg since payload sizes are stored in instructions
+    // Use TInt64 as default for pass tests (E2E tests use actual program type)
     let emptyTypeMap : ANF.TypeMap = Map.empty
     let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
-    match ANF_to_MIR.toMIR input MIR.initialRegGen emptyTypeMap emptyTypeReg with
+    match ANF_to_MIR.toMIR input MIR.initialRegGen emptyTypeMap emptyTypeReg AST.TInt64 with
     | Error err ->
         { Success = false
           Message = $"MIR conversion error: {err}"
