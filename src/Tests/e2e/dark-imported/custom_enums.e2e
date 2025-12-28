@@ -37,14 +37,13 @@ type Color = Red | Green | Blue match Blue with | Red -> 1 | Green -> 2 | _ -> 1
 
 // ===================================================================
 // Enums with Single Payload
-// NOTE: Equality tests commented out - requires enum equality support
 // ===================================================================
 
-// Option-like type
-// type MyOption = MyNone | MySome of Int64 MySome(42) == MySome(42) = stdout="true\n"
-// type MyOption = MyNone | MySome of Int64 MySome(42) == MySome(43) = stdout="false\n"
-// type MyOption = MyNone | MySome of Int64 MyNone == MyNone = stdout="true\n"
-// type MyOption = MyNone | MySome of Int64 MySome(42) == MyNone = stdout="false\n"
+// Option-like type - equality tests
+type MyOption = MyNone | MySome of Int64 MySome(42) == MySome(42) = stdout="true\n"
+type MyOption = MyNone | MySome of Int64 MySome(42) == MySome(43) = stdout="false\n"
+type MyOption = MyNone | MySome of Int64 MyNone == MyNone = stdout="true\n"
+type MyOption = MyNone | MySome of Int64 MySome(42) == MyNone = stdout="false\n"
 
 // Extract payload
 type MyOption = MyNone | MySome of Int64 match MySome(42) with | MySome(x) -> x | MyNone -> 0 = 42
@@ -55,27 +54,25 @@ type MyOption = MyNone | MySome of Int64 match MySome(10) with | MySome(x) -> x 
 type MyOption = MyNone | MySome of Int64 match MySome(5) with | MySome(x) -> x + 10 | MyNone -> 0 = 15
 
 // ===================================================================
-// Result-like Type
-// NOTE: Equality tests commented out - requires enum equality support
+// Result-like Type - equality tests
 // ===================================================================
 
-// type MyResult = MyOk of Int64 | MyErr of Int64 MyOk(42) == MyOk(42) = stdout="true\n"
-// type MyResult = MyOk of Int64 | MyErr of Int64 MyOk(42) == MyOk(43) = stdout="false\n"
-// type MyResult = MyOk of Int64 | MyErr of Int64 MyOk(42) == MyErr(42) = stdout="false\n"
-// type MyResult = MyOk of Int64 | MyErr of Int64 MyErr(1) == MyErr(1) = stdout="true\n"
+type MyResult = MyOk of Int64 | MyErr of Int64 MyOk(42) == MyOk(42) = stdout="true\n"
+type MyResult = MyOk of Int64 | MyErr of Int64 MyOk(42) == MyOk(43) = stdout="false\n"
+type MyResult = MyOk of Int64 | MyErr of Int64 MyOk(42) == MyErr(42) = stdout="false\n"
+type MyResult = MyOk of Int64 | MyErr of Int64 MyErr(1) == MyErr(1) = stdout="true\n"
 
 // Match on MyResult
 type MyResult = MyOk of Int64 | MyErr of Int64 match MyOk(100) with | MyOk(v) -> v | MyErr(e) -> 0 - e = 100
 type MyResult = MyOk of Int64 | MyErr of Int64 match MyErr(5) with | MyOk(v) -> v | MyErr(e) -> 0 - e = -5
 
 // ===================================================================
-// Either Type (Two Payload Variants)
-// NOTE: Equality tests commented out - requires enum equality support
+// Either Type (Two Payload Variants) - equality tests
 // ===================================================================
 
-// type Either = Left of Int64 | Right of Int64 Left(5) == Left(5) = stdout="true\n"
-// type Either = Left of Int64 | Right of Int64 Right(5) == Right(5) = stdout="true\n"
-// type Either = Left of Int64 | Right of Int64 Left(5) == Right(5) = stdout="false\n"
+type Either = Left of Int64 | Right of Int64 Left(5) == Left(5) = stdout="true\n"
+type Either = Left of Int64 | Right of Int64 Right(5) == Right(5) = stdout="true\n"
+type Either = Left of Int64 | Right of Int64 Left(5) == Right(5) = stdout="false\n"
 
 // Pattern match Either
 type Either = Left of Int64 | Right of Int64 match Left(10) with | Left(x) -> x | Right(y) -> y * 2 = 10

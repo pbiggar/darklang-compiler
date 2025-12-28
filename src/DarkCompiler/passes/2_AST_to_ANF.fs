@@ -1179,6 +1179,7 @@ let rec generateStructuralEquality
     (typ: AST.Type)
     (varGen: ANF.VarGen)
     (typeReg: TypeRegistry)
+    (variantLookup: VariantLookup)
     : (ANF.TempId * ANF.CExpr) list * ANF.Atom * ANF.VarGen =
 
     match typ with
@@ -1220,7 +1221,7 @@ let rec generateStructuralEquality
                 if isCompoundType elemType then
                     // Recursive structural comparison
                     let (nestedBindings, resultAtom, vg3) =
-                        generateStructuralEquality (ANF.Var leftElemVar) (ANF.Var rightElemVar) elemType vg2 typeReg
+                        generateStructuralEquality (ANF.Var leftElemVar) (ANF.Var rightElemVar) elemType vg2 typeReg variantLookup
                     compareElements (index + 1) restTypes (baseBindings @ nestedBindings) (accResults @ [resultAtom]) vg3
                 else
                     // Primitive comparison
@@ -1269,7 +1270,7 @@ let rec generateStructuralEquality
 
                     if isCompoundType fieldType then
                         let (nestedBindings, resultAtom, vg3) =
-                            generateStructuralEquality (ANF.Var leftFieldVar) (ANF.Var rightFieldVar) fieldType vg2 typeReg
+                            generateStructuralEquality (ANF.Var leftFieldVar) (ANF.Var rightFieldVar) fieldType vg2 typeReg variantLookup
                         compareFields (index + 1) restFields (baseBindings @ nestedBindings) (accResults @ [resultAtom]) vg3
                     else
                         let (cmpVar, vg3) = ANF.freshVar vg2
@@ -1278,11 +1279,39 @@ let rec generateStructuralEquality
 
             compareFields 0 fields [] [] varGen
 
-    | AST.TSum _ ->
-        // For sum types, compare directly (tags are integers for simple enums)
-        // Full structural equality for payloads would need more complex logic
-        let (cmpVar, vg') = ANF.freshVar varGen
-        ([(cmpVar, ANF.Prim (ANF.Eq, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
+    | AST.TSum (typeName, _) ->
+        // Check if ANY variant in this type has a payload
+        let typeVariants =
+            variantLookup
+            |> Map.filter (fun _ (tName, _, _, _) -> tName = typeName)
+        let hasAnyPayload =
+            typeVariants |> Map.exists (fun _ (_, _, _, pType) -> pType.IsSome)
+
+        if not hasAnyPayload then
+            // Pure enum - tags are integers, direct comparison works
+            let (cmpVar, vg') = ANF.freshVar varGen
+            ([(cmpVar, ANF.Prim (ANF.Eq, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
+        else
+            // Mixed enum - uniform [tag, payload] representation
+            // Compare tag (index 0) AND payload (index 1)
+            let (leftTagVar, vg1) = ANF.freshVar varGen
+            let (rightTagVar, vg2) = ANF.freshVar vg1
+            let (tagEqVar, vg3) = ANF.freshVar vg2
+            let (leftPayloadVar, vg4) = ANF.freshVar vg3
+            let (rightPayloadVar, vg5) = ANF.freshVar vg4
+            let (payloadEqVar, vg6) = ANF.freshVar vg5
+            let (resultVar, vg7) = ANF.freshVar vg6
+
+            let bindings = [
+                (leftTagVar, ANF.TupleGet (leftAtom, 0))
+                (rightTagVar, ANF.TupleGet (rightAtom, 0))
+                (tagEqVar, ANF.Prim (ANF.Eq, ANF.Var leftTagVar, ANF.Var rightTagVar))
+                (leftPayloadVar, ANF.TupleGet (leftAtom, 1))
+                (rightPayloadVar, ANF.TupleGet (rightAtom, 1))
+                (payloadEqVar, ANF.Prim (ANF.Eq, ANF.Var leftPayloadVar, ANF.Var rightPayloadVar))
+                (resultVar, ANF.Prim (ANF.And, ANF.Var tagEqVar, ANF.Var payloadEqVar))
+            ]
+            (bindings, ANF.Var resultVar, vg7)
 
     | _ ->
         // Primitive types - simple comparison
@@ -1615,7 +1644,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     | Ok operandType when isCompoundType operandType ->
                         // Generate structural equality
                         let (eqBindings, eqResultAtom, varGen3) =
-                            generateStructuralEquality leftAtom rightAtom operandType varGen2 typeReg
+                            generateStructuralEquality leftAtom rightAtom operandType varGen2 typeReg variantLookup
                         // For Neq, negate the result
                         let (finalAtom, finalBindings, varGen4) =
                             if op = AST.Neq then
@@ -1892,10 +1921,12 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 Ok (ANF.Return (ANF.IntLiteral (int64 tag)), varGen)
             | None ->
                 // No payload but type has other variants with payloads
-                // Heap-allocate as [tag] for consistent representation
+                // Heap-allocate as [tag, 0] for uniform 2-element structure
+                // This enables consistent structural equality comparison
                 let tagAtom = ANF.IntLiteral (int64 tag)
+                let dummyPayload = ANF.IntLiteral 0L
                 let (resultVar, varGen1) = ANF.freshVar varGen
-                let tupleExpr = ANF.TupleAlloc [tagAtom]
+                let tupleExpr = ANF.TupleAlloc [tagAtom; dummyPayload]
                 let finalExpr = ANF.Let (resultVar, tupleExpr, ANF.Return (ANF.Var resultVar))
                 Ok (finalExpr, varGen1)
             | Some payloadExpr ->
@@ -2810,7 +2841,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                     | Ok operandType when isCompoundType operandType ->
                         // Generate structural equality
                         let (eqBindings, eqResultAtom, varGen3) =
-                            generateStructuralEquality leftAtom rightAtom operandType varGen2 typeReg
+                            generateStructuralEquality leftAtom rightAtom operandType varGen2 typeReg variantLookup
                         // For Neq, negate the result
                         let (finalAtom, finalBindings, varGen4) =
                             if op = AST.Neq then
@@ -3018,10 +3049,12 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                 Ok (ANF.IntLiteral (int64 tag), [], varGen)
             | None ->
                 // No payload but type has other variants with payloads
-                // Heap-allocate as [tag] for consistent representation
+                // Heap-allocate as [tag, 0] for uniform 2-element structure
+                // This enables consistent structural equality comparison
                 let tagAtom = ANF.IntLiteral (int64 tag)
+                let dummyPayload = ANF.IntLiteral 0L
                 let (tempVar, varGen1) = ANF.freshVar varGen
-                let tupleCExpr = ANF.TupleAlloc [tagAtom]
+                let tupleCExpr = ANF.TupleAlloc [tagAtom; dummyPayload]
                 Ok (ANF.Var tempVar, [(tempVar, tupleCExpr)], varGen1)
             | Some payloadExpr ->
                 // Variant with payload: allocate [tag, payload] on heap
