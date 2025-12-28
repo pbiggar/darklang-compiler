@@ -91,12 +91,11 @@ let lirPhysFPRegToARM64FReg (physReg: LIR.PhysFPReg) : ARM64.FReg =
 /// - FVirtual 1000 -> D10 (left operand temp for binary ops)
 /// - FVirtual 1001 -> D11 (right operand temp for binary ops)
 /// - FVirtual 3000-3003 -> D12-D15 (temps for float call args, round-robin)
-/// - FVirtual n >= 10000 -> D8-D15 (computed intermediates, avoid param conflicts)
-/// - FVirtual n < 1000 -> D0-D7 (parameters and small IDs)
+/// - FVirtual n < 8 -> D8-D15 (parameters - use callee-saved to avoid conflicts)
+/// - FVirtual n >= 8 -> D0-D7 (temps and computed values)
 ///
-/// Key insight: Parameters have small TempIds (e.g., 568, 569) while computed
-/// results get large TempIds (10000+). Using separate D-register ranges avoids
-/// conflicts without a full register allocator.
+/// Key insight: Float parameters have small IDs (0-7) while temps have higher IDs.
+/// By mapping params to D8-D15 (callee-saved), we avoid conflicts with temps in D0-D7.
 let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64.FReg, string> =
     match freg with
     | LIR.FPhysical physReg -> Ok (lirPhysFPRegToARM64FReg physReg)
@@ -110,11 +109,10 @@ let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64.FReg, string> =
         | 1 -> Ok ARM64.D13
         | 2 -> Ok ARM64.D14
         | _ -> Ok ARM64.D15
-    | LIR.FVirtual n when n >= 10000 ->
-        // Computed intermediates (10000+) use D8-D15 to avoid conflicts with params
-        let regIdx = (n - 10000) % 8
+    | LIR.FVirtual n when n < 8 ->
+        // Float parameters (IDs 0-7) use D8-D15 (callee-saved) to avoid conflicts
         let physReg =
-            match regIdx with
+            match n with
             | 0 -> ARM64.D8
             | 1 -> ARM64.D9
             | 2 -> ARM64.D10
@@ -125,7 +123,7 @@ let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64.FReg, string> =
             | _ -> ARM64.D15
         Ok physReg
     | LIR.FVirtual n ->
-        // Map virtual FP registers to physical D0-D7 (for parameters and small IDs)
+        // Float temps (IDs >= 8) use D0-D7
         let regIdx = n % 8
         let physReg =
             match regIdx with
@@ -2398,16 +2396,16 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64.In
             if func.Name = "_start" then generateHeapInit ()
             else []
 
-        // Generate parameter setup: move X0-X7 to allocated parameter registers
+        // Generate parameter setup: move X0-X7/D0-D7 to allocated parameter registers
         // This must come AFTER the prologue but BEFORE the function body
         // Strategy: Save all source registers to temp regs first to avoid clobbering
-        // Use X9, X10, X11, X12, X13, X14, X15 as temps
-        // NOTE: Only for INTEGER parameters. Float params are handled via FMov in entry block.
         let argRegs = [ARM64.X0; ARM64.X1; ARM64.X2; ARM64.X3; ARM64.X4; ARM64.X5; ARM64.X6; ARM64.X7]
         let tempRegs = [ARM64.X9; ARM64.X10; ARM64.X11; ARM64.X12; ARM64.X13; ARM64.X14; ARM64.X15]
 
-        // Filter to only integer parameters (AAPCS64: int and float use separate register counters)
+        // AAPCS64: int and float use SEPARATE register counters
         let paramsWithTypes = List.zip func.Params func.ParamTypes
+
+        // Collect integer parameters with their calling convention index
         let intParamsWithIdx =
             paramsWithTypes
             |> List.indexed
@@ -2420,16 +2418,20 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64.In
             |> snd
             |> List.rev
 
-        // Step 1: Save integer calling convention registers to temps
-        let saveToTemps =
+        // Step 1a: Save integer calling convention registers to temps
+        let saveIntToTemps =
             intParamsWithIdx
             |> List.map (fun (_, intIdx) ->
                 let argReg = List.item intIdx argRegs
                 let tempReg = List.item intIdx tempRegs
                 ARM64.MOV_reg (tempReg, argReg))
 
-        // Step 2: Move from temps to allocated parameter registers
-        let moveFromTemps =
+        // Note: Float parameter setup is NOT done here - it's handled by RegisterAllocation
+        // which inserts FMov instructions at the start of the CFG entry block.
+        // Doing it here would corrupt D0/D1 before those CFG instructions run.
+
+        // Step 2a: Move integers from temps to allocated parameter registers
+        let moveIntFromTemps =
             intParamsWithIdx
             |> List.map (fun (paramReg, intIdx) ->
                 let tempReg = List.item intIdx tempRegs
@@ -2442,7 +2444,7 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64.In
                 | Error _ -> [])  // Shouldn't happen
             |> List.concat
 
-        let paramSetup = saveToTemps @ moveFromTemps
+        let paramSetup = saveIntToTemps @ moveIntFromTemps
 
         // Generate epilogue (deallocate stack, restore FP/LR, return or exit)
         let epilogueLabelInstr = [ARM64.Label ("_epilogue_" + func.Name)]

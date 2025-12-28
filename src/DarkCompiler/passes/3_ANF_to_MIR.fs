@@ -397,9 +397,8 @@ let rec getExprReturnType (floatRegs: Set<int>) (typeMap: ANF.TypeMap) (returnTy
 
 /// Compute return type for an ANF function by analyzing return statements
 /// Uses typeReg to determine which parameters are floats
-/// Note: This is used during buildReturnTypeReg, so we pass an empty return type map
-/// (we don't yet know return types of other functions)
-let computeReturnType (anfFunc: ANF.Function) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) : AST.Type =
+/// Uses returnTypeReg to check return types of called functions
+let computeReturnTypeWithReg (anfFunc: ANF.Function) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (returnTypeReg: Map<string, AST.Type>) : AST.Type =
     // Get float parameter IDs for this function
     let funcParamTypes =
         match Map.tryFind anfFunc.Name typeReg with
@@ -413,14 +412,22 @@ let computeReturnType (anfFunc: ANF.Function) (typeMap: ANF.TypeMap) (typeReg: M
             |> Set.ofList
         else
             Set.empty
-    // Pass empty return type map since we're building it
-    getExprReturnType floatParamIds typeMap Map.empty anfFunc.Body
+    getExprReturnType floatParamIds typeMap returnTypeReg anfFunc.Body
 
 /// Build a map from function name to return type for all functions
+/// Uses iterative fixpoint algorithm since functions may call each other
 let buildReturnTypeReg (functions: ANF.Function list) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) : Map<string, AST.Type> =
-    functions
-    |> List.map (fun f -> (f.Name, computeReturnType f typeMap typeReg))
-    |> Map.ofList
+    // Iterate until the map stabilizes (handles mutual recursion and call dependencies)
+    let rec fixpoint (currentReg: Map<string, AST.Type>) (iterations: int) =
+        if iterations > 100 then currentReg  // Safety limit
+        else
+            let newReg =
+                functions
+                |> List.map (fun f -> (f.Name, computeReturnTypeWithReg f typeMap typeReg currentReg))
+                |> Map.ofList
+            if newReg = currentReg then newReg
+            else fixpoint newReg (iterations + 1)
+    fixpoint Map.empty 0
 
 /// CFG builder state - includes lookups to avoid mutable module-level state
 /// which would cause race conditions in parallel test execution
