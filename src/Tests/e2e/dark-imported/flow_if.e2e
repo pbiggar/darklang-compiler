@@ -208,12 +208,11 @@ let x = 0 - 5 in if x >= 0 then x else 0 - x = 5
 match 1 with | 1 -> if true then 100 else 0 | _ -> 0 = 100
 match 2 with | 1 -> 0 | _ -> if true then 42 else 0 = 42
 
-// Match in condition (may require compiler support)
-// NOTE: Commented out - match in condition not fully supported
-// if (match 5 with | 5 -> true | _ -> false) then 1 else 0 = 1
-// if (match 5 with | 3 -> true | _ -> false) then 1 else 0 = 0
-// let b = match 5 with | 5 -> true | _ -> false in if b then 1 else 0 = 1
-// let b = match 5 with | 3 -> true | _ -> false in if b then 1 else 0 = 0
+// Match in condition
+if (match 5 with | 5 -> true | _ -> false) then 1 else 0 = 1
+if (match 5 with | 3 -> true | _ -> false) then 1 else 0 = 0
+let b = match 5 with | 5 -> true | _ -> false in if b then 1 else 0 = 1
+let b = match 5 with | 3 -> true | _ -> false in if b then 1 else 0 = 0
 
 // ===================================================================
 // Complex Conditions

@@ -1304,14 +1304,32 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         let typeEnv = typeEnvFromVarEnv env
         inferType value typeEnv typeReg variantLookup funcReg
         |> Result.bind (fun valueType ->
-            toAtom value varGen env typeReg variantLookup funcReg |> Result.bind (fun (valueAtom, valueBindings, varGen1) ->
+            // Try toAtom first; if it fails for complex expressions like Match, use toANF
+            match toAtom value varGen env typeReg variantLookup funcReg with
+            | Ok (valueAtom, valueBindings, varGen1) ->
                 let (tempId, varGen2) = ANF.freshVar varGen1
                 let env' = Map.add name (tempId, valueType) env
                 toANF body varGen2 env' typeReg variantLookup funcReg |> Result.map (fun (bodyExpr, varGen3) ->
                     // Build: valueBindings + let tempId = valueAtom + body
                     let finalExpr = ANF.Let (tempId, ANF.Atom valueAtom, bodyExpr)
                     let exprWithBindings = wrapBindings valueBindings finalExpr
-                    (exprWithBindings, varGen3))))
+                    (exprWithBindings, varGen3))
+            | Error _ ->
+                // Complex expression (like Match) - compile with toANF and transform returns
+                let (tempId, varGen1) = ANF.freshVar varGen
+                let env' = Map.add name (tempId, valueType) env
+                toANF value varGen1 env typeReg variantLookup funcReg
+                |> Result.bind (fun (valueExpr, varGen2) ->
+                    toANF body varGen2 env' typeReg variantLookup funcReg
+                    |> Result.map (fun (bodyExpr, varGen3) ->
+                        // Transform: replace all Returns in valueExpr with Let bindings to tempId + bodyExpr
+                        let rec transformReturns expr =
+                            match expr with
+                            | ANF.Return atom -> ANF.Let (tempId, ANF.Atom atom, bodyExpr)
+                            | ANF.Let (id, cexpr, rest) -> ANF.Let (id, cexpr, transformReturns rest)
+                            | ANF.If (cond, thenBr, elseBr) ->
+                                ANF.If (cond, transformReturns thenBr, transformReturns elseBr)
+                        (transformReturns valueExpr, varGen3))))
 
     | AST.UnaryOp (AST.Neg, innerExpr) ->
         // Unary negation: handle differently based on operand type
@@ -1362,14 +1380,33 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
     | AST.If (cond, thenBranch, elseBranch) ->
         // If expression: convert condition to atom, both branches to ANF
-        toAtom cond varGen env typeReg variantLookup funcReg |> Result.bind (fun (condAtom, condBindings, varGen1) ->
+        // Try toAtom first; if it fails for complex expressions like Match, use toANF
+        match toAtom cond varGen env typeReg variantLookup funcReg with
+        | Ok (condAtom, condBindings, varGen1) ->
             toANF thenBranch varGen1 env typeReg variantLookup funcReg |> Result.bind (fun (thenExpr, varGen2) ->
                 toANF elseBranch varGen2 env typeReg variantLookup funcReg |> Result.map (fun (elseExpr, varGen3) ->
                     // Build the expression: condBindings + if condAtom then thenExpr else elseExpr
                     let finalExpr = ANF.If (condAtom, thenExpr, elseExpr)
                     let exprWithBindings = wrapBindings condBindings finalExpr
-
-                    (exprWithBindings, varGen3))))
+                    (exprWithBindings, varGen3)))
+        | Error _ ->
+            // Complex condition (like Match) - compile with toANF and transform
+            // Create: let condTemp = <cond> in if condTemp then <then> else <else>
+            let (condTemp, varGen1) = ANF.freshVar varGen
+            toANF cond varGen1 env typeReg variantLookup funcReg
+            |> Result.bind (fun (condExpr, varGen2) ->
+                toANF thenBranch varGen2 env typeReg variantLookup funcReg
+                |> Result.bind (fun (thenExpr, varGen3) ->
+                    toANF elseBranch varGen3 env typeReg variantLookup funcReg
+                    |> Result.map (fun (elseExpr, varGen4) ->
+                        // Transform: replace Returns in condExpr with Let + If
+                        let ifExpr = ANF.If (ANF.Var condTemp, thenExpr, elseExpr)
+                        let rec transformReturns expr =
+                            match expr with
+                            | ANF.Return atom -> ANF.Let (condTemp, ANF.Atom atom, ifExpr)
+                            | ANF.Let (id, cexpr, rest) -> ANF.Let (id, cexpr, transformReturns rest)
+                            | ANF.If (c, t, e) -> ANF.If (c, transformReturns t, transformReturns e)
+                        (transformReturns condExpr, varGen4))))
 
     | AST.Call (funcName, args) ->
         // Function call: convert all arguments to atoms
