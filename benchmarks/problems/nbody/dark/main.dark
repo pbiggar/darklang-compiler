@@ -1,0 +1,28 @@
+// N-Body Benchmark
+// Simulates gravitational interaction between planets
+// From: Computer Language Benchmarks Game
+//
+// STATUS: NOT YET IMPLEMENTABLE
+// MISSING FEATURES:
+// - Stdlib.Float.sqrt (square root function)
+// - Float comparison operators (>, <, >=, <=)
+// - Possibly Float.pow for distance calculations
+//
+// This benchmark tests:
+// - Floating point arithmetic
+// - Record/tuple operations
+// - Loop performance
+// - Memory access patterns
+
+// TODO: Implement when sqrt is available
+//
+// type Body = {
+//     x: Float, y: Float, z: Float,
+//     vx: Float, vy: Float, vz: Float,
+//     mass: Float
+// }
+//
+// def advance(bodies: List<Body>, dt: Float) : List<Body> = ...
+// def energy(bodies: List<Body>) : Float = ...
+
+0

@@ -1,0 +1,26 @@
+// Quicksort Benchmark
+// Sorts a list using quicksort algorithm
+//
+// STATUS: PARTIALLY IMPLEMENTABLE
+// MISSING FEATURES:
+// - List filtering with closures (needed for partition)
+// - Int64 comparisons in pattern guards
+// - List concatenation is available but filtering is limited
+//
+// This benchmark tests:
+// - Recursive algorithms
+// - List operations
+// - Higher-order functions (filter with lambda)
+// - Divide and conquer pattern
+
+// TODO: Implement when list filtering with closures works
+//
+// def quicksort(arr: List<Int64>) : List<Int64> =
+//     match arr with
+//     | [] -> []
+//     | [pivot, ...rest] ->
+//         let left = Stdlib.List.filter(rest, fn x -> x < pivot)
+//         let right = Stdlib.List.filter(rest, fn x -> x >= pivot)
+//         Stdlib.List.append(quicksort(left), Stdlib.List.prepend(quicksort(right), pivot))
+
+0

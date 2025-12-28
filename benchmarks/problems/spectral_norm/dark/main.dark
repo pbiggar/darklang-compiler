@@ -1,0 +1,26 @@
+// Spectral Norm Benchmark
+// Computes the spectral norm of an infinite matrix
+// From: Computer Language Benchmarks Game
+//
+// STATUS: NOT YET IMPLEMENTABLE
+// MISSING FEATURES:
+// - Stdlib.Float.sqrt (required for normalization)
+// - Float division
+// - Efficient array/list indexing
+//
+// This benchmark tests:
+// - Floating point arithmetic
+// - Nested loops
+// - Array/vector operations
+// - Numerical precision
+
+// TODO: Implement when sqrt is available
+//
+// A(i,j) = 1.0 / ((i + j) * (i + j + 1) / 2 + i + 1)
+//
+// def A(i: Int64, j: Int64) : Float =
+//     1.0 / Stdlib.Int64.toFloat((i + j) * (i + j + 1) / 2 + i + 1)
+//
+// Compute eigenvalue of A^T * A using power iteration
+
+0

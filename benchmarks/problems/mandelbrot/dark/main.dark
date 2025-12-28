@@ -1,0 +1,30 @@
+// Mandelbrot Benchmark
+// Generates a Mandelbrot set and counts points in the set
+// From: Computer Language Benchmarks Game
+//
+// STATUS: NOT YET IMPLEMENTABLE
+// MISSING FEATURES:
+// - Float comparison operators (>, <, >=, <=)
+// - Stdlib.Float.sqrt (optional but helpful)
+//
+// This benchmark tests:
+// - Floating point arithmetic
+// - Nested loops
+// - Complex number simulation with tuples
+// - Iteration limits
+
+// TODO: Implement when float comparisons are available
+//
+// def mandelbrot(cr: Float, ci: Float, maxIter: Int64) : Int64 =
+//     let rec iterate(zr: Float, zi: Float, iter: Int64) : Int64 =
+//         if iter >= maxIter then 1
+//         else if zr * zr + zi * zi > 4.0 then 0
+//         else
+//             let newZr = zr * zr - zi * zi + cr in
+//             let newZi = 2.0 * zr * zi + ci in
+//             iterate(newZr, newZi, iter + 1)
+//     in iterate(0.0, 0.0, 0)
+//
+// Count points in the Mandelbrot set for a grid
+
+0
