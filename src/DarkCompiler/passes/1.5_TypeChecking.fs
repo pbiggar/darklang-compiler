@@ -907,7 +907,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         match remaining with
                         | [] -> Ok (List.rev accTypes, List.rev accExprs)
                         | arg :: rest ->
-                            checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry None
+                            checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg None
                             |> Result.bind (fun (argType, arg') ->
                                 checkArgs rest (argType :: accTypes) (arg' :: accExprs))
 
@@ -1021,7 +1021,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             match remaining, paramTys with
                             | [], [] -> Ok (List.rev accArgs)
                             | arg :: restArgs, paramT :: restParams ->
-                                checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry (Some paramT)
+                                checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
                                 |> Result.bind (fun (argType, arg') ->
                                     if argType = paramT then
                                         checkArgsWithTypes restArgs restParams (arg' :: accArgs)
