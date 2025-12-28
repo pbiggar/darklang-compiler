@@ -698,6 +698,7 @@ let rec parseQualifiedTypeName (firstName: string) (tokens: Token list) : string
         (firstName, tokens)
 
 /// Parse a type definition: type Name = { fields } or type Name = Variant1 | Variant2 of Type | ...
+/// Also supports type aliases: type Id = String, type MyList = List<Int64>
 /// Supports qualified type names: type Stdlib.Result.Result = Ok of T | Error of E
 /// Supports generic types: type Result<t, e> = Ok of t | Error of e
 let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
@@ -728,18 +729,52 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
                     | _ ->
                         // Single variant sum type
                         Ok (SumTypeDef (typeName, typeParams, [firstVariant]), afterType))
-            | TEquals :: TIdent variantName :: bodyRest when System.Char.IsUpper(variantName.[0]) ->
-                // Sum type: type Name = Variant1 | Variant2 | ...
+            | TEquals :: TIdent variantName :: TBar :: bodyRest when System.Char.IsUpper(variantName.[0]) ->
+                // Sum type with multiple variants: type Name = Variant1 | Variant2 | ...
                 let firstVariant = { Name = variantName; Payload = None }
-                match bodyRest with
-                | TBar :: rest' ->
-                    // More variants
-                    parseVariantsWithContext typeParams rest' [firstVariant]
-                    |> Result.map (fun (variants, remaining) ->
-                        (SumTypeDef (typeName, typeParams, variants), remaining))
-                | _ ->
-                    // Single variant sum type
-                    Ok (SumTypeDef (typeName, typeParams, [firstVariant]), bodyRest)
+                parseVariantsWithContext typeParams bodyRest [firstVariant]
+                |> Result.map (fun (variants, remaining) ->
+                    (SumTypeDef (typeName, typeParams, variants), remaining))
+            | TEquals :: rest' ->
+                // Could be a type alias or a single-variant sum type
+                // Try to parse as a type first
+                let typeParamSet = Set.ofList typeParams
+                match parseTypeWithContext typeParamSet rest' with
+                | Ok (targetType, remaining) ->
+                    // Decide: type alias or single-variant sum type?
+                    // Rules:
+                    // 1. Primitive types (Int64, String, etc.) → TYPE ALIAS
+                    // 2. Generic types (List<T>, Result<T,E>) → TYPE ALIAS
+                    // 3. Tuple types ((T, U)) → TYPE ALIAS
+                    // 4. Function types ((T) -> U) → TYPE ALIAS
+                    // 5. Simple name (TRecord):
+                    //    - Same name as type being defined → SUM TYPE (recursive variant)
+                    //    - End of input → SUM TYPE (backwards compat for single-variant enums)
+                    //    - Otherwise → TYPE ALIAS (reference to existing type)
+                    match targetType with
+                    | TRecord potentialVariant when potentialVariant = typeName ->
+                        // Same name as type being defined - this is a recursive variant definition
+                        // e.g., type Unit2 = Unit2 defines a sum type with variant Unit2
+                        let variant = { Name = potentialVariant; Payload = None }
+                        Ok (SumTypeDef (typeName, typeParams, [variant]), remaining)
+                    | TRecord potentialVariant when
+                        // Not a primitive type and at end of input - treat as sum type for backwards compat
+                        potentialVariant <> "Int64" && potentialVariant <> "Int32" && potentialVariant <> "Int16" && potentialVariant <> "Int8" &&
+                        potentialVariant <> "UInt64" && potentialVariant <> "UInt32" && potentialVariant <> "UInt16" && potentialVariant <> "UInt8" &&
+                        potentialVariant <> "Bool" && potentialVariant <> "String" && potentialVariant <> "Float" &&
+                        (match remaining with [] -> true | _ -> false) ->
+                        let variant = { Name = potentialVariant; Payload = None }
+                        Ok (SumTypeDef (typeName, typeParams, [variant]), remaining)
+                    | _ ->
+                        // Type alias for:
+                        // - Primitive types (parsed as TInt64, TString, etc. directly by parseType)
+                        // - Generic types (TSum with type args, TList)
+                        // - Tuple types (TTuple)
+                        // - Function types (TFunction)
+                        // - User types with remaining tokens (assumed to be alias to existing type)
+                        Ok (TypeAlias (typeName, typeParams, targetType), remaining)
+                | Error _ ->
+                    Error "Expected type expression after '=' in type alias or variant name"
             | _ -> Error "Expected '=' after type name in type definition"
         match afterName with
         | TLt :: rest' ->

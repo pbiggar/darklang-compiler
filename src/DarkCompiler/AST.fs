@@ -157,6 +157,7 @@ type Variant = {
 type TypeDef =
     | RecordDef of name:string * typeParams:string list * fields:(string * Type) list  // type Point<T> = { x: T, y: T }
     | SumTypeDef of name:string * typeParams:string list * variants:Variant list       // type Result<T, E> = Ok of T | Error of E
+    | TypeAlias of name:string * typeParams:string list * targetType:Type              // type Id = String
 
 /// Top-level program elements
 type TopLevel =

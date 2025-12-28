@@ -92,6 +92,11 @@ type VariantLookup = Map<string, (string * string list * int * Type option)>
 /// Only contains entries for functions that have type parameters
 type GenericFuncRegistry = Map<string, string list>
 
+/// Alias registry - maps type alias names to (type params, target type)
+/// Example: type Id = String -> ("Id", ([], TString))
+/// Example: type Outer<a> = Inner<a, Int64> -> ("Outer", (["a"], TSum("Inner", [TVar "a"; TInt64])))
+type AliasRegistry = Map<string, (string list * Type)>
+
 /// Type substitution - maps type variable names to concrete types
 type Substitution = Map<string, Type>
 
@@ -122,6 +127,52 @@ let buildSubstitution (typeParams: string list) (typeArgs: Type list) : Result<S
         Error $"Expected {List.length typeParams} type arguments, got {List.length typeArgs}"
     else
         Ok (List.zip typeParams typeArgs |> Map.ofList)
+
+/// Resolve a type by expanding any type aliases (recursively)
+/// Returns the fully resolved type with all aliases replaced by their targets
+let rec resolveType (aliasReg: AliasRegistry) (typ: Type) : Type =
+    match typ with
+    | TRecord name ->
+        // Check if this record name is actually a type alias
+        match Map.tryFind name aliasReg with
+        | Some ([], targetType) ->
+            // Non-generic alias, resolve the target type too
+            resolveType aliasReg targetType
+        | Some (typeParams, _) ->
+            // This alias expects type arguments but none provided
+            // Return as-is (error will be caught elsewhere)
+            typ
+        | None ->
+            // Not an alias, it's a real record type
+            typ
+    | TSum (name, typeArgs) ->
+        // Check if this sum type name is actually a type alias
+        match Map.tryFind name aliasReg with
+        | Some (typeParams, targetType) ->
+            // Type alias with (possibly) type arguments
+            if List.length typeParams <> List.length typeArgs then
+                // Mismatched type args, return as-is (error caught elsewhere)
+                typ
+            else
+                // Build substitution and apply to target type
+                let subst = List.zip typeParams typeArgs |> Map.ofList
+                let substituted = applySubst subst targetType
+                // Recursively resolve in case target is also an alias
+                resolveType aliasReg substituted
+        | None ->
+            // Not an alias, resolve type arguments recursively
+            TSum (name, List.map (resolveType aliasReg) typeArgs)
+    | TFunction (paramTypes, returnType) ->
+        TFunction (List.map (resolveType aliasReg) paramTypes, resolveType aliasReg returnType)
+    | TTuple elemTypes ->
+        TTuple (List.map (resolveType aliasReg) elemTypes)
+    | TList elemType ->
+        TList (resolveType aliasReg elemType)
+    | TDict (keyType, valueType) ->
+        TDict (resolveType aliasReg keyType, resolveType aliasReg valueType)
+    | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TUInt8 | TUInt16 | TUInt32 | TUInt64
+    | TBool | TFloat64 | TString | TUnit | TRawPtr ->
+        typ  // Primitive types and type variables are unchanged
 
 // =============================================================================
 // Free Variable Analysis for Closures
@@ -1434,6 +1485,14 @@ let checkProgram (program: Program) : Result<Type * Program, TypeError> =
         topLevels
         |> List.choose (function
             | TypeDef (RecordDef (name, _typeParams, fields)) -> Some (name, fields)
+            | _ -> None)
+        |> Map.ofList
+
+    // Collect type aliases
+    let aliasReg : AliasRegistry =
+        topLevels
+        |> List.choose (function
+            | TypeDef (TypeAlias (name, typeParams, targetType)) -> Some (name, (typeParams, targetType))
             | _ -> None)
         |> Map.ofList
 

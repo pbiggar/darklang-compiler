@@ -6,17 +6,16 @@
 
 // ===================================================================
 // String interpolation
-// NOTE: All tests commented out - requires string interpolation syntax ($"...")
 // ===================================================================
 
 // Basic string interpolation
-// $"""test {"1"}""" = "test 1"
+$"test {"1"}" = stdout="test 1\n"
 
 // Variable interpolation
-// let one = "1" in $"test {one}" = "test 1"
+let one = "1" in $"test {one}" = stdout="test 1\n"
 
 // Multiple variable interpolation
-// let name = "Alice" in let age = "25" in $"Name: {name}, Age: {age} years old." = "Name: Alice, Age: 25 years old."
+let name = "Alice" in let age = "25" in $"Name: {name}, Age: {age} years old." = stdout="Name: Alice, Age: 25 years old.\n"
 
 // ===================================================================
 // String interpolation type errors
