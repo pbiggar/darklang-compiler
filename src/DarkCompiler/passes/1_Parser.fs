@@ -462,6 +462,7 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
         |> Result.bind (fun (elemType, afterElem) ->
             match afterElem with
             | TGt :: remaining -> Ok (TList elemType, remaining)
+            | TShr :: remaining -> Ok (TList elemType, TGt :: remaining)  // >> is two >'s
             | _ -> Error "Expected '>' after List element type")
     | TIdent "Dict" :: TLt :: rest ->
         // Dict type: Dict<KeyType, ValueType>
@@ -473,6 +474,7 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
                 |> Result.bind (fun (valueType, afterValue) ->
                     match afterValue with
                     | TGt :: remaining -> Ok (TDict (keyType, valueType), remaining)
+                    | TShr :: remaining -> Ok (TDict (keyType, valueType), TGt :: remaining)  // >> is two >'s
                     | _ -> Error "Expected '>' after Dict value type")
             | _ -> Error "Expected ',' after Dict key type")
     | TIdent typeName :: rest when System.Char.IsUpper(typeName.[0]) ->
@@ -494,6 +496,7 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
                 |> Result.bind (fun (ty, remaining) ->
                     match remaining with
                     | TGt :: rest -> Ok (List.rev (ty :: acc), rest)
+                    | TShr :: rest -> Ok (List.rev (ty :: acc), TGt :: rest)  // >> is two >'s
                     | TComma :: rest -> parseTypeArgsInType rest (ty :: acc)
                     | _ -> Error "Expected ',' or '>' after type argument in generic type")
             parseTypeArgsInType typeArgsStart []
@@ -569,6 +572,7 @@ let rec parseTypeArgType (tokens: Token list) : Result<Type * Token list, string
         |> Result.bind (fun (elemType, afterElem) ->
             match afterElem with
             | TGt :: remaining -> Ok (TList elemType, remaining)
+            | TShr :: remaining -> Ok (TList elemType, TGt :: remaining)  // >> is two >'s
             | _ -> Error "Expected '>' after List element type in type argument")
     | TIdent "Dict" :: TLt :: rest ->
         // Dict type: Dict<KeyType, ValueType>
@@ -580,6 +584,7 @@ let rec parseTypeArgType (tokens: Token list) : Result<Type * Token list, string
                 |> Result.bind (fun (valueType, afterValue) ->
                     match afterValue with
                     | TGt :: remaining -> Ok (TDict (keyType, valueType), remaining)
+                    | TShr :: remaining -> Ok (TDict (keyType, valueType), TGt :: remaining)  // >> is two >'s
                     | _ -> Error "Expected '>' after Dict value type in type argument")
             | _ -> Error "Expected ',' after Dict key type in type argument")
     | TIdent typeName :: rest when System.Char.IsLower(typeName.[0]) ->
@@ -598,6 +603,9 @@ let rec parseTypeArgs (tokens: Token list) (acc: Type list) : Result<Type list *
         | TGt :: rest ->
             // Last type argument
             Ok (List.rev (ty :: acc), rest)
+        | TShr :: rest ->
+            // >> is two >'s - last type argument, put one > back
+            Ok (List.rev (ty :: acc), TGt :: rest)
         | TComma :: rest ->
             // More type arguments to come
             parseTypeArgs rest (ty :: acc)
@@ -1454,11 +1462,31 @@ let parse (tokens: Token list) : Result<Program, string> =
                             match toks with
                             | TGt :: remaining when depth = 1 -> Some remaining
                             | TGt :: remaining -> skipNested remaining (depth - 1)
+                            | TShr :: remaining when depth = 1 -> Some (TGt :: remaining)  // >> is two >'s
+                            | TShr :: remaining when depth = 2 -> Some remaining  // both >'s consumed
+                            | TShr :: remaining -> skipNested remaining (depth - 2)  // >> decreases by 2
                             | TLt :: remaining -> skipNested remaining (depth + 1)
                             | _ :: remaining -> skipNested remaining depth
                             | [] -> None
                         match skipNested rest 1 with
                         | Some (TGt :: TLParen :: _) -> true
+                        | Some (TShr :: _) -> true  // >> followed by ( - TShr has one > left for outer
+                        | Some (TComma :: rest') -> looksLikeTypeArgs rest'
+                        | _ -> false
+                    | TIdent "Dict" :: TLt :: rest ->  // Nested Dict<...>
+                        let rec skipNested toks depth =
+                            match toks with
+                            | TGt :: remaining when depth = 1 -> Some remaining
+                            | TGt :: remaining -> skipNested remaining (depth - 1)
+                            | TShr :: remaining when depth = 1 -> Some (TGt :: remaining)  // >> is two >'s
+                            | TShr :: remaining when depth = 2 -> Some remaining  // both >'s consumed
+                            | TShr :: remaining -> skipNested remaining (depth - 2)  // >> decreases by 2
+                            | TLt :: remaining -> skipNested remaining (depth + 1)
+                            | _ :: remaining -> skipNested remaining depth
+                            | [] -> None
+                        match skipNested rest 1 with
+                        | Some (TGt :: TLParen :: _) -> true
+                        | Some (TShr :: _) -> true  // >> followed by ( - TShr has one > left for outer
                         | Some (TComma :: rest') -> looksLikeTypeArgs rest'
                         | _ -> false
                     | _ -> false
@@ -1497,11 +1525,32 @@ let parse (tokens: Token list) : Result<Program, string> =
                         match toks with
                         | TGt :: remaining when depth = 1 -> Some remaining
                         | TGt :: remaining -> skipNested remaining (depth - 1)
+                        | TShr :: remaining when depth = 1 -> Some (TGt :: remaining)  // >> is two >'s
+                        | TShr :: remaining when depth = 2 -> Some remaining  // both >'s consumed
+                        | TShr :: remaining -> skipNested remaining (depth - 2)  // >> decreases by 2
                         | TLt :: remaining -> skipNested remaining (depth + 1)
                         | _ :: remaining -> skipNested remaining depth
                         | [] -> None
                     match skipNested rest 1 with
                     | Some (TGt :: TLParen :: _) -> true
+                    | Some (TShr :: _) -> true  // >> followed by ( - TShr has one > left for outer
+                    | Some (TComma :: rest') -> looksLikeGenericCall rest'
+                    | _ -> false
+                | TIdent "Dict" :: TLt :: rest ->  // Nested Dict<...>
+                    // Skip past nested generic type
+                    let rec skipNested toks depth =
+                        match toks with
+                        | TGt :: remaining when depth = 1 -> Some remaining
+                        | TGt :: remaining -> skipNested remaining (depth - 1)
+                        | TShr :: remaining when depth = 1 -> Some (TGt :: remaining)  // >> is two >'s
+                        | TShr :: remaining when depth = 2 -> Some remaining  // both >'s consumed
+                        | TShr :: remaining -> skipNested remaining (depth - 2)  // >> decreases by 2
+                        | TLt :: remaining -> skipNested remaining (depth + 1)
+                        | _ :: remaining -> skipNested remaining depth
+                        | [] -> None
+                    match skipNested rest 1 with
+                    | Some (TGt :: TLParen :: _) -> true
+                    | Some (TShr :: _) -> true  // >> followed by ( - TShr has one > left for outer
                     | Some (TComma :: rest') -> looksLikeGenericCall rest'
                     | _ -> false
                 | _ -> false

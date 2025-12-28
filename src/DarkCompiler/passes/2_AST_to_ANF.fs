@@ -1588,6 +1588,29 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                 elif funcName.StartsWith("__raw_set_") then
                     // __raw_set<T> returns Unit
                     Ok AST.TUnit
+                // Key intrinsics for Dict - monomorphized versions
+                elif funcName.StartsWith("__hash_") then
+                    // __hash<k> returns Int64 (hash value)
+                    Ok AST.TInt64
+                elif funcName.StartsWith("__key_eq_") then
+                    // __key_eq<k> returns Bool (equality check)
+                    Ok AST.TBool
+                // Dict intrinsics - monomorphized versions
+                elif funcName.StartsWith("__empty_dict_") then
+                    // __empty_dict<k, v> returns Dict<k, v> - but at ANF level it's Int64 (null ptr)
+                    Ok AST.TInt64
+                elif funcName.StartsWith("__dict_is_null_") then
+                    // __dict_is_null<k, v> returns Bool
+                    Ok AST.TBool
+                elif funcName.StartsWith("__dict_get_tag_") then
+                    // __dict_get_tag<k, v> returns Int64 (tag bits)
+                    Ok AST.TInt64
+                elif funcName.StartsWith("__dict_to_rawptr_") then
+                    // __dict_to_rawptr<k, v> returns RawPtr (as Int64)
+                    Ok AST.TInt64
+                elif funcName.StartsWith("__rawptr_to_dict_") then
+                    // __rawptr_to_dict<k, v> returns Dict<k, v> (as Int64)
+                    Ok AST.TInt64
                 else
                     Error $"Unknown function: '{funcName}'"
     | AST.TypeApp (_funcName, _typeArgs, _args) ->

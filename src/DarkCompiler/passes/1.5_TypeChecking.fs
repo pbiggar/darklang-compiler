@@ -75,6 +75,40 @@ let typeErrorToString (err: TypeError) : string =
     | GenericError msg ->
         msg
 
+/// Counter for generating fresh type variable names
+let mutable private freshCounter = 0
+
+/// Generate a fresh type variable name
+let private freshVarName (baseName: string) : string =
+    freshCounter <- freshCounter + 1
+    $"{baseName}${freshCounter}"
+
+/// Reset the fresh counter (for testing)
+let resetFreshCounter () = freshCounter <- 0
+
+/// Freshen type parameters - generate new unique names for each type param
+/// Returns (fresh type params, substitution map from old to fresh names)
+let freshenTypeParams (typeParams: string list) : string list * Map<string, string> =
+    let freshParams = typeParams |> List.map freshVarName
+    let subst = List.zip typeParams freshParams |> Map.ofList
+    (freshParams, subst)
+
+/// Apply type variable renaming to a type
+let rec applyTypeVarRenaming (subst: Map<string, string>) (t: Type) : Type =
+    match t with
+    | TVar name ->
+        match Map.tryFind name subst with
+        | Some newName -> TVar newName
+        | None -> t
+    | TList elem -> TList (applyTypeVarRenaming subst elem)
+    | TDict (k, v) -> TDict (applyTypeVarRenaming subst k, applyTypeVarRenaming subst v)
+    | TFunction (paramTypes, retType) ->
+        TFunction (List.map (applyTypeVarRenaming subst) paramTypes, applyTypeVarRenaming subst retType)
+    | TTuple elems -> TTuple (List.map (applyTypeVarRenaming subst) elems)
+    | TSum (name, args) -> TSum (name, List.map (applyTypeVarRenaming subst) args)
+    | TRecord _ | TInt8 | TInt16 | TInt32 | TInt64 | TUInt8 | TUInt16 | TUInt32 | TUInt64
+    | TBool | TFloat64 | TString | TUnit | TRawPtr -> t
+
 /// Type environment - maps variable names to their types
 type TypeEnv = Map<string, Type>
 
@@ -157,6 +191,58 @@ let buildSubstitution (typeParams: string list) (typeArgs: Type list) : Result<S
         Error $"Expected {List.length typeParams} type arguments, got {List.length typeArgs}"
     else
         Ok (List.zip typeParams typeArgs |> Map.ofList)
+
+/// Apply a type substitution to an expression
+/// This is used to propagate concrete types through nested TypeApp nodes
+let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
+    match expr with
+    | UnitLiteral | IntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
+    | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _
+    | BoolLiteral _ | StringLiteral _ | FloatLiteral _ | Var _ | FuncRef _ -> expr
+    | BinOp (op, left, right) ->
+        BinOp (op, applySubstToExpr subst left, applySubstToExpr subst right)
+    | UnaryOp (op, inner) ->
+        UnaryOp (op, applySubstToExpr subst inner)
+    | Let (name, value, body) ->
+        Let (name, applySubstToExpr subst value, applySubstToExpr subst body)
+    | If (cond, thenBr, elseBr) ->
+        If (applySubstToExpr subst cond, applySubstToExpr subst thenBr, applySubstToExpr subst elseBr)
+    | Call (funcName, args) ->
+        Call (funcName, List.map (applySubstToExpr subst) args)
+    | TypeApp (funcName, typeArgs, args) ->
+        // Apply substitution to both type arguments and value arguments
+        TypeApp (funcName, List.map (applySubst subst) typeArgs, List.map (applySubstToExpr subst) args)
+    | TupleLiteral elements ->
+        TupleLiteral (List.map (applySubstToExpr subst) elements)
+    | TupleAccess (tuple, index) ->
+        TupleAccess (applySubstToExpr subst tuple, index)
+    | RecordLiteral (typeName, fields) ->
+        RecordLiteral (typeName, List.map (fun (n, e) -> (n, applySubstToExpr subst e)) fields)
+    | RecordUpdate (record, updates) ->
+        RecordUpdate (applySubstToExpr subst record, List.map (fun (n, e) -> (n, applySubstToExpr subst e)) updates)
+    | RecordAccess (record, fieldName) ->
+        RecordAccess (applySubstToExpr subst record, fieldName)
+    | Constructor (typeName, variantName, payload) ->
+        Constructor (typeName, variantName, Option.map (applySubstToExpr subst) payload)
+    | Match (scrutinee, cases) ->
+        Match (applySubstToExpr subst scrutinee,
+               cases |> List.map (fun mc ->
+                   { mc with Guard = mc.Guard |> Option.map (applySubstToExpr subst)
+                             Body = applySubstToExpr subst mc.Body }))
+    | ListLiteral elements ->
+        ListLiteral (List.map (applySubstToExpr subst) elements)
+    | ListCons (heads, tail) ->
+        ListCons (List.map (applySubstToExpr subst) heads, applySubstToExpr subst tail)
+    | Lambda (params', body) ->
+        Lambda (params', applySubstToExpr subst body)
+    | Apply (func, args) ->
+        Apply (applySubstToExpr subst func, List.map (applySubstToExpr subst) args)
+    | Closure (funcName, captures) ->
+        Closure (funcName, List.map (applySubstToExpr subst) captures)
+    | InterpolatedString parts ->
+        InterpolatedString (parts |> List.map (function
+            | StringText s -> StringText s
+            | StringExpr e -> StringExpr (applySubstToExpr subst e)))
 
 /// Resolve a type by expanding any type aliases (recursively)
 /// Returns the fully resolved type with all aliases replaced by their targets
@@ -340,7 +426,9 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
     match pattern with
     | TVar name ->
         // Type variable matches anything - record the binding
-        Ok [(name, actual)]
+        match actual with
+        | TVar actualName when actualName = name -> Ok []  // Same var, no binding needed
+        | _ -> Ok [(name, actual)]
     | TInt8 -> matchConcrete TInt8 actual
     | TInt16 -> matchConcrete TInt16 actual
     | TInt32 -> matchConcrete TInt32 actual
@@ -424,8 +512,20 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
         | TVar varName -> Ok [(varName, pattern)]  // Bind TVar to Dict type
         | _ -> Error $"Expected Dict<...>, got {typeToString actual}"
 
+/// Check if a type is a type variable
+let private isTypeVar (t: Type) : bool =
+    match t with TVar _ -> true | _ -> false
+
+/// Check if two types are compatible (can be unified)
+/// Type variables in either type can match concrete types
+let typesCompatible (expected: Type) (actual: Type) : bool =
+    match matchTypes expected actual with
+    | Ok _ -> true
+    | Error _ -> false
+
 /// Consolidate bindings, checking for conflicts where the same type variable
 /// is bound to different types. Returns a map from type var name to concrete type.
+/// When a type var is bound to both a TVar and a concrete type, prefer the concrete type.
 let consolidateBindings (bindings: (string * Type) list) : Result<Map<string, Type>, string> =
     bindings
     |> List.fold (fun acc (name, typ) ->
@@ -433,8 +533,17 @@ let consolidateBindings (bindings: (string * Type) list) : Result<Map<string, Ty
             match Map.tryFind name m with
             | None -> Ok (Map.add name typ m)
             | Some existingType ->
-                if existingType = typ then Ok m
-                else Error $"Type variable {name} has conflicting inferences: {typeToString existingType} vs {typeToString typ}"))
+                if existingType = typ then
+                    Ok m
+                elif isTypeVar existingType then
+                    // existing is TVar, new might be concrete - prefer new
+                    Ok (Map.add name typ m)
+                elif isTypeVar typ then
+                    // new is TVar, existing is concrete - keep existing
+                    Ok m
+                else
+                    // Both are concrete but different - that's an error
+                    Error $"Type variable {name} has conflicting inferences: {typeToString existingType} vs {typeToString typ}"))
         (Ok Map.empty)
 
 /// Unify a type pattern (may contain TVar) with a concrete type.
@@ -449,6 +558,7 @@ let rec containsTVar (typ: Type) : bool =
     match typ with
     | TVar _ -> true
     | TList elemType -> containsTVar elemType
+    | TDict (keyType, valueType) -> containsTVar keyType || containsTVar valueType
     | TTuple elemTypes -> List.exists containsTVar elemTypes
     | TSum (_, typeArgs) -> List.exists containsTVar typeArgs
     | TFunction (paramTypes, retType) ->
@@ -483,17 +593,24 @@ let reconcileTypes (t1: Type) (t2: Type) : Type option =
 /// Infer type arguments for a generic function call.
 /// Given type parameters, parameter types (with type variables), and actual argument types,
 /// returns the inferred type arguments in order matching typeParams.
-let inferTypeArgs (typeParams: string list) (paramTypes: Type list) (argTypes: Type list) : Result<Type list, string> =
+/// Also takes optional function return type and expected return type for additional inference.
+let inferTypeArgs (typeParams: string list) (paramTypes: Type list) (argTypes: Type list) (returnType: Type option) (expectedReturnType: Type option) : Result<Type list, string> =
     if List.length paramTypes <> List.length argTypes then
         Error $"Argument count mismatch: expected {List.length paramTypes}, got {List.length argTypes}"
     else
         // Match each parameter type against argument type
-        let matchResults =
+        let argMatchResults =
             List.zip paramTypes argTypes
             |> List.map (fun (paramT, argT) -> matchTypes paramT argT)
 
+        // Also match return type against expected return type if both are provided
+        let returnMatchResult =
+            match returnType, expectedReturnType with
+            | Some retT, Some expT -> matchTypes retT expT
+            | _ -> Ok []
+
         // Combine all bindings
-        matchResults
+        (argMatchResults @ [returnMatchResult])
         |> List.fold (fun acc res ->
             match acc, res with
             | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
@@ -576,8 +693,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
     | BoolLiteral _ ->
         // Boolean literals are always TBool
         match expectedType with
-        | Some TBool | None -> Ok (TBool, expr)
-        | Some other -> Error (TypeMismatch (other, TBool, "boolean literal"))
+        | Some expected when not (typesCompatible expected TBool) ->
+            Error (TypeMismatch (expected, TBool, "boolean literal"))
+        | _ -> Ok (TBool, expr)
 
     | StringLiteral _ ->
         // String literals are always TString
@@ -834,24 +952,31 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
     | Call (funcName, args) ->
         // Function call: look up function signature, check arguments match
         match Map.tryFind funcName env with
-        | Some (TFunction (paramTypes, returnType)) ->
+        | Some (TFunction (origParamTypes, origReturnType)) ->
             // Check if this is a generic function - if so, infer type arguments
             match Map.tryFind funcName genericFuncReg with
-            | Some typeParams ->
+            | Some origTypeParams ->
+                // Freshen type params to avoid name clashes with caller's scope
+                let (freshTypeParams, renaming) = freshenTypeParams origTypeParams
+                let paramTypes = origParamTypes |> List.map (applyTypeVarRenaming renaming)
+                let returnType = applyTypeVarRenaming renaming origReturnType
+                let typeParams = freshTypeParams
                 // Generic function called without explicit type args: infer them
-                // First, type-check all arguments to get their types
-                let rec checkArgs remaining accTypes accExprs =
-                    match remaining with
-                    | [] -> Ok (List.rev accTypes, List.rev accExprs)
-                    | arg :: rest ->
-                        checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg None
+                // First, type-check all arguments with expected parameter types
+                let rec checkArgs remaining remainingParamTypes accTypes accExprs =
+                    match remaining, remainingParamTypes with
+                    | [], [] -> Ok (List.rev accTypes, List.rev accExprs)
+                    | arg :: rest, paramT :: restParamTypes ->
+                        // Pass the parameter type as expected type to help infer nested generics
+                        checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
                         |> Result.bind (fun (argType, arg') ->
-                            checkArgs rest (argType :: accTypes) (arg' :: accExprs))
+                            checkArgs rest restParamTypes (argType :: accTypes) (arg' :: accExprs))
+                    | _ -> Error (GenericError "Argument count mismatch")
 
-                checkArgs args [] []
+                checkArgs args paramTypes [] []
                 |> Result.bind (fun (argTypes, args') ->
-                    // Infer type arguments from parameter types and argument types
-                    inferTypeArgs typeParams paramTypes argTypes
+                    // Infer type arguments from parameter types, argument types, and expected return type
+                    inferTypeArgs typeParams paramTypes argTypes (Some returnType) expectedType
                     |> Result.mapError GenericError
                     |> Result.bind (fun inferredTypeArgs ->
                         // Build substitution and compute concrete types
@@ -859,18 +984,22 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         |> Result.mapError GenericError
                         |> Result.bind (fun subst ->
                             let concreteReturnType = applySubst subst returnType
+                            // Apply substitution to nested expressions (e.g., inner TypeApp nodes)
+                            // This ensures that when empty() returns Dict<k$3, v$4> and we later
+                            // infer k$3 -> Int64, v$4 -> Int64, the inner TypeApp gets updated
+                            let concreteArgs = List.map (applySubstToExpr subst) args'
                             match expectedType with
-                            | Some expected when expected <> concreteReturnType ->
+                            | Some expected when not (typesCompatible expected concreteReturnType) ->
                                 Error (TypeMismatch (expected, concreteReturnType, $"result of call to {funcName}"))
                             | _ ->
                                 // Transform Call to TypeApp with inferred type arguments
-                                Ok (concreteReturnType, TypeApp (funcName, inferredTypeArgs, args')))))
+                                Ok (concreteReturnType, TypeApp (funcName, inferredTypeArgs, concreteArgs)))))
 
             | None ->
                 // Non-generic function: regular call
                 // Check argument count
-                if List.length args <> List.length paramTypes then
-                    Error (GenericError $"Function {funcName} expects {List.length paramTypes} arguments, got {List.length args}")
+                if List.length args <> List.length origParamTypes then
+                    Error (GenericError $"Function {funcName} expects {List.length origParamTypes} arguments, got {List.length args}")
                 else
                     // Check each argument type and collect transformed args
                     let rec checkArgsWithTypes remaining paramTys accArgs =
@@ -885,12 +1014,12 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                                     Error (TypeMismatch (paramT, argType, $"argument to {funcName}")))
                         | _ -> Error (GenericError "Internal error: argument/param length mismatch")
 
-                    checkArgsWithTypes args paramTypes []
+                    checkArgsWithTypes args origParamTypes []
                     |> Result.bind (fun args' ->
                         match expectedType with
-                        | Some expected when not (typesEqual aliasReg expected returnType) ->
-                            Error (TypeMismatch (expected, returnType, $"result of call to {funcName}"))
-                        | _ -> Ok (returnType, Call (funcName, args')))
+                        | Some expected when not (typesEqual aliasReg expected origReturnType) ->
+                            Error (TypeMismatch (expected, origReturnType, $"result of call to {funcName}"))
+                        | _ -> Ok (origReturnType, Call (funcName, args')))
         | Some other ->
             Error (GenericError $"{funcName} is not a function (has type {typeToString other})")
         | None ->
@@ -898,27 +1027,31 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
             let moduleRegistry = Stdlib.buildModuleRegistry ()
             match Stdlib.tryGetFunction moduleRegistry funcName with
             | Some moduleFunc ->
-                let paramTypes = moduleFunc.ParamTypes
-                let returnType = moduleFunc.ReturnType
-                let typeParams = moduleFunc.TypeParams
+                // Freshen type params to avoid name clashes with caller's scope
+                let (freshTypeParams, renaming) = freshenTypeParams moduleFunc.TypeParams
+                let paramTypes = moduleFunc.ParamTypes |> List.map (applyTypeVarRenaming renaming)
+                let returnType = applyTypeVarRenaming renaming moduleFunc.ReturnType
+                let typeParams = freshTypeParams
                 // Check argument count
-                if List.length args <> List.length paramTypes then
-                    Error (GenericError $"Function {funcName} expects {List.length paramTypes} arguments, got {List.length args}")
+                if List.length args <> List.length moduleFunc.ParamTypes then
+                    Error (GenericError $"Function {funcName} expects {List.length moduleFunc.ParamTypes} arguments, got {List.length args}")
                 else if not (List.isEmpty typeParams) then
                     // Generic module function: infer type arguments from actual argument types
-                    // First, type-check all arguments to get their types
-                    let rec checkArgs remaining accTypes accExprs =
-                        match remaining with
-                        | [] -> Ok (List.rev accTypes, List.rev accExprs)
-                        | arg :: rest ->
-                            checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg None
+                    // First, type-check all arguments with expected parameter types
+                    let rec checkArgs remaining remainingParamTypes accTypes accExprs =
+                        match remaining, remainingParamTypes with
+                        | [], [] -> Ok (List.rev accTypes, List.rev accExprs)
+                        | arg :: rest, paramT :: restParamTypes ->
+                            // Pass the parameter type as expected type to help infer nested generics
+                            checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
                             |> Result.bind (fun (argType, arg') ->
-                                checkArgs rest (argType :: accTypes) (arg' :: accExprs))
+                                checkArgs rest restParamTypes (argType :: accTypes) (arg' :: accExprs))
+                        | _ -> Error (GenericError "Argument count mismatch")
 
-                    checkArgs args [] []
+                    checkArgs args paramTypes [] []
                     |> Result.bind (fun (argTypes, args') ->
-                        // Infer type arguments from parameter types and argument types
-                        inferTypeArgs typeParams paramTypes argTypes
+                        // Infer type arguments from parameter types, argument types, and expected return type
+                        inferTypeArgs typeParams paramTypes argTypes (Some returnType) expectedType
                         |> Result.mapError GenericError
                         |> Result.bind (fun inferredTypeArgs ->
                             // Build substitution and compute concrete types
@@ -927,7 +1060,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             |> Result.bind (fun subst ->
                                 let concreteReturnType = applySubst subst returnType
                                 match expectedType with
-                                | Some expected when expected <> concreteReturnType ->
+                                | Some expected when not (typesCompatible expected concreteReturnType) ->
                                     Error (TypeMismatch (expected, concreteReturnType, $"result of call to {funcName}"))
                                 | _ ->
                                     // Transform Call to TypeApp with inferred type arguments
@@ -1058,10 +1191,8 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         |> Result.bind (fun (elemTypes, elements') ->
             let tupleType = TTuple elemTypes
             match expectedType with
-            | Some (TTuple expectedElemTypes) when expectedElemTypes <> elemTypes ->
-                Error (TypeMismatch (TTuple expectedElemTypes, tupleType, "tuple literal"))
-            | Some other when other <> tupleType ->
-                Error (TypeMismatch (other, tupleType, "tuple literal"))
+            | Some expected when not (typesCompatible expected tupleType) ->
+                Error (TypeMismatch (expected, tupleType, "tuple literal"))
             | _ -> Ok (tupleType, TupleLiteral elements'))
 
     | TupleAccess (tupleExpr, index) ->
@@ -1726,7 +1857,8 @@ let private checkProgramInternal (baseEnv: TypeCheckEnv option) (program: Progra
     let mergedAliasReg = typeCheckEnv.AliasReg
 
     // Third pass: type check all function definitions and collect transformed top-levels
-    let rec checkAllTopLevels remaining accTopLevels =
+    // The accumulator contains (type option * TopLevel) pairs where the type is Some for expressions
+    let rec checkAllTopLevelsWithTypes remaining accTopLevels =
         match remaining with
         | [] -> Ok (List.rev accTopLevels)
         | topLevel :: rest ->
@@ -1734,26 +1866,25 @@ let private checkProgramInternal (baseEnv: TypeCheckEnv option) (program: Progra
             | FunctionDef funcDef ->
                 checkFunctionDef funcDef funcEnv typeReg variantLookup genericFuncReg moduleRegistry mergedAliasReg
                 |> Result.bind (fun funcDef' ->
-                    checkAllTopLevels rest (FunctionDef funcDef' :: accTopLevels))
+                    checkAllTopLevelsWithTypes rest ((None, FunctionDef funcDef') :: accTopLevels))
             | TypeDef _ ->
-                // Type definitions pass through unchanged
-                checkAllTopLevels rest (topLevel :: accTopLevels)
+                checkAllTopLevelsWithTypes rest ((None, topLevel) :: accTopLevels)
             | Expression expr ->
-                // Main expression - check and transform
                 checkExpr expr funcEnv typeReg variantLookup genericFuncReg moduleRegistry mergedAliasReg None
-                |> Result.bind (fun (_, expr') ->
-                    checkAllTopLevels rest (Expression expr' :: accTopLevels))
+                |> Result.bind (fun (exprType, expr') ->
+                    checkAllTopLevelsWithTypes rest ((Some exprType, Expression expr') :: accTopLevels))
 
     // Type check all top-levels
-    checkAllTopLevels topLevels []
-    |> Result.bind (fun topLevels' ->
-        // Determine result type from main expression or main function
-        let mainExpr = topLevels' |> List.tryPick (function Expression e -> Some e | _ -> None)
-        match mainExpr with
-        | Some expr ->
-            // Re-check to get type (we already have transformed expr in topLevels')
-            checkExpr expr funcEnv typeReg variantLookup genericFuncReg moduleRegistry mergedAliasReg None
-            |> Result.map (fun (typ, _) -> (typ, Program topLevels', typeCheckEnv))
+    checkAllTopLevelsWithTypes topLevels []
+    |> Result.bind (fun topLevelsWithTypes ->
+        // Extract just the top-levels
+        let topLevels' = topLevelsWithTypes |> List.map snd
+        // Find the type of the main expression (if any)
+        let mainExprType = topLevelsWithTypes |> List.tryPick (function (Some t, Expression _) -> Some t | _ -> None)
+        match mainExprType with
+        | Some typ ->
+            // We have a main expression with its type - no need to re-check
+            Ok (typ, Program topLevels', typeCheckEnv)
         | None ->
             // No main expression - just functions
             // For now, require a "main" function with signature () -> int
