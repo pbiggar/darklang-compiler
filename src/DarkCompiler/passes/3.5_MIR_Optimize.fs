@@ -55,8 +55,8 @@ let getInstrDest (instr: Instr) : VReg option =
     | Mov (dest, _, _) -> Some dest
     | BinOp (dest, _, _, _, _) -> Some dest
     | UnaryOp (dest, _, _) -> Some dest
-    | Call (dest, _, _) -> Some dest
-    | IndirectCall (dest, _, _) -> Some dest
+    | Call (dest, _, _, _, _) -> Some dest
+    | IndirectCall (dest, _, _, _, _) -> Some dest
     | ClosureAlloc (dest, _, _) -> Some dest
     | ClosureCall (dest, _, _) -> Some dest
     | HeapAlloc (dest, _) -> Some dest
@@ -96,8 +96,8 @@ let getInstrUses (instr: Instr) : Set<VReg> =
     | Mov (_, src, _) -> fromOperand src
     | BinOp (_, _, left, right, _) -> Set.union (fromOperand left) (fromOperand right)
     | UnaryOp (_, _, src) -> fromOperand src
-    | Call (_, _, args) -> args |> List.map fromOperand |> Set.unionMany
-    | IndirectCall (_, func, args) -> Set.unionMany ((fromOperand func) :: (args |> List.map fromOperand))
+    | Call (_, _, args, _, _) -> args |> List.map fromOperand |> Set.unionMany
+    | IndirectCall (_, func, args, _, _) -> Set.unionMany ((fromOperand func) :: (args |> List.map fromOperand))
     | ClosureAlloc (_, _, captures) -> captures |> List.map fromOperand |> Set.unionMany
     | ClosureCall (_, closure, args) -> Set.unionMany ((fromOperand closure) :: (args |> List.map fromOperand))
     | HeapAlloc _ -> Set.empty
@@ -249,8 +249,8 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | Mov (dest, src, vt) -> Mov (dest, p src, vt)
     | BinOp (dest, op, left, right, opType) -> BinOp (dest, op, p left, p right, opType)
     | UnaryOp (dest, op, src) -> UnaryOp (dest, op, p src)
-    | Call (dest, name, args) -> Call (dest, name, List.map p args)
-    | IndirectCall (dest, func, args) -> IndirectCall (dest, p func, List.map p args)
+    | Call (dest, name, args, argTypes, retType) -> Call (dest, name, List.map p args, argTypes, retType)
+    | IndirectCall (dest, func, args, argTypes, retType) -> IndirectCall (dest, p func, List.map p args, argTypes, retType)
     | ClosureAlloc (dest, name, captures) -> ClosureAlloc (dest, name, List.map p captures)
     | ClosureCall (dest, closure, args) -> ClosureCall (dest, p closure, List.map p args)
     | HeapAlloc (dest, size) -> HeapAlloc (dest, size)

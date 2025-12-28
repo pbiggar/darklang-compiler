@@ -301,10 +301,16 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
 
                     // Pass 3: ANF → MIR
                     if verbosity >= 1 then println "  [3/8] ANF → MIR..."
-                    // Pass empty TypeMap and TypeReg since payload sizes are now stored in instructions
+                    // Build typeReg from AST function definitions (for float/int parameter distinction)
                     let emptyTypeMap : ANF.TypeMap = Map.empty
-                    let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
-                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) emptyTypeMap emptyTypeReg
+                    let typeReg =
+                        let (AST.Program topLevels) = transformedAst
+                        topLevels
+                        |> List.choose (function
+                            | AST.FunctionDef funcDef -> Some (funcDef.Name, funcDef.Params)
+                            | _ -> None)
+                        |> Map.ofList
+                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) emptyTypeMap typeReg
 
                     match mirResult with
                     | Error err ->

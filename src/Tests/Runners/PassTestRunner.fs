@@ -175,6 +175,9 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
     | LIR.ArgMoves moves ->
         let moveStrs = moves |> List.map (fun (dest, src) -> sprintf "%A <- %s" dest (prettyPrintLIROperand src))
         sprintf "ArgMoves(%s)" (String.concat ", " moveStrs)
+    | LIR.FArgMoves moves ->
+        let moveStrs = moves |> List.map (fun (dest, src) -> sprintf "%A <- %s" dest (prettyPrintLIRFReg src))
+        sprintf "FArgMoves(%s)" (String.concat ", " moveStrs)
     // FP instructions
     | LIR.FMov (dest, src) ->
         $"{prettyPrintLIRFReg dest} <- FMov({prettyPrintLIRFReg src})"

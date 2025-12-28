@@ -146,6 +146,8 @@ let parseMIR (text: string) : Result<MIR.Program, string> =
                 let func = {
                     Name = "_start"
                     Params = []
+                    ParamTypes = []
+                    ReturnType = AST.TInt64
                     CFG = cfg
                 }
                 Ok (Program ([func], MIR.emptyStringPool, MIR.emptyFloatPool))

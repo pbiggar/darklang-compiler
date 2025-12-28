@@ -155,8 +155,8 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | Mov (dest, _, _) -> Set.add dest defs
         | BinOp (dest, _, _, _, _) -> Set.add dest defs
         | UnaryOp (dest, _, _) -> Set.add dest defs
-        | Call (dest, _, _) -> Set.add dest defs
-        | IndirectCall (dest, _, _) -> Set.add dest defs
+        | Call (dest, _, _, _, _) -> Set.add dest defs
+        | IndirectCall (dest, _, _, _, _) -> Set.add dest defs
         | ClosureAlloc (dest, _, _) -> Set.add dest defs
         | ClosureCall (dest, _, _) -> Set.add dest defs
         | HeapAlloc (dest, _) -> Set.add dest defs
@@ -215,9 +215,9 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
             | BinOp (_, _, left, right, _) ->
                 uses |> Set.union (getOperandUses left) |> Set.union (getOperandUses right)
             | UnaryOp (_, _, src) -> Set.union uses (getOperandUses src)
-            | Call (_, _, args) ->
+            | Call (_, _, args, _, _) ->
                 args |> List.fold (fun u a -> Set.union u (getOperandUses a)) uses
-            | IndirectCall (_, func, args) ->
+            | IndirectCall (_, func, args, _, _) ->
                 let funcUses = getOperandUses func
                 let argUses = args |> List.fold (fun u a -> Set.union u (getOperandUses a)) Set.empty
                 uses |> Set.union funcUses |> Set.union argUses
@@ -421,8 +421,8 @@ let createInitialRenamingState (cfg: CFG) : RenamingState =
                     | Mov (VReg n, _, _) -> max m n
                     | BinOp (VReg n, _, _, _, _) -> max m n
                     | UnaryOp (VReg n, _, _) -> max m n
-                    | Call (VReg n, _, _) -> max m n
-                    | IndirectCall (VReg n, _, _) -> max m n
+                    | Call (VReg n, _, _, _, _) -> max m n
+                    | IndirectCall (VReg n, _, _, _, _) -> max m n
                     | ClosureAlloc (VReg n, _, _) -> max m n
                     | ClosureCall (VReg n, _, _) -> max m n
                     | HeapAlloc (VReg n, _) -> max m n
@@ -504,16 +504,16 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let (_, newDest, state') = newVersion state dest
         (UnaryOp (newDest, op, src'), state')
 
-    | Call (dest, funcName, args) ->
+    | Call (dest, funcName, args, argTypes, returnType) ->
         let args' = args |> List.map (renameOperand state)
         let (_, newDest, state') = newVersion state dest
-        (Call (newDest, funcName, args'), state')
+        (Call (newDest, funcName, args', argTypes, returnType), state')
 
-    | IndirectCall (dest, func, args) ->
+    | IndirectCall (dest, func, args, argTypes, returnType) ->
         let func' = renameOperand state func
         let args' = args |> List.map (renameOperand state)
         let (_, newDest, state') = newVersion state dest
-        (IndirectCall (newDest, func', args'), state')
+        (IndirectCall (newDest, func', args', argTypes, returnType), state')
 
     | ClosureAlloc (dest, funcName, captures) ->
         let captures' = captures |> List.map (renameOperand state)

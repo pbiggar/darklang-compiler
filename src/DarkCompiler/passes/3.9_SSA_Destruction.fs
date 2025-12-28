@@ -170,8 +170,8 @@ let collectProperlyDefinedVRegs (cfg: CFG) : Set<VReg> =
                 | Mov (dest, _, _) -> Set.add dest d
                 | BinOp (dest, _, _, _, _) -> Set.add dest d
                 | UnaryOp (dest, _, _) -> Set.add dest d
-                | Call (dest, _, _) -> Set.add dest d
-                | IndirectCall (dest, _, _) -> Set.add dest d
+                | Call (dest, _, _, _, _) -> Set.add dest d
+                | IndirectCall (dest, _, _, _, _) -> Set.add dest d
                 | ClosureAlloc (dest, _, _) -> Set.add dest d
                 | ClosureCall (dest, _, _) -> Set.add dest d
                 | HeapAlloc (dest, _) -> Set.add dest d

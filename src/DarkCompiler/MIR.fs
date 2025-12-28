@@ -117,8 +117,8 @@ type Instr =
     | Mov of dest:VReg * src:Operand * valueType:AST.Type option  // valueType for float/int distinction
     | BinOp of dest:VReg * op:BinOp * left:Operand * right:Operand * operandType:AST.Type
     | UnaryOp of dest:VReg * op:UnaryOp * src:Operand
-    | Call of dest:VReg * funcName:string * args:Operand list  // Direct function call (BL instruction)
-    | IndirectCall of dest:VReg * func:Operand * args:Operand list  // Call through function pointer (BLR instruction)
+    | Call of dest:VReg * funcName:string * args:Operand list * argTypes:AST.Type list * returnType:AST.Type  // Direct function call (BL instruction)
+    | IndirectCall of dest:VReg * func:Operand * args:Operand list * argTypes:AST.Type list * returnType:AST.Type  // Call through function pointer (BLR instruction)
     | ClosureAlloc of dest:VReg * funcName:string * captures:Operand list  // Allocate closure: (func_addr, caps...)
     | ClosureCall of dest:VReg * closure:Operand * args:Operand list  // Call through closure with hidden first arg
     // Heap operations for tuples and other compound types
@@ -181,6 +181,8 @@ type CFG = {
 type Function = {
     Name: string
     Params: VReg list
+    ParamTypes: AST.Type list  // Parameter types (for distinguishing int vs float)
+    ReturnType: AST.Type       // Return type (for distinguishing int vs float returns)
     CFG: CFG
 }
 

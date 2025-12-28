@@ -41,3 +41,80 @@
 let a = 1.0 + 2.0 in a = stdout="3.00\n"
 let a = 1.0 + 2.0 in let b = 3.0 - 1.0 in a * b = stdout="6.00\n"
 (1.0 + 2.0) * (3.0 - 1.0) = stdout="6.00\n"
+
+// =====================================================
+// Float function parameters
+// Regression tests for bugs found during benchmark work
+// =====================================================
+
+// Float parameter in binary operation
+// Bug: c + c was returning 0.00 instead of 6.00 (return type inference failed)
+def doubleFloat(c: Float) : Float = c + c doubleFloat(3.0) = stdout="6.00\n"
+
+// Float parameter returned directly (should work - baseline)
+def identityFloat(c: Float) : Float = c identityFloat(3.0) = stdout="3.00\n"
+
+// Float parameter with literal addition
+def addFour(c: Float) : Float = c + 4.0 addFour(3.0) = stdout="7.00\n"
+
+// Float parameter with let binding and operation
+def useLocalFloat(c: Float) : Float = let x = 4.0 in c + x useLocalFloat(3.0) = stdout="7.00\n"
+
+// Two float parameters
+def addFloats(a: Float, b: Float) : Float = a + b addFloats(1.5, 2.5) = stdout="4.00\n"
+
+// Two float parameters - division
+// Bug: Both args got same value, returning 1.00 instead of 0.33
+def divFloats(a: Float, b: Float) : Float = a / b divFloats(1.0, 3.0) = stdout="0.33\n"
+
+// Two float parameters - subtraction
+def subFloats(a: Float, b: Float) : Float = a - b subFloats(5.0, 3.0) = stdout="2.00\n"
+
+// Two float parameters - multiplication
+def mulFloats(a: Float, b: Float) : Float = a * b mulFloats(2.0, 3.0) = stdout="6.00\n"
+
+// Three float parameters
+def sum3Floats(a: Float, b: Float, c: Float) : Float = a + b + c sum3Floats(1.0, 2.0, 3.0) = stdout="6.00\n"
+
+// Four float parameters (tests D12-D15 temp allocation)
+def sum4Floats(a: Float, b: Float, c: Float, d: Float) : Float = a + b + c + d sum4Floats(1.0, 2.0, 3.0, 4.0) = stdout="10.00\n"
+
+// Mixed float and int parameters
+// Bug: Float param and computed float intermediate were both mapped to D0
+def mixedParams(sign: Float, i: Int64) : Float = let divisor = Stdlib.Int64.toFloat(2 * i + 1) in sign / divisor mixedParams(1.0, 1) = stdout="0.33\n"
+
+// Float param with stdlib call
+def floatWithStdlib(c: Float) : Int64 = Stdlib.Float.toInt(c) floatWithStdlib(3.7) = stdout="3\n"
+
+// Float param with multiple operations
+def floatChainedOps(x: Float) : Float = (x + 1.0) * 2.0 floatChainedOps(2.0) = stdout="6.00\n"
+
+// =====================================================
+// Float comparisons in functions
+// =====================================================
+
+// BUG: Float comparison with parameter fails (register collision)
+// Literals work fine but using float param in comparison gives wrong result
+// def isPositiveFloat(x: Float) : Bool = x > 0.0 isPositiveFloat(1.0) = stdout="true\n"
+// def isPositiveFloat(x: Float) : Bool = x > 0.0 isPositiveFloat(-1.0) = stdout="false\n"
+
+// BUG: Float equality with parameters fails
+// def floatEq(a: Float, b: Float) : Bool = a == b floatEq(1.0, 1.0) = stdout="true\n"
+// def floatEq(a: Float, b: Float) : Bool = a == b floatEq(1.0, 2.0) = stdout="false\n"
+
+// =====================================================
+// KNOWN BUGS - Float in control flow (NOT YET FIXED)
+// These tests are commented out until the bugs are fixed
+// =====================================================
+
+// BUG: Float in if-then-else fails with "Float code generation not yet implemented"
+// The issue is that MIR.Mov for phi-node-like values doesn't track float types
+// def floatIfThen(a: Int64, b: Int64, c: Float) : Float = if a >= b then c else 0.0 floatIfThen(1, 1, 5.0) = stdout="5.00\n"
+// def floatIfElse(a: Int64, b: Int64, c: Float) : Float = if a >= b then c else 0.0 floatIfElse(0, 1, 5.0) = stdout="0.00\n"
+
+// BUG: Recursive function with float accumulator returns 0.00
+// Same root cause - float values in control flow not handled
+// def floatSumLoop(i: Int64, n: Int64, acc: Float) : Float = if i >= n then acc else floatSumLoop(i + 1, n, acc + 1.0) floatSumLoop(0, 5, 0.0) = stdout="5.00\n"
+
+// BUG: Leibniz pi approximation (uses float in recursive control flow)
+// def leibnizLoop(i: Int64, n: Int64, sum: Float, sign: Float) : Float = if i >= n then sum * 4.0 else let term = sign / Stdlib.Int64.toFloat(2 * i + 1) in leibnizLoop(i + 1, n, sum + term, Stdlib.Float.negate(sign)) def leibnizPi(n: Int64) : Float = leibnizLoop(0, n, 0.0, 1.0) leibnizPi(10) = stdout="3.04\n"

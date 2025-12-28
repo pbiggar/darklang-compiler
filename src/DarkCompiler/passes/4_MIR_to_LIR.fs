@@ -71,8 +71,14 @@ let ensureInFRegister (operand: MIR.Operand) (tempFReg: LIR.FReg) : Result<LIR.I
 let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Instr list, string> =
     match instr with
     | MIR.Mov (dest, src, valueType) ->
-        match valueType with
-        | Some AST.TFloat64 ->
+        // Check if this is a float move - either by valueType or by source operand type
+        let isFloatMove =
+            match valueType with
+            | Some AST.TFloat64 -> true
+            | _ -> match src with
+                   | MIR.FloatRef _ -> true
+                   | _ -> false
+        if isFloatMove then
             // Float move - use FP registers
             let lirFDest = vregToLIRFReg dest
             match src with
@@ -85,7 +91,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
                 Ok [LIR.FMov (lirFDest, srcFReg)]
             | _ ->
                 Error "Internal error: non-float operand in float Mov"
-        | _ ->
+        else
             // Integer/other move
             let lirDest = vregToLIRReg dest
             let lirSrc = convertOperand src
@@ -373,44 +379,79 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
                     LIR.Sub (lirDest, lirDest, LIR.Reg srcReg)
                 ])
 
-    | MIR.Call (dest, funcName, args) ->
+    | MIR.Call (dest, funcName, args, argTypes, returnType) ->
         // ARM64 calling convention (AAPCS64):
-        // - First 8 arguments in X0-X7
-        // - Return value in X0
-        // Note: >8 arguments are checked upfront in toLIR
+        // - Integer arguments in X0-X7 (using separate counter)
+        // - Float arguments in D0-D7 (using separate counter)
+        // - Return value in X0 (int) or D0 (float)
         let lirDest = vregToLIRReg dest
-        let argRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
+        let intRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
+        let floatRegs = [LIR.D0; LIR.D1; LIR.D2; LIR.D3; LIR.D4; LIR.D5; LIR.D6; LIR.D7]
 
         // IMPORTANT: Save caller-saved registers BEFORE setting up arguments
-        // Because argument setup may clobber registers that hold live values
-        // We use a special SaveRegs/RestoreRegs instruction pair that CodeGen expands
         let saveInstrs = [LIR.SaveRegs]
 
-        // Use ArgMoves for parallel move - handles register clobbering correctly
-        // The code generator will emit moves in a safe order, using SaveRegs stack when needed
-        let argMoves =
-            if List.isEmpty args then []
+        // Separate args into int and float based on argTypes
+        let argsWithTypes = List.zip args argTypes
+        let intArgs = argsWithTypes |> List.filter (fun (_, t) -> t <> AST.TFloat64)
+        let floatArgs = argsWithTypes |> List.filter (fun (_, t) -> t = AST.TFloat64)
+
+        // Generate ArgMoves for integer arguments
+        let intArgMoves =
+            if List.isEmpty intArgs then []
             else
                 let argPairs =
-                    List.zip args (List.take (List.length args) argRegs)
+                    List.zip (List.map fst intArgs) (List.take (List.length intArgs) intRegs)
                     |> List.map (fun (arg, reg) -> (reg, convertOperand arg))
                 [LIR.ArgMoves argPairs]
 
-        // Call instruction (no longer handles caller-save - it's done above)
+        // Generate FArgMoves for float arguments
+        // For FloatRef, we need to load into a temp FReg first, then move to D0-D7
+        let floatArgMoves =
+            if List.isEmpty floatArgs then []
+            else
+                // For each float arg, generate load if needed and create move pair
+                let mutable tempFRegCounter = 3000
+                let loadInstrsAndPairs =
+                    List.zip (List.map fst floatArgs) (List.take (List.length floatArgs) floatRegs)
+                    |> List.map (fun (arg, destReg) ->
+                        match arg with
+                        | MIR.FloatRef idx ->
+                            // Need to load float constant into a temp FReg
+                            let tempFReg = LIR.FVirtual tempFRegCounter
+                            tempFRegCounter <- tempFRegCounter + 1
+                            ([LIR.FLoad (tempFReg, idx)], (destReg, tempFReg))
+                        | MIR.Register vreg ->
+                            // Already in a virtual register, convert to FReg
+                            ([], (destReg, vregToLIRFReg vreg))
+                        | _ ->
+                            // Unexpected - use dummy
+                            ([], (destReg, LIR.FVirtual 9999)))
+                let loadInstrs = loadInstrsAndPairs |> List.collect fst
+                let argPairs = loadInstrsAndPairs |> List.map snd
+                loadInstrs @ [LIR.FArgMoves argPairs]
+
+        // Call instruction
         let callInstr = LIR.Call (lirDest, funcName, List.map convertOperand args)
 
         // Restore caller-saved registers after the call
         let restoreInstrs = [LIR.RestoreRegs]
 
-        // Move return value from X0 to destination (if not already X0)
+        // Move return value from X0 or D0 to destination based on return type
         let moveResult =
-            match lirDest with
-            | LIR.Physical LIR.X0 -> []
-            | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
+            if returnType = AST.TFloat64 then
+                // Float return: value is in D0, move to FVirtual
+                let destFReg = vregToLIRFReg dest
+                [LIR.FMov (destFReg, LIR.FPhysical LIR.D0)]
+            else
+                // Integer return: value is in X0
+                match lirDest with
+                | LIR.Physical LIR.X0 -> []
+                | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
 
-        Ok (saveInstrs @ argMoves @ [callInstr] @ restoreInstrs @ moveResult)
+        Ok (saveInstrs @ intArgMoves @ floatArgMoves @ [callInstr] @ restoreInstrs @ moveResult)
 
-    | MIR.IndirectCall (dest, func, args) ->
+    | MIR.IndirectCall (dest, func, args, _argTypes, returnType) ->
         // Indirect call through function pointer (BLR instruction)
         // Similar to direct call but uses function address in register
         let lirDest = vregToLIRReg dest
@@ -448,11 +489,17 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
         // Restore caller-saved registers
         let restoreInstrs = [LIR.RestoreRegs]
 
-        // Move return value from X0 to destination
+        // Move return value from X0 or D0 to destination based on return type
         let moveResult =
-            match lirDest with
-            | LIR.Physical LIR.X0 -> []
-            | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
+            if returnType = AST.TFloat64 then
+                // Float return: value is in D0, move to FVirtual
+                let destFReg = vregToLIRFReg dest
+                [LIR.FMov (destFReg, LIR.FPhysical LIR.D0)]
+            else
+                // Integer return: value is in X0
+                match lirDest with
+                | LIR.Physical LIR.X0 -> []
+                | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
 
         Ok (saveInstrs @ loadFuncInstrs @ argMoves @ [callInstr] @ restoreInstrs @ moveResult)
 
@@ -811,10 +858,9 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
 /// Convert MIR terminator to LIR terminator
 /// For Branch, need to convert operand to register (may add instructions)
 /// Printing is now handled by MIR.Print instruction, not in terminator
-let selectTerminator (terminator: MIR.Terminator) (stringPool: MIR.StringPool) : Result<LIR.Instr list * LIR.Terminator, string> =
+let selectTerminator (terminator: MIR.Terminator) (stringPool: MIR.StringPool) (returnType: AST.Type) : Result<LIR.Instr list * LIR.Terminator, string> =
     match terminator with
     | MIR.Ret operand ->
-        // Move return value to X0
         match operand with
         | MIR.FloatRef idx ->
             // Load float into D0 for return
@@ -829,8 +875,13 @@ let selectTerminator (terminator: MIR.Terminator) (stringPool: MIR.StringPool) :
             // Strings don't have a meaningful register return value
             // The value has been printed, so just exit with code 0
             Ok ([LIR.Exit], LIR.Ret)
+        | MIR.Register vreg when returnType = AST.TFloat64 ->
+            // Float return - move to D0 via FMov
+            let srcFReg = vregToLIRFReg vreg
+            let moveToD0 = [LIR.FMov (LIR.FPhysical LIR.D0, srcFReg)]
+            Ok (moveToD0, LIR.Ret)
         | _ ->
-            // Move operand to X0 (return register)
+            // Integer/other return - move operand to X0
             let lirOp = convertOperand operand
             let moveToX0 = [LIR.Mov (LIR.Physical LIR.X0, lirOp)]
             Ok (moveToX0, LIR.Ret)
@@ -863,7 +914,7 @@ let private collectResults (results: Result<'a list, string> list) : Result<'a l
     loop [] results
 
 /// Convert MIR basic block to LIR basic block
-let selectBlock (block: MIR.BasicBlock) (stringPool: MIR.StringPool) : Result<LIR.BasicBlock, string> =
+let selectBlock (block: MIR.BasicBlock) (stringPool: MIR.StringPool) (returnType: AST.Type) : Result<LIR.BasicBlock, string> =
     let lirLabel = convertLabel block.Label
 
     // Convert all instructions
@@ -873,7 +924,7 @@ let selectBlock (block: MIR.BasicBlock) (stringPool: MIR.StringPool) : Result<LI
     | Ok lirInstrs ->
 
     // Convert terminator (may add instructions)
-    match selectTerminator block.Terminator stringPool with
+    match selectTerminator block.Terminator stringPool returnType with
     | Error err -> Error err
     | Ok (termInstrs, lirTerm) ->
 
@@ -895,12 +946,12 @@ let private mapResults (f: 'a -> Result<'b, string>) (items: 'a list) : Result<'
     loop [] items
 
 /// Convert MIR CFG to LIR CFG
-let selectCFG (cfg: MIR.CFG) (stringPool: MIR.StringPool) : Result<LIR.CFG, string> =
+let selectCFG (cfg: MIR.CFG) (stringPool: MIR.StringPool) (returnType: AST.Type) : Result<LIR.CFG, string> =
     let lirEntry = convertLabel cfg.Entry
 
     let blockList = cfg.Blocks |> Map.toList
     match mapResults (fun (label, block) ->
-        match selectBlock block stringPool with
+        match selectBlock block stringPool returnType with
         | Error err -> Error err
         | Ok lirBlock -> Ok (convertLabel label, lirBlock)) blockList with
     | Error err -> Error err
@@ -927,9 +978,9 @@ let private checkCallArgLimits (mirFuncs: MIR.Function list) : Result<unit, stri
         block.Instrs
         |> List.tryPick (fun instr ->
             match instr with
-            | MIR.Call (_, funcName, args) when List.length args > 8 ->
+            | MIR.Call (_, funcName, args, _, _) when List.length args > 8 ->
                 Some $"Call to '{funcName}' has {List.length args} arguments, but only 8 are supported (ARM64 calling convention limit)"
-            | MIR.IndirectCall (_, _, args) when List.length args > 8 ->
+            | MIR.IndirectCall (_, _, args, _, _) when List.length args > 8 ->
                 Some $"Indirect call has {List.length args} arguments, but only 8 are supported (ARM64 calling convention limit)"
             | _ -> None)
 
@@ -956,7 +1007,7 @@ let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
 
     // Convert each MIR function to LIR
     let convertFunc (mirFunc: MIR.Function) =
-        match selectCFG mirFunc.CFG stringPool with
+        match selectCFG mirFunc.CFG stringPool mirFunc.ReturnType with
         | Error err -> Error err
         | Ok lirCFG ->
             // Convert MIR VRegs to LIR Virtual registers for parameters
@@ -964,6 +1015,7 @@ let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
             Ok {
                 LIR.Name = mirFunc.Name
                 LIR.Params = lirParams
+                LIR.ParamTypes = mirFunc.ParamTypes
                 LIR.CFG = lirCFG
                 LIR.StackSize = 0  // Will be determined by register allocation
                 LIR.UsedCalleeSaved = []  // Will be determined by register allocation

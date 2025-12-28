@@ -82,6 +82,7 @@ type Instr =
     | SaveRegs                                   // Save caller-saved registers (X1-X10) before call
     | RestoreRegs                                // Restore caller-saved registers (X1-X10) after call
     | ArgMoves of (PhysReg * Operand) list       // Move arguments to X0-X7 (parallel move - handles clobber issues)
+    | FArgMoves of (PhysFPReg * FReg) list       // Move float arguments to D0-D7
     | PrintInt of Reg                           // Print integer register to stdout (no exit)
     | PrintBool of Reg                          // Print boolean register to stdout (no exit)
     | PrintIntNoNewline of Reg                  // Print integer without newline (for tuple elements)
@@ -158,6 +159,7 @@ type CFG = {
 type Function = {
     Name: string
     Params: Reg list  // Parameter registers (before allocation: Virtual, after: Physical)
+    ParamTypes: AST.Type list  // Parameter types (for distinguishing int vs float)
     CFG: CFG
     StackSize: int  // Bytes needed for spills (16-byte aligned)
     UsedCalleeSaved: PhysReg list  // Callee-saved registers used (for prologue/epilogue)

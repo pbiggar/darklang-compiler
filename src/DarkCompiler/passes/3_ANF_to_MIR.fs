@@ -313,6 +313,74 @@ let buildFloatLookup (pool: MIR.FloatPool) : Map<float, int> =
     pool.Floats
     |> Map.fold (fun lookup idx f -> Map.add f idx lookup) Map.empty
 
+/// Helper to check if an atom is a float value
+let isFloatAtom (floatRegs: Set<int>) (atom: ANF.Atom) : bool =
+    match atom with
+    | ANF.FloatLiteral _ -> true
+    | ANF.Var (ANF.TempId id) -> Set.contains id floatRegs
+    | _ -> false
+
+/// Helper to check if a CExpr produces a float value
+let cexprProducesFloat (floatRegs: Set<int>) (cexpr: ANF.CExpr) : bool =
+    match cexpr with
+    | ANF.Prim (_, left, right) ->
+        // Binary op is float if either operand is float
+        isFloatAtom floatRegs left || isFloatAtom floatRegs right
+    | ANF.FloatSqrt _ | ANF.FloatAbs _ | ANF.FloatNeg _ | ANF.IntToFloat _ -> true
+    | ANF.Atom atom -> isFloatAtom floatRegs atom
+    | _ -> false
+
+/// Compute return type for an ANF function by analyzing return statements
+/// Uses typeReg to determine which parameters are floats
+let computeReturnType (anfFunc: ANF.Function) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) : AST.Type =
+    // Get float parameter IDs for this function
+    let funcParamTypes =
+        match Map.tryFind anfFunc.Name typeReg with
+        | Some paramInfos -> paramInfos |> List.map snd
+        | None -> []
+    let floatParamIds =
+        if List.length funcParamTypes = List.length anfFunc.Params then
+            List.zip anfFunc.Params funcParamTypes
+            |> List.filter (fun (_, typ) -> typ = AST.TFloat64)
+            |> List.map (fun (ANF.TempId id, _) -> id)
+            |> Set.ofList
+        else
+            Set.empty
+
+    // Analyze return statements in the function body, tracking float temps
+    let rec getReturnType (floatRegs: Set<int>) (expr: ANF.AExpr) : AST.Type =
+        match expr with
+        | ANF.Return atom ->
+            match atom with
+            | ANF.FloatLiteral _ -> AST.TFloat64
+            | ANF.IntLiteral _ -> AST.TInt64
+            | ANF.BoolLiteral _ -> AST.TBool
+            | ANF.StringLiteral _ -> AST.TString
+            | ANF.UnitLiteral -> AST.TUnit
+            | ANF.Var (ANF.TempId id) ->
+                if Set.contains id floatRegs then AST.TFloat64
+                else
+                    match Map.tryFind (ANF.TempId id) typeMap with
+                    | Some t -> t
+                    | None -> AST.TInt64
+            | ANF.FuncRef _ -> AST.TInt64
+        | ANF.Let (ANF.TempId destId, cexpr, rest) ->
+            // Update floatRegs if this binding produces a float
+            let floatRegs' =
+                if cexprProducesFloat floatRegs cexpr then
+                    Set.add destId floatRegs
+                else
+                    floatRegs
+            getReturnType floatRegs' rest
+        | ANF.If (_, thenBranch, _) -> getReturnType floatRegs thenBranch
+    getReturnType floatParamIds anfFunc.Body
+
+/// Build a map from function name to return type for all functions
+let buildReturnTypeReg (functions: ANF.Function list) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) : Map<string, AST.Type> =
+    functions
+    |> List.map (fun f -> (f.Name, computeReturnType f typeMap typeReg))
+    |> Map.ofList
+
 /// CFG builder state - includes lookups to avoid mutable module-level state
 /// which would cause race conditions in parallel test execution
 type CFGBuilder = {
@@ -323,6 +391,7 @@ type CFGBuilder = {
     FloatLookup: Map<float, int>
     TypeMap: ANF.TypeMap
     TypeReg: Map<string, (string * AST.Type) list>
+    ReturnTypeReg: Map<string, AST.Type>  // Function name -> return type
     FuncName: string  // For generating unique labels per function
     FloatRegs: Set<int>  // VReg IDs that hold float values
 }
@@ -482,19 +551,24 @@ let rec convertExpr
                     |> Result.map (fun operand ->
                         [MIR.UnaryOp (destReg, convertUnaryOp op, operand)])
                 | ANF.Call (funcName, args) ->
+                    let argTypes = args |> List.map (atomType builder)
+                    let returnType = Map.tryFind funcName builder.ReturnTypeReg |> Option.defaultValue AST.TInt64
                     args
                     |> List.map (atomToOperand builder)
                     |> sequenceResults
                     |> Result.map (fun argOperands ->
-                        [MIR.Call (destReg, funcName, argOperands)])
+                        [MIR.Call (destReg, funcName, argOperands, argTypes, returnType)])
                 | ANF.IndirectCall (func, args) ->
+                    let argTypes = args |> List.map (atomType builder)
+                    // For indirect calls, we don't know the return type - default to TInt64
+                    let returnType = AST.TInt64
                     atomToOperand builder func
                     |> Result.bind (fun funcOp ->
                         args
                         |> List.map (atomToOperand builder)
                         |> sequenceResults
                         |> Result.map (fun argOperands ->
-                            [MIR.IndirectCall (destReg, funcOp, argOperands)]))
+                            [MIR.IndirectCall (destReg, funcOp, argOperands, argTypes, returnType)]))
                 | ANF.ClosureAlloc (funcName, captures) ->
                     // Allocate closure: (func_addr, cap1, cap2, ...)
                     let numSlots = 1 + List.length captures  // func_ptr + captures
@@ -680,6 +754,7 @@ let rec convertExpr
             FloatLookup = builder.FloatLookup
             TypeMap = builder.TypeMap
             TypeReg = builder.TypeReg
+            ReturnTypeReg = builder.ReturnTypeReg
             FuncName = builder.FuncName
             FloatRegs = builder.FloatRegs
         }
@@ -854,19 +929,24 @@ and convertExprToOperand
                     |> Result.map (fun operand ->
                         [MIR.UnaryOp (destReg, convertUnaryOp op, operand)])
                 | ANF.Call (funcName, args) ->
+                    let argTypes = args |> List.map (atomType builder)
+                    let returnType = Map.tryFind funcName builder.ReturnTypeReg |> Option.defaultValue AST.TInt64
                     args
                     |> List.map (atomToOperand builder)
                     |> sequenceResults
                     |> Result.map (fun argOperands ->
-                        [MIR.Call (destReg, funcName, argOperands)])
+                        [MIR.Call (destReg, funcName, argOperands, argTypes, returnType)])
                 | ANF.IndirectCall (func, args) ->
+                    let argTypes = args |> List.map (atomType builder)
+                    // For indirect calls, we don't know the return type - default to TInt64
+                    let returnType = AST.TInt64
                     atomToOperand builder func
                     |> Result.bind (fun funcOp ->
                         args
                         |> List.map (atomToOperand builder)
                         |> sequenceResults
                         |> Result.map (fun argOperands ->
-                            [MIR.IndirectCall (destReg, funcOp, argOperands)]))
+                            [MIR.IndirectCall (destReg, funcOp, argOperands, argTypes, returnType)]))
                 | ANF.ClosureAlloc (funcName, captures) ->
                     // Allocate closure: (func_addr, cap1, cap2, ...)
                     let numSlots = 1 + List.length captures  // func_ptr + captures
@@ -1042,6 +1122,7 @@ and convertExprToOperand
                 FloatLookup = builder.FloatLookup
                 TypeMap = builder.TypeMap
                 TypeReg = builder.TypeReg
+                ReturnTypeReg = builder.ReturnTypeReg
                 FuncName = builder.FuncName
                 FloatRegs = builder.FloatRegs
             }
@@ -1113,7 +1194,26 @@ and convertExprToOperand
             Ok (MIR.Register resultReg, Some joinLabel, builder6))
 
 /// Convert an ANF function to a MIR function
-let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: Map<string, int>) (fltLookup: Map<float, int>) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) : Result<MIR.Function * MIR.RegGen, string> =
+let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: Map<string, int>) (fltLookup: Map<float, int>) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (returnTypeReg: Map<string, AST.Type>) : Result<MIR.Function * MIR.RegGen, string> =
+    // Initialize FloatRegs with float parameter IDs
+    // This is critical so that the function body knows which VRegs hold floats
+    // Use typeReg to look up function's parameter types by name, since typeMap is empty
+    let funcParamTypes =
+        match Map.tryFind anfFunc.Name typeReg with
+        | Some paramInfos -> paramInfos |> List.map snd
+        | None -> []  // Fallback: no type info
+
+    // Zip params with types and find the float ones
+    // Guard against length mismatch (can happen if typeReg is incomplete)
+    let floatParamIds =
+        if List.length funcParamTypes = List.length anfFunc.Params then
+            List.zip anfFunc.Params funcParamTypes
+            |> List.filter (fun (_, typ) -> typ = AST.TFloat64)
+            |> List.map (fun (ANF.TempId id, _) -> id)
+            |> Set.ofList
+        else
+            Set.empty
+
     // Create initial builder with lookups
     let initialBuilder = {
         RegGen = regGen
@@ -1123,8 +1223,9 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
         FloatLookup = fltLookup
         TypeMap = typeMap
         TypeReg = typeReg
+        ReturnTypeReg = returnTypeReg
         FuncName = anfFunc.Name
-        FloatRegs = Set.empty
+        FloatRegs = floatParamIds
     }
 
     // Create entry label for CFG (internal to function body)
@@ -1134,6 +1235,43 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
     // Must use tempToVReg to preserve the TempId values, not fresh VRegs,
     // because the body uses Var (TempId n) which converts to VReg n
     let paramVRegs = anfFunc.Params |> List.map tempToVReg
+
+    // Get parameter types from funcParamTypes (already extracted from typeReg)
+    let paramTypes =
+        if List.length funcParamTypes = List.length anfFunc.Params then
+            funcParamTypes
+        else
+            // Fallback: use Int64 for all params if type info unavailable
+            anfFunc.Params |> List.map (fun _ -> AST.TInt64)
+
+    // Helper to get return type by finding return atoms in the body
+    let rec getReturnType (floatRegs: Set<int>) (expr: ANF.AExpr) : AST.Type =
+        match expr with
+        | ANF.Return atom ->
+            match atom with
+            | ANF.FloatLiteral _ -> AST.TFloat64
+            | ANF.IntLiteral _ -> AST.TInt64
+            | ANF.BoolLiteral _ -> AST.TBool
+            | ANF.StringLiteral _ -> AST.TString
+            | ANF.UnitLiteral -> AST.TUnit
+            | ANF.Var (ANF.TempId id) ->
+                if Set.contains id floatRegs then AST.TFloat64
+                else
+                    match Map.tryFind (ANF.TempId id) typeMap with
+                    | Some t -> t
+                    | None -> AST.TInt64
+            | ANF.FuncRef _ -> AST.TInt64
+        | ANF.Let (ANF.TempId destId, cexpr, rest) ->
+            // Update floatRegs if this binding produces a float
+            let floatRegs' =
+                if cexprProducesFloat floatRegs cexpr then
+                    Set.add destId floatRegs
+                else
+                    floatRegs
+            getReturnType floatRegs' rest
+        | ANF.If (_, thenBranch, _) -> getReturnType floatRegs thenBranch  // Assume both branches have same type
+
+    let returnType = getReturnType floatParamIds anfFunc.Body
 
     // Convert function body to CFG
     match convertExpr anfFunc.Body entryLabel [] initialBuilder with
@@ -1148,6 +1286,8 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
     let mirFunc = {
         MIR.Name = anfFunc.Name
         MIR.Params = paramVRegs
+        MIR.ParamTypes = paramTypes
+        MIR.ReturnType = returnType
         MIR.CFG = cfg
     }
 
@@ -1172,12 +1312,15 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
     let floatPool = buildFloatPool allFloats
     let fltLookup = buildFloatLookup floatPool
 
+    // Build return type registry for all functions (needed for caller to know return type)
+    let returnTypeReg = buildReturnTypeReg functions typeMap typeReg
+
     // Phase 2: Convert all functions to MIR
     let rec convertFunctions funcs rg remaining =
         match remaining with
         | [] -> Ok (funcs, rg)
         | anfFunc :: rest ->
-            match convertANFFunction anfFunc rg strLookup fltLookup typeMap typeReg with
+            match convertANFFunction anfFunc rg strLookup fltLookup typeMap typeReg returnTypeReg with
             | Error err -> Error err
             | Ok (mirFunc, rg') -> convertFunctions (funcs @ [mirFunc]) rg' rest
 
@@ -1195,6 +1338,7 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
         FloatLookup = fltLookup
         TypeMap = typeMap
         TypeReg = typeReg
+        ReturnTypeReg = returnTypeReg
         FuncName = "_start"
         FloatRegs = Set.empty
     }
@@ -1208,6 +1352,8 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
     let startFunc = {
         MIR.Name = "_start"
         MIR.Params = []
+        MIR.ParamTypes = []
+        MIR.ReturnType = AST.TInt64  // Entry point return type (not used for function calls)
         MIR.CFG = cfg
     }
     let allFuncs = mirFuncs @ [startFunc]

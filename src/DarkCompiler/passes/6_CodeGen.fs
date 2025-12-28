@@ -88,16 +88,44 @@ let lirPhysFPRegToARM64FReg (physReg: LIR.PhysFPReg) : ARM64.FReg =
 
 /// Convert LIR.FReg to ARM64.FReg
 /// For FVirtual, we use a simple allocation scheme:
-/// - FVirtual 1000 -> D1 (left operand temp)
-/// - FVirtual 1001 -> D2 (right operand temp)
-/// - FVirtual n (n < 100) -> D(n % 8) for computed results
+/// - FVirtual 1000 -> D10 (left operand temp for binary ops)
+/// - FVirtual 1001 -> D11 (right operand temp for binary ops)
+/// - FVirtual 3000-3003 -> D12-D15 (temps for float call args, round-robin)
+/// - FVirtual n >= 10000 -> D8-D15 (computed intermediates, avoid param conflicts)
+/// - FVirtual n < 1000 -> D0-D7 (parameters and small IDs)
+///
+/// Key insight: Parameters have small TempIds (e.g., 568, 569) while computed
+/// results get large TempIds (10000+). Using separate D-register ranges avoids
+/// conflicts without a full register allocator.
 let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64.FReg, string> =
     match freg with
     | LIR.FPhysical physReg -> Ok (lirPhysFPRegToARM64FReg physReg)
-    | LIR.FVirtual 1000 -> Ok ARM64.D1  // Left temp
-    | LIR.FVirtual 1001 -> Ok ARM64.D2  // Right temp
+    | LIR.FVirtual 1000 -> Ok ARM64.D10  // Left temp for binary ops
+    | LIR.FVirtual 1001 -> Ok ARM64.D11  // Right temp for binary ops
+    | LIR.FVirtual n when n >= 3000 && n < 4000 ->
+        // Temps for float call arguments - use D12, D13, D14, D15
+        let tempIdx = n - 3000
+        match tempIdx % 4 with
+        | 0 -> Ok ARM64.D12
+        | 1 -> Ok ARM64.D13
+        | 2 -> Ok ARM64.D14
+        | _ -> Ok ARM64.D15
+    | LIR.FVirtual n when n >= 10000 ->
+        // Computed intermediates (10000+) use D8-D15 to avoid conflicts with params
+        let regIdx = (n - 10000) % 8
+        let physReg =
+            match regIdx with
+            | 0 -> ARM64.D8
+            | 1 -> ARM64.D9
+            | 2 -> ARM64.D10
+            | 3 -> ARM64.D11
+            | 4 -> ARM64.D12
+            | 5 -> ARM64.D13
+            | 6 -> ARM64.D14
+            | _ -> ARM64.D15
+        Ok physReg
     | LIR.FVirtual n ->
-        // Map virtual FP registers to physical D0-D7
+        // Map virtual FP registers to physical D0-D7 (for parameters and small IDs)
         let regIdx = n % 8
         let physReg =
             match regIdx with
@@ -803,6 +831,29 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             | LIR.X4 -> 4 | LIR.X5 -> 5 | LIR.X6 -> 6 | LIR.X7 -> 7
             | _ -> 100)
         |> List.map generateMove
+        |> List.fold (fun acc r ->
+            match acc, r with
+            | Ok instrs, Ok newInstrs -> Ok (instrs @ newInstrs)
+            | Error e, _ -> Error e
+            | _, Error e -> Error e) (Ok [])
+
+    | LIR.FArgMoves moves ->
+        // Float argument moves - move float values to D0-D7
+        let generateFMove (destPhysReg: LIR.PhysFPReg, srcFReg: LIR.FReg) : Result<ARM64.Instr list, string> =
+            let destARM64 = lirPhysFPRegToARM64FReg destPhysReg
+            lirFRegToARM64FReg srcFReg
+            |> Result.map (fun srcARM64 ->
+                if srcARM64 = destARM64 then []
+                else [ARM64.FMOV_reg (destARM64, srcARM64)])
+
+        // Generate all moves in order (D0, D1, D2, ...)
+        moves
+        |> List.sortBy (fun (destReg, _) ->
+            match destReg with
+            | LIR.D0 -> 0 | LIR.D1 -> 1 | LIR.D2 -> 2 | LIR.D3 -> 3
+            | LIR.D4 -> 4 | LIR.D5 -> 5 | LIR.D6 -> 6 | LIR.D7 -> 7
+            | _ -> 100)
+        |> List.map generateFMove
         |> List.fold (fun acc r ->
             match acc, r with
             | Ok instrs, Ok newInstrs -> Ok (instrs @ newInstrs)
