@@ -133,9 +133,9 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                       Success = false
                       ErrorMessage = Some $"ANF conversion error: {err}" }
                 | Ok convResult ->
-                    // Show ANF before RC insertion
+                    // Show ANF before optimization
                     if verbosity >= 3 then
-                        println "=== ANF (before RC insertion) ==="
+                        println "=== ANF (before optimization) ==="
                         let (ANF.Program (funcs, mainExprDbg)) = convResult.Program
                         for func in funcs do
                             println $"Function: {func.Name}"
@@ -145,10 +145,33 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                         println $"Main: {mainExprDbg}"
                         println ""
 
+                    // Pass 2.3: ANF Optimization
+                    if verbosity >= 1 then println "  [2.3/8] ANF Optimization..."
+                    let anfOptimized = ANF_Optimize.optimizeProgram convResult.Program
+                    let anfOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(anfOptTime, 1)
+                        println $"        {t}ms"
+
+                    // Show ANF after optimization
+                    if verbosity >= 3 then
+                        println "=== ANF (after optimization) ==="
+                        let (ANF.Program (funcs, mainExprDbg)) = anfOptimized
+                        for func in funcs do
+                            println $"Function: {func.Name}"
+                            println $"  Params: {func.Params}"
+                            println $"  Body: {func.Body}"
+                            println ""
+                        println $"Main: {mainExprDbg}"
+                        println ""
+
+                    // Update convResult with optimized program for RC insertion
+                    let convResultOptimized = { convResult with Program = anfOptimized }
+
                     // Pass 2.5: Reference Count Insertion
                     if verbosity >= 1 then println "  [2.5/8] Reference Count Insertion..."
-                    let rcResult = RefCountInsertion.insertRCInProgram convResult
-                    let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime
+                    let rcResult = RefCountInsertion.insertRCInProgram convResultOptimized
+                    let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(rcTime, 1)
                         println $"        {t}ms"
@@ -227,9 +250,36 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                         let t = System.Math.Round(mirTime, 1)
                         println $"        {t}ms"
 
+                    // Pass 3.1: SSA Construction
+                    if verbosity >= 1 then println "  [3.1/8] SSA Construction..."
+                    let ssaProgram = SSA_Construction.convertToSSA mirProgram
+
+                    let ssaTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(ssaTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 3.5: MIR Optimizations (on SSA form)
+                    if verbosity >= 1 then println "  [3.5/8] MIR Optimizations..."
+                    let optimizedProgram = MIR_Optimize.optimizeProgram ssaProgram
+
+                    let mirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(mirOptTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 3.9: SSA Destruction
+                    if verbosity >= 1 then println "  [3.9/8] SSA Destruction..."
+                    let mirAfterSSA = SSA_Destruction.destructSSA optimizedProgram
+
+                    let ssaDestructTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime - mirOptTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(ssaDestructTime, 1)
+                        println $"        {t}ms"
+
                     // Pass 4: MIR → LIR
                     if verbosity >= 1 then println "  [4/8] MIR → LIR..."
-                    let lirResult = MIR_to_LIR.toLIR mirProgram
+                    let lirResult = MIR_to_LIR.toLIR mirAfterSSA
 
                     match lirResult with
                     | Error err ->
@@ -258,9 +308,18 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
                         let t = System.Math.Round(lirTime, 1)
                         println $"        {t}ms"
 
+                    // Pass 4.5: LIR Optimizations (peephole)
+                    if verbosity >= 1 then println "  [4.5/8] LIR Optimizations..."
+                    let optimizedLirProgram = LIR_Optimize.optimizeProgram lirProgram
+
+                    let lirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime - mirOptTime - ssaDestructTime - lirTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(lirOptTime, 1)
+                        println $"        {t}ms"
+
                     // Pass 5: Register Allocation
                     if verbosity >= 1 then println "  [5/8] Register Allocation..."
-                    let (LIR.Program (funcs, stringPool, floatPool)) = lirProgram
+                    let (LIR.Program (funcs, stringPool, floatPool)) = optimizedLirProgram
                     let allocatedFuncs = funcs |> List.map RegisterAllocation.allocateRegisters
                     let allocatedProgram = LIR.Program (allocatedFuncs, stringPool, floatPool)
 

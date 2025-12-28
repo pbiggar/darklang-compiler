@@ -692,6 +692,10 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
         | Ok (valueInstrs, valueReg) ->
             Ok (ptrInstrs @ offsetInstrs @ valueInstrs @ [LIR.RawSet (ptrReg, offsetReg, valueReg)])
 
+    | MIR.Phi _ ->
+        // Phi nodes should be eliminated by SSA destruction (pass 3.9) before MIR-to-LIR
+        Error "Internal error: Phi node reached MIR-to-LIR. SSA destruction pass should have removed it."
+
 /// Convert MIR terminator to LIR terminator
 /// For Branch, need to convert operand to register (may add instructions)
 /// Printing is now handled by MIR.Print instruction, not in terminator

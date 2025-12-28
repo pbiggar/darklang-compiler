@@ -15,12 +15,17 @@
     <Compile Include="passes/1.5_TypeChecking.fs" />
     <Compile Include="ANF.fs" />
     <Compile Include="passes/2_AST_to_ANF.fs" />
+    <Compile Include="passes/2.3_ANF_Optimize.fs" />
     <Compile Include="passes/2.5_RefCountInsertion.fs" />
     <Compile Include="passes/2.6_PrintInsertion.fs" />
     <Compile Include="MIR.fs" />
     <Compile Include="passes/3_ANF_to_MIR.fs" />
+    <Compile Include="passes/3.1_SSA_Construction.fs" />
+    <Compile Include="passes/3.5_MIR_Optimize.fs" />
+    <Compile Include="passes/3.9_SSA_Destruction.fs" />
     <Compile Include="LIR.fs" />
     <Compile Include="passes/4_MIR_to_LIR.fs" />
+    <Compile Include="passes/4.5_LIR_Optimize.fs" />
     <Compile Include="passes/5_RegisterAllocation.fs" />
     <Compile Include="ARM64.fs" />
     <Compile Include="Platform.fs" />

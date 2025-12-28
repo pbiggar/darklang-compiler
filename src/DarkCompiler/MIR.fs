@@ -105,6 +105,9 @@ type UnaryOp =
     | Neg
     | Not
 
+/// Basic block label (defined early for use in Phi nodes)
+type Label = Label of string
+
 /// Instructions (non-control-flow)
 type Instr =
     | Mov of dest:VReg * src:Operand * valueType:AST.Type option  // valueType for float/int distinction
@@ -135,9 +138,9 @@ type Instr =
     | RawFree of ptr:Operand                      // Manually free raw memory
     | RawGet of dest:VReg * ptr:Operand * byteOffset:Operand  // Read 8 bytes at offset
     | RawSet of ptr:Operand * byteOffset:Operand * value:Operand  // Write 8 bytes at offset
-
-/// Basic block label
-type Label = Label of string
+    // SSA phi node - merges values from different predecessor blocks
+    // Phi nodes must appear at the beginning of a basic block, before other instructions
+    | Phi of dest:VReg * sources:(Operand * Label) list
 
 /// Terminator instructions (control flow)
 type Terminator =
