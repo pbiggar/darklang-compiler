@@ -50,6 +50,8 @@ type StdlibResult = {
     /// Generic function definitions for on-demand monomorphization
     /// (e.g., Stdlib.List.length<t> needs to be specialized when user calls it with Int64)
     GenericFuncDefs: AST_to_ANF.GenericFuncDefs
+    /// Module registry for stdlib intrinsics (built once, reused)
+    ModuleRegistry: AST.ModuleRegistry
 }
 
 /// Load the stdlib.dark file
@@ -106,6 +108,8 @@ let compileStdlib () : Result<StdlibResult, string> =
         | Ok (_, typedStdlib, typeCheckEnv) ->
             // Extract generic function definitions for on-demand monomorphization
             let genericFuncDefs = AST_to_ANF.extractGenericFuncDefs typedStdlib
+            // Build module registry once (reused across all compilations)
+            let moduleRegistry = Stdlib.buildModuleRegistry ()
             match AST_to_ANF.convertProgramWithTypes typedStdlib with
             | Error e -> Error e
             | Ok anfResult ->
@@ -115,6 +119,7 @@ let compileStdlib () : Result<StdlibResult, string> =
                     TypeCheckEnv = typeCheckEnv
                     ANFResult = anfResult
                     GenericFuncDefs = genericFuncDefs
+                    ModuleRegistry = moduleRegistry
                 }
 
 /// Internal: Compile user code with stdlib AST (shared implementation)
