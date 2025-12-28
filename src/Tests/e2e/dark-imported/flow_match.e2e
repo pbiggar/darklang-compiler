@@ -405,16 +405,22 @@ match 2 with | 1 -> 10 | 2 | 3 | 4 -> 20 | _ -> 99 = 20
 // Multiple groups
 match 6 with | 1 | 2 -> 10 | 3 | 4 -> 20 | 5 | 6 -> 30 | _ -> 0 = 30
 
-// NOTE: Original Dark tests with L suffix (commented for reference)
-// (match (1L,2L) with | (1L,2L) | (2L,1L) -> "pass" | _ -> "fail") = "pass"
-// (match (1L,3L) with | (1L,2L) | (2L,1L) -> "pass" | _ -> "fail") = "fail"
-// (match (1L,2L) with | (1L,_) | (_,1L) -> "pass" | _ -> "fail") = "pass"
-// (match [1L;2L] with | [1L;_] | [_;1L] -> "pass" | _ -> "fail") = "pass"
-// (match Stdlib.Option.Option.Some(1L) with | Some(1L) | None -> "pass" | _ -> "fail") = "pass"
-// (match ([1L], Stdlib.Option.Option.Some(2L)) with | ([1L], Some(_)) | ([_], Some(2L)) -> "pass" | _ -> "fail") = "pass"
-// (let x = 4L match x with | 1L | 2L | 3L | 4L -> "pass" | _ -> "fail") = "pass"
-// (match 5L with | 1L | 2L | 3L -> "fail" | 4L | 5L | 6L -> "pass" | _ -> "fail") = "pass"
-// (match 5L with | 4L | 5L | 6L when true -> "pass" | _ -> "fail") = "pass"
+// Pattern grouping with tuples
+(match (1, 2) with | (1, 2) | (2, 1) -> "pass" | _ -> "fail") = stdout="pass\n"
+(match (1, 3) with | (1, 2) | (2, 1) -> "pass" | _ -> "fail") = stdout="fail\n"
+(match (1, 2) with | (1, _) | (_, 1) -> "pass" | _ -> "fail") = stdout="pass\n"
+
+// Pattern grouping with lists
+(match [1, 2] with | [1, _] | [_, 1] -> "pass" | _ -> "fail") = stdout="pass\n"
+
+// Pattern grouping with let binding
+(let x = 4 in match x with | 1 | 2 | 3 | 4 -> "pass" | _ -> "fail") = stdout="pass\n"
+
+// Pattern grouping across multiple branches
+(match 5 with | 1 | 2 | 3 -> "fail" | 4 | 5 | 6 -> "pass" | _ -> "fail") = stdout="pass\n"
+
+// Pattern grouping with guard clause
+(match 5 with | 4 | 5 | 6 when true -> "pass" | _ -> "fail") = stdout="pass\n"
 // (match (1L,2L) with | (x,2L) | (2L,x) when x == 1L -> "pass" | _ -> "fail") = "pass"
 // (match (1L, 2L, 3L) with | (x, 2L, y) | (y, x, 2L) when x + y == 4L -> "pass" | _ -> "fail") = "pass"
 // (match ([1L;2L], 3L) with | ([x], y) | (x :: xs, y) when x > 0L -> "pass" | _ -> "fail") = "pass"

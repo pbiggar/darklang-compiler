@@ -2449,8 +2449,78 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (int64 tag))
                             Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                     | None -> Error $"Unknown constructor in pattern: {variantName}"
-                | AST.PTuple _ -> Ok None  // Tuple patterns just bind, don't compare
-                | AST.PRecord _ -> Ok None  // Record patterns just bind, don't compare
+                | AST.PTuple innerPatterns ->
+                    // Tuple patterns with literals need to compare each element
+                    let rec buildTupleComparisons (patterns: AST.Pattern list) (index: int) (vg: ANF.VarGen) (accBindings: (ANF.TempId * ANF.CExpr) list) (accConditions: ANF.Atom list) =
+                        match patterns with
+                        | [] ->
+                            if List.isEmpty accConditions then
+                                Ok None  // All variables/wildcards, no comparison needed
+                            else
+                                // AND together all conditions
+                                let rec andAll (conds: ANF.Atom list) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+                                    match conds with
+                                    | [] -> Error "Empty conditions list"
+                                    | [single] -> Ok (single, bindings, vg)
+                                    | first :: rest ->
+                                        andAll rest vg bindings
+                                        |> Result.map (fun (restResult, restBindings, vg1) ->
+                                            let (andVar, vg2) = ANF.freshVar vg1
+                                            let andExpr = ANF.Prim (ANF.And, first, restResult)
+                                            (ANF.Var andVar, restBindings @ [(andVar, andExpr)], vg2))
+                                andAll accConditions vg accBindings
+                                |> Result.map (fun (result, bindings, vg') -> Some (result, bindings, vg'))
+                        | p :: rest ->
+                            // Extract element at index
+                            let (elemVar, vg1) = ANF.freshVar vg
+                            let elemLoad = ANF.TupleGet (scrutAtom, index)
+                            let newBindings = accBindings @ [(elemVar, elemLoad)]
+                            // Check if this pattern needs comparison
+                            buildPatternComparison p (ANF.Var elemVar) vg1
+                            |> Result.bind (fun compResult ->
+                                match compResult with
+                                | None ->
+                                    // This element pattern doesn't need comparison (var/wildcard)
+                                    buildTupleComparisons rest (index + 1) vg1 newBindings accConditions
+                                | Some (cond, condBindings, vg2) ->
+                                    // Add this comparison
+                                    buildTupleComparisons rest (index + 1) vg2 (newBindings @ condBindings) (accConditions @ [cond]))
+                    buildTupleComparisons innerPatterns 0 vg [] []
+                | AST.PRecord (_, fieldPatterns) ->
+                    // Record patterns with literals need to compare each field
+                    let rec buildRecordComparisons (fields: (string * AST.Pattern) list) (vg: ANF.VarGen) (accBindings: (ANF.TempId * ANF.CExpr) list) (accConditions: ANF.Atom list) =
+                        match fields with
+                        | [] ->
+                            if List.isEmpty accConditions then
+                                Ok None
+                            else
+                                let rec andAll (conds: ANF.Atom list) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+                                    match conds with
+                                    | [] -> Error "Empty conditions list"
+                                    | [single] -> Ok (single, bindings, vg)
+                                    | first :: rest ->
+                                        andAll rest vg bindings
+                                        |> Result.map (fun (restResult, restBindings, vg1) ->
+                                            let (andVar, vg2) = ANF.freshVar vg1
+                                            let andExpr = ANF.Prim (ANF.And, first, restResult)
+                                            (ANF.Var andVar, restBindings @ [(andVar, andExpr)], vg2))
+                                andAll accConditions vg accBindings
+                                |> Result.map (fun (result, bindings, vg') -> Some (result, bindings, vg'))
+                        | (fieldName, p) :: rest ->
+                            // Find field index in the record type (would need type info)
+                            // For now, use a simple approach - records are ordered by field definition
+                            // This is a simplification; proper implementation would need type lookup
+                            let fieldIndex = List.findIndex (fun (fn, _) -> fn = fieldName) fieldPatterns
+                            let (elemVar, vg1) = ANF.freshVar vg
+                            let elemLoad = ANF.TupleGet (scrutAtom, fieldIndex)
+                            let newBindings = accBindings @ [(elemVar, elemLoad)]
+                            buildPatternComparison p (ANF.Var elemVar) vg1
+                            |> Result.bind (fun compResult ->
+                                match compResult with
+                                | None -> buildRecordComparisons rest vg1 newBindings accConditions
+                                | Some (cond, condBindings, vg2) ->
+                                    buildRecordComparisons rest vg2 (newBindings @ condBindings) (accConditions @ [cond]))
+                    buildRecordComparisons fieldPatterns vg [] []
                 | AST.PList patterns ->
                     // List pattern comparison: check length matches
                     // [] matches Nil (0), [a, b, ...] needs scrutinee to be non-nil first
