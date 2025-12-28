@@ -112,3 +112,22 @@ def fst2<a, b>(a: a, b: b) : a = a fst2(40, true) + 2 = 42
 
 // Multiple params in let binding
 def getfst<a, b>(a: a, b: b) : a = a let x = getfst(21, false) in x * 2 = 42
+
+// =====================================================
+// Generic Type Unification in If Expressions
+// =====================================================
+
+// If with generic Option - Some on then, None on else
+type Option1<t> = None1 | Some1 of t match (if true then Some1(42) else None1) with | Some1(x) -> x | None1 -> 0 = 42
+
+// If with generic Option - None on then, Some on else
+type Option2<t> = None2 | Some2 of t match (if false then None2 else Some2(99)) with | Some2(x) -> x | None2 -> 0 = 99
+
+// If with generic Option - variable holding None
+type Option3<t> = None3 | Some3 of t let n = None3 in match (if true then Some3(55) else n) with | Some3(x) -> x | None3 -> 0 = 55
+
+// If with generic Result type
+type Result1<t, e> = Ok1 of t | Err1 of e match (if true then Ok1(42) else Err1("error")) with | Ok1(x) -> x | Err1(_) -> 0 = 42
+
+// Nested if with generic types
+type Option4<t> = None4 | Some4 of t match (if true then (if false then None4 else Some4(42)) else None4) with | Some4(x) -> x | None4 -> 0 = 42

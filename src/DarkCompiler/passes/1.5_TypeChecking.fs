@@ -290,57 +290,41 @@ and collectPatternBindings (pattern: Pattern) : Set<string> =
 /// Match a pattern type against an actual type, extracting type variable bindings.
 /// Returns a list of (typeVarName, concreteType) pairs.
 /// Example: matchTypes (TVar "T") TInt64 = Ok [("T", TInt64)]
+/// Helper for matching concrete types - also handles when actual is a TVar
+let matchConcrete (expectedType: Type) (actual: Type) : Result<(string * Type) list, string> =
+    match actual with
+    | t when t = expectedType -> Ok []
+    | TVar name -> Ok [(name, expectedType)]  // Bind TVar to concrete type
+    | _ -> Error $"Expected {typeToString expectedType}, got {typeToString actual}"
+
 let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list, string> =
     match pattern with
     | TVar name ->
         // Type variable matches anything - record the binding
         Ok [(name, actual)]
-    | TInt8 ->
-        if actual = TInt8 then Ok []
-        else Error $"Expected Int8, got {typeToString actual}"
-    | TInt16 ->
-        if actual = TInt16 then Ok []
-        else Error $"Expected Int16, got {typeToString actual}"
-    | TInt32 ->
-        if actual = TInt32 then Ok []
-        else Error $"Expected Int32, got {typeToString actual}"
-    | TInt64 ->
-        if actual = TInt64 then Ok []
-        else Error $"Expected Int64, got {typeToString actual}"
-    | TUInt8 ->
-        if actual = TUInt8 then Ok []
-        else Error $"Expected UInt8, got {typeToString actual}"
-    | TUInt16 ->
-        if actual = TUInt16 then Ok []
-        else Error $"Expected UInt16, got {typeToString actual}"
-    | TUInt32 ->
-        if actual = TUInt32 then Ok []
-        else Error $"Expected UInt32, got {typeToString actual}"
-    | TUInt64 ->
-        if actual = TUInt64 then Ok []
-        else Error $"Expected UInt64, got {typeToString actual}"
-    | TBool ->
-        if actual = TBool then Ok []
-        else Error $"Expected Bool, got {typeToString actual}"
-    | TFloat64 ->
-        if actual = TFloat64 then Ok []
-        else Error $"Expected float, got {typeToString actual}"
-    | TString ->
-        if actual = TString then Ok []
-        else Error $"Expected string, got {typeToString actual}"
-    | TUnit ->
-        if actual = TUnit then Ok []
-        else Error $"Expected unit, got {typeToString actual}"
-    | TRawPtr ->
-        if actual = TRawPtr then Ok []
-        else Error $"Expected RawPtr, got {typeToString actual}"
+    | TInt8 -> matchConcrete TInt8 actual
+    | TInt16 -> matchConcrete TInt16 actual
+    | TInt32 -> matchConcrete TInt32 actual
+    | TInt64 -> matchConcrete TInt64 actual
+    | TUInt8 -> matchConcrete TUInt8 actual
+    | TUInt16 -> matchConcrete TUInt16 actual
+    | TUInt32 -> matchConcrete TUInt32 actual
+    | TUInt64 -> matchConcrete TUInt64 actual
+    | TBool -> matchConcrete TBool actual
+    | TFloat64 -> matchConcrete TFloat64 actual
+    | TString -> matchConcrete TString actual
+    | TUnit -> matchConcrete TUnit actual
+    | TRawPtr -> matchConcrete TRawPtr actual
     | TList patternElem ->
         match actual with
         | TList actualElem -> matchTypes patternElem actualElem
+        | TVar name -> Ok [(name, pattern)]  // Bind TVar to List type
         | _ -> Error $"Expected List<...>, got {typeToString actual}"
     | TRecord name ->
-        if actual = TRecord name then Ok []
-        else Error $"Expected {name}, got {typeToString actual}"
+        match actual with
+        | TRecord n when n = name -> Ok []
+        | TVar varName -> Ok [(varName, pattern)]  // Bind TVar to Record type
+        | _ -> Error $"Expected {name}, got {typeToString actual}"
     | TSum (name, patternArgs) ->
         match actual with
         | TSum (actualName, actualArgs) when name = actualName ->
@@ -354,6 +338,7 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
                     | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
                     | Error e, _ -> Error e
                     | _, Error e -> Error e) (Ok [])
+        | TVar varName -> Ok [(varName, pattern)]  // Bind TVar to Sum type
         | _ -> Error $"Expected {name}, got {typeToString actual}"
     | TFunction (patternParams, patternRet) ->
         match actual with
@@ -372,6 +357,7 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
                     | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
                     | Error e, _ -> Error e
                     | _, Error e -> Error e) retResult paramResults
+        | TVar varName -> Ok [(varName, pattern)]  // Bind TVar to Function type
         | _ -> Error $"Expected function, got {typeToString actual}"
     | TTuple patternElems ->
         match actual with
@@ -386,6 +372,7 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
                     | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
                     | Error e, _ -> Error e
                     | _, Error e -> Error e) (Ok [])
+        | TVar varName -> Ok [(varName, pattern)]  // Bind TVar to Tuple type
         | _ -> Error $"Expected tuple, got {typeToString actual}"
     | TDict (patternKey, patternValue) ->
         match actual with
@@ -395,6 +382,7 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
             | Ok keyBindings, Ok valueBindings -> Ok (keyBindings @ valueBindings)
             | Error e, _ -> Error e
             | _, Error e -> Error e
+        | TVar varName -> Ok [(varName, pattern)]  // Bind TVar to Dict type
         | _ -> Error $"Expected Dict<...>, got {typeToString actual}"
 
 /// Consolidate bindings, checking for conflicts where the same type variable
@@ -792,15 +780,18 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
             else
                 checkExpr thenBranch env typeReg variantLookup genericFuncReg expectedType
                 |> Result.bind (fun (thenType, then') ->
-                    checkExpr elseBranch env typeReg variantLookup genericFuncReg (Some thenType)
+                    // Pass expectedType (not thenType) to else branch - reconcileTypes will unify them
+                    // This allows e.g. if true then Some(42) else None to work even when None has unbound TVars
+                    checkExpr elseBranch env typeReg variantLookup genericFuncReg expectedType
                     |> Result.bind (fun (elseType, else') ->
-                        if thenType <> elseType then
+                        match reconcileTypes thenType elseType with
+                        | None ->
                             Error (TypeMismatch (thenType, elseType, "if branches must have same type"))
-                        else
+                        | Some reconciledType ->
                             match expectedType with
-                            | Some expected when expected <> thenType ->
-                                Error (TypeMismatch (expected, thenType, "if expression"))
-                            | _ -> Ok (thenType, If (cond', then', else')))))
+                            | Some expected when expected <> reconciledType ->
+                                Error (TypeMismatch (expected, reconciledType, "if expression"))
+                            | _ -> Ok (reconciledType, If (cond', then', else')))))
 
     | Call (funcName, args) ->
         // Function call: look up function signature, check arguments match
