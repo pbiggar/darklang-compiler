@@ -36,6 +36,14 @@ let floatModule : ModuleDef = {
 let resultType (okType: Type) : Type =
     TSum ("Stdlib.Result.Result", [okType; TString])
 
+/// Stdlib.String module - string operations
+let stringModule : ModuleDef = {
+    Name = "Stdlib.String"
+    Functions = [
+        { Name = "length"; TypeParams = []; ParamTypes = [TString]; ReturnType = TInt64 }
+    ]
+}
+
 /// Stdlib.File module - file I/O operations (intrinsics)
 /// These are special-cased in the compiler and generate syscalls
 let fileModule : ModuleDef = {
@@ -86,6 +94,7 @@ let rawMemoryIntrinsics : ModuleFunc list = [
 let allModules : ModuleDef list = [
     int64Module
     floatModule
+    stringModule
     fileModule
 ]
 

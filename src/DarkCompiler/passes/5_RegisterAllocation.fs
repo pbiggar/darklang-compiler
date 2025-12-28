@@ -108,7 +108,8 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         Set.ofList (closureVReg @ argsVRegs)
     | LIR.PrintInt reg | LIR.PrintBool reg
     | LIR.PrintIntNoNewline reg | LIR.PrintBoolNoNewline reg
-    | LIR.PrintHeapStringNoNewline reg | LIR.PrintList (reg, _) ->
+    | LIR.PrintHeapStringNoNewline reg | LIR.PrintList (reg, _)
+    | LIR.PrintSum (reg, _) ->
         regToVReg reg |> Option.toList |> Set.ofList
     | LIR.PrintFloatNoNewline _ -> Set.empty  // FP register, not GP
     | LIR.PrintChars _ -> Set.empty  // No registers used
@@ -778,6 +779,10 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
     | LIR.PrintList (listPtr, elemType) ->
         let (ptrFinal, ptrLoads) = loadSpilled mapping listPtr LIR.X12
         ptrLoads @ [LIR.PrintList (ptrFinal, elemType)]
+
+    | LIR.PrintSum (sumPtr, variants) ->
+        let (ptrFinal, ptrLoads) = loadSpilled mapping sumPtr LIR.X12
+        ptrLoads @ [LIR.PrintSum (ptrFinal, variants)]
 
     | LIR.PrintFloat freg -> [LIR.PrintFloat freg]
     | LIR.PrintString (idx, len) -> [LIR.PrintString (idx, len)]

@@ -129,14 +129,13 @@ type MyOption = MyNone | MySome of Int64 let x = 0 - 5 in let opt = if x > 0 the
 
 // ===================================================================
 // Complex Enum Usage
-// NOTE: Printing tests commented out - requires enum printing support
 // ===================================================================
 
 // Enum printing (pretty-printing of ADT values)
-// type MyOption = MyNone | MySome of Int64 MySome(20) = stdout="MySome(20)\n"
-// type MyOption = MyNone | MySome of Int64 MyNone = stdout="MyNone\n"
-// type Color = Red | Green | Blue Red = stdout="Red\n"
-// type Color = Red | Green | Blue Green = stdout="Green\n"
+type MyOption = MyNone | MySome of Int64 MySome(20) = stdout="MySome(20)\n"
+type MyOption = MyNone | MySome of Int64 MyNone = stdout="MyNone\n"
+type Color = Red | Green | Blue Red = stdout="Red\n"
+type Color = Red | Green | Blue Green = stdout="Green\n"
 
 // Map-like behavior (manual)
 type MyOption = MyNone | MySome of Int64 let opt = MySome(10) in match opt with | MySome(x) -> match MySome(x * 2) with | MySome(v) -> v | MyNone -> 0 | MyNone -> 0 = 20

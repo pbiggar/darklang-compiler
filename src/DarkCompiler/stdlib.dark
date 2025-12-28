@@ -334,8 +334,17 @@ def Stdlib.String.append(s1: String, s2: String) : String = s1 ++ s2
 // Prepend first string to second
 def Stdlib.String.prepend(s2: String, s1: String) : String = s1 ++ s2
 
+// Get the length of a string in bytes
+// String format: [len:8 bytes][data:N bytes]
+def Stdlib.String.length(s: String) : Int64 =
+    __raw_get<Int64>(__int64_to_rawptr(__string_to_int64(s)), 0)
+
+// Check if string is empty
+def Stdlib.String.isEmpty(s: String) : Bool =
+    Stdlib.String.length(s) == 0
+
 // TODO: Most String functions require runtime builtins that don't exist yet
-// length, isEmpty, toUppercase, toLowercase, contains, startsWith, endsWith,
+// toUppercase, toLowercase, contains, startsWith, endsWith,
 // trim, slice, first, last, reverse, replaceAll, etc.
 
 // =============================================================================

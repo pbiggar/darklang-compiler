@@ -792,6 +792,6 @@ let convertFunctionToSSA (func: Function) : Function =
 
 /// Convert a program to SSA form
 let convertToSSA (program: Program) : Program =
-    let (Program (functions, strings, floats)) = program
+    let (Program (functions, strings, floats, variants)) = program
     let functions' = functions |> List.map convertFunctionToSSA
-    Program (functions', strings, floats)
+    Program (functions', strings, floats, variants)

@@ -186,8 +186,12 @@ type Function = {
     CFG: CFG
 }
 
+/// Variant info for sum type printing
+/// Maps type name -> list of (variant name, tag index, payload type)
+type VariantRegistry = Map<string, (string * int * AST.Type option) list>
+
 /// MIR program (list of functions with string and float pools)
-type Program = Program of functions:Function list * strings:StringPool * floats:FloatPool
+type Program = Program of functions:Function list * strings:StringPool * floats:FloatPool * variants:VariantRegistry
 
 /// Fresh register generator
 type RegGen = RegGen of int

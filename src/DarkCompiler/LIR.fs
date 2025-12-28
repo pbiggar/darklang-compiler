@@ -93,6 +93,7 @@ type Instr =
     | PrintHeapStringNoNewline of Reg           // Print heap string without newline (for tuple/list elements)
     | PrintChars of byte list                   // Print literal characters (for tuple/list delimiters)
     | PrintList of listPtr:Reg * elemType:AST.Type  // Print list [elem1, elem2, ...] with proper element formatting
+    | PrintSum of sumPtr:Reg * variants:(string * int * AST.Type option) list  // Print sum type: variantName, tag, payloadType
     | Exit                                       // Exit program with code 0
     // Floating-point instructions
     | FMov of dest:FReg * src:FReg              // Move between FP registers

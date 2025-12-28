@@ -25,6 +25,20 @@
 
 module ANF_to_MIR
 
+/// Build VariantRegistry from VariantLookup
+/// VariantLookup: variantName -> (typeName, typeParams, tagIndex, payloadType)
+/// VariantRegistry: typeName -> list of (variantName, tagIndex, payloadType)
+let buildVariantRegistry (variantLookup: AST_to_ANF.VariantLookup) : MIR.VariantRegistry =
+    variantLookup
+    |> Map.toList
+    |> List.map (fun (variantName, (typeName, _typeParams, tagIndex, payloadType)) ->
+        (typeName, (variantName, tagIndex, payloadType)))
+    |> List.groupBy fst
+    |> List.map (fun (typeName, entries) ->
+        let variants = entries |> List.map snd |> List.sortBy (fun (_, tag, _) -> tag)
+        (typeName, variants))
+    |> Map.ofList
+
 /// Convert ANF.BinOp to MIR.BinOp
 let convertBinOp (op: ANF.BinOp) : MIR.BinOp =
     match op with
@@ -1329,7 +1343,8 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
 
 /// Convert ANF program to MIR program
 /// mainExprType: the type of the main expression (used for _start's return type)
-let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (mainExprType: AST.Type) : Result<MIR.Program * MIR.RegGen, string> =
+/// variantLookup: mapping from variant names to type info (for enum printing)
+let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (mainExprType: AST.Type) (variantLookup: AST_to_ANF.VariantLookup) : Result<MIR.Program * MIR.RegGen, string> =
     let (ANF.Program (functions, mainExpr)) = program
 
     // Critical: freshReg must generate VRegs that don't conflict with TempId-derived VRegs.
@@ -1394,12 +1409,13 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
         MIR.CFG = cfg
     }
     let allFuncs = mirFuncs @ [startFunc]
-    Ok (MIR.Program (allFuncs, stringPool, floatPool), finalBuilder.RegGen)
+    let variantRegistry = buildVariantRegistry variantLookup
+    Ok (MIR.Program (allFuncs, stringPool, floatPool, variantRegistry), finalBuilder.RegGen)
 
 /// Convert ANF program to MIR (functions only, no _start)
 /// Use for stdlib where there's no real main expression to convert.
-/// Returns just the function list and pools without wrapping in MIR.Program.
-let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) : Result<MIR.Function list * MIR.StringPool * MIR.FloatPool, string> =
+/// Returns just the function list, pools, and variant registry without wrapping in MIR.Program.
+let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (variantLookup: AST_to_ANF.VariantLookup) : Result<MIR.Function list * MIR.StringPool * MIR.FloatPool * MIR.VariantRegistry, string> =
     let (ANF.Program (functions, _mainExpr)) = program
 
     // Same regGen calculation as toMIR
@@ -1430,7 +1446,8 @@ let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: M
     match convertFunctions [] regGen functions with
     | Error err -> Error err
     | Ok (mirFuncs, _) ->
-        Ok (mirFuncs, stringPool, floatPool)
+        let variantRegistry = buildVariantRegistry variantLookup
+        Ok (mirFuncs, stringPool, floatPool, variantRegistry)
 
 // ============================================================================
 // MIR Program Merging (for stdlib MIR caching optimization)
@@ -1553,8 +1570,8 @@ let appendFloatPools (stdlibPool: MIR.FloatPool) (userPool: MIR.FloatPool) : MIR
 /// Offsets user's StringRef/FloatRef indices to account for stdlib pools.
 /// Excludes stdlib's _start function (user's _start is the entry point).
 let mergeMIRPrograms (stdlibMIR: MIR.Program) (userMIR: MIR.Program) : MIR.Program =
-    let (MIR.Program (stdlibFuncs, stdlibStrings, stdlibFloats)) = stdlibMIR
-    let (MIR.Program (userFuncs, userStrings, userFloats)) = userMIR
+    let (MIR.Program (stdlibFuncs, stdlibStrings, stdlibFloats, stdlibVariants)) = stdlibMIR
+    let (MIR.Program (userFuncs, userStrings, userFloats, userVariants)) = userMIR
 
     let stringOffset = stdlibStrings.NextId
     let floatOffset = stdlibFloats.NextId
@@ -1569,4 +1586,7 @@ let mergeMIRPrograms (stdlibMIR: MIR.Program) (userMIR: MIR.Program) : MIR.Progr
     let mergedStrings = appendStringPools stdlibStrings userStrings
     let mergedFloats = appendFloatPools stdlibFloats userFloats
 
-    MIR.Program (stdlibFuncsNoStart @ offsetUserFuncs, mergedStrings, mergedFloats)
+    // Merge variant registries (user overrides stdlib for same type names)
+    let mergedVariants = Map.fold (fun acc k v -> Map.add k v acc) stdlibVariants userVariants
+
+    MIR.Program (stdlibFuncsNoStart @ offsetUserFuncs, mergedStrings, mergedFloats, mergedVariants)

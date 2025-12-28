@@ -765,6 +765,128 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
 
             printOpenBracket @ setup @ loopCode @ printCloseBracketNewline)
 
+    | LIR.PrintSum (sumPtr, variants) ->
+        // Print sum type: variant name + optional payload + newline
+        // Sum layout depends on whether ANY variant has a payload:
+        // - If any payload: [tag, payload] on heap
+        // - If all nullary: just the tag value (integer)
+        lirRegToARM64Reg sumPtr
+        |> Result.map (fun sumReg ->
+            let os =
+                match Platform.detectOS () with
+                | Ok platform -> platform
+                | Error _ -> Platform.Linux
+            let syscalls = Platform.getSyscallNumbers os
+
+            // Check if any variant has a payload
+            let hasAnyPayload = variants |> List.exists (fun (_, _, payload) -> Option.isSome payload)
+
+            // Helper: generate code to print a string literal
+            let printLiteral (s: string) =
+                let bytes = System.Text.Encoding.UTF8.GetBytes(s)
+                if bytes.Length = 0 then []
+                else
+                    let alignedSize = max 16 ((bytes.Length + 15) &&& ~~~15)
+                    [ARM64.SUB_imm (ARM64.SP, ARM64.SP, uint16 alignedSize)] @
+                    (bytes |> Array.toList |> List.mapi (fun i b ->
+                        [ARM64.MOVZ (ARM64.X0, uint16 b, 0); ARM64.STRB (ARM64.X0, ARM64.SP, i)]
+                    ) |> List.concat) @
+                    [ARM64.MOVZ (ARM64.X0, 1us, 0);
+                     ARM64.MOV_reg (ARM64.X1, ARM64.SP);
+                     ARM64.MOVZ (ARM64.X2, uint16 bytes.Length, 0);
+                     ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0);
+                     ARM64.SVC syscalls.SvcImmediate;
+                     ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 alignedSize)]
+
+            // Setup depends on representation
+            let setup =
+                if hasAnyPayload then
+                    // Heap-allocated: X19 = sum pointer, load tag from [X19, 0] into X20
+                    [ARM64.MOV_reg (ARM64.X19, sumReg); ARM64.LDR (ARM64.X20, ARM64.X19, 0s)]
+                else
+                    // All nullary: X19 = sum pointer (for consistency), X20 = tag (the value itself)
+                    [ARM64.MOV_reg (ARM64.X19, sumReg); ARM64.MOV_reg (ARM64.X20, sumReg)]
+
+            // Generate code for each variant: compare tag, branch, print name, optionally print payload
+            // Structure: for each variant, generate:
+            //   CMP X20, #tag
+            //   B.NE next_variant
+            //   <print variant name>
+            //   <if payload: print "(", print payload, print ")">
+            //   B end
+            // next_variant:
+            //   ... (repeat)
+            // end:
+            //   <print "\n">
+
+            // Pre-calculate code blocks for each variant
+            let variantBlocks =
+                variants |> List.map (fun (variantName, _tag, payloadType) ->
+                    let printName = printLiteral variantName
+                    let printPayload =
+                        match payloadType with
+                        | None -> []
+                        | Some pType ->
+                            let printOpen = printLiteral "("
+                            let loadPayload = [ARM64.LDR (ARM64.X0, ARM64.X19, 8s)]  // Load payload from offset 8
+                            let printPayloadValue =
+                                match pType with
+                                | AST.TInt64 -> Runtime.generatePrintIntNoNewline ()
+                                | AST.TBool -> Runtime.generatePrintBoolNoNewline ()
+                                | AST.TFloat64 ->
+                                    [ARM64.FMOV_from_gp (ARM64.D0, ARM64.X0)] @ Runtime.generatePrintFloatNoNewline ()
+                                | AST.TString ->
+                                    [ARM64.LDR (ARM64.X10, ARM64.X0, 0s); ARM64.ADD_imm (ARM64.X9, ARM64.X0, 8us)] @
+                                    Runtime.generatePrintStringNoNewline ()
+                                | _ -> Runtime.generatePrintIntNoNewline ()  // Fallback
+                            let printClose = printLiteral ")"
+                            printOpen @ loadPayload @ printPayloadValue @ printClose
+                    (printName, printPayload))
+
+            // Calculate end label offset from each variant block
+            // We'll build the code and calculate offsets manually
+
+            // Print newline at end
+            let printNewline = printLiteral "\n"
+            let endBlockLen = List.length printNewline
+
+            // Build variant blocks with branching
+            // For each variant: CMP(1) + B.NE(1) + name + payload + B(1) to end
+            let mutable codeBlocks : ARM64.Instr list list = []
+            let mutable cumulativeOffset = 0
+
+            // First pass: calculate total length to know where "end" is
+            let blockLengths =
+                variants
+                |> List.mapi (fun i (_, _tag, _) ->
+                    let (printName, printPayload) = variantBlocks.[i]
+                    2 + List.length printName + List.length printPayload + 1)  // CMP + B.NE + name + payload + B
+
+            let totalVariantCodeLen = List.sum blockLengths
+            let endOffset = totalVariantCodeLen + endBlockLen
+
+            // Second pass: build actual code with correct offsets
+            let mutable currentPos = 0
+            let variantCode =
+                variants
+                |> List.mapi (fun i (_, tag, _) ->
+                    let (printName, printPayload) = variantBlocks.[i]
+                    let blockLen = 2 + List.length printName + List.length printPayload + 1
+                    // B.NE is at position 1, next block CMP is at position blockLen
+                    // So offset = blockLen - 1 (forward jump from B.NE to next CMP)
+                    let nextBlockOffset = blockLen - 1
+                    let endFromHere = totalVariantCodeLen - currentPos - blockLen + 1  // Jump to after all variant blocks
+                    currentPos <- currentPos + blockLen
+
+                    let cmpInstr = ARM64.CMP_imm (ARM64.X20, uint16 tag)
+                    let branchNeInstr = ARM64.B_cond (ARM64.NE, nextBlockOffset)  // Skip this variant's code
+                    let branchEndInstr = ARM64.B endFromHere  // Jump to end (after all variant code)
+
+                    [cmpInstr; branchNeInstr] @ printName @ printPayload @ [branchEndInstr])
+                |> List.concat
+
+            setup @ variantCode @ printNewline)
+
     | LIR.Call (dest, funcName, args) ->
         // Function call: arguments already moved to X0-X7 by preceding MOVs
         // Caller-save is handled by SaveRegs/RestoreRegs instructions

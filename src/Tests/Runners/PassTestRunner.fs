@@ -174,6 +174,8 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"PrintHeapStringNoNewline({prettyPrintLIRReg reg})"
     | LIR.PrintList (listPtr, elemType) ->
         $"PrintList({prettyPrintLIRReg listPtr}, {elemType})"
+    | LIR.PrintSum (sumPtr, variants) ->
+        $"PrintSum({prettyPrintLIRReg sumPtr}, {variants})"
     | LIR.SaveRegs ->
         "SaveRegs"
     | LIR.RestoreRegs ->
@@ -483,7 +485,7 @@ let runANF2MIRTest (input: ANF.Program) (expected: MIR.Program) : PassTestResult
     // Use TInt64 as default for pass tests (E2E tests use actual program type)
     let emptyTypeMap : ANF.TypeMap = Map.empty
     let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
-    match ANF_to_MIR.toMIR input MIR.initialRegGen emptyTypeMap emptyTypeReg AST.TInt64 with
+    match ANF_to_MIR.toMIR input MIR.initialRegGen emptyTypeMap emptyTypeReg AST.TInt64 Map.empty with
     | Error err ->
         { Success = false
           Message = $"MIR conversion error: {err}"

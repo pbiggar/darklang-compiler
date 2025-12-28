@@ -68,7 +68,7 @@ let ensureInFRegister (operand: MIR.Operand) (tempFReg: LIR.FReg) : Result<LIR.I
         Error "Internal error: Cannot use function address as float operand"
 
 /// Convert MIR instruction to LIR instructions
-let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Instr list, string> =
+let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry: MIR.VariantRegistry) : Result<LIR.Instr list, string> =
     match instr with
     | MIR.Mov (dest, src, valueType) ->
         // Check if this is a float move - either by valueType or by source operand type
@@ -707,7 +707,28 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
                 | other -> [LIR.Mov (LIR.Physical LIR.X19, other)]
             Ok (moveToX19 @ [LIR.PrintList (LIR.Physical LIR.X19, elemType)])
 
-        | AST.TRecord _ | AST.TSum _ | AST.TDict _ ->
+        | AST.TSum (typeName, _) ->
+            // Sum type printing: look up variants and generate PrintSum
+            match Map.tryFind typeName variantRegistry with
+            | Some variants ->
+                // Move sum pointer to X19 (callee-saved for print operations)
+                let lirSrc = convertOperand src
+                let moveToX19 =
+                    match lirSrc with
+                    | LIR.Reg (LIR.Physical LIR.X19) -> []
+                    | LIR.Reg r -> [LIR.Mov (LIR.Physical LIR.X19, LIR.Reg r)]
+                    | other -> [LIR.Mov (LIR.Physical LIR.X19, other)]
+                Ok (moveToX19 @ [LIR.PrintSum (LIR.Physical LIR.X19, variants)])
+            | None ->
+                // Unknown type, just print address
+                let lirSrc = convertOperand src
+                let moveToX0 =
+                    match lirSrc with
+                    | LIR.Reg (LIR.Physical LIR.X0) -> []
+                    | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
+                Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
+
+        | AST.TRecord _ | AST.TDict _ ->
             // Other heap types: print address for now
             let lirSrc = convertOperand src
             let moveToX0 =
@@ -924,11 +945,11 @@ let private collectResults (results: Result<'a list, string> list) : Result<'a l
     loop [] results
 
 /// Convert MIR basic block to LIR basic block
-let selectBlock (block: MIR.BasicBlock) (stringPool: MIR.StringPool) (returnType: AST.Type) : Result<LIR.BasicBlock, string> =
+let selectBlock (block: MIR.BasicBlock) (stringPool: MIR.StringPool) (variantRegistry: MIR.VariantRegistry) (returnType: AST.Type) : Result<LIR.BasicBlock, string> =
     let lirLabel = convertLabel block.Label
 
     // Convert all instructions
-    let instrResults = block.Instrs |> List.map (fun i -> selectInstr i stringPool)
+    let instrResults = block.Instrs |> List.map (fun i -> selectInstr i stringPool variantRegistry)
     match collectResults instrResults with
     | Error err -> Error err
     | Ok lirInstrs ->
@@ -956,12 +977,12 @@ let private mapResults (f: 'a -> Result<'b, string>) (items: 'a list) : Result<'
     loop [] items
 
 /// Convert MIR CFG to LIR CFG
-let selectCFG (cfg: MIR.CFG) (stringPool: MIR.StringPool) (returnType: AST.Type) : Result<LIR.CFG, string> =
+let selectCFG (cfg: MIR.CFG) (stringPool: MIR.StringPool) (variantRegistry: MIR.VariantRegistry) (returnType: AST.Type) : Result<LIR.CFG, string> =
     let lirEntry = convertLabel cfg.Entry
 
     let blockList = cfg.Blocks |> Map.toList
     match mapResults (fun (label, block) ->
-        match selectBlock block stringPool returnType with
+        match selectBlock block stringPool variantRegistry returnType with
         | Error err -> Error err
         | Ok lirBlock -> Ok (convertLabel label, lirBlock)) blockList with
     | Error err -> Error err
@@ -1005,7 +1026,7 @@ let private checkCallArgLimits (mirFuncs: MIR.Function list) : Result<unit, stri
 
 /// Convert MIR program to LIR
 let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
-    let (MIR.Program (mirFuncs, stringPool, floatPool)) = program
+    let (MIR.Program (mirFuncs, stringPool, floatPool, variantRegistry)) = program
 
     // Pre-check: verify all functions have ≤8 parameters and calls have ≤8 arguments
     match checkParameterLimits mirFuncs with
@@ -1017,7 +1038,7 @@ let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
 
     // Convert each MIR function to LIR
     let convertFunc (mirFunc: MIR.Function) =
-        match selectCFG mirFunc.CFG stringPool mirFunc.ReturnType with
+        match selectCFG mirFunc.CFG stringPool variantRegistry mirFunc.ReturnType with
         | Error err -> Error err
         | Ok lirCFG ->
             // Convert MIR VRegs to LIR Virtual registers for parameters
@@ -1082,7 +1103,7 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.And _ | LIR.Orr _ | LIR.Eor _ | LIR.Lsl _ | LIR.Lsr _ | LIR.Mvn _
     | LIR.SaveRegs | LIR.RestoreRegs | LIR.PrintInt _ | LIR.PrintBool _ | LIR.PrintFloat _
     | LIR.PrintIntNoNewline _ | LIR.PrintBoolNoNewline _ | LIR.PrintFloatNoNewline _
-    | LIR.PrintHeapStringNoNewline _ | LIR.PrintList _
+    | LIR.PrintHeapStringNoNewline _ | LIR.PrintList _ | LIR.PrintSum _
     | LIR.PrintChars _ | LIR.Exit | LIR.FMov _ | LIR.FAdd _ | LIR.FSub _ | LIR.FMul _ | LIR.FDiv _
     | LIR.FNeg _ | LIR.FAbs _ | LIR.FSqrt _ | LIR.FCmp _ | LIR.IntToFloat _ | LIR.FloatToInt _
     | LIR.HeapAlloc _ | LIR.HeapLoad _ | LIR.RefCountInc _ | LIR.RefCountDec _
