@@ -62,6 +62,23 @@ type StdlibResult = {
     StdlibCallGraph: Map<string, Set<string>>
 }
 
+/// Lazy stdlib result - defers expensive compilation until we know what's needed
+/// Only compiles stdlib functions that user code actually calls
+type LazyStdlibResult = {
+    /// Type checking environment (registries for types, variants, functions)
+    TypeCheckEnv: TypeChecking.TypeCheckEnv
+    /// Generic function definitions for on-demand monomorphization
+    GenericFuncDefs: AST_to_ANF.GenericFuncDefs
+    /// Module registry for stdlib intrinsics
+    ModuleRegistry: AST.ModuleRegistry
+    /// ANF conversion result (for registries used in user conversion)
+    ANFResult: AST_to_ANF.ConversionResult
+    /// Stdlib ANF functions after RC insertion, indexed by name for lazy compilation
+    StdlibANFFunctions: Map<string, ANF.Function>
+    /// Call graph at ANF level for early DCE
+    StdlibANFCallGraph: Map<string, Set<string>>
+}
+
 /// Load the stdlib.dark file
 /// Returns the stdlib AST or an error message
 let loadStdlib () : Result<AST.Program, string> =
@@ -154,6 +171,47 @@ let compileStdlib () : Result<StdlibResult, string> =
                                 AllocatedFunctions = allocatedFuncs
                                 StdlibCallGraph = stdlibCallGraph
                             }
+
+/// Prepare stdlib for lazy compilation - stops at ANF level
+/// Expensive passes (MIR, LIR, RegAlloc) are deferred until we know what's needed
+let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
+    match loadStdlib() with
+    | Error e -> Error e
+    | Ok stdlibAst ->
+        // Add dummy main expression for type checking (stdlib has no main)
+        let (AST.Program items) = stdlibAst
+        let withMain = AST.Program (items @ [AST.Expression AST.UnitLiteral])
+
+        match TypeChecking.checkProgramWithEnv withMain with
+        | Error e -> Error (TypeChecking.typeErrorToString e)
+        | Ok (_, typedStdlib, typeCheckEnv) ->
+            // Extract generic function definitions for on-demand monomorphization
+            let genericFuncDefs = AST_to_ANF.extractGenericFuncDefs typedStdlib
+            // Build module registry once (reused across all compilations)
+            let moduleRegistry = Stdlib.buildModuleRegistry ()
+            match AST_to_ANF.convertProgramWithTypes typedStdlib with
+            | Error e -> Error e
+            | Ok anfResult ->
+                // Run RC insertion on stdlib ANF
+                match RefCountInsertion.insertRCInProgram anfResult with
+                | Error e -> Error e
+                | Ok anfAfterRC ->
+                    // Extract stdlib functions into a map for lazy lookup
+                    let (ANF.Program (stdlibFuncs, _)) = anfAfterRC
+                    let stdlibFuncMap =
+                        stdlibFuncs
+                        |> List.map (fun f -> f.Name, f)
+                        |> Map.ofList
+                    // Build call graph at ANF level for early DCE
+                    let stdlibCallGraph = ANFDeadCodeElimination.buildCallGraph stdlibFuncs
+                    Ok {
+                        TypeCheckEnv = typeCheckEnv
+                        GenericFuncDefs = genericFuncDefs
+                        ModuleRegistry = moduleRegistry
+                        ANFResult = anfResult
+                        StdlibANFFunctions = stdlibFuncMap
+                        StdlibANFCallGraph = stdlibCallGraph
+                    }
 
 /// Internal: Compile user code with stdlib AST (shared implementation)
 /// This is the core compilation pipeline that does one pass of type-checking and ANF conversion
@@ -769,17 +827,290 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
           Success = false
           ErrorMessage = Some $"Compilation failed: {ex.Message}" }
 
-/// Compile source code to binary (in-memory, no file I/O)
-/// This loads stdlib and compiles it together with user code in one pass
-let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: string) : CompileResult =
-    // Load stdlib AST and compile directly (no separate stdlib compilation)
-    match loadStdlib() with
+/// Compile user code with lazy stdlib - only compiles stdlib functions that are actually called
+/// This avoids compiling unused stdlib functions through expensive passes (MIR, LIR, RegAlloc)
+let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: LazyStdlibResult) (source: string) : CompileResult =
+    let sw = Stopwatch.StartNew()
+    try
+        // Pass 1: Parse user code only
+        if verbosity >= 1 then println "  [1/8] Parse..."
+        let parseResult = Parser.parseString source
+        let parseTime = sw.Elapsed.TotalMilliseconds
+        if verbosity >= 2 then
+            let t = System.Math.Round(parseTime, 1)
+            println $"        {t}ms"
+
+        match parseResult with
+        | Error err ->
+            { Binary = Array.empty
+              Success = false
+              ErrorMessage = Some $"Parse error: {err}" }
+        | Ok userAst ->
+            // Pass 1.5: Type Checking (user code with stdlib's TypeCheckEnv)
+            if verbosity >= 1 then println "  [1.5/8] Type Checking (incremental)..."
+            let typeCheckResult = TypeChecking.checkProgramWithBaseEnv stdlib.TypeCheckEnv userAst
+            let typeCheckTime = sw.Elapsed.TotalMilliseconds - parseTime
+            if verbosity >= 2 then
+                let t = System.Math.Round(typeCheckTime, 1)
+                println $"        {t}ms"
+
+            match typeCheckResult with
+            | Error typeErr ->
+                { Binary = Array.empty
+                  Success = false
+                  ErrorMessage = Some $"Type error: {TypeChecking.typeErrorToString typeErr}" }
+            | Ok (programType, typedUserAst, _userEnv) ->
+                if verbosity >= 3 then
+                    println $"Program type: {TypeChecking.typeToString programType}"
+                    println ""
+
+                // Pass 2: AST → ANF (user only)
+                if verbosity >= 1 then println "  [2/8] AST → ANF (user only)..."
+                let userOnlyResult =
+                    AST_to_ANF.convertUserOnly
+                        stdlib.GenericFuncDefs
+                        stdlib.ANFResult
+                        typedUserAst
+                let anfTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime
+                if verbosity >= 2 then
+                    let t = System.Math.Round(anfTime, 1)
+                    println $"        {t}ms"
+
+                match userOnlyResult with
+                | Error err ->
+                    { Binary = Array.empty
+                      Success = false
+                      ErrorMessage = Some $"ANF conversion error: {err}" }
+                | Ok userOnly ->
+                    // Create ConversionResult for RC insertion (user functions only)
+                    let userConvResult : AST_to_ANF.ConversionResult = {
+                        Program = ANF.Program (userOnly.UserFunctions, userOnly.MainExpr)
+                        TypeReg = userOnly.TypeReg
+                        VariantLookup = userOnly.VariantLookup
+                        FuncReg = userOnly.FuncReg
+                        FuncParams = userOnly.FuncParams
+                        ModuleRegistry = userOnly.ModuleRegistry
+                    }
+
+                    // Pass 2.5: Reference Count Insertion (user code only)
+                    if verbosity >= 1 then println "  [2.5/8] Reference Count Insertion..."
+                    let rcResult = RefCountInsertion.insertRCInProgram userConvResult
+                    let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(rcTime, 1)
+                        println $"        {t}ms"
+
+                    match rcResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"Reference count insertion error: {err}" }
+                    | Ok userAnfAfterRC ->
+
+                    // Pass 2.6: Print Insertion (user code only)
+                    if verbosity >= 1 then println "  [2.6/8] Print Insertion..."
+                    let (ANF.Program (userFunctions, userMainExpr)) = userAnfAfterRC
+                    let userAnfProgram = PrintInsertion.insertPrint userFunctions userMainExpr programType
+                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(printTime, 1)
+                        println $"        {t}ms"
+
+                    // Early DCE: Determine which stdlib functions are actually needed
+                    let (ANF.Program (userFuncsForDCE, userMainForDCE)) = userAnfProgram
+                    let userANFFuncs = { ANF.Name = "_start"; ANF.Params = []; ANF.Body = userMainForDCE } :: userFuncsForDCE
+                    let reachableStdlibNames = ANFDeadCodeElimination.getReachableStdlib stdlib.StdlibANFCallGraph userANFFuncs
+                    if verbosity >= 2 then
+                        println $"        DCE: {reachableStdlibNames.Count} stdlib functions needed"
+
+                    // Extract only the reachable stdlib ANF functions
+                    let reachableStdlibFuncs =
+                        reachableStdlibNames
+                        |> Set.toList
+                        |> List.choose (fun name -> Map.tryFind name stdlib.StdlibANFFunctions)
+
+                    // Compile reachable stdlib functions: ANF → MIR → LIR → RegAlloc
+                    let emptyTypeMap : ANF.TypeMap = Map.empty
+                    let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
+
+                    // Convert reachable stdlib to MIR (if any)
+                    let emptyStringPool : MIR.StringPool = { Strings = Map.empty; StringToId = Map.empty; NextId = 0 }
+                    let emptyFloatPool : MIR.FloatPool = { Floats = Map.empty; FloatToId = Map.empty; NextId = 0 }
+                    let stdlibMirResult =
+                        if List.isEmpty reachableStdlibFuncs then
+                            Ok ([], emptyStringPool, emptyFloatPool)
+                        else
+                            let stdlibAnfProgram = ANF.Program (reachableStdlibFuncs, ANF.Return ANF.UnitLiteral)
+                            ANF_to_MIR.toMIRFunctionsOnly stdlibAnfProgram emptyTypeMap emptyTypeReg
+
+                    match stdlibMirResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"Stdlib MIR conversion error: {err}" }
+                    | Ok (stdlibMirFuncs, stdlibStrings, stdlibFloats) ->
+
+                    // Convert reachable stdlib to LIR
+                    let stdlibMirProgram = MIR.Program (stdlibMirFuncs, stdlibStrings, stdlibFloats)
+                    let stdlibLirResult = MIR_to_LIR.toLIR stdlibMirProgram
+
+                    match stdlibLirResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"Stdlib LIR conversion error: {err}" }
+                    | Ok stdlibLirProgram ->
+
+                    // Allocate registers for reachable stdlib
+                    let (LIR.Program (stdlibLirFuncs, stdlibLirStrings, stdlibLirFloats)) = stdlibLirProgram
+                    let allocatedStdlibFuncs = stdlibLirFuncs |> List.map RegisterAllocation.allocateRegisters
+
+                    // Pass 3: ANF → MIR (user code only)
+                    if verbosity >= 1 then println "  [3/8] ANF → MIR (user only)..."
+                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) emptyTypeMap emptyTypeReg
+                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(mirTime, 1)
+                        println $"        {t}ms"
+
+                    match userMirResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"MIR conversion error: {err}" }
+                    | Ok (userMirProgram, _) ->
+
+                    // Pass 4: MIR → LIR (user code only)
+                    if verbosity >= 1 then println "  [4/8] MIR → LIR (user only)..."
+                    let userLirResult = MIR_to_LIR.toLIR userMirProgram
+
+                    match userLirResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"LIR conversion error: {err}" }
+                    | Ok userLirProgram ->
+
+                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(lirTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 5: Register Allocation (user functions)
+                    if verbosity >= 1 then println "  [5/8] Register Allocation..."
+                    let (LIR.Program (userFuncs, userStrings, userFloats)) = userLirProgram
+
+                    // Allocate user functions
+                    let allocatedUserFuncs = userFuncs |> List.map RegisterAllocation.allocateRegisters
+
+                    // Merge pools (stdlib first, user appended with offset)
+                    let stringOffset = stdlibLirStrings.NextId
+                    let floatOffset = stdlibLirFloats.NextId
+                    let mergedStrings = ANF_to_MIR.appendStringPools stdlibLirStrings userStrings
+                    let mergedFloats = ANF_to_MIR.appendFloatPools stdlibLirFloats userFloats
+
+                    // Offset pool refs in allocated user functions
+                    let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
+
+                    // Combine stdlib + user functions
+                    let allFuncs = allocatedStdlibFuncs @ offsetUserFuncs
+                    let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
+
+                    let regAllocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(regAllocTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 6: Code Generation
+                    if verbosity >= 1 then println "  [6/8] Code Generation..."
+                    let codegenOptions : CodeGen.CodeGenOptions = { DisableFreeList = options.DisableFreeList }
+                    let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
+                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - regAllocTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(codegenTime, 1)
+                        println $"        {t}ms"
+
+                    match codegenResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"Code generation error: {err}" }
+                    | Ok arm64Instructions ->
+
+                    let osResult = Platform.detectOS ()
+                    match osResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"Platform detection error: {err}" }
+                    | Ok os ->
+
+                    // Pass 7: ARM64 Encoding
+                    if verbosity >= 1 then println "  [7/8] ARM64 Encoding..."
+                    let codeFileOffset =
+                        match os with
+                        | Platform.Linux -> 64 + 56
+                        | Platform.MacOS ->
+                            let headerSize = 32
+                            let pageZeroCommandSize = 72
+                            let numTextSections = if mergedStrings.Strings.IsEmpty then 1 else 2
+                            let textSegmentCommandSize = 72 + (80 * numTextSections)
+                            let linkeditSegmentCommandSize = 72
+                            let dylinkerCommandSize = 32
+                            let dylibCommandSize = 56
+                            let symtabCommandSize = 24
+                            let dysymtabCommandSize = 80
+                            let uuidCommandSize = 24
+                            let buildVersionCommandSize = 24
+                            let mainCommandSize = 24
+                            let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + dylibCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
+                            (headerSize + commandsSize + 200 + 7) &&& (~~~7)
+                    let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions mergedStrings mergedFloats codeFileOffset
+                    let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - regAllocTime - codegenTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(encodeTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 8: Binary Generation
+                    let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
+                    if verbosity >= 1 then println $"  [8/8] Binary Generation ({formatName})..."
+                    let binary =
+                        match os with
+                        | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode mergedStrings mergedFloats
+                        | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode mergedStrings mergedFloats
+                    let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - regAllocTime - codegenTime - encodeTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(binaryTime, 1)
+                        println $"        {t}ms"
+
+                    sw.Stop()
+                    if verbosity >= 1 then
+                        println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
+
+                    { Binary = binary
+                      Success = true
+                      ErrorMessage = None }
+    with
+    | ex ->
+        { Binary = Array.empty
+          Success = false
+          ErrorMessage = Some $"Compilation failed: {ex.Message}" }
+
+/// Compile source code to binary using lazy stdlib compilation
+/// Only compiles stdlib functions that are actually called by user code
+let compileWithOptionsLazy (verbosity: int) (options: CompilerOptions) (source: string) : CompileResult =
+    match prepareStdlibForLazyCompile() with
     | Error err ->
         { Binary = Array.empty
           Success = false
           ErrorMessage = Some err }
-    | Ok stdlibAst ->
-        compileWithStdlibAST verbosity options stdlibAst source
+    | Ok lazyStdlib ->
+        compileWithLazyStdlib verbosity options lazyStdlib source
+
+/// Compile source code to binary (in-memory, no file I/O)
+/// Uses lazy stdlib compilation - only compiles stdlib functions that are actually called
+let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: string) : CompileResult =
+    compileWithOptionsLazy verbosity options source
 
 /// Compile source code to binary (uses default options)
 let compile (verbosity: int) (source: string) : CompileResult =
