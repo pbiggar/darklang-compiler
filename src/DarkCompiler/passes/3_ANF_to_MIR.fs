@@ -335,7 +335,8 @@ let isFloatAtom (floatRegs: Set<int>) (atom: ANF.Atom) : bool =
     | _ -> false
 
 /// Helper to check if a CExpr produces a float value
-let cexprProducesFloat (floatRegs: Set<int>) (cexpr: ANF.CExpr) : bool =
+/// returnTypeReg: map from function name to return type (for checking Call results)
+let cexprProducesFloat (floatRegs: Set<int>) (returnTypeReg: Map<string, AST.Type>) (cexpr: ANF.CExpr) : bool =
     match cexpr with
     | ANF.Prim (op, left, right) ->
         // Comparisons and boolean ops always produce Bool, not Float
@@ -352,11 +353,17 @@ let cexprProducesFloat (floatRegs: Set<int>) (cexpr: ANF.CExpr) : bool =
         // IfValue produces a float if either branch produces a float
         // (then and else should have the same type, so we check then)
         isFloatAtom floatRegs thenAtom
+    | ANF.Call (funcName, _) ->
+        // Check if the called function returns a float
+        match Map.tryFind funcName returnTypeReg with
+        | Some AST.TFloat64 -> true
+        | _ -> false
     | _ -> false
 
 /// Analyze return statements in an ANF expression, tracking float temps
 /// Returns the type of the expression's result
-let rec getExprReturnType (floatRegs: Set<int>) (typeMap: ANF.TypeMap) (expr: ANF.AExpr) : AST.Type =
+/// returnTypeReg: map from function name to return type (for checking Call results)
+let rec getExprReturnType (floatRegs: Set<int>) (typeMap: ANF.TypeMap) (returnTypeReg: Map<string, AST.Type>) (expr: ANF.AExpr) : AST.Type =
     match expr with
     | ANF.Return atom ->
         match atom with
@@ -375,15 +382,17 @@ let rec getExprReturnType (floatRegs: Set<int>) (typeMap: ANF.TypeMap) (expr: AN
     | ANF.Let (ANF.TempId destId, cexpr, rest) ->
         // Update floatRegs if this binding produces a float
         let floatRegs' =
-            if cexprProducesFloat floatRegs cexpr then
+            if cexprProducesFloat floatRegs returnTypeReg cexpr then
                 Set.add destId floatRegs
             else
                 floatRegs
-        getExprReturnType floatRegs' typeMap rest
-    | ANF.If (_, thenBranch, _) -> getExprReturnType floatRegs typeMap thenBranch
+        getExprReturnType floatRegs' typeMap returnTypeReg rest
+    | ANF.If (_, thenBranch, _) -> getExprReturnType floatRegs typeMap returnTypeReg thenBranch
 
 /// Compute return type for an ANF function by analyzing return statements
 /// Uses typeReg to determine which parameters are floats
+/// Note: This is used during buildReturnTypeReg, so we pass an empty return type map
+/// (we don't yet know return types of other functions)
 let computeReturnType (anfFunc: ANF.Function) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) : AST.Type =
     // Get float parameter IDs for this function
     let funcParamTypes =
@@ -398,7 +407,8 @@ let computeReturnType (anfFunc: ANF.Function) (typeMap: ANF.TypeMap) (typeReg: M
             |> Set.ofList
         else
             Set.empty
-    getExprReturnType floatParamIds typeMap anfFunc.Body
+    // Pass empty return type map since we're building it
+    getExprReturnType floatParamIds typeMap Map.empty anfFunc.Body
 
 /// Build a map from function name to return type for all functions
 let buildReturnTypeReg (functions: ANF.Function list) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) : Map<string, AST.Type> =
@@ -594,6 +604,7 @@ let rec convertExpr
                 | ANF.Call (funcName, args) ->
                     let argTypes = args |> List.map (atomType builder)
                     let returnType = Map.tryFind funcName builder.ReturnTypeReg |> Option.defaultValue AST.TInt64
+                    destType := returnType  // Track call result type for FloatRegs update
                     args
                     |> List.map (atomToOperand builder)
                     |> sequenceResults
@@ -977,6 +988,7 @@ and convertExprToOperand
                 | ANF.Call (funcName, args) ->
                     let argTypes = args |> List.map (atomType builder)
                     let returnType = Map.tryFind funcName builder.ReturnTypeReg |> Option.defaultValue AST.TInt64
+                    destType := returnType  // Track call result type for FloatRegs update
                     args
                     |> List.map (atomToOperand builder)
                     |> sequenceResults
@@ -1293,6 +1305,7 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
             anfFunc.Params |> List.map (fun _ -> AST.TInt64)
 
     // Helper to get return type by finding return atoms in the body
+    // Uses returnTypeReg to check if function calls return floats
     let rec getReturnType (floatRegs: Set<int>) (expr: ANF.AExpr) : AST.Type =
         match expr with
         | ANF.Return atom ->
@@ -1312,7 +1325,7 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
         | ANF.Let (ANF.TempId destId, cexpr, rest) ->
             // Update floatRegs if this binding produces a float
             let floatRegs' =
-                if cexprProducesFloat floatRegs cexpr then
+                if cexprProducesFloat floatRegs returnTypeReg cexpr then
                     Set.add destId floatRegs
                 else
                     floatRegs
