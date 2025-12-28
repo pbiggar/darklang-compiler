@@ -523,9 +523,11 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     println $"Program type: {TypeChecking.typeToString programType}"
                     println ""
 
-                // Merge stdlib.TypedAST with typedUserAst for ANF conversion
-                // (Phase 2 will optimize this by concatenating ANF directly)
-                // Use mergeTypedPrograms to exclude stdlib's dummy expression
+                // Merge stdlib typed AST with user typed AST for ANF conversion
+                // NOTE: Monomorphization requires access to generic function bodies,
+                // so we must merge ASTs before running transformations when user code
+                // calls generic stdlib functions (like Stdlib.List.length<Int64>).
+                // Full separate ANF compilation would require pre-specializing stdlib generics.
                 let mergedTypedAst = mergeTypedPrograms stdlib.TypedAST typedUserAst
 
                 // Pass 2: AST → ANF

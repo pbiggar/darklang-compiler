@@ -732,9 +732,9 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             | LIR.StackSlot offset ->
                 loadStackSlot destARM64 offset
             | LIR.StringRef idx ->
-                // Convert pool string to heap string format for function arguments
-                // Pool strings have layout [data:N], but functions expect heap layout:
-                // [length:8][data:N][refcount:8]
+                // Convert pool string to heap format for function arguments
+                // Functions expect heap strings: [length:8][data:N][refcount:8]
+                // Pool strings are just raw data, so we must convert
                 match Map.tryFind idx ctx.StringPool.Strings with
                 | Some (_, len) ->
                     let label = sprintf "str_%d" idx
@@ -749,19 +749,18 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         // Store length
                     ] @ loadImmediate ARM64.X10 (int64 len) @ [
                         ARM64.STR (ARM64.X10, destARM64, 0s)  // [dest] = length
-                        // Copy bytes: loop counter in X13
+                        // Copy bytes: loop counter in X13 (NOT X0-X7 - those are arg registers!)
                         ARM64.MOVZ (ARM64.X13, 0us, 0)  // X13 = 0
                     ] @ loadImmediate ARM64.X11 (int64 len) @ [
-                        // Loop: copy bytes from pool to heap
-                        // Index:  0: CMP, 1: B_cond, 2-6: loop body, 7: B, 8+: refcount
-                        ARM64.CMP_reg (ARM64.X13, ARM64.X11)           // 0: compare counter with len
-                        ARM64.B_cond (ARM64.GE, 7)                     // 1: if counter >= len, skip 7 to index 8
-                        ARM64.LDRB (ARM64.X15, ARM64.X9, ARM64.X13)    // 2: X15 = pool[X13]
-                        ARM64.ADD_imm (ARM64.X12, destARM64, 8us)      // 3: X12 = dest + 8
-                        ARM64.ADD_reg (ARM64.X12, ARM64.X12, ARM64.X13) // 4: X12 = dest + 8 + X13
-                        ARM64.STRB_reg (ARM64.X15, ARM64.X12)          // 5: [X12] = byte
-                        ARM64.ADD_imm (ARM64.X13, ARM64.X13, 1us)      // 6: X13++
-                        ARM64.B (-7)                                   // 7: Loop back to CMP (index 0)
+                        // Loop start (if X13 >= len, done)
+                        ARM64.CMP_reg (ARM64.X13, ARM64.X11)
+                        ARM64.B_cond (ARM64.GE, 7)  // Skip 7 instructions to exit loop
+                        ARM64.LDRB (ARM64.X15, ARM64.X9, ARM64.X13)  // X15 = pool[X13]
+                        ARM64.ADD_imm (ARM64.X12, destARM64, 8us)  // X12 = dest + 8
+                        ARM64.ADD_reg (ARM64.X12, ARM64.X12, ARM64.X13)  // X12 = dest + 8 + X13
+                        ARM64.STRB_reg (ARM64.X15, ARM64.X12)  // [X12] = byte
+                        ARM64.ADD_imm (ARM64.X13, ARM64.X13, 1us)  // X13++
+                        ARM64.B (-7)  // Loop back to CMP
                         // Store refcount
                         ARM64.ADD_imm (ARM64.X12, destARM64, 8us)
                         ARM64.ADD_reg (ARM64.X12, ARM64.X12, ARM64.X10)  // X12 = dest + 8 + len
@@ -1094,17 +1093,17 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         ARM64.ADD_imm (ARM64.X14, ARM64.X13, 16us)   // X14 = total + 16
                         ARM64.ADD_imm (ARM64.X14, ARM64.X14, 7us)    // Align up
                         ARM64.MOVZ (ARM64.X15, 0xFFF8us, 0)          // ~7 mask (lower bits)
-                        ARM64.MOVK (ARM64.X15, 0xFFFFus, 1)
-                        ARM64.MOVK (ARM64.X15, 0xFFFFus, 2)
-                        ARM64.MOVK (ARM64.X15, 0xFFFFus, 3)
+                        ARM64.MOVK (ARM64.X15, 0xFFFFus, 16)         // Bits 16-31
+                        ARM64.MOVK (ARM64.X15, 0xFFFFus, 32)         // Bits 32-47
+                        ARM64.MOVK (ARM64.X15, 0xFFFFus, 48)         // Bits 48-63
                         ARM64.AND_reg (ARM64.X14, ARM64.X14, ARM64.X15)  // X14 = aligned size
                         ARM64.MOV_reg (ARM64.X14, ARM64.X28)            // X14 = current heap ptr (result)
                         ARM64.ADD_imm (ARM64.X15, ARM64.X13, 16us)      // X15 = total + 16
                         ARM64.ADD_imm (ARM64.X15, ARM64.X15, 7us)       // Align
                         ARM64.MOVZ (ARM64.X0, 0xFFF8us, 0)              // ~7 mask again (X15 was clobbered)
-                        ARM64.MOVK (ARM64.X0, 0xFFFFus, 1)
-                        ARM64.MOVK (ARM64.X0, 0xFFFFus, 2)
-                        ARM64.MOVK (ARM64.X0, 0xFFFFus, 3)
+                        ARM64.MOVK (ARM64.X0, 0xFFFFus, 16)             // Bits 16-31
+                        ARM64.MOVK (ARM64.X0, 0xFFFFus, 32)             // Bits 32-47
+                        ARM64.MOVK (ARM64.X0, 0xFFFFus, 48)             // Bits 48-63
                         ARM64.AND_reg (ARM64.X15, ARM64.X15, ARM64.X0)
                         ARM64.ADD_reg (ARM64.X28, ARM64.X28, ARM64.X15) // Bump heap pointer
                     ]
@@ -1544,7 +1543,7 @@ let generateHeapInit () : ARM64.Instr list =
     [
         // Allocate 64KB (0x10000) of stack space for heap
         ARM64.MOVZ (ARM64.X28, 0us, 0)  // Start with 0
-        ARM64.MOVK (ARM64.X28, 0x1us, 1)  // 0x10000 = 65536
+        ARM64.MOVK (ARM64.X28, 0x1us, 16)  // 0x10000 = 65536 (set bit 16)
         ARM64.SUB_reg (ARM64.SP, ARM64.SP, ARM64.X28)  // SP -= 64KB
         ARM64.MOV_reg (ARM64.X27, ARM64.SP)  // X27 = free list heads base
         // X28 = X27 + 256 (skip free list heads area)
