@@ -451,159 +451,159 @@ let main args =
 
             // Run tests in parallel (dynamically determined based on system resources) and print as they complete (in order)
             if allTests.Count > 0 then
-                // Initialize stdlib cache before running tests (compiles stdlib once)
-                // Uses incremental type checking - stdlib TypeCheckEnv is reused
-                match TestDSL.E2ETestRunner.initializeStdlibCache() with
+                // Compile stdlib once before running tests
+                match TestDSL.E2ETestRunner.compileStdlib() with
                 | Error e ->
-                    println $"  {Colors.gray}(Stdlib cache init failed: {e}){Colors.reset}"
-                | Ok () ->
-                    println $"  {Colors.gray}(Stdlib cache initialized - incremental type checking){Colors.reset}"
+                    println $"  {Colors.red}Stdlib compilation failed: {e}{Colors.reset}"
+                    println $"  {Colors.red}Skipping all E2E tests{Colors.reset}"
+                | Ok stdlib ->
+                    println $"  {Colors.gray}(Stdlib compiled - incremental type checking){Colors.reset}"
 
-                // Apply filter to tests
-                let testsArray =
-                    allTests.ToArray()
-                    |> Array.filter (fun test -> matchesFilter filter test.Name)
-                let numTests = testsArray.Length
-                let results = Array.zeroCreate<option<E2ETest * E2ETestResult * TimeSpan>> numTests
-                let mutable nextToPrint = 0
-                let lockObj = obj()
+                    // Apply filter to tests
+                    let testsArray =
+                        allTests.ToArray()
+                        |> Array.filter (fun test -> matchesFilter filter test.Name)
+                    let numTests = testsArray.Length
+                    let results = Array.zeroCreate<option<E2ETest * E2ETestResult * TimeSpan>> numTests
+                    let mutable nextToPrint = 0
+                    let lockObj = obj()
 
-                // Determine parallelism level (use override if provided)
-                let maxParallel = overrideParallel |> Option.defaultWith getOptimalParallelism
-                let source = if overrideParallel.IsSome then "command line" else "system resources"
-                println $"  {Colors.gray}(Running with {maxParallel} parallel tests based on {source}){Colors.reset}"
-                println ""
+                    // Determine parallelism level (use override if provided)
+                    let maxParallel = overrideParallel |> Option.defaultWith getOptimalParallelism
+                    let source = if overrideParallel.IsSome then "command line" else "system resources"
+                    println $"  {Colors.gray}(Running with {maxParallel} parallel tests based on {source}){Colors.reset}"
+                    println ""
 
-                // Track current file for printing headers
-                let mutable currentFile = ""
+                    // Track current file for printing headers
+                    let mutable currentFile = ""
 
-                // Helper function to print a test result
-                let printTestResult (test: E2ETest) (result: E2ETestResult) (elapsed: TimeSpan) =
-                    // Print file header if we're moving to a new file
-                    if test.SourceFile <> currentFile then
-                        currentFile <- test.SourceFile
-                        let fileName = System.IO.Path.GetFileName(test.SourceFile)
-                        println $"  {Colors.yellow}── {fileName} ──{Colors.reset}"
-                    // Clean up test name: remove Stdlib. prefix and truncate long names
-                    let cleanName = test.Name.Replace("Stdlib.", "")
-                    let displayName =
-                        if cleanName.Length > 75 then cleanName.Substring(0, 72) + "..."
-                        else cleanName
-                    print $"  {displayName}... "
-                    if result.Success then
-                        println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime elapsed}){Colors.reset}"
-                        lock lockObj (fun () -> passed <- passed + 1)
-                    else
-                        println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime elapsed}){Colors.reset}"
-                        println $"    {result.Message}"
-
-                        let details = ResizeArray<string>()
-
-                        // Show exit code mismatch
-                        match result.ExitCode with
-                        | Some code when code <> test.ExpectedExitCode ->
-                            println $"    Expected exit code: {test.ExpectedExitCode}"
-                            println $"    Actual exit code: {code}"
-                            details.Add($"Expected exit code: {test.ExpectedExitCode}")
-                            details.Add($"Actual exit code: {code}")
-                        | _ -> ()
-
-                        // Show stdout mismatch
-                        match test.ExpectedStdout, result.Stdout with
-                        | Some expected, Some actual when actual.Trim() <> expected.Trim() ->
-                            let expectedDisplay = expected.Replace("\n", "\\n")
-                            let actualDisplay = actual.Replace("\n", "\\n")
-                            println $"    Expected stdout: {expectedDisplay}"
-                            println $"    Actual stdout: {actualDisplay}"
-                            details.Add($"Expected stdout: {expectedDisplay}")
-                            details.Add($"Actual stdout: {actualDisplay}")
-                        | Some expected, None ->
-                            let expectedDisplay = expected.Replace("\n", "\\n")
-                            println $"    Expected stdout: {expectedDisplay}"
-                            println "    Actual: no stdout captured"
-                            details.Add($"Expected stdout: {expectedDisplay}")
-                            details.Add("Actual: no stdout captured")
-                        | None, Some actual when actual.Trim() <> "" ->
-                            // Unexpected stdout when none was expected
-                            let actualDisplay = actual.Replace("\n", "\\n")
-                            println $"    Unexpected stdout: {actualDisplay}"
-                            details.Add($"Unexpected stdout: {actualDisplay}")
-                        | _ -> ()
-
-                        // Show stderr mismatch
-                        match test.ExpectedStderr, result.Stderr with
-                        | Some expected, Some actual when actual.Trim() <> expected.Trim() ->
-                            let expectedDisplay = expected.Replace("\n", "\\n")
-                            let actualDisplay = actual.Replace("\n", "\\n")
-                            println $"    Expected stderr: {expectedDisplay}"
-                            println $"    Actual stderr: {actualDisplay}"
-                            details.Add($"Expected stderr: {expectedDisplay}")
-                            details.Add($"Actual stderr: {actualDisplay}")
-                        | Some expected, None ->
-                            let expectedDisplay = expected.Replace("\n", "\\n")
-                            println $"    Expected stderr: {expectedDisplay}"
-                            println "    Actual: no stderr captured"
-                            details.Add($"Expected stderr: {expectedDisplay}")
-                            details.Add("Actual: no stderr captured")
-                        | None, Some actual when actual.Trim() <> "" ->
-                            // Unexpected stderr when none was expected
-                            let actualDisplay = actual.Replace("\n", "\\n")
-                            println $"    Unexpected stderr: {actualDisplay}"
-                            details.Add($"Unexpected stderr: {actualDisplay}")
-                        | _ -> ()
-
-                        lock lockObj (fun () ->
-                            failedTests.Add({ Name = $"E2E: {test.Name}"; Message = result.Message; Details = details |> Seq.toList })
-                            failed <- failed + 1
-                        )
-
-                // Helper to print all consecutive completed tests starting from nextToPrint
-                let printPendingResults () =
-                    lock lockObj (fun () ->
-                        while nextToPrint < numTests && results.[nextToPrint].IsSome do
-                            let (test, result, elapsed) = results.[nextToPrint].Value
-                            printTestResult test result elapsed
-                            nextToPrint <- nextToPrint + 1
-                    )
-
-                // Run tests in parallel
-                let options = System.Threading.Tasks.ParallelOptions()
-                options.MaxDegreeOfParallelism <- maxParallel
-                System.Threading.Tasks.Parallel.For(
-                    0,
-                    numTests,
-                    options,
-                    fun i ->
-                        let test = testsArray.[i]
-                        let testTimer = Stopwatch.StartNew()
-                        let result = runE2ETest test
-                        testTimer.Stop()
-
-                        // Store result
-                        lock lockObj (fun () ->
-                            results.[i] <- Some (test, result, testTimer.Elapsed)
-                        )
-
-                        // Try to print this and any subsequent completed tests
-                        printPendingResults ()
-                ) |> ignore
-
-                // Count E2E section results
-                let mutable sectionPassed = 0
-                let mutable sectionFailed = 0
-                for result in results do
-                    match result with
-                    | Some (_, testResult, _) ->
-                        if testResult.Success then
-                            sectionPassed <- sectionPassed + 1
+                    // Helper function to print a test result
+                    let printTestResult (test: E2ETest) (result: E2ETestResult) (elapsed: TimeSpan) =
+                        // Print file header if we're moving to a new file
+                        if test.SourceFile <> currentFile then
+                            currentFile <- test.SourceFile
+                            let fileName = System.IO.Path.GetFileName(test.SourceFile)
+                            println $"  {Colors.yellow}── {fileName} ──{Colors.reset}"
+                        // Clean up test name: remove Stdlib. prefix and truncate long names
+                        let cleanName = test.Name.Replace("Stdlib.", "")
+                        let displayName =
+                            if cleanName.Length > 75 then cleanName.Substring(0, 72) + "..."
+                            else cleanName
+                        print $"  {displayName}... "
+                        if result.Success then
+                            println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime elapsed}){Colors.reset}"
+                            lock lockObj (fun () -> passed <- passed + 1)
                         else
-                            sectionFailed <- sectionFailed + 1
-                    | None -> ()
+                            println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime elapsed}){Colors.reset}"
+                            println $"    {result.Message}"
 
-                if sectionFailed = 0 then
-                    println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
-                else
-                    println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
+                            let details = ResizeArray<string>()
+
+                            // Show exit code mismatch
+                            match result.ExitCode with
+                            | Some code when code <> test.ExpectedExitCode ->
+                                println $"    Expected exit code: {test.ExpectedExitCode}"
+                                println $"    Actual exit code: {code}"
+                                details.Add($"Expected exit code: {test.ExpectedExitCode}")
+                                details.Add($"Actual exit code: {code}")
+                            | _ -> ()
+
+                            // Show stdout mismatch
+                            match test.ExpectedStdout, result.Stdout with
+                            | Some expected, Some actual when actual.Trim() <> expected.Trim() ->
+                                let expectedDisplay = expected.Replace("\n", "\\n")
+                                let actualDisplay = actual.Replace("\n", "\\n")
+                                println $"    Expected stdout: {expectedDisplay}"
+                                println $"    Actual stdout: {actualDisplay}"
+                                details.Add($"Expected stdout: {expectedDisplay}")
+                                details.Add($"Actual stdout: {actualDisplay}")
+                            | Some expected, None ->
+                                let expectedDisplay = expected.Replace("\n", "\\n")
+                                println $"    Expected stdout: {expectedDisplay}"
+                                println "    Actual: no stdout captured"
+                                details.Add($"Expected stdout: {expectedDisplay}")
+                                details.Add("Actual: no stdout captured")
+                            | None, Some actual when actual.Trim() <> "" ->
+                                // Unexpected stdout when none was expected
+                                let actualDisplay = actual.Replace("\n", "\\n")
+                                println $"    Unexpected stdout: {actualDisplay}"
+                                details.Add($"Unexpected stdout: {actualDisplay}")
+                            | _ -> ()
+
+                            // Show stderr mismatch
+                            match test.ExpectedStderr, result.Stderr with
+                            | Some expected, Some actual when actual.Trim() <> expected.Trim() ->
+                                let expectedDisplay = expected.Replace("\n", "\\n")
+                                let actualDisplay = actual.Replace("\n", "\\n")
+                                println $"    Expected stderr: {expectedDisplay}"
+                                println $"    Actual stderr: {actualDisplay}"
+                                details.Add($"Expected stderr: {expectedDisplay}")
+                                details.Add($"Actual stderr: {actualDisplay}")
+                            | Some expected, None ->
+                                let expectedDisplay = expected.Replace("\n", "\\n")
+                                println $"    Expected stderr: {expectedDisplay}"
+                                println "    Actual: no stderr captured"
+                                details.Add($"Expected stderr: {expectedDisplay}")
+                                details.Add("Actual: no stderr captured")
+                            | None, Some actual when actual.Trim() <> "" ->
+                                // Unexpected stderr when none was expected
+                                let actualDisplay = actual.Replace("\n", "\\n")
+                                println $"    Unexpected stderr: {actualDisplay}"
+                                details.Add($"Unexpected stderr: {actualDisplay}")
+                            | _ -> ()
+
+                            lock lockObj (fun () ->
+                                failedTests.Add({ Name = $"E2E: {test.Name}"; Message = result.Message; Details = details |> Seq.toList })
+                                failed <- failed + 1
+                            )
+
+                    // Helper to print all consecutive completed tests starting from nextToPrint
+                    let printPendingResults () =
+                        lock lockObj (fun () ->
+                            while nextToPrint < numTests && results.[nextToPrint].IsSome do
+                                let (test, result, elapsed) = results.[nextToPrint].Value
+                                printTestResult test result elapsed
+                                nextToPrint <- nextToPrint + 1
+                        )
+
+                    // Run tests in parallel
+                    let options = System.Threading.Tasks.ParallelOptions()
+                    options.MaxDegreeOfParallelism <- maxParallel
+                    System.Threading.Tasks.Parallel.For(
+                        0,
+                        numTests,
+                        options,
+                        fun i ->
+                            let test = testsArray.[i]
+                            let testTimer = Stopwatch.StartNew()
+                            let result = runE2ETest stdlib test
+                            testTimer.Stop()
+
+                            // Store result
+                            lock lockObj (fun () ->
+                                results.[i] <- Some (test, result, testTimer.Elapsed)
+                            )
+
+                            // Try to print this and any subsequent completed tests
+                            printPendingResults ()
+                    ) |> ignore
+
+                    // Count E2E section results
+                    let mutable sectionPassed = 0
+                    let mutable sectionFailed = 0
+                    for result in results do
+                        match result with
+                        | Some (_, testResult, _) ->
+                            if testResult.Success then
+                                sectionPassed <- sectionPassed + 1
+                            else
+                                sectionFailed <- sectionFailed + 1
+                        | None -> ()
+
+                    if sectionFailed = 0 then
+                        println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
+                    else
+                        println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
 
             sectionTimer.Stop()
             println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
