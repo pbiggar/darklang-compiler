@@ -584,6 +584,28 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             else
                 Runtime.generatePrintBoolNoExit ())
 
+    | LIR.PrintChars chars ->
+        // Print literal characters (for tuple/list delimiters like "(", ", ", ")")
+        Ok (Runtime.generatePrintChars chars)
+
+    | LIR.PrintIntNoNewline reg ->
+        // Print integer without newline (for tuple elements)
+        lirRegToARM64Reg reg
+        |> Result.map (fun regARM64 ->
+            if regARM64 <> ARM64.X0 then
+                [ARM64.MOV_reg (ARM64.X0, regARM64)] @ Runtime.generatePrintIntNoNewline ()
+            else
+                Runtime.generatePrintIntNoNewline ())
+
+    | LIR.PrintBoolNoNewline reg ->
+        // Print boolean without newline (for tuple elements)
+        lirRegToARM64Reg reg
+        |> Result.map (fun regARM64 ->
+            if regARM64 <> ARM64.X0 then
+                [ARM64.MOV_reg (ARM64.X0, regARM64)] @ Runtime.generatePrintBoolNoNewline ()
+            else
+                Runtime.generatePrintBoolNoNewline ())
+
     | LIR.Call (dest, funcName, args) ->
         // Function call: arguments already moved to X0-X7 by preceding MOVs
         // Caller-save is handled by SaveRegs/RestoreRegs instructions

@@ -106,8 +106,10 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         let closureVReg = regToVReg closure |> Option.toList
         let argsVRegs = args |> List.choose operandToVReg
         Set.ofList (closureVReg @ argsVRegs)
-    | LIR.PrintInt reg | LIR.PrintBool reg ->
+    | LIR.PrintInt reg | LIR.PrintBool reg
+    | LIR.PrintIntNoNewline reg | LIR.PrintBoolNoNewline reg ->
         regToVReg reg |> Option.toList |> Set.ofList
+    | LIR.PrintChars _ -> Set.empty  // No registers used
     | LIR.HeapAlloc (_, _) -> Set.empty
     | LIR.HeapStore (addr, _, src) ->
         let a = regToVReg addr |> Option.toList
@@ -753,8 +755,17 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
         let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12
         regLoads @ [LIR.PrintBool regFinal]
 
+    | LIR.PrintIntNoNewline reg ->
+        let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12
+        regLoads @ [LIR.PrintIntNoNewline regFinal]
+
+    | LIR.PrintBoolNoNewline reg ->
+        let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12
+        regLoads @ [LIR.PrintBoolNoNewline regFinal]
+
     | LIR.PrintFloat freg -> [LIR.PrintFloat freg]
     | LIR.PrintString (idx, len) -> [LIR.PrintString (idx, len)]
+    | LIR.PrintChars chars -> [LIR.PrintChars chars]
 
     // FP instructions pass through unchanged
     | LIR.FMov (dest, src) -> [LIR.FMov (dest, src)]

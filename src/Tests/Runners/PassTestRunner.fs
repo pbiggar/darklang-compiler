@@ -161,6 +161,13 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"PrintFloat({prettyPrintLIRFReg freg})"
     | LIR.PrintString (idx, len) ->
         $"PrintString(str[{idx}], len={len})"
+    | LIR.PrintChars chars ->
+        let s = chars |> List.map (fun b -> char b) |> System.String.Concat
+        $"PrintChars(\"{s}\")"
+    | LIR.PrintIntNoNewline reg ->
+        $"PrintIntNoNewline({prettyPrintLIRReg reg})"
+    | LIR.PrintBoolNoNewline reg ->
+        $"PrintBoolNoNewline({prettyPrintLIRReg reg})"
     | LIR.SaveRegs ->
         "SaveRegs"
     | LIR.RestoreRegs ->

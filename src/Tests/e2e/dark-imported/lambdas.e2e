@@ -131,12 +131,11 @@ def incr(x: Int64): Int64 = x + 1 let f = (x: Int64) => incr(incr(x)) in f(5) = 
 
 // ===================================================================
 // Lambda with Tuples
-// NOTE: Tuple printing tests commented out - requires tuple printing support
 // ===================================================================
 
 // Return tuple (printing)
-// ((x: Int64) => (x, x + 1))(5) = stdout="(5, 6)\n"
-// ((x: Int64, y: Int64) => (x + y, x * y))(3, 4) = stdout="(7, 12)\n"
+((x: Int64) => (x, x + 1))(5) = stdout="(5, 6)\n"
+((x: Int64, y: Int64) => (x + y, x * y))(3, 4) = stdout="(7, 12)\n"
 
 // Return tuple - verify via pattern match extraction
 ((x: Int64) => match (x, x + 1) with | (a, b) -> a + b)(5) = 11

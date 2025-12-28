@@ -31,14 +31,12 @@ Stdlib.Tuple2.second((1, 2)) = 2
 
 (let (a, b) = (1, 2) in 2) = 2
 (let (a, b) = (1, 2) in b) = 2
-// NOTE: Tuple printing not yet implemented
-// (let (a, b) = (1, 2) in (b, a)) = stdout="(2, 1)\n"
+(let (a, b) = (1, 2) in (b, a)) = stdout="(2, 1)\n"
 (let (d, d) = (2, 1) in d) = 1
 (let (_, _) = (1, 2) in 2) = 2
 
 (let (a, b, c) = (1, 2, 3) in b) = 2
-// NOTE: Tuple printing not yet implemented
-// (let (a, b, c) = (1, 2, 3) in (b, a)) = stdout="(2, 1)\n"
+(let (a, b, c) = (1, 2, 3) in (b, a)) = stdout="(2, 1)\n"
 (let (d, d, d) = (2, 1, 3) in d) = 3
 (let (_, _, _) = (1, 2, 3) in 2) = 2
 

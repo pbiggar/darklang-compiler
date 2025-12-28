@@ -594,8 +594,64 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
                     | LIR.Reg (LIR.Physical LIR.X0) -> []
                     | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
                 Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
-        | AST.TTuple _ | AST.TRecord _ | AST.TList _ | AST.TSum _ | AST.TDict _ ->
-            // Heap types: print address for now
+        | AST.TTuple elemTypes ->
+            // Tuple printing: (elem1, elem2, ...)
+            // Use X19 (callee-saved) to hold tuple address throughout printing
+            // since PrintChars clobbers caller-saved registers (X0-X3)
+            let tupleAddrReg = LIR.Physical LIR.X19
+            let saveTupleAddr =
+                let srcOp = convertOperand src
+                [LIR.Mov (tupleAddrReg, srcOp)]
+
+            // Helper to generate print instructions for a value based on its type
+            let rec printValue (valueReg: LIR.Reg) (valueType: AST.Type) : LIR.Instr list =
+                match valueType with
+                | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
+                | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 ->
+                    [LIR.Mov (LIR.Physical LIR.X0, LIR.Reg valueReg)
+                     LIR.PrintInt (LIR.Physical LIR.X0)]
+                | AST.TBool ->
+                    [LIR.Mov (LIR.Physical LIR.X0, LIR.Reg valueReg)
+                     LIR.PrintBool (LIR.Physical LIR.X0)]
+                | AST.TFloat64 ->
+                    // Float in int register - convert to FP register for printing
+                    // This is simplified - may need adjustment for actual float values
+                    [LIR.Mov (LIR.Physical LIR.X0, LIR.Reg valueReg)
+                     LIR.PrintInt (LIR.Physical LIR.X0)]  // TODO: proper float printing
+                | _ ->
+                    // Other types: print address for now
+                    [LIR.Mov (LIR.Physical LIR.X0, LIR.Reg valueReg)
+                     LIR.PrintInt (LIR.Physical LIR.X0)]
+
+            // Generate instructions to print each element
+            // Use no-newline versions for tuple elements
+            let elemInstrs =
+                elemTypes
+                |> List.mapi (fun i elemType ->
+                    let elemReg = LIR.Physical LIR.X0  // Load directly to X0 for printing
+                    let loadInstr = LIR.HeapLoad (elemReg, tupleAddrReg, i * 8)
+                    let sepInstrs =
+                        if i > 0 then [LIR.PrintChars [byte ','; byte ' ']]  // ", "
+                        else []
+                    let printInstrs =
+                        match elemType with
+                        | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
+                        | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 ->
+                            [LIR.PrintIntNoNewline (LIR.Physical LIR.X0)]
+                        | AST.TBool ->
+                            [LIR.PrintBoolNoNewline (LIR.Physical LIR.X0)]
+                        | _ ->
+                            [LIR.PrintIntNoNewline (LIR.Physical LIR.X0)]  // Fallback
+                    sepInstrs @ [loadInstr] @ printInstrs)
+                |> List.concat
+
+            // Combine: save addr + "(" + elements + ")\n"
+            let openParen = [LIR.PrintChars [byte '(']]
+            let closeParenNewline = [LIR.PrintChars [byte ')'; byte '\n']]
+            Ok (saveTupleAddr @ openParen @ elemInstrs @ closeParenNewline)
+
+        | AST.TRecord _ | AST.TList _ | AST.TSum _ | AST.TDict _ ->
+            // Other heap types: print address for now
             let lirSrc = convertOperand src
             let moveToX0 =
                 match lirSrc with
@@ -963,7 +1019,8 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.Store _ | LIR.Mul _ | LIR.Sdiv _ | LIR.Msub _ | LIR.Cset _
     | LIR.And _ | LIR.Orr _ | LIR.Eor _ | LIR.Lsl _ | LIR.Lsr _ | LIR.Mvn _
     | LIR.SaveRegs | LIR.RestoreRegs | LIR.PrintInt _ | LIR.PrintBool _ | LIR.PrintFloat _
-    | LIR.Exit | LIR.FMov _ | LIR.FAdd _ | LIR.FSub _ | LIR.FMul _ | LIR.FDiv _
+    | LIR.PrintIntNoNewline _ | LIR.PrintBoolNoNewline _
+    | LIR.PrintChars _ | LIR.Exit | LIR.FMov _ | LIR.FAdd _ | LIR.FSub _ | LIR.FMul _ | LIR.FDiv _
     | LIR.FNeg _ | LIR.FAbs _ | LIR.FSqrt _ | LIR.FCmp _ | LIR.IntToFloat _ | LIR.FloatToInt _
     | LIR.HeapAlloc _ | LIR.HeapLoad _ | LIR.RefCountInc _ | LIR.RefCountDec _
     | LIR.PrintHeapString _ | LIR.LoadFuncAddr _ | LIR.RawAlloc _ | LIR.RawFree _

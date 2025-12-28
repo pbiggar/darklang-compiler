@@ -84,8 +84,11 @@ type Instr =
     | ArgMoves of (PhysReg * Operand) list       // Move arguments to X0-X7 (parallel move - handles clobber issues)
     | PrintInt of Reg                           // Print integer register to stdout (no exit)
     | PrintBool of Reg                          // Print boolean register to stdout (no exit)
+    | PrintIntNoNewline of Reg                  // Print integer without newline (for tuple elements)
+    | PrintBoolNoNewline of Reg                 // Print boolean without newline (for tuple elements)
     | PrintFloat of FReg                        // Print float from FP register to stdout
     | PrintString of stringIndex:int * stringLen:int  // Print string from pool to stdout
+    | PrintChars of byte list                   // Print literal characters (for tuple/list delimiters)
     | Exit                                       // Exit program with code 0
     // Floating-point instructions
     | FMov of dest:FReg * src:FReg              // Move between FP registers

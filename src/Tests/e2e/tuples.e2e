@@ -79,3 +79,24 @@ let (a, b) = (-5, 10) in a + b = stdout="5\n"
 
 // Complex expression using destructured values
 let (x, y) = (6, 4) in x * y - x + y = stdout="22\n"
+
+// ===================================================================
+// Tuple Printing
+// ===================================================================
+
+// Basic tuple printing
+(1, 2) = stdout="(1, 2)\n"
+(42, 99) = stdout="(42, 99)\n"
+(0, 0) = stdout="(0, 0)\n"
+
+// 3-element tuple printing
+(1, 2, 3) = stdout="(1, 2, 3)\n"
+(10, 20, 30) = stdout="(10, 20, 30)\n"
+
+// Tuple with negative numbers
+(-1, -2) = stdout="(-1, -2)\n"
+(5, -10) = stdout="(5, -10)\n"
+
+// Tuple with computed values
+let x = 5 in (x, x + 1) = stdout="(5, 6)\n"
+(3 + 4, 5 * 2) = stdout="(7, 10)\n"

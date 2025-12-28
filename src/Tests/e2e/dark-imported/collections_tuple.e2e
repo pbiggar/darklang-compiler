@@ -6,15 +6,14 @@
 
 // ===================================================================
 // Tuple literals (from Dark dtuple.dark)
-// NOTE: Commented out - requires Int64 suffix support
 // ===================================================================
 
-// (1L, 2L) = stdout="(1, 2)\n"
-// (1L, 2L, 3L) = stdout="(1, 2, 3)\n"
-// (1L, 2L + 3L, 4L) = stdout="(1, 5, 4)\n"
+(1L, 2L) = stdout="(1, 2)\n"
+(1L, 2L, 3L) = stdout="(1, 2, 3)\n"
+(1L, 2L + 3L, 4L) = stdout="(1, 5, 4)\n"
 
 // No upper limit on tuple size
-// (1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L) = stdout="(1, 2, 3, 4, 5, 6, 7, 8, 9)\n"
+(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L) = stdout="(1, 2, 3, 4, 5, 6, 7, 8, 9)\n"
 
 // ===================================================================
 // Error handling tests
@@ -27,36 +26,34 @@
 
 // ===================================================================
 // Basic Tuple Construction (from extended suite)
-// NOTE: Commented out - tuple printing not yet supported
 // ===================================================================
 
 // 2-tuples
-// (1, 2) = stdout="(1, 2)\n"
-// (0, 0) = stdout="(0, 0)\n"
-// (42, 99) = stdout="(42, 99)\n"
+(1, 2) = stdout="(1, 2)\n"
+(0, 0) = stdout="(0, 0)\n"
+(42, 99) = stdout="(42, 99)\n"
 
 // 3-tuples
-// (1, 2, 3) = stdout="(1, 2, 3)\n"
-// (10, 20, 30) = stdout="(10, 20, 30)\n"
+(1, 2, 3) = stdout="(1, 2, 3)\n"
+(10, 20, 30) = stdout="(10, 20, 30)\n"
 
 // 4-tuples
-// (1, 2, 3, 4) = stdout="(1, 2, 3, 4)\n"
+(1, 2, 3, 4) = stdout="(1, 2, 3, 4)\n"
 
 // 5-tuples
-// (1, 2, 3, 4, 5) = stdout="(1, 2, 3, 4, 5)\n"
+(1, 2, 3, 4, 5) = stdout="(1, 2, 3, 4, 5)\n"
 
 // ===================================================================
 // Tuples with Expressions
-// NOTE: Commented out - tuple printing not yet supported
 // ===================================================================
 
-// (1 + 1, 2 + 2) = stdout="(2, 4)\n"
-// (2 * 3, 4 * 5) = stdout="(6, 20)\n"
-// (10 - 3, 20 - 5) = stdout="(7, 15)\n"
-// (20 / 4, 30 / 6) = stdout="(5, 5)\n"
+(1 + 1, 2 + 2) = stdout="(2, 4)\n"
+(2 * 3, 4 * 5) = stdout="(6, 20)\n"
+(10 - 3, 20 - 5) = stdout="(7, 15)\n"
+(20 / 4, 30 / 6) = stdout="(5, 5)\n"
 
-// (1, 2 + 3, 4) = stdout="(1, 5, 4)\n"
-// (1 * 2, 3 + 4, 5 - 1) = stdout="(2, 7, 4)\n"
+(1, 2 + 3, 4) = stdout="(1, 5, 4)\n"
+(1 * 2, 3 + 4, 5 - 1) = stdout="(2, 7, 4)\n"
 
 // ===================================================================
 // Tuple Pattern Matching
@@ -99,14 +96,13 @@ let (_, second) = (0, 42) in second = 42
 
 // ===================================================================
 // Tuples with Variables
-// NOTE: Commented out - tuple printing not yet supported
 // ===================================================================
 
-// let x = 5 in let y = 10 in (x, y) = stdout="(5, 10)\n"
-// let a = 1 in let b = 2 in let c = 3 in (a, b, c) = stdout="(1, 2, 3)\n"
+let x = 5 in let y = 10 in (x, y) = stdout="(5, 10)\n"
+let a = 1 in let b = 2 in let c = 3 in (a, b, c) = stdout="(1, 2, 3)\n"
 
-// let x = 5 in (x, x + 1, x + 2) = stdout="(5, 6, 7)\n"
-// let x = 2 in (x * 1, x * 2, x * 3) = stdout="(2, 4, 6)\n"
+let x = 5 in (x, x + 1, x + 2) = stdout="(5, 6, 7)\n"
+let x = 2 in (x * 1, x * 2, x * 3) = stdout="(2, 4, 6)\n"
 
 // ===================================================================
 // Tuple in Let Body
@@ -126,37 +122,34 @@ let t1 = (1, 2) in let t2 = (3, 4) in match t1 with | (a, b) -> match t2 with | 
 
 // ===================================================================
 // Tuples with Booleans
-// NOTE: Printing tests commented out - tuple printing not yet supported
 // ===================================================================
 
-// (true, false) = stdout="(true, false)\n"
-// (true, true) = stdout="(true, true)\n"
-// (false, false) = stdout="(false, false)\n"
+(true, false) = stdout="(true, false)\n"
+(true, true) = stdout="(true, true)\n"
+(false, false) = stdout="(false, false)\n"
 
 match (true, false) with | (a, _) -> if a then 1 else 0 = 1
 match (false, true) with | (_, b) -> if b then 1 else 0 = 1
 
 // ===================================================================
 // Complex Tuple Expressions
-// NOTE: Commented out - tuple printing not yet supported
 // ===================================================================
 
-// (1 == 1, 2 == 3) = stdout="(true, false)\n"
-// (5 > 3, 2 < 1) = stdout="(true, false)\n"
+(1 == 1, 2 == 3) = stdout="(true, false)\n"
+(5 > 3, 2 < 1) = stdout="(true, false)\n"
 
-// let x = 5 in (x * 2, x > 3) = stdout="(10, true)\n"
+let x = 5 in (x * 2, x > 3) = stdout="(10, true)\n"
 
 // ===================================================================
 // Edge Cases
-// NOTE: Commented out - tuple printing not yet supported
 // ===================================================================
 
-// (0, 0) = stdout="(0, 0)\n"
-// (0, 0, 0) = stdout="(0, 0, 0)\n"
+(0, 0) = stdout="(0, 0)\n"
+(0, 0, 0) = stdout="(0, 0, 0)\n"
 
-// (42, 42) = stdout="(42, 42)\n"
-// (7, 7, 7) = stdout="(7, 7, 7)\n"
+(42, 42) = stdout="(42, 42)\n"
+(7, 7, 7) = stdout="(7, 7, 7)\n"
 
-// (0 - 1, 0 - 2) = stdout="(-1, -2)\n"
+(0 - 1, 0 - 2) = stdout="(-1, -2)\n"
 
-// (1000000, 2000000) = stdout="(1000000, 2000000)\n"
+(1000000, 2000000) = stdout="(1000000, 2000000)\n"
