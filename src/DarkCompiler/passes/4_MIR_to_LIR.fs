@@ -976,7 +976,7 @@ let private offsetLIRBlock (strOffset: int) (fltOffset: int) (block: LIR.BasicBl
       Terminator = block.Terminator }  // Terminators don't contain pool refs in LIR
 
 /// Offset pool references in an LIR function
-let private offsetLIRFunction (strOffset: int) (fltOffset: int) (func: LIR.Function) : LIR.Function =
+let offsetLIRFunction (strOffset: int) (fltOffset: int) (func: LIR.Function) : LIR.Function =
     let offsetBlocks =
         func.CFG.Blocks
         |> Map.map (fun _ block -> offsetLIRBlock strOffset fltOffset block)

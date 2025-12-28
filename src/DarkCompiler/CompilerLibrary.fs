@@ -56,6 +56,8 @@ type StdlibResult = {
     MIRProgram: MIR.Program
     /// Cached LIR program (avoids re-converting stdlib MIR to LIR each compilation)
     LIRProgram: LIR.Program
+    /// Pre-allocated stdlib functions (physical registers assigned, ready for merge)
+    AllocatedFunctions: LIR.Function list
 }
 
 /// Load the stdlib.dark file
@@ -121,16 +123,21 @@ let compileStdlib () : Result<StdlibResult, string> =
                 match RefCountInsertion.insertRCInProgram anfResult with
                 | Error e -> Error e
                 | Ok anfAfterRC ->
-                    // Convert stdlib ANF to MIR (cached for reuse)
+                    // Convert stdlib ANF to MIR (functions only, no _start)
                     let emptyTypeMap : ANF.TypeMap = Map.empty
                     let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
-                    match ANF_to_MIR.toMIR anfAfterRC (MIR.RegGen 0) emptyTypeMap emptyTypeReg with
+                    match ANF_to_MIR.toMIRFunctionsOnly anfAfterRC emptyTypeMap emptyTypeReg with
                     | Error e -> Error e
-                    | Ok (mirProgram, _) ->
+                    | Ok (mirFuncs, stringPool, floatPool) ->
+                        // Wrap in MIR.Program for LIR conversion
+                        let mirProgram = MIR.Program (mirFuncs, stringPool, floatPool)
                         // Convert stdlib MIR to LIR (cached for reuse)
                         match MIR_to_LIR.toLIR mirProgram with
                         | Error e -> Error e
                         | Ok lirProgram ->
+                            // Pre-allocate stdlib functions (cached for reuse)
+                            let (LIR.Program (lirFuncs, lirStrings, lirFloats)) = lirProgram
+                            let allocatedFuncs = lirFuncs |> List.map RegisterAllocation.allocateRegisters
                             Ok {
                                 AST = stdlibAst
                                 TypedAST = typedStdlib
@@ -140,6 +147,7 @@ let compileStdlib () : Result<StdlibResult, string> =
                                 ModuleRegistry = moduleRegistry
                                 MIRProgram = mirProgram
                                 LIRProgram = lirProgram
+                                AllocatedFunctions = allocatedFuncs
                             }
 
 /// Internal: Compile user code with stdlib AST (shared implementation)
@@ -626,8 +634,8 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                         let t = System.Math.Round(mirTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 4: MIR → LIR (user code only, then merge with cached stdlib LIR)
-                    if verbosity >= 1 then println "  [4/8] MIR → LIR (user + cached stdlib)..."
+                    // Pass 4: MIR → LIR (user code only)
+                    if verbosity >= 1 then println "  [4/8] MIR → LIR (user only)..."
                     let userLirResult = MIR_to_LIR.toLIR userMirProgram
 
                     match userLirResult with
@@ -637,19 +645,31 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                           ErrorMessage = Some $"LIR conversion error: {err}" }
                     | Ok userLirProgram ->
 
-                    // Merge user LIR with cached stdlib LIR (offsets pool indices)
-                    let lirProgram = MIR_to_LIR.mergeLIRPrograms stdlib.LIRProgram userLirProgram
-
                     let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(lirTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 5: Register Allocation
-                    if verbosity >= 1 then println "  [5/8] Register Allocation..."
-                    let (LIR.Program (funcs, stringPool, floatPool)) = lirProgram
-                    let allocatedFuncs = funcs |> List.map RegisterAllocation.allocateRegisters
-                    let allocatedProgram = LIR.Program (allocatedFuncs, stringPool, floatPool)
+                    // Pass 5: Register Allocation (user functions only, stdlib pre-allocated)
+                    if verbosity >= 1 then println "  [5/8] Register Allocation (user only + cached stdlib)..."
+                    let (LIR.Program (userFuncs, userStrings, userFloats)) = userLirProgram
+                    let (LIR.Program (_, stdlibStrings, stdlibFloats)) = stdlib.LIRProgram
+
+                    // Allocate only user functions
+                    let allocatedUserFuncs = userFuncs |> List.map RegisterAllocation.allocateRegisters
+
+                    // Merge pools (stdlib first, user appended with offset)
+                    let stringOffset = stdlibStrings.NextId
+                    let floatOffset = stdlibFloats.NextId
+                    let mergedStrings = ANF_to_MIR.appendStringPools stdlibStrings userStrings
+                    let mergedFloats = ANF_to_MIR.appendFloatPools stdlibFloats userFloats
+
+                    // Offset pool refs in allocated user functions
+                    let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
+
+                    // Combine pre-allocated stdlib functions with user functions
+                    let allFuncs = stdlib.AllocatedFunctions @ offsetUserFuncs
+                    let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
 
                     let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime
                     if verbosity >= 2 then
@@ -687,7 +707,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                             | Platform.MacOS ->
                                 let headerSize = 32
                                 let pageZeroCommandSize = 72
-                                let numTextSections = if stringPool.Strings.IsEmpty then 1 else 2
+                                let numTextSections = if mergedStrings.Strings.IsEmpty then 1 else 2
                                 let textSegmentCommandSize = 72 + (80 * numTextSections)
                                 let linkeditSegmentCommandSize = 72
                                 let dylinkerCommandSize = 32
@@ -699,7 +719,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                                 let mainCommandSize = 24
                                 let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + dylibCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
                                 (headerSize + commandsSize + 200 + 7) &&& (~~~7)
-                        let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions stringPool floatPool codeFileOffset
+                        let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions mergedStrings mergedFloats codeFileOffset
 
                         let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime
                         if verbosity >= 2 then
@@ -711,8 +731,8 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                         if verbosity >= 1 then println $"  [8/8] Binary Generation ({formatName})..."
                         let binary =
                             match os with
-                            | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode stringPool floatPool
-                            | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode stringPool floatPool
+                            | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode mergedStrings mergedFloats
+                            | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode mergedStrings mergedFloats
                         let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
                         if verbosity >= 2 then
                             let t = System.Math.Round(binaryTime, 1)

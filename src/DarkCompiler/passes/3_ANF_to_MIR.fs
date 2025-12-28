@@ -1213,6 +1213,39 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
     let allFuncs = mirFuncs @ [startFunc]
     Ok (MIR.Program (allFuncs, stringPool, floatPool), finalBuilder.RegGen)
 
+/// Convert ANF program to MIR (functions only, no _start)
+/// Use for stdlib where there's no real main expression to convert.
+/// Returns just the function list and pools without wrapping in MIR.Program.
+let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) : Result<MIR.Function list * MIR.StringPool * MIR.FloatPool, string> =
+    let (ANF.Program (functions, _mainExpr)) = program
+
+    // Same regGen calculation as toMIR
+    let maxId = maxTempIdInProgram program
+    let regGen = MIR.RegGen (maxId + 1)
+
+    // Phase 1: Collect all strings and floats, build pools and lookups
+    let allStrings = collectStringsFromProgram program
+    let stringPool = buildStringPool allStrings
+    let strLookup = buildStringLookup stringPool
+
+    let allFloats = collectFloatsFromProgram program
+    let floatPool = buildFloatPool allFloats
+    let fltLookup = buildFloatLookup floatPool
+
+    // Phase 2: Convert all functions to MIR (skip main/_start)
+    let rec convertFunctions funcs rg remaining =
+        match remaining with
+        | [] -> Ok (funcs, rg)
+        | anfFunc :: rest ->
+            match convertANFFunction anfFunc rg strLookup fltLookup typeMap typeReg with
+            | Error err -> Error err
+            | Ok (mirFunc, rg') -> convertFunctions (funcs @ [mirFunc]) rg' rest
+
+    match convertFunctions [] regGen functions with
+    | Error err -> Error err
+    | Ok (mirFuncs, _) ->
+        Ok (mirFuncs, stringPool, floatPool)
+
 // ============================================================================
 // MIR Program Merging (for stdlib MIR caching optimization)
 // ============================================================================
