@@ -183,8 +183,16 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRFReg dest} <- FDiv({prettyPrintLIRFReg left}, {prettyPrintLIRFReg right})"
     | LIR.FNeg (dest, src) ->
         $"{prettyPrintLIRFReg dest} <- FNeg({prettyPrintLIRFReg src})"
+    | LIR.FAbs (dest, src) ->
+        $"{prettyPrintLIRFReg dest} <- FAbs({prettyPrintLIRFReg src})"
+    | LIR.FSqrt (dest, src) ->
+        $"{prettyPrintLIRFReg dest} <- FSqrt({prettyPrintLIRFReg src})"
     | LIR.FCmp (left, right) ->
         $"FCmp({prettyPrintLIRFReg left}, {prettyPrintLIRFReg right})"
+    | LIR.IntToFloat (dest, src) ->
+        $"{prettyPrintLIRFReg dest} <- IntToFloat({prettyPrintLIRReg src})"
+    | LIR.FloatToInt (dest, src) ->
+        $"{prettyPrintLIRReg dest} <- FloatToInt({prettyPrintLIRFReg src})"
     // Heap operations
     | LIR.HeapAlloc (dest, sizeBytes) ->
         $"{prettyPrintLIRReg dest} <- HeapAlloc({sizeBytes})"
@@ -374,6 +382,17 @@ let prettyPrintANFCExpr = function
         $"RawGet({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset})"
     | ANF.RawSet (ptr, byteOffset, value) ->
         $"RawSet({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset}, {prettyPrintANFAtom value})"
+    // Float intrinsics
+    | ANF.FloatSqrt atom ->
+        $"FloatSqrt({prettyPrintANFAtom atom})"
+    | ANF.FloatAbs atom ->
+        $"FloatAbs({prettyPrintANFAtom atom})"
+    | ANF.FloatNeg atom ->
+        $"FloatNeg({prettyPrintANFAtom atom})"
+    | ANF.IntToFloat atom ->
+        $"IntToFloat({prettyPrintANFAtom atom})"
+    | ANF.FloatToInt atom ->
+        $"FloatToInt({prettyPrintANFAtom atom})"
 
 /// Pretty-print ANF expression (recursive)
 let rec prettyPrintANFExpr = function
@@ -575,6 +594,8 @@ let prettyPrintARM64Instr = function
         $"FMOV_reg({dest}, {src})"
     | ARM64.FMOV_to_gp (dest, src) ->
         $"FMOV_to_gp({prettyPrintARM64Reg dest}, {src})"
+    | ARM64.FSQRT (dest, src) ->
+        $"FSQRT({dest}, {src})"
     | ARM64.SCVTF (dest, src) ->
         $"SCVTF({dest}, {prettyPrintARM64Reg src})"
     | ARM64.FCVTZS (dest, src) ->

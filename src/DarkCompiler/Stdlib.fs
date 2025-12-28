@@ -17,6 +17,18 @@ let int64Module : ModuleDef = {
         { Name = "div"; ParamTypes = [TInt64; TInt64]; ReturnType = TInt64 }
         { Name = "max"; ParamTypes = [TInt64; TInt64]; ReturnType = TInt64 }
         { Name = "min"; ParamTypes = [TInt64; TInt64]; ReturnType = TInt64 }
+        { Name = "toFloat"; ParamTypes = [TInt64]; ReturnType = TFloat64 }
+    ]
+}
+
+/// Stdlib.Float module - floating-point operations
+let floatModule : ModuleDef = {
+    Name = "Stdlib.Float"
+    Functions = [
+        { Name = "sqrt"; ParamTypes = [TFloat64]; ReturnType = TFloat64 }
+        { Name = "abs"; ParamTypes = [TFloat64]; ReturnType = TFloat64 }
+        { Name = "negate"; ParamTypes = [TFloat64]; ReturnType = TFloat64 }
+        { Name = "toInt"; ParamTypes = [TFloat64]; ReturnType = TInt64 }
     ]
 }
 
@@ -61,6 +73,7 @@ let rawMemoryIntrinsics : ModuleFunc list = [
 /// All available Stdlib modules
 let allModules : ModuleDef list = [
     int64Module
+    floatModule
     fileModule
 ]
 

@@ -134,6 +134,11 @@ let hasSideEffects (cexpr: CExpr) : bool =
     | RawFree _ -> true   // Frees memory
     | RawGet _ -> false   // Pure memory read
     | RawSet _ -> true    // Memory mutation
+    | FloatSqrt _ -> false  // Pure float operation
+    | FloatAbs _ -> false   // Pure float operation
+    | FloatNeg _ -> false   // Pure float operation
+    | IntToFloat _ -> false // Pure conversion
+    | FloatToInt _ -> false // Pure conversion
 
 /// Collect all TempIds used in an atom
 let collectAtomUses (atom: Atom) : Set<TempId> =
@@ -169,6 +174,11 @@ let collectCExprUses (cexpr: CExpr) : Set<TempId> =
     | RawFree ptr -> collectAtomUses ptr
     | RawGet (ptr, byteOffset) -> Set.union (collectAtomUses ptr) (collectAtomUses byteOffset)
     | RawSet (ptr, byteOffset, value) -> Set.unionMany [collectAtomUses ptr; collectAtomUses byteOffset; collectAtomUses value]
+    | FloatSqrt atom -> collectAtomUses atom
+    | FloatAbs atom -> collectAtomUses atom
+    | FloatNeg atom -> collectAtomUses atom
+    | IntToFloat atom -> collectAtomUses atom
+    | FloatToInt atom -> collectAtomUses atom
 
 /// Collect all TempIds used in an AExpr
 let rec collectAExprUses (aexpr: AExpr) : Set<TempId> =
@@ -211,6 +221,11 @@ let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | RawFree ptr -> RawFree (s ptr)
     | RawGet (ptr, byteOffset) -> RawGet (s ptr, s byteOffset)
     | RawSet (ptr, byteOffset, value) -> RawSet (s ptr, s byteOffset, s value)
+    | FloatSqrt atom -> FloatSqrt (s atom)
+    | FloatAbs atom -> FloatAbs (s atom)
+    | FloatNeg atom -> FloatNeg (s atom)
+    | IntToFloat atom -> IntToFloat (s atom)
+    | FloatToInt atom -> FloatToInt (s atom)
 
 /// Optimize a CExpr with constant folding
 let optimizeCExpr (env: ConstEnv) (cexpr: CExpr) : CExpr * bool =

@@ -692,6 +692,43 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) : Result<LIR.Ins
         | Ok (valueInstrs, valueReg) ->
             Ok (ptrInstrs @ offsetInstrs @ valueInstrs @ [LIR.RawSet (ptrReg, offsetReg, valueReg)])
 
+    | MIR.FloatSqrt (dest, src) ->
+        let lirFDest = vregToLIRFReg dest
+        match ensureInFRegister src (LIR.FVirtual 1000) with
+        | Error err -> Error err
+        | Ok (srcInstrs, srcFReg) ->
+            Ok (srcInstrs @ [LIR.FSqrt (lirFDest, srcFReg)])
+
+    | MIR.FloatAbs (dest, src) ->
+        let lirFDest = vregToLIRFReg dest
+        match ensureInFRegister src (LIR.FVirtual 1000) with
+        | Error err -> Error err
+        | Ok (srcInstrs, srcFReg) ->
+            Ok (srcInstrs @ [LIR.FAbs (lirFDest, srcFReg)])
+
+    | MIR.FloatNeg (dest, src) ->
+        let lirFDest = vregToLIRFReg dest
+        match ensureInFRegister src (LIR.FVirtual 1000) with
+        | Error err -> Error err
+        | Ok (srcInstrs, srcFReg) ->
+            Ok (srcInstrs @ [LIR.FNeg (lirFDest, srcFReg)])
+
+    | MIR.IntToFloat (dest, src) ->
+        let lirFDest = vregToLIRFReg dest
+        // src is an integer operand that needs to be in an integer register
+        match ensureInRegister src (LIR.Virtual 1000) with
+        | Error err -> Error err
+        | Ok (srcInstrs, srcReg) ->
+            Ok (srcInstrs @ [LIR.IntToFloat (lirFDest, srcReg)])
+
+    | MIR.FloatToInt (dest, src) ->
+        let lirDest = vregToLIRReg dest
+        // src is a float operand that needs to be in a float register
+        match ensureInFRegister src (LIR.FVirtual 1000) with
+        | Error err -> Error err
+        | Ok (srcInstrs, srcFReg) ->
+            Ok (srcInstrs @ [LIR.FloatToInt (lirDest, srcFReg)])
+
     | MIR.Phi _ ->
         // Phi nodes should be eliminated by SSA destruction (pass 3.9) before MIR-to-LIR
         Error "Internal error: Phi node reached MIR-to-LIR. SSA destruction pass should have removed it."

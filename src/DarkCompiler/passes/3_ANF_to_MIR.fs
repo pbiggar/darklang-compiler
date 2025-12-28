@@ -106,6 +106,11 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.RawFree ptr -> maxTempIdInAtom ptr
     | ANF.RawGet (ptr, offset) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom offset)
     | ANF.RawSet (ptr, offset, value) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
+    | ANF.FloatSqrt atom -> maxTempIdInAtom atom
+    | ANF.FloatAbs atom -> maxTempIdInAtom atom
+    | ANF.FloatNeg atom -> maxTempIdInAtom atom
+    | ANF.IntToFloat atom -> maxTempIdInAtom atom
+    | ANF.FloatToInt atom -> maxTempIdInAtom atom
 
 /// Find the maximum TempId in an AExpr
 let rec maxTempIdInAExpr (expr: ANF.AExpr) : int =
@@ -181,6 +186,11 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.RawFree ptr -> collectStringsFromAtom ptr
     | ANF.RawGet (ptr, offset) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset
     | ANF.RawSet (ptr, offset, value) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset @ collectStringsFromAtom value
+    | ANF.FloatSqrt atom -> collectStringsFromAtom atom
+    | ANF.FloatAbs atom -> collectStringsFromAtom atom
+    | ANF.FloatNeg atom -> collectStringsFromAtom atom
+    | ANF.IntToFloat atom -> collectStringsFromAtom atom
+    | ANF.FloatToInt atom -> collectStringsFromAtom atom
 
 /// Collect all float literals from a CExpr
 let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
@@ -217,6 +227,11 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
     | ANF.RawFree ptr -> collectFloatsFromAtom ptr
     | ANF.RawGet (ptr, offset) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset
     | ANF.RawSet (ptr, offset, value) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset @ collectFloatsFromAtom value
+    | ANF.FloatSqrt atom -> collectFloatsFromAtom atom
+    | ANF.FloatAbs atom -> collectFloatsFromAtom atom
+    | ANF.FloatNeg atom -> collectFloatsFromAtom atom
+    | ANF.IntToFloat atom -> collectFloatsFromAtom atom
+    | ANF.FloatToInt atom -> collectFloatsFromAtom atom
 
 /// Collect all string literals from an ANF expression
 let rec collectStringsFromExpr (expr: ANF.AExpr) : string list =
@@ -572,6 +587,25 @@ let rec convertExpr
                             atomToOperand builder valueAtom
                             |> Result.map (fun valueOp ->
                                 [MIR.RawSet (ptrOp, offsetOp, valueOp)])))
+                | ANF.FloatSqrt atom ->
+                    destType := AST.TFloat64
+                    atomToOperand builder atom
+                    |> Result.map (fun op -> [MIR.FloatSqrt (destReg, op)])
+                | ANF.FloatAbs atom ->
+                    destType := AST.TFloat64
+                    atomToOperand builder atom
+                    |> Result.map (fun op -> [MIR.FloatAbs (destReg, op)])
+                | ANF.FloatNeg atom ->
+                    destType := AST.TFloat64
+                    atomToOperand builder atom
+                    |> Result.map (fun op -> [MIR.FloatNeg (destReg, op)])
+                | ANF.IntToFloat atom ->
+                    destType := AST.TFloat64
+                    atomToOperand builder atom
+                    |> Result.map (fun op -> [MIR.IntToFloat (destReg, op)])
+                | ANF.FloatToInt atom ->
+                    atomToOperand builder atom
+                    |> Result.map (fun op -> [MIR.FloatToInt (destReg, op)])
 
             match instrsResult with
             | Error err -> Error err
@@ -910,6 +944,25 @@ and convertExprToOperand
                             atomToOperand builder valueAtom
                             |> Result.map (fun valueOp ->
                                 [MIR.RawSet (ptrOp, offsetOp, valueOp)])))
+                | ANF.FloatSqrt atom ->
+                    destType := AST.TFloat64
+                    atomToOperand builder atom
+                    |> Result.map (fun op -> [MIR.FloatSqrt (destReg, op)])
+                | ANF.FloatAbs atom ->
+                    destType := AST.TFloat64
+                    atomToOperand builder atom
+                    |> Result.map (fun op -> [MIR.FloatAbs (destReg, op)])
+                | ANF.FloatNeg atom ->
+                    destType := AST.TFloat64
+                    atomToOperand builder atom
+                    |> Result.map (fun op -> [MIR.FloatNeg (destReg, op)])
+                | ANF.IntToFloat atom ->
+                    destType := AST.TFloat64
+                    atomToOperand builder atom
+                    |> Result.map (fun op -> [MIR.IntToFloat (destReg, op)])
+                | ANF.FloatToInt atom ->
+                    atomToOperand builder atom
+                    |> Result.map (fun op -> [MIR.FloatToInt (destReg, op)])
 
             // Let bindings accumulate instructions, pass through join label
             match instrsResult with

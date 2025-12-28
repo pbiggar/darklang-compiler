@@ -598,20 +598,31 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         [fixedBits ||| rm ||| opcode ||| rn ||| rd]
 
     | ARM64.FNEG (dest, src) ->
-        // FNEG (scalar, double): 0001 1110 01 1 00000 10000 Rn Rd
-        // Encoding: 0001 1110 01 1 00000 100001 Rn Rd
+        // FNEG (scalar, double): 0x1E614000 for D0, D0
+        // Encoding: 0001 1110 0110 0001 0100 0000 Rn Rd
         let fixedBits = 0b00011110011u <<< 21
-        let rm = 0u <<< 16  // Unused, must be 0
-        let opcode = 0b100001u <<< 10  // FNEG opcode
+        let rm = 1u <<< 16  // bit 16 set for FNEG
+        let opcode = 0b010000u <<< 10  // FNEG opcode (16)
         let rn = (encodeFReg src) <<< 5
         let rd = encodeFReg dest
         [fixedBits ||| rm ||| opcode ||| rn ||| rd]
 
     | ARM64.FABS (dest, src) ->
-        // FABS (scalar, double): 0001 1110 01 1 00000 100000 Rn Rd
+        // FABS (scalar, double): 0x1E60C000 for D0, D0
+        // Encoding: 0001 1110 0110 0000 1100 0000 Rn Rd
         let fixedBits = 0b00011110011u <<< 21
-        let rm = 0u <<< 16  // Unused, must be 0
-        let opcode = 0b100000u <<< 10  // FABS opcode
+        let rm = 0u <<< 16  // bit 16 clear for FABS
+        let opcode = 0b110000u <<< 10  // FABS opcode (48)
+        let rn = (encodeFReg src) <<< 5
+        let rd = encodeFReg dest
+        [fixedBits ||| rm ||| opcode ||| rn ||| rd]
+
+    | ARM64.FSQRT (dest, src) ->
+        // FSQRT (scalar, double): 0x1E61C000 for D0, D0
+        // Encoding: 0001 1110 0110 0001 1100 0000 Rn Rd
+        let fixedBits = 0b00011110011u <<< 21
+        let rm = 1u <<< 16  // bit 16 set for FSQRT
+        let opcode = 0b110000u <<< 10  // FSQRT opcode (48)
         let rn = (encodeFReg src) <<< 5
         let rd = encodeFReg dest
         [fixedBits ||| rm ||| opcode ||| rn ||| rd]

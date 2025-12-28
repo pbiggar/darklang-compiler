@@ -175,6 +175,11 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | RawFree _ -> defs
         | RawGet (dest, _, _) -> Set.add dest defs
         | RawSet _ -> defs
+        | FloatSqrt (dest, _) -> Set.add dest defs
+        | FloatAbs (dest, _) -> Set.add dest defs
+        | FloatNeg (dest, _) -> Set.add dest defs
+        | IntToFloat (dest, _) -> Set.add dest defs
+        | FloatToInt (dest, _) -> Set.add dest defs
     ) Set.empty
 
 /// Get all variables defined anywhere in the CFG
@@ -241,6 +246,11 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
                 uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset)
             | RawSet (ptr, offset, value) ->
                 uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset) |> Set.union (getOperandUses value)
+            | FloatSqrt (_, src) -> Set.union uses (getOperandUses src)
+            | FloatAbs (_, src) -> Set.union uses (getOperandUses src)
+            | FloatNeg (_, src) -> Set.union uses (getOperandUses src)
+            | IntToFloat (_, src) -> Set.union uses (getOperandUses src)
+            | FloatToInt (_, src) -> Set.union uses (getOperandUses src)
         ) Set.empty
 
     // Also include uses in terminator
@@ -588,6 +598,31 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let byteOffset' = renameOperand state byteOffset
         let value' = renameOperand state value
         (RawSet (ptr', byteOffset', value'), state)
+
+    | FloatSqrt (dest, src) ->
+        let src' = renameOperand state src
+        let (_, newDest, state') = newVersion state dest
+        (FloatSqrt (newDest, src'), state')
+
+    | FloatAbs (dest, src) ->
+        let src' = renameOperand state src
+        let (_, newDest, state') = newVersion state dest
+        (FloatAbs (newDest, src'), state')
+
+    | FloatNeg (dest, src) ->
+        let src' = renameOperand state src
+        let (_, newDest, state') = newVersion state dest
+        (FloatNeg (newDest, src'), state')
+
+    | IntToFloat (dest, src) ->
+        let src' = renameOperand state src
+        let (_, newDest, state') = newVersion state dest
+        (IntToFloat (newDest, src'), state')
+
+    | FloatToInt (dest, src) ->
+        let src' = renameOperand state src
+        let (_, newDest, state') = newVersion state dest
+        (FloatToInt (newDest, src'), state')
 
 /// Rename terminator
 let renameTerminator (state: RenamingState) (term: Terminator) : Terminator =

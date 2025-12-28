@@ -107,6 +107,7 @@ type Instr =
     | FDIV of dest:FReg * src1:FReg * src2:FReg      // FP div: dest = src1 / src2
     | FNEG of dest:FReg * src:FReg                   // FP negate: dest = -src
     | FABS of dest:FReg * src:FReg                   // FP absolute value: dest = |src|
+    | FSQRT of dest:FReg * src:FReg                  // FP square root: dest = sqrt(src)
     | FCMP of src1:FReg * src2:FReg                  // FP compare (sets condition flags)
     | FMOV_reg of dest:FReg * src:FReg               // FP move between registers
     | FMOV_to_gp of dest:Reg * src:FReg              // FP to GP register (bit-for-bit)

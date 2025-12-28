@@ -39,6 +39,11 @@ let hasSideEffects (instr: Instr) : bool =
     | RawFree _ -> true   // Frees memory
     | RawGet _ -> false   // Pure memory read
     | RawSet _ -> true    // Writes to memory
+    | FloatSqrt _ -> false  // Pure float operation
+    | FloatAbs _ -> false   // Pure float operation
+    | FloatNeg _ -> false   // Pure float operation
+    | IntToFloat _ -> false // Pure conversion
+    | FloatToInt _ -> false // Pure conversion
 
 /// Get the destination VReg of an instruction (if any)
 let getInstrDest (instr: Instr) : VReg option =
@@ -60,6 +65,11 @@ let getInstrDest (instr: Instr) : VReg option =
     | Phi (dest, _) -> Some dest
     | RawAlloc (dest, _) -> Some dest
     | RawGet (dest, _, _) -> Some dest
+    | FloatSqrt (dest, _) -> Some dest
+    | FloatAbs (dest, _) -> Some dest
+    | FloatNeg (dest, _) -> Some dest
+    | IntToFloat (dest, _) -> Some dest
+    | FloatToInt (dest, _) -> Some dest
     | HeapStore _ -> None
     | RefCountInc _ -> None
     | RefCountDec _ -> None
@@ -98,6 +108,11 @@ let getInstrUses (instr: Instr) : Set<VReg> =
     | RawFree ptr -> fromOperand ptr
     | RawGet (_, ptr, byteOffset) -> Set.union (fromOperand ptr) (fromOperand byteOffset)
     | RawSet (ptr, byteOffset, value) -> Set.unionMany [fromOperand ptr; fromOperand byteOffset; fromOperand value]
+    | FloatSqrt (_, src) -> fromOperand src
+    | FloatAbs (_, src) -> fromOperand src
+    | FloatNeg (_, src) -> fromOperand src
+    | IntToFloat (_, src) -> fromOperand src
+    | FloatToInt (_, src) -> fromOperand src
 
 /// Get VRegs used by terminator
 let getTerminatorUses (term: Terminator) : Set<VReg> =
@@ -252,6 +267,11 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | RawFree ptr -> RawFree (p ptr)
     | RawGet (dest, ptr, byteOffset) -> RawGet (dest, p ptr, p byteOffset)
     | RawSet (ptr, byteOffset, value) -> RawSet (p ptr, p byteOffset, p value)
+    | FloatSqrt (dest, src) -> FloatSqrt (dest, p src)
+    | FloatAbs (dest, src) -> FloatAbs (dest, p src)
+    | FloatNeg (dest, src) -> FloatNeg (dest, p src)
+    | IntToFloat (dest, src) -> IntToFloat (dest, p src)
+    | FloatToInt (dest, src) -> FloatToInt (dest, p src)
 
 /// Apply copy propagation to terminator
 let propagateCopyTerminator (copies: CopyMap) (term: Terminator) : Terminator =

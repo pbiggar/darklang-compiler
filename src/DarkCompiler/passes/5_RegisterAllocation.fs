@@ -150,6 +150,9 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         let o = regToVReg byteOffset |> Option.toList
         let v = regToVReg value |> Option.toList
         Set.ofList (p @ o @ v)
+    // IntToFloat uses an integer source register
+    | LIR.IntToFloat (_, src) ->
+        regToVReg src |> Option.toList |> Set.ofList
     | _ -> Set.empty
 
 /// Get virtual register ID defined (written) by an instruction
@@ -182,6 +185,8 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.RawGet (dest, _, _) -> regToVReg dest
     | LIR.RawFree _ -> None
     | LIR.RawSet _ -> None
+    // FloatToInt defines an integer destination register
+    | LIR.FloatToInt (dest, _) -> regToVReg dest
     | _ -> None
 
 /// Get virtual register used by terminator
@@ -744,7 +749,22 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
     | LIR.FMul (dest, left, right) -> [LIR.FMul (dest, left, right)]
     | LIR.FDiv (dest, left, right) -> [LIR.FDiv (dest, left, right)]
     | LIR.FNeg (dest, src) -> [LIR.FNeg (dest, src)]
+    | LIR.FAbs (dest, src) -> [LIR.FAbs (dest, src)]
+    | LIR.FSqrt (dest, src) -> [LIR.FSqrt (dest, src)]
     | LIR.FCmp (left, right) -> [LIR.FCmp (left, right)]
+    // IntToFloat: src is integer register, dest is FP register
+    | LIR.IntToFloat (dest, src) ->
+        let (srcReg, srcLoads) = loadSpilled mapping src LIR.X12
+        srcLoads @ [LIR.IntToFloat (dest, srcReg)]
+    // FloatToInt: src is FP register, dest is integer register
+    | LIR.FloatToInt (dest, src) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let instr = LIR.FloatToInt (destReg, src)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        [instr] @ storeInstrs
 
     // Heap operations
     | LIR.HeapAlloc (dest, size) ->

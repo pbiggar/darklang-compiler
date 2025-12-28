@@ -880,11 +880,35 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             lirFRegToARM64FReg src
             |> Result.map (fun srcReg -> [ARM64.FNEG (destReg, srcReg)]))
 
+    | LIR.FAbs (dest, src) ->
+        lirFRegToARM64FReg dest
+        |> Result.bind (fun destReg ->
+            lirFRegToARM64FReg src
+            |> Result.map (fun srcReg -> [ARM64.FABS (destReg, srcReg)]))
+
+    | LIR.FSqrt (dest, src) ->
+        lirFRegToARM64FReg dest
+        |> Result.bind (fun destReg ->
+            lirFRegToARM64FReg src
+            |> Result.map (fun srcReg -> [ARM64.FSQRT (destReg, srcReg)]))
+
     | LIR.FCmp (left, right) ->
         lirFRegToARM64FReg left
         |> Result.bind (fun leftReg ->
             lirFRegToARM64FReg right
             |> Result.map (fun rightReg -> [ARM64.FCMP (leftReg, rightReg)]))
+
+    | LIR.IntToFloat (dest, src) ->
+        lirFRegToARM64FReg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg src
+            |> Result.map (fun srcReg -> [ARM64.SCVTF (destReg, srcReg)]))
+
+    | LIR.FloatToInt (dest, src) ->
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirFRegToARM64FReg src
+            |> Result.map (fun srcReg -> [ARM64.FCVTZS (destReg, srcReg)]))
 
     // Heap operations
     | LIR.HeapAlloc (dest, sizeBytes) ->

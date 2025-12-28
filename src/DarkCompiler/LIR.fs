@@ -95,7 +95,11 @@ type Instr =
     | FMul of dest:FReg * left:FReg * right:FReg
     | FDiv of dest:FReg * left:FReg * right:FReg
     | FNeg of dest:FReg * src:FReg
+    | FAbs of dest:FReg * src:FReg              // Absolute value
+    | FSqrt of dest:FReg * src:FReg             // Square root
     | FCmp of left:FReg * right:FReg            // Compare FP values (sets flags)
+    | IntToFloat of dest:FReg * src:Reg         // Convert Int64 to Float64 (SCVTF)
+    | FloatToInt of dest:Reg * src:FReg         // Convert Float64 to Int64 (FCVTZS)
     // Heap operations for tuples and other compound types
     | HeapAlloc of dest:Reg * sizeBytes:int       // Allocate heap memory
     | HeapStore of addr:Reg * offset:int * src:Operand  // Store at heap[addr+offset]

@@ -133,6 +133,12 @@ type Instr =
     | FileExists of dest:VReg * path:Operand      // Check if file exists, returns Bool
     | FileWriteText of dest:VReg * path:Operand * content:Operand   // Write file, returns Result<Unit, String>
     | FileAppendText of dest:VReg * path:Operand * content:Operand  // Append to file, returns Result<Unit, String>
+    // Float intrinsics
+    | FloatSqrt of dest:VReg * src:Operand        // Square root: sqrt(x)
+    | FloatAbs of dest:VReg * src:Operand         // Absolute value: |x|
+    | FloatNeg of dest:VReg * src:Operand         // Negate: -x
+    | IntToFloat of dest:VReg * src:Operand       // Convert Int64 to Float64
+    | FloatToInt of dest:VReg * src:Operand       // Convert Float64 to Int64 (truncate)
     // Raw memory intrinsics (internal, for HAMT implementation)
     | RawAlloc of dest:VReg * numBytes:Operand    // Allocate raw bytes (no header), returns RawPtr
     | RawFree of ptr:Operand                      // Manually free raw memory
