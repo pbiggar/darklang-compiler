@@ -115,6 +115,24 @@ let rawMemoryIntrinsics : ModuleFunc list = [
     { Name = "__string_to_int64"; TypeParams = []; ParamTypes = [TString]; ReturnType = TInt64 }
     // __int64_to_string : (Int64) -> String - cast int to string pointer (for retrieval)
     { Name = "__int64_to_string"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TString }
+
+    // Dict intrinsics - for type-safe Dict<k, v> operations
+    // __empty_dict<k, v> : () -> Dict<k, v> - create empty dict (null pointer)
+    { Name = "__empty_dict"; TypeParams = ["k"; "v"]; ParamTypes = []; ReturnType = TDict(TVar "k", TVar "v") }
+    // __dict_is_null<k, v> : (Dict<k, v>) -> Bool - check if dict is empty/null
+    { Name = "__dict_is_null"; TypeParams = ["k"; "v"]; ParamTypes = [TDict(TVar "k", TVar "v")]; ReturnType = TBool }
+    // __dict_get_tag<k, v> : (Dict<k, v>) -> Int64 - get tag bits from dict pointer
+    { Name = "__dict_get_tag"; TypeParams = ["k"; "v"]; ParamTypes = [TDict(TVar "k", TVar "v")]; ReturnType = TInt64 }
+    // __dict_to_rawptr<k, v> : (Dict<k, v>) -> RawPtr - convert dict to raw pointer (strips tag)
+    { Name = "__dict_to_rawptr"; TypeParams = ["k"; "v"]; ParamTypes = [TDict(TVar "k", TVar "v")]; ReturnType = TRawPtr }
+    // __rawptr_to_dict<k, v> : (RawPtr, Int64) -> Dict<k, v> - create dict from pointer + tag
+    { Name = "__rawptr_to_dict"; TypeParams = ["k"; "v"]; ParamTypes = [TRawPtr; TInt64]; ReturnType = TDict(TVar "k", TVar "v") }
+
+    // Key intrinsics - for generic key hashing and comparison
+    // __hash<k> : (k) -> Int64 - hash any key type
+    { Name = "__hash"; TypeParams = ["k"]; ParamTypes = [TVar "k"]; ReturnType = TInt64 }
+    // __key_eq<k> : (k, k) -> Bool - compare two keys for equality
+    { Name = "__key_eq"; TypeParams = ["k"]; ParamTypes = [TVar "k"; TVar "k"]; ReturnType = TBool }
 ]
 
 /// All available Stdlib modules

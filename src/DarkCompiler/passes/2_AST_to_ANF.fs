@@ -108,6 +108,38 @@ let tryRawMemoryIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr o
         Some (ANF.Atom strAtom)
     | "__int64_to_string", [intAtom] ->
         Some (ANF.Atom intAtom)
+
+    // Dict intrinsics - for type-safe Dict<k, v> operations
+    // __empty_dict<k, v> returns 0 (null pointer)
+    | name, [] when name = "__empty_dict" || name.StartsWith("__empty_dict_") ->
+        Some (ANF.Atom (ANF.IntLiteral 0L))
+    // __dict_is_null<k, v> checks if pointer is 0
+    | name, [dictAtom] when name = "__dict_is_null" || name.StartsWith("__dict_is_null_") ->
+        Some (ANF.Prim (ANF.Eq, dictAtom, ANF.IntLiteral 0L))
+    // __dict_get_tag<k, v> extracts low 2 bits (dict & 3)
+    | name, [dictAtom] when name = "__dict_get_tag" || name.StartsWith("__dict_get_tag_") ->
+        Some (ANF.Prim (ANF.BitAnd, dictAtom, ANF.IntLiteral 3L))
+    // __dict_to_rawptr<k, v> clears tag bits (dict & -4)
+    | name, [dictAtom] when name = "__dict_to_rawptr" || name.StartsWith("__dict_to_rawptr_") ->
+        Some (ANF.Prim (ANF.BitAnd, dictAtom, ANF.IntLiteral -4L))
+    // __rawptr_to_dict<k, v> combines pointer + tag (ptr | tag)
+    | name, [ptrAtom; tagAtom] when name = "__rawptr_to_dict" || name.StartsWith("__rawptr_to_dict_") ->
+        Some (ANF.Prim (ANF.BitOr, ptrAtom, tagAtom))
+
+    // Key intrinsics - dispatch based on monomorphized type
+    // __hash<Int64> is identity (Int64 is its own hash)
+    | "__hash_i64", [keyAtom] ->
+        Some (ANF.Atom keyAtom)
+    // __hash<String> uses string hash
+    | "__hash_str", [keyAtom] ->
+        Some (ANF.StringHash keyAtom)
+    // __key_eq<Int64> uses integer equality
+    | "__key_eq_i64", [leftAtom; rightAtom] ->
+        Some (ANF.Prim (ANF.Eq, leftAtom, rightAtom))
+    // __key_eq<String> uses string equality
+    | "__key_eq_str", [leftAtom; rightAtom] ->
+        Some (ANF.StringEq (leftAtom, rightAtom))
+
     | _ -> None
 
 /// Type registry - maps record type names to their field definitions
