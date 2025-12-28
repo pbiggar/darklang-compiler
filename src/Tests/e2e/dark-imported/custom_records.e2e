@@ -229,13 +229,10 @@ type Point = { x: Int64, y: Int64 } let p = Point { x = 3, y = 4 } in p.x * p.x 
 
 // ===================================================================
 // Nested Record Field Access
-// NOTE: Commented out - requires Int64 type annotation support
 // ===================================================================
 
-// type NestedRecordA = { col1: Int64 }
-// type NestedRecordB = { col1: NestedRecordA }
-
-// (NestedRecordB { col1 = NestedRecordA { col1 = 1L } }).col1.col1 = 1
+// Nested record field access (converted from Dark: 1L -> 1)
+type NestedRecordA = { col1: Int64 } type NestedRecordB = { col1: NestedRecordA } (NestedRecordB { col1 = NestedRecordA { col1 = 1 } }).col1.col1 = 1
 
 // ===================================================================
 // Record Update Syntax
@@ -281,12 +278,7 @@ type RecordForUpdateMultiple = { x: Int64, y: Int64, z: Int64 } let r = RecordFo
 
 // ===================================================================
 // Deeply Nested Record Access
-// NOTE: Commented out - requires Int64 type annotations
 // ===================================================================
 
-// type A = { b: B }
-// type B = { c: C }
-// type C = { v: Int64 }
-
-// def getC(a: A): Int64 = a.b.c.v
-// getC (A { b = B { c = C { v = 5L } } }) = 5
+// Three levels of nesting with function accessor (converted from Dark: 5L -> 5)
+type C = { v: Int64 } type B = { c: C } type A = { b: B } def getC(a: A): Int64 = a.b.c.v getC(A { b = B { c = C { v = 5 } } }) = 5
