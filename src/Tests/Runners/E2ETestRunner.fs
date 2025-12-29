@@ -27,6 +27,11 @@ let runE2ETest (stdlib: CompilerLibrary.StdlibResult) (test: E2ETest) : E2ETestR
     try
         let options : CompilerLibrary.CompilerOptions = {
             DisableFreeList = test.DisableFreeList
+            DisableANFOpt = test.DisableANFOpt
+            DisableTCO = test.DisableTCO
+            DisableMIROpt = test.DisableMIROpt
+            DisableLIROpt = test.DisableLIROpt
+            DisableDCE = test.DisableDCE
         }
         let execResult = CompilerLibrary.compileAndRunWithStdlib 0 options stdlib test.Source
 

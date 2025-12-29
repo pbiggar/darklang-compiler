@@ -50,7 +50,13 @@ type CliOptions = {
     Help: bool
     Version: bool
     Argument: string option
+    // Optimization flags
     DisableFreeList: bool
+    DisableANFOpt: bool
+    DisableTCO: bool
+    DisableMIROpt: bool
+    DisableLIROpt: bool
+    DisableDCE: bool
 }
 
 /// Default empty options
@@ -63,6 +69,11 @@ let defaultOptions = {
     Version = false
     Argument = None
     DisableFreeList = false
+    DisableANFOpt = false
+    DisableTCO = false
+    DisableMIROpt = false
+    DisableLIROpt = false
+    DisableDCE = false
 }
 
 /// Parse command-line flags into options
@@ -127,8 +138,23 @@ let parseArgs (argv: string array) : Result<CliOptions, string> =
         | "--version" :: rest ->
             parseFlags rest { opts with Version = true } lastVerbosity
 
-        | "--no-free-list" :: rest ->
+        | "--no-free-list" :: rest | "--disable-opt-freelist" :: rest ->
             parseFlags rest { opts with DisableFreeList = true } lastVerbosity
+
+        | "--disable-opt-anf" :: rest ->
+            parseFlags rest { opts with DisableANFOpt = true } lastVerbosity
+
+        | "--disable-opt-tco" :: rest ->
+            parseFlags rest { opts with DisableTCO = true } lastVerbosity
+
+        | "--disable-opt-mir" :: rest ->
+            parseFlags rest { opts with DisableMIROpt = true } lastVerbosity
+
+        | "--disable-opt-lir" :: rest ->
+            parseFlags rest { opts with DisableLIROpt = true } lastVerbosity
+
+        | "--disable-opt-dce" :: rest ->
+            parseFlags rest { opts with DisableDCE = true } lastVerbosity
 
         | "-" :: rest ->
             // Special case: "-" means stdin
@@ -187,7 +213,7 @@ let validateOptions (opts: CliOptions) : Result<CliOptions, string> =
             Ok opts
 
 /// Compile source expression to executable
-let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (disableFreeList: bool) : int =
+let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int =
     let showNormal = verbosity = Normal || verbosity = Verbose || verbosity = VeryVerbose || verbosity = DumpIR
 
     if showNormal then
@@ -195,7 +221,12 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (d
 
     // Use library for compilation
     let options : CompilerLibrary.CompilerOptions = {
-        DisableFreeList = disableFreeList
+        DisableFreeList = cliOpts.DisableFreeList
+        DisableANFOpt = cliOpts.DisableANFOpt
+        DisableTCO = cliOpts.DisableTCO
+        DisableMIROpt = cliOpts.DisableMIROpt
+        DisableLIROpt = cliOpts.DisableLIROpt
+        DisableDCE = cliOpts.DisableDCE
     }
     let result = CompilerLibrary.compileWithOptions (verbosityToInt verbosity) options source
 
@@ -223,7 +254,7 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (d
                 0
 
 /// Run an expression (compile to temp and execute)
-let run (source: string) (verbosity: VerbosityLevel) (disableFreeList: bool) : int =
+let run (source: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int =
     let showNormal = verbosity = Normal || verbosity = Verbose || verbosity = VeryVerbose || verbosity = DumpIR
 
     if showNormal then
@@ -232,7 +263,12 @@ let run (source: string) (verbosity: VerbosityLevel) (disableFreeList: bool) : i
 
     // Use library for compile and run
     let options : CompilerLibrary.CompilerOptions = {
-        DisableFreeList = disableFreeList
+        DisableFreeList = cliOpts.DisableFreeList
+        DisableANFOpt = cliOpts.DisableANFOpt
+        DisableTCO = cliOpts.DisableTCO
+        DisableMIROpt = cliOpts.DisableMIROpt
+        DisableLIROpt = cliOpts.DisableLIROpt
+        DisableDCE = cliOpts.DisableDCE
     }
     let result = CompilerLibrary.compileAndRunWithOptions (verbosityToInt verbosity) options source
 
@@ -272,7 +308,14 @@ let printUsage () =
     println "  -vvv                 Dump all intermediate representations"
     println "  -h, --help           Show this help message"
     println "  --version            Show version information"
-    println "  --no-free-list       Disable free list memory reuse (for testing)"
+    println ""
+    println "Optimization flags (for debugging):"
+    println "  --disable-opt-anf       Disable ANF-level optimizations"
+    println "  --disable-opt-tco       Disable tail call optimization"
+    println "  --disable-opt-mir       Disable MIR-level optimizations"
+    println "  --disable-opt-lir       Disable LIR-level optimizations"
+    println "  --disable-opt-dce       Disable dead code elimination (tree shaking)"
+    println "  --disable-opt-freelist  Disable free list memory reuse"
     println ""
     println "Flags can appear in any order and can be combined (e.g., -qr, -re, -vvre)"
     println "Verbosity levels: (none)=normal, -v=passes, -vv=passes+timing, -vvv=dump IRs"
@@ -344,11 +387,11 @@ let main argv =
             | Ok source ->
                 if options.Run then
                     // Run mode
-                    run source options.Verbosity options.DisableFreeList
+                    run source options.Verbosity options
                 else
                     // Compile mode (default)
                     let output = options.OutputFile |> Option.defaultValue "dark.out"
-                    compile source output options.Verbosity options.DisableFreeList
+                    compile source output options.Verbosity options
 
             | Error msg ->
                 println $"Error: {msg}"

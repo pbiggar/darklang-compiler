@@ -25,16 +25,30 @@ type ExecutionResult = {
     Stderr: string
 }
 
-/// Compiler options for controlling code generation behavior
+/// Compiler options for controlling optimization behavior
 type CompilerOptions = {
     /// Disable free list memory reuse (always bump allocate)
-    /// Useful for testing that free list is necessary
     DisableFreeList: bool
+    /// Disable ANF-level optimizations (constant folding, propagation, etc.)
+    DisableANFOpt: bool
+    /// Disable tail call optimization
+    DisableTCO: bool
+    /// Disable MIR-level optimizations (DCE, copy/constant propagation on SSA)
+    DisableMIROpt: bool
+    /// Disable LIR-level optimizations (peephole optimizations)
+    DisableLIROpt: bool
+    /// Disable dead code elimination (tree shaking of unused stdlib)
+    DisableDCE: bool
 }
 
 /// Default compiler options
 let defaultOptions : CompilerOptions = {
     DisableFreeList = false
+    DisableANFOpt = false
+    DisableTCO = false
+    DisableMIROpt = false
+    DisableLIROpt = false
+    DisableDCE = false
 }
 
 /// Result of compiling stdlib - can be reused across compilations
@@ -318,7 +332,9 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
 
                     // Pass 2.3: ANF Optimization
                     if verbosity >= 1 then println "  [2.3/8] ANF Optimization..."
-                    let anfOptimized = ANF_Optimize.optimizeProgram convResult.Program
+                    let anfOptimized =
+                        if options.DisableANFOpt then convResult.Program
+                        else ANF_Optimize.optimizeProgram convResult.Program
                     let anfOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(anfOptTime, 1)
@@ -368,7 +384,9 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
 
                     // Pass 2.7: Tail Call Detection
                     if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
-                    let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
+                    let anfAfterTCO =
+                        if options.DisableTCO then anfAfterRC
+                        else TailCallDetection.detectTailCallsInProgram anfAfterRC
                     let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(tcoTime, 1)
@@ -460,7 +478,9 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
 
                     // Pass 3.5: MIR Optimizations (on SSA form)
                     if verbosity >= 1 then println "  [3.5/8] MIR Optimizations..."
-                    let optimizedProgram = MIR_Optimize.optimizeProgram ssaProgram
+                    let optimizedProgram =
+                        if options.DisableMIROpt then ssaProgram
+                        else MIR_Optimize.optimizeProgram ssaProgram
 
                     let mirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime
                     if verbosity >= 2 then
@@ -509,7 +529,9 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
 
                     // Pass 4.5: LIR Optimizations (peephole)
                     if verbosity >= 1 then println "  [4.5/8] LIR Optimizations..."
-                    let optimizedLirProgram = LIR_Optimize.optimizeProgram lirProgram
+                    let optimizedLirProgram =
+                        if options.DisableLIROpt then lirProgram
+                        else LIR_Optimize.optimizeProgram lirProgram
 
                     let lirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime - mirOptTime - ssaDestructTime - lirTime
                     if verbosity >= 2 then
@@ -730,7 +752,9 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
 
                     // Pass 2.7: Tail Call Detection
                     if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
-                    let userAnfAfterTCO = TailCallDetection.detectTailCallsInProgram userAnfAfterRC
+                    let userAnfAfterTCO =
+                        if options.DisableTCO then userAnfAfterRC
+                        else TailCallDetection.detectTailCallsInProgram userAnfAfterRC
                     let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(tcoTime, 1)
@@ -799,10 +823,12 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
 
                     // Filter stdlib functions to only include reachable ones (dead code elimination)
                     let reachableStdlib =
-                        DeadCodeElimination.filterFunctions
-                            stdlib.StdlibCallGraph
-                            offsetUserFuncs
-                            stdlib.AllocatedFunctions
+                        if options.DisableDCE then stdlib.AllocatedFunctions
+                        else
+                            DeadCodeElimination.filterFunctions
+                                stdlib.StdlibCallGraph
+                                offsetUserFuncs
+                                stdlib.AllocatedFunctions
 
                     // Combine reachable stdlib functions with user functions
                     let allFuncs = reachableStdlib @ offsetUserFuncs
@@ -970,7 +996,9 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
 
                     // Pass 2.7: Tail Call Detection
                     if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
-                    let userAnfAfterTCO = TailCallDetection.detectTailCallsInProgram userAnfAfterRC
+                    let userAnfAfterTCO =
+                        if options.DisableTCO then userAnfAfterRC
+                        else TailCallDetection.detectTailCallsInProgram userAnfAfterRC
                     let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(tcoTime, 1)
@@ -986,17 +1014,19 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                         println $"        {t}ms"
 
                     // Early DCE: Determine which stdlib functions are actually needed
-                    let (ANF.Program (userFuncsForDCE, userMainForDCE)) = userAnfProgram
-                    let userANFFuncs = { ANF.Name = "_start"; ANF.Params = []; ANF.Body = userMainForDCE } :: userFuncsForDCE
-                    let reachableStdlibNames = ANFDeadCodeElimination.getReachableStdlib stdlib.StdlibANFCallGraph userANFFuncs
-                    if verbosity >= 2 then
-                        println $"        DCE: {reachableStdlibNames.Count} stdlib functions needed"
-
-                    // Extract only the reachable stdlib ANF functions
                     let reachableStdlibFuncs =
-                        reachableStdlibNames
-                        |> Set.toList
-                        |> List.choose (fun name -> Map.tryFind name stdlib.StdlibANFFunctions)
+                        if options.DisableDCE then
+                            // Include all stdlib functions when DCE is disabled
+                            stdlib.StdlibANFFunctions |> Map.values |> List.ofSeq
+                        else
+                            let (ANF.Program (userFuncsForDCE, userMainForDCE)) = userAnfProgram
+                            let userANFFuncs = { ANF.Name = "_start"; ANF.Params = []; ANF.Body = userMainForDCE } :: userFuncsForDCE
+                            let reachableStdlibNames = ANFDeadCodeElimination.getReachableStdlib stdlib.StdlibANFCallGraph userANFFuncs
+                            if verbosity >= 2 then
+                                println $"        DCE: {reachableStdlibNames.Count} stdlib functions needed"
+                            reachableStdlibNames
+                            |> Set.toList
+                            |> List.choose (fun name -> Map.tryFind name stdlib.StdlibANFFunctions)
 
                     // Compile reachable stdlib functions: ANF → MIR → LIR → RegAlloc
                     // Use cached typeMap and FuncParams from stdlib preparation
