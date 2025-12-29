@@ -248,6 +248,16 @@ def Stdlib.List.map<a, b>(list: List<a>, fn: (a) -> b) : List<b> =
     | [] -> []
     | [h, ...t] -> [fn(h), ...Stdlib.List.map<a, b>(t, fn)]
 
+// Flatten a list of lists into a single list
+def Stdlib.List.flatten<a>(lists: List<List<a>>) : List<a> =
+    match lists with
+    | [] -> []
+    | [h, ...t] -> Stdlib.List.append<a>(h, Stdlib.List.flatten<a>(t))
+
+// Apply a function that returns a list and flatten the results
+def Stdlib.List.flatMap<a, b>(list: List<a>, fn: (a) -> List<b>) : List<b> =
+    Stdlib.List.flatten<b>(Stdlib.List.map<a, List<b>>(list, fn))
+
 // Keep only elements that satisfy a predicate
 def Stdlib.List.filter<a>(list: List<a>, fn: (a) -> Bool) : List<a> =
     match list with
@@ -599,6 +609,46 @@ def Stdlib.String.fromCodepoints(cps: List<Int64>) : String =
         // Write refcount = 1 at end
         let _ = __raw_set<Int64>(ptr, 8 + byteLen, 1) in
         __int64_to_string(__rawptr_to_int64(ptr))
+
+// =============================================================================
+// Case Mapping Functions (ASCII fast path, with Unicode table fallback)
+// =============================================================================
+
+// Map ASCII lowercase to uppercase (a-z -> A-Z)
+def Stdlib.String.__asciiToUpper(cp: Int64) : Int64 =
+    if cp >= 97 && cp <= 122 then cp - 32 else cp
+
+// Map ASCII uppercase to lowercase (A-Z -> a-z)
+def Stdlib.String.__asciiToLower(cp: Int64) : Int64 =
+    if cp >= 65 && cp <= 90 then cp + 32 else cp
+
+// Helper: map codepoints to uppercase ASCII (simple version)
+def Stdlib.String.__mapUpperAscii(cps: List<Int64>, acc: List<Int64>) : List<Int64> =
+    match cps with
+    | [] -> Stdlib.List.reverse<Int64>(acc)
+    | [cp, ...rest] ->
+        let upper = Stdlib.String.__asciiToUpper(cp) in
+        Stdlib.String.__mapUpperAscii(rest, [upper, ...acc])
+
+// Helper: map codepoints to lowercase ASCII (simple version)
+def Stdlib.String.__mapLowerAscii(cps: List<Int64>, acc: List<Int64>) : List<Int64> =
+    match cps with
+    | [] -> Stdlib.List.reverse<Int64>(acc)
+    | [cp, ...rest] ->
+        let lower = Stdlib.String.__asciiToLower(cp) in
+        Stdlib.String.__mapLowerAscii(rest, [lower, ...acc])
+
+// Convert string to uppercase (ASCII only for now)
+def Stdlib.String.toUpperCase(s: String) : String =
+    let codepoints = Stdlib.String.toCodepoints(s) in
+    let upper = Stdlib.String.__mapUpperAscii(codepoints, []) in
+    Stdlib.String.fromCodepoints(upper)
+
+// Convert string to lowercase (ASCII only for now)
+def Stdlib.String.toLowerCase(s: String) : String =
+    let codepoints = Stdlib.String.toCodepoints(s) in
+    let lower = Stdlib.String.__mapLowerAscii(codepoints, []) in
+    Stdlib.String.fromCodepoints(lower)
 
 // =============================================================================
 // Stdlib.Dict - Immutable Dictionary using HAMT (Hash Array Mapped Trie)
