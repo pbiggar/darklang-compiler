@@ -128,16 +128,16 @@ let tryRawMemoryIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr o
     // Dict intrinsics - for type-safe Dict<k, v> operations
     // __empty_dict<k, v> returns 0 (null pointer)
     | name, [] when name = "__empty_dict" || name.StartsWith("__empty_dict_") ->
-        Some (ANF.Atom (ANF.IntLiteral 0L))
+        Some (ANF.Atom (ANF.IntLiteral (ANF.Int64 0L)))
     // __dict_is_null<k, v> checks if pointer is 0
     | name, [dictAtom] when name = "__dict_is_null" || name.StartsWith("__dict_is_null_") ->
-        Some (ANF.Prim (ANF.Eq, dictAtom, ANF.IntLiteral 0L))
+        Some (ANF.Prim (ANF.Eq, dictAtom, ANF.IntLiteral (ANF.Int64 0L)))
     // __dict_get_tag<k, v> extracts low 2 bits (dict & 3)
     | name, [dictAtom] when name = "__dict_get_tag" || name.StartsWith("__dict_get_tag_") ->
-        Some (ANF.Prim (ANF.BitAnd, dictAtom, ANF.IntLiteral 3L))
+        Some (ANF.Prim (ANF.BitAnd, dictAtom, ANF.IntLiteral (ANF.Int64 3L)))
     // __dict_to_rawptr<k, v> clears tag bits (dict & -4)
     | name, [dictAtom] when name = "__dict_to_rawptr" || name.StartsWith("__dict_to_rawptr_") ->
-        Some (ANF.Prim (ANF.BitAnd, dictAtom, ANF.IntLiteral -4L))
+        Some (ANF.Prim (ANF.BitAnd, dictAtom, ANF.IntLiteral (ANF.Int64 -4L)))
     // __rawptr_to_dict<k, v> combines pointer + tag (ptr | tag)
     | name, [ptrAtom; tagAtom] when name = "__rawptr_to_dict" || name.StartsWith("__rawptr_to_dict_") ->
         Some (ANF.Prim (ANF.BitOr, ptrAtom, tagAtom))
@@ -1739,32 +1739,29 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         Ok (ANF.Return (ANF.UnitLiteral), varGen)
 
     | AST.IntLiteral n ->
-        // Integer literal becomes return
-        Ok (ANF.Return (ANF.IntLiteral n), varGen)
+        // Integer literal (default Int64)
+        Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 n)), varGen)
 
     | AST.Int8Literal n ->
-        // Convert to int64 for ANF (type info is tracked separately)
-        Ok (ANF.Return (ANF.IntLiteral (int64 n)), varGen)
+        Ok (ANF.Return (ANF.IntLiteral (ANF.Int8 n)), varGen)
 
     | AST.Int16Literal n ->
-        Ok (ANF.Return (ANF.IntLiteral (int64 n)), varGen)
+        Ok (ANF.Return (ANF.IntLiteral (ANF.Int16 n)), varGen)
 
     | AST.Int32Literal n ->
-        Ok (ANF.Return (ANF.IntLiteral (int64 n)), varGen)
+        Ok (ANF.Return (ANF.IntLiteral (ANF.Int32 n)), varGen)
 
     | AST.UInt8Literal n ->
-        Ok (ANF.Return (ANF.IntLiteral (int64 n)), varGen)
+        Ok (ANF.Return (ANF.IntLiteral (ANF.UInt8 n)), varGen)
 
     | AST.UInt16Literal n ->
-        Ok (ANF.Return (ANF.IntLiteral (int64 n)), varGen)
+        Ok (ANF.Return (ANF.IntLiteral (ANF.UInt16 n)), varGen)
 
     | AST.UInt32Literal n ->
-        Ok (ANF.Return (ANF.IntLiteral (int64 n)), varGen)
+        Ok (ANF.Return (ANF.IntLiteral (ANF.UInt32 n)), varGen)
 
     | AST.UInt64Literal n ->
-        // Note: uint64 to int64 conversion may lose data for values > Int64.MaxValue
-        // but for now we treat all integers as 64-bit signed
-        Ok (ANF.Return (ANF.IntLiteral (int64 n)), varGen)
+        Ok (ANF.Return (ANF.IntLiteral (ANF.UInt64 n)), varGen)
 
     | AST.BoolLiteral b ->
         // Boolean literal becomes return
@@ -1870,7 +1867,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         | AST.IntLiteral n when n = System.Int64.MinValue ->
             // The lexer stores INT64_MIN as a sentinel for "9223372036854775808"
             // When negated, it should remain INT64_MIN (mathematically correct)
-            Ok (ANF.Return (ANF.IntLiteral System.Int64.MinValue), varGen)
+            Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 System.Int64.MinValue)), varGen)
         | AST.FloatLiteral f ->
             // Constant-fold negative float literals at compile time
             Ok (ANF.Return (ANF.FloatLiteral (-f)), varGen)
@@ -2214,13 +2211,13 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             match payload with
             | None when not typeHasPayloadVariants ->
                 // Pure enum type (no payloads anywhere): return tag as an integer
-                Ok (ANF.Return (ANF.IntLiteral (int64 tag)), varGen)
+                Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 (int64 tag))), varGen)
             | None ->
                 // No payload but type has other variants with payloads
                 // Heap-allocate as [tag, 0] for uniform 2-element structure
                 // This enables consistent structural equality comparison
-                let tagAtom = ANF.IntLiteral (int64 tag)
-                let dummyPayload = ANF.IntLiteral 0L
+                let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
+                let dummyPayload = ANF.IntLiteral (ANF.Int64 0L)
                 let (resultVar, varGen1) = ANF.freshVar varGen
                 let tupleExpr = ANF.TupleAlloc [tagAtom; dummyPayload]
                 let finalExpr = ANF.Let (resultVar, tupleExpr, ANF.Return (ANF.Var resultVar))
@@ -2229,7 +2226,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 // Variant with payload: allocate [tag, payload] on heap
                 toAtom payloadExpr varGen env typeReg variantLookup funcReg moduleRegistry
                 |> Result.map (fun (payloadAtom, payloadBindings, varGen1) ->
-                    let tagAtom = ANF.IntLiteral (int64 tag)
+                    let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
                     // Create TupleAlloc [tag, payload] and bind to fresh variable
                     let (resultVar, varGen2) = ANF.freshVar varGen1
                     let tupleExpr = ANF.TupleAlloc [tagAtom; payloadAtom]
@@ -2252,16 +2249,16 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     |> Result.map (fun (elemAtom, elemBindings, vg2) ->
                         let (consVar, vg3) = ANF.freshVar vg2
                         // Cons = [tag=1, head, tail]
-                        let consExpr = ANF.TupleAlloc [ANF.IntLiteral 1L; elemAtom; restAtom]
+                        let consExpr = ANF.TupleAlloc [ANF.IntLiteral (ANF.Int64 1L); elemAtom; restAtom]
                         let newBindings = restBindings @ elemBindings @ [(consVar, consExpr)]
                         (ANF.Var consVar, newBindings, vg3)))
 
         if List.isEmpty elements then
             // Empty list is Nil (represented as 0)
-            Ok (ANF.Return (ANF.IntLiteral 0L), varGen)
+            Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 0L)), varGen)
         else
             // Build the list starting with Nil
-            buildList elements varGen (ANF.IntLiteral 0L) []
+            buildList elements varGen (ANF.IntLiteral (ANF.Int64 0L)) []
             |> Result.map (fun (listAtom, listBindings, varGen1) ->
                 let finalExpr = ANF.Return listAtom
                 let exprWithBindings = wrapBindings listBindings finalExpr
@@ -2285,7 +2282,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         |> Result.map (fun (elemAtom, elemBindings, vg2) ->
                             let (consVar, vg3) = ANF.freshVar vg2
                             // Cons = [tag=1, head, tail]
-                            let consExpr = ANF.TupleAlloc [ANF.IntLiteral 1L; elemAtom; restAtom]
+                            let consExpr = ANF.TupleAlloc [ANF.IntLiteral (ANF.Int64 1L); elemAtom; restAtom]
                             let newBindings = restBindings @ elemBindings @ [(consVar, consExpr)]
                             (ANF.Var consVar, newBindings, vg3)))
 
@@ -2727,7 +2724,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | AST.PVar _ -> Ok None
                 | AST.PLiteral n ->
                     let (cmpVar, vg1) = ANF.freshVar vg
-                    let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral n)
+                    let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.Int64 n))
                     Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                 | AST.PBool b ->
                     let (cmpVar, vg1) = ANF.freshVar vg
@@ -2750,12 +2747,12 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             let (tagVar, vg1) = ANF.freshVar vg
                             let tagLoadExpr = ANF.TupleGet (scrutAtom, 0)
                             let (cmpVar, vg2) = ANF.freshVar vg1
-                            let cmpExpr = ANF.Prim (ANF.Eq, ANF.Var tagVar, ANF.IntLiteral (int64 tag))
+                            let cmpExpr = ANF.Prim (ANF.Eq, ANF.Var tagVar, ANF.IntLiteral (ANF.Int64 (int64 tag)))
                             Ok (Some (ANF.Var cmpVar, [(tagVar, tagLoadExpr); (cmpVar, cmpExpr)], vg2))
                         else
                             // Simple enum - scrutinee IS the tag
                             let (cmpVar, vg1) = ANF.freshVar vg
-                            let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (int64 tag))
+                            let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.Int64 (int64 tag)))
                             Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                     | None -> Error $"Unknown constructor in pattern: {variantName}"
                 | AST.PTuple innerPatterns ->
@@ -2837,7 +2834,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     if List.isEmpty patterns then
                         // Empty list pattern: check scrutinee == 0
                         let (cmpVar, vg1) = ANF.freshVar vg
-                        let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral 0L)
+                        let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.Int64 0L))
                         Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                     else
                         // Non-empty list pattern: check scrutinee != 0 (not Nil)
@@ -2845,7 +2842,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         // is not fully validated here - mismatched lengths may crash
                         // when extracting elements. Full validation would need nested ifs.
                         let (cmpVar, vg1) = ANF.freshVar vg
-                        let cmpExpr = ANF.Prim (ANF.Neq, scrutAtom, ANF.IntLiteral 0L)
+                        let cmpExpr = ANF.Prim (ANF.Neq, scrutAtom, ANF.IntLiteral (ANF.Int64 0L))
                         Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                 | AST.PListCons (headPatterns, _) ->
                     // List cons pattern: [...t] matches any list, [h, ...t] needs at least one element
@@ -2855,7 +2852,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     else
                         // [h, ...t] or [a, b, ...t] - needs at least one element (non-nil)
                         let (cmpVar, vg1) = ANF.freshVar vg
-                        let cmpExpr = ANF.Prim (ANF.Neq, scrutAtom, ANF.IntLiteral 0L)
+                        let cmpExpr = ANF.Prim (ANF.Neq, scrutAtom, ANF.IntLiteral (ANF.Int64 0L))
                         Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
 
             // Compile a list pattern with proper length validation.
@@ -2875,7 +2872,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     // All elements extracted - check tail is nil for exact length matching
                     // listAtom should be nil (0) if pattern matched exactly
                     let (tailCheckVar, vg1) = ANF.freshVar vg
-                    let tailCheckExpr = ANF.Prim (ANF.Eq, listAtom, ANF.IntLiteral 0L)
+                    let tailCheckExpr = ANF.Prim (ANF.Eq, listAtom, ANF.IntLiteral (ANF.Int64 0L))
                     toANF body vg1 currentEnv typeReg variantLookup funcReg moduleRegistry
                     |> Result.map (fun (bodyExpr, vg2) ->
                         let ifExpr = ANF.If (ANF.Var tailCheckVar, bodyExpr, elseExpr)
@@ -2884,7 +2881,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | pat :: restPatterns ->
                     // Check current position is non-nil (list has at least one more element)
                     let (checkVar, vg1) = ANF.freshVar vg
-                    let checkExpr = ANF.Prim (ANF.Neq, listAtom, ANF.IntLiteral 0L)
+                    let checkExpr = ANF.Prim (ANF.Neq, listAtom, ANF.IntLiteral (ANF.Int64 0L))
 
                     // Extract head (index 1) and tail (index 2) from Cons cell
                     let (headVar, vg2) = ANF.freshVar vg1
@@ -2929,11 +2926,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             |> Result.map (fun (env, bindings, vg) -> (env, bindings, vg, None))
                         | AST.PLiteral n ->
                             // Literal pattern: add equality check
-                            Ok (currentEnv, [], vg3, Some (ANF.IntLiteral n))
+                            Ok (currentEnv, [], vg3, Some (ANF.IntLiteral (ANF.Int64 n)))
                         | AST.PBool b ->
                             // Boolean pattern: add equality check
                             let boolVal = if b then 1L else 0L
-                            Ok (currentEnv, [], vg3, Some (ANF.IntLiteral boolVal))
+                            Ok (currentEnv, [], vg3, Some (ANF.IntLiteral (ANF.Int64 boolVal)))
                         | AST.PUnit | AST.PConstructor _ | AST.PString _ | AST.PFloat _ | AST.PRecord _
                         | AST.PList _ | AST.PListCons _ ->
                             Error $"Nested pattern in list element not yet supported: {pat}"
@@ -2997,7 +2994,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | pat :: restPatterns ->
                     // Check current position is non-nil
                     let (checkVar, vg1) = ANF.freshVar vg
-                    let checkExpr = ANF.Prim (ANF.Neq, listAtom, ANF.IntLiteral 0L)
+                    let checkExpr = ANF.Prim (ANF.Neq, listAtom, ANF.IntLiteral (ANF.Int64 0L))
 
                     // Extract head (index 1) and tail (index 2)
                     let (headVar, vg2) = ANF.freshVar vg1
@@ -3042,11 +3039,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             |> Result.map (fun (env, bindings, vg) -> (env, bindings, vg, None))
                         | AST.PLiteral n ->
                             // Literal pattern: add equality check
-                            Ok (currentEnv, [], vg3, Some (ANF.IntLiteral n))
+                            Ok (currentEnv, [], vg3, Some (ANF.IntLiteral (ANF.Int64 n)))
                         | AST.PBool b ->
                             // Boolean pattern: add equality check
                             let boolVal = if b then 1L else 0L
-                            Ok (currentEnv, [], vg3, Some (ANF.IntLiteral boolVal))
+                            Ok (currentEnv, [], vg3, Some (ANF.IntLiteral (ANF.Int64 boolVal)))
                         | AST.PUnit | AST.PConstructor _ | AST.PString _ | AST.PFloat _ | AST.PRecord _
                         | AST.PList _ | AST.PListCons _ ->
                             Error $"Nested pattern in list cons element not yet supported: {pat}"
@@ -3127,7 +3124,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         Error "Non-exhaustive pattern match: list pattern requires a catch-all case"
                     | AST.PListCons (headPatterns, tailPattern) ->
                         // List cons pattern as last case
-                        let fallbackExpr = ANF.Return (ANF.IntLiteral 0L)
+                        let fallbackExpr = ANF.Return (ANF.IntLiteral (ANF.Int64 0L))
                         compileListConsPatternWithChecks headPatterns tailPattern scrutineeAtom' env body fallbackExpr vg
                     | _ ->
                         // Other patterns - original behavior
@@ -3138,7 +3135,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         | Some guardExpr ->
                             // With guard: compile pattern match with guard check
                             // Note: If guard fails, fallback returns 0 (not ideal, but safe if match is exhaustive)
-                            let fallbackExpr = ANF.Return (ANF.IntLiteral 0L)
+                            let fallbackExpr = ANF.Return (ANF.IntLiteral (ANF.Int64 0L))
                             extractAndCompileBodyWithGuard pattern guardExpr body scrutineeAtom' env vg fallbackExpr
                 | mc :: rest ->
                     // For pattern grouping, use first pattern for bindings but OR all patterns for comparison
@@ -3406,28 +3403,28 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         Ok (ANF.UnitLiteral, [], varGen)
 
     | AST.IntLiteral n ->
-        Ok (ANF.IntLiteral n, [], varGen)
+        Ok (ANF.IntLiteral (ANF.Int64 n), [], varGen)
 
     | AST.Int8Literal n ->
-        Ok (ANF.IntLiteral (int64 n), [], varGen)
+        Ok (ANF.IntLiteral (ANF.Int8 n), [], varGen)
 
     | AST.Int16Literal n ->
-        Ok (ANF.IntLiteral (int64 n), [], varGen)
+        Ok (ANF.IntLiteral (ANF.Int16 n), [], varGen)
 
     | AST.Int32Literal n ->
-        Ok (ANF.IntLiteral (int64 n), [], varGen)
+        Ok (ANF.IntLiteral (ANF.Int32 n), [], varGen)
 
     | AST.UInt8Literal n ->
-        Ok (ANF.IntLiteral (int64 n), [], varGen)
+        Ok (ANF.IntLiteral (ANF.UInt8 n), [], varGen)
 
     | AST.UInt16Literal n ->
-        Ok (ANF.IntLiteral (int64 n), [], varGen)
+        Ok (ANF.IntLiteral (ANF.UInt16 n), [], varGen)
 
     | AST.UInt32Literal n ->
-        Ok (ANF.IntLiteral (int64 n), [], varGen)
+        Ok (ANF.IntLiteral (ANF.UInt32 n), [], varGen)
 
     | AST.UInt64Literal n ->
-        Ok (ANF.IntLiteral (int64 n), [], varGen)
+        Ok (ANF.IntLiteral (ANF.UInt64 n), [], varGen)
 
     | AST.BoolLiteral b ->
         Ok (ANF.BoolLiteral b, [], varGen)
@@ -3508,7 +3505,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         | AST.IntLiteral n when n = System.Int64.MinValue ->
             // The lexer stores INT64_MIN as a sentinel for "9223372036854775808"
             // When negated, it should remain INT64_MIN (mathematically correct)
-            Ok (ANF.IntLiteral System.Int64.MinValue, [], varGen)
+            Ok (ANF.IntLiteral (ANF.Int64 System.Int64.MinValue), [], varGen)
         | AST.FloatLiteral f ->
             // Constant-fold negative float literals at compile time
             Ok (ANF.FloatLiteral (-f), [], varGen)
@@ -3775,13 +3772,13 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             match payload with
             | None when not typeHasPayloadVariants ->
                 // Pure enum type: return tag as an integer (no bindings needed)
-                Ok (ANF.IntLiteral (int64 tag), [], varGen)
+                Ok (ANF.IntLiteral (ANF.Int64 (int64 tag)), [], varGen)
             | None ->
                 // No payload but type has other variants with payloads
                 // Heap-allocate as [tag, 0] for uniform 2-element structure
                 // This enables consistent structural equality comparison
-                let tagAtom = ANF.IntLiteral (int64 tag)
-                let dummyPayload = ANF.IntLiteral 0L
+                let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
+                let dummyPayload = ANF.IntLiteral (ANF.Int64 0L)
                 let (tempVar, varGen1) = ANF.freshVar varGen
                 let tupleCExpr = ANF.TupleAlloc [tagAtom; dummyPayload]
                 Ok (ANF.Var tempVar, [(tempVar, tupleCExpr)], varGen1)
@@ -3789,7 +3786,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                 // Variant with payload: allocate [tag, payload] on heap
                 toAtom payloadExpr varGen env typeReg variantLookup funcReg moduleRegistry
                 |> Result.map (fun (payloadAtom, payloadBindings, varGen1) ->
-                    let tagAtom = ANF.IntLiteral (int64 tag)
+                    let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
                     // Create TupleAlloc [tag, payload] and bind to fresh variable
                     let (tempVar, varGen2) = ANF.freshVar varGen1
                     let tupleCExpr = ANF.TupleAlloc [tagAtom; payloadAtom]
@@ -3810,16 +3807,16 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                     |> Result.map (fun (elemAtom, elemBindings, vg2) ->
                         let (consVar, vg3) = ANF.freshVar vg2
                         // Cons = [tag=1, head, tail]
-                        let consExpr = ANF.TupleAlloc [ANF.IntLiteral 1L; elemAtom; restAtom]
+                        let consExpr = ANF.TupleAlloc [ANF.IntLiteral (ANF.Int64 1L); elemAtom; restAtom]
                         let newBindings = restBindings @ elemBindings @ [(consVar, consExpr)]
                         (ANF.Var consVar, newBindings, vg3)))
 
         if List.isEmpty elements then
             // Empty list is Nil (represented as 0)
-            Ok (ANF.IntLiteral 0L, [], varGen)
+            Ok (ANF.IntLiteral (ANF.Int64 0L), [], varGen)
         else
             // Build the list starting with Nil
-            buildList elements varGen (ANF.IntLiteral 0L) []
+            buildList elements varGen (ANF.IntLiteral (ANF.Int64 0L)) []
 
     | AST.ListCons (headElements, tail) ->
         // Compile list cons in atom position: [a, b, ...tail] prepends elements to tail
@@ -3834,7 +3831,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                         toAtom elem vg1 env typeReg variantLookup funcReg moduleRegistry
                         |> Result.map (fun (elemAtom, elemBindings, vg2) ->
                             let (consVar, vg3) = ANF.freshVar vg2
-                            let consExpr = ANF.TupleAlloc [ANF.IntLiteral 1L; elemAtom; restAtom]
+                            let consExpr = ANF.TupleAlloc [ANF.IntLiteral (ANF.Int64 1L); elemAtom; restAtom]
                             let newBindings = restBindings @ elemBindings @ [(consVar, consExpr)]
                             (ANF.Var consVar, newBindings, vg3)))
 

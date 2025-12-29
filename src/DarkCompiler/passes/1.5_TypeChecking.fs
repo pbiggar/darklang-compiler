@@ -773,7 +773,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
             checkExpr left env typeReg variantLookup genericFuncReg moduleRegistry aliasReg None
             |> Result.bind (fun (leftType, left') ->
                 match leftType with
-                | TInt64 | TFloat64 ->
+                | TInt8 | TInt16 | TInt32 | TInt64 | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TFloat64 ->
                     // Right operand must be same type
                     checkExpr right env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some leftType)
                     |> Result.bind (fun (rightType, right') ->
@@ -819,7 +819,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 | Lt | Gt | Lte | Gte ->
                     // Ordering only works on numeric types
                     match leftType with
-                    | TInt64 | TFloat64 ->
+                    | TInt8 | TInt16 | TInt32 | TInt64 | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TFloat64 ->
                         checkExpr right env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some leftType)
                         |> Result.bind (fun (rightType, right') ->
                             if rightType <> leftType then
@@ -895,11 +895,11 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
     | UnaryOp (op, inner) ->
         match op with
         | Neg ->
-            // Negation works on integers and floats
+            // Negation works on signed integers and floats
             checkExpr inner env typeReg variantLookup genericFuncReg moduleRegistry aliasReg None
             |> Result.bind (fun (innerType, inner') ->
                 match innerType with
-                | TInt64 | TFloat64 ->
+                | TInt8 | TInt16 | TInt32 | TInt64 | TFloat64 ->
                     match expectedType with
                     | Some expected when expected <> innerType ->
                         Error (TypeMismatch (expected, innerType, "result of negation"))

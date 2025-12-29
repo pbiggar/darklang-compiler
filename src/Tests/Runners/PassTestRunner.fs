@@ -358,7 +358,7 @@ let runMIR2LIRTest (input: MIR.Program) (expected: LIR.Program) : PassTestResult
 /// Pretty-print ANF atom
 let prettyPrintANFAtom = function
     | ANF.UnitLiteral -> "()"
-    | ANF.IntLiteral n -> string n
+    | ANF.IntLiteral n -> string (ANF.sizedIntToInt64 n)
     | ANF.BoolLiteral b -> if b then "true" else "false"
     | ANF.StringLiteral s -> $"\"{s}\""
     | ANF.FloatLiteral f -> string f

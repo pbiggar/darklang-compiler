@@ -496,7 +496,7 @@ let getPayloadSizeForAtom (builder: CFGBuilder) (atom: ANF.Atom) : Result<int, s
 let atomToOperand (builder: CFGBuilder) (atom: ANF.Atom) : Result<MIR.Operand, string> =
     match atom with
     | ANF.UnitLiteral -> Ok (MIR.IntConst 0L)  // Unit is represented as 0
-    | ANF.IntLiteral n -> Ok (MIR.IntConst n)
+    | ANF.IntLiteral n -> Ok (MIR.IntConst (ANF.sizedIntToInt64 n))
     | ANF.BoolLiteral b -> Ok (MIR.BoolConst b)
     | ANF.FloatLiteral f ->
         match Map.tryFind f builder.FloatLookup with

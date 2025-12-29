@@ -23,10 +23,47 @@ module ANF
 /// Unique identifier for temporary variables
 type TempId = TempId of int
 
+/// Integer value with explicit size - invalid states unrepresentable
+/// Following "make invalid states unrepresentable" principle
+type SizedInt =
+    | Int8 of sbyte
+    | Int16 of int16
+    | Int32 of int32
+    | Int64 of int64
+    | UInt8 of byte
+    | UInt16 of uint16
+    | UInt32 of uint32
+    | UInt64 of uint64
+
+/// Extract int64 value from SizedInt (for codegen)
+/// Note: UInt64 values > Int64.MaxValue will be converted incorrectly
+let sizedIntToInt64 (si: SizedInt) : int64 =
+    match si with
+    | Int8 n -> int64 n
+    | Int16 n -> int64 n
+    | Int32 n -> int64 n
+    | Int64 n -> n
+    | UInt8 n -> int64 n
+    | UInt16 n -> int64 n
+    | UInt32 n -> int64 n
+    | UInt64 n -> int64 n  // May lose high bit for values > Int64.MaxValue
+
+/// Get the AST.Type corresponding to a SizedInt
+let sizedIntToType (si: SizedInt) : AST.Type =
+    match si with
+    | Int8 _ -> AST.TInt8
+    | Int16 _ -> AST.TInt16
+    | Int32 _ -> AST.TInt32
+    | Int64 _ -> AST.TInt64
+    | UInt8 _ -> AST.TUInt8
+    | UInt16 _ -> AST.TUInt16
+    | UInt32 _ -> AST.TUInt32
+    | UInt64 _ -> AST.TUInt64
+
 /// Atomic expressions (cannot be decomposed further)
 type Atom =
     | UnitLiteral            // Unit value: ()
-    | IntLiteral of int64
+    | IntLiteral of SizedInt // Integer with explicit size
     | BoolLiteral of bool
     | StringLiteral of string
     | FloatLiteral of float

@@ -31,14 +31,15 @@ let resolveAtom (env: ConstEnv) (atom: Atom) : Atom =
     | _ -> atom
 
 /// Fold a binary operation on constants
+/// Only folds Int64 for now - other integer types need proper overflow handling at runtime
 let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     match op, left, right with
-    // Integer arithmetic (unchecked - overflow wraps)
-    | Add, IntLiteral a, IntLiteral b -> Some (Atom (IntLiteral (a + b)))
-    | Sub, IntLiteral a, IntLiteral b -> Some (Atom (IntLiteral (a - b)))
-    | Mul, IntLiteral a, IntLiteral b -> Some (Atom (IntLiteral (a * b)))
-    | Div, IntLiteral a, IntLiteral b when b <> 0L -> Some (Atom (IntLiteral (a / b)))
-    | Mod, IntLiteral a, IntLiteral b when b <> 0L -> Some (Atom (IntLiteral (a % b)))
+    // Int64 arithmetic (unchecked - overflow wraps)
+    | Add, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (IntLiteral (Int64 (a + b))))
+    | Sub, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (IntLiteral (Int64 (a - b))))
+    | Mul, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (IntLiteral (Int64 (a * b))))
+    | Div, IntLiteral (Int64 a), IntLiteral (Int64 b) when b <> 0L -> Some (Atom (IntLiteral (Int64 (a / b))))
+    | Mod, IntLiteral (Int64 a), IntLiteral (Int64 b) when b <> 0L -> Some (Atom (IntLiteral (Int64 (a % b))))
 
     // Float arithmetic
     | Add, FloatLiteral a, FloatLiteral b -> Some (Atom (FloatLiteral (a + b)))
@@ -46,13 +47,13 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | Mul, FloatLiteral a, FloatLiteral b -> Some (Atom (FloatLiteral (a * b)))
     | Div, FloatLiteral a, FloatLiteral b -> Some (Atom (FloatLiteral (a / b)))
 
-    // Integer comparisons
-    | Eq, IntLiteral a, IntLiteral b -> Some (Atom (BoolLiteral (a = b)))
-    | Neq, IntLiteral a, IntLiteral b -> Some (Atom (BoolLiteral (a <> b)))
-    | Lt, IntLiteral a, IntLiteral b -> Some (Atom (BoolLiteral (a < b)))
-    | Gt, IntLiteral a, IntLiteral b -> Some (Atom (BoolLiteral (a > b)))
-    | Lte, IntLiteral a, IntLiteral b -> Some (Atom (BoolLiteral (a <= b)))
-    | Gte, IntLiteral a, IntLiteral b -> Some (Atom (BoolLiteral (a >= b)))
+    // Int64 comparisons
+    | Eq, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (BoolLiteral (a = b)))
+    | Neq, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (BoolLiteral (a <> b)))
+    | Lt, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (BoolLiteral (a < b)))
+    | Gt, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (BoolLiteral (a > b)))
+    | Lte, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (BoolLiteral (a <= b)))
+    | Gte, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (BoolLiteral (a >= b)))
 
     // Boolean comparisons
     | Eq, BoolLiteral a, BoolLiteral b -> Some (Atom (BoolLiteral (a = b)))
@@ -66,15 +67,15 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | Eq, StringLiteral a, StringLiteral b -> Some (Atom (BoolLiteral (a = b)))
     | Neq, StringLiteral a, StringLiteral b -> Some (Atom (BoolLiteral (a <> b)))
 
-    // Algebraic identities (strength reduction)
-    | Add, IntLiteral 0L, x -> Some (Atom x)
-    | Add, x, IntLiteral 0L -> Some (Atom x)
-    | Sub, x, IntLiteral 0L -> Some (Atom x)
-    | Mul, IntLiteral 1L, x -> Some (Atom x)
-    | Mul, x, IntLiteral 1L -> Some (Atom x)
-    | Mul, IntLiteral 0L, _ -> Some (Atom (IntLiteral 0L))
-    | Mul, _, IntLiteral 0L -> Some (Atom (IntLiteral 0L))
-    | Div, x, IntLiteral 1L -> Some (Atom x)
+    // Algebraic identities (strength reduction) - only for Int64
+    | Add, IntLiteral (Int64 0L), x -> Some (Atom x)
+    | Add, x, IntLiteral (Int64 0L) -> Some (Atom x)
+    | Sub, x, IntLiteral (Int64 0L) -> Some (Atom x)
+    | Mul, IntLiteral (Int64 1L), x -> Some (Atom x)
+    | Mul, x, IntLiteral (Int64 1L) -> Some (Atom x)
+    | Mul, IntLiteral (Int64 0L), _ -> Some (Atom (IntLiteral (Int64 0L)))
+    | Mul, _, IntLiteral (Int64 0L) -> Some (Atom (IntLiteral (Int64 0L)))
+    | Div, x, IntLiteral (Int64 1L) -> Some (Atom x)
 
     // Short-circuit boolean
     | And, BoolLiteral false, _ -> Some (Atom (BoolLiteral false))
@@ -91,8 +92,8 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
 /// Fold a unary operation on constants
 let foldUnaryOp (op: UnaryOp) (src: Atom) : CExpr option =
     match op, src with
-    // Integer negation (unchecked - INT64_MIN wraps to itself)
-    | Neg, IntLiteral n -> Some (Atom (IntLiteral (-n)))
+    // Int64 negation (unchecked - INT64_MIN wraps to itself)
+    | Neg, IntLiteral (Int64 n) -> Some (Atom (IntLiteral (Int64 (-n))))
     | Neg, FloatLiteral f -> Some (Atom (FloatLiteral (-f)))
     | Not, BoolLiteral b -> Some (Atom (BoolLiteral (not b)))
     | _ -> None

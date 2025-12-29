@@ -30,9 +30,9 @@ let parseAtom (text: string) : Result<Atom, string> =
     match parseTempId text with
     | Ok tid -> Ok (Var tid)
     | Error _ ->
-        // Try parsing as number
+        // Try parsing as number (default to Int64)
         match Int64.TryParse(text) with
-        | true, n -> Ok (IntLiteral n)
+        | true, n -> Ok (IntLiteral (ANF.Int64 n))
         | false, _ -> Error $"Invalid atom '{text}' (expected number or temp variable)"
 
 /// Parse binary operator
