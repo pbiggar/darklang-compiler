@@ -1875,6 +1875,23 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let exprWithRight = wrapBindings rightBindings exprWithEq
                         let exprWithLeft = wrapBindings leftBindings exprWithRight
                         Ok (exprWithLeft, varGen4)
+                    | Ok AST.TString ->
+                        // String equality - use StringEq
+                        let (tempVar, varGen3) = ANF.freshVar varGen2
+                        let cexpr = ANF.StringEq (leftAtom, rightAtom)
+                        // For Neq, negate the result
+                        let (finalAtom, finalBindings, varGen4) =
+                            if op = AST.Neq then
+                                let (negVar, vg) = ANF.freshVar varGen3
+                                let negExpr = ANF.UnaryPrim (ANF.Not, ANF.Var tempVar)
+                                (ANF.Var negVar, [(tempVar, cexpr); (negVar, negExpr)], vg)
+                            else
+                                (ANF.Var tempVar, [(tempVar, cexpr)], varGen3)
+                        let finalExpr = ANF.Return finalAtom
+                        let exprWithBindings = wrapBindings finalBindings finalExpr
+                        let exprWithRight = wrapBindings rightBindings exprWithBindings
+                        let exprWithLeft = wrapBindings leftBindings exprWithRight
+                        Ok (exprWithLeft, varGen4)
                     | _ ->
                         // Primitive type or type inference failed - use simple comparison
                         let (tempVar, varGen3) = ANF.freshVar varGen2
@@ -3426,6 +3443,20 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                                 (ANF.Var negVar, eqBindings @ [(negVar, negExpr)], vg)
                             else
                                 (eqResultAtom, eqBindings, varGen3)
+                        let allBindings = leftBindings @ rightBindings @ finalBindings
+                        Ok (finalAtom, allBindings, varGen4)
+                    | Ok AST.TString ->
+                        // String equality - use StringEq
+                        let (tempVar, varGen3) = ANF.freshVar varGen2
+                        let cexpr = ANF.StringEq (leftAtom, rightAtom)
+                        // For Neq, negate the result
+                        let (finalAtom, finalBindings, varGen4) =
+                            if op = AST.Neq then
+                                let (negVar, vg) = ANF.freshVar varGen3
+                                let negExpr = ANF.UnaryPrim (ANF.Not, ANF.Var tempVar)
+                                (ANF.Var negVar, [(tempVar, cexpr); (negVar, negExpr)], vg)
+                            else
+                                (ANF.Var tempVar, [(tempVar, cexpr)], varGen3)
                         let allBindings = leftBindings @ rightBindings @ finalBindings
                         Ok (finalAtom, allBindings, varGen4)
                     | _ ->
