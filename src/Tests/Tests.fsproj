@@ -19,10 +19,12 @@
     <Compile Include="TestDSL/ARM64EncodingFormat.fs" />
     <Compile Include="TestDSL/E2EFormat.fs" />
     <Compile Include="TestDSL/TypeCheckingFormat.fs" />
+    <Compile Include="TestDSL/OptimizationFormat.fs" />
     <Compile Include="Runners/PassTestRunner.fs" />
     <Compile Include="Runners/ARM64EncodingTestRunner.fs" />
     <Compile Include="Runners/E2ETestRunner.fs" />
     <Compile Include="Runners/TypeCheckingTestRunner.fs" />
+    <Compile Include="Runners/OptimizationTestRunner.fs" />
 
     <!-- Unit tests -->
     <Compile Include="EncodingTests.fs" />
@@ -45,6 +47,7 @@
     <None Include="passes/**/*.arm64enc" CopyToOutputDirectory="PreserveNewest" />
     <None Include="e2e/**/*.e2e" CopyToOutputDirectory="PreserveNewest" />
     <None Include="typecheck/**/*.typecheck" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="optimization/**/*.opt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
