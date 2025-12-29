@@ -166,10 +166,12 @@ let compileStdlib () : Result<StdlibResult, string> =
                 match RefCountInsertion.insertRCInProgram anfResult with
                 | Error e -> Error e
                 | Ok anfAfterRC ->
+                    // Run tail call detection
+                    let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
                     // Convert stdlib ANF to MIR (functions only, no _start)
                     let emptyTypeMap : ANF.TypeMap = Map.empty
                     let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
-                    match ANF_to_MIR.toMIRFunctionsOnly anfAfterRC emptyTypeMap emptyTypeReg anfResult.VariantLookup Map.empty with
+                    match ANF_to_MIR.toMIRFunctionsOnly anfAfterTCO emptyTypeMap emptyTypeReg anfResult.VariantLookup Map.empty with
                     | Error e -> Error e
                     | Ok (mirFuncs, stringPool, floatPool, variantRegistry, recordRegistry) ->
                         // Wrap in MIR.Program for LIR conversion
@@ -220,8 +222,10 @@ let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
                 match RefCountInsertion.insertRCInProgram anfResult with
                 | Error e -> Error e
                 | Ok anfAfterRC ->
+                    // Run tail call detection
+                    let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
                     // Extract stdlib functions into a map for lazy lookup
-                    let (ANF.Program (stdlibFuncs, _)) = anfAfterRC
+                    let (ANF.Program (stdlibFuncs, _)) = anfAfterTCO
                     let stdlibFuncMap =
                         stdlibFuncs
                         |> List.map (fun f -> f.Name, f)
@@ -360,11 +364,31 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                         println $"Main: {mainExprDbg}"
                         println ""
 
-                    // Pass 2.6: Print Insertion (for main expression)
-                    if verbosity >= 1 then println "  [2.6/8] Print Insertion..."
-                    let (ANF.Program (functions, mainExpr)) = anfAfterRC
+                    // Pass 2.7: Tail Call Detection
+                    if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
+                    let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
+                    let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(tcoTime, 1)
+                        println $"        {t}ms"
+
+                    // Show ANF after TCO
+                    if verbosity >= 3 then
+                        println "=== ANF (after Tail Call Detection) ==="
+                        let (ANF.Program (funcs, mainExprDbg)) = anfAfterTCO
+                        for func in funcs do
+                            println $"Function: {func.Name}"
+                            println $"  Params: {func.Params}"
+                            println $"  Body: {func.Body}"
+                            println ""
+                        println $"Main: {mainExprDbg}"
+                        println ""
+
+                    // Pass 2.8: Print Insertion (for main expression)
+                    if verbosity >= 1 then println "  [2.8/8] Print Insertion..."
+                    let (ANF.Program (functions, mainExpr)) = anfAfterTCO
                     let anfProgram = PrintInsertion.insertPrint functions mainExpr programType
-                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
+                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - tcoTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(printTime, 1)
                         println $"        {t}ms"
@@ -703,11 +727,19 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                           ErrorMessage = Some $"Reference count insertion error: {err}" }
                     | Ok userAnfAfterRC ->
 
-                    // Pass 2.6: Print Insertion (user code only)
-                    if verbosity >= 1 then println "  [2.6/8] Print Insertion..."
-                    let (ANF.Program (userFunctions, userMainExpr)) = userAnfAfterRC
+                    // Pass 2.7: Tail Call Detection (user code only)
+                    if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
+                    let userAnfAfterTCO = TailCallDetection.detectTailCallsInProgram userAnfAfterRC
+                    let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(tcoTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 2.8: Print Insertion (user code only)
+                    if verbosity >= 1 then println "  [2.8/8] Print Insertion..."
+                    let (ANF.Program (userFunctions, userMainExpr)) = userAnfAfterTCO
                     let userAnfProgram = PrintInsertion.insertPrint userFunctions userMainExpr programType
-                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
+                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - tcoTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(printTime, 1)
                         println $"        {t}ms"
@@ -935,11 +967,19 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                           ErrorMessage = Some $"Reference count insertion error: {err}" }
                     | Ok userAnfAfterRC ->
 
-                    // Pass 2.6: Print Insertion (user code only)
-                    if verbosity >= 1 then println "  [2.6/8] Print Insertion..."
-                    let (ANF.Program (userFunctions, userMainExpr)) = userAnfAfterRC
+                    // Pass 2.7: Tail Call Detection (user code only)
+                    if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
+                    let userAnfAfterTCO = TailCallDetection.detectTailCallsInProgram userAnfAfterRC
+                    let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(tcoTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 2.8: Print Insertion (user code only)
+                    if verbosity >= 1 then println "  [2.8/8] Print Insertion..."
+                    let (ANF.Program (userFunctions, userMainExpr)) = userAnfAfterTCO
                     let userAnfProgram = PrintInsertion.insertPrint userFunctions userMainExpr programType
-                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
+                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - tcoTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(printTime, 1)
                         println $"        {t}ms"

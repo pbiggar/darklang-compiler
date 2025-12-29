@@ -1,0 +1,29 @@
+// Simple tail recursion (accumulator pattern)
+// This pattern should be detected and optimized
+def sumTo(n: Int64, acc: Int64) : Int64 =
+    if n <= 0 then acc else sumTo(n - 1, acc + n)
+sumTo(10, 0)
+---
+55
+===
+// Large N that would overflow stack without TCO
+def countDown(n: Int64) : Int64 =
+    if n <= 0 then 0 else countDown(n - 1)
+countDown(100000)
+---
+0
+===
+// Non-tail recursive - should NOT be optimized
+// (the multiply happens after the recursive call)
+def factorial(n: Int64) : Int64 =
+    if n <= 1 then 1 else n * factorial(n - 1)
+factorial(10)
+---
+3628800
+===
+// Tail recursive with multiple arguments
+def gcd(a: Int64, b: Int64) : Int64 =
+    if b == 0 then a else gcd(b, a % b)
+gcd(48, 18)
+---
+6

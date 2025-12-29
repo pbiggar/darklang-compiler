@@ -32,6 +32,9 @@ let defaultOptions : CodeGenOptions = {
 type CodeGenContext = {
     Options: CodeGenOptions
     StringPool: MIR.StringPool
+    // Function context for tail call epilogue generation
+    StackSize: int
+    UsedCalleeSaved: LIR.PhysReg list
 }
 
 /// Convert LIR.PhysReg to ARM64.Reg
@@ -950,9 +953,26 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         Ok [ARM64.BL funcName]
 
     | LIR.TailCall (funcName, args) ->
-        // Tail call: use B (branch) instead of BL (branch with link)
-        // No SaveRegs/RestoreRegs - we're not returning to this function
-        Ok [ARM64.B_label funcName]
+        // Tail call: restore stack frame, then branch (no link)
+        // This is the same as the epilogue but with B instead of RET
+        let restoreCalleeSavedInstrs = generateCalleeSavedRestores ctx.UsedCalleeSaved
+        let calleeSavedSpace = calleeSavedStackSpace ctx.UsedCalleeSaved
+        let deallocCalleeSaved =
+            if calleeSavedSpace > 0 then
+                [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 calleeSavedSpace)]
+            else
+                []
+        let deallocStack =
+            if ctx.StackSize > 0 then
+                [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 ctx.StackSize)]
+            else
+                []
+        let restoreFpLr = [
+            ARM64.LDP (ARM64.X29, ARM64.X30, ARM64.SP, 0s)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
+        ]
+        let branch = [ARM64.B_label funcName]
+        Ok (restoreCalleeSavedInstrs @ deallocCalleeSaved @ deallocStack @ restoreFpLr @ branch)
 
     | LIR.IndirectCall (dest, func, args) ->
         // Indirect call: call through function pointer in register
@@ -961,9 +981,27 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         |> Result.map (fun funcReg -> [ARM64.BLR funcReg])
 
     | LIR.IndirectTailCall (func, args) ->
-        // Indirect tail call: use BR (branch to register) instead of BLR
+        // Indirect tail call: restore stack frame, then branch to register
         lirRegToARM64Reg func
-        |> Result.map (fun funcReg -> [ARM64.BR funcReg])
+        |> Result.map (fun funcReg ->
+            let restoreCalleeSavedInstrs = generateCalleeSavedRestores ctx.UsedCalleeSaved
+            let calleeSavedSpace = calleeSavedStackSpace ctx.UsedCalleeSaved
+            let deallocCalleeSaved =
+                if calleeSavedSpace > 0 then
+                    [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 calleeSavedSpace)]
+                else
+                    []
+            let deallocStack =
+                if ctx.StackSize > 0 then
+                    [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 ctx.StackSize)]
+                else
+                    []
+            let restoreFpLr = [
+                ARM64.LDP (ARM64.X29, ARM64.X30, ARM64.SP, 0s)
+                ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
+            ]
+            let branch = [ARM64.BR funcReg]
+            restoreCalleeSavedInstrs @ deallocCalleeSaved @ deallocStack @ restoreFpLr @ branch)
 
     | LIR.ClosureAlloc (dest, funcName, captures) ->
         // Allocate closure on heap: (func_ptr, cap1, cap2, ...)
@@ -1025,10 +1063,27 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             [ARM64.BLR funcPtrReg])
 
     | LIR.ClosureTailCall (funcPtr, args) ->
-        // Closure tail call: use BR instead of BLR
+        // Closure tail call: restore stack frame, then branch to register
         lirRegToARM64Reg funcPtr
         |> Result.map (fun funcPtrReg ->
-            [ARM64.BR funcPtrReg])
+            let restoreCalleeSavedInstrs = generateCalleeSavedRestores ctx.UsedCalleeSaved
+            let calleeSavedSpace = calleeSavedStackSpace ctx.UsedCalleeSaved
+            let deallocCalleeSaved =
+                if calleeSavedSpace > 0 then
+                    [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 calleeSavedSpace)]
+                else
+                    []
+            let deallocStack =
+                if ctx.StackSize > 0 then
+                    [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 ctx.StackSize)]
+                else
+                    []
+            let restoreFpLr = [
+                ARM64.LDP (ARM64.X29, ARM64.X30, ARM64.SP, 0s)
+                ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
+            ]
+            let branch = [ARM64.BR funcPtrReg]
+            restoreCalleeSavedInstrs @ deallocCalleeSaved @ deallocStack @ restoreFpLr @ branch)
 
     | LIR.SaveRegs ->
         // Save caller-saved registers (X1-X10 and D0-D7) before call
@@ -2434,8 +2489,11 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64.In
     // Generate epilogue label for this function (passed to convertCFG for Ret terminators)
     let epilogueLabel = "_epilogue_" + func.Name
 
+    // Create function-specific context with stack info for tail call epilogue generation
+    let funcCtx = { ctx with StackSize = func.StackSize; UsedCalleeSaved = func.UsedCalleeSaved }
+
     // Convert CFG to ARM64 instructions
-    match convertCFG ctx epilogueLabel func.CFG with
+    match convertCFG funcCtx epilogueLabel func.CFG with
     | Error err -> Error err
     | Ok cfgInstrs ->
         // Generate prologue (save FP/LR, allocate stack)
@@ -2519,7 +2577,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
     let (LIR.Program (functions, stringPool, _floatPool)) = program
 
     // Create code generation context with options and string pool
-    let ctx = { Options = options; StringPool = stringPool }
+    // StackSize and UsedCalleeSaved are set per-function in convertFunction
+    let ctx = { Options = options; StringPool = stringPool; StackSize = 0; UsedCalleeSaved = [] }
 
     // Ensure _start is first (entry point)
     let sortedFunctions =

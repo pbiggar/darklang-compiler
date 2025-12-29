@@ -19,6 +19,7 @@
     <Compile Include="passes/2.3_ANF_Optimize.fs" />
     <Compile Include="passes/2.5_RefCountInsertion.fs" />
     <Compile Include="passes/2.6_PrintInsertion.fs" />
+    <Compile Include="passes/2.7_TailCallDetection.fs" />
     <Compile Include="MIR.fs" />
     <Compile Include="passes/3_ANF_to_MIR.fs" />
     <Compile Include="passes/3.1_SSA_Construction.fs" />
