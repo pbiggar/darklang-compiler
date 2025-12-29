@@ -139,5 +139,59 @@ EOF
     fi
 fi
 
+# Handle Node.js separately (run via interpreter) - only if refreshing baseline
+NODE_TIMEOUT=${NODE_TIMEOUT:-300}
+
+if [ "$REFRESH_BASELINE" = "true" ] && [ -f "$PROBLEM_DIR/node/main.js" ]; then
+    if command -v node &> /dev/null; then
+        echo "  Running cachegrind on node (timeout: ${NODE_TIMEOUT}s)..."
+
+        # Use timeout to avoid hanging on slow benchmarks
+        if CG_OUTPUT=$(timeout "$NODE_TIMEOUT" valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes node "$PROBLEM_DIR/node/main.js" 2>&1); then
+            NODE_SUCCESS=true
+        else
+            EXIT_CODE=$?
+            if [ $EXIT_CODE -eq 124 ]; then
+                echo "    TIMEOUT: Node benchmark exceeded ${NODE_TIMEOUT}s, skipping"
+                NODE_SUCCESS=false
+            else
+                # Other error - still try to parse output
+                NODE_SUCCESS=true
+            fi
+        fi
+
+        if [ "$NODE_SUCCESS" = true ]; then
+            I_REFS=$(echo "$CG_OUTPUT" | grep "I refs:" | sed 's/.*I refs:[[:space:]]*//' | tr -d ',')
+            D_REFS=$(echo "$CG_OUTPUT" | grep "D refs:" | sed 's/.*D refs:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+            BRANCHES=$(echo "$CG_OUTPUT" | grep "Branches:" | sed 's/.*Branches:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+            MISPREDICTS=$(echo "$CG_OUTPUT" | grep "Mispredicts:" | sed 's/.*Mispredicts:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+            I1_MISSES=$(echo "$CG_OUTPUT" | grep "I1  misses:" | sed 's/.*I1  misses:[[:space:]]*//' | tr -d ',')
+            D1_MISSES=$(echo "$CG_OUTPUT" | grep "D1  misses:" | sed 's/.*D1  misses:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+            LL_MISSES=$(echo "$CG_OUTPUT" | grep "LL misses:" | head -1 | sed 's/.*LL misses:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+
+            if [ "$FIRST" = true ]; then
+                FIRST=false
+            else
+                echo "," >> "$RESULTS_FILE"
+            fi
+
+            cat >> "$RESULTS_FILE" << EOF
+  {
+    "language": "node",
+    "instructions": $I_REFS,
+    "data_refs": $D_REFS,
+    "branches": $BRANCHES,
+    "branch_mispredicts": $MISPREDICTS,
+    "i1_misses": $I1_MISSES,
+    "d1_misses": $D1_MISSES,
+    "ll_misses": $LL_MISSES
+  }
+EOF
+
+            echo "    Instructions: $I_REFS"
+        fi
+    fi
+fi
+
 echo "]}" >> "$RESULTS_FILE"
 echo "  Results saved to: $RESULTS_FILE"

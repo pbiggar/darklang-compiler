@@ -45,7 +45,7 @@ def parse_history_baselines(history_path: Path) -> dict:
             if current_benchmark and line.startswith("|"):
                 # Parse table row
                 cols = [p.strip() for p in line.split("|")]
-                if len(cols) >= 9 and cols[1].lower() in ("rust", "python"):
+                if len(cols) >= 9 and cols[1].lower() in ("rust", "python", "node"):
                     lang = cols[1].lower()
                     # Skip if we already have this language for this benchmark
                     if any(b["language"] == lang for b in baselines.get(current_benchmark, [])):
