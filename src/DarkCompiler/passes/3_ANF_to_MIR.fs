@@ -523,7 +523,12 @@ let atomType (builder: CFGBuilder) (atom: ANF.Atom) : AST.Type =
         else
             match Map.tryFind (ANF.TempId id) builder.TypeMap with
             | Some t -> t
-            | None -> AST.TInt64  // Fallback
+            | None ->
+                // TODO: TypeMap is currently not populated during stdlib compilation,
+                // so we fall back to TInt64. This could hide bugs where a float variable
+                // is incorrectly treated as integer. To fix properly, TypeMap should be
+                // populated during AST_to_ANF or type checking for all variables.
+                AST.TInt64
     | ANF.FuncRef _ -> AST.TInt64  // Function addresses are pointer-sized
 
 /// Get the operand type for a binary operation (checks both operands)
