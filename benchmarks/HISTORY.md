@@ -4,6 +4,233 @@ Performance history of Darklang compiler across versions (instruction counts via
 
 ---
 
+## 2025-12-29 18:12:47
+
+**Commit:** `460b0112` - Add CLI flags to disable individual compiler optimizations
+
+### primes
+
+| Language | Instructions | vs Rust  | Data Refs  | L1 Miss | LL Miss | Branches   | Mispred |
+|----------|--------------|----------|------------|---------|---------|------------|---------|
+|     Rust |    1,250,531 | baseline |    100,206 |   3,577 |   3,927 |    305,900 |    3.1% |
+|     Dark |   12,990,837 |   10.39x |  1,958,433 |       6 |      25 |    932,988 |    1.2% |
+|   Python |   91,368,767 |   73.06x | 37,746,501 | 801,354 | 367,963 | 13,901,396 |    5.6% |
+---
+
+
+## 2025-12-29 18:07:34
+
+**Commit:** `460b0112` - Add CLI flags to disable individual compiler optimizations
+
+### ackermann
+
+| Language | Instructions   | vs Rust  | Data Refs     | L1 Miss       | LL Miss     | Branches      | Mispred |
+|----------|----------------|----------|---------------|---------------|-------------|---------------|---------|
+|     Rust |  5,009,839,714 | baseline | 2,146,994,214 |   341,647,151 | 167,747,580 |   715,742,674 |    0.0% |
+|     Dark | 20,754,029,457 |    4.14x | 5,725,181,742 | 1,056,965,103 | 840,086,209 | 1,073,512,521 |    0.0% |
+#### Instruction Counts (Cachegrind)
+
+**primes:**
+- Rust: 1,250,531 (0.10x)
+- Dark: 12,990,837 (baseline)
+- Python: 91,368,767 (7.0x)
+
+---
+
+
+## 2025-12-29 17:28:49
+
+**Commit:** `460b0112` - Add CLI flags to disable individual compiler optimizations
+
+### binary_trees
+
+| Language | Instructions   | vs Rust  | Data Refs      | L1 Miss     | LL Miss     | Branches      | Mispred |
+|----------|----------------|----------|----------------|-------------|-------------|---------------|---------|
+|     Dark |    183,500,628 |    0.10x |     45,875,432 |          27 |          40 |     6,553,612 |   12.6% |
+|     Rust |  1,842,792,039 | baseline |    882,808,841 |  10,889,334 |   9,441,889 |   260,986,208 |    3.6% |
+|   Python | 24,066,592,928 |   13.06x | 11,608,672,480 | 208,039,698 | 120,609,893 | 3,816,938,589 |    4.0% |
+#### Instruction Counts (Cachegrind)
+
+**ackermann:**
+- Rust: 5,009,839,714 (0.24x)
+- Dark: 20,754,029,457 (baseline)
+
+---
+
+
+## 2025-12-29 17:28:32
+
+**Commit:** `460b0112` - Add CLI flags to disable individual compiler optimizations
+
+### sum_to_n
+
+| Language | Instructions | vs Rust  | Data Refs   | L1 Miss   | LL Miss   | Branches    | Mispred |
+|----------|--------------|----------|-------------|-----------|-----------|-------------|---------|
+|     Rust |      256,187 | baseline |     100,112 |     3,572 |     3,920 |      45,728 |    9.9% |
+|     Dark |   20,004,831 |   78.09x |   4,001,233 |         5 |        15 |   1,000,213 |    0.0% |
+|   Python |  940,692,466 | 3671.90x | 400,718,969 | 6,789,659 | 5,592,876 | 131,732,878 |    3.4% |
+#### Instruction Counts (Cachegrind)
+
+**binary_trees:**
+- Dark: 183,500,628 (baseline)
+- Rust: 1,842,792,039 (10.0x)
+- Python: 24,066,592,928 (131.2x)
+
+---
+
+
+## 2025-12-29 17:28:20
+
+**Commit:** `460b0112` - Add CLI flags to disable individual compiler optimizations
+
+### factorial
+
+| Language | Instructions | vs Rust  | Data Refs  | L1 Miss | LL Miss | Branches   | Mispred |
+|----------|--------------|----------|------------|---------|---------|------------|---------|
+|     Rust |      256,227 | baseline |    100,118 |   3,572 |   3,921 |     45,719 |    9.9% |
+|     Dark |    5,750,208 |   22.44x |  1,450,044 |      33 |      43 |    210,024 |    4.8% |
+|   Python |  181,992,256 |  710.28x | 76,319,398 | 822,481 | 426,540 | 25,485,290 |    5.9% |
+#### Instruction Counts (Cachegrind)
+
+**sum_to_n:**
+- Rust: 256,187 (0.01x)
+- Dark: 20,004,831 (baseline)
+- Python: 940,692,466 (47.0x)
+
+---
+
+
+## 2025-12-29 17:27:01
+
+**Commit:** `460b0112` - Add CLI flags to disable individual compiler optimizations
+
+### fib
+
+| Language | Instructions   | vs Rust  | Data Refs     | L1 Miss | LL Miss | Branches      | Mispred |
+|----------|----------------|----------|---------------|---------|---------|---------------|---------|
+|     Rust |    272,527,060 | baseline |   119,542,930 |   3,587 |   3,938 |    29,906,427 |    9.0% |
+|     Dark |    806,239,074 |    2.96x |   209,024,946 |      54 |      62 |    29,860,714 |    9.0% |
+|   Python | 15,135,137,343 |   55.54x | 6,347,481,275 | 716,856 | 362,119 | 1,932,948,073 |    6.4% |
+#### Instruction Counts (Cachegrind)
+
+**factorial:**
+- Rust: 256,227 (0.04x)
+- Dark: 5,750,208 (baseline)
+- Python: 181,992,256 (31.6x)
+
+---
+
+
+## 2025-12-29 17:21:30
+
+**Commit:** `460b0112` - Add CLI flags to disable individual compiler optimizations
+
+### ackermann
+
+| Language | Instructions   | vs Rust  | Data Refs     | L1 Miss       | LL Miss     | Branches      | Mispred |
+|----------|----------------|----------|---------------|---------------|-------------|---------------|---------|
+|     Dark | 20,754,029,457 | baseline | 5,725,181,742 | 1,056,965,103 | 840,086,209 | 1,073,512,521 |    0.0% |
+#### Instruction Counts (Cachegrind)
+
+**fib:**
+- Rust: 272,527,060 (0.34x)
+- Dark: 806,239,074 (baseline)
+- Python: 15,135,137,343 (18.8x)
+
+---
+
+
+## 2025-12-29 17:21:19
+
+**Commit:** `460b0112` - Add CLI flags to disable individual compiler optimizations
+
+### binary_trees
+
+| Language | Instructions | vs Rust  | Data Refs  | L1 Miss | LL Miss | Branches  | Mispred |
+|----------|--------------|----------|------------|---------|---------|-----------|---------|
+|     Dark |  183,500,628 | baseline | 45,875,432 |      27 |      40 | 6,553,612 |   12.6% |
+#### Instruction Counts (Cachegrind)
+
+**ackermann:**
+- Dark: 20,754,029,457 (baseline)
+
+---
+
+
+## 2025-12-29 17:21:11
+
+**Commit:** `460b0112` - Add CLI flags to disable individual compiler optimizations
+
+### sum_to_n
+
+| Language | Instructions | vs Rust  | Data Refs | L1 Miss | LL Miss | Branches  | Mispred |
+|----------|--------------|----------|-----------|---------|---------|-----------|---------|
+|     Dark |   20,004,831 | baseline | 4,001,233 |       4 |      14 | 1,000,213 |    0.0% |
+#### Instruction Counts (Cachegrind)
+
+**binary_trees:**
+- Dark: 183,500,628 (baseline)
+
+---
+
+
+## 2025-12-29 17:21:04
+
+**Commit:** `460b0112` - Add CLI flags to disable individual compiler optimizations
+
+### factorial
+
+| Language | Instructions | vs Rust  | Data Refs | L1 Miss | LL Miss | Branches | Mispred |
+|----------|--------------|----------|-----------|---------|---------|----------|---------|
+|     Dark |    5,750,208 | baseline | 1,450,044 |      33 |      43 |  210,024 |    4.8% |
+#### Instruction Counts (Cachegrind)
+
+**sum_to_n:**
+- Rust: 255,662 (0.01x)
+- Dark: 20,004,831 (baseline)
+- Python: 940,685,845 (47.0x)
+
+---
+
+
+## 2025-12-29 17:20:54
+
+**Commit:** `460b0112` - Add CLI flags to disable individual compiler optimizations
+
+### fib
+
+| Language | Instructions | vs Rust  | Data Refs   | L1 Miss | LL Miss | Branches   | Mispred |
+|----------|--------------|----------|-------------|---------|---------|------------|---------|
+|     Dark |  806,239,074 | baseline | 209,024,946 |      54 |      62 | 29,860,714 |    9.0% |
+#### Instruction Counts (Cachegrind)
+
+**factorial:**
+- Rust: 255,726 (0.04x)
+- Dark: 5,750,208 (baseline)
+- Python: 182,064,112 (31.7x)
+
+---
+
+
+## 2025-12-29 17:20:45
+
+**Commit:** `460b0112` - Add CLI flags to disable individual compiler optimizations
+
+### primes
+
+| Language | Instructions | vs Rust  | Data Refs | L1 Miss | LL Miss | Branches | Mispred |
+|----------|--------------|----------|-----------|---------|---------|----------|---------|
+|     Dark |   12,990,837 | baseline | 1,958,433 |       6 |      25 |  932,988 |    1.2% |
+#### Instruction Counts (Cachegrind)
+
+**fib:**
+- Rust: 272,526,559 (0.34x)
+- Dark: 806,239,074 (baseline)
+- Python: 15,135,188,032 (18.8x)
+
+---
+
+
 ## 2025-12-29 10:28:45
 
 **Commit:** `0ac77f8e` - Revert buggy parallel move fix, restore original stack-based approach
@@ -13,6 +240,11 @@ Performance history of Darklang compiler across versions (instruction counts via
 | Language | Instructions | vs Rust  | Data Refs   | L1 Miss | LL Miss | Branches   | Mispred |
 |----------|--------------|----------|-------------|---------|---------|------------|---------|
 |     Dark |  776,378,372 | baseline | 209,024,946 |      54 |      62 | 29,860,714 |    9.0% |
+#### Instruction Counts (Cachegrind)
+
+**primes:**
+- Dark: 12,990,837 (baseline)
+
 ---
 
 
