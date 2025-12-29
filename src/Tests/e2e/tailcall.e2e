@@ -61,3 +61,13 @@ def genericTail<t>(x: t, n: Int64) : t = if n <= 0 then x else genericTail<t>(x,
 
 // Bug 11: Generic tail recursion with two type params
 def genericTail2<k, v>(kv: k, vv: v, n: Int64) : k = if n <= 0 then kv else genericTail2<k, v>(kv, vv, n - 1) genericTail2<Int64, String>(99, "test", 3) = 99
+
+// Bug 12: Compare with function calls before tail call (like __compareBytes)
+// This is the exact pattern that fails in stdlib String operations
+def compareBytesLike(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool = if count <= 0 then true else let b1 = Stdlib.String.getByteAt(s1, i) in let b2 = Stdlib.String.getByteAt(s2, j) in if b1 != b2 then false else compareBytesLike(s1, i + 1, s2, j + 1, count - 1) compareBytesLike("hello", 0, "hello", 0, 5) = stdout="true\n"
+def compareBytesLikeFail(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool = if count <= 0 then true else let b1 = Stdlib.String.getByteAt(s1, i) in let b2 = Stdlib.String.getByteAt(s2, j) in if b1 != b2 then false else compareBytesLikeFail(s1, i + 1, s2, j + 1, count - 1) compareBytesLikeFail("hello", 0, "world", 0, 5) = stdout="false\n"
+
+// Bug 13: Cross-function tail call (A tail-calls B, B tail-calls itself)
+// This mimics startsWith calling __compareBytes
+def myCompare(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool = if count <= 0 then true else let b1 = Stdlib.String.getByteAt(s1, i) in let b2 = Stdlib.String.getByteAt(s2, j) in if b1 != b2 then false else myCompare(s1, i + 1, s2, j + 1, count - 1) def myStartsWith2(s: String, prefix: String) : Bool = let sLen = Stdlib.String.length(s) in let prefixLen = Stdlib.String.length(prefix) in if prefixLen > sLen then false else myCompare(s, 0, prefix, 0, prefixLen) myStartsWith2("hello world", "hello") = stdout="true\n"
+def myCompare2(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool = if count <= 0 then true else let b1 = Stdlib.String.getByteAt(s1, i) in let b2 = Stdlib.String.getByteAt(s2, j) in if b1 != b2 then false else myCompare2(s1, i + 1, s2, j + 1, count - 1) def myStartsWith2Fail(s: String, prefix: String) : Bool = let sLen = Stdlib.String.length(s) in let prefixLen = Stdlib.String.length(prefix) in if prefixLen > sLen then false else myCompare2(s, 0, prefix, 0, prefixLen) myStartsWith2Fail("hello world", "world") = stdout="false\n"

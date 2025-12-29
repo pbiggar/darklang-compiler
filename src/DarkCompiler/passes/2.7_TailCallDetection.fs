@@ -81,9 +81,11 @@ let detectTailCallsInProgram (program: ANF.Program) : ANF.Program =
     // TCO DISABLED: 197 failures in stdlib when enabled
     // INVESTIGATION FINDINGS:
     // - User-defined tail calls work: swap, rotate, compare5, sum6, generics
+    // - User cross-function tail calls work (A calls B in tail position)
     // - Stdlib fails: Dict, String operations
     // - KEY BUG: Functions returning `false` return `true` instead
     //   e.g., String.startsWith("hello world", "world") returns true (should be false)
-    // - This suggests bool return values are corrupted in tail call epilogue
-    // - Tests that should return true pass; only false→true corruption occurs
+    // - Bug is SPECIFIC to stdlib-compiled functions, NOT user code
+    // - Same pattern compiled as user code works; only stdlib version fails
+    // - Root cause likely in how stdlib compilation differs from user compilation
     program

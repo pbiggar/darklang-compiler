@@ -77,6 +77,8 @@ type LazyStdlibResult = {
     StdlibANFFunctions: Map<string, ANF.Function>
     /// Call graph at ANF level for early DCE
     StdlibANFCallGraph: Map<string, Set<string>>
+    /// TypeMap from RC insertion - needed for MIR conversion (tail call arg types, etc.)
+    StdlibTypeMap: ANF.TypeMap
 }
 
 // Helper functions for exception-to-Result conversion (Darklang compatibility)
@@ -169,8 +171,8 @@ let compileStdlib () : Result<StdlibResult, string> =
                     // Pass 2.7: Tail Call Detection
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
                     // Convert stdlib ANF to MIR (functions only, no _start)
-                    let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
-                    match ANF_to_MIR.toMIRFunctionsOnly anfAfterTCO typeMap emptyTypeReg anfResult.VariantLookup Map.empty with
+                    // Use FuncParams for typeReg (needed for tail call argument types)
+                    match ANF_to_MIR.toMIRFunctionsOnly anfAfterTCO typeMap anfResult.FuncParams anfResult.VariantLookup Map.empty with
                     | Error e -> Error e
                     | Ok (mirFuncs, stringPool, floatPool, variantRegistry, recordRegistry) ->
                         // Wrap in MIR.Program for LIR conversion
@@ -220,7 +222,7 @@ let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
                 // Run RC insertion on stdlib ANF
                 match RefCountInsertion.insertRCInProgram anfResult with
                 | Error e -> Error e
-                | Ok (anfAfterRC, _typeMap) ->
+                | Ok (anfAfterRC, typeMap) ->
                     // Pass 2.7: Tail Call Detection
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
                     // Extract stdlib functions into a map for lazy lookup
@@ -238,6 +240,7 @@ let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
                         ANFResult = anfResult
                         StdlibANFFunctions = stdlibFuncMap
                         StdlibANFCallGraph = stdlibCallGraph
+                        StdlibTypeMap = typeMap
                     }
 
 /// Internal: Compile user code with stdlib AST (shared implementation)
@@ -996,8 +999,9 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                         |> List.choose (fun name -> Map.tryFind name stdlib.StdlibANFFunctions)
 
                     // Compile reachable stdlib functions: ANF → MIR → LIR → RegAlloc
-                    // Note: stdlib typeMap was discarded in lazy cache - use empty for stdlib, user typeMap for user code
-                    let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
+                    // Use cached typeMap and FuncParams from stdlib preparation
+                    let stdlibTypeReg = stdlib.ANFResult.FuncParams
+                    let stdlibVariantLookup = stdlib.ANFResult.VariantLookup
 
                     // Convert reachable stdlib to MIR (if any)
                     let emptyStringPool : MIR.StringPool = { Strings = Map.empty; StringToId = Map.empty; NextId = 0 }
@@ -1007,8 +1011,8 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                             Ok ([], emptyStringPool, emptyFloatPool, Map.empty, Map.empty)
                         else
                             let stdlibAnfProgram = ANF.Program (reachableStdlibFuncs, ANF.Return ANF.UnitLiteral)
-                            // Use empty typeMap for stdlib (typeMap was discarded in lazy cache)
-                            ANF_to_MIR.toMIRFunctionsOnly stdlibAnfProgram Map.empty emptyTypeReg Map.empty Map.empty
+                            // Use cached typeMap and typeReg from stdlib preparation
+                            ANF_to_MIR.toMIRFunctionsOnly stdlibAnfProgram stdlib.StdlibTypeMap stdlibTypeReg stdlibVariantLookup Map.empty
 
                     match stdlibMirResult with
                     | Error err ->
