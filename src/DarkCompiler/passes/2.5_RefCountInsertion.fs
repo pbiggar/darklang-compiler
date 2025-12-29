@@ -29,6 +29,8 @@ type TypeContext = {
     FuncParams: Map<string, (string * AST.Type) list>
     /// Maps TempId -> Type for values we've seen
     TempTypes: Map<TempId, AST.Type>
+    /// Maps TempId -> function name for closures (to resolve closure call return types)
+    ClosureFuncs: Map<TempId, string>
 }
 
 /// Create initial context from conversion result
@@ -37,11 +39,22 @@ let createContext (result: ConversionResult) : TypeContext =
       VariantLookup = result.VariantLookup
       FuncReg = result.FuncReg
       FuncParams = result.FuncParams
-      TempTypes = Map.empty }
+      TempTypes = Map.empty
+      ClosureFuncs = Map.empty }
 
 /// Add a TempId -> Type mapping to context
 let addType (ctx: TypeContext) (tempId: TempId) (typ: AST.Type) : TypeContext =
     { ctx with TempTypes = Map.add tempId typ ctx.TempTypes }
+
+/// Add a closure TempId -> function name mapping to context
+let addClosureFunc (ctx: TypeContext) (tempId: TempId) (funcName: string) : TypeContext =
+    { ctx with ClosureFuncs = Map.add tempId funcName ctx.ClosureFuncs }
+
+/// Try to get the function name of a closure from its TempId
+let tryGetClosureFunc (ctx: TypeContext) (atom: Atom) : string option =
+    match atom with
+    | Var tid -> Map.tryFind tid ctx.ClosureFuncs
+    | _ -> None
 
 /// Try to get the type of a TempId
 let tryGetType (ctx: TypeContext) (tempId: TempId) : AST.Type option =
@@ -82,23 +95,36 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | TailCall (funcName, _) ->
         // Tail calls have same return type as regular calls
         Map.tryFind funcName ctx.FuncReg
-    | IndirectCall (_, _) ->
-        // For indirect calls, we would need to track the function type
-        // For now, return None (no ref counting for indirect call results)
-        None
-    | IndirectTailCall (_, _) ->
+    | IndirectCall (funcAtom, _) ->
+        // Look up the function's type to get its return type
+        match funcAtom with
+        | Var tid ->
+            match tryGetType ctx tid with
+            | Some (AST.TFunction (_, retType)) -> Some retType
+            | _ -> None
+        | _ -> None
+    | IndirectTailCall (funcAtom, _) ->
         // Same as IndirectCall
-        None
+        match funcAtom with
+        | Var tid ->
+            match tryGetType ctx tid with
+            | Some (AST.TFunction (_, retType)) -> Some retType
+            | _ -> None
+        | _ -> None
     | ClosureAlloc (_, captures) ->
         // Closure is a tuple-like structure: (func_ptr, cap1, cap2, ...)
         // Return a tuple type for ref counting purposes
         Some (AST.TTuple (AST.TInt64 :: List.replicate (List.length captures) AST.TInt64))
-    | ClosureCall (_, _) ->
-        // Closure calls return unknown type for now
-        None
-    | ClosureTailCall (_, _) ->
+    | ClosureCall (closureAtom, _) ->
+        // Try to find the closure's function name and look up return type
+        match tryGetClosureFunc ctx closureAtom with
+        | Some funcName -> Map.tryFind funcName ctx.FuncReg
+        | None -> None
+    | ClosureTailCall (closureAtom, _) ->
         // Same as ClosureCall
-        None
+        match tryGetClosureFunc ctx closureAtom with
+        | Some funcName -> Map.tryFind funcName ctx.FuncReg
+        | None -> None
     | TupleAlloc elems ->
         // Infer element types and create TTuple
         let elemTypes =
@@ -203,28 +229,36 @@ let isBorrowingExpr (cexpr: CExpr) : bool =
     | _ -> false
 
 /// Insert reference counting operations into an AExpr
-let rec insertRC (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * VarGen =
+/// Returns (transformed expr, varGen, accumulated TempTypes)
+let rec insertRC (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * VarGen * Map<TempId, AST.Type> =
     match expr with
     | Return _ ->
-        // Nothing to do at return
-        (expr, varGen)
+        // Nothing to do at return - return current accumulated types
+        (expr, varGen, ctx.TempTypes)
 
     | If (cond, thenBranch, elseBranch) ->
         // Process both branches
-        let (thenBranch', varGen1) = insertRC ctx thenBranch varGen
-        let (elseBranch', varGen2) = insertRC ctx elseBranch varGen1
-        (If (cond, thenBranch', elseBranch'), varGen2)
+        let (thenBranch', varGen1, types1) = insertRC ctx thenBranch varGen
+        let ctx1 = { ctx with TempTypes = types1 }
+        let (elseBranch', varGen2, types2) = insertRC ctx1 elseBranch varGen1
+        (If (cond, thenBranch', elseBranch'), varGen2, types2)
 
     | Let (tempId, cexpr, body) ->
         // First, infer the type of this binding and add to context
         let maybeType = inferCExprType ctx cexpr
-        let ctx' =
-            match maybeType with
-            | Some t -> addType ctx tempId t
-            | None -> ctx
+        // Always add the type to context - use TInt64 as fallback when inference fails
+        // This ensures all TempIds are tracked even if we can't determine exact type
+        let inferredType = Option.defaultValue AST.TInt64 maybeType
+        let ctx' = addType ctx tempId inferredType
+
+        // Track closure function names for later ClosureCall type resolution
+        let ctx'' =
+            match cexpr with
+            | ClosureAlloc (funcName, _) -> addClosureFunc ctx' tempId funcName
+            | _ -> ctx'
 
         // Process the body recursively
-        let (body', varGen1) = insertRC ctx' body varGen
+        let (body', varGen1, accTypes) = insertRC ctx'' body varGen
 
         // Check if this TempId is heap-typed, not returned, and not borrowed
         // Borrowed values don't own their memory - the parent does
@@ -232,12 +266,13 @@ let rec insertRC (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * Var
         | Some t when isHeapType t && not (isTempReturned tempId body') && not (isBorrowingExpr cexpr) ->
             // Insert Dec after body completes but value isn't returned
             let (bodyWithDec, varGen2) = wrapWithDec tempId t ctx' body' varGen1
-            (Let (tempId, cexpr, bodyWithDec), varGen2)
+            (Let (tempId, cexpr, bodyWithDec), varGen2, accTypes)
         | _ ->
-            (Let (tempId, cexpr, body'), varGen1)
+            (Let (tempId, cexpr, body'), varGen1, accTypes)
 
 /// Insert RC operations into a function
-let insertRCInFunction (ctx: TypeContext) (func: Function) (varGen: VarGen) : Function * VarGen =
+/// Returns (transformed function, varGen, accumulated TempTypes)
+let insertRCInFunction (ctx: TypeContext) (func: Function) (varGen: VarGen) : Function * VarGen * Map<TempId, AST.Type> =
     // Add parameter types to context
     let paramTypes =
         match Map.tryFind func.Name ctx.FuncParams with
@@ -249,26 +284,32 @@ let insertRCInFunction (ctx: TypeContext) (func: Function) (varGen: VarGen) : Fu
         |> List.fold (fun c (tid, t) -> addType c tid t) ctx
 
     // Process function body
-    let (body', varGen') = insertRC ctx' func.Body varGen
-    ({ func with Body = body' }, varGen')
+    let (body', varGen', accTypes) = insertRC ctx' func.Body varGen
+    ({ func with Body = body' }, varGen', accTypes)
 
 /// Insert RC operations into a program
-let insertRCInProgram (result: ConversionResult) : Result<ANF.Program, string> =
+/// Returns (ANF.Program, TypeMap) where TypeMap contains all TempId -> Type mappings
+let insertRCInProgram (result: ConversionResult) : Result<ANF.Program * ANF.TypeMap, string> =
     let ctx = createContext result
     let (ANF.Program (functions, mainExpr)) = result.Program
     let varGen = VarGen 1000  // Start high to avoid conflicts
 
-    // Process all functions
-    let rec processFuncs (funcs: Function list) (vg: VarGen) (acc: Function list) : Function list * VarGen =
+    // Process all functions, accumulating types
+    let rec processFuncs (funcs: Function list) (vg: VarGen) (accFuncs: Function list) (accTypes: Map<TempId, AST.Type>) : Function list * VarGen * Map<TempId, AST.Type> =
         match funcs with
-        | [] -> (List.rev acc, vg)
+        | [] -> (List.rev accFuncs, vg, accTypes)
         | f :: rest ->
-            let (f', vg') = insertRCInFunction ctx f vg
-            processFuncs rest vg' (f' :: acc)
+            let (f', vg', types) = insertRCInFunction { ctx with TempTypes = accTypes } f vg
+            // Merge accumulated types
+            let mergedTypes = Map.fold (fun m k v -> Map.add k v m) accTypes types
+            processFuncs rest vg' (f' :: accFuncs) mergedTypes
 
-    let (functions', varGen1) = processFuncs functions varGen []
+    let (functions', varGen1, typesFromFuncs) = processFuncs functions varGen [] Map.empty
 
     // Process main expression
-    let (mainExpr', _) = insertRC ctx mainExpr varGen1
+    let (mainExpr', _, typesFromMain) = insertRC { ctx with TempTypes = typesFromFuncs } mainExpr varGen1
 
-    Ok (ANF.Program (functions', mainExpr'))
+    // Final merged TypeMap
+    let finalTypeMap = Map.fold (fun m k v -> Map.add k v m) typesFromFuncs typesFromMain
+
+    Ok (ANF.Program (functions', mainExpr'), finalTypeMap)

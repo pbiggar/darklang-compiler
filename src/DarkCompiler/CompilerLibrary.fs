@@ -165,13 +165,12 @@ let compileStdlib () : Result<StdlibResult, string> =
                 // Run RC insertion on stdlib ANF (stdlib functions need ref counting too)
                 match RefCountInsertion.insertRCInProgram anfResult with
                 | Error e -> Error e
-                | Ok anfAfterRC ->
+                | Ok (anfAfterRC, typeMap) ->
                     // Pass 2.7: Tail Call Detection
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
                     // Convert stdlib ANF to MIR (functions only, no _start)
-                    let emptyTypeMap : ANF.TypeMap = Map.empty
                     let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
-                    match ANF_to_MIR.toMIRFunctionsOnly anfAfterTCO emptyTypeMap emptyTypeReg anfResult.VariantLookup Map.empty with
+                    match ANF_to_MIR.toMIRFunctionsOnly anfAfterTCO typeMap emptyTypeReg anfResult.VariantLookup Map.empty with
                     | Error e -> Error e
                     | Ok (mirFuncs, stringPool, floatPool, variantRegistry, recordRegistry) ->
                         // Wrap in MIR.Program for LIR conversion
@@ -221,7 +220,7 @@ let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
                 // Run RC insertion on stdlib ANF
                 match RefCountInsertion.insertRCInProgram anfResult with
                 | Error e -> Error e
-                | Ok anfAfterRC ->
+                | Ok (anfAfterRC, _typeMap) ->
                     // Pass 2.7: Tail Call Detection
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
                     // Extract stdlib functions into a map for lazy lookup
@@ -350,7 +349,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                         { Binary = Array.empty
                           Success = false
                           ErrorMessage = Some $"Reference count insertion error: {err}" }
-                    | Ok anfAfterRC ->
+                    | Ok (anfAfterRC, typeMap) ->
 
                     // Show ANF after RC insertion
                     if verbosity >= 3 then
@@ -407,8 +406,6 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
 
                     // Pass 3: ANF → MIR
                     if verbosity >= 1 then println "  [3/8] ANF → MIR..."
-                    // Build typeReg from AST function definitions (for float/int parameter distinction)
-                    let emptyTypeMap : ANF.TypeMap = Map.empty
                     // Build func params from function defs (for float param handling)
                     let funcParams =
                         let (AST.Program topLevels) = transformedAst
@@ -419,7 +416,8 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                         |> Map.ofList
                     // Use funcParams for MIR conversion (float param handling)
                     // TypeReg from ConversionResult contains record type definitions for printing
-                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) emptyTypeMap funcParams programType convResultOptimized.VariantLookup convResultOptimized.TypeReg
+                    // typeMap contains TempId -> Type mappings from RC insertion
+                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) typeMap funcParams programType convResultOptimized.VariantLookup convResultOptimized.TypeReg
 
                     match mirResult with
                     | Error err ->
@@ -725,7 +723,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                         { Binary = Array.empty
                           Success = false
                           ErrorMessage = Some $"Reference count insertion error: {err}" }
-                    | Ok userAnfAfterRC ->
+                    | Ok (userAnfAfterRC, typeMap) ->
 
                     // Pass 2.7: Tail Call Detection
                     if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
@@ -746,10 +744,10 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
 
                     // Pass 3: ANF → MIR (user code only)
                     if verbosity >= 1 then println "  [3/8] ANF → MIR (user only)..."
-                    let emptyTypeMap : ANF.TypeMap = Map.empty
                     // Use FuncParams (maps function names to param types) for correct float param handling
                     // Use TypeReg from ConversionResult for record type definitions (for record printing)
-                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) emptyTypeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg
+                    // typeMap contains TempId -> Type mappings from RC insertion
+                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg
 
                     match userMirResult with
                     | Error err ->
@@ -965,7 +963,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                         { Binary = Array.empty
                           Success = false
                           ErrorMessage = Some $"Reference count insertion error: {err}" }
-                    | Ok userAnfAfterRC ->
+                    | Ok (userAnfAfterRC, typeMap) ->
 
                     // Pass 2.7: Tail Call Detection
                     if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
@@ -998,7 +996,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                         |> List.choose (fun name -> Map.tryFind name stdlib.StdlibANFFunctions)
 
                     // Compile reachable stdlib functions: ANF → MIR → LIR → RegAlloc
-                    let emptyTypeMap : ANF.TypeMap = Map.empty
+                    // Note: stdlib typeMap was discarded in lazy cache - use empty for stdlib, user typeMap for user code
                     let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
 
                     // Convert reachable stdlib to MIR (if any)
@@ -1009,7 +1007,8 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                             Ok ([], emptyStringPool, emptyFloatPool, Map.empty, Map.empty)
                         else
                             let stdlibAnfProgram = ANF.Program (reachableStdlibFuncs, ANF.Return ANF.UnitLiteral)
-                            ANF_to_MIR.toMIRFunctionsOnly stdlibAnfProgram emptyTypeMap emptyTypeReg Map.empty Map.empty
+                            // Use empty typeMap for stdlib (typeMap was discarded in lazy cache)
+                            ANF_to_MIR.toMIRFunctionsOnly stdlibAnfProgram Map.empty emptyTypeReg Map.empty Map.empty
 
                     match stdlibMirResult with
                     | Error err ->
@@ -1036,7 +1035,8 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                     // Pass 3: ANF → MIR (user code only)
                     if verbosity >= 1 then println "  [3/8] ANF → MIR (user only)..."
                     // Use FuncParams for correct float param handling, VariantLookup for enum printing, TypeReg for record printing
-                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) emptyTypeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg
+                    // typeMap contains TempId -> Type mappings from RC insertion
+                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg
                     let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(mirTime, 1)

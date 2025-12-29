@@ -524,11 +524,9 @@ let atomType (builder: CFGBuilder) (atom: ANF.Atom) : AST.Type =
             match Map.tryFind (ANF.TempId id) builder.TypeMap with
             | Some t -> t
             | None ->
-                // TODO: TypeMap is currently not populated during stdlib compilation,
-                // so we fall back to TInt64. This could hide bugs where a float variable
-                // is incorrectly treated as integer. To fix properly, TypeMap should be
-                // populated during AST_to_ANF or type checking for all variables.
-                AST.TInt64
+                // TypeMap is populated by RefCountInsertion pass with fallback to TInt64.
+                // If we reach here, a pass after RefCountInsertion created a TempId without tracking.
+                failwith $"atomType: unknown type for TempId {id} - TempId created after RefCountInsertion?"
     | ANF.FuncRef _ -> AST.TInt64  // Function addresses are pointer-sized
 
 /// Get the operand type for a binary operation (checks both operands)

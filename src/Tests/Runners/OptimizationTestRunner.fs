@@ -111,13 +111,12 @@ let getOptimizedMIR (source: string) : Result<string, string> =
                 let convResultOptimized = { convResult with Program = optimized }
                 match RefCountInsertion.insertRCInProgram convResultOptimized with
                 | Error e -> Error $"RC insertion error: {e}"
-                | Ok anfAfterRC ->
+                | Ok (anfAfterRC, typeMap) ->
                     let (ANF.Program (functions, mainExpr)) = anfAfterRC
                     let anfProgram = PrintInsertion.insertPrint functions mainExpr programType
 
                     // Convert to MIR
-                    let emptyTypeMap : ANF.TypeMap = Map.empty
-                    match ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) emptyTypeMap Map.empty programType convResultOptimized.VariantLookup convResultOptimized.TypeReg with
+                    match ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) typeMap Map.empty programType convResultOptimized.VariantLookup convResultOptimized.TypeReg with
                     | Error e -> Error $"MIR conversion error: {e}"
                     | Ok (mirProgram, _) ->
                         // SSA construction
@@ -153,13 +152,12 @@ let getOptimizedLIR (source: string) : Result<string, string> =
                 let convResultOptimized = { convResult with Program = optimized }
                 match RefCountInsertion.insertRCInProgram convResultOptimized with
                 | Error e -> Error $"RC insertion error: {e}"
-                | Ok anfAfterRC ->
+                | Ok (anfAfterRC, typeMap) ->
                     let (ANF.Program (functions, mainExpr)) = anfAfterRC
                     let anfProgram = PrintInsertion.insertPrint functions mainExpr programType
 
                     // Convert to MIR
-                    let emptyTypeMap : ANF.TypeMap = Map.empty
-                    match ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) emptyTypeMap Map.empty programType convResultOptimized.VariantLookup convResultOptimized.TypeReg with
+                    match ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) typeMap Map.empty programType convResultOptimized.VariantLookup convResultOptimized.TypeReg with
                     | Error e -> Error $"MIR conversion error: {e}"
                     | Ok (mirProgram, _) ->
                         // SSA construction and optimization
