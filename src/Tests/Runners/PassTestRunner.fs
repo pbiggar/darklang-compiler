@@ -255,6 +255,8 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- RawGetByte({prettyPrintLIRReg ptr}, {prettyPrintLIRReg byteOffset})"
     | LIR.RawSet (ptr, byteOffset, value) ->
         $"RawSet({prettyPrintLIRReg ptr}, {prettyPrintLIRReg byteOffset}, {prettyPrintLIRReg value})"
+    | LIR.RawSetByte (ptr, byteOffset, value) ->
+        $"RawSetByte({prettyPrintLIRReg ptr}, {prettyPrintLIRReg byteOffset}, {prettyPrintLIRReg value})"
     // String intrinsics
     | LIR.StringHash (dest, str) ->
         $"{prettyPrintLIRReg dest} <- StringHash({prettyPrintLIROperand str})"
@@ -425,6 +427,8 @@ let prettyPrintANFCExpr = function
         $"RawGetByte({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset})"
     | ANF.RawSet (ptr, byteOffset, value) ->
         $"RawSet({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset}, {prettyPrintANFAtom value})"
+    | ANF.RawSetByte (ptr, byteOffset, value) ->
+        $"RawSetByte({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset}, {prettyPrintANFAtom value})"
     // Float intrinsics
     | ANF.FloatSqrt atom ->
         $"FloatSqrt({prettyPrintANFAtom atom})"

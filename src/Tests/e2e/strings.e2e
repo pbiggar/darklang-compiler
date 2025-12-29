@@ -236,3 +236,44 @@ Stdlib.String.contains("hello world", "xyz") = stdout="false\n"
 Stdlib.String.contains("hello", "") = stdout="true\n"
 Stdlib.String.contains("", "") = stdout="true\n"
 Stdlib.String.contains("", "a") = stdout="false\n"
+
+// =============================================================================
+// Stdlib.String.slice Tests
+// =============================================================================
+
+// Basic slice
+Stdlib.String.slice("hello world", 0, 5) = stdout="hello\n"
+Stdlib.String.slice("hello world", 6, 5) = stdout="world\n"
+Stdlib.String.slice("hello world", 0, 11) = stdout="hello world\n"
+
+// Slice from middle
+Stdlib.String.slice("abcdef", 2, 3) = stdout="cde\n"
+
+// Empty result
+Stdlib.String.slice("hello", 0, 0) = stdout="\n"
+Stdlib.String.slice("hello", 5, 0) = stdout="\n"
+
+// Clamping behavior
+Stdlib.String.slice("hello", 0, 100) = stdout="hello\n"
+Stdlib.String.slice("hello", 10, 5) = stdout="\n"
+
+// =============================================================================
+// Stdlib.String.take and drop Tests
+// =============================================================================
+
+// take
+Stdlib.String.take("hello world", 5) = stdout="hello\n"
+Stdlib.String.take("hello", 0) = stdout="\n"
+Stdlib.String.take("hello", 100) = stdout="hello\n"
+
+// drop
+Stdlib.String.drop("hello world", 6) = stdout="world\n"
+Stdlib.String.drop("hello", 0) = stdout="hello\n"
+Stdlib.String.drop("hello", 100) = stdout="\n"
+
+// =============================================================================
+// Stdlib.String.substring Tests
+// =============================================================================
+
+Stdlib.String.substring("hello world", 0, 5) = stdout="hello\n"
+Stdlib.String.substring("hello world", 6, 11) = stdout="world\n"

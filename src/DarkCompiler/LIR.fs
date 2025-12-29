@@ -134,6 +134,7 @@ type Instr =
     | RawGet of dest:Reg * ptr:Reg * byteOffset:Reg  // Read 8 bytes at offset
     | RawGetByte of dest:Reg * ptr:Reg * byteOffset:Reg  // Read 1 byte at offset (zero-extended)
     | RawSet of ptr:Reg * byteOffset:Reg * value:Reg  // Write 8 bytes at offset
+    | RawSetByte of ptr:Reg * byteOffset:Reg * value:Reg  // Write 1 byte at offset
     // String intrinsics (for Dict with string keys)
     | StringHash of dest:Reg * str:Operand        // FNV-1a hash of string, returns Int64
     | StringEq of dest:Reg * left:Operand * right:Operand // Byte-wise string equality

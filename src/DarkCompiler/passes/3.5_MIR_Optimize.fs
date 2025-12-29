@@ -43,6 +43,7 @@ let hasSideEffects (instr: Instr) : bool =
     | RawGet _ -> false   // Pure memory read
     | RawGetByte _ -> false  // Pure memory read (byte)
     | RawSet _ -> true    // Writes to memory
+    | RawSetByte _ -> true  // Writes to memory (byte)
     | FloatSqrt _ -> false  // Pure float operation
     | FloatAbs _ -> false   // Pure float operation
     | FloatNeg _ -> false   // Pure float operation
@@ -90,6 +91,7 @@ let getInstrDest (instr: Instr) : VReg option =
     | Print _ -> None
     | RawFree _ -> None
     | RawSet _ -> None
+    | RawSetByte _ -> None
     | RefCountIncString _ -> None
     | RefCountDecString _ -> None
     | RandomInt64 dest -> Some dest
@@ -128,6 +130,7 @@ let getInstrUses (instr: Instr) : Set<VReg> =
     | RawGet (_, ptr, byteOffset) -> Set.union (fromOperand ptr) (fromOperand byteOffset)
     | RawGetByte (_, ptr, byteOffset) -> Set.union (fromOperand ptr) (fromOperand byteOffset)
     | RawSet (ptr, byteOffset, value) -> Set.unionMany [fromOperand ptr; fromOperand byteOffset; fromOperand value]
+    | RawSetByte (ptr, byteOffset, value) -> Set.unionMany [fromOperand ptr; fromOperand byteOffset; fromOperand value]
     | FloatSqrt (_, src) -> fromOperand src
     | FloatAbs (_, src) -> fromOperand src
     | FloatNeg (_, src) -> fromOperand src
@@ -295,6 +298,7 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | RawGet (dest, ptr, byteOffset) -> RawGet (dest, p ptr, p byteOffset)
     | RawGetByte (dest, ptr, byteOffset) -> RawGetByte (dest, p ptr, p byteOffset)
     | RawSet (ptr, byteOffset, value) -> RawSet (p ptr, p byteOffset, p value)
+    | RawSetByte (ptr, byteOffset, value) -> RawSetByte (p ptr, p byteOffset, p value)
     | FloatSqrt (dest, src) -> FloatSqrt (dest, p src)
     | FloatAbs (dest, src) -> FloatAbs (dest, p src)
     | FloatNeg (dest, src) -> FloatNeg (dest, p src)

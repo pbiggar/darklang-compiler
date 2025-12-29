@@ -2023,6 +2023,25 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         ARM64.STR (valueReg, tempReg, 0s)            // [temp] = value
                     ])))
 
+    | LIR.RawSetByte (ptr, byteOffset, value) ->
+        // Store 1 byte at ptr + byteOffset
+        // IMPORTANT: If any input reg is X15, use X14 as temp instead
+        lirRegToARM64Reg ptr
+        |> Result.bind (fun ptrReg ->
+            lirRegToARM64Reg byteOffset
+            |> Result.bind (fun offsetReg ->
+                lirRegToARM64Reg value
+                |> Result.map (fun valueReg ->
+                    let tempReg =
+                        if ptrReg = ARM64.X15 || offsetReg = ARM64.X15 || valueReg = ARM64.X15 then
+                            ARM64.X14
+                        else
+                            ARM64.X15
+                    [
+                        ARM64.ADD_reg (tempReg, ptrReg, offsetReg)   // temp = ptr + offset
+                        ARM64.STRB_reg (valueReg, tempReg)           // [temp] = value (byte)
+                    ])))
+
     | LIR.StringHash (dest, str) ->
         // FNV-1a hash of string
         // Heap string layout: [length:8][data:N][refcount:8]

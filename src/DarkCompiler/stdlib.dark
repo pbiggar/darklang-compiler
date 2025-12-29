@@ -427,7 +427,52 @@ def Stdlib.String.indexOf(s: String, search: String) : Int64 =
 def Stdlib.String.contains(s: String, search: String) : Bool =
     Stdlib.String.indexOf(s, search) >= 0
 
-// TODO: More String functions: slice, toUppercase, toLowercase, trim, etc.
+// Internal: Copy n bytes from source string to destination raw pointer
+def Stdlib.String.__copyBytesToPtr(src: String, srcStart: Int64, dest: RawPtr, destStart: Int64, count: Int64) : Unit =
+    if count <= 0 then
+        ()
+    else
+        let byte = Stdlib.String.getByteAt(src, srcStart) in
+        let _ = __raw_set_byte(dest, destStart, byte) in
+        Stdlib.String.__copyBytesToPtr(src, srcStart + 1, dest, destStart + 1, count - 1)
+
+// Extract substring from start index with given length
+// String format: [length:8 bytes][data:N bytes][refcount:8 bytes]
+def Stdlib.String.slice(s: String, start: Int64, len: Int64) : String =
+    let sLen = Stdlib.String.length(s) in
+    // Clamp start and len to valid range
+    let actualStart = if start < 0 then 0 else if start > sLen then sLen else start in
+    let maxLen = sLen - actualStart in
+    let actualLen = if len < 0 then 0 else if len > maxLen then maxLen else len in
+    if actualLen == 0 then
+        ""
+    else
+        // Allocate: 8 (length) + actualLen (data) + 8 (refcount) = 16 + actualLen
+        let totalSize = 16 + actualLen in
+        let ptr = __raw_alloc(totalSize) in
+        // Write length at offset 0
+        let _ = __raw_set<Int64>(ptr, 0, actualLen) in
+        // Copy bytes from source (offset 8 + actualStart) to dest (offset 8)
+        let _ = Stdlib.String.__copyBytesToPtr(s, actualStart, ptr, 8, actualLen) in
+        // Write refcount = 1 at offset (8 + actualLen)
+        let _ = __raw_set<Int64>(ptr, 8 + actualLen, 1) in
+        // Convert raw pointer to string
+        __int64_to_string(__rawptr_to_int64(ptr))
+
+// Get substring from start to end (excluding end)
+def Stdlib.String.substring(s: String, start: Int64, end_: Int64) : String =
+    Stdlib.String.slice(s, start, end_ - start)
+
+// Get first n characters
+def Stdlib.String.take(s: String, n: Int64) : String =
+    Stdlib.String.slice(s, 0, n)
+
+// Drop first n characters
+def Stdlib.String.drop(s: String, n: Int64) : String =
+    let sLen = Stdlib.String.length(s) in
+    Stdlib.String.slice(s, n, sLen - n)
+
+// TODO: More String functions: toUppercase, toLowercase, trim, replace, split, etc.
 
 // =============================================================================
 // Stdlib.Dict - Immutable Dictionary using HAMT (Hash Array Mapped Trie)

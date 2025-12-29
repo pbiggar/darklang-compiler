@@ -101,6 +101,7 @@ type CExpr =
     | RawGet of ptr:Atom * byteOffset:Atom    // Read 8 bytes at offset, returns Int64
     | RawGetByte of ptr:Atom * byteOffset:Atom  // Read 1 byte at offset, returns Int64 (zero-extended)
     | RawSet of ptr:Atom * byteOffset:Atom * value:Atom  // Write 8 bytes at offset
+    | RawSetByte of ptr:Atom * byteOffset:Atom * value:Atom  // Write 1 byte at offset
     // String intrinsics (for Dict with string keys)
     | StringHash of str:Atom                  // FNV-1a hash of string, returns Int64
     | StringEq of left:Atom * right:Atom      // Byte-wise string equality, returns Bool

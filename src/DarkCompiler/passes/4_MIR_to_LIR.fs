@@ -877,6 +877,19 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         | Ok (valueInstrs, valueReg) ->
             Ok (ptrInstrs @ offsetInstrs @ valueInstrs @ [LIR.RawSet (ptrReg, offsetReg, valueReg)])
 
+    | MIR.RawSetByte (ptr, byteOffset, value) ->
+        // All three operands must be in registers
+        match ensureInRegister ptr (LIR.Virtual 1000) with
+        | Error err -> Error err
+        | Ok (ptrInstrs, ptrReg) ->
+        match ensureInRegister byteOffset (LIR.Virtual 1001) with
+        | Error err -> Error err
+        | Ok (offsetInstrs, offsetReg) ->
+        match ensureInRegister value (LIR.Virtual 1002) with
+        | Error err -> Error err
+        | Ok (valueInstrs, valueReg) ->
+            Ok (ptrInstrs @ offsetInstrs @ valueInstrs @ [LIR.RawSetByte (ptrReg, offsetReg, valueReg)])
+
     | MIR.FloatSqrt (dest, src) ->
         let lirFDest = vregToLIRFReg dest
         match ensureInFRegister src (LIR.FVirtual 1000) with
@@ -1166,7 +1179,7 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.FNeg _ | LIR.FAbs _ | LIR.FSqrt _ | LIR.FCmp _ | LIR.IntToFloat _ | LIR.FloatToInt _
     | LIR.HeapAlloc _ | LIR.HeapLoad _ | LIR.RefCountInc _ | LIR.RefCountDec _
     | LIR.PrintHeapString _ | LIR.LoadFuncAddr _ | LIR.RawAlloc _ | LIR.RawFree _
-    | LIR.RawGet _ | LIR.RawGetByte _ | LIR.RawSet _ | LIR.FArgMoves _ -> instr
+    | LIR.RawGet _ | LIR.RawGetByte _ | LIR.RawSet _ | LIR.RawSetByte _ | LIR.FArgMoves _ -> instr
 
 /// Offset pool references in an LIR basic block
 let private offsetLIRBlock (strOffset: int) (fltOffset: int) (block: LIR.BasicBlock) : LIR.BasicBlock =

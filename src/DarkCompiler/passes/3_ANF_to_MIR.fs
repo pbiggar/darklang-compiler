@@ -123,6 +123,7 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.RawGet (ptr, offset) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom offset)
     | ANF.RawGetByte (ptr, offset) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom offset)
     | ANF.RawSet (ptr, offset, value) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
+    | ANF.RawSetByte (ptr, offset, value) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
     | ANF.FloatSqrt atom -> maxTempIdInAtom atom
     | ANF.FloatAbs atom -> maxTempIdInAtom atom
     | ANF.FloatNeg atom -> maxTempIdInAtom atom
@@ -211,6 +212,7 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.RawGet (ptr, offset) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset
     | ANF.RawGetByte (ptr, offset) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset
     | ANF.RawSet (ptr, offset, value) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset @ collectStringsFromAtom value
+    | ANF.RawSetByte (ptr, offset, value) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset @ collectStringsFromAtom value
     | ANF.FloatSqrt atom -> collectStringsFromAtom atom
     | ANF.FloatAbs atom -> collectStringsFromAtom atom
     | ANF.FloatNeg atom -> collectStringsFromAtom atom
@@ -260,6 +262,7 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
     | ANF.RawGet (ptr, offset) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset
     | ANF.RawGetByte (ptr, offset) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset
     | ANF.RawSet (ptr, offset, value) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset @ collectFloatsFromAtom value
+    | ANF.RawSetByte (ptr, offset, value) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset @ collectFloatsFromAtom value
     | ANF.FloatSqrt atom -> collectFloatsFromAtom atom
     | ANF.FloatAbs atom -> collectFloatsFromAtom atom
     | ANF.FloatNeg atom -> collectFloatsFromAtom atom
@@ -756,6 +759,14 @@ let rec convertExpr
                             atomToOperand builder valueAtom
                             |> Result.map (fun valueOp ->
                                 [MIR.RawSet (ptrOp, offsetOp, valueOp)])))
+                | ANF.RawSetByte (ptrAtom, offsetAtom, valueAtom) ->
+                    atomToOperand builder ptrAtom
+                    |> Result.bind (fun ptrOp ->
+                        atomToOperand builder offsetAtom
+                        |> Result.bind (fun offsetOp ->
+                            atomToOperand builder valueAtom
+                            |> Result.map (fun valueOp ->
+                                [MIR.RawSetByte (ptrOp, offsetOp, valueOp)])))
                 | ANF.FloatSqrt atom ->
                     destType := AST.TFloat64
                     atomToOperand builder atom
@@ -1154,6 +1165,14 @@ and convertExprToOperand
                             atomToOperand builder valueAtom
                             |> Result.map (fun valueOp ->
                                 [MIR.RawSet (ptrOp, offsetOp, valueOp)])))
+                | ANF.RawSetByte (ptrAtom, offsetAtom, valueAtom) ->
+                    atomToOperand builder ptrAtom
+                    |> Result.bind (fun ptrOp ->
+                        atomToOperand builder offsetAtom
+                        |> Result.bind (fun offsetOp ->
+                            atomToOperand builder valueAtom
+                            |> Result.map (fun valueOp ->
+                                [MIR.RawSetByte (ptrOp, offsetOp, valueOp)])))
                 | ANF.FloatSqrt atom ->
                     destType := AST.TFloat64
                     atomToOperand builder atom
@@ -1563,6 +1582,7 @@ let private offsetInstr (strOffset: int) (fltOffset: int) (instr: MIR.Instr) : M
     | MIR.RawGet (dest, ptr, offset) -> MIR.RawGet (dest, offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset offset)
     | MIR.RawGetByte (dest, ptr, offset) -> MIR.RawGetByte (dest, offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset offset)
     | MIR.RawSet (ptr, offset, value) -> MIR.RawSet (offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset offset, offsetOperand strOffset fltOffset value)
+    | MIR.RawSetByte (ptr, offset, value) -> MIR.RawSetByte (offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset offset, offsetOperand strOffset fltOffset value)
     | MIR.StringHash (dest, str) -> MIR.StringHash (dest, offsetOperand strOffset fltOffset str)
     | MIR.StringEq (dest, left, right) -> MIR.StringEq (dest, offsetOperand strOffset fltOffset left, offsetOperand strOffset fltOffset right)
     | MIR.RefCountIncString str -> MIR.RefCountIncString (offsetOperand strOffset fltOffset str)

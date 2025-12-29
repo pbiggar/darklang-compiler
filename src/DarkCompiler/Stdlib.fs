@@ -111,6 +111,8 @@ let rawMemoryIntrinsics : ModuleFunc list = [
     { Name = "__raw_set"; TypeParams = ["v"]; ParamTypes = [TRawPtr; TInt64; TVar "v"]; ReturnType = TUnit }
     // __raw_get_byte : (RawPtr, Int64) -> Int64 - read 1 byte at offset, zero-extended
     { Name = "__raw_get_byte"; TypeParams = []; ParamTypes = [TRawPtr; TInt64]; ReturnType = TInt64 }
+    // __raw_set_byte : (RawPtr, Int64, Int64) -> Unit - write 1 byte at offset
+    { Name = "__raw_set_byte"; TypeParams = []; ParamTypes = [TRawPtr; TInt64; TInt64]; ReturnType = TUnit }
     // __rawptr_to_int64 : (RawPtr) -> Int64 - cast pointer to int (for tagging)
     { Name = "__rawptr_to_int64"; TypeParams = []; ParamTypes = [TRawPtr]; ReturnType = TInt64 }
     // __int64_to_rawptr : (Int64) -> RawPtr - cast int to pointer (for memory ops)

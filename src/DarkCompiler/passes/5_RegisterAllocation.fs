@@ -163,6 +163,11 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         let o = regToVReg byteOffset |> Option.toList
         let v = regToVReg value |> Option.toList
         Set.ofList (p @ o @ v)
+    | LIR.RawSetByte (ptr, byteOffset, value) ->
+        let p = regToVReg ptr |> Option.toList
+        let o = regToVReg byteOffset |> Option.toList
+        let v = regToVReg value |> Option.toList
+        Set.ofList (p @ o @ v)
     // IntToFloat uses an integer source register
     | LIR.IntToFloat (_, src) ->
         regToVReg src |> Option.toList |> Set.ofList
@@ -213,6 +218,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.RawGetByte (dest, _, _) -> regToVReg dest
     | LIR.RawFree _ -> None
     | LIR.RawSet _ -> None
+    | LIR.RawSetByte _ -> None
     // FloatToInt defines an integer destination register
     | LIR.FloatToInt (dest, _) -> regToVReg dest
     | LIR.StringHash (dest, _) -> regToVReg dest
@@ -991,6 +997,12 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
         let (offsetReg, offsetLoads) = loadSpilled mapping byteOffset LIR.X13
         let (valueReg, valueLoads) = loadSpilled mapping value LIR.X14
         ptrLoads @ offsetLoads @ valueLoads @ [LIR.RawSet (ptrReg, offsetReg, valueReg)]
+
+    | LIR.RawSetByte (ptr, byteOffset, value) ->
+        let (ptrReg, ptrLoads) = loadSpilled mapping ptr LIR.X12
+        let (offsetReg, offsetLoads) = loadSpilled mapping byteOffset LIR.X13
+        let (valueReg, valueLoads) = loadSpilled mapping value LIR.X14
+        ptrLoads @ offsetLoads @ valueLoads @ [LIR.RawSetByte (ptrReg, offsetReg, valueReg)]
 
     | LIR.StringHash (dest, str) ->
         let (destReg, destAlloc) = applyToReg mapping dest

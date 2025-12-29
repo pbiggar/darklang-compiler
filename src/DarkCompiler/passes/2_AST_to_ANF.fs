@@ -89,6 +89,10 @@ let tryRawMemoryIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr o
     | name, [ptrAtom; offsetAtom] when name = "__raw_get" || name.StartsWith("__raw_get_") ->
         // Generic __raw_get<v> monomorphizes to __raw_get_i64, __raw_get_str, etc.
         Some (ANF.RawGet (ptrAtom, offsetAtom))
+    | "__raw_set_byte", [ptrAtom; offsetAtom; valueAtom] ->
+        // Write single byte at offset
+        // IMPORTANT: Must come before the generic __raw_set_* pattern
+        Some (ANF.RawSetByte (ptrAtom, offsetAtom, valueAtom))
     | name, [ptrAtom; offsetAtom; valueAtom] when name = "__raw_set" || name.StartsWith("__raw_set_") ->
         // Generic __raw_set<v> monomorphizes to __raw_set_i64, __raw_set_str, etc.
         Some (ANF.RawSet (ptrAtom, offsetAtom, valueAtom))
