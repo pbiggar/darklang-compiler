@@ -332,6 +332,25 @@ def Stdlib.List.drop<a>(list: List<a>, n: Int64) : List<a> =
     | [] -> []
     | [h, ...t] -> Stdlib.List.drop<a>(t, n - 1)
 
+// Check if all elements satisfy a predicate
+def Stdlib.List.forAll<a>(list: List<a>, fn: (a) -> Bool) : Bool =
+    match list with
+    | [] -> true
+    | [h, ...t] -> fn(h) && Stdlib.List.forAll<a>(t, fn)
+
+// Check if any element satisfies a predicate
+def Stdlib.List.exists<a>(list: List<a>, fn: (a) -> Bool) : Bool =
+    match list with
+    | [] -> false
+    | [h, ...t] -> fn(h) || Stdlib.List.exists<a>(t, fn)
+
+// TODO: List.zip is disabled due to compiler bug with tuple recursion
+// def Stdlib.List.zip<a, b>(list1: List<a>, list2: List<b>) : List<(a, b)> =
+//     match (list1, list2) with
+//     | ([], _) -> []
+//     | (_, []) -> []
+//     | ([h1, ...t1], [h2, ...t2]) -> [(h1, h2), ...Stdlib.List.zip<a, b>(t1, t2)]
+
 // Stdlib.Path - Path operations
 
 // Combine two path segments
@@ -802,6 +821,19 @@ def Stdlib.String.equals(s1: String, s2: String) : Bool =
     let len2 = Stdlib.String.length(s2) in
     if len1 != len2 then false
     else Stdlib.String.__compareBytes(s1, 0, s2, 0, len1)
+
+// Check if byte is an ASCII digit (0-9)
+def Stdlib.String.__isDigit(b: Int64) : Bool =
+    b >= 48 && b <= 57
+
+// Convert digit byte to its numeric value
+def Stdlib.String.__digitValue(b: Int64) : Int64 =
+    b - 48
+
+// TODO: parseInt and parseFloat are disabled due to compiler bugs:
+// 1. Tail calls with String parameters cause segfaults
+// 2. String parameters passed to stdlib functions lose their value
+// Will be re-enabled when these compiler bugs are fixed
 
 // =============================================================================
 // Stdlib.Dict - Immutable Dictionary using HAMT (Hash Array Mapped Trie)

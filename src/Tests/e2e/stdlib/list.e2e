@@ -122,9 +122,25 @@ Stdlib.Option.withDefault<Int64>(Stdlib.List.findFirst<Int64>([1, 2, 3, 4], (x: 
 Stdlib.Option.isNone<Int64>(Stdlib.List.findFirst<Int64>([1, 2, 3], (x: Int64) => x > 10)) = stdout="true\n"
 
 // ===================================================================
-// NOTE: Functions not yet implemented
+// Stdlib.List.forAll - Check if all elements satisfy predicate
+// ===================================================================
+
+Stdlib.List.forAll<Int64>([1, 2, 3], (x: Int64) => x > 0) = stdout="true\n"
+Stdlib.List.forAll<Int64>([1, 2, 3], (x: Int64) => x > 2) = stdout="false\n"
+Stdlib.List.forAll<Int64>([], (x: Int64) => x > 0) = stdout="true\n"
+
+// ===================================================================
+// Stdlib.List.exists - Check if any element satisfies predicate
+// ===================================================================
+
+Stdlib.List.exists<Int64>([1, 2, 3], (x: Int64) => x > 2) = stdout="true\n"
+Stdlib.List.exists<Int64>([1, 2, 3], (x: Int64) => x > 10) = stdout="false\n"
+Stdlib.List.exists<Int64>([], (x: Int64) => x > 0) = stdout="false\n"
+
+// ===================================================================
+// NOTE: Functions not yet implemented or disabled
 // ===================================================================
 
 // Stdlib.List.last - not yet implemented
 // Stdlib.List.range - not yet implemented
-// Stdlib.List.all/any - not yet implemented
+// Stdlib.List.zip - disabled due to tuple recursion bug
