@@ -721,6 +721,90 @@ def Stdlib.String.graphemeLength(s: String) : Int64 =
     Stdlib.List.length<String>(Stdlib.String.toGraphemes(s))
 
 // =============================================================================
+// High-Level String API
+// =============================================================================
+
+// Repeat a string n times
+def Stdlib.String.repeat(s: String, n: Int64) : String =
+    if n <= 0 then ""
+    else if n == 1 then s
+    else s ++ Stdlib.String.repeat(s, n - 1)
+
+// Join a list of strings with a separator
+def Stdlib.String.join(strs: List<String>, sep: String) : String =
+    match strs with
+    | [] -> ""
+    | [only] -> only
+    | [first, ...rest] -> first ++ sep ++ Stdlib.String.join(rest, sep)
+
+// Check if byte is ASCII whitespace (space, tab, newline, carriage return)
+def Stdlib.String.__isWhitespace(b: Int64) : Bool =
+    b == 32 || b == 9 || b == 10 || b == 13
+
+// Trim leading whitespace
+def Stdlib.String.trimStart(s: String) : String =
+    let len = Stdlib.String.length(s) in
+    Stdlib.String.__trimStartHelper(s, 0, len)
+
+def Stdlib.String.__trimStartHelper(s: String, i: Int64, len: Int64) : String =
+    if i >= len then ""
+    else if Stdlib.String.__isWhitespace(Stdlib.String.getByteAt(s, i)) then
+        Stdlib.String.__trimStartHelper(s, i + 1, len)
+    else
+        Stdlib.String.drop(s, i)
+
+// Trim trailing whitespace
+def Stdlib.String.trimEnd(s: String) : String =
+    let len = Stdlib.String.length(s) in
+    Stdlib.String.__trimEndHelper(s, len - 1)
+
+def Stdlib.String.__trimEndHelper(s: String, i: Int64) : String =
+    if i < 0 then ""
+    else if Stdlib.String.__isWhitespace(Stdlib.String.getByteAt(s, i)) then
+        Stdlib.String.__trimEndHelper(s, i - 1)
+    else
+        Stdlib.String.take(s, i + 1)
+
+// Trim both leading and trailing whitespace
+def Stdlib.String.trim(s: String) : String =
+    Stdlib.String.trimEnd(Stdlib.String.trimStart(s))
+
+// Split string by delimiter (simple byte-based)
+def Stdlib.String.split(s: String, delim: String) : List<String> =
+    Stdlib.String.__splitHelper(s, delim, 0, [])
+
+def Stdlib.String.__splitHelper(s: String, delim: String, start: Int64, acc: List<String>) : List<String> =
+    let sLen = Stdlib.String.length(s) in
+    let delimLen = Stdlib.String.length(delim) in
+    if start > sLen then
+        Stdlib.List.reverse<String>(acc)
+    else
+        let idx = Stdlib.String.__findFrom(s, delim, start) in
+        if idx < 0 then
+            // No more delimiters - add rest of string
+            Stdlib.List.reverse<String>([Stdlib.String.drop(s, start), ...acc])
+        else
+            // Found delimiter - add segment and continue
+            let segment = Stdlib.String.substring(s, start, idx) in
+            Stdlib.String.__splitHelper(s, delim, idx + delimLen, [segment, ...acc])
+
+// Replace all occurrences of old with new
+def Stdlib.String.replace(s: String, old: String, new: String) : String =
+    Stdlib.String.join(Stdlib.String.split(s, old), new)
+
+// Reverse a string (byte-based, works for ASCII)
+def Stdlib.String.reverse(s: String) : String =
+    let cps = Stdlib.String.toCodepoints(s) in
+    Stdlib.String.fromCodepoints(Stdlib.List.reverse<Int64>(cps))
+
+// Check if string equals another (byte comparison)
+def Stdlib.String.equals(s1: String, s2: String) : Bool =
+    let len1 = Stdlib.String.length(s1) in
+    let len2 = Stdlib.String.length(s2) in
+    if len1 != len2 then false
+    else Stdlib.String.__compareBytes(s1, 0, s2, 0, len1)
+
+// =============================================================================
 // Stdlib.Dict - Immutable Dictionary using HAMT (Hash Array Mapped Trie)
 // =============================================================================
 
