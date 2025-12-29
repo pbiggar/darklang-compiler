@@ -1,16 +1,22 @@
 // 8_Binary_Generation_ELF.fs - ELF Binary Generation (Pass 8, Linux variant)
 //
 // Generates a complete ELF executable from ARM64 machine code for Linux.
+// This is a direct binary generator - no assembler or linker needed.
 //
-// Binary generation algorithm:
-// - Converts machine code (uint32 list) to byte array
-// - Calculates file offsets and memory addresses for segments
-// - Creates ELF64 header with ARM64 architecture
-// - Creates PT_LOAD program header for executable code segment
-// - Serializes all structures to little-endian bytes
-// - Writes byte array to file with executable permissions
+// File structure:
+//   [ELF Header]         - Magic (0x7F 'ELF'), architecture, entry point
+//   [Program Header]     - Describes loadable segment (PT_LOAD)
+//   [Machine Code]       - ARM64 instructions
+//   [Constant Data]      - Float pool + string pool (8-byte aligned)
 //
-// No code signing needed on Linux.
+// Memory layout:
+//   - Base address: 0x400000 (traditional ELF user-space address)
+//   - Single PT_LOAD segment: headers + code + data
+//   - Flags: PF_R | PF_X (readable and executable)
+//
+// No code signing needed on Linux (unlike macOS).
+//
+// See docs/features/binary-generation.md for detailed documentation.
 
 module Binary_Generation_ELF
 

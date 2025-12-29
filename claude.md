@@ -109,6 +109,12 @@ Common filter patterns: tuple, record, list, string, float, closure, match, adt,
 | Understand architecture decisions | `docs/architecture.md` |
 | Handle errors properly | `docs/result-patterns.md` |
 | See design rationale | `docs/design-decisions.md` |
+| Understand generics/monomorphization | `docs/features/generics.md` |
+| Understand memory management | `docs/features/reference-counting.md` |
+| Understand tail call optimization | `docs/features/tail-call-optimization.md` |
+| Understand closures/lambda lifting | `docs/features/closures.md` |
+| Understand register allocation | `docs/features/register-allocation.md` |
+| Understand binary generation | `docs/features/binary-generation.md` |
 
 ## Key Files
 

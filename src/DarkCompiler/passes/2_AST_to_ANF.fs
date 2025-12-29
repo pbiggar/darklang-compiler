@@ -219,6 +219,27 @@ let typeEnvFromVarEnv (varEnv: VarEnv) : Map<string, AST.Type> =
 // ============================================================================
 // Monomorphization Support for Generic Functions
 // ============================================================================
+//
+// The Dark compiler uses monomorphization to handle generics - each generic
+// function instantiation becomes a separate specialized function with a
+// mangled name (e.g., identity<Int64> → identity_i64).
+//
+// Algorithm:
+// 1. Collect all generic function definitions (functions with TypeParams)
+// 2. Scan for TypeApp expressions (calls to generic functions with type args)
+// 3. For each unique (funcName, [typeArgs]) pair:
+//    - Substitute type parameters with concrete types in the function body
+//    - Generate a specialized function with mangled name
+// 4. Replace all TypeApp calls with regular Calls to mangled names
+// 5. Iterate until fixed-point (new specializations may contain more TypeApps)
+//
+// Key design decisions:
+// - No runtime type info: all types resolved at compile time
+// - Name mangling encodes types: identity_i64, swap_str_bool
+// - Iterative: handles nested generics like List<Option<T>>
+//
+// See docs/features/generics.md for detailed documentation.
+// ============================================================================
 
 /// Generic function registry - maps generic function names to their definitions
 type GenericFuncDefs = Map<string, AST.FunctionDef>
@@ -672,7 +693,31 @@ let inlineLambdasInProgram (program: AST.Program) : AST.Program =
     AST.Program topLevels'
 
 // ============================================================================
-// Lambda Lifting: Convert non-capturing lambdas to top-level functions
+// Lambda Lifting: Convert Lambdas to Top-Level Functions with Closures
+// ============================================================================
+//
+// Lambda lifting transforms nested lambda expressions into top-level functions.
+// The process handles both capturing and non-capturing lambdas uniformly.
+//
+// Algorithm:
+// 1. Identify lambdas in argument positions (function calls, let bindings)
+// 2. Collect free variables (captures) from each lambda body
+// 3. Generate a lifted function with signature: (closure_tuple, original_params...) -> result
+// 4. Replace the lambda with a ClosureAlloc expression containing the function and captures
+//
+// Closure representation at runtime:
+//   [func_ptr, cap1, cap2, ...]  -- heap-allocated tuple
+//
+// The lifted function extracts captures from the closure tuple:
+//   let __closure_N(__closure, x, y) =
+//       let cap1 = __closure.1
+//       let cap2 = __closure.2
+//       in <original body with captures replaced>
+//
+// All function values use closures for uniform calling convention, even non-capturing
+// lambdas and function references. This simplifies higher-order function support.
+//
+// See docs/features/closures.md for detailed documentation.
 // ============================================================================
 
 /// State for lambda lifting - tracks generated functions and counter

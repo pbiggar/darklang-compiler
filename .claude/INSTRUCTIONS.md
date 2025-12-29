@@ -19,6 +19,17 @@ This is the Darklang compiler, written in F# with the intention to eventually tr
 | Result handling patterns | `docs/result-patterns.md` |
 | Design decisions | `docs/design-decisions.md` |
 
+## Feature Documentation
+
+| Feature | File |
+|---------|------|
+| Generics & monomorphization | `docs/features/generics.md` |
+| Reference counting memory | `docs/features/reference-counting.md` |
+| Tail call optimization | `docs/features/tail-call-optimization.md` |
+| Closures & lambda lifting | `docs/features/closures.md` |
+| Register allocation | `docs/features/register-allocation.md` |
+| Binary generation (Mach-O/ELF) | `docs/features/binary-generation.md` |
+
 ## Critical Conventions
 
 1. **No exceptions** - Use `Result<T, E>` for all error handling

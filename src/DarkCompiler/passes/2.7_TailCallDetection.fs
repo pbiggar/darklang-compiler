@@ -12,6 +12,12 @@
 // This runs AFTER RefCountInsertion, so RefCountDec operations are already
 // inserted. For safety in V1, we only optimize calls that are immediately
 // followed by Return (no intervening RefCountDec).
+//
+// CURRENT STATUS: TCO is DISABLED due to parallel move resolution bugs.
+// The detectTailCallsInProgram function returns the program unchanged.
+// See git commits eb7cf84, 9dcb1f4, 9446a3d for bug history.
+//
+// See docs/features/tail-call-optimization.md for detailed documentation.
 
 module TailCallDetection
 

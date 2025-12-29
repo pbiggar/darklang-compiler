@@ -1,17 +1,29 @@
 // 8_Binary_Generation_MachO.fs - Mach-O Binary Generation (Pass 8, macOS variant)
 //
 // Generates a complete Mach-O executable from ARM64 machine code for macOS.
+// This is a direct binary generator - no assembler or linker needed.
 //
-// Binary generation algorithm:
-// - Converts machine code (uint32 list) to byte array
-// - Calculates file offsets and VM addresses for segments
-// - Creates Mach-O header with ARM64 CPU type
-// - Creates __PAGEZERO segment (4GB unmapped memory)
-// - Creates __TEXT segment with __text section containing code
-// - Creates LC_MAIN load command specifying entry point
-// - Serializes all structures to little-endian bytes
-// - Writes byte array to file with executable permissions
-// - Code signs the binary (required for macOS)
+// File structure:
+//   [Mach Header]        - Magic, CPU type, flags
+//   [Load Commands]      - Describe segments, entry point, libraries
+//   [Padding]            - Space for codesign to add LC_CODE_SIGNATURE
+//   [__text section]     - Machine code
+//   [__const section]    - Float pool + string pool (8-byte aligned)
+//
+// Load commands created:
+//   - LC_SEGMENT_64 __PAGEZERO: 4GB unmapped for null pointer protection
+//   - LC_SEGMENT_64 __TEXT: Code and constant data
+//   - LC_SEGMENT_64 __LINKEDIT: Symbol tables (empty)
+//   - LC_DYLINKER: Path to /usr/lib/dyld
+//   - LC_LOAD_DYLIB: libSystem.B.dylib reference
+//   - LC_SYMTAB/LC_DYSYMTAB: Symbol tables (empty but required)
+//   - LC_UUID: Unique binary identifier
+//   - LC_BUILD_VERSION: macOS version requirement
+//   - LC_MAIN: Entry point offset into __TEXT
+//
+// Code signing: Required for macOS execution, done via `codesign -s -` (ad-hoc).
+//
+// See docs/features/binary-generation.md for detailed documentation.
 
 module Binary_Generation_MachO
 

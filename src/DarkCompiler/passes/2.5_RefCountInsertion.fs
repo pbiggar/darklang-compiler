@@ -10,6 +10,11 @@
 //
 // The pass uses type inference from the conversion result to determine
 // which TempIds hold heap-allocated values.
+//
+// Heap types (reference counted): Tuples, Records, Sum types, Lists, Dicts, Strings
+// Stack types (NOT RC'd): Integers, Booleans, Float64, RawPtr
+//
+// See docs/features/reference-counting.md for detailed documentation.
 
 module RefCountInsertion
 

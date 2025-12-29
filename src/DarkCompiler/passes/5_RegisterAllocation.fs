@@ -8,9 +8,10 @@
 // 3. Use linear scan algorithm to allocate registers
 // 4. Spill to stack when registers are exhausted
 //
-// Registers:
+// General-Purpose Registers:
 // - X0: reserved for return values
-// - X1-X10: caller-saved (preferred for allocation)
+// - X1-X8: caller-saved (preferred for allocation)
+// - X9-X10: excluded (used by StringHash/StringEq internally)
 // - X11-X13: reserved as scratch registers for spill code
 // - X19-X26: callee-saved (used when caller-saved exhausted)
 // - X27: reserved for free list base pointer
@@ -18,7 +19,14 @@
 // - X29: frame pointer
 // - X30: link register
 //
-// Callee-saved registers (X19-X26) are saved/restored in function prologue/epilogue.
+// Float Registers:
+// - D0: float return value
+// - D0-D7: caller-saved (saved around calls when live)
+// - D8-D15: callee-saved
+//
+// Callee-saved registers (X19-X26, D8-D15) are saved/restored in prologue/epilogue.
+//
+// See docs/features/register-allocation.md for detailed documentation.
 
 module RegisterAllocation
 
