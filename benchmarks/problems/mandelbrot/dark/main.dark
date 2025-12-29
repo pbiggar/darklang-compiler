@@ -2,21 +2,50 @@
 // Generates a Mandelbrot set and counts points in the set
 // From: Computer Language Benchmarks Game
 //
-// STATUS: BLOCKED
-// There's a register allocation bug when computing newZr and newZi
-// in the same let binding sequence. The zr and zi values get corrupted
-// when computing the second value.
-//
 // This benchmark tests:
 // - Floating point arithmetic
 // - Nested loops
-// - Complex number simulation with tuples
+// - Complex number simulation
 // - Iteration limits
 
-// TODO: Implement once the float register allocation bug is fixed
-// The bug: In a sequence like:
-//   let newZr = zr * zr - zi * zi + cr in
-//   let newZi = 2.0 * zr * zi + ci in
-// The zr value gets corrupted when computing newZi
+// Check if point (cr, ci) is in the Mandelbrot set
+// Returns 1 if point escapes within maxIter iterations, 0 otherwise
+def iterate(cr: Float, ci: Float, zr: Float, zi: Float, iter: Int64, maxIter: Int64) : Int64 =
+    if iter >= maxIter then
+        0  // Point is in the set
+    else
+        let zr2 = zr * zr in
+        let zi2 = zi * zi in
+        if zr2 + zi2 > 4.0 then
+            1  // Point escaped
+        else
+            // z = z^2 + c
+            let newZr = zr2 - zi2 + cr in
+            let newZi = 2.0 * zr * zi + ci in
+            iterate(cr, ci, newZr, newZi, iter + 1, maxIter)
 
-0
+// Count escaped points in a row from x=startX to x=endX-1
+def countRow(y: Int64, startX: Int64, endX: Int64, size: Int64, maxIter: Int64, count: Int64) : Int64 =
+    if startX >= endX then
+        count
+    else
+        let sizeF = Stdlib.Int64.toFloat(size) in
+        let xf = Stdlib.Int64.toFloat(startX) in
+        let yf = Stdlib.Int64.toFloat(y) in
+        let cr = 2.0 * xf / sizeF - 1.5 in
+        let ci = 2.0 * yf / sizeF - 1.0 in
+        let escaped = iterate(cr, ci, 0.0, 0.0, 0, maxIter) in
+        countRow(y, startX + 1, endX, size, maxIter, count + escaped)
+
+// Count escaped points in all rows from y=startY to y=endY-1
+def countAll(startY: Int64, endY: Int64, size: Int64, maxIter: Int64, count: Int64) : Int64 =
+    if startY >= endY then
+        count
+    else
+        let rowCount = countRow(startY, 0, size, size, maxIter, 0) in
+        countAll(startY + 1, endY, size, maxIter, count + rowCount)
+
+// Run with smaller values until TCO is implemented
+// Original: size=200, maxIter=50
+// Current: size=10, maxIter=10 (to avoid stack overflow)
+countAll(0, 10, 10, 10, 0)
