@@ -29,6 +29,16 @@ This is the Darklang compiler, written in F# with the intention to eventually tr
 | Closures & lambda lifting | `docs/features/closures.md` |
 | Register allocation | `docs/features/register-allocation.md` |
 | Binary generation (Mach-O/ELF) | `docs/features/binary-generation.md` |
+| Pattern matching | `docs/features/pattern-matching.md` |
+| Type checking | `docs/features/type-checking.md` |
+| Sum types (ADTs) | `docs/features/sum-types.md` |
+| Records | `docs/features/records.md` |
+| Lists | `docs/features/lists.md` |
+| Strings | `docs/features/strings.md` |
+| MIR/LIR intermediate representations | `docs/features/intermediate-representations.md` |
+| ARM64 code generation | `docs/features/arm64-codegen.md` |
+| Standard library | `docs/features/stdlib.md` |
+| Dict (HAMT) | `docs/features/dict-hamt.md` |
 
 ## Critical Conventions
 

@@ -115,6 +115,16 @@ Common filter patterns: tuple, record, list, string, float, closure, match, adt,
 | Understand closures/lambda lifting | `docs/features/closures.md` |
 | Understand register allocation | `docs/features/register-allocation.md` |
 | Understand binary generation | `docs/features/binary-generation.md` |
+| Understand pattern matching | `docs/features/pattern-matching.md` |
+| Understand type checking | `docs/features/type-checking.md` |
+| Understand sum types (ADTs) | `docs/features/sum-types.md` |
+| Understand records | `docs/features/records.md` |
+| Understand lists | `docs/features/lists.md` |
+| Understand strings | `docs/features/strings.md` |
+| Understand MIR/LIR IRs | `docs/features/intermediate-representations.md` |
+| Understand ARM64 code generation | `docs/features/arm64-codegen.md` |
+| Understand stdlib | `docs/features/stdlib.md` |
+| Understand Dict (HAMT) | `docs/features/dict-hamt.md` |
 
 ## Key Files
 
