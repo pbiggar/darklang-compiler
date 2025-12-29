@@ -166,7 +166,7 @@ let compileStdlib () : Result<StdlibResult, string> =
                 match RefCountInsertion.insertRCInProgram anfResult with
                 | Error e -> Error e
                 | Ok anfAfterRC ->
-                    // Run tail call detection
+                    // Pass 2.7: Tail Call Detection
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
                     // Convert stdlib ANF to MIR (functions only, no _start)
                     let emptyTypeMap : ANF.TypeMap = Map.empty
@@ -222,7 +222,7 @@ let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
                 match RefCountInsertion.insertRCInProgram anfResult with
                 | Error e -> Error e
                 | Ok anfAfterRC ->
-                    // Run tail call detection
+                    // Pass 2.7: Tail Call Detection
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
                     // Extract stdlib functions into a map for lazy lookup
                     let (ANF.Program (stdlibFuncs, _)) = anfAfterTCO
@@ -727,7 +727,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                           ErrorMessage = Some $"Reference count insertion error: {err}" }
                     | Ok userAnfAfterRC ->
 
-                    // Pass 2.7: Tail Call Detection (user code only)
+                    // Pass 2.7: Tail Call Detection
                     if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
                     let userAnfAfterTCO = TailCallDetection.detectTailCallsInProgram userAnfAfterRC
                     let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
@@ -967,7 +967,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                           ErrorMessage = Some $"Reference count insertion error: {err}" }
                     | Ok userAnfAfterRC ->
 
-                    // Pass 2.7: Tail Call Detection (user code only)
+                    // Pass 2.7: Tail Call Detection
                     if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
                     let userAnfAfterTCO = TailCallDetection.detectTailCallsInProgram userAnfAfterRC
                     let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime

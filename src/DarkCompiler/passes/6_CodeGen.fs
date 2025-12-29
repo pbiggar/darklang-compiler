@@ -56,6 +56,8 @@ let lirPhysRegToARM64Reg (physReg: LIR.PhysReg) : ARM64.Reg =
     | LIR.X13 -> ARM64.X13
     | LIR.X14 -> ARM64.X14
     | LIR.X15 -> ARM64.X15
+    | LIR.X16 -> ARM64.X16
+    | LIR.X17 -> ARM64.X17
     | LIR.X19 -> ARM64.X19
     | LIR.X20 -> ARM64.X20
     | LIR.X21 -> ARM64.X21
@@ -1137,55 +1139,26 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
 
     | LIR.ArgMoves moves ->
         // Parallel move resolution for function arguments
+        // After SaveRegs, X1-X10 are saved at [SP+0..SP+72]
+        // If source is in X1-X7 and could be clobbered, load from stack instead
         //
-        // Problem: When we have moves like [X0 <- n-1, X1 <- X0], the naive approach
-        // processes X0 first (since we sort by destination), which clobbers the value
-        // needed for X1.
-        //
-        // Solution: Use temp registers (X14, X15) to save clobbered sources FIRST,
-        // then do the moves reading from temps when needed.
-        //
-        // Algorithm:
-        // 1. Find all source registers that are also destinations (clobbered sources)
-        // 2. Emit copies to temp registers for clobbered sources
-        // 3. For each move, if source was clobbered, use temp instead
+        // Stack layout after SaveRegs: X1@[SP+0], X2@[SP+8], ..., X10@[SP+72]
+        let saveRegsOffset (reg: LIR.PhysReg) : int option =
+            match reg with
+            | LIR.X1 -> Some 0
+            | LIR.X2 -> Some 8
+            | LIR.X3 -> Some 16
+            | LIR.X4 -> Some 24
+            | LIR.X5 -> Some 32
+            | LIR.X6 -> Some 40
+            | LIR.X7 -> Some 48
+            | LIR.X8 -> Some 56
+            | LIR.X9 -> Some 64
+            | LIR.X10 -> Some 72
+            | _ -> None
 
-        // Find which registers are destinations
+        // Find which destination registers (X0-X7) will be written
         let destRegs = moves |> List.map fst |> Set.ofList
-
-        // Find source registers that will be clobbered (they're in destRegs)
-        // Only consider physical registers that are argument registers (X0-X7)
-        let clobberedSources =
-            moves
-            |> List.choose (fun (destReg, srcOp) ->
-                match srcOp with
-                | LIR.Reg (LIR.Physical srcReg) ->
-                    match srcReg with
-                    | LIR.X0 | LIR.X1 | LIR.X2 | LIR.X3 | LIR.X4 | LIR.X5 | LIR.X6 | LIR.X7 ->
-                        // Clobbered if it's a destination of some OTHER move
-                        if Set.contains srcReg destRegs && srcReg <> destReg then
-                            Some srcReg
-                        else
-                            None
-                    | _ -> None
-                | _ -> None)
-            |> List.distinct
-
-        // Map clobbered sources to temp registers (X14, X15)
-        let tempMapping =
-            clobberedSources
-            |> List.mapi (fun i srcReg ->
-                let tempReg = if i = 0 then LIR.X14 else LIR.X15
-                (srcReg, tempReg))
-            |> Map.ofList
-
-        // Generate save instructions (copy clobbered sources to temps)
-        let saveInstrs =
-            clobberedSources
-            |> List.mapi (fun i srcReg ->
-                let tempReg = if i = 0 then ARM64.X14 else ARM64.X15
-                let srcARM64 = lirPhysRegToARM64Reg srcReg
-                ARM64.MOV_reg (tempReg, srcARM64))
 
         // For each move, determine how to execute it safely
         let generateMove (destReg: LIR.PhysReg, srcOp: LIR.Operand) : Result<ARM64.Instr list, string> =
@@ -1194,12 +1167,24 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             | LIR.Imm value ->
                 Ok (loadImmediate destARM64 value)
             | LIR.Reg (LIR.Physical srcPhysReg) ->
-                // Check if this source was clobbered - if so, use temp register
-                match Map.tryFind srcPhysReg tempMapping with
-                | Some tempReg ->
-                    let tempARM64 = lirPhysRegToARM64Reg tempReg
-                    Ok [ARM64.MOV_reg (destARM64, tempARM64)]
-                | None ->
+                // Check if source register will be clobbered by an earlier move
+                // A register is clobbered if it's a destination of a move to a LOWER index
+                // (since we process X0, X1, X2, ... in order)
+                let srcWillBeClobbered =
+                    match srcPhysReg with
+                    | LIR.X1 | LIR.X2 | LIR.X3 | LIR.X4 | LIR.X5 | LIR.X6 | LIR.X7 ->
+                        Set.contains srcPhysReg destRegs
+                    | _ -> false
+                if srcWillBeClobbered then
+                    // Load from SaveRegs stack instead of live register
+                    match saveRegsOffset srcPhysReg with
+                    | Some offset ->
+                        Ok [ARM64.LDR (destARM64, ARM64.SP, int16 offset)]
+                    | None ->
+                        // Shouldn't happen, but fall back to MOV
+                        let srcARM64 = lirPhysRegToARM64Reg srcPhysReg
+                        Ok [ARM64.MOV_reg (destARM64, srcARM64)]
+                else
                     let srcARM64 = lirPhysRegToARM64Reg srcPhysReg
                     Ok [ARM64.MOV_reg (destARM64, srcARM64)]
             | LIR.Reg (LIR.Virtual _) ->
@@ -1263,8 +1248,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 | Error e, _ -> Error e
                 | _, Error e -> Error e) (Ok [])
 
-        // Combine: save clobbered sources to temps, then do moves
-        moveInstrs |> Result.map (fun moves -> saveInstrs @ moves)
+        moveInstrs
 
     | LIR.FArgMoves moves ->
         // Float argument moves - move float values to D0-D7
