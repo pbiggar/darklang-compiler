@@ -199,7 +199,8 @@ let isFileIntrinsic (qualifiedName: string) : bool =
     qualifiedName = "Stdlib.File.writeText" ||
     qualifiedName = "Stdlib.File.appendText" ||
     qualifiedName = "Stdlib.File.delete" ||
-    qualifiedName = "Stdlib.File.setExecutable"
+    qualifiedName = "Stdlib.File.setExecutable" ||
+    qualifiedName = "Stdlib.File.writeFromPtr"
 
 /// Check if a function name is a random intrinsic
 /// These are special-cased in the compiler to generate syscalls
