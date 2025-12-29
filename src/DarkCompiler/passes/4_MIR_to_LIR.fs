@@ -1100,9 +1100,13 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         let lirDest = vregToLIRReg dest
         Ok [LIR.RandomInt64 lirDest]
 
-    | MIR.Phi _ ->
-        // Phi nodes should be eliminated by SSA destruction (pass 3.9) before MIR-to-LIR
-        Error "Internal error: Phi node reached MIR-to-LIR. SSA destruction pass should have removed it."
+    | MIR.Phi (dest, sources) ->
+        // Convert MIR.Phi to LIR.Phi for SSA-based register allocation
+        let lirDest = vregToLIRReg dest
+        let lirSources =
+            sources |> List.map (fun (op, MIR.Label lbl) ->
+                (convertOperand op, LIR.Label lbl))
+        Ok [LIR.Phi (lirDest, lirSources)]
 
 /// Convert MIR terminator to LIR terminator
 /// For Branch, need to convert operand to register (may add instructions)
@@ -1295,6 +1299,8 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     match instr with
     // Instructions with Operand fields that may contain StringRef/FloatRef
     | LIR.Mov (dest, src) -> LIR.Mov (dest, offsetLIROperand strOffset fltOffset src)
+    | LIR.Phi (dest, sources) ->
+        LIR.Phi (dest, sources |> List.map (fun (op, lbl) -> (offsetLIROperand strOffset fltOffset op, lbl)))
     | LIR.Add (dest, left, right) -> LIR.Add (dest, left, offsetLIROperand strOffset fltOffset right)
     | LIR.Sub (dest, left, right) -> LIR.Sub (dest, left, offsetLIROperand strOffset fltOffset right)
     | LIR.Cmp (left, right) -> LIR.Cmp (left, offsetLIROperand strOffset fltOffset right)

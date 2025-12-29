@@ -114,6 +114,9 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
     match instr with
     | LIR.Mov (dest, src) ->
         $"{prettyPrintLIRReg dest} <- Mov({prettyPrintLIROperand src})"
+    | LIR.Phi (dest, sources) ->
+        let srcs = sources |> List.map (fun (op, LIR.Label lbl) -> $"({prettyPrintLIROperand op}, {lbl})") |> String.concat ", "
+        $"{prettyPrintLIRReg dest} <- Phi([{srcs}])"
     | LIR.Store (offset, src) ->
         $"Store(Stack {offset}, {prettyPrintLIRReg src})"
     | LIR.Add (dest, left, right) ->

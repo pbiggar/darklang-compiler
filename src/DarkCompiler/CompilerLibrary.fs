@@ -487,18 +487,12 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                         let t = System.Math.Round(mirOptTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 3.9: SSA Destruction
-                    if verbosity >= 1 then println "  [3.9/8] SSA Destruction..."
-                    let mirAfterSSA = SSA_Destruction.destructSSA optimizedProgram
+                    // Pass 3.9 (SSA Destruction) has been removed.
+                    // Phi resolution is now handled in RegisterAllocation.allocateRegisters
 
-                    let ssaDestructTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime - mirOptTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(ssaDestructTime, 1)
-                        println $"        {t}ms"
-
-                    // Pass 4: MIR → LIR
-                    if verbosity >= 1 then println "  [4/8] MIR → LIR..."
-                    let lirResult = MIR_to_LIR.toLIR mirAfterSSA
+                    // Pass 4: MIR → LIR (SSA form is preserved)
+                    if verbosity >= 1 then println "  [4/7] MIR → LIR..."
+                    let lirResult = MIR_to_LIR.toLIR optimizedProgram
 
                     match lirResult with
                     | Error err ->
@@ -528,18 +522,18 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                         println $"        {t}ms"
 
                     // Pass 4.5: LIR Optimizations (peephole)
-                    if verbosity >= 1 then println "  [4.5/8] LIR Optimizations..."
+                    if verbosity >= 1 then println "  [4.5/7] LIR Optimizations..."
                     let optimizedLirProgram =
                         if options.DisableLIROpt then lirProgram
                         else LIR_Optimize.optimizeProgram lirProgram
 
-                    let lirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime - mirOptTime - ssaDestructTime - lirTime
+                    let lirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime - mirOptTime - lirTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(lirOptTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 5: Register Allocation
-                    if verbosity >= 1 then println "  [5/8] Register Allocation..."
+                    // Pass 5: Register Allocation (includes phi resolution)
+                    if verbosity >= 1 then println "  [5/7] Register Allocation..."
                     let (LIR.Program (funcs, stringPool, floatPool)) = optimizedLirProgram
                     let allocatedFuncs = funcs |> List.map RegisterAllocation.allocateRegisters
                     let allocatedProgram = LIR.Program (allocatedFuncs, stringPool, floatPool)
@@ -564,7 +558,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                         println $"        {t}ms"
 
                     // Pass 6: Code Generation (LIR → ARM64)
-                    if verbosity >= 1 then println "  [6/8] Code Generation..."
+                    if verbosity >= 1 then println "  [6/7] Code Generation..."
                     let codegenOptions : CodeGen.CodeGenOptions = {
                         DisableFreeList = options.DisableFreeList
                     }
@@ -598,7 +592,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
 
                         // Pass 7: ARM64 Encoding (ARM64 → machine code)
                         // Use encodeAllWithStrings to handle ADRP/ADD_label for string addresses
-                        if verbosity >= 1 then println "  [7/8] ARM64 Encoding..."
+                        if verbosity >= 1 then println "  [7/7] ARM64 Encoding..."
 
                         // Compute code file offset based on platform
                         let codeFileOffset =
@@ -643,7 +637,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
 
                         // Pass 8: Binary Generation (machine code → executable)
                         let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
-                        if verbosity >= 1 then println $"  [8/8] Binary Generation ({formatName})..."
+                        if verbosity >= 1 then println $"  [7/7] Binary Generation ({formatName})..."
                         let binary =
                             match os with
                             | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode stringPool floatPool
@@ -863,7 +857,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                         | Ok os ->
 
                         // Pass 7: ARM64 Encoding
-                        if verbosity >= 1 then println "  [7/8] ARM64 Encoding..."
+                        if verbosity >= 1 then println "  [7/7] ARM64 Encoding..."
                         let codeFileOffset =
                             match os with
                             | Platform.Linux -> 64 + 56
@@ -891,7 +885,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
 
                         // Pass 8: Binary Generation
                         let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
-                        if verbosity >= 1 then println $"  [8/8] Binary Generation ({formatName})..."
+                        if verbosity >= 1 then println $"  [7/7] Binary Generation ({formatName})..."
                         let binary =
                             match os with
                             | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode mergedStrings mergedFloats
@@ -1149,7 +1143,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                     | Ok os ->
 
                     // Pass 7: ARM64 Encoding
-                    if verbosity >= 1 then println "  [7/8] ARM64 Encoding..."
+                    if verbosity >= 1 then println "  [7/7] ARM64 Encoding..."
                     let codeFileOffset =
                         match os with
                         | Platform.Linux -> 64 + 56
@@ -1176,7 +1170,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
 
                     // Pass 8: Binary Generation
                     let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
-                    if verbosity >= 1 then println $"  [8/8] Binary Generation ({formatName})..."
+                    if verbosity >= 1 then println $"  [7/7] Binary Generation ({formatName})..."
                     let binary =
                         match os with
                         | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode mergedStrings mergedFloats

@@ -729,6 +729,70 @@ let main args =
             failed <- failed + 1
             sectionFailed <- sectionFailed + 1
 
+    if matchesFilter filter "Parallel Move Tests" then
+        let parallelMoveTestTimer = Stopwatch.StartNew()
+        match ParallelMoveTests.runAll() with
+        | Ok () ->
+            parallelMoveTestTimer.Stop()
+            println $"  {Colors.green}✓ Parallel Move Tests{Colors.reset} {Colors.gray}({formatTime parallelMoveTestTimer.Elapsed}){Colors.reset}"
+            passed <- passed + 8  // 8 tests in ParallelMoveTests
+            sectionPassed <- sectionPassed + 8
+        | Error msg ->
+            parallelMoveTestTimer.Stop()
+            println $"  {Colors.red}✗ FAIL: Parallel move tests{Colors.reset} {Colors.gray}({formatTime parallelMoveTestTimer.Elapsed}){Colors.reset}"
+            println $"    {msg}"
+            failedTests.Add({ Name = "Unit: Parallel Move Tests"; Message = msg; Details = [] })
+            failed <- failed + 1
+            sectionFailed <- sectionFailed + 1
+
+    if matchesFilter filter "Critical Edge Tests" then
+        let criticalEdgeTestTimer = Stopwatch.StartNew()
+        match CriticalEdgeTests.runAll() with
+        | Ok () ->
+            criticalEdgeTestTimer.Stop()
+            println $"  {Colors.green}✓ Critical Edge Tests{Colors.reset} {Colors.gray}({formatTime criticalEdgeTestTimer.Elapsed}){Colors.reset}"
+            passed <- passed + 5  // 5 tests in CriticalEdgeTests
+            sectionPassed <- sectionPassed + 5
+        | Error msg ->
+            criticalEdgeTestTimer.Stop()
+            println $"  {Colors.red}✗ FAIL: Critical edge tests{Colors.reset} {Colors.gray}({formatTime criticalEdgeTestTimer.Elapsed}){Colors.reset}"
+            println $"    {msg}"
+            failedTests.Add({ Name = "Unit: Critical Edge Tests"; Message = msg; Details = [] })
+            failed <- failed + 1
+            sectionFailed <- sectionFailed + 1
+
+    if matchesFilter filter "SSA Liveness Tests" then
+        let ssaLivenessTestTimer = Stopwatch.StartNew()
+        match SSALivenessTests.runAll() with
+        | Ok () ->
+            ssaLivenessTestTimer.Stop()
+            println $"  {Colors.green}✓ SSA Liveness Tests{Colors.reset} {Colors.gray}({formatTime ssaLivenessTestTimer.Elapsed}){Colors.reset}"
+            passed <- passed + 4  // 4 tests in SSALivenessTests
+            sectionPassed <- sectionPassed + 4
+        | Error msg ->
+            ssaLivenessTestTimer.Stop()
+            println $"  {Colors.red}✗ FAIL: SSA liveness tests{Colors.reset} {Colors.gray}({formatTime ssaLivenessTestTimer.Elapsed}){Colors.reset}"
+            println $"    {msg}"
+            failedTests.Add({ Name = "Unit: SSA Liveness Tests"; Message = msg; Details = [] })
+            failed <- failed + 1
+            sectionFailed <- sectionFailed + 1
+
+    if matchesFilter filter "Phi Resolution Tests" then
+        let phiResolutionTestTimer = Stopwatch.StartNew()
+        match PhiResolutionTests.runAll() with
+        | Ok () ->
+            phiResolutionTestTimer.Stop()
+            println $"  {Colors.green}✓ Phi Resolution Tests{Colors.reset} {Colors.gray}({formatTime phiResolutionTestTimer.Elapsed}){Colors.reset}"
+            passed <- passed + 5  // 5 tests in PhiResolutionTests
+            sectionPassed <- sectionPassed + 5
+        | Error msg ->
+            phiResolutionTestTimer.Stop()
+            println $"  {Colors.red}✗ FAIL: Phi resolution tests{Colors.reset} {Colors.gray}({formatTime phiResolutionTestTimer.Elapsed}){Colors.reset}"
+            println $"    {msg}"
+            failedTests.Add({ Name = "Unit: Phi Resolution Tests"; Message = msg; Details = [] })
+            failed <- failed + 1
+            sectionFailed <- sectionFailed + 1
+
     sectionTimer.Stop()
     if sectionFailed = 0 then
         println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"

@@ -209,6 +209,9 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         operandToVReg str |> Option.toList |> Set.ofList
     | LIR.RandomInt64 _ ->
         Set.empty  // No operands to read
+    // Phi sources are NOT regular uses - they are used at predecessor exits, not at the phi's block
+    // The liveness analysis handles phi sources specially in computeLiveness
+    | LIR.Phi _ -> Set.empty
     | _ -> Set.empty
 
 /// Get virtual register ID defined (written) by an instruction
@@ -258,6 +261,8 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.RefCountIncString _ -> None
     | LIR.RefCountDecString _ -> None
     | LIR.RandomInt64 dest -> regToVReg dest
+    // Phi defines its destination at block entry
+    | LIR.Phi (dest, _) -> regToVReg dest
     | _ -> None
 
 /// Get virtual register used by terminator
@@ -272,6 +277,26 @@ let getSuccessors (term: LIR.Terminator) : LIR.Label list =
     | LIR.Ret -> []
     | LIR.Branch (_, trueLabel, falseLabel) -> [trueLabel; falseLabel]
     | LIR.Jump label -> [label]
+
+/// Get phi uses grouped by predecessor label
+/// Returns a map from predecessor label to the set of VRegIds used from that predecessor
+let getPhiUsesByPredecessor (block: LIR.BasicBlock) : Map<LIR.Label, Set<int>> =
+    let operandToVReg (op: LIR.Operand) : int option =
+        match op with
+        | LIR.Reg (LIR.Virtual id) -> Some id
+        | _ -> None
+
+    block.Instrs
+    |> List.choose (fun instr ->
+        match instr with
+        | LIR.Phi (_, sources) ->
+            Some (sources |> List.choose (fun (op, predLabel) ->
+                operandToVReg op |> Option.map (fun vregId -> (predLabel, vregId))))
+        | _ -> None)
+    |> List.concat
+    |> List.groupBy fst
+    |> List.map (fun (label, pairs) -> (label, pairs |> List.map snd |> Set.ofList))
+    |> Map.ofList
 
 /// Compute GEN and KILL sets for a basic block
 /// GEN = variables used before being defined
@@ -304,6 +329,7 @@ let computeGenKill (block: LIR.BasicBlock) : Set<int> * Set<int> =
     (gen, kill)
 
 /// Compute liveness using backward dataflow analysis
+/// Handles SSA phi nodes: phi sources are live at predecessor exits, not at phi's block entry
 let computeLiveness (cfg: LIR.CFG) : Map<LIR.Label, BlockLiveness> =
     // Initialize with empty sets
     let mutable liveness : Map<LIR.Label, BlockLiveness> =
@@ -314,6 +340,12 @@ let computeLiveness (cfg: LIR.CFG) : Map<LIR.Label, BlockLiveness> =
     let genKill =
         cfg.Blocks
         |> Map.map (fun _ block -> computeGenKill block)
+
+    // Precompute phi uses by predecessor for each block
+    // This maps: successor_label -> (predecessor_label -> vregs_used_from_that_predecessor)
+    let phiUsesByBlock =
+        cfg.Blocks
+        |> Map.map (fun _ block -> getPhiUsesByPredecessor block)
 
     // Iterate until fixed point
     let mutable changed = true
@@ -326,13 +358,25 @@ let computeLiveness (cfg: LIR.CFG) : Map<LIR.Label, BlockLiveness> =
             let oldLiveness = Map.find label liveness
 
             // LiveOut = union of LiveIn of all successors
+            //         + phi uses from successors (for the current block as predecessor)
             let successors = getSuccessors block.Terminator
             let newLiveOut =
                 successors
                 |> List.fold (fun acc succLabel ->
-                    match Map.tryFind succLabel liveness with
-                    | Some succ -> Set.union acc succ.LiveIn
-                    | None -> acc
+                    // Add LiveIn of successor
+                    let liveInContrib =
+                        match Map.tryFind succLabel liveness with
+                        | Some succ -> succ.LiveIn
+                        | None -> Set.empty
+                    // Add phi uses from successor that reference this block as predecessor
+                    let phiContrib =
+                        match Map.tryFind succLabel phiUsesByBlock with
+                        | Some phiUses ->
+                            match Map.tryFind label phiUses with
+                            | Some vregs -> vregs
+                            | None -> Set.empty
+                        | None -> Set.empty
+                    Set.union acc (Set.union liveInContrib phiContrib)
                 ) Set.empty
 
             // LiveIn = GEN ∪ (LiveOut - KILL)
@@ -616,6 +660,11 @@ let loadSpilled (mapping: Map<int, Allocation>) (reg: LIR.Reg) (tempReg: LIR.Phy
 /// Apply allocation to an instruction
 let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr list =
     match instr with
+    | LIR.Phi _ ->
+        // Phi nodes are handled specially by resolvePhiNodes after allocation.
+        // Skip them here - they will be removed and converted to moves at predecessor exits.
+        []
+
     | LIR.Mov (dest, src) ->
         let (destReg, destAlloc) = applyToReg mapping dest
         let (srcOp, srcLoads) = applyToOperand mapping src LIR.X12
@@ -1354,6 +1403,114 @@ let applyToCFG (mapping: Map<int, Allocation>) (cfg: LIR.CFG) : LIR.CFG =
     }
 
 // ============================================================================
+// Phi Resolution
+// ============================================================================
+
+/// Resolve phi nodes by inserting parallel moves at predecessor block exits.
+/// This function:
+/// 1. Finds all phi nodes in each block
+/// 2. For each predecessor, collects all (dest, src) pairs for moves
+/// 3. Uses ParallelMoves.resolve to sequence the moves properly (handling cycles)
+/// 4. Inserts the moves at the end of each predecessor (before terminator)
+/// 5. Removes phi nodes from blocks
+let resolvePhiNodes (cfg: LIR.CFG) (allocation: Map<int, Allocation>) : LIR.CFG =
+    // Helper to get the physical register for an allocation
+    let getAllocatedReg (id: int) : LIR.PhysReg =
+        match Map.tryFind id allocation with
+        | Some (PhysReg r) -> r
+        | Some (StackSlot _) -> LIR.X11  // Use scratch for spilled values
+        | None -> LIR.X11
+
+    // Helper to convert a LIR.Reg to physical reg based on allocation
+    let regToPhys (reg: LIR.Reg) : LIR.PhysReg =
+        match reg with
+        | LIR.Virtual id -> getAllocatedReg id
+        | LIR.Physical p -> p
+
+    // Helper to convert a LIR.Operand to allocated version
+    let operandToAllocated (op: LIR.Operand) : LIR.Operand =
+        match op with
+        | LIR.Reg (LIR.Virtual id) ->
+            match Map.tryFind id allocation with
+            | Some (PhysReg r) -> LIR.Reg (LIR.Physical r)
+            | Some (StackSlot offset) -> LIR.StackSlot offset
+            | None -> op
+        | LIR.Reg (LIR.Physical p) -> LIR.Reg (LIR.Physical p)
+        | _ -> op
+
+    // Collect all phi info: for each phi, get (dest_reg, src_operand, pred_label)
+    // This gives us: List of (successor_label, dest, sources)
+    let phiInfo =
+        cfg.Blocks
+        |> Map.toList
+        |> List.collect (fun (_, block) ->
+            block.Instrs
+            |> List.choose (fun instr ->
+                match instr with
+                | LIR.Phi (dest, sources) -> Some (dest, sources)
+                | _ -> None))
+
+    // Group by predecessor: Map<pred_label, List<(dest_phys, src_operand)>>
+    // Each predecessor needs to perform moves for all phis that reference it
+    let predecessorMoves : Map<LIR.Label, (LIR.PhysReg * LIR.Operand) list> =
+        phiInfo
+        |> List.collect (fun (dest, sources) ->
+            let destPhys = regToPhys dest
+            sources |> List.map (fun (src, predLabel) ->
+                let srcAllocated = operandToAllocated src
+                (predLabel, (destPhys, srcAllocated))))
+        |> List.groupBy fst
+        |> List.map (fun (predLabel, pairs) ->
+            (predLabel, pairs |> List.map snd))
+        |> Map.ofList
+
+    // Get the source PhysReg if the operand is a Reg (for ParallelMoves)
+    let getSrcPhysReg (op: LIR.Operand) : LIR.PhysReg option =
+        match op with
+        | LIR.Reg (LIR.Physical p) -> Some p
+        | _ -> None
+
+    // Convert move actions to LIR instructions using X16 as temp (same as TailArgMoves)
+    let generateMoveInstrs (moves: (LIR.PhysReg * LIR.Operand) list) : LIR.Instr list =
+        let actions = ParallelMoves.resolve moves getSrcPhysReg
+        actions
+        |> List.collect (fun action ->
+            match action with
+            | ParallelMoves.SaveToTemp reg ->
+                [LIR.Mov (LIR.Physical LIR.X16, LIR.Reg (LIR.Physical reg))]
+            | ParallelMoves.Move (dest, src) ->
+                [LIR.Mov (LIR.Physical dest, src)]
+            | ParallelMoves.MoveFromTemp dest ->
+                [LIR.Mov (LIR.Physical dest, LIR.Reg (LIR.Physical LIR.X16))])
+
+    // Add moves to predecessor blocks
+    let mutable updatedBlocks = cfg.Blocks
+    for kvp in predecessorMoves do
+        let predLabel = kvp.Key
+        let moves = kvp.Value
+        match Map.tryFind predLabel updatedBlocks with
+        | Some predBlock ->
+            let moveInstrs = generateMoveInstrs moves
+            // Insert moves at the end of the block (before terminator)
+            let updatedBlock = { predBlock with Instrs = predBlock.Instrs @ moveInstrs }
+            updatedBlocks <- Map.add predLabel updatedBlock updatedBlocks
+        | None -> ()
+
+    // Remove phi nodes from all blocks
+    updatedBlocks <-
+        updatedBlocks
+        |> Map.map (fun _ block ->
+            let filteredInstrs =
+                block.Instrs
+                |> List.filter (fun instr ->
+                    match instr with
+                    | LIR.Phi _ -> false
+                    | _ -> true)
+            { block with Instrs = filteredInstrs })
+
+    { cfg with Blocks = updatedBlocks }
+
+// ============================================================================
 // Main Entry Point
 // ============================================================================
 
@@ -1426,20 +1583,25 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
             | LIR.Physical _ -> None)
         |> List.choose id
 
-    // Step 7: Apply allocation to CFG with liveness info for SaveRegs/RestoreRegs population
-    let allocatedCFG = applyToCFGWithLiveness result.Mapping func.CFG liveness
+    // Step 7: Resolve phi nodes (convert to moves at predecessor exits)
+    // This must happen BEFORE applying allocation since we need to know where each
+    // value is allocated to generate the correct moves
+    let cfgWithPhiResolved = resolvePhiNodes func.CFG result.Mapping
 
-    // Step 8: Insert parameter copy instructions at the start of the entry block
+    // Step 8: Apply allocation to CFG with liveness info for SaveRegs/RestoreRegs population
+    let allocatedCFG = applyToCFGWithLiveness result.Mapping cfgWithPhiResolved liveness
+
+    // Step 9: Insert parameter copy instructions at the start of the entry block
     // Float param copies go first (they use separate register bank)
-    let entryBlock = Map.find func.CFG.Entry allocatedCFG.Blocks
+    let entryBlock = Map.find allocatedCFG.Entry allocatedCFG.Blocks
     let entryBlockWithCopies = {
         entryBlock with
             Instrs = floatParamCopyInstrs @ intParamCopyInstrs @ entryBlock.Instrs
     }
-    let updatedBlocks = Map.add func.CFG.Entry entryBlockWithCopies allocatedCFG.Blocks
+    let updatedBlocks = Map.add allocatedCFG.Entry entryBlockWithCopies allocatedCFG.Blocks
     let cfgWithParamCopies = { allocatedCFG with Blocks = updatedBlocks }
 
-    // Step 9: Set parameters to calling convention registers
+    // Step 10: Set parameters to calling convention registers
     // For floats, we still record as X register in Params since Params is Reg list
     // The actual float handling is done via ParamTypes
     let allocatedParams =

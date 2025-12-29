@@ -125,11 +125,9 @@ let getOptimizedMIR (source: string) : Result<string, string> =
                         // MIR optimization
                         let optimizedMir = MIR_Optimize.optimizeProgram ssaProgram
 
-                        // SSA destruction
-                        let mirAfterSSA = SSA_Destruction.destructSSA optimizedMir
-
-                        // Pretty-print
-                        Ok (prettyPrintMIRProgram mirAfterSSA)
+                        // SSA form is now preserved (phi resolution happens in register allocation)
+                        // Pretty-print the optimized MIR (still in SSA form)
+                        Ok (prettyPrintMIRProgram optimizedMir)
 
 /// Compile source and get LIR after optimization
 let getOptimizedLIR (source: string) : Result<string, string> =
@@ -163,10 +161,10 @@ let getOptimizedLIR (source: string) : Result<string, string> =
                         // SSA construction and optimization
                         let ssaProgram = SSA_Construction.convertToSSA mirProgram
                         let optimizedMir = MIR_Optimize.optimizeProgram ssaProgram
-                        let mirAfterSSA = SSA_Destruction.destructSSA optimizedMir
 
+                        // SSA form is now preserved (phi resolution happens in register allocation)
                         // Convert to LIR
-                        match MIR_to_LIR.toLIR mirAfterSSA with
+                        match MIR_to_LIR.toLIR optimizedMir with
                         | Error e -> Error $"LIR conversion error: {e}"
                         | Ok lirProgram ->
                             // LIR optimization

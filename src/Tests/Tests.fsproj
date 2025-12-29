@@ -30,6 +30,10 @@
     <Compile Include="EncodingTests.fs" />
     <Compile Include="BinaryTests.fs" />
     <Compile Include="TypeCheckingTests.fs" />
+    <Compile Include="ParallelMoveTests.fs" />
+    <Compile Include="CriticalEdgeTests.fs" />
+    <Compile Include="SSALivenessTests.fs" />
+    <Compile Include="PhiResolutionTests.fs" />
 
     <!-- Test Runner (must be last) -->
     <Compile Include="TestRunner.fs" />

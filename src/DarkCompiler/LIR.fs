@@ -58,9 +58,13 @@ type Condition =
     | LE   // Less than or equal (signed)
     | GE   // Greater than or equal (signed)
 
+/// Basic block label (wrapper type for type safety)
+type Label = Label of string
+
 /// Instructions (closer to ARM64 instructions, non-control-flow)
 type Instr =
     | Mov of dest:Reg * src:Operand
+    | Phi of dest:Reg * sources:(Operand * Label) list  // SSA phi node: merge values from predecessors
     | Store of stackSlot:int * src:Reg          // Store register to stack slot (for spills)
     | Add of dest:Reg * left:Reg * right:Operand
     | Sub of dest:Reg * left:Reg * right:Operand
@@ -156,9 +160,6 @@ type Instr =
     | RefCountDecString of str:Operand            // Decrement string ref count, free if zero
     // Random intrinsics
     | RandomInt64 of dest:Reg                     // Get 8 random bytes as Int64
-
-/// Basic block label (wrapper type for type safety)
-type Label = Label of string
 
 /// Terminator instructions (control flow)
 type Terminator =
