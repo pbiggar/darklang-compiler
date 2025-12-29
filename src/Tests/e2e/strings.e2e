@@ -169,3 +169,70 @@ Stdlib.String.__isLowercase(65) = stdout="false\n"
 Stdlib.String.__isUppercase(65) = stdout="true\n"
 Stdlib.String.__isUppercase(90) = stdout="true\n"
 Stdlib.String.__isUppercase(97) = stdout="false\n"
+
+// =============================================================================
+// Stdlib.String.startsWith Tests
+// =============================================================================
+
+// Basic startsWith
+Stdlib.String.startsWith("hello world", "hello") = stdout="true\n"
+Stdlib.String.startsWith("hello world", "world") = stdout="false\n"
+Stdlib.String.startsWith("abc", "a") = stdout="true\n"
+Stdlib.String.startsWith("abc", "ab") = stdout="true\n"
+Stdlib.String.startsWith("abc", "abc") = stdout="true\n"
+Stdlib.String.startsWith("abc", "abcd") = stdout="false\n"
+
+// Empty string cases
+Stdlib.String.startsWith("hello", "") = stdout="true\n"
+Stdlib.String.startsWith("", "") = stdout="true\n"
+Stdlib.String.startsWith("", "a") = stdout="false\n"
+
+// =============================================================================
+// Stdlib.String.endsWith Tests
+// =============================================================================
+
+// Basic endsWith
+Stdlib.String.endsWith("hello world", "world") = stdout="true\n"
+Stdlib.String.endsWith("hello world", "hello") = stdout="false\n"
+Stdlib.String.endsWith("abc", "c") = stdout="true\n"
+Stdlib.String.endsWith("abc", "bc") = stdout="true\n"
+Stdlib.String.endsWith("abc", "abc") = stdout="true\n"
+Stdlib.String.endsWith("abc", "xabc") = stdout="false\n"
+
+// Empty string cases
+Stdlib.String.endsWith("hello", "") = stdout="true\n"
+Stdlib.String.endsWith("", "") = stdout="true\n"
+Stdlib.String.endsWith("", "a") = stdout="false\n"
+
+// =============================================================================
+// Stdlib.String.indexOf Tests
+// =============================================================================
+
+// Basic indexOf
+Stdlib.String.indexOf("hello world", "hello") = 0
+Stdlib.String.indexOf("hello world", "world") = 6
+Stdlib.String.indexOf("hello world", "o") = 4
+Stdlib.String.indexOf("hello world", "o w") = 4
+
+// Not found
+Stdlib.String.indexOf("hello world", "xyz") = -1
+Stdlib.String.indexOf("abc", "d") = -1
+
+// Empty string search
+Stdlib.String.indexOf("hello", "") = 0
+Stdlib.String.indexOf("", "") = 0
+
+// =============================================================================
+// Stdlib.String.contains Tests
+// =============================================================================
+
+// Basic contains
+Stdlib.String.contains("hello world", "hello") = stdout="true\n"
+Stdlib.String.contains("hello world", "world") = stdout="true\n"
+Stdlib.String.contains("hello world", "o w") = stdout="true\n"
+Stdlib.String.contains("hello world", "xyz") = stdout="false\n"
+
+// Empty string cases
+Stdlib.String.contains("hello", "") = stdout="true\n"
+Stdlib.String.contains("", "") = stdout="true\n"
+Stdlib.String.contains("", "a") = stdout="false\n"

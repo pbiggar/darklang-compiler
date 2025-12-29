@@ -375,8 +375,59 @@ def Stdlib.String.__isLowercase(byte: Int64) : Bool =
 def Stdlib.String.__isUppercase(byte: Int64) : Bool =
     byte >= 65 && byte <= 90
 
-// TODO: More String functions will be added as more runtime builtins are implemented
-// slice, contains, startsWith, endsWith, toUppercase, toLowercase, trim, etc.
+// Internal: Compare n bytes starting at positions in two strings
+// Returns true if all bytes match
+def Stdlib.String.__compareBytes(s1: String, start1: Int64, s2: String, start2: Int64, count: Int64) : Bool =
+    if count <= 0 then
+        true
+    else
+        let b1 = Stdlib.String.getByteAt(s1, start1) in
+        let b2 = Stdlib.String.getByteAt(s2, start2) in
+        if b1 != b2 then
+            false
+        else
+            Stdlib.String.__compareBytes(s1, start1 + 1, s2, start2 + 1, count - 1)
+
+// Check if string starts with prefix
+def Stdlib.String.startsWith(s: String, prefix: String) : Bool =
+    let sLen = Stdlib.String.length(s) in
+    let prefixLen = Stdlib.String.length(prefix) in
+    if prefixLen > sLen then
+        false
+    else
+        Stdlib.String.__compareBytes(s, 0, prefix, 0, prefixLen)
+
+// Check if string ends with suffix
+def Stdlib.String.endsWith(s: String, suffix: String) : Bool =
+    let sLen = Stdlib.String.length(s) in
+    let suffixLen = Stdlib.String.length(suffix) in
+    if suffixLen > sLen then
+        false
+    else
+        Stdlib.String.__compareBytes(s, sLen - suffixLen, suffix, 0, suffixLen)
+
+// Internal: Find substring starting at offset, returns -1 if not found
+def Stdlib.String.__findFrom(s: String, search: String, offset: Int64) : Int64 =
+    let sLen = Stdlib.String.length(s) in
+    let searchLen = Stdlib.String.length(search) in
+    if searchLen == 0 then
+        offset  // Empty string is always found at current position
+    else if offset + searchLen > sLen then
+        -1  // Not enough characters left
+    else if Stdlib.String.__compareBytes(s, offset, search, 0, searchLen) then
+        offset  // Found match at this position
+    else
+        Stdlib.String.__findFrom(s, search, offset + 1)
+
+// Find position of first occurrence of search string, returns -1 if not found
+def Stdlib.String.indexOf(s: String, search: String) : Int64 =
+    Stdlib.String.__findFrom(s, search, 0)
+
+// Check if string contains substring
+def Stdlib.String.contains(s: String, search: String) : Bool =
+    Stdlib.String.indexOf(s, search) >= 0
+
+// TODO: More String functions: slice, toUppercase, toLowercase, trim, etc.
 
 // =============================================================================
 // Stdlib.Dict - Immutable Dictionary using HAMT (Hash Array Mapped Trie)
