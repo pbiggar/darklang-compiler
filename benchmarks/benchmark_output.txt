@@ -1,0 +1,51 @@
+Recording compiler version...
+Mode: Cachegrind (instruction counts) - using cached Rust/Python baselines
+Benchmarks to run: ackermann
+binary_trees
+collatz
+factorial
+fannkuch
+fib
+leibniz
+mandelbrot
+matmul
+nbody
+nqueen
+pisum
+primes
+quicksort
+spectral_norm
+sum_to_n
+tak
+
+==========================================
+Benchmark: ackermann
+==========================================
+Building ackermann...
+  Building Dark...
+  Building Rust...
+  Python: no build needed
+  Build complete.
+Validating ackermann (expected: 32765)...
+  Dark: PASS
+  Rust: PASS
+  Python: PASS
+  All validations passed.
+Running cachegrind benchmark for ackermann...
+  Running cachegrind on dark...
+    Instructions: 27194711527
+  Results saved to: /Users/paulbiggar/projects/agent-worktree-3/benchmarks/results/2025-12-29_003635/ackermann_cachegrind.json
+
+==========================================
+Benchmark: binary_trees
+==========================================
+Building binary_trees...
+  Building Dark...
+  Building Rust...
+  Python: no build needed
+  Build complete.
+Validating binary_trees (expected: 6553500)...
+  Dark: FAIL (got: '')
+  Rust: PASS
+  Python: PASS
+Validation failed!
