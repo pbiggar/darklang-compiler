@@ -472,7 +472,58 @@ def Stdlib.String.drop(s: String, n: Int64) : String =
     let sLen = Stdlib.String.length(s) in
     Stdlib.String.slice(s, n, sLen - n)
 
-// TODO: More String functions: toUppercase, toLowercase, trim, replace, split, etc.
+// =============================================================================
+// UTF-8 Decoding (for Unicode support)
+// =============================================================================
+
+// Decode a single UTF-8 codepoint starting at byteIndex
+// Returns (codepoint, bytesConsumed) tuple
+// UTF-8 encoding:
+//   - 1 byte:  0xxxxxxx (ASCII, 0-127)
+//   - 2 bytes: 110xxxxx 10xxxxxx (128-2047)
+//   - 3 bytes: 1110xxxx 10xxxxxx 10xxxxxx (2048-65535)
+//   - 4 bytes: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx (65536-1114111)
+def Stdlib.String.__decodeUtf8At(s: String, byteIndex: Int64) : (Int64, Int64) =
+    let b0 = Stdlib.String.getByteAt(s, byteIndex) in
+    if b0 < 128 then
+        // 1-byte (ASCII): 0xxxxxxx
+        (b0, 1)
+    else if b0 < 224 then
+        // 2-byte: 110xxxxx 10xxxxxx
+        let b1 = Stdlib.String.getByteAt(s, byteIndex + 1) in
+        let cp = ((b0 & 31) << 6) ^ (b1 & 63) in
+        (cp, 2)
+    else if b0 < 240 then
+        // 3-byte: 1110xxxx 10xxxxxx 10xxxxxx
+        let b1 = Stdlib.String.getByteAt(s, byteIndex + 1) in
+        let b2 = Stdlib.String.getByteAt(s, byteIndex + 2) in
+        let cp = ((b0 & 15) << 12) ^ ((b1 & 63) << 6) ^ (b2 & 63) in
+        (cp, 3)
+    else
+        // 4-byte: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+        let b1 = Stdlib.String.getByteAt(s, byteIndex + 1) in
+        let b2 = Stdlib.String.getByteAt(s, byteIndex + 2) in
+        let b3 = Stdlib.String.getByteAt(s, byteIndex + 3) in
+        let cp = ((b0 & 7) << 18) ^ ((b1 & 63) << 12) ^ ((b2 & 63) << 6) ^ (b3 & 63) in
+        (cp, 4)
+
+// Convert a string to a list of Unicode codepoints
+def Stdlib.String.toCodepoints(s: String) : List<Int64> =
+    Stdlib.String.__toCodepointsHelper(s, 0, Stdlib.String.length(s), [])
+
+// Helper: recursively decode codepoints
+def Stdlib.String.__toCodepointsHelper(s: String, byteIndex: Int64, byteLen: Int64, acc: List<Int64>) : List<Int64> =
+    if byteIndex >= byteLen then
+        Stdlib.List.reverse<Int64>(acc)
+    else
+        let result = Stdlib.String.__decodeUtf8At(s, byteIndex) in
+        let cp = Stdlib.Tuple2.first<Int64, Int64>(result) in
+        let consumed = Stdlib.Tuple2.second<Int64, Int64>(result) in
+        Stdlib.String.__toCodepointsHelper(s, byteIndex + consumed, byteLen, [cp, ...acc])
+
+// Get the number of codepoints in a string (not bytes)
+def Stdlib.String.codepointLength(s: String) : Int64 =
+    Stdlib.List.length<Int64>(Stdlib.String.toCodepoints(s))
 
 // =============================================================================
 // Stdlib.Dict - Immutable Dictionary using HAMT (Hash Array Mapped Trie)

@@ -37,8 +37,10 @@ let addString (pool: StringPool) (s: string) : int * StringPool =
     | Some idx -> (idx, pool)
     | None ->
         let idx = pool.NextId
+        // Use UTF-8 byte count, not UTF-16 char count
+        let utf8Length = System.Text.Encoding.UTF8.GetByteCount(s)
         let pool' = {
-            Strings = Map.add idx (s, String.length s) pool.Strings
+            Strings = Map.add idx (s, utf8Length) pool.Strings
             StringToId = Map.add s idx pool.StringToId
             NextId = idx + 1
         }
