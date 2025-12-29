@@ -258,3 +258,8 @@ match (5 > 3) && (2 < 4) with | true -> 1 | false -> 0 = stdout="1\n"
 // Or in match condition
 match (1 > 10) || (10 > 1) with | true -> 42 | false -> 0 = stdout="42\n"
 
+// === Non-exhaustive pattern match test ===
+// A 3-element list matched against [a, b] pattern with no wildcard is non-exhaustive
+// This should produce a compile error
+match [1, 2, 3] with | [a, b] -> a + b = error="Non-exhaustive"
+

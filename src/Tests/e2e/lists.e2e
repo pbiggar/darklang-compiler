@@ -93,10 +93,10 @@ match [2 + 3, 4 * 5] with | [a, b] -> a + b | _ -> 0 = stdout="25\n"
 // === Nested Match ===
 
 // Match result is a list, then match that
-match [1] with | [x] -> match [x, x + 1] with | [a, b] -> a + b | _ -> 0 | _ -> 0 = stdout="3\n"
+match [1] with | [x] -> (match [x, x + 1] with | [a, b] -> a + b | _ -> 0) | _ -> 0 = stdout="3\n"
 
 // Chain of list matches
-match [2] with | [x] -> let y = x * 3 in match [y] with | [z] -> z | _ -> 0 | _ -> 0 = stdout="6\n"
+match [2] with | [x] -> (let y = x * 3 in match [y] with | [z] -> z | _ -> 0) | _ -> 0 = stdout="6\n"
 
 // === List in Let Body ===
 
@@ -104,7 +104,7 @@ match [2] with | [x] -> let y = x * 3 in match [y] with | [z] -> z | _ -> 0 | _ 
 match [5, 10] with | [a, b] -> (a + b) * 2 | _ -> 0 = stdout="30\n"
 
 // Multiple bindings then use
-match [1, 2] with | [x, y] -> match [3, 4] with | [a, b] -> x + y + a + b | _ -> 0 | _ -> 0 = stdout="10\n"
+match [1, 2] with | [x, y] -> (match [3, 4] with | [a, b] -> x + y + a + b | _ -> 0) | _ -> 0 = stdout="10\n"
 
 // === Edge Cases ===
 

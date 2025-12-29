@@ -2999,11 +2999,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     // For non-empty list patterns, we still need proper length checking
                     match pattern with
                     | AST.PList (_ :: _ as listPatterns) ->
-                        // For list patterns as last case, generate proper checks
-                        // If the pattern doesn't match, this is a non-exhaustive match
-                        // We generate an expression that returns 0 as a fallback (TODO: proper error)
-                        let fallbackExpr = ANF.Return (ANF.IntLiteral 0L)
-                        compileListPatternWithChecks listPatterns scrutineeAtom' env body fallbackExpr vg
+                        // Explicit list pattern like [a, b] as the only/last case with no wildcard
+                        // This is non-exhaustive - reject at compile time
+                        Error "Non-exhaustive pattern match: list pattern requires a catch-all case"
                     | AST.PListCons (headPatterns, tailPattern) ->
                         // List cons pattern as last case
                         let fallbackExpr = ANF.Return (ANF.IntLiteral 0L)
@@ -3016,6 +3014,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             extractAndCompileBody pattern body scrutineeAtom' env vg
                         | Some guardExpr ->
                             // With guard: compile pattern match with guard check
+                            // Note: If guard fails, fallback returns 0 (not ideal, but safe if match is exhaustive)
                             let fallbackExpr = ANF.Return (ANF.IntLiteral 0L)
                             extractAndCompileBodyWithGuard pattern guardExpr body scrutineeAtom' env vg fallbackExpr
                 | mc :: rest ->

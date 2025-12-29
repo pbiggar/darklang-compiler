@@ -142,8 +142,8 @@ let xs = [5, 10] in match xs with | [a, b] -> a * b | _ -> 0 = 50
 // Nested List Matches
 // ===================================================================
 
-match [1] with | [x] -> match [x, x + 1] with | [a, b] -> a + b | _ -> 0 | _ -> 0 = 3
-match [2] with | [x] -> let y = x * 3 in match [y] with | [z] -> z | _ -> 0 | _ -> 0 = 6
+match [1] with | [x] -> (match [x, x + 1] with | [a, b] -> a + b | _ -> 0) | _ -> 0 = 3
+match [2] with | [x] -> (let y = x * 3 in match [y] with | [z] -> z | _ -> 0) | _ -> 0 = 6
 
 // ===================================================================
 // Lists with Complex Bodies
