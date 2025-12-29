@@ -37,7 +37,7 @@ Stdlib.Result.isError<Int64, Int64>(Stdlib.Result.map<Int64, Int64, Int64>(Stdli
 // When changing error type from e to f, the Error constructor gets the wrong type
 // ===================================================================
 
-// Stdlib.Result.mapError<Int64, Int64, Int64>(Stdlib.Result.Result.Error(99), (e: Int64) => e + 1)
+// Stdlib.Result.mapError(Stdlib.Result.Result.Error(99), (e: Int64) => e + 1)
 
 // ===================================================================
 // Stdlib.Result.andThen - Chain Result computations

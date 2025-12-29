@@ -12,8 +12,8 @@
 // Stdlib.List.singleton - Create a single-element list
 // ===================================================================
 
-Stdlib.List.length<Int64>(Stdlib.List.singleton<Int64>(42)) = stdout="1\n"
-match Stdlib.List.singleton<Int64>(5) with | [x] -> x | _ -> 0 = 5
+Stdlib.List.length(Stdlib.List.singleton(42)) = stdout="1\n"
+match Stdlib.List.singleton(5) with | [x] -> x | _ -> 0 = 5
 
 // ===================================================================
 // List spread syntax - [h, ...rest] in expressions
@@ -104,7 +104,7 @@ Stdlib.Option.isNone<Int64>(Stdlib.List.head<Int64>([])) = stdout="true\n"
 
 Stdlib.List.length<Int64>(Stdlib.Option.withDefault<List<Int64>>(Stdlib.List.tail<Int64>([1, 2, 3]), [])) = stdout="2\n"
 Stdlib.Option.isNone<List<Int64>>(Stdlib.List.tail<Int64>([])) = stdout="true\n"
-match Stdlib.List.tail<Int64>([1, 2, 3]) with | Some(t) -> Stdlib.List.length<Int64>(t) | None -> 0 = stdout="2\n"
+match Stdlib.List.tail<Int64>([1, 2, 3]) with | Some(t) -> Stdlib.List.length(t) | None -> 0 = stdout="2\n"
 
 // ===================================================================
 // Stdlib.List.getAt - Get element at index

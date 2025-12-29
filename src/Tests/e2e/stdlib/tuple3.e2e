@@ -7,31 +7,31 @@
 // Stdlib.Tuple3.create - Constructs a triple from three values
 // ===================================================================
 
-Stdlib.Tuple3.first<Int64, Int64, Int64>(Stdlib.Tuple3.create<Int64, Int64, Int64>(1, 2, 3)) = 1
-Stdlib.Tuple3.second<Int64, Int64, Int64>(Stdlib.Tuple3.create<Int64, Int64, Int64>(1, 2, 3)) = 2
-Stdlib.Tuple3.third<Int64, Int64, Int64>(Stdlib.Tuple3.create<Int64, Int64, Int64>(1, 2, 3)) = 3
+Stdlib.Tuple3.first(Stdlib.Tuple3.create(1, 2, 3)) = 1
+Stdlib.Tuple3.second(Stdlib.Tuple3.create(1, 2, 3)) = 2
+Stdlib.Tuple3.third(Stdlib.Tuple3.create(1, 2, 3)) = 3
 
 // ===================================================================
 // Stdlib.Tuple3.first - Returns the first value of a triple
 // ===================================================================
 
-Stdlib.Tuple3.first<Int64, Int64, Int64>((1, 2, 3)) = 1
-Stdlib.Tuple3.first<Int64, Int64, Int64>((42, 0, 99)) = 42
-Stdlib.Tuple3.first<Bool, Bool, Bool>((true, false, true)) = stdout="true\n"
+Stdlib.Tuple3.first((1, 2, 3)) = 1
+Stdlib.Tuple3.first((42, 0, 99)) = 42
+Stdlib.Tuple3.first((true, false, true)) = stdout="true\n"
 
 // ===================================================================
 // Stdlib.Tuple3.second - Returns the second value of a triple
 // ===================================================================
 
-Stdlib.Tuple3.second<Int64, Int64, Int64>((1, 2, 3)) = 2
-Stdlib.Tuple3.second<Int64, Int64, Int64>((0, 42, 99)) = 42
+Stdlib.Tuple3.second((1, 2, 3)) = 2
+Stdlib.Tuple3.second((0, 42, 99)) = 42
 
 // ===================================================================
 // Stdlib.Tuple3.third - Returns the third value of a triple
 // ===================================================================
 
-Stdlib.Tuple3.third<Int64, Int64, Int64>((1, 2, 3)) = 3
-Stdlib.Tuple3.third<Int64, Int64, Int64>((0, 0, 42)) = 42
+Stdlib.Tuple3.third((1, 2, 3)) = 3
+Stdlib.Tuple3.third((0, 0, 42)) = 42
 
 // ===================================================================
 // Stdlib.Tuple3.mapFirst - Transform the first value in a triple
