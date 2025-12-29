@@ -12,6 +12,8 @@ open Output
 open TestDSL.PassTestRunner
 open TestDSL.E2EFormat
 open TestDSL.E2ETestRunner
+open TestDSL.OptimizationFormat
+open TestDSL.OptimizationTestRunner
 
 // ANSI color codes
 module Colors =
@@ -414,6 +416,68 @@ let main args =
                         failedTests.Add({ Name = $"Type Checking: {Path.GetFileName testFile}"; Message = msg; Details = [] })
                         sectionFailed <- sectionFailed + 1
                         failed <- failed + 1
+
+            sectionTimer.Stop()
+            if sectionFailed = 0 then
+                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
+            else
+                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
+            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
+            println ""
+
+    // Run Optimization Tests (ANF, MIR, LIR)
+    let optDir = Path.Combine(assemblyDir, "optimization")
+    if Directory.Exists optDir then
+        let optTestFiles = Directory.GetFiles(optDir, "*.opt", SearchOption.AllDirectories)
+        if optTestFiles.Length > 0 then
+            let sectionTimer = Stopwatch.StartNew()
+            println $"{Colors.cyan}⚡ Optimization Tests{Colors.reset}"
+            println ""
+
+            let mutable sectionPassed = 0
+            let mutable sectionFailed = 0
+
+            for testFile in optTestFiles do
+                let fileName = Path.GetFileNameWithoutExtension testFile
+                // Determine stage from filename (anf.opt -> ANF, mir.opt -> MIR, lir.opt -> LIR)
+                let stage =
+                    if fileName.ToLower().Contains("anf") then TestDSL.OptimizationFormat.ANF
+                    elif fileName.ToLower().Contains("mir") then TestDSL.OptimizationFormat.MIR
+                    elif fileName.ToLower().Contains("lir") then TestDSL.OptimizationFormat.LIR
+                    else TestDSL.OptimizationFormat.ANF  // Default to ANF
+
+                match TestDSL.OptimizationTestRunner.runTestFile stage testFile with
+                | Error msg ->
+                    println $"{Colors.red}✗ ERROR parsing {Path.GetFileName testFile}{Colors.reset}"
+                    println $"    {msg}"
+                    failedTests.Add({ Name = $"Optimization: {Path.GetFileName testFile}"; Message = msg; Details = [] })
+                    sectionFailed <- sectionFailed + 1
+                    failed <- failed + 1
+                | Ok results ->
+                    for (test, result) in results do
+                        if matchesFilter filter test.Name then
+                            if result.Success then
+                                sectionPassed <- sectionPassed + 1
+                                passed <- passed + 1
+                            else
+                                print $"  {test.Name}... "
+                                println $"{Colors.red}✗ FAIL{Colors.reset}"
+                                println $"    {result.Message}"
+                                let details = ResizeArray<string>()
+                                match result.Expected, result.Actual with
+                                | Some exp, Some act ->
+                                    println "    Expected:"
+                                    for line in exp.Split('\n') do
+                                        println $"      {line}"
+                                        details.Add($"Expected: {line}")
+                                    println "    Actual:"
+                                    for line in act.Split('\n') do
+                                        println $"      {line}"
+                                        details.Add($"Actual: {line}")
+                                | _ -> ()
+                                failedTests.Add({ Name = $"Optimization: {test.Name}"; Message = result.Message; Details = details |> Seq.toList })
+                                sectionFailed <- sectionFailed + 1
+                                failed <- failed + 1
 
             sectionTimer.Stop()
             if sectionFailed = 0 then

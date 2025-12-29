@@ -1,0 +1,261 @@
+// ANF Optimization Tests
+// Tests constant folding, algebraic identities, DCE, constant propagation, and conditional simplification
+
+---NAME---
+const_fold_int_add
+---INPUT---
+1 + 2
+---EXPECTED---
+return 3
+
+---NAME---
+const_fold_int_sub
+---INPUT---
+10 - 3
+---EXPECTED---
+return 7
+
+---NAME---
+const_fold_int_mul
+---INPUT---
+4 * 5
+---EXPECTED---
+return 20
+
+---NAME---
+const_fold_int_div
+---INPUT---
+20 / 4
+---EXPECTED---
+return 5
+
+---NAME---
+const_fold_int_mod
+---INPUT---
+10 % 3
+---EXPECTED---
+return 1
+
+---NAME---
+const_fold_float_add
+---INPUT---
+1.0 + 2.0
+---EXPECTED---
+return 3
+
+---NAME---
+const_fold_float_sub
+---INPUT---
+5.0 - 2.0
+---EXPECTED---
+return 3
+
+---NAME---
+const_fold_float_mul
+---INPUT---
+3.0 * 4.0
+---EXPECTED---
+return 12
+
+---NAME---
+const_fold_float_div
+---INPUT---
+8.0 / 2.0
+---EXPECTED---
+return 4
+
+---NAME---
+const_fold_comparison_lt
+---INPUT---
+if 1 < 2 then 10 else 20
+---EXPECTED---
+return 10
+
+---NAME---
+const_fold_comparison_gt
+---INPUT---
+if 2 > 1 then 10 else 20
+---EXPECTED---
+return 10
+
+---NAME---
+const_fold_comparison_eq
+---INPUT---
+if 1 == 1 then 10 else 20
+---EXPECTED---
+return 10
+
+---NAME---
+const_fold_comparison_neq
+---INPUT---
+if 1 != 2 then 10 else 20
+---EXPECTED---
+return 10
+
+---NAME---
+const_fold_bool_and_true
+---INPUT---
+if true && true then 1 else 0
+---EXPECTED---
+return 1
+
+---NAME---
+const_fold_bool_and_false
+---INPUT---
+if true && false then 1 else 0
+---EXPECTED---
+return 0
+
+---NAME---
+const_fold_bool_or_true
+---INPUT---
+if false || true then 1 else 0
+---EXPECTED---
+return 1
+
+---NAME---
+const_fold_bool_or_false
+---INPUT---
+if false || false then 1 else 0
+---EXPECTED---
+return 0
+
+---NAME---
+identity_add_zero_right
+---INPUT---
+let x = 42 in x + 0
+---EXPECTED---
+return 42
+
+---NAME---
+identity_add_zero_left
+---INPUT---
+let x = 42 in 0 + x
+---EXPECTED---
+return 42
+
+---NAME---
+identity_sub_zero
+---INPUT---
+let x = 42 in x - 0
+---EXPECTED---
+return 42
+
+---NAME---
+identity_mul_one_right
+---INPUT---
+let x = 42 in x * 1
+---EXPECTED---
+return 42
+
+---NAME---
+identity_mul_one_left
+---INPUT---
+let x = 42 in 1 * x
+---EXPECTED---
+return 42
+
+---NAME---
+identity_mul_zero_right
+---INPUT---
+let x = 42 in x * 0
+---EXPECTED---
+return 0
+
+---NAME---
+identity_mul_zero_left
+---INPUT---
+let x = 42 in 0 * x
+---EXPECTED---
+return 0
+
+---NAME---
+identity_div_one
+---INPUT---
+let x = 42 in x / 1
+---EXPECTED---
+return 42
+
+---NAME---
+dce_unused_binding
+---INPUT---
+let unused = 1 + 2 in 42
+---EXPECTED---
+return 42
+
+---NAME---
+dce_multiple_unused
+---INPUT---
+let a = 1 in let b = 2 in let c = 3 in 100
+---EXPECTED---
+return 100
+
+---NAME---
+const_prop_simple
+---INPUT---
+let x = 5 in x + 1
+---EXPECTED---
+return 6
+
+---NAME---
+const_prop_chain
+---INPUT---
+let x = 2 in let y = x * 3 in y + 1
+---EXPECTED---
+return 7
+
+---NAME---
+const_prop_multi_level
+---INPUT---
+let x = 2 in let y = x * 3 in let z = y + 1 in z
+---EXPECTED---
+return 7
+
+---NAME---
+cond_simp_true_branch
+---INPUT---
+if true then 1 else 2
+---EXPECTED---
+return 1
+
+---NAME---
+cond_simp_false_branch
+---INPUT---
+if false then 1 else 2
+---EXPECTED---
+return 2
+
+---NAME---
+cond_simp_nested
+---INPUT---
+if true then (if false then 1 else 2) else 3
+---EXPECTED---
+return 2
+
+---NAME---
+unary_neg_int
+---INPUT---
+-(5)
+---EXPECTED---
+return -5
+
+---NAME---
+unary_neg_float
+---INPUT---
+-(3.5)
+---EXPECTED---
+return -3.5
+
+---NAME---
+unary_not_true
+---INPUT---
+if !true then 1 else 2
+---EXPECTED---
+return 2
+
+---NAME---
+unary_not_false
+---INPUT---
+if !false then 1 else 2
+---EXPECTED---
+return 1
