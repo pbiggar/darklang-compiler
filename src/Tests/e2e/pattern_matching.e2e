@@ -1,69 +1,83 @@
 // Pattern matching tests for Phase 7 Milestone 5
 
+// =====================================================
+// Simple Enum Matching - Color type
+// =====================================================
+
+type Color = Red | Green | Blue
+
 // Match on simple enum - first variant
-type Color = Red | Green | Blue match Red with | Red -> 1 | Green -> 2 | Blue -> 3 = stdout="1\n"
+match Red with | Red -> 1 | Green -> 2 | Blue -> 3 = stdout="1\n"
 
 // Match on simple enum - second variant
-type Color = Red | Green | Blue match Green with | Red -> 1 | Green -> 2 | Blue -> 3 = stdout="2\n"
+match Green with | Red -> 1 | Green -> 2 | Blue -> 3 = stdout="2\n"
 
 // Match on simple enum - third variant
-type Color = Red | Green | Blue match Blue with | Red -> 1 | Green -> 2 | Blue -> 3 = stdout="3\n"
+match Blue with | Red -> 1 | Green -> 2 | Blue -> 3 = stdout="3\n"
 
 // Wildcard pattern matches anything
-type Color = Red | Green | Blue match Green with | Red -> 1 | _ -> 99 = stdout="99\n"
+match Green with | Red -> 1 | _ -> 99 = stdout="99\n"
 
 // Wildcard at end is catch-all
-type Color = Red | Green | Blue match Blue with | Red -> 1 | Green -> 2 | _ -> 100 = stdout="100\n"
+match Blue with | Red -> 1 | Green -> 2 | _ -> 100 = stdout="100\n"
 
 // Match on enum stored in variable
-type Color = Red | Green | Blue let c = Green in match c with | Red -> 10 | Green -> 20 | Blue -> 30 = stdout="20\n"
+let c = Green in match c with | Red -> 10 | Green -> 20 | Blue -> 30 = stdout="20\n"
 
 // Match with arithmetic in case body
-type Color = Red | Green | Blue match Red with | Red -> 5 + 10 | _ -> 0 = stdout="15\n"
-
-// Nested match - match result of another match
-type Bool = True | False let b = True in match b with | True -> 100 | False -> 0 = stdout="100\n"
+match Red with | Red -> 5 + 10 | _ -> 0 = stdout="15\n"
 
 // Match with complex body expressions
-type Color = Red | Green | Blue match Red with | Red -> 2 + 3 | Green -> 10 - 5 | Blue -> 1 * 1 = stdout="5\n"
+match Red with | Red -> 2 + 3 | Green -> 10 - 5 | Blue -> 1 * 1 = stdout="5\n"
 
-// Two variant type
-type Bool = True | False match False with | True -> 1 | False -> 0 = stdout="0\n"
+// =====================================================
+// Other Simple Enums
+// =====================================================
+
+// Two variant type (shadowing built-in Bool for testing)
+type Bool = True | False
+
+let b = True in match b with | True -> 100 | False -> 0 = stdout="100\n"
+match False with | True -> 1 | False -> 0 = stdout="0\n"
 
 // Four variant type
-type Dir = North | East | South | West match South with | North -> 0 | East -> 1 | South -> 2 | West -> 3 = stdout="2\n"
+type Dir = North | East | South | West
+
+match South with | North -> 0 | East -> 1 | South -> 2 | West -> 3 = stdout="2\n"
 
 // === Milestone 6: Payload Extraction ===
 
+type MyOption = MyNone | MySome of Int64
+
 // Extract payload from MySome variant
-type MyOption = MyNone | MySome of Int64 match MySome(42) with | MySome(x) -> x | MyNone -> 0 = stdout="42\n"
+match MySome(42) with | MySome(x) -> x | MyNone -> 0 = stdout="42\n"
 
 // Extract and use payload in arithmetic
-type MyOption = MyNone | MySome of Int64 match MySome(10) with | MySome(x) -> x + 5 | MyNone -> 0 = stdout="15\n"
+match MySome(10) with | MySome(x) -> x + 5 | MyNone -> 0 = stdout="15\n"
 
 // Match MyNone case (no extraction)
-type MyOption = MyNone | MySome of Int64 match MyNone with | MySome(x) -> x | MyNone -> 99 = stdout="99\n"
-
-// Variable binding on whole scrutinee
-type Color = Red | Green | Blue match Green with | x -> 1 = stdout="1\n"
-
-// Extract payload with different variant order
-type MyResult = MyOk of Int64 | MyErr match MyOk(100) with | MyOk(v) -> v | MyErr -> 0 = stdout="100\n"
-
-// Match second variant of MyResult
-type MyResult = MyOk of Int64 | MyErr match MyErr with | MyOk(v) -> v | MyErr -> 1 = stdout="1\n"
-
-// Multiple payload variants - match first
-type Either = Left of Int64 | Right of Int64 match Left(5) with | Left(x) -> x | Right(y) -> y = stdout="5\n"
-
-// Multiple payload variants - match second
-type Either = Left of Int64 | Right of Int64 match Right(7) with | Left(x) -> x | Right(y) -> y = stdout="7\n"
+match MyNone with | MySome(x) -> x | MyNone -> 99 = stdout="99\n"
 
 // Extract and multiply
-type MyOption = MyNone | MySome of Int64 match MySome(6) with | MySome(x) -> x * 7 | MyNone -> 0 = stdout="42\n"
+match MySome(6) with | MySome(x) -> x * 7 | MyNone -> 0 = stdout="42\n"
 
 // Extract with wildcard fallback
-type MyOption = MyNone | MySome of Int64 match MySome(123) with | MySome(n) -> n | _ -> 0 = stdout="123\n"
+match MySome(123) with | MySome(n) -> n | _ -> 0 = stdout="123\n"
+
+// Variable binding on whole scrutinee (uses Color from above)
+match Green with | x -> 1 = stdout="1\n"
+
+// Extract payload with different variant order
+type MyResult = MyOk of Int64 | MyErr
+
+match MyOk(100) with | MyOk(v) -> v | MyErr -> 0 = stdout="100\n"
+match MyErr with | MyOk(v) -> v | MyErr -> 1 = stdout="1\n"
+
+// Multiple payload variants
+type Either = Left of Int64 | Right of Int64
+
+match Left(5) with | Left(x) -> x | Right(y) -> y = stdout="5\n"
+match Right(7) with | Left(x) -> x | Right(y) -> y = stdout="7\n"
 
 // === Integer Literal Patterns ===
 
@@ -142,42 +156,51 @@ match (1, 2, 3, 4, 5) with | (a, _, c, _, e) -> a + c + e = stdout="9\n"
 
 // === Record Patterns ===
 
+type Point = { x: Int64, y: Int64 }
+
 // Simple record extraction
-type Point = { x: Int64, y: Int64 } match Point { x = 10, y = 20 } with | Point { x = a, y = b } -> a + b = stdout="30\n"
+match Point { x = 10, y = 20 } with | Point { x = a, y = b } -> a + b = stdout="30\n"
 
 // Record with one field extracted
-type Point = { x: Int64, y: Int64 } match Point { x = 5, y = 10 } with | Point { x = n, y = _ } -> n = stdout="5\n"
+match Point { x = 5, y = 10 } with | Point { x = n, y = _ } -> n = stdout="5\n"
 
 // Record second field only
-type Point = { x: Int64, y: Int64 } match Point { x = 5, y = 15 } with | Point { x = _, y = m } -> m = stdout="15\n"
+match Point { x = 5, y = 15 } with | Point { x = _, y = m } -> m = stdout="15\n"
 
 // Record from variable
-type Point = { x: Int64, y: Int64 } let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> a * a + b * b = stdout="25\n"
+let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> a * a + b * b = stdout="25\n"
 
 // Three-field record
-type Vec3 = { x: Int64, y: Int64, z: Int64 } match Vec3 { x = 1, y = 2, z = 3 } with | Vec3 { x = a, y = b, z = c } -> a + b + c = stdout="6\n"
+type Vec3 = { x: Int64, y: Int64, z: Int64 }
+
+match Vec3 { x = 1, y = 2, z = 3 } with | Vec3 { x = a, y = b, z = c } -> a + b + c = stdout="6\n"
 
 // === Nested ADT Patterns ===
 
-// Nested - testing Wrap type
-type MyOption = MyNone | MySome of Int64 type Nested = Empty | Wrap of Int64 match Wrap(42) with | Wrap(x) -> x | Empty -> 0 = stdout="42\n"
+// Nested - testing Wrap type (MyOption already defined above)
+type Nested = Empty | Wrap of Int64
+
+match Wrap(42) with | Wrap(x) -> x | Empty -> 0 = stdout="42\n"
 
 // Deeply extract from nested variant
-type Box = Empty | Full of Int64 match Full(99) with | Full(n) -> n * 2 | Empty -> 0 = stdout="198\n"
+type Box = Empty | Full of Int64
+
+match Full(99) with | Full(n) -> n * 2 | Empty -> 0 = stdout="198\n"
 
 // === Complex Combinations ===
+// Note: Uses MyOption and Point defined above
 
 // Tuple inside match case body
-type MyOption = MyNone | MySome of Int64 match MySome(5) with | MySome(x) -> let t = (x, x * 2) in match t with | (a, b) -> a + b | MyNone -> 0 = stdout="15\n"
+match MySome(5) with | MySome(x) -> let t = (x, x * 2) in match t with | (a, b) -> a + b | MyNone -> 0 = stdout="15\n"
 
 // Record access in match body
-type Point = { x: Int64, y: Int64 } type MyOption = MyNone | MySome of Int64 match MySome(1) with | MySome(_) -> let p = Point { x = 10, y = 20 } in p.x + p.y | MyNone -> 0 = stdout="30\n"
+match MySome(1) with | MySome(_) -> let p = Point { x = 10, y = 20 } in p.x + p.y | MyNone -> 0 = stdout="30\n"
 
 // Match on tuple element
 match (1, 2) with | (a, _) -> match a with | 1 -> 100 | _ -> 0 = stdout="100\n"
 
-// Chained matches
-type Color = Red | Green | Blue match Red with | Red -> match true with | true -> 42 | false -> 0 | _ -> 0 = stdout="42\n"
+// Chained matches (uses Color from above)
+match Red with | Red -> match true with | true -> 42 | false -> 0 | _ -> 0 = stdout="42\n"
 
 // Match with arithmetic in result (avoid match-in-atom-position)
 match 5 with | 5 -> 100 + 1 | _ -> 0 = stdout="101\n"
@@ -186,7 +209,9 @@ match 5 with | 5 -> 100 + 1 | _ -> 0 = stdout="101\n"
 match 1 with | 1 -> match 2 with | 2 -> 10 + 20 | _ -> 0 | _ -> 0 = stdout="30\n"
 
 // Arithmetic on extracted values
-type Pair = MkPair of Int64 match MkPair(7) with | MkPair(n) -> n * n + n = stdout="56\n"
+type Pair = MkPair of Int64
+
+match MkPair(7) with | MkPair(n) -> n * n + n = stdout="56\n"
 
 // Boolean from comparison used in match
 let x = 42 in match x == 42 with | true -> 1 | false -> 0 = stdout="1\n"
@@ -209,10 +234,14 @@ match 1 with | 1 -> 100 | 2 -> 200 | _ -> 0 = stdout="100\n"
 match 99 with | 1 -> 100 | 2 -> 200 | n -> n = stdout="99\n"
 
 // Multiple wildcards in different positions
-type Triple = T of Int64 match T(5) with | T(x) -> x + 1 = stdout="6\n"
+type Triple = T of Int64
+
+match T(5) with | T(x) -> x + 1 = stdout="6\n"
 
 // Combine enum and payload extraction
-type MaybeInt = Nothing | Just of Int64 match Just(10) with | Nothing -> 0 | Just(n) -> n + n = stdout="20\n"
+type MaybeInt = Nothing | Just of Int64
+
+match Just(10) with | Nothing -> 0 | Just(n) -> n + n = stdout="20\n"
 
 // Mix patterns in same match
 match 2 with | 1 -> 10 | 2 -> 20 | x -> x * 100 = stdout="20\n"
@@ -229,19 +258,25 @@ let t = (1 + 2, 3 + 4) in match t with | (a, b) -> a * b = stdout="21\n"
 match (true, false) with | (a, _) -> match a with | true -> 1 | false -> 0 = stdout="1\n"
 
 // === Records with Complex Bodies ===
+// Note: Point already defined above
 
-type Point = { x: Int64, y: Int64 } let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> (a + b) * (a - b) = stdout="-7\n"
+// Complex arithmetic with record fields
+let p = Point { x = 3, y = 4 } in match p with | Point { x = a, y = b } -> (a + b) * (a - b) = stdout="-7\n"
 
 // Manhattan distance style
-type Point = { x: Int64, y: Int64 } match Point { x = 3, y = 4 } with | Point { x = a, y = b } -> if a > b then a else b = stdout="4\n"
+match Point { x = 3, y = 4 } with | Point { x = a, y = b } -> if a > b then a else b = stdout="4\n"
 
 // === Wild Nested Combinations ===
 
 // Tuple in ADT payload then extracted
-type Box = Empty | Pair of Int64 match Pair(42) with | Pair(n) -> let t = (n, n + 1) in match t with | (a, b) -> a + b | Empty -> 0 = stdout="85\n"
+type BoxPair = EmptyPair | Pair of Int64
+
+match Pair(42) with | Pair(n) -> let t = (n, n + 1) in match t with | (a, b) -> a + b | EmptyPair -> 0 = stdout="85\n"
 
 // ADT in tuple (via let)
-type Maybe = No | Yes of Int64 let m = Yes(5) in let t = (m, 10) in match t with | (_, y) -> y = stdout="10\n"
+type Maybe = No | Yes of Int64
+
+let m = Yes(5) in let t = (m, 10) in match t with | (_, y) -> y = stdout="10\n"
 
 // Deeply nested match cascade
 match 1 with | 1 -> match 2 with | 2 -> match 3 with | 3 -> 42 | _ -> 0 | _ -> 0 | _ -> 0 = stdout="42\n"

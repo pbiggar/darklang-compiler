@@ -1,225 +1,227 @@
 // Tests for Dict (HAMT) implementation
+//
+// Helper functions to reduce verbosity
+
+def emptyInt(): Dict<Int64, Int64> = Stdlib.Dict.empty<Int64, Int64>()
+def setInt(d: Dict<Int64, Int64>, k: Int64, v: Int64): Dict<Int64, Int64> = Stdlib.Dict.set<Int64, Int64>(d, k, v)
+def getInt(d: Dict<Int64, Int64>, k: Int64): Stdlib.Option.Option<Int64> = Stdlib.Dict.get<Int64, Int64>(d, k)
+def removeInt(d: Dict<Int64, Int64>, k: Int64): Dict<Int64, Int64> = Stdlib.Dict.remove<Int64, Int64>(d, k)
+def getOrDefault(d: Dict<Int64, Int64>, k: Int64, default: Int64): Int64 = Stdlib.Option.withDefault<Int64>(getInt(d, k), default)
+def isNoneInt(opt: Stdlib.Option.Option<Int64>): Bool = Stdlib.Option.isNone<Int64>(opt)
+
+def emptyStr(): Dict<String, Int64> = Stdlib.Dict.empty<String, Int64>()
+def setStr(d: Dict<String, Int64>, k: String, v: Int64): Dict<String, Int64> = Stdlib.Dict.set<String, Int64>(d, k, v)
+def getStr(d: Dict<String, Int64>, k: String): Stdlib.Option.Option<Int64> = Stdlib.Dict.get<String, Int64>(d, k)
+def removeStr(d: Dict<String, Int64>, k: String): Dict<String, Int64> = Stdlib.Dict.remove<String, Int64>(d, k)
+def getOrDefaultStr(d: Dict<String, Int64>, k: String, default: Int64): Int64 = Stdlib.Option.withDefault<Int64>(getStr(d, k), default)
 
 // Empty dict is 0 (null pointer)
-Stdlib.Dict.empty<Int64, Int64>() = 0
+emptyInt() = 0
 
 // Get from empty dict returns None
-Stdlib.Option.isNone<Int64>(Stdlib.Dict.get<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 42)) = stdout="true\n"
+isNoneInt(getInt(emptyInt(), 42)) = stdout="true\n"
 
 // Set and get single value
-Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100), 1), -1) = 100
+getOrDefault(setInt(emptyInt(), 1, 100), 1, -1) = 100
 
 // Get non-existent key from non-empty dict returns None
-Stdlib.Option.isNone<Int64>(Stdlib.Dict.get<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100), 2)) = stdout="true\n"
+isNoneInt(getInt(setInt(emptyInt(), 1, 100), 2)) = stdout="true\n"
 
 // Set multiple values
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100) in let d2 = Stdlib.Dict.set<Int64, Int64>(d1, 2, 200) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(d2, 1), -1) = 100
-
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100) in let d2 = Stdlib.Dict.set<Int64, Int64>(d1, 2, 200) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(d2, 2), -1) = 200
+let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 2, 200) in getOrDefault(d2, 1, -1) = 100
+let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 2, 200) in getOrDefault(d2, 2, -1) = 200
 
 // Update existing key
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100) in let d2 = Stdlib.Dict.set<Int64, Int64>(d1, 1, 999) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(d2, 1), -1) = 999
+let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 1, 999) in getOrDefault(d2, 1, -1) = 999
 
 // Three values
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10) in let d2 = Stdlib.Dict.set<Int64, Int64>(d1, 2, 20) in let d3 = Stdlib.Dict.set<Int64, Int64>(d2, 3, 30) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(d3, 1), -1) = 10
-
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10) in let d2 = Stdlib.Dict.set<Int64, Int64>(d1, 2, 20) in let d3 = Stdlib.Dict.set<Int64, Int64>(d2, 3, 30) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(d3, 2), -1) = 20
-
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10) in let d2 = Stdlib.Dict.set<Int64, Int64>(d1, 2, 20) in let d3 = Stdlib.Dict.set<Int64, Int64>(d2, 3, 30) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(d3, 3), -1) = 30
+let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = setInt(d2, 3, 30) in getOrDefault(d3, 1, -1) = 10
+let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = setInt(d2, 3, 30) in getOrDefault(d3, 2, -1) = 20
+let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = setInt(d2, 3, 30) in getOrDefault(d3, 3, -1) = 30
 
 // Keys with same hash chunk at level 0 (testing internal node expansion)
 // Keys 0 and 64 have the same 6-bit chunk at level 0 (both are 0 & 63 = 0)
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 0, 1000) in let d2 = Stdlib.Dict.set<Int64, Int64>(d1, 64, 2000) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(d2, 0), -1) = 1000
-
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 0, 1000) in let d2 = Stdlib.Dict.set<Int64, Int64>(d1, 64, 2000) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(d2, 64), -1) = 2000
+let d1 = setInt(emptyInt(), 0, 1000) in let d2 = setInt(d1, 64, 2000) in getOrDefault(d2, 0, -1) = 1000
+let d1 = setInt(emptyInt(), 0, 1000) in let d2 = setInt(d1, 64, 2000) in getOrDefault(d2, 64, -1) = 2000
 
 // ========== Dict.remove tests ==========
 
 // Remove from single-entry dict
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100) in let d2 = Stdlib.Dict.remove<Int64, Int64>(d1, 1) in Stdlib.Option.isNone<Int64>(Stdlib.Dict.get<Int64, Int64>(d2, 1)) = stdout="true\n"
+let d1 = setInt(emptyInt(), 1, 100) in let d2 = removeInt(d1, 1) in isNoneInt(getInt(d2, 1)) = stdout="true\n"
 
 // Remove non-existent key (dict unchanged)
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100) in let d2 = Stdlib.Dict.remove<Int64, Int64>(d1, 999) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(d2, 1), -1) = 100
+let d1 = setInt(emptyInt(), 1, 100) in let d2 = removeInt(d1, 999) in getOrDefault(d2, 1, -1) = 100
 
 // Remove one key, other keys remain
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100) in let d2 = Stdlib.Dict.set<Int64, Int64>(d1, 2, 200) in let d3 = Stdlib.Dict.set<Int64, Int64>(d2, 3, 300) in let d4 = Stdlib.Dict.remove<Int64, Int64>(d3, 2) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(d4, 1), -1) = 100
-
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100) in let d2 = Stdlib.Dict.set<Int64, Int64>(d1, 2, 200) in let d3 = Stdlib.Dict.set<Int64, Int64>(d2, 3, 300) in let d4 = Stdlib.Dict.remove<Int64, Int64>(d3, 2) in Stdlib.Option.isNone<Int64>(Stdlib.Dict.get<Int64, Int64>(d4, 2)) = stdout="true\n"
-
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100) in let d2 = Stdlib.Dict.set<Int64, Int64>(d1, 2, 200) in let d3 = Stdlib.Dict.set<Int64, Int64>(d2, 3, 300) in let d4 = Stdlib.Dict.remove<Int64, Int64>(d3, 2) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(d4, 3), -1) = 300
+let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 2, 200) in let d3 = setInt(d2, 3, 300) in let d4 = removeInt(d3, 2) in getOrDefault(d4, 1, -1) = 100
+let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 2, 200) in let d3 = setInt(d2, 3, 300) in let d4 = removeInt(d3, 2) in isNoneInt(getInt(d4, 2)) = stdout="true\n"
+let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 2, 200) in let d3 = setInt(d2, 3, 300) in let d4 = removeInt(d3, 2) in getOrDefault(d4, 3, -1) = 300
 
 // Immutability: original dict unchanged after remove
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100) in let d2 = Stdlib.Dict.remove<Int64, Int64>(d1, 1) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(d1, 1), -1) = 100
+let d1 = setInt(emptyInt(), 1, 100) in let d2 = removeInt(d1, 1) in getOrDefault(d1, 1, -1) = 100
 
 // Remove all keys one by one
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10) in let d2 = Stdlib.Dict.set<Int64, Int64>(d1, 2, 20) in let d3 = Stdlib.Dict.remove<Int64, Int64>(d2, 1) in let d4 = Stdlib.Dict.remove<Int64, Int64>(d3, 2) in Stdlib.Option.isNone<Int64>(Stdlib.Dict.get<Int64, Int64>(d4, 1)) = stdout="true\n"
-
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10) in let d2 = Stdlib.Dict.set<Int64, Int64>(d1, 2, 20) in let d3 = Stdlib.Dict.remove<Int64, Int64>(d2, 1) in let d4 = Stdlib.Dict.remove<Int64, Int64>(d3, 2) in Stdlib.Option.isNone<Int64>(Stdlib.Dict.get<Int64, Int64>(d4, 2)) = stdout="true\n"
+let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = removeInt(d2, 1) in let d4 = removeInt(d3, 2) in isNoneInt(getInt(d4, 1)) = stdout="true\n"
+let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = removeInt(d2, 1) in let d4 = removeInt(d3, 2) in isNoneInt(getInt(d4, 2)) = stdout="true\n"
 
 // Remove from empty dict (no-op)
-Stdlib.Option.isNone<Int64>(Stdlib.Dict.get<Int64, Int64>(Stdlib.Dict.remove<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1), 1)) = stdout="true\n"
+isNoneInt(getInt(removeInt(emptyInt(), 1), 1)) = stdout="true\n"
 
 // ========== String-keyed Dict tests ==========
 
 // Get from empty dict with string key
-Stdlib.Option.isNone<Int64>(Stdlib.Dict.get<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "hello")) = stdout="true\n"
+isNoneInt(getStr(emptyStr(), "hello")) = stdout="true\n"
 
 // Set and get single string key
-Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<String, Int64>(Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "hello", 100), "hello"), -1) = 100
+getOrDefaultStr(setStr(emptyStr(), "hello", 100), "hello", -1) = 100
 
 // Get non-existent string key from non-empty dict
-Stdlib.Option.isNone<Int64>(Stdlib.Dict.get<String, Int64>(Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "hello", 100), "world")) = stdout="true\n"
+isNoneInt(getStr(setStr(emptyStr(), "hello", 100), "world")) = stdout="true\n"
 
 // Set multiple string keys
-let d1 = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "one", 1) in let d2 = Stdlib.Dict.set<String, Int64>(d1, "two", 2) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<String, Int64>(d2, "one"), -1) = 1
-
-let d1 = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "one", 1) in let d2 = Stdlib.Dict.set<String, Int64>(d1, "two", 2) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<String, Int64>(d2, "two"), -1) = 2
+let d1 = setStr(emptyStr(), "one", 1) in let d2 = setStr(d1, "two", 2) in getOrDefaultStr(d2, "one", -1) = 1
+let d1 = setStr(emptyStr(), "one", 1) in let d2 = setStr(d1, "two", 2) in getOrDefaultStr(d2, "two", -1) = 2
 
 // Update existing string key
-let d1 = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "key", 100) in let d2 = Stdlib.Dict.set<String, Int64>(d1, "key", 999) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<String, Int64>(d2, "key"), -1) = 999
+let d1 = setStr(emptyStr(), "key", 100) in let d2 = setStr(d1, "key", 999) in getOrDefaultStr(d2, "key", -1) = 999
 
 // Three string keys
-let d1 = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "a", 10) in let d2 = Stdlib.Dict.set<String, Int64>(d1, "b", 20) in let d3 = Stdlib.Dict.set<String, Int64>(d2, "c", 30) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<String, Int64>(d3, "a"), -1) = 10
-
-let d1 = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "a", 10) in let d2 = Stdlib.Dict.set<String, Int64>(d1, "b", 20) in let d3 = Stdlib.Dict.set<String, Int64>(d2, "c", 30) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<String, Int64>(d3, "b"), -1) = 20
-
-let d1 = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "a", 10) in let d2 = Stdlib.Dict.set<String, Int64>(d1, "b", 20) in let d3 = Stdlib.Dict.set<String, Int64>(d2, "c", 30) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<String, Int64>(d3, "c"), -1) = 30
+let d1 = setStr(emptyStr(), "a", 10) in let d2 = setStr(d1, "b", 20) in let d3 = setStr(d2, "c", 30) in getOrDefaultStr(d3, "a", -1) = 10
+let d1 = setStr(emptyStr(), "a", 10) in let d2 = setStr(d1, "b", 20) in let d3 = setStr(d2, "c", 30) in getOrDefaultStr(d3, "b", -1) = 20
+let d1 = setStr(emptyStr(), "a", 10) in let d2 = setStr(d1, "b", 20) in let d3 = setStr(d2, "c", 30) in getOrDefaultStr(d3, "c", -1) = 30
 
 // ========== String Dict remove tests ==========
 
 // Remove from single-entry dict
-let d1 = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "key", 100) in let d2 = Stdlib.Dict.remove<String, Int64>(d1, "key") in Stdlib.Option.isNone<Int64>(Stdlib.Dict.get<String, Int64>(d2, "key")) = stdout="true\n"
+let d1 = setStr(emptyStr(), "key", 100) in let d2 = removeStr(d1, "key") in isNoneInt(getStr(d2, "key")) = stdout="true\n"
 
 // Remove non-existent key (dict unchanged)
-let d1 = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "key", 100) in let d2 = Stdlib.Dict.remove<String, Int64>(d1, "other") in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<String, Int64>(d2, "key"), -1) = 100
+let d1 = setStr(emptyStr(), "key", 100) in let d2 = removeStr(d1, "other") in getOrDefaultStr(d2, "key", -1) = 100
 
 // Remove one key, other keys remain
-let d1 = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "a", 100) in let d2 = Stdlib.Dict.set<String, Int64>(d1, "b", 200) in let d3 = Stdlib.Dict.set<String, Int64>(d2, "c", 300) in let d4 = Stdlib.Dict.remove<String, Int64>(d3, "b") in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<String, Int64>(d4, "a"), -1) = 100
-
-let d1 = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "a", 100) in let d2 = Stdlib.Dict.set<String, Int64>(d1, "b", 200) in let d3 = Stdlib.Dict.set<String, Int64>(d2, "c", 300) in let d4 = Stdlib.Dict.remove<String, Int64>(d3, "b") in Stdlib.Option.isNone<Int64>(Stdlib.Dict.get<String, Int64>(d4, "b")) = stdout="true\n"
-
-let d1 = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "a", 100) in let d2 = Stdlib.Dict.set<String, Int64>(d1, "b", 200) in let d3 = Stdlib.Dict.set<String, Int64>(d2, "c", 300) in let d4 = Stdlib.Dict.remove<String, Int64>(d3, "b") in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<String, Int64>(d4, "c"), -1) = 300
+let d1 = setStr(emptyStr(), "a", 100) in let d2 = setStr(d1, "b", 200) in let d3 = setStr(d2, "c", 300) in let d4 = removeStr(d3, "b") in getOrDefaultStr(d4, "a", -1) = 100
+let d1 = setStr(emptyStr(), "a", 100) in let d2 = setStr(d1, "b", 200) in let d3 = setStr(d2, "c", 300) in let d4 = removeStr(d3, "b") in isNoneInt(getStr(d4, "b")) = stdout="true\n"
+let d1 = setStr(emptyStr(), "a", 100) in let d2 = setStr(d1, "b", 200) in let d3 = setStr(d2, "c", 300) in let d4 = removeStr(d3, "b") in getOrDefaultStr(d4, "c", -1) = 300
 
 // Immutability: original dict unchanged after remove
-let d1 = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "key", 100) in let d2 = Stdlib.Dict.remove<String, Int64>(d1, "key") in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<String, Int64>(d1, "key"), -1) = 100
+let d1 = setStr(emptyStr(), "key", 100) in let d2 = removeStr(d1, "key") in getOrDefaultStr(d1, "key", -1) = 100
 
 // Empty string as key
-Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<String, Int64>(Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "", 42), ""), -1) = 42
+getOrDefaultStr(setStr(emptyStr(), "", 42), "", -1) = 42
 
 // Edge case: keys that differ only in length
-let d1 = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "ab", 1) in let d2 = Stdlib.Dict.set<String, Int64>(d1, "abc", 2) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<String, Int64>(d2, "ab"), -1) = 1
-
-let d1 = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "ab", 1) in let d2 = Stdlib.Dict.set<String, Int64>(d1, "abc", 2) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<String, Int64>(d2, "abc"), -1) = 2
+let d1 = setStr(emptyStr(), "ab", 1) in let d2 = setStr(d1, "abc", 2) in getOrDefaultStr(d2, "ab", -1) = 1
+let d1 = setStr(emptyStr(), "ab", 1) in let d2 = setStr(d1, "abc", 2) in getOrDefaultStr(d2, "abc", -1) = 2
 
 // ========== Dict utility functions ==========
 
 // isEmpty tests
-Stdlib.Dict.isEmpty<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>()) = stdout="true\n"
-Stdlib.Dict.isEmpty<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100)) = stdout="false\n"
+Stdlib.Dict.isEmpty<Int64, Int64>(emptyInt()) = stdout="true\n"
+Stdlib.Dict.isEmpty<Int64, Int64>(setInt(emptyInt(), 1, 100)) = stdout="false\n"
 
 // contains tests (int-keyed)
-Stdlib.Dict.contains<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1) = stdout="false\n"
-Stdlib.Dict.contains<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100), 1) = stdout="true\n"
-Stdlib.Dict.contains<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100), 2) = stdout="false\n"
+Stdlib.Dict.contains<Int64, Int64>(emptyInt(), 1) = stdout="false\n"
+Stdlib.Dict.contains<Int64, Int64>(setInt(emptyInt(), 1, 100), 1) = stdout="true\n"
+Stdlib.Dict.contains<Int64, Int64>(setInt(emptyInt(), 1, 100), 2) = stdout="false\n"
 
 // contains tests (string-keyed)
-Stdlib.Dict.contains<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "hello") = stdout="false\n"
-Stdlib.Dict.contains<String, Int64>(Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "hello", 100), "hello") = stdout="true\n"
-Stdlib.Dict.contains<String, Int64>(Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "hello", 100), "world") = stdout="false\n"
+Stdlib.Dict.contains<String, Int64>(emptyStr(), "hello") = stdout="false\n"
+Stdlib.Dict.contains<String, Int64>(setStr(emptyStr(), "hello", 100), "hello") = stdout="true\n"
+Stdlib.Dict.contains<String, Int64>(setStr(emptyStr(), "hello", 100), "world") = stdout="false\n"
 
 // size tests
-Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>()) = 0
-Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100)) = 1
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10) in let d2 = Stdlib.Dict.set<Int64, Int64>(d1, 2, 20) in Stdlib.Dict.size<Int64, Int64>(d2) = 2
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10) in let d2 = Stdlib.Dict.set<Int64, Int64>(d1, 2, 20) in let d3 = Stdlib.Dict.set<Int64, Int64>(d2, 3, 30) in Stdlib.Dict.size<Int64, Int64>(d3) = 3
+Stdlib.Dict.size<Int64, Int64>(emptyInt()) = 0
+Stdlib.Dict.size<Int64, Int64>(setInt(emptyInt(), 1, 100)) = 1
+let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in Stdlib.Dict.size<Int64, Int64>(d2) = 2
+let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = setInt(d2, 3, 30) in Stdlib.Dict.size<Int64, Int64>(d3) = 3
 
 // size with string keys
-Stdlib.Dict.size<String, Int64>(Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "a", 1)) = 1
-let d1 = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "a", 1) in let d2 = Stdlib.Dict.set<String, Int64>(d1, "b", 2) in Stdlib.Dict.size<String, Int64>(d2) = 2
+Stdlib.Dict.size<String, Int64>(setStr(emptyStr(), "a", 1)) = 1
+let d1 = setStr(emptyStr(), "a", 1) in let d2 = setStr(d1, "b", 2) in Stdlib.Dict.size<String, Int64>(d2) = 2
 
 // ========== Dict enumeration (Int64-keyed) ==========
 
 // keys tests
-Stdlib.List.length<Int64>(Stdlib.Dict.keys<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>())) = 0
-Stdlib.List.length<Int64>(Stdlib.Dict.keys<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100))) = 1
-let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10), 2, 20) in Stdlib.List.length<Int64>(Stdlib.Dict.keys<Int64, Int64>(d)) = 2
+Stdlib.List.length<Int64>(Stdlib.Dict.keys<Int64, Int64>(emptyInt())) = 0
+Stdlib.List.length<Int64>(Stdlib.Dict.keys<Int64, Int64>(setInt(emptyInt(), 1, 100))) = 1
+let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.List.length<Int64>(Stdlib.Dict.keys<Int64, Int64>(d)) = 2
 
 // values tests
-Stdlib.List.length<Int64>(Stdlib.Dict.values<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>())) = 0
-Stdlib.List.length<Int64>(Stdlib.Dict.values<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100))) = 1
-let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10), 2, 20) in Stdlib.List.length<Int64>(Stdlib.Dict.values<Int64, Int64>(d)) = 2
+Stdlib.List.length<Int64>(Stdlib.Dict.values<Int64, Int64>(emptyInt())) = 0
+Stdlib.List.length<Int64>(Stdlib.Dict.values<Int64, Int64>(setInt(emptyInt(), 1, 100))) = 1
+let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.List.length<Int64>(Stdlib.Dict.values<Int64, Int64>(d)) = 2
 
 // ========== Dict enumeration (String-keyed) ==========
 
 // keys tests
-Stdlib.List.length<String>(Stdlib.Dict.keys<String, Int64>(Stdlib.Dict.empty<String, Int64>())) = 0
-Stdlib.List.length<String>(Stdlib.Dict.keys<String, Int64>(Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "a", 100))) = 1
-let d = Stdlib.Dict.set<String, Int64>(Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "a", 10), "b", 20) in Stdlib.List.length<String>(Stdlib.Dict.keys<String, Int64>(d)) = 2
+Stdlib.List.length<String>(Stdlib.Dict.keys<String, Int64>(emptyStr())) = 0
+Stdlib.List.length<String>(Stdlib.Dict.keys<String, Int64>(setStr(emptyStr(), "a", 100))) = 1
+let d = setStr(setStr(emptyStr(), "a", 10), "b", 20) in Stdlib.List.length<String>(Stdlib.Dict.keys<String, Int64>(d)) = 2
 
 // values tests
-Stdlib.List.length<Int64>(Stdlib.Dict.values<String, Int64>(Stdlib.Dict.empty<String, Int64>())) = 0
-Stdlib.List.length<Int64>(Stdlib.Dict.values<String, Int64>(Stdlib.Dict.set<String, Int64>(Stdlib.Dict.empty<String, Int64>(), "a", 100))) = 1
+Stdlib.List.length<Int64>(Stdlib.Dict.values<String, Int64>(emptyStr())) = 0
+Stdlib.List.length<Int64>(Stdlib.Dict.values<String, Int64>(setStr(emptyStr(), "a", 100))) = 1
 
 // ========== Dict.entries tests ==========
 
 // entries on empty dict
-Stdlib.List.length<(Int64, Int64)>(Stdlib.Dict.entries<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>())) = 0
+Stdlib.List.length<(Int64, Int64)>(Stdlib.Dict.entries<Int64, Int64>(emptyInt())) = 0
 
 // entries on single-entry dict
-Stdlib.List.length<(Int64, Int64)>(Stdlib.Dict.entries<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100))) = 1
+Stdlib.List.length<(Int64, Int64)>(Stdlib.Dict.entries<Int64, Int64>(setInt(emptyInt(), 1, 100))) = 1
 
 // entries on two-entry dict
-let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10), 2, 20) in Stdlib.List.length<(Int64, Int64)>(Stdlib.Dict.entries<Int64, Int64>(d)) = 2
+let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.List.length<(Int64, Int64)>(Stdlib.Dict.entries<Int64, Int64>(d)) = 2
 
 // ========== Dict.fold tests ==========
 
 // fold to sum values
-let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10), 2, 20) in Stdlib.Dict.fold<Int64, Int64, Int64>(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + v) = 30
+let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.fold<Int64, Int64, Int64>(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + v) = 30
 
 // fold to sum keys
-let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10), 2, 20) in Stdlib.Dict.fold<Int64, Int64, Int64>(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + k) = 3
+let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.fold<Int64, Int64, Int64>(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + k) = 3
 
 // fold on empty dict
-Stdlib.Dict.fold<Int64, Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 100, (acc: Int64, k: Int64, v: Int64) => acc + v) = 100
+Stdlib.Dict.fold<Int64, Int64, Int64>(emptyInt(), 100, (acc: Int64, k: Int64, v: Int64) => acc + v) = 100
 
 // ========== Dict.map tests ==========
 
 // map to double values
-let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10) in let d2 = Stdlib.Dict.map<Int64, Int64, Int64>(d, (k: Int64, v: Int64) => v * 2) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(d2, 1), -1) = 20
+let d = setInt(emptyInt(), 1, 10) in let d2 = Stdlib.Dict.map<Int64, Int64, Int64>(d, (k: Int64, v: Int64) => v * 2) in getOrDefault(d2, 1, -1) = 20
 
 // map preserves structure
-let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10), 2, 20) in Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.map<Int64, Int64, Int64>(d, (k: Int64, v: Int64) => v + k)) = 2
+let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.map<Int64, Int64, Int64>(d, (k: Int64, v: Int64) => v + k)) = 2
 
 // map on empty dict
-Stdlib.Dict.isEmpty<Int64, Int64>(Stdlib.Dict.map<Int64, Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), (k: Int64, v: Int64) => v * 2)) = stdout="true\n"
+Stdlib.Dict.isEmpty<Int64, Int64>(Stdlib.Dict.map<Int64, Int64, Int64>(emptyInt(), (k: Int64, v: Int64) => v * 2)) = stdout="true\n"
 
 // ========== Dict.filter tests ==========
 
 // filter to keep values > 15
-let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10), 2, 20) in Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.filter<Int64, Int64>(d, (k: Int64, v: Int64) => v > 15)) = 1
+let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.filter<Int64, Int64>(d, (k: Int64, v: Int64) => v > 15)) = 1
 
 // filter on empty dict
-Stdlib.Dict.isEmpty<Int64, Int64>(Stdlib.Dict.filter<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), (k: Int64, v: Int64) => v > 0)) = stdout="true\n"
+Stdlib.Dict.isEmpty<Int64, Int64>(Stdlib.Dict.filter<Int64, Int64>(emptyInt(), (k: Int64, v: Int64) => v > 0)) = stdout="true\n"
 
 // filter to keep all
-let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10), 2, 20) in Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.filter<Int64, Int64>(d, (k: Int64, v: Int64) => true)) = 2
+let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.filter<Int64, Int64>(d, (k: Int64, v: Int64) => true)) = 2
 
 // filter to keep none
-Stdlib.Dict.isEmpty<Int64, Int64>(Stdlib.Dict.filter<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10), (k: Int64, v: Int64) => false)) = stdout="true\n"
+Stdlib.Dict.isEmpty<Int64, Int64>(Stdlib.Dict.filter<Int64, Int64>(setInt(emptyInt(), 1, 10), (k: Int64, v: Int64) => false)) = stdout="true\n"
 
 // ========== Dict.merge tests ==========
 
 // merge empty dicts
-Stdlib.Dict.isEmpty<Int64, Int64>(Stdlib.Dict.merge<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), Stdlib.Dict.empty<Int64, Int64>())) = stdout="true\n"
+Stdlib.Dict.isEmpty<Int64, Int64>(Stdlib.Dict.merge<Int64, Int64>(emptyInt(), emptyInt())) = stdout="true\n"
 
 // merge into empty
-Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.merge<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10))) = 1
+Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.merge<Int64, Int64>(emptyInt(), setInt(emptyInt(), 1, 10))) = 1
 
 // merge with overlapping keys (second wins)
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 100) in let d2 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 999) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(Stdlib.Dict.merge<Int64, Int64>(d1, d2), 1), -1) = 999
+let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(emptyInt(), 1, 999) in getOrDefault(Stdlib.Dict.merge<Int64, Int64>(d1, d2), 1, -1) = 999
 
 // merge disjoint dicts
-let d1 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 10) in let d2 = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 2, 20) in Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.merge<Int64, Int64>(d1, d2)) = 2
+let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(emptyInt(), 2, 20) in Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.merge<Int64, Int64>(d1, d2)) = 2
 
 // ========== Dict.fromList tests ==========
 
@@ -233,30 +235,45 @@ Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.fromList<Int64, Int64>([(1, 100)])) =
 Stdlib.Dict.size<Int64, Int64>(Stdlib.Dict.fromList<Int64, Int64>([(1, 10), (2, 20), (3, 30)])) = 3
 
 // fromList get value
-Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(Stdlib.Dict.fromList<Int64, Int64>([(1, 42), (2, 99)]), 1), -1) = 42
+getOrDefault(Stdlib.Dict.fromList<Int64, Int64>([(1, 42), (2, 99)]), 1, -1) = 42
 
 // ========== Dict.getOrDefault tests ==========
 
 // getOrDefault on existing key
-Stdlib.Dict.getOrDefault<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, 42), 1, -1) = 42
+Stdlib.Dict.getOrDefault<Int64, Int64>(setInt(emptyInt(), 1, 42), 1, -1) = 42
 
 // getOrDefault on missing key
-Stdlib.Dict.getOrDefault<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 1, -1) = -1
+Stdlib.Dict.getOrDefault<Int64, Int64>(emptyInt(), 1, -1) = -1
 
 // ========== Larger dictionary tests ==========
 
-// Build dict with 10 entries
-let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 0, 0), 1, 10), 2, 20), 3, 30), 4, 40), 5, 50), 6, 60), 7, 70), 8, 80), 9, 90) in Stdlib.Dict.size<Int64, Int64>(d) = 10
+// Helper to build a dict with 10 entries
+def buildDict10(): Dict<Int64, Int64> =
+    let d0 = setInt(emptyInt(), 0, 0) in
+    let d1 = setInt(d0, 1, 10) in
+    let d2 = setInt(d1, 2, 20) in
+    let d3 = setInt(d2, 3, 30) in
+    let d4 = setInt(d3, 4, 40) in
+    let d5 = setInt(d4, 5, 50) in
+    let d6 = setInt(d5, 6, 60) in
+    let d7 = setInt(d6, 7, 70) in
+    let d8 = setInt(d7, 8, 80) in
+    setInt(d8, 9, 90)
 
-let d = Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.set<Int64, Int64>(Stdlib.Dict.empty<Int64, Int64>(), 0, 0), 1, 10), 2, 20), 3, 30), 4, 40), 5, 50), 6, 60), 7, 70), 8, 80), 9, 90) in Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Int64, Int64>(d, 5), -1) = 50
+Stdlib.Dict.size<Int64, Int64>(buildDict10()) = 10
+getOrDefault(buildDict10(), 5, -1) = 50
 
 // ========== Bool key tests ==========
 
+def emptyBool(): Dict<Bool, Int64> = Stdlib.Dict.empty<Bool, Int64>()
+def setBool(d: Dict<Bool, Int64>, k: Bool, v: Int64): Dict<Bool, Int64> = Stdlib.Dict.set<Bool, Int64>(d, k, v)
+def getBool(d: Dict<Bool, Int64>, k: Bool): Stdlib.Option.Option<Int64> = Stdlib.Dict.get<Bool, Int64>(d, k)
+
 // Bool keys - two entries
-Stdlib.Dict.size<Bool, Int64>(Stdlib.Dict.set<Bool, Int64>(Stdlib.Dict.set<Bool, Int64>(Stdlib.Dict.empty<Bool, Int64>(), true, 1), false, 0)) = 2
+Stdlib.Dict.size<Bool, Int64>(setBool(setBool(emptyBool(), true, 1), false, 0)) = 2
 
 // Bool keys - get true
-Stdlib.Option.withDefault<Int64>(Stdlib.Dict.get<Bool, Int64>(Stdlib.Dict.set<Bool, Int64>(Stdlib.Dict.empty<Bool, Int64>(), true, 42), true), -1) = 42
+Stdlib.Option.withDefault<Int64>(getBool(setBool(emptyBool(), true, 42), true), -1) = 42
 
 // Bool keys - get false from true-keyed dict returns None
-Stdlib.Option.isNone<Int64>(Stdlib.Dict.get<Bool, Int64>(Stdlib.Dict.set<Bool, Int64>(Stdlib.Dict.empty<Bool, Int64>(), true, 42), false)) = stdout="true\n"
+isNoneInt(getBool(setBool(emptyBool(), true, 42), false)) = stdout="true\n"

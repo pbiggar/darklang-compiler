@@ -2,7 +2,11 @@
 
 // Simple tail recursion (accumulator pattern)
 // This pattern should be detected and optimized
-def sumTo(n: Int64, acc: Int64) : Int64 = if n <= 0 then acc else sumTo(n - 1, acc + n) sumTo(10, 0) = 55
+def sumTo(n: Int64, acc: Int64) : Int64 =
+    if n <= 0 then acc
+    else sumTo(n - 1, acc + n)
+
+sumTo(10, 0) = 55
 
 // Large N that would overflow stack without TCO
 // TODO: Re-enable when TCO is fixed
@@ -10,10 +14,18 @@ def sumTo(n: Int64, acc: Int64) : Int64 = if n <= 0 then acc else sumTo(n - 1, a
 
 // Non-tail recursive - should NOT be optimized
 // (the multiply happens after the recursive call)
-def factorial(n: Int64) : Int64 = if n <= 1 then 1 else n * factorial(n - 1) factorial(10) = 3628800
+def factorial(n: Int64) : Int64 =
+    if n <= 1 then 1
+    else n * factorial(n - 1)
+
+factorial(10) = 3628800
 
 // Tail recursive with multiple arguments
-def gcd(a: Int64, b: Int64) : Int64 = if b == 0 then a else gcd(b, a % b) gcd(48, 18) = 6
+def gcd(a: Int64, b: Int64) : Int64 =
+    if b == 0 then a
+    else gcd(b, a % b)
+
+gcd(48, 18) = 6
 
 // ============================================================================
 // TCO Bug Test Cases - expose specific bugs in tail call optimization
@@ -21,53 +33,171 @@ def gcd(a: Int64, b: Int64) : Int64 = if b == 0 then a else gcd(b, a % b) gcd(48
 
 // Bug 1: Float argument swap (cycle bug in FArgMoves)
 // FArgMoves doesn't handle register cycles - D0 <- D1, D1 <- D0 clobbers D0
-def swapFloat(a: Float, b: Float, n: Int64) : Float = if n <= 0 then a else swapFloat(b, a, n - 1) swapFloat(1.0, 2.0, 1) = stdout="2.00\n"
-def swapFloat2(a: Float, b: Float, n: Int64) : Float = if n <= 0 then a else swapFloat2(b, a, n - 1) swapFloat2(1.0, 2.0, 2) = stdout="1.00\n"
+def swapFloat(a: Float, b: Float, n: Int64) : Float =
+    if n <= 0 then a
+    else swapFloat(b, a, n - 1)
+
+swapFloat(1.0, 2.0, 1) = stdout="2.00\n"
+
+def swapFloat2(a: Float, b: Float, n: Int64) : Float =
+    if n <= 0 then a
+    else swapFloat2(b, a, n - 1)
+
+swapFloat2(1.0, 2.0, 2) = stdout="1.00\n"
 
 // Bug 2: Integer argument swap (TailArgMoves cycle)
 // Tests X0 <- X1, X1 <- X0 cycle handling
-def swapInt(a: Int64, b: Int64, n: Int64) : Int64 = if n <= 0 then a else swapInt(b, a, n - 1) swapInt(1, 2, 1) = 2
-def swapInt2(a: Int64, b: Int64, n: Int64) : Int64 = if n <= 0 then a else swapInt2(b, a, n - 1) swapInt2(1, 2, 2) = 1
+def swapInt(a: Int64, b: Int64, n: Int64) : Int64 =
+    if n <= 0 then a
+    else swapInt(b, a, n - 1)
+
+swapInt(1, 2, 1) = 2
+
+def swapInt2(a: Int64, b: Int64, n: Int64) : Int64 =
+    if n <= 0 then a
+    else swapInt2(b, a, n - 1)
+
+swapInt2(1, 2, 2) = 1
 
 // Bug 3: Three-way integer rotation
 // Tests X0 <- X1, X1 <- X2, X2 <- X0 cycle handling
-def rotate3(a: Int64, b: Int64, c: Int64, n: Int64) : Int64 = if n <= 0 then a else rotate3(b, c, a, n - 1) rotate3(1, 2, 3, 1) = 2
-def rotate3b(a: Int64, b: Int64, c: Int64, n: Int64) : Int64 = if n <= 0 then a else rotate3b(b, c, a, n - 1) rotate3b(1, 2, 3, 3) = 1
+def rotate3(a: Int64, b: Int64, c: Int64, n: Int64) : Int64 =
+    if n <= 0 then a
+    else rotate3(b, c, a, n - 1)
+
+rotate3(1, 2, 3, 1) = 2
+
+def rotate3b(a: Int64, b: Int64, c: Int64, n: Int64) : Int64 =
+    if n <= 0 then a
+    else rotate3b(b, c, a, n - 1)
+
+rotate3b(1, 2, 3, 3) = 1
 
 // Bug 4: Three-way float rotation
 // Tests D0 <- D1, D1 <- D2, D2 <- D0 - FArgMoves has no cycle handling
-def rotate3Float(a: Float, b: Float, c: Float, n: Int64) : Float = if n <= 0 then a else rotate3Float(b, c, a, n - 1) rotate3Float(1.0, 2.0, 3.0, 1) = stdout="2.00\n"
-def rotate3Floatb(a: Float, b: Float, c: Float, n: Int64) : Float = if n <= 0 then a else rotate3Floatb(b, c, a, n - 1) rotate3Floatb(1.0, 2.0, 3.0, 3) = stdout="1.00\n"
+def rotate3Float(a: Float, b: Float, c: Float, n: Int64) : Float =
+    if n <= 0 then a
+    else rotate3Float(b, c, a, n - 1)
+
+rotate3Float(1.0, 2.0, 3.0, 1) = stdout="2.00\n"
+
+def rotate3Floatb(a: Float, b: Float, c: Float, n: Int64) : Float =
+    if n <= 0 then a
+    else rotate3Floatb(b, c, a, n - 1)
+
+rotate3Floatb(1.0, 2.0, 3.0, 3) = stdout="1.00\n"
 
 // Bug 5: Five-argument tail recursion (similar to String.__compareBytes)
-def compare5(a: Int64, i: Int64, b: Int64, j: Int64, count: Int64) : Bool = if count <= 0 then true else if a != b then false else compare5(a, i + 1, b, j + 1, count - 1) compare5(42, 0, 42, 0, 3) = stdout="true\n"
-def compare5b(a: Int64, i: Int64, b: Int64, j: Int64, count: Int64) : Bool = if count <= 0 then true else if a != b then false else compare5b(a, i + 1, b, j + 1, count - 1) compare5b(42, 0, 99, 0, 3) = stdout="false\n"
+def compare5(a: Int64, i: Int64, b: Int64, j: Int64, count: Int64) : Bool =
+    if count <= 0 then true
+    else if a != b then false
+    else compare5(a, i + 1, b, j + 1, count - 1)
+
+compare5(42, 0, 42, 0, 3) = stdout="true\n"
+
+def compare5b(a: Int64, i: Int64, b: Int64, j: Int64, count: Int64) : Bool =
+    if count <= 0 then true
+    else if a != b then false
+    else compare5b(a, i + 1, b, j + 1, count - 1)
+
+compare5b(42, 0, 99, 0, 3) = stdout="false\n"
 
 // Bug 6: Many arguments (tests register spilling in tail calls)
-def sum6(a: Int64, b: Int64, c: Int64, d: Int64, e: Int64, f: Int64, n: Int64) : Int64 = if n <= 0 then a + b + c + d + e + f else sum6(a, b, c, d, e, f, n - 1) sum6(1, 2, 3, 4, 5, 6, 1) = 21
+def sum6(a: Int64, b: Int64, c: Int64, d: Int64, e: Int64, f: Int64, n: Int64) : Int64 =
+    if n <= 0 then a + b + c + d + e + f
+    else sum6(a, b, c, d, e, f, n - 1)
+
+sum6(1, 2, 3, 4, 5, 6, 1) = 21
 
 // Bug 7: Tail call after let binding (like String.__compareBytes)
-def callThenTail(x: Int64, n: Int64) : Int64 = if n <= 0 then x else let y = x + 1 in callThenTail(y, n - 1) callThenTail(0, 5) = 5
+def callThenTail(x: Int64, n: Int64) : Int64 =
+    if n <= 0 then x
+    else let y = x + 1 in callThenTail(y, n - 1)
+
+callThenTail(0, 5) = 5
 
 // Bug 8: Tail call with String parameters (reference-counted types)
 // Similar to String.__compareBytes which fails with TCO
-def strCompare(s1: String, s2: String, n: Int64) : Bool = if n <= 0 then true else if Stdlib.String.length(s1) != Stdlib.String.length(s2) then false else strCompare(s1, s2, n - 1) strCompare("hello", "hello", 3) = stdout="true\n"
+def strCompare(s1: String, s2: String, n: Int64) : Bool =
+    if n <= 0 then true
+    else if Stdlib.String.length(s1) != Stdlib.String.length(s2) then false
+    else strCompare(s1, s2, n - 1)
+
+strCompare("hello", "hello", 3) = stdout="true\n"
 
 // Bug 9: Nested function calls before tail call
-def nestedCalls(a: Int64, b: Int64, n: Int64) : Int64 = if n <= 0 then a + b else let x = a + 1 in let y = b + 1 in nestedCalls(x, y, n - 1) nestedCalls(0, 0, 5) = 10
+def nestedCalls(a: Int64, b: Int64, n: Int64) : Int64 =
+    if n <= 0 then a + b
+    else let x = a + 1 in let y = b + 1 in nestedCalls(x, y, n - 1)
+
+nestedCalls(0, 0, 5) = 10
 
 // Bug 10: Generic tail-recursive function (like stdlib Dict/String)
-def genericTail<t>(x: t, n: Int64) : t = if n <= 0 then x else genericTail<t>(x, n - 1) genericTail<Int64>(42, 5) = 42
+def genericTail<t>(x: t, n: Int64) : t =
+    if n <= 0 then x
+    else genericTail<t>(x, n - 1)
+
+genericTail<Int64>(42, 5) = 42
 
 // Bug 11: Generic tail recursion with two type params
-def genericTail2<k, v>(kv: k, vv: v, n: Int64) : k = if n <= 0 then kv else genericTail2<k, v>(kv, vv, n - 1) genericTail2<Int64, String>(99, "test", 3) = 99
+def genericTail2<k, v>(kv: k, vv: v, n: Int64) : k =
+    if n <= 0 then kv
+    else genericTail2<k, v>(kv, vv, n - 1)
+
+genericTail2<Int64, String>(99, "test", 3) = 99
 
 // Bug 12: Compare with function calls before tail call (like __compareBytes)
 // This is the exact pattern that fails in stdlib String operations
-def compareBytesLike(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool = if count <= 0 then true else let b1 = Stdlib.String.getByteAt(s1, i) in let b2 = Stdlib.String.getByteAt(s2, j) in if b1 != b2 then false else compareBytesLike(s1, i + 1, s2, j + 1, count - 1) compareBytesLike("hello", 0, "hello", 0, 5) = stdout="true\n"
-def compareBytesLikeFail(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool = if count <= 0 then true else let b1 = Stdlib.String.getByteAt(s1, i) in let b2 = Stdlib.String.getByteAt(s2, j) in if b1 != b2 then false else compareBytesLikeFail(s1, i + 1, s2, j + 1, count - 1) compareBytesLikeFail("hello", 0, "world", 0, 5) = stdout="false\n"
+def compareBytesLike(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool =
+    if count <= 0 then true
+    else
+        let b1 = Stdlib.String.getByteAt(s1, i) in
+        let b2 = Stdlib.String.getByteAt(s2, j) in
+        if b1 != b2 then false
+        else compareBytesLike(s1, i + 1, s2, j + 1, count - 1)
+
+compareBytesLike("hello", 0, "hello", 0, 5) = stdout="true\n"
+
+def compareBytesLikeFail(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool =
+    if count <= 0 then true
+    else
+        let b1 = Stdlib.String.getByteAt(s1, i) in
+        let b2 = Stdlib.String.getByteAt(s2, j) in
+        if b1 != b2 then false
+        else compareBytesLikeFail(s1, i + 1, s2, j + 1, count - 1)
+
+compareBytesLikeFail("hello", 0, "world", 0, 5) = stdout="false\n"
 
 // Bug 13: Cross-function tail call (A tail-calls B, B tail-calls itself)
 // This mimics startsWith calling __compareBytes
-def myCompare(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool = if count <= 0 then true else let b1 = Stdlib.String.getByteAt(s1, i) in let b2 = Stdlib.String.getByteAt(s2, j) in if b1 != b2 then false else myCompare(s1, i + 1, s2, j + 1, count - 1) def myStartsWith2(s: String, prefix: String) : Bool = let sLen = Stdlib.String.length(s) in let prefixLen = Stdlib.String.length(prefix) in if prefixLen > sLen then false else myCompare(s, 0, prefix, 0, prefixLen) myStartsWith2("hello world", "hello") = stdout="true\n"
-def myCompare2(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool = if count <= 0 then true else let b1 = Stdlib.String.getByteAt(s1, i) in let b2 = Stdlib.String.getByteAt(s2, j) in if b1 != b2 then false else myCompare2(s1, i + 1, s2, j + 1, count - 1) def myStartsWith2Fail(s: String, prefix: String) : Bool = let sLen = Stdlib.String.length(s) in let prefixLen = Stdlib.String.length(prefix) in if prefixLen > sLen then false else myCompare2(s, 0, prefix, 0, prefixLen) myStartsWith2Fail("hello world", "world") = stdout="false\n"
+def myCompare(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool =
+    if count <= 0 then true
+    else
+        let b1 = Stdlib.String.getByteAt(s1, i) in
+        let b2 = Stdlib.String.getByteAt(s2, j) in
+        if b1 != b2 then false
+        else myCompare(s1, i + 1, s2, j + 1, count - 1)
+
+def myStartsWith2(s: String, prefix: String) : Bool =
+    let sLen = Stdlib.String.length(s) in
+    let prefixLen = Stdlib.String.length(prefix) in
+    if prefixLen > sLen then false
+    else myCompare(s, 0, prefix, 0, prefixLen)
+
+myStartsWith2("hello world", "hello") = stdout="true\n"
+
+def myCompare2(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool =
+    if count <= 0 then true
+    else
+        let b1 = Stdlib.String.getByteAt(s1, i) in
+        let b2 = Stdlib.String.getByteAt(s2, j) in
+        if b1 != b2 then false
+        else myCompare2(s1, i + 1, s2, j + 1, count - 1)
+
+def myStartsWith2Fail(s: String, prefix: String) : Bool =
+    let sLen = Stdlib.String.length(s) in
+    let prefixLen = Stdlib.String.length(prefix) in
+    if prefixLen > sLen then false
+    else myCompare2(s, 0, prefix, 0, prefixLen)
+
+myStartsWith2Fail("hello world", "world") = stdout="false\n"

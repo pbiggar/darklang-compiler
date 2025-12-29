@@ -8,33 +8,46 @@
 // Working type alias tests (Int64 fields)
 // ===================================================================
 
+type PointBase = { x: Int64, y: Int64 }
+type MyPoint = PointBase
+type AliasedPoint = PointBase
+type Alias1 = PointBase
+type Alias2 = PointBase
+
 // Simple record alias
-type PointBase = { x: Int64, y: Int64 } type MyPoint = PointBase MyPoint { x = 1, y = 2 }.x = 1
-type PointBase = { x: Int64, y: Int64 } type MyPoint = PointBase MyPoint { x = 1, y = 2 }.y = 2
+MyPoint { x = 1, y = 2 }.x = 1
+MyPoint { x = 1, y = 2 }.y = 2
 
 // Aliased record field access
-type PointBase = { x: Int64, y: Int64 } type AliasedPoint = PointBase let p = AliasedPoint { x = 10, y = 20 } in p.x = 10
-type PointBase = { x: Int64, y: Int64 } type AliasedPoint = PointBase let p = AliasedPoint { x = 10, y = 20 } in p.y = 20
+let p = AliasedPoint { x = 10, y = 20 } in p.x = 10
+let p = AliasedPoint { x = 10, y = 20 } in p.y = 20
 
 // Aliased record with computed fields
-type PointBase = { x: Int64, y: Int64 } type AliasedPoint = PointBase AliasedPoint { x = 3 * 2, y = 4 + 1 }.x = 6
-type PointBase = { x: Int64, y: Int64 } type AliasedPoint = PointBase AliasedPoint { x = 3 * 2, y = 4 + 1 }.y = 5
+AliasedPoint { x = 3 * 2, y = 4 + 1 }.x = 6
+AliasedPoint { x = 3 * 2, y = 4 + 1 }.y = 5
 
 // Aliased records are structurally equal to base type
-type PointBase = { x: Int64, y: Int64 } type AliasedPoint = PointBase PointBase { x = 5, y = 6 } == AliasedPoint { x = 5, y = 6 } = stdout="true\n"
-type PointBase = { x: Int64, y: Int64 } type AliasedPoint = PointBase AliasedPoint { x = 5, y = 6 } == PointBase { x = 5, y = 6 } = stdout="true\n"
+PointBase { x = 5, y = 6 } == AliasedPoint { x = 5, y = 6 } = stdout="true\n"
+AliasedPoint { x = 5, y = 6 } == PointBase { x = 5, y = 6 } = stdout="true\n"
 
 // Multiple aliases to same type
-type PointBase = { x: Int64, y: Int64 } type Alias1 = PointBase type Alias2 = PointBase Alias1 { x = 1, y = 2 } == Alias2 { x = 1, y = 2 } = stdout="true\n"
+Alias1 { x = 1, y = 2 } == Alias2 { x = 1, y = 2 } = stdout="true\n"
 
 // Record update through alias
-type PointBase = { x: Int64, y: Int64 } type AliasedPoint = PointBase let p = AliasedPoint { x = 1, y = 2 } in { p with x = 100 }.x = 100
+let p = AliasedPoint { x = 1, y = 2 } in { p with x = 100 }.x = 100
 
-// Function with aliased parameter types
-type Point = { x: Int64, y: Int64 } type Vec = Point def addVecs(a: Vec, b: Vec): Vec = Vec { x = a.x + b.x, y = a.y + b.y } addVecs(Vec { x = 1, y = 2 }, Vec { x = 3, y = 4 }) = stdout="Vec { x = 4, y = 6 }\n"
+// Function with aliased parameter and return types
+type Point = { x: Int64, y: Int64 }
+type Vec = Point
 
-// Function with aliased return type
-type Point = { x: Int64, y: Int64 } type Vec = Point def makeVec(x: Int64, y: Int64): Vec = Vec { x = x, y = y } makeVec(10, 20) = stdout="Vec { x = 10, y = 20 }\n"
+def addVecs(a: Vec, b: Vec): Vec =
+    Vec { x = a.x + b.x, y = a.y + b.y }
+
+def makeVec(x: Int64, y: Int64): Vec =
+    Vec { x = x, y = y }
+
+addVecs(Vec { x = 1, y = 2 }, Vec { x = 3, y = 4 }) = stdout="Vec { x = 4, y = 6 }\n"
+makeVec(10, 20) = stdout="Vec { x = 10, y = 20 }\n"
 
 // ===================================================================
 // Simple alias
@@ -70,20 +83,35 @@ type Point = { x: Int64, y: Int64 } type Vec = Point def makeVec(x: Int64, y: In
 // SimpleEnumAlias module
 // ===================================================================
 
-type UserRole = Admin | User | Guest type AdminRole = UserRole type GuestRole = UserRole (GuestRole.Guest == AdminRole.Guest) = stdout="true\n"
+type UserRole = Admin | User | Guest
+type AdminRole = UserRole
+type GuestRole = UserRole
+
+(GuestRole.Guest == AdminRole.Guest) = stdout="true\n"
 
 // ===================================================================
 // Generic type aliases (aliasing generic types like List<Int64>)
 // ===================================================================
 
 // Alias for List<Int64> - variable with alias type passed to stdlib function
-type IntList = List<Int64> def getLength(xs: IntList): Int64 = Stdlib.List.length<Int64>(xs) getLength([1, 2, 3]) = 3
+type IntList = List<Int64>
+
+def getLength(xs: IntList): Int64 =
+    Stdlib.List.length<Int64>(xs)
+
+getLength([1, 2, 3]) = 3
 
 // Alias for tuple with type parameter
-type Pair<a> = (a, a) def makePair(x: Int64): Pair<Int64> = (x, x + 1) match makePair(5) with | (a, b) -> a + b = 11
+type Pair<a> = (a, a)
 
-// Alias for tuple - function returning aliased type
-type Pair<a> = (a, a) def fstPair(p: Pair<Int64>): Int64 = match p with | (a, b) -> a fstPair((10, 20)) = 10
+def makePair(x: Int64): Pair<Int64> =
+    (x, x + 1)
+
+def fstPair(p: Pair<Int64>): Int64 =
+    match p with | (a, b) -> a
+
+match makePair(5) with | (a, b) -> a + b = 11
+fstPair((10, 20)) = 10
 
 // ===================================================================
 // NestedAlias module
