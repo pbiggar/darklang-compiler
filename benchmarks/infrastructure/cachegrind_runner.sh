@@ -48,9 +48,10 @@ echo "{\"benchmark\": \"$BENCHMARK\", \"results\": [" > "$RESULTS_FILE"
 FIRST=true
 
 # Determine which implementations to run
-# Dark always runs; compiled languages (rust, ocaml, go) run if selected
+# Dark always runs; compiled languages (rust, ocaml) run if selected
+# Note: Go crashes under valgrind due to runtime stack management
 IMPLS="dark"
-for lang in rust ocaml go; do
+for lang in rust ocaml; do
     if should_run_lang "$lang"; then
         IMPLS="$IMPLS $lang"
     fi
@@ -210,6 +211,9 @@ fi
 
 # F# is NOT supported with cachegrind - .NET runtime doesn't work properly under valgrind
 # (GC initialization fails, and AOT binaries don't get accurate instruction counts)
+
+# Go is NOT supported with cachegrind - runtime crashes under valgrind
+# (SIGSEGV in runtime.getproccount during initialization - Go's stack management conflicts with valgrind)
 
 # Bun is NOT supported with cachegrind - JIT-compiled code isn't properly instrumented
 # (All benchmarks show ~2.17M instructions regardless of complexity - just measuring startup)
