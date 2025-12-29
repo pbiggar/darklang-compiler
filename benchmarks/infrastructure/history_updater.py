@@ -27,6 +27,27 @@ def format_number(n: int) -> str:
     return f"{n:,}"
 
 
+def format_speedup(ratio: float | None) -> str:
+    """Format speedup ratio as 'Nx' string."""
+    if ratio is None:
+        return "-"
+    if ratio >= 100:
+        return f"{ratio:.0f}x"
+    if ratio >= 10:
+        return f"{ratio:.1f}x"
+    return f"{ratio:.2f}x"
+
+
+def geometric_mean(values: list[float]) -> float | None:
+    """Calculate geometric mean of positive values."""
+    if not values:
+        return None
+    product = 1.0
+    for v in values:
+        product *= v
+    return product ** (1 / len(values))
+
+
 def load_json_results(results_dir: Path) -> dict:
     """Load all cachegrind JSON results from the results directory."""
     results = {}
@@ -135,11 +156,30 @@ def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dic
             if instrs > 0 and lang != "dark":
                 existing[benchmark][lang] = instrs
 
-    # Generate table
+    # Languages with speedup columns (rust is baseline, no speedup column for it)
     languages = ["dark", "rust", "python", "node"]
+    langs_with_speedup = ["dark", "python", "node"]  # Rust is baseline
+
+    # Calculate speedups for each benchmark
+    speedups = {}  # {benchmark: {lang: ratio}}
+    avg_speedups = {lang: [] for lang in langs_with_speedup}
+
+    for benchmark in existing:
+        speedups[benchmark] = {}
+        rust_instrs = existing[benchmark].get("rust", 0)
+        for lang in langs_with_speedup:
+            if lang in existing[benchmark] and rust_instrs > 0:
+                ratio = existing[benchmark][lang] / rust_instrs
+                speedups[benchmark][lang] = ratio
+                avg_speedups[lang].append(ratio)
+
+    # Calculate geometric mean of speedups
+    avg_speedup_values = {}
+    for lang in langs_with_speedup:
+        avg_speedup_values[lang] = geometric_mean(avg_speedups[lang])
 
     # Calculate column widths
-    col_widths = {"benchmark": len("Benchmark")}
+    col_widths = {"benchmark": len("Benchmark"), "x": 5}  # "x" column for speedup
     for lang in languages:
         col_widths[lang] = len(lang.capitalize())
 
@@ -163,16 +203,34 @@ def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dic
         "",
     ]
 
-    # Header
+    # Header row
     header = f"| {'Benchmark':<{col_widths['benchmark']}} |"
     separator = f"|{'-' * (col_widths['benchmark'] + 2)}|"
     for lang in languages:
         header += f" {lang.capitalize():>{col_widths[lang]}} |"
         separator += f"{'-' * (col_widths[lang] + 2)}|"
+        if lang in langs_with_speedup:
+            header += f" {'x':>{col_widths['x']}} |"
+            separator += f"{'-' * (col_widths['x'] + 2)}|"
     lines.append(header)
     lines.append(separator)
 
-    # Rows
+    # Averages row
+    avg_row = f"| {'':>{col_widths['benchmark']}} |"
+    for lang in languages:
+        if lang in langs_with_speedup:
+            avg = avg_speedup_values.get(lang)
+            if avg is not None:
+                avg_str = f"(avg {format_speedup(avg)})"
+            else:
+                avg_str = ""
+            avg_row += f" {avg_str:>{col_widths[lang]}} |"
+            avg_row += f" {'':>{col_widths['x']}} |"
+        else:
+            avg_row += f" {'':>{col_widths[lang]}} |"
+    lines.append(avg_row)
+
+    # Data rows
     for benchmark in sorted(existing.keys()):
         row = f"| {benchmark:<{col_widths['benchmark']}} |"
         for lang in languages:
@@ -181,6 +239,9 @@ def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dic
             else:
                 val = "-"
             row += f" {val:>{col_widths[lang]}} |"
+            if lang in langs_with_speedup:
+                speedup = speedups[benchmark].get(lang)
+                row += f" {format_speedup(speedup):>{col_widths['x']}} |"
         lines.append(row)
 
     lines.append("")
