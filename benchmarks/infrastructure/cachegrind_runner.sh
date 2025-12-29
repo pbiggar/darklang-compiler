@@ -85,27 +85,43 @@ EOF
 done
 
 # Handle Python separately (run via interpreter) - only if refreshing baseline
+# Python timeout: 5 minutes (300 seconds) - some benchmarks are too slow
+PYTHON_TIMEOUT=${PYTHON_TIMEOUT:-300}
+
 if [ "$REFRESH_BASELINE" = "true" ] && [ -f "$PROBLEM_DIR/python/main.py" ]; then
     if command -v python3 &> /dev/null; then
-        echo "  Running cachegrind on python..."
+        echo "  Running cachegrind on python (timeout: ${PYTHON_TIMEOUT}s)..."
 
-        CG_OUTPUT=$(valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes python3 "$PROBLEM_DIR/python/main.py" 2>&1)
-
-        I_REFS=$(echo "$CG_OUTPUT" | grep "I refs:" | sed 's/.*I refs:[[:space:]]*//' | tr -d ',')
-        D_REFS=$(echo "$CG_OUTPUT" | grep "D refs:" | sed 's/.*D refs:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
-        BRANCHES=$(echo "$CG_OUTPUT" | grep "Branches:" | sed 's/.*Branches:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
-        MISPREDICTS=$(echo "$CG_OUTPUT" | grep "Mispredicts:" | sed 's/.*Mispredicts:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
-        I1_MISSES=$(echo "$CG_OUTPUT" | grep "I1  misses:" | sed 's/.*I1  misses:[[:space:]]*//' | tr -d ',')
-        D1_MISSES=$(echo "$CG_OUTPUT" | grep "D1  misses:" | sed 's/.*D1  misses:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
-        LL_MISSES=$(echo "$CG_OUTPUT" | grep "LL misses:" | head -1 | sed 's/.*LL misses:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
-
-        if [ "$FIRST" = true ]; then
-            FIRST=false
+        # Use timeout to avoid hanging on slow benchmarks
+        if CG_OUTPUT=$(timeout "$PYTHON_TIMEOUT" valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes python3 "$PROBLEM_DIR/python/main.py" 2>&1); then
+            PYTHON_SUCCESS=true
         else
-            echo "," >> "$RESULTS_FILE"
+            EXIT_CODE=$?
+            if [ $EXIT_CODE -eq 124 ]; then
+                echo "    TIMEOUT: Python benchmark exceeded ${PYTHON_TIMEOUT}s, skipping"
+                PYTHON_SUCCESS=false
+            else
+                # Other error - still try to parse output
+                PYTHON_SUCCESS=true
+            fi
         fi
 
-        cat >> "$RESULTS_FILE" << EOF
+        if [ "$PYTHON_SUCCESS" = true ]; then
+            I_REFS=$(echo "$CG_OUTPUT" | grep "I refs:" | sed 's/.*I refs:[[:space:]]*//' | tr -d ',')
+            D_REFS=$(echo "$CG_OUTPUT" | grep "D refs:" | sed 's/.*D refs:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+            BRANCHES=$(echo "$CG_OUTPUT" | grep "Branches:" | sed 's/.*Branches:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+            MISPREDICTS=$(echo "$CG_OUTPUT" | grep "Mispredicts:" | sed 's/.*Mispredicts:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+            I1_MISSES=$(echo "$CG_OUTPUT" | grep "I1  misses:" | sed 's/.*I1  misses:[[:space:]]*//' | tr -d ',')
+            D1_MISSES=$(echo "$CG_OUTPUT" | grep "D1  misses:" | sed 's/.*D1  misses:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+            LL_MISSES=$(echo "$CG_OUTPUT" | grep "LL misses:" | head -1 | sed 's/.*LL misses:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+
+            if [ "$FIRST" = true ]; then
+                FIRST=false
+            else
+                echo "," >> "$RESULTS_FILE"
+            fi
+
+            cat >> "$RESULTS_FILE" << EOF
   {
     "language": "python",
     "instructions": $I_REFS,
@@ -118,7 +134,8 @@ if [ "$REFRESH_BASELINE" = "true" ] && [ -f "$PROBLEM_DIR/python/main.py" ]; the
   }
 EOF
 
-        echo "    Instructions: $I_REFS"
+            echo "    Instructions: $I_REFS"
+        fi
     fi
 fi
 
