@@ -389,11 +389,18 @@ let cexprProducesFloat (floatRegs: Set<int>) (returnTypeReg: Map<string, AST.Typ
         // IfValue produces a float if either branch produces a float
         // (then and else should have the same type, so we check then)
         isFloatAtom floatRegs thenAtom
-    | ANF.Call (funcName, _) ->
+    | ANF.Call (funcName, _)
+    | ANF.TailCall (funcName, _) ->
         // Check if the called function returns a float
         match Map.tryFind funcName returnTypeReg with
         | Some AST.TFloat64 -> true
         | _ -> false
+    | ANF.IndirectCall _ | ANF.IndirectTailCall _ ->
+        // Indirect calls - we don't know the return type, assume not float
+        false
+    | ANF.ClosureCall _ | ANF.ClosureTailCall _ ->
+        // Closure calls - we don't know the return type, assume not float
+        false
     | _ -> false
 
 /// Analyze return statements in an ANF expression, tracking float temps

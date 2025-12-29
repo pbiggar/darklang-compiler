@@ -72,5 +72,6 @@ let detectTailCallsInFunction (func: Function) : Function =
 
 /// Detect tail calls in a program
 let detectTailCallsInProgram (program: ANF.Program) : ANF.Program =
-    // TCO DISABLED: Tail calls break float returns and Dict operations
+    // TCO DISABLED: Still has 141 crashes from other issues (likely stack/register corruption)
+    // Float return type tracking is now fixed (TailCall handled in cexprProducesFloat)
     program
