@@ -1,0 +1,31 @@
+// Fasta Benchmark - DNA Sequence Generation
+// From: Computer Language Benchmarks Game
+//
+// STATUS: NOT YET IMPLEMENTABLE
+// MISSING FEATURES:
+// - String/character operations
+// - Float to int conversion for random selection
+// - Efficient string building or byte arrays
+//
+// This benchmark tests:
+// - Random number generation
+// - String/byte array operations
+// - Lookup table performance
+// - Loop performance
+//
+// The fasta benchmark generates DNA sequences using a
+// linear congruential generator and weighted random selection.
+
+// TODO: Implement when string operations are available
+//
+// const IM = 139968
+// const IA = 3877
+// const IC = 29573
+//
+// def random(last: Int64, max: Float) : (Int64, Float) =
+//     let newLast = (last * IA + IC) % IM
+//     (newLast, max * Stdlib.Int64.toFloat(newLast) / Stdlib.Int64.toFloat(IM))
+//
+// def selectRandom(table: List<(Char, Float)>, r: Float) : Char = ...
+
+0

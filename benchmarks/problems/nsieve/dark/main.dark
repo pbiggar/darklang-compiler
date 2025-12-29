@@ -1,0 +1,30 @@
+// Nsieve Benchmark - Sieve of Eratosthenes
+// From: Computer Language Benchmarks Game
+//
+// STATUS: NOT YET IMPLEMENTABLE
+// MISSING FEATURES:
+// - Mutable arrays (for sieve marking)
+// - Efficient array indexing and mutation
+//
+// This benchmark tests:
+// - Array allocation and access
+// - Loop iteration
+// - Memory access patterns
+//
+// The sieve algorithm requires mutable arrays to mark
+// composite numbers efficiently. A purely functional
+// version would be too slow to be useful as a benchmark.
+
+// TODO: Implement when mutable arrays are available
+//
+// def nsieve(n: Int64) : Int64 =
+//     let sieve = Array.create(n + 1, true) in
+//     let count = 0 in
+//     for i in 2 to n do
+//         if sieve[i] then
+//             count <- count + 1
+//             for j in (i + i) to n step i do
+//                 sieve[j] <- false
+//     count
+
+0
