@@ -90,29 +90,42 @@ let tryStartProcess (info: ProcessStartInfo) : Result<Process, string> =
     try Ok (Process.Start(info))
     with ex -> Error ex.Message
 
-/// Load the stdlib.dark file
-/// Returns the stdlib AST or an error message
-let loadStdlib () : Result<AST.Program, string> =
-    // Find stdlib.dark relative to the executable
+/// Load a .dark file from possible paths
+let loadDarkFile (filename: string) : Result<AST.Program, string> =
     let exePath = Assembly.GetExecutingAssembly().Location
     let exeDir = Path.GetDirectoryName(exePath)
-    // Try multiple locations for stdlib.dark
     let possiblePaths = [
-        Path.Combine(exeDir, "stdlib.dark")
-        Path.Combine(exeDir, "..", "..", "..", "..", "src", "DarkCompiler", "stdlib.dark")
-        Path.Combine(Environment.CurrentDirectory, "src", "DarkCompiler", "stdlib.dark")
+        Path.Combine(exeDir, filename)
+        Path.Combine(exeDir, "..", "..", "..", "..", "src", "DarkCompiler", filename)
+        Path.Combine(Environment.CurrentDirectory, "src", "DarkCompiler", filename)
     ]
-    let stdlibPath =
+    let filePath =
         possiblePaths
         |> List.tryFind File.Exists
-    match stdlibPath with
+    match filePath with
     | None ->
         let pathsStr = String.Join(", ", possiblePaths)
-        Error $"Could not find stdlib.dark in any of: {pathsStr}"
+        Error $"Could not find {filename} in any of: {pathsStr}"
     | Some path ->
         let source = File.ReadAllText(path)
         Parser.parseString source
-        |> Result.mapError (fun err -> $"Error parsing stdlib.dark: {err}")
+        |> Result.mapError (fun err -> $"Error parsing {filename}: {err}")
+
+/// Load the stdlib.dark and unicode_data.dark files
+/// Returns the merged stdlib AST or an error message
+let loadStdlib () : Result<AST.Program, string> =
+    // Load stdlib.dark first
+    match loadDarkFile "stdlib.dark" with
+    | Error e -> Error e
+    | Ok (AST.Program stdlibItems) ->
+        // Try to load unicode_data.dark (optional, may not exist in all environments)
+        match loadDarkFile "unicode_data.dark" with
+        | Error _ ->
+            // Unicode data not available, return stdlib only
+            Ok (AST.Program stdlibItems)
+        | Ok (AST.Program unicodeItems) ->
+            // Merge stdlib and unicode data
+            Ok (AST.Program (stdlibItems @ unicodeItems))
 
 /// Merge two programs - stdlib functions come first
 let mergePrograms (stdlib: AST.Program) (userProgram: AST.Program) : AST.Program =
