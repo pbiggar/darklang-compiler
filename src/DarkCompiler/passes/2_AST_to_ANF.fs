@@ -246,6 +246,7 @@ let rec typeToMangledName (t: AST.Type) : string =
     | AST.TBool -> "bool"
     | AST.TFloat64 -> "f64"
     | AST.TString -> "str"
+    | AST.TChar -> "char"
     | AST.TUnit -> "unit"
     | AST.TFunction (paramTypes, retType) ->
         let paramStr = paramTypes |> List.map typeToMangledName |> String.concat "_"
@@ -304,7 +305,7 @@ let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
         AST.TDict (applySubstToType subst keyType, applySubstToType subst valueType)
     | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
-    | AST.TBool | AST.TFloat64 | AST.TString | AST.TUnit | AST.TRecord _ | AST.TSum _ | AST.TRawPtr ->
+    | AST.TBool | AST.TFloat64 | AST.TString | AST.TChar | AST.TUnit | AST.TRecord _ | AST.TSum _ | AST.TRawPtr ->
         typ  // Concrete types are unchanged
 
 /// Apply a substitution to an expression, replacing type variables in type annotations
@@ -312,7 +313,7 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
     match expr with
     | AST.UnitLiteral | AST.IntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
     | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
+    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
         expr  // No types to substitute in literals, variables, function references, and closures
     | AST.BinOp (op, left, right) ->
         AST.BinOp (op, applySubstToExpr subst left, applySubstToExpr subst right)
@@ -380,7 +381,7 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
     match expr with
     | AST.UnitLiteral | AST.IntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
     | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
+    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
         Set.empty
     | AST.BinOp (_, left, right) ->
         Set.union (collectTypeApps left) (collectTypeApps right)
@@ -447,7 +448,7 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
     match expr with
     | AST.UnitLiteral | AST.IntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
     | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
+    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
         expr
     | AST.BinOp (op, left, right) ->
         AST.BinOp (op, replaceTypeApps left, replaceTypeApps right)
@@ -515,7 +516,7 @@ let rec varOccursInExpr (name: string) (expr: AST.Expr) : bool =
     match expr with
     | AST.UnitLiteral | AST.IntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
     | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ -> false
+    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ -> false
     | AST.Var n -> n = name
     | AST.BinOp (_, left, right) -> varOccursInExpr name left || varOccursInExpr name right
     | AST.UnaryOp (_, inner) -> varOccursInExpr name inner
@@ -566,7 +567,7 @@ let rec inlineLambdas (expr: AST.Expr) (lambdaEnv: LambdaEnv) : AST.Expr =
     match expr with
     | AST.UnitLiteral | AST.IntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
     | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ ->
+    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ ->
         expr
     | AST.Var _ -> expr  // Variable references stay as-is (not at call position)
     | AST.BinOp (op, left, right) ->
@@ -676,7 +677,7 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
     match expr with
     | AST.UnitLiteral | AST.IntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
     | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ -> Set.empty
+    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ -> Set.empty
     | AST.Var name -> if Set.contains name bound then Set.empty else Set.singleton name
     | AST.BinOp (_, left, right) -> Set.union (freeVars left bound) (freeVars right bound)
     | AST.UnaryOp (_, inner) -> freeVars inner bound
@@ -732,7 +733,7 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
     match expr with
     | AST.UnitLiteral | AST.IntLiteral _ | AST.Int8Literal _ | AST.Int16Literal _ | AST.Int32Literal _
     | AST.UInt8Literal _ | AST.UInt16Literal _ | AST.UInt32Literal _ | AST.UInt64Literal _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
+    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _ | AST.Var _ | AST.FuncRef _ | AST.Closure _ ->
         Ok (expr, state)
     | AST.BinOp (op, left, right) ->
         liftLambdasInExpr left state
@@ -1497,6 +1498,7 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
     | AST.UInt64Literal _ -> Ok AST.TUInt64
     | AST.BoolLiteral _ -> Ok AST.TBool
     | AST.StringLiteral _ -> Ok AST.TString
+    | AST.CharLiteral _ -> Ok AST.TChar
     | AST.FloatLiteral _ -> Ok AST.TFloat64
     | AST.Var name ->
         match Map.tryFind name typeEnv with
@@ -1716,6 +1718,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
     | AST.StringLiteral s ->
         // String literal becomes return
+        Ok (ANF.Return (ANF.StringLiteral s), varGen)
+
+    | AST.CharLiteral s ->
+        // Char literal becomes return (stored as string, same runtime representation)
         Ok (ANF.Return (ANF.StringLiteral s), varGen)
 
     | AST.FloatLiteral f ->
@@ -3165,6 +3171,10 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         Ok (ANF.BoolLiteral b, [], varGen)
 
     | AST.StringLiteral s ->
+        Ok (ANF.StringLiteral s, [], varGen)
+
+    | AST.CharLiteral s ->
+        // Char literal uses same representation as string
         Ok (ANF.StringLiteral s, [], varGen)
 
     | AST.FloatLiteral f ->

@@ -630,8 +630,9 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                     LIR.PrintFloat (LIR.FPhysical LIR.D0)]
             | _ ->
                 Error "Internal error: unexpected operand type for float print"
-        | AST.TString ->
-            // String printing uses PrintString for pool strings, PrintHeapString for heap strings
+        | AST.TString | AST.TChar ->
+            // String/Char printing uses PrintString for pool strings, PrintHeapString for heap strings
+            // Char is stored as a string at runtime (single EGC)
             match src with
             | MIR.StringRef idx ->
                 // Pool string: look up the string length from the pool

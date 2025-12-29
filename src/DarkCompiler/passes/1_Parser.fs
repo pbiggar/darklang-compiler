@@ -34,6 +34,7 @@ and Token =
     | TUInt64 of uint64     // 64-bit unsigned: 1UL
     | TFloat of float
     | TStringLit of string  // String literal token (named to avoid conflict with AST.TString type)
+    | TCharLit of string    // Char literal: 'x' (stores UTF-8 string for EGC support)
     | TInterpString of InterpPart list  // Interpolated string: $"Hello {name}!"
     | TTrue
     | TFalse
@@ -381,6 +382,55 @@ let lex (input: string) : Result<Token list, string> =
                 lexHelper remaining (TInterpString parts :: acc)
             | Error err -> Error err
 
+        | '\'' :: rest ->
+            // Parse char literal with escape sequences (single Extended Grapheme Cluster)
+            let rec parseCharContent (cs: char list) (chars: char list) : Result<string * char list, string> =
+                match cs with
+                | [] -> Error "Unterminated char literal"
+                | '\'' :: remaining ->
+                    // End of char literal
+                    let str = System.String(List.rev chars |> List.toArray)
+                    if str.Length = 0 then
+                        Error "Empty char literal"
+                    else
+                        // Validate that it's a single Extended Grapheme Cluster using .NET's StringInfo
+                        let enumerator = System.Globalization.StringInfo.GetTextElementEnumerator(str)
+                        if enumerator.MoveNext() then
+                            if enumerator.MoveNext() then
+                                Error $"Char literal contains more than one grapheme cluster: '{str}'"
+                            else
+                                Ok (str, remaining)
+                        else
+                            Error "Empty char literal"
+                | '\\' :: 'n' :: remaining ->
+                    parseCharContent remaining ('\n' :: chars)
+                | '\\' :: 't' :: remaining ->
+                    parseCharContent remaining ('\t' :: chars)
+                | '\\' :: 'r' :: remaining ->
+                    parseCharContent remaining ('\r' :: chars)
+                | '\\' :: '\\' :: remaining ->
+                    parseCharContent remaining ('\\' :: chars)
+                | '\\' :: '\'' :: remaining ->
+                    parseCharContent remaining ('\'' :: chars)
+                | '\\' :: '0' :: remaining ->
+                    parseCharContent remaining ('\000' :: chars)
+                | '\\' :: 'x' :: h1 :: h2 :: remaining ->
+                    // Hex escape: \xNN
+                    let hexStr = System.String([| h1; h2 |])
+                    match System.Int32.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber, null) with
+                    | (true, value) ->
+                        parseCharContent remaining (char value :: chars)
+                    | (false, _) ->
+                        Error $"Invalid hex escape sequence: \\x{hexStr}"
+                | '\\' :: c :: _ ->
+                    Error $"Unknown escape sequence: \\{c}"
+                | c :: remaining ->
+                    parseCharContent remaining (c :: chars)
+
+            match parseCharContent rest [] with
+            | Ok (str, remaining) -> lexHelper remaining (TCharLit str :: acc)
+            | Error err -> Error err
+
         | '"' :: rest ->
             // Parse string literal with escape sequences
             let rec parseString (cs: char list) (chars: char list) : Result<string * char list, string> =
@@ -451,6 +501,7 @@ and parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type *
     | TIdent "UInt64" :: rest -> Ok (AST.TUInt64, rest)
     | TIdent "Bool" :: rest -> Ok (AST.TBool, rest)
     | TIdent "String" :: rest -> Ok (AST.TString, rest)
+    | TIdent "Char" :: rest -> Ok (AST.TChar, rest)
     | TIdent "Float" :: rest -> Ok (AST.TFloat64, rest)
     | TIdent "Unit" :: rest -> Ok (AST.TUnit, rest)
     | TIdent "RawPtr" :: rest -> Ok (AST.TRawPtr, rest)  // Internal raw pointer type
@@ -563,6 +614,7 @@ let rec parseTypeArgType (tokens: Token list) : Result<Type * Token list, string
     | TIdent "UInt64" :: rest -> Ok (AST.TUInt64, rest)
     | TIdent "Bool" :: rest -> Ok (AST.TBool, rest)
     | TIdent "String" :: rest -> Ok (AST.TString, rest)
+    | TIdent "Char" :: rest -> Ok (AST.TChar, rest)
     | TIdent "Float" :: rest -> Ok (AST.TFloat64, rest)
     | TIdent "Unit" :: rest -> Ok (AST.TUnit, rest)
     | TIdent "RawPtr" :: rest -> Ok (AST.TRawPtr, rest)  // Internal raw pointer type
@@ -1433,6 +1485,7 @@ let parse (tokens: Token list) : Result<Program, string> =
         | TUInt64 n :: rest -> Ok (UInt64Literal n, rest)
         | TFloat f :: rest -> Ok (FloatLiteral f, rest)
         | TStringLit s :: rest -> Ok (StringLiteral s, rest)
+        | TCharLit s :: rest -> Ok (CharLiteral s, rest)
         | TInterpString parts :: rest ->
             // Parse interpolated string into AST.InterpolatedString
             let rec parseInterpParts (parts: InterpPart list) (acc: AST.StringPart list) : Result<AST.StringPart list, string> =

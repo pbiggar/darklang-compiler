@@ -33,6 +33,7 @@ type Type =
     | TBool
     | TFloat64
     | TString
+    | TChar      // Extended Grapheme Cluster (single visual character)
     | TUnit
     | TFunction of Type list * Type  // parameter types * return type
     | TTuple of Type list             // tuple type: (Int, Bool, String)
@@ -108,6 +109,7 @@ and Expr =
     | UInt64Literal of uint64               // 64-bit unsigned: 42UL
     | BoolLiteral of bool
     | StringLiteral of string
+    | CharLiteral of string   // Single Extended Grapheme Cluster stored as UTF-8 string
     | FloatLiteral of float
     | InterpolatedString of StringPart list // $"Hello {name}!"
     | BinOp of BinOp * Expr * Expr

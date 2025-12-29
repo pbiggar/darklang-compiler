@@ -53,6 +53,7 @@ let rec typeToString (t: Type) : string =
     | TBool -> "Bool"
     | TFloat64 -> "Float"
     | TString -> "String"
+    | TChar -> "Char"
     | TUnit -> "Unit"
     | TFunction (params', ret) ->
         let paramStr = params' |> List.map typeToString |> String.concat ", "
@@ -117,7 +118,7 @@ let rec applyTypeVarRenaming (subst: Map<string, string>) (t: Type) : Type =
     | TTuple elems -> TTuple (List.map (applyTypeVarRenaming subst) elems)
     | TSum (name, args) -> TSum (name, List.map (applyTypeVarRenaming subst) args)
     | TRecord _ | TInt8 | TInt16 | TInt32 | TInt64 | TUInt8 | TUInt16 | TUInt32 | TUInt64
-    | TBool | TFloat64 | TString | TUnit | TRawPtr -> t
+    | TBool | TFloat64 | TString | TChar | TUnit | TRawPtr -> t
 
 /// Type environment - maps variable names to their types
 type TypeEnv = Map<string, Type>
@@ -192,7 +193,7 @@ let rec applySubst (subst: Substitution) (typ: Type) : Type =
     | TDict (keyType, valueType) ->
         TDict (applySubst subst keyType, applySubst subst valueType)
     | TInt8 | TInt16 | TInt32 | TInt64 | TUInt8 | TUInt16 | TUInt32 | TUInt64
-    | TBool | TFloat64 | TString | TUnit | TRecord _ | TRawPtr ->
+    | TBool | TFloat64 | TString | TChar | TUnit | TRecord _ | TRawPtr ->
         typ  // Concrete types are unchanged
 
 /// Build a substitution from type parameters and type arguments
@@ -208,7 +209,7 @@ let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
     match expr with
     | UnitLiteral | IntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _
-    | BoolLiteral _ | StringLiteral _ | FloatLiteral _ | Var _ | FuncRef _ -> expr
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ -> expr
     | BinOp (op, left, right) ->
         BinOp (op, applySubstToExpr subst left, applySubstToExpr subst right)
     | UnaryOp (op, inner) ->
@@ -297,7 +298,7 @@ let rec resolveType (aliasReg: AliasRegistry) (typ: Type) : Type =
     | TDict (keyType, valueType) ->
         TDict (resolveType aliasReg keyType, resolveType aliasReg valueType)
     | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TUInt8 | TUInt16 | TUInt32 | TUInt64
-    | TBool | TFloat64 | TString | TUnit | TRawPtr ->
+    | TBool | TFloat64 | TString | TChar | TUnit | TRawPtr ->
         typ  // Primitive types and type variables are unchanged
 
 /// Compare two types for equality, resolving type aliases first
@@ -319,7 +320,7 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
     match expr with
     | UnitLiteral | IntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _
-    | BoolLiteral _ | StringLiteral _ | FloatLiteral _ ->
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ ->
         Set.empty
     | Var name ->
         if Set.contains name bound then Set.empty else Set.singleton name
@@ -450,6 +451,7 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
     | TBool -> matchConcrete TBool actual
     | TFloat64 -> matchConcrete TFloat64 actual
     | TString -> matchConcrete TString actual
+    | TChar -> matchConcrete TChar actual
     | TUnit -> matchConcrete TUnit actual
     | TRawPtr -> matchConcrete TRawPtr actual
     | TList patternElem ->
@@ -717,6 +719,12 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         match expectedType with
         | Some TString | None -> Ok (TString, expr)
         | Some other -> Error (TypeMismatch (other, TString, "string literal"))
+
+    | CharLiteral _ ->
+        // Char literals are always TChar (single Extended Grapheme Cluster)
+        match expectedType with
+        | Some TChar | None -> Ok (TChar, expr)
+        | Some other -> Error (TypeMismatch (other, TChar, "char literal"))
 
     | InterpolatedString parts ->
         // Interpolated strings are always TString
