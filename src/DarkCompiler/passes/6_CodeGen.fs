@@ -1355,23 +1355,34 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         let mutable allInstrs : ARM64.Instr list = []
         let mutable remaining = moves |> List.map (fun (d, s) -> (d, s))
 
-        // Phase 1: Emit all non-register-source moves first (they can never cause conflicts)
-        // Also filter out self-loops (X1 <- X1) since they're no-ops
+        // Filter out self-loops (X1 <- X1) since they're no-ops
         let isSelfLoop (destReg: LIR.PhysReg, srcOp: LIR.Operand) =
             match getSrcPhysReg srcOp with
             | Some srcReg -> srcReg = destReg
             | None -> false
 
         let nonSelfLoops = remaining |> List.filter (not << isSelfLoop)
+
+        // Collect all source registers used by register-source moves
+        let allRegSrcRegs =
+            nonSelfLoops
+            |> List.choose (fun (_, srcOp) -> getSrcPhysReg srcOp)
+            |> Set.ofList
+
+        // Phase 1: Emit non-register-source moves whose destination is NOT used as a source
+        // IMPORTANT: A move like X0 <- Imm cannot be emitted early if X0 is a source for another move!
         let (nonRegMoves, regMoves) =
             nonSelfLoops |> List.partition (fun (_, srcOp) -> getSrcPhysReg srcOp = None)
 
-        for (dest, src) in nonRegMoves do
+        let (safeNonRegMoves, unsafeNonRegMoves) =
+            nonRegMoves |> List.partition (fun (dest, _) -> not (Set.contains dest allRegSrcRegs))
+
+        for (dest, src) in safeNonRegMoves do
             match generateMoveInstr (dest, src) with
             | Ok instrs -> allInstrs <- allInstrs @ instrs
             | Error e -> failwith e
 
-        remaining <- regMoves
+        remaining <- unsafeNonRegMoves @ regMoves
 
         // Phase 2: Iteratively emit moves where dest is not a source for remaining moves
         let mutable changed = true
@@ -1396,12 +1407,15 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         // Phase 3: Handle cycles using X16 as temp
         // At this point, all remaining moves form cycles. For each cycle:
         // 1. Save the FIRST destination to X16 (it gets clobbered first but read later)
-        // 2. Emit all moves in order
+        // 2. Emit all moves in DEPENDENCY ORDER (so we read from registers before they're overwritten)
         // 3. Any move that reads the saved register uses X16 instead
         //
         // Example cycle: X0 <- X1, X1 <- X2, X2 <- X0
         // 1. Save X0 to X16 (X0 is written first but X2 <- X0 reads it later)
-        // 2. Emit: X0 <- X1, X1 <- X2, X2 <- X16
+        // 2. Emit in order: X0 <- X1, X1 <- X2, X2 <- X16
+        //
+        // CRITICAL: Moves must be emitted in dependency order!
+        // Wrong order (e.g., X1 <- X2 before X0 <- X1) would clobber X1 before X0 reads it.
 
         while not (List.isEmpty remaining) do
             // Pick the first move and save its destination
@@ -1411,28 +1425,32 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             // Save this register to X16
             allInstrs <- allInstrs @ [ARM64.MOV_reg (ARM64.X16, lirPhysRegToARM64Reg savedReg)]
 
-            // Find all moves that form a cycle with this saved register
-            // Follow the chain: firstDest -> (source of move to firstDest) -> ...
-            let rec findCycleMembers (visited: Set<LIR.PhysReg>) (frontier: LIR.PhysReg list) : Set<LIR.PhysReg> =
-                match frontier with
-                | [] -> visited
-                | reg :: rest ->
-                    // Find moves where this reg is the destination
-                    let movesToReg = remaining |> List.filter (fun (d, _) -> d = reg)
-                    // Get their sources
-                    let sources = movesToReg |> List.choose (fun (_, s) -> getSrcPhysReg s)
-                    // Add unvisited sources to frontier
-                    let newFrontier = sources |> List.filter (fun s -> not (Set.contains s visited))
-                    findCycleMembers (Set.add reg visited) (rest @ newFrontier)
+            // Build ordered chain starting from savedReg:
+            // 1. Find move that writes to savedReg (the first move to emit)
+            // 2. Get its source register
+            // 3. Find move that writes to that source register
+            // 4. Repeat until we find a move that reads savedReg (end of cycle)
+            let rec buildOrderedChain (currentDest: LIR.PhysReg) (movesLeft: (LIR.PhysReg * LIR.Operand) list)
+                                      (chain: (LIR.PhysReg * LIR.Operand) list) : (LIR.PhysReg * LIR.Operand) list =
+                match movesLeft |> List.tryFind (fun (d, _) -> d = currentDest) with
+                | Some ((dest, src) as move) ->
+                    let movesLeft' = movesLeft |> List.filter (fun m -> m <> move)
+                    let newChain = move :: chain
+                    match getSrcPhysReg src with
+                    | Some srcReg when srcReg <> savedReg ->
+                        // Continue following the chain
+                        buildOrderedChain srcReg movesLeft' newChain
+                    | _ ->
+                        // End of cycle (source is savedReg or not a register)
+                        newChain
+                | None ->
+                    // No more moves to this destination
+                    chain
 
-            let cycleRegs = findCycleMembers Set.empty [firstDest]
+            let orderedMoves = buildOrderedChain savedReg remaining [] |> List.rev
 
-            // Extract cycle moves
-            let (cycleMoves, otherMoves) =
-                remaining |> List.partition (fun (d, _) -> Set.contains d cycleRegs)
-
-            // Emit cycle moves, replacing any source that equals savedReg with X16
-            for (dest, src) in cycleMoves do
+            // Emit moves in order, using X16 for savedReg
+            for (dest, src) in orderedMoves do
                 match getSrcPhysReg src with
                 | Some srcReg when srcReg = savedReg ->
                     // Use X16 instead of the saved register
@@ -1444,7 +1462,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     | Ok instrs -> allInstrs <- allInstrs @ instrs
                     | Error e -> failwith e
 
-            remaining <- otherMoves
+            remaining <- remaining |> List.filter (fun m -> not (List.contains m orderedMoves))
 
         Ok allInstrs
 

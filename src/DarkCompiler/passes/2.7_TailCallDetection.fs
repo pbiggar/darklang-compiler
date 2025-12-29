@@ -72,13 +72,5 @@ let detectTailCallsInFunction (func: Function) : Function =
 
 /// Detect tail calls in a program
 let detectTailCallsInProgram (program: ANF.Program) : ANF.Program =
-    // TCO DISABLED: The TailArgMoves parallel move resolution has bugs that cause
-    // Dict operations and other tests to fail. Needs more investigation.
-    // See issues:
-    // - Dict.set with 3+ items doesn't store 3rd item correctly
-    // - Option.isNone on Dict.get(empty) causes segfault
-    // - Many other test failures (229 total)
+    // TCO DISABLED: Tail calls break float returns and Dict operations
     program
-    // let (ANF.Program (functions, mainExpr)) = program
-    // let functions' = List.map detectTailCallsInFunction functions
-    // ANF.Program (functions', mainExpr)
