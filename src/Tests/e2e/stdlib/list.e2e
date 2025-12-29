@@ -9,140 +9,140 @@
 // new lists cannot be implemented without this feature.
 
 // ===================================================================
-// Stdlib.List.singleton - Create a single-element list
+// List.singleton - Create a single-element list
 // ===================================================================
 
-Stdlib.List.length(Stdlib.List.singleton(42)) = stdout="1\n"
-match Stdlib.List.singleton(5) with | [x] -> x | _ -> 0 = 5
+List.length(List.singleton(42)) = stdout="1\n"
+match List.singleton(5) with | [x] -> x | _ -> 0 = 5
 
 // ===================================================================
 // List spread syntax - [h, ...rest] in expressions
 // ===================================================================
 
 // Test basic spread syntax
-let rest = [3, 4, 5] in Stdlib.List.length([1, 2, ...rest]) = stdout="5\n"
+let rest = [3, 4, 5] in List.length([1, 2, ...rest]) = stdout="5\n"
 
 // Test spread with empty list (need type annotation via function call)
-Stdlib.List.length<Int64>([1, ...[]]) = stdout="1\n"
+List.length<Int64>([1, ...[]]) = stdout="1\n"
 
 // Test spread with single element head
 let tail = [2, 3] in match [1, ...tail] with | [a, b, c] -> a + b + c | _ -> 0 = 6
 
 // ===================================================================
-// Stdlib.List.push - Add element to front of list
+// List.push - Add element to front of list
 // ===================================================================
 
-match Stdlib.List.push([2, 3], 1) with | [a, b, c] -> a | _ -> 0 = 1
-Stdlib.List.length(Stdlib.List.push([1, 2], 0)) = stdout="3\n"
+match List.push([2, 3], 1) with | [a, b, c] -> a | _ -> 0 = 1
+List.length(List.push([1, 2], 0)) = stdout="3\n"
 
 // ===================================================================
-// Stdlib.List.append - Concatenate two lists
+// List.append - Concatenate two lists
 // ===================================================================
 
-Stdlib.List.length(Stdlib.List.append([1, 2, 3], [4, 5, 6])) = stdout="6\n"
-match Stdlib.List.append([1, 2], [3, 4]) with | [a, b, c, d] -> a + b + c + d | _ -> 0 = 10
+List.length(List.append([1, 2, 3], [4, 5, 6])) = stdout="6\n"
+match List.append([1, 2], [3, 4]) with | [a, b, c, d] -> a + b + c + d | _ -> 0 = 10
 
 // ===================================================================
-// Stdlib.List.pushBack - Add element to end of list
+// List.pushBack - Add element to end of list
 // ===================================================================
 
-match Stdlib.List.pushBack([1, 2], 3) with | [a, b, c] -> c | _ -> 0 = 3
+match List.pushBack([1, 2], 3) with | [a, b, c] -> c | _ -> 0 = 3
 
 // ===================================================================
-// Stdlib.List.reverse - Reverse a list
+// List.reverse - Reverse a list
 // NOTE: Currently has a bug - returns unreversed list. Needs investigation.
 // ===================================================================
 
-// match Stdlib.List.reverse([1, 2, 3]) with | [a, b, c] -> a | _ -> 0 = 3
+// match List.reverse([1, 2, 3]) with | [a, b, c] -> a | _ -> 0 = 3
 
 // ===================================================================
-// Stdlib.List.map - Apply a function to each element
+// List.map - Apply a function to each element
 // ===================================================================
 
-match Stdlib.List.map([1, 2, 3], (x: Int64) => x + 1) with | [a, b, c] -> a + b + c | _ -> 0 = 9
-Stdlib.List.length(Stdlib.List.map([1, 2, 3, 4], (x: Int64) => x * 2)) = stdout="4\n"
+match List.map([1, 2, 3], (x: Int64) => x + 1) with | [a, b, c] -> a + b + c | _ -> 0 = 9
+List.length(List.map([1, 2, 3, 4], (x: Int64) => x * 2)) = stdout="4\n"
 
 // ===================================================================
-// Stdlib.List.filter - Keep elements that match predicate
+// List.filter - Keep elements that match predicate
 // ===================================================================
 
-Stdlib.List.length(Stdlib.List.filter([1, 2, 3, 4, 5], (x: Int64) => x > 2)) = stdout="3\n"
+List.length(List.filter([1, 2, 3, 4, 5], (x: Int64) => x > 2)) = stdout="3\n"
 
 // ===================================================================
-// Stdlib.List.fold - Reduce list with accumulator
+// List.fold - Reduce list with accumulator
 // ===================================================================
 
-Stdlib.List.fold([1, 2, 3, 4, 5], 0, (acc: Int64, x: Int64) => acc + x) = 15
-Stdlib.List.fold([1, 2, 3, 4], 1, (acc: Int64, x: Int64) => acc * x) = 24
+List.fold([1, 2, 3, 4, 5], 0, (acc: Int64, x: Int64) => acc + x) = 15
+List.fold([1, 2, 3, 4], 1, (acc: Int64, x: Int64) => acc * x) = 24
 
 // ===================================================================
-// Stdlib.List.drop - Drop first n elements
+// List.drop - Drop first n elements
 // ===================================================================
 
-Stdlib.List.length(Stdlib.List.drop([1, 2, 3, 4, 5], 2)) = stdout="3\n"
-Stdlib.List.length(Stdlib.List.drop([1, 2, 3], 0)) = stdout="3\n"
-Stdlib.List.length(Stdlib.List.drop([1, 2, 3], 10)) = stdout="0\n"
+List.length(List.drop([1, 2, 3, 4, 5], 2)) = stdout="3\n"
+List.length(List.drop([1, 2, 3], 0)) = stdout="3\n"
+List.length(List.drop([1, 2, 3], 10)) = stdout="0\n"
 
 // ===================================================================
-// Stdlib.List.take - Take first n elements
+// List.take - Take first n elements
 // ===================================================================
 
-Stdlib.List.length(Stdlib.List.take([1, 2, 3, 4, 5], 3)) = stdout="3\n"
-Stdlib.List.length(Stdlib.List.take([1, 2, 3], 0)) = stdout="0\n"
-Stdlib.List.length(Stdlib.List.take([1, 2], 10)) = stdout="2\n"
+List.length(List.take([1, 2, 3, 4, 5], 3)) = stdout="3\n"
+List.length(List.take([1, 2, 3], 0)) = stdout="0\n"
+List.length(List.take([1, 2], 10)) = stdout="2\n"
 
 // ===================================================================
-// Stdlib.List.head - Get first element or None
+// List.head - Get first element or None
 // ===================================================================
 
-Stdlib.Option.withDefault(Stdlib.List.head([1, 2, 3]), 0) = 1
-Stdlib.Option.isNone<Int64>(Stdlib.List.head<Int64>([])) = stdout="true\n"
+Option.withDefault(List.head([1, 2, 3]), 0) = 1
+Option.isNone<Int64>(List.head<Int64>([])) = stdout="true\n"
 
 // ===================================================================
-// Stdlib.List.tail - Get rest of list (all but first element) or None
+// List.tail - Get rest of list (all but first element) or None
 // ===================================================================
 
 // NOTE: Needs type params because empty list default doesn't constrain type
-Stdlib.List.length(Stdlib.Option.withDefault<List<Int64>>(Stdlib.List.tail([1, 2, 3]), [])) = stdout="2\n"
-Stdlib.Option.isNone<List<Int64>>(Stdlib.List.tail<Int64>([])) = stdout="true\n"
-match Stdlib.List.tail([1, 2, 3]) with | Some(t) -> Stdlib.List.length(t) | None -> 0 = stdout="2\n"
+List.length(Option.withDefault<List<Int64>>(List.tail([1, 2, 3]), [])) = stdout="2\n"
+Option.isNone<List<Int64>>(List.tail<Int64>([])) = stdout="true\n"
+match List.tail([1, 2, 3]) with | Some(t) -> List.length(t) | None -> 0 = stdout="2\n"
 
 // ===================================================================
-// Stdlib.List.getAt - Get element at index
+// List.getAt - Get element at index
 // ===================================================================
 
-Stdlib.Option.withDefault(Stdlib.List.getAt([10, 20, 30], 0), 0) = 10
-Stdlib.Option.withDefault(Stdlib.List.getAt([10, 20, 30], 2), 0) = 30
-Stdlib.Option.isNone<Int64>(Stdlib.List.getAt<Int64>([1, 2, 3], 10)) = stdout="true\n"
+Option.withDefault(List.getAt([10, 20, 30], 0), 0) = 10
+Option.withDefault(List.getAt([10, 20, 30], 2), 0) = 30
+Option.isNone<Int64>(List.getAt<Int64>([1, 2, 3], 10)) = stdout="true\n"
 
 // ===================================================================
-// Stdlib.List.findFirst - Find first element matching predicate
+// List.findFirst - Find first element matching predicate
 // ===================================================================
 
-Stdlib.Option.withDefault(Stdlib.List.findFirst([1, 2, 3, 4], (x: Int64) => x > 2), 0) = 3
-Stdlib.Option.isNone<Int64>(Stdlib.List.findFirst<Int64>([1, 2, 3], (x: Int64) => x > 10)) = stdout="true\n"
+Option.withDefault(List.findFirst([1, 2, 3, 4], (x: Int64) => x > 2), 0) = 3
+Option.isNone<Int64>(List.findFirst<Int64>([1, 2, 3], (x: Int64) => x > 10)) = stdout="true\n"
 
 // ===================================================================
-// Stdlib.List.forAll - Check if all elements satisfy predicate
+// List.forAll - Check if all elements satisfy predicate
 // ===================================================================
 
-Stdlib.List.forAll([1, 2, 3], (x: Int64) => x > 0) = stdout="true\n"
-Stdlib.List.forAll([1, 2, 3], (x: Int64) => x > 2) = stdout="false\n"
-Stdlib.List.forAll<Int64>([], (x: Int64) => x > 0) = stdout="true\n"
+List.forAll([1, 2, 3], (x: Int64) => x > 0) = stdout="true\n"
+List.forAll([1, 2, 3], (x: Int64) => x > 2) = stdout="false\n"
+List.forAll<Int64>([], (x: Int64) => x > 0) = stdout="true\n"
 
 // ===================================================================
-// Stdlib.List.exists - Check if any element satisfies predicate
+// List.exists - Check if any element satisfies predicate
 // ===================================================================
 
-Stdlib.List.exists([1, 2, 3], (x: Int64) => x > 2) = stdout="true\n"
-Stdlib.List.exists([1, 2, 3], (x: Int64) => x > 10) = stdout="false\n"
-Stdlib.List.exists<Int64>([], (x: Int64) => x > 0) = stdout="false\n"
+List.exists([1, 2, 3], (x: Int64) => x > 2) = stdout="true\n"
+List.exists([1, 2, 3], (x: Int64) => x > 10) = stdout="false\n"
+List.exists<Int64>([], (x: Int64) => x > 0) = stdout="false\n"
 
 // ===================================================================
 // NOTE: Functions not yet implemented or disabled
 // ===================================================================
 
-// Stdlib.List.last - not yet implemented
-// Stdlib.List.range - not yet implemented
-// Stdlib.List.zip - disabled due to tuple recursion bug
+// List.last - not yet implemented
+// List.range - not yet implemented
+// List.zip - disabled due to tuple recursion bug
 

@@ -646,6 +646,21 @@ let inferTypeArgs (typeParams: string list) (paramTypes: Type list) (argTypes: T
                     | None -> Error $"Cannot infer type for {paramName}: no arguments constrain it"))
                 (Ok []))
 
+/// Try to look up a function name in a map, with fallback to Stdlib prefix
+/// Returns the value and the resolved name (which may differ from input)
+let tryLookupWithFallback (name: string) (m: Map<string, 'a>) : ('a * string) option =
+    match Map.tryFind name m with
+    | Some v -> Some (v, name)
+    | None ->
+        // Try with Stdlib prefix if name has at least one dot
+        if name.Contains(".") && not (name.StartsWith("Stdlib.")) then
+            let resolvedName = "Stdlib." + name
+            match Map.tryFind resolvedName m with
+            | Some v -> Some (v, resolvedName)
+            | None -> None
+        else
+            None
+
 /// Check expression type top-down, potentially transforming the expression.
 /// Parameters:
 ///   - expr: Expression to type-check
@@ -940,15 +955,15 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
         | None ->
             // Check if it's a module function (e.g., Stdlib.Int64.add)
             let moduleRegistry = Stdlib.buildModuleRegistry ()
-            match Stdlib.tryGetFunction moduleRegistry name with
-            | Some moduleFunc ->
+            match Stdlib.tryGetFunctionWithFallback moduleRegistry name with
+            | Some (moduleFunc, resolvedName) ->
                 let funcType = Stdlib.getFunctionType moduleFunc
                 match expectedType with
                 | Some expected ->
                     match reconcileTypes (Some aliasReg) expected funcType with
-                    | Some reconciledType -> Ok (reconciledType, expr)
+                    | Some reconciledType -> Ok (reconciledType, Var resolvedName)
                     | None -> Error (TypeMismatch (expected, funcType, $"variable {name}"))
-                | None -> Ok (funcType, expr)
+                | None -> Ok (funcType, Var resolvedName)
             | None ->
                 Error (UndefinedVariable name)
 
@@ -976,11 +991,12 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
 
     | Call (funcName, args) ->
         // Function call: look up function signature, check arguments match
-        match Map.tryFind funcName env with
-        | Some (TFunction (origParamTypes, origReturnType)) ->
+        // Use fallback to resolve short names like Option.isSome to Stdlib.Option.isSome
+        match tryLookupWithFallback funcName env with
+        | Some (TFunction (origParamTypes, origReturnType), resolvedFuncName) ->
             // Check if this is a generic function - if so, infer type arguments
-            match Map.tryFind funcName genericFuncReg with
-            | Some origTypeParams ->
+            match tryLookupWithFallback resolvedFuncName genericFuncReg with
+            | Some (origTypeParams, _) ->
                 // Freshen type params to avoid name clashes with caller's scope
                 let (freshTypeParams, renaming) = freshenTypeParams origTypeParams
                 let paramTypes = origParamTypes |> List.map (applyTypeVarRenaming renaming)
@@ -1017,8 +1033,8 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             | Some expected when not (typesCompatible expected concreteReturnType) ->
                                 Error (TypeMismatch (expected, concreteReturnType, $"result of call to {funcName}"))
                             | _ ->
-                                // Transform Call to TypeApp with inferred type arguments
-                                Ok (concreteReturnType, TypeApp (funcName, inferredTypeArgs, concreteArgs)))))
+                                // Transform Call to TypeApp with inferred type arguments (using resolved name)
+                                Ok (concreteReturnType, TypeApp (resolvedFuncName, inferredTypeArgs, concreteArgs)))))
 
             | None ->
                 // Non-generic function: regular call or partial application
@@ -1051,9 +1067,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             remainingParamTypes
                             |> List.map (fun t -> (freshPartialParam (), t))
 
-                        // Create the lambda body: call the original function with all args
+                        // Create the lambda body: call the original function with all args (using resolved name)
                         let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
-                        let lambdaBody = Call (funcName, allArgs)
+                        let lambdaBody = Call (resolvedFuncName, allArgs)
 
                         // Create the lambda: (p0, p1, ...) => funcName(providedArgs, p0, p1, ...)
                         let lambdaExpr = Lambda (remainingParams, lambdaBody)
@@ -1084,14 +1100,14 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         match expectedType with
                         | Some expected when not (typesEqual aliasReg expected origReturnType) ->
                             Error (TypeMismatch (expected, origReturnType, $"result of call to {funcName}"))
-                        | _ -> Ok (origReturnType, Call (funcName, args')))
-        | Some other ->
+                        | _ -> Ok (origReturnType, Call (resolvedFuncName, args')))
+        | Some (other, _) ->
             Error (GenericError $"{funcName} is not a function (has type {typeToString other})")
         | None ->
             // Check if it's a module function (e.g., Stdlib.Int64.add, __raw_get)
             let moduleRegistry = Stdlib.buildModuleRegistry ()
-            match Stdlib.tryGetFunction moduleRegistry funcName with
-            | Some moduleFunc ->
+            match Stdlib.tryGetFunctionWithFallback moduleRegistry funcName with
+            | Some (moduleFunc, resolvedFuncName) ->
                 // Freshen type params to avoid name clashes with caller's scope
                 let (freshTypeParams, renaming) = freshenTypeParams moduleFunc.TypeParams
                 let paramTypes = moduleFunc.ParamTypes |> List.map (applyTypeVarRenaming renaming)
@@ -1127,9 +1143,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             remainingParamTypes
                             |> List.map (fun t -> (freshPartialParam (), t))
 
-                        // Create the lambda body: call the original function with all args
+                        // Create the lambda body: call the original function with all args (using resolved name)
                         let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
-                        let lambdaBody = Call (funcName, allArgs)
+                        let lambdaBody = Call (resolvedFuncName, allArgs)
 
                         // Create the lambda: (p0, p1, ...) => funcName(providedArgs, p0, p1, ...)
                         let lambdaExpr = Lambda (remainingParams, lambdaBody)
@@ -1188,9 +1204,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                                 concreteRemainingTypes
                                 |> List.map (fun t -> (freshPartialParam (), t))
 
-                            // Create the lambda body: TypeApp call with all args
+                            // Create the lambda body: TypeApp call with all args (using resolved name)
                             let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
-                            let lambdaBody = TypeApp (funcName, inferredTypeArgs, allArgs)
+                            let lambdaBody = TypeApp (resolvedFuncName, inferredTypeArgs, allArgs)
 
                             // Create the lambda
                             let lambdaExpr = Lambda (remainingParams, lambdaBody)
@@ -1230,8 +1246,8 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                                 | Some expected when not (typesCompatible expected concreteReturnType) ->
                                     Error (TypeMismatch (expected, concreteReturnType, $"result of call to {funcName}"))
                                 | _ ->
-                                    // Transform Call to TypeApp with inferred type arguments
-                                    Ok (concreteReturnType, TypeApp (funcName, inferredTypeArgs, args')))))
+                                    // Transform Call to TypeApp with inferred type arguments (using resolved name)
+                                    Ok (concreteReturnType, TypeApp (resolvedFuncName, inferredTypeArgs, args')))))
                 else
                     // Non-generic module function: regular call
                     // Check each argument type and collect transformed args
@@ -1252,18 +1268,18 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         match expectedType with
                         | Some expected when not (typesEqual aliasReg expected returnType) ->
                             Error (TypeMismatch (expected, returnType, $"result of call to {funcName}"))
-                        | _ -> Ok (returnType, Call (funcName, args')))
+                        | _ -> Ok (returnType, Call (resolvedFuncName, args')))
             | None ->
                 Error (UndefinedVariable funcName)
 
     | TypeApp (funcName, typeArgs, args) ->
         // Generic function call with explicit type arguments: func<Type1, Type2>(args)
-        // 1. Look up function signature
-        match Map.tryFind funcName env with
-        | Some (TFunction (paramTypes, returnType)) ->
+        // 1. Look up function signature with fallback to Stdlib prefix
+        match tryLookupWithFallback funcName env with
+        | Some (TFunction (paramTypes, returnType), resolvedFuncName) ->
             // 2. Look up type parameters
-            match Map.tryFind funcName genericFuncReg with
-            | Some typeParams ->
+            match tryLookupWithFallback resolvedFuncName genericFuncReg with
+            | Some (typeParams, _) ->
                 // 3. Build substitution from type params to type args
                 buildSubstitution typeParams typeArgs
                 |> Result.mapError GenericError
@@ -1303,9 +1319,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                                 remainingParamTypes
                                 |> List.map (fun t -> (freshPartialParam (), t))
 
-                            // Create the lambda body: TypeApp call with all args
+                            // Create the lambda body: TypeApp call with all args (using resolved name)
                             let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
-                            let lambdaBody = TypeApp (funcName, typeArgs, allArgs)
+                            let lambdaBody = TypeApp (resolvedFuncName, typeArgs, allArgs)
 
                             // Create the lambda
                             let lambdaExpr = Lambda (remainingParams, lambdaBody)
@@ -1334,21 +1350,21 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
 
                         checkArgsWithTypes args concreteParamTypes []
                         |> Result.bind (fun args' ->
-                            // 7. Return the concrete return type
+                            // 7. Return the concrete return type (using resolved name)
                             // Use typesCompatible to allow type variables to unify with concrete types
                             match expectedType with
                             | Some expected when not (typesCompatible expected concreteReturnType) ->
                                 Error (TypeMismatch (expected, concreteReturnType, $"result of call to {funcName}"))
-                            | _ -> Ok (concreteReturnType, TypeApp (funcName, typeArgs, args'))))
+                            | _ -> Ok (concreteReturnType, TypeApp (resolvedFuncName, typeArgs, args'))))
             | None ->
                 Error (GenericError $"Function {funcName} is not generic, use regular call syntax")
-        | Some other ->
+        | Some (other, _) ->
             Error (GenericError $"{funcName} is not a function (has type {typeToString other})")
         | None ->
             // Check if it's a generic module function (e.g., __raw_get<v>)
             let moduleRegistry = Stdlib.buildModuleRegistry ()
-            match Stdlib.tryGetFunction moduleRegistry funcName with
-            | Some moduleFunc when not (List.isEmpty moduleFunc.TypeParams) ->
+            match Stdlib.tryGetFunctionWithFallback moduleRegistry funcName with
+            | Some (moduleFunc, resolvedFuncName) when not (List.isEmpty moduleFunc.TypeParams) ->
                 let typeParams = moduleFunc.TypeParams
                 let paramTypes = moduleFunc.ParamTypes
                 let returnType = moduleFunc.ReturnType
@@ -1391,9 +1407,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                                 remainingParamTypes
                                 |> List.map (fun t -> (freshPartialParam (), t))
 
-                            // Create the lambda body: TypeApp call with all args
+                            // Create the lambda body: TypeApp call with all args (using resolved name)
                             let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
-                            let lambdaBody = TypeApp (funcName, typeArgs, allArgs)
+                            let lambdaBody = TypeApp (resolvedFuncName, typeArgs, allArgs)
 
                             // Create the lambda
                             let lambdaExpr = Lambda (remainingParams, lambdaBody)
@@ -1426,8 +1442,8 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             match expectedType with
                             | Some expected when not (typesCompatible expected concreteReturnType) ->
                                 Error (TypeMismatch (expected, concreteReturnType, $"result of call to {funcName}"))
-                            | _ -> Ok (concreteReturnType, TypeApp (funcName, typeArgs, args'))))
-            | Some _ ->
+                            | _ -> Ok (concreteReturnType, TypeApp (resolvedFuncName, typeArgs, args'))))
+            | Some (_, _) ->
                 Error (GenericError $"Function {funcName} is not generic, use regular call syntax")
             | None ->
                 Error (UndefinedVariable funcName)

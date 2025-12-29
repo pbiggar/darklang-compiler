@@ -1559,8 +1559,8 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
         | Some t -> Ok t
         | None ->
             // Check if it's a module function (e.g., Stdlib.Int64.add)
-            match Stdlib.tryGetFunction moduleRegistry name with
-            | Some moduleFunc -> Ok (Stdlib.getFunctionType moduleFunc)
+            match Stdlib.tryGetFunctionWithFallback moduleRegistry name with
+            | Some (moduleFunc, _) -> Ok (Stdlib.getFunctionType moduleFunc)
             | None -> Error $"Cannot infer type: undefined variable '{name}'"
     | AST.RecordLiteral (typeName, fields) ->
         if typeName = "" then
@@ -1659,8 +1659,8 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
             | Some (AST.TFunction (_, returnType)) -> Ok returnType
             | _ ->
             // Check if it's a module function (e.g., Stdlib.File.exists)
-            match Stdlib.tryGetFunction moduleRegistry funcName with
-            | Some moduleFunc -> Ok moduleFunc.ReturnType
+            match Stdlib.tryGetFunctionWithFallback moduleRegistry funcName with
+            | Some (moduleFunc, _) -> Ok moduleFunc.ReturnType
             | None ->
                 // Check if it's a monomorphized intrinsic (e.g., __raw_get_i64)
                 // These are raw memory operations that work with 8-byte values
@@ -1785,9 +1785,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         | Some (tempId, _) -> Ok (ANF.Return (ANF.Var tempId), varGen)
         | None ->
             // Check if it's a module function (e.g., Stdlib.Int64.add)
-            match Stdlib.tryGetFunction moduleRegistry name with
-            | Some _ ->
+            match Stdlib.tryGetFunctionWithFallback moduleRegistry name with
+            | Some (_, _) ->
                 // Module function reference - wrap in closure for uniform calling convention
+                // Note: name should already be resolved by the type checker
                 let (closureId, varGen') = ANF.freshVar varGen
                 let closureAlloc = ANF.ClosureAlloc (name, [])
                 Ok (ANF.Let (closureId, closureAlloc, ANF.Return (ANF.Var closureId)), varGen')
@@ -3445,9 +3446,10 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         | Some (tempId, _) -> Ok (ANF.Var tempId, [], varGen)
         | None ->
             // Check if it's a module function (e.g., Stdlib.Int64.add)
-            match Stdlib.tryGetFunction moduleRegistry name with
-            | Some _ ->
+            match Stdlib.tryGetFunctionWithFallback moduleRegistry name with
+            | Some (_, _) ->
                 // Module function reference - wrap in closure for uniform calling convention
+                // Note: name should already be resolved by the type checker
                 let (closureId, varGen') = ANF.freshVar varGen
                 let closureAlloc = ANF.ClosureAlloc (name, [])
                 Ok (ANF.Var closureId, [(closureId, closureAlloc)], varGen')
