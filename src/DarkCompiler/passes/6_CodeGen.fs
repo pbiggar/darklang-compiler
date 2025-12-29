@@ -1612,6 +1612,13 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             lirFRegToARM64FReg src
             |> Result.map (fun srcReg -> [ARM64.FCVTZS (destReg, srcReg)]))
 
+    | LIR.GpToFp (dest, src) ->
+        // Move bits from GP register to FP register (for floats loaded from heap)
+        lirFRegToARM64FReg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg src
+            |> Result.map (fun srcReg -> [ARM64.FMOV_from_gp (destReg, srcReg)]))
+
     // Heap operations
     | LIR.HeapAlloc (dest, sizeBytes) ->
         // Heap allocator with free list support
@@ -1713,13 +1720,13 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     ARM64.STR (tempReg, addrReg, int16 offset)
                 ]
             | LIR.FloatRef idx ->
-                // Load float address from pool into temp, then store to heap
-                let tempReg = ARM64.X9
+                // Load float VALUE from pool into temp FP register, then store to heap
                 let floatLabel = "_float" + string idx
                 Ok [
-                    ARM64.ADRP (tempReg, floatLabel)
-                    ARM64.ADD_label (tempReg, tempReg, floatLabel)
-                    ARM64.STR (tempReg, addrReg, int16 offset)
+                    ARM64.ADRP (ARM64.X9, floatLabel)              // Load page address
+                    ARM64.ADD_label (ARM64.X9, ARM64.X9, floatLabel) // Add offset
+                    ARM64.LDR_fp (ARM64.D15, ARM64.X9, 0s)         // Load float into D15
+                    ARM64.STR_fp (ARM64.D15, addrReg, int16 offset) // Store float to heap
                 ]
             | _ -> Error "Unsupported operand type in HeapStore")
 

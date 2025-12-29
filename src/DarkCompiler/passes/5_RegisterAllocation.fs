@@ -948,6 +948,10 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
     | LIR.IntToFloat (dest, src) ->
         let (srcReg, srcLoads) = loadSpilled mapping src LIR.X12
         srcLoads @ [LIR.IntToFloat (dest, srcReg)]
+    // GpToFp: move bits from GP register to FP register (src is integer, dest is FP)
+    | LIR.GpToFp (dest, src) ->
+        let (srcReg, srcLoads) = loadSpilled mapping src LIR.X12
+        srcLoads @ [LIR.GpToFp (dest, srcReg)]
     // FloatToInt: src is FP register, dest is integer register
     | LIR.FloatToInt (dest, src) ->
         let (destReg, destAlloc) = applyToReg mapping dest

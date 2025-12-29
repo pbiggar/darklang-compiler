@@ -25,7 +25,7 @@ let convertOperand (operand: MIR.Operand) : LIR.Operand =
     match operand with
     | MIR.IntConst n -> LIR.Imm n
     | MIR.BoolConst b -> LIR.Imm (if b then 1L else 0L)  // Booleans as 0/1
-    | MIR.FloatRef idx -> LIR.FloatImm 0.0  // Placeholder - actual float loaded from pool later
+    | MIR.FloatRef idx -> LIR.FloatRef idx
     | MIR.StringRef idx -> LIR.StringRef idx
     | MIR.Register vreg -> LIR.Reg (vregToLIRReg vreg)
     | MIR.FuncAddr name -> LIR.FuncAddr name  // Function address (for higher-order functions)
@@ -781,10 +781,10 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                     [LIR.Mov (LIR.Physical LIR.X0, LIR.Reg valueReg)
                      LIR.PrintBool (LIR.Physical LIR.X0)]
                 | AST.TFloat64 ->
-                    // Float in int register - convert to FP register for printing
-                    // This is simplified - may need adjustment for actual float values
+                    // Float value is in integer register as raw bits, move to D0 for printing
                     [LIR.Mov (LIR.Physical LIR.X0, LIR.Reg valueReg)
-                     LIR.PrintInt (LIR.Physical LIR.X0)]  // TODO: proper float printing
+                     LIR.GpToFp (LIR.FPhysical LIR.D0, LIR.Physical LIR.X0)
+                     LIR.PrintFloat (LIR.FPhysical LIR.D0)]
                 | _ ->
                     // Other types: print address for now
                     [LIR.Mov (LIR.Physical LIR.X0, LIR.Reg valueReg)
@@ -807,6 +807,10 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                             [LIR.PrintIntNoNewline (LIR.Physical LIR.X0)]
                         | AST.TBool ->
                             [LIR.PrintBoolNoNewline (LIR.Physical LIR.X0)]
+                        | AST.TFloat64 ->
+                            // Float is in X0 as raw bits, move to D0 for printing
+                            [LIR.GpToFp (LIR.FPhysical LIR.D0, LIR.Physical LIR.X0)
+                             LIR.PrintFloatNoNewline (LIR.FPhysical LIR.D0)]
                         | _ ->
                             [LIR.PrintIntNoNewline (LIR.Physical LIR.X0)]  // Fallback
                     sepInstrs @ [loadInstr] @ printInstrs)
@@ -1308,7 +1312,7 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.PrintHeapStringNoNewline _ | LIR.PrintList _ | LIR.PrintSum _ | LIR.PrintRecord _
     | LIR.PrintChars _ | LIR.Exit | LIR.FMov _ | LIR.FAdd _ | LIR.FSub _ | LIR.FMul _ | LIR.FDiv _
     | LIR.FNeg _ | LIR.FAbs _ | LIR.FSqrt _ | LIR.FCmp _ | LIR.IntToFloat _ | LIR.FloatToInt _
-    | LIR.HeapAlloc _ | LIR.HeapLoad _ | LIR.RefCountInc _ | LIR.RefCountDec _
+    | LIR.GpToFp _ | LIR.HeapAlloc _ | LIR.HeapLoad _ | LIR.RefCountInc _ | LIR.RefCountDec _
     | LIR.PrintHeapString _ | LIR.LoadFuncAddr _ | LIR.RawAlloc _ | LIR.RawFree _
     | LIR.RawGet _ | LIR.RawGetByte _ | LIR.RawSet _ | LIR.RawSetByte _ | LIR.FArgMoves _
     | LIR.TailCall _ | LIR.IndirectTailCall _ | LIR.ClosureTailCall _ -> instr

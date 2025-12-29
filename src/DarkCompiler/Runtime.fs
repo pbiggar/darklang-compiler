@@ -686,7 +686,7 @@ let generatePrintFloatNoNewline () : ARM64.Instr list =
         ARM64.NEG (ARM64.X2, ARM64.X0)
 
         // Check if integer part is zero
-        ARM64.CBZ_offset (ARM64.X2, 51)  // Branch to print_zero_int
+        ARM64.CBZ_offset (ARM64.X2, 53)  // Branch to print_zero_int (instruction 67)
 
         // convert_int_loop
         ARM64.MOVZ (ARM64.X3, 10us, 0)
@@ -756,13 +756,13 @@ let generatePrintFloatNoNewline () : ARM64.Instr list =
 
         // Cleanup (no newline, no exit)
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, 48us)
-        ARM64.B (4)  // Skip past print_zero_int
+        ARM64.B (5)  // Skip past print_zero_int (4 instructions + 1 to land after)
 
-        // print_zero_int
+        // print_zero_int (instruction 67)
         ARM64.MOVZ (ARM64.X2, 48us, 0)
         ARM64.STRB (ARM64.X2, ARM64.X1, 0)
         ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1us)
-        ARM64.B (-44)  // Branch back to store_minus_if_needed
+        ARM64.B (-46)  // Branch back to store_minus_if_needed (instruction 24)
     ]
 
 /// Generate ARM64 instructions to print heap string WITHOUT newline
