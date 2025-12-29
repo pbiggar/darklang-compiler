@@ -2487,8 +2487,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 collectRecordBindings rest newEnv (binding :: bindings) vg1 (fieldIdx + 1)
                             | AST.PWildcard ->
                                 collectRecordBindings rest env bindings vg1 (fieldIdx + 1)
-                            | _ ->
-                                collectRecordBindings rest env (binding :: bindings) vg1 (fieldIdx + 1)
+                            | AST.PUnit | AST.PConstructor _ | AST.PLiteral _ | AST.PBool _
+                            | AST.PString _ | AST.PFloat _ | AST.PTuple _ | AST.PRecord _
+                            | AST.PList _ | AST.PListCons _ ->
+                                Error $"Nested pattern in record field not yet supported: {pat}"
                     collectRecordBindings fieldPatterns currentEnv [] vg 0
                     |> Result.bind (fun (newEnv, bindings, vg1) ->
                         toANF body vg1 newEnv typeReg variantLookup funcReg moduleRegistry
@@ -2532,13 +2534,17 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                             collectTupleBindings tupRest tupleAtom (idx + 1) newEnv (elemBinding :: bindings) vg1
                                         | AST.PWildcard ->
                                             collectTupleBindings tupRest tupleAtom (idx + 1) env bindings vg1
-                                        | _ ->
-                                            collectTupleBindings tupRest tupleAtom (idx + 1) env (elemBinding :: bindings) vg1
+                                        | AST.PUnit | AST.PConstructor _ | AST.PLiteral _ | AST.PBool _
+                                        | AST.PString _ | AST.PFloat _ | AST.PTuple _ | AST.PRecord _
+                                        | AST.PList _ | AST.PListCons _ ->
+                                            Error $"Nested pattern in tuple element not yet supported: {tupPat}"
                                 collectTupleBindings innerPatterns (ANF.Var headVar) 0 env (tailBinding :: headBinding :: bindings) vg2
                                 |> Result.bind (fun (newEnv, newBindings, vg3) ->
                                     collectListBindings rest (ANF.Var tailVar) newEnv newBindings vg3)
-                            | _ ->
-                                collectListBindings rest (ANF.Var tailVar) env (tailBinding :: headBinding :: bindings) vg2
+                            | AST.PUnit | AST.PConstructor _ | AST.PLiteral _ | AST.PBool _
+                            | AST.PString _ | AST.PFloat _ | AST.PRecord _
+                            | AST.PList _ | AST.PListCons _ ->
+                                Error $"Nested pattern in list element not yet supported: {pat}"
                     collectListBindings patterns scrutAtom currentEnv [] vg
                     |> Result.bind (fun (newEnv, bindings, vg1) ->
                         toANF body vg1 newEnv typeReg variantLookup funcReg moduleRegistry
@@ -2581,13 +2587,17 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                             collectTupleBindings tupRest tupleAtom (idx + 1) newEnv (elemBinding :: bindings) vg1
                                         | AST.PWildcard ->
                                             collectTupleBindings tupRest tupleAtom (idx + 1) env bindings vg1
-                                        | _ ->
-                                            collectTupleBindings tupRest tupleAtom (idx + 1) env (elemBinding :: bindings) vg1
+                                        | AST.PUnit | AST.PConstructor _ | AST.PLiteral _ | AST.PBool _
+                                        | AST.PString _ | AST.PFloat _ | AST.PTuple _ | AST.PRecord _
+                                        | AST.PList _ | AST.PListCons _ ->
+                                            Error $"Nested pattern in tuple element not yet supported: {tupPat}"
                                 collectTupleBindings innerPatterns (ANF.Var headVar) 0 env (tailBinding :: headBinding :: bindings) vg2
                                 |> Result.bind (fun (newEnv, newBindings, vg3) ->
                                     collectListConsBindings rest (ANF.Var tailVar) newEnv newBindings vg3)
-                            | _ ->
-                                collectListConsBindings rest (ANF.Var tailVar) env (tailBinding :: headBinding :: bindings) vg2
+                            | AST.PUnit | AST.PConstructor _ | AST.PLiteral _ | AST.PBool _
+                            | AST.PString _ | AST.PFloat _ | AST.PRecord _
+                            | AST.PList _ | AST.PListCons _ ->
+                                Error $"Nested pattern in list cons element not yet supported: {pat}"
                     collectListConsBindings headPatterns scrutAtom currentEnv [] vg
                     |> Result.bind (fun (newEnv, bindings, tailAtom, vg1) ->
                         // Bind tail pattern
@@ -2889,9 +2899,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         (env: VarEnv)
                         (bindings: (ANF.TempId * ANF.CExpr) list)
                         (vg: ANF.VarGen)
-                        : VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
+                        : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                         match tupPats with
-                        | [] -> (env, bindings, vg)
+                        | [] -> Ok (env, bindings, vg)
                         | tupPat :: tupRest ->
                             let (elemVar, vg1) = ANF.freshVar vg
                             let elemExpr = ANF.TupleGet (tupleAtom, idx)
@@ -2902,34 +2912,59 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 extractTupleBindings tupRest tupleAtom (idx + 1) newEnv (elemBinding :: bindings) vg1
                             | AST.PWildcard ->
                                 extractTupleBindings tupRest tupleAtom (idx + 1) env bindings vg1
-                            | _ ->
-                                extractTupleBindings tupRest tupleAtom (idx + 1) env (elemBinding :: bindings) vg1
+                            | AST.PUnit | AST.PConstructor _ | AST.PLiteral _ | AST.PBool _
+                            | AST.PString _ | AST.PFloat _ | AST.PTuple _ | AST.PRecord _
+                            | AST.PList _ | AST.PListCons _ ->
+                                Error $"Nested pattern in tuple element not yet supported: {tupPat}"
 
-                    let (newEnv, tupleBindings, vg3') =
+                    // Handle literal pattern with runtime equality check
+                    let envBindingsAndLiteralCheck =
                         match pat with
-                        | AST.PVar name -> (Map.add name (headVar, AST.TInt64) currentEnv, [], vg3)
+                        | AST.PVar name -> Ok (Map.add name (headVar, AST.TInt64) currentEnv, [], vg3, None)
+                        | AST.PWildcard -> Ok (currentEnv, [], vg3, None)
                         | AST.PTuple innerPatterns ->
                             extractTupleBindings innerPatterns (ANF.Var headVar) 0 currentEnv [] vg3
-                        | _ -> (currentEnv, [], vg3)
+                            |> Result.map (fun (env, bindings, vg) -> (env, bindings, vg, None))
+                        | AST.PLiteral n ->
+                            // Literal pattern: add equality check
+                            Ok (currentEnv, [], vg3, Some (ANF.IntLiteral n))
+                        | AST.PBool b ->
+                            // Boolean pattern: add equality check
+                            let boolVal = if b then 1L else 0L
+                            Ok (currentEnv, [], vg3, Some (ANF.IntLiteral boolVal))
+                        | AST.PUnit | AST.PConstructor _ | AST.PString _ | AST.PFloat _ | AST.PRecord _
+                        | AST.PList _ | AST.PListCons _ ->
+                            Error $"Nested pattern in list element not yet supported: {pat}"
 
-                    // Recursively compile rest of list pattern
-                    compileListPatternWithChecks restPatterns (ANF.Var tailVar) newEnv body elseExpr vg3'
-                    |> Result.map (fun (innerExpr, vg4) ->
-                        // Build nested structure:
-                        // let checkVar = (listAtom != 0) in
-                        //   if checkVar then
-                        //     let headVar = TupleGet(listAtom, 1) in
-                        //     let tailVar = TupleGet(listAtom, 2) in
-                        //     <tuple bindings if any>
-                        //     <innerExpr>
-                        //   else
-                        //     <elseExpr>
-                        // Wrap tuple bindings around innerExpr (bindings are in reverse order)
-                        let withTupleBindings = wrapBindings (List.rev tupleBindings) innerExpr
-                        let withTail = ANF.Let (tailVar, tailExpr, withTupleBindings)
-                        let withHead = ANF.Let (headVar, headExpr, withTail)
-                        let ifExpr = ANF.If (ANF.Var checkVar, withHead, elseExpr)
-                        (ANF.Let (checkVar, checkExpr, ifExpr), vg4))
+                    envBindingsAndLiteralCheck
+                    |> Result.bind (fun (newEnv, tupleBindings, vg3', literalCheckOpt) ->
+                        // Recursively compile rest of list pattern
+                        compileListPatternWithChecks restPatterns (ANF.Var tailVar) newEnv body elseExpr vg3'
+                        |> Result.map (fun (innerExpr, vg4) ->
+                            // Build nested structure with optional literal check:
+                            // let checkVar = (listAtom != 0) in
+                            //   if checkVar then
+                            //     let headVar = TupleGet(listAtom, 1) in
+                            //     let tailVar = TupleGet(listAtom, 2) in
+                            //     <optional: if headVar == literal then ... else elseExpr>
+                            //     <tuple bindings if any>
+                            //     <innerExpr>
+                            //   else
+                            //     <elseExpr>
+                            // Wrap tuple bindings around innerExpr (bindings are in reverse order)
+                            let withTupleBindings = wrapBindings (List.rev tupleBindings) innerExpr
+                            // Add literal check if needed
+                            let withLiteralCheck =
+                                match literalCheckOpt with
+                                | None -> withTupleBindings
+                                | Some literalAtom ->
+                                    let (litCheckVar, _vgUnused) = ANF.freshVar vg4
+                                    let litCheckExpr = ANF.Prim (ANF.Eq, ANF.Var headVar, literalAtom)
+                                    ANF.Let (litCheckVar, litCheckExpr, ANF.If (ANF.Var litCheckVar, withTupleBindings, elseExpr))
+                            let withTail = ANF.Let (tailVar, tailExpr, withLiteralCheck)
+                            let withHead = ANF.Let (headVar, headExpr, withTail)
+                            let ifExpr = ANF.If (ANF.Var checkVar, withHead, elseExpr)
+                            (ANF.Let (checkVar, checkExpr, ifExpr), vg4)))
 
             // Compile a list cons pattern [h, ...t] with proper checks
             let rec compileListConsPatternWithChecks
@@ -2977,9 +3012,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         (env: VarEnv)
                         (bindings: (ANF.TempId * ANF.CExpr) list)
                         (vg: ANF.VarGen)
-                        : VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
+                        : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                         match tupPats with
-                        | [] -> (env, bindings, vg)
+                        | [] -> Ok (env, bindings, vg)
                         | tupPat :: tupRest ->
                             let (elemVar, vg1) = ANF.freshVar vg
                             let elemExpr = ANF.TupleGet (tupleAtom, idx)
@@ -2990,25 +3025,49 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 extractTupleBindings tupRest tupleAtom (idx + 1) newEnv (elemBinding :: bindings) vg1
                             | AST.PWildcard ->
                                 extractTupleBindings tupRest tupleAtom (idx + 1) env bindings vg1
-                            | _ ->
-                                extractTupleBindings tupRest tupleAtom (idx + 1) env (elemBinding :: bindings) vg1
+                            | AST.PUnit | AST.PConstructor _ | AST.PLiteral _ | AST.PBool _
+                            | AST.PString _ | AST.PFloat _ | AST.PTuple _ | AST.PRecord _
+                            | AST.PList _ | AST.PListCons _ ->
+                                Error $"Nested pattern in tuple element not yet supported: {tupPat}"
 
-                    let (newEnv, tupleBindings, vg3') =
+                    // Handle literal pattern with runtime equality check
+                    let envBindingsAndLiteralCheck =
                         match pat with
-                        | AST.PVar name -> (Map.add name (headVar, AST.TInt64) currentEnv, [], vg3)
+                        | AST.PVar name -> Ok (Map.add name (headVar, AST.TInt64) currentEnv, [], vg3, None)
+                        | AST.PWildcard -> Ok (currentEnv, [], vg3, None)
                         | AST.PTuple innerPatterns ->
                             extractTupleBindings innerPatterns (ANF.Var headVar) 0 currentEnv [] vg3
-                        | _ -> (currentEnv, [], vg3)
+                            |> Result.map (fun (env, bindings, vg) -> (env, bindings, vg, None))
+                        | AST.PLiteral n ->
+                            // Literal pattern: add equality check
+                            Ok (currentEnv, [], vg3, Some (ANF.IntLiteral n))
+                        | AST.PBool b ->
+                            // Boolean pattern: add equality check
+                            let boolVal = if b then 1L else 0L
+                            Ok (currentEnv, [], vg3, Some (ANF.IntLiteral boolVal))
+                        | AST.PUnit | AST.PConstructor _ | AST.PString _ | AST.PFloat _ | AST.PRecord _
+                        | AST.PList _ | AST.PListCons _ ->
+                            Error $"Nested pattern in list cons element not yet supported: {pat}"
 
-                    // Recursively compile rest
-                    compileListConsPatternWithChecks restPatterns tailPattern (ANF.Var tailVar) newEnv body elseExpr vg3'
-                    |> Result.map (fun (innerExpr, vg4) ->
-                        // Wrap tuple bindings around innerExpr (bindings are in reverse order)
-                        let withTupleBindings = wrapBindings (List.rev tupleBindings) innerExpr
-                        let withTail = ANF.Let (tailVar, tailExpr, withTupleBindings)
-                        let withHead = ANF.Let (headVar, headExpr, withTail)
-                        let ifExpr = ANF.If (ANF.Var checkVar, withHead, elseExpr)
-                        (ANF.Let (checkVar, checkExpr, ifExpr), vg4))
+                    envBindingsAndLiteralCheck
+                    |> Result.bind (fun (newEnv, tupleBindings, vg3', literalCheckOpt) ->
+                        // Recursively compile rest
+                        compileListConsPatternWithChecks restPatterns tailPattern (ANF.Var tailVar) newEnv body elseExpr vg3'
+                        |> Result.map (fun (innerExpr, vg4) ->
+                            // Wrap tuple bindings around innerExpr (bindings are in reverse order)
+                            let withTupleBindings = wrapBindings (List.rev tupleBindings) innerExpr
+                            // Add literal check if needed
+                            let withLiteralCheck =
+                                match literalCheckOpt with
+                                | None -> withTupleBindings
+                                | Some literalAtom ->
+                                    let (litCheckVar, _vgUnused) = ANF.freshVar vg4
+                                    let litCheckExpr = ANF.Prim (ANF.Eq, ANF.Var headVar, literalAtom)
+                                    ANF.Let (litCheckVar, litCheckExpr, ANF.If (ANF.Var litCheckVar, withTupleBindings, elseExpr))
+                            let withTail = ANF.Let (tailVar, tailExpr, withLiteralCheck)
+                            let withHead = ANF.Let (headVar, headExpr, withTail)
+                            let ifExpr = ANF.If (ANF.Var checkVar, withHead, elseExpr)
+                            (ANF.Let (checkVar, checkExpr, ifExpr), vg4)))
 
             // Build OR of multiple pattern conditions for pattern grouping
             // Returns: combined condition atom, all bindings, updated vargen

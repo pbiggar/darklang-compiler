@@ -263,3 +263,46 @@ match (1 > 10) || (10 > 1) with | true -> 42 | false -> 0 = stdout="42\n"
 // This should produce a compile error
 match [1, 2, 3] with | [a, b] -> a + b = error="Non-exhaustive"
 
+// === Unsupported nested pattern tests ===
+// These test that we properly reject patterns that aren't yet supported,
+// rather than silently generating incorrect code.
+
+// Nested literal pattern in record field
+type Point = { x: Int64, y: Int64 } match Point { x = 5, y = 10 } with | Point { x = 5, y = n } -> n = error="Nested pattern in record field not yet supported"
+
+// Nested tuple pattern in record field
+type PointPair = { a: (Int64, Int64), b: Int64 } match PointPair { a = (1, 2), b = 3 } with | PointPair { a = (x, y), b = z } -> x + y + z = error="Nested pattern in record field not yet supported"
+
+// Nested constructor pattern in list element
+type MyOpt = MyNone | MySome of Int64 match [MySome(1)] with | [MySome(x)] -> x | _ -> 0 = error="Nested pattern in list element not yet supported"
+
+// Nested literal pattern inside tuple inside list
+match [(1, 2)] with | [(1, x)] -> x | _ -> 0 = error="Nested pattern in tuple element not yet supported"
+
+// Nested constructor pattern in list cons head
+type MyOpt = MyNone | MySome of Int64 match [MySome(1), MySome(2)] with | [MySome(x), ...rest] -> x | _ -> 0 = error="Nested pattern in list cons element not yet supported"
+
+// Nested literal pattern inside tuple inside list cons
+match [(1, 2), (3, 4)] with | [(1, x), ...rest] -> x | _ -> 0 = error="Nested pattern in tuple element not yet supported"
+
+// === Literal patterns in lists (now supported) ===
+// These test that literal patterns in list elements work correctly
+
+// Literal pattern in list - match
+match [1, 2, 3] with | [1, x, 3] -> x | _ -> 0 = stdout="2\n"
+
+// Literal pattern in list - no match (wrong literal)
+match [1, 2, 4] with | [1, x, 3] -> x | _ -> 0 = stdout="0\n"
+
+// Literal pattern in list cons - match
+match [1, 2, 3] with | [1, ...rest] -> 42 | _ -> 0 = stdout="42\n"
+
+// Literal pattern in list cons - no match
+match [2, 2, 3] with | [1, ...rest] -> 42 | _ -> 0 = stdout="0\n"
+
+// Single literal pattern
+match [13] with | [13] -> 1 | _ -> 0 = stdout="1\n"
+
+// Single literal pattern - no match
+match [14] with | [13] -> 1 | _ -> 0 = stdout="0\n"
+
