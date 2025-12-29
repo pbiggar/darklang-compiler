@@ -92,6 +92,7 @@ type CExpr =
     | FileAppendText of path:Atom * content:Atom // Append to file, returns Result<Unit, String>
     | FileDelete of path:Atom                     // Delete file, returns Result<Unit, String>
     | FileSetExecutable of path:Atom             // Set executable bit, returns Result<Unit, String>
+    | FileWriteFromPtr of path:Atom * ptr:Atom * length:Atom  // Write raw bytes from pointer to file
     // Float intrinsics
     | FloatSqrt of Atom                       // Square root: sqrt(x)
     | FloatAbs of Atom                        // Absolute value: |x|

@@ -61,6 +61,8 @@ let fileModule : ModuleDef = {
         { Name = "delete"; TypeParams = []; ParamTypes = [TString]; ReturnType = resultType TUnit }
         // setExecutable : (String) -> Result<Unit, String>
         { Name = "setExecutable"; TypeParams = []; ParamTypes = [TString]; ReturnType = resultType TUnit }
+        // writeFromPtr : (String, RawPtr, Int64) -> Bool - write raw bytes to file
+        { Name = "writeFromPtr"; TypeParams = []; ParamTypes = [TString; TRawPtr; TInt64]; ReturnType = TBool }
     ]
 }
 
@@ -129,6 +131,12 @@ let rawMemoryIntrinsics : ModuleFunc list = [
     { Name = "__string_to_int64"; TypeParams = []; ParamTypes = [TString]; ReturnType = TInt64 }
     // __int64_to_string : (Int64) -> String - cast int to string pointer (for retrieval)
     { Name = "__int64_to_string"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TString }
+
+    // Bytes intrinsics - for byte array operations
+    // __bytes_to_int64 : (Bytes) -> Int64 - cast bytes pointer to int (for storage)
+    { Name = "__bytes_to_int64"; TypeParams = []; ParamTypes = [TBytes]; ReturnType = TInt64 }
+    // __int64_to_bytes : (Int64) -> Bytes - cast int to bytes pointer (for retrieval)
+    { Name = "__int64_to_bytes"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TBytes }
 
     // Dict intrinsics - for type-safe Dict<k, v> operations
     // __empty_dict<k, v> : () -> Dict<k, v> - create empty dict (null pointer)

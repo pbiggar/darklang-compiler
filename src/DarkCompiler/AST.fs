@@ -33,6 +33,7 @@ type Type =
     | TBool
     | TFloat64
     | TString
+    | TBytes     // Byte array: [length:8][data:N][refcount:8]
     | TChar      // Extended Grapheme Cluster (single visual character)
     | TUnit
     | TFunction of Type list * Type  // parameter types * return type

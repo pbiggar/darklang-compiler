@@ -894,6 +894,14 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 | LIR.Reg (LIR.Physical LIR.X0) -> []
                 | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
             Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
+        | AST.TBytes ->
+            // Bytes: print address for now (TODO: print as hex or length)
+            let lirSrc = convertOperand src
+            let moveToX0 =
+                match lirSrc with
+                | LIR.Reg (LIR.Physical LIR.X0) -> []
+                | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
+            Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
         | AST.TVar _ ->
             // Type variables should be monomorphized away before reaching LIR
             Error "Internal error: Type variable reached MIR_to_LIR (should be monomorphized)"
@@ -935,6 +943,18 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         let lirDest = vregToLIRReg dest
         let lirPath = convertOperand path
         Ok [LIR.FileSetExecutable (lirDest, lirPath)]
+
+    | MIR.FileWriteFromPtr (dest, path, ptr, length) ->
+        let lirDest = vregToLIRReg dest
+        let lirPath = convertOperand path
+        // ptr and length must be in registers
+        match ensureInRegister ptr (LIR.Virtual 1000) with
+        | Error err -> Error err
+        | Ok (ptrInstrs, ptrReg) ->
+        match ensureInRegister length (LIR.Virtual 1001) with
+        | Error err -> Error err
+        | Ok (lengthInstrs, lengthReg) ->
+            Ok (ptrInstrs @ lengthInstrs @ [LIR.FileWriteFromPtr (lirDest, lirPath, ptrReg, lengthReg)])
 
     | MIR.RawAlloc (dest, numBytes) ->
         let lirDest = vregToLIRReg dest
@@ -1271,6 +1291,7 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.FileAppendText (dest, path, content) -> LIR.FileAppendText (dest, offsetLIROperand strOffset fltOffset path, offsetLIROperand strOffset fltOffset content)
     | LIR.FileDelete (dest, path) -> LIR.FileDelete (dest, offsetLIROperand strOffset fltOffset path)
     | LIR.FileSetExecutable (dest, path) -> LIR.FileSetExecutable (dest, offsetLIROperand strOffset fltOffset path)
+    | LIR.FileWriteFromPtr (dest, path, ptr, length) -> LIR.FileWriteFromPtr (dest, offsetLIROperand strOffset fltOffset path, ptr, length)
     | LIR.StringHash (dest, str) -> LIR.StringHash (dest, offsetLIROperand strOffset fltOffset str)
     | LIR.StringEq (dest, left, right) -> LIR.StringEq (dest, offsetLIROperand strOffset fltOffset left, offsetLIROperand strOffset fltOffset right)
     | LIR.RefCountIncString str -> LIR.RefCountIncString (offsetLIROperand strOffset fltOffset str)

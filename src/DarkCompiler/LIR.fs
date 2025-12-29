@@ -132,6 +132,7 @@ type Instr =
     | FileAppendText of dest:Reg * path:Operand * content:Operand  // Append to file, returns Result<Unit, String>
     | FileDelete of dest:Reg * path:Operand       // Delete file, returns Result<Unit, String>
     | FileSetExecutable of dest:Reg * path:Operand // Set executable bit, returns Result<Unit, String>
+    | FileWriteFromPtr of dest:Reg * path:Operand * ptr:Reg * length:Reg // Write raw bytes to file, returns Bool
     // Raw memory intrinsics (internal, for HAMT implementation)
     | RawAlloc of dest:Reg * numBytes:Reg         // Allocate raw bytes (no header), returns RawPtr
     | RawFree of ptr:Reg                          // Manually free raw memory

@@ -175,6 +175,7 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | FileAppendText (dest, _, _) -> Set.add dest defs
         | FileDelete (dest, _) -> Set.add dest defs
         | FileSetExecutable (dest, _) -> Set.add dest defs
+        | FileWriteFromPtr (dest, _, _, _) -> Set.add dest defs
         | Phi (dest, _) -> Set.add dest defs
         | RawAlloc (dest, _) -> Set.add dest defs
         | RawFree _ -> defs
@@ -262,6 +263,8 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
                 uses |> Set.union (getOperandUses path) |> Set.union (getOperandUses content)
             | FileDelete (_, path) -> Set.union uses (getOperandUses path)
             | FileSetExecutable (_, path) -> Set.union uses (getOperandUses path)
+            | FileWriteFromPtr (_, path, ptr, length) ->
+                uses |> Set.union (getOperandUses path) |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses length)
             | Phi (_, sources) ->
                 sources |> List.fold (fun u (src, _) -> Set.union u (getOperandUses src)) uses
             | RawAlloc (_, numBytes) -> Set.union uses (getOperandUses numBytes)
@@ -459,6 +462,7 @@ let createInitialRenamingState (cfg: CFG) : RenamingState =
                     | FileAppendText (VReg n, _, _) -> max m n
                     | FileDelete (VReg n, _) -> max m n
                     | FileSetExecutable (VReg n, _) -> max m n
+                    | FileWriteFromPtr (VReg n, _, _, _) -> max m n
                     | Phi (VReg n, _) -> max m n
                     | _ -> m
                 ) 0
@@ -631,6 +635,13 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let path' = renameOperand state path
         let (_, newDest, state') = newVersion state dest
         (FileSetExecutable (newDest, path'), state')
+
+    | FileWriteFromPtr (dest, path, ptr, length) ->
+        let path' = renameOperand state path
+        let ptr' = renameOperand state ptr
+        let length' = renameOperand state length
+        let (_, newDest, state') = newVersion state dest
+        (FileWriteFromPtr (newDest, path', ptr', length'), state')
 
     | Phi (dest, sources) ->
         // Phi sources are renamed when processing predecessors

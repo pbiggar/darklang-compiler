@@ -53,6 +53,7 @@ let rec typeToString (t: Type) : string =
     | TBool -> "Bool"
     | TFloat64 -> "Float"
     | TString -> "String"
+    | TBytes -> "Bytes"
     | TChar -> "Char"
     | TUnit -> "Unit"
     | TFunction (params', ret) ->
@@ -118,7 +119,7 @@ let rec applyTypeVarRenaming (subst: Map<string, string>) (t: Type) : Type =
     | TTuple elems -> TTuple (List.map (applyTypeVarRenaming subst) elems)
     | TSum (name, args) -> TSum (name, List.map (applyTypeVarRenaming subst) args)
     | TRecord _ | TInt8 | TInt16 | TInt32 | TInt64 | TUInt8 | TUInt16 | TUInt32 | TUInt64
-    | TBool | TFloat64 | TString | TChar | TUnit | TRawPtr -> t
+    | TBool | TFloat64 | TString | TBytes | TChar | TUnit | TRawPtr -> t
 
 /// Type environment - maps variable names to their types
 type TypeEnv = Map<string, Type>
@@ -193,7 +194,7 @@ let rec applySubst (subst: Substitution) (typ: Type) : Type =
     | TDict (keyType, valueType) ->
         TDict (applySubst subst keyType, applySubst subst valueType)
     | TInt8 | TInt16 | TInt32 | TInt64 | TUInt8 | TUInt16 | TUInt32 | TUInt64
-    | TBool | TFloat64 | TString | TChar | TUnit | TRecord _ | TRawPtr ->
+    | TBool | TFloat64 | TString | TBytes | TChar | TUnit | TRecord _ | TRawPtr ->
         typ  // Concrete types are unchanged
 
 /// Build a substitution from type parameters and type arguments
@@ -298,7 +299,7 @@ let rec resolveType (aliasReg: AliasRegistry) (typ: Type) : Type =
     | TDict (keyType, valueType) ->
         TDict (resolveType aliasReg keyType, resolveType aliasReg valueType)
     | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TUInt8 | TUInt16 | TUInt32 | TUInt64
-    | TBool | TFloat64 | TString | TChar | TUnit | TRawPtr ->
+    | TBool | TFloat64 | TString | TBytes | TChar | TUnit | TRawPtr ->
         typ  // Primitive types and type variables are unchanged
 
 /// Compare two types for equality, resolving type aliases first
@@ -451,6 +452,7 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
     | TBool -> matchConcrete TBool actual
     | TFloat64 -> matchConcrete TFloat64 actual
     | TString -> matchConcrete TString actual
+    | TBytes -> matchConcrete TBytes actual
     | TChar -> matchConcrete TChar actual
     | TUnit -> matchConcrete TUnit actual
     | TRawPtr -> matchConcrete TRawPtr actual

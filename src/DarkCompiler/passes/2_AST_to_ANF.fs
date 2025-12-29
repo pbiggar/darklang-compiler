@@ -35,6 +35,8 @@ let tryFileIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option
         Some (ANF.FileDelete pathAtom)
     | "Stdlib.File.setExecutable", [pathAtom] ->
         Some (ANF.FileSetExecutable pathAtom)
+    | "Stdlib.File.writeFromPtr", [pathAtom; ptrAtom; lengthAtom] ->
+        Some (ANF.FileWriteFromPtr (pathAtom, ptrAtom, lengthAtom))
     | _ -> None
 
 /// Try to convert a function call to a Float intrinsic CExpr
@@ -115,6 +117,12 @@ let tryRawMemoryIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr o
     | "__string_to_int64", [strAtom] ->
         Some (ANF.Atom strAtom)
     | "__int64_to_string", [intAtom] ->
+        Some (ANF.Atom intAtom)
+
+    // Bytes pointer cast operations are no-ops at runtime - just pass through the value
+    | "__bytes_to_int64", [bytesAtom] ->
+        Some (ANF.Atom bytesAtom)
+    | "__int64_to_bytes", [intAtom] ->
         Some (ANF.Atom intAtom)
 
     // Dict intrinsics - for type-safe Dict<k, v> operations
@@ -246,6 +254,7 @@ let rec typeToMangledName (t: AST.Type) : string =
     | AST.TBool -> "bool"
     | AST.TFloat64 -> "f64"
     | AST.TString -> "str"
+    | AST.TBytes -> "bytes"
     | AST.TChar -> "char"
     | AST.TUnit -> "unit"
     | AST.TFunction (paramTypes, retType) ->
@@ -305,7 +314,7 @@ let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
         AST.TDict (applySubstToType subst keyType, applySubstToType subst valueType)
     | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
-    | AST.TBool | AST.TFloat64 | AST.TString | AST.TChar | AST.TUnit | AST.TRecord _ | AST.TSum _ | AST.TRawPtr ->
+    | AST.TBool | AST.TFloat64 | AST.TString | AST.TBytes | AST.TChar | AST.TUnit | AST.TRecord _ | AST.TSum _ | AST.TRawPtr ->
         typ  // Concrete types are unchanged
 
 /// Apply a substitution to an expression, replacing type variables in type annotations

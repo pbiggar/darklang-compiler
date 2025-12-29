@@ -156,6 +156,11 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         operandToVReg path |> Option.toList |> Set.ofList
     | LIR.FileSetExecutable (_, path) ->
         operandToVReg path |> Option.toList |> Set.ofList
+    | LIR.FileWriteFromPtr (_, path, ptr, length) ->
+        let p = operandToVReg path |> Option.toList
+        let ptr' = regToVReg ptr |> Option.toList
+        let len = regToVReg length |> Option.toList
+        Set.ofList (p @ ptr' @ len)
     | LIR.RawAlloc (_, numBytes) ->
         regToVReg numBytes |> Option.toList |> Set.ofList
     | LIR.RawFree ptr ->
@@ -226,6 +231,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.FileAppendText (dest, _, _) -> regToVReg dest
     | LIR.FileDelete (dest, _) -> regToVReg dest
     | LIR.FileSetExecutable (dest, _) -> regToVReg dest
+    | LIR.FileWriteFromPtr (dest, _, _, _) -> regToVReg dest
     | LIR.RawAlloc (dest, _) -> regToVReg dest
     | LIR.RawGet (dest, _, _) -> regToVReg dest
     | LIR.RawGetByte (dest, _, _) -> regToVReg dest
@@ -1062,6 +1068,18 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
             | _ -> []
         pathLoads @ [fileInstr] @ storeInstrs
+
+    | LIR.FileWriteFromPtr (dest, path, ptr, length) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (pathOp, pathLoads) = applyToOperand mapping path LIR.X12
+        let (ptrReg, ptrLoads) = loadSpilled mapping ptr LIR.X13
+        let (lengthReg, lengthLoads) = loadSpilled mapping length LIR.X14
+        let fileInstr = LIR.FileWriteFromPtr (destReg, pathOp, ptrReg, lengthReg)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        pathLoads @ ptrLoads @ lengthLoads @ [fileInstr] @ storeInstrs
 
     | LIR.RawAlloc (dest, numBytes) ->
         let (destReg, destAlloc) = applyToReg mapping dest

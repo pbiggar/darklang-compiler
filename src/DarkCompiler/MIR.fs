@@ -144,6 +144,7 @@ type Instr =
     | FileAppendText of dest:VReg * path:Operand * content:Operand  // Append to file, returns Result<Unit, String>
     | FileDelete of dest:VReg * path:Operand      // Delete file, returns Result<Unit, String>
     | FileSetExecutable of dest:VReg * path:Operand  // Set executable bit, returns Result<Unit, String>
+    | FileWriteFromPtr of dest:VReg * path:Operand * ptr:Operand * length:Operand  // Write raw bytes to file
     // Float intrinsics
     | FloatSqrt of dest:VReg * src:Operand        // Square root: sqrt(x)
     | FloatAbs of dest:VReg * src:Operand         // Absolute value: |x|

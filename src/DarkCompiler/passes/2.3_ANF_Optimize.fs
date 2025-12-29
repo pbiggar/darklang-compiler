@@ -124,6 +124,7 @@ let hasSideEffects (cexpr: CExpr) : bool =
     | FileAppendText _ -> true
     | FileDelete _ -> true
     | FileSetExecutable _ -> true
+    | FileWriteFromPtr _ -> true  // File I/O
     | RawAlloc _ -> true  // Allocates memory
     | RawFree _ -> true   // Frees memory
     | RawGet _ -> false   // Pure memory read
@@ -178,6 +179,7 @@ let collectCExprUses (cexpr: CExpr) : Set<TempId> =
     | FileAppendText (path, content) -> Set.union (collectAtomUses path) (collectAtomUses content)
     | FileDelete path -> collectAtomUses path
     | FileSetExecutable path -> collectAtomUses path
+    | FileWriteFromPtr (path, ptr, length) -> Set.unionMany [collectAtomUses path; collectAtomUses ptr; collectAtomUses length]
     | RawAlloc numBytes -> collectAtomUses numBytes
     | RawFree ptr -> collectAtomUses ptr
     | RawGet (ptr, byteOffset) -> Set.union (collectAtomUses ptr) (collectAtomUses byteOffset)
@@ -237,6 +239,7 @@ let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | FileAppendText (path, content) -> FileAppendText (s path, s content)
     | FileDelete path -> FileDelete (s path)
     | FileSetExecutable path -> FileSetExecutable (s path)
+    | FileWriteFromPtr (path, ptr, length) -> FileWriteFromPtr (s path, s ptr, s length)
     | RawAlloc numBytes -> RawAlloc (s numBytes)
     | RawFree ptr -> RawFree (s ptr)
     | RawGet (ptr, byteOffset) -> RawGet (s ptr, s byteOffset)

@@ -124,6 +124,7 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.FileAppendText (path, content) -> max (maxTempIdInAtom path) (maxTempIdInAtom content)
     | ANF.FileDelete path -> maxTempIdInAtom path
     | ANF.FileSetExecutable path -> maxTempIdInAtom path
+    | ANF.FileWriteFromPtr (path, ptr, length) -> max (maxTempIdInAtom path) (max (maxTempIdInAtom ptr) (maxTempIdInAtom length))
     | ANF.RawAlloc numBytes -> maxTempIdInAtom numBytes
     | ANF.RawFree ptr -> maxTempIdInAtom ptr
     | ANF.RawGet (ptr, offset) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom offset)
@@ -219,6 +220,7 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.FileAppendText (path, content) -> collectStringsFromAtom path @ collectStringsFromAtom content
     | ANF.FileDelete path -> collectStringsFromAtom path
     | ANF.FileSetExecutable path -> collectStringsFromAtom path
+    | ANF.FileWriteFromPtr (path, ptr, length) -> collectStringsFromAtom path @ collectStringsFromAtom ptr @ collectStringsFromAtom length
     | ANF.RawAlloc numBytes -> collectStringsFromAtom numBytes
     | ANF.RawFree ptr -> collectStringsFromAtom ptr
     | ANF.RawGet (ptr, offset) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset
@@ -275,6 +277,7 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
     | ANF.FileAppendText (path, content) -> collectFloatsFromAtom path @ collectFloatsFromAtom content
     | ANF.FileDelete path -> collectFloatsFromAtom path
     | ANF.FileSetExecutable path -> collectFloatsFromAtom path
+    | ANF.FileWriteFromPtr (path, ptr, length) -> collectFloatsFromAtom path @ collectFloatsFromAtom ptr @ collectFloatsFromAtom length
     | ANF.RawAlloc numBytes -> collectFloatsFromAtom numBytes
     | ANF.RawFree ptr -> collectFloatsFromAtom ptr
     | ANF.RawGet (ptr, offset) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset
@@ -780,6 +783,14 @@ let rec convertExpr
                 | ANF.FileSetExecutable pathAtom ->
                     atomToOperand builder pathAtom
                     |> Result.map (fun pathOp -> [MIR.FileSetExecutable (destReg, pathOp)])
+                | ANF.FileWriteFromPtr (pathAtom, ptrAtom, lengthAtom) ->
+                    atomToOperand builder pathAtom
+                    |> Result.bind (fun pathOp ->
+                        atomToOperand builder ptrAtom
+                        |> Result.bind (fun ptrOp ->
+                            atomToOperand builder lengthAtom
+                            |> Result.map (fun lengthOp ->
+                                [MIR.FileWriteFromPtr (destReg, pathOp, ptrOp, lengthOp)])))
                 | ANF.RawAlloc numBytesAtom ->
                     atomToOperand builder numBytesAtom
                     |> Result.map (fun numBytesOp -> [MIR.RawAlloc (destReg, numBytesOp)])
@@ -1215,6 +1226,14 @@ and convertExprToOperand
                 | ANF.FileSetExecutable pathAtom ->
                     atomToOperand builder pathAtom
                     |> Result.map (fun pathOp -> [MIR.FileSetExecutable (destReg, pathOp)])
+                | ANF.FileWriteFromPtr (pathAtom, ptrAtom, lengthAtom) ->
+                    atomToOperand builder pathAtom
+                    |> Result.bind (fun pathOp ->
+                        atomToOperand builder ptrAtom
+                        |> Result.bind (fun ptrOp ->
+                            atomToOperand builder lengthAtom
+                            |> Result.map (fun lengthOp ->
+                                [MIR.FileWriteFromPtr (destReg, pathOp, ptrOp, lengthOp)])))
                 | ANF.RawAlloc numBytesAtom ->
                     atomToOperand builder numBytesAtom
                     |> Result.map (fun numBytesOp -> [MIR.RawAlloc (destReg, numBytesOp)])
@@ -1651,6 +1670,7 @@ let private offsetInstr (strOffset: int) (fltOffset: int) (instr: MIR.Instr) : M
     | MIR.FileAppendText (dest, path, content) -> MIR.FileAppendText (dest, offsetOperand strOffset fltOffset path, offsetOperand strOffset fltOffset content)
     | MIR.FileDelete (dest, path) -> MIR.FileDelete (dest, offsetOperand strOffset fltOffset path)
     | MIR.FileSetExecutable (dest, path) -> MIR.FileSetExecutable (dest, offsetOperand strOffset fltOffset path)
+    | MIR.FileWriteFromPtr (dest, path, ptr, length) -> MIR.FileWriteFromPtr (dest, offsetOperand strOffset fltOffset path, offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset length)
     | MIR.FloatSqrt (dest, src) -> MIR.FloatSqrt (dest, offsetOperand strOffset fltOffset src)
     | MIR.FloatAbs (dest, src) -> MIR.FloatAbs (dest, offsetOperand strOffset fltOffset src)
     | MIR.FloatNeg (dest, src) -> MIR.FloatNeg (dest, offsetOperand strOffset fltOffset src)
