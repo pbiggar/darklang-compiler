@@ -1878,13 +1878,12 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             // Integer negation: convert to 0 - expr
             toANF (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen env typeReg variantLookup funcReg moduleRegistry
 
-    | AST.UnaryOp (op, innerExpr) ->
-        // Unary operation: convert operand to atom
+    | AST.UnaryOp (AST.Not, innerExpr) ->
+        // Boolean not: convert operand to atom and apply Not
         toAtom innerExpr varGen env typeReg variantLookup funcReg moduleRegistry |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
             // Create unary op and bind to fresh variable
             let (tempVar, varGen2) = ANF.freshVar varGen1
-            let anfOp = convertUnaryOp op
-            let cexpr = ANF.UnaryPrim (anfOp, innerAtom)
+            let cexpr = ANF.UnaryPrim (ANF.Not, innerAtom)
 
             // Build the expression: innerBindings + let tempVar = op
             let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
@@ -1953,8 +1952,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     let exprWithRight = wrapBindings rightBindings finalExpr
                     let exprWithLeft = wrapBindings leftBindings exprWithRight
                     Ok (exprWithLeft, varGen3)
-                | _ ->
-                    // Other binary operations - use simple primitive
+                // Arithmetic, bitwise, and comparison operators - use simple primitive
+                | AST.Add | AST.Sub | AST.Mul | AST.Div | AST.Mod
+                | AST.Shl | AST.Shr | AST.BitAnd | AST.BitOr | AST.BitXor
+                | AST.Lt | AST.Gt | AST.Lte | AST.Gte
+                | AST.And | AST.Or ->
                     let (tempVar, varGen3) = ANF.freshVar varGen2
                     let cexpr = ANF.Prim (convertBinOp op, leftAtom, rightAtom)
                     let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
@@ -3514,13 +3516,12 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             // Integer negation: convert to 0 - expr
             toAtom (AST.BinOp (AST.Sub, AST.IntLiteral 0L, innerExpr)) varGen env typeReg variantLookup funcReg moduleRegistry
 
-    | AST.UnaryOp (op, innerExpr) ->
-        // Unary operation: convert operand to atom, create binding
+    | AST.UnaryOp (AST.Not, innerExpr) ->
+        // Boolean not: convert operand to atom, create binding
         toAtom innerExpr varGen env typeReg variantLookup funcReg moduleRegistry |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
             // Create the operation
             let (tempVar, varGen2) = ANF.freshVar varGen1
-            let anfOp = convertUnaryOp op
-            let cexpr = ANF.UnaryPrim (anfOp, innerAtom)
+            let cexpr = ANF.UnaryPrim (ANF.Not, innerAtom)
 
             // Return the temp variable as atom, plus all bindings
             let allBindings = innerBindings @ [(tempVar, cexpr)]
@@ -3574,8 +3575,11 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                     let cexpr = ANF.StringConcat (leftAtom, rightAtom)
                     let allBindings = leftBindings @ rightBindings @ [(tempVar, cexpr)]
                     Ok (ANF.Var tempVar, allBindings, varGen3)
-                | _ ->
-                    // Other binary operations
+                // Arithmetic, bitwise, and comparison operators - use simple primitive
+                | AST.Add | AST.Sub | AST.Mul | AST.Div | AST.Mod
+                | AST.Shl | AST.Shr | AST.BitAnd | AST.BitOr | AST.BitXor
+                | AST.Lt | AST.Gt | AST.Lte | AST.Gte
+                | AST.And | AST.Or ->
                     let (tempVar, varGen3) = ANF.freshVar varGen2
                     let cexpr = ANF.Prim (convertBinOp op, leftAtom, rightAtom)
                     let allBindings = leftBindings @ rightBindings @ [(tempVar, cexpr)]
