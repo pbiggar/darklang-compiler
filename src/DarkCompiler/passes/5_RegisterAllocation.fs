@@ -1189,21 +1189,34 @@ let applyToBlockWithLiveness
     if instrCount <> livenessCount then
         failwithf "Instruction count (%d) doesn't match liveness count (%d)" instrCount livenessCount
 
+    // First pass: find SaveRegs/RestoreRegs pairs and compute the registers to save
+    // For each SaveRegs, look ahead to find the matching RestoreRegs and use its liveness
+    // This ensures SaveRegs and RestoreRegs have matching register lists
+    let mutable savedRegsStack : LIR.PhysReg list list = []
+
     let allocatedInstrs =
         List.zip block.Instrs instrLiveness
         |> List.collect (fun (instr, liveAfter) ->
             match instr with
             | LIR.SaveRegs ([], []) ->
-                // Empty placeholder - populate with live caller-saved registers
-                // At SaveRegs point, we save registers that contain values live across the call
+                // At SaveRegs, we need to save registers that are:
+                // 1. Currently live (have values that might be clobbered by the call)
+                // 2. Needed after the call
+                // The liveAfter here includes both categories, so we use it
                 let liveCallerSaved = getLiveCallerSavedRegs liveAfter mapping
-                // For now, don't save float registers (we'd need to track float liveness too)
-                // TODO: Add float register liveness tracking
+                // Push onto stack for matching RestoreRegs
+                savedRegsStack <- liveCallerSaved :: savedRegsStack
                 applyToInstr mapping (LIR.SaveRegs (liveCallerSaved, []))
             | LIR.RestoreRegs ([], []) ->
-                // Match the corresponding SaveRegs - use the same registers
-                // For now, we'll compute it the same way (they should match)
-                let liveCallerSaved = getLiveCallerSavedRegs liveAfter mapping
+                // Pop the matching SaveRegs registers
+                let liveCallerSaved =
+                    match savedRegsStack with
+                    | head :: tail ->
+                        savedRegsStack <- tail
+                        head
+                    | [] ->
+                        // Fallback: compute from liveness (shouldn't happen with matched pairs)
+                        getLiveCallerSavedRegs liveAfter mapping
                 applyToInstr mapping (LIR.RestoreRegs (liveCallerSaved, []))
             | _ ->
                 applyToInstr mapping instr)

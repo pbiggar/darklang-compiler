@@ -1322,8 +1322,12 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             | LIR.Imm value ->
                 Ok (loadImmediate destARM64 value)
             | LIR.Reg (LIR.Physical srcPhysReg) ->
-                let srcARM64 = lirPhysRegToARM64Reg srcPhysReg
-                Ok [ARM64.MOV_reg (destARM64, srcARM64)]
+                // If source equals destination, it's a no-op
+                if srcPhysReg = destReg then
+                    Ok []
+                else
+                    let srcARM64 = lirPhysRegToARM64Reg srcPhysReg
+                    Ok [ARM64.MOV_reg (destARM64, srcARM64)]
             | LIR.Reg (LIR.Virtual _) ->
                 Error "Virtual register in TailArgMoves - should have been allocated"
             | LIR.StackSlot offset ->
@@ -1352,8 +1356,15 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         let mutable remaining = moves |> List.map (fun (d, s) -> (d, s))
 
         // Phase 1: Emit all non-register-source moves first (they can never cause conflicts)
+        // Also filter out self-loops (X1 <- X1) since they're no-ops
+        let isSelfLoop (destReg: LIR.PhysReg, srcOp: LIR.Operand) =
+            match getSrcPhysReg srcOp with
+            | Some srcReg -> srcReg = destReg
+            | None -> false
+
+        let nonSelfLoops = remaining |> List.filter (not << isSelfLoop)
         let (nonRegMoves, regMoves) =
-            remaining |> List.partition (fun (_, srcOp) -> getSrcPhysReg srcOp = None)
+            nonSelfLoops |> List.partition (fun (_, srcOp) -> getSrcPhysReg srcOp = None)
 
         for (dest, src) in nonRegMoves do
             match generateMoveInstr (dest, src) with
