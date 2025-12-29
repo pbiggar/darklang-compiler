@@ -651,6 +651,76 @@ def Stdlib.String.toLowerCase(s: String) : String =
     Stdlib.String.fromCodepoints(lower)
 
 // =============================================================================
+// Grapheme Cluster Segmentation (simplified UAX #29)
+// =============================================================================
+// Grapheme break categories (simplified):
+// - CR (13), LF (10): newline handling
+// - ZWJ (8205): zero-width joiner for emoji sequences
+// - Extend: combining marks, variation selectors, skin tone modifiers
+
+// Check if codepoint is a combining/extending character
+def Stdlib.String.__isExtend(cp: Int64) : Bool =
+    // Combining Diacritical Marks (0300-036F)
+    (cp >= 768 && cp <= 879) ||
+    // Variation Selectors (FE00-FE0F)
+    (cp >= 65024 && cp <= 65039) ||
+    // Combining Diacritical Marks Extended (1AB0-1AFF)
+    (cp >= 6832 && cp <= 6911) ||
+    // Combining Half Marks (FE20-FE2F)
+    (cp >= 65056 && cp <= 65071) ||
+    // Emoji Fitzpatrick modifiers (skin tones) (1F3FB-1F3FF)
+    (cp >= 127995 && cp <= 127999) ||
+    // Emoji component (hair styles, etc) - simplified range
+    (cp >= 127988 && cp <= 127988)
+
+// Check if codepoint is ZWJ (Zero Width Joiner)
+def Stdlib.String.__isZWJ(cp: Int64) : Bool = cp == 8205
+
+// Segment codepoints into grapheme clusters
+// Returns list of codepoint lists (each inner list is one grapheme)
+def Stdlib.String.__segmentGraphemes(cps: List<Int64>, current: List<Int64>, result: List<List<Int64>>) : List<List<Int64>> =
+    match cps with
+    | [] ->
+        // End of input - add current grapheme if non-empty
+        if Stdlib.List.isEmpty<Int64>(current) then
+            Stdlib.List.reverse<List<Int64>>(result)
+        else
+            Stdlib.List.reverse<List<Int64>>([Stdlib.List.reverse<Int64>(current), ...result])
+    | [cp, ...rest] ->
+        if Stdlib.List.isEmpty<Int64>(current) then
+            // Start new grapheme
+            Stdlib.String.__segmentGraphemes(rest, [cp], result)
+        else if Stdlib.String.__isExtend(cp) || Stdlib.String.__isZWJ(cp) then
+            // Extend current grapheme
+            Stdlib.String.__segmentGraphemes(rest, [cp, ...current], result)
+        else if cp == 10 then
+            // LF - check if preceded by CR
+            match current with
+            | [13] ->
+                // CR + LF = single grapheme
+                Stdlib.String.__segmentGraphemes(rest, [], [Stdlib.List.reverse<Int64>([cp, ...current]), ...result])
+            | _ ->
+                // LF alone - end current, LF is its own grapheme
+                Stdlib.String.__segmentGraphemes(rest, [], [[cp], Stdlib.List.reverse<Int64>(current), ...result])
+        else
+            // New base character - end current grapheme, start new one
+            Stdlib.String.__segmentGraphemes(rest, [cp], [Stdlib.List.reverse<Int64>(current), ...result])
+
+// Convert a list of codepoints to a string
+def Stdlib.String.__codepointsToString(cps: List<Int64>) : String =
+    Stdlib.String.fromCodepoints(cps)
+
+// Convert string to list of grapheme clusters (each as a string)
+def Stdlib.String.toGraphemes(s: String) : List<String> =
+    let cps = Stdlib.String.toCodepoints(s) in
+    let segments = Stdlib.String.__segmentGraphemes(cps, [], []) in
+    Stdlib.List.map<List<Int64>, String>(segments, Stdlib.String.__codepointsToString)
+
+// Get number of grapheme clusters in a string
+def Stdlib.String.graphemeLength(s: String) : Int64 =
+    Stdlib.List.length<String>(Stdlib.String.toGraphemes(s))
+
+// =============================================================================
 // Stdlib.Dict - Immutable Dictionary using HAMT (Hash Array Mapped Trie)
 // =============================================================================
 
