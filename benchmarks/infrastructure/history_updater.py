@@ -106,20 +106,28 @@ def load_results_file(benchmarks_dir: Path) -> dict:
     for line in content.split("\n"):
         if line.startswith("| Benchmark"):
             in_table = True
-            # Parse header to get language columns
+            # Parse header to get language columns (strip speedup suffix like " (5.30x)")
             cols = [c.strip() for c in line.split("|")]
-            languages = cols[2:]  # Skip empty and Benchmark columns
+            languages = []
+            for col in cols[2:]:  # Skip empty and Benchmark columns
+                lang = col.split(" (")[0] if " (" in col else col
+                languages.append(lang)
             continue
         if line.startswith("|---"):
             continue
         if in_table and line.startswith("|"):
             cols = [c.strip() for c in line.split("|")]
             if len(cols) >= 3:
-                benchmark = cols[1]
+                benchmark = cols[1].strip()
+                if not benchmark:  # Skip empty rows (like averages row)
+                    continue
                 results[benchmark] = {}
                 for i, lang in enumerate(languages):
                     if i + 2 < len(cols) and cols[i + 2]:
                         val = cols[i + 2].replace(",", "").strip()
+                        # Strip inline speedup suffix like " (4.14x)"
+                        if " (" in val:
+                            val = val.split(" (")[0]
                         if val and val != "-" and val != "(timeout)":
                             try:
                                 results[benchmark][lang.lower()] = int(val)
@@ -156,7 +164,7 @@ def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dic
             if instrs > 0 and lang != "dark":
                 existing[benchmark][lang] = instrs
 
-    # Languages with speedup columns (rust is baseline, no speedup column for it)
+    # Languages (rust is baseline, no speedup for it)
     languages = ["dark", "rust", "python", "node"]
     langs_with_speedup = ["dark", "python", "node"]  # Rust is baseline
 
@@ -173,21 +181,31 @@ def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dic
                 speedups[benchmark][lang] = ratio
                 avg_speedups[lang].append(ratio)
 
-    # Calculate geometric mean of speedups
+    # Calculate geometric mean of speedups for header
     avg_speedup_values = {}
     for lang in langs_with_speedup:
         avg_speedup_values[lang] = geometric_mean(avg_speedups[lang])
 
-    # Calculate column widths
-    col_widths = {"benchmark": len("Benchmark"), "x": 5}  # "x" column for speedup
+    # Build header names with averages
+    header_names = {}
     for lang in languages:
-        col_widths[lang] = len(lang.capitalize())
+        if lang in langs_with_speedup and avg_speedup_values.get(lang) is not None:
+            header_names[lang] = f"{lang.capitalize()} ({format_speedup(avg_speedup_values[lang])})"
+        else:
+            header_names[lang] = lang.capitalize()
+
+    # Calculate column widths (including inline speedups)
+    col_widths = {"benchmark": len("Benchmark")}
+    for lang in languages:
+        col_widths[lang] = len(header_names[lang])
 
     for benchmark in existing:
         col_widths["benchmark"] = max(col_widths["benchmark"], len(benchmark))
         for lang in languages:
             if lang in existing[benchmark]:
                 val = format_number(existing[benchmark][lang])
+                if lang in langs_with_speedup and benchmark in speedups and lang in speedups[benchmark]:
+                    val += f" ({format_speedup(speedups[benchmark][lang])})"
                 col_widths[lang] = max(col_widths[lang], len(val))
             else:
                 col_widths[lang] = max(col_widths[lang], len("-"))
@@ -207,28 +225,10 @@ def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dic
     header = f"| {'Benchmark':<{col_widths['benchmark']}} |"
     separator = f"|{'-' * (col_widths['benchmark'] + 2)}|"
     for lang in languages:
-        header += f" {lang.capitalize():>{col_widths[lang]}} |"
+        header += f" {header_names[lang]:>{col_widths[lang]}} |"
         separator += f"{'-' * (col_widths[lang] + 2)}|"
-        if lang in langs_with_speedup:
-            header += f" {'x':>{col_widths['x']}} |"
-            separator += f"{'-' * (col_widths['x'] + 2)}|"
     lines.append(header)
     lines.append(separator)
-
-    # Averages row
-    avg_row = f"| {'':>{col_widths['benchmark']}} |"
-    for lang in languages:
-        if lang in langs_with_speedup:
-            avg = avg_speedup_values.get(lang)
-            if avg is not None:
-                avg_str = f"(avg {format_speedup(avg)})"
-            else:
-                avg_str = ""
-            avg_row += f" {avg_str:>{col_widths[lang]}} |"
-            avg_row += f" {'':>{col_widths['x']}} |"
-        else:
-            avg_row += f" {'':>{col_widths[lang]}} |"
-    lines.append(avg_row)
 
     # Data rows
     for benchmark in sorted(existing.keys()):
@@ -236,12 +236,11 @@ def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dic
         for lang in languages:
             if lang in existing[benchmark]:
                 val = format_number(existing[benchmark][lang])
+                if lang in langs_with_speedup and benchmark in speedups and lang in speedups[benchmark]:
+                    val += f" ({format_speedup(speedups[benchmark][lang])})"
             else:
                 val = "-"
             row += f" {val:>{col_widths[lang]}} |"
-            if lang in langs_with_speedup:
-                speedup = speedups[benchmark].get(lang)
-                row += f" {format_speedup(speedup):>{col_widths['x']}} |"
         lines.append(row)
 
     lines.append("")
