@@ -3,7 +3,7 @@
 Process cachegrind benchmark results and generate summary reports.
 Usage: python3 cachegrind_processor.py <results_dir> [--use-baseline]
 
-When --use-baseline is passed, reads Rust/Python baselines from HISTORY.md
+When --use-baseline is passed, reads Rust/Python/Node baselines from BASELINES.md
 instead of requiring them in the results directory.
 """
 
@@ -13,63 +13,48 @@ import sys
 from pathlib import Path
 
 
-def parse_history_baselines(history_path: Path) -> dict:
-    """Parse HISTORY.md to extract the most recent Rust/Python baselines per benchmark.
+def parse_baselines_file(baselines_path: Path) -> dict:
+    """Parse BASELINES.md to extract Rust/Python/Node baselines per benchmark.
 
-    Searches through history entries to find the most recent one that has Rust/Python data.
+    Returns: {benchmark: [{language, instructions, data_refs, ...}]}
     """
-    if not history_path.exists():
-        return {}
-
-    content = history_path.read_text()
-
-    # Split by --- to get entries (first part is header)
-    parts = content.split("\n---\n")
-    if len(parts) < 2:
+    if not baselines_path.exists():
         return {}
 
     baselines = {}
+    content = baselines_path.read_text()
 
-    # Search through entries to find ones with Rust/Python data
-    for entry in parts[1:]:  # Skip header
-        current_benchmark = None
-        for line in entry.split("\n"):
-            # Match benchmark header (### factorial, ### fib, etc.)
-            header_match = re.match(r"^###\s+(\w+)", line)
-            if header_match:
-                current_benchmark = header_match.group(1)
-                if current_benchmark not in baselines:
-                    baselines[current_benchmark] = []
-                continue
+    in_table = False
+    for line in content.split("\n"):
+        if line.startswith("| Benchmark"):
+            in_table = True
+            continue
+        if line.startswith("|---"):
+            continue
+        if in_table and line.startswith("|"):
+            cols = [c.strip() for c in line.split("|")]
+            if len(cols) >= 9:
+                benchmark = cols[1].strip()
+                lang = cols[2].strip().lower()
+                try:
+                    branches = int(cols[7].replace(",", ""))
+                    mispred_pct = float(cols[8].replace("%", ""))
+                    mispreds = int(branches * mispred_pct / 100)
 
-            if current_benchmark and line.startswith("|"):
-                # Parse table row
-                cols = [p.strip() for p in line.split("|")]
-                if len(cols) >= 9 and cols[1].lower() in ("rust", "python", "node"):
-                    lang = cols[1].lower()
-                    # Skip if we already have this language for this benchmark
-                    if any(b["language"] == lang for b in baselines.get(current_benchmark, [])):
-                        continue
-                    try:
-                        instrs = int(cols[2].replace(",", ""))
-                        data_refs = int(cols[4].replace(",", ""))
-                        d1_misses = int(cols[5].replace(",", ""))
-                        ll_misses = int(cols[6].replace(",", ""))
-                        branches = int(cols[7].replace(",", ""))
-                        mispred_pct = float(cols[8].replace("%", ""))
-                        mispreds = int(branches * mispred_pct / 100)
-
-                        baselines[current_benchmark].append({
-                            "language": lang,
-                            "instructions": instrs,
-                            "data_refs": data_refs,
-                            "d1_misses": d1_misses,
-                            "ll_misses": ll_misses,
-                            "branches": branches,
-                            "branch_mispredicts": mispreds,
-                        })
-                    except (ValueError, IndexError):
-                        pass
+                    entry = {
+                        "language": lang,
+                        "instructions": int(cols[3].replace(",", "")),
+                        "data_refs": int(cols[4].replace(",", "")),
+                        "d1_misses": int(cols[5].replace(",", "")),
+                        "ll_misses": int(cols[6].replace(",", "")),
+                        "branches": branches,
+                        "branch_mispredicts": mispreds,
+                    }
+                    if benchmark not in baselines:
+                        baselines[benchmark] = []
+                    baselines[benchmark].append(entry)
+                except (ValueError, IndexError):
+                    pass
 
     return baselines
 
@@ -177,92 +162,13 @@ def generate_summary(results: dict, output_dir: Path):
         print(line)
 
 
-def update_history(results: dict, output_dir: Path, benchmarks_dir: Path):
-    """Append cachegrind results to HISTORY.md."""
-    from datetime import datetime
-
-    history_path = benchmarks_dir / "HISTORY.md"
-    if not history_path.exists():
-        return  # Let the timing history_updater create it first
-
-    # Get metadata
-    dir_name = output_dir.name
-    try:
-        dt = datetime.strptime(dir_name, "%Y-%m-%d_%H%M%S")
-        timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
-    except ValueError:
-        timestamp = dir_name
-
-    version_file = output_dir / "compiler_version.txt"
-    commit_hash = "unknown"
-    if version_file.exists():
-        lines_v = version_file.read_text().strip().split("\n")
-        commit_hash = lines_v[0][:8] if lines_v else "unknown"
-
-    # Generate cachegrind section
-    lines = [
-        "",
-        "#### Instruction Counts (Cachegrind)",
-        "",
-    ]
-
-    for benchmark_name, benchmark_results in sorted(results.items()):
-        if not benchmark_results:
-            continue
-
-        sorted_results = sorted(benchmark_results, key=lambda x: x.get("instructions", 0))
-
-        # Find Dark baseline
-        baseline = None
-        for r in sorted_results:
-            if r.get("language", "").lower() == "dark":
-                baseline = r
-                break
-        if baseline is None:
-            baseline = sorted_results[0]
-
-        baseline_instrs = baseline.get("instructions", 1)
-
-        lines.append(f"**{benchmark_name}:**")
-        for r in sorted_results:
-            lang = r.get("language", "unknown").capitalize()
-            instrs = r.get("instructions", 0)
-            ratio = instrs / baseline_instrs if baseline_instrs > 0 else 0
-            ratio_str = format_ratio(ratio)
-            lines.append(f"- {lang}: {format_number(instrs)} ({ratio_str})")
-        lines.append("")
-
-    # Read existing history and find the most recent entry to append to
-    existing = history_path.read_text()
-
-    # Find the first "---" after the header and insert after it
-    # The format is: header, ---, entry, ---, entry, ...
-    # We want to add cachegrind data to the most recent entry
-    parts = existing.split("\n---\n")
-    if len(parts) >= 2:
-        # Insert cachegrind section into the first entry (most recent)
-        header = parts[0]
-        first_entry = parts[1]
-        rest = parts[2:] if len(parts) > 2 else []
-
-        # Append cachegrind lines before the end of the first entry
-        new_first_entry = first_entry.rstrip() + "\n".join(lines)
-
-        # Reconstruct
-        new_parts = [header, new_first_entry] + rest
-        new_content = "\n---\n".join(new_parts)
-
-        history_path.write_text(new_content)
-        print(f"Cachegrind results appended to: {history_path}")
-
-
 def merge_with_baselines(results: dict, baselines: dict) -> dict:
-    """Merge fresh Dark results with cached Rust/Python baselines."""
+    """Merge fresh Dark results with cached Rust/Python/Node baselines."""
     merged = {}
     for benchmark, dark_results in results.items():
         merged[benchmark] = list(dark_results)  # Copy Dark results
         if benchmark in baselines:
-            # Add Rust/Python from baselines
+            # Add Rust/Python/Node from baselines
             merged[benchmark].extend(baselines[benchmark])
     return merged
 
@@ -287,16 +193,16 @@ def main():
         print("No cachegrind results found.")
         sys.exit(0)
 
-    # If using baseline, merge with cached Rust/Python from history
+    # If using baseline, merge with cached Rust/Python/Node from BASELINES.md
     if use_baseline:
-        history_path = benchmarks_dir / "HISTORY.md"
-        baselines = parse_history_baselines(history_path)
+        baselines_path = benchmarks_dir / "BASELINES.md"
+        baselines = parse_baselines_file(baselines_path)
         if baselines:
-            print(f"  Using cached baselines from HISTORY.md")
+            print(f"  Using cached baselines from BASELINES.md")
             results = merge_with_baselines(results, baselines)
 
     generate_summary(results, results_dir)
-    update_history(results, results_dir, benchmarks_dir)
+    # Note: history_updater.py now handles updating RESULTS.md, BASELINES.md, and HISTORY.md
 
 
 if __name__ == "__main__":
