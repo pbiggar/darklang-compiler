@@ -13,9 +13,9 @@
 // inserted. For safety in V1, we only optimize calls that are immediately
 // followed by Return (no intervening RefCountDec).
 //
-// CURRENT STATUS: TCO is DISABLED due to parallel move resolution bugs.
-// The detectTailCallsInProgram function returns the program unchanged.
-// See git commits eb7cf84, 9dcb1f4, 9446a3d for bug history.
+// CURRENT STATUS: TCO is ENABLED. The DCE bug that caused 197 test failures
+// has been fixed (DeadCodeElimination.fs was not recognizing TailCall as a
+// function call, causing stdlib functions called via tail call to be removed).
 //
 // See docs/features/tail-call-optimization.md for detailed documentation.
 
@@ -78,14 +78,7 @@ let detectTailCallsInFunction (func: Function) : Function =
 
 /// Detect tail calls in a program
 let detectTailCallsInProgram (program: ANF.Program) : ANF.Program =
-    // TCO DISABLED: 197 failures in stdlib when enabled
-    // INVESTIGATION FINDINGS:
-    // - User-defined tail calls work: swap, rotate, compare5, sum6, generics
-    // - User cross-function tail calls work (A calls B in tail position)
-    // - Stdlib fails: Dict, String operations
-    // - KEY BUG: Functions returning `false` return `true` instead
-    //   e.g., String.startsWith("hello world", "world") returns true (should be false)
-    // - Bug is SPECIFIC to stdlib-compiled functions, NOT user code
-    // - Same pattern compiled as user code works; only stdlib version fails
-    // - Root cause likely in how stdlib compilation differs from user compilation
-    program
+    // TCO is ENABLED - the DCE bug that caused 197 test failures has been fixed
+    // (DeadCodeElimination.fs was not recognizing TailCall as a function call)
+    let (ANF.Program (functions, main)) = program
+    ANF.Program (functions |> List.map detectTailCallsInFunction, main)

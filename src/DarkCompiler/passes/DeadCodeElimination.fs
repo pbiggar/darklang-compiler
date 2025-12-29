@@ -16,8 +16,16 @@ let private extractCallsFromInstr (instr: LIR.Instr) : string list =
     match instr with
     | LIR.Call (_, funcName, args) ->
         funcName :: (args |> List.collect extractFromOperand)
+    | LIR.TailCall (funcName, args) ->
+        funcName :: (args |> List.collect extractFromOperand)
+    | LIR.IndirectTailCall (_, args) ->
+        // Function pointer is in a register - we can't statically determine the target
+        args |> List.collect extractFromOperand
     | LIR.ClosureAlloc (_, funcName, captures) ->
         funcName :: (captures |> List.collect extractFromOperand)
+    | LIR.ClosureTailCall (_, args) ->
+        // Closure pointer is in a register - we can't statically determine the target
+        args |> List.collect extractFromOperand
     | LIR.LoadFuncAddr (_, funcName) -> [funcName]
     | LIR.HeapStore (_, _, src) -> extractFromOperand src
     | LIR.Mov (_, src) -> extractFromOperand src
