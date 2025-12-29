@@ -2,11 +2,14 @@
 // Ported from https://github.com/darklang/dark/tree/main/backend/testfiles/execution/stdlib
 //
 // Tests for Result module functions
+// NOTE: Result<T, E> has two type parameters. When using Ok, E is unconstrained.
+//       When using Error, T is unconstrained. Type params needed for these cases.
 
 // ===================================================================
 // Stdlib.Result.isOk - Returns true if the result is Ok
 // ===================================================================
 
+// NOTE: Needs type params because Error type is unconstrained
 Stdlib.Result.isOk<Int64, Int64>(Stdlib.Result.Result.Ok(5)) = stdout="true\n"
 Stdlib.Result.isOk<Int64, Int64>(Stdlib.Result.Result.Error(99)) = stdout="false\n"
 
@@ -14,6 +17,7 @@ Stdlib.Result.isOk<Int64, Int64>(Stdlib.Result.Result.Error(99)) = stdout="false
 // Stdlib.Result.isError - Returns true if the result is Error
 // ===================================================================
 
+// NOTE: Needs type params because one type is always unconstrained
 Stdlib.Result.isError<Int64, Int64>(Stdlib.Result.Result.Ok(5)) = stdout="false\n"
 Stdlib.Result.isError<Int64, Int64>(Stdlib.Result.Result.Error(99)) = stdout="true\n"
 
@@ -21,6 +25,7 @@ Stdlib.Result.isError<Int64, Int64>(Stdlib.Result.Result.Error(99)) = stdout="tr
 // Stdlib.Result.withDefault - Returns the value or a default
 // ===================================================================
 
+// NOTE: Needs type params - Error type unconstrained
 Stdlib.Result.withDefault<Int64, Int64>(Stdlib.Result.Result.Ok(5), 0) = 5
 Stdlib.Result.withDefault<Int64, Int64>(Stdlib.Result.Result.Error(99), 42) = 42
 
@@ -28,8 +33,9 @@ Stdlib.Result.withDefault<Int64, Int64>(Stdlib.Result.Result.Error(99), 42) = 42
 // Stdlib.Result.map - Apply a function to the Ok value
 // ===================================================================
 
+// NOTE: Needs type params - Error type unconstrained from Ok constructor
 Stdlib.Result.withDefault<Int64, Int64>(Stdlib.Result.map<Int64, Int64, Int64>(Stdlib.Result.Result.Ok(5), (x: Int64) => x + 1), 0) = 6
-Stdlib.Result.isError<Int64, Int64>(Stdlib.Result.map<Int64, Int64, Int64>(Stdlib.Result.Result.Error(99), (x: Int64) => x + 1)) = stdout="true\n"
+Stdlib.Result.isError(Stdlib.Result.map(Stdlib.Result.Result.Error(99), (x: Int64) => x + 1)) = stdout="true\n"
 
 // ===================================================================
 // Stdlib.Result.mapError - Apply a function to the Error value
@@ -43,14 +49,17 @@ Stdlib.Result.isError<Int64, Int64>(Stdlib.Result.map<Int64, Int64, Int64>(Stdli
 // Stdlib.Result.andThen - Chain Result computations
 // ===================================================================
 
+// NOTE: Needs type params - Error type unconstrained
 Stdlib.Result.withDefault<Int64, Int64>(Stdlib.Result.andThen<Int64, Int64, Int64>(Stdlib.Result.Result.Ok(5), (x: Int64) => Stdlib.Result.Result.Ok(x * 2)), 0) = 10
-Stdlib.Result.isError<Int64, Int64>(Stdlib.Result.andThen<Int64, Int64, Int64>(Stdlib.Result.Result.Error(99), (x: Int64) => Stdlib.Result.Result.Ok(x * 2))) = stdout="true\n"
-Stdlib.Result.isError<Int64, Int64>(Stdlib.Result.andThen<Int64, Int64, Int64>(Stdlib.Result.Result.Ok(5), (x: Int64) => Stdlib.Result.Result.Error(99))) = stdout="true\n"
+Stdlib.Result.isError(Stdlib.Result.andThen(Stdlib.Result.Result.Error(99), (x: Int64) => Stdlib.Result.Result.Ok(x * 2))) = stdout="true\n"
+// NOTE: Needs type params because lambda returns Error which doesn't constrain the ok type
+Stdlib.Result.isError(Stdlib.Result.andThen<Int64, Int64, Int64>(Stdlib.Result.Result.Ok(5), (x: Int64) => Stdlib.Result.Result.Error(99))) = stdout="true\n"
 
 // ===================================================================
 // Pipe operator with Result functions
 // ===================================================================
 
+// NOTE: All need type params because Result has two type parameters
 Stdlib.Result.Result.Ok(42) |> Stdlib.Result.isOk<Int64, Int64>() = stdout="true\n"
 Stdlib.Result.Result.Error(99) |> Stdlib.Result.isError<Int64, Int64>() = stdout="true\n"
 Stdlib.Result.Result.Ok(10) |> Stdlib.Result.map<Int64, Int64, Int64>((x: Int64) => x * 2) |> Stdlib.Result.withDefault<Int64, Int64>(0) = 20

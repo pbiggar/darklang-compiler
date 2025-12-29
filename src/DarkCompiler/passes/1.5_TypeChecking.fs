@@ -1289,7 +1289,8 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             | arg :: restArgs, paramT :: restParams ->
                                 checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
                                 |> Result.bind (fun (argType, arg') ->
-                                    if typesEqual aliasReg argType paramT then
+                                    // Use typesCompatible to allow type variables to unify with concrete types
+                                    if typesCompatible paramT argType then
                                         checkProvidedArgs restArgs restParams (arg' :: accArgs)
                                     else
                                         Error (TypeMismatch (paramT, argType, $"argument to {funcName}")))
@@ -1324,7 +1325,8 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             | arg :: restArgs, paramT :: restParams ->
                                 checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
                                 |> Result.bind (fun (argType, arg') ->
-                                    if typesEqual aliasReg argType paramT then
+                                    // Use typesCompatible to allow type variables to unify with concrete types
+                                    if typesCompatible paramT argType then
                                         checkArgsWithTypes restArgs restParams (arg' :: accArgs)
                                     else
                                         Error (TypeMismatch (paramT, argType, $"argument to {funcName}")))
@@ -1333,8 +1335,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         checkArgsWithTypes args concreteParamTypes []
                         |> Result.bind (fun args' ->
                             // 7. Return the concrete return type
+                            // Use typesCompatible to allow type variables to unify with concrete types
                             match expectedType with
-                            | Some expected when not (typesEqual aliasReg expected concreteReturnType) ->
+                            | Some expected when not (typesCompatible expected concreteReturnType) ->
                                 Error (TypeMismatch (expected, concreteReturnType, $"result of call to {funcName}"))
                             | _ -> Ok (concreteReturnType, TypeApp (funcName, typeArgs, args'))))
             | None ->
@@ -1374,7 +1377,8 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             | arg :: restArgs, paramT :: restParams ->
                                 checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
                                 |> Result.bind (fun (argType, arg') ->
-                                    if typesEqual aliasReg argType paramT then
+                                    // Use typesCompatible to allow type variables to unify with concrete types
+                                    if typesCompatible paramT argType then
                                         checkProvidedArgs restArgs restParams (arg' :: accArgs)
                                     else
                                         Error (TypeMismatch (paramT, argType, $"argument to {funcName}")))
@@ -1409,7 +1413,8 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             | arg :: restArgs, paramT :: restParams ->
                                 checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
                                 |> Result.bind (fun (argType, arg') ->
-                                    if typesEqual aliasReg argType paramT then
+                                    // Use typesCompatible to allow type variables to unify with concrete types
+                                    if typesCompatible paramT argType then
                                         checkArgsWithTypes restArgs restParams (arg' :: accArgs)
                                     else
                                         Error (TypeMismatch (paramT, argType, $"argument to {funcName}")))
@@ -1417,8 +1422,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
 
                         checkArgsWithTypes args concreteParamTypes []
                         |> Result.bind (fun args' ->
+                            // Use typesCompatible to allow type variables to unify with concrete types
                             match expectedType with
-                            | Some expected when not (typesEqual aliasReg expected concreteReturnType) ->
+                            | Some expected when not (typesCompatible expected concreteReturnType) ->
                                 Error (TypeMismatch (expected, concreteReturnType, $"result of call to {funcName}"))
                             | _ -> Ok (concreteReturnType, TypeApp (funcName, typeArgs, args'))))
             | Some _ ->
@@ -1637,14 +1643,18 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     // Non-generic type - check payload has exact type
                     checkExpr payloadExpr env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some payloadType)
                     |> Result.bind (fun (actualPayloadType, payloadExpr') ->
-                        if actualPayloadType <> payloadType then
+                        // Use typesCompatible to allow type variables to match concrete types
+                        if not (typesCompatible payloadType actualPayloadType) then
                             Error (TypeMismatch (payloadType, actualPayloadType, $"payload of {variantName}"))
                         else
                             let sumType = TSum (typeName, [])
                             match expectedType with
-                            | Some expected when expected <> sumType ->
-                                Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
-                            | _ -> Ok (sumType, Constructor (constrTypeName, variantName, Some payloadExpr')))
+                            | Some expected ->
+                                // Use reconcileTypes to allow type variables to unify with concrete types
+                                match reconcileTypes (Some aliasReg) expected sumType with
+                                | None -> Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
+                                | Some reconciledType -> Ok (reconciledType, Constructor (constrTypeName, variantName, Some payloadExpr'))
+                            | None -> Ok (sumType, Constructor (constrTypeName, variantName, Some payloadExpr')))
                 else
                     // Generic type - infer type variables from payload
                     // First, check the payload expression without expected type
@@ -1657,7 +1667,8 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         | Ok subst ->
                             // Apply substitution to verify all type vars are resolved
                             let concretePayloadType = applySubst subst payloadType
-                            if concretePayloadType <> actualPayloadType then
+                            // Use typesCompatible to allow type variables to match concrete types
+                            if not (typesCompatible concretePayloadType actualPayloadType) then
                                 Error (TypeMismatch (concretePayloadType, actualPayloadType, $"payload of {variantName}"))
                             else
                                 // Build concrete type arguments from substitution
@@ -1677,9 +1688,12 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                                         | None -> TVar p)
                                 let sumType = TSum (typeName, typeArgs)
                                 match expectedType with
-                                | Some expected when expected <> sumType ->
-                                    Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
-                                | _ -> Ok (sumType, Constructor (constrTypeName, variantName, Some payloadExpr')))
+                                | Some expected ->
+                                    // Use reconcileTypes to allow type variables to unify with concrete types
+                                    match reconcileTypes (Some aliasReg) expected sumType with
+                                    | None -> Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
+                                    | Some reconciledType -> Ok (reconciledType, Constructor (constrTypeName, variantName, Some payloadExpr'))
+                                | None -> Ok (sumType, Constructor (constrTypeName, variantName, Some payloadExpr')))
 
     | Match (scrutinee, cases) ->
         // Type check the scrutinee first
@@ -1866,37 +1880,46 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 |> Result.bind (fun elements' ->
                     let listType = TList elemType
                     match expectedType with
-                    | Some (TList expectedElem) when not (typesEqual aliasReg expectedElem elemType) ->
-                        Error (TypeMismatch (TList expectedElem, listType, "list literal"))
-                    | Some other when not (typesEqual aliasReg other listType) ->
-                        // Resolve type alias before comparing (e.g., IntList = List<Int64>)
-                        Error (TypeMismatch (other, listType, "list literal"))
-                    | _ -> Ok (listType, ListLiteral elements')))
+                    | Some expected ->
+                        // Use reconcileTypes to allow type variables to unify and resolve type aliases
+                        match reconcileTypes (Some aliasReg) expected listType with
+                        | Some reconciledType -> Ok (reconciledType, ListLiteral elements')
+                        | None -> Error (TypeMismatch (expected, listType, "list literal"))
+                    | None -> Ok (listType, ListLiteral elements')))
 
     | ListCons (headElements, tail) ->
         // Type-check tail first to get element type
-        checkExpr tail env typeReg variantLookup genericFuncReg moduleRegistry aliasReg None
+        // Pass expected type to tail if it's a list type
+        let tailExpectedType =
+            match expectedType with
+            | Some (TList _) -> expectedType
+            | _ -> None
+        checkExpr tail env typeReg variantLookup genericFuncReg moduleRegistry aliasReg tailExpectedType
         |> Result.bind (fun (tailType, tail') ->
             match tailType with
             | TList elemType ->
                 // Type-check each head element with the inferred element type
-                let rec checkHeads elems acc =
+                // Track the most concrete element type as we process elements
+                let rec checkHeads elems currentElemType acc =
                     match elems with
-                    | [] -> Ok (List.rev acc)
+                    | [] -> Ok (currentElemType, List.rev acc)
                     | h :: rest ->
-                        checkExpr h env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some elemType)
+                        checkExpr h env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some currentElemType)
                         |> Result.bind (fun (hType, h') ->
-                            if hType <> elemType then
-                                Error (TypeMismatch (elemType, hType, "list cons element"))
-                            else
-                                checkHeads rest (h' :: acc))
-                checkHeads headElements []
-                |> Result.bind (fun heads' ->
-                    let listType = TList elemType
+                            // Use reconcileTypes to allow type variables to unify with concrete types
+                            match reconcileTypes (Some aliasReg) currentElemType hType with
+                            | None -> Error (TypeMismatch (currentElemType, hType, "list cons element"))
+                            | Some reconciledElemType -> checkHeads rest reconciledElemType (h' :: acc))
+                checkHeads headElements elemType []
+                |> Result.bind (fun (finalElemType, heads') ->
+                    let listType = TList finalElemType
                     match expectedType with
-                    | Some expected when expected <> listType ->
-                        Error (TypeMismatch (expected, listType, "list cons"))
-                    | _ -> Ok (listType, ListCons (heads', tail')))
+                    | Some expected ->
+                        // Use reconcileTypes to allow type variables to unify with concrete types
+                        match reconcileTypes (Some aliasReg) expected listType with
+                        | None -> Error (TypeMismatch (expected, listType, "list cons"))
+                        | Some reconciledType -> Ok (reconciledType, ListCons (heads', tail'))
+                    | None -> Ok (listType, ListCons (heads', tail')))
             | other -> Error (TypeMismatch (TList (TVar "t"), other, "list cons tail must be a list")))
 
     | Lambda (parameters, body) ->
@@ -1916,9 +1939,10 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 if List.length expectedParams <> List.length paramTypes then
                     Error (TypeMismatch (TFunction (expectedParams, expectedRet), funcType, "lambda parameter count"))
                 else
+                    // Use typesCompatible to allow type variables to unify with concrete types
                     let paramMismatch =
                         List.zip expectedParams paramTypes
-                        |> List.tryFind (fun (expected, actual) -> expected <> actual)
+                        |> List.tryFind (fun (expected, actual) -> not (typesCompatible expected actual))
                     match paramMismatch with
                     | Some (expected, actual) ->
                         Error (TypeMismatch (expected, actual, "lambda parameter type"))
