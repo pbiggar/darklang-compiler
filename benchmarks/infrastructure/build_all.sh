@@ -34,7 +34,7 @@ fi
 if [ -f "$PROBLEM_DIR/rust/main.rs" ]; then
     if command -v rustc &> /dev/null; then
         echo "  Building Rust..."
-        rustc -O "$PROBLEM_DIR/rust/main.rs" -o "$PROBLEM_DIR/rust/main" 2>/dev/null
+        rustc -C opt-level=3 "$PROBLEM_DIR/rust/main.rs" -o "$PROBLEM_DIR/rust/main" 2>/dev/null
     else
         echo "  Rust: skipped (rustc not installed)"
     fi
