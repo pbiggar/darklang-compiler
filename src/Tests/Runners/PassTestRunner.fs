@@ -269,6 +269,15 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
     | LIR.RandomInt64 dest ->
         $"{prettyPrintLIRReg dest} <- RandomInt64()"
     | LIR.Exit -> "Exit"
+    | LIR.TailCall (funcName, args) ->
+        let argStr = args |> List.map prettyPrintLIROperand |> String.concat ", "
+        $"TailCall({funcName}, [{argStr}])"
+    | LIR.IndirectTailCall (func, args) ->
+        let argStr = args |> List.map prettyPrintLIROperand |> String.concat ", "
+        $"IndirectTailCall({prettyPrintLIRReg func}, [{argStr}])"
+    | LIR.ClosureTailCall (closure, args) ->
+        let argStr = args |> List.map prettyPrintLIROperand |> String.concat ", "
+        $"ClosureTailCall({prettyPrintLIRReg closure}, [{argStr}])"
 
 /// Pretty-print LIR terminator
 let prettyPrintLIRTerminator (term: LIR.Terminator) : string =
@@ -450,6 +459,15 @@ let prettyPrintANFCExpr = function
     | ANF.RefCountDecString str ->
         $"RefCountDecString({prettyPrintANFAtom str})"
     | ANF.RandomInt64 -> "RandomInt64()"
+    | ANF.TailCall (funcName, args) ->
+        let argStr = args |> List.map prettyPrintANFAtom |> String.concat ", "
+        $"TailCall({funcName}, [{argStr}])"
+    | ANF.IndirectTailCall (func, args) ->
+        let argStr = args |> List.map prettyPrintANFAtom |> String.concat ", "
+        $"IndirectTailCall({prettyPrintANFAtom func}, [{argStr}])"
+    | ANF.ClosureTailCall (closure, args) ->
+        let argStr = args |> List.map prettyPrintANFAtom |> String.concat ", "
+        $"ClosureTailCall({prettyPrintANFAtom closure}, [{argStr}])"
 
 /// Pretty-print ANF expression (recursive)
 let rec prettyPrintANFExpr = function
@@ -660,6 +678,8 @@ let prettyPrintARM64Instr = function
         $"SCVTF({dest}, {prettyPrintARM64Reg src})"
     | ARM64.FCVTZS (dest, src) ->
         $"FCVTZS({prettyPrintARM64Reg dest}, {src})"
+    | ARM64.BR reg ->
+        $"BR({prettyPrintARM64Reg reg})"
 
 /// Pretty-print ARM64 program (filtering out Label pseudo-instructions)
 let prettyPrintARM64 (instrs: ARM64.Instr list) : string =

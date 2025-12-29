@@ -949,11 +949,21 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         // Caller-save is handled by SaveRegs/RestoreRegs instructions
         Ok [ARM64.BL funcName]
 
+    | LIR.TailCall (funcName, args) ->
+        // Tail call: use B (branch) instead of BL (branch with link)
+        // No SaveRegs/RestoreRegs - we're not returning to this function
+        Ok [ARM64.B_label funcName]
+
     | LIR.IndirectCall (dest, func, args) ->
         // Indirect call: call through function pointer in register
         // Use BLR instruction instead of BL
         lirRegToARM64Reg func
         |> Result.map (fun funcReg -> [ARM64.BLR funcReg])
+
+    | LIR.IndirectTailCall (func, args) ->
+        // Indirect tail call: use BR (branch to register) instead of BLR
+        lirRegToARM64Reg func
+        |> Result.map (fun funcReg -> [ARM64.BR funcReg])
 
     | LIR.ClosureAlloc (dest, funcName, captures) ->
         // Allocate closure on heap: (func_ptr, cap1, cap2, ...)
@@ -1013,6 +1023,12 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         lirRegToARM64Reg funcPtr
         |> Result.map (fun funcPtrReg ->
             [ARM64.BLR funcPtrReg])
+
+    | LIR.ClosureTailCall (funcPtr, args) ->
+        // Closure tail call: use BR instead of BLR
+        lirRegToARM64Reg funcPtr
+        |> Result.map (fun funcPtrReg ->
+            [ARM64.BR funcPtrReg])
 
     | LIR.SaveRegs ->
         // Save caller-saved registers (X1-X10 and D0-D7) before call

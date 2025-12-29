@@ -462,6 +462,51 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         let (saveReturnValue, copyReturnValue) = moveResult
         Ok (saveInstrs @ intArgMoves @ floatArgMoves @ [callInstr] @ saveReturnValue @ restoreInstrs @ copyReturnValue)
 
+    | MIR.TailCall (funcName, args, argTypes, _returnType) ->
+        // Tail call optimization: Skip SaveRegs/RestoreRegs, use B instead of BL
+        let intRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
+        let floatRegs = [LIR.D0; LIR.D1; LIR.D2; LIR.D3; LIR.D4; LIR.D5; LIR.D6; LIR.D7]
+
+        // Separate args into int and float based on argTypes
+        let argsWithTypes = List.zip args argTypes
+        let intArgs = argsWithTypes |> List.filter (fun (_, t) -> t <> AST.TFloat64)
+        let floatArgs = argsWithTypes |> List.filter (fun (_, t) -> t = AST.TFloat64)
+
+        // Generate ArgMoves for integer arguments
+        let intArgMoves =
+            if List.isEmpty intArgs then []
+            else
+                let argPairs =
+                    List.zip (List.map fst intArgs) (List.take (List.length intArgs) intRegs)
+                    |> List.map (fun (arg, reg) -> (reg, convertOperand arg))
+                [LIR.ArgMoves argPairs]
+
+        // Generate FArgMoves for float arguments
+        let floatArgMoves =
+            if List.isEmpty floatArgs then []
+            else
+                let mutable tempFRegCounter = 3000
+                let loadInstrsAndPairs =
+                    List.zip (List.map fst floatArgs) (List.take (List.length floatArgs) floatRegs)
+                    |> List.map (fun (arg, destReg) ->
+                        match arg with
+                        | MIR.FloatRef idx ->
+                            let tempFReg = LIR.FVirtual tempFRegCounter
+                            tempFRegCounter <- tempFRegCounter + 1
+                            ([LIR.FLoad (tempFReg, idx)], (destReg, tempFReg))
+                        | MIR.Register vreg ->
+                            ([], (destReg, vregToLIRFReg vreg))
+                        | _ ->
+                            ([], (destReg, LIR.FVirtual 9999)))
+                let loadInstrs = loadInstrsAndPairs |> List.collect fst
+                let argPairs = loadInstrsAndPairs |> List.map snd
+                loadInstrs @ [LIR.FArgMoves argPairs]
+
+        // Tail call instruction (no SaveRegs/RestoreRegs)
+        let callInstr = LIR.TailCall (funcName, List.map convertOperand args)
+
+        Ok (intArgMoves @ floatArgMoves @ [callInstr])
+
     | MIR.IndirectCall (dest, func, args, _argTypes, returnType) ->
         // Indirect call through function pointer (BLR instruction)
         // Similar to direct call but uses function address in register
@@ -513,6 +558,32 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
 
         Ok (saveInstrs @ loadFuncInstrs @ argMoves @ [callInstr] @ restoreInstrs @ moveResult)
+
+    | MIR.IndirectTailCall (func, args, _argTypes, _returnType) ->
+        // Indirect tail call: use BR instead of BLR, no SaveRegs/RestoreRegs
+        let argRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
+
+        // Load function address into X9 FIRST
+        let funcOp = convertOperand func
+        let loadFuncInstrs =
+            match funcOp with
+            | LIR.Reg r -> [LIR.Mov (LIR.Physical LIR.X9, LIR.Reg r)]
+            | LIR.FuncAddr name -> [LIR.LoadFuncAddr (LIR.Physical LIR.X9, name)]
+            | other -> [LIR.Mov (LIR.Physical LIR.X9, other)]
+
+        // Use ArgMoves for parallel move
+        let argMoves =
+            if List.isEmpty args then []
+            else
+                let argPairs =
+                    List.zip args (List.take (List.length args) argRegs)
+                    |> List.map (fun (arg, reg) -> (reg, convertOperand arg))
+                [LIR.ArgMoves argPairs]
+
+        // Indirect tail call through X9
+        let callInstr = LIR.IndirectTailCall (LIR.Physical LIR.X9, List.map convertOperand args)
+
+        Ok (loadFuncInstrs @ argMoves @ [callInstr])
 
     | MIR.ClosureAlloc (dest, funcName, captures) ->
         // Allocate closure: (func_addr, cap1, cap2, ...)
@@ -575,6 +646,37 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
             | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
 
         Ok (saveInstrs @ [loadClosureInstr; loadFuncPtrInstr] @ argMoves @ [callInstr] @ restoreInstrs @ moveResult)
+
+    | MIR.ClosureTailCall (closure, args) ->
+        // Closure tail call: skip SaveRegs/RestoreRegs, use BR
+        let argRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
+
+        // Load closure into a temp register first
+        let closureOp = convertOperand closure
+        let closureReg = LIR.Physical LIR.X10
+        let loadClosureInstr =
+            match closureOp with
+            | LIR.Reg r -> LIR.Mov (closureReg, LIR.Reg r)
+            | other -> LIR.Mov (closureReg, other)
+
+        // Load function pointer from closure[0] into X9
+        let loadFuncPtrInstr = LIR.HeapLoad (LIR.Physical LIR.X9, closureReg, 0)
+
+        // Closure goes to X0, args to X1-X7
+        let argMoves =
+            if List.length args > 7 then []
+            else
+                let closureMove = (LIR.X0, LIR.Reg closureReg)
+                let regularArgMoves =
+                    args
+                    |> List.mapi (fun i arg ->
+                        let targetReg = List.item (i + 1) argRegs
+                        (targetReg, convertOperand arg))
+                [LIR.ArgMoves (closureMove :: regularArgMoves)]
+
+        let callInstr = LIR.ClosureTailCall (LIR.Physical LIR.X9, List.map convertOperand args)
+
+        Ok ([loadClosureInstr; loadFuncPtrInstr] @ argMoves @ [callInstr])
 
     | MIR.HeapAlloc (dest, sizeBytes) ->
         let lirDest = vregToLIRReg dest
@@ -1180,7 +1282,8 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.FNeg _ | LIR.FAbs _ | LIR.FSqrt _ | LIR.FCmp _ | LIR.IntToFloat _ | LIR.FloatToInt _
     | LIR.HeapAlloc _ | LIR.HeapLoad _ | LIR.RefCountInc _ | LIR.RefCountDec _
     | LIR.PrintHeapString _ | LIR.LoadFuncAddr _ | LIR.RawAlloc _ | LIR.RawFree _
-    | LIR.RawGet _ | LIR.RawGetByte _ | LIR.RawSet _ | LIR.RawSetByte _ | LIR.FArgMoves _ -> instr
+    | LIR.RawGet _ | LIR.RawGetByte _ | LIR.RawSet _ | LIR.RawSetByte _ | LIR.FArgMoves _
+    | LIR.TailCall _ | LIR.IndirectTailCall _ | LIR.ClosureTailCall _ -> instr
 
 /// Offset pool references in an LIR basic block
 let private offsetLIRBlock (strOffset: int) (fltOffset: int) (block: LIR.BasicBlock) : LIR.BasicBlock =

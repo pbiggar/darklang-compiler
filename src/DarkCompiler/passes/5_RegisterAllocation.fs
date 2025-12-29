@@ -96,13 +96,23 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         regToVReg src |> Option.toList |> Set.ofList
     | LIR.Call (_, _, args) ->
         args |> List.choose operandToVReg |> Set.ofList
+    | LIR.TailCall (_, args) ->
+        args |> List.choose operandToVReg |> Set.ofList
     | LIR.IndirectCall (_, func, args) ->
+        let funcVReg = regToVReg func |> Option.toList
+        let argsVRegs = args |> List.choose operandToVReg
+        Set.ofList (funcVReg @ argsVRegs)
+    | LIR.IndirectTailCall (func, args) ->
         let funcVReg = regToVReg func |> Option.toList
         let argsVRegs = args |> List.choose operandToVReg
         Set.ofList (funcVReg @ argsVRegs)
     | LIR.ClosureAlloc (_, _, captures) ->
         captures |> List.choose operandToVReg |> Set.ofList
     | LIR.ClosureCall (_, closure, args) ->
+        let closureVReg = regToVReg closure |> Option.toList
+        let argsVRegs = args |> List.choose operandToVReg
+        Set.ofList (closureVReg @ argsVRegs)
+    | LIR.ClosureTailCall (closure, args) ->
         let closureVReg = regToVReg closure |> Option.toList
         let argsVRegs = args |> List.choose operandToVReg
         Set.ofList (closureVReg @ argsVRegs)
@@ -201,9 +211,12 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.Lsl (dest, _, _) | LIR.Lsr (dest, _, _) -> regToVReg dest
     | LIR.Mvn (dest, _) -> regToVReg dest
     | LIR.Call (dest, _, _) -> regToVReg dest
+    | LIR.TailCall _ -> None  // Tail calls don't return to caller
     | LIR.IndirectCall (dest, _, _) -> regToVReg dest
+    | LIR.IndirectTailCall _ -> None  // Indirect tail calls don't return to caller
     | LIR.ClosureAlloc (dest, _, _) -> regToVReg dest
     | LIR.ClosureCall (dest, _, _) -> regToVReg dest
+    | LIR.ClosureTailCall _ -> None  // Closure tail calls don't return to caller
     | LIR.HeapAlloc (dest, _) -> regToVReg dest
     | LIR.HeapLoad (dest, _, _) -> regToVReg dest
     | LIR.StringConcat (dest, _, _) -> regToVReg dest
@@ -706,6 +719,18 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
             | _ -> []
         argLoads @ [callInstr] @ storeInstrs
 
+    | LIR.TailCall (funcName, args) ->
+        // Tail calls have no destination - just apply allocation to args
+        let allocatedArgs =
+            args |> List.mapi (fun i arg ->
+                let tempReg = if i = 0 then LIR.X12 else LIR.X13
+                applyToOperand mapping arg tempReg
+            )
+        let argLoads = allocatedArgs |> List.collect snd
+        let argOps = allocatedArgs |> List.map fst
+        let callInstr = LIR.TailCall (funcName, argOps)
+        argLoads @ [callInstr]
+
     | LIR.IndirectCall (dest, func, args) ->
         let (destReg, destAlloc) = applyToReg mapping dest
         let (funcReg, funcLoads) = loadSpilled mapping func LIR.X14
@@ -722,6 +747,19 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
             | _ -> []
         funcLoads @ argLoads @ [callInstr] @ storeInstrs
+
+    | LIR.IndirectTailCall (func, args) ->
+        // Indirect tail calls have no destination
+        let (funcReg, funcLoads) = loadSpilled mapping func LIR.X14
+        let allocatedArgs =
+            args |> List.mapi (fun i arg ->
+                let tempReg = if i = 0 then LIR.X12 else LIR.X13
+                applyToOperand mapping arg tempReg
+            )
+        let argLoads = allocatedArgs |> List.collect snd
+        let argOps = allocatedArgs |> List.map fst
+        let callInstr = LIR.IndirectTailCall (funcReg, argOps)
+        funcLoads @ argLoads @ [callInstr]
 
     | LIR.ClosureAlloc (dest, funcName, captures) ->
         let (destReg, destAlloc) = applyToReg mapping dest
@@ -755,6 +793,19 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
             | _ -> []
         closureLoads @ argLoads @ [callInstr] @ storeInstrs
+
+    | LIR.ClosureTailCall (closure, args) ->
+        // Closure tail calls have no destination
+        let (closureReg, closureLoads) = loadSpilled mapping closure LIR.X14
+        let allocatedArgs =
+            args |> List.mapi (fun i arg ->
+                let tempReg = if i = 0 then LIR.X12 else LIR.X13
+                applyToOperand mapping arg tempReg
+            )
+        let argLoads = allocatedArgs |> List.collect snd
+        let argOps = allocatedArgs |> List.map fst
+        let callInstr = LIR.ClosureTailCall (closureReg, argOps)
+        closureLoads @ argLoads @ [callInstr]
 
     | LIR.SaveRegs -> [LIR.SaveRegs]
     | LIR.RestoreRegs -> [LIR.RestoreRegs]

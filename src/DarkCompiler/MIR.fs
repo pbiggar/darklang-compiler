@@ -120,9 +120,12 @@ type Instr =
     | BinOp of dest:VReg * op:BinOp * left:Operand * right:Operand * operandType:AST.Type
     | UnaryOp of dest:VReg * op:UnaryOp * src:Operand
     | Call of dest:VReg * funcName:string * args:Operand list * argTypes:AST.Type list * returnType:AST.Type  // Direct function call (BL instruction)
+    | TailCall of funcName:string * args:Operand list * argTypes:AST.Type list * returnType:AST.Type  // Tail call (B instruction, no return)
     | IndirectCall of dest:VReg * func:Operand * args:Operand list * argTypes:AST.Type list * returnType:AST.Type  // Call through function pointer (BLR instruction)
+    | IndirectTailCall of func:Operand * args:Operand list * argTypes:AST.Type list * returnType:AST.Type  // Indirect tail call (BR instruction)
     | ClosureAlloc of dest:VReg * funcName:string * captures:Operand list  // Allocate closure: (func_addr, caps...)
     | ClosureCall of dest:VReg * closure:Operand * args:Operand list  // Call through closure with hidden first arg
+    | ClosureTailCall of closure:Operand * args:Operand list  // Tail call through closure (BR instruction)
     // Heap operations for tuples and other compound types
     | HeapAlloc of dest:VReg * sizeBytes:int       // Allocate heap memory
     | HeapStore of addr:VReg * offset:int * src:Operand  // Store at heap[addr+offset]

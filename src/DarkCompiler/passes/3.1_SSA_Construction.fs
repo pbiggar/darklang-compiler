@@ -156,9 +156,12 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | BinOp (dest, _, _, _, _) -> Set.add dest defs
         | UnaryOp (dest, _, _) -> Set.add dest defs
         | Call (dest, _, _, _, _) -> Set.add dest defs
+        | TailCall _ -> defs  // Tail calls have no destination
         | IndirectCall (dest, _, _, _, _) -> Set.add dest defs
+        | IndirectTailCall _ -> defs  // Indirect tail calls have no destination
         | ClosureAlloc (dest, _, _) -> Set.add dest defs
         | ClosureCall (dest, _, _) -> Set.add dest defs
+        | ClosureTailCall _ -> defs  // Closure tail calls have no destination
         | HeapAlloc (dest, _) -> Set.add dest defs
         | HeapStore _ -> defs  // No destination register
         | HeapLoad (dest, _, _) -> Set.add dest defs
@@ -222,13 +225,23 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
             | UnaryOp (_, _, src) -> Set.union uses (getOperandUses src)
             | Call (_, _, args, _, _) ->
                 args |> List.fold (fun u a -> Set.union u (getOperandUses a)) uses
+            | TailCall (_, args, _, _) ->
+                args |> List.fold (fun u a -> Set.union u (getOperandUses a)) uses
             | IndirectCall (_, func, args, _, _) ->
+                let funcUses = getOperandUses func
+                let argUses = args |> List.fold (fun u a -> Set.union u (getOperandUses a)) Set.empty
+                uses |> Set.union funcUses |> Set.union argUses
+            | IndirectTailCall (func, args, _, _) ->
                 let funcUses = getOperandUses func
                 let argUses = args |> List.fold (fun u a -> Set.union u (getOperandUses a)) Set.empty
                 uses |> Set.union funcUses |> Set.union argUses
             | ClosureAlloc (_, _, captures) ->
                 captures |> List.fold (fun u c -> Set.union u (getOperandUses c)) uses
             | ClosureCall (_, closure, args) ->
+                let closureUses = getOperandUses closure
+                let argUses = args |> List.fold (fun u a -> Set.union u (getOperandUses a)) Set.empty
+                uses |> Set.union closureUses |> Set.union argUses
+            | ClosureTailCall (closure, args) ->
                 let closureUses = getOperandUses closure
                 let argUses = args |> List.fold (fun u a -> Set.union u (getOperandUses a)) Set.empty
                 uses |> Set.union closureUses |> Set.union argUses
@@ -523,11 +536,20 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let (_, newDest, state') = newVersion state dest
         (Call (newDest, funcName, args', argTypes, returnType), state')
 
+    | TailCall (funcName, args, argTypes, returnType) ->
+        let args' = args |> List.map (renameOperand state)
+        (TailCall (funcName, args', argTypes, returnType), state)  // No dest
+
     | IndirectCall (dest, func, args, argTypes, returnType) ->
         let func' = renameOperand state func
         let args' = args |> List.map (renameOperand state)
         let (_, newDest, state') = newVersion state dest
         (IndirectCall (newDest, func', args', argTypes, returnType), state')
+
+    | IndirectTailCall (func, args, argTypes, returnType) ->
+        let func' = renameOperand state func
+        let args' = args |> List.map (renameOperand state)
+        (IndirectTailCall (func', args', argTypes, returnType), state)  // No dest
 
     | ClosureAlloc (dest, funcName, captures) ->
         let captures' = captures |> List.map (renameOperand state)
@@ -539,6 +561,11 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let args' = args |> List.map (renameOperand state)
         let (_, newDest, state') = newVersion state dest
         (ClosureCall (newDest, closure', args'), state')
+
+    | ClosureTailCall (closure, args) ->
+        let closure' = renameOperand state closure
+        let args' = args |> List.map (renameOperand state)
+        (ClosureTailCall (closure', args'), state)  // No dest
 
     | HeapAlloc (dest, size) ->
         let (_, newDest, state') = newVersion state dest

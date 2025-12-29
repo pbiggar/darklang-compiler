@@ -98,6 +98,7 @@ let formatMismatches (mismatches: (int * Instr * uint32 * uint32) list) : string
                     | FSQRT (dest, src) -> $"FSQRT({dest}, {src})"
                     | SCVTF (dest, src) -> $"SCVTF({dest}, {src})"
                     | FCVTZS (dest, src) -> $"FCVTZS({dest}, {src})"
+                    | BR reg -> $"BR({reg})"
 
                 $"Instruction {i}: {instrStr}\n      Expected: 0x{expected:X8}, Got: 0x{actual:X8}")
         String.concat "\n    " lines

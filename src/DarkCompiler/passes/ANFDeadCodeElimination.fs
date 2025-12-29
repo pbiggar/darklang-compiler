@@ -17,11 +17,17 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
     match cexpr with
     | ANF.Call (funcName, args) ->
         funcName :: (args |> List.collect extractFromAtom)
+    | ANF.TailCall (funcName, args) ->
+        funcName :: (args |> List.collect extractFromAtom)
     | ANF.IndirectCall (func, args) ->
+        extractFromAtom func @ (args |> List.collect extractFromAtom)
+    | ANF.IndirectTailCall (func, args) ->
         extractFromAtom func @ (args |> List.collect extractFromAtom)
     | ANF.ClosureAlloc (funcName, captures) ->
         funcName :: (captures |> List.collect extractFromAtom)
     | ANF.ClosureCall (closure, args) ->
+        extractFromAtom closure @ (args |> List.collect extractFromAtom)
+    | ANF.ClosureTailCall (closure, args) ->
         extractFromAtom closure @ (args |> List.collect extractFromAtom)
     | ANF.Atom atom -> extractFromAtom atom
     | ANF.Prim (_, left, right) ->

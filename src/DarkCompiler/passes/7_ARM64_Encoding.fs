@@ -525,6 +525,13 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rn = encodeReg reg
         [0xD63F0000u ||| (rn <<< 5)]
 
+    | ARM64.BR reg ->
+        // BR: Branch to Register (no link, for tail calls)
+        // Encoding: 1101011 0 0 00 11111 0000 0 0 Rn 00000
+        // 0xD61F0000 | (Rn << 5)
+        let rn = encodeReg reg
+        [0xD61F0000u ||| (rn <<< 5)]
+
     | ARM64.RET ->
         // RET: 1101011 0 0 10 11111 0000 0 0 Rn=11110 00000
         // Default RET uses X30 (link register)

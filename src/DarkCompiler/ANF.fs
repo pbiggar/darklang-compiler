@@ -70,9 +70,12 @@ type CExpr =
     | UnaryPrim of UnaryOp * Atom
     | IfValue of cond:Atom * thenValue:Atom * elseValue:Atom  // If-expression that produces a value
     | Call of funcName:string * args:Atom list  // Function call (direct: BL instruction)
+    | TailCall of funcName:string * args:Atom list  // Tail call (direct: B instruction, no return)
     | IndirectCall of func:Atom * args:Atom list  // Call through function variable (BLR instruction)
+    | IndirectTailCall of func:Atom * args:Atom list  // Tail call through function variable (BR instruction)
     | ClosureAlloc of funcName:string * captures:Atom list  // Allocate closure: (func_addr, cap1, cap2, ...)
     | ClosureCall of closure:Atom * args:Atom list  // Call through closure, passing closure as hidden first arg
+    | ClosureTailCall of closure:Atom * args:Atom list  // Tail call through closure (BR instruction)
     | TupleAlloc of Atom list                   // Create tuple: (a, b, c)
     | TupleGet of tuple:Atom * index:int        // Get tuple element: t.0
     // String operations (heap-allocating)

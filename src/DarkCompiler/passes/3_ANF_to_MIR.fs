@@ -98,7 +98,11 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
         max (maxTempIdInAtom cond) (max (maxTempIdInAtom thenVal) (maxTempIdInAtom elseVal))
     | ANF.Call (_, args) ->
         args |> List.map maxTempIdInAtom |> List.fold max -1
+    | ANF.TailCall (_, args) ->
+        args |> List.map maxTempIdInAtom |> List.fold max -1
     | ANF.IndirectCall (func, args) ->
+        max (maxTempIdInAtom func) (args |> List.map maxTempIdInAtom |> List.fold max -1)
+    | ANF.IndirectTailCall (func, args) ->
         max (maxTempIdInAtom func) (args |> List.map maxTempIdInAtom |> List.fold max -1)
     | ANF.TupleAlloc atoms ->
         atoms |> List.map maxTempIdInAtom |> List.fold max -1
@@ -111,6 +115,8 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.ClosureAlloc (_, captures) ->
         captures |> List.map maxTempIdInAtom |> List.fold max -1
     | ANF.ClosureCall (closure, args) ->
+        max (maxTempIdInAtom closure) (args |> List.map maxTempIdInAtom |> List.fold max -1)
+    | ANF.ClosureTailCall (closure, args) ->
         max (maxTempIdInAtom closure) (args |> List.map maxTempIdInAtom |> List.fold max -1)
     | ANF.FileReadText path -> maxTempIdInAtom path
     | ANF.FileExists path -> maxTempIdInAtom path
@@ -187,7 +193,11 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
         collectStringsFromAtom elseAtom
     | ANF.Call (_, args) ->
         args |> List.collect collectStringsFromAtom
+    | ANF.TailCall (_, args) ->
+        args |> List.collect collectStringsFromAtom
     | ANF.IndirectCall (func, args) ->
+        collectStringsFromAtom func @ (args |> List.collect collectStringsFromAtom)
+    | ANF.IndirectTailCall (func, args) ->
         collectStringsFromAtom func @ (args |> List.collect collectStringsFromAtom)
     | ANF.TupleAlloc elems ->
         elems |> List.collect collectStringsFromAtom
@@ -200,6 +210,8 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.Print (atom, _) -> collectStringsFromAtom atom
     | ANF.ClosureAlloc (_, captures) -> captures |> List.collect collectStringsFromAtom
     | ANF.ClosureCall (closure, args) ->
+        collectStringsFromAtom closure @ (args |> List.collect collectStringsFromAtom)
+    | ANF.ClosureTailCall (closure, args) ->
         collectStringsFromAtom closure @ (args |> List.collect collectStringsFromAtom)
     | ANF.FileReadText path -> collectStringsFromAtom path
     | ANF.FileExists path -> collectStringsFromAtom path
@@ -237,7 +249,11 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
         collectFloatsFromAtom elseAtom
     | ANF.Call (_, args) ->
         args |> List.collect collectFloatsFromAtom
+    | ANF.TailCall (_, args) ->
+        args |> List.collect collectFloatsFromAtom
     | ANF.IndirectCall (func, args) ->
+        collectFloatsFromAtom func @ (args |> List.collect collectFloatsFromAtom)
+    | ANF.IndirectTailCall (func, args) ->
         collectFloatsFromAtom func @ (args |> List.collect collectFloatsFromAtom)
     | ANF.TupleAlloc elems ->
         elems |> List.collect collectFloatsFromAtom
@@ -250,6 +266,8 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
     | ANF.Print (atom, _) -> collectFloatsFromAtom atom
     | ANF.ClosureAlloc (_, captures) -> captures |> List.collect collectFloatsFromAtom
     | ANF.ClosureCall (closure, args) ->
+        collectFloatsFromAtom closure @ (args |> List.collect collectFloatsFromAtom)
+    | ANF.ClosureTailCall (closure, args) ->
         collectFloatsFromAtom closure @ (args |> List.collect collectFloatsFromAtom)
     | ANF.FileReadText path -> collectFloatsFromAtom path
     | ANF.FileExists path -> collectFloatsFromAtom path
@@ -667,6 +685,35 @@ let rec convertExpr
                         |> sequenceResults
                         |> Result.map (fun argOperands ->
                             [MIR.ClosureCall (destReg, closureOp, argOperands)]))
+                | ANF.TailCall (funcName, args) ->
+                    // Tail call: no destination register, doesn't return
+                    let argTypes = args |> List.map (atomType builder)
+                    let returnType = Map.tryFind funcName builder.ReturnTypeReg |> Option.defaultValue AST.TInt64
+                    args
+                    |> List.map (atomToOperand builder)
+                    |> sequenceResults
+                    |> Result.map (fun argOperands ->
+                        [MIR.TailCall (funcName, argOperands, argTypes, returnType)])
+                | ANF.IndirectTailCall (func, args) ->
+                    // Indirect tail call: no destination register
+                    let argTypes = args |> List.map (atomType builder)
+                    let returnType = AST.TInt64
+                    atomToOperand builder func
+                    |> Result.bind (fun funcOp ->
+                        args
+                        |> List.map (atomToOperand builder)
+                        |> sequenceResults
+                        |> Result.map (fun argOperands ->
+                            [MIR.IndirectTailCall (funcOp, argOperands, argTypes, returnType)]))
+                | ANF.ClosureTailCall (closure, args) ->
+                    // Closure tail call: no destination register
+                    atomToOperand builder closure
+                    |> Result.bind (fun closureOp ->
+                        args
+                        |> List.map (atomToOperand builder)
+                        |> sequenceResults
+                        |> Result.map (fun argOperands ->
+                            [MIR.ClosureTailCall (closureOp, argOperands)]))
                 | ANF.TupleAlloc elems ->
                     // Allocate heap space: 8 bytes per element
                     let sizeBytes = List.length elems * 8
@@ -1073,6 +1120,35 @@ and convertExprToOperand
                         |> sequenceResults
                         |> Result.map (fun argOperands ->
                             [MIR.ClosureCall (destReg, closureOp, argOperands)]))
+                | ANF.TailCall (funcName, args) ->
+                    // Tail call: no destination register, doesn't return
+                    let argTypes = args |> List.map (atomType builder)
+                    let returnType = Map.tryFind funcName builder.ReturnTypeReg |> Option.defaultValue AST.TInt64
+                    args
+                    |> List.map (atomToOperand builder)
+                    |> sequenceResults
+                    |> Result.map (fun argOperands ->
+                        [MIR.TailCall (funcName, argOperands, argTypes, returnType)])
+                | ANF.IndirectTailCall (func, args) ->
+                    // Indirect tail call: no destination register
+                    let argTypes = args |> List.map (atomType builder)
+                    let returnType = AST.TInt64
+                    atomToOperand builder func
+                    |> Result.bind (fun funcOp ->
+                        args
+                        |> List.map (atomToOperand builder)
+                        |> sequenceResults
+                        |> Result.map (fun argOperands ->
+                            [MIR.IndirectTailCall (funcOp, argOperands, argTypes, returnType)]))
+                | ANF.ClosureTailCall (closure, args) ->
+                    // Closure tail call: no destination register
+                    atomToOperand builder closure
+                    |> Result.bind (fun closureOp ->
+                        args
+                        |> List.map (atomToOperand builder)
+                        |> sequenceResults
+                        |> Result.map (fun argOperands ->
+                            [MIR.ClosureTailCall (closureOp, argOperands)]))
                 | ANF.TupleAlloc elems ->
                     // Allocate heap space: 8 bytes per element
                     let sizeBytes = List.length elems * 8
@@ -1556,9 +1632,12 @@ let private offsetInstr (strOffset: int) (fltOffset: int) (instr: MIR.Instr) : M
     | MIR.BinOp (dest, op, left, right, t) -> MIR.BinOp (dest, op, offsetOperand strOffset fltOffset left, offsetOperand strOffset fltOffset right, t)
     | MIR.UnaryOp (dest, op, src) -> MIR.UnaryOp (dest, op, offsetOperand strOffset fltOffset src)
     | MIR.Call (dest, name, args, argTypes, returnType) -> MIR.Call (dest, name, offsetOperands strOffset fltOffset args, argTypes, returnType)
+    | MIR.TailCall (name, args, argTypes, returnType) -> MIR.TailCall (name, offsetOperands strOffset fltOffset args, argTypes, returnType)
     | MIR.IndirectCall (dest, func, args, argTypes, returnType) -> MIR.IndirectCall (dest, offsetOperand strOffset fltOffset func, offsetOperands strOffset fltOffset args, argTypes, returnType)
+    | MIR.IndirectTailCall (func, args, argTypes, returnType) -> MIR.IndirectTailCall (offsetOperand strOffset fltOffset func, offsetOperands strOffset fltOffset args, argTypes, returnType)
     | MIR.ClosureAlloc (dest, name, caps) -> MIR.ClosureAlloc (dest, name, offsetOperands strOffset fltOffset caps)
     | MIR.ClosureCall (dest, closure, args) -> MIR.ClosureCall (dest, offsetOperand strOffset fltOffset closure, offsetOperands strOffset fltOffset args)
+    | MIR.ClosureTailCall (closure, args) -> MIR.ClosureTailCall (offsetOperand strOffset fltOffset closure, offsetOperands strOffset fltOffset args)
     | MIR.HeapAlloc (dest, size) -> MIR.HeapAlloc (dest, size)
     | MIR.HeapStore (addr, offset, src) -> MIR.HeapStore (addr, offset, offsetOperand strOffset fltOffset src)
     | MIR.HeapLoad (dest, addr, offset) -> MIR.HeapLoad (dest, addr, offset)

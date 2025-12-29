@@ -108,9 +108,12 @@ let hasSideEffects (cexpr: CExpr) : bool =
     | TupleGet _ -> false
     // These have side effects
     | Call _ -> true
+    | TailCall _ -> true
     | IndirectCall _ -> true
+    | IndirectTailCall _ -> true
     | ClosureAlloc _ -> true  // Allocates memory
     | ClosureCall _ -> true
+    | ClosureTailCall _ -> true
     | StringConcat _ -> true  // Allocates memory
     | RefCountInc _ -> true
     | RefCountDec _ -> true
@@ -153,10 +156,15 @@ let collectCExprUses (cexpr: CExpr) : Set<TempId> =
     | IfValue (cond, thenVal, elseVal) ->
         Set.unionMany [collectAtomUses cond; collectAtomUses thenVal; collectAtomUses elseVal]
     | Call (_, args) -> args |> List.map collectAtomUses |> Set.unionMany
+    | TailCall (_, args) -> args |> List.map collectAtomUses |> Set.unionMany
     | IndirectCall (func, args) ->
+        Set.unionMany ((collectAtomUses func) :: (args |> List.map collectAtomUses))
+    | IndirectTailCall (func, args) ->
         Set.unionMany ((collectAtomUses func) :: (args |> List.map collectAtomUses))
     | ClosureAlloc (_, captures) -> captures |> List.map collectAtomUses |> Set.unionMany
     | ClosureCall (closure, args) ->
+        Set.unionMany ((collectAtomUses closure) :: (args |> List.map collectAtomUses))
+    | ClosureTailCall (closure, args) ->
         Set.unionMany ((collectAtomUses closure) :: (args |> List.map collectAtomUses))
     | TupleAlloc elems -> elems |> List.map collectAtomUses |> Set.unionMany
     | TupleGet (tuple, _) -> collectAtomUses tuple
@@ -211,9 +219,12 @@ let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | UnaryPrim (op, src) -> UnaryPrim (op, s src)
     | IfValue (cond, thenVal, elseVal) -> IfValue (s cond, s thenVal, s elseVal)
     | Call (name, args) -> Call (name, List.map s args)
+    | TailCall (name, args) -> TailCall (name, List.map s args)
     | IndirectCall (func, args) -> IndirectCall (s func, List.map s args)
+    | IndirectTailCall (func, args) -> IndirectTailCall (s func, List.map s args)
     | ClosureAlloc (name, captures) -> ClosureAlloc (name, List.map s captures)
     | ClosureCall (closure, args) -> ClosureCall (s closure, List.map s args)
+    | ClosureTailCall (closure, args) -> ClosureTailCall (s closure, List.map s args)
     | TupleAlloc elems -> TupleAlloc (List.map s elems)
     | TupleGet (tuple, idx) -> TupleGet (s tuple, idx)
     | StringConcat (left, right) -> StringConcat (s left, s right)

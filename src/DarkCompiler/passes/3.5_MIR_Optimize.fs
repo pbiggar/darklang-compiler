@@ -23,9 +23,12 @@ let hasSideEffects (instr: Instr) : bool =
     | HeapLoad _ -> false
     // These have side effects
     | Call _ -> true  // Function calls may have side effects
+    | TailCall _ -> true  // Tail calls have side effects
     | IndirectCall _ -> true
+    | IndirectTailCall _ -> true  // Indirect tail calls have side effects
     | ClosureAlloc _ -> true  // Allocates memory
     | ClosureCall _ -> true
+    | ClosureTailCall _ -> true  // Closure tail calls have side effects
     | HeapAlloc _ -> true  // Allocates memory
     | HeapStore _ -> true  // Writes to memory
     | StringConcat _ -> true  // Allocates memory
@@ -62,9 +65,12 @@ let getInstrDest (instr: Instr) : VReg option =
     | BinOp (dest, _, _, _, _) -> Some dest
     | UnaryOp (dest, _, _) -> Some dest
     | Call (dest, _, _, _, _) -> Some dest
+    | TailCall _ -> None  // Tail calls don't return here
     | IndirectCall (dest, _, _, _, _) -> Some dest
+    | IndirectTailCall _ -> None  // Indirect tail calls don't return here
     | ClosureAlloc (dest, _, _) -> Some dest
     | ClosureCall (dest, _, _) -> Some dest
+    | ClosureTailCall _ -> None  // Closure tail calls don't return here
     | HeapAlloc (dest, _) -> Some dest
     | HeapLoad (dest, _, _) -> Some dest
     | StringConcat (dest, _, _) -> Some dest
@@ -108,9 +114,12 @@ let getInstrUses (instr: Instr) : Set<VReg> =
     | BinOp (_, _, left, right, _) -> Set.union (fromOperand left) (fromOperand right)
     | UnaryOp (_, _, src) -> fromOperand src
     | Call (_, _, args, _, _) -> args |> List.map fromOperand |> Set.unionMany
+    | TailCall (_, args, _, _) -> args |> List.map fromOperand |> Set.unionMany
     | IndirectCall (_, func, args, _, _) -> Set.unionMany ((fromOperand func) :: (args |> List.map fromOperand))
+    | IndirectTailCall (func, args, _, _) -> Set.unionMany ((fromOperand func) :: (args |> List.map fromOperand))
     | ClosureAlloc (_, _, captures) -> captures |> List.map fromOperand |> Set.unionMany
     | ClosureCall (_, closure, args) -> Set.unionMany ((fromOperand closure) :: (args |> List.map fromOperand))
+    | ClosureTailCall (closure, args) -> Set.unionMany ((fromOperand closure) :: (args |> List.map fromOperand))
     | HeapAlloc _ -> Set.empty
     | HeapStore (addr, _, src) -> Set.add addr (fromOperand src)
     | HeapLoad (_, addr, _) -> Set.singleton addr
@@ -266,9 +275,12 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | BinOp (dest, op, left, right, opType) -> BinOp (dest, op, p left, p right, opType)
     | UnaryOp (dest, op, src) -> UnaryOp (dest, op, p src)
     | Call (dest, name, args, argTypes, retType) -> Call (dest, name, List.map p args, argTypes, retType)
+    | TailCall (name, args, argTypes, retType) -> TailCall (name, List.map p args, argTypes, retType)
     | IndirectCall (dest, func, args, argTypes, retType) -> IndirectCall (dest, p func, List.map p args, argTypes, retType)
+    | IndirectTailCall (func, args, argTypes, retType) -> IndirectTailCall (p func, List.map p args, argTypes, retType)
     | ClosureAlloc (dest, name, captures) -> ClosureAlloc (dest, name, List.map p captures)
     | ClosureCall (dest, closure, args) -> ClosureCall (dest, p closure, List.map p args)
+    | ClosureTailCall (closure, args) -> ClosureTailCall (p closure, List.map p args)
     | HeapAlloc (dest, size) -> HeapAlloc (dest, size)
     | HeapStore (addr, offset, src) ->
         let addr' = match p (Register addr) with Register v -> v | _ -> addr

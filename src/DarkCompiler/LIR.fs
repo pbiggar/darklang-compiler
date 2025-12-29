@@ -76,9 +76,12 @@ type Instr =
     | Lsr of dest:Reg * src:Reg * shift:Reg     // Logical shift right (>>)
     | Mvn of dest:Reg * src:Reg                 // Bitwise NOT
     | Call of dest:Reg * funcName:string * args:Operand list  // Direct function call (BL instruction)
+    | TailCall of funcName:string * args:Operand list  // Tail call (B instruction, no return)
     | IndirectCall of dest:Reg * func:Reg * args:Operand list  // Call through function pointer (BLR instruction)
+    | IndirectTailCall of func:Reg * args:Operand list  // Indirect tail call (BR instruction)
     | ClosureAlloc of dest:Reg * funcName:string * captures:Operand list  // Allocate closure: (func_addr, caps...)
     | ClosureCall of dest:Reg * closure:Reg * args:Operand list  // Call through closure with hidden first arg
+    | ClosureTailCall of closure:Reg * args:Operand list  // Tail call through closure (BR instruction)
     | SaveRegs                                   // Save caller-saved registers (X1-X10) before call
     | RestoreRegs                                // Restore caller-saved registers (X1-X10) after call
     | ArgMoves of (PhysReg * Operand) list       // Move arguments to X0-X7 (parallel move - handles clobber issues)

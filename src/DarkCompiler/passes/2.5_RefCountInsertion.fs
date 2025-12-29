@@ -74,9 +74,15 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | Call (funcName, _) ->
         // Return type from function registry
         Map.tryFind funcName ctx.FuncReg
+    | TailCall (funcName, _) ->
+        // Tail calls have same return type as regular calls
+        Map.tryFind funcName ctx.FuncReg
     | IndirectCall (_, _) ->
         // For indirect calls, we would need to track the function type
         // For now, return None (no ref counting for indirect call results)
+        None
+    | IndirectTailCall (_, _) ->
+        // Same as IndirectCall
         None
     | ClosureAlloc (_, captures) ->
         // Closure is a tuple-like structure: (func_ptr, cap1, cap2, ...)
@@ -84,6 +90,9 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         Some (AST.TTuple (AST.TInt64 :: List.replicate (List.length captures) AST.TInt64))
     | ClosureCall (_, _) ->
         // Closure calls return unknown type for now
+        None
+    | ClosureTailCall (_, _) ->
+        // Same as ClosureCall
         None
     | TupleAlloc elems ->
         // Infer element types and create TTuple

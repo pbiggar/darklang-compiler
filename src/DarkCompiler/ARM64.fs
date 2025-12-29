@@ -80,6 +80,7 @@ type Instr =
     | LDUR of dest:Reg * addr:Reg * offset:int16  // Load register (signed offset, -256 to +255): dest = [addr + offset] (64-bit)
     | BL of label:string  // Branch with link: call function at label (sets X30/LR to return address)
     | BLR of reg:Reg  // Branch with link to register: call function at address in reg (indirect call)
+    | BR of reg:Reg  // Branch to register without link: tail call to address in reg (no return)
     // Label-based branches (for compiler-generated code with CFG)
     | CBZ of reg:Reg * label:string  // Compare and branch if zero (label will be resolved)
     | CBNZ of reg:Reg * label:string  // Compare and branch if not zero
