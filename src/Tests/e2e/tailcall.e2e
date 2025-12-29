@@ -55,3 +55,9 @@ def strCompare(s1: String, s2: String, n: Int64) : Bool = if n <= 0 then true el
 
 // Bug 9: Nested function calls before tail call
 def nestedCalls(a: Int64, b: Int64, n: Int64) : Int64 = if n <= 0 then a + b else let x = a + 1 in let y = b + 1 in nestedCalls(x, y, n - 1) nestedCalls(0, 0, 5) = 10
+
+// Bug 10: Generic tail-recursive function (like stdlib Dict/String)
+def genericTail<t>(x: t, n: Int64) : t = if n <= 0 then x else genericTail<t>(x, n - 1) genericTail<Int64>(42, 5) = 42
+
+// Bug 11: Generic tail recursion with two type params
+def genericTail2<k, v>(kv: k, vv: v, n: Int64) : k = if n <= 0 then kv else genericTail2<k, v>(kv, vv, n - 1) genericTail2<Int64, String>(99, "test", 3) = 99

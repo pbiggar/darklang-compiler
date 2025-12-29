@@ -78,11 +78,12 @@ let detectTailCallsInFunction (func: Function) : Function =
 
 /// Detect tail calls in a program
 let detectTailCallsInProgram (program: ANF.Program) : ANF.Program =
-    // TCO DISABLED: 197 test failures in stdlib when enabled
-    // Simple user-defined tail calls work correctly (swap, rotate, compare5, sum6)
-    // Failures are specifically in stdlib:
-    //   - Dict operations (isEmpty, get, fold, contains)
-    //   - String operations (startsWith, endsWith, indexOf, contains, split)
-    // The difference is unclear - stdlib uses same patterns as user tests
-    // Possible causes: generic monomorphization, intrinsics, or compilation pipeline
+    // TCO DISABLED: 197 failures in stdlib when enabled
+    // INVESTIGATION FINDINGS:
+    // - User-defined tail calls work: swap, rotate, compare5, sum6, generics
+    // - Stdlib fails: Dict, String operations
+    // - KEY BUG: Functions returning `false` return `true` instead
+    //   e.g., String.startsWith("hello world", "world") returns true (should be false)
+    // - This suggests bool return values are corrupted in tail call epilogue
+    // - Tests that should return true pass; only false→true corruption occurs
     program
