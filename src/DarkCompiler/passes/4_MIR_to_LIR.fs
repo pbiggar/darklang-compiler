@@ -811,8 +811,8 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                             // Float is in X0 as raw bits, move to D0 for printing
                             [LIR.GpToFp (LIR.FPhysical LIR.D0, LIR.Physical LIR.X0)
                              LIR.PrintFloatNoNewline (LIR.FPhysical LIR.D0)]
-                        | _ ->
-                            [LIR.PrintIntNoNewline (LIR.Physical LIR.X0)]  // Fallback
+                        | t ->
+                            failwith $"Unsupported tuple element type for printing: {t}"
                     sepInstrs @ [loadInstr] @ printInstrs)
                 |> List.concat
 

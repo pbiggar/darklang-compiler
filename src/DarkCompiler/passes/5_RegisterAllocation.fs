@@ -1245,8 +1245,7 @@ let applyToBlockWithLiveness
                         savedRegsStack <- tail
                         head
                     | [] ->
-                        // Fallback: compute from liveness (shouldn't happen with matched pairs)
-                        getLiveCallerSavedRegs liveAfter mapping
+                        failwith "Unmatched RestoreRegs: SaveRegs stack is empty"
                 applyToInstr mapping (LIR.RestoreRegs (liveCallerSaved, []))
             | _ ->
                 applyToInstr mapping instr)

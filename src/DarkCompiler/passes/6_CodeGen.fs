@@ -837,7 +837,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                                 | AST.TString ->
                                     [ARM64.LDR (ARM64.X10, ARM64.X0, 0s); ARM64.ADD_imm (ARM64.X9, ARM64.X0, 8us)] @
                                     Runtime.generatePrintStringNoNewline ()
-                                | _ -> Runtime.generatePrintIntNoNewline ()  // Fallback
+                                | t -> failwith $"Unsupported payload type in sum variant: {t}"
                             let printClose = printLiteral ")"
                             printOpen @ loadPayload @ printPayloadValue @ printClose
                     (printName, printPayload))
@@ -937,7 +937,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                             // String is a pointer: load length, compute data ptr, print
                             [ARM64.LDR (ARM64.X10, ARM64.X0, 0s); ARM64.ADD_imm (ARM64.X9, ARM64.X0, 8us)] @
                             Runtime.generatePrintStringNoNewline ()
-                        | _ -> Runtime.generatePrintIntNoNewline ()  // Fallback: print as int
+                        | t -> failwith $"Unsupported field type in record: {t}"
                     let separator =
                         if i < List.length fields - 1 then printLiteral ", "
                         else []

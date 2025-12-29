@@ -1432,7 +1432,7 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
     let funcParamTypes =
         match Map.tryFind anfFunc.Name typeReg with
         | Some paramInfos -> paramInfos |> List.map snd
-        | None -> []  // Fallback: no type info
+        | None -> failwith $"Type information not found for function '{anfFunc.Name}'"
 
     // Zip params with types and find the float ones
     // Guard against length mismatch (can happen if typeReg is incomplete)
@@ -1472,8 +1472,7 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
         if List.length funcParamTypes = List.length anfFunc.Params then
             funcParamTypes
         else
-            // Fallback: use Int64 for all params if type info unavailable
-            anfFunc.Params |> List.map (fun _ -> AST.TInt64)
+            failwith $"Parameter count mismatch for '{anfFunc.Name}': expected {List.length anfFunc.Params} params but got {List.length funcParamTypes} types"
 
     // Helper to get return type by finding return atoms in the body
     // Uses returnTypeReg to check if function calls return floats
