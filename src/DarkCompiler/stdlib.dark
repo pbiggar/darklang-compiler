@@ -300,11 +300,10 @@ def Stdlib.List.head<a>(list: List<a>) : Stdlib.Option.Option<a> =
     | [h, ...t] -> Some(h)
 
 // Get tail of list or return None
-// TODO: Blocked by parser - can't handle nested generics like Stdlib.Option.Option<List<a>>
-// def Stdlib.List.tail<a>(list: List<a>) : Stdlib.Option.Option<List<a>> =
-//     match list with
-//     | [] -> None
-//     | [h, ...t] -> Some(t)
+def Stdlib.List.tail<a>(list: List<a>) : Stdlib.Option.Option<List<a>> =
+    match list with
+    | [] -> None
+    | [h, ...t] -> Some(t)
 
 // Get element at index (0-based)
 def Stdlib.List.getAt<a>(list: List<a>, index: Int64) : Stdlib.Option.Option<a> =

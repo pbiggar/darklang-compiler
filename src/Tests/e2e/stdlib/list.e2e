@@ -99,6 +99,14 @@ Stdlib.Option.withDefault<Int64>(Stdlib.List.head<Int64>([1, 2, 3]), 0) = 1
 Stdlib.Option.isNone<Int64>(Stdlib.List.head<Int64>([])) = stdout="true\n"
 
 // ===================================================================
+// Stdlib.List.tail - Get rest of list (all but first element) or None
+// ===================================================================
+
+Stdlib.List.length<Int64>(Stdlib.Option.withDefault<List<Int64>>(Stdlib.List.tail<Int64>([1, 2, 3]), [])) = stdout="2\n"
+Stdlib.Option.isNone<List<Int64>>(Stdlib.List.tail<Int64>([])) = stdout="true\n"
+match Stdlib.List.tail<Int64>([1, 2, 3]) with | Some(t) -> Stdlib.List.length<Int64>(t) | None -> 0 = stdout="2\n"
+
+// ===================================================================
 // Stdlib.List.getAt - Get element at index
 // ===================================================================
 
@@ -117,7 +125,6 @@ Stdlib.Option.isNone<Int64>(Stdlib.List.findFirst<Int64>([1, 2, 3], (x: Int64) =
 // NOTE: Functions not yet implemented
 // ===================================================================
 
-// Stdlib.List.tail - blocked by parser (can't parse Option<List<a>>)
 // Stdlib.List.last - not yet implemented
 // Stdlib.List.range - not yet implemented
 // Stdlib.List.all/any - not yet implemented

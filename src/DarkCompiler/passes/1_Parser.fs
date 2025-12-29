@@ -643,8 +643,32 @@ let rec parseTypeArgType (tokens: Token list) : Result<Type * Token list, string
         // Lowercase identifier is a type variable in type argument context
         Ok (TVar typeName, rest)
     | TIdent typeName :: rest when System.Char.IsUpper(typeName.[0]) ->
-        // Uppercase identifier is a concrete type (record/sum type)
-        Ok (TRecord typeName, rest)
+        // Could be a simple type or a qualified type like Stdlib.Option.Option
+        // First parse the full qualified name
+        let rec parseQualTypeName (name: string) (toks: Token list) : string * Token list =
+            match toks with
+            | TDot :: TIdent nextName :: remaining when System.Char.IsUpper(nextName.[0]) ->
+                parseQualTypeName (name + "." + nextName) remaining
+            | _ -> (name, toks)
+        let (fullTypeName, afterTypeName) = parseQualTypeName typeName rest
+        // Check for type arguments <...>
+        match afterTypeName with
+        | TLt :: typeArgsStart ->
+            // Generic type: TypeName<args> - recursively parse type arguments
+            let rec parseNestedTypeArgs (toks: Token list) (acc: Type list) : Result<Type list * Token list, string> =
+                parseTypeArgType toks
+                |> Result.bind (fun (ty, remaining) ->
+                    match remaining with
+                    | TGt :: rest -> Ok (List.rev (ty :: acc), rest)
+                    | TShr :: rest -> Ok (List.rev (ty :: acc), TGt :: rest)  // >> is two >'s
+                    | TComma :: rest -> parseNestedTypeArgs rest (ty :: acc)
+                    | _ -> Error "Expected ',' or '>' after type argument in generic type")
+            parseNestedTypeArgs typeArgsStart []
+            |> Result.map (fun (typeArgs, remaining) ->
+                (TSum (fullTypeName, typeArgs), remaining))
+        | _ ->
+            // Simple type without type arguments
+            Ok (TRecord fullTypeName, afterTypeName)
     | TLParen :: rest ->
         // Tuple type or function type: (Type1, Type2, ...) or (Type1, Type2) -> RetType
         parseTypeArgTupleElements rest []
