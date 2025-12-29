@@ -1,10 +1,11 @@
 #!/bin/bash
 # Main entry point for running benchmarks
-# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--refresh-baseline] [benchmark_name|all]
+# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--refresh-baseline[=lang1,lang2]] [benchmark_name|all]
 #
 # Options:
-#   --hyperfine         Use hyperfine for timing (default: cachegrind for instruction counts)
-#   --refresh-baseline  Re-run Rust and Python (default: use cached values from HISTORY.md)
+#   --hyperfine              Use hyperfine for timing (default: cachegrind for instruction counts)
+#   --refresh-baseline       Re-run all baseline languages (default: use cached values)
+#   --refresh-baseline=LANGS Re-run specific languages only (comma-separated: rust,go,python,node,ocaml)
 
 set -e
 
@@ -23,7 +24,11 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --refresh-baseline)
-            export REFRESH_BASELINE=true
+            export REFRESH_BASELINE="all"
+            shift
+            ;;
+        --refresh-baseline=*)
+            export REFRESH_BASELINE="${1#*=}"
             shift
             ;;
         *)
@@ -49,10 +54,12 @@ else
 fi
 
 if [ "$USE_CACHEGRIND" = true ]; then
-    if [ "$REFRESH_BASELINE" = "true" ]; then
+    if [ "$REFRESH_BASELINE" = "false" ]; then
+        echo "Mode: Cachegrind (instruction counts) - Dark only (use --refresh-baseline for baselines)"
+    elif [ "$REFRESH_BASELINE" = "all" ]; then
         echo "Mode: Cachegrind (instruction counts) - refreshing all baselines"
     else
-        echo "Mode: Cachegrind (instruction counts) - using cached Rust/Python baselines"
+        echo "Mode: Cachegrind (instruction counts) - refreshing: $REFRESH_BASELINE"
     fi
 else
     echo "Mode: Hyperfine (timing)"
@@ -84,10 +91,10 @@ done
 # Process results
 echo "Processing results..."
 if [ "$USE_CACHEGRIND" = true ]; then
-    if [ "$REFRESH_BASELINE" = "true" ]; then
-        python3 "$SCRIPT_DIR/infrastructure/cachegrind_processor.py" "$OUTPUT_DIR"
-    else
+    if [ "$REFRESH_BASELINE" = "false" ]; then
         python3 "$SCRIPT_DIR/infrastructure/cachegrind_processor.py" "$OUTPUT_DIR" --use-baseline
+    else
+        python3 "$SCRIPT_DIR/infrastructure/cachegrind_processor.py" "$OUTPUT_DIR"
     fi
     # Update history log with cachegrind results
     python3 "$SCRIPT_DIR/infrastructure/history_updater.py" "$OUTPUT_DIR"

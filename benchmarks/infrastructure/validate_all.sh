@@ -63,6 +63,19 @@ elif [ -f "$PROBLEM_DIR/ocaml/main.ml" ]; then
     echo "  OCaml: skipped (not built)"
 fi
 
+# Validate Go
+if [ -x "$PROBLEM_DIR/go/main" ]; then
+    OUTPUT=$("$PROBLEM_DIR/go/main" 2>&1 || true)
+    if [ "$OUTPUT" = "$EXPECTED" ]; then
+        echo "  Go: PASS"
+    else
+        echo "  Go: FAIL (got: '$OUTPUT')"
+        FAILED=1
+    fi
+elif [ -f "$PROBLEM_DIR/go/main.go" ]; then
+    echo "  Go: skipped (not built)"
+fi
+
 # Validate F#
 if [ -f "$PROBLEM_DIR/fsharp/main.fsx" ]; then
     if command -v dotnet &> /dev/null; then
@@ -110,6 +123,7 @@ if [ -f "$PROBLEM_DIR/node/main.js" ]; then
 fi
 
 # Validate Bun (non-fatal - uses same JS as Node)
+export PATH="$HOME/.bun/bin:$PATH"
 if [ -f "$PROBLEM_DIR/node/main.js" ]; then
     if command -v bun &> /dev/null; then
         OUTPUT=$(bun run "$PROBLEM_DIR/node/main.js" 2>&1 || true)

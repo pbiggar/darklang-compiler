@@ -50,6 +50,16 @@ if [ -f "$PROBLEM_DIR/ocaml/main.ml" ]; then
     fi
 fi
 
+# Build Go implementation
+if [ -f "$PROBLEM_DIR/go/main.go" ]; then
+    if command -v go &> /dev/null; then
+        echo "  Building Go..."
+        go build -o "$PROBLEM_DIR/go/main" "$PROBLEM_DIR/go/main.go" 2>/dev/null || echo "    Go build failed"
+    else
+        echo "  Go: skipped (go not installed)"
+    fi
+fi
+
 # F# scripts don't need building (run via dotnet fsi)
 if [ -f "$PROBLEM_DIR/fsharp/main.fsx" ]; then
     echo "  F#: no build needed (script)"

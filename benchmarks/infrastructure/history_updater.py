@@ -165,8 +165,10 @@ def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dic
                 existing[benchmark][lang] = instrs
 
     # Languages (rust is baseline, no speedup for it)
-    languages = ["dark", "rust", "ocaml", "fsharp", "python", "node", "bun"]
-    langs_with_speedup = ["dark", "ocaml", "fsharp", "python", "node", "bun"]  # Rust is baseline
+    # Note: F# removed - .NET doesn't work with valgrind/cachegrind
+    # Note: Bun removed - JIT code not properly instrumented by valgrind
+    languages = ["dark", "rust", "go", "ocaml", "python", "node"]
+    langs_with_speedup = ["dark", "go", "ocaml", "python", "node"]  # Rust is baseline
 
     # Calculate speedups for each benchmark
     speedups = {}  # {benchmark: {lang: ratio}}

@@ -2,8 +2,9 @@
 # Run cachegrind benchmark for a given problem
 # Usage: ./cachegrind_runner.sh <benchmark_name> <output_dir>
 #
-# By default, only runs Dark and uses cached Rust/Python baselines from HISTORY.md.
-# Set REFRESH_BASELINE=true to re-run Rust and Python.
+# By default, only runs Dark and uses cached baselines from BASELINES.md.
+# Set REFRESH_BASELINE=all to re-run all languages.
+# Set REFRESH_BASELINE=rust,go,python to re-run specific languages.
 
 set -e
 
@@ -26,6 +27,18 @@ if ! command -v valgrind &> /dev/null; then
     exit 1
 fi
 
+# Helper to check if a language should run
+should_run_lang() {
+    local lang="$1"
+    if [ -z "$REFRESH_BASELINE" ] || [ "$REFRESH_BASELINE" = "false" ]; then
+        return 1
+    fi
+    if [ "$REFRESH_BASELINE" = "true" ] || [ "$REFRESH_BASELINE" = "all" ]; then
+        return 0
+    fi
+    echo ",$REFRESH_BASELINE," | grep -q ",$lang,"
+}
+
 echo "Running cachegrind benchmark for $BENCHMARK..."
 
 # Create output file for parsed results
@@ -35,12 +48,13 @@ echo "{\"benchmark\": \"$BENCHMARK\", \"results\": [" > "$RESULTS_FILE"
 FIRST=true
 
 # Determine which implementations to run
-# Compiled languages with binaries: dark, rust, ocaml
-if [ "$REFRESH_BASELINE" = "true" ]; then
-    IMPLS="dark rust ocaml"
-else
-    IMPLS="dark"
-fi
+# Dark always runs; compiled languages (rust, ocaml, go) run if selected
+IMPLS="dark"
+for lang in rust ocaml go; do
+    if should_run_lang "$lang"; then
+        IMPLS="$IMPLS $lang"
+    fi
+done
 
 # Run cachegrind for each implementation
 for impl in $IMPLS; do
@@ -85,11 +99,11 @@ EOF
     fi
 done
 
-# Handle Python separately (run via interpreter) - only if refreshing baseline
+# Handle Python separately (run via interpreter) - only if selected
 # Python timeout: 5 minutes (300 seconds) - some benchmarks are too slow
 PYTHON_TIMEOUT=${PYTHON_TIMEOUT:-300}
 
-if [ "$REFRESH_BASELINE" = "true" ] && [ -f "$PROBLEM_DIR/python/main.py" ]; then
+if should_run_lang "python" && [ -f "$PROBLEM_DIR/python/main.py" ]; then
     if command -v python3 &> /dev/null; then
         echo "  Running cachegrind on python (timeout: ${PYTHON_TIMEOUT}s)..."
 
@@ -140,10 +154,10 @@ EOF
     fi
 fi
 
-# Handle Node.js separately (run via interpreter) - only if refreshing baseline
+# Handle Node.js separately (run via interpreter) - only if selected
 NODE_TIMEOUT=${NODE_TIMEOUT:-300}
 
-if [ "$REFRESH_BASELINE" = "true" ] && [ -f "$PROBLEM_DIR/node/main.js" ]; then
+if should_run_lang "node" && [ -f "$PROBLEM_DIR/node/main.js" ]; then
     if command -v node &> /dev/null; then
         echo "  Running cachegrind on node (timeout: ${NODE_TIMEOUT}s)..."
 
@@ -194,109 +208,11 @@ EOF
     fi
 fi
 
-# Handle F# separately (run via dotnet fsi) - only if refreshing baseline
-FSHARP_TIMEOUT=${FSHARP_TIMEOUT:-300}
+# F# is NOT supported with cachegrind - .NET runtime doesn't work properly under valgrind
+# (GC initialization fails, and AOT binaries don't get accurate instruction counts)
 
-if [ "$REFRESH_BASELINE" = "true" ] && [ -f "$PROBLEM_DIR/fsharp/main.fsx" ]; then
-    if command -v dotnet &> /dev/null; then
-        echo "  Running cachegrind on fsharp (timeout: ${FSHARP_TIMEOUT}s)..."
-
-        if CG_OUTPUT=$(timeout "$FSHARP_TIMEOUT" valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes dotnet fsi --optimize+ "$PROBLEM_DIR/fsharp/main.fsx" 2>&1); then
-            FSHARP_SUCCESS=true
-        else
-            EXIT_CODE=$?
-            if [ $EXIT_CODE -eq 124 ]; then
-                echo "    TIMEOUT: F# benchmark exceeded ${FSHARP_TIMEOUT}s, skipping"
-                FSHARP_SUCCESS=false
-            else
-                FSHARP_SUCCESS=true
-            fi
-        fi
-
-        if [ "$FSHARP_SUCCESS" = true ]; then
-            I_REFS=$(echo "$CG_OUTPUT" | grep "I refs:" | sed 's/.*I refs:[[:space:]]*//' | tr -d ',')
-            D_REFS=$(echo "$CG_OUTPUT" | grep "D refs:" | sed 's/.*D refs:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
-            BRANCHES=$(echo "$CG_OUTPUT" | grep "Branches:" | sed 's/.*Branches:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
-            MISPREDICTS=$(echo "$CG_OUTPUT" | grep "Mispredicts:" | sed 's/.*Mispredicts:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
-            I1_MISSES=$(echo "$CG_OUTPUT" | grep "I1  misses:" | sed 's/.*I1  misses:[[:space:]]*//' | tr -d ',')
-            D1_MISSES=$(echo "$CG_OUTPUT" | grep "D1  misses:" | sed 's/.*D1  misses:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
-            LL_MISSES=$(echo "$CG_OUTPUT" | grep "LL misses:" | head -1 | sed 's/.*LL misses:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
-
-            if [ "$FIRST" = true ]; then
-                FIRST=false
-            else
-                echo "," >> "$RESULTS_FILE"
-            fi
-
-            cat >> "$RESULTS_FILE" << EOF
-  {
-    "language": "fsharp",
-    "instructions": $I_REFS,
-    "data_refs": $D_REFS,
-    "branches": $BRANCHES,
-    "branch_mispredicts": $MISPREDICTS,
-    "i1_misses": $I1_MISSES,
-    "d1_misses": $D1_MISSES,
-    "ll_misses": $LL_MISSES
-  }
-EOF
-
-            echo "    Instructions: $I_REFS"
-        fi
-    fi
-fi
-
-# Handle Bun separately (uses same JS as Node) - only if refreshing baseline
-BUN_TIMEOUT=${BUN_TIMEOUT:-300}
-
-if [ "$REFRESH_BASELINE" = "true" ] && [ -f "$PROBLEM_DIR/node/main.js" ]; then
-    if command -v bun &> /dev/null; then
-        echo "  Running cachegrind on bun (timeout: ${BUN_TIMEOUT}s)..."
-
-        if CG_OUTPUT=$(timeout "$BUN_TIMEOUT" valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes bun run "$PROBLEM_DIR/node/main.js" 2>&1); then
-            BUN_SUCCESS=true
-        else
-            EXIT_CODE=$?
-            if [ $EXIT_CODE -eq 124 ]; then
-                echo "    TIMEOUT: Bun benchmark exceeded ${BUN_TIMEOUT}s, skipping"
-                BUN_SUCCESS=false
-            else
-                BUN_SUCCESS=true
-            fi
-        fi
-
-        if [ "$BUN_SUCCESS" = true ]; then
-            I_REFS=$(echo "$CG_OUTPUT" | grep "I refs:" | sed 's/.*I refs:[[:space:]]*//' | tr -d ',')
-            D_REFS=$(echo "$CG_OUTPUT" | grep "D refs:" | sed 's/.*D refs:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
-            BRANCHES=$(echo "$CG_OUTPUT" | grep "Branches:" | sed 's/.*Branches:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
-            MISPREDICTS=$(echo "$CG_OUTPUT" | grep "Mispredicts:" | sed 's/.*Mispredicts:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
-            I1_MISSES=$(echo "$CG_OUTPUT" | grep "I1  misses:" | sed 's/.*I1  misses:[[:space:]]*//' | tr -d ',')
-            D1_MISSES=$(echo "$CG_OUTPUT" | grep "D1  misses:" | sed 's/.*D1  misses:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
-            LL_MISSES=$(echo "$CG_OUTPUT" | grep "LL misses:" | head -1 | sed 's/.*LL misses:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
-
-            if [ "$FIRST" = true ]; then
-                FIRST=false
-            else
-                echo "," >> "$RESULTS_FILE"
-            fi
-
-            cat >> "$RESULTS_FILE" << EOF
-  {
-    "language": "bun",
-    "instructions": $I_REFS,
-    "data_refs": $D_REFS,
-    "branches": $BRANCHES,
-    "branch_mispredicts": $MISPREDICTS,
-    "i1_misses": $I1_MISSES,
-    "d1_misses": $D1_MISSES,
-    "ll_misses": $LL_MISSES
-  }
-EOF
-
-            echo "    Instructions: $I_REFS"
-        fi
-    fi
-fi
+# Bun is NOT supported with cachegrind - JIT-compiled code isn't properly instrumented
+# (All benchmarks show ~2.17M instructions regardless of complexity - just measuring startup)
 
 echo "]}" >> "$RESULTS_FILE"
 echo "  Results saved to: $RESULTS_FILE"
