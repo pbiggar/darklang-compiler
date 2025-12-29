@@ -142,6 +142,18 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- Lsr({prettyPrintLIRReg src}, {prettyPrintLIRReg shift})"
     | LIR.Mvn (dest, src) ->
         $"{prettyPrintLIRReg dest} <- Mvn({prettyPrintLIRReg src})"
+    | LIR.Sxtb (dest, src) ->
+        $"{prettyPrintLIRReg dest} <- Sxtb({prettyPrintLIRReg src})"
+    | LIR.Sxth (dest, src) ->
+        $"{prettyPrintLIRReg dest} <- Sxth({prettyPrintLIRReg src})"
+    | LIR.Sxtw (dest, src) ->
+        $"{prettyPrintLIRReg dest} <- Sxtw({prettyPrintLIRReg src})"
+    | LIR.Uxtb (dest, src) ->
+        $"{prettyPrintLIRReg dest} <- Uxtb({prettyPrintLIRReg src})"
+    | LIR.Uxth (dest, src) ->
+        $"{prettyPrintLIRReg dest} <- Uxth({prettyPrintLIRReg src})"
+    | LIR.Uxtw (dest, src) ->
+        $"{prettyPrintLIRReg dest} <- Uxtw({prettyPrintLIRReg src})"
     | LIR.Call (dest, funcName, args) ->
         let argStr = args |> List.map prettyPrintLIROperand |> String.concat ", "
         $"{prettyPrintLIRReg dest} <- Call({funcName}, [{argStr}])"
@@ -618,6 +630,18 @@ let prettyPrintARM64Instr = function
         $"LSR_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {prettyPrintARM64Reg shift})"
     | ARM64.MVN (dest, src) ->
         $"MVN({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
+    | ARM64.SXTB (dest, src) ->
+        $"SXTB({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
+    | ARM64.SXTH (dest, src) ->
+        $"SXTH({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
+    | ARM64.SXTW (dest, src) ->
+        $"SXTW({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
+    | ARM64.UXTB (dest, src) ->
+        $"UXTB({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
+    | ARM64.UXTH (dest, src) ->
+        $"UXTH({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
+    | ARM64.UXTW (dest, src) ->
+        $"UXTW({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
     | ARM64.CBZ (reg, label) ->
         $"CBZ({prettyPrintARM64Reg reg}, {label})"
     | ARM64.CBZ_offset (reg, offset) ->

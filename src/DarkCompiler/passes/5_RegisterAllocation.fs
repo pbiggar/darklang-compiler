@@ -102,6 +102,9 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
     | LIR.Cset (_, _) -> Set.empty
     | LIR.Mvn (_, src) ->
         regToVReg src |> Option.toList |> Set.ofList
+    | LIR.Sxtb (_, src) | LIR.Sxth (_, src) | LIR.Sxtw (_, src)
+    | LIR.Uxtb (_, src) | LIR.Uxth (_, src) | LIR.Uxtw (_, src) ->
+        regToVReg src |> Option.toList |> Set.ofList
     | LIR.Call (_, _, args) ->
         args |> List.choose operandToVReg |> Set.ofList
     | LIR.TailCall (_, args) ->
@@ -223,6 +226,8 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.And (dest, _, _) | LIR.Orr (dest, _, _) | LIR.Eor (dest, _, _)
     | LIR.Lsl (dest, _, _) | LIR.Lsr (dest, _, _) -> regToVReg dest
     | LIR.Mvn (dest, _) -> regToVReg dest
+    | LIR.Sxtb (dest, _) | LIR.Sxth (dest, _) | LIR.Sxtw (dest, _)
+    | LIR.Uxtb (dest, _) | LIR.Uxth (dest, _) | LIR.Uxtw (dest, _) -> regToVReg dest
     | LIR.Call (dest, _, _) -> regToVReg dest
     | LIR.TailCall _ -> None  // Tail calls don't return to caller
     | LIR.IndirectCall (dest, _, _) -> regToVReg dest
@@ -759,6 +764,67 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
             | _ -> []
         srcLoads @ [mvnInstr] @ storeInstrs
+
+    // Sign/zero extension instructions (for integer overflow)
+    | LIR.Sxtb (dest, src) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (srcReg, srcLoads) = loadSpilled mapping src LIR.X12
+        let extInstr = LIR.Sxtb (destReg, srcReg)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        srcLoads @ [extInstr] @ storeInstrs
+
+    | LIR.Sxth (dest, src) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (srcReg, srcLoads) = loadSpilled mapping src LIR.X12
+        let extInstr = LIR.Sxth (destReg, srcReg)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        srcLoads @ [extInstr] @ storeInstrs
+
+    | LIR.Sxtw (dest, src) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (srcReg, srcLoads) = loadSpilled mapping src LIR.X12
+        let extInstr = LIR.Sxtw (destReg, srcReg)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        srcLoads @ [extInstr] @ storeInstrs
+
+    | LIR.Uxtb (dest, src) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (srcReg, srcLoads) = loadSpilled mapping src LIR.X12
+        let extInstr = LIR.Uxtb (destReg, srcReg)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        srcLoads @ [extInstr] @ storeInstrs
+
+    | LIR.Uxth (dest, src) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (srcReg, srcLoads) = loadSpilled mapping src LIR.X12
+        let extInstr = LIR.Uxth (destReg, srcReg)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        srcLoads @ [extInstr] @ storeInstrs
+
+    | LIR.Uxtw (dest, src) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (srcReg, srcLoads) = loadSpilled mapping src LIR.X12
+        let extInstr = LIR.Uxtw (destReg, srcReg)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        srcLoads @ [extInstr] @ storeInstrs
 
     | LIR.Call (dest, funcName, args) ->
         let (destReg, destAlloc) = applyToReg mapping dest

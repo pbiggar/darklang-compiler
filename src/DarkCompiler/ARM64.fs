@@ -115,6 +115,13 @@ type Instr =
     | FMOV_from_gp of dest:FReg * src:Reg            // GP to FP register (bit-for-bit)
     | SCVTF of dest:FReg * src:Reg                   // Signed int to FP: dest = (double)src
     | FCVTZS of dest:Reg * src:FReg                  // FP to signed int (truncate): dest = (int64)src
+    // Sign/zero extension instructions (for integer overflow truncation)
+    | SXTB of dest:Reg * src:Reg                     // Sign-extend byte: dest = sign_extend(src[7:0])
+    | SXTH of dest:Reg * src:Reg                     // Sign-extend halfword: dest = sign_extend(src[15:0])
+    | SXTW of dest:Reg * src:Reg                     // Sign-extend word: dest = sign_extend(src[31:0])
+    | UXTB of dest:Reg * src:Reg                     // Zero-extend byte: dest = zero_extend(src[7:0])
+    | UXTH of dest:Reg * src:Reg                     // Zero-extend halfword: dest = zero_extend(src[15:0])
+    | UXTW of dest:Reg * src:Reg                     // Zero-extend word: dest = zero_extend(src[31:0])
 
 /// Machine code (32-bit instruction)
 type MachineCode = uint32

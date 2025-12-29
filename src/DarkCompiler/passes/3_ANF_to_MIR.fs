@@ -411,7 +411,7 @@ let rec getExprReturnType (floatRegs: Set<int>) (typeMap: ANF.TypeMap) (returnTy
     | ANF.Return atom ->
         match atom with
         | ANF.FloatLiteral _ -> AST.TFloat64
-        | ANF.IntLiteral _ -> AST.TInt64
+        | ANF.IntLiteral n -> ANF.sizedIntToType n  // Use actual type from SizedInt
         | ANF.BoolLiteral _ -> AST.TBool
         | ANF.StringLiteral _ -> AST.TString
         | ANF.UnitLiteral -> AST.TUnit
@@ -513,7 +513,7 @@ let atomToOperand (builder: CFGBuilder) (atom: ANF.Atom) : Result<MIR.Operand, s
 let atomType (builder: CFGBuilder) (atom: ANF.Atom) : AST.Type =
     match atom with
     | ANF.UnitLiteral -> AST.TUnit
-    | ANF.IntLiteral _ -> AST.TInt64
+    | ANF.IntLiteral n -> ANF.sizedIntToType n  // Use the actual type from SizedInt
     | ANF.BoolLiteral _ -> AST.TBool
     | ANF.StringLiteral _ -> AST.TString
     | ANF.FloatLiteral _ -> AST.TFloat64
@@ -1481,7 +1481,7 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
         | ANF.Return atom ->
             match atom with
             | ANF.FloatLiteral _ -> AST.TFloat64
-            | ANF.IntLiteral _ -> AST.TInt64
+            | ANF.IntLiteral n -> ANF.sizedIntToType n  // Use actual type from SizedInt
             | ANF.BoolLiteral _ -> AST.TBool
             | ANF.StringLiteral _ -> AST.TString
             | ANF.UnitLiteral -> AST.TUnit

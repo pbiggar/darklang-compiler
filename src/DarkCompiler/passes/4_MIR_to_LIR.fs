@@ -67,6 +67,20 @@ let ensureInFRegister (operand: MIR.Operand) (tempFReg: LIR.FReg) : Result<LIR.I
     | MIR.FuncAddr _ ->
         Error "Internal error: Cannot use function address as float operand"
 
+/// Generate truncation instruction for sized integer arithmetic
+/// After a 64-bit operation, this sign/zero extends the result to the target width
+/// to ensure proper overflow behavior (e.g., 127y + 1y = -128)
+let truncateForType (destReg: LIR.Reg) (operandType: AST.Type) : LIR.Instr list =
+    match operandType with
+    | AST.TInt8 -> [LIR.Sxtb (destReg, destReg)]      // Sign-extend byte
+    | AST.TInt16 -> [LIR.Sxth (destReg, destReg)]     // Sign-extend halfword
+    | AST.TInt32 -> [LIR.Sxtw (destReg, destReg)]     // Sign-extend word
+    | AST.TUInt8 -> [LIR.Uxtb (destReg, destReg)]     // Zero-extend byte
+    | AST.TUInt16 -> [LIR.Uxth (destReg, destReg)]    // Zero-extend halfword
+    | AST.TUInt32 -> [LIR.Uxtw (destReg, destReg)]    // Zero-extend word
+    | AST.TInt64 | AST.TUInt64 -> []                  // No truncation needed for 64-bit
+    | _ -> []                                          // Non-integer types
+
 /// Convert MIR instruction to LIR instructions
 let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry: MIR.VariantRegistry) (recordRegistry: MIR.RecordRegistry) : Result<LIR.Instr list, string> =
     match instr with
@@ -197,6 +211,9 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
 
         | _ ->
             // Integer operations - existing logic
+            // Note: After each arithmetic operation, we truncate to the target width
+            // to ensure proper overflow behavior (e.g., 127y + 1y = -128 for Int8)
+            let truncInstrs = truncateForType lirDest operandType
             match op with
             | MIR.Add ->
                 // ADD can have immediate or register as right operand
@@ -204,14 +221,14 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 match ensureInRegister left lirDest with
                 | Error err -> Error err
                 | Ok (leftInstrs, leftReg) ->
-                    Ok (leftInstrs @ [LIR.Add (lirDest, leftReg, rightOp)])
+                    Ok (leftInstrs @ [LIR.Add (lirDest, leftReg, rightOp)] @ truncInstrs)
 
             | MIR.Sub ->
                 // SUB can have immediate or register as right operand
                 match ensureInRegister left lirDest with
                 | Error err -> Error err
                 | Ok (leftInstrs, leftReg) ->
-                    Ok (leftInstrs @ [LIR.Sub (lirDest, leftReg, rightOp)])
+                    Ok (leftInstrs @ [LIR.Sub (lirDest, leftReg, rightOp)] @ truncInstrs)
 
             | MIR.Mul ->
                 // MUL requires both operands in registers
@@ -221,7 +238,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 match ensureInRegister right (LIR.Virtual 1001) with
                 | Error err -> Error err
                 | Ok (rightInstrs, rightReg) ->
-                    Ok (leftInstrs @ rightInstrs @ [LIR.Mul (lirDest, leftReg, rightReg)])
+                    Ok (leftInstrs @ rightInstrs @ [LIR.Mul (lirDest, leftReg, rightReg)] @ truncInstrs)
 
             | MIR.Div ->
                 // SDIV requires both operands in registers
@@ -231,7 +248,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 match ensureInRegister right (LIR.Virtual 1001) with
                 | Error err -> Error err
                 | Ok (rightInstrs, rightReg) ->
-                    Ok (leftInstrs @ rightInstrs @ [LIR.Sdiv (lirDest, leftReg, rightReg)])
+                    Ok (leftInstrs @ rightInstrs @ [LIR.Sdiv (lirDest, leftReg, rightReg)] @ truncInstrs)
 
             | MIR.Mod ->
                 // Modulo: a % b = a - (a / b) * b
@@ -245,7 +262,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                     let quotReg = LIR.Virtual 1002  // temp for quotient
                     Ok (leftInstrs @ rightInstrs @
                         [LIR.Sdiv (quotReg, leftReg, rightReg);
-                         LIR.Msub (lirDest, quotReg, rightReg, leftReg)])
+                         LIR.Msub (lirDest, quotReg, rightReg, leftReg)] @ truncInstrs)
 
             // Comparisons: CMP + CSET sequence
             | MIR.Eq ->
@@ -303,7 +320,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 | Ok (rightInstrs, rightReg) ->
                     Ok (leftInstrs @ rightInstrs @ [LIR.Orr (lirDest, leftReg, rightReg)])
 
-            // Bitwise operators
+            // Bitwise operators (also need truncation for proper overflow)
             | MIR.Shl ->
                 match ensureInRegister left (LIR.Virtual 1000) with
                 | Error err -> Error err
@@ -311,7 +328,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 match ensureInRegister right (LIR.Virtual 1001) with
                 | Error err -> Error err
                 | Ok (rightInstrs, rightReg) ->
-                    Ok (leftInstrs @ rightInstrs @ [LIR.Lsl (lirDest, leftReg, rightReg)])
+                    Ok (leftInstrs @ rightInstrs @ [LIR.Lsl (lirDest, leftReg, rightReg)] @ truncInstrs)
 
             | MIR.Shr ->
                 match ensureInRegister left (LIR.Virtual 1000) with
@@ -320,7 +337,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 match ensureInRegister right (LIR.Virtual 1001) with
                 | Error err -> Error err
                 | Ok (rightInstrs, rightReg) ->
-                    Ok (leftInstrs @ rightInstrs @ [LIR.Lsr (lirDest, leftReg, rightReg)])
+                    Ok (leftInstrs @ rightInstrs @ [LIR.Lsr (lirDest, leftReg, rightReg)] @ truncInstrs)
 
             | MIR.BitAnd ->
                 match ensureInRegister left (LIR.Virtual 1000) with
@@ -329,7 +346,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 match ensureInRegister right (LIR.Virtual 1001) with
                 | Error err -> Error err
                 | Ok (rightInstrs, rightReg) ->
-                    Ok (leftInstrs @ rightInstrs @ [LIR.And (lirDest, leftReg, rightReg)])
+                    Ok (leftInstrs @ rightInstrs @ [LIR.And (lirDest, leftReg, rightReg)] @ truncInstrs)
 
             | MIR.BitOr ->
                 match ensureInRegister left (LIR.Virtual 1000) with
@@ -338,7 +355,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 match ensureInRegister right (LIR.Virtual 1001) with
                 | Error err -> Error err
                 | Ok (rightInstrs, rightReg) ->
-                    Ok (leftInstrs @ rightInstrs @ [LIR.Orr (lirDest, leftReg, rightReg)])
+                    Ok (leftInstrs @ rightInstrs @ [LIR.Orr (lirDest, leftReg, rightReg)] @ truncInstrs)
 
             | MIR.BitXor ->
                 match ensureInRegister left (LIR.Virtual 1000) with
@@ -347,7 +364,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 match ensureInRegister right (LIR.Virtual 1001) with
                 | Error err -> Error err
                 | Ok (rightInstrs, rightReg) ->
-                    Ok (leftInstrs @ rightInstrs @ [LIR.Eor (lirDest, leftReg, rightReg)])
+                    Ok (leftInstrs @ rightInstrs @ [LIR.Eor (lirDest, leftReg, rightReg)] @ truncInstrs)
 
     | MIR.UnaryOp (dest, op, src) ->
         let lirDest = vregToLIRReg dest
@@ -1307,6 +1324,7 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     // Instructions without pool references - pass through unchanged
     | LIR.Store _ | LIR.Mul _ | LIR.Sdiv _ | LIR.Msub _ | LIR.Cset _
     | LIR.And _ | LIR.Orr _ | LIR.Eor _ | LIR.Lsl _ | LIR.Lsr _ | LIR.Mvn _
+    | LIR.Sxtb _ | LIR.Sxth _ | LIR.Sxtw _ | LIR.Uxtb _ | LIR.Uxth _ | LIR.Uxtw _
     | LIR.SaveRegs _ | LIR.RestoreRegs _ | LIR.PrintInt _ | LIR.PrintBool _ | LIR.PrintFloat _
     | LIR.PrintIntNoNewline _ | LIR.PrintBoolNoNewline _ | LIR.PrintFloatNoNewline _
     | LIR.PrintHeapStringNoNewline _ | LIR.PrintList _ | LIR.PrintSum _ | LIR.PrintRecord _

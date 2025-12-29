@@ -75,6 +75,13 @@ type Instr =
     | Lsl of dest:Reg * src:Reg * shift:Reg     // Logical shift left (<<)
     | Lsr of dest:Reg * src:Reg * shift:Reg     // Logical shift right (>>)
     | Mvn of dest:Reg * src:Reg                 // Bitwise NOT
+    // Sign/zero extension for integer overflow (truncation to target width)
+    | Sxtb of dest:Reg * src:Reg               // Sign-extend byte (8-bit) to 64-bit
+    | Sxth of dest:Reg * src:Reg               // Sign-extend halfword (16-bit) to 64-bit
+    | Sxtw of dest:Reg * src:Reg               // Sign-extend word (32-bit) to 64-bit
+    | Uxtb of dest:Reg * src:Reg               // Zero-extend byte (8-bit) to 64-bit
+    | Uxth of dest:Reg * src:Reg               // Zero-extend halfword (16-bit) to 64-bit
+    | Uxtw of dest:Reg * src:Reg               // Zero-extend word (32-bit) to 64-bit
     | Call of dest:Reg * funcName:string * args:Operand list  // Direct function call (BL instruction)
     | TailCall of funcName:string * args:Operand list  // Tail call (B instruction, no return)
     | IndirectCall of dest:Reg * func:Reg * args:Operand list  // Call through function pointer (BLR instruction)

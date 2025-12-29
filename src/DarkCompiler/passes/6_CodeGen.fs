@@ -602,6 +602,43 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             lirRegToARM64Reg src
             |> Result.map (fun srcReg -> [ARM64.MVN (destReg, srcReg)]))
 
+    // Sign/zero extension for integer overflow truncation
+    | LIR.Sxtb (dest, src) ->
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg src
+            |> Result.map (fun srcReg -> [ARM64.SXTB (destReg, srcReg)]))
+
+    | LIR.Sxth (dest, src) ->
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg src
+            |> Result.map (fun srcReg -> [ARM64.SXTH (destReg, srcReg)]))
+
+    | LIR.Sxtw (dest, src) ->
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg src
+            |> Result.map (fun srcReg -> [ARM64.SXTW (destReg, srcReg)]))
+
+    | LIR.Uxtb (dest, src) ->
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg src
+            |> Result.map (fun srcReg -> [ARM64.UXTB (destReg, srcReg)]))
+
+    | LIR.Uxth (dest, src) ->
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg src
+            |> Result.map (fun srcReg -> [ARM64.UXTH (destReg, srcReg)]))
+
+    | LIR.Uxtw (dest, src) ->
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg src
+            |> Result.map (fun srcReg -> [ARM64.UXTW (destReg, srcReg)]))
+
     | LIR.PrintBool reg ->
         // Print booleans as "true" or "false" (no exit)
         lirRegToARM64Reg reg

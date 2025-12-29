@@ -699,6 +699,82 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rd = encodeReg dest
         [sf ||| fixedBits ||| opcode1 ||| opcode2 ||| rn ||| rd]
 
+    // Sign/zero extension instructions (for integer overflow truncation)
+    // These are encoded using SBFM/UBFM (Signed/Unsigned Bitfield Move)
+    | ARM64.SXTB (dest, src) ->
+        // SXTB: SBFM Xd, Xn, #0, #7 (sign-extend byte to 64-bit)
+        // Encoding: sf=1 opc=00 100110 N=1 immr=0 imms=7 Rn Rd
+        let sf = 1u <<< 31
+        let opc = 0u <<< 29  // SBFM (signed)
+        let fixedBits = 0b100110u <<< 23
+        let n = 1u <<< 22  // N=1 for 64-bit
+        let immr = 0u <<< 16  // rotate by 0
+        let imms = 7u <<< 10  // extract bits 0-7 (byte)
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeReg dest
+        [sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd]
+
+    | ARM64.SXTH (dest, src) ->
+        // SXTH: SBFM Xd, Xn, #0, #15 (sign-extend halfword to 64-bit)
+        let sf = 1u <<< 31
+        let opc = 0u <<< 29  // SBFM
+        let fixedBits = 0b100110u <<< 23
+        let n = 1u <<< 22
+        let immr = 0u <<< 16
+        let imms = 15u <<< 10  // extract bits 0-15 (halfword)
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeReg dest
+        [sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd]
+
+    | ARM64.SXTW (dest, src) ->
+        // SXTW: SBFM Xd, Xn, #0, #31 (sign-extend word to 64-bit)
+        let sf = 1u <<< 31
+        let opc = 0u <<< 29  // SBFM
+        let fixedBits = 0b100110u <<< 23
+        let n = 1u <<< 22
+        let immr = 0u <<< 16
+        let imms = 31u <<< 10  // extract bits 0-31 (word)
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeReg dest
+        [sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd]
+
+    | ARM64.UXTB (dest, src) ->
+        // UXTB: UBFM Xd, Xn, #0, #7 (zero-extend byte to 64-bit)
+        // Encoding: sf=1 opc=10 100110 N=1 immr=0 imms=7 Rn Rd
+        let sf = 1u <<< 31
+        let opc = 2u <<< 29  // UBFM (unsigned)
+        let fixedBits = 0b100110u <<< 23
+        let n = 1u <<< 22
+        let immr = 0u <<< 16
+        let imms = 7u <<< 10
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeReg dest
+        [sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd]
+
+    | ARM64.UXTH (dest, src) ->
+        // UXTH: UBFM Xd, Xn, #0, #15 (zero-extend halfword to 64-bit)
+        let sf = 1u <<< 31
+        let opc = 2u <<< 29  // UBFM
+        let fixedBits = 0b100110u <<< 23
+        let n = 1u <<< 22
+        let immr = 0u <<< 16
+        let imms = 15u <<< 10
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeReg dest
+        [sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd]
+
+    | ARM64.UXTW (dest, src) ->
+        // UXTW: UBFM Xd, Xn, #0, #31 (zero-extend word to 64-bit)
+        let sf = 1u <<< 31
+        let opc = 2u <<< 29  // UBFM
+        let fixedBits = 0b100110u <<< 23
+        let n = 1u <<< 22
+        let immr = 0u <<< 16
+        let imms = 31u <<< 10
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeReg dest
+        [sf ||| opc ||| fixedBits ||| n ||| immr ||| imms ||| rn ||| rd]
+
 /// Two-Pass Encoding for Label Resolution
 
 /// Pass 1: Compute byte offset for each label
