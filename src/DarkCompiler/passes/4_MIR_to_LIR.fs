@@ -472,14 +472,14 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         let intArgs = argsWithTypes |> List.filter (fun (_, t) -> t <> AST.TFloat64)
         let floatArgs = argsWithTypes |> List.filter (fun (_, t) -> t = AST.TFloat64)
 
-        // Generate ArgMoves for integer arguments
+        // Generate TailArgMoves for integer arguments (uses temp registers, no SaveRegs)
         let intArgMoves =
             if List.isEmpty intArgs then []
             else
                 let argPairs =
                     List.zip (List.map fst intArgs) (List.take (List.length intArgs) intRegs)
                     |> List.map (fun (arg, reg) -> (reg, convertOperand arg))
-                [LIR.ArgMoves argPairs]
+                [LIR.TailArgMoves argPairs]
 
         // Generate FArgMoves for float arguments
         let floatArgMoves =
@@ -571,14 +571,14 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
             | LIR.FuncAddr name -> [LIR.LoadFuncAddr (LIR.Physical LIR.X9, name)]
             | other -> [LIR.Mov (LIR.Physical LIR.X9, other)]
 
-        // Use ArgMoves for parallel move
+        // Use TailArgMoves for parallel move (uses temp registers, no SaveRegs)
         let argMoves =
             if List.isEmpty args then []
             else
                 let argPairs =
                     List.zip args (List.take (List.length args) argRegs)
                     |> List.map (fun (arg, reg) -> (reg, convertOperand arg))
-                [LIR.ArgMoves argPairs]
+                [LIR.TailArgMoves argPairs]
 
         // Indirect tail call through X9
         let callInstr = LIR.IndirectTailCall (LIR.Physical LIR.X9, List.map convertOperand args)
@@ -662,7 +662,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         // Load function pointer from closure[0] into X9
         let loadFuncPtrInstr = LIR.HeapLoad (LIR.Physical LIR.X9, closureReg, 0)
 
-        // Closure goes to X0, args to X1-X7
+        // Closure goes to X0, args to X1-X7 (using TailArgMoves - no SaveRegs)
         let argMoves =
             if List.length args > 7 then []
             else
@@ -672,7 +672,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                     |> List.mapi (fun i arg ->
                         let targetReg = List.item (i + 1) argRegs
                         (targetReg, convertOperand arg))
-                [LIR.ArgMoves (closureMove :: regularArgMoves)]
+                [LIR.TailArgMoves (closureMove :: regularArgMoves)]
 
         let callInstr = LIR.ClosureTailCall (LIR.Physical LIR.X9, List.map convertOperand args)
 
@@ -1256,6 +1256,7 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.ClosureAlloc (dest, name, caps) -> LIR.ClosureAlloc (dest, name, offsetLIROperands strOffset fltOffset caps)
     | LIR.ClosureCall (dest, closure, args) -> LIR.ClosureCall (dest, closure, offsetLIROperands strOffset fltOffset args)
     | LIR.ArgMoves moves -> LIR.ArgMoves (moves |> List.map (fun (reg, op) -> (reg, offsetLIROperand strOffset fltOffset op)))
+    | LIR.TailArgMoves moves -> LIR.TailArgMoves (moves |> List.map (fun (reg, op) -> (reg, offsetLIROperand strOffset fltOffset op)))
     | LIR.HeapStore (addr, offset, src) -> LIR.HeapStore (addr, offset, offsetLIROperand strOffset fltOffset src)
     | LIR.StringConcat (dest, left, right) -> LIR.StringConcat (dest, offsetLIROperand strOffset fltOffset left, offsetLIROperand strOffset fltOffset right)
     | LIR.FileReadText (dest, path) -> LIR.FileReadText (dest, offsetLIROperand strOffset fltOffset path)

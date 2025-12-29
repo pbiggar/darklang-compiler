@@ -49,5 +49,8 @@
     <None Include="typecheck/**/*.typecheck" CopyToOutputDirectory="PreserveNewest" />
     <None Include="optimization/**/*.opt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
 
 </Project>

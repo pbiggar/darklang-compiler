@@ -1250,6 +1250,146 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
 
         moveInstrs
 
+    | LIR.TailArgMoves moves ->
+        // Parallel move resolution for TAIL CALL arguments
+        // Unlike ArgMoves, there is NO SaveRegs, so we can't load from stack.
+        // We use proper parallel move resolution with X16 as a temp register.
+        //
+        // Algorithm:
+        // 1. Build a dependency graph: dest depends on src if src is a register
+        // 2. Find moves where dest is not used as src by any other move (safe to emit)
+        // 3. Emit safe moves, removing them from the graph
+        // 4. Repeat until only cycles remain
+        // 5. For cycles, use X16 as temp: save first src, emit all cycle moves, restore
+
+        // Helper to get source register if operand is a physical register
+        let getSrcPhysReg (srcOp: LIR.Operand) : LIR.PhysReg option =
+            match srcOp with
+            | LIR.Reg (LIR.Physical srcPhysReg) -> Some srcPhysReg
+            | _ -> None
+
+        // Generate a single move instruction
+        let generateMoveInstr (destReg: LIR.PhysReg, srcOp: LIR.Operand) : Result<ARM64.Instr list, string> =
+            let destARM64 = lirPhysRegToARM64Reg destReg
+            match srcOp with
+            | LIR.Imm value ->
+                Ok (loadImmediate destARM64 value)
+            | LIR.Reg (LIR.Physical srcPhysReg) ->
+                let srcARM64 = lirPhysRegToARM64Reg srcPhysReg
+                Ok [ARM64.MOV_reg (destARM64, srcARM64)]
+            | LIR.Reg (LIR.Virtual _) ->
+                Error "Virtual register in TailArgMoves - should have been allocated"
+            | LIR.StackSlot offset ->
+                loadStackSlot destARM64 offset
+            | LIR.FuncAddr funcName ->
+                Ok [ARM64.ADR (destARM64, funcName)]
+            | LIR.StringRef _ | LIR.FloatImm _ | LIR.FloatRef _ ->
+                Error "StringRef/Float in TailArgMoves not yet supported"
+
+        // Find all source registers used by any move
+        let allSrcRegs =
+            moves
+            |> List.choose (fun (_, srcOp) -> getSrcPhysReg srcOp)
+            |> Set.ofList
+
+        // Partition moves into:
+        // - Simple moves: destination is not used as source by any other move
+        // - Conflicting moves: destination IS used as source by some move
+        let isConflicting (destReg: LIR.PhysReg) = Set.contains destReg allSrcRegs
+
+        // First emit all moves that don't depend on anything (immediates, stack slots, etc)
+        // Then emit moves in dependency order using topological sort with cycle breaking
+
+        // Collect all instructions
+        let mutable allInstrs : ARM64.Instr list = []
+        let mutable remaining = moves |> List.map (fun (d, s) -> (d, s))
+
+        // Phase 1: Emit all non-register-source moves first (they can never cause conflicts)
+        let (nonRegMoves, regMoves) =
+            remaining |> List.partition (fun (_, srcOp) -> getSrcPhysReg srcOp = None)
+
+        for (dest, src) in nonRegMoves do
+            match generateMoveInstr (dest, src) with
+            | Ok instrs -> allInstrs <- allInstrs @ instrs
+            | Error e -> failwith e
+
+        remaining <- regMoves
+
+        // Phase 2: Iteratively emit moves where dest is not a source for remaining moves
+        let mutable changed = true
+        while changed && not (List.isEmpty remaining) do
+            changed <- false
+            let remainingSrcs =
+                remaining
+                |> List.choose (fun (_, srcOp) -> getSrcPhysReg srcOp)
+                |> Set.ofList
+
+            let (safe, unsafe) =
+                remaining |> List.partition (fun (destReg, _) -> not (Set.contains destReg remainingSrcs))
+
+            if not (List.isEmpty safe) then
+                changed <- true
+                for (dest, src) in safe do
+                    match generateMoveInstr (dest, src) with
+                    | Ok instrs -> allInstrs <- allInstrs @ instrs
+                    | Error e -> failwith e
+                remaining <- unsafe
+
+        // Phase 3: Handle cycles using X16 as temp
+        // At this point, all remaining moves form cycles. For each cycle:
+        // 1. Save the FIRST destination to X16 (it gets clobbered first but read later)
+        // 2. Emit all moves in order
+        // 3. Any move that reads the saved register uses X16 instead
+        //
+        // Example cycle: X0 <- X1, X1 <- X2, X2 <- X0
+        // 1. Save X0 to X16 (X0 is written first but X2 <- X0 reads it later)
+        // 2. Emit: X0 <- X1, X1 <- X2, X2 <- X16
+
+        while not (List.isEmpty remaining) do
+            // Pick the first move and save its destination
+            let (firstDest, _) = remaining.Head
+            let savedReg = firstDest
+
+            // Save this register to X16
+            allInstrs <- allInstrs @ [ARM64.MOV_reg (ARM64.X16, lirPhysRegToARM64Reg savedReg)]
+
+            // Find all moves that form a cycle with this saved register
+            // Follow the chain: firstDest -> (source of move to firstDest) -> ...
+            let rec findCycleMembers (visited: Set<LIR.PhysReg>) (frontier: LIR.PhysReg list) : Set<LIR.PhysReg> =
+                match frontier with
+                | [] -> visited
+                | reg :: rest ->
+                    // Find moves where this reg is the destination
+                    let movesToReg = remaining |> List.filter (fun (d, _) -> d = reg)
+                    // Get their sources
+                    let sources = movesToReg |> List.choose (fun (_, s) -> getSrcPhysReg s)
+                    // Add unvisited sources to frontier
+                    let newFrontier = sources |> List.filter (fun s -> not (Set.contains s visited))
+                    findCycleMembers (Set.add reg visited) (rest @ newFrontier)
+
+            let cycleRegs = findCycleMembers Set.empty [firstDest]
+
+            // Extract cycle moves
+            let (cycleMoves, otherMoves) =
+                remaining |> List.partition (fun (d, _) -> Set.contains d cycleRegs)
+
+            // Emit cycle moves, replacing any source that equals savedReg with X16
+            for (dest, src) in cycleMoves do
+                match getSrcPhysReg src with
+                | Some srcReg when srcReg = savedReg ->
+                    // Use X16 instead of the saved register
+                    allInstrs <- allInstrs @ [ARM64.MOV_reg (lirPhysRegToARM64Reg dest, ARM64.X16)]
+                | Some srcReg ->
+                    allInstrs <- allInstrs @ [ARM64.MOV_reg (lirPhysRegToARM64Reg dest, lirPhysRegToARM64Reg srcReg)]
+                | None ->
+                    match generateMoveInstr (dest, src) with
+                    | Ok instrs -> allInstrs <- allInstrs @ instrs
+                    | Error e -> failwith e
+
+            remaining <- otherMoves
+
+        Ok allInstrs
+
     | LIR.FArgMoves moves ->
         // Float argument moves - move float values to D0-D7
         let generateFMove (destPhysReg: LIR.PhysFPReg, srcFReg: LIR.FReg) : Result<ARM64.Instr list, string> =

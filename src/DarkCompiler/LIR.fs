@@ -84,7 +84,8 @@ type Instr =
     | ClosureTailCall of closure:Reg * args:Operand list  // Tail call through closure (BR instruction)
     | SaveRegs                                   // Save caller-saved registers (X1-X10) before call
     | RestoreRegs                                // Restore caller-saved registers (X1-X10) after call
-    | ArgMoves of (PhysReg * Operand) list       // Move arguments to X0-X7 (parallel move - handles clobber issues)
+    | ArgMoves of (PhysReg * Operand) list       // Move arguments to X0-X7 (parallel move - loads clobbered from SaveRegs stack)
+    | TailArgMoves of (PhysReg * Operand) list   // Move arguments for tail calls (uses temp registers, no SaveRegs)
     | FArgMoves of (PhysFPReg * FReg) list       // Move float arguments to D0-D7
     | PrintInt of Reg                           // Print integer register to stdout (no exit)
     | PrintBool of Reg                          // Print boolean register to stdout (no exit)

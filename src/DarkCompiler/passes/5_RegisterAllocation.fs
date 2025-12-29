@@ -821,6 +821,17 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
         let finalMoves = allocatedMoves |> List.map (fun (destReg, op, _) -> (destReg, op))
         allLoads @ [LIR.ArgMoves finalMoves]
 
+    | LIR.TailArgMoves moves ->
+        // Apply allocation to each operand in the tail arg moves (same as ArgMoves)
+        let allocatedMoves =
+            moves |> List.map (fun (destReg, srcOp) ->
+                let (allocatedOp, loads) = applyToOperand mapping srcOp LIR.X12
+                (destReg, allocatedOp, loads))
+        // Collect all load instructions and the allocated moves
+        let allLoads = allocatedMoves |> List.collect (fun (_, _, loads) -> loads)
+        let finalMoves = allocatedMoves |> List.map (fun (destReg, op, _) -> (destReg, op))
+        allLoads @ [LIR.TailArgMoves finalMoves]
+
     | LIR.FArgMoves moves ->
         // Pass through unchanged for now - float argument moves use physical registers only
         [LIR.FArgMoves moves]
