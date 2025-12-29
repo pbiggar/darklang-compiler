@@ -2652,19 +2652,23 @@ let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Res
         // Then unconditional branch to false label
         lirRegToARM64Reg condReg
         |> Result.map (fun arm64Reg ->
+            let (LIR.Label trueLbl) = trueLabel
+            let (LIR.Label falseLbl) = falseLabel
             [
-                ARM64.CBNZ (arm64Reg, trueLabel)  // If true, jump to then branch
-                ARM64.B_label falseLabel           // Otherwise jump to else branch
+                ARM64.CBNZ (arm64Reg, trueLbl)  // If true, jump to then branch
+                ARM64.B_label falseLbl           // Otherwise jump to else branch
             ])
 
     | LIR.Jump label ->
-        Ok [ARM64.B_label label]
+        let (LIR.Label lbl) = label
+        Ok [ARM64.B_label lbl]
 
 /// Convert LIR basic block to ARM64 instructions (with label)
 /// epilogueLabel: passed through to terminator for Ret handling
 let convertBlock (ctx: CodeGenContext) (epilogueLabel: string) (block: LIR.BasicBlock) : Result<ARM64.Instr list, string> =
     // Emit label for this block
-    let labelInstr = ARM64.Label block.Label
+    let (LIR.Label lbl) = block.Label
+    let labelInstr = ARM64.Label lbl
 
     // Convert all instructions
     let instrResults = block.Instrs |> List.map (convertInstr ctx)

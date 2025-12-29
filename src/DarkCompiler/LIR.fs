@@ -150,8 +150,8 @@ type Instr =
     // Random intrinsics
     | RandomInt64 of dest:Reg                     // Get 8 random bytes as Int64
 
-/// Basic block label
-type Label = string
+/// Basic block label (wrapper type for type safety)
+type Label = Label of string
 
 /// Terminator instructions (control flow)
 type Terminator =

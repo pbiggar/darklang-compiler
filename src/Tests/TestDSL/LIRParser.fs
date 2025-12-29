@@ -225,7 +225,7 @@ let parseLIR (text: string) : Result<LIR.Program, string> =
                     (allInstrs, Ret)
 
         // Build single-block CFG
-        let entryLabel = "entry"
+        let entryLabel = LIR.Label "entry"
         let block = {
             Label = entryLabel
             Instrs = instrs

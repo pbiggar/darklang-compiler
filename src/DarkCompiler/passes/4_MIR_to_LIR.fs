@@ -1119,7 +1119,7 @@ let selectTerminator (terminator: MIR.Terminator) (stringPool: MIR.StringPool) (
             Ok (moveToX0, LIR.Ret)
 
     | MIR.Branch (condOp, trueLabel, falseLabel) ->
-        // Convert MIR.Label to LIR.Label (just unwrap)
+        // Convert MIR.Label to LIR.Label
         let (MIR.Label trueLbl) = trueLabel
         let (MIR.Label falseLbl) = falseLabel
 
@@ -1127,14 +1127,14 @@ let selectTerminator (terminator: MIR.Terminator) (stringPool: MIR.StringPool) (
         match ensureInRegister condOp (LIR.Virtual 1002) with
         | Error err -> Error err
         | Ok (condInstrs, condReg) ->
-            Ok (condInstrs, LIR.Branch (condReg, trueLbl, falseLbl))
+            Ok (condInstrs, LIR.Branch (condReg, LIR.Label trueLbl, LIR.Label falseLbl))
 
     | MIR.Jump label ->
         let (MIR.Label lbl) = label
-        Ok ([], LIR.Jump lbl)
+        Ok ([], LIR.Jump (LIR.Label lbl))
 
 /// Convert MIR label to LIR label
-let convertLabel (MIR.Label lbl) : LIR.Label = lbl
+let convertLabel (MIR.Label lbl) : LIR.Label = LIR.Label lbl
 
 /// Helper: collect Results from a list, returning Error on first failure
 let private collectResults (results: Result<'a list, string> list) : Result<'a list, string> =
