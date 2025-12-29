@@ -78,11 +78,11 @@ let detectTailCallsInFunction (func: Function) : Function =
 
 /// Detect tail calls in a program
 let detectTailCallsInProgram (program: ANF.Program) : ANF.Program =
-    // TCO DISABLED: 197 failures in stdlib functions when enabled
-    // Simple tail calls work (swap, rotate, compare5, sum6 all pass)
-    // Failures are in:
-    // - Dict operations (isEmpty, get, fold, contains, getOrDefault)
-    // - String operations (startsWith, endsWith, indexOf, contains, split, equals)
-    // Likely issue is with stdlib's complex patterns (indirect calls, closures, or
-    // interaction with reference counting)
+    // TCO DISABLED: 197 test failures in stdlib when enabled
+    // Simple user-defined tail calls work correctly (swap, rotate, compare5, sum6)
+    // Failures are specifically in stdlib:
+    //   - Dict operations (isEmpty, get, fold, contains)
+    //   - String operations (startsWith, endsWith, indexOf, contains, split)
+    // The difference is unclear - stdlib uses same patterns as user tests
+    // Possible causes: generic monomorphization, intrinsics, or compilation pipeline
     program

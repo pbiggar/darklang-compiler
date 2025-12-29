@@ -48,3 +48,10 @@ def sum6(a: Int64, b: Int64, c: Int64, d: Int64, e: Int64, f: Int64, n: Int64) :
 
 // Bug 7: Tail call after let binding (like String.__compareBytes)
 def callThenTail(x: Int64, n: Int64) : Int64 = if n <= 0 then x else let y = x + 1 in callThenTail(y, n - 1) callThenTail(0, 5) = 5
+
+// Bug 8: Tail call with String parameters (reference-counted types)
+// Similar to String.__compareBytes which fails with TCO
+def strCompare(s1: String, s2: String, n: Int64) : Bool = if n <= 0 then true else if Stdlib.String.length(s1) != Stdlib.String.length(s2) then false else strCompare(s1, s2, n - 1) strCompare("hello", "hello", 3) = stdout="true\n"
+
+// Bug 9: Nested function calls before tail call
+def nestedCalls(a: Int64, b: Int64, n: Int64) : Int64 = if n <= 0 then a + b else let x = a + 1 in let y = b + 1 in nestedCalls(x, y, n - 1) nestedCalls(0, 0, 5) = 10
