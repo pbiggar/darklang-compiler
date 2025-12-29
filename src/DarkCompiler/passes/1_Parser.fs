@@ -1472,7 +1472,14 @@ let parse (tokens: Token list) : Result<Program, string> =
 
     and parseUnary (toks: Token list) : Result<Expr * Token list, string> =
         match toks with
+        // Negative integer literals - parse directly as negative values
+        | TMinus :: TInt n :: rest -> Ok (IntLiteral (-n), rest)
+        | TMinus :: TInt8 n :: rest -> Ok (Int8Literal (-n), rest)
+        | TMinus :: TInt16 n :: rest -> Ok (Int16Literal (-n), rest)
+        | TMinus :: TInt32 n :: rest -> Ok (Int32Literal (-n), rest)
+        | TMinus :: TFloat f :: rest -> Ok (FloatLiteral (-f), rest)
         | TMinus :: rest ->
+            // For non-literal expressions, use UnaryOp
             parseUnary rest
             |> Result.map (fun (expr, remaining) -> (UnaryOp (Neg, expr), remaining))
         | TNot :: rest ->

@@ -229,6 +229,11 @@ let buildCopyMap (cfg: CFG) : CopyMap =
                 // Don't add if dest is a phi destination or already in map
                 if Set.contains dest phiDests || Map.containsKey dest m then m
                 else Map.add dest (Register src) m
+            | Mov (dest, (IntConst _ as src), _)
+            | Mov (dest, (BoolConst _ as src), _) ->
+                // Constant propagation: track constant moves too
+                if Set.contains dest phiDests || Map.containsKey dest m then m
+                else Map.add dest src m
             | Phi (dest, [(Register src, _)]) when dest <> src ->
                 // Trivial phi with single register source
                 if Map.containsKey dest m then m
@@ -412,17 +417,29 @@ let simplifyEmptyBlocks (cfg: CFG) : CFG * bool =
 
         ({ cfg with Blocks = blocks' }, true)
 
+/// Truncate a 64-bit value to the appropriate integer type width
+/// This ensures proper overflow/wraparound behavior for smaller integer types
+let truncateToType (value: int64) (opType: AST.Type) : int64 =
+    match opType with
+    | AST.TInt8 -> int64 (int8 value)      // Truncate to signed 8-bit
+    | AST.TInt16 -> int64 (int16 value)    // Truncate to signed 16-bit
+    | AST.TInt32 -> int64 (int32 value)    // Truncate to signed 32-bit
+    | AST.TUInt8 -> int64 (uint8 value)    // Truncate to unsigned 8-bit
+    | AST.TUInt16 -> int64 (uint16 value)  // Truncate to unsigned 16-bit
+    | AST.TUInt32 -> int64 (uint32 value)  // Truncate to unsigned 32-bit
+    | _ -> value                            // Int64/UInt64 and other types: no truncation
+
 /// Constant Folding for MIR
 /// Evaluate operations on constants at compile time
-let tryFoldBinOp (op: BinOp) (left: Operand) (right: Operand) : Operand option =
+let tryFoldBinOp (op: BinOp) (left: Operand) (right: Operand) (opType: AST.Type) : Operand option =
     match op, left, right with
-    // Integer arithmetic
-    | Add, IntConst a, IntConst b -> Some (IntConst (a + b))
-    | Sub, IntConst a, IntConst b -> Some (IntConst (a - b))
-    | Mul, IntConst a, IntConst b -> Some (IntConst (a * b))
+    // Integer arithmetic - apply truncation for proper overflow behavior
+    | Add, IntConst a, IntConst b -> Some (IntConst (truncateToType (a + b) opType))
+    | Sub, IntConst a, IntConst b -> Some (IntConst (truncateToType (a - b) opType))
+    | Mul, IntConst a, IntConst b -> Some (IntConst (truncateToType (a * b) opType))
     // Division: avoid divide by zero and INT64_MIN / -1 overflow
-    | Div, IntConst a, IntConst b when b <> 0L && not (a = System.Int64.MinValue && b = -1L) -> Some (IntConst (a / b))
-    | Mod, IntConst a, IntConst b when b <> 0L -> Some (IntConst (a % b))
+    | Div, IntConst a, IntConst b when b <> 0L && not (a = System.Int64.MinValue && b = -1L) -> Some (IntConst (truncateToType (a / b) opType))
+    | Mod, IntConst a, IntConst b when b <> 0L -> Some (IntConst (truncateToType (a % b) opType))
 
     // Comparisons
     | Eq, IntConst a, IntConst b -> Some (BoolConst (a = b))
@@ -559,6 +576,13 @@ let applyCSE (cfg: CFG) : CFG * bool =
 
     ({ cfg with Blocks = blocks' }, changed)
 
+/// Try to fold a unary operation on a constant
+let tryFoldUnaryOp (op: UnaryOp) (src: Operand) : Operand option =
+    match op, src with
+    | Neg, IntConst n -> Some (IntConst (-n))
+    | Not, BoolConst b -> Some (BoolConst (not b))
+    | _ -> None
+
 /// Apply constant folding to a CFG
 let applyConstantFolding (cfg: CFG) : CFG * bool =
     let (blocks', changed) =
@@ -569,7 +593,13 @@ let applyConstantFolding (cfg: CFG) : CFG * bool =
                 |> List.fold (fun (acc', ch') instr ->
                     match instr with
                     | BinOp (dest, op, left, right, opType) ->
-                        match tryFoldBinOp op left right with
+                        match tryFoldBinOp op left right opType with
+                        | Some result ->
+                            (acc' @ [Mov (dest, result, None)], true)
+                        | None ->
+                            (acc' @ [instr], ch')
+                    | UnaryOp (dest, op, src) ->
+                        match tryFoldUnaryOp op src with
                         | Some result ->
                             (acc' @ [Mov (dest, result, None)], true)
                         | None ->
@@ -589,8 +619,12 @@ let optimizeCFG (cfg: CFG) : CFG =
     let (cfg1, _) = applyConstantFolding cfg
     let (cfg2, _) = applyCSE cfg1
     let (cfg3, _) = applyCopyPropagation cfg2
-    let (cfg4, _) = eliminateDeadCode cfg3
-    cfg4
+    // Run constant folding again after copy propagation
+    // This catches cases like: v1 = -127; v2 = v1 - 2
+    // After copy prop: v2 = IntConst(-127) - IntConst(2) -> can fold
+    let (cfg4, _) = applyConstantFolding cfg3
+    let (cfg5, _) = eliminateDeadCode cfg4
+    cfg5
 
 /// Optimize a function
 let optimizeFunction (func: Function) : Function =
