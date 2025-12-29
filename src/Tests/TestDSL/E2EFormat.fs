@@ -74,16 +74,32 @@ let private parseAttribute (attr: string) : Result<string * string, string> =
     | [| key; value |] -> Ok (key.Trim(), value.Trim())
     | _ -> Error $"Invalid attribute format: {attr}"
 
+/// Check if string starts with expectation keywords (digit, -, stdout, etc.)
+let private isExpectationStart (rest: string) : bool =
+    let trimmed = rest.TrimStart()
+    if trimmed.Length = 0 then false
+    elif Char.IsDigit(trimmed.[0]) || trimmed.[0] = '-' then true
+    elif trimmed.StartsWith("exit") || trimmed.StartsWith("stdout") || trimmed.StartsWith("stderr") || trimmed.StartsWith("no_free_list") || trimmed.StartsWith("error") || trimmed.StartsWith("disable_opt_") then true
+    else false
+
+/// Check if line has ) followed by = <expectation> (for multi-line expression closing)
+let private hasClosingParenTest (s: string) : bool =
+    let rec findPattern (i: int) =
+        if i >= s.Length then false
+        elif s.[i] = ')' then
+            let rest = s.Substring(i + 1).TrimStart()
+            if rest.StartsWith("=") then
+                let afterEq = rest.Substring(1)
+                isExpectationStart afterEq
+            else
+                findPattern (i + 1)
+        else
+            findPattern (i + 1)
+    findPattern 0
+
 /// Find the = that separates source from expectations
 /// Returns Some index if this looks like a test line, None otherwise
 let private findSeparatorIndex (s: string) : int option =
-    let isExpectationStart (rest: string) : bool =
-        let trimmed = rest.TrimStart()
-        if trimmed.Length = 0 then false
-        elif Char.IsDigit(trimmed.[0]) || trimmed.[0] = '-' then true
-        elif trimmed.StartsWith("exit") || trimmed.StartsWith("stdout") || trimmed.StartsWith("stderr") || trimmed.StartsWith("no_free_list") || trimmed.StartsWith("error") || trimmed.StartsWith("disable_opt_") then true
-        else false
-
     let rec findLast (i: int) (inQuotes: bool) (lastEqualsIdx: int option) : int option =
         if i >= s.Length then
             lastEqualsIdx
@@ -294,6 +310,48 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
         | Error e ->
             Error $"Line {lineNumber}: {e}"
 
+/// Parse a multi-line test expression wrapped in parens
+/// Format: (expr...\n...) = expectations
+let private parseMultilineTest (fullText: string) (startLineNumber: int) (filePath: string) (preamble: string) : Result<E2ETest, string> =
+    // Find the `) = <expectation>` pattern that closes the expression
+    // We need to find the LAST ) that's followed by ` = <expectation>`
+    let rec findClosingParen (i: int) (inQuotes: bool) (lastMatch: int option) : int option =
+        if i >= fullText.Length then lastMatch
+        elif fullText.[i] = '"' then findClosingParen (i + 1) (not inQuotes) lastMatch
+        elif fullText.[i] = ')' && not inQuotes then
+            let rest = fullText.Substring(i + 1).TrimStart()
+            if rest.StartsWith("=") then
+                let afterEq = rest.Substring(1)
+                if isExpectationStart afterEq then
+                    findClosingParen (i + 1) inQuotes (Some i)
+                else
+                    findClosingParen (i + 1) inQuotes lastMatch
+            else
+                findClosingParen (i + 1) inQuotes lastMatch
+        else
+            findClosingParen (i + 1) inQuotes lastMatch
+
+    match findClosingParen 0 false None with
+    | None -> Error $"Line {startLineNumber}: Multi-line expression missing ') = <expectation>' pattern"
+    | Some closeParenIdx ->
+        // Extract expression (strip outer parens)
+        let exprStart = fullText.IndexOf('(')
+        if exprStart < 0 then
+            Error $"Line {startLineNumber}: Multi-line expression missing opening '('"
+        else
+            let exprContent = fullText.Substring(exprStart + 1, closeParenIdx - exprStart - 1).Trim()
+            let afterCloseParen = fullText.Substring(closeParenIdx + 1).TrimStart()
+            // afterCloseParen should start with "= expectations"
+            let expectationsStr =
+                if afterCloseParen.StartsWith("=") then afterCloseParen.Substring(1).Trim()
+                else afterCloseParen
+
+            // Reconstruct as single-line format for parsing
+            // Note: The expression itself might contain = signs, but that's fine since
+            // we've already extracted the expectations part
+            let reconstructed = exprContent + " = " + expectationsStr
+            parseTestLineWithPreamble reconstructed startLineNumber filePath preamble
+
 /// Remove trailing comment from a line
 let private stripComment (line: string) : string =
     let commentIdx = line.IndexOf("//")
@@ -304,6 +362,9 @@ let private stripComment (line: string) : string =
 /// Supports preamble definitions that are prepended to all tests.
 /// Lines that don't match the test format (expr = expectation) are treated as
 /// definitions and accumulated. Test lines get the accumulated preamble prepended.
+/// Also supports multi-line test expressions wrapped in parens:
+///   (expr
+///    continuation...) = expectations
 let parseE2ETestFile (path: string) : Result<E2ETest list, string> =
     if not (System.IO.File.Exists path) then
         Error $"Test file not found: {path}"
@@ -313,6 +374,10 @@ let parseE2ETestFile (path: string) : Result<E2ETest list, string> =
         let mutable tests = []
         let mutable errors = []
         let mutable preambleLines = []
+        // Multi-line expression state
+        let mutable pendingExprLines : string list = []
+        let mutable pendingStartLine = 0
+        let mutable inMultilineExpr = false
 
         for i in 0 .. lines.Length - 1 do
             let line = lines.[i]
@@ -321,17 +386,49 @@ let parseE2ETestFile (path: string) : Result<E2ETest list, string> =
 
             // Skip blank lines and comment-only lines
             if trimmedLine.Length > 0 && not (trimmedLine.StartsWith("//")) then
-                let lineWithoutComment = stripComment trimmedLine
-                if isTestLine lineWithoutComment then
-                    // This is a test line - parse it with accumulated preamble
-                    let preamble = String.concat "\n" (List.rev preambleLines)
-                    match parseTestLineWithPreamble trimmedLine lineNumber path preamble with
-                    | Ok test -> tests <- test :: tests
-                    | Error err -> errors <- err :: errors
+                if inMultilineExpr then
+                    // Accumulating multi-line expression
+                    pendingExprLines <- line :: pendingExprLines
+
+                    // Check if this line closes the expression: ) = <expectation>
+                    let lineWithoutComment = stripComment trimmedLine
+                    if hasClosingParenTest lineWithoutComment then
+                        // Combine all accumulated lines and parse as multi-line test
+                        let fullExpr = String.concat "\n" (List.rev pendingExprLines)
+                        let preamble = String.concat "\n" (List.rev preambleLines)
+                        match parseMultilineTest fullExpr pendingStartLine path preamble with
+                        | Ok test -> tests <- test :: tests
+                        | Error err -> errors <- err :: errors
+                        // Reset multi-line state
+                        pendingExprLines <- []
+                        inMultilineExpr <- false
+                    // else: continue accumulating
                 else
-                    // This is a definition line - add to preamble
-                    // Preserve original indentation for multi-line definitions
-                    preambleLines <- line :: preambleLines
+                    let lineWithoutComment = stripComment trimmedLine
+
+                    // Check if this starts a multi-line expression: starts with ( but isn't a complete test
+                    // IMPORTANT: Only treat as multi-line start if at column 0 (no indentation)
+                    // Otherwise it's likely a continuation of a function body
+                    let isTopLevel = line.Length > 0 && not (Char.IsWhiteSpace(line.[0]))
+                    if isTopLevel && trimmedLine.StartsWith("(") && not (isTestLine lineWithoutComment) then
+                        // Start accumulating multi-line expression
+                        pendingExprLines <- [line]
+                        pendingStartLine <- lineNumber
+                        inMultilineExpr <- true
+                    elif isTestLine lineWithoutComment then
+                        // This is a single-line test - parse it with accumulated preamble
+                        let preamble = String.concat "\n" (List.rev preambleLines)
+                        match parseTestLineWithPreamble trimmedLine lineNumber path preamble with
+                        | Ok test -> tests <- test :: tests
+                        | Error err -> errors <- err :: errors
+                    else
+                        // This is a definition line - add to preamble
+                        // Preserve original indentation for multi-line definitions
+                        preambleLines <- line :: preambleLines
+
+        // Check for unclosed multi-line expression
+        if inMultilineExpr then
+            errors <- $"Line {pendingStartLine}: Unclosed multi-line expression (missing ') = <expectation>')" :: errors
 
         if errors.Length > 0 then
             Error (String.concat "\n" (List.rev errors))

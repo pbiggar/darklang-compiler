@@ -6,6 +6,19 @@
 
 type Color = Red | Green | Blue
 
+// Multi-line match expression (testing multi-line syntax support)
+(match Red with
+    | Red -> 1
+    | Green -> 2
+    | Blue -> 3) = stdout="1\n"
+
+// Multi-line with closing paren on separate line
+(match Green with
+    | Red -> 100
+    | Green -> 200
+    | Blue -> 300
+) = stdout="200\n"
+
 // Match on simple enum - first variant
 match Red with | Red -> 1 | Green -> 2 | Blue -> 3 = stdout="1\n"
 
