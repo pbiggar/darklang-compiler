@@ -40,9 +40,34 @@ if [ -f "$PROBLEM_DIR/rust/main.rs" ]; then
     fi
 fi
 
+# Build OCaml implementation
+if [ -f "$PROBLEM_DIR/ocaml/main.ml" ]; then
+    if command -v ocamlopt &> /dev/null; then
+        echo "  Building OCaml..."
+        ocamlopt -O3 "$PROBLEM_DIR/ocaml/main.ml" -o "$PROBLEM_DIR/ocaml/main" 2>/dev/null || echo "    OCaml build failed"
+    else
+        echo "  OCaml: skipped (ocamlopt not installed)"
+    fi
+fi
+
+# F# scripts don't need building (run via dotnet fsi)
+if [ -f "$PROBLEM_DIR/fsharp/main.fsx" ]; then
+    echo "  F#: no build needed (script)"
+fi
+
 # Python doesn't need building
 if [ -f "$PROBLEM_DIR/python/main.py" ]; then
     echo "  Python: no build needed"
+fi
+
+# Node.js doesn't need building
+if [ -f "$PROBLEM_DIR/node/main.js" ]; then
+    echo "  Node.js: no build needed"
+fi
+
+# Bun uses same JS files as Node
+if [ -f "$PROBLEM_DIR/node/main.js" ]; then
+    echo "  Bun: no build needed (uses Node.js files)"
 fi
 
 echo "  Build complete."

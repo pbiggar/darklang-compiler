@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 def parse_baselines_file(baselines_path: Path) -> dict:
-    """Parse BASELINES.md to extract Rust/Python/Node baselines per benchmark.
+    """Parse BASELINES.md to extract language baselines per benchmark.
 
     Returns: {benchmark: [{language, instructions, data_refs, ...}]}
     """

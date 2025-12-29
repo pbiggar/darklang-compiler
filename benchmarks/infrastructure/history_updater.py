@@ -4,7 +4,7 @@ Update benchmark result files after a benchmark run.
 
 Manages three files:
 - RESULTS.md: Quick overview of latest Dark results vs other languages
-- BASELINES.md: Detailed baseline metrics for Rust/Python/Node (no Dark)
+- BASELINES.md: Detailed baseline metrics for reference languages (no Dark)
 - HISTORY.md: Append-only log of all Dark benchmark runs
 
 Usage: python3 history_updater.py <results_dir> [--refresh-baseline]
@@ -165,8 +165,8 @@ def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dic
                 existing[benchmark][lang] = instrs
 
     # Languages (rust is baseline, no speedup for it)
-    languages = ["dark", "rust", "python", "node"]
-    langs_with_speedup = ["dark", "python", "node"]  # Rust is baseline
+    languages = ["dark", "rust", "ocaml", "fsharp", "python", "node", "bun"]
+    langs_with_speedup = ["dark", "ocaml", "fsharp", "python", "node", "bun"]  # Rust is baseline
 
     # Calculate speedups for each benchmark
     speedups = {}  # {benchmark: {lang: ratio}}
@@ -249,7 +249,7 @@ def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dic
 
 
 # ============================================================================
-# BASELINES.md - Detailed baselines for Rust/Python/Node (no Dark)
+# BASELINES.md - Detailed baselines for reference languages (no Dark)
 # ============================================================================
 
 def load_baselines_file(benchmarks_dir: Path) -> dict:
@@ -300,7 +300,7 @@ def load_baselines_file(benchmarks_dir: Path) -> dict:
 
 
 def update_baselines_file(benchmarks_dir: Path, json_results: dict):
-    """Update BASELINES.md with new baseline results (Rust/Python/Node only)."""
+    """Update BASELINES.md with new baseline results (all languages except Dark)."""
     baselines_path = benchmarks_dir / BASELINES_FILE
 
     # Load existing baselines
@@ -330,7 +330,7 @@ def update_baselines_file(benchmarks_dir: Path, json_results: dict):
     lines = [
         "# Benchmark Baselines",
         "",
-        "Reference metrics for Rust, Python, and Node implementations (no Dark).",
+        "Reference metrics for all languages except Dark.",
         "",
         "| Benchmark     | Language | Instructions     | Data Refs        | L1 Miss     | LL Miss     | Branches        | Mispred |",
         "|---------------|----------|------------------|------------------|-------------|-------------|-----------------|---------|",

@@ -50,6 +50,34 @@ elif [ -f "$PROBLEM_DIR/rust/main.rs" ]; then
     echo "  Rust: skipped (not built)"
 fi
 
+# Validate OCaml
+if [ -x "$PROBLEM_DIR/ocaml/main" ]; then
+    OUTPUT=$("$PROBLEM_DIR/ocaml/main" 2>&1 || true)
+    if [ "$OUTPUT" = "$EXPECTED" ]; then
+        echo "  OCaml: PASS"
+    else
+        echo "  OCaml: FAIL (got: '$OUTPUT')"
+        FAILED=1
+    fi
+elif [ -f "$PROBLEM_DIR/ocaml/main.ml" ]; then
+    echo "  OCaml: skipped (not built)"
+fi
+
+# Validate F#
+if [ -f "$PROBLEM_DIR/fsharp/main.fsx" ]; then
+    if command -v dotnet &> /dev/null; then
+        OUTPUT=$(dotnet fsi --optimize+ "$PROBLEM_DIR/fsharp/main.fsx" 2>&1 || true)
+        if [ "$OUTPUT" = "$EXPECTED" ]; then
+            echo "  F#: PASS"
+        else
+            echo "  F#: FAIL (got: '$OUTPUT')"
+            FAILED=1
+        fi
+    else
+        echo "  F#: skipped (dotnet not installed)"
+    fi
+fi
+
 # Validate Python
 if [ -f "$PROBLEM_DIR/python/main.py" ]; then
     if command -v python3 &> /dev/null; then
@@ -62,6 +90,36 @@ if [ -f "$PROBLEM_DIR/python/main.py" ]; then
         fi
     else
         echo "  Python: skipped (python3 not installed)"
+    fi
+fi
+
+# Validate Node.js
+if [ -f "$PROBLEM_DIR/node/main.js" ]; then
+    if command -v node &> /dev/null; then
+        OUTPUT=$(node "$PROBLEM_DIR/node/main.js" 2>&1 || true)
+        if [ "$OUTPUT" = "$EXPECTED" ]; then
+            echo "  Node.js: PASS"
+        else
+            echo "  Node.js: FAIL (got: '$OUTPUT')"
+            FAILED=1
+        fi
+    else
+        echo "  Node.js: skipped (node not installed)"
+    fi
+fi
+
+# Validate Bun (uses same JS as Node)
+if [ -f "$PROBLEM_DIR/node/main.js" ]; then
+    if command -v bun &> /dev/null; then
+        OUTPUT=$(bun run "$PROBLEM_DIR/node/main.js" 2>&1 || true)
+        if [ "$OUTPUT" = "$EXPECTED" ]; then
+            echo "  Bun: PASS"
+        else
+            echo "  Bun: FAIL (got: '$OUTPUT')"
+            FAILED=1
+        fi
+    else
+        echo "  Bun: skipped (bun not installed)"
     fi
 fi
 

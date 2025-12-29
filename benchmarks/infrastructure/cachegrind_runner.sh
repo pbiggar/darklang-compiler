@@ -35,8 +35,9 @@ echo "{\"benchmark\": \"$BENCHMARK\", \"results\": [" > "$RESULTS_FILE"
 FIRST=true
 
 # Determine which implementations to run
+# Compiled languages with binaries: dark, rust, ocaml
 if [ "$REFRESH_BASELINE" = "true" ]; then
-    IMPLS="dark rust"
+    IMPLS="dark rust ocaml"
 else
     IMPLS="dark"
 fi
@@ -178,6 +179,110 @@ if [ "$REFRESH_BASELINE" = "true" ] && [ -f "$PROBLEM_DIR/node/main.js" ]; then
             cat >> "$RESULTS_FILE" << EOF
   {
     "language": "node",
+    "instructions": $I_REFS,
+    "data_refs": $D_REFS,
+    "branches": $BRANCHES,
+    "branch_mispredicts": $MISPREDICTS,
+    "i1_misses": $I1_MISSES,
+    "d1_misses": $D1_MISSES,
+    "ll_misses": $LL_MISSES
+  }
+EOF
+
+            echo "    Instructions: $I_REFS"
+        fi
+    fi
+fi
+
+# Handle F# separately (run via dotnet fsi) - only if refreshing baseline
+FSHARP_TIMEOUT=${FSHARP_TIMEOUT:-300}
+
+if [ "$REFRESH_BASELINE" = "true" ] && [ -f "$PROBLEM_DIR/fsharp/main.fsx" ]; then
+    if command -v dotnet &> /dev/null; then
+        echo "  Running cachegrind on fsharp (timeout: ${FSHARP_TIMEOUT}s)..."
+
+        if CG_OUTPUT=$(timeout "$FSHARP_TIMEOUT" valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes dotnet fsi --optimize+ "$PROBLEM_DIR/fsharp/main.fsx" 2>&1); then
+            FSHARP_SUCCESS=true
+        else
+            EXIT_CODE=$?
+            if [ $EXIT_CODE -eq 124 ]; then
+                echo "    TIMEOUT: F# benchmark exceeded ${FSHARP_TIMEOUT}s, skipping"
+                FSHARP_SUCCESS=false
+            else
+                FSHARP_SUCCESS=true
+            fi
+        fi
+
+        if [ "$FSHARP_SUCCESS" = true ]; then
+            I_REFS=$(echo "$CG_OUTPUT" | grep "I refs:" | sed 's/.*I refs:[[:space:]]*//' | tr -d ',')
+            D_REFS=$(echo "$CG_OUTPUT" | grep "D refs:" | sed 's/.*D refs:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+            BRANCHES=$(echo "$CG_OUTPUT" | grep "Branches:" | sed 's/.*Branches:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+            MISPREDICTS=$(echo "$CG_OUTPUT" | grep "Mispredicts:" | sed 's/.*Mispredicts:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+            I1_MISSES=$(echo "$CG_OUTPUT" | grep "I1  misses:" | sed 's/.*I1  misses:[[:space:]]*//' | tr -d ',')
+            D1_MISSES=$(echo "$CG_OUTPUT" | grep "D1  misses:" | sed 's/.*D1  misses:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+            LL_MISSES=$(echo "$CG_OUTPUT" | grep "LL misses:" | head -1 | sed 's/.*LL misses:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+
+            if [ "$FIRST" = true ]; then
+                FIRST=false
+            else
+                echo "," >> "$RESULTS_FILE"
+            fi
+
+            cat >> "$RESULTS_FILE" << EOF
+  {
+    "language": "fsharp",
+    "instructions": $I_REFS,
+    "data_refs": $D_REFS,
+    "branches": $BRANCHES,
+    "branch_mispredicts": $MISPREDICTS,
+    "i1_misses": $I1_MISSES,
+    "d1_misses": $D1_MISSES,
+    "ll_misses": $LL_MISSES
+  }
+EOF
+
+            echo "    Instructions: $I_REFS"
+        fi
+    fi
+fi
+
+# Handle Bun separately (uses same JS as Node) - only if refreshing baseline
+BUN_TIMEOUT=${BUN_TIMEOUT:-300}
+
+if [ "$REFRESH_BASELINE" = "true" ] && [ -f "$PROBLEM_DIR/node/main.js" ]; then
+    if command -v bun &> /dev/null; then
+        echo "  Running cachegrind on bun (timeout: ${BUN_TIMEOUT}s)..."
+
+        if CG_OUTPUT=$(timeout "$BUN_TIMEOUT" valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes bun run "$PROBLEM_DIR/node/main.js" 2>&1); then
+            BUN_SUCCESS=true
+        else
+            EXIT_CODE=$?
+            if [ $EXIT_CODE -eq 124 ]; then
+                echo "    TIMEOUT: Bun benchmark exceeded ${BUN_TIMEOUT}s, skipping"
+                BUN_SUCCESS=false
+            else
+                BUN_SUCCESS=true
+            fi
+        fi
+
+        if [ "$BUN_SUCCESS" = true ]; then
+            I_REFS=$(echo "$CG_OUTPUT" | grep "I refs:" | sed 's/.*I refs:[[:space:]]*//' | tr -d ',')
+            D_REFS=$(echo "$CG_OUTPUT" | grep "D refs:" | sed 's/.*D refs:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+            BRANCHES=$(echo "$CG_OUTPUT" | grep "Branches:" | sed 's/.*Branches:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+            MISPREDICTS=$(echo "$CG_OUTPUT" | grep "Mispredicts:" | sed 's/.*Mispredicts:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+            I1_MISSES=$(echo "$CG_OUTPUT" | grep "I1  misses:" | sed 's/.*I1  misses:[[:space:]]*//' | tr -d ',')
+            D1_MISSES=$(echo "$CG_OUTPUT" | grep "D1  misses:" | sed 's/.*D1  misses:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+            LL_MISSES=$(echo "$CG_OUTPUT" | grep "LL misses:" | head -1 | sed 's/.*LL misses:[[:space:]]*//' | sed 's/ .*//' | tr -d ',')
+
+            if [ "$FIRST" = true ]; then
+                FIRST=false
+            else
+                echo "," >> "$RESULTS_FILE"
+            fi
+
+            cat >> "$RESULTS_FILE" << EOF
+  {
+    "language": "bun",
     "instructions": $I_REFS,
     "data_refs": $D_REFS,
     "branches": $BRANCHES,
