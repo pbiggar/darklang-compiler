@@ -389,7 +389,8 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         let floatRegs = [LIR.D0; LIR.D1; LIR.D2; LIR.D3; LIR.D4; LIR.D5; LIR.D6; LIR.D7]
 
         // IMPORTANT: Save caller-saved registers BEFORE setting up arguments
-        let saveInstrs = [LIR.SaveRegs]
+        // Empty placeholder - register allocator will fill in the actual registers to save
+        let saveInstrs = [LIR.SaveRegs ([], [])]
 
         // Separate args into int and float based on argTypes
         let argsWithTypes = List.zip args argTypes
@@ -435,7 +436,8 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         let callInstr = LIR.Call (lirDest, funcName, List.map convertOperand args)
 
         // Restore caller-saved registers after the call
-        let restoreInstrs = [LIR.RestoreRegs]
+        // Empty placeholder - register allocator will fill in the actual registers to restore
+        let restoreInstrs = [LIR.RestoreRegs ([], [])]
 
         // Move return value from X0 or D0 to destination based on return type
         // For float returns, we use D8 (callee-saved) as intermediate to avoid conflicts:
@@ -514,7 +516,8 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         let argRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
 
         // Save caller-saved registers
-        let saveInstrs = [LIR.SaveRegs]
+        // Empty placeholder - register allocator will fill in the actual registers to save
+        let saveInstrs = [LIR.SaveRegs ([], [])]
 
         // IMPORTANT: Load function address into X9 FIRST, before setting up arguments.
         // The function pointer might be in X0-X7 which will be overwritten by argument moves.
@@ -543,7 +546,8 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         let callInstr = LIR.IndirectCall (lirDest, LIR.Physical LIR.X9, List.map convertOperand args)
 
         // Restore caller-saved registers
-        let restoreInstrs = [LIR.RestoreRegs]
+        // Empty placeholder - register allocator will fill in the actual registers to restore
+        let restoreInstrs = [LIR.RestoreRegs ([], [])]
 
         // Move return value from X0 or D0 to destination based on return type
         let moveResult =
@@ -606,7 +610,8 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         let argRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
 
         // Save caller-saved registers
-        let saveInstrs = [LIR.SaveRegs]
+        // Empty placeholder - register allocator will fill in the actual registers to save
+        let saveInstrs = [LIR.SaveRegs ([], [])]
 
         // Load closure into a temp register first
         let closureOp = convertOperand closure
@@ -637,7 +642,8 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         let callInstr = LIR.ClosureCall (lirDest, LIR.Physical LIR.X9, List.map convertOperand args)
 
         // Restore caller-saved registers
-        let restoreInstrs = [LIR.RestoreRegs]
+        // Empty placeholder - register allocator will fill in the actual registers to restore
+        let restoreInstrs = [LIR.RestoreRegs ([], [])]
 
         // Move return value from X0 to destination
         let moveResult =
@@ -1276,7 +1282,7 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     // Instructions without pool references - pass through unchanged
     | LIR.Store _ | LIR.Mul _ | LIR.Sdiv _ | LIR.Msub _ | LIR.Cset _
     | LIR.And _ | LIR.Orr _ | LIR.Eor _ | LIR.Lsl _ | LIR.Lsr _ | LIR.Mvn _
-    | LIR.SaveRegs | LIR.RestoreRegs | LIR.PrintInt _ | LIR.PrintBool _ | LIR.PrintFloat _
+    | LIR.SaveRegs _ | LIR.RestoreRegs _ | LIR.PrintInt _ | LIR.PrintBool _ | LIR.PrintFloat _
     | LIR.PrintIntNoNewline _ | LIR.PrintBoolNoNewline _ | LIR.PrintFloatNoNewline _
     | LIR.PrintHeapStringNoNewline _ | LIR.PrintList _ | LIR.PrintSum _ | LIR.PrintRecord _
     | LIR.PrintChars _ | LIR.Exit | LIR.FMov _ | LIR.FAdd _ | LIR.FSub _ | LIR.FMul _ | LIR.FDiv _

@@ -179,10 +179,14 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"PrintSum({prettyPrintLIRReg sumPtr}, {variants})"
     | LIR.PrintRecord (recordPtr, typeName, fields) ->
         $"PrintRecord({prettyPrintLIRReg recordPtr}, {typeName}, {fields})"
-    | LIR.SaveRegs ->
-        "SaveRegs"
-    | LIR.RestoreRegs ->
-        "RestoreRegs"
+    | LIR.SaveRegs (intRegs, floatRegs) ->
+        let intStr = intRegs |> List.map (sprintf "%A") |> String.concat ", "
+        let floatStr = floatRegs |> List.map (sprintf "%A") |> String.concat ", "
+        $"SaveRegs([{intStr}], [{floatStr}])"
+    | LIR.RestoreRegs (intRegs, floatRegs) ->
+        let intStr = intRegs |> List.map (sprintf "%A") |> String.concat ", "
+        let floatStr = floatRegs |> List.map (sprintf "%A") |> String.concat ", "
+        $"RestoreRegs([{intStr}], [{floatStr}])"
     | LIR.ArgMoves moves ->
         let moveStrs = moves |> List.map (fun (dest, src) -> sprintf "%A <- %s" dest (prettyPrintLIROperand src))
         sprintf "ArgMoves(%s)" (String.concat ", " moveStrs)

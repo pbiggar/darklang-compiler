@@ -82,8 +82,8 @@ type Instr =
     | ClosureAlloc of dest:Reg * funcName:string * captures:Operand list  // Allocate closure: (func_addr, caps...)
     | ClosureCall of dest:Reg * closure:Reg * args:Operand list  // Call through closure with hidden first arg
     | ClosureTailCall of closure:Reg * args:Operand list  // Tail call through closure (BR instruction)
-    | SaveRegs                                   // Save caller-saved registers (X1-X10) before call
-    | RestoreRegs                                // Restore caller-saved registers (X1-X10) after call
+    | SaveRegs of intRegs:PhysReg list * floatRegs:PhysFPReg list  // Save specified caller-saved registers before call
+    | RestoreRegs of intRegs:PhysReg list * floatRegs:PhysFPReg list  // Restore specified caller-saved registers after call
     | ArgMoves of (PhysReg * Operand) list       // Move arguments to X0-X7 (parallel move - loads clobbered from SaveRegs stack)
     | TailArgMoves of (PhysReg * Operand) list   // Move arguments for tail calls (uses temp registers, no SaveRegs)
     | FArgMoves of (PhysFPReg * FReg) list       // Move float arguments to D0-D7

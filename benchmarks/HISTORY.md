@@ -4,6 +4,75 @@ Performance history of Darklang compiler across versions (instruction counts via
 
 ---
 
+## 2025-12-29 10:28:45
+
+**Commit:** `0ac77f8e` - Revert buggy parallel move fix, restore original stack-based approach
+
+### fib
+
+| Language | Instructions | vs Rust  | Data Refs   | L1 Miss | LL Miss | Branches   | Mispred |
+|----------|--------------|----------|-------------|---------|---------|------------|---------|
+|     Dark |  776,378,372 | baseline | 209,024,946 |      54 |      62 | 29,860,714 |    9.0% |
+---
+
+
+## 2025-12-29 08:43:50
+
+**Commit:** `d2e1e3ae` - Fix parallel move clobbering for tail calls
+
+### sum_to_n
+
+| Language | Instructions | vs Rust  | Data Refs | L1 Miss | LL Miss | Branches  | Mispred |
+|----------|--------------|----------|-----------|---------|---------|-----------|---------|
+|     Dark |   20,007,159 | baseline | 4,004,065 |       8 |      21 | 1,000,213 |    0.0% |
+#### Instruction Counts (Cachegrind)
+
+**fib:**
+- Rust: 272,526,559 (0.35x)
+- Dark: 776,378,372 (baseline)
+- Python: 15,135,188,032 (19.5x)
+
+---
+
+
+## 2025-12-29 08:43:37
+
+**Commit:** `d2e1e3ae` - Fix parallel move clobbering for tail calls
+
+### fib
+
+| Language | Instructions  | vs Rust  | Data Refs     | L1 Miss | LL Miss | Branches   | Mispred |
+|----------|---------------|----------|---------------|---------|---------|------------|---------|
+|     Dark | 1,463,174,546 | baseline | 1,119,776,389 |      90 |     103 | 29,860,714 |    9.0% |
+#### Instruction Counts (Cachegrind)
+
+**sum_to_n:**
+- Rust: 255,662 (0.01x)
+- Dark: 20,007,159 (baseline)
+- Python: 940,685,845 (47.0x)
+
+---
+
+
+## 2025-12-29 08:43:26
+
+**Commit:** `d2e1e3ae` - Fix parallel move clobbering for tail calls
+
+### factorial
+
+| Language | Instructions | vs Rust  | Data Refs | L1 Miss | LL Miss | Branches | Mispred |
+|----------|--------------|----------|-----------|---------|---------|----------|---------|
+|     Dark |   10,160,236 | baseline | 7,430,076 |      55 |      70 |  210,024 |    4.8% |
+#### Instruction Counts (Cachegrind)
+
+**fib:**
+- Rust: 272,526,559 (0.19x)
+- Dark: 1,463,174,546 (baseline)
+- Python: 15,135,188,032 (10.3x)
+
+---
+
+
 ## 2025-12-28 12:28:19
 
 **Commit:** `0f060e54` - Add algebraic simplifications and bitwise identities
@@ -49,6 +118,13 @@ Performance history of Darklang compiler across versions (instruction counts via
 | Language | Instructions  | vs Rust  | Data Refs   | L1 Miss | LL Miss | Branches   | Mispred |
 |----------|---------------|----------|-------------|---------|---------|------------|---------|
 |     Dark | 1,022,273,555 | baseline | 573,470,532 |      53 |      71 | 24,933,506 |   17.4% |
+#### Instruction Counts (Cachegrind)
+
+**factorial:**
+- Rust: 255,726 (0.03x)
+- Dark: 10,160,236 (baseline)
+- Python: 182,064,112 (17.9x)
+
 ---
 
 

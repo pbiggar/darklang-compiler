@@ -1087,55 +1087,98 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             let branch = [ARM64.BR funcPtrReg]
             restoreCalleeSavedInstrs @ deallocCalleeSaved @ deallocStack @ restoreFpLr @ branch)
 
-    | LIR.SaveRegs ->
-        // Save caller-saved registers (X1-X10 and D0-D7) before call
-        // D0 is saved because it may contain a live float parameter.
-        // The return value is captured BEFORE RestoreRegs runs, so D0 can be
-        // safely restored to its pre-call value.
-        // Layout: X1-X10 at SP+0..SP+72, D0-D7 at SP+80..SP+136
-        // Total: 144 bytes (aligned for 16-byte requirement)
-        Ok [
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 144us)
-            // Save integer registers X1-X10
-            ARM64.STP (ARM64.X1, ARM64.X2, ARM64.SP, 0s)
-            ARM64.STP (ARM64.X3, ARM64.X4, ARM64.SP, 16s)
-            ARM64.STP (ARM64.X5, ARM64.X6, ARM64.SP, 32s)
-            ARM64.STP (ARM64.X7, ARM64.X8, ARM64.SP, 48s)
-            ARM64.STP (ARM64.X9, ARM64.X10, ARM64.SP, 64s)
-            // Save float registers D0-D7 (caller-saved per AAPCS64)
-            ARM64.STR_fp (ARM64.D0, ARM64.SP, 80s)
-            ARM64.STR_fp (ARM64.D1, ARM64.SP, 88s)
-            ARM64.STR_fp (ARM64.D2, ARM64.SP, 96s)
-            ARM64.STR_fp (ARM64.D3, ARM64.SP, 104s)
-            ARM64.STR_fp (ARM64.D4, ARM64.SP, 112s)
-            ARM64.STR_fp (ARM64.D5, ARM64.SP, 120s)
-            ARM64.STR_fp (ARM64.D6, ARM64.SP, 128s)
-            ARM64.STR_fp (ARM64.D7, ARM64.SP, 136s)
-        ]
+    | LIR.SaveRegs (intRegs, floatRegs) ->
+        // Save only the caller-saved registers that are live across this call
+        // We maintain fixed offsets for ArgMoves compatibility:
+        // Layout: X1-X10 at SP+0..SP+72 (fixed), D0-D7 at SP+80..SP+136
+        // If no registers need saving, emit nothing (no stack allocation)
+        if List.isEmpty intRegs && List.isEmpty floatRegs then
+            Ok []  // Nothing to save - no stack allocation needed
+        else
+            // Determine stack size - we need fixed layout for ArgMoves compatibility
+            // when any int registers are saved
+            let hasIntRegs = not (List.isEmpty intRegs)
+            let hasFloatRegs = not (List.isEmpty floatRegs)
+            let intSlotSize = if hasIntRegs then 80 else 0  // X1-X10 (10 regs * 8 bytes)
+            let floatSlotSize = if hasFloatRegs then 64 else 0  // D0-D7 (8 regs * 8 bytes)
+            let totalSize = intSlotSize + floatSlotSize
 
-    | LIR.RestoreRegs ->
-        // Restore caller-saved registers (X1-X10 and D0-D7) after call
-        // The return value has already been captured to its destination before
-        // RestoreRegs runs, so D0 can be safely restored to preserve any live
-        // float parameter that was in D0 before the call.
-        Ok [
-            // Restore integer registers X1-X10
-            ARM64.LDP (ARM64.X1, ARM64.X2, ARM64.SP, 0s)
-            ARM64.LDP (ARM64.X3, ARM64.X4, ARM64.SP, 16s)
-            ARM64.LDP (ARM64.X5, ARM64.X6, ARM64.SP, 32s)
-            ARM64.LDP (ARM64.X7, ARM64.X8, ARM64.SP, 48s)
-            ARM64.LDP (ARM64.X9, ARM64.X10, ARM64.SP, 64s)
-            // Restore float registers D0-D7
-            ARM64.LDR_fp (ARM64.D0, ARM64.SP, 80s)
-            ARM64.LDR_fp (ARM64.D1, ARM64.SP, 88s)
-            ARM64.LDR_fp (ARM64.D2, ARM64.SP, 96s)
-            ARM64.LDR_fp (ARM64.D3, ARM64.SP, 104s)
-            ARM64.LDR_fp (ARM64.D4, ARM64.SP, 112s)
-            ARM64.LDR_fp (ARM64.D5, ARM64.SP, 120s)
-            ARM64.LDR_fp (ARM64.D6, ARM64.SP, 128s)
-            ARM64.LDR_fp (ARM64.D7, ARM64.SP, 136s)
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 144us)
-        ]
+            let allocStack = [ARM64.SUB_imm (ARM64.SP, ARM64.SP, uint16 totalSize)]
+
+            // Save only the specified int registers at fixed offsets
+            // (must maintain layout for ArgMoves which loads from stack)
+            let saveIntReg (reg: LIR.PhysReg) : ARM64.Instr list =
+                let arm64Reg = lirPhysRegToARM64Reg reg
+                let offset =
+                    match reg with
+                    | LIR.X1 -> 0s | LIR.X2 -> 8s | LIR.X3 -> 16s | LIR.X4 -> 24s
+                    | LIR.X5 -> 32s | LIR.X6 -> 40s | LIR.X7 -> 48s | LIR.X8 -> 56s
+                    | LIR.X9 -> 64s | LIR.X10 -> 72s
+                    | _ -> 0s  // Shouldn't happen
+                [ARM64.STR (arm64Reg, ARM64.SP, offset)]
+
+            let intSaves = intRegs |> List.collect saveIntReg
+
+            // Save only the specified float registers
+            let saveFloatReg (freg: LIR.PhysFPReg) : ARM64.Instr list =
+                let arm64FReg = lirPhysFPRegToARM64FReg freg
+                let baseOffset = if hasIntRegs then 80s else 0s
+                let offset =
+                    match freg with
+                    | LIR.D0 -> baseOffset | LIR.D1 -> baseOffset + 8s
+                    | LIR.D2 -> baseOffset + 16s | LIR.D3 -> baseOffset + 24s
+                    | LIR.D4 -> baseOffset + 32s | LIR.D5 -> baseOffset + 40s
+                    | LIR.D6 -> baseOffset + 48s | LIR.D7 -> baseOffset + 56s
+                    | _ -> baseOffset  // Shouldn't happen
+                [ARM64.STR_fp (arm64FReg, ARM64.SP, offset)]
+
+            let floatSaves = floatRegs |> List.collect saveFloatReg
+
+            Ok (allocStack @ intSaves @ floatSaves)
+
+    | LIR.RestoreRegs (intRegs, floatRegs) ->
+        // Restore only the caller-saved registers that are live across this call
+        // Must match the layout from SaveRegs
+        if List.isEmpty intRegs && List.isEmpty floatRegs then
+            Ok []  // Nothing was saved - no stack deallocation needed
+        else
+            let hasIntRegs = not (List.isEmpty intRegs)
+            let hasFloatRegs = not (List.isEmpty floatRegs)
+            let intSlotSize = if hasIntRegs then 80 else 0
+            let floatSlotSize = if hasFloatRegs then 64 else 0
+            let totalSize = intSlotSize + floatSlotSize
+
+            // Restore only the specified int registers from fixed offsets
+            let restoreIntReg (reg: LIR.PhysReg) : ARM64.Instr list =
+                let arm64Reg = lirPhysRegToARM64Reg reg
+                let offset =
+                    match reg with
+                    | LIR.X1 -> 0s | LIR.X2 -> 8s | LIR.X3 -> 16s | LIR.X4 -> 24s
+                    | LIR.X5 -> 32s | LIR.X6 -> 40s | LIR.X7 -> 48s | LIR.X8 -> 56s
+                    | LIR.X9 -> 64s | LIR.X10 -> 72s
+                    | _ -> 0s
+                [ARM64.LDR (arm64Reg, ARM64.SP, offset)]
+
+            let intRestores = intRegs |> List.collect restoreIntReg
+
+            // Restore only the specified float registers
+            let restoreFloatReg (freg: LIR.PhysFPReg) : ARM64.Instr list =
+                let arm64FReg = lirPhysFPRegToARM64FReg freg
+                let baseOffset = if hasIntRegs then 80s else 0s
+                let offset =
+                    match freg with
+                    | LIR.D0 -> baseOffset | LIR.D1 -> baseOffset + 8s
+                    | LIR.D2 -> baseOffset + 16s | LIR.D3 -> baseOffset + 24s
+                    | LIR.D4 -> baseOffset + 32s | LIR.D5 -> baseOffset + 40s
+                    | LIR.D6 -> baseOffset + 48s | LIR.D7 -> baseOffset + 56s
+                    | _ -> baseOffset
+                [ARM64.LDR_fp (arm64FReg, ARM64.SP, offset)]
+
+            let floatRestores = floatRegs |> List.collect restoreFloatReg
+
+            let deallocStack = [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 totalSize)]
+
+            Ok (intRestores @ floatRestores @ deallocStack)
 
     | LIR.ArgMoves moves ->
         // Parallel move resolution for function arguments
@@ -1167,26 +1210,30 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             | LIR.Imm value ->
                 Ok (loadImmediate destARM64 value)
             | LIR.Reg (LIR.Physical srcPhysReg) ->
-                // Check if source register will be clobbered by an earlier move
-                // A register is clobbered if it's a destination of a move to a LOWER index
-                // (since we process X0, X1, X2, ... in order)
-                let srcWillBeClobbered =
-                    match srcPhysReg with
-                    | LIR.X1 | LIR.X2 | LIR.X3 | LIR.X4 | LIR.X5 | LIR.X6 | LIR.X7 ->
-                        Set.contains srcPhysReg destRegs
-                    | _ -> false
-                if srcWillBeClobbered then
-                    // Load from SaveRegs stack instead of live register
-                    match saveRegsOffset srcPhysReg with
-                    | Some offset ->
-                        Ok [ARM64.LDR (destARM64, ARM64.SP, int16 offset)]
-                    | None ->
-                        // Shouldn't happen, but fall back to MOV
+                // If source equals destination, it's a no-op
+                if srcPhysReg = destReg then
+                    Ok []
+                else
+                    // Check if source register will be clobbered by an earlier move
+                    // A register is clobbered if it's a destination of a move to a LOWER index
+                    // (since we process X0, X1, X2, ... in order)
+                    let srcWillBeClobbered =
+                        match srcPhysReg with
+                        | LIR.X1 | LIR.X2 | LIR.X3 | LIR.X4 | LIR.X5 | LIR.X6 | LIR.X7 ->
+                            Set.contains srcPhysReg destRegs
+                        | _ -> false
+                    if srcWillBeClobbered then
+                        // Load from SaveRegs stack instead of live register
+                        match saveRegsOffset srcPhysReg with
+                        | Some offset ->
+                            Ok [ARM64.LDR (destARM64, ARM64.SP, int16 offset)]
+                        | None ->
+                            // Shouldn't happen, but fall back to MOV
+                            let srcARM64 = lirPhysRegToARM64Reg srcPhysReg
+                            Ok [ARM64.MOV_reg (destARM64, srcARM64)]
+                    else
                         let srcARM64 = lirPhysRegToARM64Reg srcPhysReg
                         Ok [ARM64.MOV_reg (destARM64, srcARM64)]
-                else
-                    let srcARM64 = lirPhysRegToARM64Reg srcPhysReg
-                    Ok [ARM64.MOV_reg (destARM64, srcARM64)]
             | LIR.Reg (LIR.Virtual _) ->
                 Error "Virtual register in ArgMoves - should have been allocated"
             | LIR.StackSlot offset ->

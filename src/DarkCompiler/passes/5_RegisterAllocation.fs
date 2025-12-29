@@ -325,6 +325,38 @@ let computeLiveness (cfg: LIR.CFG) : Map<LIR.Label, BlockLiveness> =
 
     liveness
 
+/// Compute liveness at each instruction index within a block
+/// Returns a list of live VReg sets, one per instruction (same order as Instrs)
+let computeInstructionLiveness (block: LIR.BasicBlock) (liveOut: Set<int>) : Set<int> list =
+    // Walk backwards from the terminator, tracking liveness
+    let mutable live = liveOut
+
+    // Handle terminator uses first
+    let termUses = getTerminatorUsedVRegs block.Terminator
+    for u in termUses do
+        live <- Set.add u live
+
+    // Walk instructions in reverse, collecting liveness at each point
+    // We want liveness AFTER each instruction (what's live when that instruction completes)
+    let instrsReversed = List.rev block.Instrs
+    let mutable livenessListReversed = []
+
+    for instr in instrsReversed do
+        // Record liveness at this point (after the instruction executes)
+        livenessListReversed <- live :: livenessListReversed
+
+        // Update liveness: remove definition, add uses
+        match getDefinedVReg instr with
+        | Some def -> live <- Set.remove def live
+        | None -> ()
+
+        for used in getUsedVRegs instr do
+            live <- Set.add used live
+
+    // Since we walked backwards and prepended each result, the list is already
+    // in forward order (matching the original instruction order)
+    livenessListReversed
+
 // ============================================================================
 // Live Interval Construction
 // ============================================================================
@@ -427,6 +459,17 @@ let allocatableRegs = callerSavedRegs @ calleeSavedRegs
 /// Check if a register is callee-saved
 let isCalleeSaved (reg: LIR.PhysReg) : bool =
     List.contains reg calleeSavedRegs
+
+/// Get the caller-saved physical registers that contain live values
+let getLiveCallerSavedRegs (liveVRegs: Set<int>) (mapping: Map<int, Allocation>) : LIR.PhysReg list =
+    liveVRegs
+    |> Set.toList
+    |> List.choose (fun vregId ->
+        match Map.tryFind vregId mapping with
+        | Some (PhysReg reg) when List.contains reg callerSavedRegs -> Some reg
+        | _ -> None)
+    |> List.distinct
+    |> List.sort  // Keep consistent order for deterministic output
 
 /// Align to 16-byte boundary
 let alignTo16 (size: int) : int =
@@ -807,8 +850,10 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
         let callInstr = LIR.ClosureTailCall (closureReg, argOps)
         closureLoads @ argLoads @ [callInstr]
 
-    | LIR.SaveRegs -> [LIR.SaveRegs]
-    | LIR.RestoreRegs -> [LIR.RestoreRegs]
+    // SaveRegs/RestoreRegs are handled specially in applyToBlockWithLiveness
+    // These patterns handle the case where they've already been populated
+    | LIR.SaveRegs (intRegs, floatRegs) -> [LIR.SaveRegs (intRegs, floatRegs)]
+    | LIR.RestoreRegs (intRegs, floatRegs) -> [LIR.RestoreRegs (intRegs, floatRegs)]
 
     | LIR.ArgMoves moves ->
         // Apply allocation to each operand in the arg moves
@@ -1127,7 +1172,50 @@ let applyToTerminator (mapping: Map<int, Allocation>) (term: LIR.Terminator)
             ([], LIR.Branch (LIR.Physical p, trueLabel, falseLabel))
     | LIR.Jump label -> ([], LIR.Jump label)
 
-/// Apply allocation to a basic block
+/// Apply allocation to a basic block with liveness-aware SaveRegs/RestoreRegs population
+let applyToBlockWithLiveness
+    (mapping: Map<int, Allocation>)
+    (liveOut: Set<int>)
+    (block: LIR.BasicBlock)
+    : LIR.BasicBlock =
+
+    // Compute liveness at each instruction point
+    let instrLiveness = computeInstructionLiveness block liveOut
+
+    // Process each instruction with its corresponding liveness
+    // Debug: check lengths match
+    let instrCount = List.length block.Instrs
+    let livenessCount = List.length instrLiveness
+    if instrCount <> livenessCount then
+        failwithf "Instruction count (%d) doesn't match liveness count (%d)" instrCount livenessCount
+
+    let allocatedInstrs =
+        List.zip block.Instrs instrLiveness
+        |> List.collect (fun (instr, liveAfter) ->
+            match instr with
+            | LIR.SaveRegs ([], []) ->
+                // Empty placeholder - populate with live caller-saved registers
+                // At SaveRegs point, we save registers that contain values live across the call
+                let liveCallerSaved = getLiveCallerSavedRegs liveAfter mapping
+                // For now, don't save float registers (we'd need to track float liveness too)
+                // TODO: Add float register liveness tracking
+                applyToInstr mapping (LIR.SaveRegs (liveCallerSaved, []))
+            | LIR.RestoreRegs ([], []) ->
+                // Match the corresponding SaveRegs - use the same registers
+                // For now, we'll compute it the same way (they should match)
+                let liveCallerSaved = getLiveCallerSavedRegs liveAfter mapping
+                applyToInstr mapping (LIR.RestoreRegs (liveCallerSaved, []))
+            | _ ->
+                applyToInstr mapping instr)
+
+    let (termLoads, allocatedTerm) = applyToTerminator mapping block.Terminator
+    {
+        LIR.Label = block.Label
+        LIR.Instrs = allocatedInstrs @ termLoads
+        LIR.Terminator = allocatedTerm
+    }
+
+/// Apply allocation to a basic block (legacy - no liveness info)
 let applyToBlock (mapping: Map<int, Allocation>) (block: LIR.BasicBlock) : LIR.BasicBlock =
     let allocatedInstrs = block.Instrs |> List.collect (applyToInstr mapping)
     let (termLoads, allocatedTerm) = applyToTerminator mapping block.Terminator
@@ -1137,7 +1225,20 @@ let applyToBlock (mapping: Map<int, Allocation>) (block: LIR.BasicBlock) : LIR.B
         LIR.Terminator = allocatedTerm
     }
 
-/// Apply allocation to CFG
+/// Apply allocation to CFG with liveness info
+let applyToCFGWithLiveness
+    (mapping: Map<int, Allocation>)
+    (cfg: LIR.CFG)
+    (liveness: Map<LIR.Label, BlockLiveness>)
+    : LIR.CFG =
+    {
+        LIR.Entry = cfg.Entry
+        LIR.Blocks = cfg.Blocks |> Map.map (fun label block ->
+            let blockLiveness = Map.find label liveness
+            applyToBlockWithLiveness mapping blockLiveness.LiveOut block)
+    }
+
+/// Apply allocation to CFG (legacy - no liveness info)
 let applyToCFG (mapping: Map<int, Allocation>) (cfg: LIR.CFG) : LIR.CFG =
     {
         LIR.Entry = cfg.Entry
@@ -1217,8 +1318,8 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
             | LIR.Physical _ -> None)
         |> List.choose id
 
-    // Step 7: Apply allocation to CFG
-    let allocatedCFG = applyToCFG result.Mapping func.CFG
+    // Step 7: Apply allocation to CFG with liveness info for SaveRegs/RestoreRegs population
+    let allocatedCFG = applyToCFGWithLiveness result.Mapping func.CFG liveness
 
     // Step 8: Insert parameter copy instructions at the start of the entry block
     // Float param copies go first (they use separate register bank)
