@@ -41,6 +41,7 @@ let hasSideEffects (instr: Instr) : bool =
     | RawAlloc _ -> true  // Allocates memory
     | RawFree _ -> true   // Frees memory
     | RawGet _ -> false   // Pure memory read
+    | RawGetByte _ -> false  // Pure memory read (byte)
     | RawSet _ -> true    // Writes to memory
     | FloatSqrt _ -> false  // Pure float operation
     | FloatAbs _ -> false   // Pure float operation
@@ -75,6 +76,7 @@ let getInstrDest (instr: Instr) : VReg option =
     | Phi (dest, _) -> Some dest
     | RawAlloc (dest, _) -> Some dest
     | RawGet (dest, _, _) -> Some dest
+    | RawGetByte (dest, _, _) -> Some dest
     | FloatSqrt (dest, _) -> Some dest
     | FloatAbs (dest, _) -> Some dest
     | FloatNeg (dest, _) -> Some dest
@@ -124,6 +126,7 @@ let getInstrUses (instr: Instr) : Set<VReg> =
     | RawAlloc (_, numBytes) -> fromOperand numBytes
     | RawFree ptr -> fromOperand ptr
     | RawGet (_, ptr, byteOffset) -> Set.union (fromOperand ptr) (fromOperand byteOffset)
+    | RawGetByte (_, ptr, byteOffset) -> Set.union (fromOperand ptr) (fromOperand byteOffset)
     | RawSet (ptr, byteOffset, value) -> Set.unionMany [fromOperand ptr; fromOperand byteOffset; fromOperand value]
     | FloatSqrt (_, src) -> fromOperand src
     | FloatAbs (_, src) -> fromOperand src
@@ -290,6 +293,7 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | RawAlloc (dest, numBytes) -> RawAlloc (dest, p numBytes)
     | RawFree ptr -> RawFree (p ptr)
     | RawGet (dest, ptr, byteOffset) -> RawGet (dest, p ptr, p byteOffset)
+    | RawGetByte (dest, ptr, byteOffset) -> RawGetByte (dest, p ptr, p byteOffset)
     | RawSet (ptr, byteOffset, value) -> RawSet (p ptr, p byteOffset, p value)
     | FloatSqrt (dest, src) -> FloatSqrt (dest, p src)
     | FloatAbs (dest, src) -> FloatAbs (dest, p src)

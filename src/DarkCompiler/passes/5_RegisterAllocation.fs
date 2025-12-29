@@ -154,6 +154,10 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         let p = regToVReg ptr |> Option.toList
         let o = regToVReg byteOffset |> Option.toList
         Set.ofList (p @ o)
+    | LIR.RawGetByte (_, ptr, byteOffset) ->
+        let p = regToVReg ptr |> Option.toList
+        let o = regToVReg byteOffset |> Option.toList
+        Set.ofList (p @ o)
     | LIR.RawSet (ptr, byteOffset, value) ->
         let p = regToVReg ptr |> Option.toList
         let o = regToVReg byteOffset |> Option.toList
@@ -206,6 +210,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.FileSetExecutable (dest, _) -> regToVReg dest
     | LIR.RawAlloc (dest, _) -> regToVReg dest
     | LIR.RawGet (dest, _, _) -> regToVReg dest
+    | LIR.RawGetByte (dest, _, _) -> regToVReg dest
     | LIR.RawFree _ -> None
     | LIR.RawSet _ -> None
     // FloatToInt defines an integer destination register
@@ -964,6 +969,17 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
         let (ptrReg, ptrLoads) = loadSpilled mapping ptr LIR.X12
         let (offsetReg, offsetLoads) = loadSpilled mapping byteOffset LIR.X13
         let getInstr = LIR.RawGet (destReg, ptrReg, offsetReg)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        ptrLoads @ offsetLoads @ [getInstr] @ storeInstrs
+
+    | LIR.RawGetByte (dest, ptr, byteOffset) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (ptrReg, ptrLoads) = loadSpilled mapping ptr LIR.X12
+        let (offsetReg, offsetLoads) = loadSpilled mapping byteOffset LIR.X13
+        let getInstr = LIR.RawGetByte (destReg, ptrReg, offsetReg)
         let storeInstrs =
             match destAlloc with
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]

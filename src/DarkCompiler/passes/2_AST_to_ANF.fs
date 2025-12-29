@@ -82,6 +82,10 @@ let tryRawMemoryIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr o
         Some (ANF.RawAlloc numBytesAtom)
     | "__raw_free", [ptrAtom] ->
         Some (ANF.RawFree ptrAtom)
+    | "__raw_get_byte", [ptrAtom; offsetAtom] ->
+        // Read single byte at offset, returns Int64 (zero-extended)
+        // IMPORTANT: Must come before the generic __raw_get_* pattern
+        Some (ANF.RawGetByte (ptrAtom, offsetAtom))
     | name, [ptrAtom; offsetAtom] when name = "__raw_get" || name.StartsWith("__raw_get_") ->
         // Generic __raw_get<v> monomorphizes to __raw_get_i64, __raw_get_str, etc.
         Some (ANF.RawGet (ptrAtom, offsetAtom))

@@ -137,3 +137,35 @@ $"{"a" ++ "b"}" = stdout="ab\n"
 
 // NOTE: Multiple interpolations like $"{x} and {y}" trigger a pre-existing bug
 // in chained string concatenation code generation - to be fixed separately
+
+// =============================================================================
+// Stdlib.String.getByteAt Tests
+// =============================================================================
+
+// Get bytes from ASCII string "abc" = 97, 98, 99
+Stdlib.String.getByteAt("abc", 0) = 97
+Stdlib.String.getByteAt("abc", 1) = 98
+Stdlib.String.getByteAt("abc", 2) = 99
+
+// Get bytes from uppercase "ABC" = 65, 66, 67
+Stdlib.String.getByteAt("ABC", 0) = 65
+Stdlib.String.getByteAt("ABC", 1) = 66
+Stdlib.String.getByteAt("ABC", 2) = 67
+
+// Get byte from single character
+Stdlib.String.getByteAt("x", 0) = 120
+
+// Get space character (ASCII 32)
+Stdlib.String.getByteAt(" ", 0) = 32
+
+// Get digits
+Stdlib.String.getByteAt("0", 0) = 48
+Stdlib.String.getByteAt("9", 0) = 57
+
+// Helper functions for character type checks
+Stdlib.String.__isLowercase(97) = stdout="true\n"
+Stdlib.String.__isLowercase(122) = stdout="true\n"
+Stdlib.String.__isLowercase(65) = stdout="false\n"
+Stdlib.String.__isUppercase(65) = stdout="true\n"
+Stdlib.String.__isUppercase(90) = stdout="true\n"
+Stdlib.String.__isUppercase(97) = stdout="false\n"

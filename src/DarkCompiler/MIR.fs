@@ -149,6 +149,7 @@ type Instr =
     | RawAlloc of dest:VReg * numBytes:Operand    // Allocate raw bytes (no header), returns RawPtr
     | RawFree of ptr:Operand                      // Manually free raw memory
     | RawGet of dest:VReg * ptr:Operand * byteOffset:Operand  // Read 8 bytes at offset
+    | RawGetByte of dest:VReg * ptr:Operand * byteOffset:Operand  // Read 1 byte at offset (zero-extended)
     | RawSet of ptr:Operand * byteOffset:Operand * value:Operand  // Write 8 bytes at offset
     // String intrinsics (for Dict with string keys)
     | StringHash of dest:VReg * str:Operand       // FNV-1a hash of string, returns Int64

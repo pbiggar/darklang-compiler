@@ -210,6 +210,7 @@ let collectProperlyDefinedVRegs (cfg: CFG) : Set<VReg> =
                 | FileAppendText (dest, _, _) -> Set.add dest d
                 | RawAlloc (dest, _) -> Set.add dest d
                 | RawGet (dest, _, _) -> Set.add dest d
+                | RawGetByte (dest, _, _) -> Set.add dest d
                 | Phi _ -> d  // Skip phi nodes
                 | _ -> d
             ) defs

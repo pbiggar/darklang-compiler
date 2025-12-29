@@ -124,6 +124,7 @@ let hasSideEffects (cexpr: CExpr) : bool =
     | RawAlloc _ -> true  // Allocates memory
     | RawFree _ -> true   // Frees memory
     | RawGet _ -> false   // Pure memory read
+    | RawGetByte _ -> false  // Pure memory read (byte)
     | RawSet _ -> true    // Memory mutation
     | FloatSqrt _ -> false  // Pure float operation
     | FloatAbs _ -> false   // Pure float operation
@@ -171,6 +172,7 @@ let collectCExprUses (cexpr: CExpr) : Set<TempId> =
     | RawAlloc numBytes -> collectAtomUses numBytes
     | RawFree ptr -> collectAtomUses ptr
     | RawGet (ptr, byteOffset) -> Set.union (collectAtomUses ptr) (collectAtomUses byteOffset)
+    | RawGetByte (ptr, byteOffset) -> Set.union (collectAtomUses ptr) (collectAtomUses byteOffset)
     | RawSet (ptr, byteOffset, value) -> Set.unionMany [collectAtomUses ptr; collectAtomUses byteOffset; collectAtomUses value]
     | FloatSqrt atom -> collectAtomUses atom
     | FloatAbs atom -> collectAtomUses atom
@@ -225,6 +227,7 @@ let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | RawAlloc numBytes -> RawAlloc (s numBytes)
     | RawFree ptr -> RawFree (s ptr)
     | RawGet (ptr, byteOffset) -> RawGet (s ptr, s byteOffset)
+    | RawGetByte (ptr, byteOffset) -> RawGetByte (s ptr, s byteOffset)
     | RawSet (ptr, byteOffset, value) -> RawSet (s ptr, s byteOffset, s value)
     | FloatSqrt atom -> FloatSqrt (s atom)
     | FloatAbs atom -> FloatAbs (s atom)

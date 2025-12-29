@@ -176,6 +176,7 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | RawAlloc (dest, _) -> Set.add dest defs
         | RawFree _ -> defs
         | RawGet (dest, _, _) -> Set.add dest defs
+        | RawGetByte (dest, _, _) -> Set.add dest defs
         | RawSet _ -> defs
         | FloatSqrt (dest, _) -> Set.add dest defs
         | FloatAbs (dest, _) -> Set.add dest defs
@@ -252,6 +253,8 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
             | RawAlloc (_, numBytes) -> Set.union uses (getOperandUses numBytes)
             | RawFree ptr -> Set.union uses (getOperandUses ptr)
             | RawGet (_, ptr, offset) ->
+                uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset)
+            | RawGetByte (_, ptr, offset) ->
                 uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset)
             | RawSet (ptr, offset, value) ->
                 uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset) |> Set.union (getOperandUses value)
@@ -619,6 +622,12 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let byteOffset' = renameOperand state byteOffset
         let (_, newDest, state') = newVersion state dest
         (RawGet (newDest, ptr', byteOffset'), state')
+
+    | RawGetByte (dest, ptr, byteOffset) ->
+        let ptr' = renameOperand state ptr
+        let byteOffset' = renameOperand state byteOffset
+        let (_, newDest, state') = newVersion state dest
+        (RawGetByte (newDest, ptr', byteOffset'), state')
 
     | RawSet (ptr, byteOffset, value) ->
         let ptr' = renameOperand state ptr

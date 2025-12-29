@@ -361,9 +361,22 @@ def Stdlib.String.length(s: String) : Int64 =
 def Stdlib.String.isEmpty(s: String) : Bool =
     Stdlib.String.length(s) == 0
 
-// TODO: Most String functions require runtime builtins that don't exist yet
-// toUppercase, toLowercase, contains, startsWith, endsWith,
-// trim, slice, first, last, reverse, replaceAll, etc.
+// Get the byte value at a given index (0-based)
+// Returns the byte as an Int64 (0-255)
+// String data starts at offset 8 (after the length field)
+def Stdlib.String.getByteAt(s: String, index: Int64) : Int64 =
+    __raw_get_byte(__int64_to_rawptr(__string_to_int64(s)), index + 8)
+
+// Check if a byte is an ASCII lowercase letter (a-z)
+def Stdlib.String.__isLowercase(byte: Int64) : Bool =
+    byte >= 97 && byte <= 122
+
+// Check if a byte is an ASCII uppercase letter (A-Z)
+def Stdlib.String.__isUppercase(byte: Int64) : Bool =
+    byte >= 65 && byte <= 90
+
+// TODO: More String functions will be added as more runtime builtins are implemented
+// slice, contains, startsWith, endsWith, toUppercase, toLowercase, trim, etc.
 
 // =============================================================================
 // Stdlib.Dict - Immutable Dictionary using HAMT (Hash Array Mapped Trie)

@@ -1991,6 +1991,19 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         ARM64.LDR (destReg, ARM64.X15, 0s)             // dest = [X15]
                     ])))
 
+    | LIR.RawGetByte (dest, ptr, byteOffset) ->
+        // Load 1 byte from ptr + byteOffset (zero-extended to 64 bits)
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg ptr
+            |> Result.bind (fun ptrReg ->
+                lirRegToARM64Reg byteOffset
+                |> Result.map (fun offsetReg ->
+                    [
+                        ARM64.ADD_reg (ARM64.X15, ptrReg, offsetReg)   // X15 = ptr + offset
+                        ARM64.LDRB_imm (destReg, ARM64.X15, 0)         // dest = [X15] (byte, zero-extended)
+                    ])))
+
     | LIR.RawSet (ptr, byteOffset, value) ->
         // Store 8 bytes at ptr + byteOffset
         // IMPORTANT: If any input reg is X15, use X14 as temp instead
