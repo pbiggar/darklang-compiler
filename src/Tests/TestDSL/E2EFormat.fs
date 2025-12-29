@@ -74,11 +74,47 @@ let private parseAttribute (attr: string) : Result<string * string, string> =
     | [| key; value |] -> Ok (key.Trim(), value.Trim())
     | _ -> Error $"Invalid attribute format: {attr}"
 
-/// Parse a single test line
+/// Find the = that separates source from expectations
+/// Returns Some index if this looks like a test line, None otherwise
+let private findSeparatorIndex (s: string) : int option =
+    let isExpectationStart (rest: string) : bool =
+        let trimmed = rest.TrimStart()
+        if trimmed.Length = 0 then false
+        elif Char.IsDigit(trimmed.[0]) || trimmed.[0] = '-' then true
+        elif trimmed.StartsWith("exit") || trimmed.StartsWith("stdout") || trimmed.StartsWith("stderr") || trimmed.StartsWith("no_free_list") || trimmed.StartsWith("error") || trimmed.StartsWith("disable_opt_") then true
+        else false
+
+    let rec findLast (i: int) (inQuotes: bool) (lastEqualsIdx: int option) : int option =
+        if i >= s.Length then
+            lastEqualsIdx
+        elif s.[i] = '"' then
+            findLast (i + 1) (not inQuotes) lastEqualsIdx
+        elif s.[i] = '=' && not inQuotes then
+            // Only consider this = as a separator if preceded by whitespace or )
+            // This distinguishes "source = expectations" from "exit=139"
+            let hasPrecedingSpace = i > 0 && (Char.IsWhiteSpace(s.[i - 1]) || s.[i - 1] = ')')
+            if hasPrecedingSpace then
+                // Check if this = is followed by an expectation
+                let rest = s.Substring(i + 1)
+                if isExpectationStart rest then
+                    findLast (i + 1) inQuotes (Some i)
+                else
+                    findLast (i + 1) inQuotes lastEqualsIdx
+            else
+                findLast (i + 1) inQuotes lastEqualsIdx
+        else
+            findLast (i + 1) inQuotes lastEqualsIdx
+    findLast 0 false None
+
+/// Check if a line (with comment removed) looks like a test line
+let private isTestLine (lineWithoutComment: string) : bool =
+    findSeparatorIndex lineWithoutComment |> Option.isSome
+
+/// Parse a single test line with optional preamble to prepend
 /// Supports two formats:
 ///   Old: source = exit_code  // comment
 ///   New: source = [exit=N] [stdout="..."] [stderr="..."]  // comment
-let private parseTestLine (line: string) (lineNumber: int) (filePath: string) : Result<E2ETest, string> =
+let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath: string) (preamble: string) : Result<E2ETest, string> =
     // First, remove any comment
     let lineWithoutComment, comment =
         let commentIdx = line.IndexOf("//")
@@ -88,48 +124,15 @@ let private parseTestLine (line: string) (lineNumber: int) (filePath: string) : 
         else
             (line, None)
 
-    // Find the = that separates source from expectations
-    // It's the last = that's not inside quotes AND:
-    // - Is preceded by whitespace (to distinguish from attr=value)
-    // - Is followed by either:
-    //   - A digit (simple format)
-    //   - An attribute keyword (exit, stdout, stderr, no_free_list)
-    //   - Whitespace then digit or attribute
-    let findSeparatorIndex (s: string) : int option =
-        let isExpectationStart (rest: string) : bool =
-            let trimmed = rest.TrimStart()
-            if trimmed.Length = 0 then false
-            elif Char.IsDigit(trimmed.[0]) || trimmed.[0] = '-' then true
-            elif trimmed.StartsWith("exit") || trimmed.StartsWith("stdout") || trimmed.StartsWith("stderr") || trimmed.StartsWith("no_free_list") || trimmed.StartsWith("error") || trimmed.StartsWith("disable_opt_") then true
-            else false
-
-        let rec findLast (i: int) (inQuotes: bool) (lastEqualsIdx: int option) : int option =
-            if i >= s.Length then
-                lastEqualsIdx
-            elif s.[i] = '"' then
-                findLast (i + 1) (not inQuotes) lastEqualsIdx
-            elif s.[i] = '=' && not inQuotes then
-                // Only consider this = as a separator if preceded by whitespace or )
-                // This distinguishes "source = expectations" from "exit=139"
-                let hasPrecedingSpace = i > 0 && (Char.IsWhiteSpace(s.[i - 1]) || s.[i - 1] = ')')
-                if hasPrecedingSpace then
-                    // Check if this = is followed by an expectation
-                    let rest = s.Substring(i + 1)
-                    if isExpectationStart rest then
-                        findLast (i + 1) inQuotes (Some i)
-                    else
-                        findLast (i + 1) inQuotes lastEqualsIdx
-                else
-                    findLast (i + 1) inQuotes lastEqualsIdx
-            else
-                findLast (i + 1) inQuotes lastEqualsIdx
-        findLast 0 false None
-
     match findSeparatorIndex lineWithoutComment with
     | None ->
         Error $"Line {lineNumber}: Expected format 'source = expectations', got: {line}"
     | Some equalsIdx ->
-        let source = lineWithoutComment.Substring(0, equalsIdx).Trim()
+        let testExpr = lineWithoutComment.Substring(0, equalsIdx).Trim()
+        // Prepend preamble (definitions) to the test expression
+        let source =
+            if preamble.Length > 0 then preamble + "\n" + testExpr
+            else testExpr
         let expectationsStr = lineWithoutComment.Substring(equalsIdx + 1).Trim()
 
         // Parse expectations - either old format (bare number), new format (attributes), or error
@@ -291,7 +294,16 @@ let private parseTestLine (line: string) (lineNumber: int) (filePath: string) : 
         | Error e ->
             Error $"Line {lineNumber}: {e}"
 
+/// Remove trailing comment from a line
+let private stripComment (line: string) : string =
+    let commentIdx = line.IndexOf("//")
+    if commentIdx >= 0 then line.Substring(0, commentIdx).Trim()
+    else line.Trim()
+
 /// Parse all E2E tests from a single file
+/// Supports preamble definitions that are prepended to all tests.
+/// Lines that don't match the test format (expr = expectation) are treated as
+/// definitions and accumulated. Test lines get the accumulated preamble prepended.
 let parseE2ETestFile (path: string) : Result<E2ETest list, string> =
     if not (System.IO.File.Exists path) then
         Error $"Test file not found: {path}"
@@ -300,16 +312,26 @@ let parseE2ETestFile (path: string) : Result<E2ETest list, string> =
 
         let mutable tests = []
         let mutable errors = []
+        let mutable preambleLines = []
 
         for i in 0 .. lines.Length - 1 do
-            let line = lines.[i].Trim()
+            let line = lines.[i]
+            let trimmedLine = line.Trim()
             let lineNumber = i + 1
 
-            // Skip blank lines and comments
-            if line.Length > 0 && not (line.StartsWith("//")) then
-                match parseTestLine line lineNumber path with
-                | Ok test -> tests <- test :: tests
-                | Error err -> errors <- err :: errors
+            // Skip blank lines and comment-only lines
+            if trimmedLine.Length > 0 && not (trimmedLine.StartsWith("//")) then
+                let lineWithoutComment = stripComment trimmedLine
+                if isTestLine lineWithoutComment then
+                    // This is a test line - parse it with accumulated preamble
+                    let preamble = String.concat "\n" (List.rev preambleLines)
+                    match parseTestLineWithPreamble trimmedLine lineNumber path preamble with
+                    | Ok test -> tests <- test :: tests
+                    | Error err -> errors <- err :: errors
+                else
+                    // This is a definition line - add to preamble
+                    // Preserve original indentation for multi-line definitions
+                    preambleLines <- line :: preambleLines
 
         if errors.Length > 0 then
             Error (String.concat "\n" (List.rev errors))
