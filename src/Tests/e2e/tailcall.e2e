@@ -14,3 +14,37 @@ def factorial(n: Int64) : Int64 = if n <= 1 then 1 else n * factorial(n - 1) fac
 
 // Tail recursive with multiple arguments
 def gcd(a: Int64, b: Int64) : Int64 = if b == 0 then a else gcd(b, a % b) gcd(48, 18) = 6
+
+// ============================================================================
+// TCO Bug Test Cases - expose specific bugs in tail call optimization
+// ============================================================================
+
+// Bug 1: Float argument swap (cycle bug in FArgMoves)
+// FArgMoves doesn't handle register cycles - D0 <- D1, D1 <- D0 clobbers D0
+def swapFloat(a: Float, b: Float, n: Int64) : Float = if n <= 0 then a else swapFloat(b, a, n - 1) swapFloat(1.0, 2.0, 1) = stdout="2.00\n"
+def swapFloat2(a: Float, b: Float, n: Int64) : Float = if n <= 0 then a else swapFloat2(b, a, n - 1) swapFloat2(1.0, 2.0, 2) = stdout="1.00\n"
+
+// Bug 2: Integer argument swap (TailArgMoves cycle)
+// Tests X0 <- X1, X1 <- X0 cycle handling
+def swapInt(a: Int64, b: Int64, n: Int64) : Int64 = if n <= 0 then a else swapInt(b, a, n - 1) swapInt(1, 2, 1) = 2
+def swapInt2(a: Int64, b: Int64, n: Int64) : Int64 = if n <= 0 then a else swapInt2(b, a, n - 1) swapInt2(1, 2, 2) = 1
+
+// Bug 3: Three-way integer rotation
+// Tests X0 <- X1, X1 <- X2, X2 <- X0 cycle handling
+def rotate3(a: Int64, b: Int64, c: Int64, n: Int64) : Int64 = if n <= 0 then a else rotate3(b, c, a, n - 1) rotate3(1, 2, 3, 1) = 2
+def rotate3b(a: Int64, b: Int64, c: Int64, n: Int64) : Int64 = if n <= 0 then a else rotate3b(b, c, a, n - 1) rotate3b(1, 2, 3, 3) = 1
+
+// Bug 4: Three-way float rotation
+// Tests D0 <- D1, D1 <- D2, D2 <- D0 - FArgMoves has no cycle handling
+def rotate3Float(a: Float, b: Float, c: Float, n: Int64) : Float = if n <= 0 then a else rotate3Float(b, c, a, n - 1) rotate3Float(1.0, 2.0, 3.0, 1) = stdout="2.00\n"
+def rotate3Floatb(a: Float, b: Float, c: Float, n: Int64) : Float = if n <= 0 then a else rotate3Floatb(b, c, a, n - 1) rotate3Floatb(1.0, 2.0, 3.0, 3) = stdout="1.00\n"
+
+// Bug 5: Five-argument tail recursion (similar to String.__compareBytes)
+def compare5(a: Int64, i: Int64, b: Int64, j: Int64, count: Int64) : Bool = if count <= 0 then true else if a != b then false else compare5(a, i + 1, b, j + 1, count - 1) compare5(42, 0, 42, 0, 3) = stdout="true\n"
+def compare5b(a: Int64, i: Int64, b: Int64, j: Int64, count: Int64) : Bool = if count <= 0 then true else if a != b then false else compare5b(a, i + 1, b, j + 1, count - 1) compare5b(42, 0, 99, 0, 3) = stdout="false\n"
+
+// Bug 6: Many arguments (tests register spilling in tail calls)
+def sum6(a: Int64, b: Int64, c: Int64, d: Int64, e: Int64, f: Int64, n: Int64) : Int64 = if n <= 0 then a + b + c + d + e + f else sum6(a, b, c, d, e, f, n - 1) sum6(1, 2, 3, 4, 5, 6, 1) = 21
+
+// Bug 7: Tail call after let binding (like String.__compareBytes)
+def callThenTail(x: Int64, n: Int64) : Int64 = if n <= 0 then x else let y = x + 1 in callThenTail(y, n - 1) callThenTail(0, 5) = 5

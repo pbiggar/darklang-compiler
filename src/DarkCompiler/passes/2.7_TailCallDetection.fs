@@ -78,6 +78,11 @@ let detectTailCallsInFunction (func: Function) : Function =
 
 /// Detect tail calls in a program
 let detectTailCallsInProgram (program: ANF.Program) : ANF.Program =
-    // TCO DISABLED: Still has 141 crashes from other issues (likely stack/register corruption)
-    // Float return type tracking is now fixed (TailCall handled in cexprProducesFloat)
+    // TCO DISABLED: 197 failures in stdlib functions when enabled
+    // Simple tail calls work (swap, rotate, compare5, sum6 all pass)
+    // Failures are in:
+    // - Dict operations (isEmpty, get, fold, contains, getOrDefault)
+    // - String operations (startsWith, endsWith, indexOf, contains, split, equals)
+    // Likely issue is with stdlib's complex patterns (indirect calls, closures, or
+    // interaction with reference counting)
     program
