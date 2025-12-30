@@ -1353,3 +1353,46 @@ let compileAndRunWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib:
 /// Compile and run source code (main entry point for E2E tests)
 let compileAndRun (verbosity: int) (source: string) : ExecutionResult =
     compileAndRunWithOptions verbosity defaultOptions source
+
+/// Get the set of stdlib function names reachable from user code
+/// Used for coverage analysis without full compilation
+let getReachableStdlibFunctions (stdlib: LazyStdlibResult) (source: string) : Result<Set<string>, string> =
+    // Parse user code
+    match Parser.parseString source with
+    | Error err -> Error $"Parse error: {err}"
+    | Ok userAst ->
+        // Type check with stdlib environment
+        match TypeChecking.checkProgramWithBaseEnv stdlib.TypeCheckEnv userAst with
+        | Error typeErr -> Error $"Type error: {TypeChecking.typeErrorToString typeErr}"
+        | Ok (programType, typedUserAst, _) ->
+            // Convert to ANF
+            match AST_to_ANF.convertUserOnly stdlib.GenericFuncDefs stdlib.ANFResult typedUserAst with
+            | Error err -> Error $"ANF conversion error: {err}"
+            | Ok userOnly ->
+                // Create ConversionResult for RC insertion
+                let userConvResult : AST_to_ANF.ConversionResult = {
+                    Program = ANF.Program (userOnly.UserFunctions, userOnly.MainExpr)
+                    TypeReg = userOnly.TypeReg
+                    VariantLookup = userOnly.VariantLookup
+                    FuncReg = userOnly.FuncReg
+                    FuncParams = userOnly.FuncParams
+                    ModuleRegistry = userOnly.ModuleRegistry
+                }
+                // RC insertion to get full ANF
+                match RefCountInsertion.insertRCInProgram userConvResult with
+                | Error err -> Error $"RC insertion error: {err}"
+                | Ok (userAnfAfterRC, _typeMap) ->
+                    // Tail call detection
+                    let userAnfAfterTCO = TailCallDetection.detectTailCallsInProgram userAnfAfterRC
+                    // Print insertion
+                    let (ANF.Program (userFunctions, userMainExpr)) = userAnfAfterTCO
+                    let userAnfProgram = PrintInsertion.insertPrint userFunctions userMainExpr programType
+                    // Extract reachable stdlib functions using DCE infrastructure
+                    let (ANF.Program (userFuncsForDCE, userMainForDCE)) = userAnfProgram
+                    let userANFFuncs = { ANF.Name = "_start"; ANF.Params = []; ANF.Body = userMainForDCE } :: userFuncsForDCE
+                    let reachableStdlibNames = ANFDeadCodeElimination.getReachableStdlib stdlib.StdlibANFCallGraph userANFFuncs
+                    Ok reachableStdlibNames
+
+/// Get all stdlib function names from the lazy stdlib
+let getAllStdlibFunctionNames (stdlib: LazyStdlibResult) : Set<string> =
+    stdlib.StdlibANFFunctions |> Map.keys |> Set.ofSeq

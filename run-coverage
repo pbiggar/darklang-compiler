@@ -1,0 +1,131 @@
+#!/bin/bash
+# run-coverage - Run tests with code coverage and generate reports
+#
+# Usage: ./run-coverage [OPTIONS]
+#
+# Options:
+#   --no-build         Skip building, run coverage on existing build
+#   --no-report        Skip HTML report generation
+#   -h, --help         Show this help message
+#
+# Prerequisites:
+#   dotnet tool install -g coverlet.console
+#   dotnet tool install -g dotnet-reportgenerator-globaltool
+
+set -e
+
+# Parse arguments
+NO_BUILD=false
+NO_REPORT=false
+HELP=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --no-build)
+            NO_BUILD=true
+            shift
+            ;;
+        --no-report)
+            NO_REPORT=true
+            shift
+            ;;
+        -h|--help)
+            HELP=true
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+# Show help
+if [ "$HELP" = true ]; then
+    echo "Usage: ./run-coverage [OPTIONS]"
+    echo ""
+    echo "Run tests with code coverage and generate HTML reports."
+    echo ""
+    echo "Options:"
+    echo "  --no-build         Skip building, run coverage on existing build"
+    echo "  --no-report        Skip HTML report generation"
+    echo "  -h, --help         Show this help message"
+    echo ""
+    echo "Prerequisites:"
+    echo "  dotnet tool install -g coverlet.console"
+    echo "  dotnet tool install -g dotnet-reportgenerator-globaltool"
+    echo ""
+    echo "Output:"
+    echo "  coverage.xml           Cobertura format coverage data"
+    echo "  coverage-report/       HTML report directory"
+    exit 0
+fi
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Check for required tools
+if ! command -v coverlet &> /dev/null; then
+    echo "Error: coverlet not found."
+    echo "Install with: dotnet tool install -g coverlet.console"
+    exit 1
+fi
+
+if [ "$NO_REPORT" = false ] && ! command -v reportgenerator &> /dev/null; then
+    echo "Error: reportgenerator not found."
+    echo "Install with: dotnet tool install -g dotnet-reportgenerator-globaltool"
+    exit 1
+fi
+
+# Build if needed
+if [ "$NO_BUILD" = false ]; then
+    echo "Building..."
+    if ! timeout 120 dotnet build --verbosity quiet 2>&1; then
+        echo "Build failed!"
+        exit 1
+    fi
+    echo "Build complete."
+    echo ""
+fi
+
+# Paths
+TEST_DLL="$SCRIPT_DIR/bin/Tests/Debug/net9.0/Tests.dll"
+TEST_EXE="$SCRIPT_DIR/bin/Tests/Debug/net9.0/Tests"
+COVERAGE_OUTPUT="$SCRIPT_DIR/coverage.xml"
+REPORT_DIR="$SCRIPT_DIR/coverage-report"
+
+if [ ! -f "$TEST_DLL" ]; then
+    echo "Error: Test DLL not found at $TEST_DLL"
+    echo "Try running without --no-build first."
+    exit 1
+fi
+
+# Clean previous coverage
+rm -f "$COVERAGE_OUTPUT"
+rm -rf "$REPORT_DIR"
+
+# Run tests with coverage
+echo "Running tests with coverage..."
+echo ""
+
+coverlet "$TEST_DLL" \
+    --target "$TEST_EXE" \
+    --format cobertura \
+    --output "$COVERAGE_OUTPUT" \
+    --exclude "[Tests]*"
+
+echo ""
+echo "Coverage data written to: $COVERAGE_OUTPUT"
+
+# Generate HTML report
+if [ "$NO_REPORT" = false ]; then
+    echo ""
+    echo "Generating HTML report..."
+    reportgenerator \
+        -reports:"$COVERAGE_OUTPUT" \
+        -targetdir:"$REPORT_DIR" \
+        -reporttypes:Html
+
+    echo ""
+    echo "Coverage report: $REPORT_DIR/index.html"
+fi

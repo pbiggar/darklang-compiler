@@ -45,3 +45,7 @@ examples/*.out
 examples/output
 dark.out
 cachegrind.out.*
+
+# Coverage
+coverage.xml
+coverage-report/

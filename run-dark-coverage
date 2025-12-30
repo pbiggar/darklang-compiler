@@ -1,0 +1,25 @@
+#!/bin/bash
+# run-dark-coverage - Analyze which stdlib functions are covered by E2E tests
+#
+# Usage: ./run-dark-coverage [OPTIONS]
+#
+# This performs static coverage analysis by examining which stdlib functions
+# are reachable from E2E test code (call graph analysis).
+
+set -e
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Build if needed
+echo "Building..."
+if ! timeout 120 dotnet build --verbosity quiet 2>&1; then
+    echo "Build failed!"
+    exit 1
+fi
+echo "Build complete."
+echo ""
+
+# Run coverage analysis
+exec ./bin/Tests/Debug/net9.0/Tests --coverage
