@@ -561,6 +561,8 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                     if verbosity >= 1 then println "  [6/7] Code Generation..."
                     let codegenOptions : CodeGen.CodeGenOptions = {
                         DisableFreeList = options.DisableFreeList
+                        EnableCoverage = false
+                        CoverageExprCount = 0
                     }
                     let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
                     let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime
@@ -835,7 +837,11 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
 
                     // Pass 6: Code Generation
                     if verbosity >= 1 then println "  [6/8] Code Generation..."
-                    let codegenOptions : CodeGen.CodeGenOptions = { DisableFreeList = options.DisableFreeList }
+                    let codegenOptions : CodeGen.CodeGenOptions = {
+                        DisableFreeList = options.DisableFreeList
+                        EnableCoverage = false
+                        CoverageExprCount = 0
+                    }
                     let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
                     let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime
                     if verbosity >= 2 then
@@ -1120,7 +1126,11 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
 
                     // Pass 6: Code Generation
                     if verbosity >= 1 then println "  [6/8] Code Generation..."
-                    let codegenOptions : CodeGen.CodeGenOptions = { DisableFreeList = options.DisableFreeList }
+                    let codegenOptions : CodeGen.CodeGenOptions = {
+                        DisableFreeList = options.DisableFreeList
+                        EnableCoverage = false
+                        CoverageExprCount = 0
+                    }
                     let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
                     let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - regAllocTime
                     if verbosity >= 2 then

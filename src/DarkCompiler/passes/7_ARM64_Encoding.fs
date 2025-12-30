@@ -999,6 +999,24 @@ let computeStringLabels (codeFileOffset: int) (codeSize: int) (floatPoolSize: in
             (startOffset, Map.empty)
         |> snd
 
+/// Compute the size of the string pool in bytes
+let getStringPoolSize (stringPool: MIR.StringPool) : int =
+    if stringPool.Strings.IsEmpty then 0
+    else
+        stringPool.Strings
+        |> Map.toList
+        |> List.sumBy (fun (_, (str, _)) ->
+            System.Text.Encoding.UTF8.GetBytes(str).Length + 1)  // +1 for null terminator
+
+/// Compute coverage data label position
+/// Returns map with "_coverage_data" label after all other data, 8-byte aligned
+let computeCoverageLabel (codeFileOffset: int) (codeSize: int) (floatPoolSize: int) (stringPoolSize: int) : Map<string, int> =
+    // Coverage data starts after headers + code + floats + strings, 8-byte aligned
+    let floatStart = (codeFileOffset + codeSize + 7) &&& (~~~7)
+    let stringStart = floatStart + floatPoolSize
+    let coverageStart = (stringStart + stringPoolSize + 7) &&& (~~~7)  // 8-byte aligned
+    Map.ofList [("_coverage_data", coverageStart)]
+
 /// Encoding with string and float pool support
 /// Computes label positions and encodes ADRP/ADD_label correctly
 /// codeFileOffset: where code will be placed in the final binary (for correct PC-relative addressing)
@@ -1042,3 +1060,54 @@ let encodeAllWithStrings (instructions: ARM64.Instr list) (stringPool: MIR.Strin
 let encodeAll (instructions: ARM64.Instr list) : ARM64.MachineCode list =
     // Use version with empty pools and 0 offset for backwards compatibility
     encodeAllWithPools instructions MIR.emptyStringPool MIR.emptyFloatPool 0
+
+/// Encoding with coverage support
+/// Adds _coverage_data label pointing to BSS section after all data
+/// coverageExprCount: number of expressions to track (determines BSS size)
+let encodeAllWithCoverage
+    (instructions: ARM64.Instr list)
+    (stringPool: MIR.StringPool)
+    (floatPool: MIR.FloatPool)
+    (codeFileOffset: int)
+    (coverageExprCount: int)
+    : ARM64.MachineCode list =
+
+    // Step 1: Compute code size
+    let codeSize = getCodeSize instructions
+
+    // Step 2: Compute float label positions (after headers + code, 8-byte aligned)
+    let floatLabels = computeFloatLabels codeFileOffset codeSize floatPool
+    let floatPoolSize = getFloatPoolSize floatPool
+
+    // Step 3: Compute string label positions (after headers + code + floats)
+    let stringLabels = computeStringLabels codeFileOffset codeSize floatPoolSize stringPool
+    let stringPoolSize = getStringPoolSize stringPool
+
+    // Step 4: Compute coverage label position (after headers + code + floats + strings)
+    let coverageLabels =
+        if coverageExprCount > 0 then
+            computeCoverageLabel codeFileOffset codeSize floatPoolSize stringPoolSize
+        else
+            Map.empty
+
+    // Step 5: Compute code label positions (relative to code start, add file offset)
+    let rawCodeLabels = computeLabelPositions instructions
+    let codeLabelMap = rawCodeLabels |> Map.map (fun _ offset -> codeFileOffset + offset)
+
+    // Step 6: Merge all labels
+    let labelMap =
+        codeLabelMap
+        |> Map.fold (fun acc k v -> Map.add k v acc) floatLabels
+        |> Map.fold (fun acc k v -> Map.add k v acc) stringLabels
+        |> Map.fold (fun acc k v -> Map.add k v acc) coverageLabels
+
+    // Step 7: Encode with label resolution
+    let rec encodeLoop instrs offset acc =
+        match instrs with
+        | [] -> List.rev acc
+        | instr :: rest ->
+            let machineCode = encodeWithLabels instr offset labelMap
+            let newOffset = offset + (List.length machineCode * 4)
+            encodeLoop rest newOffset (List.rev machineCode @ acc)
+
+    encodeLoop instructions codeFileOffset []

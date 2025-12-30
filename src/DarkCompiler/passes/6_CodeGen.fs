@@ -21,11 +21,17 @@ module CodeGen
 type CodeGenOptions = {
     /// Disable free list memory reuse (always bump allocate)
     DisableFreeList: bool
+    /// Enable coverage instrumentation
+    EnableCoverage: bool
+    /// Number of coverage expressions (determines buffer size)
+    CoverageExprCount: int
 }
 
 /// Default code generation options
 let defaultOptions : CodeGenOptions = {
     DisableFreeList = false
+    EnableCoverage = false
+    CoverageExprCount = 0
 }
 
 /// Code generation context (passed through to instruction conversion)
@@ -2566,24 +2572,25 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
 
     | LIR.CoverageHit exprId ->
         // Increment coverage counter at _coverage_data[exprId * 8]
+        // Uses PC-relative addressing (ADRP+ADD) to get BSS buffer address
         // Uses X9 and X10 as scratch registers
-        let offset = int64 (exprId * 8)
-        let offsetInstrs =
-            if offset = 0L then
-                []  // No offset needed for exprId 0
-            elif offset < 4096L then
-                // Small offset - use immediate
-                [ARM64.ADD_imm (ARM64.X9, ARM64.X9, uint16 offset)]
-            else
-                // Large offset - load into X10 and add
-                loadImmediate ARM64.X10 offset @ [ARM64.ADD_reg (ARM64.X9, ARM64.X9, ARM64.X10)]
+        let offset = exprId * 8
         Ok ([
+            // Get address of coverage buffer using PC-relative addressing
             ARM64.ADRP (ARM64.X9, "_coverage_data")
             ARM64.ADD_label (ARM64.X9, ARM64.X9, "_coverage_data")
-        ] @ offsetInstrs @ [
-            ARM64.LDR (ARM64.X10, ARM64.X9, 0s)     // X10 = coverage_data[exprId]
+        ] @
+        // Add offset for this expression's counter
+        (if offset = 0 then
+            []
+        elif offset < 4096 then
+            [ARM64.ADD_imm (ARM64.X9, ARM64.X9, uint16 offset)]
+        else
+            loadImmediate ARM64.X10 (int64 offset) @ [ARM64.ADD_reg (ARM64.X9, ARM64.X9, ARM64.X10)]) @
+        [
+            ARM64.LDR (ARM64.X10, ARM64.X9, 0s)        // X10 = coverage_buffer[exprId]
             ARM64.ADD_imm (ARM64.X10, ARM64.X10, 1us)  // X10++
-            ARM64.STR (ARM64.X10, ARM64.X9, 0s)     // coverage_data[exprId] = X10
+            ARM64.STR (ARM64.X10, ARM64.X9, 0s)        // coverage_buffer[exprId] = X10
         ])
 
 /// Convert LIR terminator to ARM64 instructions
@@ -2733,6 +2740,9 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64.In
         let heapInit =
             if func.Name = "_start" then generateHeapInit ()
             else []
+
+        // Note: Coverage buffer is in BSS section (zero-initialized by OS)
+        // No runtime initialization needed - CoverageHit uses ADRP+ADD to access it
 
         // Generate parameter setup: move X0-X7/D0-D7 to allocated parameter registers
         // This must come AFTER the prologue but BEFORE the function body

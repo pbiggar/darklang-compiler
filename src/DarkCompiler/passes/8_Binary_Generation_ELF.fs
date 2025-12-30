@@ -223,6 +223,104 @@ let createExecutableWithStrings (machineCode: uint32 list) (stringPool: MIR.Stri
 let createExecutable (machineCode: uint32 list) : byte array =
     createExecutableWithPools machineCode MIR.emptyStringPool MIR.emptyFloatPool
 
+/// Create an ELF executable with coverage data section
+/// coverageExprCount: number of coverage expressions (each needs 8 bytes)
+/// The coverage data is placed after strings and initialized to zero
+/// Uses a single RWX segment for simplicity (code + data + coverage)
+let createExecutableWithCoverage (machineCode: uint32 list) (stringPool: MIR.StringPool) (floatPool: MIR.FloatPool) (coverageExprCount: int) : byte array =
+    let codeBytes =
+        machineCode
+        |> List.collect (fun word ->
+            uint32ToBytes word |> Array.toList)
+        |> Array.ofList
+
+    // Create float data (goes after code, before strings)
+    let floatBytes = createFloatData floatPool
+
+    // Create string data
+    let stringBytes = createStringData stringPool
+
+    // Create coverage data (zeros, 8 bytes per expression, 8-byte aligned)
+    let coverageSize = ((coverageExprCount * 8 + 7) / 8) * 8
+    let coverageBytes = Array.create coverageSize 0uy
+
+    // Combined data: floats + strings + padding for alignment + coverage
+    let floatAndStringBytes = Array.append floatBytes stringBytes
+    let alignedCoverageStart = ((floatAndStringBytes.Length + 7) / 8) * 8
+    let coveragePadding = Array.create (alignedCoverageStart - floatAndStringBytes.Length) 0uy
+    let dataBytes = Array.concat [floatAndStringBytes; coveragePadding; coverageBytes]
+
+    let codeSize = uint64 codeBytes.Length
+    let dataSize = uint64 dataBytes.Length
+
+    // ELF structures
+    let elfHeaderSize = 64UL
+    let programHeaderSize = 56UL
+    let numProgramHeaders = 1us
+
+    // Load address
+    let baseVAddr = 0x400000UL
+
+    // Code starts right after headers
+    let codeFileOffset = elfHeaderSize + (uint64 numProgramHeaders * programHeaderSize)
+    let codeVAddr = baseVAddr + codeFileOffset
+
+    // Create ELF identification bytes
+    let ident = Array.create 16 0uy
+    ident.[0] <- Binary_ELF.EI_MAG0
+    ident.[1] <- Binary_ELF.EI_MAG1
+    ident.[2] <- Binary_ELF.EI_MAG2
+    ident.[3] <- Binary_ELF.EI_MAG3
+    ident.[4] <- Binary_ELF.ELFCLASS64
+    ident.[5] <- Binary_ELF.ELFDATA2LSB
+    ident.[6] <- Binary_ELF.EV_CURRENT
+    ident.[7] <- Binary_ELF.ELFOSABI_NONE
+
+    let header : Binary_ELF.Elf64Header = {
+        Ident = ident
+        Type = Binary_ELF.ET_EXEC
+        Machine = Binary_ELF.EM_AARCH64
+        Version = 1u
+        Entry = codeVAddr
+        PhOff = elfHeaderSize
+        ShOff = 0UL
+        Flags = 0u
+        EhSize = uint16 elfHeaderSize
+        PhEntSize = uint16 programHeaderSize
+        PhNum = numProgramHeaders
+        ShEntSize = 0us
+        ShNum = 0us
+        ShStrNdx = 0us
+    }
+
+    // Calculate segment size
+    let alignedDataOffset = (codeFileOffset + codeSize + 7UL) &&& (~~~7UL)
+    let alignmentPadding = alignedDataOffset - (codeFileOffset + codeSize)
+    let segmentFileSize = codeFileOffset + codeSize + alignmentPadding + dataSize
+    let segmentMemSize = segmentFileSize
+
+    // Single segment: RWX (code + read-only data + coverage data)
+    // Note: RWX is not ideal for security but simplifies the implementation
+    let segment : Binary_ELF.Elf64ProgramHeader = {
+        Type = Binary_ELF.PT_LOAD
+        Flags = Binary_ELF.PF_R ||| Binary_ELF.PF_W ||| Binary_ELF.PF_X  // RWX
+        Offset = 0UL
+        VAddr = baseVAddr
+        PAddr = baseVAddr
+        FileSize = segmentFileSize
+        MemSize = segmentMemSize
+        Align = 0x1000UL
+    }
+
+    let binary : Binary_ELF.ElfBinary = {
+        Header = header
+        ProgramHeaders = [segment]
+        MachineCode = codeBytes
+        StringData = dataBytes
+    }
+
+    serializeElf binary
+
 /// Write bytes to file (Linux - no code signing needed)
 let writeToFile (path: string) (bytes: byte array) : Result<unit, string> =
     System.IO.File.WriteAllBytes(path, bytes)
