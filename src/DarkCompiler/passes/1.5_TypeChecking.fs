@@ -1017,38 +1017,92 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 let returnType = applyTypeVarRenaming renaming origReturnType
                 let typeParams = freshTypeParams
                 // Generic function called without explicit type args: infer them
-                // First, type-check all arguments with expected parameter types
-                let rec checkArgs remaining remainingParamTypes accTypes accExprs =
-                    match remaining, remainingParamTypes with
-                    | [], [] -> Ok (List.rev accTypes, List.rev accExprs)
-                    | arg :: rest, paramT :: restParamTypes ->
-                        // Pass the parameter type as expected type to help infer nested generics
-                        checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
-                        |> Result.bind (fun (argType, arg') ->
-                            checkArgs rest restParamTypes (argType :: accTypes) (arg' :: accExprs))
-                    | _ -> Error (GenericError "Argument count mismatch")
+                let numArgs = List.length args
+                let numParams = List.length paramTypes
 
-                checkArgs args paramTypes [] []
-                |> Result.bind (fun (argTypes, args') ->
-                    // Infer type arguments from parameter types, argument types, and expected return type
-                    inferTypeArgs typeParams paramTypes argTypes (Some returnType) expectedType
-                    |> Result.mapError GenericError
-                    |> Result.bind (fun inferredTypeArgs ->
-                        // Build substitution and compute concrete types
-                        buildSubstitution typeParams inferredTypeArgs
+                if numArgs > numParams then
+                    Error (GenericError $"Function {funcName} expects {numParams} arguments, got {numArgs}")
+                else if numArgs < numParams then
+                    // Partial application of generic function
+                    let providedParamTypes = List.take numArgs paramTypes
+                    let remainingParamTypes = List.skip numArgs paramTypes
+
+                    // Type-check the provided arguments
+                    let rec checkProvidedArgs remaining paramTys accTypes accExprs =
+                        match remaining, paramTys with
+                        | [], [] -> Ok (List.rev accTypes, List.rev accExprs)
+                        | arg :: restArgs, paramT :: restParams ->
+                            checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
+                            |> Result.bind (fun (argType, arg') ->
+                                checkProvidedArgs restArgs restParams (argType :: accTypes) (arg' :: accExprs))
+                        | _ -> Error (GenericError "Internal error: argument/param length mismatch")
+
+                    checkProvidedArgs args providedParamTypes [] []
+                    |> Result.bind (fun (argTypes, args') ->
+                        // Infer type arguments from provided args (some may remain as TVar)
+                        inferTypeArgs typeParams providedParamTypes argTypes (Some returnType) None
                         |> Result.mapError GenericError
-                        |> Result.bind (fun subst ->
-                            let concreteReturnType = applySubst subst returnType
-                            // Apply substitution to nested expressions (e.g., inner TypeApp nodes)
-                            // This ensures that when empty() returns Dict<k$3, v$4> and we later
-                            // infer k$3 -> Int64, v$4 -> Int64, the inner TypeApp gets updated
-                            let concreteArgs = List.map (applySubstToExpr subst) args'
-                            match expectedType with
-                            | Some expected when not (typesCompatible expected concreteReturnType) ->
-                                Error (TypeMismatch (expected, concreteReturnType, $"result of call to {funcName}"))
-                            | _ ->
-                                // Transform Call to TypeApp with inferred type arguments (using resolved name)
-                                Ok (concreteReturnType, TypeApp (resolvedFuncName, inferredTypeArgs, concreteArgs)))))
+                        |> Result.bind (fun inferredTypeArgs ->
+                            // Build substitution and compute concrete types for remaining params
+                            buildSubstitution typeParams inferredTypeArgs
+                            |> Result.mapError GenericError
+                            |> Result.bind (fun subst ->
+                                let concreteRemainingParamTypes = List.map (applySubst subst) remainingParamTypes
+                                let concreteReturnType = applySubst subst returnType
+                                let concreteArgs = List.map (applySubstToExpr subst) args'
+
+                                // Create unique parameter names for the remaining parameters
+                                let remainingParams =
+                                    concreteRemainingParamTypes
+                                    |> List.map (fun t -> (freshPartialParam (), t))
+
+                                // Create the lambda body: TypeApp with all args
+                                let allArgs = concreteArgs @ (remainingParams |> List.map (fun (name, _) -> Var name))
+                                let lambdaBody = TypeApp (resolvedFuncName, inferredTypeArgs, allArgs)
+
+                                // Create the lambda: (p0, p1, ...) => funcName<types>(providedArgs, p0, p1, ...)
+                                let lambdaExpr = Lambda (remainingParams, lambdaBody)
+
+                                // The resulting type is a function from remaining params to return type
+                                let partialType = TFunction (concreteRemainingParamTypes, concreteReturnType)
+
+                                match expectedType with
+                                | Some expected when not (typesCompatible expected partialType) ->
+                                    Error (TypeMismatch (expected, partialType, $"partial application of {funcName}"))
+                                | _ -> Ok (partialType, lambdaExpr))))
+                else
+                    // Full application - type-check all arguments
+                    let rec checkArgs remaining remainingParamTypes accTypes accExprs =
+                        match remaining, remainingParamTypes with
+                        | [], [] -> Ok (List.rev accTypes, List.rev accExprs)
+                        | arg :: rest, paramT :: restParamTypes ->
+                            // Pass the parameter type as expected type to help infer nested generics
+                            checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
+                            |> Result.bind (fun (argType, arg') ->
+                                checkArgs rest restParamTypes (argType :: accTypes) (arg' :: accExprs))
+                        | _ -> Error (GenericError "Argument count mismatch")
+
+                    checkArgs args paramTypes [] []
+                    |> Result.bind (fun (argTypes, args') ->
+                        // Infer type arguments from parameter types, argument types, and expected return type
+                        inferTypeArgs typeParams paramTypes argTypes (Some returnType) expectedType
+                        |> Result.mapError GenericError
+                        |> Result.bind (fun inferredTypeArgs ->
+                            // Build substitution and compute concrete types
+                            buildSubstitution typeParams inferredTypeArgs
+                            |> Result.mapError GenericError
+                            |> Result.bind (fun subst ->
+                                let concreteReturnType = applySubst subst returnType
+                                // Apply substitution to nested expressions (e.g., inner TypeApp nodes)
+                                // This ensures that when empty() returns Dict<k$3, v$4> and we later
+                                // infer k$3 -> Int64, v$4 -> Int64, the inner TypeApp gets updated
+                                let concreteArgs = List.map (applySubstToExpr subst) args'
+                                match expectedType with
+                                | Some expected when not (typesCompatible expected concreteReturnType) ->
+                                    Error (TypeMismatch (expected, concreteReturnType, $"result of call to {funcName}"))
+                                | _ ->
+                                    // Transform Call to TypeApp with inferred type arguments (using resolved name)
+                                    Ok (concreteReturnType, TypeApp (resolvedFuncName, inferredTypeArgs, concreteArgs)))))
 
             | None ->
                 // Non-generic function: regular call or partial application
