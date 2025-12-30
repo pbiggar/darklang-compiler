@@ -185,13 +185,41 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | RefCountIncString _ -> Some AST.TUnit  // Returns unit
     | RefCountDecString _ -> Some AST.TUnit  // Returns unit
 
-/// Check if an atom is returned in the expression
-let rec isAtomReturned (atom: Atom) (expr: AExpr) : bool =
+/// Check if sourceId is transitively an alias of targetId
+/// The aliases map is: aliases[x] = y means "x is an alias of y" (from Let x = Atom (Var y))
+/// We follow the chain from sourceId to see if it reaches targetId
+let rec isTransitiveAliasOf (aliases: Map<TempId, TempId>) (sourceId: TempId) (targetId: TempId) : bool =
+    if sourceId = targetId then true
+    else
+        match Map.tryFind sourceId aliases with
+        | Some nextId -> isTransitiveAliasOf aliases nextId targetId
+        | None -> false
+
+/// Check if an atom is returned in the expression, following aliases
+/// An alias is a binding like "let x = Atom (Var y)" which means x is an alias of y
+let rec isAtomReturnedWithAliases (aliases: Map<TempId, TempId>) (atom: Atom) (expr: AExpr) : bool =
     match expr with
-    | Return retAtom -> retAtom = atom
-    | Let (_, _, body) -> isAtomReturned atom body
+    | Return retAtom ->
+        // Check if the returned atom is our target or a transitive alias of it
+        match atom, retAtom with
+        | Var targetId, Var retId ->
+            // Check if retId is the same as targetId or transitively aliases to it
+            isTransitiveAliasOf aliases retId targetId
+        | _, _ -> retAtom = atom
+    | Let (boundId, cexpr, body) ->
+        // Check if this is an alias binding (let x = Atom (Var y))
+        let aliases' =
+            match cexpr with
+            | Atom (Var sourceId) -> Map.add boundId sourceId aliases
+            | _ -> aliases
+        isAtomReturnedWithAliases aliases' atom body
     | If (_, thenBranch, elseBranch) ->
-        isAtomReturned atom thenBranch || isAtomReturned atom elseBranch
+        isAtomReturnedWithAliases aliases atom thenBranch ||
+        isAtomReturnedWithAliases aliases atom elseBranch
+
+/// Check if an atom is returned in the expression
+let isAtomReturned (atom: Atom) (expr: AExpr) : bool =
+    isAtomReturnedWithAliases Map.empty atom expr
 
 /// Check if a TempId is returned in the expression
 let isTempReturned (tempId: TempId) (expr: AExpr) : bool =
