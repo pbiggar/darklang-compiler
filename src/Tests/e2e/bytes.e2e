@@ -1,0 +1,31 @@
+// Bytes Module Tests
+//
+// Tests for Stdlib.Bytes operations
+
+// Create bytes and get length
+Bytes.length(Bytes.create(0)) = 0
+Bytes.length(Bytes.create(1)) = 1
+Bytes.length(Bytes.create(10)) = 10
+Bytes.length(Bytes.create(100)) = 100
+
+// Create, set, and get
+Bytes.get(Bytes.set(Bytes.create(1), 0, 42), 0) = 42
+Bytes.get(Bytes.set(Bytes.create(10), 5, 123), 5) = 123
+Bytes.get(Bytes.set(Bytes.create(10), 0, 255), 0) = 255
+Bytes.get(Bytes.set(Bytes.create(10), 9, 99), 9) = 99
+
+// Multiple sets
+let b = Bytes.create(3) in let b = Bytes.set(b, 0, 10) in let b = Bytes.set(b, 1, 20) in let b = Bytes.set(b, 2, 30) in Bytes.get(b, 0) + Bytes.get(b, 1) + Bytes.get(b, 2) = 60
+
+// fromList and toList
+Bytes.toList(Bytes.fromList([1, 2, 3])) = stdout="[1, 2, 3]\n"
+Bytes.toList(Bytes.fromList([])) = stdout="[]\n"
+Bytes.toList(Bytes.fromList([255])) = stdout="[255]\n"
+Bytes.toList(Bytes.fromList([0, 128, 255])) = stdout="[0, 128, 255]\n"
+
+// Length of fromList result
+Bytes.length(Bytes.fromList([1, 2, 3, 4, 5])) = 5
+Bytes.length(Bytes.fromList([])) = 0
+
+// Round-trip: create, set values, toList
+let b = Bytes.create(3) in let b = Bytes.set(b, 0, 10) in let b = Bytes.set(b, 1, 20) in let b = Bytes.set(b, 2, 30) in Bytes.toList(b) = stdout="[10, 20, 30]\n"

@@ -277,3 +277,22 @@ Stdlib.Option.withDefault<Int64>(getBool(setBool(emptyBool(), true, 42), true), 
 
 // Bool keys - get false from true-keyed dict returns None
 isNoneInt(getBool(setBool(emptyBool(), true, 42), false)) = stdout="true\n"
+
+// ========== Dict with List values ==========
+// Tests to cover Dict<Int64, List<Int64>> monomorphizations
+
+def emptyListDict(): Dict<Int64, List<Int64>> = Stdlib.Dict.empty<Int64, List<Int64>>()
+def setListDict(d: Dict<Int64, List<Int64>>, k: Int64, v: List<Int64>): Dict<Int64, List<Int64>> = Stdlib.Dict.set<Int64, List<Int64>>(d, k, v)
+def getListDict(d: Dict<Int64, List<Int64>>, k: Int64): Stdlib.Option.Option<List<Int64>> = Stdlib.Dict.get<Int64, List<Int64>>(d, k)
+
+// Set and get list value
+Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 1, [10, 20, 30]), 1), []) = stdout="[10, 20, 30]\n"
+
+// Multiple list entries
+let d = setListDict(emptyListDict(), 1, [1, 2]) in let d = setListDict(d, 2, [3, 4, 5]) in Stdlib.Option.withDefault<List<Int64>>(getListDict(d, 2), []) = stdout="[3, 4, 5]\n"
+
+// Empty list as value
+Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 42, []), 42), [-1]) = stdout="[]\n"
+
+// fromList with list values - use Stdlib.Dict.size with specific type
+let d = Stdlib.Dict.fromList<Int64, List<Int64>>([(1, [10]), (2, [20, 30])]) in Stdlib.Dict.size<Int64, List<Int64>>(d) = 2

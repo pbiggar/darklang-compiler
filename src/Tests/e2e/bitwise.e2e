@@ -169,3 +169,28 @@
 
 // Large number shifts
 1 << 63 = -9223372036854775808
+
+
+// ===================================================================
+// Stdlib Function Versions (coverage for function forms)
+// ===================================================================
+
+// Stdlib.Int64.bitwiseAnd
+Int64.bitwiseAnd(12, 10) = 8
+Int64.bitwiseAnd(255, 15) = 15
+Int64.bitwiseAnd(0, 255) = 0
+
+// Stdlib.Int64.bitwiseXor
+Int64.bitwiseXor(12, 10) = 6
+Int64.bitwiseXor(42, 42) = 0
+Int64.bitwiseXor(170, 85) = 255
+
+// Stdlib.Int64.shiftLeft
+Int64.shiftLeft(1, 4) = 16
+Int64.shiftLeft(1, 10) = 1024
+Int64.shiftLeft(5, 3) = 40
+
+// Stdlib.Int64.shiftRight
+Int64.shiftRight(16, 4) = 1
+Int64.shiftRight(1024, 10) = 1
+Int64.shiftRight(256, 4) = 16
