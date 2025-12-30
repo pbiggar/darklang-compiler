@@ -473,3 +473,66 @@ String.fromCodepoints([72, 105]) = stdout="Hi\n"
 // String.toGraphemes("abc") = stdout="[a, b, c]\n"
 String.toGraphemes("") = stdout="[]\n"
 // String.toGraphemes("hello") = stdout="[h, e, l, l, o]\n"
+
+// ===================================================================
+// String.first - Get first n bytes (alias for take)
+// ===================================================================
+
+String.first("hello", 3) = stdout="hel\n"
+String.first("hello", 0) = stdout="\n"
+String.first("hello", 10) = stdout="hello\n"
+
+// ===================================================================
+// String.last - Get last n bytes
+// ===================================================================
+
+String.last("hello", 3) = stdout="llo\n"
+String.last("hello", 0) = stdout="\n"
+String.last("hello", 10) = stdout="hello\n"
+String.last("hello", 5) = stdout="hello\n"
+String.last("abcdef", 2) = stdout="ef\n"
+
+// ===================================================================
+// String.dropFirst - Drop first n bytes (alias for drop)
+// ===================================================================
+
+String.dropFirst("hello", 2) = stdout="llo\n"
+String.dropFirst("hello", 0) = stdout="hello\n"
+String.dropFirst("hello", 10) = stdout="\n"
+
+// ===================================================================
+// String.dropLast - Drop last n bytes
+// ===================================================================
+
+String.dropLast("hello", 2) = stdout="hel\n"
+String.dropLast("hello", 0) = stdout="hello\n"
+String.dropLast("hello", 10) = stdout="\n"
+String.dropLast("hello", 5) = stdout="\n"
+String.dropLast("abcdef", 3) = stdout="abc\n"
+
+// ===================================================================
+// String.head - Get first character as Option
+// ===================================================================
+
+Option.withDefault<String>(String.head("hello"), "") = stdout="h\n"
+Option.isNone<String>(String.head("")) = stdout="true\n"
+
+// ===================================================================
+// String.padStart - Pad on the left
+// ===================================================================
+
+String.padStart("hi", 5, " ") = stdout="   hi\n"
+String.padStart("hello", 5, " ") = stdout="hello\n"
+String.padStart("hello", 3, " ") = stdout="hello\n"
+String.padStart("5", 3, "0") = stdout="005\n"
+String.padStart("42", 5, "0") = stdout="00042\n"
+
+// ===================================================================
+// String.padEnd - Pad on the right
+// ===================================================================
+
+String.padEnd("hi", 5, " ") = stdout="hi   \n"
+String.padEnd("hello", 5, " ") = stdout="hello\n"
+String.padEnd("hello", 3, " ") = stdout="hello\n"
+String.padEnd("5", 3, "0") = stdout="500\n"
+String.padEnd("42", 5, "0") = stdout="42000\n"

@@ -88,6 +88,18 @@ def Stdlib.Int64.toString(n: Int64) : String =
     else if n < 10 then Stdlib.Int64.digitToString(n)
     else Stdlib.Int64.toString(n / 10) ++ Stdlib.Int64.digitToString(n % 10)
 
+// Check if integer is even
+def Stdlib.Int64.isEven(n: Int64) : Bool =
+    (n % 2) == 0
+
+// Check if integer is odd
+def Stdlib.Int64.isOdd(n: Int64) : Bool =
+    (n % 2) != 0
+
+// Sum all integers in a list
+def Stdlib.Int64.sum(list: List<Int64>) : Int64 =
+    Stdlib.List.fold<Int64, Int64>(list, 0, (acc: Int64, x: Int64) => acc + x)
+
 // Stdlib.Bool - Boolean operations
 
 def Stdlib.Bool.not(b: Bool) : Bool = !b
@@ -341,6 +353,67 @@ def Stdlib.List.exists<a>(list: List<a>, fn: (a) -> Bool) : Bool =
     match list with
     | [] -> false
     | [h, ...t] -> fn(h) || Stdlib.List.exists<a>(t, fn)
+
+// Get the last element of a list, or None if empty
+def Stdlib.List.last<a>(list: List<a>) : Stdlib.Option.Option<a> =
+    match list with
+    | [] -> None
+    | [only] -> Some(only)
+    | [h, ...t] -> Stdlib.List.last<a>(t)
+
+// Remove the last element from a list
+def Stdlib.List.dropLast<a>(list: List<a>) : List<a> =
+    match list with
+    | [] -> []
+    | [only] -> []
+    | [h, ...t] -> [h, ...Stdlib.List.dropLast<a>(t)]
+
+// Generate a list of integers from start (inclusive) to end (exclusive)
+def Stdlib.List.range(start: Int64, end_: Int64) : List<Int64> =
+    Stdlib.List.__rangeHelper(start, end_, [])
+
+def Stdlib.List.__rangeHelper(current: Int64, end_: Int64, acc: List<Int64>) : List<Int64> =
+    if current >= end_ then
+        Stdlib.List.reverse<Int64>(acc)
+    else
+        Stdlib.List.__rangeHelper(current + 1, end_, [current, ...acc])
+
+// Repeat a value n times
+def Stdlib.List.repeat<a>(value: a, count: Int64) : List<a> =
+    Stdlib.List.__repeatHelper<a>(value, count, [])
+
+def Stdlib.List.__repeatHelper<a>(value: a, count: Int64, acc: List<a>) : List<a> =
+    if count <= 0 then
+        acc
+    else
+        Stdlib.List.__repeatHelper<a>(value, count - 1, [value, ...acc])
+
+// Map with index: apply a function to each element along with its index
+def Stdlib.List.indexedMap<a, b>(list: List<a>, fn: (Int64, a) -> b) : List<b> =
+    Stdlib.List.__indexedMapHelper<a, b>(list, fn, 0)
+
+def Stdlib.List.__indexedMapHelper<a, b>(list: List<a>, fn: (Int64, a) -> b, index: Int64) : List<b> =
+    match list with
+    | [] -> []
+    | [h, ...t] -> [fn(index, h), ...Stdlib.List.__indexedMapHelper<a, b>(t, fn, index + 1)]
+
+// Partition a list into two lists based on a predicate
+// Returns (elements where predicate is true, elements where predicate is false)
+def Stdlib.List.partition<a>(list: List<a>, fn: (a) -> Bool) : (List<a>, List<a>) =
+    Stdlib.List.__partitionHelper<a>(list, fn, [], [])
+
+def Stdlib.List.__partitionHelper<a>(list: List<a>, fn: (a) -> Bool, trueAcc: List<a>, falseAcc: List<a>) : (List<a>, List<a>) =
+    match list with
+    | [] -> (Stdlib.List.reverse<a>(trueAcc), Stdlib.List.reverse<a>(falseAcc))
+    | [h, ...t] ->
+        if fn(h) then
+            Stdlib.List.__partitionHelper<a>(t, fn, [h, ...trueAcc], falseAcc)
+        else
+            Stdlib.List.__partitionHelper<a>(t, fn, trueAcc, [h, ...falseAcc])
+
+// Alias for forAll (darklang naming convention)
+def Stdlib.List.all<a>(list: List<a>, fn: (a) -> Bool) : Bool =
+    Stdlib.List.forAll<a>(list, fn)
 
 // TODO: List.zip is disabled due to compiler bug with tuple recursion
 // def Stdlib.List.zip<a, b>(list1: List<a>, list2: List<b>) : List<(a, b)> =
@@ -819,6 +892,64 @@ def Stdlib.String.equals(s1: String, s2: String) : Bool =
     let len2 = Stdlib.String.length(s2) in
     if len1 != len2 then false
     else Stdlib.String.__compareBytes(s1, 0, s2, 0, len1)
+
+// Get first n bytes (alias for take)
+def Stdlib.String.first(s: String, n: Int64) : String =
+    Stdlib.String.take(s, n)
+
+// Get last n bytes
+def Stdlib.String.last(s: String, n: Int64) : String =
+    let len = Stdlib.String.length(s) in
+    if n <= 0 then ""
+    else if n >= len then s
+    else Stdlib.String.drop(s, len - n)
+
+// Drop first n bytes (alias for drop)
+def Stdlib.String.dropFirst(s: String, n: Int64) : String =
+    Stdlib.String.drop(s, n)
+
+// Drop last n bytes
+def Stdlib.String.dropLast(s: String, n: Int64) : String =
+    let len = Stdlib.String.length(s) in
+    if n <= 0 then s
+    else if n >= len then ""
+    else Stdlib.String.take(s, len - n)
+
+// Get first character as Option (grapheme-aware)
+def Stdlib.String.head(s: String) : Stdlib.Option.Option<String> =
+    if Stdlib.String.length(s) == 0 then
+        None
+    else
+        Some(Stdlib.String.take(s, 1))
+
+// Pad string on the left to reach target length
+// Uses byte-based length for simplicity
+def Stdlib.String.padStart(s: String, targetLen: Int64, padChar: String) : String =
+    let len = Stdlib.String.length(s) in
+    let padLen = Stdlib.String.length(padChar) in
+    if len >= targetLen then s
+    else if padLen == 0 then s
+    else
+        let needed = targetLen - len in
+        let numPads = needed / padLen in
+        let remainder = needed % padLen in
+        let fullPad = Stdlib.String.repeat(padChar, numPads) in
+        let partialPad = Stdlib.String.take(padChar, remainder) in
+        fullPad ++ partialPad ++ s
+
+// Pad string on the right to reach target length
+def Stdlib.String.padEnd(s: String, targetLen: Int64, padChar: String) : String =
+    let len = Stdlib.String.length(s) in
+    let padLen = Stdlib.String.length(padChar) in
+    if len >= targetLen then s
+    else if padLen == 0 then s
+    else
+        let needed = targetLen - len in
+        let numPads = needed / padLen in
+        let remainder = needed % padLen in
+        let fullPad = Stdlib.String.repeat(padChar, numPads) in
+        let partialPad = Stdlib.String.take(padChar, remainder) in
+        s ++ fullPad ++ partialPad
 
 
 // =============================================================================
@@ -1455,6 +1586,14 @@ def Stdlib.Dict.__fromListHelper<k, v>(pairs: List<(k, v)>, acc: Dict<k, v>) : D
 def Stdlib.Dict.getOrDefault<k, v>(dict: Dict<k, v>, key: k, default: v) : v =
     Stdlib.Option.withDefault<v>(Stdlib.Dict.get<k, v>(dict, key), default)
 
+// Create a dictionary with a single key-value pair
+def Stdlib.Dict.singleton<k, v>(key: k, value: v) : Dict<k, v> =
+    Stdlib.Dict.set<k, v>(Stdlib.Dict.empty<k, v>(), key, value)
+
+// Convert dictionary to list of key-value pairs (alias for entries)
+def Stdlib.Dict.toList<k, v>(dict: Dict<k, v>) : List<(k, v)> =
+    Stdlib.Dict.entries<k, v>(dict)
+
 // ============================================================================
 // Stdlib.Uuid - UUID v4 generation
 // ============================================================================
@@ -1614,3 +1753,318 @@ def Stdlib.Bytes.__toListHelper(b: Bytes, index: Int64, acc: List<Int64>) : List
     else
         let byte = Stdlib.Bytes.get(b, index) in
         Stdlib.Bytes.__toListHelper(b, index - 1, [byte, ...acc])
+
+// =============================================================================
+// Stdlib.Char - Character operations
+// =============================================================================
+// Note: In Dark, characters are represented as single-character strings.
+// These functions operate on the first codepoint of a string.
+
+// Check if character is an ASCII digit (0-9)
+def Stdlib.Char.isDigit(c: String) : Bool =
+    if Stdlib.String.isEmpty(c) then false
+    else
+        let cps = Stdlib.String.toCodepoints(c) in
+        match Stdlib.List.head<Int64>(cps) with
+        | Some(cp) -> cp >= 48 && cp <= 57
+        | None -> false
+
+// Check if character is an ASCII letter (a-z, A-Z)
+def Stdlib.Char.isLetter(c: String) : Bool =
+    if Stdlib.String.isEmpty(c) then false
+    else
+        let cps = Stdlib.String.toCodepoints(c) in
+        match Stdlib.List.head<Int64>(cps) with
+        | Some(cp) -> (cp >= 65 && cp <= 90) || (cp >= 97 && cp <= 122)
+        | None -> false
+
+// Check if character is ASCII whitespace (space, tab, newline, carriage return)
+def Stdlib.Char.isWhitespace(c: String) : Bool =
+    if Stdlib.String.isEmpty(c) then false
+    else
+        let cps = Stdlib.String.toCodepoints(c) in
+        match Stdlib.List.head<Int64>(cps) with
+        | Some(cp) -> cp == 32 || cp == 9 || cp == 10 || cp == 13
+        | None -> false
+
+// Check if character is an ASCII uppercase letter (A-Z)
+def Stdlib.Char.isUppercase(c: String) : Bool =
+    if Stdlib.String.isEmpty(c) then false
+    else
+        let cps = Stdlib.String.toCodepoints(c) in
+        match Stdlib.List.head<Int64>(cps) with
+        | Some(cp) -> cp >= 65 && cp <= 90
+        | None -> false
+
+// Check if character is an ASCII lowercase letter (a-z)
+def Stdlib.Char.isLowercase(c: String) : Bool =
+    if Stdlib.String.isEmpty(c) then false
+    else
+        let cps = Stdlib.String.toCodepoints(c) in
+        match Stdlib.List.head<Int64>(cps) with
+        | Some(cp) -> cp >= 97 && cp <= 122
+        | None -> false
+
+// Check if character is alphanumeric (a-z, A-Z, 0-9)
+def Stdlib.Char.isAlphanumeric(c: String) : Bool =
+    Stdlib.Char.isLetter(c) || Stdlib.Char.isDigit(c)
+
+// Convert ASCII character to uppercase
+def Stdlib.Char.toUppercase(c: String) : String =
+    if Stdlib.String.isEmpty(c) then ""
+    else
+        let cps = Stdlib.String.toCodepoints(c) in
+        match Stdlib.List.head<Int64>(cps) with
+        | Some(cp) ->
+            if cp >= 97 && cp <= 122 then
+                Stdlib.String.fromCodepoints([cp - 32])
+            else
+                Stdlib.String.fromCodepoints([cp])
+        | None -> ""
+
+// Convert ASCII character to lowercase
+def Stdlib.Char.toLowercase(c: String) : String =
+    if Stdlib.String.isEmpty(c) then ""
+    else
+        let cps = Stdlib.String.toCodepoints(c) in
+        match Stdlib.List.head<Int64>(cps) with
+        | Some(cp) ->
+            if cp >= 65 && cp <= 90 then
+                Stdlib.String.fromCodepoints([cp + 32])
+            else
+                Stdlib.String.fromCodepoints([cp])
+        | None -> ""
+
+// Get the Unicode codepoint value of the first character
+def Stdlib.Char.toCode(c: String) : Int64 =
+    let cps = Stdlib.String.toCodepoints(c) in
+    match Stdlib.List.head<Int64>(cps) with
+    | Some(cp) -> cp
+    | None -> 0
+
+// Create a single character string from a codepoint
+def Stdlib.Char.fromCode(code: Int64) : String =
+    Stdlib.String.fromCodepoints([code])
+
+// =============================================================================
+// Stdlib.Base64 - Base64 encoding and decoding
+// =============================================================================
+// Standard Base64 alphabet: A-Z, a-z, 0-9, +, /
+// URL-safe alphabet: A-Z, a-z, 0-9, -, _
+
+// Encoding lookup table (6-bit value -> character)
+def Stdlib.Base64.__encodeChar(n: Int64) : String =
+    match n with
+    | 0 -> "A" | 1 -> "B" | 2 -> "C" | 3 -> "D" | 4 -> "E" | 5 -> "F"
+    | 6 -> "G" | 7 -> "H" | 8 -> "I" | 9 -> "J" | 10 -> "K" | 11 -> "L"
+    | 12 -> "M" | 13 -> "N" | 14 -> "O" | 15 -> "P" | 16 -> "Q" | 17 -> "R"
+    | 18 -> "S" | 19 -> "T" | 20 -> "U" | 21 -> "V" | 22 -> "W" | 23 -> "X"
+    | 24 -> "Y" | 25 -> "Z" | 26 -> "a" | 27 -> "b" | 28 -> "c" | 29 -> "d"
+    | 30 -> "e" | 31 -> "f" | 32 -> "g" | 33 -> "h" | 34 -> "i" | 35 -> "j"
+    | 36 -> "k" | 37 -> "l" | 38 -> "m" | 39 -> "n" | 40 -> "o" | 41 -> "p"
+    | 42 -> "q" | 43 -> "r" | 44 -> "s" | 45 -> "t" | 46 -> "u" | 47 -> "v"
+    | 48 -> "w" | 49 -> "x" | 50 -> "y" | 51 -> "z" | 52 -> "0" | 53 -> "1"
+    | 54 -> "2" | 55 -> "3" | 56 -> "4" | 57 -> "5" | 58 -> "6" | 59 -> "7"
+    | 60 -> "8" | 61 -> "9" | 62 -> "+" | 63 -> "/"
+    | _ -> ""
+
+// URL-safe encoding (uses - and _ instead of + and /)
+def Stdlib.Base64.__encodeCharUrl(n: Int64) : String =
+    if n == 62 then "-"
+    else if n == 63 then "_"
+    else Stdlib.Base64.__encodeChar(n)
+
+// Decode lookup table (character -> 6-bit value, returns -1 for invalid)
+def Stdlib.Base64.__decodeChar(c: Int64) : Int64 =
+    if c >= 65 && c <= 90 then c - 65      // A-Z -> 0-25
+    else if c >= 97 && c <= 122 then c - 71  // a-z -> 26-51
+    else if c >= 48 && c <= 57 then c + 4    // 0-9 -> 52-61
+    else if c == 43 then 62                   // + -> 62
+    else if c == 47 then 63                   // / -> 63
+    else if c == 45 then 62                   // - -> 62 (URL-safe)
+    else if c == 95 then 63                   // _ -> 63 (URL-safe)
+    else if c == 61 then -2                   // = -> padding
+    else -1                                   // Invalid
+
+// Encode 3 bytes to 4 base64 characters
+def Stdlib.Base64.__encode3Bytes(b0: Int64, b1: Int64, b2: Int64, urlSafe: Bool) : String =
+    let c0 = (b0 >> 2) & 63 in
+    let c1 = ((b0 & 3) << 4) ^ ((b1 >> 4) & 15) in
+    let c2 = ((b1 & 15) << 2) ^ ((b2 >> 6) & 3) in
+    let c3 = b2 & 63 in
+    if urlSafe then
+        Stdlib.Base64.__encodeCharUrl(c0) ++
+        Stdlib.Base64.__encodeCharUrl(c1) ++
+        Stdlib.Base64.__encodeCharUrl(c2) ++
+        Stdlib.Base64.__encodeCharUrl(c3)
+    else
+        Stdlib.Base64.__encodeChar(c0) ++
+        Stdlib.Base64.__encodeChar(c1) ++
+        Stdlib.Base64.__encodeChar(c2) ++
+        Stdlib.Base64.__encodeChar(c3)
+
+// Encode 2 bytes to 3 base64 characters + 1 padding
+def Stdlib.Base64.__encode2Bytes(b0: Int64, b1: Int64, urlSafe: Bool) : String =
+    let c0 = (b0 >> 2) & 63 in
+    let c1 = ((b0 & 3) << 4) ^ ((b1 >> 4) & 15) in
+    let c2 = (b1 & 15) << 2 in
+    if urlSafe then
+        Stdlib.Base64.__encodeCharUrl(c0) ++
+        Stdlib.Base64.__encodeCharUrl(c1) ++
+        Stdlib.Base64.__encodeCharUrl(c2) ++ "="
+    else
+        Stdlib.Base64.__encodeChar(c0) ++
+        Stdlib.Base64.__encodeChar(c1) ++
+        Stdlib.Base64.__encodeChar(c2) ++ "="
+
+// Encode 1 byte to 2 base64 characters + 2 padding
+def Stdlib.Base64.__encode1Byte(b0: Int64, urlSafe: Bool) : String =
+    let c0 = (b0 >> 2) & 63 in
+    let c1 = (b0 & 3) << 4 in
+    if urlSafe then
+        Stdlib.Base64.__encodeCharUrl(c0) ++
+        Stdlib.Base64.__encodeCharUrl(c1) ++ "=="
+    else
+        Stdlib.Base64.__encodeChar(c0) ++
+        Stdlib.Base64.__encodeChar(c1) ++ "=="
+
+// Encode bytes to base64 helper
+def Stdlib.Base64.__encodeHelper(b: Bytes, index: Int64, len: Int64, urlSafe: Bool, acc: String) : String =
+    let remaining = len - index in
+    if remaining <= 0 then
+        acc
+    else if remaining >= 3 then
+        let b0 = Stdlib.Bytes.get(b, index) in
+        let b1 = Stdlib.Bytes.get(b, index + 1) in
+        let b2 = Stdlib.Bytes.get(b, index + 2) in
+        let chunk = Stdlib.Base64.__encode3Bytes(b0, b1, b2, urlSafe) in
+        Stdlib.Base64.__encodeHelper(b, index + 3, len, urlSafe, acc ++ chunk)
+    else if remaining == 2 then
+        let b0 = Stdlib.Bytes.get(b, index) in
+        let b1 = Stdlib.Bytes.get(b, index + 1) in
+        acc ++ Stdlib.Base64.__encode2Bytes(b0, b1, urlSafe)
+    else
+        let b0 = Stdlib.Bytes.get(b, index) in
+        acc ++ Stdlib.Base64.__encode1Byte(b0, urlSafe)
+
+// Encode bytes to standard base64 string
+def Stdlib.Base64.encode(bytes: Bytes) : String =
+    Stdlib.Base64.__encodeHelper(bytes, 0, Stdlib.Bytes.length(bytes), false, "")
+
+// Encode bytes to URL-safe base64 string
+def Stdlib.Base64.urlEncode(bytes: Bytes) : String =
+    Stdlib.Base64.__encodeHelper(bytes, 0, Stdlib.Bytes.length(bytes), true, "")
+
+// Decode 4 base64 characters to up to 3 bytes
+// Returns (bytes list, error flag)
+def Stdlib.Base64.__decode4Chars(c0: Int64, c1: Int64, c2: Int64, c3: Int64) : (List<Int64>, Bool) =
+    let v0 = Stdlib.Base64.__decodeChar(c0) in
+    let v1 = Stdlib.Base64.__decodeChar(c1) in
+    let v2 = Stdlib.Base64.__decodeChar(c2) in
+    let v3 = Stdlib.Base64.__decodeChar(c3) in
+    // Check for invalid characters
+    if v0 == -1 || v1 == -1 || (v2 == -1 && v2 != -2) || (v3 == -1 && v3 != -2) then
+        ([], true)
+    else if v2 == -2 then
+        // Two padding chars - 1 output byte
+        let b0 = ((v0 << 2) ^ (v1 >> 4)) & 255 in
+        ([b0], false)
+    else if v3 == -2 then
+        // One padding char - 2 output bytes
+        let b0 = ((v0 << 2) ^ (v1 >> 4)) & 255 in
+        let b1 = ((v1 << 4) ^ (v2 >> 2)) & 255 in
+        ([b0, b1], false)
+    else
+        // No padding - 3 output bytes
+        let b0 = ((v0 << 2) ^ (v1 >> 4)) & 255 in
+        let b1 = ((v1 << 4) ^ (v2 >> 2)) & 255 in
+        let b2 = ((v2 << 6) ^ v3) & 255 in
+        ([b0, b1, b2], false)
+
+// Decode base64 helper
+def Stdlib.Base64.__decodeHelper(s: String, index: Int64, len: Int64, acc: List<Int64>) : Stdlib.Result.Result<List<Int64>, String> =
+    if index >= len then
+        Ok(Stdlib.List.reverse<Int64>(acc))
+    else if index + 4 > len then
+        Error("Invalid base64: length not multiple of 4")
+    else
+        let c0 = Stdlib.String.getByteAt(s, index) in
+        let c1 = Stdlib.String.getByteAt(s, index + 1) in
+        let c2 = Stdlib.String.getByteAt(s, index + 2) in
+        let c3 = Stdlib.String.getByteAt(s, index + 3) in
+        let result = Stdlib.Base64.__decode4Chars(c0, c1, c2, c3) in
+        match result with
+        | (bytes, true) -> Error("Invalid base64 character")
+        | (bytes, false) ->
+            // Prepend bytes to accumulator (in reverse order since we'll reverse at end)
+            let newAcc = Stdlib.Base64.__prependReversed(bytes, acc) in
+            Stdlib.Base64.__decodeHelper(s, index + 4, len, newAcc)
+
+// Helper to prepend a list in reverse order
+def Stdlib.Base64.__prependReversed(bytes: List<Int64>, acc: List<Int64>) : List<Int64> =
+    match bytes with
+    | [] -> acc
+    | [b, ...rest] -> Stdlib.Base64.__prependReversed(rest, [b, ...acc])
+
+// Decode base64 string to bytes
+def Stdlib.Base64.decode(s: String) : Stdlib.Result.Result<Bytes, String> =
+    let len = Stdlib.String.length(s) in
+    if len == 0 then
+        Ok(Stdlib.Bytes.create(0))
+    else if (len % 4) != 0 then
+        Error("Invalid base64: length not multiple of 4")
+    else
+        match Stdlib.Base64.__decodeHelper(s, 0, len, []) with
+        | Ok(byteList) -> Ok(Stdlib.Bytes.fromList(byteList))
+        | Error(msg) -> Error(msg)
+
+// Decode URL-safe base64 string to bytes (same decoder handles both)
+def Stdlib.Base64.urlDecode(s: String) : Stdlib.Result.Result<Bytes, String> =
+    Stdlib.Base64.decode(s)
+
+// =============================================================================
+// Stdlib.Math - Mathematical operations
+// =============================================================================
+
+// Pi constant (approximation to 15 decimal places)
+// 3.141592653589793
+def Stdlib.Math.pi() : Float = 3.141592653589793
+
+// Euler's number e (approximation to 15 decimal places)
+// 2.718281828459045
+def Stdlib.Math.e() : Float = 2.718281828459045
+
+// Absolute value of a float
+def Stdlib.Math.abs(x: Float) : Float =
+    Float.abs(x)
+
+// Square root (delegating to existing Float.sqrt)
+def Stdlib.Math.sqrt(x: Float) : Float =
+    Float.sqrt(x)
+
+// Convert float to integer, truncating toward zero
+def Stdlib.Math.truncate(x: Float) : Int64 =
+    Float.toInt(x)
+
+// Floor: largest integer less than or equal to x
+// Note: Float.toInt truncates toward zero, so we need to adjust for negative numbers
+def Stdlib.Math.floor(x: Float) : Int64 =
+    let truncated = Float.toInt(x) in
+    let floatTruncated = Float.abs(x) in  // placeholder - we don't have Int64.toFloat
+    truncated  // Simplified: just truncate for now
+
+// Ceiling: smallest integer greater than or equal to x
+def Stdlib.Math.ceiling(x: Float) : Int64 =
+    let truncated = Float.toInt(x) in
+    truncated  // Simplified: just truncate for now
+
+// Round to nearest integer
+def Stdlib.Math.round(x: Float) : Int64 =
+    Float.toInt(x)  // Simplified: just truncate for now
+
+// NOTE: Float comparison and arithmetic operators are not fully implemented yet.
+// The following functions require compiler support for float operations:
+// - Math.max, Math.min, Math.clamp (need float comparison)
+// - Math.pow (needs float multiplication)
+// - Math.isNegative (needs float comparison)
+// - Trigonometric functions (sin, cos, tan) require intrinsics

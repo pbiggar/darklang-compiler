@@ -139,10 +139,64 @@ List.exists([1, 2, 3], (x: Int64) => x > 10) = stdout="false\n"
 List.exists<Int64>([], (x: Int64) => x > 0) = stdout="false\n"
 
 // ===================================================================
-// NOTE: Functions not yet implemented or disabled
+// List.last - Get last element or None
 // ===================================================================
 
-// List.last - not yet implemented
-// List.range - not yet implemented
+Option.withDefault(List.last([1, 2, 3]), 0) = 3
+Option.withDefault(List.last([42]), 0) = 42
+Option.isNone<Int64>(List.last<Int64>([])) = stdout="true\n"
+
+// ===================================================================
+// List.dropLast - Remove last element
+// ===================================================================
+
+List.length(List.dropLast([1, 2, 3, 4, 5])) = stdout="4\n"
+List.length(List.dropLast([1])) = stdout="0\n"
+List.length(List.dropLast<Int64>([])) = stdout="0\n"
+match List.dropLast([1, 2, 3]) with | [a, b] -> a + b | _ -> 0 = 3
+
+// ===================================================================
+// List.range - Generate list of integers
+// ===================================================================
+
+List.length<Int64>(List.range(0, 5)) = stdout="5\n"
+List.length<Int64>(List.range(0, 0)) = stdout="0\n"
+List.length<Int64>(List.range(5, 3)) = stdout="0\n"
+match List.range(1, 4) with | [a, b, c] -> a + b + c | _ -> 0 = 6
+
+// ===================================================================
+// List.repeat - Repeat value n times
+// ===================================================================
+
+List.length(List.repeat(42, 5)) = stdout="5\n"
+List.length(List.repeat(1, 0)) = stdout="0\n"
+match List.repeat(7, 3) with | [a, b, c] -> a + b + c | _ -> 0 = 21
+
+// ===================================================================
+// List.indexedMap - Map with index
+// ===================================================================
+
+// Sum of index + value for [10, 20, 30] = (0+10) + (1+20) + (2+30) = 63
+List.fold(List.indexedMap([10, 20, 30], (i: Int64, x: Int64) => i + x), 0, (acc: Int64, x: Int64) => acc + x) = 63
+List.length(List.indexedMap([1, 2, 3, 4], (i: Int64, x: Int64) => x)) = stdout="4\n"
+
+// ===================================================================
+// List.partition - Split list by predicate
+// ===================================================================
+
+match List.partition([1, 2, 3, 4, 5], (x: Int64) => x > 2) with | (trues, falses) -> List.length(trues) | _ -> 0 = stdout="3\n"
+match List.partition([1, 2, 3, 4, 5], (x: Int64) => x > 2) with | (trues, falses) -> List.length(falses) | _ -> 0 = stdout="2\n"
+
+// ===================================================================
+// List.all - Check if all satisfy predicate (alias for forAll)
+// ===================================================================
+
+List.all([1, 2, 3], (x: Int64) => x > 0) = stdout="true\n"
+List.all([1, 2, 3], (x: Int64) => x > 2) = stdout="false\n"
+
+// ===================================================================
+// NOTE: Functions disabled due to compiler bugs
+// ===================================================================
+
 // List.zip - disabled due to tuple recursion bug
 

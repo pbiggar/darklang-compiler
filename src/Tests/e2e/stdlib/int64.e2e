@@ -147,6 +147,40 @@ Int64.toString(-5) = stdout="-5\n"
 Int64.toString(1234567890) = stdout="1234567890\n"
 
 // ===================================================================
+// Int64.isEven - Check if integer is even
+// ===================================================================
+
+Int64.isEven(0) = stdout="true\n"
+Int64.isEven(2) = stdout="true\n"
+Int64.isEven(4) = stdout="true\n"
+Int64.isEven(-2) = stdout="true\n"
+Int64.isEven(1) = stdout="false\n"
+Int64.isEven(3) = stdout="false\n"
+Int64.isEven(-1) = stdout="false\n"
+
+// ===================================================================
+// Int64.isOdd - Check if integer is odd
+// ===================================================================
+
+Int64.isOdd(1) = stdout="true\n"
+Int64.isOdd(3) = stdout="true\n"
+Int64.isOdd(-1) = stdout="true\n"
+Int64.isOdd(0) = stdout="false\n"
+Int64.isOdd(2) = stdout="false\n"
+Int64.isOdd(4) = stdout="false\n"
+Int64.isOdd(-2) = stdout="false\n"
+
+// ===================================================================
+// Int64.sum - Sum all integers in a list
+// ===================================================================
+
+Int64.sum([1, 2, 3, 4, 5]) = 15
+Int64.sum([]) = 0
+Int64.sum([100]) = 100
+Int64.sum([1, -1, 2, -2]) = 0
+Int64.sum([10, 20, 30]) = 60
+
+// ===================================================================
 // NOTE: Functions not yet implemented due to missing types or features
 // ===================================================================
 
@@ -165,6 +199,3 @@ Int64.toString(1234567890) = stdout="1234567890\n"
 // Int64.remainder - needs Result type (blocked by type checker bug)
 // Int64.remainder(15, 6) = Result.Ok(3)
 // Int64.remainder(5, 0) = Result.Error(...)
-
-// Int64.sum - needs List iteration support
-// Int64.sum([1, 2, 3, 4, 5]) = 15

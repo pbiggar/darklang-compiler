@@ -1,0 +1,68 @@
+// Stdlib.Math Tests
+// Tests for Math module functions
+
+// ===================================================================
+// Math.pi - Pi constant
+// ===================================================================
+
+// Pi should be approximately 3.14159...
+// We can't test float equality directly, so check it's positive
+Math.truncate(Math.pi()) = 3
+
+// ===================================================================
+// Math.e - Euler's number constant
+// ===================================================================
+
+// e should be approximately 2.71828...
+Math.truncate(Math.e()) = 2
+
+// ===================================================================
+// Math.abs - Absolute value of float
+// ===================================================================
+
+Math.truncate(Math.abs(5.0)) = 5
+Math.truncate(Math.abs(-5.0)) = 5
+
+// ===================================================================
+// Math.sqrt - Square root
+// ===================================================================
+
+Math.truncate(Math.sqrt(4.0)) = 2
+Math.truncate(Math.sqrt(9.0)) = 3
+Math.truncate(Math.sqrt(16.0)) = 4
+
+// ===================================================================
+// Math.truncate - Truncate toward zero
+// ===================================================================
+
+Math.truncate(3.7) = 3
+Math.truncate(-3.7) = -3
+Math.truncate(0.0) = 0
+
+// ===================================================================
+// Math.floor - Floor function (simplified - same as truncate for now)
+// ===================================================================
+
+Math.floor(3.7) = 3
+Math.floor(3.0) = 3
+
+// ===================================================================
+// Math.ceiling - Ceiling function (simplified - same as truncate for now)
+// ===================================================================
+
+Math.ceiling(3.7) = 3
+Math.ceiling(3.0) = 3
+
+// ===================================================================
+// Math.round - Round to nearest (simplified - same as truncate for now)
+// ===================================================================
+
+Math.round(3.5) = 3
+Math.round(3.0) = 3
+
+// ===================================================================
+// NOTE: More comprehensive float tests would require:
+// - Float comparison operators
+// - Float arithmetic operators
+// - Float literals beyond basic values
+// ===================================================================

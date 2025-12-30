@@ -1,0 +1,109 @@
+// Stdlib.Char Tests
+// Tests for Char module functions
+
+// ===================================================================
+// Char.isDigit - Check if character is digit (0-9)
+// ===================================================================
+
+Char.isDigit("0") = stdout="true\n"
+Char.isDigit("5") = stdout="true\n"
+Char.isDigit("9") = stdout="true\n"
+Char.isDigit("a") = stdout="false\n"
+Char.isDigit("A") = stdout="false\n"
+Char.isDigit(" ") = stdout="false\n"
+Char.isDigit("") = stdout="false\n"
+
+// ===================================================================
+// Char.isLetter - Check if character is letter (a-z, A-Z)
+// ===================================================================
+
+Char.isLetter("a") = stdout="true\n"
+Char.isLetter("z") = stdout="true\n"
+Char.isLetter("A") = stdout="true\n"
+Char.isLetter("Z") = stdout="true\n"
+Char.isLetter("0") = stdout="false\n"
+Char.isLetter(" ") = stdout="false\n"
+Char.isLetter("") = stdout="false\n"
+
+// ===================================================================
+// Char.isWhitespace - Check if character is whitespace
+// ===================================================================
+
+Char.isWhitespace(" ") = stdout="true\n"
+Char.isWhitespace("\t") = stdout="true\n"
+Char.isWhitespace("\n") = stdout="true\n"
+Char.isWhitespace("a") = stdout="false\n"
+Char.isWhitespace("0") = stdout="false\n"
+Char.isWhitespace("") = stdout="false\n"
+
+// ===================================================================
+// Char.isUppercase - Check if character is uppercase (A-Z)
+// ===================================================================
+
+Char.isUppercase("A") = stdout="true\n"
+Char.isUppercase("Z") = stdout="true\n"
+Char.isUppercase("a") = stdout="false\n"
+Char.isUppercase("z") = stdout="false\n"
+Char.isUppercase("0") = stdout="false\n"
+Char.isUppercase("") = stdout="false\n"
+
+// ===================================================================
+// Char.isLowercase - Check if character is lowercase (a-z)
+// ===================================================================
+
+Char.isLowercase("a") = stdout="true\n"
+Char.isLowercase("z") = stdout="true\n"
+Char.isLowercase("A") = stdout="false\n"
+Char.isLowercase("Z") = stdout="false\n"
+Char.isLowercase("0") = stdout="false\n"
+Char.isLowercase("") = stdout="false\n"
+
+// ===================================================================
+// Char.isAlphanumeric - Check if character is alphanumeric
+// ===================================================================
+
+Char.isAlphanumeric("a") = stdout="true\n"
+Char.isAlphanumeric("Z") = stdout="true\n"
+Char.isAlphanumeric("5") = stdout="true\n"
+Char.isAlphanumeric(" ") = stdout="false\n"
+Char.isAlphanumeric("!") = stdout="false\n"
+Char.isAlphanumeric("") = stdout="false\n"
+
+// ===================================================================
+// Char.toUppercase - Convert to uppercase
+// ===================================================================
+
+Char.toUppercase("a") = stdout="A\n"
+Char.toUppercase("z") = stdout="Z\n"
+Char.toUppercase("A") = stdout="A\n"
+Char.toUppercase("5") = stdout="5\n"
+Char.toUppercase("") = stdout="\n"
+
+// ===================================================================
+// Char.toLowercase - Convert to lowercase
+// ===================================================================
+
+Char.toLowercase("A") = stdout="a\n"
+Char.toLowercase("Z") = stdout="z\n"
+Char.toLowercase("a") = stdout="a\n"
+Char.toLowercase("5") = stdout="5\n"
+Char.toLowercase("") = stdout="\n"
+
+// ===================================================================
+// Char.toCode - Get codepoint value
+// ===================================================================
+
+Char.toCode("A") = 65
+Char.toCode("a") = 97
+Char.toCode("0") = 48
+Char.toCode(" ") = 32
+Char.toCode("") = 0
+
+// ===================================================================
+// Char.fromCode - Create character from codepoint
+// ===================================================================
+
+Char.fromCode(65) = stdout="A\n"
+Char.fromCode(97) = stdout="a\n"
+Char.fromCode(48) = stdout="0\n"
+Char.fromCode(32) = stdout=" \n"
