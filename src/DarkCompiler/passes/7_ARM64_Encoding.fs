@@ -232,6 +232,10 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // Resolved in encodeWithLabels with computed label offsets
         []
 
+    | ARM64.B_cond_label (cond, label) ->
+        // Resolved in encodeWithLabels with computed label offsets
+        []
+
     | ARM64.Label label ->
         // Pseudo-instruction: marks a label position (no machine code generated)
         []
@@ -789,7 +793,7 @@ let computeLabelPositions (instructions: ARM64.Instr list) : Map<string, int> =
             | ARM64.Label name ->
                 // Record this label's position, don't increment offset (pseudo-instruction)
                 loop rest offset (Map.add name offset labelMap)
-            | ARM64.CBZ _ | ARM64.CBNZ _ | ARM64.B_label _ | ARM64.BL _
+            | ARM64.CBZ _ | ARM64.CBNZ _ | ARM64.B_label _ | ARM64.B_cond_label _ | ARM64.BL _
             | ARM64.ADRP _ | ARM64.ADR _ | ARM64.ADD_label _ ->
                 // These will be resolved in pass 2, each is 4 bytes
                 loop rest (offset + 4) labelMap
@@ -847,6 +851,26 @@ let encodeWithLabels (instr: ARM64.Instr) (currentOffset: int) (labelMap: Map<st
             let op = 0b000101u <<< 26
             let imm26 = (uint32 instrOffset) &&& 0x3FFFFFFu
             [op ||| imm26]
+        | None ->
+            []
+
+    | ARM64.B_cond_label (cond, label) ->
+        match Map.tryFind label labelMap with
+        | Some targetOffset ->
+            let byteOffset = targetOffset - currentOffset
+            let instrOffset = byteOffset / 4
+            // B.cond: 01010100 imm19 0 cond
+            let op = 0b01010100u <<< 24
+            let imm19 = ((uint32 instrOffset) &&& 0x7FFFFu) <<< 5
+            let condBits =
+                match cond with
+                | ARM64.EQ -> 0b0000u
+                | ARM64.NE -> 0b0001u
+                | ARM64.LT -> 0b1011u
+                | ARM64.GT -> 0b1100u
+                | ARM64.LE -> 0b1101u
+                | ARM64.GE -> 0b1010u
+            [op ||| imm19 ||| condBits]
         | None ->
             []
 

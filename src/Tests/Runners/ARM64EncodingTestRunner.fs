@@ -73,6 +73,7 @@ let formatMismatches (mismatches: (int * Instr * uint32 * uint32) list) : string
                     | B offset -> $"B({offset})"
                     | B_cond (cond, offset) -> $"B_cond({cond}, {offset})"
                     | B_label label -> $"B_label({label})"
+                    | B_cond_label (cond, label) -> $"B_cond_label({cond}, {label})"
                     | NEG (dest, src) -> $"NEG({dest}, {src})"
                     | STP (reg1, reg2, addr, offset) -> $"STP({reg1}, {reg2}, {addr}, {offset})"
                     | LDP (reg1, reg2, addr, offset) -> $"LDP({reg1}, {reg2}, {addr}, {offset})"

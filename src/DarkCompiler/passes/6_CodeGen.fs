@@ -2706,6 +2706,24 @@ let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Res
         let (LIR.Label lbl) = label
         Ok [ARM64.B_label lbl]
 
+    | LIR.CondBranch (cond, trueLabel, falseLabel) ->
+        // Branch based on condition flags (set by previous CMP)
+        // Use B.cond to true label, then unconditional branch to false label
+        let (LIR.Label trueLbl) = trueLabel
+        let (LIR.Label falseLbl) = falseLabel
+        let arm64Cond =
+            match cond with
+            | LIR.EQ -> ARM64.EQ
+            | LIR.NE -> ARM64.NE
+            | LIR.LT -> ARM64.LT
+            | LIR.GT -> ARM64.GT
+            | LIR.LE -> ARM64.LE
+            | LIR.GE -> ARM64.GE
+        Ok [
+            ARM64.B_cond_label (arm64Cond, trueLbl)  // If condition, jump to true branch
+            ARM64.B_label falseLbl                   // Otherwise jump to false branch
+        ]
+
 /// Convert LIR basic block to ARM64 instructions (with label)
 /// epilogueLabel: passed through to terminator for Ret handling
 let convertBlock (ctx: CodeGenContext) (epilogueLabel: string) (block: LIR.BasicBlock) : Result<ARM64.Instr list, string> =

@@ -845,9 +845,20 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                         let t = System.Math.Round(lirTime, 1)
                         println $"        {t}ms"
 
+                    // Pass 4.5: LIR Optimizations (peephole - user code)
+                    if verbosity >= 1 then println "  [4.5/8] LIR Optimizations (user only)..."
+                    let userOptimizedLirProgram =
+                        if options.DisableLIROpt then userLirProgram
+                        else LIR_Optimize.optimizeProgram userLirProgram
+
+                    let lirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(lirOptTime, 1)
+                        println $"        {t}ms"
+
                     // Pass 5: Register Allocation (user functions only, stdlib pre-allocated)
                     if verbosity >= 1 then println "  [5/8] Register Allocation (user only + cached stdlib)..."
-                    let (LIR.Program (userFuncs, userStrings, userFloats)) = userLirProgram
+                    let (LIR.Program (userFuncs, userStrings, userFloats)) = userOptimizedLirProgram
                     let (LIR.Program (_, stdlibStrings, stdlibFloats)) = stdlib.LIRProgram
 
                     // Allocate only user functions
@@ -1170,9 +1181,20 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                         let t = System.Math.Round(lirTime, 1)
                         println $"        {t}ms"
 
+                    // Pass 4.5: LIR Optimizations (peephole - user code)
+                    if verbosity >= 1 then println "  [4.5/8] LIR Optimizations (user only)..."
+                    let userOptimizedLirProgram =
+                        if options.DisableLIROpt then userLirProgram
+                        else LIR_Optimize.optimizeProgram userLirProgram
+
+                    let lirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(lirOptTime, 1)
+                        println $"        {t}ms"
+
                     // Pass 5: Register Allocation (user functions)
                     if verbosity >= 1 then println "  [5/8] Register Allocation..."
-                    let (LIR.Program (userFuncs, userStrings, userFloats)) = userLirProgram
+                    let (LIR.Program (userFuncs, userStrings, userFloats)) = userOptimizedLirProgram
 
                     // Allocate user functions
                     let allocatedUserFuncs = userFuncs |> List.map RegisterAllocation.allocateRegisters

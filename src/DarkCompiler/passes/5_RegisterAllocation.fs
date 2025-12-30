@@ -287,6 +287,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
 let getTerminatorUsedVRegs (term: LIR.Terminator) : Set<int> =
     match term with
     | LIR.Branch (LIR.Virtual id, _, _) -> Set.singleton id
+    | LIR.CondBranch _ -> Set.empty  // CondBranch uses condition flags, not a register
     | _ -> Set.empty
 
 /// Get successor labels for a terminator
@@ -294,6 +295,7 @@ let getSuccessors (term: LIR.Terminator) : LIR.Label list =
     match term with
     | LIR.Ret -> []
     | LIR.Branch (_, trueLabel, falseLabel) -> [trueLabel; falseLabel]
+    | LIR.CondBranch (_, trueLabel, falseLabel) -> [trueLabel; falseLabel]
     | LIR.Jump label -> [label]
 
 /// Get phi uses grouped by predecessor label
@@ -1553,6 +1555,9 @@ let applyToTerminator (mapping: Map<int, Allocation>) (term: LIR.Terminator)
         | LIR.Physical p ->
             ([], LIR.Branch (LIR.Physical p, trueLabel, falseLabel))
     | LIR.Jump label -> ([], LIR.Jump label)
+    | LIR.CondBranch (cond, trueLabel, falseLabel) ->
+        // CondBranch uses condition flags, not a register - pass through unchanged
+        ([], LIR.CondBranch (cond, trueLabel, falseLabel))
 
 /// Apply allocation to a basic block with liveness-aware SaveRegs/RestoreRegs population
 let applyToBlockWithLiveness

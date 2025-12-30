@@ -166,7 +166,8 @@ type Instr =
 /// Terminator instructions (control flow)
 type Terminator =
     | Ret                                              // Return from function
-    | Branch of cond:Reg * trueLabel:Label * falseLabel:Label  // Conditional branch
+    | Branch of cond:Reg * trueLabel:Label * falseLabel:Label  // Conditional branch (test register)
+    | CondBranch of cond:Condition * trueLabel:Label * falseLabel:Label  // Conditional branch (test flags)
     | Jump of Label                                     // Unconditional jump
 
 /// Basic block with label, instructions, and terminator

@@ -63,9 +63,52 @@ let optimizeInstrs (instrs: Instr list) : Instr list =
     instrs
     |> List.choose optimizeInstr
 
+/// Check if a register is used in any instruction (for dead code detection)
+let isRegUsedInInstrs (reg: Reg) (instrs: Instr list) : bool =
+    instrs |> List.exists (fun instr ->
+        match instr with
+        | Mov (_, Reg r) -> sameReg r reg
+        | Mov (_, _) -> false
+        | Add (_, left, Reg right) -> sameReg left reg || sameReg right reg
+        | Add (_, left, _) -> sameReg left reg
+        | Sub (_, left, Reg right) -> sameReg left reg || sameReg right reg
+        | Sub (_, left, _) -> sameReg left reg
+        | Mul (_, left, right) -> sameReg left reg || sameReg right reg
+        | Cmp (left, Reg right) -> sameReg left reg || sameReg right reg
+        | Cmp (left, _) -> sameReg left reg
+        | Cset _ -> false  // Cset only writes, doesn't read
+        | _ -> false  // Conservative: assume not used for other instructions
+    )
+
+/// Try to fuse Cset + Branch into CondBranch
+/// Pattern: last instruction is Cset dest, cond; terminator is Branch dest, trueL, falseL
+/// Result: remove Cset, replace Branch with CondBranch cond, trueL, falseL
+let tryFuseCondBranch (instrs: Instr list) (terminator: Terminator) : (Instr list * Terminator) option =
+    match terminator with
+    | Branch (condReg, trueLabel, falseLabel) ->
+        // Check if last instruction is Cset writing to condReg
+        match List.tryLast instrs with
+        | Some (Cset (dest, cond)) when sameReg dest condReg ->
+            // Check that condReg is not used elsewhere in the block (except the Cset and Branch)
+            let otherInstrs = instrs |> List.take (List.length instrs - 1)
+            if not (isRegUsedInInstrs condReg otherInstrs) then
+                // Fuse: remove Cset and replace Branch with CondBranch
+                Some (otherInstrs, CondBranch (cond, trueLabel, falseLabel))
+            else
+                None
+        | _ -> None
+    | _ -> None
+
 /// Optimize a basic block
 let optimizeBlock (block: BasicBlock) : BasicBlock =
-    { block with Instrs = optimizeInstrs block.Instrs }
+    let instrs' = optimizeInstrs block.Instrs
+
+    // Try to fuse Cset + Branch into CondBranch
+    match tryFuseCondBranch instrs' block.Terminator with
+    | Some (fusedInstrs, fusedTerminator) ->
+        { block with Instrs = fusedInstrs; Terminator = fusedTerminator }
+    | None ->
+        { block with Instrs = instrs' }
 
 /// Optimize a CFG
 let optimizeCFG (cfg: CFG) : CFG =

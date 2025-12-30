@@ -314,6 +314,8 @@ let prettyPrintLIRTerminator (term: LIR.Terminator) : string =
     | LIR.Ret -> "Ret"
     | LIR.Branch (cond, trueLabel, falseLabel) ->
         $"Branch({prettyPrintLIRReg cond}, {trueLabel}, {falseLabel})"
+    | LIR.CondBranch (cond, trueLabel, falseLabel) ->
+        $"CondBranch({cond}, {trueLabel}, {falseLabel})"
     | LIR.Jump label -> $"Jump({label})"
 
 /// Pretty-print LIR program (flat format for single-block CFGs)
@@ -663,6 +665,8 @@ let prettyPrintARM64Instr = function
         $"B_cond({cond}, {offset})"
     | ARM64.B_label label ->
         $"B_label({label})"
+    | ARM64.B_cond_label (cond, label) ->
+        $"B_cond_label({cond}, {label})"
     | ARM64.NEG (dest, src) ->
         $"NEG({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
     | ARM64.STP (reg1, reg2, addr, offset) ->

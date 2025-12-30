@@ -85,6 +85,7 @@ type Instr =
     | CBZ of reg:Reg * label:string  // Compare and branch if zero (label will be resolved)
     | CBNZ of reg:Reg * label:string  // Compare and branch if not zero
     | B_label of label:string  // Unconditional branch to label
+    | B_cond_label of cond:Condition * label:string  // Conditional branch to label
     // Offset-based branches (for handcrafted runtime code with known offsets)
     | CBZ_offset of reg:Reg * offset:int  // CBZ with immediate offset
     | CBNZ_offset of reg:Reg * offset:int  // CBNZ with immediate offset
