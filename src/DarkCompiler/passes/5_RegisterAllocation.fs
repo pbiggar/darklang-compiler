@@ -1528,6 +1528,9 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
             | _ -> []
         [randomInstr] @ storeInstrs
 
+    | LIR.CoverageHit exprId ->
+        [LIR.CoverageHit exprId]  // No registers to allocate
+
     | LIR.Exit -> [LIR.Exit]
 
 /// Apply allocation to terminator

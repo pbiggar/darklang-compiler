@@ -193,6 +193,7 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | RefCountIncString _ -> defs
         | RefCountDecString _ -> defs
         | RandomInt64 dest -> Set.add dest defs
+        | CoverageHit _ -> defs  // No destination register
     ) Set.empty
 
 /// Get all variables defined anywhere in the CFG
@@ -288,6 +289,7 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
             | RefCountIncString str -> Set.union uses (getOperandUses str)
             | RefCountDecString str -> Set.union uses (getOperandUses str)
             | RandomInt64 _ -> uses  // No operand uses
+            | CoverageHit _ -> uses  // No operand uses
         ) Set.empty
 
     // Also include uses in terminator
@@ -729,6 +731,9 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
     | RandomInt64 dest ->
         let (_, newDest, state') = newVersion state dest
         (RandomInt64 newDest, state')
+
+    | CoverageHit exprId ->
+        (CoverageHit exprId, state)  // No registers to rename
 
 /// Rename terminator
 let renameTerminator (state: RenamingState) (term: Terminator) : Terminator =

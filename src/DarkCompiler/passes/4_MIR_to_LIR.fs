@@ -1100,6 +1100,9 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         let lirDest = vregToLIRReg dest
         Ok [LIR.RandomInt64 lirDest]
 
+    | MIR.CoverageHit exprId ->
+        Ok [LIR.CoverageHit exprId]
+
     | MIR.Phi (dest, sources) ->
         // Convert MIR.Phi to LIR.Phi for SSA-based register allocation
         let lirDest = vregToLIRReg dest
@@ -1339,7 +1342,8 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.GpToFp _ | LIR.HeapAlloc _ | LIR.HeapLoad _ | LIR.RefCountInc _ | LIR.RefCountDec _
     | LIR.PrintHeapString _ | LIR.LoadFuncAddr _ | LIR.RawAlloc _ | LIR.RawFree _
     | LIR.RawGet _ | LIR.RawGetByte _ | LIR.RawSet _ | LIR.RawSetByte _ | LIR.FArgMoves _
-    | LIR.TailCall _ | LIR.IndirectTailCall _ | LIR.ClosureTailCall _ -> instr
+    | LIR.TailCall _ | LIR.IndirectTailCall _ | LIR.ClosureTailCall _
+    | LIR.CoverageHit _ -> instr
 
 /// Offset pool references in an LIR basic block
 let private offsetLIRBlock (strOffset: int) (fltOffset: int) (block: LIR.BasicBlock) : LIR.BasicBlock =

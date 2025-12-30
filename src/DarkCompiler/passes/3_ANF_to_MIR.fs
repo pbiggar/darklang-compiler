@@ -479,6 +479,10 @@ type CFGBuilder = {
     ReturnTypeReg: Map<string, AST.Type>  // Function name -> return type
     FuncName: string  // For generating unique labels per function
     FloatRegs: Set<int>  // VReg IDs that hold float values
+    // Coverage support
+    EnableCoverage: bool
+    ExprIdGen: ANF.ExprIdGen
+    CoverageMapping: ANF.CoverageMapping
 }
 
 /// Get payload size for an atom used in reference counting
@@ -921,6 +925,9 @@ let rec convertExpr
             ReturnTypeReg = builder.ReturnTypeReg
             FuncName = builder.FuncName
             FloatRegs = builder.FloatRegs
+            EnableCoverage = builder.EnableCoverage
+            ExprIdGen = builder.ExprIdGen
+            CoverageMapping = builder.CoverageMapping
         }
 
         // Convert then-branch: result goes into resultReg, then jump to join
@@ -1354,6 +1361,9 @@ and convertExprToOperand
                 ReturnTypeReg = builder.ReturnTypeReg
                 FuncName = builder.FuncName
                 FloatRegs = builder.FloatRegs
+                EnableCoverage = builder.EnableCoverage
+                ExprIdGen = builder.ExprIdGen
+                CoverageMapping = builder.CoverageMapping
             }
 
             // Convert then-branch
@@ -1457,6 +1467,10 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
         ReturnTypeReg = returnTypeReg
         FuncName = anfFunc.Name
         FloatRegs = floatParamIds
+        // Coverage - disabled for now, will be parameterized later
+        EnableCoverage = false
+        ExprIdGen = ANF.initialExprIdGen
+        CoverageMapping = ANF.emptyCoverageMapping
     }
 
     // Create entry label for CFG (internal to function body)
@@ -1575,6 +1589,10 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
         ReturnTypeReg = returnTypeReg
         FuncName = "_start"
         FloatRegs = Set.empty
+        // Coverage - disabled for now, will be parameterized later
+        EnableCoverage = false
+        ExprIdGen = ANF.initialExprIdGen
+        CoverageMapping = ANF.emptyCoverageMapping
     }
     match convertExpr mainExpr entryLabel [] initialBuilder with
     | Error err -> Error err
@@ -1697,6 +1715,7 @@ let private offsetInstr (strOffset: int) (fltOffset: int) (instr: MIR.Instr) : M
     | MIR.RefCountDecString str -> MIR.RefCountDecString (offsetOperand strOffset fltOffset str)
     | MIR.RandomInt64 dest -> MIR.RandomInt64 dest  // No operands to offset
     | MIR.Phi (dest, sources) -> MIR.Phi (dest, List.map (offsetPhiSource strOffset fltOffset) sources)
+    | MIR.CoverageHit exprId -> MIR.CoverageHit exprId  // No operands to offset
 
 /// Offset pool references in a terminator
 let private offsetTerminator (strOffset: int) (fltOffset: int) (term: MIR.Terminator) : MIR.Terminator =

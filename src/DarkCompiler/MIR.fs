@@ -169,6 +169,8 @@ type Instr =
     // SSA phi node - merges values from different predecessor blocks
     // Phi nodes must appear at the beginning of a basic block, before other instructions
     | Phi of dest:VReg * sources:(Operand * Label) list
+    // Coverage instrumentation - records that expression was executed
+    | CoverageHit of exprId:int
 
 /// Terminator instructions (control flow)
 type Terminator =

@@ -295,6 +295,8 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"RefCountDecString({prettyPrintLIROperand str})"
     | LIR.RandomInt64 dest ->
         $"{prettyPrintLIRReg dest} <- RandomInt64()"
+    | LIR.CoverageHit exprId ->
+        $"CoverageHit({exprId})"
     | LIR.Exit -> "Exit"
     | LIR.TailCall (funcName, args) ->
         let argStr = args |> List.map prettyPrintLIROperand |> String.concat ", "

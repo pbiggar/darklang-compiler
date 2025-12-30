@@ -2564,6 +2564,11 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         |> Result.map (fun destReg ->
             Runtime.generateRandomInt64 destReg)
 
+    | LIR.CoverageHit exprId ->
+        // TODO: Implement coverage instrumentation
+        // For now, generate no code (coverage will be added in a later pass)
+        Ok []
+
 /// Convert LIR terminator to ARM64 instructions
 /// epilogueLabel: the label to jump to for function return (handles stack cleanup)
 let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Result<ARM64.Instr list, string> =

@@ -160,6 +160,8 @@ type Instr =
     | RefCountDecString of str:Operand            // Decrement string ref count, free if zero
     // Random intrinsics
     | RandomInt64 of dest:Reg                     // Get 8 random bytes as Int64
+    // Coverage instrumentation - records that expression was executed
+    | CoverageHit of exprId:int
 
 /// Terminator instructions (control flow)
 type Terminator =

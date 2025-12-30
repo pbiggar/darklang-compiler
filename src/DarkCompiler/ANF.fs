@@ -210,3 +210,40 @@ let payloadSize (t: AST.Type) (typeReg: Map<string, (string * AST.Type) list>) :
     | AST.TSum _ -> 16  // [tag, payload]
     | AST.TDict _ -> 8  // Root pointer only (HAMT structure is variable-sized raw memory)
     | _ -> 0  // Non-heap types
+
+// ============================================================================
+// Coverage Types
+// ============================================================================
+
+/// Unique expression ID for coverage tracking
+type ExprId = int
+
+/// Expression ID generator (functional style, like VarGen)
+type ExprIdGen = ExprIdGen of int
+
+/// Generate a fresh expression ID
+let freshExprId (ExprIdGen n) : ExprId * ExprIdGen =
+    (n, ExprIdGen (n + 1))
+
+/// Initial expression ID generator
+let initialExprIdGen = ExprIdGen 0
+
+/// Coverage mapping: tracks expression descriptions for reporting
+type CoverageMapping = {
+    /// ExprId -> description string (e.g., "List.map: Call filter")
+    Descriptions: Map<int, string>
+    /// Total number of expressions tracked
+    TotalExpressions: int
+}
+
+/// Empty coverage mapping
+let emptyCoverageMapping : CoverageMapping = {
+    Descriptions = Map.empty
+    TotalExpressions = 0
+}
+
+/// Add an expression to the coverage mapping
+let addCoverageEntry (exprId: ExprId) (description: string) (mapping: CoverageMapping) : CoverageMapping =
+    { mapping with
+        Descriptions = Map.add exprId description mapping.Descriptions
+        TotalExpressions = max mapping.TotalExpressions (exprId + 1) }
