@@ -555,6 +555,62 @@ let operandType (builder: CFGBuilder) (operand: MIR.Operand) : AST.Type =
         if Set.contains id builder.FloatRegs then AST.TFloat64
         else AST.TInt64  // Default to integer
 
+/// Generate description for a CExpr (for coverage mapping)
+let cexprDescription (cexpr: ANF.CExpr) : string =
+    match cexpr with
+    | ANF.Atom _ -> "Atom"
+    | ANF.Prim (op, _, _) -> $"Prim {op}"
+    | ANF.UnaryPrim (op, _) -> $"UnaryPrim {op}"
+    | ANF.IfValue _ -> "IfValue"
+    | ANF.Call (name, _) -> $"Call {name}"
+    | ANF.TailCall (name, _) -> $"TailCall {name}"
+    | ANF.IndirectCall _ -> "IndirectCall"
+    | ANF.IndirectTailCall _ -> "IndirectTailCall"
+    | ANF.ClosureAlloc (name, _) -> $"ClosureAlloc {name}"
+    | ANF.ClosureCall _ -> "ClosureCall"
+    | ANF.ClosureTailCall _ -> "ClosureTailCall"
+    | ANF.TupleAlloc _ -> "TupleAlloc"
+    | ANF.TupleGet _ -> "TupleGet"
+    | ANF.StringConcat _ -> "StringConcat"
+    | ANF.RefCountInc _ -> "RefCountInc"
+    | ANF.RefCountDec _ -> "RefCountDec"
+    | ANF.Print _ -> "Print"
+    | ANF.FileReadText _ -> "FileReadText"
+    | ANF.FileExists _ -> "FileExists"
+    | ANF.FileWriteText _ -> "FileWriteText"
+    | ANF.FileAppendText _ -> "FileAppendText"
+    | ANF.FileDelete _ -> "FileDelete"
+    | ANF.FileSetExecutable _ -> "FileSetExecutable"
+    | ANF.FileWriteFromPtr _ -> "FileWriteFromPtr"
+    | ANF.FloatSqrt _ -> "FloatSqrt"
+    | ANF.FloatAbs _ -> "FloatAbs"
+    | ANF.FloatNeg _ -> "FloatNeg"
+    | ANF.IntToFloat _ -> "IntToFloat"
+    | ANF.FloatToInt _ -> "FloatToInt"
+    | ANF.RawAlloc _ -> "RawAlloc"
+    | ANF.RawFree _ -> "RawFree"
+    | ANF.RawGet _ -> "RawGet"
+    | ANF.RawGetByte _ -> "RawGetByte"
+    | ANF.RawSet _ -> "RawSet"
+    | ANF.RawSetByte _ -> "RawSetByte"
+    | ANF.StringHash _ -> "StringHash"
+    | ANF.StringEq _ -> "StringEq"
+    | ANF.RefCountIncString _ -> "RefCountIncString"
+    | ANF.RefCountDecString _ -> "RefCountDecString"
+    | ANF.RandomInt64 -> "RandomInt64"
+
+/// Generate coverage instrumentation for an expression
+/// Returns: (CoverageHit instruction option, updated builder with new ExprId)
+let withCoverage (builder: CFGBuilder) (cexpr: ANF.CExpr) : MIR.Instr list * CFGBuilder =
+    if builder.EnableCoverage then
+        let (exprId, exprIdGen') = ANF.freshExprId builder.ExprIdGen
+        let description = $"{builder.FuncName}: {cexprDescription cexpr}"
+        let mapping' = ANF.addCoverageEntry exprId description builder.CoverageMapping
+        let builder' = { builder with ExprIdGen = exprIdGen'; CoverageMapping = mapping' }
+        ([MIR.CoverageHit exprId], builder')
+    else
+        ([], builder)
+
 /// Convert ANF expression to CFG
 /// Returns: Result of (final value operand, CFG builder with all blocks)
 let rec convertExpr
@@ -589,25 +645,28 @@ let rec convertExpr
             // 3. Create else-block (assigns elseAtom to destReg, jumps to join)
             // 4. Create join-block (continues with rest)
 
-            atomToOperand builder condAtom
-            |> Result.bind (fun condOp ->
-                atomToOperand builder thenAtom
-                |> Result.bind (fun thenOp ->
-                    atomToOperand builder elseAtom
-                    |> Result.bind (fun elseOp ->
-                        let (thenLabel, labelGen1) = MIR.freshLabelWithPrefix builder.FuncName builder.LabelGen
-                        let (elseLabel, labelGen2) = MIR.freshLabelWithPrefix builder.FuncName labelGen1
-                        let (joinLabel, labelGen3) = MIR.freshLabelWithPrefix builder.FuncName labelGen2
+            // Add coverage instrumentation for the IfValue expression
+            let (coverageInstrs, builderWithCoverage) = withCoverage builder cexpr
 
-                        // Current block ends with branch
+            atomToOperand builderWithCoverage condAtom
+            |> Result.bind (fun condOp ->
+                atomToOperand builderWithCoverage thenAtom
+                |> Result.bind (fun thenOp ->
+                    atomToOperand builderWithCoverage elseAtom
+                    |> Result.bind (fun elseOp ->
+                        let (thenLabel, labelGen1) = MIR.freshLabelWithPrefix builderWithCoverage.FuncName builderWithCoverage.LabelGen
+                        let (elseLabel, labelGen2) = MIR.freshLabelWithPrefix builderWithCoverage.FuncName labelGen1
+                        let (joinLabel, labelGen3) = MIR.freshLabelWithPrefix builderWithCoverage.FuncName labelGen2
+
+                        // Current block ends with branch (after coverage hit)
                         let currentBlock = {
                             MIR.Label = currentLabel
-                            MIR.Instrs = currentInstrs
+                            MIR.Instrs = currentInstrs @ coverageInstrs
                             MIR.Terminator = MIR.Branch (condOp, thenLabel, elseLabel)
                         }
 
                         // Determine the type of the if result (then/else should have same type)
-                        let resultType = atomType builder thenAtom
+                        let resultType = atomType builderWithCoverage thenAtom
 
                         // Then block: assign thenAtom to destReg, jump to join
                         let thenBlock = {
@@ -624,8 +683,8 @@ let rec convertExpr
                         }
 
                         let builder' = {
-                            builder with
-                                Blocks = builder.Blocks
+                            builderWithCoverage with
+                                Blocks = builderWithCoverage.Blocks
                                          |> Map.add currentLabel currentBlock
                                          |> Map.add thenLabel thenBlock
                                          |> Map.add elseLabel elseBlock
@@ -879,14 +938,16 @@ let rec convertExpr
             match instrsResult with
             | Error err -> Error err
             | Ok instrs ->
-                let newInstrs = currentInstrs @ instrs
+                // Add coverage instrumentation if enabled
+                let (coverageInstrs, builderWithCoverage) = withCoverage builder cexpr
+                let newInstrs = currentInstrs @ coverageInstrs @ instrs
                 // Update FloatRegs if this dest is a float
                 let (MIR.VReg destId) = destReg
                 let builder' =
                     if !destType = AST.TFloat64 then
-                        { builder with FloatRegs = Set.add destId builder.FloatRegs }
+                        { builderWithCoverage with FloatRegs = Set.add destId builderWithCoverage.FloatRegs }
                     else
-                        builder
+                        builderWithCoverage
                 convertExpr rest currentLabel newInstrs builder'
 
     | ANF.If (condAtom, thenBranch, elseBranch) ->

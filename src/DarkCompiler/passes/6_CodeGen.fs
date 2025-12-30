@@ -2565,9 +2565,26 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             Runtime.generateRandomInt64 destReg)
 
     | LIR.CoverageHit exprId ->
-        // TODO: Implement coverage instrumentation
-        // For now, generate no code (coverage will be added in a later pass)
-        Ok []
+        // Increment coverage counter at _coverage_data[exprId * 8]
+        // Uses X9 and X10 as scratch registers
+        let offset = int64 (exprId * 8)
+        let offsetInstrs =
+            if offset = 0L then
+                []  // No offset needed for exprId 0
+            elif offset < 4096L then
+                // Small offset - use immediate
+                [ARM64.ADD_imm (ARM64.X9, ARM64.X9, uint16 offset)]
+            else
+                // Large offset - load into X10 and add
+                loadImmediate ARM64.X10 offset @ [ARM64.ADD_reg (ARM64.X9, ARM64.X9, ARM64.X10)]
+        Ok ([
+            ARM64.ADRP (ARM64.X9, "_coverage_data")
+            ARM64.ADD_label (ARM64.X9, ARM64.X9, "_coverage_data")
+        ] @ offsetInstrs @ [
+            ARM64.LDR (ARM64.X10, ARM64.X9, 0s)     // X10 = coverage_data[exprId]
+            ARM64.ADD_imm (ARM64.X10, ARM64.X10, 1us)  // X10++
+            ARM64.STR (ARM64.X10, ARM64.X9, 0s)     // coverage_data[exprId] = X10
+        ])
 
 /// Convert LIR terminator to ARM64 instructions
 /// epilogueLabel: the label to jump to for function return (handles stack cleanup)
