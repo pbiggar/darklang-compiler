@@ -1,0 +1,48 @@
+// E2E tests for tuple-returning functions
+// KNOWN BUG: "let t = (tuple) in t" loses first element when function returns tuple
+// Root cause: Unknown - possibly register allocation or code generation issue
+// When this bug is fixed, uncomment the failing tests
+
+// =====================================================
+// BUG: "let t = (a, b) in t" pattern loses first element
+// =====================================================
+// The following patterns are BROKEN (first element is 0):
+//
+// def test(a: Int64) : (Int64, Int64) = let t = (a, a * 2) in t
+// let r = test(5) in r.0 = 5    // FAILS: returns 0
+//
+// def makeNext(t: (Int64, Int64)) : (Int64, Int64) = let next = (t.0+1, t.1+2) in next
+// let r = makeNext((0, 0)) in r.0 = 1  // FAILS: returns 0
+//
+// Recursive version also fails due to same underlying bug:
+// def tupleRecurse(t: (Int64, Int64), n: Int64) : (Int64, Int64) =
+//     if n <= 0 then t
+//     else let next = (t.0 + 1, t.1 + 2) in tupleRecurse(next, n - 1)
+// let result = tupleRecurse((0, 0), 10) in result.0 + result.1 = 30  // FAILS
+
+// =====================================================
+// WORKING: Direct tuple return without let binding
+// =====================================================
+def addToTupleDirect(t: (Int64, Int64)) : (Int64, Int64) = (t.0 + 1, t.1 + 2)
+
+let r = addToTupleDirect((5, 10)) in r.0 + r.1 = 18
+
+// Test accessing first element - works with direct return
+let r2 = addToTupleDirect((0, 0)) in r2.0 = 1
+
+// Test accessing second element
+let r3 = addToTupleDirect((0, 0)) in r3.1 = 2
+
+// =====================================================
+// WORKING: Accessing tuple elements inside the function
+// =====================================================
+def getFirst(a: Int64) : Int64 =
+    let t = (a, a * 2) in t.0
+
+getFirst(5) = 5
+
+def getSecond(a: Int64) : Int64 =
+    let t = (a, a * 2) in t.1
+
+getSecond(5) = 10
+

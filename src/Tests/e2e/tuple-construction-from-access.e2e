@@ -1,0 +1,57 @@
+// E2E tests for constructing tuples from tuple access expressions
+// Regression test for ANF conversion bug: "Cannot access index on non-tuple type"
+
+// =====================================================
+// Basic tuple construction from access (no functions)
+// =====================================================
+
+// Simple 2-tuple construction from 3-tuple access
+let t = (1, 2, 3) in let t2 = (t.0, t.1) in t2.0 + t2.1 = 3
+
+// 3-tuple construction from 4-tuple access
+let t = (1, 2, 3, 4) in let t2 = (t.0, t.1, t.2) in t2.0 + t2.1 + t2.2 = 6
+
+// Constructing tuple with reordered access
+let t = (10, 20, 30) in let t2 = (t.2, t.0) in t2.0 + t2.1 = 40
+
+// =====================================================
+// Tuple construction from function return access
+// =====================================================
+
+// These functions have unique names to work with accumulating preamble
+def makeTuple3(x: Int64) : (Int64, Int64, Int64) = (x, x * 2, x * 3)
+
+let r = makeTuple3(5) in let t = (r.0, r.1) in t.0 + t.1 = 15
+
+def makeTuple4(x: Int64) : (Int64, Int64, Int64, Int64) = (x, x + 1, x + 2, x + 3)
+
+let r = makeTuple4(10) in let t = (r.1, r.3) in t.0 + t.1 = 24
+
+// =====================================================
+// Tuple construction in let chain
+// =====================================================
+
+let a = (1, 2, 3) in let b = (a.0 + 10, a.1 + 10) in let c = (b.0, b.1, a.2) in c.0 + c.1 + c.2 = 26
+
+// =====================================================
+// Tuple construction in function returning tuple
+// =====================================================
+
+def transformTuple(t: (Int64, Int64, Int64)) : (Int64, Int64) = (t.0 + t.1, t.1 + t.2)
+
+let orig = (1, 2, 3) in let result = transformTuple(orig) in result.0 + result.1 = 8
+
+// =====================================================
+// Recursive function using tuple construction from access
+// =====================================================
+
+def stepPair(x: Int64, y: Int64) : (Int64, Int64) = (x + 1, y + 2)
+
+def recurseWithTuple(t: (Int64, Int64), n: Int64) : Int64 =
+    if n <= 0 then t.0 + t.1
+    else
+        let r = stepPair(t.0, t.1) in
+        let t2 = (r.0, r.1) in
+        recurseWithTuple(t2, n - 1)
+
+recurseWithTuple((0, 0), 5) = 15

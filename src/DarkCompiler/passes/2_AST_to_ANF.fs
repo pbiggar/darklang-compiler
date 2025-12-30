@@ -1652,7 +1652,8 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
     | AST.Call (funcName, _) ->
         // Look up function return type from the function registry
         match Map.tryFind funcName funcReg with
-        | Some returnType -> Ok returnType
+        | Some (AST.TFunction (_, returnType)) -> Ok returnType
+        | Some _ -> Error $"Expected function type for {funcName} in funcReg"
         | None ->
             // Check if it's a function parameter (variable with function type)
             match Map.tryFind funcName typeEnv with

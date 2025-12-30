@@ -1,0 +1,74 @@
+// E2E tests for recursive functions with tuple parameters
+// Regression tests for stack space issues with tuple recursion
+// The compiler should handle tuple recursion without excessive stack usage
+
+// =====================================================
+// Basic tuple recursion
+// =====================================================
+
+// Simple tuple recursion with let binding
+def tupleRecurseLet(t: (Int64, Int64), n: Int64) : Int64 =
+    if n <= 0 then t.0 + t.1
+    else
+        let next = (t.0 + 1, t.1 + 1) in
+        tupleRecurseLet(next, n - 1)
+
+tupleRecurseLet((0, 0), 10) = 20
+
+// Tuple recursion with inline construction
+def tupleRecurseInline(t: (Int64, Int64), n: Int64) : Int64 =
+    if n <= 0 then t.0 + t.1
+    else tupleRecurseInline((t.0 + 1, t.1 + 1), n - 1)
+
+tupleRecurseInline((0, 0), 10) = 20
+
+// =====================================================
+// Tuple recursion with helper function
+// =====================================================
+
+def stepPairHelper(x: Int64, y: Int64) : (Int64, Int64) = (x + 1, y + 2)
+
+def recurseWithHelper(t: (Int64, Int64), n: Int64) : Int64 =
+    if n <= 0 then t.0 + t.1
+    else
+        let next = stepPairHelper(t.0, t.1) in
+        recurseWithHelper(next, n - 1)
+
+recurseWithHelper((0, 0), 10) = 30
+
+// =====================================================
+// 3-tuple recursion
+// =====================================================
+
+def tuple3Recurse(t: (Int64, Int64, Int64), n: Int64) : Int64 =
+    if n <= 0 then t.0 + t.1 + t.2
+    else
+        let next = (t.0 + 1, t.1 + 1, t.2 + 1) in
+        tuple3Recurse(next, n - 1)
+
+tuple3Recurse((0, 0, 0), 10) = 30
+
+// =====================================================
+// Tuple recursion returning tuple
+// =====================================================
+
+// Note: Tests for tuple-returning recursive functions are in a separate file
+// as they involve a different bug with tuple element propagation through recursion
+
+// Non-recursive tuple return works correctly
+def makeTupleFromTuple(t: (Int64, Int64)) : (Int64, Int64) = (t.0 + 1, t.1 + 2)
+
+let orig = (5, 10) in let result = makeTupleFromTuple(orig) in result.0 + result.1 = 18
+
+// =====================================================
+// Moderate depth recursion (should not stack overflow)
+// These tests verify the compiler doesn't use excessive stack space
+// =====================================================
+
+// 100 iterations should work without stack overflow
+tupleRecurseLet((0, 0), 100) = 200
+
+tupleRecurseInline((0, 0), 100) = 200
+
+recurseWithHelper((0, 0), 100) = 300
+
