@@ -307,6 +307,18 @@ let rec isConcrete (ty: AST.Type) : bool =
     | AST.TDict (keyType, valueType) -> isConcrete keyType && isConcrete valueType
     | _ -> true
 
+/// Default unresolved type variables to Int64
+let rec defaultTypeVars (ty: AST.Type) : AST.Type =
+    match ty with
+    | AST.TVar _ -> AST.TInt64  // Default to Int64
+    | AST.TFunction (paramTypes, retType) ->
+        AST.TFunction (List.map defaultTypeVars paramTypes, defaultTypeVars retType)
+    | AST.TTuple elemTypes -> AST.TTuple (List.map defaultTypeVars elemTypes)
+    | AST.TSum (name, typeArgs) -> AST.TSum (name, List.map defaultTypeVars typeArgs)
+    | AST.TList elemType -> AST.TList (defaultTypeVars elemType)
+    | AST.TDict (keyType, valueType) -> AST.TDict (defaultTypeVars keyType, defaultTypeVars valueType)
+    | _ -> ty
+
 /// Generate a specialized function name
 let specName (funcName: string) (typeArgs: AST.Type list) : string =
     if List.isEmpty typeArgs then
@@ -425,12 +437,10 @@ let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
         args |> List.map collectTypeApps |> List.fold Set.union Set.empty
     | AST.TypeApp (funcName, typeArgs, args) ->
         // This is a generic call - collect this specialization plus any in args
-        // Only collect if all type arguments are concrete (no TVar)
+        // Default any unresolved type variables to Int64 so we can specialize
+        let concreteTypeArgs = typeArgs |> List.map defaultTypeVars
         let argSpecs = args |> List.map collectTypeApps |> List.fold Set.union Set.empty
-        if List.forall isConcrete typeArgs then
-            Set.add (funcName, typeArgs) argSpecs
-        else
-            argSpecs
+        Set.add (funcName, concreteTypeArgs) argSpecs
     | AST.TupleLiteral elements ->
         elements |> List.map collectTypeApps |> List.fold Set.union Set.empty
     | AST.TupleAccess (tuple, _) ->
@@ -492,7 +502,9 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
         AST.Call (funcName, List.map replaceTypeApps args)
     | AST.TypeApp (funcName, typeArgs, args) ->
         // Replace with a regular Call to the specialized name
-        let specializedName = specName funcName typeArgs
+        // Default any unresolved type variables to Int64
+        let concreteTypeArgs = typeArgs |> List.map defaultTypeVars
+        let specializedName = specName funcName concreteTypeArgs
         AST.Call (specializedName, List.map replaceTypeApps args)
     | AST.TupleLiteral elements ->
         AST.TupleLiteral (List.map replaceTypeApps elements)

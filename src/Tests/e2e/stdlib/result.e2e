@@ -2,24 +2,25 @@
 // Ported from https://github.com/darklang/dark/tree/main/backend/testfiles/execution/stdlib
 //
 // Tests for Result module functions
-// NOTE: Result<T, E> has two type parameters. When using Ok, E is unconstrained.
-//       When using Error, T is unconstrained. Type params needed for these cases.
+// NOTE: Result<T, E> has two type parameters. Unresolved type variables are
+//       defaulted to Int64 during monomorphization, so explicit type params
+//       are not always needed.
 
 // ===================================================================
 // Result.isOk - Returns true if the result is Ok
 // ===================================================================
 
-// NOTE: Needs type params because Error type is unconstrained
-Result.isOk<Int64, Int64>(Result.Ok(5)) = stdout="true\n"
-Result.isOk<Int64, Int64>(Result.Error(99)) = stdout="false\n"
+// Unresolved type variables are defaulted to Int64 during monomorphization
+Result.isOk(Result.Ok(5)) = stdout="true\n"
+Result.isOk(Result.Error(99)) = stdout="false\n"
 
 // ===================================================================
 // Result.isError - Returns true if the result is Error
 // ===================================================================
 
-// NOTE: Needs type params because one type is always unconstrained
-Result.isError<Int64, Int64>(Result.Ok(5)) = stdout="false\n"
-Result.isError<Int64, Int64>(Result.Error(99)) = stdout="true\n"
+// Unresolved type variables are defaulted to Int64 during monomorphization
+Result.isError(Result.Ok(5)) = stdout="false\n"
+Result.isError(Result.Error(99)) = stdout="true\n"
 
 // ===================================================================
 // Result.withDefault - Returns the value or a default
@@ -33,8 +34,8 @@ Result.withDefault(Result.Error(99), 42) = 42
 // Result.map - Apply a function to the Ok value
 // ===================================================================
 
-// NOTE: Needs type params - Error type unconstrained from Ok constructor
-Result.withDefault<Int64, Int64>(Result.map<Int64, Int64, Int64>(Result.Ok(5), (x: Int64) => x + 1), 0) = 6
+// Unresolved type variables are defaulted to Int64 during monomorphization
+Result.withDefault(Result.map(Result.Ok(5), (x: Int64) => x + 1), 0) = 6
 Result.isError(Result.map(Result.Error(99), (x: Int64) => x + 1)) = stdout="true\n"
 
 // ===================================================================
@@ -49,18 +50,25 @@ Result.isError(Result.map(Result.Error(99), (x: Int64) => x + 1)) = stdout="true
 // Result.andThen - Chain Result computations
 // ===================================================================
 
-// NOTE: Needs type params - Error type unconstrained
-Result.withDefault<Int64, Int64>(Result.andThen<Int64, Int64, Int64>(Result.Ok(5), (x: Int64) => Result.Ok(x * 2)), 0) = 10
+// Unresolved type variables are defaulted to Int64 during monomorphization
+Result.withDefault(Result.andThen(Result.Ok(5), (x: Int64) => Result.Ok(x * 2)), 0) = 10
 Result.isError(Result.andThen(Result.Error(99), (x: Int64) => Result.Ok(x * 2))) = stdout="true\n"
-// NOTE: Needs type params because lambda returns Error which doesn't constrain the ok type
-Result.isError(Result.andThen<Int64, Int64, Int64>(Result.Ok(5), (x: Int64) => Result.Error(99))) = stdout="true\n"
+// When lambda returns Error, unresolved ok type is defaulted to Int64
+Result.isError(Result.andThen(Result.Ok(5), (x: Int64) => Result.Error(99))) = stdout="true\n"
 
 // ===================================================================
 // Pipe operator with Result functions
 // ===================================================================
 
-// NOTE: All need type params because Result has two type parameters
-Result.Ok(42) |> Result.isOk<Int64, Int64>() = stdout="true\n"
-Result.Error(99) |> Result.isError<Int64, Int64>() = stdout="true\n"
-Result.Ok(10) |> Result.map<Int64, Int64, Int64>((x: Int64) => x * 2) |> Result.withDefault<Int64, Int64>(0) = 20
+// Unresolved type variables are defaulted to Int64 during monomorphization
+Result.Ok(42) |> Result.isOk() = stdout="true\n"
+Result.Error(99) |> Result.isError() = stdout="true\n"
+Result.Ok(10) |> Result.map((x: Int64) => x * 2) |> Result.withDefault(0) = 20
+
+// ===================================================================
+// Unresolved type variable resolved later by context
+// ===================================================================
+
+// Type is inferred from withDefault's second argument
+let x = Result.Error(99) in Result.withDefault(x, 42) = 42
 

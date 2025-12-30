@@ -8,14 +8,16 @@
 // ===================================================================
 
 Option.isSome(Option.Some(5)) = stdout="true\n"
-Option.isSome<Int64>(Option.None) = stdout="false\n"
+// Unresolved type variable is defaulted to Int64 during monomorphization
+Option.isSome(Option.None) = stdout="false\n"
 
 // ===================================================================
 // Option.isNone - Returns true if the option is None
 // ===================================================================
 
 Option.isNone(Option.Some(5)) = stdout="false\n"
-Option.isNone<Int64>(Option.None) = stdout="true\n"
+// Unresolved type variable is defaulted to Int64 during monomorphization
+Option.isNone(Option.None) = stdout="true\n"
 
 // ===================================================================
 // Option.withDefault - Returns the value or a default
@@ -52,6 +54,65 @@ List.isEmpty(Option.toList(Option.None)) = stdout="true\n"
 // ===================================================================
 
 Option.Some(42) |> Option.isSome() = stdout="true\n"
-Option.None |> Option.isNone<Int64>() = stdout="true\n"
+Option.None |> Option.isNone() = stdout="true\n"
 Option.Some(10) |> Option.map((x: Int64) => x * 2) |> Option.withDefault(0) = 20
+
+// ===================================================================
+// Unresolved type variable resolved later by context
+// Tests that type variables unify correctly with all types
+// ===================================================================
+
+// Int64
+let x = Option.None in Option.withDefault(x, 42) = 42
+
+// String
+let x = Option.None in Option.withDefault(x, "hello") = stdout="hello\n"
+
+// Bool
+let x = Option.None in Option.withDefault(x, true) = stdout="true\n"
+
+// Float64
+let x = Option.None in Option.withDefault(x, 3.14) = stdout="3.14\n"
+
+// Char
+let x = Option.None in Option.withDefault(x, 'a') = stdout="a\n"
+
+// Unit
+let x = Option.None in Option.withDefault(x, ()) = stdout="()\n"
+
+// Int8
+let x = Option.None in Option.withDefault(x, 42y) = stdout="42\n"
+
+// Int16
+let x = Option.None in Option.withDefault(x, 42s) = stdout="42\n"
+
+// Int32
+let x = Option.None in Option.withDefault(x, 42l) = stdout="42\n"
+
+// UInt8
+let x = Option.None in Option.withDefault(x, 42uy) = stdout="42\n"
+
+// UInt16
+let x = Option.None in Option.withDefault(x, 42us) = stdout="42\n"
+
+// UInt32
+let x = Option.None in Option.withDefault(x, 42ul) = stdout="42\n"
+
+// UInt64
+let x = Option.None in Option.withDefault(x, 42UL) = stdout="42\n"
+
+// Tuple
+let x = Option.None in Option.withDefault(x, (1, 2)) = stdout="(1, 2)\n"
+
+// Tuple3
+let x = Option.None in Option.withDefault(x, (1, 2, 3)) = stdout="(1, 2, 3)\n"
+
+// List
+let x = Option.None in List.length(Option.withDefault(x, [1, 2, 3])) = stdout="3\n"
+
+// Nested Option (Option<Option<Int64>>)
+let x = Option.None in Option.isSome(Option.withDefault(x, Option.Some(42))) = stdout="true\n"
+
+// Result
+let x = Option.None in Result.isOk(Option.withDefault(x, Result.Ok(42))) = stdout="true\n"
 

@@ -530,6 +530,18 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
 let private isTypeVar (t: Type) : bool =
     match t with TVar _ -> true | _ -> false
 
+/// Check if a type contains type variables
+let rec containsTVar (typ: Type) : bool =
+    match typ with
+    | TVar _ -> true
+    | TList elemType -> containsTVar elemType
+    | TDict (keyType, valueType) -> containsTVar keyType || containsTVar valueType
+    | TTuple elemTypes -> List.exists containsTVar elemTypes
+    | TSum (_, typeArgs) -> List.exists containsTVar typeArgs
+    | TFunction (paramTypes, retType) ->
+        List.exists containsTVar paramTypes || containsTVar retType
+    | _ -> false
+
 /// Check if two types are compatible (can be unified)
 /// Type variables in either type can match concrete types
 let typesCompatible (expected: Type) (actual: Type) : bool =
@@ -539,7 +551,7 @@ let typesCompatible (expected: Type) (actual: Type) : bool =
 
 /// Consolidate bindings, checking for conflicts where the same type variable
 /// is bound to different types. Returns a map from type var name to concrete type.
-/// When a type var is bound to both a TVar and a concrete type, prefer the concrete type.
+/// When a type var is bound to both a type containing TVars and a concrete type, prefer the concrete type.
 let consolidateBindings (bindings: (string * Type) list) : Result<Map<string, Type>, string> =
     bindings
     |> List.fold (fun acc (name, typ) ->
@@ -549,11 +561,14 @@ let consolidateBindings (bindings: (string * Type) list) : Result<Map<string, Ty
             | Some existingType ->
                 if existingType = typ then
                     Ok m
-                elif isTypeVar existingType then
-                    // existing is TVar, new might be concrete - prefer new
+                elif containsTVar existingType && not (containsTVar typ) then
+                    // existing contains TVars, new is concrete - prefer new
                     Ok (Map.add name typ m)
-                elif isTypeVar typ then
-                    // new is TVar, existing is concrete - keep existing
+                elif containsTVar typ && not (containsTVar existingType) then
+                    // new contains TVars, existing is concrete - keep existing
+                    Ok m
+                elif containsTVar existingType && containsTVar typ then
+                    // Both contain TVars - keep the first one (arbitrary choice)
                     Ok m
                 else
                     // Both are concrete but different - that's an error
@@ -566,18 +581,6 @@ let consolidateBindings (bindings: (string * Type) list) : Result<Map<string, Ty
 let unifyTypes (pattern: Type) (actual: Type) : Result<Substitution, string> =
     matchTypes pattern actual
     |> Result.bind consolidateBindings
-
-/// Check if a type contains type variables
-let rec containsTVar (typ: Type) : bool =
-    match typ with
-    | TVar _ -> true
-    | TList elemType -> containsTVar elemType
-    | TDict (keyType, valueType) -> containsTVar keyType || containsTVar valueType
-    | TTuple elemTypes -> List.exists containsTVar elemTypes
-    | TSum (_, typeArgs) -> List.exists containsTVar typeArgs
-    | TFunction (paramTypes, retType) ->
-        List.exists containsTVar paramTypes || containsTVar retType
-    | _ -> false
 
 /// Reconcile two types where one might contain type variables.
 /// If one type is concrete and the other has type variables that can unify with it,
@@ -643,7 +646,7 @@ let inferTypeArgs (typeParams: string list) (paramTypes: Type list) (argTypes: T
                 acc |> Result.bind (fun args ->
                     match Map.tryFind paramName bindingMap with
                     | Some typ -> Ok (args @ [typ])
-                    | None -> Error $"Cannot infer type for {paramName}: no arguments constrain it"))
+                    | None -> Ok (args @ [TVar paramName])))
                 (Ok []))
 
 /// Try to look up a function name in a map, with fallback to Stdlib prefix
@@ -677,8 +680,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
     | UnitLiteral ->
         // Unit literal is always TUnit
         match expectedType with
-        | Some TUnit | None -> Ok (TUnit, expr)
-        | Some other -> Error (TypeMismatch (other, TUnit, "unit literal"))
+        | Some expected when not (typesCompatible expected TUnit) ->
+            Error (TypeMismatch (expected, TUnit, "unit literal"))
+        | _ -> Ok (TUnit, expr)
 
     | IntLiteral _ ->
         match expectedType with
@@ -691,38 +695,45 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
 
     | Int8Literal _ ->
         match expectedType with
-        | Some TInt8 | None -> Ok (TInt8, expr)
-        | Some other -> Error (TypeMismatch (other, TInt8, "Int8 literal"))
+        | Some expected when not (typesCompatible expected TInt8) ->
+            Error (TypeMismatch (expected, TInt8, "Int8 literal"))
+        | _ -> Ok (TInt8, expr)
 
     | Int16Literal _ ->
         match expectedType with
-        | Some TInt16 | None -> Ok (TInt16, expr)
-        | Some other -> Error (TypeMismatch (other, TInt16, "Int16 literal"))
+        | Some expected when not (typesCompatible expected TInt16) ->
+            Error (TypeMismatch (expected, TInt16, "Int16 literal"))
+        | _ -> Ok (TInt16, expr)
 
     | Int32Literal _ ->
         match expectedType with
-        | Some TInt32 | None -> Ok (TInt32, expr)
-        | Some other -> Error (TypeMismatch (other, TInt32, "Int32 literal"))
+        | Some expected when not (typesCompatible expected TInt32) ->
+            Error (TypeMismatch (expected, TInt32, "Int32 literal"))
+        | _ -> Ok (TInt32, expr)
 
     | UInt8Literal _ ->
         match expectedType with
-        | Some TUInt8 | None -> Ok (TUInt8, expr)
-        | Some other -> Error (TypeMismatch (other, TUInt8, "UInt8 literal"))
+        | Some expected when not (typesCompatible expected TUInt8) ->
+            Error (TypeMismatch (expected, TUInt8, "UInt8 literal"))
+        | _ -> Ok (TUInt8, expr)
 
     | UInt16Literal _ ->
         match expectedType with
-        | Some TUInt16 | None -> Ok (TUInt16, expr)
-        | Some other -> Error (TypeMismatch (other, TUInt16, "UInt16 literal"))
+        | Some expected when not (typesCompatible expected TUInt16) ->
+            Error (TypeMismatch (expected, TUInt16, "UInt16 literal"))
+        | _ -> Ok (TUInt16, expr)
 
     | UInt32Literal _ ->
         match expectedType with
-        | Some TUInt32 | None -> Ok (TUInt32, expr)
-        | Some other -> Error (TypeMismatch (other, TUInt32, "UInt32 literal"))
+        | Some expected when not (typesCompatible expected TUInt32) ->
+            Error (TypeMismatch (expected, TUInt32, "UInt32 literal"))
+        | _ -> Ok (TUInt32, expr)
 
     | UInt64Literal _ ->
         match expectedType with
-        | Some TUInt64 | None -> Ok (TUInt64, expr)
-        | Some other -> Error (TypeMismatch (other, TUInt64, "UInt64 literal"))
+        | Some expected when not (typesCompatible expected TUInt64) ->
+            Error (TypeMismatch (expected, TUInt64, "UInt64 literal"))
+        | _ -> Ok (TUInt64, expr)
 
     | BoolLiteral _ ->
         // Boolean literals are always TBool
@@ -734,14 +745,16 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
     | StringLiteral _ ->
         // String literals are always TString
         match expectedType with
-        | Some TString | None -> Ok (TString, expr)
-        | Some other -> Error (TypeMismatch (other, TString, "string literal"))
+        | Some expected when not (typesCompatible expected TString) ->
+            Error (TypeMismatch (expected, TString, "string literal"))
+        | _ -> Ok (TString, expr)
 
     | CharLiteral _ ->
         // Char literals are always TChar (single Extended Grapheme Cluster)
         match expectedType with
-        | Some TChar | None -> Ok (TChar, expr)
-        | Some other -> Error (TypeMismatch (other, TChar, "char literal"))
+        | Some expected when not (typesCompatible expected TChar) ->
+            Error (TypeMismatch (expected, TChar, "char literal"))
+        | _ -> Ok (TChar, expr)
 
     | InterpolatedString parts ->
         // Interpolated strings are always TString
@@ -768,8 +781,9 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
     | FloatLiteral _ ->
         // Float literals are always TFloat64
         match expectedType with
-        | Some TFloat64 | None -> Ok (TFloat64, expr)
-        | Some other -> Error (TypeMismatch (other, TFloat64, "float literal"))
+        | Some expected when not (typesCompatible expected TFloat64) ->
+            Error (TypeMismatch (expected, TFloat64, "float literal"))
+        | _ -> Ok (TFloat64, expr)
 
     | BinOp (op, left, right) ->
         match op with
