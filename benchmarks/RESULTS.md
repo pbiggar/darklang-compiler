@@ -2,14 +2,14 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2025-12-30 18:56:19
-**Commit:** `fa23a6c0` - Implement self-recursion to loop optimization with SSA
+**Last Updated:** 2025-12-30 19:02:28
+**Commit:** `36c2941c` - Optimize self-recursion loop: skip unnecessary temps and self-moves
 
 | Benchmark    |           Dark (4.62x) |          Rust | Ocaml |          Python (169x) |          Node (34.8x) |
 |--------------|------------------------|---------------|-------|------------------------|-----------------------|
 | ackermann    | 20,038,398,119 (4.00x) | 5,009,839,130 |     - |                      - | 3,094,160,411 (0.62x) |
 | binary_trees |    183,500,628 (0.10x) | 1,842,791,955 |     - | 24,066,589,690 (13.1x) |   699,817,640 (0.38x) |
-| collatz      |            292,629,760 |             - |     - |          8,739,724,145 |           424,626,770 |
+| collatz      |            184,191,363 |             - |     - |          8,739,724,145 |           424,626,770 |
 | factorial    |      5,750,208 (22.5x) |       256,121 |     - |     182,023,134 (711x) |   558,152,202 (2179x) |
 | fib          |    806,239,074 (2.96x) |   272,526,960 |     - | 15,135,091,010 (55.5x) | 1,828,008,648 (6.71x) |
 | helloworld   |                     66 |             - |     - |             34,113,033 |           388,836,906 |
