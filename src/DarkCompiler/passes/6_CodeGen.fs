@@ -1386,8 +1386,44 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 loadStackSlot destARM64 offset
             | LIR.FuncAddr funcName ->
                 Ok [ARM64.ADR (destARM64, funcName)]
-            | LIR.StringRef _ | LIR.FloatImm _ | LIR.FloatRef _ ->
-                Error "StringRef/Float in TailArgMoves not yet supported"
+            | LIR.StringRef idx ->
+                // Convert pool string to heap format for tail call arguments
+                // Same pattern as ArgMoves - functions expect heap strings
+                match Map.tryFind idx ctx.StringPool.Strings with
+                | Some (_, len) ->
+                    let label = "str_" + string idx
+                    let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
+                    Ok ([
+                        // Load pool string address into X9
+                        ARM64.ADRP (ARM64.X9, label)
+                        ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                        // Allocate heap space (bump allocator)
+                        ARM64.MOV_reg (destARM64, ARM64.X28)  // dest = current heap pointer
+                        ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)  // bump pointer
+                        // Store length
+                    ] @ loadImmediate ARM64.X10 (int64 len) @ [
+                        ARM64.STR (ARM64.X10, destARM64, 0s)  // [dest] = length
+                        // Copy bytes: loop counter in X13
+                        ARM64.MOVZ (ARM64.X13, 0us, 0)  // X13 = 0
+                    ] @ loadImmediate ARM64.X11 (int64 len) @ [
+                        // Loop start (if X13 >= len, done)
+                        ARM64.CMP_reg (ARM64.X13, ARM64.X11)
+                        ARM64.B_cond (ARM64.GE, 7)  // Skip 7 instructions to exit loop
+                        ARM64.LDRB (ARM64.X15, ARM64.X9, ARM64.X13)  // X15 = pool[X13]
+                        ARM64.ADD_imm (ARM64.X12, destARM64, 8us)  // X12 = dest + 8
+                        ARM64.ADD_reg (ARM64.X12, ARM64.X12, ARM64.X13)  // X12 = dest + 8 + X13
+                        ARM64.STRB_reg (ARM64.X15, ARM64.X12)  // [X12] = byte
+                        ARM64.ADD_imm (ARM64.X13, ARM64.X13, 1us)  // X13++
+                        ARM64.B (-7)  // Loop back to CMP
+                        // Store refcount
+                        ARM64.ADD_imm (ARM64.X12, destARM64, 8us)
+                        ARM64.ADD_reg (ARM64.X12, ARM64.X12, ARM64.X10)  // X12 = dest + 8 + len
+                        ARM64.MOVZ (ARM64.X15, 1us, 0)
+                        ARM64.STR (ARM64.X15, ARM64.X12, 0s)  // [X12] = 1
+                    ])
+                | None -> Error $"String index {idx} not found in pool"
+            | LIR.FloatImm _ | LIR.FloatRef _ ->
+                Error "Float in TailArgMoves not yet supported"
 
         // Use the shared parallel move resolution algorithm
         let actions = ParallelMoves.resolve moves getSrcPhysReg
@@ -1665,14 +1701,44 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 let tempReg = ARM64.X9
                 Ok [ARM64.ADR (tempReg, funcName); ARM64.STR (tempReg, addrReg, int16 offset)]
             | LIR.StringRef idx, _ ->
-                // Load string address from pool into temp, then store to heap
-                let tempReg = ARM64.X9
-                let stringLabel = "str_" + string idx
-                Ok [
-                    ARM64.ADRP (tempReg, stringLabel)
-                    ARM64.ADD_label (tempReg, tempReg, stringLabel)
-                    ARM64.STR (tempReg, addrReg, int16 offset)
-                ]
+                // Convert pool string to heap format when storing in tuples/data structures
+                // Heap strings: [length:8][data:N][refcount:8]
+                // Pool strings: just raw bytes (length known at compile time)
+                // We must convert because tuple extraction expects heap format
+                match Map.tryFind idx ctx.StringPool.Strings with
+                | Some (_, len) ->
+                    let label = "str_" + string idx
+                    let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
+                    Ok ([
+                        // Load pool string address into X10
+                        ARM64.ADRP (ARM64.X10, label)
+                        ARM64.ADD_label (ARM64.X10, ARM64.X10, label)
+                        // Allocate heap space (bump allocator), store address in X9
+                        ARM64.MOV_reg (ARM64.X9, ARM64.X28)  // X9 = current heap pointer (result)
+                        ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)  // bump pointer
+                        // Store length (known at compile time)
+                    ] @ loadImmediate ARM64.X11 (int64 len) @ [
+                        ARM64.STR (ARM64.X11, ARM64.X9, 0s)   // Store length at heap[0]
+                        // Copy bytes: counter in X12, limit in X11
+                        ARM64.MOVZ (ARM64.X12, 0us, 0)  // X12 = 0
+                        // Loop start (if X12 >= len, done)
+                        ARM64.CMP_reg (ARM64.X12, ARM64.X11)
+                        ARM64.B_cond (ARM64.GE, 7)  // Skip 7 instructions to exit loop
+                        ARM64.LDRB (ARM64.X15, ARM64.X10, ARM64.X12)  // X15 = pool[X12]
+                        ARM64.ADD_imm (ARM64.X14, ARM64.X9, 8us)  // X14 = heap + 8
+                        ARM64.ADD_reg (ARM64.X14, ARM64.X14, ARM64.X12)  // X14 = heap + 8 + X12
+                        ARM64.STRB_reg (ARM64.X15, ARM64.X14)  // heap_data[X12] = byte
+                        ARM64.ADD_imm (ARM64.X12, ARM64.X12, 1us)  // X12++
+                        ARM64.B (-7)  // Loop back to CMP
+                        // Store refcount = 1
+                        ARM64.ADD_imm (ARM64.X14, ARM64.X9, 8us)
+                        ARM64.ADD_reg (ARM64.X14, ARM64.X14, ARM64.X11)  // X14 = heap + 8 + len
+                        ARM64.MOVZ (ARM64.X15, 1us, 0)
+                        ARM64.STR (ARM64.X15, ARM64.X14, 0s)  // refcount = 1
+                        // Store heap string address to tuple slot
+                        ARM64.STR (ARM64.X9, addrReg, int16 offset)
+                    ])
+                | None -> Error $"String index {idx} not found in pool"
             | LIR.FloatRef idx, _ ->
                 // Load float VALUE from pool into temp FP register, then store to heap
                 let floatLabel = "_float" + string idx
