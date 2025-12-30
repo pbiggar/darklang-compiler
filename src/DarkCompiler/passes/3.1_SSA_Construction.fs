@@ -165,7 +165,7 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | ClosureTailCall _ -> defs  // Closure tail calls have no destination
         | HeapAlloc (dest, _) -> Set.add dest defs
         | HeapStore _ -> defs  // No destination register
-        | HeapLoad (dest, _, _) -> Set.add dest defs
+        | HeapLoad (dest, _, _, _) -> Set.add dest defs
         | StringConcat (dest, _, _) -> Set.add dest defs
         | RefCountInc _ -> defs
         | RefCountDec _ -> defs
@@ -249,9 +249,9 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
                 let argUses = args |> List.fold (fun u a -> Set.union u (getOperandUses a)) Set.empty
                 uses |> Set.union closureUses |> Set.union argUses
             | HeapAlloc _ -> uses
-            | HeapStore (addr, _, src) ->
+            | HeapStore (addr, _, src, _) ->
                 uses |> Set.add addr |> Set.union (getOperandUses src)
-            | HeapLoad (_, addr, _) -> Set.add addr uses
+            | HeapLoad (_, addr, _, _) -> Set.add addr uses
             | StringConcat (_, left, right) ->
                 uses |> Set.union (getOperandUses left) |> Set.union (getOperandUses right)
             | RefCountInc (addr, _) -> Set.add addr uses
@@ -469,7 +469,7 @@ let createInitialRenamingState (cfg: CFG) : RenamingState =
                     | ClosureAlloc (VReg n, _, _) -> max m n
                     | ClosureCall (VReg n, _, _) -> max m n
                     | HeapAlloc (VReg n, _) -> max m n
-                    | HeapLoad (VReg n, _, _) -> max m n
+                    | HeapLoad (VReg n, _, _, _) -> max m n
                     | StringConcat (VReg n, _, _) -> max m n
                     | FileReadText (VReg n, _) -> max m n
                     | FileExists (VReg n, _) -> max m n
@@ -590,16 +590,16 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let (_, newDest, state') = newVersion state dest
         (HeapAlloc (newDest, size), state')
 
-    | HeapStore (addr, offset, src) ->
+    | HeapStore (addr, offset, src, vt) ->
         let src' = renameOperand state src
         // addr is used, not defined
         let addr' = getRenamedReg state addr
-        (HeapStore (addr', offset, src'), state)
+        (HeapStore (addr', offset, src', vt), state)
 
-    | HeapLoad (dest, addr, offset) ->
+    | HeapLoad (dest, addr, offset, vt) ->
         let addr' = getRenamedReg state addr
         let (_, newDest, state') = newVersion state dest
-        (HeapLoad (newDest, addr', offset), state')
+        (HeapLoad (newDest, addr', offset, vt), state')
 
     | StringConcat (dest, left, right) ->
         let left' = renameOperand state left

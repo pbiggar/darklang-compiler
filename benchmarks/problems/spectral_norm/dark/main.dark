@@ -2,25 +2,90 @@
 // Computes the spectral norm of an infinite matrix
 // From: Computer Language Benchmarks Game
 //
-// STATUS: NOT YET IMPLEMENTABLE
-// MISSING FEATURES:
-// - Stdlib.Float.sqrt (required for normalization)
-// - Float division
-// - Efficient array/list indexing
-//
 // This benchmark tests:
 // - Floating point arithmetic
-// - Nested loops
-// - Array/vector operations
+// - Nested loops via recursion
+// - List operations
 // - Numerical precision
 
-// TODO: Implement when sqrt is available
-//
-// A(i,j) = 1.0 / ((i + j) * (i + j + 1) / 2 + i + 1)
-//
-// def A(i: Int64, j: Int64) : Float =
-//     1.0 / Stdlib.Int64.toFloat((i + j) * (i + j + 1) / 2 + i + 1)
-//
-// Compute eigenvalue of A^T * A using power iteration
+// Matrix element A(i,j) = 1 / ((i+j)*(i+j+1)/2 + i + 1)
+def matrixA(i: Int64, j: Int64) : Float =
+    1.0 / Stdlib.Int64.toFloat((i + j) * (i + j + 1) / 2 + i + 1)
 
-0
+// Create a list of n ones
+def makeOnes(n: Int64) : List<Float> =
+    if n <= 0 then []
+    else [1.0, ...makeOnes(n - 1)]
+
+// Compute single element of av: sum over j of a(i,j) * v[j]
+// Traverse v list with j counter (O(n) per element)
+def avElementHelper(i: Int64, v: List<Float>, j: Int64, acc: Float) : Float =
+    match v with
+    | [] -> acc
+    | [head, ...tail] -> avElementHelper(i, tail, j + 1, acc + matrixA(i, j) * head)
+
+def avElement(i: Int64, v: List<Float>) : Float =
+    avElementHelper(i, v, 0, 0.0)
+
+// Build result of av recursively (O(n²) total)
+def avHelper(i: Int64, n: Int64, v: List<Float>) : List<Float> =
+    if i >= n then []
+    else [avElement(i, v), ...avHelper(i + 1, n, v)]
+
+def av(n: Int64, v: List<Float>) : List<Float> =
+    avHelper(0, n, v)
+
+// Similarly for atv (transpose - swap i,j in matrix access)
+def atvElementHelper(i: Int64, v: List<Float>, j: Int64, acc: Float) : Float =
+    match v with
+    | [] -> acc
+    | [head, ...tail] -> atvElementHelper(i, tail, j + 1, acc + matrixA(j, i) * head)
+
+def atvElement(i: Int64, v: List<Float>) : Float =
+    atvElementHelper(i, v, 0, 0.0)
+
+def atvHelper(i: Int64, n: Int64, v: List<Float>) : List<Float> =
+    if i >= n then []
+    else [atvElement(i, v), ...atvHelper(i + 1, n, v)]
+
+def atv(n: Int64, v: List<Float>) : List<Float> =
+    atvHelper(0, n, v)
+
+// A^T * A * v
+def atav(n: Int64, v: List<Float>) : List<Float> =
+    atv(n, av(n, v))
+
+// Dot product of two lists
+def dotHelper(xs: List<Float>, ys: List<Float>, acc: Float) : Float =
+    match xs with
+    | [] -> acc
+    | [x, ...xtail] ->
+        match ys with
+        | [] -> acc
+        | [y, ...ytail] -> dotHelper(xtail, ytail, acc + x * y)
+
+def dot(xs: List<Float>, ys: List<Float>) : Float =
+    dotHelper(xs, ys, 0.0)
+
+// Power iteration: 10 rounds of atav on alternating u, v
+def iterate(n: Int64, u: List<Float>, v: List<Float>, rounds: Int64) : (List<Float>, List<Float>) =
+    if rounds <= 0 then (u, v)
+    else
+        let v2 = atav(n, u) in
+        let u2 = atav(n, v2) in
+        iterate(n, u2, v2, rounds - 1)
+
+// Main computation
+def spectralNorm(n: Int64) : Float =
+    let u = makeOnes(n) in
+    let v = makeOnes(n) in
+    let result = iterate(n, u, v, 5) in
+    let finalU = result.0 in
+    let finalV = result.1 in
+    let vbv = dot(finalU, finalV) in
+    let vv = dot(finalV, finalV) in
+    Stdlib.Float.sqrt(vbv / vv)
+
+// Run with n = 5 and 5 rounds (reduced due to stack limitations)
+let result = spectralNorm(5) in
+Stdlib.Float.toInt(result * 1000000000.0)

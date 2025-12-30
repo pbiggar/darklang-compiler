@@ -2443,9 +2443,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 match pats with
                                 | [] -> Ok (env, bindings, vg)
                                 | p :: rest ->
-                                    // Head is at index 0, tail at index 1
+                                    // List layout: [tag=1, head, tail] - head at index 1, tail at index 2
                                     let (headVar, vg1) = ANF.freshVar vg
-                                    let headExpr = ANF.TupleGet (currentList, 0)
+                                    let headExpr = ANF.TupleGet (currentList, 1)
                                     let headBinding = (headVar, headExpr)
                                     collectPatternBindings p (ANF.Var headVar) env (headBinding :: bindings) vg1
                                     |> Result.bind (fun (env', bindings', vg') ->
@@ -2454,7 +2454,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                         else
                                             // Get tail for next iteration
                                             let (tailVar, vg2) = ANF.freshVar vg'
-                                            let tailExpr = ANF.TupleGet (currentList, 1)
+                                            let tailExpr = ANF.TupleGet (currentList, 2)
                                             let tailBinding = (tailVar, tailExpr)
                                             collectFromList rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                             collectFromList innerPatterns sourceAtom env bindings vg
@@ -2466,13 +2466,14 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                     // Bind the remaining list to tail pattern
                                     collectPatternBindings tailPattern currentList env bindings vg
                                 | p :: rest ->
+                                    // List layout: [tag=1, head, tail] - head at index 1, tail at index 2
                                     let (headVar, vg1) = ANF.freshVar vg
-                                    let headExpr = ANF.TupleGet (currentList, 0)
+                                    let headExpr = ANF.TupleGet (currentList, 1)
                                     let headBinding = (headVar, headExpr)
                                     collectPatternBindings p (ANF.Var headVar) env (headBinding :: bindings) vg1
                                     |> Result.bind (fun (env', bindings', vg') ->
                                         let (tailVar, vg2) = ANF.freshVar vg'
-                                        let tailExpr = ANF.TupleGet (currentList, 1)
+                                        let tailExpr = ANF.TupleGet (currentList, 2)
                                         let tailBinding = (tailVar, tailExpr)
                                         collectHeads rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                             collectHeads headPatterns sourceAtom env bindings vg
@@ -2682,9 +2683,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             match pats with
                             | [] -> (env, bindings, vg)
                             | p :: rest ->
-                                // Head is at index 0, tail at index 1
+                                // List layout: [tag=1, head, tail] - head at index 1, tail at index 2
                                 let (headVar, vg1) = ANF.freshVar vg
-                                let headExpr = ANF.TupleGet (currentList, 0)
+                                let headExpr = ANF.TupleGet (currentList, 1)
                                 let headBinding = (headVar, headExpr)
                                 let (env', bindings', vg') = collectBindings p (ANF.Var headVar) env (headBinding :: bindings) vg1
                                 if List.isEmpty rest then
@@ -2692,7 +2693,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 else
                                     // Get tail for next iteration
                                     let (tailVar, vg2) = ANF.freshVar vg'
-                                    let tailExpr = ANF.TupleGet (currentList, 1)
+                                    let tailExpr = ANF.TupleGet (currentList, 2)
                                     let tailBinding = (tailVar, tailExpr)
                                     collectFromList rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2
                         collectFromList innerPatterns sourceAtom env bindings vg
@@ -2704,12 +2705,13 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 // Bind the remaining list to tail pattern
                                 collectBindings tailPattern currentList env bindings vg
                             | p :: rest ->
+                                // List layout: [tag=1, head, tail] - head at index 1, tail at index 2
                                 let (headVar, vg1) = ANF.freshVar vg
-                                let headExpr = ANF.TupleGet (currentList, 0)
+                                let headExpr = ANF.TupleGet (currentList, 1)
                                 let headBinding = (headVar, headExpr)
                                 let (env', bindings', vg') = collectBindings p (ANF.Var headVar) env (headBinding :: bindings) vg1
                                 let (tailVar, vg2) = ANF.freshVar vg'
-                                let tailExpr = ANF.TupleGet (currentList, 1)
+                                let tailExpr = ANF.TupleGet (currentList, 2)
                                 let tailBinding = (tailVar, tailExpr)
                                 collectHeads rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2
                         collectHeads headPatterns sourceAtom env bindings vg

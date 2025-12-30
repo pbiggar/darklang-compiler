@@ -151,6 +151,13 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                 | Some fields when index < List.length fields ->
                     Some (snd (List.item index fields))
                 | _ -> None
+            | Some (AST.TList elemType) ->
+                // List Cons cells are (tag, head, tail) - index 1 is head, index 2 is tail
+                match index with
+                | 0 -> Some AST.TInt64  // tag
+                | 1 -> Some elemType    // head element
+                | 2 -> Some (AST.TList elemType)  // tail is same list type
+                | _ -> None
             | _ -> None
         | _ -> None
     | StringConcat (_, _) -> Some AST.TString  // String concatenation returns a string

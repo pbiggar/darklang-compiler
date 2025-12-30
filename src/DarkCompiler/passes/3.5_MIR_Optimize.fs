@@ -74,7 +74,7 @@ let getInstrDest (instr: Instr) : VReg option =
     | ClosureCall (dest, _, _) -> Some dest
     | ClosureTailCall _ -> None  // Closure tail calls don't return here
     | HeapAlloc (dest, _) -> Some dest
-    | HeapLoad (dest, _, _) -> Some dest
+    | HeapLoad (dest, _, _, _) -> Some dest
     | StringConcat (dest, _, _) -> Some dest
     | FileReadText (dest, _) -> Some dest
     | FileExists (dest, _) -> Some dest
@@ -125,8 +125,8 @@ let getInstrUses (instr: Instr) : Set<VReg> =
     | ClosureCall (_, closure, args) -> Set.unionMany ((fromOperand closure) :: (args |> List.map fromOperand))
     | ClosureTailCall (closure, args) -> Set.unionMany ((fromOperand closure) :: (args |> List.map fromOperand))
     | HeapAlloc _ -> Set.empty
-    | HeapStore (addr, _, src) -> Set.add addr (fromOperand src)
-    | HeapLoad (_, addr, _) -> Set.singleton addr
+    | HeapStore (addr, _, src, _) -> Set.add addr (fromOperand src)
+    | HeapLoad (_, addr, _, _) -> Set.singleton addr
     | StringConcat (_, left, right) -> Set.union (fromOperand left) (fromOperand right)
     | RefCountInc (addr, _) -> Set.singleton addr
     | RefCountDec (addr, _) -> Set.singleton addr
@@ -293,12 +293,12 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | ClosureCall (dest, closure, args) -> ClosureCall (dest, p closure, List.map p args)
     | ClosureTailCall (closure, args) -> ClosureTailCall (p closure, List.map p args)
     | HeapAlloc (dest, size) -> HeapAlloc (dest, size)
-    | HeapStore (addr, offset, src) ->
+    | HeapStore (addr, offset, src, vt) ->
         let addr' = match p (Register addr) with Register v -> v | _ -> addr
-        HeapStore (addr', offset, p src)
-    | HeapLoad (dest, addr, offset) ->
+        HeapStore (addr', offset, p src, vt)
+    | HeapLoad (dest, addr, offset, vt) ->
         let addr' = match p (Register addr) with Register v -> v | _ -> addr
-        HeapLoad (dest, addr', offset)
+        HeapLoad (dest, addr', offset, vt)
     | StringConcat (dest, left, right) -> StringConcat (dest, p left, p right)
     | RefCountInc (addr, size) ->
         let addr' = match p (Register addr) with Register v -> v | _ -> addr

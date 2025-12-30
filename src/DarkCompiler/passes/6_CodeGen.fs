@@ -150,6 +150,19 @@ let lirRegToARM64Reg (reg: LIR.Reg) : Result<ARM64.Reg, string> =
     | LIR.Physical physReg -> Ok (lirPhysRegToARM64Reg physReg)
     | LIR.Virtual vreg -> Error $"Virtual register {vreg} should have been allocated"
 
+/// Convert LIR.Reg (Virtual) to LIR.FReg (FVirtual) for float HeapStore
+/// This is used when a float value is stored via HeapStore - the register
+/// ID is shared between Virtual and FVirtual address spaces
+let virtualToFVirtual (reg: LIR.Reg) : LIR.FReg =
+    match reg with
+    | LIR.Virtual n -> LIR.FVirtual n
+    | LIR.Physical p -> LIR.FPhysical (
+        // Map GP physical registers to FP physical registers for edge cases
+        match p with
+        | LIR.X0 -> LIR.D0 | LIR.X1 -> LIR.D1 | LIR.X2 -> LIR.D2 | LIR.X3 -> LIR.D3
+        | LIR.X4 -> LIR.D4 | LIR.X5 -> LIR.D5 | LIR.X6 -> LIR.D6 | LIR.X7 -> LIR.D7
+        | _ -> LIR.D15)
+
 /// Generate ARM64 instructions to load an immediate into a register
 let loadImmediate (dest: ARM64.Reg) (value: int64) : ARM64.Instr list =
     // Load 64-bit immediate using MOVZ + MOVK sequence
@@ -1614,17 +1627,23 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize) // bump pointer
                 ])
 
-    | LIR.HeapStore (addr, offset, src) ->
+    | LIR.HeapStore (addr, offset, src, valueType) ->
         // Store value at addr + offset (offset is in bytes)
         lirRegToARM64Reg addr
         |> Result.bind (fun addrReg ->
-            match src with
-            | LIR.Imm value ->
+            match src, valueType with
+            | LIR.Imm value, _ ->
                 // Load immediate into temp register, then store
                 let tempReg = ARM64.X9
                 Ok (loadImmediate tempReg value @
                     [ARM64.STR (tempReg, addrReg, int16 offset)])
-            | LIR.Reg srcReg ->
+            | LIR.Reg srcReg, Some AST.TFloat64 ->
+                // Float value in register: interpret as FReg and use STR_fp
+                // The srcReg ID is actually an FVirtual, convert to ARM64 FP register
+                lirFRegToARM64FReg (virtualToFVirtual srcReg)
+                |> Result.map (fun srcARM64FP ->
+                    [ARM64.STR_fp (srcARM64FP, addrReg, int16 offset)])
+            | LIR.Reg srcReg, _ ->
                 lirRegToARM64Reg srcReg
                 |> Result.map (fun srcARM64 ->
                     // If src and addr are the same register, we have a problem
@@ -1635,17 +1654,17 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         [ARM64.MOV_reg (tempReg, srcARM64); ARM64.STR (tempReg, addrReg, int16 offset)]
                     else
                         [ARM64.STR (srcARM64, addrReg, int16 offset)])
-            | LIR.StackSlot slotOffset ->
+            | LIR.StackSlot slotOffset, _ ->
                 // Load from stack slot into temp, then store to heap
                 let tempReg = ARM64.X9
                 loadStackSlot tempReg slotOffset
                 |> Result.map (fun loadInstrs ->
                     loadInstrs @ [ARM64.STR (tempReg, addrReg, int16 offset)])
-            | LIR.FuncAddr funcName ->
+            | LIR.FuncAddr funcName, _ ->
                 // Load function address into temp, then store to heap
                 let tempReg = ARM64.X9
                 Ok [ARM64.ADR (tempReg, funcName); ARM64.STR (tempReg, addrReg, int16 offset)]
-            | LIR.StringRef idx ->
+            | LIR.StringRef idx, _ ->
                 // Load string address from pool into temp, then store to heap
                 let tempReg = ARM64.X9
                 let stringLabel = "str_" + string idx
@@ -1654,7 +1673,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     ARM64.ADD_label (tempReg, tempReg, stringLabel)
                     ARM64.STR (tempReg, addrReg, int16 offset)
                 ]
-            | LIR.FloatRef idx ->
+            | LIR.FloatRef idx, _ ->
                 // Load float VALUE from pool into temp FP register, then store to heap
                 let floatLabel = "_float" + string idx
                 Ok [

@@ -127,7 +127,7 @@ type Instr =
     | GpToFp of dest:FReg * src:Reg             // Move bits from GP to FP register (for float in tuple)
     // Heap operations for tuples and other compound types
     | HeapAlloc of dest:Reg * sizeBytes:int       // Allocate heap memory
-    | HeapStore of addr:Reg * offset:int * src:Operand  // Store at heap[addr+offset]
+    | HeapStore of addr:Reg * offset:int * src:Operand * valueType:AST.Type option  // Store at heap[addr+offset], valueType for float/int
     | HeapLoad of dest:Reg * addr:Reg * offset:int     // Load from heap[addr+offset]
     // Reference counting operations
     | RefCountInc of addr:Reg * payloadSize:int   // Increment ref count at [addr + payloadSize]

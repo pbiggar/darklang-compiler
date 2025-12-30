@@ -27,7 +27,7 @@ let private extractCallsFromInstr (instr: LIR.Instr) : string list =
         // Closure pointer is in a register - we can't statically determine the target
         args |> List.collect extractFromOperand
     | LIR.LoadFuncAddr (_, funcName) -> [funcName]
-    | LIR.HeapStore (_, _, src) -> extractFromOperand src
+    | LIR.HeapStore (_, _, src, _) -> extractFromOperand src
     | LIR.Mov (_, src) -> extractFromOperand src
     | LIR.StringConcat (_, left, right) ->
         extractFromOperand left @ extractFromOperand right

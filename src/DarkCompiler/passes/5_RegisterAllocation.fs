@@ -153,7 +153,7 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
     | LIR.PrintFloatNoNewline _ -> Set.empty  // FP register, not GP
     | LIR.PrintChars _ -> Set.empty  // No registers used
     | LIR.HeapAlloc (_, _) -> Set.empty
-    | LIR.HeapStore (addr, _, src) ->
+    | LIR.HeapStore (addr, _, src, _) ->
         let a = regToVReg addr |> Option.toList
         let s = operandToVReg src |> Option.toList
         Set.ofList (a @ s)
@@ -1321,10 +1321,10 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
             | _ -> []
         [allocInstr] @ storeInstrs
 
-    | LIR.HeapStore (addr, offset, src) ->
+    | LIR.HeapStore (addr, offset, src, vt) ->
         let (addrReg, addrLoads) = loadSpilled mapping addr LIR.X12
         let (srcOp, srcLoads) = applyToOperand mapping src LIR.X13
-        addrLoads @ srcLoads @ [LIR.HeapStore (addrReg, offset, srcOp)]
+        addrLoads @ srcLoads @ [LIR.HeapStore (addrReg, offset, srcOp, vt)]
 
     | LIR.HeapLoad (dest, addr, offset) ->
         let (destReg, destAlloc) = applyToReg mapping dest

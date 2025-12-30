@@ -128,8 +128,8 @@ type Instr =
     | ClosureTailCall of closure:Operand * args:Operand list  // Tail call through closure (BR instruction)
     // Heap operations for tuples and other compound types
     | HeapAlloc of dest:VReg * sizeBytes:int       // Allocate heap memory
-    | HeapStore of addr:VReg * offset:int * src:Operand  // Store at heap[addr+offset]
-    | HeapLoad of dest:VReg * addr:VReg * offset:int     // Load from heap[addr+offset]
+    | HeapStore of addr:VReg * offset:int * src:Operand * valueType:AST.Type option  // Store at heap[addr+offset], valueType for float/int
+    | HeapLoad of dest:VReg * addr:VReg * offset:int * valueType:AST.Type option  // Load from heap[addr+offset]
     // String operations
     | StringConcat of dest:VReg * left:Operand * right:Operand  // Concatenate strings
     // Reference counting operations

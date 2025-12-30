@@ -241,7 +241,7 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
     // Heap operations
     | LIR.HeapAlloc (dest, sizeBytes) ->
         $"{prettyPrintLIRReg dest} <- HeapAlloc({sizeBytes})"
-    | LIR.HeapStore (addr, offset, src) ->
+    | LIR.HeapStore (addr, offset, src, _valueType) ->
         $"HeapStore({prettyPrintLIRReg addr}, {offset}, {prettyPrintLIROperand src})"
     | LIR.HeapLoad (dest, addr, offset) ->
         $"{prettyPrintLIRReg dest} <- HeapLoad({prettyPrintLIRReg addr}, {offset})"

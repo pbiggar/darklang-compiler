@@ -203,7 +203,7 @@ let collectProperlyDefinedVRegs (cfg: CFG) (funcParams: Set<VReg>) : Set<VReg> =
                 | ClosureAlloc (dest, _, _) -> Set.add dest d
                 | ClosureCall (dest, _, _) -> Set.add dest d
                 | HeapAlloc (dest, _) -> Set.add dest d
-                | HeapLoad (dest, _, _) -> Set.add dest d
+                | HeapLoad (dest, _, _, _) -> Set.add dest d
                 | StringConcat (dest, _, _) -> Set.add dest d
                 | FileReadText (dest, _) -> Set.add dest d
                 | FileExists (dest, _) -> Set.add dest d

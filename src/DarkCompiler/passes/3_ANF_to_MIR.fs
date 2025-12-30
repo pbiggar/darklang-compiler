@@ -831,14 +831,16 @@ let rec convertExpr
                     let numSlots = 1 + List.length captures  // func_ptr + captures
                     let sizeBytes = numSlots * 8
                     let allocInstr = MIR.HeapAlloc (destReg, sizeBytes)
-                    // Store function pointer at offset 0
-                    let storeFuncInstr = MIR.HeapStore (destReg, 0, MIR.FuncAddr funcName)
-                    // Store captured values at offsets 8, 16, ...
+                    // Store function pointer at offset 0 (always int/pointer type)
+                    let storeFuncInstr = MIR.HeapStore (destReg, 0, MIR.FuncAddr funcName, None)
+                    // Store captured values at offsets 8, 16, ... tracking value type for floats
                     captures
                     |> List.mapi (fun i cap -> (i, cap))
                     |> List.map (fun (i, cap) ->
+                        let capType = atomType builder cap
+                        let valueType = if capType = AST.TFloat64 then Some AST.TFloat64 else None
                         atomToOperand builder cap
-                        |> Result.map (fun op -> MIR.HeapStore (destReg, (i + 1) * 8, op)))
+                        |> Result.map (fun op -> MIR.HeapStore (destReg, (i + 1) * 8, op, valueType)))
                     |> sequenceResults
                     |> Result.map (fun storeInstrs -> allocInstr :: storeFuncInstr :: storeInstrs)
                 | ANF.ClosureCall (closure, args) ->
@@ -884,12 +886,14 @@ let rec convertExpr
                     // Allocate heap space: 8 bytes per element
                     let sizeBytes = List.length elems * 8
                     let allocInstr = MIR.HeapAlloc (destReg, sizeBytes)
-                    // Store each element at its offset
+                    // Store each element at its offset, tracking value type for float handling
                     elems
                     |> List.mapi (fun i elem -> (i, elem))
                     |> List.map (fun (i, elem) ->
+                        let elemType = atomType builder elem
+                        let valueType = if elemType = AST.TFloat64 then Some AST.TFloat64 else None
                         atomToOperand builder elem
-                        |> Result.map (fun op -> MIR.HeapStore (destReg, i * 8, op)))
+                        |> Result.map (fun op -> MIR.HeapStore (destReg, i * 8, op, valueType)))
                     |> sequenceResults
                     |> Result.map (fun storeInstrs -> allocInstr :: storeInstrs)
                 | ANF.TupleGet (tupleAtom, index) ->
@@ -897,7 +901,24 @@ let rec convertExpr
                     match tupleAtom with
                     | ANF.Var tid ->
                         let tupleReg = tempToVReg tid
-                        Ok [MIR.HeapLoad (destReg, tupleReg, index * 8)]
+                        // Look up the tuple's type to determine the element type at this index
+                        // This is needed for Float elements to be properly tracked in FloatRegs
+                        let tupleType = Map.tryFind tid builder.TypeMap
+                        let _ =
+                            match tupleType with
+                            | Some (AST.TTuple elemTypes) when index < List.length elemTypes ->
+                                let elemType = List.item index elemTypes
+                                if elemType = AST.TFloat64 then destType := AST.TFloat64
+                            | Some (AST.TList elemType) ->
+                                // List is a Cons cell: (tag, head, tail) - index 1 is head
+                                if index = 1 && elemType = AST.TFloat64 then destType := AST.TFloat64
+                            | Some (AST.TFunction (_, AST.TList elemType)) ->
+                                // Function returning list - extract list element type
+                                // This happens when TypeMap contains TFunction instead of just the return type
+                                if index = 1 && elemType = AST.TFloat64 then destType := AST.TFloat64
+                            | _ -> ()
+                        let loadType = if !destType = AST.TFloat64 then Some AST.TFloat64 else None
+                        Ok [MIR.HeapLoad (destReg, tupleReg, index * 8, loadType)]
                     | _ ->
                         Error "Internal error: Tuple access on non-variable (ANF invariant violated)"
                 | ANF.IfValue _ ->
@@ -1161,9 +1182,17 @@ let rec convertExpr
         }
         let builder6 = { builder5 with Blocks = Map.add joinLabel joinBlock builder5.Blocks }
 
+        // Update FloatRegs if the result is a float
+        let (MIR.VReg resultId) = resultReg
+        let builder7 =
+            if thenResultType = AST.TFloat64 || elseResultType = AST.TFloat64 then
+                { builder6 with FloatRegs = Set.add resultId builder6.FloatRegs }
+            else
+                builder6
+
         // Return the result operand
         let resultOp = MIR.Register resultReg
-        Ok (resultOp, builder6))
+        Ok (resultOp, builder7))
 
 /// Helper: convert expression and extract final operand
 /// Returns: Result of (operand, optional join label if blocks were created, builder)
@@ -1374,14 +1403,16 @@ and convertExprToOperand
                     let numSlots = 1 + List.length captures  // func_ptr + captures
                     let sizeBytes = numSlots * 8
                     let allocInstr = MIR.HeapAlloc (destReg, sizeBytes)
-                    // Store function pointer at offset 0
-                    let storeFuncInstr = MIR.HeapStore (destReg, 0, MIR.FuncAddr funcName)
-                    // Store captured values at offsets 8, 16, ...
+                    // Store function pointer at offset 0 (always int/pointer type)
+                    let storeFuncInstr = MIR.HeapStore (destReg, 0, MIR.FuncAddr funcName, None)
+                    // Store captured values at offsets 8, 16, ... tracking value type for floats
                     captures
                     |> List.mapi (fun i cap -> (i, cap))
                     |> List.map (fun (i, cap) ->
+                        let capType = atomType builder cap
+                        let valueType = if capType = AST.TFloat64 then Some AST.TFloat64 else None
                         atomToOperand builder cap
-                        |> Result.map (fun op -> MIR.HeapStore (destReg, (i + 1) * 8, op)))
+                        |> Result.map (fun op -> MIR.HeapStore (destReg, (i + 1) * 8, op, valueType)))
                     |> sequenceResults
                     |> Result.map (fun storeInstrs -> allocInstr :: storeFuncInstr :: storeInstrs)
                 | ANF.ClosureCall (closure, args) ->
@@ -1427,12 +1458,14 @@ and convertExprToOperand
                     // Allocate heap space: 8 bytes per element
                     let sizeBytes = List.length elems * 8
                     let allocInstr = MIR.HeapAlloc (destReg, sizeBytes)
-                    // Store each element at its offset
+                    // Store each element at its offset, tracking value type for float handling
                     elems
                     |> List.mapi (fun i elem -> (i, elem))
                     |> List.map (fun (i, elem) ->
+                        let elemType = atomType builder elem
+                        let valueType = if elemType = AST.TFloat64 then Some AST.TFloat64 else None
                         atomToOperand builder elem
-                        |> Result.map (fun op -> MIR.HeapStore (destReg, i * 8, op)))
+                        |> Result.map (fun op -> MIR.HeapStore (destReg, i * 8, op, valueType)))
                     |> sequenceResults
                     |> Result.map (fun storeInstrs -> allocInstr :: storeInstrs)
                 | ANF.TupleGet (tupleAtom, index) ->
@@ -1440,7 +1473,24 @@ and convertExprToOperand
                     match tupleAtom with
                     | ANF.Var tid ->
                         let tupleReg = tempToVReg tid
-                        Ok [MIR.HeapLoad (destReg, tupleReg, index * 8)]
+                        // Look up the tuple's type to determine the element type at this index
+                        // This is needed for Float elements to be properly tracked in FloatRegs
+                        let tupleType = Map.tryFind tid builder.TypeMap
+                        let _ =
+                            match tupleType with
+                            | Some (AST.TTuple elemTypes) when index < List.length elemTypes ->
+                                let elemType = List.item index elemTypes
+                                if elemType = AST.TFloat64 then destType := AST.TFloat64
+                            | Some (AST.TList elemType) ->
+                                // List is a Cons cell: (tag, head, tail) - index 1 is head
+                                if index = 1 && elemType = AST.TFloat64 then destType := AST.TFloat64
+                            | Some (AST.TFunction (_, AST.TList elemType)) ->
+                                // Function returning list - extract list element type
+                                // This happens when TypeMap contains TFunction instead of just the return type
+                                if index = 1 && elemType = AST.TFloat64 then destType := AST.TFloat64
+                            | _ -> ()
+                        let loadType = if !destType = AST.TFloat64 then Some AST.TFloat64 else None
+                        Ok [MIR.HeapLoad (destReg, tupleReg, index * 8, loadType)]
                     | _ ->
                         Error "Internal error: Tuple access on non-variable (ANF invariant violated)"
                 | ANF.IfValue _ ->
@@ -1692,8 +1742,16 @@ and convertExprToOperand
             }
             let builder6 = { builder5 with Blocks = Map.add joinLabel joinBlock builder5.Blocks }
 
+            // Update FloatRegs if the result is a float
+            let (MIR.VReg resultId) = resultReg
+            let builder7 =
+                if thenResultType = AST.TFloat64 || elseResultType = AST.TFloat64 then
+                    { builder6 with FloatRegs = Set.add resultId builder6.FloatRegs }
+                else
+                    builder6
+
             // Return result register and our join label for potential patching by caller
-            Ok (MIR.Register resultReg, Some joinLabel, builder6))
+            Ok (MIR.Register resultReg, Some joinLabel, builder7))
 
 /// Convert an ANF function to a MIR function
 let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: Map<string, int>) (fltLookup: Map<float, int>) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (returnTypeReg: Map<string, AST.Type>) (enableCoverage: bool) : Result<MIR.Function * MIR.RegGen, string> =
@@ -1961,8 +2019,8 @@ let private offsetInstr (strOffset: int) (fltOffset: int) (instr: MIR.Instr) : M
     | MIR.ClosureCall (dest, closure, args) -> MIR.ClosureCall (dest, offsetOperand strOffset fltOffset closure, offsetOperands strOffset fltOffset args)
     | MIR.ClosureTailCall (closure, args) -> MIR.ClosureTailCall (offsetOperand strOffset fltOffset closure, offsetOperands strOffset fltOffset args)
     | MIR.HeapAlloc (dest, size) -> MIR.HeapAlloc (dest, size)
-    | MIR.HeapStore (addr, offset, src) -> MIR.HeapStore (addr, offset, offsetOperand strOffset fltOffset src)
-    | MIR.HeapLoad (dest, addr, offset) -> MIR.HeapLoad (dest, addr, offset)
+    | MIR.HeapStore (addr, offset, src, vt) -> MIR.HeapStore (addr, offset, offsetOperand strOffset fltOffset src, vt)
+    | MIR.HeapLoad (dest, addr, offset, vt) -> MIR.HeapLoad (dest, addr, offset, vt)
     | MIR.StringConcat (dest, left, right) -> MIR.StringConcat (dest, offsetOperand strOffset fltOffset left, offsetOperand strOffset fltOffset right)
     | MIR.RefCountInc (addr, size) -> MIR.RefCountInc (addr, size)
     | MIR.RefCountDec (addr, size) -> MIR.RefCountDec (addr, size)

@@ -613,12 +613,12 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         let numSlots = 1 + List.length captures
         let sizeBytes = numSlots * 8
         let allocInstr = LIR.HeapAlloc (lirDest, sizeBytes)
-        // Store function pointer at offset 0
-        let storeFuncInstr = LIR.HeapStore (lirDest, 0, LIR.FuncAddr funcName)
-        // Store captured values at offsets 8, 16, ...
+        // Store function pointer at offset 0 (always int/pointer type)
+        let storeFuncInstr = LIR.HeapStore (lirDest, 0, LIR.FuncAddr funcName, None)
+        // Store captured values at offsets 8, 16, ... (assume int/pointer for captures)
         let storeInstrs =
             captures
-            |> List.mapi (fun i cap -> LIR.HeapStore (lirDest, (i + 1) * 8, convertOperand cap))
+            |> List.mapi (fun i cap -> LIR.HeapStore (lirDest, (i + 1) * 8, convertOperand cap, None))
         Ok (allocInstr :: storeFuncInstr :: storeInstrs)
 
     | MIR.ClosureCall (dest, closure, args) ->
@@ -705,15 +705,24 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         let lirDest = vregToLIRReg dest
         Ok [LIR.HeapAlloc (lirDest, sizeBytes)]
 
-    | MIR.HeapStore (addr, offset, src) ->
+    | MIR.HeapStore (addr, offset, src, valueType) ->
         let lirAddr = vregToLIRReg addr
         let lirSrc = convertOperand src
-        Ok [LIR.HeapStore (lirAddr, offset, lirSrc)]
+        Ok [LIR.HeapStore (lirAddr, offset, lirSrc, valueType)]
 
-    | MIR.HeapLoad (dest, addr, offset) ->
-        let lirDest = vregToLIRReg dest
+    | MIR.HeapLoad (dest, addr, offset, valueType) ->
         let lirAddr = vregToLIRReg addr
-        Ok [LIR.HeapLoad (lirDest, lirAddr, offset)]
+        match valueType with
+        | Some AST.TFloat64 ->
+            // Float load: load into integer register, then move bits to float register
+            let lirFDest = vregToLIRFReg dest
+            let tempReg = LIR.Physical LIR.X9  // Use temp register for heap load
+            Ok [LIR.HeapLoad (tempReg, lirAddr, offset)
+                LIR.GpToFp (lirFDest, tempReg)]
+        | _ ->
+            // Integer/other load
+            let lirDest = vregToLIRReg dest
+            Ok [LIR.HeapLoad (lirDest, lirAddr, offset)]
 
     | MIR.RefCountInc (addr, payloadSize) ->
         let lirAddr = vregToLIRReg addr
@@ -1313,7 +1322,7 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.ClosureCall (dest, closure, args) -> LIR.ClosureCall (dest, closure, offsetLIROperands strOffset fltOffset args)
     | LIR.ArgMoves moves -> LIR.ArgMoves (moves |> List.map (fun (reg, op) -> (reg, offsetLIROperand strOffset fltOffset op)))
     | LIR.TailArgMoves moves -> LIR.TailArgMoves (moves |> List.map (fun (reg, op) -> (reg, offsetLIROperand strOffset fltOffset op)))
-    | LIR.HeapStore (addr, offset, src) -> LIR.HeapStore (addr, offset, offsetLIROperand strOffset fltOffset src)
+    | LIR.HeapStore (addr, offset, src, vt) -> LIR.HeapStore (addr, offset, offsetLIROperand strOffset fltOffset src, vt)
     | LIR.StringConcat (dest, left, right) -> LIR.StringConcat (dest, offsetLIROperand strOffset fltOffset left, offsetLIROperand strOffset fltOffset right)
     | LIR.FileReadText (dest, path) -> LIR.FileReadText (dest, offsetLIROperand strOffset fltOffset path)
     | LIR.FileExists (dest, path) -> LIR.FileExists (dest, offsetLIROperand strOffset fltOffset path)
