@@ -466,7 +466,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                                 println $"  {block.Terminator}"
                         println ""
 
-                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime
+                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(mirTime, 1)
                         println $"        {t}ms"
@@ -520,7 +520,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                                 println $"  {block.Terminator}"
                         println ""
 
-                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime
+                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(lirTime, 1)
                         println $"        {t}ms"
@@ -556,7 +556,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                                 println $"  {block.Terminator}"
                         println ""
 
-                    let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime
+                    let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(allocTime, 1)
                         println $"        {t}ms"
@@ -570,7 +570,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                         CoverageExprCount = coverageExprCount
                     }
                     let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
-                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime
+                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(codegenTime, 1)
                         println $"        {t}ms"
@@ -637,7 +637,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                                     println $"  {i:X4}: {bytes}"
                             println $"Total: {machineCode.Length} bytes\n"
 
-                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime
+                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime
                         if verbosity >= 2 then
                             let t = System.Math.Round(encodeTime, 1)
                             println $"        {t}ms"
@@ -649,7 +649,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                             match os with
                             | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode stringPool floatPool
                             | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode stringPool floatPool
-                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
+                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
                         if verbosity >= 2 then
                             let t = System.Math.Round(binaryTime, 1)
                             println $"        {t}ms"
@@ -726,9 +726,20 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                       Success = false
                       ErrorMessage = Some $"ANF conversion error: {err}" }
                 | Ok userOnly ->
+                    // Pass 2.3: ANF Optimization (user code only)
+                    if verbosity >= 1 then println "  [2.3/8] ANF Optimization..."
+                    let userProgram = ANF.Program (userOnly.UserFunctions, userOnly.MainExpr)
+                    let anfOptimized =
+                        if options.DisableANFOpt then userProgram
+                        else ANF_Optimize.optimizeProgram userProgram
+                    let anfOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(anfOptTime, 1)
+                        println $"        {t}ms"
+
                     // Create ConversionResult for RC insertion (user functions only)
                     let userConvResult : AST_to_ANF.ConversionResult = {
-                        Program = ANF.Program (userOnly.UserFunctions, userOnly.MainExpr)
+                        Program = anfOptimized
                         TypeReg = userOnly.TypeReg
                         VariantLookup = userOnly.VariantLookup
                         FuncReg = userOnly.FuncReg
@@ -739,7 +750,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     // Pass 2.5: Reference Count Insertion (user code only)
                     if verbosity >= 1 then println "  [2.5/8] Reference Count Insertion..."
                     let rcResult = RefCountInsertion.insertRCInProgram userConvResult
-                    let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime
+                    let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(rcTime, 1)
                         println $"        {t}ms"
@@ -756,7 +767,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     let userAnfAfterTCO =
                         if options.DisableTCO then userAnfAfterRC
                         else TailCallDetection.detectTailCallsInProgram userAnfAfterRC
-                    let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
+                    let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(tcoTime, 1)
                         println $"        {t}ms"
@@ -765,7 +776,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     if verbosity >= 1 then println "  [2.8/8] Print Insertion..."
                     let (ANF.Program (userFunctions, userMainExpr)) = userAnfAfterTCO
                     let userAnfProgram = PrintInsertion.insertPrint userFunctions userMainExpr programType
-                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - tcoTime
+                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - tcoTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(printTime, 1)
                         println $"        {t}ms"
@@ -784,7 +795,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                           ErrorMessage = Some $"MIR conversion error: {err}" }
                     | Ok (userMirProgram, _) ->
 
-                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime
+                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(mirTime, 1)
                         println $"        {t}ms"
@@ -800,7 +811,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                           ErrorMessage = Some $"LIR conversion error: {err}" }
                     | Ok userLirProgram ->
 
-                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime
+                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(lirTime, 1)
                         println $"        {t}ms"
@@ -835,7 +846,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     let allFuncs = reachableStdlib @ offsetUserFuncs
                     let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
 
-                    let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime
+                    let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(allocTime, 1)
                         println $"        {t}ms"
@@ -849,7 +860,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                         CoverageExprCount = coverageExprCount
                     }
                     let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
-                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime
+                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(codegenTime, 1)
                         println $"        {t}ms"
@@ -890,7 +901,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                                 (headerSize + commandsSize + 200 + 7) &&& (~~~7)
                         let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions mergedStrings mergedFloats codeFileOffset
 
-                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime
+                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime
                         if verbosity >= 2 then
                             let t = System.Math.Round(encodeTime, 1)
                             println $"        {t}ms"
@@ -902,7 +913,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                             match os with
                             | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode mergedStrings mergedFloats
                             | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode mergedStrings mergedFloats
-                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
+                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
                         if verbosity >= 2 then
                             let t = System.Math.Round(binaryTime, 1)
                             println $"        {t}ms"
@@ -975,9 +986,20 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                       Success = false
                       ErrorMessage = Some $"ANF conversion error: {err}" }
                 | Ok userOnly ->
+                    // Pass 2.3: ANF Optimization (user code only)
+                    if verbosity >= 1 then println "  [2.3/8] ANF Optimization..."
+                    let userProgram = ANF.Program (userOnly.UserFunctions, userOnly.MainExpr)
+                    let anfOptimized =
+                        if options.DisableANFOpt then userProgram
+                        else ANF_Optimize.optimizeProgram userProgram
+                    let anfOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(anfOptTime, 1)
+                        println $"        {t}ms"
+
                     // Create ConversionResult for RC insertion (user functions only)
                     let userConvResult : AST_to_ANF.ConversionResult = {
-                        Program = ANF.Program (userOnly.UserFunctions, userOnly.MainExpr)
+                        Program = anfOptimized
                         TypeReg = userOnly.TypeReg
                         VariantLookup = userOnly.VariantLookup
                         FuncReg = userOnly.FuncReg
@@ -988,7 +1010,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                     // Pass 2.5: Reference Count Insertion (user code only)
                     if verbosity >= 1 then println "  [2.5/8] Reference Count Insertion..."
                     let rcResult = RefCountInsertion.insertRCInProgram userConvResult
-                    let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime
+                    let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(rcTime, 1)
                         println $"        {t}ms"
@@ -1005,7 +1027,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                     let userAnfAfterTCO =
                         if options.DisableTCO then userAnfAfterRC
                         else TailCallDetection.detectTailCallsInProgram userAnfAfterRC
-                    let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime
+                    let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(tcoTime, 1)
                         println $"        {t}ms"
@@ -1014,7 +1036,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                     if verbosity >= 1 then println "  [2.8/8] Print Insertion..."
                     let (ANF.Program (userFunctions, userMainExpr)) = userAnfAfterTCO
                     let userAnfProgram = PrintInsertion.insertPrint userFunctions userMainExpr programType
-                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - tcoTime
+                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - tcoTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(printTime, 1)
                         println $"        {t}ms"
@@ -1077,7 +1099,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                     // Use FuncParams for correct float param handling, VariantLookup for enum printing, TypeReg for record printing
                     // typeMap contains TempId -> Type mappings from RC insertion
                     let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg options.EnableCoverage
-                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime
+                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(mirTime, 1)
                         println $"        {t}ms"
@@ -1100,7 +1122,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                           ErrorMessage = Some $"LIR conversion error: {err}" }
                     | Ok userLirProgram ->
 
-                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime
+                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(lirTime, 1)
                         println $"        {t}ms"
@@ -1125,7 +1147,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                     let allFuncs = allocatedStdlibFuncs @ offsetUserFuncs
                     let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
 
-                    let regAllocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime
+                    let regAllocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(regAllocTime, 1)
                         println $"        {t}ms"
@@ -1139,7 +1161,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                         CoverageExprCount = coverageExprCount
                     }
                     let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
-                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - regAllocTime
+                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - regAllocTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(codegenTime, 1)
                         println $"        {t}ms"
@@ -1180,7 +1202,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                             let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + dylibCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
                             (headerSize + commandsSize + 200 + 7) &&& (~~~7)
                     let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions mergedStrings mergedFloats codeFileOffset
-                    let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - regAllocTime - codegenTime
+                    let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - regAllocTime - codegenTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(encodeTime, 1)
                         println $"        {t}ms"
@@ -1192,7 +1214,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                         match os with
                         | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode mergedStrings mergedFloats
                         | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode mergedStrings mergedFloats
-                    let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - regAllocTime - codegenTime - encodeTime
+                    let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - regAllocTime - codegenTime - encodeTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(binaryTime, 1)
                         println $"        {t}ms"
