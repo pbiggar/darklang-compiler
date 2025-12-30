@@ -25,9 +25,9 @@ Result.isError<Int64, Int64>(Result.Error(99)) = stdout="true\n"
 // Result.withDefault - Returns the value or a default
 // ===================================================================
 
-// NOTE: Needs type params - Error type unconstrained
-Result.withDefault<Int64, Int64>(Result.Ok(5), 0) = 5
-Result.withDefault<Int64, Int64>(Result.Error(99), 42) = 42
+// Type inference from default value and constructor works
+Result.withDefault(Result.Ok(5), 0) = 5
+Result.withDefault(Result.Error(99), 42) = 42
 
 // ===================================================================
 // Result.map - Apply a function to the Ok value

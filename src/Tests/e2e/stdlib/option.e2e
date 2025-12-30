@@ -22,21 +22,21 @@ Option.isNone<Int64>(Option.None) = stdout="true\n"
 // ===================================================================
 
 Option.withDefault(Option.Some(5), 0) = 5
-Option.withDefault<Int64>(Option.None, 42) = 42
+Option.withDefault(Option.None, 42) = 42
 
 // ===================================================================
 // Option.map - Apply a function to the value if Some
 // ===================================================================
 
 Option.withDefault(Option.map(Option.Some(5), (x: Int64) => x + 1), 0) = 6
-Option.isNone(Option.map<Int64, Int64>(Option.None, (x: Int64) => x + 1)) = stdout="true\n"
+Option.isNone(Option.map(Option.None, (x: Int64) => x + 1)) = stdout="true\n"
 
 // ===================================================================
 // Option.andThen - Chain Option computations
 // ===================================================================
 
 Option.withDefault(Option.andThen(Option.Some(5), (x: Int64) => Option.Some(x * 2)), 0) = 10
-Option.isNone(Option.andThen<Int64, Int64>(Option.None, (x: Int64) => Option.Some(x * 2))) = stdout="true\n"
+Option.isNone(Option.andThen(Option.None, (x: Int64) => Option.Some(x * 2))) = stdout="true\n"
 // NOTE: Needs type params because the lambda returns None which doesn't constrain the output type
 Option.isNone(Option.andThen<Int64, Int64>(Option.Some(5), (x: Int64) => Option.None)) = stdout="true\n"
 
@@ -45,7 +45,7 @@ Option.isNone(Option.andThen<Int64, Int64>(Option.Some(5), (x: Int64) => Option.
 // ===================================================================
 
 List.length(Option.toList(Option.Some(42))) = stdout="1\n"
-List.isEmpty<Int64>(Option.toList<Int64>(Option.None)) = stdout="true\n"
+List.isEmpty(Option.toList(Option.None)) = stdout="true\n"
 
 // ===================================================================
 // Pipe operator with Option functions
