@@ -1496,7 +1496,7 @@ and convertExprToOperand
             Ok (MIR.Register resultReg, Some joinLabel, builder6))
 
 /// Convert an ANF function to a MIR function
-let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: Map<string, int>) (fltLookup: Map<float, int>) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (returnTypeReg: Map<string, AST.Type>) : Result<MIR.Function * MIR.RegGen, string> =
+let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: Map<string, int>) (fltLookup: Map<float, int>) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (returnTypeReg: Map<string, AST.Type>) (enableCoverage: bool) : Result<MIR.Function * MIR.RegGen, string> =
     // Initialize FloatRegs with float parameter IDs
     // This is critical so that the function body knows which VRegs hold floats
     // Use typeReg to look up function's parameter types by name, since typeMap is empty
@@ -1528,8 +1528,7 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
         ReturnTypeReg = returnTypeReg
         FuncName = anfFunc.Name
         FloatRegs = floatParamIds
-        // Coverage - disabled for now, will be parameterized later
-        EnableCoverage = false
+        EnableCoverage = enableCoverage
         ExprIdGen = ANF.initialExprIdGen
         CoverageMapping = ANF.emptyCoverageMapping
     }
@@ -1603,7 +1602,7 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
 /// mainExprType: the type of the main expression (used for _start's return type)
 /// variantLookup: mapping from variant names to type info (for enum printing)
 /// recordRegistry: mapping from record type names to field info (for record printing)
-let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (mainExprType: AST.Type) (variantLookup: AST_to_ANF.VariantLookup) (recordRegistry: MIR.RecordRegistry) : Result<MIR.Program * MIR.RegGen, string> =
+let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (mainExprType: AST.Type) (variantLookup: AST_to_ANF.VariantLookup) (recordRegistry: MIR.RecordRegistry) (enableCoverage: bool) : Result<MIR.Program * MIR.RegGen, string> =
     let (ANF.Program (functions, mainExpr)) = program
 
     // Critical: freshReg must generate VRegs that don't conflict with TempId-derived VRegs.
@@ -1629,7 +1628,7 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
         match remaining with
         | [] -> Ok (funcs, rg)
         | anfFunc :: rest ->
-            match convertANFFunction anfFunc rg strLookup fltLookup typeMap typeReg returnTypeReg with
+            match convertANFFunction anfFunc rg strLookup fltLookup typeMap typeReg returnTypeReg enableCoverage with
             | Error err -> Error err
             | Ok (mirFunc, rg') -> convertFunctions (funcs @ [mirFunc]) rg' rest
 
@@ -1650,8 +1649,7 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
         ReturnTypeReg = returnTypeReg
         FuncName = "_start"
         FloatRegs = Set.empty
-        // Coverage - disabled for now, will be parameterized later
-        EnableCoverage = false
+        EnableCoverage = enableCoverage
         ExprIdGen = ANF.initialExprIdGen
         CoverageMapping = ANF.emptyCoverageMapping
     }
@@ -1679,7 +1677,7 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
 /// Convert ANF program to MIR (functions only, no _start)
 /// Use for stdlib where there's no real main expression to convert.
 /// Returns just the function list, pools, variant registry, and record registry without wrapping in MIR.Program.
-let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (variantLookup: AST_to_ANF.VariantLookup) (recordRegistry: MIR.RecordRegistry) : Result<MIR.Function list * MIR.StringPool * MIR.FloatPool * MIR.VariantRegistry * MIR.RecordRegistry, string> =
+let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (variantLookup: AST_to_ANF.VariantLookup) (recordRegistry: MIR.RecordRegistry) (enableCoverage: bool) : Result<MIR.Function list * MIR.StringPool * MIR.FloatPool * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     let (ANF.Program (functions, _mainExpr)) = program
 
     // Same regGen calculation as toMIR
@@ -1703,7 +1701,7 @@ let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: M
         match remaining with
         | [] -> Ok (funcs, rg)
         | anfFunc :: rest ->
-            match convertANFFunction anfFunc rg strLookup fltLookup typeMap typeReg returnTypeReg with
+            match convertANFFunction anfFunc rg strLookup fltLookup typeMap typeReg returnTypeReg enableCoverage with
             | Error err -> Error err
             | Ok (mirFunc, rg') -> convertFunctions (funcs @ [mirFunc]) rg' rest
 

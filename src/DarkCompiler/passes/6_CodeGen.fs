@@ -2798,10 +2798,14 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64.In
         let epilogueLabelInstr = [ARM64.Label ("_epilogue_" + func.Name)]
         let epilogue =
             if func.Name = "_start" then
-                // For _start, exit instead of return
+                // For _start, flush coverage (if enabled) then exit instead of return
+                let coverageFlush =
+                    if ctx.Options.EnableCoverage then
+                        Runtime.generateCoverageFlush ctx.Options.CoverageExprCount
+                    else []
                 generateEpilogue func.UsedCalleeSaved func.StackSize
                 |> List.filter (function ARM64.RET -> false | _ -> true)  // Remove RET
-                |> fun instrs -> instrs @ Runtime.generateExit ()  // Add Exit syscall
+                |> fun instrs -> instrs @ coverageFlush @ Runtime.generateExit ()
             else
                 generateEpilogue func.UsedCalleeSaved func.StackSize
 

@@ -32,6 +32,7 @@ let runE2ETest (stdlib: CompilerLibrary.StdlibResult) (test: E2ETest) : E2ETestR
             DisableMIROpt = test.DisableMIROpt
             DisableLIROpt = test.DisableLIROpt
             DisableDCE = test.DisableDCE
+            EnableCoverage = false  // Coverage integration handled separately
         }
         let execResult = CompilerLibrary.compileAndRunWithStdlib 0 options stdlib test.Source
 

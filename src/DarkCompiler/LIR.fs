@@ -195,6 +195,17 @@ type Function = {
 /// LIR program with functions, string pool, and float pool
 type Program = Program of functions:Function list * strings:MIR.StringPool * floats:MIR.FloatPool
 
+/// Count the number of CoverageHit instructions in a program
+/// This is used to size the coverage data section
+let countCoverageHits (Program (functions, _, _)) : int =
+    functions
+    |> List.collect (fun f ->
+        f.CFG.Blocks
+        |> Map.toList
+        |> List.collect (fun (_, block) -> block.Instrs))
+    |> List.filter (function CoverageHit _ -> true | _ -> false)
+    |> List.length
+
 /// Live range for a virtual register (future use)
 type LiveRange = {
     Start: int

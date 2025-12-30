@@ -39,6 +39,8 @@ type CompilerOptions = {
     DisableLIROpt: bool
     /// Disable dead code elimination (tree shaking of unused stdlib)
     DisableDCE: bool
+    /// Enable runtime expression coverage tracking
+    EnableCoverage: bool
 }
 
 /// Default compiler options
@@ -49,6 +51,7 @@ let defaultOptions : CompilerOptions = {
     DisableMIROpt = false
     DisableLIROpt = false
     DisableDCE = false
+    EnableCoverage = false
 }
 
 /// Result of compiling stdlib - can be reused across compilations
@@ -186,7 +189,8 @@ let compileStdlib () : Result<StdlibResult, string> =
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
                     // Convert stdlib ANF to MIR (functions only, no _start)
                     // Use FuncParams for typeReg (needed for tail call argument types)
-                    match ANF_to_MIR.toMIRFunctionsOnly anfAfterTCO typeMap anfResult.FuncParams anfResult.VariantLookup Map.empty with
+                    // Coverage is false here since stdlib is precompiled for caching
+                    match ANF_to_MIR.toMIRFunctionsOnly anfAfterTCO typeMap anfResult.FuncParams anfResult.VariantLookup Map.empty false with
                     | Error e -> Error e
                     | Ok (mirFuncs, stringPool, floatPool, variantRegistry, recordRegistry) ->
                         // Wrap in MIR.Program for LIR conversion
@@ -438,7 +442,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                     // Use funcParams for MIR conversion (float param handling)
                     // TypeReg from ConversionResult contains record type definitions for printing
                     // typeMap contains TempId -> Type mappings from RC insertion
-                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) typeMap funcParams programType convResultOptimized.VariantLookup convResultOptimized.TypeReg
+                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) typeMap funcParams programType convResultOptimized.VariantLookup convResultOptimized.TypeReg options.EnableCoverage
 
                     match mirResult with
                     | Error err ->
@@ -559,10 +563,11 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
 
                     // Pass 6: Code Generation (LIR → ARM64)
                     if verbosity >= 1 then println "  [6/7] Code Generation..."
+                    let coverageExprCount = if options.EnableCoverage then LIR.countCoverageHits allocatedProgram else 0
                     let codegenOptions : CodeGen.CodeGenOptions = {
                         DisableFreeList = options.DisableFreeList
-                        EnableCoverage = false
-                        CoverageExprCount = 0
+                        EnableCoverage = options.EnableCoverage
+                        CoverageExprCount = coverageExprCount
                     }
                     let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
                     let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime
@@ -770,7 +775,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     // Use FuncParams (maps function names to param types) for correct float param handling
                     // Use TypeReg from ConversionResult for record type definitions (for record printing)
                     // typeMap contains TempId -> Type mappings from RC insertion
-                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg
+                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg options.EnableCoverage
 
                     match userMirResult with
                     | Error err ->
@@ -837,10 +842,11 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
 
                     // Pass 6: Code Generation
                     if verbosity >= 1 then println "  [6/8] Code Generation..."
+                    let coverageExprCount = if options.EnableCoverage then LIR.countCoverageHits allocatedProgram else 0
                     let codegenOptions : CodeGen.CodeGenOptions = {
                         DisableFreeList = options.DisableFreeList
-                        EnableCoverage = false
-                        CoverageExprCount = 0
+                        EnableCoverage = options.EnableCoverage
+                        CoverageExprCount = coverageExprCount
                     }
                     let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
                     let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - allocTime
@@ -1042,7 +1048,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                         else
                             let stdlibAnfProgram = ANF.Program (reachableStdlibFuncs, ANF.Return ANF.UnitLiteral)
                             // Use cached typeMap and typeReg from stdlib preparation
-                            ANF_to_MIR.toMIRFunctionsOnly stdlibAnfProgram stdlib.StdlibTypeMap stdlibTypeReg stdlibVariantLookup Map.empty
+                            ANF_to_MIR.toMIRFunctionsOnly stdlibAnfProgram stdlib.StdlibTypeMap stdlibTypeReg stdlibVariantLookup Map.empty options.EnableCoverage
 
                     match stdlibMirResult with
                     | Error err ->
@@ -1070,7 +1076,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                     if verbosity >= 1 then println "  [3/8] ANF → MIR (user only)..."
                     // Use FuncParams for correct float param handling, VariantLookup for enum printing, TypeReg for record printing
                     // typeMap contains TempId -> Type mappings from RC insertion
-                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg
+                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg options.EnableCoverage
                     let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(mirTime, 1)
@@ -1126,10 +1132,11 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
 
                     // Pass 6: Code Generation
                     if verbosity >= 1 then println "  [6/8] Code Generation..."
+                    let coverageExprCount = if options.EnableCoverage then LIR.countCoverageHits allocatedProgram else 0
                     let codegenOptions : CodeGen.CodeGenOptions = {
                         DisableFreeList = options.DisableFreeList
-                        EnableCoverage = false
-                        CoverageExprCount = 0
+                        EnableCoverage = options.EnableCoverage
+                        CoverageExprCount = coverageExprCount
                     }
                     let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
                     let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - lirTime - regAllocTime

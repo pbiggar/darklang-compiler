@@ -227,6 +227,7 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (c
         DisableMIROpt = cliOpts.DisableMIROpt
         DisableLIROpt = cliOpts.DisableLIROpt
         DisableDCE = cliOpts.DisableDCE
+        EnableCoverage = false
     }
     let result = CompilerLibrary.compileWithOptions (verbosityToInt verbosity) options source
 
@@ -269,6 +270,7 @@ let run (source: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int
         DisableMIROpt = cliOpts.DisableMIROpt
         DisableLIROpt = cliOpts.DisableLIROpt
         DisableDCE = cliOpts.DisableDCE
+        EnableCoverage = false
     }
     let result = CompilerLibrary.compileAndRunWithOptions (verbosityToInt verbosity) options source
 
