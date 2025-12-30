@@ -377,7 +377,10 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 Error "Float code generation not yet implemented"
             | LIR.Reg srcReg ->
                 lirRegToARM64Reg srcReg
-                |> Result.map (fun srcARM64 -> [ARM64.MOV_reg (destReg, srcARM64)])
+                |> Result.map (fun srcARM64 ->
+                    // Skip self-moves (can happen after register allocation coalesces VRegs)
+                    if destReg = srcARM64 then []
+                    else [ARM64.MOV_reg (destReg, srcARM64)])
             | LIR.StackSlot offset ->
                 // Load from stack slot into destination register
                 loadStackSlot destReg offset

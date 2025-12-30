@@ -665,32 +665,53 @@ let rec convertExpr
             |> Result.bind (fun argOperands ->
                 let loopLabel = MIR.Label $"{funcName}_body"
                 // To handle register swaps correctly (e.g., swapInt(b, a, n-1)),
-                // we must capture all new argument values into fresh temps BEFORE
-                // writing to any parameter register. This ensures SSA sees the
-                // OLD values of all args before any params are redefined.
+                // we need temps only when an argument directly references a parameter.
                 //
-                // Example swap: args = [b, a] for params [a, b]
-                //   temp0 = b  // capture old value of b
-                //   temp1 = a  // capture old value of a (before a is overwritten!)
-                //   a = temp0  // assign new values
-                //   b = temp1
-                let (tempRegs, regGen') =
-                    argOperands
-                    |> List.fold (fun (temps, rg) _ ->
-                        let (temp, rg') = MIR.freshReg rg
-                        (temps @ [temp], rg')
-                    ) ([], builder.RegGen)
-                // First capture all arg values into temps
-                let captureInstrs =
-                    List.zip3 tempRegs argOperands argTypes
-                    |> List.map (fun (temp, argOp, argType) ->
-                        MIR.Mov (temp, argOp, Some argType))
-                // Then assign temps to params
-                let assignInstrs =
-                    List.zip3 builder.ParamRegs tempRegs argTypes
-                    |> List.map (fun (paramReg, temp, argType) ->
-                        MIR.Mov (paramReg, MIR.Register temp, Some argType))
-                let paramAssignments = captureInstrs @ assignInstrs
+                // Example where temps are needed: args = [b, a] for params [a, b]
+                //   - Arg 0 is param b (VReg 1), needs capture before a is overwritten
+                //   - Arg 1 is param a (VReg 0), needs capture before b is overwritten
+                //
+                // Example where temps are NOT needed: args = [n-1, acc+n] for params [n, acc]
+                //   - Arg 0 is a computed temp (VReg 10xxx), not a direct param reference
+                //   - Arg 1 is a computed temp (VReg 10xxx), not a direct param reference
+                //
+                // We only need temps if ANY argument is a direct param reference AND
+                // that param will be written to by another assignment.
+                let paramSet = builder.ParamRegs |> Set.ofList
+                let argReferencesParam (op: MIR.Operand) =
+                    match op with
+                    | MIR.Register vreg -> Set.contains vreg paramSet
+                    | _ -> false
+                let needsTemps = argOperands |> List.exists argReferencesParam
+
+                let (paramAssignments, regGen') =
+                    if needsTemps then
+                        // Use temps to avoid swap issues
+                        let (tempRegs, rg) =
+                            argOperands
+                            |> List.fold (fun (temps, rg) _ ->
+                                let (temp, rg') = MIR.freshReg rg
+                                (temps @ [temp], rg')
+                            ) ([], builder.RegGen)
+                        // First capture all arg values into temps
+                        let captureInstrs =
+                            List.zip3 tempRegs argOperands argTypes
+                            |> List.map (fun (temp, argOp, argType) ->
+                                MIR.Mov (temp, argOp, Some argType))
+                        // Then assign temps to params
+                        let assignInstrs =
+                            List.zip3 builder.ParamRegs tempRegs argTypes
+                            |> List.map (fun (paramReg, temp, argType) ->
+                                MIR.Mov (paramReg, MIR.Register temp, Some argType))
+                        (captureInstrs @ assignInstrs, rg)
+                    else
+                        // No temps needed - just assign directly
+                        let assignInstrs =
+                            List.zip3 builder.ParamRegs argOperands argTypes
+                            |> List.map (fun (paramReg, argOp, argType) ->
+                                MIR.Mov (paramReg, argOp, Some argType))
+                        (assignInstrs, builder.RegGen)
+
                 // Create block with accumulated instructions + param assignments + Jump
                 let block = {
                     MIR.Label = currentLabel
@@ -1207,32 +1228,41 @@ and convertExprToOperand
             |> Result.bind (fun argOperands ->
                 let loopLabel = MIR.Label $"{funcName}_body"
                 // To handle register swaps correctly (e.g., swapInt(b, a, n-1)),
-                // we must capture all new argument values into fresh temps BEFORE
-                // writing to any parameter register. This ensures SSA sees the
-                // OLD values of all args before any params are redefined.
-                //
-                // Example swap: args = [b, a] for params [a, b]
-                //   temp0 = b  // capture old value of b
-                //   temp1 = a  // capture old value of a (before a is overwritten!)
-                //   a = temp0  // assign new values
-                //   b = temp1
-                let (tempRegs, regGen') =
-                    argOperands
-                    |> List.fold (fun (temps, rg) _ ->
-                        let (temp, rg') = MIR.freshReg rg
-                        (temps @ [temp], rg')
-                    ) ([], builder.RegGen)
-                // First capture all arg values into temps
-                let captureInstrs =
-                    List.zip3 tempRegs argOperands argTypes
-                    |> List.map (fun (temp, argOp, argType) ->
-                        MIR.Mov (temp, argOp, Some argType))
-                // Then assign temps to params
-                let assignInstrs =
-                    List.zip3 builder.ParamRegs tempRegs argTypes
-                    |> List.map (fun (paramReg, temp, argType) ->
-                        MIR.Mov (paramReg, MIR.Register temp, Some argType))
-                let paramAssignments = captureInstrs @ assignInstrs
+                // we need temps only when an argument directly references a parameter.
+                // (See convertExpr for detailed explanation)
+                let paramSet = builder.ParamRegs |> Set.ofList
+                let argReferencesParam (op: MIR.Operand) =
+                    match op with
+                    | MIR.Register vreg -> Set.contains vreg paramSet
+                    | _ -> false
+                let needsTemps = argOperands |> List.exists argReferencesParam
+
+                let (paramAssignments, regGen') =
+                    if needsTemps then
+                        // Use temps to avoid swap issues
+                        let (tempRegs, rg) =
+                            argOperands
+                            |> List.fold (fun (temps, rg) _ ->
+                                let (temp, rg') = MIR.freshReg rg
+                                (temps @ [temp], rg')
+                            ) ([], builder.RegGen)
+                        let captureInstrs =
+                            List.zip3 tempRegs argOperands argTypes
+                            |> List.map (fun (temp, argOp, argType) ->
+                                MIR.Mov (temp, argOp, Some argType))
+                        let assignInstrs =
+                            List.zip3 builder.ParamRegs tempRegs argTypes
+                            |> List.map (fun (paramReg, temp, argType) ->
+                                MIR.Mov (paramReg, MIR.Register temp, Some argType))
+                        (captureInstrs @ assignInstrs, rg)
+                    else
+                        // No temps needed - just assign directly
+                        let assignInstrs =
+                            List.zip3 builder.ParamRegs argOperands argTypes
+                            |> List.map (fun (paramReg, argOp, argType) ->
+                                MIR.Mov (paramReg, argOp, Some argType))
+                        (assignInstrs, builder.RegGen)
+
                 // Create block with accumulated instructions + param assignments + Jump
                 let block = {
                     MIR.Label = startLabel
