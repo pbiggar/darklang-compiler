@@ -120,13 +120,13 @@ def addOne(x: Int64): Int64 = x + 1 def double(x: Int64): Int64 = x * 2 let resu
 // (let x = fun x -> Stdlib.Option.map x (fun a -> a) in (Stdlib.Option.Option.Some 3L) |> x |> Stdlib.Option.map (fun a -> a + 1L)) = stdout="Stdlib.Option.Option.Some(4)\n"
 
 // Pipe Option to withDefault then add (converted from Dark: (+) 3L)
-Stdlib.Option.Option.Some(3) |> Stdlib.Option.withDefault<Int64>(0) |> ((x: Int64) => x + 3) = 6
+Option.Some(3) |> Option.withDefault<Int64>(0) |> ((x: Int64) => x + 3) = 6
 
 // Pipe Result.Ok to withDefault then add
-Stdlib.Result.Result.Ok(3) |> Stdlib.Result.withDefault<Int64, Int64>(0) |> ((x: Int64) => x + 3) = 6
+Result.Ok(3) |> Result.withDefault<Int64, Int64>(0) |> ((x: Int64) => x + 3) = 6
 
 // Pipe Result.Error to withDefault (uses default) then add
-Stdlib.Result.Result.Error(99) |> Stdlib.Result.withDefault<Int64, Int64>(0) |> ((x: Int64) => x + 3) = 3
+Result.Error(99) |> Result.withDefault<Int64, Int64>(0) |> ((x: Int64) => x + 3) = 3
 
 // (let x = fun a -> Stdlib.Result.withDefault_v0 a 1L in (Stdlib.Result.Result.Error "err") |> x |> (+) 3L) = 4
 

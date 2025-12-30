@@ -13,8 +13,8 @@
 "xx" ++ "yy" = stdout="xxyy\n"
 (5 + (3)) = 8
 
-// Stdlib.Int64.add (converted from Dark: add_v0 5 3 -> add(5, 3))
-Stdlib.Int64.add(5, 3) = 8
+// Int64.add (converted from Dark: add_v0 5 3 -> add(5, 3))
+Int64.add(5, 3) = 8
 
 // ===================================================================
 // Error handling tests

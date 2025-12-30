@@ -12,9 +12,9 @@
 
 let fn = (x: Int64) => x + 1 in fn(6) = 7
 
-let fn = Stdlib.Int64.add in fn(3, 4) = 7
+let fn = Int64.add in fn(3, 4) = 7
 
-let fn = Stdlib.Int64.max in fn(3, 7) = 7
+let fn = Int64.max in fn(3, 7) = 7
 
 // ([ 1L; 2L; 3L; 4L; 5L ] |> Stdlib.List.map (fun x y -> x) |> Stdlib.List.map (fun l -> l 1L)) = stdout="[1, 2, 3, 4, 5]\n"
 

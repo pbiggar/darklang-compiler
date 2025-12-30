@@ -1,45 +1,45 @@
 // Stdlib.Float tests
 
 // sqrt
-Stdlib.Float.sqrt(4.0) = stdout="2.00\n"
-Stdlib.Float.sqrt(9.0) = stdout="3.00\n"
-Stdlib.Float.sqrt(2.0) = stdout="1.41\n"
-Stdlib.Float.sqrt(0.0) = stdout="0.00\n"
-Stdlib.Float.sqrt(1.0) = stdout="1.00\n"
-Stdlib.Float.sqrt(100.0) = stdout="10.00\n"
+Float.sqrt(4.0) = stdout="2.00\n"
+Float.sqrt(9.0) = stdout="3.00\n"
+Float.sqrt(2.0) = stdout="1.41\n"
+Float.sqrt(0.0) = stdout="0.00\n"
+Float.sqrt(1.0) = stdout="1.00\n"
+Float.sqrt(100.0) = stdout="10.00\n"
 
 // abs
-Stdlib.Float.abs(5.5) = stdout="5.50\n"
-Stdlib.Float.abs(-5.5) = stdout="5.50\n"
-Stdlib.Float.abs(0.0) = stdout="0.00\n"
-Stdlib.Float.abs(-0.0) = stdout="0.00\n"
-Stdlib.Float.abs(-123.456) = stdout="123.45\n"  // Note: printf rounds to 123.45 (banker's rounding)
+Float.abs(5.5) = stdout="5.50\n"
+Float.abs(-5.5) = stdout="5.50\n"
+Float.abs(0.0) = stdout="0.00\n"
+Float.abs(-0.0) = stdout="0.00\n"
+Float.abs(-123.456) = stdout="123.45\n"  // Note: printf rounds to 123.45 (banker's rounding)
 
 // negate
-Stdlib.Float.negate(3.14) = stdout="-3.14\n"
-Stdlib.Float.negate(-3.14) = stdout="3.14\n"
-Stdlib.Float.negate(0.0) = stdout="-0.00\n"
+Float.negate(3.14) = stdout="-3.14\n"
+Float.negate(-3.14) = stdout="3.14\n"
+Float.negate(0.0) = stdout="-0.00\n"
 
 // toInt (truncates toward zero)
-Stdlib.Float.toInt(3.7) = stdout="3\n"
-Stdlib.Float.toInt(3.2) = stdout="3\n"
-Stdlib.Float.toInt(-3.7) = stdout="-3\n"
-Stdlib.Float.toInt(-3.2) = stdout="-3\n"
-Stdlib.Float.toInt(0.0) = stdout="0\n"
-Stdlib.Float.toInt(100.99) = stdout="100\n"
+Float.toInt(3.7) = stdout="3\n"
+Float.toInt(3.2) = stdout="3\n"
+Float.toInt(-3.7) = stdout="-3\n"
+Float.toInt(-3.2) = stdout="-3\n"
+Float.toInt(0.0) = stdout="0\n"
+Float.toInt(100.99) = stdout="100\n"
 
 // Int64.toFloat
-Stdlib.Int64.toFloat(42) = stdout="42.00\n"
-Stdlib.Int64.toFloat(0) = stdout="0.00\n"
-Stdlib.Int64.toFloat(-100) = stdout="-100.00\n"
+Int64.toFloat(42) = stdout="42.00\n"
+Int64.toFloat(0) = stdout="0.00\n"
+Int64.toFloat(-100) = stdout="-100.00\n"
 
 // Combined operations
-Stdlib.Float.sqrt(Stdlib.Float.abs(-16.0)) = stdout="4.00\n"
-Stdlib.Float.abs(Stdlib.Float.negate(5.0)) = stdout="5.00\n"
-Stdlib.Float.toInt(Stdlib.Float.sqrt(100.0)) = stdout="10\n"
-Stdlib.Int64.toFloat(Stdlib.Float.toInt(9.99)) = stdout="9.00\n"
+Float.sqrt(Float.abs(-16.0)) = stdout="4.00\n"
+Float.abs(Float.negate(5.0)) = stdout="5.00\n"
+Float.toInt(Float.sqrt(100.0)) = stdout="10\n"
+Int64.toFloat(Float.toInt(9.99)) = stdout="9.00\n"
 
 // Float comparisons (already work, but good to test with new functions)
-Stdlib.Float.sqrt(4.0) > 1.0 = stdout="true\n"
-Stdlib.Float.sqrt(4.0) == 2.0 = stdout="true\n"
-Stdlib.Float.abs(-5.0) > 4.0 = stdout="true\n"
+Float.sqrt(4.0) > 1.0 = stdout="true\n"
+Float.sqrt(4.0) == 2.0 = stdout="true\n"
+Float.abs(-5.0) > 4.0 = stdout="true\n"

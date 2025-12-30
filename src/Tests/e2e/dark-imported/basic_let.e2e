@@ -15,15 +15,15 @@
 // Unit type in let binding
 // ===================================================================
 
-(let () = Stdlib.Tuple2.first(((), 5)) in 5) = 5
+(let () = Tuple2.first(((), 5)) in 5) = 5
 
 // ===================================================================
-// Stdlib.Tuple2 functions
+// Tuple2 functions
 // ===================================================================
 
-Stdlib.Tuple2.first((1, 2)) = 1
-Stdlib.Tuple2.second((1, 2)) = 2
-(let t = (10, 20) in Stdlib.Tuple2.first(t) + Stdlib.Tuple2.second(t)) = 30
+Tuple2.first((1, 2)) = 1
+Tuple2.second((1, 2)) = 2
+(let t = (10, 20) in Tuple2.first(t) + Tuple2.second(t)) = 30
 
 // ===================================================================
 // Tuple destructuring (from Dark)
@@ -65,9 +65,9 @@ Stdlib.Tuple2.second((1, 2)) = 2
 
 (let x = 35 in match 6 with | x -> x) = 6
 
-// Shadowing with Result type (using generic Stdlib.Result.Result)
-// Original Dark test: (let x = 35 in match Stdlib.Result.Result.Ok 6 with | Ok x -> x) = 6
-(let x = 35 in match Stdlib.Result.Result.Ok(6) with | Ok(x) -> x | Error(e) -> 0) = 6
+// Shadowing with Result type (using generic Result)
+// Original Dark test: (let x = 35 in match Result.Ok 6 with | Ok x -> x) = 6
+(let x = 35 in match Result.Ok(6) with | Ok(x) -> x | Error(e) -> 0) = 6
 
 // NOTE: Tests below require Stdlib.List.map which needs list cons ([h, ...t]) support
 

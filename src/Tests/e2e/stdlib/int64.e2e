@@ -4,167 +4,167 @@
 // Tests for Int64 module functions
 
 // ===================================================================
-// Stdlib.Int64.add - Add two integers
+// Int64.add - Add two integers
 // ===================================================================
 
-Stdlib.Int64.add(10, 9) = 19
-Stdlib.Int64.add(0, 0) = 0
-Stdlib.Int64.add(-5, 5) = 0
-Stdlib.Int64.add(100, 200) = 300
+Int64.add(10, 9) = 19
+Int64.add(0, 0) = 0
+Int64.add(-5, 5) = 0
+Int64.add(100, 200) = 300
 
 // ===================================================================
-// Stdlib.Int64.sub - Subtract two integers
+// Int64.sub - Subtract two integers
 // ===================================================================
 
-Stdlib.Int64.sub(10, 9) = 1
-Stdlib.Int64.sub(0, 0) = 0
-Stdlib.Int64.sub(100, 50) = 50
-Stdlib.Int64.sub(5, 10) = -5
+Int64.sub(10, 9) = 1
+Int64.sub(0, 0) = 0
+Int64.sub(100, 50) = 50
+Int64.sub(5, 10) = -5
 
 // ===================================================================
-// Stdlib.Int64.mul - Multiply two integers
+// Int64.mul - Multiply two integers
 // ===================================================================
 
-Stdlib.Int64.mul(8, 8) = 64
-Stdlib.Int64.mul(0, 100) = 0
-Stdlib.Int64.mul(-5, 5) = -25
-Stdlib.Int64.mul(100, 100) = 10000
+Int64.mul(8, 8) = 64
+Int64.mul(0, 100) = 0
+Int64.mul(-5, 5) = -25
+Int64.mul(100, 100) = 10000
 
 // ===================================================================
-// Stdlib.Int64.div - Divide two integers
+// Int64.div - Divide two integers
 // ===================================================================
 
-Stdlib.Int64.div(10, 5) = 2
-Stdlib.Int64.div(10, 3) = 3
-Stdlib.Int64.div(100, 10) = 10
-Stdlib.Int64.div(-10, 2) = -5
+Int64.div(10, 5) = 2
+Int64.div(10, 3) = 3
+Int64.div(100, 10) = 10
+Int64.div(-10, 2) = -5
 
 // ===================================================================
-// Stdlib.Int64.mod - Modulo operation
+// Int64.mod - Modulo operation
 // ===================================================================
 
-Stdlib.Int64.mod(15, 6) = 3
-Stdlib.Int64.mod(10, 3) = 1
-Stdlib.Int64.mod(100, 7) = 2
-Stdlib.Int64.mod(-10, 3) = -1
+Int64.mod(15, 6) = 3
+Int64.mod(10, 3) = 1
+Int64.mod(100, 7) = 2
+Int64.mod(-10, 3) = -1
 
 // ===================================================================
-// Stdlib.Int64.max - Maximum of two integers
+// Int64.max - Maximum of two integers
 // ===================================================================
 
-Stdlib.Int64.max(5, 6) = 6
-Stdlib.Int64.max(6, 5) = 6
-Stdlib.Int64.max(-5, -10) = -5
-Stdlib.Int64.max(0, 0) = 0
+Int64.max(5, 6) = 6
+Int64.max(6, 5) = 6
+Int64.max(-5, -10) = -5
+Int64.max(0, 0) = 0
 
 // ===================================================================
-// Stdlib.Int64.min - Minimum of two integers
+// Int64.min - Minimum of two integers
 // ===================================================================
 
-Stdlib.Int64.min(5, 6) = 5
-Stdlib.Int64.min(6, 5) = 5
-Stdlib.Int64.min(-5, -10) = -10
-Stdlib.Int64.min(0, 0) = 0
+Int64.min(5, 6) = 5
+Int64.min(6, 5) = 5
+Int64.min(-5, -10) = -10
+Int64.min(0, 0) = 0
 
 // ===================================================================
-// Stdlib.Int64.absoluteValue - Absolute value
+// Int64.absoluteValue - Absolute value
 // ===================================================================
 
-Stdlib.Int64.absoluteValue(-5) = 5
-Stdlib.Int64.absoluteValue(5) = 5
-Stdlib.Int64.absoluteValue(0) = 0
-Stdlib.Int64.absoluteValue(-100) = 100
+Int64.absoluteValue(-5) = 5
+Int64.absoluteValue(5) = 5
+Int64.absoluteValue(0) = 0
+Int64.absoluteValue(-100) = 100
 
 // ===================================================================
-// Stdlib.Int64.negate - Negate an integer
+// Int64.negate - Negate an integer
 // ===================================================================
 
-Stdlib.Int64.negate(-5) = 5
-Stdlib.Int64.negate(5) = -5
-Stdlib.Int64.negate(0) = 0
-Stdlib.Int64.negate(100) = -100
+Int64.negate(-5) = 5
+Int64.negate(5) = -5
+Int64.negate(0) = 0
+Int64.negate(100) = -100
 
 // ===================================================================
-// Stdlib.Int64.power - Raise to a power
+// Int64.power - Raise to a power
 // ===================================================================
 
-Stdlib.Int64.power(8, 5) = 32768
-Stdlib.Int64.power(2, 10) = 1024
-Stdlib.Int64.power(0, 0) = 1
-Stdlib.Int64.power(5, 0) = 1
-Stdlib.Int64.power(5, 1) = 5
-Stdlib.Int64.power(2, 8) = 256
+Int64.power(8, 5) = 32768
+Int64.power(2, 10) = 1024
+Int64.power(0, 0) = 1
+Int64.power(5, 0) = 1
+Int64.power(5, 1) = 5
+Int64.power(2, 8) = 256
 
 // ===================================================================
-// Stdlib.Int64.clamp - Clamp value between limits
+// Int64.clamp - Clamp value between limits
 // ===================================================================
 
-Stdlib.Int64.clamp(-5, -2, 5) = -2
-Stdlib.Int64.clamp(3, 0, 2) = 2
-Stdlib.Int64.clamp(1, 0, 5) = 1
-Stdlib.Int64.clamp(10, 5, 15) = 10
-Stdlib.Int64.clamp(0, 5, 10) = 5
+Int64.clamp(-5, -2, 5) = -2
+Int64.clamp(3, 0, 2) = 2
+Int64.clamp(1, 0, 5) = 1
+Int64.clamp(10, 5, 15) = 10
+Int64.clamp(0, 5, 10) = 5
 
 // ===================================================================
-// Stdlib.Int64.greaterThan - Greater than comparison
+// Int64.greaterThan - Greater than comparison
 // ===================================================================
 
-Stdlib.Int64.greaterThan(20, 1) = stdout="true\n"
-Stdlib.Int64.greaterThan(1, 20) = stdout="false\n"
-Stdlib.Int64.greaterThan(5, 5) = stdout="false\n"
+Int64.greaterThan(20, 1) = stdout="true\n"
+Int64.greaterThan(1, 20) = stdout="false\n"
+Int64.greaterThan(5, 5) = stdout="false\n"
 
 // ===================================================================
-// Stdlib.Int64.greaterThanOrEqualTo - Greater than or equal comparison
+// Int64.greaterThanOrEqualTo - Greater than or equal comparison
 // ===================================================================
 
-Stdlib.Int64.greaterThanOrEqualTo(6, 1) = stdout="true\n"
-Stdlib.Int64.greaterThanOrEqualTo(1, 6) = stdout="false\n"
-Stdlib.Int64.greaterThanOrEqualTo(5, 5) = stdout="true\n"
+Int64.greaterThanOrEqualTo(6, 1) = stdout="true\n"
+Int64.greaterThanOrEqualTo(1, 6) = stdout="false\n"
+Int64.greaterThanOrEqualTo(5, 5) = stdout="true\n"
 
 // ===================================================================
-// Stdlib.Int64.lessThan - Less than comparison
+// Int64.lessThan - Less than comparison
 // ===================================================================
 
-Stdlib.Int64.lessThan(6, 8) = stdout="true\n"
-Stdlib.Int64.lessThan(8, 6) = stdout="false\n"
-Stdlib.Int64.lessThan(5, 5) = stdout="false\n"
+Int64.lessThan(6, 8) = stdout="true\n"
+Int64.lessThan(8, 6) = stdout="false\n"
+Int64.lessThan(5, 5) = stdout="false\n"
 
 // ===================================================================
-// Stdlib.Int64.lessThanOrEqualTo - Less than or equal comparison
+// Int64.lessThanOrEqualTo - Less than or equal comparison
 // ===================================================================
 
-Stdlib.Int64.lessThanOrEqualTo(6, 8) = stdout="true\n"
-Stdlib.Int64.lessThanOrEqualTo(8, 6) = stdout="false\n"
-Stdlib.Int64.lessThanOrEqualTo(5, 5) = stdout="true\n"
+Int64.lessThanOrEqualTo(6, 8) = stdout="true\n"
+Int64.lessThanOrEqualTo(8, 6) = stdout="false\n"
+Int64.lessThanOrEqualTo(5, 5) = stdout="true\n"
 
 // ===================================================================
-// Stdlib.Int64.toString - Convert integer to string
+// Int64.toString - Convert integer to string
 // ===================================================================
 
-Stdlib.Int64.toString(0) = stdout="0\n"
-Stdlib.Int64.toString(42) = stdout="42\n"
-Stdlib.Int64.toString(-5) = stdout="-5\n"
-Stdlib.Int64.toString(1234567890) = stdout="1234567890\n"
+Int64.toString(0) = stdout="0\n"
+Int64.toString(42) = stdout="42\n"
+Int64.toString(-5) = stdout="-5\n"
+Int64.toString(1234567890) = stdout="1234567890\n"
 
 // ===================================================================
 // NOTE: Functions not yet implemented due to missing types or features
 // ===================================================================
 
-// Stdlib.Int64.sqrt - needs Float type
-// Stdlib.Int64.sqrt(4) = 2.0
-// Stdlib.Int64.sqrt(100) = 10.0
+// Int64.sqrt - needs Float type
+// Int64.sqrt(4) = 2.0
+// Int64.sqrt(100) = 10.0
 
-// Stdlib.Int64.toFloat - needs Float type
-// Stdlib.Int64.toFloat(2) = 2.0
-// Stdlib.Int64.toFloat(-5) = -5.0
+// Int64.toFloat - needs Float type
+// Int64.toFloat(2) = 2.0
+// Int64.toFloat(-5) = -5.0
 
-// Stdlib.Int64.parse - needs Result type (blocked by type checker bug)
-// Stdlib.Int64.parse("1") = Stdlib.Result.Result.Ok(1)
-// Stdlib.Int64.parse("abc") = Stdlib.Result.Result.Error(...)
+// Int64.parse - needs Result type (blocked by type checker bug)
+// Int64.parse("1") = Result.Ok(1)
+// Int64.parse("abc") = Result.Error(...)
 
-// Stdlib.Int64.remainder - needs Result type (blocked by type checker bug)
-// Stdlib.Int64.remainder(15, 6) = Stdlib.Result.Result.Ok(3)
-// Stdlib.Int64.remainder(5, 0) = Stdlib.Result.Result.Error(...)
+// Int64.remainder - needs Result type (blocked by type checker bug)
+// Int64.remainder(15, 6) = Result.Ok(3)
+// Int64.remainder(5, 0) = Result.Error(...)
 
-// Stdlib.Int64.sum - needs List iteration support
-// Stdlib.Int64.sum([1, 2, 3, 4, 5]) = 15
+// Int64.sum - needs List iteration support
+// Int64.sum([1, 2, 3, 4, 5]) = 15

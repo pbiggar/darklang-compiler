@@ -97,7 +97,7 @@ type GuestRole = UserRole
 type IntList = List<Int64>
 
 def getLength(xs: IntList): Int64 =
-    Stdlib.List.length(xs)
+    List.length(xs)
 
 getLength([1, 2, 3]) = 3
 
