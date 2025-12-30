@@ -151,19 +151,19 @@ let inferOperandType (typeMap: Map<VReg, AST.Type>) (src: Operand) : AST.Type op
 /// Insert a copy instruction at the end of a block (before terminator)
 /// For phi node: dest = phi[(v1, L1), (v2, L2), ...]
 /// In predecessor L1: insert "dest = v1" at end
-let insertCopyInPredecessor (cfg: CFG) (predLabel: Label) (dest: VReg) (src: Operand) (typeMap: Map<VReg, AST.Type>) (_funcName: string) : CFG =
+let insertCopyInPredecessor (cfg: CFG) (predLabel: Label) (dest: VReg) (src: Operand) (typeMap: Map<VReg, AST.Type>) (_funcName: string) (funcParams: Set<VReg>) : CFG =
     // Skip if source equals dest (self-referential phi)
     let skip =
         match src with
         | Register srcReg -> srcReg = dest
         | _ -> false
 
-    // Skip if source is an unrenamed VReg (< 10000), meaning the variable
-    // was never defined on this path. This happens when phi nodes are inserted
-    // for variables that aren't live on all incoming paths.
+    // Skip if source is an unrenamed VReg (< 10000) that is NOT a function parameter.
+    // Unrenamed VRegs that aren't params mean the variable was never defined on this path.
+    // Function parameters ARE valid unrenamed sources - they're defined by the function call.
     let isUnrenamed =
         match src with
-        | Register (VReg id) -> id < 10000
+        | Register (VReg id as vreg) -> id < 10000 && not (Set.contains vreg funcParams)
         | _ -> false
 
     if skip || isUnrenamed then
@@ -186,7 +186,8 @@ let insertCopyInPredecessor (cfg: CFG) (predLabel: Label) (dest: VReg) (src: Ope
 /// A VReg is properly defined if:
 /// 1. It's defined by a non-phi instruction (Mov, BinOp, Call, etc.)
 /// 2. It's defined by a phi where ALL sources are properly defined
-let collectProperlyDefinedVRegs (cfg: CFG) : Set<VReg> =
+/// 3. It's a function parameter (funcParams)
+let collectProperlyDefinedVRegs (cfg: CFG) (funcParams: Set<VReg>) : Set<VReg> =
     // First, collect all VRegs defined by non-phi instructions
     let nonPhiDefs =
         cfg.Blocks
@@ -239,14 +240,17 @@ let collectProperlyDefinedVRegs (cfg: CFG) : Set<VReg> =
                     // 1. Already defined
                     // 2. Not a register (constant)
                     // 3. A renamed register (>= 10000) that is in defined set
+                    // 4. A function parameter (always valid)
                     let allSourcesValid =
                         sources |> List.forall (fun (src, _) ->
                             match src with
                             | Register vreg ->
                                 let (VReg id) = vreg
-                                // Unrenamed VRegs (< 10000) are invalid
+                                // Function parameters are valid even if unrenamed
+                                // Unrenamed VRegs that aren't params are invalid
                                 // Renamed VRegs must be in the defined set
-                                id >= 10000 && Set.contains vreg d
+                                Set.contains vreg funcParams ||
+                                (id >= 10000 && Set.contains vreg d)
                             | _ -> true  // Constants are always valid
                         )
                     if allSourcesValid then
@@ -259,9 +263,10 @@ let collectProperlyDefinedVRegs (cfg: CFG) : Set<VReg> =
     fixpoint nonPhiDefs
 
 /// Replace phi nodes with copies in predecessors
-let eliminatePhiNodes (cfg: CFG) (funcName: string) : CFG =
-    // Get set of properly defined VRegs
-    let definedVRegs = collectProperlyDefinedVRegs cfg
+let eliminatePhiNodes (cfg: CFG) (funcName: string) (funcParams: Set<VReg>) : CFG =
+    // Get set of properly defined VRegs (pass funcParams so they're treated as valid sources)
+    let definedVRegs = collectProperlyDefinedVRegs cfg funcParams
+    let _ = funcName  // suppress unused warning
 
     // Build type map to infer types for phi resolution copies
     let typeMap = buildTypeMap cfg
@@ -287,7 +292,7 @@ let eliminatePhiNodes (cfg: CFG) (funcName: string) : CFG =
                 | Phi (dest, sources) ->
                     sources
                     |> List.fold (fun c' (src, predLabel) ->
-                        insertCopyInPredecessor c' predLabel dest src typeMap funcName
+                        insertCopyInPredecessor c' predLabel dest src typeMap funcName funcParams
                     ) c
                 | _ -> c
             ) cfg'
@@ -305,8 +310,11 @@ let destructSSAInFunction (func: Function) (labelGen: LabelGen) : Function * Lab
     // Split critical edges
     let (cfg', labelGen') = splitCriticalEdges func.CFG labelGen
 
+    // Convert function params to a Set for O(log n) lookup
+    let funcParams = func.Params |> Set.ofList
+
     // Eliminate phi nodes
-    let cfg'' = eliminatePhiNodes cfg' func.Name
+    let cfg'' = eliminatePhiNodes cfg' func.Name funcParams
 
     ({ func with CFG = cfg'' }, labelGen')
 

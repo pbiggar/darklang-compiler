@@ -23,6 +23,7 @@ let buildPredecessors (cfg: CFG) : Predecessors =
 
     cfg.Blocks
     |> Map.fold (fun preds label block ->
+        // Add edges from terminator
         match block.Terminator with
         | Ret _ -> preds
         | Jump target -> addEdge label target preds
@@ -372,8 +373,20 @@ let computeLiveness (cfg: CFG) : Map<Label, Set<VReg>> * Map<Label, Set<VReg>> =
 ///   For each block d in DF(b):
 ///     Insert phi node for v in d (if not already present AND v is live-in at d)
 ///     This also counts as a definition, so recursively process
-let insertPhiNodes (cfg: CFG) (df: DominanceFrontier) (preds: Predecessors) (liveIn: Map<Label, Set<VReg>>) (_funcName: string) : CFG =
-    let allDefs = getAllDefs cfg
+let insertPhiNodes (cfg: CFG) (df: DominanceFrontier) (preds: Predecessors) (liveIn: Map<Label, Set<VReg>>) (funcParams: VReg list) : CFG =
+    // Get all definitions from instructions in the CFG
+    let instrDefs = getAllDefs cfg
+
+    // Add function parameters as definitions at the entry block
+    // This is critical for self-recursive functions: params are defined at entry (from args)
+    // AND re-defined in recursive blocks (before jumping back). SSA needs both definition
+    // sites to insert phi nodes at the loop header (the entry block for such functions).
+    let allDefs =
+        funcParams
+        |> List.fold (fun defs vreg ->
+            let existing = Map.tryFind vreg defs |> Option.defaultValue Set.empty
+            Map.add vreg (Set.add cfg.Entry existing) defs
+        ) instrDefs
 
     // Worklist algorithm: for each variable, propagate phi insertion
     let rec insertForVar (vreg: VReg) (worklist: Set<Label>) (phiBlocks: Set<Label>) (cfg': CFG) : CFG =
@@ -761,15 +774,15 @@ let renameBlock (state: RenamingState) (block: BasicBlock) : BasicBlock * Renami
 let updatePhiSourcesForSuccessors (cfg: CFG) (currentLabel: Label) (state: RenamingState) : CFG =
     let block = Map.find currentLabel cfg.Blocks
 
-    // Get successor labels
-    let successors =
+    // Get successor labels from terminator
+    let terminatorSuccessors =
         match block.Terminator with
         | Ret _ -> []
         | Jump target -> [target]
         | Branch (_, trueLabel, falseLabel) -> [trueLabel; falseLabel]
 
     // For each successor, update phi nodes that come from currentLabel
-    successors
+    terminatorSuccessors
     |> List.fold (fun cfg' succLabel ->
         let succBlock = Map.find succLabel cfg'.Blocks
         let instrs' =
@@ -866,7 +879,8 @@ let convertFunctionToSSA (func: Function) : Function =
 
 
     // Insert phi nodes (only for live variables)
-    let cfgWithPhis = insertPhiNodes cfg df preds liveIn func.Name
+    // Pass function params so they're treated as defined at entry (for self-recursive functions)
+    let cfgWithPhis = insertPhiNodes cfg df preds liveIn func.Params
 
     // Rename variables
     let ssaCFG = renameCFG cfgWithPhis idoms

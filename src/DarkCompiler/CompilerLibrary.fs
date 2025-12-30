@@ -800,9 +800,38 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                         let t = System.Math.Round(mirTime, 1)
                         println $"        {t}ms"
 
+                    // Pass 3.1: SSA Construction (user code only)
+                    if verbosity >= 1 then println "  [3.1/8] SSA Construction (user only)..."
+                    let userSsaProgram = SSA_Construction.convertToSSA userMirProgram
+
+                    let ssaTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(ssaTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 3.5: MIR Optimizations (user code only)
+                    if verbosity >= 1 then println "  [3.5/8] MIR Optimizations (user only)..."
+                    let userOptimizedProgram =
+                        if options.DisableMIROpt then userSsaProgram
+                        else MIR_Optimize.optimizeProgram userSsaProgram
+
+                    let mirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(mirOptTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 3.9: SSA Destruction (convert phi nodes to copies)
+                    if verbosity >= 1 then println "  [3.9/8] SSA Destruction (user only)..."
+                    let userDestructedProgram = SSA_Destruction.destructSSA userOptimizedProgram
+
+                    let ssaDestructTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime - mirOptTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(ssaDestructTime, 1)
+                        println $"        {t}ms"
+
                     // Pass 4: MIR → LIR (user code only)
                     if verbosity >= 1 then println "  [4/8] MIR → LIR (user only)..."
-                    let userLirResult = MIR_to_LIR.toLIR userMirProgram
+                    let userLirResult = MIR_to_LIR.toLIR userDestructedProgram
 
                     match userLirResult with
                     | Error err ->
@@ -1111,9 +1140,23 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                           ErrorMessage = Some $"MIR conversion error: {err}" }
                     | Ok (userMirProgram, _) ->
 
+                    // Pass 3.1: SSA Construction (user code only)
+                    if verbosity >= 1 then println "  [3.1/8] SSA Construction (user only)..."
+                    let userSsaProgram = SSA_Construction.convertToSSA userMirProgram
+
+                    // Pass 3.5: MIR Optimizations (user code only)
+                    if verbosity >= 1 then println "  [3.5/8] MIR Optimizations (user only)..."
+                    let userOptimizedProgram =
+                        if options.DisableMIROpt then userSsaProgram
+                        else MIR_Optimize.optimizeProgram userSsaProgram
+
+                    // Pass 3.9: SSA Destruction (convert phi nodes to copies)
+                    if verbosity >= 1 then println "  [3.9/8] SSA Destruction (user only)..."
+                    let userDestructedProgram = SSA_Destruction.destructSSA userOptimizedProgram
+
                     // Pass 4: MIR → LIR (user code only)
                     if verbosity >= 1 then println "  [4/8] MIR → LIR (user only)..."
-                    let userLirResult = MIR_to_LIR.toLIR userMirProgram
+                    let userLirResult = MIR_to_LIR.toLIR userDestructedProgram
 
                     match userLirResult with
                     | Error err ->

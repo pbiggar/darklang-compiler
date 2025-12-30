@@ -478,6 +478,7 @@ type CFGBuilder = {
     TypeReg: Map<string, (string * AST.Type) list>
     ReturnTypeReg: Map<string, AST.Type>  // Function name -> return type
     FuncName: string  // For generating unique labels per function
+    ParamRegs: MIR.VReg list  // Parameter VRegs for self-recursive tail call loop optimization
     FloatRegs: Set<int>  // VReg IDs that hold float values
     // Coverage support
     EnableCoverage: bool
@@ -633,6 +634,73 @@ let rec convertExpr
             let builder' = { builder with Blocks = Map.add currentLabel block builder.Blocks }
             Ok (operand, builder'))
 
+    // Self-recursive tail call: emit Movs to update params + Jump to loop header
+    // This must come before the general Let case to take precedence
+    // IMPORTANT: Skip for functions with float parameters - SSA phi nodes don't carry type info,
+    // so float phis would be incorrectly converted to integer registers.
+    | ANF.Let (_, ANF.TailCall (funcName, args), _) when funcName = builder.FuncName ->
+        let argTypes = args |> List.map (atomType builder)
+        let hasFloatParams = argTypes |> List.exists (fun t -> t = AST.TFloat64)
+        if hasFloatParams then
+            // Fall through to regular TailCall handling for float functions
+            let returnType = Map.tryFind funcName builder.ReturnTypeReg |> Option.defaultValue AST.TInt64
+            args
+            |> List.map (atomToOperand builder)
+            |> sequenceResults
+            |> Result.bind (fun argOperands ->
+                let tailCallInstr = MIR.TailCall (funcName, argOperands, argTypes, returnType)
+                let block = {
+                    MIR.Label = currentLabel
+                    MIR.Instrs = currentInstrs @ [tailCallInstr]
+                    // TailCall never returns, but we need a terminator - use Ret as placeholder
+                    MIR.Terminator = MIR.Ret (MIR.IntConst 0L)
+                }
+                let builder' = { builder with Blocks = Map.add currentLabel block builder.Blocks }
+                Ok (MIR.IntConst 0L, builder'))
+        else
+            // Integer-only function: use self-recursion optimization
+            args
+            |> List.map (atomToOperand builder)
+            |> sequenceResults
+            |> Result.bind (fun argOperands ->
+                let loopLabel = MIR.Label $"{funcName}_body"
+                // To handle register swaps correctly (e.g., swapInt(b, a, n-1)),
+                // we must capture all new argument values into fresh temps BEFORE
+                // writing to any parameter register. This ensures SSA sees the
+                // OLD values of all args before any params are redefined.
+                //
+                // Example swap: args = [b, a] for params [a, b]
+                //   temp0 = b  // capture old value of b
+                //   temp1 = a  // capture old value of a (before a is overwritten!)
+                //   a = temp0  // assign new values
+                //   b = temp1
+                let (tempRegs, regGen') =
+                    argOperands
+                    |> List.fold (fun (temps, rg) _ ->
+                        let (temp, rg') = MIR.freshReg rg
+                        (temps @ [temp], rg')
+                    ) ([], builder.RegGen)
+                // First capture all arg values into temps
+                let captureInstrs =
+                    List.zip3 tempRegs argOperands argTypes
+                    |> List.map (fun (temp, argOp, argType) ->
+                        MIR.Mov (temp, argOp, Some argType))
+                // Then assign temps to params
+                let assignInstrs =
+                    List.zip3 builder.ParamRegs tempRegs argTypes
+                    |> List.map (fun (paramReg, temp, argType) ->
+                        MIR.Mov (paramReg, MIR.Register temp, Some argType))
+                let paramAssignments = captureInstrs @ assignInstrs
+                // Create block with accumulated instructions + param assignments + Jump
+                let block = {
+                    MIR.Label = currentLabel
+                    MIR.Instrs = currentInstrs @ paramAssignments
+                    MIR.Terminator = MIR.Jump loopLabel
+                }
+                let builder' = { builder with Blocks = Map.add currentLabel block builder.Blocks; RegGen = regGen' }
+                // Return dummy operand since this doesn't return
+                Ok (MIR.IntConst 0L, builder'))
+
     | ANF.Let (tempId, cexpr, rest) ->
         // Let binding: handle based on cexpr type
         let destReg = tempToVReg tempId
@@ -762,7 +830,8 @@ let rec convertExpr
                         |> Result.map (fun argOperands ->
                             [MIR.ClosureCall (destReg, closureOp, argOperands)]))
                 | ANF.TailCall (funcName, args) ->
-                    // Tail call: no destination register, doesn't return
+                    // Non-self-recursive tail call (self-recursive handled specially above)
+                    // Emits TailCall instruction with full epilogue + branch
                     let argTypes = args |> List.map (atomType builder)
                     let returnType = Map.tryFind funcName builder.ReturnTypeReg |> Option.defaultValue AST.TInt64
                     args
@@ -985,6 +1054,7 @@ let rec convertExpr
             TypeReg = builder.TypeReg
             ReturnTypeReg = builder.ReturnTypeReg
             FuncName = builder.FuncName
+            ParamRegs = builder.ParamRegs
             FloatRegs = builder.FloatRegs
             EnableCoverage = builder.EnableCoverage
             ExprIdGen = builder.ExprIdGen
@@ -996,14 +1066,25 @@ let rec convertExpr
         | Error err -> Error err
         | Ok (thenResult, thenJoinOpt, builder2) ->
 
+        // Helper: check if a block is a self-recursive loop-back (jumps to _body label)
+        // Such blocks should NOT be patched as they are terminal control flow
+        let isLoopBackBlock (block: MIR.BasicBlock) =
+            match block.Terminator with
+            | MIR.Jump (MIR.Label label) when label.EndsWith("_body") -> true
+            | _ -> false
+
         // If then-branch created blocks (nested if), patch its join block
         // Otherwise, create a simple block that moves result and jumps
+        // EXCEPTION: If the block is a self-recursive loop-back, don't patch it
         let thenResultType = operandType builder2 thenResult
         let builder3 =
             match thenJoinOpt with
             | Some nestedJoinLabel ->
                 // Patch the nested join block to jump to our join instead of returning
                 match Map.tryFind nestedJoinLabel builder2.Blocks with
+                | Some nestedJoinBlock when isLoopBackBlock nestedJoinBlock ->
+                    // Self-recursive loop-back: don't patch, it's already terminal
+                    builder2
                 | Some nestedJoinBlock ->
                     let patchedBlock = {
                         nestedJoinBlock with
@@ -1032,6 +1113,9 @@ let rec convertExpr
             match elseJoinOpt with
             | Some nestedJoinLabel ->
                 match Map.tryFind nestedJoinLabel builder4.Blocks with
+                | Some nestedJoinBlock when isLoopBackBlock nestedJoinBlock ->
+                    // Self-recursive loop-back: don't patch, it's already terminal
+                    builder4
                 | Some nestedJoinBlock ->
                     let patchedBlock = {
                         nestedJoinBlock with
@@ -1089,6 +1173,76 @@ and convertExprToOperand
                 }
                 let builder' = { builder with Blocks = Map.add startLabel block builder.Blocks }
                 Ok (operand, Some startLabel, builder'))
+
+    // Self-recursive tail call: emit Movs to update params + Jump to loop header
+    // This must come before the general Let case to take precedence
+    // IMPORTANT: Skip for functions with float parameters - SSA phi nodes don't carry type info,
+    // so float phis would be incorrectly converted to integer registers.
+    // TODO: Add type info to MIR.Phi to support float parameters in self-recursion
+    | ANF.Let (_, ANF.TailCall (funcName, args), _) when funcName = builder.FuncName ->
+        let argTypes = args |> List.map (atomType builder)
+        let hasFloatParams = argTypes |> List.exists (fun t -> t = AST.TFloat64)
+        if hasFloatParams then
+            // Fall through to regular TailCall handling for float functions
+            // until phi nodes support type information
+            let returnType = Map.tryFind funcName builder.ReturnTypeReg |> Option.defaultValue AST.TInt64
+            args
+            |> List.map (atomToOperand builder)
+            |> sequenceResults
+            |> Result.bind (fun argOperands ->
+                let tailCallInstr = MIR.TailCall (funcName, argOperands, argTypes, returnType)
+                let block = {
+                    MIR.Label = startLabel
+                    MIR.Instrs = startInstrs @ [tailCallInstr]
+                    // TailCall never returns, but we need a terminator - use Ret as placeholder
+                    MIR.Terminator = MIR.Ret (MIR.IntConst 0L)
+                }
+                let builder' = { builder with Blocks = Map.add startLabel block builder.Blocks }
+                Ok (MIR.IntConst 0L, Some startLabel, builder'))
+        else
+            // Integer-only function: use self-recursion optimization
+            args
+            |> List.map (atomToOperand builder)
+            |> sequenceResults
+            |> Result.bind (fun argOperands ->
+                let loopLabel = MIR.Label $"{funcName}_body"
+                // To handle register swaps correctly (e.g., swapInt(b, a, n-1)),
+                // we must capture all new argument values into fresh temps BEFORE
+                // writing to any parameter register. This ensures SSA sees the
+                // OLD values of all args before any params are redefined.
+                //
+                // Example swap: args = [b, a] for params [a, b]
+                //   temp0 = b  // capture old value of b
+                //   temp1 = a  // capture old value of a (before a is overwritten!)
+                //   a = temp0  // assign new values
+                //   b = temp1
+                let (tempRegs, regGen') =
+                    argOperands
+                    |> List.fold (fun (temps, rg) _ ->
+                        let (temp, rg') = MIR.freshReg rg
+                        (temps @ [temp], rg')
+                    ) ([], builder.RegGen)
+                // First capture all arg values into temps
+                let captureInstrs =
+                    List.zip3 tempRegs argOperands argTypes
+                    |> List.map (fun (temp, argOp, argType) ->
+                        MIR.Mov (temp, argOp, Some argType))
+                // Then assign temps to params
+                let assignInstrs =
+                    List.zip3 builder.ParamRegs tempRegs argTypes
+                    |> List.map (fun (paramReg, temp, argType) ->
+                        MIR.Mov (paramReg, MIR.Register temp, Some argType))
+                let paramAssignments = captureInstrs @ assignInstrs
+                // Create block with accumulated instructions + param assignments + Jump
+                let block = {
+                    MIR.Label = startLabel
+                    MIR.Instrs = startInstrs @ paramAssignments
+                    MIR.Terminator = MIR.Jump loopLabel
+                }
+                let builder' = { builder with Blocks = Map.add startLabel block builder.Blocks; RegGen = regGen' }
+                // Return Some startLabel to tell the caller we created a block that's terminal
+                // (jumps back to loop header). The caller should not try to patch this block.
+                Ok (MIR.IntConst 0L, Some startLabel, builder'))
 
     | ANF.Let (tempId, cexpr, rest) ->
         let destReg = tempToVReg tempId
@@ -1210,7 +1364,8 @@ and convertExprToOperand
                         |> Result.map (fun argOperands ->
                             [MIR.ClosureCall (destReg, closureOp, argOperands)]))
                 | ANF.TailCall (funcName, args) ->
-                    // Tail call: no destination register, doesn't return
+                    // Non-self-recursive tail call (self-recursive handled specially above)
+                    // Emits TailCall instruction with full epilogue + branch
                     let argTypes = args |> List.map (atomType builder)
                     let returnType = Map.tryFind funcName builder.ReturnTypeReg |> Option.defaultValue AST.TInt64
                     args
@@ -1421,11 +1576,19 @@ and convertExprToOperand
                 TypeReg = builder.TypeReg
                 ReturnTypeReg = builder.ReturnTypeReg
                 FuncName = builder.FuncName
+                ParamRegs = builder.ParamRegs
                 FloatRegs = builder.FloatRegs
                 EnableCoverage = builder.EnableCoverage
                 ExprIdGen = builder.ExprIdGen
                 CoverageMapping = builder.CoverageMapping
             }
+
+            // Helper: check if a block is a self-recursive loop-back (jumps to _body label)
+            // Such blocks should NOT be patched as they are terminal control flow
+            let isLoopBackBlock (block: MIR.BasicBlock) =
+                match block.Terminator with
+                | MIR.Jump (MIR.Label label) when label.EndsWith("_body") -> true
+                | _ -> false
 
             // Convert then-branch
             match convertExprToOperand thenBranch thenLabel [] builder1 with
@@ -1434,12 +1597,16 @@ and convertExprToOperand
 
             // If then-branch created blocks (nested if), patch its join block
             // Otherwise, create a simple block that moves result and jumps
+            // EXCEPTION: If the block is a self-recursive loop-back, don't patch it
             let thenResultType = operandType builder2 thenResult
             let builder3 =
                 match thenJoinOpt with
                 | Some nestedJoinLabel ->
                     // Patch the nested join block to jump to our join instead of returning
                     match Map.tryFind nestedJoinLabel builder2.Blocks with
+                    | Some nestedJoinBlock when isLoopBackBlock nestedJoinBlock ->
+                        // Self-recursive loop-back: don't patch, it's already terminal
+                        builder2
                     | Some nestedJoinBlock ->
                         let patchedBlock = {
                             nestedJoinBlock with
@@ -1468,6 +1635,9 @@ and convertExprToOperand
                 match elseJoinOpt with
                 | Some nestedJoinLabel ->
                     match Map.tryFind nestedJoinLabel builder4.Blocks with
+                    | Some nestedJoinBlock when isLoopBackBlock nestedJoinBlock ->
+                        // Self-recursive loop-back: don't patch, it's already terminal
+                        builder4
                     | Some nestedJoinBlock ->
                         let patchedBlock = {
                             nestedJoinBlock with
@@ -1516,6 +1686,11 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
         else
             Set.empty
 
+    // Convert ANF parameter TempIds to MIR VRegs
+    // Must use tempToVReg to preserve the TempId values, not fresh VRegs,
+    // because the body uses Var (TempId n) which converts to VReg n
+    let paramVRegs = anfFunc.Params |> List.map tempToVReg
+
     // Create initial builder with lookups
     let initialBuilder = {
         RegGen = regGen
@@ -1527,6 +1702,7 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
         TypeReg = typeReg
         ReturnTypeReg = returnTypeReg
         FuncName = anfFunc.Name
+        ParamRegs = paramVRegs  // For self-recursive tail call loop optimization
         FloatRegs = floatParamIds
         EnableCoverage = enableCoverage
         ExprIdGen = ANF.initialExprIdGen
@@ -1535,11 +1711,6 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
 
     // Create entry label for CFG (internal to function body)
     let entryLabel = MIR.Label $"{anfFunc.Name}_body"
-
-    // Convert ANF parameter TempIds to MIR VRegs
-    // Must use tempToVReg to preserve the TempId values, not fresh VRegs,
-    // because the body uses Var (TempId n) which converts to VReg n
-    let paramVRegs = anfFunc.Params |> List.map tempToVReg
 
     // Get parameter types from funcParamTypes (already extracted from typeReg)
     let paramTypes =
@@ -1578,14 +1749,29 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
 
     let returnType = getReturnType floatParamIds anfFunc.Body
 
+    // For self-recursive functions, we need a separate entry block that jumps to the body.
+    // This allows the body to be a proper loop header with two predecessors:
+    // 1. The entry block (first call with initial param values)
+    // 2. The recursive block (back-edge with updated param values)
+    // This structure enables SSA to insert phi nodes at the loop header.
+    let trueEntryLabel = MIR.Label $"{anfFunc.Name}_entry"
+    let entryBlock = {
+        MIR.Label = trueEntryLabel
+        MIR.Instrs = []  // Params are implicitly defined here by calling convention
+        MIR.Terminator = MIR.Jump entryLabel
+    }
+
     // Convert function body to CFG
     match convertExpr anfFunc.Body entryLabel [] initialBuilder with
     | Error err -> Error err
     | Ok (_, finalBuilder) ->
 
+    // Add the entry block to the CFG
+    let allBlocks = Map.add trueEntryLabel entryBlock finalBuilder.Blocks
+
     let cfg = {
-        MIR.Entry = entryLabel
-        MIR.Blocks = finalBuilder.Blocks
+        MIR.Entry = trueEntryLabel
+        MIR.Blocks = allBlocks
     }
 
     let mirFunc = {
@@ -1648,6 +1834,7 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
         TypeReg = typeReg
         ReturnTypeReg = returnTypeReg
         FuncName = "_start"
+        ParamRegs = []  // _start has no params
         FloatRegs = Set.empty
         EnableCoverage = enableCoverage
         ExprIdGen = ANF.initialExprIdGen
