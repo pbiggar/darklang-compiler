@@ -60,6 +60,24 @@ type BlockLiveness = {
 }
 
 // ============================================================================
+// Chordal Graph Coloring Types
+// ============================================================================
+
+/// Interference graph for register allocation
+/// In SSA form, this graph is guaranteed to be chordal
+type InterferenceGraph = {
+    Vertices: Set<int>              // VReg IDs
+    Edges: Map<int, Set<int>>       // Adjacency list (symmetric)
+}
+
+/// Result of graph coloring
+type ColoringResult = {
+    Colors: Map<int, int>           // VRegId → color (0..k-1)
+    Spills: Set<int>                // VRegs that must be spilled
+    ChromaticNumber: int            // Max color used + 1
+}
+
+// ============================================================================
 // Liveness Analysis
 // ============================================================================
 
@@ -498,7 +516,7 @@ let buildLiveIntervals (cfg: LIR.CFG) (liveness: Map<LIR.Label, BlockLiveness>) 
     |> List.sortBy (fun i -> i.Start)
 
 // ============================================================================
-// Linear Scan Register Allocation
+// Register Definitions
 // ============================================================================
 
 /// Caller-saved registers (X1-X8) - preferred for allocation
@@ -522,6 +540,222 @@ let allocatableRegs = callerSavedRegs @ calleeSavedRegs
 /// Check if a register is callee-saved
 let isCalleeSaved (reg: LIR.PhysReg) : bool =
     List.contains reg calleeSavedRegs
+
+// ============================================================================
+// Chordal Graph Coloring Register Allocation
+// ============================================================================
+
+/// Build interference graph from CFG and liveness information
+/// Two variables interfere if they are both live at any program point
+let buildInterferenceGraph (cfg: LIR.CFG) (liveness: Map<LIR.Label, BlockLiveness>) : InterferenceGraph =
+    let mutable vertices = Set.empty<int>
+    let mutable edges = Map.empty<int, Set<int>>
+
+    /// Add a vertex to the graph
+    let addVertex (v: int) =
+        vertices <- Set.add v vertices
+        if not (Map.containsKey v edges) then
+            edges <- Map.add v Set.empty edges
+
+    /// Add an edge between two vertices (symmetric)
+    let addEdge (u: int) (v: int) =
+        if u <> v then
+            addVertex u
+            addVertex v
+            edges <- Map.add u (Set.add v (Map.find u edges)) edges
+            edges <- Map.add v (Set.add u (Map.find v edges)) edges
+
+    // For each block, walk backward through instructions
+    // At each point, all live variables interfere with each other
+    for kvp in cfg.Blocks do
+        let block = kvp.Value
+        let label = kvp.Key
+
+        match Map.tryFind label liveness with
+        | None -> ()
+        | Some blockLiveness ->
+            let mutable live = blockLiveness.LiveOut
+
+            // Add all LiveOut variables as vertices
+            for v in live do
+                addVertex v
+
+            // Process terminator
+            let termUses = getTerminatorUsedVRegs block.Terminator
+            for v in termUses do
+                addVertex v
+                live <- Set.add v live
+
+            // All live variables at this point interfere
+            let liveList = Set.toList live
+            for i in 0 .. liveList.Length - 2 do
+                for j in i + 1 .. liveList.Length - 1 do
+                    addEdge liveList.[i] liveList.[j]
+
+            // Walk instructions backward
+            for instr in List.rev block.Instrs do
+                // Get definition and uses
+                let def = getDefinedVReg instr
+                let uses = getUsedVRegs instr
+
+                // Definition kills liveness
+                match def with
+                | Some d ->
+                    addVertex d
+                    // The defined variable interferes with all currently live (except itself)
+                    for v in live do
+                        if v <> d then
+                            addEdge d v
+                    live <- Set.remove d live
+                | None -> ()
+
+                // Uses make variables live
+                for u in uses do
+                    addVertex u
+                    live <- Set.add u live
+
+                // All live variables interfere
+                let liveList = Set.toList live
+                for i in 0 .. liveList.Length - 2 do
+                    for j in i + 1 .. liveList.Length - 1 do
+                        addEdge liveList.[i] liveList.[j]
+
+    { Vertices = vertices; Edges = edges }
+
+/// Maximum Cardinality Search - computes Perfect Elimination Ordering for chordal graphs
+/// Returns vertices in PEO order (first vertex is most "central")
+let maximumCardinalitySearch (graph: InterferenceGraph) : int list =
+    if Set.isEmpty graph.Vertices then
+        []
+    else
+        let n = Set.count graph.Vertices
+        let vertexList = Set.toArray graph.Vertices
+        let vertexToIdx = vertexList |> Array.mapi (fun i v -> (v, i)) |> Map.ofArray
+
+        // Track weights and ordered status
+        let weights = Array.zeroCreate<int> n
+        let ordered = Array.create n false
+        let mutable ordering = []
+
+        // Simple O(V^2) implementation - can optimize with buckets later
+        for _ in 0 .. n - 1 do
+            // Find unordered vertex with maximum weight
+            let mutable maxWeight = -1
+            let mutable maxVertex = -1
+            for i in 0 .. n - 1 do
+                if not ordered.[i] && weights.[i] > maxWeight then
+                    maxWeight <- weights.[i]
+                    maxVertex <- i
+
+            // Mark as ordered
+            ordered.[maxVertex] <- true
+            ordering <- vertexList.[maxVertex] :: ordering
+
+            // Increment weights of unordered neighbors
+            let v = vertexList.[maxVertex]
+            match Map.tryFind v graph.Edges with
+            | Some neighbors ->
+                for u in neighbors do
+                    match Map.tryFind u vertexToIdx with
+                    | Some idx when not ordered.[idx] ->
+                        weights.[idx] <- weights.[idx] + 1
+                    | _ -> ()
+            | None -> ()
+
+        List.rev ordering  // Return in PEO order
+
+/// Greedy color in reverse PEO order
+/// For chordal graphs, this produces an optimal coloring
+let greedyColorReverse (graph: InterferenceGraph) (peo: int list) (precolored: Map<int, int>) (numColors: int) : ColoringResult =
+    let mutable colors = precolored
+    let mutable spills = Set.empty<int>
+    let mutable maxColor = -1
+
+    // Update maxColor from pre-colored vertices
+    for kvp in precolored do
+        if kvp.Value > maxColor then
+            maxColor <- kvp.Value
+
+    // Process in REVERSE PEO order
+    for v in List.rev peo do
+        if not (Map.containsKey v colors) then
+            // Find colors used by already-colored neighbors
+            let neighbors = Map.tryFind v graph.Edges |> Option.defaultValue Set.empty
+            let usedColors =
+                neighbors
+                |> Set.toList
+                |> List.choose (fun u -> Map.tryFind u colors)
+                |> Set.ofList
+
+            // Find smallest available color
+            let mutable assigned = false
+            for c in 0 .. numColors - 1 do
+                if not assigned && not (Set.contains c usedColors) then
+                    colors <- Map.add v c colors
+                    if c > maxColor then maxColor <- c
+                    assigned <- true
+
+            // If no color available, mark for spill
+            if not assigned then
+                spills <- Set.add v spills
+
+    { Colors = colors
+      Spills = spills
+      ChromaticNumber = if maxColor < 0 then 0 else maxColor + 1 }
+
+/// Main chordal graph coloring function
+let chordalGraphColor (graph: InterferenceGraph) (precolored: Map<int, int>) (numColors: int) : ColoringResult =
+    if Set.isEmpty graph.Vertices then
+        { Colors = Map.empty; Spills = Set.empty; ChromaticNumber = 0 }
+    else
+        let peo = maximumCardinalitySearch graph
+        greedyColorReverse graph peo precolored numColors
+
+/// Convert chordal graph coloring result to allocation result
+/// Colors map to physical registers, spills map to stack slots
+let coloringToAllocation (colorResult: ColoringResult) (registers: LIR.PhysReg list) : AllocationResult =
+    let mutable mapping = Map.empty<int, Allocation>
+    let mutable nextStackSlot = -8
+    let mutable usedCalleeSaved = Set.empty<LIR.PhysReg>
+
+    // Map colored vertices to physical registers
+    for kvp in colorResult.Colors do
+        let vregId = kvp.Key
+        let color = kvp.Value
+        if color < List.length registers then
+            let reg = List.item color registers
+            mapping <- Map.add vregId (PhysReg reg) mapping
+            // Track callee-saved register usage
+            if List.contains reg [LIR.X19; LIR.X20; LIR.X21; LIR.X22; LIR.X23; LIR.X24; LIR.X25; LIR.X26] then
+                usedCalleeSaved <- Set.add reg usedCalleeSaved
+        else
+            // Color out of range - treat as spill
+            mapping <- Map.add vregId (StackSlot nextStackSlot) mapping
+            nextStackSlot <- nextStackSlot - 8
+
+    // Map spilled vertices to stack slots
+    for vregId in colorResult.Spills do
+        mapping <- Map.add vregId (StackSlot nextStackSlot) mapping
+        nextStackSlot <- nextStackSlot - 8
+
+    // Compute 16-byte aligned stack size
+    let stackSize =
+        if nextStackSlot = -8 then 0
+        else ((abs nextStackSlot + 15) / 16) * 16
+
+    { Mapping = mapping
+      StackSize = stackSize
+      UsedCalleeSaved = usedCalleeSaved |> Set.toList |> List.sort }
+
+/// Run chordal graph coloring register allocation
+let chordalAllocation (cfg: LIR.CFG) (liveness: Map<LIR.Label, BlockLiveness>) : AllocationResult =
+    let graph = buildInterferenceGraph cfg liveness
+    let colorResult = chordalGraphColor graph Map.empty (List.length allocatableRegs)
+    coloringToAllocation colorResult allocatableRegs
+
+// ============================================================================
+// Linear Scan Register Allocation (kept for reference, not used)
+// ============================================================================
 
 /// Get the caller-saved physical registers that contain live values
 let getLiveCallerSavedRegs (liveVRegs: Set<int>) (mapping: Map<int, Allocation>) : LIR.PhysReg list =
@@ -1523,11 +1757,12 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
     // Step 1: Compute liveness
     let liveness = computeLiveness func.CFG
 
-    // Step 2: Build live intervals
-    let intervals = buildLiveIntervals func.CFG liveness
+    // Step 2: Build interference graph
+    let graph = buildInterferenceGraph func.CFG liveness
 
-    // Step 3: Run linear scan allocation
-    let result = linearScan intervals
+    // Step 3: Run chordal graph coloring
+    let colorResult = chordalGraphColor graph Map.empty (List.length allocatableRegs)
+    let result = coloringToAllocation colorResult allocatableRegs
 
     // Step 4: Build parameter info with separate int/float counters (AAPCS64)
     // Each parameter type uses its own register counter
@@ -1546,22 +1781,60 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
     let floatParams = List.rev floatParams
 
     // Step 5: Build mapping that copies INT parameters from X0-X7
-    // to wherever linearScan allocated them
-    let intParamCopyInstrs =
+    // to wherever chordal graph coloring allocated them.
+    // IMPORTANT: Use proper parallel move resolution to handle cycles!
+    // (e.g., X1→X2 and X2→X1 require a temp register)
+    let intParamMoves =
         intParams
-        |> List.map (fun (reg, paramIdx) ->
+        |> List.choose (fun (reg, paramIdx) ->
             match reg with
             | LIR.Virtual id ->
                 let paramReg = List.item paramIdx parameterRegs
                 match Map.tryFind id result.Mapping with
                 | Some (PhysReg allocatedReg) when allocatedReg <> paramReg ->
-                    Some (LIR.Mov (LIR.Physical allocatedReg, LIR.Reg (LIR.Physical paramReg)))
+                    // Need to copy from paramReg to allocatedReg
+                    Some (allocatedReg, LIR.Reg (LIR.Physical paramReg))
+                | Some (StackSlot offset) ->
+                    // Store to stack - not a register move, handle separately
+                    None // We'll handle stack stores separately
+                | _ -> None // Same register or not in mapping
+            | LIR.Physical _ -> None)
+
+    // Collect stack stores separately (they don't conflict with register moves)
+    let intParamStackStores =
+        intParams
+        |> List.choose (fun (reg, paramIdx) ->
+            match reg with
+            | LIR.Virtual id ->
+                let paramReg = List.item paramIdx parameterRegs
+                match Map.tryFind id result.Mapping with
                 | Some (StackSlot offset) ->
                     Some (LIR.Store (offset, LIR.Physical paramReg))
                 | _ -> None
             | LIR.Physical _ -> None)
-        |> List.choose id
-        |> List.rev  // Reverse to avoid clobbering
+
+    // Use parallel move resolution for register-to-register moves
+    let getSrcReg (op: LIR.Operand) : LIR.PhysReg option =
+        match op with
+        | LIR.Reg (LIR.Physical r) -> Some r
+        | _ -> None
+
+    let moveActions = ParallelMoves.resolve intParamMoves getSrcReg
+
+    // Convert move actions to LIR instructions using X16 as temp register
+    let regMoveInstrs =
+        moveActions
+        |> List.collect (fun action ->
+            match action with
+            | ParallelMoves.SaveToTemp reg ->
+                [LIR.Mov (LIR.Physical LIR.X16, LIR.Reg (LIR.Physical reg))]
+            | ParallelMoves.Move (dest, src) ->
+                [LIR.Mov (LIR.Physical dest, src)]
+            | ParallelMoves.MoveFromTemp dest ->
+                [LIR.Mov (LIR.Physical dest, LIR.Reg (LIR.Physical LIR.X16))])
+
+    // Combine register moves and stack stores
+    let intParamCopyInstrs = regMoveInstrs @ intParamStackStores
 
     // Step 6: Build mapping that copies FLOAT parameters from D0-D7
     // Float parameters use FVirtual registers (same ID as Virtual)

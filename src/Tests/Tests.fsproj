@@ -34,6 +34,7 @@
     <Compile Include="CriticalEdgeTests.fs" />
     <Compile Include="SSALivenessTests.fs" />
     <Compile Include="PhiResolutionTests.fs" />
+    <Compile Include="ChordalGraphTests.fs" />
 
     <!-- Test Runner (must be last) -->
     <Compile Include="TestRunner.fs" />

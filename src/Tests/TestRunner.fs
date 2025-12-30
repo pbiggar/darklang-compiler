@@ -883,6 +883,30 @@ let main args =
             failed <- failed + 1
             sectionFailed <- sectionFailed + 1
 
+    if matchesFilter filter "Chordal Graph Tests" then
+        let chordalGraphTestTimer = Stopwatch.StartNew()
+        let results = ChordalGraphTests.runAllTests()
+        let failures = results |> List.filter (fun (_, r) -> match r with Error _ -> true | Ok _ -> false)
+        chordalGraphTestTimer.Stop()
+        if List.isEmpty failures then
+            println $"  {Colors.green}✓ Chordal Graph Tests{Colors.reset} {Colors.gray}({formatTime chordalGraphTestTimer.Elapsed}){Colors.reset}"
+            passed <- passed + List.length results
+            sectionPassed <- sectionPassed + List.length results
+        else
+            println $"  {Colors.red}✗ FAIL: Chordal graph tests{Colors.reset} {Colors.gray}({formatTime chordalGraphTestTimer.Elapsed}){Colors.reset}"
+            for (name, result) in failures do
+                match result with
+                | Error msg ->
+                    println $"    {name}: {msg}"
+                    failedTests.Add({ Name = $"Unit: Chordal Graph - {name}"; Message = msg; Details = [] })
+                    failed <- failed + 1
+                    sectionFailed <- sectionFailed + 1
+                | Ok _ -> ()
+            // Count passed tests
+            let passedCount = results |> List.filter (fun (_, r) -> match r with Ok _ -> true | Error _ -> false) |> List.length
+            passed <- passed + passedCount
+            sectionPassed <- sectionPassed + passedCount
+
     sectionTimer.Stop()
     if sectionFailed = 0 then
         println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
