@@ -438,9 +438,14 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         ARM64.STRB_reg (ARM64.X15, ARM64.X12)  // [X12] = byte
                         ARM64.ADD_imm (ARM64.X13, ARM64.X13, 1us)  // X13++
                         ARM64.B (-7)  // Loop back to CMP
-                        // Store refcount
-                        ARM64.ADD_imm (ARM64.X12, destReg, 8us)
-                        ARM64.ADD_reg (ARM64.X12, ARM64.X12, ARM64.X10)  // X12 = dest + 8 + len
+                        // Store refcount at aligned offset
+                        // aligned(x) = ((x + 7) >> 3) << 3
+                        ARM64.ADD_imm (ARM64.X12, ARM64.X10, 7us)        // X12 = len + 7
+                        ARM64.MOVZ (ARM64.X15, 3us, 0)                   // X15 = 3
+                        ARM64.LSR_reg (ARM64.X12, ARM64.X12, ARM64.X15)  // X12 = (len + 7) >> 3
+                        ARM64.LSL_reg (ARM64.X12, ARM64.X12, ARM64.X15)  // X12 = aligned(len)
+                        ARM64.ADD_imm (ARM64.X15, destReg, 8us)          // X15 = dest + 8
+                        ARM64.ADD_reg (ARM64.X12, ARM64.X15, ARM64.X12)  // X12 = dest + 8 + aligned(len)
                         ARM64.MOVZ (ARM64.X15, 1us, 0)
                         ARM64.STR (ARM64.X15, ARM64.X12, 0s)  // [X12] = 1
                     ])
@@ -1331,9 +1336,14 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         ARM64.STRB_reg (ARM64.X15, ARM64.X12)  // [X12] = byte
                         ARM64.ADD_imm (ARM64.X13, ARM64.X13, 1us)  // X13++
                         ARM64.B (-7)  // Loop back to CMP
-                        // Store refcount
-                        ARM64.ADD_imm (ARM64.X12, destARM64, 8us)
-                        ARM64.ADD_reg (ARM64.X12, ARM64.X12, ARM64.X10)  // X12 = dest + 8 + len
+                        // Store refcount at aligned offset
+                        // aligned(x) = ((x + 7) >> 3) << 3
+                        ARM64.ADD_imm (ARM64.X12, ARM64.X10, 7us)        // X12 = len + 7
+                        ARM64.MOVZ (ARM64.X15, 3us, 0)                   // X15 = 3
+                        ARM64.LSR_reg (ARM64.X12, ARM64.X12, ARM64.X15)  // X12 = (len + 7) >> 3
+                        ARM64.LSL_reg (ARM64.X12, ARM64.X12, ARM64.X15)  // X12 = aligned(len)
+                        ARM64.ADD_imm (ARM64.X15, destARM64, 8us)        // X15 = dest + 8
+                        ARM64.ADD_reg (ARM64.X12, ARM64.X15, ARM64.X12)  // X12 = dest + 8 + aligned(len)
                         ARM64.MOVZ (ARM64.X15, 1us, 0)
                         ARM64.STR (ARM64.X15, ARM64.X12, 0s)  // [X12] = 1
                     ])
@@ -1925,10 +1935,15 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         ARM64.ADD_reg (ARM64.X13, ARM64.X10, ARM64.X12)  // X13 = len1 + len2
                     ]
 
-                    // Store refcount=1 at [X14+8+total]
+                    // Store refcount=1 at [X14+8+aligned(total)]
+                    // where aligned(x) = ((x + 7) >> 3) << 3
                     let storeRefcount = [
-                        ARM64.ADD_imm (ARM64.X15, ARM64.X14, 8us)        // X15 = X14 + 8
-                        ARM64.ADD_reg (ARM64.X15, ARM64.X15, ARM64.X13)  // X15 = X14 + 8 + total
+                        ARM64.ADD_imm (ARM64.X15, ARM64.X13, 7us)        // X15 = total + 7
+                        ARM64.MOVZ (ARM64.X16, 3us, 0)                   // X16 = 3 (shift amount)
+                        ARM64.LSR_reg (ARM64.X15, ARM64.X15, ARM64.X16)  // X15 = (total + 7) >> 3
+                        ARM64.LSL_reg (ARM64.X15, ARM64.X15, ARM64.X16)  // X15 = aligned(total)
+                        ARM64.ADD_imm (ARM64.X16, ARM64.X14, 8us)        // X16 = dest + 8
+                        ARM64.ADD_reg (ARM64.X15, ARM64.X16, ARM64.X15)  // X15 = dest + 8 + aligned(total)
                         ARM64.MOVZ (ARM64.X16, 1us, 0)                   // X16 = 1
                         ARM64.STR (ARM64.X16, ARM64.X15, 0s)             // [X15] = 1
                     ]
@@ -2055,9 +2070,14 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         ARM64.STRB_reg (ARM64.X12, ARM64.X13)  // [X13] = byte
                         ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)  // X0++
                         ARM64.B (-7)  // Loop back
-                        // Store refcount = 1 at [X15 + 8 + len]
-                        ARM64.ADD_imm (ARM64.X13, ARM64.X15, 8us)
-                        ARM64.ADD_reg (ARM64.X13, ARM64.X13, ARM64.X10)  // X13 = X15 + 8 + len
+                        // Store refcount = 1 at [X15 + 8 + aligned(len)]
+                        // aligned(x) = ((x + 7) >> 3) << 3
+                        ARM64.ADD_imm (ARM64.X13, ARM64.X10, 7us)        // X13 = len + 7
+                        ARM64.MOVZ (ARM64.X12, 3us, 0)                   // X12 = 3
+                        ARM64.LSR_reg (ARM64.X13, ARM64.X13, ARM64.X12)  // X13 = (len + 7) >> 3
+                        ARM64.LSL_reg (ARM64.X13, ARM64.X13, ARM64.X12)  // X13 = aligned(len)
+                        ARM64.ADD_imm (ARM64.X12, ARM64.X15, 8us)        // X12 = X15 + 8
+                        ARM64.ADD_reg (ARM64.X13, ARM64.X12, ARM64.X13)  // X13 = X15 + 8 + aligned(len)
                         ARM64.MOVZ (ARM64.X12, 1us, 0)
                         ARM64.STR (ARM64.X12, ARM64.X13, 0s)  // [X13] = 1
                     ] @ Runtime.generateFileExists destReg ARM64.X15)
@@ -2102,9 +2122,14 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                             ARM64.STRB_reg (ARM64.X12, ARM64.X13)
                             ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)
                             ARM64.B (-7)  // Jump back to CMP
-                            // Store refcount = 1 at [tempReg + 8 + len]
-                            ARM64.ADD_imm (ARM64.X13, tempReg, 8us)
-                            ARM64.ADD_reg (ARM64.X13, ARM64.X13, ARM64.X10)
+                            // Store refcount = 1 at [tempReg + 8 + aligned(len)]
+                            // aligned(x) = ((x + 7) >> 3) << 3
+                            ARM64.ADD_imm (ARM64.X13, ARM64.X10, 7us)        // X13 = len + 7
+                            ARM64.MOVZ (ARM64.X12, 3us, 0)                   // X12 = 3
+                            ARM64.LSR_reg (ARM64.X13, ARM64.X13, ARM64.X12)  // X13 = (len + 7) >> 3
+                            ARM64.LSL_reg (ARM64.X13, ARM64.X13, ARM64.X12)  // X13 = aligned(len)
+                            ARM64.ADD_imm (ARM64.X12, tempReg, 8us)          // X12 = tempReg + 8
+                            ARM64.ADD_reg (ARM64.X13, ARM64.X12, ARM64.X13)  // X13 = tempReg + 8 + aligned(len)
                             ARM64.MOVZ (ARM64.X12, 1us, 0)
                             ARM64.STR (ARM64.X12, ARM64.X13, 0s)
                         ], tempReg)
@@ -2151,9 +2176,14 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                             ARM64.STRB_reg (ARM64.X12, ARM64.X13)
                             ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)
                             ARM64.B (-7)  // Jump back to CMP
-                            // Store refcount = 1 at [tempReg + 8 + len]
-                            ARM64.ADD_imm (ARM64.X13, tempReg, 8us)
-                            ARM64.ADD_reg (ARM64.X13, ARM64.X13, ARM64.X10)
+                            // Store refcount = 1 at [tempReg + 8 + aligned(len)]
+                            // aligned(x) = ((x + 7) >> 3) << 3
+                            ARM64.ADD_imm (ARM64.X13, ARM64.X10, 7us)        // X13 = len + 7
+                            ARM64.MOVZ (ARM64.X12, 3us, 0)                   // X12 = 3
+                            ARM64.LSR_reg (ARM64.X13, ARM64.X13, ARM64.X12)  // X13 = (len + 7) >> 3
+                            ARM64.LSL_reg (ARM64.X13, ARM64.X13, ARM64.X12)  // X13 = aligned(len)
+                            ARM64.ADD_imm (ARM64.X12, tempReg, 8us)          // X12 = tempReg + 8
+                            ARM64.ADD_reg (ARM64.X13, ARM64.X12, ARM64.X13)  // X13 = tempReg + 8 + aligned(len)
                             ARM64.MOVZ (ARM64.X12, 1us, 0)
                             ARM64.STR (ARM64.X12, ARM64.X13, 0s)
                         ], tempReg)
@@ -2210,9 +2240,14 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         ARM64.STRB_reg (ARM64.X12, ARM64.X13)  // [X13] = byte
                         ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1us)  // X0++
                         ARM64.B (-7)  // Loop back
-                        // Store refcount = 1 at [X15 + 8 + len]
-                        ARM64.ADD_imm (ARM64.X13, ARM64.X15, 8us)
-                        ARM64.ADD_reg (ARM64.X13, ARM64.X13, ARM64.X10)  // X13 = X15 + 8 + len
+                        // Store refcount = 1 at [X15 + 8 + aligned(len)]
+                        // aligned(x) = ((x + 7) >> 3) << 3
+                        ARM64.ADD_imm (ARM64.X13, ARM64.X10, 7us)        // X13 = len + 7
+                        ARM64.MOVZ (ARM64.X12, 3us, 0)                   // X12 = 3
+                        ARM64.LSR_reg (ARM64.X13, ARM64.X13, ARM64.X12)  // X13 = (len + 7) >> 3
+                        ARM64.LSL_reg (ARM64.X13, ARM64.X13, ARM64.X12)  // X13 = aligned(len)
+                        ARM64.ADD_imm (ARM64.X12, ARM64.X15, 8us)        // X12 = X15 + 8
+                        ARM64.ADD_reg (ARM64.X13, ARM64.X12, ARM64.X13)  // X13 = X15 + 8 + aligned(len)
                         ARM64.MOVZ (ARM64.X12, 1us, 0)
                         ARM64.STR (ARM64.X12, ARM64.X13, 0s)  // [X13] = 1
                     ] @ Runtime.generateFileDelete destReg ARM64.X15)
