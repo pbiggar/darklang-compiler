@@ -27,6 +27,7 @@ module Colors =
 
 // Failed test info for summary at end
 type FailedTestInfo = {
+    File: string
     Name: string
     Message: string
     Details: string list  // Additional details like expected/actual
@@ -278,14 +279,14 @@ let main args =
                                     println $"      {line}"
                                     details.Add($"Actual: {line}")
                             | _ -> ()
-                            failedTests.Add({ Name = $"ANF→MIR: {testName}"; Message = result.Message; Details = details |> Seq.toList })
+                            failedTests.Add({ File = testPath; Name = $"ANF→MIR: {testName}"; Message = result.Message; Details = details |> Seq.toList })
                             failed <- failed + 1
                             sectionFailed <- sectionFailed + 1
                     | Error msg ->
                         testTimer.Stop()
                         println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         println $"    Failed to load test: {msg}"
-                        failedTests.Add({ Name = $"ANF→MIR: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
+                        failedTests.Add({ File = testPath; Name = $"ANF→MIR: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
                         failed <- failed + 1
                         sectionFailed <- sectionFailed + 1
 
@@ -338,14 +339,14 @@ let main args =
                                     println $"      {line}"
                                     details.Add($"Actual: {line}")
                             | _ -> ()
-                            failedTests.Add({ Name = $"MIR→LIR: {testName}"; Message = result.Message; Details = details |> Seq.toList })
+                            failedTests.Add({ File = testPath; Name = $"MIR→LIR: {testName}"; Message = result.Message; Details = details |> Seq.toList })
                             failed <- failed + 1
                             sectionFailed <- sectionFailed + 1
                     | Error msg ->
                         testTimer.Stop()
                         println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         println $"    Failed to load test: {msg}"
-                        failedTests.Add({ Name = $"MIR→LIR: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
+                        failedTests.Add({ File = testPath; Name = $"MIR→LIR: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
                         failed <- failed + 1
                         sectionFailed <- sectionFailed + 1
 
@@ -398,14 +399,14 @@ let main args =
                                     println $"      {line}"
                                     details.Add($"Actual: {line}")
                             | _ -> ()
-                            failedTests.Add({ Name = $"LIR→ARM64: {testName}"; Message = result.Message; Details = details |> Seq.toList })
+                            failedTests.Add({ File = testPath; Name = $"LIR→ARM64: {testName}"; Message = result.Message; Details = details |> Seq.toList })
                             failed <- failed + 1
                             sectionFailed <- sectionFailed + 1
                     | Error msg ->
                         testTimer.Stop()
                         println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         println $"    Failed to load test: {msg}"
-                        failedTests.Add({ Name = $"LIR→ARM64: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
+                        failedTests.Add({ File = testPath; Name = $"LIR→ARM64: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
                         failed <- failed + 1
                         sectionFailed <- sectionFailed + 1
 
@@ -446,14 +447,14 @@ let main args =
                         else
                             println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                             println $"    {result.Message}"
-                            failedTests.Add({ Name = $"ARM64 Encoding: {testName}"; Message = result.Message; Details = [] })
+                            failedTests.Add({ File = testPath; Name = $"ARM64 Encoding: {testName}"; Message = result.Message; Details = [] })
                             failed <- failed + 1
                             sectionFailed <- sectionFailed + 1
                     | Error msg ->
                         testTimer.Stop()
                         println $"{Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                         println $"    Failed to load test: {msg}"
-                        failedTests.Add({ Name = $"ARM64 Encoding: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
+                        failedTests.Add({ File = testPath; Name = $"ARM64 Encoding: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
                         failed <- failed + 1
                         sectionFailed <- sectionFailed + 1
 
@@ -497,13 +498,13 @@ let main args =
                                 print $"  {typeDesc} ({fileName})... "
                                 println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
                                 println $"    {result.Message}"
-                                failedTests.Add({ Name = $"Type Checking: {typeDesc} ({fileName})"; Message = result.Message; Details = [] })
+                                failedTests.Add({ File = testFile; Name = $"Type Checking: {typeDesc} ({fileName})"; Message = result.Message; Details = [] })
                                 sectionFailed <- sectionFailed + 1
                                 failed <- failed + 1
                     | Error msg ->
                         println $"{Colors.red}✗ ERROR parsing {Path.GetFileName testFile}{Colors.reset}"
                         println $"    {msg}"
-                        failedTests.Add({ Name = $"Type Checking: {Path.GetFileName testFile}"; Message = msg; Details = [] })
+                        failedTests.Add({ File = testFile; Name = $"Type Checking: {Path.GetFileName testFile}"; Message = msg; Details = [] })
                         sectionFailed <- sectionFailed + 1
                         failed <- failed + 1
 
@@ -540,7 +541,7 @@ let main args =
                 | Error msg ->
                     println $"{Colors.red}✗ ERROR parsing {Path.GetFileName testFile}{Colors.reset}"
                     println $"    {msg}"
-                    failedTests.Add({ Name = $"Optimization: {Path.GetFileName testFile}"; Message = msg; Details = [] })
+                    failedTests.Add({ File = testFile; Name = $"Optimization: {Path.GetFileName testFile}"; Message = msg; Details = [] })
                     sectionFailed <- sectionFailed + 1
                     failed <- failed + 1
                 | Ok results ->
@@ -565,7 +566,7 @@ let main args =
                                         println $"      {line}"
                                         details.Add($"Actual: {line}")
                                 | _ -> ()
-                                failedTests.Add({ Name = $"Optimization: {test.Name}"; Message = result.Message; Details = details |> Seq.toList })
+                                failedTests.Add({ File = testFile; Name = $"Optimization: {test.Name}"; Message = result.Message; Details = details |> Seq.toList })
                                 sectionFailed <- sectionFailed + 1
                                 failed <- failed + 1
 
@@ -594,13 +595,14 @@ let main args =
                 match TestDSL.E2EFormat.parseE2ETestFile testFile with
                 | Ok tests -> allTests.AddRange(tests)
                 | Error msg ->
-                    parseErrors <- (Path.GetFileName testFile, msg) :: parseErrors
+                    parseErrors <- (testFile, msg) :: parseErrors
 
             // Report parse errors
-            for (fileName, msg) in parseErrors do
+            for (filePath, msg) in parseErrors do
+                let fileName = Path.GetFileName filePath
                 println $"{Colors.red}✗ ERROR parsing {fileName}{Colors.reset}"
                 println $"    {msg}"
-                failedTests.Add({ Name = $"E2E: {fileName}"; Message = msg; Details = [] })
+                failedTests.Add({ File = filePath; Name = $"E2E: {fileName}"; Message = msg; Details = [] })
                 failed <- failed + 1
 
             // Run tests in parallel (dynamically determined based on system resources) and print as they complete (in order)
@@ -707,7 +709,7 @@ let main args =
                             | _ -> ()
 
                             lock lockObj (fun () ->
-                                failedTests.Add({ Name = $"E2E: {test.Name}"; Message = result.Message; Details = details |> Seq.toList })
+                                failedTests.Add({ File = test.SourceFile; Name = $"E2E: {test.Name}"; Message = result.Message; Details = details |> Seq.toList })
                                 failed <- failed + 1
                             )
 
@@ -783,7 +785,7 @@ let main args =
             unitTestTimer.Stop()
             println $"  {Colors.red}✗ FAIL: Encoding tests{Colors.reset} {Colors.gray}({formatTime unitTestTimer.Elapsed}){Colors.reset}"
             println $"    {msg}"
-            failedTests.Add({ Name = "Unit: Encoding Tests"; Message = msg; Details = [] })
+            failedTests.Add({ File = ""; Name = "Unit: Encoding Tests"; Message = msg; Details = [] })
             failed <- failed + 1
             sectionFailed <- sectionFailed + 1
 
@@ -799,7 +801,7 @@ let main args =
             binaryTestTimer.Stop()
             println $"  {Colors.red}✗ FAIL: Binary tests{Colors.reset} {Colors.gray}({formatTime binaryTestTimer.Elapsed}){Colors.reset}"
             println $"    {msg}"
-            failedTests.Add({ Name = "Unit: Binary Tests"; Message = msg; Details = [] })
+            failedTests.Add({ File = ""; Name = "Unit: Binary Tests"; Message = msg; Details = [] })
             failed <- failed + 1
             sectionFailed <- sectionFailed + 1
 
@@ -815,7 +817,7 @@ let main args =
             typeCheckingTestTimer.Stop()
             println $"  {Colors.red}✗ FAIL: Type checking tests{Colors.reset} {Colors.gray}({formatTime typeCheckingTestTimer.Elapsed}){Colors.reset}"
             println $"    {msg}"
-            failedTests.Add({ Name = "Unit: Type Checking Tests"; Message = msg; Details = [] })
+            failedTests.Add({ File = ""; Name = "Unit: Type Checking Tests"; Message = msg; Details = [] })
             failed <- failed + 1
             sectionFailed <- sectionFailed + 1
 
@@ -831,7 +833,7 @@ let main args =
             parallelMoveTestTimer.Stop()
             println $"  {Colors.red}✗ FAIL: Parallel move tests{Colors.reset} {Colors.gray}({formatTime parallelMoveTestTimer.Elapsed}){Colors.reset}"
             println $"    {msg}"
-            failedTests.Add({ Name = "Unit: Parallel Move Tests"; Message = msg; Details = [] })
+            failedTests.Add({ File = ""; Name = "Unit: Parallel Move Tests"; Message = msg; Details = [] })
             failed <- failed + 1
             sectionFailed <- sectionFailed + 1
 
@@ -847,7 +849,7 @@ let main args =
             criticalEdgeTestTimer.Stop()
             println $"  {Colors.red}✗ FAIL: Critical edge tests{Colors.reset} {Colors.gray}({formatTime criticalEdgeTestTimer.Elapsed}){Colors.reset}"
             println $"    {msg}"
-            failedTests.Add({ Name = "Unit: Critical Edge Tests"; Message = msg; Details = [] })
+            failedTests.Add({ File = ""; Name = "Unit: Critical Edge Tests"; Message = msg; Details = [] })
             failed <- failed + 1
             sectionFailed <- sectionFailed + 1
 
@@ -863,7 +865,7 @@ let main args =
             ssaLivenessTestTimer.Stop()
             println $"  {Colors.red}✗ FAIL: SSA liveness tests{Colors.reset} {Colors.gray}({formatTime ssaLivenessTestTimer.Elapsed}){Colors.reset}"
             println $"    {msg}"
-            failedTests.Add({ Name = "Unit: SSA Liveness Tests"; Message = msg; Details = [] })
+            failedTests.Add({ File = ""; Name = "Unit: SSA Liveness Tests"; Message = msg; Details = [] })
             failed <- failed + 1
             sectionFailed <- sectionFailed + 1
 
@@ -879,7 +881,7 @@ let main args =
             phiResolutionTestTimer.Stop()
             println $"  {Colors.red}✗ FAIL: Phi resolution tests{Colors.reset} {Colors.gray}({formatTime phiResolutionTestTimer.Elapsed}){Colors.reset}"
             println $"    {msg}"
-            failedTests.Add({ Name = "Unit: Phi Resolution Tests"; Message = msg; Details = [] })
+            failedTests.Add({ File = ""; Name = "Unit: Phi Resolution Tests"; Message = msg; Details = [] })
             failed <- failed + 1
             sectionFailed <- sectionFailed + 1
 
@@ -898,7 +900,7 @@ let main args =
                 match result with
                 | Error msg ->
                     println $"    {name}: {msg}"
-                    failedTests.Add({ Name = $"Unit: Chordal Graph - {name}"; Message = msg; Details = [] })
+                    failedTests.Add({ File = ""; Name = $"Unit: Chordal Graph - {name}"; Message = msg; Details = [] })
                     failed <- failed + 1
                     sectionFailed <- sectionFailed + 1
                 | Ok _ -> ()
@@ -971,7 +973,8 @@ let main args =
 
         for i in 0 .. displayCount - 1 do
             let test = failedTests.[i]
-            println $"{Colors.red}{i + 1}. {test.Name}{Colors.reset}"
+            let fileInfo = if test.File <> "" then $" ({Path.GetFileName test.File})" else ""
+            println $"{Colors.red}{i + 1}. {test.Name}{fileInfo}{Colors.reset}"
             println $"   {Colors.gray}{test.Message}{Colors.reset}"
             for detail in test.Details do
                 println $"   {Colors.gray}{detail}{Colors.reset}"
