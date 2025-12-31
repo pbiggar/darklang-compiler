@@ -82,7 +82,8 @@ let truncateForType (destReg: LIR.Reg) (operandType: AST.Type) : LIR.Instr list 
     | _ -> []                                          // Non-integer types
 
 /// Convert MIR instruction to LIR instructions
-let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry: MIR.VariantRegistry) (recordRegistry: MIR.RecordRegistry) : Result<LIR.Instr list, string> =
+/// floatRegs: Set of VReg IDs that hold float values (from MIR.Function.FloatRegs)
+let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry: MIR.VariantRegistry) (recordRegistry: MIR.RecordRegistry) (floatRegs: Set<int>) : Result<LIR.Instr list, string> =
     match instr with
     | MIR.Mov (dest, src, valueType) ->
         // Check if this is a float move - either by valueType or by source operand type
@@ -1114,8 +1115,15 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
 
     | MIR.Phi (dest, sources, valueType) ->
         // Convert MIR.Phi to LIR.Phi (int) or LIR.FPhi (float)
-        match valueType with
-        | Some AST.TFloat64 ->
+        // Check if this is a float phi by:
+        // 1. valueType is Some TFloat64 (set by SSA for parameters), OR
+        // 2. destination VReg is in floatRegs (set during MIR generation and SSA renaming)
+        let (MIR.VReg destId) = dest
+        let isFloatPhi =
+            match valueType with
+            | Some AST.TFloat64 -> true
+            | _ -> Set.contains destId floatRegs
+        if isFloatPhi then
             // Float phi uses FReg (FVirtual) registers
             let lirDest = vregToLIRFReg dest
             let lirSources =
@@ -1124,7 +1132,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                     | MIR.Register vreg -> (vregToLIRFReg vreg, LIR.Label lbl)
                     | _ -> failwith $"FPhi source must be a register, got: {op}")
             Ok [LIR.FPhi (lirDest, lirSources)]
-        | _ ->
+        else
             // Integer phi uses Reg (Virtual) registers
             let lirDest = vregToLIRReg dest
             let lirSources =
@@ -1191,11 +1199,11 @@ let private collectResults (results: Result<'a list, string> list) : Result<'a l
     loop [] results
 
 /// Convert MIR basic block to LIR basic block
-let selectBlock (block: MIR.BasicBlock) (stringPool: MIR.StringPool) (variantRegistry: MIR.VariantRegistry) (recordRegistry: MIR.RecordRegistry) (returnType: AST.Type) : Result<LIR.BasicBlock, string> =
+let selectBlock (block: MIR.BasicBlock) (stringPool: MIR.StringPool) (variantRegistry: MIR.VariantRegistry) (recordRegistry: MIR.RecordRegistry) (returnType: AST.Type) (floatRegs: Set<int>) : Result<LIR.BasicBlock, string> =
     let lirLabel = convertLabel block.Label
 
     // Convert all instructions
-    let instrResults = block.Instrs |> List.map (fun i -> selectInstr i stringPool variantRegistry recordRegistry)
+    let instrResults = block.Instrs |> List.map (fun i -> selectInstr i stringPool variantRegistry recordRegistry floatRegs)
     match collectResults instrResults with
     | Error err -> Error err
     | Ok lirInstrs ->
@@ -1223,12 +1231,12 @@ let private mapResults (f: 'a -> Result<'b, string>) (items: 'a list) : Result<'
     loop [] items
 
 /// Convert MIR CFG to LIR CFG
-let selectCFG (cfg: MIR.CFG) (stringPool: MIR.StringPool) (variantRegistry: MIR.VariantRegistry) (recordRegistry: MIR.RecordRegistry) (returnType: AST.Type) : Result<LIR.CFG, string> =
+let selectCFG (cfg: MIR.CFG) (stringPool: MIR.StringPool) (variantRegistry: MIR.VariantRegistry) (recordRegistry: MIR.RecordRegistry) (returnType: AST.Type) (floatRegs: Set<int>) : Result<LIR.CFG, string> =
     let lirEntry = convertLabel cfg.Entry
 
     let blockList = cfg.Blocks |> Map.toList
     match mapResults (fun (label, block) ->
-        match selectBlock block stringPool variantRegistry recordRegistry returnType with
+        match selectBlock block stringPool variantRegistry recordRegistry returnType floatRegs with
         | Error err -> Error err
         | Ok lirBlock -> Ok (convertLabel label, lirBlock)) blockList with
     | Error err -> Error err
@@ -1284,7 +1292,7 @@ let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
 
     // Convert each MIR function to LIR
     let convertFunc (mirFunc: MIR.Function) =
-        match selectCFG mirFunc.CFG stringPool variantRegistry recordRegistry mirFunc.ReturnType with
+        match selectCFG mirFunc.CFG stringPool variantRegistry recordRegistry mirFunc.ReturnType mirFunc.FloatRegs with
         | Error err -> Error err
         | Ok lirCFG ->
             // Convert MIR VRegs to LIR Virtual registers for parameters

@@ -199,6 +199,7 @@ type Function = {
     ParamTypes: AST.Type list  // Parameter types (for distinguishing int vs float)
     ReturnType: AST.Type       // Return type (for distinguishing int vs float returns)
     CFG: CFG
+    FloatRegs: Set<int>        // VReg IDs that hold float values (for SSA phi nodes)
 }
 
 /// Variant info for sum type printing

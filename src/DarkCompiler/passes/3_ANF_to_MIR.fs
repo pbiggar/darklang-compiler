@@ -1826,6 +1826,7 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
         MIR.ParamTypes = paramTypes
         MIR.ReturnType = returnType
         MIR.CFG = cfg
+        MIR.FloatRegs = finalBuilder.FloatRegs
     }
 
     Ok (mirFunc, finalBuilder.RegGen)
@@ -1901,6 +1902,7 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
         MIR.ParamTypes = []
         MIR.ReturnType = mainExprType
         MIR.CFG = cfg
+        MIR.FloatRegs = finalBuilder.FloatRegs
     }
     let allFuncs = mirFuncs @ [startFunc]
     let variantRegistry = buildVariantRegistry variantLookup
@@ -2031,7 +2033,8 @@ let private offsetFunction (strOffset: int) (fltOffset: int) (func: MIR.Function
       Params = func.Params
       ParamTypes = func.ParamTypes
       ReturnType = func.ReturnType
-      CFG = { Entry = func.CFG.Entry; Blocks = offsetBlocks } }
+      CFG = { Entry = func.CFG.Entry; Blocks = offsetBlocks }
+      FloatRegs = func.FloatRegs }
 
 /// Append a user string pool to stdlib string pool with offset
 let appendStringPools (stdlibPool: MIR.StringPool) (userPool: MIR.StringPool) : MIR.StringPool =

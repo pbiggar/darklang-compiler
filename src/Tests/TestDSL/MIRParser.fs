@@ -149,6 +149,7 @@ let parseMIR (text: string) : Result<MIR.Program, string> =
                     ParamTypes = []
                     ReturnType = AST.TInt64
                     CFG = cfg
+                    FloatRegs = Set.empty
                 }
                 Ok (Program ([func], MIR.emptyStringPool, MIR.emptyFloatPool, Map.empty, Map.empty))
         | Choice1Of2 _ ->

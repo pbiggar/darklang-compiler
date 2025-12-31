@@ -455,10 +455,14 @@ type RenamingState = {
     NextVersion: int
     /// Map from (original VReg, version) to new VReg
     VersionToReg: Map<VReg * int, VReg>
+    /// Original floatRegs set (VReg IDs that are floats)
+    OriginalFloatRegs: Set<int>
+    /// Updated floatRegs set (includes SSA renamed VRegs)
+    FloatRegs: Set<int>
 }
 
 /// Create initial renaming state, starting VReg numbers above any existing VRegs
-let createInitialRenamingState (cfg: CFG) : RenamingState =
+let createInitialRenamingState (cfg: CFG) (floatRegs: Set<int>) : RenamingState =
     // Find the highest VReg number used in the CFG
     let maxVReg =
         cfg.Blocks
@@ -495,6 +499,8 @@ let createInitialRenamingState (cfg: CFG) : RenamingState =
         VersionStack = Map.empty
         NextVersion = maxVReg + 10000  // Start SSA VRegs well above original VRegs
         VersionToReg = Map.empty
+        OriginalFloatRegs = floatRegs
+        FloatRegs = floatRegs  // Start with original floatRegs, will be extended
     }
 
 /// Get current version of a VReg, creating version 0 if not seen
@@ -517,11 +523,22 @@ let newVersion (state: RenamingState) (vreg: VReg) : int * VReg * RenamingState 
 
     // Push onto stack
     let stack = Map.tryFind vreg state.VersionStack |> Option.defaultValue []
+
+    // If the original VReg was a float, the new SSA version is also a float
+    let (VReg origId) = vreg
+    let updatedFloatRegs =
+        if Set.contains origId state.OriginalFloatRegs then
+            Set.add state.NextVersion state.FloatRegs
+        else
+            state.FloatRegs
+
     let state' = {
         CurrentVersion = Map.add vreg version state.CurrentVersion
         VersionStack = Map.add vreg (version :: stack) state.VersionStack
         NextVersion = state.NextVersion + 1
         VersionToReg = Map.add (vreg, version) newReg state.VersionToReg
+        OriginalFloatRegs = state.OriginalFloatRegs
+        FloatRegs = updatedFloatRegs
     }
     (version, newReg, state')
 
@@ -835,7 +852,9 @@ let popVersions (state: RenamingState) (block: BasicBlock) : RenamingState =
     ) state
 
 /// Rename CFG using dominator tree traversal
-let renameCFG (cfg: CFG) (idoms: Dominators) : CFG =
+/// Rename CFG to SSA form
+/// Returns (renamed CFG, updated floatRegs set with SSA versions)
+let renameCFG (cfg: CFG) (idoms: Dominators) (floatRegs: Set<int>) : CFG * Set<int> =
     let domTree = buildDomTree idoms
 
     // DFS traversal of dominator tree
@@ -857,21 +876,25 @@ let renameCFG (cfg: CFG) (idoms: Dominators) : CFG =
             children
             |> List.fold (fun (c, s) child ->
                 // Each child inherits current versions from state', but uses s.NextVersion
-                let childState = { state' with NextVersion = s.NextVersion }
+                // Also inherit FloatRegs to accumulate all float VRegs
+                let childState = { state' with NextVersion = s.NextVersion; FloatRegs = s.FloatRegs }
                 let (c', s') = visit child childState c
                 (c', s')
             ) (cfg''', state')
 
         // Pop versions for backtracking (restore CurrentVersion/VersionStack from before this block)
-        // but keep the NextVersion from children
-        let stateAfterPop = { popVersions finalState block' with NextVersion = finalState.NextVersion }
+        // but keep the NextVersion and FloatRegs from children
+        let stateAfterPop =
+            { popVersions finalState block' with
+                NextVersion = finalState.NextVersion
+                FloatRegs = finalState.FloatRegs }
 
         (cfg'''', stateAfterPop)
 
     // Start from entry with initial state based on CFG's existing VRegs
-    let initialState = createInitialRenamingState cfg
-    let (resultCfg, _) = visit cfg.Entry initialState cfg
-    resultCfg
+    let initialState = createInitialRenamingState cfg floatRegs
+    let (resultCfg, finalState) = visit cfg.Entry initialState cfg
+    (resultCfg, finalState.FloatRegs)
 
 /// Convert a function to SSA form
 let convertFunctionToSSA (func: Function) : Function =
@@ -888,10 +911,10 @@ let convertFunctionToSSA (func: Function) : Function =
     // Pass function params so they're treated as defined at entry (for self-recursive functions)
     let cfgWithPhis = insertPhiNodes cfg df preds liveIn func.Params func.ParamTypes
 
-    // Rename variables
-    let ssaCFG = renameCFG cfgWithPhis idoms
+    // Rename variables and update floatRegs with SSA versions
+    let (ssaCFG, updatedFloatRegs) = renameCFG cfgWithPhis idoms func.FloatRegs
 
-    { func with CFG = ssaCFG }
+    { func with CFG = ssaCFG; FloatRegs = updatedFloatRegs }
 
 /// Convert a program to SSA form
 let convertToSSA (program: Program) : Program =
