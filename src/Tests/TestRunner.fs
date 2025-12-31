@@ -837,22 +837,6 @@ let main args =
             failed <- failed + 1
             sectionFailed <- sectionFailed + 1
 
-    if matchesFilter filter "Critical Edge Tests" then
-        let criticalEdgeTestTimer = Stopwatch.StartNew()
-        match CriticalEdgeTests.runAll() with
-        | Ok () ->
-            criticalEdgeTestTimer.Stop()
-            println $"  {Colors.green}✓ Critical Edge Tests{Colors.reset} {Colors.gray}({formatTime criticalEdgeTestTimer.Elapsed}){Colors.reset}"
-            passed <- passed + 5  // 5 tests in CriticalEdgeTests
-            sectionPassed <- sectionPassed + 5
-        | Error msg ->
-            criticalEdgeTestTimer.Stop()
-            println $"  {Colors.red}✗ FAIL: Critical edge tests{Colors.reset} {Colors.gray}({formatTime criticalEdgeTestTimer.Elapsed}){Colors.reset}"
-            println $"    {msg}"
-            failedTests.Add({ File = ""; Name = "Unit: Critical Edge Tests"; Message = msg; Details = [] })
-            failed <- failed + 1
-            sectionFailed <- sectionFailed + 1
-
     if matchesFilter filter "SSA Liveness Tests" then
         let ssaLivenessTestTimer = Stopwatch.StartNew()
         match SSALivenessTests.runAll() with

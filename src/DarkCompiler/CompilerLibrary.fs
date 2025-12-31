@@ -843,18 +843,11 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                         let t = System.Math.Round(mirOptTime, 1)
                         println $"        {t}ms"
 
-                    // Pass 3.9: SSA Destruction (convert phi nodes to copies)
-                    if verbosity >= 1 then println "  [3.9/8] SSA Destruction (user only)..."
-                    let userDestructedProgram = SSA_Destruction.destructSSA userOptimizedProgram
+                    // Pass 3.9 (SSA Destruction) removed - phi resolution handled in RegisterAllocation
 
-                    let ssaDestructTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime - mirOptTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(ssaDestructTime, 1)
-                        println $"        {t}ms"
-
-                    // Pass 4: MIR → LIR (user code only)
+                    // Pass 4: MIR → LIR (user code only, phi nodes flow through)
                     if verbosity >= 1 then println "  [4/8] MIR → LIR (user only)..."
-                    let userLirResult = MIR_to_LIR.toLIR userDestructedProgram
+                    let userLirResult = MIR_to_LIR.toLIR userOptimizedProgram
 
                     match userLirResult with
                     | Error err ->
@@ -1194,13 +1187,11 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                         if options.DisableMIROpt then userSsaProgram
                         else MIR_Optimize.optimizeProgram userSsaProgram
 
-                    // Pass 3.9: SSA Destruction (convert phi nodes to copies)
-                    if verbosity >= 1 then println "  [3.9/8] SSA Destruction (user only)..."
-                    let userDestructedProgram = SSA_Destruction.destructSSA userOptimizedProgram
+                    // Pass 3.9 (SSA Destruction) removed - phi resolution handled in RegisterAllocation
 
-                    // Pass 4: MIR → LIR (user code only)
+                    // Pass 4: MIR → LIR (user code only, phi nodes flow through)
                     if verbosity >= 1 then println "  [4/8] MIR → LIR (user only)..."
-                    let userLirResult = MIR_to_LIR.toLIR userDestructedProgram
+                    let userLirResult = MIR_to_LIR.toLIR userOptimizedProgram
 
                     match userLirResult with
                     | Error err ->
