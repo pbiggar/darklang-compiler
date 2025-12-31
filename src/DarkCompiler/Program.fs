@@ -53,6 +53,7 @@ type CliOptions = {
     // Optimization flags
     DisableFreeList: bool
     DisableANFOpt: bool
+    DisableInlining: bool
     DisableTCO: bool
     DisableMIROpt: bool
     DisableLIROpt: bool
@@ -70,6 +71,7 @@ let defaultOptions = {
     Argument = None
     DisableFreeList = false
     DisableANFOpt = false
+    DisableInlining = false
     DisableTCO = false
     DisableMIROpt = false
     DisableLIROpt = false
@@ -143,6 +145,9 @@ let parseArgs (argv: string array) : Result<CliOptions, string> =
 
         | "--disable-opt-anf" :: rest ->
             parseFlags rest { opts with DisableANFOpt = true } lastVerbosity
+
+        | "--disable-opt-inline" :: rest ->
+            parseFlags rest { opts with DisableInlining = true } lastVerbosity
 
         | "--disable-opt-tco" :: rest ->
             parseFlags rest { opts with DisableTCO = true } lastVerbosity
@@ -223,6 +228,7 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (c
     let options : CompilerLibrary.CompilerOptions = {
         DisableFreeList = cliOpts.DisableFreeList
         DisableANFOpt = cliOpts.DisableANFOpt
+        DisableInlining = cliOpts.DisableInlining
         DisableTCO = cliOpts.DisableTCO
         DisableMIROpt = cliOpts.DisableMIROpt
         DisableLIROpt = cliOpts.DisableLIROpt
@@ -266,6 +272,7 @@ let run (source: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int
     let options : CompilerLibrary.CompilerOptions = {
         DisableFreeList = cliOpts.DisableFreeList
         DisableANFOpt = cliOpts.DisableANFOpt
+        DisableInlining = cliOpts.DisableInlining
         DisableTCO = cliOpts.DisableTCO
         DisableMIROpt = cliOpts.DisableMIROpt
         DisableLIROpt = cliOpts.DisableLIROpt
@@ -313,6 +320,7 @@ let printUsage () =
     println ""
     println "Optimization flags (for debugging):"
     println "  --disable-opt-anf       Disable ANF-level optimizations"
+    println "  --disable-opt-inline    Disable function inlining"
     println "  --disable-opt-tco       Disable tail call optimization"
     println "  --disable-opt-mir       Disable MIR-level optimizations"
     println "  --disable-opt-lir       Disable LIR-level optimizations"

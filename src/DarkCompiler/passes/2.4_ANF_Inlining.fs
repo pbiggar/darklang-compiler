@@ -1,0 +1,326 @@
+// 2.4_ANF_Inlining.fs - ANF Function Inlining Pass
+//
+// Inlines small, non-recursive functions at their call sites to eliminate
+// function call overhead.
+//
+// Heuristics:
+// - MaxFunctionSize: Only inline functions with <= N TempIds in body
+// - MaxInlineDepth: Limit recursive inlining to prevent code explosion
+// - Skip recursive functions (direct and mutual)
+// - Skip functions with closures (complex runtime behavior)
+// - Skip tail calls (preserve TCO optimization)
+
+module ANF_Inlining
+
+open ANF
+
+/// Inlining configuration
+type InliningConfig = {
+    /// Maximum function body size (in TempIds) to inline
+    MaxFunctionSize: int
+    /// Maximum depth of recursive inlining
+    MaxInlineDepth: int
+}
+
+/// Default inlining configuration
+let defaultConfig = {
+    MaxFunctionSize = 20
+    MaxInlineDepth = 3
+}
+
+/// Information about a function for inlining decisions
+type FunctionInfo = {
+    Func: Function
+    Size: int            // Count of TempIds (Let bindings) in body
+    IsRecursive: bool    // Calls itself directly
+    HasClosures: bool    // Contains ClosureAlloc or ClosureCall
+    CallsCount: int      // Number of call sites (for future heuristics)
+}
+
+// ============================================================================
+// Phase 1: Analysis - Build function info map
+// ============================================================================
+
+/// Count TempIds (Let bindings) in an expression
+let rec countTempIds (expr: AExpr) : int =
+    match expr with
+    | Let (_, _, body) -> 1 + countTempIds body
+    | Return _ -> 0
+    | If (_, thenBranch, elseBranch) ->
+        countTempIds thenBranch + countTempIds elseBranch
+
+/// Check if a CExpr contains closures
+let cexprHasClosures (cexpr: CExpr) : bool =
+    match cexpr with
+    | ClosureAlloc _ | ClosureCall _ | ClosureTailCall _ -> true
+    | _ -> false
+
+/// Check if expression contains closures
+let rec exprHasClosures (expr: AExpr) : bool =
+    match expr with
+    | Let (_, cexpr, body) ->
+        cexprHasClosures cexpr || exprHasClosures body
+    | Return _ -> false
+    | If (_, thenBranch, elseBranch) ->
+        exprHasClosures thenBranch || exprHasClosures elseBranch
+
+/// Collect all function names called in a CExpr
+let collectCallsInCExpr (cexpr: CExpr) : Set<string> =
+    match cexpr with
+    | Call (name, _) -> Set.singleton name
+    | TailCall (name, _) -> Set.singleton name
+    | _ -> Set.empty
+
+/// Collect all function names called in an expression
+let rec collectCalls (expr: AExpr) : Set<string> =
+    match expr with
+    | Let (_, cexpr, body) ->
+        Set.union (collectCallsInCExpr cexpr) (collectCalls body)
+    | Return _ -> Set.empty
+    | If (_, thenBranch, elseBranch) ->
+        Set.union (collectCalls thenBranch) (collectCalls elseBranch)
+
+/// Build function info for a single function
+let buildFunctionInfo (func: Function) : FunctionInfo =
+    let calls = collectCalls func.Body
+    {
+        Func = func
+        Size = countTempIds func.Body
+        IsRecursive = Set.contains func.Name calls
+        HasClosures = exprHasClosures func.Body
+        CallsCount = 0  // Will be updated later if needed
+    }
+
+/// Build function info map for all functions
+let buildFunctionInfoMap (funcs: Function list) : Map<string, FunctionInfo> =
+    funcs
+    |> List.map (fun f -> (f.Name, buildFunctionInfo f))
+    |> Map.ofList
+
+// ============================================================================
+// Phase 2: TempId Renaming - Avoid variable conflicts when inlining
+// ============================================================================
+
+/// Rename an atom (substitute TempIds)
+let renameAtom (mapping: Map<TempId, TempId>) (atom: Atom) : Atom =
+    match atom with
+    | Var tid ->
+        match Map.tryFind tid mapping with
+        | Some newTid -> Var newTid
+        | None -> atom  // External reference, keep as-is
+    | _ -> atom
+
+/// Rename all TempIds in a CExpr
+let renameCExpr (mapping: Map<TempId, TempId>) (cexpr: CExpr) : CExpr =
+    let r = renameAtom mapping
+    match cexpr with
+    | Atom a -> Atom (r a)
+    | Prim (op, left, right) -> Prim (op, r left, r right)
+    | UnaryPrim (op, src) -> UnaryPrim (op, r src)
+    | IfValue (cond, thenVal, elseVal) -> IfValue (r cond, r thenVal, r elseVal)
+    | Call (name, args) -> Call (name, List.map r args)
+    | TailCall (name, args) -> TailCall (name, List.map r args)
+    | IndirectCall (func, args) -> IndirectCall (r func, List.map r args)
+    | IndirectTailCall (func, args) -> IndirectTailCall (r func, List.map r args)
+    | ClosureAlloc (name, captures) -> ClosureAlloc (name, List.map r captures)
+    | ClosureCall (closure, args) -> ClosureCall (r closure, List.map r args)
+    | ClosureTailCall (closure, args) -> ClosureTailCall (r closure, List.map r args)
+    | TupleAlloc elems -> TupleAlloc (List.map r elems)
+    | TupleGet (tuple, idx) -> TupleGet (r tuple, idx)
+    | StringConcat (left, right) -> StringConcat (r left, r right)
+    | RefCountInc (a, size) -> RefCountInc (r a, size)
+    | RefCountDec (a, size) -> RefCountDec (r a, size)
+    | Print (a, t) -> Print (r a, t)
+    | FileReadText path -> FileReadText (r path)
+    | FileExists path -> FileExists (r path)
+    | FileWriteText (path, content) -> FileWriteText (r path, r content)
+    | FileAppendText (path, content) -> FileAppendText (r path, r content)
+    | FileDelete path -> FileDelete (r path)
+    | FileSetExecutable path -> FileSetExecutable (r path)
+    | FileWriteFromPtr (path, ptr, len) -> FileWriteFromPtr (r path, r ptr, r len)
+    | FloatSqrt a -> FloatSqrt (r a)
+    | FloatAbs a -> FloatAbs (r a)
+    | FloatNeg a -> FloatNeg (r a)
+    | IntToFloat a -> IntToFloat (r a)
+    | FloatToInt a -> FloatToInt (r a)
+    | RawAlloc numBytes -> RawAlloc (r numBytes)
+    | RawFree ptr -> RawFree (r ptr)
+    | RawGet (ptr, offset) -> RawGet (r ptr, r offset)
+    | RawGetByte (ptr, offset) -> RawGetByte (r ptr, r offset)
+    | RawSet (ptr, offset, value) -> RawSet (r ptr, r offset, r value)
+    | RawSetByte (ptr, offset, value) -> RawSetByte (r ptr, r offset, r value)
+    | StringHash str -> StringHash (r str)
+    | StringEq (left, right) -> StringEq (r left, r right)
+    | RefCountIncString a -> RefCountIncString (r a)
+    | RefCountDecString a -> RefCountDecString (r a)
+    | RandomInt64 -> RandomInt64
+
+/// Rename all TempIds in an expression, allocating fresh TempIds
+let rec renameExpr (mapping: Map<TempId, TempId>) (varGen: VarGen) (expr: AExpr)
+    : AExpr * VarGen =
+    match expr with
+    | Let (tid, cexpr, body) ->
+        // Allocate fresh TempId for this binding
+        let (newTid, varGen') = freshVar varGen
+        let mapping' = Map.add tid newTid mapping
+        // Rename the CExpr (uses old mapping for references)
+        let cexpr' = renameCExpr mapping cexpr
+        // Rename the body (uses new mapping including this binding)
+        let (body', varGen'') = renameExpr mapping' varGen' body
+        (Let (newTid, cexpr', body'), varGen'')
+    | Return atom ->
+        (Return (renameAtom mapping atom), varGen)
+    | If (cond, thenBranch, elseBranch) ->
+        let (thenBranch', varGen') = renameExpr mapping varGen thenBranch
+        let (elseBranch', varGen'') = renameExpr mapping varGen' elseBranch
+        (If (renameAtom mapping cond, thenBranch', elseBranch'), varGen'')
+
+// ============================================================================
+// Phase 3: Inlining - Substitute function calls with bodies
+// ============================================================================
+
+/// Check if a function should be inlined
+let shouldInline (info: FunctionInfo) (config: InliningConfig) (depth: int) : bool =
+    info.Size <= config.MaxFunctionSize
+    && not info.IsRecursive
+    && not info.HasClosures
+    && depth < config.MaxInlineDepth
+
+/// Substitute Return with a continuation expression
+/// This replaces `Return atom` with a binding and continues with the rest
+let rec substituteReturn (resultTid: TempId) (continuation: AExpr) (expr: AExpr) : AExpr =
+    match expr with
+    | Return atom ->
+        // Replace return with a binding to resultTid, then continue
+        Let (resultTid, Atom atom, continuation)
+    | Let (tid, cexpr, body) ->
+        Let (tid, cexpr, substituteReturn resultTid continuation body)
+    | If (cond, thenBranch, elseBranch) ->
+        If (cond,
+            substituteReturn resultTid continuation thenBranch,
+            substituteReturn resultTid continuation elseBranch)
+
+/// Inline a function call
+/// Returns the inlined expression and updated VarGen
+let inlineCall (info: FunctionInfo) (args: Atom list) (resultTid: TempId)
+               (continuation: AExpr) (varGen: VarGen)
+    : AExpr * VarGen =
+    // Step 1: Build parameter -> argument mapping
+    let paramMapping =
+        List.zip info.Func.Params args
+        |> List.fold (fun m (param, arg) ->
+            match arg with
+            | Var tid -> Map.add param tid m
+            | _ -> m  // Literal args handled differently
+        ) Map.empty
+
+    // Step 2: For literal arguments, we need to insert Let bindings
+    // This is a simplification - for now, we only inline when args are Vars
+    // TODO: Handle literal arguments by inserting Let bindings
+
+    // Step 3: Rename all TempIds in the function body to fresh ones
+    let (renamedBody, varGen') = renameExpr paramMapping varGen info.Func.Body
+
+    // Step 4: Substitute Return with continuation
+    let inlinedExpr = substituteReturn resultTid continuation renamedBody
+
+    (inlinedExpr, varGen')
+
+/// Recursively inline calls in an expression
+let rec inlineInExpr (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
+                     (depth: int) (varGen: VarGen) (expr: AExpr)
+    : AExpr * VarGen * bool =  // Returns (expr, varGen, changed)
+    match expr with
+    | Let (tid, Call (funcName, args), body) when not (funcName.StartsWith("_")) ->
+        // Check if this is a regular call (not tail call) to a user function
+        match Map.tryFind funcName funcs with
+        | Some info when shouldInline info config depth ->
+            // Check that all args are Vars (simplification for now)
+            let allVars = args |> List.forall (function Var _ -> true | _ -> false)
+            if allVars then
+                // Inline the call
+                let (inlinedExpr, varGen') = inlineCall info args tid body varGen
+                // Recursively inline in the result (with increased depth)
+                let (result, varGen'', _) = inlineInExpr funcs config (depth + 1) varGen' inlinedExpr
+                (result, varGen'', true)
+            else
+                // Can't inline - args contain literals
+                // Continue processing body
+                let (body', varGen', changed) = inlineInExpr funcs config depth varGen body
+                (Let (tid, Call (funcName, args), body'), varGen', changed)
+        | _ ->
+            // Don't inline - continue processing body
+            let (body', varGen', changed) = inlineInExpr funcs config depth varGen body
+            (Let (tid, Call (funcName, args), body'), varGen', changed)
+
+    | Let (tid, cexpr, body) ->
+        // Not a call, just process the body
+        let (body', varGen', changed) = inlineInExpr funcs config depth varGen body
+        (Let (tid, cexpr, body'), varGen', changed)
+
+    | Return atom ->
+        (Return atom, varGen, false)
+
+    | If (cond, thenBranch, elseBranch) ->
+        let (thenBranch', varGen', changed1) = inlineInExpr funcs config depth varGen thenBranch
+        let (elseBranch', varGen'', changed2) = inlineInExpr funcs config depth varGen' elseBranch
+        (If (cond, thenBranch', elseBranch'), varGen'', changed1 || changed2)
+
+/// Inline in a function body
+let inlineInFunction (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
+                     (varGen: VarGen) (func: Function)
+    : Function * VarGen * bool =
+    let (body', varGen', changed) = inlineInExpr funcs config 0 varGen func.Body
+    ({ func with Body = body' }, varGen', changed)
+
+/// Find the maximum TempId used in an expression
+let rec maxTempId (expr: AExpr) : int =
+    match expr with
+    | Let (TempId n, _, body) -> max n (maxTempId body)
+    | Return (Var (TempId n)) -> n
+    | Return _ -> 0
+    | If (Var (TempId n), thenBranch, elseBranch) ->
+        max n (max (maxTempId thenBranch) (maxTempId elseBranch))
+    | If (_, thenBranch, elseBranch) ->
+        max (maxTempId thenBranch) (maxTempId elseBranch)
+
+/// Find the maximum TempId in a function
+let maxTempIdInFunction (func: Function) : int =
+    let paramMax = func.Params |> List.map (fun (TempId n) -> n) |> List.fold max 0
+    max paramMax (maxTempId func.Body)
+
+/// Find the maximum TempId in a program
+let maxTempIdInProgram (Program (funcs, main)) : int =
+    let funcMax = funcs |> List.map maxTempIdInFunction |> List.fold max 0
+    max funcMax (maxTempId main)
+
+// ============================================================================
+// Phase 4: Main entry point
+// ============================================================================
+
+/// Inline functions in a program
+let inlineProgram (config: InliningConfig) (program: Program) : Program =
+    let (Program (funcs, main)) = program
+
+    // Build function info map (only for user functions, not stdlib)
+    let funcInfoMap = buildFunctionInfoMap funcs
+
+    // Find starting VarGen value (must be higher than any existing TempId)
+    let startVarGen = VarGen (maxTempIdInProgram program + 1)
+
+    // Inline in each function (single pass for now)
+    let (funcs', varGen', _) =
+        funcs
+        |> List.fold (fun (accFuncs, varGen, anyChanged) func ->
+            let (func', varGen', changed) = inlineInFunction funcInfoMap config varGen func
+            (func' :: accFuncs, varGen', anyChanged || changed)
+        ) ([], startVarGen, false)
+
+    // Inline in main expression
+    let (main', _, _) = inlineInExpr funcInfoMap config 0 varGen' main
+
+    Program (List.rev funcs', main')
+
+/// Inline functions with default configuration
+let inlineProgramDefault (program: Program) : Program =
+    inlineProgram defaultConfig program

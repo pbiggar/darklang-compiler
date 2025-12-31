@@ -31,6 +31,8 @@ type CompilerOptions = {
     DisableFreeList: bool
     /// Disable ANF-level optimizations (constant folding, propagation, etc.)
     DisableANFOpt: bool
+    /// Disable ANF function inlining
+    DisableInlining: bool
     /// Disable tail call optimization
     DisableTCO: bool
     /// Disable MIR-level optimizations (DCE, copy/constant propagation on SSA)
@@ -47,6 +49,7 @@ type CompilerOptions = {
 let defaultOptions : CompilerOptions = {
     DisableFreeList = false
     DisableANFOpt = false
+    DisableInlining = false
     DisableTCO = false
     DisableMIROpt = false
     DisableLIROpt = false
@@ -356,13 +359,23 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                         println $"Main: {mainExprDbg}"
                         println ""
 
+                    // Pass 2.4: ANF Inlining (optional)
+                    if verbosity >= 1 then println "  [2.4/8] ANF Inlining..."
+                    let anfInlined =
+                        if options.DisableInlining then anfOptimized
+                        else ANF_Inlining.inlineProgramDefault anfOptimized
+                    let inlineTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(inlineTime, 1)
+                        println $"        {t}ms"
+
                     // Update convResult with optimized program for RC insertion
-                    let convResultOptimized = { convResult with Program = anfOptimized }
+                    let convResultOptimized = { convResult with Program = anfInlined }
 
                     // Pass 2.5: Reference Count Insertion
                     if verbosity >= 1 then println "  [2.5/8] Reference Count Insertion..."
                     let rcResult = RefCountInsertion.insertRCInProgram convResultOptimized
-                    let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime
+                    let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - inlineTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(rcTime, 1)
                         println $"        {t}ms"
@@ -737,9 +750,19 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                         let t = System.Math.Round(anfOptTime, 1)
                         println $"        {t}ms"
 
+                    // Pass 2.4: ANF Inlining (optional)
+                    if verbosity >= 1 then println "  [2.4/8] ANF Inlining..."
+                    let anfInlined =
+                        if options.DisableInlining then anfOptimized
+                        else ANF_Inlining.inlineProgramDefault anfOptimized
+                    let inlineTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(inlineTime, 1)
+                        println $"        {t}ms"
+
                     // Create ConversionResult for RC insertion (user functions only)
                     let userConvResult : AST_to_ANF.ConversionResult = {
-                        Program = anfOptimized
+                        Program = anfInlined
                         TypeReg = userOnly.TypeReg
                         VariantLookup = userOnly.VariantLookup
                         FuncReg = userOnly.FuncReg
@@ -750,7 +773,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     // Pass 2.5: Reference Count Insertion (user code only)
                     if verbosity >= 1 then println "  [2.5/8] Reference Count Insertion..."
                     let rcResult = RefCountInsertion.insertRCInProgram userConvResult
-                    let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime
+                    let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - inlineTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(rcTime, 1)
                         println $"        {t}ms"
@@ -1037,9 +1060,19 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                         let t = System.Math.Round(anfOptTime, 1)
                         println $"        {t}ms"
 
+                    // Pass 2.4: ANF Inlining (optional)
+                    if verbosity >= 1 then println "  [2.4/8] ANF Inlining..."
+                    let anfInlined =
+                        if options.DisableInlining then anfOptimized
+                        else ANF_Inlining.inlineProgramDefault anfOptimized
+                    let inlineTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(inlineTime, 1)
+                        println $"        {t}ms"
+
                     // Create ConversionResult for RC insertion (user functions only)
                     let userConvResult : AST_to_ANF.ConversionResult = {
-                        Program = anfOptimized
+                        Program = anfInlined
                         TypeReg = userOnly.TypeReg
                         VariantLookup = userOnly.VariantLookup
                         FuncReg = userOnly.FuncReg
@@ -1050,7 +1083,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                     // Pass 2.5: Reference Count Insertion (user code only)
                     if verbosity >= 1 then println "  [2.5/8] Reference Count Insertion..."
                     let rcResult = RefCountInsertion.insertRCInProgram userConvResult
-                    let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime
+                    let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - inlineTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(rcTime, 1)
                         println $"        {t}ms"

@@ -28,6 +28,7 @@ let runE2ETest (stdlib: CompilerLibrary.StdlibResult) (test: E2ETest) : E2ETestR
         let options : CompilerLibrary.CompilerOptions = {
             DisableFreeList = test.DisableFreeList
             DisableANFOpt = test.DisableANFOpt
+            DisableInlining = false  // Inlining is always enabled in tests
             DisableTCO = test.DisableTCO
             DisableMIROpt = test.DisableMIROpt
             DisableLIROpt = test.DisableLIROpt

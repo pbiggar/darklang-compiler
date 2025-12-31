@@ -17,6 +17,7 @@
     <Compile Include="passes/ANFDeadCodeElimination.fs" />
     <Compile Include="passes/2_AST_to_ANF.fs" />
     <Compile Include="passes/2.3_ANF_Optimize.fs" />
+    <Compile Include="passes/2.4_ANF_Inlining.fs" />
     <Compile Include="passes/2.5_RefCountInsertion.fs" />
     <Compile Include="passes/2.6_PrintInsertion.fs" />
     <Compile Include="passes/2.7_TailCallDetection.fs" />
