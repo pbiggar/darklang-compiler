@@ -141,8 +141,19 @@ def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dic
     """Update RESULTS.md with latest results."""
     results_path = benchmarks_dir / RESULTS_FILE
 
-    # Load existing results
-    existing = load_results_file(benchmarks_dir)
+    # Discover all benchmarks from problem directory structure
+    existing = {}
+    problems_dir = benchmarks_dir / "problems"
+    if problems_dir.exists():
+        for problem_dir in problems_dir.iterdir():
+            if problem_dir.is_dir():
+                existing[problem_dir.name] = {}
+
+    # Merge with existing results from file
+    for benchmark, langs in load_results_file(benchmarks_dir).items():
+        if benchmark not in existing:
+            existing[benchmark] = {}
+        existing[benchmark].update(langs)
 
     # Merge with new results
     for benchmark, benchmark_results in json_results.items():

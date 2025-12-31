@@ -34,7 +34,7 @@ def buildTree(depth: Int64, leafStart: Int64) : Int64 =
         let right = buildTree(depth - 1, leafStart + leftSize) in
         hashPair(left, right)
 
-// Smaller parameters for Dark version
+// Full benchmark: depth=15, iterations=50 (matching reference implementations)
 def benchmark(depth: Int64, iterations: Int64, i: Int64, checksum: Int64) : Int64 =
     if i >= iterations then checksum
     else
@@ -42,4 +42,4 @@ def benchmark(depth: Int64, iterations: Int64, i: Int64, checksum: Int64) : Int6
         let newChecksum = (checksum + root) % 1000000007 in
         benchmark(depth, iterations, i + 1, newChecksum)
 
-benchmark(10, 20, 0, 0)
+benchmark(15, 50, 0, 0)

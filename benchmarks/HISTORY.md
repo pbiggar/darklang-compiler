@@ -4,6 +4,7 @@ Dark compiler performance over time (append-only log).
 
 | Date       | Commit   | Benchmark     | Instructions     | Data Refs        | L1 Miss     | LL Miss     | Branches        | Mispred |
 |------------|----------|---------------|------------------|------------------|-------------|-------------|-----------------|---------|
+| full_merkle | unknown | merkletrees   |      134,348,003 |       26,214,235 |          28 |          43 |       3,276,814 |   12.6% |
 | full_params | 5b14f04c | mandelbrot    |       14,865,926 |        2,312,830 |           8 |          28 |         609,810 |    9.1% |
 | full_params | 5b14f04c | pisum         |      140,028,203 |       25,006,544 |           6 |          17 |       5,001,022 |    0.0% |
 | 2025-12-31 | 66a48e77 | collatz       |      206,699,042 |        1,600,033 |           5 |          18 |      21,707,693 |   16.7% |
