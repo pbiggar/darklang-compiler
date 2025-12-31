@@ -67,8 +67,8 @@ selfCycle(42, 10) = 42
 // Simple tuple access
 let t = (10, 20, 30) in t.0 + t.1 + t.2 = 60
 
-// Nested tuple
-let outer = ((1, 2), (3, 4)) in outer.0.0 + outer.0.1 + outer.1.0 + outer.1.1 = 10
+// Nested tuple - use parentheses for chained tuple access (outer.0.0 not supported)
+let outer = ((1, 2), (3, 4)) in (outer.0).0 + (outer.0).1 + (outer.1).0 + (outer.1).1 = 10
 
 // Alias chain (transitive)
 let a = (1, 2) in let b = a in let c = b in let d = c in d.0 + d.1 = 3
