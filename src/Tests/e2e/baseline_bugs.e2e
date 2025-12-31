@@ -1,0 +1,122 @@
+// Baseline Bug Tests
+//
+// These tests are designed to stress-test potential problem areas in the compiler:
+// - Float register allocation (D0-D7 registers)
+// - Parallel move resolution (register cycles)
+// - Reference counting (aliases, nesting)
+// - Large immediates (values > 4095)
+
+// ===================================================================
+// Float Register Stress Tests
+// ===================================================================
+
+// Multiple float parameters (stress D0-D7)
+def float4(a: Float, b: Float, c: Float, d: Float) : Float = a + b + c + d
+
+float4(1.0, 2.0, 3.0, 4.0) = stdout="10.00\n"
+
+// Float in recursive function (live across calls)
+def floatRecurse(n: Int64, acc: Float) : Float = if n <= 0 then acc else floatRecurse(n - 1, acc + 1.0)
+
+Stdlib.Float.toInt(floatRecurse(10, 0.0)) = 10
+
+// Nested float operations
+def floatNested(x: Float) : Float = let a = x + 1.0 in let b = a + 2.0 in let c = b + 3.0 in a + b + c
+
+Stdlib.Float.toInt(floatNested(0.0)) = 10
+
+
+// ===================================================================
+// Parallel Move Resolution Tests (Register Cycles)
+// ===================================================================
+
+// 2-way swap (simple cycle)
+def swap2(a: Int64, b: Int64, n: Int64) : Int64 = if n <= 0 then a else swap2(b, a, n - 1)
+
+swap2(1, 2, 1) = 2
+swap2(1, 2, 2) = 1
+
+// 3-way rotation (3-cycle)
+def rotate3(a: Int64, b: Int64, c: Int64, n: Int64) : Int64 = if n <= 0 then a else rotate3(b, c, a, n - 1)
+
+rotate3(1, 2, 3, 1) = 2
+rotate3(1, 2, 3, 3) = 1
+
+// 4-way rotation (4-cycle)
+def rotate4(a: Int64, b: Int64, c: Int64, d: Int64, n: Int64) : Int64 = if n <= 0 then a else rotate4(b, c, d, a, n - 1)
+
+rotate4(1, 2, 3, 4, 1) = 2
+rotate4(1, 2, 3, 4, 4) = 1
+
+// Float rotation (tests FP register parallel moves)
+def rotateFloat2(a: Float, b: Float, n: Int64) : Float = if n <= 0 then a else rotateFloat2(b, a, n - 1)
+
+Stdlib.Float.toInt(rotateFloat2(1.0, 2.0, 1) * 10.0) = 20
+Stdlib.Float.toInt(rotateFloat2(1.0, 2.0, 2) * 10.0) = 10
+
+// Self-cycle (no-op move, X0 <- X0)
+def selfCycle(x: Int64, n: Int64) : Int64 = if n <= 0 then x else selfCycle(x, n - 1)
+
+selfCycle(42, 10) = 42
+
+
+// ===================================================================
+// Reference Counting / Heap Tests
+// ===================================================================
+
+// Simple tuple access
+let t = (10, 20, 30) in t.0 + t.1 + t.2 = 60
+
+// Nested tuple
+let outer = ((1, 2), (3, 4)) in outer.0.0 + outer.0.1 + outer.1.0 + outer.1.1 = 10
+
+// Alias chain (transitive)
+let a = (1, 2) in let b = a in let c = b in let d = c in d.0 + d.1 = 3
+
+// Heap value returned from function
+def makePair(x: Int64) : (Int64, Int64) = (x, x + 1)
+
+let p = makePair(10) in p.0 + p.1 = 21
+
+// Heap value not returned (should be freed)
+def heapNoReturn(n: Int64) : Int64 = let t = (n, n + 1) in t.0 + t.1
+
+heapNoReturn(5) = 11
+
+
+// ===================================================================
+// Large Immediate Tests (values > 4095)
+// ===================================================================
+
+// Addition with large immediate
+5000 + 1 = 5001
+
+// Subtraction with large immediate
+10000 - 1 = 9999
+
+// Large multiplication
+8192 * 2 = 16384
+
+// Very large constant
+let x = 1000000 in x + 1 = 1000001
+
+// Large values in branches
+if 5000 > 4000 then 1 else 0 = 1
+
+
+// ===================================================================
+// Edge Cases with Multiple Features
+// ===================================================================
+
+// Mixed int and float in tail call
+def mixedTail(x: Int64, f: Float, n: Int64) : Int64 = if n <= 0 then x + Stdlib.Float.toInt(f) else mixedTail(x + 1, f + 1.0, n - 1)
+
+mixedTail(0, 0.0, 5) = 10
+
+// Deeply nested let bindings
+let a = 1 in let b = a + 1 in let c = b + 1 in let d = c + 1 in let e = d + 1 in a + b + c + d + e = 15
+
+// Boolean short-circuit in complex expression
+if (1 < 2 && 3 > 4) then 1 else 0 = 0
+if (1 < 2 || 3 > 4) then 1 else 0 = 1
+if (5 > 3 && 2 < 4 && 1 != 0) then 1 else 0 = 1
