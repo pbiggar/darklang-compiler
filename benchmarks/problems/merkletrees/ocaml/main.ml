@@ -4,7 +4,8 @@
 
 (* Simple hash function (FNV-1a variant) *)
 let hash_val data =
-  let h = ref 14695981039346656037L in
+  (* FNV offset basis: 14695981039346656037 as signed = -3750763034362895579 *)
+  let h = ref (-3750763034362895579L) in
   for _ = 0 to 7 do
     h := Int64.logxor !h (Int64.logand data 0xFFL);
     h := Int64.mul !h 1099511628211L
