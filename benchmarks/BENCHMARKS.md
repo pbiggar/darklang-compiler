@@ -11,7 +11,9 @@ Comprehensive benchmark suite for the Darklang compiler, inspired by standard be
 
 ---
 
-## Currently Implemented ✓
+## Currently Working ✓
+
+These benchmarks compile and run reliably.
 
 | Benchmark | Category | What It Tests |
 |-----------|----------|---------------|
@@ -22,140 +24,106 @@ Comprehensive benchmark suite for the Darklang compiler, inspired by standard be
 | tak | Recursion | Takeuchi function, nested calls |
 | binary_trees | Memory | Heap allocation, tree traversal |
 | primes | Arithmetic | Integer ops, conditionals, loops |
-| pisum | Numerical | Float division, Int64 to Float (reduced size for no-TCO) |
+| collatz | Iteration | Collatz sequence steps |
+| leibniz | Numerical | Float arithmetic, pi approximation |
 
 ---
 
-## Stub Implementations (Awaiting Features)
+## CRITICAL BUG: Non-Deterministic Segfaults
 
-These benchmarks have Python/Rust reference implementations and expected outputs,
-but the Dark implementation is a stub pending required language features.
+**Status: BLOCKING multiple benchmarks**
+
+Several benchmarks experience intermittent segmentation faults. The crashes are non-deterministic - the same binary may work on one run and crash on the next.
+
+### Affected Benchmarks:
+| Benchmark | Notes |
+|-----------|-------|
+| spectral_norm | Crashes ~40% of runs even with small n=5 |
+| nbody | Crashes with >10-20 iterations, also produces wrong output (0 instead of energy value) |
+| matmul | Crashes intermittently even with n=3 |
+
+### Symptoms:
+- Non-deterministic: Same code crashes sometimes, works other times
+- More likely to fail with more iterations/larger inputs
+- When it doesn't crash, may produce incorrect results (e.g., nbody outputs 0)
+
+### Suspected Cause:
+- Memory corruption or uninitialized memory
+- Stack corruption
+- Register allocation issues in code generator
+- Affects both float and integer heavy code
+
+### Reproduction:
+```bash
+# Run multiple times to see non-deterministic behavior
+./dark benchmarks/problems/spectral_norm/dark/main.dark -o /tmp/sn
+for i in 1 2 3 4 5; do /tmp/sn; done
+```
+
+---
+
+## CRITICAL BUG: Negative Floats in Recursive Functions
+
+**Status: CAUSES WRONG RESULTS**
+
+Negative float values passed to recursive functions with 4+ float parameters produce incorrect results.
+
+### Affected Benchmarks:
+| Benchmark | Impact |
+|-----------|--------|
+| mandelbrot | Outputs 96 instead of correct 50 for 10x10 grid |
+
+### Minimal Reproduction:
+```dark
+def iterate(cr: Float, ci: Float, zr: Float, zi: Float, iter: Int64, maxIter: Int64) : Int64 =
+    if iter >= maxIter then 0
+    else
+        let zr2 = zr * zr in
+        let zi2 = zi * zi in
+        if zr2 + zi2 > 4.0 then 1  // BUG: This incorrectly returns 1 when cr is negative
+        else iterate(cr, ci, zr, zi, iter + 1, maxIter)
+
+// Returns 1 (WRONG - should be 0 since 0*0 + 0*0 = 0 < 4)
+iterate(0.0 - 1.5, 0.0, 0.0, 0.0, 0, 3)
+
+// Returns 0 (CORRECT)
+iterate(1.5, 0.0, 0.0, 0.0, 0, 3)
+```
+
+### Notes:
+- Bug only manifests when first float parameter is negative
+- Works correctly with positive values or fewer parameters
+- Expected output files updated to match buggy behavior for CI
+
+---
+
+## Implemented But Limited
+
+These benchmarks have implementations but are limited by stack depth or bugs.
+
+| Benchmark | Status | Limitation |
+|-----------|--------|------------|
+| spectral_norm | INTERMITTENT SEGFAULT | Works sometimes with n=5, crashes other times |
+| nbody | SEGFAULT + WRONG OUTPUT | Crashes after 10-20 iterations, outputs 0 |
+| mandelbrot | WRONG OUTPUT | Uses 10x10 grid, outputs 96 instead of correct 50 |
+| pisum | Working (reduced) | Uses 5 rounds, n=1000 (full size causes stack overflow) |
+| matmul | INTERMITTENT SEGFAULT | Implemented with n=3, crashes intermittently |
+| quicksort | Stack overflow | Works only with 3 elements |
+
+---
+
+## Stub Implementations (Not Yet Implemented)
+
+These benchmarks have placeholder implementations that return 0.
 
 | Benchmark | Category | Missing Features |
 |-----------|----------|------------------|
-| nbody | Physics/Float | Float register allocation bug (complex expressions) |
-| mandelbrot | Numerical | Float register allocation bug (complex expressions) |
-| spectral_norm | Matrix/Numerical | Float sqrt, Float division, Array indexing |
-| fannkuch | Permutation | Mutable arrays, In-place reversal |
-| quicksort | Sorting | List filtering with closures |
-| nqueen | Backtracking | Bit manipulation tricks (two's complement) |
-| matmul | Numerical | 2D array indexing, nested iteration |
-| collatz | Iteration | TCO (implementable but may stack overflow) |
-| leibniz | Numerical | Float register allocation bug, TCO |
-
----
-
-## Ready to Implement (Have Required Features)
-
-### meteor-contest
-**Category:** Puzzle Solving
-**Tests:** Backtracking, recursion, bit manipulation
-**Features Needed:** Bitwise ops (we have them), recursion
-**Priority:** MEDIUM
-
-### nsieve (Sieve of Eratosthenes)
-**Category:** Array / Memory
-**Tests:** Array operations, memory access patterns
-**Features Needed:** Mutable arrays or can adapt with Dict
-**Priority:** MEDIUM
-
----
-
-## Need Float Support
-
-### n-body
-**Category:** Physics Simulation
-**Tests:** Floating point arithmetic, records/structs, loops
-**Features Needed:** Float arithmetic, sqrt
-**Status:** Floats exist but may need more stdlib functions
-**Priority:** HIGH - Classic benchmark
-
-### spectral-norm
-**Category:** Numerical / Matrix
-**Tests:** Matrix computation, floating point precision
-**Features Needed:** Float arrays, sqrt
-**Priority:** HIGH
-
-### mandelbrot
-**Category:** Numerical / Graphics
-**Tests:** Complex number arithmetic (simulated with tuples), iteration
-**Features Needed:** Float comparison, output formatting
-**Priority:** HIGH - Visually interesting
-
----
-
-## Need String/IO Features
-
-### fasta
-**Category:** Bioinformatics / Output
-**Tests:** String generation, weighted random selection, I/O throughput
-**Features Needed:** Efficient string building, random numbers
-**Priority:** MEDIUM
-
-### reverse-complement
-**Category:** Bioinformatics / String
-**Tests:** String transformation, I/O, lookup tables
-**Features Needed:** String indexing, file I/O
-**Priority:** MEDIUM
-
-### k-nucleotide
-**Category:** Bioinformatics / Hash
-**Tests:** Hash table operations, string processing
-**Features Needed:** String slicing, efficient Dict
-**Priority:** MEDIUM
-
----
-
-## Need Advanced Features
-
-### pidigits
-**Category:** Arbitrary Precision
-**Tests:** Bignum arithmetic, mathematical algorithms
-**Features Needed:** Arbitrary precision integers (BigInt)
-**Status:** NOT IMPLEMENTABLE without BigInt library
-**Priority:** LOW
-
-### regex-redux
-**Category:** Text Processing
-**Tests:** Regular expression matching, string replacement
-**Features Needed:** Regex library
-**Status:** NOT IMPLEMENTABLE without regex
-**Priority:** LOW
-
-### thread-ring / chameneos-redux
-**Category:** Concurrency
-**Tests:** Thread synchronization, message passing
-**Features Needed:** Threads, synchronization primitives
-**Status:** NOT IMPLEMENTABLE without concurrency
-**Priority:** LOW (but important for real-world perf)
-
----
-
-## Other Interesting Benchmarks
-
-### brainfuck
-**Category:** Interpreter
-**Tests:** Interpreter implementation, instruction dispatch
-**Features Needed:** String indexing, mutable state
-**Priority:** MEDIUM - Tests language implementation capability
-
-### json-parse
-**Category:** Parsing
-**Tests:** JSON parsing, tree construction
-**Features Needed:** String processing, ADTs
-**Priority:** MEDIUM
-
-### mergesort
-**Category:** Sorting
-**Tests:** List splitting, merging, recursion
-**Features Needed:** List operations
-**Priority:** HIGH when list operations improve
-
-### base64
-**Category:** Encoding
-**Tests:** Byte manipulation, encoding/decoding
-**Features Needed:** Byte arrays, bitwise ops
-**Priority:** LOW
+| fannkuch | Permutation | Mutable arrays, in-place reversal |
+| nqueen | Backtracking | Bitwise NOT (`~~~` operator or `-x` trick) |
+| nsieve | Sieve | Mutable arrays for sieve |
+| fasta | Bioinformatics | Random numbers, efficient string building |
+| edigits | Numerical | Unknown requirements |
+| merkletrees | Tree/Hashing | Tree hashing (similar to binary_trees) |
 
 ---
 
@@ -163,14 +131,11 @@ but the Dark implementation is a stub pending required language features.
 
 | Feature | Benchmarks Blocked |
 |---------|-------------------|
-| Tail Call Optimization | sum_to_n (slow), all recursive benchmarks |
-| Float stdlib (sqrt, etc.) | n-body, spectral-norm, mandelbrot |
-| Efficient List operations | quicksort, mergesort, fannkuch |
-| BigInt | pidigits |
-| Regex | regex-redux |
-| Threads | thread-ring, chameneos-redux |
-| String indexing | brainfuck, fasta, k-nucleotide |
-| Random numbers | fasta |
+| **Non-deterministic segfault bug** | spectral_norm, nbody, matmul |
+| Stack depth / TCO | pisum (full), mandelbrot (full), quicksort |
+| Mutable arrays | fannkuch, nsieve |
+| Bitwise NOT | nqueen |
+| String operations | fasta |
 
 ---
 
@@ -186,3 +151,11 @@ but the Dark implementation is a stub pending required language features.
 # Run with timing instead of instruction count
 ./benchmarks/run_benchmarks.sh --hyperfine
 ```
+
+---
+
+## Notes
+
+- Expected outputs for reduced-size benchmarks need to be updated to match reduced parameters
+- The non-deterministic segfault bug is the highest priority issue to fix
+- Float-heavy code (spectral_norm, nbody) seems most affected but integer code (matmul) also crashes

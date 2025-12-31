@@ -25,4 +25,5 @@ def pisum(rounds: Int64, n: Int64, lastResult: Float) : Float =
 // Run with smaller values until TCO is implemented
 // Original: 500 rounds with n=10000
 // Current: 5 rounds with n=1000 (to avoid stack overflow)
-pisum(5, 1000, 0.0)
+// Output as integer (multiply by large factor for precision)
+Stdlib.Float.toInt(pisum(5, 1000, 0.0) * 1000000000000.0)

@@ -2,24 +2,102 @@
 // Multiplies two NxN matrices using naive O(n^3) algorithm
 // From: plb2 and Julia micro-benchmarks
 //
-// STATUS: NOT YET IMPLEMENTABLE
-// MISSING FEATURES:
-// - 2D array/list indexing (list of lists)
-// - Efficient nested iteration
-// - Mutable arrays for result
-//
 // This benchmark tests:
 // - Nested loop performance
-// - Array/memory access patterns
+// - List operations
 // - Integer arithmetic
-// - Cache behavior
 
-// TODO: Implement when 2D array operations are available
-//
-// The algorithm is the naive O(n^3) matrix multiplication:
-// C[i][j] = sum(A[i][k] * B[k][j] for k in 0..n)
-//
-// def matmul(a: List<List<Int64>>, b: List<List<Int64>>, n: Int64) : List<List<Int64>> =
-//     // Need efficient 2D indexing and construction
+// LCG random number generator
+def nextRandom(x: Int64) : Int64 =
+    Stdlib.Int64.mod(x * 1103515245 + 12345, 2147483648)
 
-0
+// Generate a single row of random values
+def generateRowHelper(cols: Int64, seed: Int64, acc: List<Int64>) : (Int64, List<Int64>) =
+    if cols <= 0 then (seed, acc)
+    else
+        let next = nextRandom(seed) in
+        let value = Stdlib.Int64.mod(next, 100) in
+        generateRowHelper(cols - 1, next, Stdlib.List.pushBack<Int64>(acc, value))
+
+def generateRow(n: Int64, seed: Int64) : (Int64, List<Int64>) =
+    generateRowHelper(n, seed, [])
+
+// Generate NxN matrix
+def generateMatrixHelper(rows: Int64, n: Int64, seed: Int64, acc: List<List<Int64>>) : List<List<Int64>> =
+    if rows <= 0 then acc
+    else
+        let rowResult = generateRow(n, seed) in
+        let newSeed = rowResult.0 in
+        let row = rowResult.1 in
+        generateMatrixHelper(rows - 1, n, newSeed, Stdlib.List.pushBack<List<Int64>>(acc, row))
+
+def generateMatrix(n: Int64, seed: Int64) : List<List<Int64>> =
+    generateMatrixHelper(n, n, seed, [])
+
+// Get element at (i, j) in matrix
+def getAt2D(m: List<List<Int64>>, i: Int64, j: Int64) : Int64 =
+    match Stdlib.List.getAt<List<Int64>>(m, i) with
+    | None -> 0
+    | Some(row) ->
+        match Stdlib.List.getAt<Int64>(row, j) with
+        | None -> 0
+        | Some(v) -> v
+
+// Compute dot product of row i of A with column j of B
+def dotProductHelper(a: List<List<Int64>>, b: List<List<Int64>>, i: Int64, j: Int64, k: Int64, n: Int64, acc: Int64) : Int64 =
+    if k >= n then acc
+    else
+        let aik = getAt2D(a, i, k) in
+        let bkj = getAt2D(b, k, j) in
+        dotProductHelper(a, b, i, j, k + 1, n, acc + aik * bkj)
+
+def computeElement(a: List<List<Int64>>, b: List<List<Int64>>, i: Int64, j: Int64, n: Int64) : Int64 =
+    dotProductHelper(a, b, i, j, 0, n, 0)
+
+// Build a row of the result matrix
+def buildRowHelper(a: List<List<Int64>>, b: List<List<Int64>>, i: Int64, j: Int64, n: Int64, acc: List<Int64>) : List<Int64> =
+    if j >= n then acc
+    else
+        let elem = computeElement(a, b, i, j, n) in
+        buildRowHelper(a, b, i, j + 1, n, Stdlib.List.pushBack<Int64>(acc, elem))
+
+def buildRow(a: List<List<Int64>>, b: List<List<Int64>>, i: Int64, n: Int64) : List<Int64> =
+    buildRowHelper(a, b, i, 0, n, [])
+
+// Build the result matrix
+def matmulHelper(a: List<List<Int64>>, b: List<List<Int64>>, i: Int64, n: Int64, acc: List<List<Int64>>) : List<List<Int64>> =
+    if i >= n then acc
+    else
+        let row = buildRow(a, b, i, n) in
+        matmulHelper(a, b, i + 1, n, Stdlib.List.pushBack<List<Int64>>(acc, row))
+
+def matmul(a: List<List<Int64>>, b: List<List<Int64>>, n: Int64) : List<List<Int64>> =
+    matmulHelper(a, b, 0, n, [])
+
+// Compute checksum
+def checksumRowHelper(row: List<Int64>, i: Int64, j: Int64, n: Int64, acc: Int64) : Int64 =
+    match row with
+    | [] -> acc
+    | [v, ...rest] ->
+        let idx = i * n + j + 1 in
+        let newAcc = Stdlib.Int64.mod(acc + v * idx, 1000000007) in
+        checksumRowHelper(rest, i, j + 1, n, newAcc)
+
+def checksumHelper(m: List<List<Int64>>, i: Int64, n: Int64, acc: Int64) : Int64 =
+    match m with
+    | [] -> acc
+    | [row, ...rest] ->
+        let rowSum = checksumRowHelper(row, i, 0, n, acc) in
+        checksumHelper(rest, i + 1, n, rowSum)
+
+def checksum(m: List<List<Int64>>, n: Int64) : Int64 =
+    checksumHelper(m, 0, n, 0)
+
+// Main: Use very small size (3x3) to avoid stack overflow
+// Full benchmark would use n=100
+// n=4 and larger causes segfault due to stack depth limits
+let n = 3 in
+let a = generateMatrix(n, 42) in
+let b = generateMatrix(n, 123) in
+let c = matmul(a, b, n) in
+checksum(c, n)

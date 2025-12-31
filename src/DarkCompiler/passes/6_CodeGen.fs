@@ -101,12 +101,13 @@ let lirPhysFPRegToARM64FReg (physReg: LIR.PhysFPReg) : ARM64.FReg =
 /// For FVirtual, we use a simple allocation scheme:
 /// - FVirtual 1000 -> D0 (left operand temp for binary ops)
 /// - FVirtual 1001 -> D1 (right operand temp for binary ops)
-/// - FVirtual 3000-3003 -> D0-D3 (temps for float call args before SaveRegs)
-/// - All other FVirtual n -> D2-D15 (14 registers with modulo)
+/// - FVirtual 3000-3007 -> D14-D15 (temps for float call args, reserved to avoid
+///   conflicts with both argument registers D0-D7 and expression temps D2-D13)
+/// - All other FVirtual n -> D2-D13 (12 registers with modulo)
 ///
 /// D0-D1 are reserved for binary op temps (which are short-lived within a single
-/// expression). All other FVirtuals use D2-D15, giving 14 registers before wrapping.
-/// This supports up to 14 concurrent float values without register conflicts.
+/// expression). D14-D15 are reserved for float call arg temps. All other FVirtuals
+/// use D2-D13, giving 12 registers before wrapping.
 let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64.FReg, string> =
     match freg with
     | LIR.FPhysical physReg -> Ok (lirPhysFPRegToARM64FReg physReg)
@@ -114,18 +115,14 @@ let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64.FReg, string> =
     | LIR.FVirtual 1000 -> Ok ARM64.D0  // Left temp for binary ops
     | LIR.FVirtual 1001 -> Ok ARM64.D1  // Right temp for binary ops
     | LIR.FVirtual n when n >= 3000 && n < 4000 ->
-        // Temps for float call arguments - use D0-D3 (these are only live
-        // between FLoad and FArgMoves, before SaveRegs clobbers them)
+        // Temps for float call arguments - use D14-D15 which are reserved and
+        // don't overlap with expression temps (D2-D13) or binary op temps (D0-D1)
         let tempIdx = n - 3000
-        match tempIdx % 4 with
-        | 0 -> Ok ARM64.D0
-        | 1 -> Ok ARM64.D1
-        | 2 -> Ok ARM64.D2
-        | _ -> Ok ARM64.D3
+        if tempIdx % 2 = 0 then Ok ARM64.D14 else Ok ARM64.D15
     | LIR.FVirtual n ->
-        // All float temps use D2-D15 (14 registers) with modulo to handle overflow
-        // This gives us 14 concurrent float values before register reuse
-        let regIdx = n % 14
+        // All float temps use D2-D13 (12 registers) with modulo to handle overflow
+        // D14-D15 are reserved for call arg temps to avoid conflicts
+        let regIdx = n % 12
         let physReg =
             match regIdx with
             | 0 -> ARM64.D2
@@ -139,9 +136,7 @@ let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64.FReg, string> =
             | 8 -> ARM64.D10
             | 9 -> ARM64.D11
             | 10 -> ARM64.D12
-            | 11 -> ARM64.D13
-            | 12 -> ARM64.D14
-            | _ -> ARM64.D15
+            | _ -> ARM64.D13
         Ok physReg
 
 /// Convert LIR.Reg to ARM64.Reg (assumes physical registers only)
