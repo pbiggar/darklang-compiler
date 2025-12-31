@@ -4,6 +4,7 @@ Dark compiler performance over time (append-only log).
 
 | Date       | Commit   | Benchmark     | Instructions     | Data Refs        | L1 Miss     | LL Miss     | Branches        | Mispred |
 |------------|----------|---------------|------------------|------------------|-------------|-------------|-----------------|---------|
+| 2025-12-31 | a6c7003 | quicksort     |          218,256 |           69,706 |       1,542 |       1,131 |          15,829 |   11.0% |
 | 2025-12-31 | 0735911 | merkletrees   |      134,348,003 |       26,214,235 |          28 |          43 |       3,276,814 |   12.6% |
 | full_merkle | unknown | merkletrees   |      134,348,003 |       26,214,235 |          28 |          43 |       3,276,814 |   12.6% |
 | full_params | 5b14f04c | mandelbrot    |       14,865,926 |        2,312,830 |           8 |          28 |         609,810 |    9.1% |

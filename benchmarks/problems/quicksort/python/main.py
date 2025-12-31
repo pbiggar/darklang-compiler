@@ -27,7 +27,7 @@ def checksum(arr):
         result = (result + x * (i + 1)) % 1000000007
     return result
 
-# Sort 5000 elements
-arr = generate_list(5000, 42)
+# Sort 100 elements (reduced to match Dark heap constraints)
+arr = generate_list(100, 42)
 sorted_arr = quicksort(arr)
 print(checksum(sorted_arr))

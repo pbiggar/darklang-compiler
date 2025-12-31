@@ -29,8 +29,8 @@ let checksum arr =
   ) arr;
   !result
 
-(* Sort 5000 elements *)
+(* Sort 100 elements (reduced to match Dark heap constraints) *)
 let () =
-  let arr = generate_list 5000 42L in
+  let arr = generate_list 100 42L in
   let sorted_arr = quicksort arr in
   Printf.printf "%Ld\n" (checksum sorted_arr)

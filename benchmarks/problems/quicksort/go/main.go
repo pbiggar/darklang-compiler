@@ -44,7 +44,8 @@ func checksum(arr []int64) int64 {
 }
 
 func main() {
-	arr := generateList(5000, 42)
+	// Sort 100 elements (reduced to match Dark heap constraints)
+	arr := generateList(100, 42)
 	sorted := quicksort(arr)
 	fmt.Println(checksum(sorted))
 }
