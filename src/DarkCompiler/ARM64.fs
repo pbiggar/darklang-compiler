@@ -31,10 +31,17 @@ type Reg =
     | X28  // Reserved for heap pointer
     | X29 | X30 | SP
 
-/// ARM64 floating-point registers (D0-D15 for double precision)
+/// ARM64 floating-point registers (D0-D31 for double precision)
+/// D0-D7: Argument/result registers (caller-saved)
+/// D8-D15: Callee-saved registers
+/// D16-D31: Additional caller-saved registers
 type FReg =
     | D0 | D1 | D2 | D3 | D4 | D5 | D6 | D7
     | D8 | D9 | D10 | D11 | D12 | D13 | D14 | D15
+    | D16  // Used as temp for FArgMoves cycle breaking
+    | D17  // Used as temp for binary ops (right operand)
+    | D18  // Used as temp for binary ops (left operand)
+    | D19 | D20 | D21 | D22 | D23 | D24 | D25 | D26  // Used for float call arg temps
 
 /// Comparison conditions (for CSET)
 type Condition =

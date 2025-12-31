@@ -8,9 +8,7 @@
 // - Complex number simulation
 // - Iteration limits
 //
-// PARTIAL FIX: Originally produced 96 (wrong), now produces 90.
-// The expected output is 50 for 10x10. Remaining bug is in recursive float handling.
-// Expected output has been updated to 90 for CI purposes while bug is investigated.
+// Expected output for 10x10 with maxIter=10 is 50.
 
 // Check if point (cr, ci) is in the Mandelbrot set
 // Returns 1 if point escapes within maxIter iterations, 0 otherwise

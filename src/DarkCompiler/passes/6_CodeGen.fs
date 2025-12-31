@@ -98,33 +98,43 @@ let lirPhysFPRegToARM64FReg (physReg: LIR.PhysFPReg) : ARM64.FReg =
     | LIR.D15 -> ARM64.D15
 
 /// Convert LIR.FReg to ARM64.FReg
-/// For FVirtual, we use a simple allocation scheme:
-/// - FVirtual 1000 -> D0 (left operand temp for binary ops)
-/// - FVirtual 1001 -> D1 (right operand temp for binary ops)
-/// - FVirtual 3000-3007 -> D14-D15 (temps for float call args, reserved to avoid
-///   conflicts with both argument registers D0-D7 and expression temps D2-D13)
-/// - All other FVirtual n -> D2-D13 (12 registers with modulo)
+/// For FVirtual, we use a two-tier allocation scheme to avoid collisions:
+/// - FVirtual 1000 -> D18 (left operand temp for binary ops)
+/// - FVirtual 1001 -> D17 (right operand temp for binary ops)
+/// - FVirtual 3000-3007 -> D14-D15 (temps for float call args)
+/// - FVirtual 0-7 -> D2-D9 (dedicated 1:1 mapping for parameters)
+/// - FVirtual 8+ -> D10-D13 (4 temps with modulo, for SSA temps and locals)
 ///
-/// D0-D1 are reserved for binary op temps (which are short-lived within a single
-/// expression). D14-D15 are reserved for float call arg temps. All other FVirtuals
-/// use D2-D13, giving 12 registers before wrapping.
+/// The two-tier scheme ensures that parameter VRegs (0-7) never collide with
+/// SSA-generated temps (which have high IDs like 12001). Parameters get D2-D9,
+/// while temps get D10-D13 with modulo 4.
 let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64.FReg, string> =
     match freg with
     | LIR.FPhysical physReg -> Ok (lirPhysFPRegToARM64FReg physReg)
-    // Binary op temps use D0-D1 (short-lived, only during expression evaluation)
-    | LIR.FVirtual 1000 -> Ok ARM64.D0  // Left temp for binary ops
-    | LIR.FVirtual 1001 -> Ok ARM64.D1  // Right temp for binary ops
+    // Binary op temps use D17-D18 (caller-saved, not used as argument registers)
+    | LIR.FVirtual 1000 -> Ok ARM64.D18  // Left temp for binary ops
+    | LIR.FVirtual 1001 -> Ok ARM64.D17  // Right temp for binary ops
     | LIR.FVirtual n when n >= 3000 && n < 4000 ->
-        // Temps for float call arguments - use D14-D15 which are reserved and
-        // don't overlap with expression temps (D2-D13) or binary op temps (D0-D1)
-        let tempIdx = n - 3000
-        if tempIdx % 2 = 0 then Ok ARM64.D14 else Ok ARM64.D15
-    | LIR.FVirtual n ->
-        // All float temps use D2-D13 (12 registers) with modulo to handle overflow
-        // D14-D15 are reserved for call arg temps to avoid conflicts
-        let regIdx = n % 12
+        // Temps for float call arguments - use D19-D26 (8 registers)
+        // These must not collide with each other since up to 8 floats
+        // can be loaded before FArgMoves. Using D19-D26 avoids collision
+        // with argument regs D0-D7, parameter VRegs D2-D9, SSA temps D10-D13,
+        // and binary op temps D17-D18.
+        let tempIdx = (n - 3000) % 8
+        match tempIdx with
+        | 0 -> Ok ARM64.D19
+        | 1 -> Ok ARM64.D20
+        | 2 -> Ok ARM64.D21
+        | 3 -> Ok ARM64.D22
+        | 4 -> Ok ARM64.D23
+        | 5 -> Ok ARM64.D24
+        | 6 -> Ok ARM64.D25
+        | _ -> Ok ARM64.D26
+    | LIR.FVirtual n when n >= 0 && n <= 7 ->
+        // Parameters (VRegs 0-7) get dedicated D2-D9 mapping
+        // This prevents collisions with SSA-generated temps
         let physReg =
-            match regIdx with
+            match n with
             | 0 -> ARM64.D2
             | 1 -> ARM64.D3
             | 2 -> ARM64.D4
@@ -132,11 +142,16 @@ let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64.FReg, string> =
             | 4 -> ARM64.D6
             | 5 -> ARM64.D7
             | 6 -> ARM64.D8
-            | 7 -> ARM64.D9
-            | 8 -> ARM64.D10
-            | 9 -> ARM64.D11
-            | 10 -> ARM64.D12
-            | _ -> ARM64.D13
+            | _ -> ARM64.D9
+        Ok physReg
+    | LIR.FVirtual n ->
+        // SSA temps and other high-numbered VRegs
+        // Available: D0, D1 (caller-saved, saved around calls), D10-D15 (not used elsewhere)
+        // Must avoid: D2-D9 (params), D16 (cycle temp), D17-D18 (binop temps), D19-D26 (arg temps)
+        // Using 8 registers: D0, D1, D10, D11, D12, D13, D14, D15
+        let tempRegs = [| ARM64.D0; ARM64.D1; ARM64.D10; ARM64.D11; ARM64.D12; ARM64.D13; ARM64.D14; ARM64.D15 |]
+        let regIdx = n % tempRegs.Length
+        let physReg = tempRegs.[regIdx]
         Ok physReg
 
 /// Convert LIR.Reg to ARM64.Reg (assumes physical registers only)
@@ -1457,26 +1472,48 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
 
     | LIR.FArgMoves moves ->
         // Float argument moves - move float values to D0-D7
-        let generateFMove (destPhysReg: LIR.PhysFPReg, srcFReg: LIR.FReg) : Result<ARM64.Instr list, string> =
-            let destARM64 = lirPhysFPRegToARM64FReg destPhysReg
-            lirFRegToARM64FReg srcFReg
-            |> Result.map (fun srcARM64 ->
-                if srcARM64 = destARM64 then []
-                else [ARM64.FMOV_reg (destARM64, srcARM64)])
+        // Uses parallel move resolution to handle register conflicts correctly
 
-        // Generate all moves in order (D0, D1, D2, ...)
-        moves
-        |> List.sortBy (fun (destReg, _) ->
-            match destReg with
-            | LIR.D0 -> 0 | LIR.D1 -> 1 | LIR.D2 -> 2 | LIR.D3 -> 3
-            | LIR.D4 -> 4 | LIR.D5 -> 5 | LIR.D6 -> 6 | LIR.D7 -> 7
-            | _ -> 100)
-        |> List.map generateFMove
-        |> List.fold (fun acc r ->
-            match acc, r with
-            | Ok instrs, Ok newInstrs -> Ok (instrs @ newInstrs)
-            | Error e, _ -> Error e
-            | _, Error e -> Error e) (Ok [])
+        // First, convert all source FRegs to ARM64 FRegs
+        let resolvedMoves =
+            moves
+            |> List.map (fun (destPhysReg, srcFReg) ->
+                let destARM64 = lirPhysFPRegToARM64FReg destPhysReg
+                match lirFRegToARM64FReg srcFReg with
+                | Ok srcARM64 -> Ok (destARM64, srcARM64)
+                | Error e -> Error e)
+            |> List.fold (fun acc r ->
+                match acc, r with
+                | Ok moves, Ok move -> Ok (move :: moves)
+                | Error e, _ -> Error e
+                | _, Error e -> Error e) (Ok [])
+            |> Result.map List.rev
+
+        match resolvedMoves with
+        | Error e -> Error e
+        | Ok armMoves ->
+            // Use ParallelMoves.resolve to get the correct move order
+            // We treat ARM64.FReg as both dest and src type
+            let getSrcReg (srcReg: ARM64.FReg) : ARM64.FReg option = Some srcReg
+            let actions = ParallelMoves.resolve armMoves getSrcReg
+
+            // Convert actions to ARM64 instructions
+            // Use D16 as temp register for cycle breaking
+            // D16-D31 are the upper half of the SIMD register file, not used elsewhere
+            let mutable allInstrs : ARM64.Instr list = []
+            for action in actions do
+                match action with
+                | ParallelMoves.SaveToTemp srcReg ->
+                    // Save to D16 (temp) - using upper SIMD register
+                    allInstrs <- allInstrs @ [ARM64.FMOV_reg (ARM64.D16, srcReg)]
+                | ParallelMoves.Move (dest, src) ->
+                    if dest <> src then
+                        allInstrs <- allInstrs @ [ARM64.FMOV_reg (dest, src)]
+                | ParallelMoves.MoveFromTemp dest ->
+                    // Move from D16 (temp) to destination
+                    allInstrs <- allInstrs @ [ARM64.FMOV_reg (dest, ARM64.D16)]
+
+            Ok allInstrs
 
     | LIR.PrintInt reg ->
         // Value to print should be in X0 (no exit)
