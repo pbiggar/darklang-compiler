@@ -168,7 +168,8 @@ type Instr =
     | RandomInt64 of dest:VReg                     // Get 8 random bytes as Int64
     // SSA phi node - merges values from different predecessor blocks
     // Phi nodes must appear at the beginning of a basic block, before other instructions
-    | Phi of dest:VReg * sources:(Operand * Label) list
+    // valueType distinguishes between integer (X registers) and float (D registers) phi nodes
+    | Phi of dest:VReg * sources:(Operand * Label) list * valueType:AST.Type option
     // Coverage instrumentation - records that expression was executed
     | CoverageHit of exprId:int
 

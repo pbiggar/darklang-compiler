@@ -1112,13 +1112,25 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
     | MIR.CoverageHit exprId ->
         Ok [LIR.CoverageHit exprId]
 
-    | MIR.Phi (dest, sources) ->
-        // Convert MIR.Phi to LIR.Phi for SSA-based register allocation
-        let lirDest = vregToLIRReg dest
-        let lirSources =
-            sources |> List.map (fun (op, MIR.Label lbl) ->
-                (convertOperand op, LIR.Label lbl))
-        Ok [LIR.Phi (lirDest, lirSources)]
+    | MIR.Phi (dest, sources, valueType) ->
+        // Convert MIR.Phi to LIR.Phi (int) or LIR.FPhi (float)
+        match valueType with
+        | Some AST.TFloat64 ->
+            // Float phi uses FReg (FVirtual) registers
+            let lirDest = vregToLIRFReg dest
+            let lirSources =
+                sources |> List.map (fun (op, MIR.Label lbl) ->
+                    match op with
+                    | MIR.Register vreg -> (vregToLIRFReg vreg, LIR.Label lbl)
+                    | _ -> failwith $"FPhi source must be a register, got: {op}")
+            Ok [LIR.FPhi (lirDest, lirSources)]
+        | _ ->
+            // Integer phi uses Reg (Virtual) registers
+            let lirDest = vregToLIRReg dest
+            let lirSources =
+                sources |> List.map (fun (op, MIR.Label lbl) ->
+                    (convertOperand op, LIR.Label lbl))
+            Ok [LIR.Phi (lirDest, lirSources, valueType)]
 
 /// Convert MIR terminator to LIR terminator
 /// For Branch, need to convert operand to register (may add instructions)
@@ -1311,8 +1323,11 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     match instr with
     // Instructions with Operand fields that may contain StringRef/FloatRef
     | LIR.Mov (dest, src) -> LIR.Mov (dest, offsetLIROperand strOffset fltOffset src)
-    | LIR.Phi (dest, sources) ->
-        LIR.Phi (dest, sources |> List.map (fun (op, lbl) -> (offsetLIROperand strOffset fltOffset op, lbl)))
+    | LIR.Phi (dest, sources, valueType) ->
+        LIR.Phi (dest, sources |> List.map (fun (op, lbl) -> (offsetLIROperand strOffset fltOffset op, lbl)), valueType)
+    | LIR.FPhi (dest, sources) ->
+        // FPhi sources are FRegs, not operands with pool references, so no offset needed
+        LIR.FPhi (dest, sources)
     | LIR.Add (dest, left, right) -> LIR.Add (dest, left, offsetLIROperand strOffset fltOffset right)
     | LIR.Sub (dest, left, right) -> LIR.Sub (dest, left, offsetLIROperand strOffset fltOffset right)
     | LIR.Cmp (left, right) -> LIR.Cmp (left, offsetLIROperand strOffset fltOffset right)

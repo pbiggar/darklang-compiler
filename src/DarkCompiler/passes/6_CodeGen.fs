@@ -390,6 +390,10 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         // Phi nodes should be eliminated before code generation (by register allocation)
         Error "Phi nodes should be eliminated before code generation"
 
+    | LIR.FPhi _ ->
+        // Float phi nodes should be eliminated before code generation (by register allocation)
+        Error "Float phi nodes should be eliminated before code generation"
+
     | LIR.Mov (dest, src) ->
         lirRegToARM64Reg dest
         |> Result.bind (fun destReg ->

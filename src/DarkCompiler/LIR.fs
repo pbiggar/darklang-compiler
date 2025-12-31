@@ -64,7 +64,7 @@ type Label = Label of string
 /// Instructions (closer to ARM64 instructions, non-control-flow)
 type Instr =
     | Mov of dest:Reg * src:Operand
-    | Phi of dest:Reg * sources:(Operand * Label) list  // SSA phi node: merge values from predecessors
+    | Phi of dest:Reg * sources:(Operand * Label) list * valueType:AST.Type option  // SSA phi node: merge values from predecessors
     | Store of stackSlot:int * src:Reg          // Store register to stack slot (for spills)
     | Add of dest:Reg * left:Reg * right:Operand
     | Sub of dest:Reg * left:Reg * right:Operand
@@ -112,6 +112,7 @@ type Instr =
     | PrintRecord of recordPtr:Reg * typeName:string * fields:(string * AST.Type) list  // Print record: TypeName { field1 = val1, ... }
     | Exit                                       // Exit program with code 0
     // Floating-point instructions
+    | FPhi of dest:FReg * sources:(FReg * Label) list  // Float SSA phi node: merge float values from predecessors
     | FMov of dest:FReg * src:FReg              // Move between FP registers
     | FLoad of dest:FReg * floatIdx:int         // Load float from pool into FP register
     | FAdd of dest:FReg * left:FReg * right:FReg

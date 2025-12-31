@@ -177,7 +177,7 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | FileDelete (dest, _) -> Set.add dest defs
         | FileSetExecutable (dest, _) -> Set.add dest defs
         | FileWriteFromPtr (dest, _, _, _) -> Set.add dest defs
-        | Phi (dest, _) -> Set.add dest defs
+        | Phi (dest, _, _) -> Set.add dest defs
         | RawAlloc (dest, _) -> Set.add dest defs
         | RawFree _ -> defs
         | RawGet (dest, _, _) -> Set.add dest defs
@@ -267,7 +267,7 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
             | FileSetExecutable (_, path) -> Set.union uses (getOperandUses path)
             | FileWriteFromPtr (_, path, ptr, length) ->
                 uses |> Set.union (getOperandUses path) |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses length)
-            | Phi (_, sources) ->
+            | Phi (_, sources, _) ->
                 sources |> List.fold (fun u (src, _) -> Set.union u (getOperandUses src)) uses
             | RawAlloc (_, numBytes) -> Set.union uses (getOperandUses numBytes)
             | RawFree ptr -> Set.union uses (getOperandUses ptr)
@@ -373,7 +373,11 @@ let computeLiveness (cfg: CFG) : Map<Label, Set<VReg>> * Map<Label, Set<VReg>> =
 ///   For each block d in DF(b):
 ///     Insert phi node for v in d (if not already present AND v is live-in at d)
 ///     This also counts as a definition, so recursively process
-let insertPhiNodes (cfg: CFG) (df: DominanceFrontier) (preds: Predecessors) (liveIn: Map<Label, Set<VReg>>) (funcParams: VReg list) : CFG =
+let insertPhiNodes (cfg: CFG) (df: DominanceFrontier) (preds: Predecessors) (liveIn: Map<Label, Set<VReg>>) (funcParams: VReg list) (paramTypes: AST.Type list) : CFG =
+    // Create a map from parameter VReg to its type
+    let paramTypeMap =
+        List.zip funcParams paramTypes
+        |> Map.ofList
     // Get all definitions from instructions in the CFG
     let instrDefs = getAllDefs cfg
 
@@ -415,7 +419,9 @@ let insertPhiNodes (cfg: CFG) (df: DominanceFrontier) (preds: Predecessors) (liv
                             let blockPreds = Map.tryFind dfBlock preds |> Option.defaultValue []
                             // Create phi with placeholder sources (will be renamed later)
                             let phiSources = blockPreds |> List.map (fun p -> (Register vreg, p))
-                            let phiInstr = Phi (vreg, phiSources)
+                            // Look up type for this vreg (if it's a parameter)
+                            let valueType = Map.tryFind vreg paramTypeMap
+                            let phiInstr = Phi (vreg, phiSources, valueType)
 
                             // Add to block (at the beginning)
                             let existingBlock = Map.find dfBlock c.Blocks
@@ -478,7 +484,7 @@ let createInitialRenamingState (cfg: CFG) : RenamingState =
                     | FileDelete (VReg n, _) -> max m n
                     | FileSetExecutable (VReg n, _) -> max m n
                     | FileWriteFromPtr (VReg n, _, _, _) -> max m n
-                    | Phi (VReg n, _) -> max m n
+                    | Phi (VReg n, _, _) -> max m n
                     | _ -> m
                 ) 0
             max maxSoFar blockMax
@@ -658,11 +664,11 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let (_, newDest, state') = newVersion state dest
         (FileWriteFromPtr (newDest, path', ptr', length'), state')
 
-    | Phi (dest, sources) ->
+    | Phi (dest, sources, valueType) ->
         // Phi sources are renamed when processing predecessors
         // Here we just rename the destination
         let (_, newDest, state') = newVersion state dest
-        (Phi (newDest, sources), state')
+        (Phi (newDest, sources, valueType), state')
 
     | RawAlloc (dest, numBytes) ->
         let numBytes' = renameOperand state numBytes
@@ -789,7 +795,7 @@ let updatePhiSourcesForSuccessors (cfg: CFG) (currentLabel: Label) (state: Renam
             succBlock.Instrs
             |> List.map (fun instr ->
                 match instr with
-                | Phi (dest, sources) ->
+                | Phi (dest, sources, valueType) ->
                     // Update the source that comes from currentLabel
                     let sources' =
                         sources
@@ -799,7 +805,7 @@ let updatePhiSourcesForSuccessors (cfg: CFG) (currentLabel: Label) (state: Renam
                             else
                                 (op, fromLabel)
                         )
-                    Phi (dest, sources')
+                    Phi (dest, sources', valueType)
                 | other -> other
             )
         let succBlock' = { succBlock with Instrs = instrs' }
@@ -880,7 +886,7 @@ let convertFunctionToSSA (func: Function) : Function =
 
     // Insert phi nodes (only for live variables)
     // Pass function params so they're treated as defined at entry (for self-recursive functions)
-    let cfgWithPhis = insertPhiNodes cfg df preds liveIn func.Params
+    let cfgWithPhis = insertPhiNodes cfg df preds liveIn func.Params func.ParamTypes
 
     // Rename variables
     let ssaCFG = renameCFG cfgWithPhis idoms

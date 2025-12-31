@@ -90,7 +90,7 @@ let testSimplePhiResolution () : TestResult =
     let blockA = makeBranchBlock labelA [Mov (vr 0, Imm 1L)] (vr 0) labelB labelC
     let blockB = makeJumpBlock labelB [Mov (vr 1, Imm 10L)] labelD
     let blockC = makeJumpBlock labelC [Mov (vr 2, Imm 20L)] labelD
-    let phiInstr = Phi (vr 3, [(vreg 1, labelB); (vreg 2, labelC)])
+    let phiInstr = Phi (vr 3, [(vreg 1, labelB); (vreg 2, labelC)], None)
     let blockD = makeRetBlock labelD [phiInstr; Mov (vr 4, vreg 3)]
 
     let cfg = makeCFG labelA [blockA; blockB; blockC; blockD]
@@ -142,8 +142,8 @@ let testMultiplePhisParallel () : TestResult =
     let blockA = makeBranchBlock labelA [Mov (vr 0, Imm 1L)] (vr 0) labelB labelC
     let blockB = makeJumpBlock labelB [Mov (vr 1, Imm 10L); Mov (vr 5, Imm 50L)] labelD
     let blockC = makeJumpBlock labelC [Mov (vr 2, Imm 20L); Mov (vr 6, Imm 60L)] labelD
-    let phi1 = Phi (vr 3, [(vreg 1, labelB); (vreg 2, labelC)])
-    let phi2 = Phi (vr 4, [(vreg 5, labelB); (vreg 6, labelC)])
+    let phi1 = Phi (vr 3, [(vreg 1, labelB); (vreg 2, labelC)], None)
+    let phi2 = Phi (vr 4, [(vreg 5, labelB); (vreg 6, labelC)], None)
     let blockD = makeRetBlock labelD [phi1; phi2]
 
     let cfg = makeCFG labelA [blockA; blockB; blockC; blockD]
@@ -197,8 +197,8 @@ let testPhiSwap () : TestResult =
     let blockC = makeJumpBlock labelC [Mov (vr 5, Imm 50L); Mov (vr 6, Imm 60L)] labelD
     // The swap: v3 gets v2 (from B), v4 gets v1 (from B)
     // If v3→X1 and v4→X2, and v1→X1 and v2→X2, then this is a direct swap
-    let phi1 = Phi (vr 3, [(vreg 2, labelB); (vreg 5, labelC)])  // v3 ← v2 from B
-    let phi2 = Phi (vr 4, [(vreg 1, labelB); (vreg 6, labelC)])  // v4 ← v1 from B
+    let phi1 = Phi (vr 3, [(vreg 2, labelB); (vreg 5, labelC)], None)  // v3 ← v2 from B
+    let phi2 = Phi (vr 4, [(vreg 1, labelB); (vreg 6, labelC)], None)  // v4 ← v1 from B
     let blockD = makeRetBlock labelD [phi1; phi2]
 
     let cfg = makeCFG labelA [blockA; blockB; blockC; blockD]
@@ -249,7 +249,7 @@ let testPhiWithImmediate () : TestResult =
     let blockB = makeJumpBlock labelB [] labelD
     let blockC = makeJumpBlock labelC [Mov (vr 2, Imm 20L)] labelD
     // Phi with immediate from B
-    let phiInstr = Phi (vr 1, [(Imm 10L, labelB); (vreg 2, labelC)])
+    let phiInstr = Phi (vr 1, [(Imm 10L, labelB); (vreg 2, labelC)], None)
     let blockD = makeRetBlock labelD [phiInstr; Mov (vr 3, vreg 1)]
 
     let cfg = makeCFG labelA [blockA; blockB; blockC; blockD]
@@ -295,7 +295,7 @@ let testLoopPhi () : TestResult =
     let labelD = makeLabel "D"
 
     let blockA = makeJumpBlock labelA [Mov (vr 0, Imm 0L)] labelB
-    let phiInstr = Phi (vr 1, [(vreg 0, labelA); (vreg 2, labelC)])
+    let phiInstr = Phi (vr 1, [(vreg 0, labelA); (vreg 2, labelC)], None)
     let blockB = makeJumpBlock labelB [phiInstr] labelC
     let blockC = makeBranchBlock labelC [Add (vr 2, vr 1, Imm 1L); Mov (vr 99, Imm 1L)] (vr 99) labelB labelD
     let blockD = makeRetBlock labelD []

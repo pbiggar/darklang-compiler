@@ -79,7 +79,7 @@ let testPhiDefAtBlockEntry () : TestResult =
     let blockA = makeBranchBlock labelA [Mov (vr 0, Imm 1L)] (vr 0) labelB labelC
     let blockB = makeJumpBlock labelB [] labelD
     let blockC = makeJumpBlock labelC [] labelD
-    let phiInstr = Phi (vr 1, [(vreg 0, labelB); (vreg 0, labelC)])
+    let phiInstr = Phi (vr 1, [(vreg 0, labelB); (vreg 0, labelC)], None)
     // Use v1 and then return
     let blockD = makeJumpBlock labelD [phiInstr; Mov (vr 2, vreg 1)] labelE
     let blockE = makeRetBlock labelE [Mov (vr 3, vreg 2)]
@@ -126,7 +126,7 @@ let testPhiSourceLivenessScoped () : TestResult =
     let blockA = makeBranchBlock labelA [Mov (condReg, Imm 1L)] condReg labelB labelC
     let blockB = makeJumpBlock labelB [Mov (vr 0, Imm 10L)] labelD
     let blockC = makeJumpBlock labelC [Mov (vr 1, Imm 20L)] labelD
-    let phiInstr = Phi (vr 2, [(vreg 0, labelB); (vreg 1, labelC)])
+    let phiInstr = Phi (vr 2, [(vreg 0, labelB); (vreg 1, labelC)], None)
     // Use v2 and return
     let blockD = makeRetBlock labelD [phiInstr; Mov (vr 3, vreg 2)]
 
@@ -171,8 +171,8 @@ let testMultiplePhisSameBlock () : TestResult =
     let blockA = makeBranchBlock labelA [Mov (condReg, Imm 1L)] condReg labelB labelC
     let blockB = makeJumpBlock labelB [Mov (vr 0, Imm 10L); Mov (vr 4, Imm 40L)] labelD
     let blockC = makeJumpBlock labelC [Mov (vr 1, Imm 20L); Mov (vr 5, Imm 50L)] labelD
-    let phi1 = Phi (vr 2, [(vreg 0, labelB); (vreg 1, labelC)])
-    let phi2 = Phi (vr 3, [(vreg 4, labelB); (vreg 5, labelC)])
+    let phi1 = Phi (vr 2, [(vreg 0, labelB); (vreg 1, labelC)], None)
+    let phi2 = Phi (vr 3, [(vreg 4, labelB); (vreg 5, labelC)], None)
     // Use both phi results with Add
     let useInstr = Add (vr 6, vr 2, vreg 3)
     let blockD = makeRetBlock labelD [phi1; phi2; useInstr; Mov (vr 7, vreg 6)]
@@ -221,7 +221,7 @@ let testLoopPhi () : TestResult =
     let condReg = vr 99
 
     let blockA = makeJumpBlock labelA [Mov (vr 0, Imm 0L)] labelB
-    let phiInstr = Phi (vr 1, [(vreg 0, labelA); (vreg 2, labelC)])
+    let phiInstr = Phi (vr 1, [(vreg 0, labelA); (vreg 2, labelC)], None)
     let blockB = makeJumpBlock labelB [phiInstr] labelC
     // C uses v1 to compute v2, and might loop back
     let blockC = makeBranchBlock labelC [Add (vr 2, vr 1, Imm 1L); Mov (condReg, Imm 1L)] condReg labelB labelD

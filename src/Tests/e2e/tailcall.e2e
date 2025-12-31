@@ -201,3 +201,59 @@ def myStartsWith2Fail(s: String, prefix: String) : Bool =
     else myCompare2(s, 0, prefix, 0, prefixLen)
 
 myStartsWith2Fail("hello world", "world") = stdout="false\n"
+
+// ============================================================================
+// Float Parameter Self-Recursion Tests
+// These test the FPhi (float phi node) support for self-recursion optimization.
+// Previously, functions with float parameters fell back to TailCall instruction.
+// Now they use the loop optimization with phi nodes that carry type info.
+// ============================================================================
+
+// Float accumulator with integer counter
+// Tests FPhi for the acc parameter
+def sumFloats(n: Int64, acc: Float) : Float =
+    if n <= 0 then acc
+    else sumFloats(n - 1, acc + 1.0)
+
+sumFloats(10, 0.0) = stdout="10.00\n"
+
+// Larger iteration count to verify loop works correctly
+def sumFloats100(n: Int64, acc: Float) : Float =
+    if n <= 0 then acc
+    else sumFloats100(n - 1, acc + 1.0)
+
+sumFloats100(100, 0.0) = stdout="100.00\n"
+
+// All float parameters (2 floats + int counter)
+// Tests FPhi for both x and y parameters
+def floatLoop(x: Float, y: Float, n: Int64) : Float =
+    if n <= 0 then x + y
+    else floatLoop(y, x, n - 1)
+
+floatLoop(1.0, 2.0, 0) = stdout="3.00\n"
+
+def floatLoop1(x: Float, y: Float, n: Int64) : Float =
+    if n <= 0 then x + y
+    else floatLoop1(y, x, n - 1)
+
+floatLoop1(1.0, 2.0, 1) = stdout="3.00\n"
+
+def floatLoop2(x: Float, y: Float, n: Int64) : Float =
+    if n <= 0 then x + y
+    else floatLoop2(y, x, n - 1)
+
+floatLoop2(1.0, 2.0, 2) = stdout="3.00\n"
+
+// Float with arithmetic in loop
+def floatArithmetic(x: Float, acc: Float, n: Int64) : Float =
+    if n <= 0 then acc
+    else floatArithmetic(x, acc + x, n - 1)
+
+floatArithmetic(2.5, 0.0, 4) = stdout="10.00\n"
+
+// Mixed: two floats, one being accumulated
+def floatAccum(a: Float, b: Float, n: Int64) : Float =
+    if n <= 0 then a
+    else floatAccum(a + b, b, n - 1)
+
+floatAccum(0.0, 1.5, 4) = stdout="6.00\n"

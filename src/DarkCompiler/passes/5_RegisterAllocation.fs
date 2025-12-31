@@ -280,7 +280,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.RefCountDecString _ -> None
     | LIR.RandomInt64 dest -> regToVReg dest
     // Phi defines its destination at block entry
-    | LIR.Phi (dest, _) -> regToVReg dest
+    | LIR.Phi (dest, _, _) -> regToVReg dest
     | _ -> None
 
 /// Get virtual register used by terminator
@@ -309,7 +309,7 @@ let getPhiUsesByPredecessor (block: LIR.BasicBlock) : Map<LIR.Label, Set<int>> =
     block.Instrs
     |> List.choose (fun instr ->
         match instr with
-        | LIR.Phi (_, sources) ->
+        | LIR.Phi (_, sources, _) ->
             Some (sources |> List.choose (fun (op, predLabel) ->
                 operandToVReg op |> Option.map (fun vregId -> (predLabel, vregId))))
         | _ -> None)
@@ -899,6 +899,11 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
     | LIR.Phi _ ->
         // Phi nodes are handled specially by resolvePhiNodes after allocation.
         // Skip them here - they will be removed and converted to moves at predecessor exits.
+        []
+
+    | LIR.FPhi _ ->
+        // Float phi nodes are handled specially by resolvePhiNodes after allocation.
+        // Skip them here - they will be removed and converted to FMov at predecessor exits.
         []
 
     | LIR.Mov (dest, src) ->
@@ -1680,27 +1685,50 @@ let resolvePhiNodes (cfg: LIR.CFG) (allocation: Map<int, Allocation>) : LIR.CFG 
         | LIR.Reg (LIR.Physical p) -> LIR.Reg (LIR.Physical p)
         | _ -> op
 
-    // Collect all phi info: for each phi, get (dest_reg, src_operand, pred_label)
-    // This gives us: List of (successor_label, dest, sources)
-    let phiInfo =
+    // Collect all int phi info: for each phi, get (dest_reg, src_operand, pred_label)
+    // This gives us: List of (dest, sources, valueType)
+    let intPhiInfo =
         cfg.Blocks
         |> Map.toList
         |> List.collect (fun (_, block) ->
             block.Instrs
             |> List.choose (fun instr ->
                 match instr with
-                | LIR.Phi (dest, sources) -> Some (dest, sources)
+                | LIR.Phi (dest, sources, valueType) -> Some (dest, sources, valueType)
                 | _ -> None))
 
-    // Group by predecessor: Map<pred_label, List<(dest_phys, src_operand)>>
+    // Collect all float phi info: (dest FReg, source FRegs with labels)
+    let floatPhiInfo =
+        cfg.Blocks
+        |> Map.toList
+        |> List.collect (fun (_, block) ->
+            block.Instrs
+            |> List.choose (fun instr ->
+                match instr with
+                | LIR.FPhi (dest, sources) -> Some (dest, sources)
+                | _ -> None))
+
+    // Group int phis by predecessor: Map<pred_label, List<(dest_phys, src_operand)>>
     // Each predecessor needs to perform moves for all phis that reference it
-    let predecessorMoves : Map<LIR.Label, (LIR.PhysReg * LIR.Operand) list> =
-        phiInfo
-        |> List.collect (fun (dest, sources) ->
+    let predecessorIntMoves : Map<LIR.Label, (LIR.PhysReg * LIR.Operand) list> =
+        intPhiInfo
+        |> List.collect (fun (dest, sources, _valueType) ->
             let destPhys = regToPhys dest
             sources |> List.map (fun (src, predLabel) ->
                 let srcAllocated = operandToAllocated src
                 (predLabel, (destPhys, srcAllocated))))
+        |> List.groupBy fst
+        |> List.map (fun (predLabel, pairs) ->
+            (predLabel, pairs |> List.map snd))
+        |> Map.ofList
+
+    // Group float phis by predecessor: Map<pred_label, List<(dest_freg, src_freg)>>
+    // Float registers don't go through allocation - FVirtual maps directly to D regs in CodeGen
+    let predecessorFloatMoves : Map<LIR.Label, (LIR.FReg * LIR.FReg) list> =
+        floatPhiInfo
+        |> List.collect (fun (dest, sources) ->
+            sources |> List.map (fun (src, predLabel) ->
+                (predLabel, (dest, src))))
         |> List.groupBy fst
         |> List.map (fun (predLabel, pairs) ->
             (predLabel, pairs |> List.map snd))
@@ -1712,8 +1740,8 @@ let resolvePhiNodes (cfg: LIR.CFG) (allocation: Map<int, Allocation>) : LIR.CFG 
         | LIR.Reg (LIR.Physical p) -> Some p
         | _ -> None
 
-    // Convert move actions to LIR instructions using X16 as temp (same as TailArgMoves)
-    let generateMoveInstrs (moves: (LIR.PhysReg * LIR.Operand) list) : LIR.Instr list =
+    // Convert int move actions to LIR instructions using X16 as temp (same as TailArgMoves)
+    let generateIntMoveInstrs (moves: (LIR.PhysReg * LIR.Operand) list) : LIR.Instr list =
         let actions = ParallelMoves.resolve moves getSrcPhysReg
         actions
         |> List.collect (fun action ->
@@ -1725,20 +1753,41 @@ let resolvePhiNodes (cfg: LIR.CFG) (allocation: Map<int, Allocation>) : LIR.CFG 
             | ParallelMoves.MoveFromTemp dest ->
                 [LIR.Mov (LIR.Physical dest, LIR.Reg (LIR.Physical LIR.X16))])
 
+    // Generate float moves (FMov instructions)
+    // FVirtual registers map directly to D registers in CodeGen, so we just emit FMov
+    let generateFloatMoveInstrs (moves: (LIR.FReg * LIR.FReg) list) : LIR.Instr list =
+        // For simplicity, emit moves in order. If there are cycles, we'd need to handle them.
+        // For self-recursion phis, cycles are unlikely since params get new values each iteration.
+        moves
+        |> List.filter (fun (dest, src) -> dest <> src)  // Skip no-op moves
+        |> List.map (fun (dest, src) -> LIR.FMov (dest, src))
+
     // Add moves to predecessor blocks
     let mutable updatedBlocks = cfg.Blocks
-    for kvp in predecessorMoves do
+
+    // Add int phi moves
+    for kvp in predecessorIntMoves do
         let predLabel = kvp.Key
         let moves = kvp.Value
         match Map.tryFind predLabel updatedBlocks with
         | Some predBlock ->
-            let moveInstrs = generateMoveInstrs moves
-            // Insert moves at the end of the block (before terminator)
+            let moveInstrs = generateIntMoveInstrs moves
             let updatedBlock = { predBlock with Instrs = predBlock.Instrs @ moveInstrs }
             updatedBlocks <- Map.add predLabel updatedBlock updatedBlocks
         | None -> ()
 
-    // Remove phi nodes from all blocks
+    // Add float phi moves
+    for kvp in predecessorFloatMoves do
+        let predLabel = kvp.Key
+        let moves = kvp.Value
+        match Map.tryFind predLabel updatedBlocks with
+        | Some predBlock ->
+            let moveInstrs = generateFloatMoveInstrs moves
+            let updatedBlock = { predBlock with Instrs = predBlock.Instrs @ moveInstrs }
+            updatedBlocks <- Map.add predLabel updatedBlock updatedBlocks
+        | None -> ()
+
+    // Remove phi and fphi nodes from all blocks
     updatedBlocks <-
         updatedBlocks
         |> Map.map (fun _ block ->
@@ -1747,6 +1796,7 @@ let resolvePhiNodes (cfg: LIR.CFG) (allocation: Map<int, Allocation>) : LIR.CFG 
                 |> List.filter (fun instr ->
                     match instr with
                     | LIR.Phi _ -> false
+                    | LIR.FPhi _ -> false
                     | _ -> true)
             { block with Instrs = filteredInstrs })
 

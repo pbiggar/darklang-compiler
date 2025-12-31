@@ -83,7 +83,7 @@ let getInstrDest (instr: Instr) : VReg option =
     | FileDelete (dest, _) -> Some dest
     | FileSetExecutable (dest, _) -> Some dest
     | FileWriteFromPtr (dest, _, _, _) -> Some dest
-    | Phi (dest, _) -> Some dest
+    | Phi (dest, _, _) -> Some dest
     | RawAlloc (dest, _) -> Some dest
     | RawGet (dest, _, _) -> Some dest
     | RawGetByte (dest, _, _) -> Some dest
@@ -138,7 +138,7 @@ let getInstrUses (instr: Instr) : Set<VReg> =
     | FileDelete (_, path) -> fromOperand path
     | FileSetExecutable (_, path) -> fromOperand path
     | FileWriteFromPtr (_, path, ptr, length) -> Set.unionMany [fromOperand path; fromOperand ptr; fromOperand length]
-    | Phi (_, sources) -> sources |> List.map (fun (op, _) -> fromOperand op) |> Set.unionMany
+    | Phi (_, sources, _) -> sources |> List.map (fun (op, _) -> fromOperand op) |> Set.unionMany
     | RawAlloc (_, numBytes) -> fromOperand numBytes
     | RawFree ptr -> fromOperand ptr
     | RawGet (_, ptr, byteOffset) -> Set.union (fromOperand ptr) (fromOperand byteOffset)
@@ -218,7 +218,7 @@ let buildCopyMap (cfg: CFG) : CopyMap =
             block.Instrs
             |> List.fold (fun d instr ->
                 match instr with
-                | Phi (dest, _) -> Set.add dest d
+                | Phi (dest, _, _) -> Set.add dest d
                 | _ -> d
             ) dests
         ) Set.empty
@@ -237,11 +237,11 @@ let buildCopyMap (cfg: CFG) : CopyMap =
                 // Constant propagation: track constant moves too
                 if Set.contains dest phiDests || Map.containsKey dest m then m
                 else Map.add dest src m
-            | Phi (dest, [(Register src, _)]) when dest <> src ->
+            | Phi (dest, [(Register src, _)], _) when dest <> src ->
                 // Trivial phi with single register source
                 if Map.containsKey dest m then m
                 else Map.add dest (Register src) m
-            | Phi (dest, sources) ->
+            | Phi (dest, sources, _) ->
                 // Check if all sources are the same register
                 if Map.containsKey dest m then m
                 else
@@ -316,7 +316,7 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | FileWriteFromPtr (dest, path, ptr, length) -> FileWriteFromPtr (dest, p path, p ptr, p length)
     // Don't propagate copies into phi sources - phis are merge points and their
     // sources represent values flowing from specific predecessor blocks
-    | Phi (dest, sources) -> Phi (dest, sources)
+    | Phi (dest, sources, valueType) -> Phi (dest, sources, valueType)
     | RawAlloc (dest, numBytes) -> RawAlloc (dest, p numBytes)
     | RawFree ptr -> RawFree (p ptr)
     | RawGet (dest, ptr, byteOffset) -> RawGet (dest, p ptr, p byteOffset)
@@ -410,9 +410,9 @@ let simplifyEmptyBlocks (cfg: CFG) : CFG * bool =
                     block.Instrs
                     |> List.map (fun instr ->
                         match instr with
-                        | Phi (dest, sources) ->
+                        | Phi (dest, sources, valueType) ->
                             let sources' = sources |> List.map (fun (op, lbl) -> (op, redirectLabel lbl))
-                            Phi (dest, sources')
+                            Phi (dest, sources', valueType)
                         | other -> other
                     )
 
