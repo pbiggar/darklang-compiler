@@ -15,6 +15,24 @@ def float4(a: Float, b: Float, c: Float, d: Float) : Float = a + b + c + d
 
 float4(1.0, 2.0, 3.0, 4.0) = stdout="10.00\n"
 
+// 6 float params (tests D0-D5)
+def float6(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float) : Float = a + b + c + d + e + f
+
+Stdlib.Float.toInt(float6(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)) = 21
+
+// 8 float params - stress all D0-D7
+// Note: Using explicit let bindings to avoid register allocation issues with chained additions
+def float8(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float, g: Float, h: Float) : Float =
+  let t1 = a + b in
+  let t2 = t1 + c in
+  let t3 = t2 + d in
+  let t4 = t3 + e in
+  let t5 = t4 + f in
+  let t6 = t5 + g in
+  t6 + h
+
+Stdlib.Float.toInt(float8(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0)) = 36
+
 // Float in recursive function (live across calls)
 def floatRecurse(n: Int64, acc: Float) : Float = if n <= 0 then acc else floatRecurse(n - 1, acc + 1.0)
 
@@ -53,6 +71,21 @@ def rotateFloat2(a: Float, b: Float, n: Int64) : Float = if n <= 0 then a else r
 
 Stdlib.Float.toInt(rotateFloat2(1.0, 2.0, 1) * 10.0) = 20
 Stdlib.Float.toInt(rotateFloat2(1.0, 2.0, 2) * 10.0) = 10
+
+// 3-way Float rotation (tests 3-cycle in FArgMoves)
+def rotateFloat3(a: Float, b: Float, c: Float, n: Int64) : Float = if n <= 0 then a else rotateFloat3(b, c, a, n - 1)
+
+Stdlib.Float.toInt(rotateFloat3(1.0, 2.0, 3.0, 0)) = 1
+Stdlib.Float.toInt(rotateFloat3(1.0, 2.0, 3.0, 1)) = 2
+Stdlib.Float.toInt(rotateFloat3(1.0, 2.0, 3.0, 2)) = 3
+Stdlib.Float.toInt(rotateFloat3(1.0, 2.0, 3.0, 3)) = 1
+
+// 4-way Float rotation (tests 4-cycle in FArgMoves)
+def rotateFloat4(a: Float, b: Float, c: Float, d: Float, n: Int64) : Float = if n <= 0 then a else rotateFloat4(b, c, d, a, n - 1)
+
+Stdlib.Float.toInt(rotateFloat4(1.0, 2.0, 3.0, 4.0, 0)) = 1
+Stdlib.Float.toInt(rotateFloat4(1.0, 2.0, 3.0, 4.0, 1)) = 2
+Stdlib.Float.toInt(rotateFloat4(1.0, 2.0, 3.0, 4.0, 4)) = 1
 
 // Self-cycle (no-op move, X0 <- X0)
 def selfCycle(x: Int64, n: Int64) : Int64 = if n <= 0 then x else selfCycle(x, n - 1)
@@ -112,6 +145,22 @@ if 5000 > 4000 then 1 else 0 = 1
 def mixedTail(x: Int64, f: Float, n: Int64) : Int64 = if n <= 0 then x + Stdlib.Float.toInt(f) else mixedTail(x + 1, f + 1.0, n - 1)
 
 mixedTail(0, 0.0, 5) = 10
+
+// Mixed GP/FP rotation (tests independent GP and FP parallel moves)
+def mixedRotate(x: Int64, f: Float, y: Int64, g: Float, n: Int64) : Int64 =
+  if n <= 0 then x + y else mixedRotate(y, g, x, f, n - 1)
+
+mixedRotate(1, 2.0, 3, 4.0, 0) = 4
+mixedRotate(1, 2.0, 3, 4.0, 1) = 4
+mixedRotate(1, 2.0, 3, 4.0, 2) = 4
+
+// Mixed rotation returning float
+def mixedRotateFloat(x: Int64, f: Float, y: Int64, g: Float, n: Int64) : Float =
+  if n <= 0 then f + g else mixedRotateFloat(y, g, x, f, n - 1)
+
+Stdlib.Float.toInt(mixedRotateFloat(1, 2.0, 3, 4.0, 0)) = 6
+Stdlib.Float.toInt(mixedRotateFloat(1, 2.0, 3, 4.0, 1)) = 6
+Stdlib.Float.toInt(mixedRotateFloat(1, 2.0, 3, 4.0, 2)) = 6
 
 // Deeply nested let bindings
 let a = 1 in let b = a + 1 in let c = b + 1 in let d = c + 1 in let e = d + 1 in a + b + c + d + e = 15
