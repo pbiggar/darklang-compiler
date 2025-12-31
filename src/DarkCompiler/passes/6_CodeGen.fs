@@ -2804,6 +2804,19 @@ let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Res
                 ARM64.B_label falseLbl           // Otherwise jump to else branch
             ])
 
+    | LIR.BranchZero (condReg, zeroLabel, nonZeroLabel) ->
+        // Branch if register is zero, otherwise fall through to non-zero case
+        // Use CBZ (compare and branch if zero) to zero label
+        // Then unconditional branch to non-zero label
+        lirRegToARM64Reg condReg
+        |> Result.map (fun arm64Reg ->
+            let (LIR.Label zeroLbl) = zeroLabel
+            let (LIR.Label nonZeroLbl) = nonZeroLabel
+            [
+                ARM64.CBZ (arm64Reg, zeroLbl)    // If zero, jump to zero branch
+                ARM64.B_label nonZeroLbl          // Otherwise jump to non-zero branch
+            ])
+
     | LIR.Jump label ->
         let (LIR.Label lbl) = label
         Ok [ARM64.B_label lbl]

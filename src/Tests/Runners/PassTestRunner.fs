@@ -317,6 +317,8 @@ let prettyPrintLIRTerminator (term: LIR.Terminator) : string =
     | LIR.Ret -> "Ret"
     | LIR.Branch (cond, trueLabel, falseLabel) ->
         $"Branch({prettyPrintLIRReg cond}, {trueLabel}, {falseLabel})"
+    | LIR.BranchZero (cond, zeroLabel, nonZeroLabel) ->
+        $"BranchZero({prettyPrintLIRReg cond}, {zeroLabel}, {nonZeroLabel})"
     | LIR.CondBranch (cond, trueLabel, falseLabel) ->
         $"CondBranch({cond}, {trueLabel}, {falseLabel})"
     | LIR.Jump label -> $"Jump({label})"

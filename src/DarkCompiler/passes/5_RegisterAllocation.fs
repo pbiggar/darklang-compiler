@@ -287,6 +287,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
 let getTerminatorUsedVRegs (term: LIR.Terminator) : Set<int> =
     match term with
     | LIR.Branch (LIR.Virtual id, _, _) -> Set.singleton id
+    | LIR.BranchZero (LIR.Virtual id, _, _) -> Set.singleton id
     | LIR.CondBranch _ -> Set.empty  // CondBranch uses condition flags, not a register
     | _ -> Set.empty
 
@@ -295,6 +296,7 @@ let getSuccessors (term: LIR.Terminator) : LIR.Label list =
     match term with
     | LIR.Ret -> []
     | LIR.Branch (_, trueLabel, falseLabel) -> [trueLabel; falseLabel]
+    | LIR.BranchZero (_, zeroLabel, nonZeroLabel) -> [zeroLabel; nonZeroLabel]
     | LIR.CondBranch (_, trueLabel, falseLabel) -> [trueLabel; falseLabel]
     | LIR.Jump label -> [label]
 
@@ -1602,6 +1604,20 @@ let applyToTerminator (mapping: Map<int, Allocation>) (term: LIR.Terminator)
                 ([], LIR.Branch (LIR.Physical LIR.X11, trueLabel, falseLabel))
         | LIR.Physical p ->
             ([], LIR.Branch (LIR.Physical p, trueLabel, falseLabel))
+    | LIR.BranchZero (cond, zeroLabel, nonZeroLabel) ->
+        match cond with
+        | LIR.Virtual id ->
+            match Map.tryFind id mapping with
+            | Some (PhysReg physReg) ->
+                ([], LIR.BranchZero (LIR.Physical physReg, zeroLabel, nonZeroLabel))
+            | Some (StackSlot offset) ->
+                // Load condition from stack before branching
+                let loadInstr = LIR.Mov (LIR.Physical LIR.X11, LIR.StackSlot offset)
+                ([loadInstr], LIR.BranchZero (LIR.Physical LIR.X11, zeroLabel, nonZeroLabel))
+            | None ->
+                ([], LIR.BranchZero (LIR.Physical LIR.X11, zeroLabel, nonZeroLabel))
+        | LIR.Physical p ->
+            ([], LIR.BranchZero (LIR.Physical p, zeroLabel, nonZeroLabel))
     | LIR.Jump label -> ([], LIR.Jump label)
     | LIR.CondBranch (cond, trueLabel, falseLabel) ->
         // CondBranch uses condition flags, not a register - pass through unchanged

@@ -99,6 +99,31 @@ let tryFuseCondBranch (instrs: Instr list) (terminator: Terminator) : (Instr lis
         | _ -> None
     | _ -> None
 
+/// Try to fuse CMP reg, #0 + CondBranch into Branch/BranchZero
+/// Pattern: last instruction is CMP reg, #0; terminator is CondBranch(EQ/NE, ...)
+/// Result:
+///   - CMP reg, #0 + CondBranch(EQ, true, false) → BranchZero(reg, true, false)  [uses CBZ]
+///   - CMP reg, #0 + CondBranch(NE, true, false) → Branch(reg, true, false)      [uses CBNZ]
+let tryFuseCmpZeroBranch (instrs: Instr list) (terminator: Terminator) : (Instr list * Terminator) option =
+    match terminator with
+    | CondBranch (cond, trueLabel, falseLabel) ->
+        // Check if last instruction is CMP reg, #0
+        match List.tryLast instrs with
+        | Some (Cmp (cmpReg, Imm 0L)) ->
+            let otherInstrs = instrs |> List.take (List.length instrs - 1)
+            match cond with
+            | EQ ->
+                // CMP reg, #0 + B.eq → CBZ reg (BranchZero)
+                Some (otherInstrs, BranchZero (cmpReg, trueLabel, falseLabel))
+            | NE ->
+                // CMP reg, #0 + B.ne → CBNZ reg (Branch)
+                Some (otherInstrs, Branch (cmpReg, trueLabel, falseLabel))
+            | _ ->
+                // Other conditions (LT, GT, LE, GE) can't be fused with CBZ/CBNZ
+                None
+        | _ -> None
+    | _ -> None
+
 /// Optimize a basic block
 let optimizeBlock (block: BasicBlock) : BasicBlock =
     let instrs' = optimizeInstrs block.Instrs
@@ -106,9 +131,19 @@ let optimizeBlock (block: BasicBlock) : BasicBlock =
     // Try to fuse Cset + Branch into CondBranch
     match tryFuseCondBranch instrs' block.Terminator with
     | Some (fusedInstrs, fusedTerminator) ->
-        { block with Instrs = fusedInstrs; Terminator = fusedTerminator }
+        // After fusing Cset + Branch → CondBranch, try to fuse CMP #0 + CondBranch → CBZ/CBNZ
+        match tryFuseCmpZeroBranch fusedInstrs fusedTerminator with
+        | Some (fusedInstrs2, fusedTerminator2) ->
+            { block with Instrs = fusedInstrs2; Terminator = fusedTerminator2 }
+        | None ->
+            { block with Instrs = fusedInstrs; Terminator = fusedTerminator }
     | None ->
-        { block with Instrs = instrs' }
+        // Also try CMP #0 + CondBranch fusion on the original terminator
+        match tryFuseCmpZeroBranch instrs' block.Terminator with
+        | Some (fusedInstrs, fusedTerminator) ->
+            { block with Instrs = fusedInstrs; Terminator = fusedTerminator }
+        | None ->
+            { block with Instrs = instrs' }
 
 /// Optimize a CFG
 let optimizeCFG (cfg: CFG) : CFG =
