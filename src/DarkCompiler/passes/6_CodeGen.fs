@@ -2827,9 +2827,10 @@ let generateHeapInit () : ARM64.Instr list =
     let freeListSize = 256
     [
         // Allocate 64KB (0x10000) of stack space for heap
-        ARM64.MOVZ (ARM64.X28, 0us, 0)  // Start with 0
-        ARM64.MOVK (ARM64.X28, 0x1us, 16)  // 0x10000 = 65536 (set bit 16)
-        ARM64.SUB_reg (ARM64.SP, ARM64.SP, ARM64.X28)  // SP -= 64KB
+        // Note: We use SUB_imm12 (shifted immediate) because:
+        // 1. SUB_reg with SP doesn't work - register 31 is interpreted as XZR, not SP
+        // 2. 64KB = 16 * 4096, so we use SUB_imm12 with imm=16 (value is imm << 12)
+        ARM64.SUB_imm12 (ARM64.SP, ARM64.SP, 16us)  // SP -= 16 * 4096 = 64KB
         ARM64.MOV_reg (ARM64.X27, ARM64.SP)  // X27 = free list heads base
         // X28 = X27 + 256 (skip free list heads area)
         ARM64.ADD_imm (ARM64.X28, ARM64.X27, uint16 freeListSize)

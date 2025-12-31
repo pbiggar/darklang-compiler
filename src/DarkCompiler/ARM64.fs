@@ -52,6 +52,7 @@ type Instr =
     | ADD_imm of dest:Reg * src:Reg * imm:uint16
     | ADD_reg of dest:Reg * src1:Reg * src2:Reg
     | SUB_imm of dest:Reg * src:Reg * imm:uint16
+    | SUB_imm12 of dest:Reg * src:Reg * imm:uint16  // SUB with shift=12, value = imm * 4096
     | SUB_reg of dest:Reg * src1:Reg * src2:Reg
     | MUL of dest:Reg * src1:Reg * src2:Reg
     | SDIV of dest:Reg * src1:Reg * src2:Reg

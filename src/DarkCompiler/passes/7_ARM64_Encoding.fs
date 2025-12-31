@@ -95,6 +95,19 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rd = encodeReg dest
         [sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd]
 
+    | ARM64.SUB_imm12 (dest, src, imm) ->
+        // SUB immediate with shift=12: actual value = imm * 4096
+        // sf=1 op=1 S=0 10001 shift=01(12-bit shift) imm12(12) Rn(5) Rd(5)
+        let sf = 1u <<< 31          // 64-bit operation
+        let op = 1u <<< 30          // SUB (vs ADD which has op=0)
+        let s = 0u <<< 29           // Don't set flags
+        let opcode = 0b10001u <<< 24 // Fixed opcode bits
+        let shift = 1u <<< 22       // shift=1 means LSL #12
+        let imm12 = (uint32 imm) <<< 10
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeReg dest
+        [sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd]
+
     | ARM64.SUB_reg (dest, src1, src2) ->
         // SUB register: sf=1 op=1 S=0 01011 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
         // Bits: sf(31) op(30) S(29) 01011(28-24) shift(23-22) 0(21) Rm(20-16) imm6(15-10) Rn(9-5) Rd(4-0)

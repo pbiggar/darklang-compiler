@@ -40,6 +40,7 @@ let formatMismatches (mismatches: (int * Instr * uint32 * uint32) list) : string
                     | ADD_imm (dest, src, imm) -> $"ADD_imm({dest}, {src}, {imm})"
                     | ADD_reg (dest, src1, src2) -> $"ADD_reg({dest}, {src1}, {src2})"
                     | SUB_imm (dest, src, imm) -> $"SUB_imm({dest}, {src}, {imm})"
+                    | SUB_imm12 (dest, src, imm) -> $"SUB_imm12({dest}, {src}, {imm})"
                     | SUB_reg (dest, src1, src2) -> $"SUB_reg({dest}, {src1}, {src2})"
                     | MUL (dest, src1, src2) -> $"MUL({dest}, {src1}, {src2})"
                     | SDIV (dest, src1, src2) -> $"SDIV({dest}, {src1}, {src2})"
