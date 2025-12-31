@@ -10,13 +10,13 @@ def isqrt(n: Int64, guess: Int64) : Int64 =
 
 def isDivisible(n: Int64, d: Int64, limit: Int64) : Bool =
     if d > limit then false
-    else if n - (n / d) * d == 0 then true
+    else if n % d == 0 then true
     else isDivisible(n, d + 1, limit)
 
 def isPrime(n: Int64) : Bool =
     if n < 2 then false
     else if n == 2 then true
-    else if n - (n / 2) * 2 == 0 then false
+    else if n % 2 == 0 then false
     else
         let limit = isqrt(n, 1) in
         if isDivisible(n, 3, limit) then false else true
