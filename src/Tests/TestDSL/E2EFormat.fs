@@ -27,6 +27,7 @@ type E2ETest = {
     /// Compiler options for disabling optimizations
     DisableFreeList: bool
     DisableANFOpt: bool
+    DisableInlining: bool
     DisableTCO: bool
     DisableMIROpt: bool
     DisableLIROpt: bool
@@ -39,6 +40,7 @@ type E2ETest = {
 type private OptFlags = {
     DisableFreeList: bool
     DisableANFOpt: bool
+    DisableInlining: bool
     DisableTCO: bool
     DisableMIROpt: bool
     DisableLIROpt: bool
@@ -48,6 +50,7 @@ type private OptFlags = {
 let private defaultOptFlags = {
     DisableFreeList = false
     DisableANFOpt = false
+    DisableInlining = false
     DisableTCO = false
     DisableMIROpt = false
     DisableLIROpt = false
@@ -264,6 +267,10 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                                 match parseBool value "disable_opt_anf" with
                                 | Some b -> optFlags <- { optFlags with DisableANFOpt = b }
                                 | None -> ()
+                            | "disable_opt_inline" ->
+                                match parseBool value "disable_opt_inline" with
+                                | Some b -> optFlags <- { optFlags with DisableInlining = b }
+                                | None -> ()
                             | "disable_opt_tco" ->
                                 match parseBool value "disable_opt_tco" with
                                 | Some b -> optFlags <- { optFlags with DisableTCO = b }
@@ -301,6 +308,7 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                 ExpectedErrorMessage = errorMessage
                 DisableFreeList = optFlags.DisableFreeList
                 DisableANFOpt = optFlags.DisableANFOpt
+                DisableInlining = optFlags.DisableInlining
                 DisableTCO = optFlags.DisableTCO
                 DisableMIROpt = optFlags.DisableMIROpt
                 DisableLIROpt = optFlags.DisableLIROpt

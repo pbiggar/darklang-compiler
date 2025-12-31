@@ -6,9 +6,13 @@
 // Heuristics:
 // - MaxFunctionSize: Only inline functions with <= N TempIds in body
 // - MaxInlineDepth: Limit recursive inlining to prevent code explosion
-// - Skip recursive functions (direct and mutual)
+// - Skip recursive functions (direct and mutual recursion via SCC detection)
 // - Skip functions with closures (complex runtime behavior)
 // - Skip tail calls (preserve TCO optimization)
+//
+// Mutual recursion detection uses Kosaraju's algorithm to find strongly
+// connected components (SCCs) in the call graph. Any function in an SCC
+// of size > 1, or that calls itself, is considered recursive.
 
 module ANF_Inlining
 
@@ -80,21 +84,127 @@ let rec collectCalls (expr: AExpr) : Set<string> =
     | If (_, thenBranch, elseBranch) ->
         Set.union (collectCalls thenBranch) (collectCalls elseBranch)
 
+// ============================================================================
+// Mutual Recursion Detection via SCC (Strongly Connected Components)
+// Uses Kosaraju's algorithm to find SCCs in the call graph
+// ============================================================================
+
+/// Build a call graph from functions: Map<caller, Set<callees>>
+let buildCallGraph (funcs: Function list) : Map<string, Set<string>> =
+    funcs
+    |> List.map (fun f -> (f.Name, collectCalls f.Body))
+    |> Map.ofList
+
+/// Build reverse call graph: Map<callee, Set<callers>>
+let buildReverseCallGraph (callGraph: Map<string, Set<string>>) : Map<string, Set<string>> =
+    callGraph
+    |> Map.fold (fun acc caller callees ->
+        callees
+        |> Set.fold (fun acc' callee ->
+            let existing = Map.tryFind callee acc' |> Option.defaultValue Set.empty
+            Map.add callee (Set.add caller existing) acc'
+        ) acc
+    ) Map.empty
+
+/// DFS to compute finish order (for Kosaraju's algorithm)
+let rec dfsFinishOrder (graph: Map<string, Set<string>>) (node: string)
+                       (visited: Set<string>) (order: string list)
+    : Set<string> * string list =
+    if Set.contains node visited then
+        (visited, order)
+    else
+        let visited' = Set.add node visited
+        let neighbors = Map.tryFind node graph |> Option.defaultValue Set.empty
+        let (visited'', order') =
+            neighbors
+            |> Set.fold (fun (v, o) neighbor ->
+                dfsFinishOrder graph neighbor v o
+            ) (visited', order)
+        (visited'', node :: order')
+
+/// DFS to collect SCC members
+let rec dfsCollectSCC (graph: Map<string, Set<string>>) (node: string)
+                      (visited: Set<string>) (scc: Set<string>)
+    : Set<string> * Set<string> =
+    if Set.contains node visited then
+        (visited, scc)
+    else
+        let visited' = Set.add node visited
+        let scc' = Set.add node scc
+        let neighbors = Map.tryFind node graph |> Option.defaultValue Set.empty
+        neighbors
+        |> Set.fold (fun (v, c) neighbor ->
+            dfsCollectSCC graph neighbor v c
+        ) (visited', scc')
+
+/// Find all SCCs using Kosaraju's algorithm
+/// Returns list of SCCs, where each SCC is a Set of function names
+let findSCCs (funcs: Function list) : Set<string> list =
+    let funcNames = funcs |> List.map (fun f -> f.Name) |> Set.ofList
+    let callGraph = buildCallGraph funcs
+    let reverseGraph = buildReverseCallGraph callGraph
+
+    // Step 1: DFS on original graph to get finish order
+    let (_, finishOrder) =
+        funcNames
+        |> Set.fold (fun (visited, order) name ->
+            dfsFinishOrder callGraph name visited order
+        ) (Set.empty, [])
+
+    // Step 2: DFS on reverse graph in reverse finish order to find SCCs
+    let (_, sccs) =
+        finishOrder
+        |> List.fold (fun (visited, components) name ->
+            if Set.contains name visited then
+                (visited, components)
+            else
+                let (visited', scc) = dfsCollectSCC reverseGraph name visited Set.empty
+                (visited', scc :: components)
+        ) (Set.empty, [])
+
+    sccs
+
+/// Find all functions involved in mutual recursion (in SCCs of size > 1)
+/// or direct self-recursion (calls itself)
+let findRecursiveFunctions (funcs: Function list) : Set<string> =
+    let sccs = findSCCs funcs
+    let callGraph = buildCallGraph funcs
+
+    // Functions in SCCs of size > 1 (mutual recursion)
+    let mutuallyRecursive =
+        sccs
+        |> List.filter (fun scc -> Set.count scc > 1)
+        |> List.fold Set.union Set.empty
+
+    // Functions that call themselves (direct recursion)
+    let directlyRecursive =
+        funcs
+        |> List.filter (fun f ->
+            let calls = Map.tryFind f.Name callGraph |> Option.defaultValue Set.empty
+            Set.contains f.Name calls
+        )
+        |> List.map (fun f -> f.Name)
+        |> Set.ofList
+
+    Set.union mutuallyRecursive directlyRecursive
+
 /// Build function info for a single function
-let buildFunctionInfo (func: Function) : FunctionInfo =
-    let calls = collectCalls func.Body
+let buildFunctionInfo (recursiveFuncs: Set<string>) (func: Function) : FunctionInfo =
     {
         Func = func
         Size = countTempIds func.Body
-        IsRecursive = Set.contains func.Name calls
+        IsRecursive = Set.contains func.Name recursiveFuncs
         HasClosures = exprHasClosures func.Body
         CallsCount = 0  // Will be updated later if needed
     }
 
 /// Build function info map for all functions
 let buildFunctionInfoMap (funcs: Function list) : Map<string, FunctionInfo> =
+    // First, find all recursive functions (direct and mutual)
+    let recursiveFuncs = findRecursiveFunctions funcs
+    // Then build info for each function
     funcs
-    |> List.map (fun f -> (f.Name, buildFunctionInfo f))
+    |> List.map (fun f -> (f.Name, buildFunctionInfo recursiveFuncs f))
     |> Map.ofList
 
 // ============================================================================

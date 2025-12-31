@@ -106,7 +106,8 @@ sumCollatzRange(1, 5, 0) = 15
 
 // ===================================================================
 // Primes (primes) - count primes up to n using trial division
-// FIXME: Commented out - causes infinite loop in inlining pass
+// NOTE: Inlining of isPrime causes SSA Construction to hang (separate bug)
+// TODO: Investigate SSA Construction infinite loop when isPrime is inlined
 // ===================================================================
 
 // def isqrt(n: Int64, guess: Int64) : Int64 =
@@ -132,9 +133,9 @@ sumCollatzRange(1, 5, 0) = 15
 //     else if isPrime(n) then countPrimes(n - 1, count + 1)
 //     else countPrimes(n - 1, count)
 //
-// countPrimes(2, 0) = 1
-// countPrimes(10, 0) = 4
-// countPrimes(20, 0) = 8
+// countPrimes(2, 0) = disable_opt_inline=true exit=1
+// countPrimes(10, 0) = disable_opt_inline=true exit=4
+// countPrimes(20, 0) = disable_opt_inline=true exit=8
 
 
 // ===================================================================
