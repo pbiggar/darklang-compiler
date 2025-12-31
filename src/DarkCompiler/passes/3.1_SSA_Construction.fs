@@ -39,26 +39,55 @@ let computeDominators (cfg: CFG) (preds: Predecessors) : Dominators =
     let labels = cfg.Blocks |> Map.keys |> List.ofSeq
     let entry = cfg.Entry
 
-    // Initialize: entry dominates itself, others are undefined
-    // Use a set to represent all dominators for each node initially
+    // First, compute reachable blocks from entry using BFS
+    // This is critical because unreachable blocks have no well-defined dominators
+    // and would cause cycles in the idom tree if included
+    let rec findReachable (queue: Label list) (visited: Set<Label>) : Set<Label> =
+        match queue with
+        | [] -> visited
+        | current :: rest ->
+            if Set.contains current visited then
+                findReachable rest visited
+            else
+                let visited' = Set.add current visited
+                let block = Map.tryFind current cfg.Blocks
+                let successors =
+                    match block with
+                    | Some b ->
+                        match b.Terminator with
+                        | Ret _ -> []
+                        | Jump target -> [target]
+                        | Branch (_, trueLabel, falseLabel) -> [trueLabel; falseLabel]
+                    | None -> []
+                findReachable (rest @ successors) visited'
+
+    let reachableBlocks = findReachable [entry] Set.empty
+    let reachableLabels = labels |> List.filter (fun l -> Set.contains l reachableBlocks)
+
+    // Initialize: entry dominates itself, other reachable blocks dominated by all reachable
+    // Unreachable blocks are NOT included in the dominator computation
     let initialDoms =
-        labels
+        reachableLabels
         |> List.fold (fun m label ->
             if label = entry then
                 Map.add label (Set.singleton label) m
             else
-                Map.add label (Set.ofList labels) m  // Initially dominated by all
+                Map.add label (Set.ofList reachableLabels) m  // Initially dominated by all reachable
         ) Map.empty
 
-    // Iterate until fixed point
+    // Iterate until fixed point (only for reachable blocks)
     let rec iterate (doms: Map<Label, Set<Label>>) =
         let (changed, doms') =
-            labels
+            reachableLabels
             |> List.fold (fun (changed, m) label ->
                 if label = entry then
                     (changed, m)
                 else
-                    let predLabels = Map.tryFind label preds |> Option.defaultValue []
+                    // Only consider reachable predecessors
+                    let predLabels =
+                        Map.tryFind label preds
+                        |> Option.defaultValue []
+                        |> List.filter (fun p -> Set.contains p reachableBlocks)
                     if List.isEmpty predLabels then
                         (changed, m)
                     else
@@ -83,7 +112,8 @@ let computeDominators (cfg: CFG) (preds: Predecessors) : Dominators =
 
     // Extract immediate dominator from dominator sets
     // idom(n) is the dominator of n that is dominated by all other dominators of n (closest one)
-    labels
+    // Only process reachable blocks
+    reachableLabels
     |> List.fold (fun idoms label ->
         if label = entry then
             idoms  // Entry has no immediate dominator
@@ -905,7 +935,6 @@ let convertFunctionToSSA (func: Function) : Function =
 
     // Compute liveness to only insert phi nodes for live variables
     let (liveIn, _) = computeLiveness cfg
-
 
     // Insert phi nodes (only for live variables)
     // Pass function params so they're treated as defined at entry (for self-recursive functions)
