@@ -904,6 +904,26 @@ let applyToOperand (mapping: Map<int, Allocation>) (operand: LIR.Operand) (tempR
             | None -> (LIR.Reg (LIR.Physical tempReg), [])
     | LIR.FuncAddr name -> (LIR.FuncAddr name, [])
 
+/// Apply allocation to an operand WITHOUT generating load instructions for spills.
+/// Returns StackSlot for spilled values so CodeGen can load them at the right time.
+/// Used for TailArgMoves where loads must be deferred to avoid using the same temp register.
+let applyToOperandNoLoad (mapping: Map<int, Allocation>) (operand: LIR.Operand) : LIR.Operand =
+    match operand with
+    | LIR.Imm n -> LIR.Imm n
+    | LIR.FloatImm f -> LIR.FloatImm f
+    | LIR.StringRef idx -> LIR.StringRef idx
+    | LIR.FloatRef idx -> LIR.FloatRef idx
+    | LIR.StackSlot s -> LIR.StackSlot s
+    | LIR.Reg reg ->
+        match reg with
+        | LIR.Physical p -> LIR.Reg (LIR.Physical p)
+        | LIR.Virtual id ->
+            match Map.tryFind id mapping with
+            | Some (PhysReg physReg) -> LIR.Reg (LIR.Physical physReg)
+            | Some (StackSlot offset) -> LIR.StackSlot offset
+            | None -> LIR.Reg (LIR.Physical LIR.X11)  // Fallback
+    | LIR.FuncAddr name -> LIR.FuncAddr name
+
 /// Helper to load a spilled register
 let loadSpilled (mapping: Map<int, Allocation>) (reg: LIR.Reg) (tempReg: LIR.PhysReg)
     : LIR.Reg * LIR.Instr list =
@@ -1261,15 +1281,14 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
         allLoads @ [LIR.ArgMoves finalMoves]
 
     | LIR.TailArgMoves moves ->
-        // Apply allocation to each operand in the tail arg moves (same as ArgMoves)
+        // Apply allocation WITHOUT loading spilled values into a temp register.
+        // This is different from ArgMoves: for tail calls, we can't use a shared temp
+        // because there's no SaveRegs to preserve values. CodeGen will handle StackSlots
+        // by loading them directly into the destination register.
         let allocatedMoves =
             moves |> List.map (fun (destReg, srcOp) ->
-                let (allocatedOp, loads) = applyToOperand mapping srcOp LIR.X12
-                (destReg, allocatedOp, loads))
-        // Collect all load instructions and the allocated moves
-        let allLoads = allocatedMoves |> List.collect (fun (_, _, loads) -> loads)
-        let finalMoves = allocatedMoves |> List.map (fun (destReg, op, _) -> (destReg, op))
-        allLoads @ [LIR.TailArgMoves finalMoves]
+                (destReg, applyToOperandNoLoad mapping srcOp))
+        [LIR.TailArgMoves allocatedMoves]
 
     | LIR.FArgMoves moves ->
         // Pass through unchanged for now - float argument moves use physical registers only
@@ -1685,18 +1704,14 @@ let applyToCFG (mapping: Map<int, Allocation>) (cfg: LIR.CFG) : LIR.CFG =
 /// 4. Inserts the moves at the end of each predecessor (before terminator)
 /// 5. Removes phi nodes from blocks
 let resolvePhiNodes (cfg: LIR.CFG) (allocation: Map<int, Allocation>) : LIR.CFG =
-    // Helper to get the physical register for an allocation
-    let getAllocatedReg (id: int) : LIR.PhysReg =
-        match Map.tryFind id allocation with
-        | Some (PhysReg r) -> r
-        | Some (StackSlot _) -> LIR.X11  // Use scratch for spilled values
-        | None -> LIR.X11
-
-    // Helper to convert a LIR.Reg to physical reg based on allocation
-    let regToPhys (reg: LIR.Reg) : LIR.PhysReg =
+    // Get the allocation for a virtual register (register or stack slot)
+    let getDestAllocation (reg: LIR.Reg) : Allocation =
         match reg with
-        | LIR.Virtual id -> getAllocatedReg id
-        | LIR.Physical p -> p
+        | LIR.Virtual id ->
+            match Map.tryFind id allocation with
+            | Some alloc -> alloc
+            | None -> PhysReg LIR.X11  // Fallback
+        | LIR.Physical p -> PhysReg p
 
     // Helper to convert a LIR.Operand to allocated version
     let operandToAllocated (op: LIR.Operand) : LIR.Operand =
@@ -1732,15 +1747,15 @@ let resolvePhiNodes (cfg: LIR.CFG) (allocation: Map<int, Allocation>) : LIR.CFG 
                 | LIR.FPhi (dest, sources) -> Some (dest, sources)
                 | _ -> None))
 
-    // Group int phis by predecessor: Map<pred_label, List<(dest_phys, src_operand)>>
-    // Each predecessor needs to perform moves for all phis that reference it
-    let predecessorIntMoves : Map<LIR.Label, (LIR.PhysReg * LIR.Operand) list> =
+    // Group int phis by predecessor: Map<pred_label, List<(dest_allocation, src_operand)>>
+    // Keep the full Allocation type to handle both register and stack destinations
+    let predecessorIntMoves : Map<LIR.Label, (Allocation * LIR.Operand) list> =
         intPhiInfo
         |> List.collect (fun (dest, sources, _valueType) ->
-            let destPhys = regToPhys dest
+            let destAlloc = getDestAllocation dest
             sources |> List.map (fun (src, predLabel) ->
                 let srcAllocated = operandToAllocated src
-                (predLabel, (destPhys, srcAllocated))))
+                (predLabel, (destAlloc, srcAllocated))))
         |> List.groupBy fst
         |> List.map (fun (predLabel, pairs) ->
             (predLabel, pairs |> List.map snd))
@@ -1758,24 +1773,87 @@ let resolvePhiNodes (cfg: LIR.CFG) (allocation: Map<int, Allocation>) : LIR.CFG 
             (predLabel, pairs |> List.map snd))
         |> Map.ofList
 
-    // Get the source PhysReg if the operand is a Reg (for ParallelMoves)
-    let getSrcPhysReg (op: LIR.Operand) : LIR.PhysReg option =
-        match op with
-        | LIR.Reg (LIR.Physical p) -> Some p
-        | _ -> None
+    // Generate move instructions for phi resolution
+    // Handles 4 cases:
+    // 1. Dest=Reg, Src=Reg: Register-to-register move (may need parallel move resolution)
+    // 2. Dest=Reg, Src=Stack: Load from stack to register
+    // 3. Dest=Stack, Src=Reg: Store from register to stack
+    // 4. Dest=Stack, Src=Stack: Load to temp, store from temp
+    let generateIntMoveInstrs (moves: (Allocation * LIR.Operand) list) : LIR.Instr list =
+        // Separate into register-dest and stack-dest moves
+        let (regDestMoves, stackDestMoves) =
+            moves |> List.partition (fun (dest, _) ->
+                match dest with
+                | PhysReg _ -> true
+                | StackSlot _ -> false)
 
-    // Convert int move actions to LIR instructions using X16 as temp (same as TailArgMoves)
-    let generateIntMoveInstrs (moves: (LIR.PhysReg * LIR.Operand) list) : LIR.Instr list =
-        let actions = ParallelMoves.resolve moves getSrcPhysReg
-        actions
-        |> List.collect (fun action ->
-            match action with
-            | ParallelMoves.SaveToTemp reg ->
-                [LIR.Mov (LIR.Physical LIR.X16, LIR.Reg (LIR.Physical reg))]
-            | ParallelMoves.Move (dest, src) ->
-                [LIR.Mov (LIR.Physical dest, src)]
-            | ParallelMoves.MoveFromTemp dest ->
-                [LIR.Mov (LIR.Physical dest, LIR.Reg (LIR.Physical LIR.X16))])
+        // For register-dest moves, we need parallel move resolution to handle cycles
+        // Convert to (PhysReg * Operand) format for ParallelMoves
+        let regMoves : (LIR.PhysReg * LIR.Operand) list =
+            regDestMoves
+            |> List.map (fun (dest, src) ->
+                match dest with
+                | PhysReg r -> (r, src)
+                | StackSlot _ -> failwith "Unexpected stack slot in regDestMoves")
+
+        let getSrcPhysReg (op: LIR.Operand) : LIR.PhysReg option =
+            match op with
+            | LIR.Reg (LIR.Physical p) -> Some p
+            | _ -> None
+
+        let regMoveInstrs =
+            let actions = ParallelMoves.resolve regMoves getSrcPhysReg
+            actions
+            |> List.collect (fun action ->
+                match action with
+                | ParallelMoves.SaveToTemp reg ->
+                    [LIR.Mov (LIR.Physical LIR.X16, LIR.Reg (LIR.Physical reg))]
+                | ParallelMoves.Move (dest, src) ->
+                    [LIR.Mov (LIR.Physical dest, src)]
+                | ParallelMoves.MoveFromTemp dest ->
+                    [LIR.Mov (LIR.Physical dest, LIR.Reg (LIR.Physical LIR.X16))])
+
+        // For stack-dest moves, no cycle resolution needed (stack slots don't interfere)
+        // IMPORTANT: Stack stores must happen BEFORE register moves!
+        // Otherwise, if a stack store reads from register R which is also a dest of a register move,
+        // the register move would clobber R before the stack store can read it.
+        //
+        // Example conflict:
+        //   - Stack store: Store(-40, X1)  -- needs to read X1
+        //   - Reg move: X1 <- X2           -- clobbers X1
+        // If reg moves happen first, the stack store gets the wrong value.
+        //
+        // For stack stores that read from registers, we save to X11 first,
+        // then do all register moves, then store from X11.
+        // This way the register value is captured before it might be clobbered.
+        let stackMoveInstrs =
+            stackDestMoves
+            |> List.collect (fun (dest, src) ->
+                match dest with
+                | StackSlot offset ->
+                    match src with
+                    | LIR.Reg (LIR.Physical r) ->
+                        // Store register to stack - save to X11 first
+                        // This captures the register value before register moves might change it
+                        [LIR.Mov (LIR.Physical LIR.X11, LIR.Reg (LIR.Physical r));
+                         LIR.Store (offset, LIR.Physical LIR.X11)]
+                    | LIR.StackSlot srcOffset ->
+                        // Stack-to-stack: load to X11, store to dest
+                        [LIR.Mov (LIR.Physical LIR.X11, LIR.StackSlot srcOffset);
+                         LIR.Store (offset, LIR.Physical LIR.X11)]
+                    | LIR.Imm n ->
+                        // Immediate to stack: load to X11, store
+                        [LIR.Mov (LIR.Physical LIR.X11, LIR.Imm n);
+                         LIR.Store (offset, LIR.Physical LIR.X11)]
+                    | _ ->
+                        // Other cases: load to X11, store
+                        [LIR.Mov (LIR.Physical LIR.X11, src);
+                         LIR.Store (offset, LIR.Physical LIR.X11)]
+                | PhysReg _ -> failwith "Unexpected PhysReg in stackDestMoves")
+
+        // Stack stores first (captures register values before reg moves modify them),
+        // then register moves
+        stackMoveInstrs @ regMoveInstrs
 
     // Generate float moves (FMov instructions)
     // FVirtual registers map directly to D registers in CodeGen, so we just emit FMov
