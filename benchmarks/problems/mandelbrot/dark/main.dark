@@ -47,7 +47,5 @@ def countAll(startY: Int64, endY: Int64, size: Int64, maxIter: Int64, count: Int
         let rowCount = countRow(startY, 0, size, size, maxIter, 0) in
         countAll(startY + 1, endY, size, maxIter, count + rowCount)
 
-// Run with smaller values until TCO is implemented
-// Original: size=200, maxIter=50
-// Current: size=10, maxIter=10 (to avoid stack overflow)
-countAll(0, 10, 10, 10, 0)
+// Full benchmark: size=200, maxIter=50
+countAll(0, 200, 200, 50, 0)

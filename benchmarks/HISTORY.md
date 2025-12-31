@@ -4,30 +4,16 @@ Dark compiler performance over time (append-only log).
 
 | Date       | Commit   | Benchmark     | Instructions     | Data Refs        | L1 Miss     | LL Miss     | Branches        | Mispred |
 |------------|----------|---------------|------------------|------------------|-------------|-------------|-----------------|---------|
-| baselines | 5b14f04c | edigits       |               56 |               22 |           3 |           9 |               4 |   50.0% |
-| baselines | 5b14f04c | fannkuch      |               56 |               22 |           3 |           9 |               4 |   50.0% |
-| baselines | 5b14f04c | fasta         |               56 |               22 |           3 |           9 |               4 |   50.0% |
+| full_params | 5b14f04c | mandelbrot    |       14,865,926 |        2,312,830 |           8 |          28 |         609,810 |    9.1% |
+| full_params | 5b14f04c | pisum         |      140,028,203 |       25,006,544 |           6 |          17 |       5,001,022 |    0.0% |
+| 2025-12-31 | 66a48e77 | collatz       |      206,699,042 |        1,600,033 |           5 |          18 |      21,707,693 |   16.7% |
+| 2025-12-31 | 66a48e77 | collatz       |      206,699,042 |        1,600,033 |           5 |          18 |      21,707,693 |   16.7% |
 | baselines | 5b14f04c | mandelbrot    |           52,488 |           11,137 |           8 |          29 |           1,699 |    7.0% |
-| baselines | 5b14f04c | matmul        |               56 |               22 |           3 |           9 |               4 |   50.0% |
 | baselines | 5b14f04c | merkletrees   |        2,784,636 |          716,637 |          20 |          37 |          40,974 |   12.7% |
-| baselines | 5b14f04c | nbody         |               56 |               22 |           3 |           9 |               4 |   50.0% |
-| baselines | 5b14f04c | nqueen        |               56 |               22 |           3 |           9 |               4 |   50.0% |
-| baselines | 5b14f04c | nsieve        |               56 |               22 |           3 |           9 |               4 |   50.0% |
 | baselines | 5b14f04c | pisum         |          145,407 |           25,106 |           5 |          18 |           5,018 |    0.2% |
-| baselines | 5b14f04c | quicksort     |               56 |               22 |           3 |           9 |               4 |   50.0% |
-| baselines | 5b14f04c | spectral_norm |               56 |               22 |           3 |           9 |               4 |   50.0% |
-| baselines | 5b14f04c | edigits       |               56 |               22 |           3 |           9 |               4 |   50.0% |
-| baselines | 5b14f04c | fannkuch      |               56 |               22 |           3 |           9 |               4 |   50.0% |
-| baselines | 5b14f04c | fasta         |               56 |               22 |           3 |           9 |               4 |   50.0% |
 | baselines | 5b14f04c | mandelbrot    |           52,488 |           11,137 |           8 |          29 |           1,699 |    7.0% |
-| baselines | 5b14f04c | matmul        |               56 |               22 |           3 |           9 |               4 |   50.0% |
 | baselines | 5b14f04c | merkletrees   |        2,784,636 |          716,637 |          20 |          37 |          40,974 |   12.7% |
-| baselines | 5b14f04c | nbody         |               56 |               22 |           3 |           9 |               4 |   50.0% |
-| baselines | 5b14f04c | nqueen        |               56 |               22 |           3 |           9 |               4 |   50.0% |
-| baselines | 5b14f04c | nsieve        |               56 |               22 |           3 |           9 |               4 |   50.0% |
 | baselines | 5b14f04c | pisum         |          145,407 |           25,106 |           5 |          18 |           5,018 |    0.2% |
-| baselines | 5b14f04c | quicksort     |               56 |               22 |           3 |           9 |               4 |   50.0% |
-| baselines | 5b14f04c | spectral_norm |               56 |               22 |           3 |           9 |               4 |   50.0% |
 | 2025-12-31 | 66a48e77 | collatz       |      206,699,042 |        1,600,033 |           5 |          18 |      21,707,693 |   16.7% |
 | 2025-12-31 | 66a48e77 | collatz       |      206,699,042 |        1,600,033 |           5 |          18 |      21,707,693 |   16.7% |
 | 2025-12-31 | 66a48e77 | collatz       |      206,699,042 |        1,600,033 |           5 |          18 |      21,707,693 |   16.7% |
