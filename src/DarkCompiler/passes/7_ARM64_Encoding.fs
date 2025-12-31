@@ -483,6 +483,32 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rt = encodeReg reg1
         [opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt]
 
+    | ARM64.STP_pre (reg1, reg2, addr, offset) ->
+        // STP (Store Pair) - pre-indexed addressing: addr += offset, then store
+        // Encoding: opc(2) 101 V(1) mode(3) L(1) imm7(7) Rt2(5) Rn(5) Rt(5)
+        // V=0 (integer), mode=011 (pre-indexed), L=0 (store)
+        // Bits 29-22 = 1010 011 0 = 0b10100110
+        let opc = 2u <<< 30  // 64-bit
+        let fixedBits = 0b10100110u <<< 22  // STP pre-indexed: 101 0 011 0
+        let imm7 = ((uint32 (int offset / 8)) &&& 0x7Fu) <<< 15
+        let rt2 = (encodeReg reg2) <<< 10
+        let rn = (encodeReg addr) <<< 5
+        let rt = encodeReg reg1
+        [opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt]
+
+    | ARM64.LDP_post (reg1, reg2, addr, offset) ->
+        // LDP (Load Pair) - post-indexed addressing: load, then addr += offset
+        // Encoding: opc(2) 101 V(1) mode(2) L(1) imm7(7) Rt2(5) Rn(5) Rt(5)
+        // V=0 (integer), mode=01 (post-indexed), L=1 (load)
+        // Bits 29-22 = 1010 001 1 = 0b10100011
+        let opc = 2u <<< 30  // 64-bit
+        let fixedBits = 0b10100011u <<< 22  // LDP post-indexed: 101 0 001 1
+        let imm7 = ((uint32 (int offset / 8)) &&& 0x7Fu) <<< 15
+        let rt2 = (encodeReg reg2) <<< 10
+        let rn = (encodeReg addr) <<< 5
+        let rt = encodeReg reg1
+        [opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt]
+
     | ARM64.STR (src, addr, offset) ->
         // STR (Store Register) - unsigned offset addressing
         // Encoding: size=11 111 001 00 imm12 Rn Rt

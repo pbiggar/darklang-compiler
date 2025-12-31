@@ -677,8 +677,12 @@ let prettyPrintARM64Instr = function
         $"NEG({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
     | ARM64.STP (reg1, reg2, addr, offset) ->
         $"STP({prettyPrintARM64Reg reg1}, {prettyPrintARM64Reg reg2}, {prettyPrintARM64Reg addr}, {offset})"
+    | ARM64.STP_pre (reg1, reg2, addr, offset) ->
+        $"STP_pre({prettyPrintARM64Reg reg1}, {prettyPrintARM64Reg reg2}, {prettyPrintARM64Reg addr}, {offset})"
     | ARM64.LDP (reg1, reg2, addr, offset) ->
         $"LDP({prettyPrintARM64Reg reg1}, {prettyPrintARM64Reg reg2}, {prettyPrintARM64Reg addr}, {offset})"
+    | ARM64.LDP_post (reg1, reg2, addr, offset) ->
+        $"LDP_post({prettyPrintARM64Reg reg1}, {prettyPrintARM64Reg reg2}, {prettyPrintARM64Reg addr}, {offset})"
     | ARM64.STR (src, addr, offset) ->
         $"STR({prettyPrintARM64Reg src}, {prettyPrintARM64Reg addr}, {offset})"
     | ARM64.LDR (dest, addr, offset) ->

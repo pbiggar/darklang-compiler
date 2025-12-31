@@ -322,66 +322,59 @@ let calleeSavedStackSpace (regs: LIR.PhysReg list) : int =
 /// Saves FP, LR, callee-saved registers, and allocates stack space
 let generatePrologue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM64.Instr list =
     // Prologue sequence:
-    // 1. Decrement SP and save FP (X29) and LR (X30)
+    // 1. Save FP (X29) and LR (X30) with pre-indexed addressing (combines SUB and STP)
     // 2. Set FP = SP: MOV X29, SP
-    // 3. Save callee-saved registers (if any)
-    // 4. Allocate stack space for spills: SUB SP, SP, #stackSize
+    // 3. Allocate stack space for spills and callee-saved registers
+    // 4. Save callee-saved registers
 
-    let saveFpLr = [
-        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)  // Decrement SP by 16
-        ARM64.STP (ARM64.X29, ARM64.X30, ARM64.SP, 0s)  // Store at [SP]
-    ]
+    // Use pre-indexed STP to save FP/LR and decrement SP in one instruction
+    let saveFpLr = [ARM64.STP_pre (ARM64.X29, ARM64.X30, ARM64.SP, -16s)]
     let setFp = [ARM64.MOV_reg (ARM64.X29, ARM64.SP)]
 
-    // Save callee-saved registers
+    // Calculate total additional stack space needed
     let calleeSavedSpace = calleeSavedStackSpace usedCalleeSaved
-    let (saveCalleeSavedInstrs, _) = generateCalleeSavedSaves usedCalleeSaved
-    let allocCalleeSaved =
-        if calleeSavedSpace > 0 then
-            [ARM64.SUB_imm (ARM64.SP, ARM64.SP, uint16 calleeSavedSpace)]
-        else
-            []
+    let totalExtraStack = stackSize + calleeSavedSpace
 
+    // Allocate all stack space at once (for spills + callee-saved)
     let allocStack =
-        if stackSize > 0 then
-            [ARM64.SUB_imm (ARM64.SP, ARM64.SP, uint16 stackSize)]
+        if totalExtraStack > 0 then
+            [ARM64.SUB_imm (ARM64.SP, ARM64.SP, uint16 totalExtraStack)]
         else
             []
 
-    saveFpLr @ setFp @ allocStack @ allocCalleeSaved @ saveCalleeSavedInstrs
+    // Save callee-saved registers at [SP]
+    // (callee-saved are at the bottom of the frame, spill space is above them)
+    let (saveCalleeSavedInstrs, _) = generateCalleeSavedSaves usedCalleeSaved
+
+    saveFpLr @ setFp @ allocStack @ saveCalleeSavedInstrs
 
 /// Generate function epilogue
 /// Restores callee-saved registers, FP, LR, and returns
 let generateEpilogue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM64.Instr list =
     // Epilogue sequence (reverse of prologue):
-    // 1. Deallocate stack: ADD SP, SP, #stackSize
-    // 2. Restore callee-saved registers
-    // 3. Deallocate callee-saved space
-    // 4. Restore FP and LR from [SP], then increment SP
-    // 5. Return: RET
+    // 1. Restore callee-saved registers from [SP + stackSize]
+    // 2. Deallocate stack space (spills + callee-saved) at once
+    // 3. Restore FP and LR with post-indexed addressing (combines LDP and ADD)
+    // 4. Return: RET
 
-    let deallocStack =
-        if stackSize > 0 then
-            [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 stackSize)]
-        else
-            []
-
-    // Restore callee-saved registers
+    // Restore callee-saved registers from [SP]
+    // (callee-saved are at the bottom of the frame, spill space is above them)
     let calleeSavedSpace = calleeSavedStackSpace usedCalleeSaved
     let restoreCalleeSavedInstrs = generateCalleeSavedRestores usedCalleeSaved
-    let deallocCalleeSaved =
-        if calleeSavedSpace > 0 then
-            [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 calleeSavedSpace)]
+
+    // Deallocate all stack space at once
+    let totalExtraStack = stackSize + calleeSavedSpace
+    let deallocStack =
+        if totalExtraStack > 0 then
+            [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 totalExtraStack)]
         else
             []
 
-    let restoreFpLr = [
-        ARM64.LDP (ARM64.X29, ARM64.X30, ARM64.SP, 0s)  // Load from [SP]
-        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)  // Increment SP by 16
-    ]
+    // Use post-indexed LDP to restore FP/LR and increment SP in one instruction
+    let restoreFpLr = [ARM64.LDP_post (ARM64.X29, ARM64.X30, ARM64.SP, 16s)]
     let ret = [ARM64.RET]
 
-    restoreCalleeSavedInstrs @ deallocCalleeSaved @ deallocStack @ restoreFpLr @ ret
+    restoreCalleeSavedInstrs @ deallocStack @ restoreFpLr @ ret
 
 /// Convert LIR instruction to ARM64 instructions
 let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr list, string> =
@@ -1039,24 +1032,18 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
     | LIR.TailCall (funcName, args) ->
         // Tail call: restore stack frame, then branch (no link)
         // This is the same as the epilogue but with B instead of RET
-        let restoreCalleeSavedInstrs = generateCalleeSavedRestores ctx.UsedCalleeSaved
         let calleeSavedSpace = calleeSavedStackSpace ctx.UsedCalleeSaved
-        let deallocCalleeSaved =
-            if calleeSavedSpace > 0 then
-                [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 calleeSavedSpace)]
-            else
-                []
+        let restoreCalleeSavedInstrs = generateCalleeSavedRestores ctx.UsedCalleeSaved
+        // Deallocate all stack at once
+        let totalExtraStack = ctx.StackSize + calleeSavedSpace
         let deallocStack =
-            if ctx.StackSize > 0 then
-                [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 ctx.StackSize)]
+            if totalExtraStack > 0 then
+                [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 totalExtraStack)]
             else
                 []
-        let restoreFpLr = [
-            ARM64.LDP (ARM64.X29, ARM64.X30, ARM64.SP, 0s)
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
-        ]
+        let restoreFpLr = [ARM64.LDP_post (ARM64.X29, ARM64.X30, ARM64.SP, 16s)]
         let branch = [ARM64.B_label funcName]
-        Ok (restoreCalleeSavedInstrs @ deallocCalleeSaved @ deallocStack @ restoreFpLr @ branch)
+        Ok (restoreCalleeSavedInstrs @ deallocStack @ restoreFpLr @ branch)
 
     | LIR.IndirectCall (dest, func, args) ->
         // Indirect call: call through function pointer in register
@@ -1068,24 +1055,17 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         // Indirect tail call: restore stack frame, then branch to register
         lirRegToARM64Reg func
         |> Result.map (fun funcReg ->
-            let restoreCalleeSavedInstrs = generateCalleeSavedRestores ctx.UsedCalleeSaved
             let calleeSavedSpace = calleeSavedStackSpace ctx.UsedCalleeSaved
-            let deallocCalleeSaved =
-                if calleeSavedSpace > 0 then
-                    [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 calleeSavedSpace)]
-                else
-                    []
+            let restoreCalleeSavedInstrs = generateCalleeSavedRestores ctx.UsedCalleeSaved
+            let totalExtraStack = ctx.StackSize + calleeSavedSpace
             let deallocStack =
-                if ctx.StackSize > 0 then
-                    [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 ctx.StackSize)]
+                if totalExtraStack > 0 then
+                    [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 totalExtraStack)]
                 else
                     []
-            let restoreFpLr = [
-                ARM64.LDP (ARM64.X29, ARM64.X30, ARM64.SP, 0s)
-                ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
-            ]
+            let restoreFpLr = [ARM64.LDP_post (ARM64.X29, ARM64.X30, ARM64.SP, 16s)]
             let branch = [ARM64.BR funcReg]
-            restoreCalleeSavedInstrs @ deallocCalleeSaved @ deallocStack @ restoreFpLr @ branch)
+            restoreCalleeSavedInstrs @ deallocStack @ restoreFpLr @ branch)
 
     | LIR.ClosureAlloc (dest, funcName, captures) ->
         // Allocate closure on heap: (func_ptr, cap1, cap2, ...)
@@ -1150,24 +1130,17 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         // Closure tail call: restore stack frame, then branch to register
         lirRegToARM64Reg funcPtr
         |> Result.map (fun funcPtrReg ->
-            let restoreCalleeSavedInstrs = generateCalleeSavedRestores ctx.UsedCalleeSaved
             let calleeSavedSpace = calleeSavedStackSpace ctx.UsedCalleeSaved
-            let deallocCalleeSaved =
-                if calleeSavedSpace > 0 then
-                    [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 calleeSavedSpace)]
-                else
-                    []
+            let restoreCalleeSavedInstrs = generateCalleeSavedRestores ctx.UsedCalleeSaved
+            let totalExtraStack = ctx.StackSize + calleeSavedSpace
             let deallocStack =
-                if ctx.StackSize > 0 then
-                    [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 ctx.StackSize)]
+                if totalExtraStack > 0 then
+                    [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 totalExtraStack)]
                 else
                     []
-            let restoreFpLr = [
-                ARM64.LDP (ARM64.X29, ARM64.X30, ARM64.SP, 0s)
-                ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
-            ]
+            let restoreFpLr = [ARM64.LDP_post (ARM64.X29, ARM64.X30, ARM64.SP, 16s)]
             let branch = [ARM64.BR funcPtrReg]
-            restoreCalleeSavedInstrs @ deallocCalleeSaved @ deallocStack @ restoreFpLr @ branch)
+            restoreCalleeSavedInstrs @ deallocStack @ restoreFpLr @ branch)
 
     | LIR.SaveRegs (intRegs, floatRegs) ->
         // Save only the caller-saved registers that are live across this call

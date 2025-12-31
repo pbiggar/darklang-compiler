@@ -81,7 +81,9 @@ type Instr =
     | STRB_reg of src:Reg * addr:Reg  // Store byte: [addr] = src (lower 8 bits)
     // Stack operations (for function calls and stack frames)
     | STP of reg1:Reg * reg2:Reg * addr:Reg * offset:int16  // Store pair: [addr + offset] = reg1, [addr + offset + 8] = reg2
+    | STP_pre of reg1:Reg * reg2:Reg * addr:Reg * offset:int16  // Store pair with pre-index: addr += offset, then store
     | LDP of reg1:Reg * reg2:Reg * addr:Reg * offset:int16  // Load pair: reg1 = [addr + offset], reg2 = [addr + offset + 8]
+    | LDP_post of reg1:Reg * reg2:Reg * addr:Reg * offset:int16  // Load pair with post-index: load, then addr += offset
     | STR of src:Reg * addr:Reg * offset:int16  // Store register (unsigned offset): [addr + offset] = src (64-bit)
     | LDR of dest:Reg * addr:Reg * offset:int16  // Load register (unsigned offset): dest = [addr + offset] (64-bit)
     | STUR of src:Reg * addr:Reg * offset:int16  // Store register (signed offset, -256 to +255): [addr + offset] = src (64-bit)
