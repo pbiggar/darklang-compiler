@@ -543,6 +543,30 @@ let allocatableRegs = callerSavedRegs @ calleeSavedRegs
 let isCalleeSaved (reg: LIR.PhysReg) : bool =
     List.contains reg calleeSavedRegs
 
+/// Check if an instruction is a non-tail call (requires SaveRegs/RestoreRegs)
+let isNonTailCall (instr: LIR.Instr) : bool =
+    match instr with
+    | LIR.Call _ | LIR.IndirectCall _ | LIR.ClosureCall _ -> true
+    | _ -> false
+
+/// Check if a function has any non-tail calls
+/// If it does, we prefer callee-saved registers to avoid per-call save/restore overhead
+let hasNonTailCalls (cfg: LIR.CFG) : bool =
+    cfg.Blocks
+    |> Map.exists (fun _ block ->
+        block.Instrs |> List.exists isNonTailCall)
+
+/// Get the optimal register allocation order based on calling pattern
+/// - Functions with non-tail calls: prefer callee-saved (save once in prologue/epilogue)
+/// - Leaf functions / tail-call-only: prefer caller-saved (no prologue/epilogue overhead)
+let getAllocatableRegs (cfg: LIR.CFG) : LIR.PhysReg list =
+    if hasNonTailCalls cfg then
+        // Callee-saved first for call-heavy functions
+        calleeSavedRegs @ callerSavedRegs
+    else
+        // Caller-saved first for leaf/tail-call-only functions
+        callerSavedRegs @ calleeSavedRegs
+
 // ============================================================================
 // Chordal Graph Coloring Register Allocation
 // ============================================================================
@@ -1819,8 +1843,12 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
     let graph = buildInterferenceGraph func.CFG liveness
 
     // Step 3: Run chordal graph coloring
-    let colorResult = chordalGraphColor graph Map.empty (List.length allocatableRegs)
-    let result = coloringToAllocation colorResult allocatableRegs
+    // Use optimal register order based on calling pattern:
+    // - Functions with non-tail calls: callee-saved first (save once in prologue/epilogue)
+    // - Leaf functions / tail-call-only: caller-saved first (no prologue overhead)
+    let regs = getAllocatableRegs func.CFG
+    let colorResult = chordalGraphColor graph Map.empty (List.length regs)
+    let result = coloringToAllocation colorResult regs
 
     // Step 4: Build parameter info with separate int/float counters (AAPCS64)
     // Each parameter type uses its own register counter
