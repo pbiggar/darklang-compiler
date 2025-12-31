@@ -15,6 +15,16 @@ open ANF
 /// Environment mapping TempIds to their constant values (for propagation)
 type ConstEnv = Map<TempId, Atom>
 
+/// Check if n is a power of 2, and if so return its log2
+/// Returns None if n is not a power of 2 or is <= 0
+let tryLog2 (n: int64) : int64 option =
+    if n <= 0L || (n &&& (n - 1L)) <> 0L then None
+    else
+        let rec countBits acc x =
+            if x = 1L then acc
+            else countBits (acc + 1L) (x >>> 1)
+        Some (countBits 0L n)
+
 /// Check if an atom is a constant (literal or known value)
 let isConstant (atom: Atom) : bool =
     match atom with
@@ -78,6 +88,16 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | Mul, IntLiteral (Int64 0L), _ -> Some (Atom (IntLiteral (Int64 0L)))
     | Mul, _, IntLiteral (Int64 0L) -> Some (Atom (IntLiteral (Int64 0L)))
     | Div, x, IntLiteral (Int64 1L) -> Some (Atom x)
+
+    // Strength reduction: multiply by power of 2 → left shift
+    | Mul, x, IntLiteral (Int64 n) ->
+        match tryLog2 n with
+        | Some shift -> Some (Prim (Shl, x, IntLiteral (Int64 shift)))
+        | None -> None
+    | Mul, IntLiteral (Int64 n), x ->
+        match tryLog2 n with
+        | Some shift -> Some (Prim (Shl, x, IntLiteral (Int64 shift)))
+        | None -> None
 
     // Short-circuit boolean
     | And, BoolLiteral false, _ -> Some (Atom (BoolLiteral false))

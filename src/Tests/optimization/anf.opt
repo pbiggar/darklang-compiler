@@ -259,3 +259,38 @@ unary_not_false
 if !false then 1 else 2
 ---EXPECTED---
 return 1
+
+---NAME---
+strength_reduce_mul_2
+---INPUT---
+let x = 5 in x * 2
+---EXPECTED---
+return 10
+
+---NAME---
+strength_reduce_2_mul
+---INPUT---
+let x = 5 in 2 * x
+---EXPECTED---
+return 10
+
+---NAME---
+strength_reduce_mul_4
+---INPUT---
+let x = 3 in x * 4
+---EXPECTED---
+return 12
+
+---NAME---
+strength_reduce_mul_8
+---INPUT---
+let x = 7 in x * 8
+---EXPECTED---
+return 56
+
+---NAME---
+strength_reduce_mul_16
+---INPUT---
+let x = 2 in x * 16
+---EXPECTED---
+return 32
