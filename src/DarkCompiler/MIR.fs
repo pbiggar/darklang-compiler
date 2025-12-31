@@ -110,6 +110,7 @@ type BinOp =
 type UnaryOp =
     | Neg
     | Not
+    | BitNot  // Bitwise NOT: ~~~expr
 
 /// Basic block label (defined early for use in Phi nodes)
 type Label = Label of string

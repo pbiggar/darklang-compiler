@@ -98,6 +98,8 @@ let foldUnaryOp (op: UnaryOp) (src: Atom) : CExpr option =
     | Neg, IntLiteral (Int64 n) -> Some (Atom (IntLiteral (Int64 (-n))))
     | Neg, FloatLiteral f -> Some (Atom (FloatLiteral (-f)))
     | Not, BoolLiteral b -> Some (Atom (BoolLiteral (not b)))
+    // Bitwise NOT: flip all bits
+    | BitNot, IntLiteral (Int64 n) -> Some (Atom (IntLiteral (Int64 (~~~n))))
     | _ -> None
 
 /// Check if a CExpr has side effects

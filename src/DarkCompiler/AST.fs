@@ -74,8 +74,9 @@ type BinOp =
 
 /// Unary operators
 type UnaryOp =
-    | Neg  // Unary negation: -expr
-    | Not  // Boolean not: !expr
+    | Neg     // Unary negation: -expr
+    | Not     // Boolean not: !expr
+    | BitNot  // Bitwise not: ~~~expr
 
 /// Pattern matching patterns
 type Pattern =

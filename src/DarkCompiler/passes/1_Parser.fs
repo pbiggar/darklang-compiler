@@ -83,7 +83,9 @@ and Token =
     | TShl         // << (left shift)
     | TShr         // >> (right shift)
     | TBitAnd      // & (bitwise and)
+    | TBitOr       // ||| (bitwise or)
     | TBitXor      // ^ (bitwise xor)
+    | TBitNot      // ~~~ (bitwise not)
     | TIdent of string
     | TEOF
 
@@ -135,7 +137,9 @@ let lex (input: string) : Result<Token list, string> =
         | '&' :: '&' :: rest -> lexHelper rest (TAnd :: acc)
         | '&' :: rest -> lexHelper rest (TBitAnd :: acc)
         | '^' :: rest -> lexHelper rest (TBitXor :: acc)
+        | '~' :: '~' :: '~' :: rest -> lexHelper rest (TBitNot :: acc)
         | '%' :: rest -> lexHelper rest (TPercent :: acc)
+        | '|' :: '|' :: '|' :: rest -> lexHelper rest (TBitOr :: acc)
         | '|' :: '|' :: rest -> lexHelper rest (TOr :: acc)
         | '|' :: '>' :: rest -> lexHelper rest (TPipe :: acc)
         | '|' :: rest -> lexHelper rest (TBar :: acc)
@@ -1346,18 +1350,28 @@ let parse (tokens: Token list) : Result<Program, string> =
             parseOrRest left remaining)
 
     and parseAnd (toks: Token list) : Result<Expr * Token list, string> =
-        // Note: parseBitOr was removed because `|` conflicts with pattern matching syntax.
-        // Use Stdlib.Int64.bitwiseOr function instead of `|` operator for bitwise OR.
-        parseBitXor toks
+        parseBitOr toks
         |> Result.bind (fun (left, remaining) ->
             let rec parseAndRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
                 match toks with
                 | TAnd :: rest ->
-                    parseBitXor rest
+                    parseBitOr rest
                     |> Result.bind (fun (right, remaining') ->
                         parseAndRest (BinOp (And, leftExpr, right)) remaining')
                 | _ -> Ok (leftExpr, toks)
             parseAndRest left remaining)
+
+    and parseBitOr (toks: Token list) : Result<Expr * Token list, string> =
+        parseBitXor toks
+        |> Result.bind (fun (left, remaining) ->
+            let rec parseBitOrRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
+                match toks with
+                | TBitOr :: rest ->
+                    parseBitXor rest
+                    |> Result.bind (fun (right, remaining') ->
+                        parseBitOrRest (BinOp (BitOr, leftExpr, right)) remaining')
+                | _ -> Ok (leftExpr, toks)
+            parseBitOrRest left remaining)
 
     and parseBitXor (toks: Token list) : Result<Expr * Token list, string> =
         parseBitAnd toks
@@ -1485,6 +1499,9 @@ let parse (tokens: Token list) : Result<Program, string> =
         | TNot :: rest ->
             parseUnary rest
             |> Result.map (fun (expr, remaining) -> (UnaryOp (Not, expr), remaining))
+        | TBitNot :: rest ->
+            parseUnary rest
+            |> Result.map (fun (expr, remaining) -> (UnaryOp (BitNot, expr), remaining))
         | _ ->
             parsePrimary toks
 

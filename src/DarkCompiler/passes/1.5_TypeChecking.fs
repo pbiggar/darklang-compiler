@@ -947,6 +947,17 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     | Some TBool | None -> Ok (TBool, UnaryOp (op, inner'))
                     | Some other -> Error (TypeMismatch (other, TBool, "result of !")))
 
+        | BitNot ->
+            // Bitwise NOT works on Int64 and returns Int64
+            checkExpr inner env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some TInt64)
+            |> Result.bind (fun (innerType, inner') ->
+                if innerType <> TInt64 then
+                    Error (TypeMismatch (TInt64, innerType, "operand of ~~~"))
+                else
+                    match expectedType with
+                    | Some TInt64 | None -> Ok (TInt64, UnaryOp (op, inner'))
+                    | Some other -> Error (TypeMismatch (other, TInt64, "result of ~~~")))
+
     | Let (name, value, body) ->
         // Let binding: check value, extend environment, check body
         checkExpr value env typeReg variantLookup genericFuncReg moduleRegistry aliasReg None

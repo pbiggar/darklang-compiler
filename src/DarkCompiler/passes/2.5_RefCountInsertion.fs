@@ -79,6 +79,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         match op with
         | Neg -> Some AST.TInt64
         | Not -> Some AST.TBool
+        | BitNot -> Some AST.TInt64
     | IfValue (_, thenAtom, _) ->
         // Type is the type of the branches (should be the same)
         match thenAtom with

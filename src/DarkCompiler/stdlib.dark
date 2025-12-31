@@ -44,11 +44,15 @@ def Stdlib.Int64.lessThanOrEqualTo(a: Int64, b: Int64) : Bool = a <= b
 // Bitwise operations
 def Stdlib.Int64.bitwiseAnd(a: Int64, b: Int64) : Int64 = a & b
 
+def Stdlib.Int64.bitwiseOr(a: Int64, b: Int64) : Int64 = a ||| b
+
 def Stdlib.Int64.bitwiseXor(a: Int64, b: Int64) : Int64 = a ^ b
 
 def Stdlib.Int64.shiftLeft(a: Int64, shift: Int64) : Int64 = a << shift
 
 def Stdlib.Int64.shiftRight(a: Int64, shift: Int64) : Int64 = a >> shift
+
+def Stdlib.Int64.bitwiseNot(a: Int64) : Int64 = ~~~a
 
 // Count number of set bits (population count)
 // Uses parallel bit counting algorithm (Brian Kernighan / SWAR)
@@ -321,6 +325,15 @@ def Stdlib.List.getAt<a>(list: List<a>, index: Int64) : Stdlib.Option.Option<a> 
     else match list with
     | [] -> None
     | [h, ...t] -> if index == 0 then Some(h) else Stdlib.List.getAt<a>(t, index - 1)
+
+// Set element at index (0-based), returns original list if index out of bounds
+def Stdlib.List.setAt<a>(list: List<a>, index: Int64, value: a) : List<a> =
+    if index < 0 then list
+    else match list with
+    | [] -> []
+    | [h, ...t] ->
+        if index == 0 then [value, ...t]
+        else [h, ...Stdlib.List.setAt<a>(t, index - 1, value)]
 
 // Find first element satisfying a predicate
 def Stdlib.List.findFirst<a>(list: List<a>, fn: (a) -> Bool) : Stdlib.Option.Option<a> =

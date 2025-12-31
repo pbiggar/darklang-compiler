@@ -412,6 +412,7 @@ let prettyPrintANFOp = function
 let prettyPrintANFUnaryOp = function
     | ANF.Neg -> "-"
     | ANF.Not -> "!"
+    | ANF.BitNot -> "~~~"
 
 /// Pretty-print ANF complex expression
 let prettyPrintANFCExpr = function

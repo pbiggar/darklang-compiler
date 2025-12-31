@@ -99,6 +99,7 @@ type BinOp =
 type UnaryOp =
     | Neg
     | Not
+    | BitNot  // Bitwise NOT: ~~~expr
 
 /// Complex expressions (produce values)
 type CExpr =

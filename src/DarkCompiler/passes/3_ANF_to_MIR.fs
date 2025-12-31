@@ -66,6 +66,7 @@ let convertUnaryOp (op: ANF.UnaryOp) : MIR.UnaryOp =
     match op with
     | ANF.Neg -> MIR.Neg
     | ANF.Not -> MIR.Not
+    | ANF.BitNot -> MIR.BitNot
 
 /// Sequence a list of Results into a Result of list
 let sequenceResults (results: Result<'a, string> list) : Result<'a list, string> =

@@ -397,6 +397,13 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                     LIR.Sub (lirDest, lirDest, LIR.Reg srcReg)
                 ])
 
+        | MIR.BitNot ->
+            // Bitwise NOT: flip all bits using MVN instruction
+            match ensureInRegister src (LIR.Virtual 1000) with
+            | Error err -> Error err
+            | Ok (srcInstrs, srcReg) ->
+                Ok (srcInstrs @ [LIR.Mvn (lirDest, srcReg)])
+
     | MIR.Call (dest, funcName, args, argTypes, returnType) ->
         // ARM64 calling convention (AAPCS64):
         // - Integer arguments in X0-X7 (using separate counter)

@@ -142,6 +142,23 @@ let tryRawMemoryIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr o
     | name, [ptrAtom; tagAtom] when name = "__rawptr_to_dict" || name.StartsWith("__rawptr_to_dict_") ->
         Some (ANF.Prim (ANF.BitOr, ptrAtom, tagAtom))
 
+    // List intrinsics - for Finger Tree implementation
+    // __list_is_null<a> checks if list pointer is 0 (empty)
+    | name, [listAtom] when name = "__list_is_null" || name.StartsWith("__list_is_null_") ->
+        Some (ANF.Prim (ANF.Eq, listAtom, ANF.IntLiteral (ANF.Int64 0L)))
+    // __list_get_tag<a> extracts low 3 bits (list & 7) for Finger Tree tags (0-4)
+    | name, [listAtom] when name = "__list_get_tag" || name.StartsWith("__list_get_tag_") ->
+        Some (ANF.Prim (ANF.BitAnd, listAtom, ANF.IntLiteral (ANF.Int64 7L)))
+    // __list_to_rawptr<a> clears tag bits (list & -8) to get raw pointer
+    | name, [listAtom] when name = "__list_to_rawptr" || name.StartsWith("__list_to_rawptr_") ->
+        Some (ANF.Prim (ANF.BitAnd, listAtom, ANF.IntLiteral (ANF.Int64 -8L)))
+    // __rawptr_to_list<a> combines pointer + tag (ptr | tag) to create tagged list
+    | name, [ptrAtom; tagAtom] when name = "__rawptr_to_list" || name.StartsWith("__rawptr_to_list_") ->
+        Some (ANF.Prim (ANF.BitOr, ptrAtom, tagAtom))
+    // __list_empty<a> returns 0 (null pointer = empty finger tree)
+    | name, [] when name = "__list_empty" || name.StartsWith("__list_empty_") ->
+        Some (ANF.Atom (ANF.IntLiteral (ANF.Int64 0L)))
+
     // Key intrinsics - dispatch based on monomorphized type
     // __hash<Int64> is identity (Int64 is its own hash)
     | "__hash_i64", [keyAtom] ->
@@ -1393,6 +1410,7 @@ let convertUnaryOp (op: AST.UnaryOp) : ANF.UnaryOp =
     match op with
     | AST.Neg -> ANF.Neg
     | AST.Not -> ANF.Not
+    | AST.BitNot -> ANF.BitNot
 
 /// Check if a type requires structural equality (compound types)
 let isCompoundType (typ: AST.Type) : bool =
@@ -1656,6 +1674,7 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
         match op with
         | AST.Neg -> Ok AST.TInt64
         | AST.Not -> Ok AST.TBool
+        | AST.BitNot -> Ok AST.TInt64
     | AST.Match (_, cases) ->
         // Infer from first case body
         match cases with
@@ -1705,6 +1724,22 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                     Ok AST.TInt64
                 elif funcName.StartsWith("__rawptr_to_dict_") then
                     // __rawptr_to_dict<k, v> returns Dict<k, v> (as Int64)
+                    Ok AST.TInt64
+                // List intrinsics - monomorphized versions for Finger Tree
+                elif funcName.StartsWith("__list_is_null_") then
+                    // __list_is_null<a> returns Bool
+                    Ok AST.TBool
+                elif funcName.StartsWith("__list_get_tag_") then
+                    // __list_get_tag<a> returns Int64 (tag bits)
+                    Ok AST.TInt64
+                elif funcName.StartsWith("__list_to_rawptr_") then
+                    // __list_to_rawptr<a> returns RawPtr (as Int64)
+                    Ok AST.TInt64
+                elif funcName.StartsWith("__rawptr_to_list_") then
+                    // __rawptr_to_list<a> returns List<a> (as Int64)
+                    Ok AST.TInt64
+                elif funcName.StartsWith("__list_empty_") then
+                    // __list_empty<a> returns List<a> - but at ANF level it's Int64 (null ptr)
                     Ok AST.TInt64
                 else
                     Error $"Unknown function: '{funcName}'"
@@ -1895,6 +1930,19 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             // Create unary op and bind to fresh variable
             let (tempVar, varGen2) = ANF.freshVar varGen1
             let cexpr = ANF.UnaryPrim (ANF.Not, innerAtom)
+
+            // Build the expression: innerBindings + let tempVar = op
+            let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
+            let exprWithBindings = wrapBindings innerBindings finalExpr
+
+            (exprWithBindings, varGen2))
+
+    | AST.UnaryOp (AST.BitNot, innerExpr) ->
+        // Bitwise NOT: convert operand to atom and apply BitNot
+        toAtom innerExpr varGen env typeReg variantLookup funcReg moduleRegistry |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
+            // Create unary op and bind to fresh variable
+            let (tempVar, varGen2) = ANF.freshVar varGen1
+            let cexpr = ANF.UnaryPrim (ANF.BitNot, innerAtom)
 
             // Build the expression: innerBindings + let tempVar = op
             let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
@@ -3536,6 +3584,17 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             // Create the operation
             let (tempVar, varGen2) = ANF.freshVar varGen1
             let cexpr = ANF.UnaryPrim (ANF.Not, innerAtom)
+
+            // Return the temp variable as atom, plus all bindings
+            let allBindings = innerBindings @ [(tempVar, cexpr)]
+            (ANF.Var tempVar, allBindings, varGen2))
+
+    | AST.UnaryOp (AST.BitNot, innerExpr) ->
+        // Bitwise NOT: convert operand to atom, create binding
+        toAtom innerExpr varGen env typeReg variantLookup funcReg moduleRegistry |> Result.map (fun (innerAtom, innerBindings, varGen1) ->
+            // Create the operation
+            let (tempVar, varGen2) = ANF.freshVar varGen1
+            let cexpr = ANF.UnaryPrim (ANF.BitNot, innerAtom)
 
             // Return the temp variable as atom, plus all bindings
             let allBindings = innerBindings @ [(tempVar, cexpr)]
