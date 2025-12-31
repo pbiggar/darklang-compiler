@@ -1709,6 +1709,67 @@ let applyToCFG (mapping: Map<int, Allocation>) (cfg: LIR.CFG) : LIR.CFG =
     }
 
 // ============================================================================
+// Float Move Generation (used by both phi resolution and param copies)
+// ============================================================================
+
+/// Generate float move instructions with parallel move resolution.
+/// Uses ParallelMoves.resolve to handle cycles like D0←D1, D1←D2, D2←D0.
+/// IMPORTANT: We must work with PHYSICAL register IDs, not FVirtual IDs,
+/// because multiple FVirtual IDs can map to the same physical register.
+let generateFloatMoveInstrs (moves: (LIR.FReg * LIR.FReg) list) : LIR.Instr list =
+    if List.isEmpty moves then []
+    else
+        // Map FVirtual to a canonical integer representing the physical register
+        // This mirrors the logic in CodeGen.lirFRegToARM64FReg
+        let fregToPhysId (freg: LIR.FReg) : int =
+            match freg with
+            | LIR.FPhysical p ->
+                match p with
+                | LIR.D0 -> 0 | LIR.D1 -> 1 | LIR.D2 -> 2 | LIR.D3 -> 3
+                | LIR.D4 -> 4 | LIR.D5 -> 5 | LIR.D6 -> 6 | LIR.D7 -> 7
+                | LIR.D8 -> 8 | LIR.D9 -> 9 | LIR.D10 -> 10 | LIR.D11 -> 11
+                | LIR.D12 -> 12 | LIR.D13 -> 13 | LIR.D14 -> 14 | LIR.D15 -> 15
+            | LIR.FVirtual 1000 -> 18  // D18 (left temp for binary ops)
+            | LIR.FVirtual 1001 -> 17  // D17 (right temp for binary ops)
+            | LIR.FVirtual 2000 -> 16  // D16 (cycle resolution temp)
+            | LIR.FVirtual n when n >= 3000 && n < 4000 -> 19 + ((n - 3000) % 8)  // D19-D26
+            | LIR.FVirtual n when n >= 0 && n <= 7 -> 2 + n  // D2-D9 for params
+            | LIR.FVirtual n ->
+                // SSA temps: D0, D1, D10-D15, D27-D31 (13 registers with modulo)
+                // Must match CodeGen.fs lirFRegToARM64FReg to avoid phi source/dest collisions
+                let tempRegs = [| 0; 1; 10; 11; 12; 13; 14; 15; 27; 28; 29; 30; 31 |]
+                tempRegs[n % 13]
+
+        // Convert moves to physical register IDs for cycle detection
+        let physMoves = moves |> List.map (fun (dest, src) -> (fregToPhysId dest, fregToPhysId src))
+
+        let getSrcPhysId (src: int) : int option = Some src
+
+        let actions = ParallelMoves.resolve physMoves getSrcPhysId
+
+        // Convert actions back to FMov instructions using original FRegs
+        // Build a map from physical ID to original FReg for destinations
+        let destMap = moves |> List.map (fun (dest, _) -> (fregToPhysId dest, dest)) |> Map.ofList
+        let srcMap = moves |> List.map (fun (_, src) -> (fregToPhysId src, src)) |> Map.ofList
+
+        actions
+        |> List.collect (fun action ->
+            match action with
+            | ParallelMoves.SaveToTemp physId ->
+                // Save the source FReg to D16 temp
+                match Map.tryFind physId srcMap with
+                | Some srcFreg -> [LIR.FMov (LIR.FVirtual 2000, srcFreg)]
+                | None -> []
+            | ParallelMoves.Move (destPhysId, srcPhysId) ->
+                match Map.tryFind destPhysId destMap, Map.tryFind srcPhysId srcMap with
+                | Some destFreg, Some srcFreg -> [LIR.FMov (destFreg, srcFreg)]
+                | _ -> []
+            | ParallelMoves.MoveFromTemp destPhysId ->
+                match Map.tryFind destPhysId destMap with
+                | Some destFreg -> [LIR.FMov (destFreg, LIR.FVirtual 2000)]
+                | None -> [])
+
+// ============================================================================
 // Phi Resolution
 // ============================================================================
 
@@ -1871,60 +1932,6 @@ let resolvePhiNodes (cfg: LIR.CFG) (allocation: Map<int, Allocation>) : LIR.CFG 
         // then register moves
         stackMoveInstrs @ regMoveInstrs
 
-    // Generate float moves (FMov instructions) with proper cycle resolution
-    // Uses ParallelMoves.resolve to handle cycles like D0←D1, D1←D2, D2←D0
-    // IMPORTANT: We must work with PHYSICAL register IDs, not FVirtual IDs,
-    // because multiple FVirtual IDs can map to the same physical register.
-    let generateFloatMoveInstrs (moves: (LIR.FReg * LIR.FReg) list) : LIR.Instr list =
-        // Map FVirtual to a canonical integer representing the physical register
-        // This mirrors the logic in CodeGen.lirFRegToARM64FReg
-        let fregToPhysId (freg: LIR.FReg) : int =
-            match freg with
-            | LIR.FPhysical p ->
-                match p with
-                | LIR.D0 -> 0 | LIR.D1 -> 1 | LIR.D2 -> 2 | LIR.D3 -> 3
-                | LIR.D4 -> 4 | LIR.D5 -> 5 | LIR.D6 -> 6 | LIR.D7 -> 7
-                | LIR.D8 -> 8 | LIR.D9 -> 9 | LIR.D10 -> 10 | LIR.D11 -> 11
-                | LIR.D12 -> 12 | LIR.D13 -> 13 | LIR.D14 -> 14 | LIR.D15 -> 15
-            | LIR.FVirtual 1000 -> 18  // D18 (left temp for binary ops)
-            | LIR.FVirtual 1001 -> 17  // D17 (right temp for binary ops)
-            | LIR.FVirtual 2000 -> 16  // D16 (cycle resolution temp)
-            | LIR.FVirtual n when n >= 3000 && n < 4000 -> 19 + ((n - 3000) % 8)  // D19-D26
-            | LIR.FVirtual n when n >= 0 && n <= 7 -> 2 + n  // D2-D9 for params
-            | LIR.FVirtual n ->
-                // SSA temps: D0, D1, D10-D15 (8 registers with modulo)
-                let tempRegs = [| 0; 1; 10; 11; 12; 13; 14; 15 |]
-                tempRegs[n % 8]
-
-        // Convert moves to physical register IDs for cycle detection
-        let physMoves = moves |> List.map (fun (dest, src) -> (fregToPhysId dest, fregToPhysId src))
-
-        let getSrcPhysId (src: int) : int option = Some src
-
-        let actions = ParallelMoves.resolve physMoves getSrcPhysId
-
-        // Convert actions back to FMov instructions using original FRegs
-        // Build a map from physical ID to original FReg for destinations
-        let destMap = moves |> List.map (fun (dest, _) -> (fregToPhysId dest, dest)) |> Map.ofList
-        let srcMap = moves |> List.map (fun (_, src) -> (fregToPhysId src, src)) |> Map.ofList
-
-        actions
-        |> List.collect (fun action ->
-            match action with
-            | ParallelMoves.SaveToTemp physId ->
-                // Save the source FReg to D16 temp
-                match Map.tryFind physId srcMap with
-                | Some srcFreg -> [LIR.FMov (LIR.FVirtual 2000, srcFreg)]
-                | None -> []
-            | ParallelMoves.Move (destPhysId, srcPhysId) ->
-                match Map.tryFind destPhysId destMap, Map.tryFind srcPhysId srcMap with
-                | Some destFreg, Some srcFreg -> [LIR.FMov (destFreg, srcFreg)]
-                | _ -> []
-            | ParallelMoves.MoveFromTemp destPhysId ->
-                match Map.tryFind destPhysId destMap with
-                | Some destFreg -> [LIR.FMov (destFreg, LIR.FVirtual 2000)]
-                | None -> [])
-
     // Add moves to predecessor blocks
     let mutable updatedBlocks = cfg.Blocks
 
@@ -2073,22 +2080,21 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
     // Step 6: Build mapping that copies FLOAT parameters from D0-D7
     // Float parameters use FVirtual registers (same ID as Virtual)
     // and don't go through linear scan - they map directly in CodeGen
-    let floatParamCopyInstrs =
-        // Reverse the order to avoid clobbering: copy from higher-indexed params first
-        // E.g., if D0→D1 and D1→D2, we must do D1→D2 first, then D0→D1
+    // IMPORTANT: Use parallel move resolution to handle cases where destination
+    // registers collide with source registers (e.g., when FVirtual id maps to D0
+    // which is also a source register for other params)
+    let floatParamMoves =
         floatParams
-        |> List.rev
-        |> List.map (fun (reg, paramIdx) ->
+        |> List.choose (fun (reg, paramIdx) ->
             match reg with
             | LIR.Virtual id ->
                 // Float param comes in D0/D1/etc, needs to be in FVirtual id
-                // FVirtual id maps to D(id % 8) in CodeGen, so we need FMov if different
                 let srcDReg = List.item paramIdx floatParamRegs
                 let destFVirtual = LIR.FVirtual id
-                // Always emit FMov from calling convention reg to virtual
-                Some (LIR.FMov (destFVirtual, LIR.FPhysical srcDReg))
+                Some (destFVirtual, LIR.FPhysical srcDReg)
             | LIR.Physical _ -> None)
-        |> List.choose id
+
+    let floatParamCopyInstrs = generateFloatMoveInstrs floatParamMoves
 
     // Step 6b: Extract entry-edge phi moves for float phis
     // For phis at the entry block, we need to add moves from entry-edge sources
@@ -2115,9 +2121,8 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
         |> List.concat
 
     // Generate FMov instructions for entry-edge phi resolution
-    let entryEdgePhiInstrs =
-        entryEdgeFloatPhiMoves
-        |> List.map (fun (dest, src) -> LIR.FMov (dest, src))
+    // Use parallel move resolution to handle potential register conflicts
+    let entryEdgePhiInstrs = generateFloatMoveInstrs entryEdgeFloatPhiMoves
 
     // Step 7: Resolve phi nodes (convert to moves at predecessor exits)
     // This must happen BEFORE applying allocation since we need to know where each
