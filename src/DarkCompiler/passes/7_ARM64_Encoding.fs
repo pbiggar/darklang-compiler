@@ -613,6 +613,32 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rt = encodeFReg src
         [size ||| fixedBits ||| imm12 ||| rn ||| rt]
 
+    | ARM64.STP_fp (freg1, freg2, addr, offset) ->
+        // STP (SIMD&FP) - signed offset addressing for double
+        // Encoding: opc(2) 101 V(1) mode(2) L(1) imm7(7) Rt2(5) Rn(5) Rt(5)
+        // opc=01 for 64-bit (D registers), V=1 (FP), mode=010 (signed offset), L=0 (store)
+        // Bits 29-22 = 101 1 010 0 = 0b10110100
+        let opc = 1u <<< 30  // 01 for 64-bit FP
+        let fixedBits = 0b10110100u <<< 22  // STP FP: 101 1 010 0
+        let imm7 = ((uint32 (int offset / 8)) &&& 0x7Fu) <<< 15
+        let rt2 = (encodeFReg freg2) <<< 10
+        let rn = (encodeReg addr) <<< 5
+        let rt = encodeFReg freg1
+        [opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt]
+
+    | ARM64.LDP_fp (freg1, freg2, addr, offset) ->
+        // LDP (SIMD&FP) - signed offset addressing for double
+        // Encoding: opc(2) 101 V(1) mode(2) L(1) imm7(7) Rt2(5) Rn(5) Rt(5)
+        // opc=01 for 64-bit (D registers), V=1 (FP), mode=010 (signed offset), L=1 (load)
+        // Bits 29-22 = 101 1 010 1 = 0b10110101
+        let opc = 1u <<< 30  // 01 for 64-bit FP
+        let fixedBits = 0b10110101u <<< 22  // LDP FP: 101 1 010 1
+        let imm7 = ((uint32 (int offset / 8)) &&& 0x7Fu) <<< 15
+        let rt2 = (encodeFReg freg2) <<< 10
+        let rn = (encodeReg addr) <<< 5
+        let rt = encodeFReg freg1
+        [opc ||| fixedBits ||| imm7 ||| rt2 ||| rn ||| rt]
+
     | ARM64.FADD (dest, src1, src2) ->
         // FADD (scalar, double): 0001 1110 01 1 Rm 0010 10 Rn Rd
         // ftype=01 (double), opcode=0010 (add)

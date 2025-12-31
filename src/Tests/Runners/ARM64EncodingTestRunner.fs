@@ -95,6 +95,8 @@ let formatMismatches (mismatches: (int * Instr * uint32 * uint32) list) : string
                     // Floating-point instructions
                     | LDR_fp (dest, addr, offset) -> $"LDR_fp({dest}, {addr}, {offset})"
                     | STR_fp (src, addr, offset) -> $"STR_fp({src}, {addr}, {offset})"
+                    | STP_fp (freg1, freg2, addr, offset) -> $"STP_fp({freg1}, {freg2}, {addr}, {offset})"
+                    | LDP_fp (freg1, freg2, addr, offset) -> $"LDP_fp({freg1}, {freg2}, {addr}, {offset})"
                     | FADD (dest, src1, src2) -> $"FADD({dest}, {src1}, {src2})"
                     | FSUB (dest, src1, src2) -> $"FSUB({dest}, {src1}, {src2})"
                     | FMUL (dest, src1, src2) -> $"FMUL({dest}, {src1}, {src2})"

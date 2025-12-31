@@ -709,6 +709,10 @@ let prettyPrintARM64Instr = function
         $"LDR_fp({dest}, {prettyPrintARM64Reg addr}, {offset})"
     | ARM64.STR_fp (src, addr, offset) ->
         $"STR_fp({src}, {prettyPrintARM64Reg addr}, {offset})"
+    | ARM64.STP_fp (freg1, freg2, addr, offset) ->
+        $"STP_fp({freg1}, {freg2}, {prettyPrintARM64Reg addr}, {offset})"
+    | ARM64.LDP_fp (freg1, freg2, addr, offset) ->
+        $"LDP_fp({freg1}, {freg2}, {prettyPrintARM64Reg addr}, {offset})"
     | ARM64.FADD (dest, src1, src2) ->
         $"FADD({dest}, {src1}, {src2})"
     | ARM64.FSUB (dest, src1, src2) ->

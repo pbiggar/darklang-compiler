@@ -1160,34 +1160,61 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
 
             let allocStack = [ARM64.SUB_imm (ARM64.SP, ARM64.SP, uint16 totalSize)]
 
-            // Save only the specified int registers at fixed offsets
-            // (must maintain layout for ArgMoves which loads from stack)
-            let saveIntReg (reg: LIR.PhysReg) : ARM64.Instr list =
-                let arm64Reg = lirPhysRegToARM64Reg reg
-                let offset =
-                    match reg with
-                    | LIR.X1 -> 0s | LIR.X2 -> 8s | LIR.X3 -> 16s | LIR.X4 -> 24s
-                    | LIR.X5 -> 32s | LIR.X6 -> 40s | LIR.X7 -> 48s | LIR.X8 -> 56s
-                    | LIR.X9 -> 64s | LIR.X10 -> 72s
-                    | _ -> 0s  // Shouldn't happen
-                [ARM64.STR (arm64Reg, ARM64.SP, offset)]
+            // Save int registers using STP pairs where possible
+            // Pairs: (X1,X2)@0, (X3,X4)@16, (X5,X6)@32, (X7,X8)@48, (X9,X10)@64
+            let intPairs = [
+                (LIR.X1, LIR.X2, 0s)
+                (LIR.X3, LIR.X4, 16s)
+                (LIR.X5, LIR.X6, 32s)
+                (LIR.X7, LIR.X8, 48s)
+                (LIR.X9, LIR.X10, 64s)
+            ]
 
-            let intSaves = intRegs |> List.collect saveIntReg
+            let intSaves : ARM64.Instr list =
+                intPairs |> List.collect (fun (r1, r2, offset) ->
+                    let has1 = List.contains r1 intRegs
+                    let has2 = List.contains r2 intRegs
+                    match (has1, has2) with
+                    | (true, true) ->
+                        // Both registers - use STP
+                        [ARM64.STP (lirPhysRegToARM64Reg r1, lirPhysRegToARM64Reg r2, ARM64.SP, offset)]
+                    | (true, false) ->
+                        // Only first register - use STR
+                        [ARM64.STR (lirPhysRegToARM64Reg r1, ARM64.SP, offset)]
+                    | (false, true) ->
+                        // Only second register - use STR
+                        [ARM64.STR (lirPhysRegToARM64Reg r2, ARM64.SP, offset + 8s)]
+                    | (false, false) ->
+                        // Neither register
+                        [])
 
-            // Save only the specified float registers
-            let saveFloatReg (freg: LIR.PhysFPReg) : ARM64.Instr list =
-                let arm64FReg = lirPhysFPRegToARM64FReg freg
-                let baseOffset = if hasIntRegs then 80s else 0s
-                let offset =
-                    match freg with
-                    | LIR.D0 -> baseOffset | LIR.D1 -> baseOffset + 8s
-                    | LIR.D2 -> baseOffset + 16s | LIR.D3 -> baseOffset + 24s
-                    | LIR.D4 -> baseOffset + 32s | LIR.D5 -> baseOffset + 40s
-                    | LIR.D6 -> baseOffset + 48s | LIR.D7 -> baseOffset + 56s
-                    | _ -> baseOffset  // Shouldn't happen
-                [ARM64.STR_fp (arm64FReg, ARM64.SP, offset)]
+            // Save float registers using STP_fp pairs where possible
+            // Pairs: (D0,D1)@0, (D2,D3)@16, (D4,D5)@32, (D6,D7)@48
+            let baseFloatOffset = if hasIntRegs then 80s else 0s
+            let floatPairs = [
+                (LIR.D0, LIR.D1, 0s)
+                (LIR.D2, LIR.D3, 16s)
+                (LIR.D4, LIR.D5, 32s)
+                (LIR.D6, LIR.D7, 48s)
+            ]
 
-            let floatSaves = floatRegs |> List.collect saveFloatReg
+            let floatSaves : ARM64.Instr list =
+                floatPairs |> List.collect (fun (f1, f2, offset) ->
+                    let has1 = List.contains f1 floatRegs
+                    let has2 = List.contains f2 floatRegs
+                    match (has1, has2) with
+                    | (true, true) ->
+                        // Both registers - use STP_fp
+                        [ARM64.STP_fp (lirPhysFPRegToARM64FReg f1, lirPhysFPRegToARM64FReg f2, ARM64.SP, baseFloatOffset + offset)]
+                    | (true, false) ->
+                        // Only first register - use STR_fp
+                        [ARM64.STR_fp (lirPhysFPRegToARM64FReg f1, ARM64.SP, baseFloatOffset + offset)]
+                    | (false, true) ->
+                        // Only second register - use STR_fp
+                        [ARM64.STR_fp (lirPhysFPRegToARM64FReg f2, ARM64.SP, baseFloatOffset + offset + 8s)]
+                    | (false, false) ->
+                        // Neither register
+                        [])
 
             Ok (allocStack @ intSaves @ floatSaves)
 
@@ -1203,33 +1230,61 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             let floatSlotSize = if hasFloatRegs then 64 else 0
             let totalSize = intSlotSize + floatSlotSize
 
-            // Restore only the specified int registers from fixed offsets
-            let restoreIntReg (reg: LIR.PhysReg) : ARM64.Instr list =
-                let arm64Reg = lirPhysRegToARM64Reg reg
-                let offset =
-                    match reg with
-                    | LIR.X1 -> 0s | LIR.X2 -> 8s | LIR.X3 -> 16s | LIR.X4 -> 24s
-                    | LIR.X5 -> 32s | LIR.X6 -> 40s | LIR.X7 -> 48s | LIR.X8 -> 56s
-                    | LIR.X9 -> 64s | LIR.X10 -> 72s
-                    | _ -> 0s
-                [ARM64.LDR (arm64Reg, ARM64.SP, offset)]
+            // Restore int registers using LDP pairs where possible
+            // Pairs: (X1,X2)@0, (X3,X4)@16, (X5,X6)@32, (X7,X8)@48, (X9,X10)@64
+            let intPairs = [
+                (LIR.X1, LIR.X2, 0s)
+                (LIR.X3, LIR.X4, 16s)
+                (LIR.X5, LIR.X6, 32s)
+                (LIR.X7, LIR.X8, 48s)
+                (LIR.X9, LIR.X10, 64s)
+            ]
 
-            let intRestores = intRegs |> List.collect restoreIntReg
+            let intRestores : ARM64.Instr list =
+                intPairs |> List.collect (fun (r1, r2, offset) ->
+                    let has1 = List.contains r1 intRegs
+                    let has2 = List.contains r2 intRegs
+                    match (has1, has2) with
+                    | (true, true) ->
+                        // Both registers - use LDP
+                        [ARM64.LDP (lirPhysRegToARM64Reg r1, lirPhysRegToARM64Reg r2, ARM64.SP, offset)]
+                    | (true, false) ->
+                        // Only first register - use LDR
+                        [ARM64.LDR (lirPhysRegToARM64Reg r1, ARM64.SP, offset)]
+                    | (false, true) ->
+                        // Only second register - use LDR
+                        [ARM64.LDR (lirPhysRegToARM64Reg r2, ARM64.SP, offset + 8s)]
+                    | (false, false) ->
+                        // Neither register
+                        [])
 
-            // Restore only the specified float registers
-            let restoreFloatReg (freg: LIR.PhysFPReg) : ARM64.Instr list =
-                let arm64FReg = lirPhysFPRegToARM64FReg freg
-                let baseOffset = if hasIntRegs then 80s else 0s
-                let offset =
-                    match freg with
-                    | LIR.D0 -> baseOffset | LIR.D1 -> baseOffset + 8s
-                    | LIR.D2 -> baseOffset + 16s | LIR.D3 -> baseOffset + 24s
-                    | LIR.D4 -> baseOffset + 32s | LIR.D5 -> baseOffset + 40s
-                    | LIR.D6 -> baseOffset + 48s | LIR.D7 -> baseOffset + 56s
-                    | _ -> baseOffset
-                [ARM64.LDR_fp (arm64FReg, ARM64.SP, offset)]
+            // Restore float registers using LDP_fp pairs where possible
+            // Pairs: (D0,D1)@0, (D2,D3)@16, (D4,D5)@32, (D6,D7)@48
+            let baseFloatOffset = if hasIntRegs then 80s else 0s
+            let floatPairs = [
+                (LIR.D0, LIR.D1, 0s)
+                (LIR.D2, LIR.D3, 16s)
+                (LIR.D4, LIR.D5, 32s)
+                (LIR.D6, LIR.D7, 48s)
+            ]
 
-            let floatRestores = floatRegs |> List.collect restoreFloatReg
+            let floatRestores : ARM64.Instr list =
+                floatPairs |> List.collect (fun (f1, f2, offset) ->
+                    let has1 = List.contains f1 floatRegs
+                    let has2 = List.contains f2 floatRegs
+                    match (has1, has2) with
+                    | (true, true) ->
+                        // Both registers - use LDP_fp
+                        [ARM64.LDP_fp (lirPhysFPRegToARM64FReg f1, lirPhysFPRegToARM64FReg f2, ARM64.SP, baseFloatOffset + offset)]
+                    | (true, false) ->
+                        // Only first register - use LDR_fp
+                        [ARM64.LDR_fp (lirPhysFPRegToARM64FReg f1, ARM64.SP, baseFloatOffset + offset)]
+                    | (false, true) ->
+                        // Only second register - use LDR_fp
+                        [ARM64.LDR_fp (lirPhysFPRegToARM64FReg f2, ARM64.SP, baseFloatOffset + offset + 8s)]
+                    | (false, false) ->
+                        // Neither register
+                        [])
 
             let deallocStack = [ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 totalSize)]
 

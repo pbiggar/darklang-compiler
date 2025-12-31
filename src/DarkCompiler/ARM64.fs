@@ -113,6 +113,8 @@ type Instr =
     // Floating-point instructions
     | LDR_fp of dest:FReg * addr:Reg * offset:int16  // Load double from [addr + offset]
     | STR_fp of src:FReg * addr:Reg * offset:int16   // Store double to [addr + offset]
+    | STP_fp of freg1:FReg * freg2:FReg * addr:Reg * offset:int16  // Store FP pair: [addr + offset] = freg1, [addr + offset + 8] = freg2
+    | LDP_fp of freg1:FReg * freg2:FReg * addr:Reg * offset:int16  // Load FP pair: freg1 = [addr + offset], freg2 = [addr + offset + 8]
     | FADD of dest:FReg * src1:FReg * src2:FReg      // FP add: dest = src1 + src2
     | FSUB of dest:FReg * src1:FReg * src2:FReg      // FP sub: dest = src1 - src2
     | FMUL of dest:FReg * src1:FReg * src2:FReg      // FP mul: dest = src1 * src2
