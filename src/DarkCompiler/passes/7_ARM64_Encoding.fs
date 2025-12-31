@@ -41,6 +41,7 @@ let encodeFReg (reg: ARM64.FReg) : uint32 =
     | ARM64.D16 -> 16u | ARM64.D17 -> 17u | ARM64.D18 -> 18u
     | ARM64.D19 -> 19u | ARM64.D20 -> 20u | ARM64.D21 -> 21u | ARM64.D22 -> 22u
     | ARM64.D23 -> 23u | ARM64.D24 -> 24u | ARM64.D25 -> 25u | ARM64.D26 -> 26u
+    | ARM64.D27 -> 27u | ARM64.D28 -> 28u | ARM64.D29 -> 29u | ARM64.D30 -> 30u | ARM64.D31 -> 31u
 
 /// Encode ARM64 instruction to 32-bit machine code
 let encode (instr: ARM64.Instr) : ARM64.MachineCode list =

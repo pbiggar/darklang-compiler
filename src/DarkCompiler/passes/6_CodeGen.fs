@@ -111,9 +111,10 @@ let lirPhysFPRegToARM64FReg (physReg: LIR.PhysFPReg) : ARM64.FReg =
 let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64.FReg, string> =
     match freg with
     | LIR.FPhysical physReg -> Ok (lirPhysFPRegToARM64FReg physReg)
-    // Binary op temps use D17-D18 (caller-saved, not used as argument registers)
+    // Special temp registers for specific purposes
     | LIR.FVirtual 1000 -> Ok ARM64.D18  // Left temp for binary ops
     | LIR.FVirtual 1001 -> Ok ARM64.D17  // Right temp for binary ops
+    | LIR.FVirtual 2000 -> Ok ARM64.D16  // Temp for FPhi cycle resolution
     | LIR.FVirtual n when n >= 3000 && n < 4000 ->
         // Temps for float call arguments - use D19-D26 (8 registers)
         // These must not collide with each other since up to 8 floats
@@ -146,10 +147,12 @@ let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64.FReg, string> =
         Ok physReg
     | LIR.FVirtual n ->
         // SSA temps and other high-numbered VRegs
-        // Available: D0, D1 (caller-saved, saved around calls), D10-D15 (not used elsewhere)
+        // Available: D0, D1 (caller-saved), D10-D15 (not used elsewhere), D27-D31 (caller-saved)
         // Must avoid: D2-D9 (params), D16 (cycle temp), D17-D18 (binop temps), D19-D26 (arg temps)
-        // Using 8 registers: D0, D1, D10, D11, D12, D13, D14, D15
-        let tempRegs = [| ARM64.D0; ARM64.D1; ARM64.D10; ARM64.D11; ARM64.D12; ARM64.D13; ARM64.D14; ARM64.D15 |]
+        // Using 13 registers to avoid collisions between phi sources and destinations
+        // (With only 8 registers, modulo collisions caused phi source/dest to share registers)
+        let tempRegs = [| ARM64.D0; ARM64.D1; ARM64.D10; ARM64.D11; ARM64.D12; ARM64.D13; ARM64.D14; ARM64.D15;
+                          ARM64.D27; ARM64.D28; ARM64.D29; ARM64.D30; ARM64.D31 |]
         let regIdx = n % tempRegs.Length
         let physReg = tempRegs.[regIdx]
         Ok physReg

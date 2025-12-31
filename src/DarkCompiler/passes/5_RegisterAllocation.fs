@@ -1855,14 +1855,59 @@ let resolvePhiNodes (cfg: LIR.CFG) (allocation: Map<int, Allocation>) : LIR.CFG 
         // then register moves
         stackMoveInstrs @ regMoveInstrs
 
-    // Generate float moves (FMov instructions)
-    // FVirtual registers map directly to D registers in CodeGen, so we just emit FMov
+    // Generate float moves (FMov instructions) with proper cycle resolution
+    // Uses ParallelMoves.resolve to handle cycles like D0←D1, D1←D2, D2←D0
+    // IMPORTANT: We must work with PHYSICAL register IDs, not FVirtual IDs,
+    // because multiple FVirtual IDs can map to the same physical register.
     let generateFloatMoveInstrs (moves: (LIR.FReg * LIR.FReg) list) : LIR.Instr list =
-        // For simplicity, emit moves in order. If there are cycles, we'd need to handle them.
-        // For self-recursion phis, cycles are unlikely since params get new values each iteration.
-        moves
-        |> List.filter (fun (dest, src) -> dest <> src)  // Skip no-op moves
-        |> List.map (fun (dest, src) -> LIR.FMov (dest, src))
+        // Map FVirtual to a canonical integer representing the physical register
+        // This mirrors the logic in CodeGen.lirFRegToARM64FReg
+        let fregToPhysId (freg: LIR.FReg) : int =
+            match freg with
+            | LIR.FPhysical p ->
+                match p with
+                | LIR.D0 -> 0 | LIR.D1 -> 1 | LIR.D2 -> 2 | LIR.D3 -> 3
+                | LIR.D4 -> 4 | LIR.D5 -> 5 | LIR.D6 -> 6 | LIR.D7 -> 7
+                | LIR.D8 -> 8 | LIR.D9 -> 9 | LIR.D10 -> 10 | LIR.D11 -> 11
+                | LIR.D12 -> 12 | LIR.D13 -> 13 | LIR.D14 -> 14 | LIR.D15 -> 15
+            | LIR.FVirtual 1000 -> 18  // D18 (left temp for binary ops)
+            | LIR.FVirtual 1001 -> 17  // D17 (right temp for binary ops)
+            | LIR.FVirtual 2000 -> 16  // D16 (cycle resolution temp)
+            | LIR.FVirtual n when n >= 3000 && n < 4000 -> 19 + ((n - 3000) % 8)  // D19-D26
+            | LIR.FVirtual n when n >= 0 && n <= 7 -> 2 + n  // D2-D9 for params
+            | LIR.FVirtual n ->
+                // SSA temps: D0, D1, D10-D15 (8 registers with modulo)
+                let tempRegs = [| 0; 1; 10; 11; 12; 13; 14; 15 |]
+                tempRegs[n % 8]
+
+        // Convert moves to physical register IDs for cycle detection
+        let physMoves = moves |> List.map (fun (dest, src) -> (fregToPhysId dest, fregToPhysId src))
+
+        let getSrcPhysId (src: int) : int option = Some src
+
+        let actions = ParallelMoves.resolve physMoves getSrcPhysId
+
+        // Convert actions back to FMov instructions using original FRegs
+        // Build a map from physical ID to original FReg for destinations
+        let destMap = moves |> List.map (fun (dest, _) -> (fregToPhysId dest, dest)) |> Map.ofList
+        let srcMap = moves |> List.map (fun (_, src) -> (fregToPhysId src, src)) |> Map.ofList
+
+        actions
+        |> List.collect (fun action ->
+            match action with
+            | ParallelMoves.SaveToTemp physId ->
+                // Save the source FReg to D16 temp
+                match Map.tryFind physId srcMap with
+                | Some srcFreg -> [LIR.FMov (LIR.FVirtual 2000, srcFreg)]
+                | None -> []
+            | ParallelMoves.Move (destPhysId, srcPhysId) ->
+                match Map.tryFind destPhysId destMap, Map.tryFind srcPhysId srcMap with
+                | Some destFreg, Some srcFreg -> [LIR.FMov (destFreg, srcFreg)]
+                | _ -> []
+            | ParallelMoves.MoveFromTemp destPhysId ->
+                match Map.tryFind destPhysId destMap with
+                | Some destFreg -> [LIR.FMov (destFreg, LIR.FVirtual 2000)]
+                | None -> [])
 
     // Add moves to predecessor blocks
     let mutable updatedBlocks = cfg.Blocks
@@ -1879,15 +1924,24 @@ let resolvePhiNodes (cfg: LIR.CFG) (allocation: Map<int, Allocation>) : LIR.CFG 
         | None -> ()
 
     // Add float phi moves
+    // IMPORTANT: For tail call blocks, the phi resolution is ALREADY handled by:
+    // 1. FArgMoves: puts new values in D0-D7
+    // 2. TailCall: jumps back to function entry
+    // 3. Param copy at entry: copies D0-D7 to phi destination registers
+    // So we should SKIP phi resolution for tail call backedges - it's redundant and incorrect.
+    //
+    // For non-tail-call predecessors, append moves at the end as usual.
     for kvp in predecessorFloatMoves do
         let predLabel = kvp.Key
         let moves = kvp.Value
         match Map.tryFind predLabel updatedBlocks with
         | Some predBlock ->
+            // Add phi moves at end of predecessor block
             let moveInstrs = generateFloatMoveInstrs moves
             let updatedBlock = { predBlock with Instrs = predBlock.Instrs @ moveInstrs }
             updatedBlocks <- Map.add predLabel updatedBlock updatedBlocks
-        | None -> ()
+        | None ->
+            ()
 
     // Remove phi and fphi nodes from all blocks
     updatedBlocks <-
@@ -2020,6 +2074,35 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
             | LIR.Physical _ -> None)
         |> List.choose id
 
+    // Step 6b: Extract entry-edge phi moves for float phis
+    // For phis at the entry block, we need to add moves from entry-edge sources
+    // to phi destinations. These moves don't get added by resolvePhiNodes because
+    // there's no predecessor block for "before function entry".
+    let entryBlockBeforeResolution = Map.find func.CFG.Entry func.CFG.Blocks
+
+    let entryEdgeFloatPhiMoves =
+        entryBlockBeforeResolution.Instrs
+        |> List.choose (fun instr ->
+            match instr with
+            | LIR.FPhi (dest, sources) ->
+                // Find sources where the predecessor label doesn't exist in the CFG
+                // (these are entry-edge sources)
+                let entryEdgeSources =
+                    sources
+                    |> List.filter (fun (_, predLabel) ->
+                        not (Map.containsKey predLabel func.CFG.Blocks))
+                // Generate moves for entry-edge sources
+                entryEdgeSources
+                |> List.map (fun (src, _) -> (dest, src))
+                |> Some
+            | _ -> None)
+        |> List.concat
+
+    // Generate FMov instructions for entry-edge phi resolution
+    let entryEdgePhiInstrs =
+        entryEdgeFloatPhiMoves
+        |> List.map (fun (dest, src) -> LIR.FMov (dest, src))
+
     // Step 7: Resolve phi nodes (convert to moves at predecessor exits)
     // This must happen BEFORE applying allocation since we need to know where each
     // value is allocated to generate the correct moves
@@ -2030,10 +2113,11 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
 
     // Step 9: Insert parameter copy instructions at the start of the entry block
     // Float param copies go first (they use separate register bank)
+    // Entry-edge phi moves come after param copies (they copy from param FVirtual to phi dest FVirtual)
     let entryBlock = Map.find allocatedCFG.Entry allocatedCFG.Blocks
     let entryBlockWithCopies = {
         entryBlock with
-            Instrs = floatParamCopyInstrs @ intParamCopyInstrs @ entryBlock.Instrs
+            Instrs = floatParamCopyInstrs @ entryEdgePhiInstrs @ intParamCopyInstrs @ entryBlock.Instrs
     }
     let updatedBlocks = Map.add allocatedCFG.Entry entryBlockWithCopies allocatedCFG.Blocks
     let cfgWithParamCopies = { allocatedCFG with Blocks = updatedBlocks }

@@ -42,6 +42,7 @@ type FReg =
     | D17  // Used as temp for binary ops (right operand)
     | D18  // Used as temp for binary ops (left operand)
     | D19 | D20 | D21 | D22 | D23 | D24 | D25 | D26  // Used for float call arg temps
+    | D27 | D28 | D29 | D30 | D31  // Additional SSA temp registers
 
 /// Comparison conditions (for CSET)
 type Condition =
