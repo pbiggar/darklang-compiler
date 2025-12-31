@@ -155,6 +155,18 @@ let rawMemoryIntrinsics : ModuleFunc list = [
     { Name = "__hash"; TypeParams = ["k"]; ParamTypes = [TVar "k"]; ReturnType = TInt64 }
     // __key_eq<k> : (k, k) -> Bool - compare two keys for equality
     { Name = "__key_eq"; TypeParams = ["k"]; ParamTypes = [TVar "k"; TVar "k"]; ReturnType = TBool }
+
+    // List intrinsics - for Finger Tree implementation
+    // __list_empty<a> : () -> List<a> - create empty list (null pointer with tag 0)
+    { Name = "__list_empty"; TypeParams = ["a"]; ParamTypes = []; ReturnType = TList(TVar "a") }
+    // __list_is_null<a> : (List<a>) -> Bool - check if list is empty/null
+    { Name = "__list_is_null"; TypeParams = ["a"]; ParamTypes = [TList(TVar "a")]; ReturnType = TBool }
+    // __list_get_tag<a> : (List<a>) -> Int64 - get tag bits from list pointer (low 3 bits)
+    { Name = "__list_get_tag"; TypeParams = ["a"]; ParamTypes = [TList(TVar "a")]; ReturnType = TInt64 }
+    // __list_to_rawptr<a> : (List<a>) -> RawPtr - convert list to raw pointer (strips tag)
+    { Name = "__list_to_rawptr"; TypeParams = ["a"]; ParamTypes = [TList(TVar "a")]; ReturnType = TRawPtr }
+    // __rawptr_to_list<a> : (RawPtr, Int64) -> List<a> - create list from pointer + tag
+    { Name = "__rawptr_to_list"; TypeParams = ["a"]; ParamTypes = [TRawPtr; TInt64]; ReturnType = TList(TVar "a") }
 ]
 
 /// All available Stdlib modules
