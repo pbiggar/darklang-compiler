@@ -90,7 +90,8 @@ type StdlibResult = {
 }
 
 /// Cache for lazily compiled LIR functions - thread-safe for parallel test execution
-type LIRCache = ConcurrentDictionary<string, LIR.Function>
+/// Uses Lazy<T> to ensure each function is compiled exactly once even under contention
+type LIRCache = ConcurrentDictionary<string, Lazy<LIR.Function option>>
 
 /// Lazy stdlib result - defers expensive compilation until we know what's needed
 /// Only compiles stdlib functions that user code actually calls
@@ -1040,36 +1041,37 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
           Success = false
           ErrorMessage = Some $"Compilation failed: {ex.Message}" }
 
+/// Compile a single MIR function to LIR (used by cache factory)
+let private compileMIRToLIR (stdlib: LazyStdlibResult) (mirFunc: MIR.Function) : LIR.Function option =
+    // Create a mini MIR program with just this function
+    let miniProgram = MIR.Program ([mirFunc], stdlib.StdlibStringPool, stdlib.StdlibFloatPool, Map.empty, Map.empty)
+
+    // Convert to LIR
+    match MIR_to_LIR.toLIR miniProgram with
+    | Error _ -> None  // Conversion failed
+    | Ok lirProgram ->
+        // LIR Optimizations
+        let optimizedLir = LIR_Optimize.optimizeProgram lirProgram
+        let (LIR.Program (lirFuncs, _, _)) = optimizedLir
+
+        // Register allocation
+        match lirFuncs with
+        | [lirFunc] -> Some (RegisterAllocation.allocateRegisters lirFunc)
+        | _ -> None  // Unexpected: should have exactly one function
+
 /// Lazily compile a stdlib function from MIR to LIR with caching
 /// Returns the compiled LIR function (from cache if available, or compiles and caches)
+/// Uses Lazy<T> to ensure compilation happens exactly once even under parallel contention
 let private getOrCompileStdlibLIR (stdlib: LazyStdlibResult) (funcName: string) : LIR.Function option =
-    // Check cache first
-    match stdlib.LIRCache.TryGetValue(funcName) with
-    | true, cached -> Some cached
-    | false, _ ->
-        // Not in cache - compile from MIR
-        match Map.tryFind funcName stdlib.StdlibMIRFunctions with
-        | None -> None  // Function not found in stdlib
-        | Some mirFunc ->
-            // Create a mini MIR program with just this function
-            let miniProgram = MIR.Program ([mirFunc], stdlib.StdlibStringPool, stdlib.StdlibFloatPool, Map.empty, Map.empty)
-
-            // Convert to LIR
-            match MIR_to_LIR.toLIR miniProgram with
-            | Error _ -> None  // Conversion failed
-            | Ok lirProgram ->
-                // LIR Optimizations
-                let optimizedLir = LIR_Optimize.optimizeProgram lirProgram
-                let (LIR.Program (lirFuncs, _, _)) = optimizedLir
-
-                // Register allocation
-                match lirFuncs with
-                | [lirFunc] ->
-                    let allocated = RegisterAllocation.allocateRegisters lirFunc
-                    // Cache the result (thread-safe: if another thread beat us, that's fine)
-                    stdlib.LIRCache.TryAdd(funcName, allocated) |> ignore
-                    Some allocated
-                | _ -> None  // Unexpected: should have exactly one function
+    match Map.tryFind funcName stdlib.StdlibMIRFunctions with
+    | None -> None  // Function not found in stdlib
+    | Some mirFunc ->
+        // GetOrAdd with Lazy ensures the factory is called at most once per key
+        // Even if multiple threads call GetOrAdd simultaneously, only one Lazy is stored
+        // and its Value is computed exactly once
+        let lazyResult = stdlib.LIRCache.GetOrAdd(funcName, fun _ ->
+            lazy (compileMIRToLIR stdlib mirFunc))
+        lazyResult.Value
 
 /// Get multiple stdlib functions, lazily compiling as needed
 let private getStdlibLIRFunctions (stdlib: LazyStdlibResult) (funcNames: string list) : LIR.Function list =
@@ -1525,6 +1527,17 @@ let compileAndRunWithOptions (verbosity: int) (options: CompilerOptions) (source
 /// Compile and run source code with pre-compiled stdlib
 let compileAndRunWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (source: string) : ExecutionResult =
     let compileResult = compileWithStdlib verbosity options stdlib source
+
+    if not compileResult.Success then
+        { ExitCode = 1
+          Stdout = ""
+          Stderr = compileResult.ErrorMessage |> Option.defaultValue "Compilation failed" }
+    else
+        execute verbosity compileResult.Binary
+
+/// Compile and run source code with lazy stdlib (caches LIR compilation across tests)
+let compileAndRunWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: LazyStdlibResult) (source: string) : ExecutionResult =
+    let compileResult = compileWithLazyStdlib verbosity options stdlib source
 
     if not compileResult.Success then
         { ExitCode = 1

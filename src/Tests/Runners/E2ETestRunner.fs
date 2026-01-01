@@ -19,6 +19,7 @@ type E2ETestResult = {
 }
 
 /// Compile stdlib once (call at test startup, pass result to runE2ETest)
+/// Uses pre-compiled stdlib - all functions compiled to LIR upfront for maximum speed
 let compileStdlib () : Result<CompilerLibrary.StdlibResult, string> =
     CompilerLibrary.compileStdlib()
 
