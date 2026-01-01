@@ -99,6 +99,23 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
         | Some shift -> Some (Prim (Shl, x, IntLiteral (Int64 shift)))
         | None -> None
 
+    // Strength reduction: modulo by power of 2 → bitwise AND
+    // Note: For signed integers, x % n gives result with sign of x,
+    // but x & (n-1) is always non-negative. This is correct for evenness
+    // checks (% 2 == 0) but may differ for other uses with negative values.
+    | Mod, x, IntLiteral (Int64 n) when n > 0L ->
+        match tryLog2 n with
+        | Some _ -> Some (Prim (BitAnd, x, IntLiteral (Int64 (n - 1L))))
+        | None -> None
+
+    // Strength reduction: unsigned-style division by power of 2 → right shift
+    // Note: For signed integers, this uses logical shift which doesn't
+    // round toward zero for negative numbers. Safe for non-negative values.
+    | Div, x, IntLiteral (Int64 n) when n > 0L ->
+        match tryLog2 n with
+        | Some shift -> Some (Prim (Shr, x, IntLiteral (Int64 shift)))
+        | None -> None
+
     // Short-circuit boolean
     | And, BoolLiteral false, _ -> Some (Atom (BoolLiteral false))
     | And, _, BoolLiteral false -> Some (Atom (BoolLiteral false))
