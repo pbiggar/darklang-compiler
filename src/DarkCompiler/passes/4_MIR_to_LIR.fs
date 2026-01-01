@@ -1056,10 +1056,17 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         match ensureInRegister byteOffset (LIR.Virtual 1001) with
         | Error err -> Error err
         | Ok (offsetInstrs, offsetReg) ->
-        match ensureInRegister value (LIR.Virtual 1002) with
-        | Error err -> Error err
-        | Ok (valueInstrs, valueReg) ->
-            Ok (ptrInstrs @ offsetInstrs @ valueInstrs @ [LIR.RawSet (ptrReg, offsetReg, valueReg)])
+        // Handle StringRef specially - use Mov which CodeGen handles (converts to heap format)
+        match value with
+        | MIR.StringRef _ ->
+            let tempReg = LIR.Virtual 1002
+            let movInstr = LIR.Mov (tempReg, convertOperand value)
+            Ok (ptrInstrs @ offsetInstrs @ [movInstr; LIR.RawSet (ptrReg, offsetReg, tempReg)])
+        | _ ->
+            match ensureInRegister value (LIR.Virtual 1002) with
+            | Error err -> Error err
+            | Ok (valueInstrs, valueReg) ->
+                Ok (ptrInstrs @ offsetInstrs @ valueInstrs @ [LIR.RawSet (ptrReg, offsetReg, valueReg)])
 
     | MIR.RawSetByte (ptr, byteOffset, value) ->
         // All three operands must be in registers
