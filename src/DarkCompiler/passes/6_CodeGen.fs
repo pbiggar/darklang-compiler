@@ -145,17 +145,24 @@ let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64.FReg, string> =
             | 6 -> ARM64.D8
             | _ -> ARM64.D9
         Ok physReg
-    | LIR.FVirtual n ->
-        // SSA temps and other high-numbered VRegs
-        // Available: D0, D1 (caller-saved), D10-D15 (not used elsewhere), D27-D31 (caller-saved)
-        // Must avoid: D2-D9 (params), D16 (cycle temp), D17-D18 (binop temps), D19-D26 (arg temps)
-        // Using 13 registers to avoid collisions between phi sources and destinations
-        // (With only 8 registers, modulo collisions caused phi source/dest to share registers)
+    | LIR.FVirtual n when n < 10000 ->
+        // ANF-level VRegs (8-9999): function params and local bindings
+        // These come from ANF TempIds which are sequential across functions.
+        // Pool: D0, D1, D10-D15, D27-D31 (13 registers)
+        // Using direct index: (n - 8) % 13
         let tempRegs = [| ARM64.D0; ARM64.D1; ARM64.D10; ARM64.D11; ARM64.D12; ARM64.D13; ARM64.D14; ARM64.D15;
                           ARM64.D27; ARM64.D28; ARM64.D29; ARM64.D30; ARM64.D31 |]
-        let regIdx = n % tempRegs.Length
-        let physReg = tempRegs.[regIdx]
-        Ok physReg
+        let regIdx = (n - 8) % tempRegs.Length
+        Ok tempRegs.[regIdx]
+    | LIR.FVirtual n ->
+        // MIR intermediates (VRegs 10000+): computation temps from freshReg
+        // Use same pool but with offset to reduce collisions with ANF-level VRegs
+        // The offset of 7 ensures that if ANF VReg k and MIR VReg (10000+k) exist,
+        // they map to different registers (since 7 and 13 are coprime)
+        let tempRegs = [| ARM64.D0; ARM64.D1; ARM64.D10; ARM64.D11; ARM64.D12; ARM64.D13; ARM64.D14; ARM64.D15;
+                          ARM64.D27; ARM64.D28; ARM64.D29; ARM64.D30; ARM64.D31 |]
+        let regIdx = ((n - 10000) + 7) % tempRegs.Length
+        Ok tempRegs.[regIdx]
 
 /// Convert LIR.Reg to ARM64.Reg (assumes physical registers only)
 let lirRegToARM64Reg (reg: LIR.Reg) : Result<ARM64.Reg, string> =

@@ -1750,12 +1750,19 @@ let generateFloatMoveInstrs (moves: (LIR.FReg * LIR.FReg) list) : LIR.Instr list
             | LIR.FVirtual 1001 -> 17  // D17 (right temp for binary ops)
             | LIR.FVirtual 2000 -> 16  // D16 (cycle resolution temp)
             | LIR.FVirtual n when n >= 3000 && n < 4000 -> 19 + ((n - 3000) % 8)  // D19-D26
-            | LIR.FVirtual n when n >= 0 && n <= 7 -> 2 + n  // D2-D9 for params
-            | LIR.FVirtual n ->
-                // SSA temps: D0, D1, D10-D15, D27-D31 (13 registers with modulo)
-                // Must match CodeGen.fs lirFRegToARM64FReg to avoid phi source/dest collisions
+            | LIR.FVirtual n when n >= 0 && n <= 7 -> 2 + n  // D2-D9 for params 0-7
+            | LIR.FVirtual n when n < 10000 ->
+                // ANF-level VRegs (8-9999): params and local bindings beyond 0-7
+                // Pool: D0, D1, D10-D15, D27-D31 (13 registers)
+                // Must match CodeGen.fs lirFRegToARM64FReg
                 let tempRegs = [| 0; 1; 10; 11; 12; 13; 14; 15; 27; 28; 29; 30; 31 |]
-                tempRegs[n % 13]
+                tempRegs[(n - 8) % 13]
+            | LIR.FVirtual n ->
+                // MIR intermediates (VRegs 10000+): computation temps
+                // Same pool with offset 7 to reduce collisions
+                // Must match CodeGen.fs lirFRegToARM64FReg
+                let tempRegs = [| 0; 1; 10; 11; 12; 13; 14; 15; 27; 28; 29; 30; 31 |]
+                tempRegs[((n - 10000) + 7) % 13]
 
         // Convert moves to physical register IDs for cycle detection
         let physMoves = moves |> List.map (fun (dest, src) -> (fregToPhysId dest, fregToPhysId src))
@@ -2157,6 +2164,7 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
         entryBlock with
             Instrs = floatParamCopyInstrs @ entryEdgePhiInstrs @ intParamCopyInstrs @ entryBlock.Instrs
     }
+
     let updatedBlocks = Map.add allocatedCFG.Entry entryBlockWithCopies allocatedCFG.Blocks
     let cfgWithParamCopies = { allocatedCFG with Blocks = updatedBlocks }
 
