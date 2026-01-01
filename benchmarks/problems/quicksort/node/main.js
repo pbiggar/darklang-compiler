@@ -30,7 +30,6 @@ function checksum(arr) {
     return result;
 }
 
-// Sort 100 elements (reduced to match Dark heap constraints)
-const arr = generateList(100, 42);
+const arr = generateList(5000, 42);
 const sortedArr = quicksort(arr);
 console.log(checksum(sortedArr));

@@ -23,7 +23,6 @@ let checksum arr =
     |> List.mapi (fun i x -> (x * int64 (i + 1)) % 1000000007L)
     |> List.fold (fun acc x -> (acc + x) % 1000000007L) 0L
 
-// Sort 100 elements (reduced to match Dark heap constraints)
-let arr = generateList 100 42UL
+let arr = generateList 5000 42UL
 let sortedArr = quicksort arr
 printfn "%d" (checksum sortedArr)

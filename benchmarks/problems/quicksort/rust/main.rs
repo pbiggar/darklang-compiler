@@ -35,8 +35,7 @@ fn checksum(arr: &[i64]) -> i64 {
 }
 
 fn main() {
-    // Sort 100 elements (reduced to match Dark heap constraints)
-    let arr = generate_list(100, 42);
+    let arr = generate_list(5000, 42);
     let sorted_arr = quicksort(arr);
     println!("{}", checksum(&sorted_arr));
 }

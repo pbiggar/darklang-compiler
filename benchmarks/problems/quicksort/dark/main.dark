@@ -1,10 +1,5 @@
 // Quicksort Benchmark - Dark implementation
 // Sorts a list and returns a checksum
-//
-// NOTE: Uses 100 elements instead of 5000 due to heap memory constraints.
-// The functional quicksort creates many intermediate lists which exhaust
-// the 64KB bump allocator. This is still a meaningful benchmark for comparing
-// per-element costs.
 
 // Get element at index, with default for out of bounds
 def getAtOrDefault(list: List<Int64>, index: Int64, default_: Int64) : Int64 =
@@ -47,7 +42,6 @@ def checksumHelper(arr: List<Int64>, index: Int64, acc: Int64) : Int64 =
 def checksum(arr: List<Int64>) : Int64 =
     checksumHelper(arr, 0, 0)
 
-// Sort 100 elements (see note above about heap constraints)
-let arr = generateList(100, 42) in
+let arr = generateList(5000, 42) in
 let sortedArr = quicksort(arr) in
 checksum(sortedArr)
