@@ -90,9 +90,8 @@ Dict.size(Dict.fromList<String, Int64>([])) = stdout="0\n"
 
 // ===================================================================
 // Dict.merge - Combine dictionaries
-// FIXME: Commented out - causes infinite loop in inlining pass
 // ===================================================================
 
-// Dict.size(Dict.merge(Dict.singleton("a", 1), Dict.singleton("b", 2))) = stdout="2\n"
-// // Second dict wins on conflicts
-// Option.withDefault(Dict.get(Dict.merge(Dict.singleton("key", 1), Dict.singleton("key", 2)), "key"), 0) = 2
+Dict.size(Dict.merge(Dict.singleton("a", 1), Dict.singleton("b", 2))) = stdout="2\n"
+// Second dict wins on conflicts
+Option.withDefault(Dict.get(Dict.merge(Dict.singleton("key", 1), Dict.singleton("key", 2)), "key"), 0) = 2

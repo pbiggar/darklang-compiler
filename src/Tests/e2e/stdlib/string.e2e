@@ -343,9 +343,9 @@ String.replace("hello", "x", "y") = stdout="hello\n"
 String.replace("aaa", "a", "b") = stdout="bbb\n"
 String.replace("", "a", "b") = stdout="\n"
 String.replace("abcABCcbaCBA", "b", "x") = stdout="axcABCcxaCBA\n"
-// NOTE: Empty old string causes infinite loop/crash - implementation bug
-// String.replace("abcABCcbaCBA", "", "x") = stdout="xaxbxcxAxBxCxcxbxaxCxBxAx\n"
-// String.replace("", "", "&") = stdout="&\n"
+// Empty old string inserts at every position (including boundaries)
+String.replace("abcABCcbaCBA", "", "x") = stdout="xaxbxcxAxBxCxcxbxaxCxBxAx\n"
+String.replace("", "", "&") = stdout="&\n"
 String.replace("abcABCcbaCBA", "b", "") = stdout="acABCcaCBA\n"
 
 // Unicode replace tests

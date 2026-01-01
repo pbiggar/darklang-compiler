@@ -872,8 +872,20 @@ def Stdlib.String.trim(s: String) : String =
     Stdlib.String.trimEnd(Stdlib.String.trimStart(s))
 
 // Split string by delimiter (simple byte-based)
+// Empty delimiter splits into individual bytes
 def Stdlib.String.split(s: String, delim: String) : List<String> =
-    Stdlib.String.__splitHelper(s, delim, 0, [])
+    if Stdlib.String.isEmpty(delim) then
+        // Empty delimiter: split into individual bytes
+        Stdlib.String.__splitIntoBytes(s, 0, [])
+    else
+        Stdlib.String.__splitHelper(s, delim, 0, [])
+
+def Stdlib.String.__splitIntoBytes(s: String, idx: Int64, acc: List<String>) : List<String> =
+    if idx >= Stdlib.String.length(s) then
+        Stdlib.List.reverse<String>(acc)
+    else
+        let byte = Stdlib.String.substring(s, idx, idx + 1) in
+        Stdlib.String.__splitIntoBytes(s, idx + 1, [byte, ...acc])
 
 def Stdlib.String.__splitHelper(s: String, delim: String, start: Int64, acc: List<String>) : List<String> =
     let sLen = Stdlib.String.length(s) in
@@ -891,8 +903,20 @@ def Stdlib.String.__splitHelper(s: String, delim: String, start: Int64, acc: Lis
             Stdlib.String.__splitHelper(s, delim, idx + delimLen, [segment, ...acc])
 
 // Replace all occurrences of old with new
+// Empty old string inserts new at every position (including boundaries)
 def Stdlib.String.replace(s: String, old: String, new: String) : String =
-    Stdlib.String.join(Stdlib.String.split(s, old), new)
+    if Stdlib.String.isEmpty(old) then
+        // Insert new at every position: before each char and after last
+        Stdlib.String.__replaceEmpty(s, new, 0, new)
+    else
+        Stdlib.String.join(Stdlib.String.split(s, old), new)
+
+def Stdlib.String.__replaceEmpty(s: String, new: String, idx: Int64, acc: String) : String =
+    if idx >= Stdlib.String.length(s) then
+        acc
+    else
+        let byte = Stdlib.String.substring(s, idx, idx + 1) in
+        Stdlib.String.__replaceEmpty(s, new, idx + 1, acc ++ byte ++ new)
 
 // Reverse a string (byte-based, works for ASCII)
 def Stdlib.String.reverse(s: String) : String =
