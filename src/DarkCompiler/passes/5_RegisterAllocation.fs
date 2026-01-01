@@ -286,6 +286,8 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.RawSetByte _ -> None
     // FloatToInt defines an integer destination register
     | LIR.FloatToInt (dest, _) -> regToVReg dest
+    // FpToGp defines an integer destination register
+    | LIR.FpToGp (dest, _) -> regToVReg dest
     | LIR.StringHash (dest, _) -> regToVReg dest
     | LIR.StringEq (dest, _, _) -> regToVReg dest
     | LIR.RefCountIncString _ -> None
@@ -316,6 +318,7 @@ let getUsedFVRegs (instr: LIR.Instr) : Set<int> =
     | LIR.FCmp (left, right) ->
         [fregToId left; fregToId right] |> List.choose id |> Set.ofList
     | LIR.FloatToInt (_, src) -> fregToId src |> Option.toList |> Set.ofList
+    | LIR.FpToGp (_, src) -> fregToId src |> Option.toList |> Set.ofList
     | LIR.PrintFloat freg | LIR.PrintFloatNoNewline freg ->
         fregToId freg |> Option.toList |> Set.ofList
     | LIR.FArgMoves moves ->
@@ -1210,6 +1213,7 @@ let applyFloatAllocationToInstr (floatAllocation: FAllocationResult) (instr: LIR
     | LIR.FLoad (dest, idx) -> LIR.FLoad (applyF dest, idx)
     | LIR.IntToFloat (dest, src) -> LIR.IntToFloat (applyF dest, src)
     | LIR.FloatToInt (dest, src) -> LIR.FloatToInt (dest, applyF src)
+    | LIR.FpToGp (dest, src) -> LIR.FpToGp (dest, applyF src)
     | LIR.GpToFp (dest, src) -> LIR.GpToFp (applyF dest, src)
     | LIR.PrintFloat freg -> LIR.PrintFloat (applyF freg)
     | LIR.PrintFloatNoNewline freg -> LIR.PrintFloatNoNewline (applyF freg)
@@ -1845,6 +1849,16 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
     | LIR.FloatToInt (dest, src) ->
         let (destReg, destAlloc) = applyToReg mapping dest
         let instr = LIR.FloatToInt (destReg, src)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        [instr] @ storeInstrs
+
+    // FpToGp: src is FP register, dest is integer register
+    | LIR.FpToGp (dest, src) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let instr = LIR.FpToGp (destReg, src)
         let storeInstrs =
             match destAlloc with
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]

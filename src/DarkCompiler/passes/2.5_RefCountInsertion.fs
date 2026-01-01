@@ -159,6 +159,18 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                 | 1 -> Some elemType    // head element
                 | 2 -> Some (AST.TList elemType)  // tail is same list type
                 | _ -> None
+            | Some (AST.TSum (_typeName, typeArgs)) ->
+                // Sum type layout: [tag:8][payload:8]
+                // index 0 = tag (Int64), index 1 = payload
+                match index with
+                | 0 -> Some AST.TInt64  // tag
+                | 1 ->
+                    // Payload type depends on variant, but for simple cases like Option<T>,
+                    // the payload type is the first type argument
+                    match typeArgs with
+                    | [singleType] -> Some singleType
+                    | _ -> None  // Multiple type args - can't determine without variant info
+                | _ -> None
             | _ -> None
         | _ -> None
     | StringConcat (_, _) -> Some AST.TString  // String concatenation returns a string

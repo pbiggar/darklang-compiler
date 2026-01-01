@@ -897,6 +897,12 @@ let rec convertExpr
                                 // Function returning list - extract list element type
                                 // This happens when TypeMap contains TFunction instead of just the return type
                                 if index = 1 && elemType = AST.TFloat64 then destType := AST.TFloat64
+                            | Some (AST.TSum (_typeName, typeArgs)) ->
+                                // Sum type: [tag:8][payload:8], index 1 is payload
+                                // For single type arg sums like Option<Float>, payload is that type
+                                match index, typeArgs with
+                                | 1, [singleType] when singleType = AST.TFloat64 -> destType := AST.TFloat64
+                                | _ -> ()
                             | _ -> ()
                         let loadType = if !destType = AST.TFloat64 then Some AST.TFloat64 else None
                         Ok [MIR.HeapLoad (destReg, tupleReg, index * 8, loadType)]
@@ -1447,6 +1453,12 @@ and convertExprToOperand
                                 // Function returning list - extract list element type
                                 // This happens when TypeMap contains TFunction instead of just the return type
                                 if index = 1 && elemType = AST.TFloat64 then destType := AST.TFloat64
+                            | Some (AST.TSum (_typeName, typeArgs)) ->
+                                // Sum type: [tag:8][payload:8], index 1 is payload
+                                // For single type arg sums like Option<Float>, payload is that type
+                                match index, typeArgs with
+                                | 1, [singleType] when singleType = AST.TFloat64 -> destType := AST.TFloat64
+                                | _ -> ()
                             | _ -> ()
                         let loadType = if !destType = AST.TFloat64 then Some AST.TFloat64 else None
                         Ok [MIR.HeapLoad (destReg, tupleReg, index * 8, loadType)]

@@ -249,6 +249,8 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- FloatToInt({prettyPrintLIRFReg src})"
     | LIR.GpToFp (dest, src) ->
         $"{prettyPrintLIRFReg dest} <- GpToFp({prettyPrintLIRReg src})"
+    | LIR.FpToGp (dest, src) ->
+        $"{prettyPrintLIRReg dest} <- FpToGp({prettyPrintLIRFReg src})"
     // Heap operations
     | LIR.HeapAlloc (dest, sizeBytes) ->
         $"{prettyPrintLIRReg dest} <- HeapAlloc({sizeBytes})"

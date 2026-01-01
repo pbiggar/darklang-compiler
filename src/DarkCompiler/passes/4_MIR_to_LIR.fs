@@ -40,8 +40,9 @@ let ensureInRegister (operand: MIR.Operand) (tempReg: LIR.Reg) : Result<LIR.Inst
         // Load boolean (0 or 1) into register
         Ok ([LIR.Mov (tempReg, LIR.Imm (if b then 1L else 0L))], tempReg)
     | MIR.FloatRef idx ->
-        // Load float into a register (placeholder - proper FP support needed later)
-        Ok ([LIR.Mov (tempReg, LIR.FloatImm 0.0)], tempReg)
+        // Load float from pool into FP register, then move bits to GP register
+        let tempFReg = LIR.FVirtual 999
+        Ok ([LIR.FLoad (tempFReg, idx); LIR.FpToGp (tempReg, tempFReg)], tempReg)
     | MIR.StringRef _ ->
         // String references are not used as operands in arithmetic operations
         Error "Internal error: Cannot use string literal as arithmetic operand"
@@ -1402,7 +1403,7 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.PrintHeapStringNoNewline _ | LIR.PrintList _ | LIR.PrintSum _ | LIR.PrintRecord _
     | LIR.PrintChars _ | LIR.Exit | LIR.FMov _ | LIR.FAdd _ | LIR.FSub _ | LIR.FMul _ | LIR.FDiv _
     | LIR.FNeg _ | LIR.FAbs _ | LIR.FSqrt _ | LIR.FCmp _ | LIR.IntToFloat _ | LIR.FloatToInt _
-    | LIR.GpToFp _ | LIR.HeapAlloc _ | LIR.HeapLoad _ | LIR.RefCountInc _ | LIR.RefCountDec _
+    | LIR.GpToFp _ | LIR.FpToGp _ | LIR.HeapAlloc _ | LIR.HeapLoad _ | LIR.RefCountInc _ | LIR.RefCountDec _
     | LIR.PrintHeapString _ | LIR.LoadFuncAddr _ | LIR.RawAlloc _ | LIR.RawFree _
     | LIR.RawGet _ | LIR.RawGetByte _ | LIR.RawSet _ | LIR.RawSetByte _ | LIR.FArgMoves _
     | LIR.TailCall _ | LIR.IndirectTailCall _ | LIR.ClosureTailCall _

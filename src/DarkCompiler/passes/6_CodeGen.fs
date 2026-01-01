@@ -1831,6 +1831,13 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             lirRegToARM64Reg src
             |> Result.map (fun srcReg -> [ARM64.FMOV_from_gp (destReg, srcReg)]))
 
+    | LIR.FpToGp (dest, src) ->
+        // Move bits from FP register to GP register (for floats stored to list)
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirFRegToARM64FReg src
+            |> Result.map (fun srcReg -> [ARM64.FMOV_to_gp (destReg, srcReg)]))
+
     // Heap operations
     | LIR.HeapAlloc (dest, sizeBytes) ->
         // Heap allocator with free list support

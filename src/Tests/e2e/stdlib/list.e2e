@@ -116,7 +116,9 @@ Option.withDefault(List.getAt([10, 20, 30], 2), 0) = 30
 Option.isNone<Int64>(List.getAt<Int64>([1, 2, 3], 10)) = stdout="true\n"
 
 // Regression test: List.getAt<Float> should correctly extract Float from Option
-// NOTE: Float list code generation not yet implemented
+// NOTE: Float list storage works (FpToGp converts Float bits to GP for RawSet),
+// but extraction doesn't work yet - __raw_get<Float> returns bits in GP register
+// and needs GpToFp conversion at function return level, which isn't implemented.
 // let v = [1.0, 2.0, 3.0] in match List.getAt<Float>(v, 1) with | Some(x) -> Stdlib.Float.toInt(x * 1000.0) | None -> -1 = 2000
 
 // ===================================================================

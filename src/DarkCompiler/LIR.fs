@@ -130,6 +130,7 @@ type Instr =
     | IntToFloat of dest:FReg * src:Reg         // Convert Int64 to Float64 (SCVTF)
     | FloatToInt of dest:Reg * src:FReg         // Convert Float64 to Int64 (FCVTZS)
     | GpToFp of dest:FReg * src:Reg             // Move bits from GP to FP register (for float in tuple)
+    | FpToGp of dest:Reg * src:FReg             // Move bits from FP to GP register (for float in list)
     // Heap operations for tuples and other compound types
     | HeapAlloc of dest:Reg * sizeBytes:int       // Allocate heap memory
     | HeapStore of addr:Reg * offset:int * src:Operand * valueType:AST.Type option  // Store at heap[addr+offset], valueType for float/int
