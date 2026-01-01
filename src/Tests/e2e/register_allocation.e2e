@@ -40,13 +40,13 @@ let x = 1 in let y = 2 in let z = 3 in let w = 4 in match [7, 8] with | [a, b] -
 // 5 lets + pattern match with operation (works)
 let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in match [7, 8] with | [a, b] -> a + b | _ -> 99 = 15
 
-// BUG: 5 lets + pattern match with direct return of first extracted element
+// 5 lets + pattern match with direct return of first extracted element
 let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in match [7, 8] with | [a, b] -> a | _ -> 99 = 7
 
-// BUG: 5 lets + pattern match with direct return of second extracted element
+// 5 lets + pattern match with direct return of second extracted element
 let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in match [7, 8] with | [a, b] -> b | _ -> 99 = 8
 
-// BUG: 5 lets + pattern match with constant return
+// 5 lets + pattern match with constant return
 let x = 1 in let y = 2 in let z = 3 in let w = 4 in let v = 5 in match [7, 8] with | [a, b] -> 42 | _ -> 99 = 42
 
 // 5 lets + pattern match with a + 0 (works - forces operation)
