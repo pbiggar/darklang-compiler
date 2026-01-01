@@ -87,6 +87,12 @@ type StdlibResult = {
     StdlibCallGraph: Map<string, Set<string>>
     /// Cache for specialized functions (shared across test compilations)
     SpecCache: SpecializationCache
+    /// Stdlib ANF functions indexed by name (for coverage analysis)
+    StdlibANFFunctions: Map<string, ANF.Function>
+    /// Call graph at ANF level (for coverage analysis reachability)
+    StdlibANFCallGraph: Map<string, Set<string>>
+    /// TypeMap from RC insertion (needed for getReachableStdlibFunctions)
+    StdlibTypeMap: ANF.TypeMap
 }
 
 /// Cache for lazily compiled LIR functions - thread-safe for parallel test execution
@@ -211,6 +217,14 @@ let compileStdlib () : Result<StdlibResult, string> =
                 | Ok (anfAfterRC, typeMap) ->
                     // Pass 2.7: Tail Call Detection
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
+                    // Extract stdlib ANF functions for coverage analysis
+                    let (ANF.Program (stdlibFuncs, _)) = anfAfterTCO
+                    let stdlibFuncMap =
+                        stdlibFuncs
+                        |> List.map (fun f -> f.Name, f)
+                        |> Map.ofList
+                    // Build ANF-level call graph for coverage analysis
+                    let stdlibANFCallGraph = ANFDeadCodeElimination.buildCallGraph stdlibFuncs
                     // Convert stdlib ANF to MIR (functions only, no _start)
                     // Use FuncParams for typeReg (needed for tail call argument types)
                     // Coverage is false here since stdlib is precompiled for caching
@@ -240,6 +254,9 @@ let compileStdlib () : Result<StdlibResult, string> =
                                 AllocatedFunctions = allocatedFuncs
                                 StdlibCallGraph = stdlibCallGraph
                                 SpecCache = SpecializationCache()
+                                StdlibANFFunctions = stdlibFuncMap
+                                StdlibANFCallGraph = stdlibANFCallGraph
+                                StdlibTypeMap = typeMap
                             }
 
 /// Prepare stdlib for lazy compilation - stops at MIR level
@@ -1592,3 +1609,46 @@ let getReachableStdlibFunctions (stdlib: LazyStdlibResult) (source: string) : Re
 /// Get all stdlib function names from the lazy stdlib
 let getAllStdlibFunctionNames (stdlib: LazyStdlibResult) : Set<string> =
     stdlib.StdlibANFFunctions |> Map.keys |> Set.ofSeq
+
+/// Get all stdlib function names from the pre-compiled stdlib
+let getAllStdlibFunctionNamesFromStdlib (stdlib: StdlibResult) : Set<string> =
+    stdlib.StdlibANFFunctions |> Map.keys |> Set.ofSeq
+
+/// Get the set of stdlib function names reachable from user code (using pre-compiled stdlib)
+/// Used for coverage analysis without re-compiling stdlib
+let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string) : Result<Set<string>, string> =
+    // Parse user code
+    match Parser.parseString source with
+    | Error err -> Error $"Parse error: {err}"
+    | Ok userAst ->
+        // Type check with stdlib environment
+        match TypeChecking.checkProgramWithBaseEnv stdlib.TypeCheckEnv userAst with
+        | Error typeErr -> Error $"Type error: {TypeChecking.typeErrorToString typeErr}"
+        | Ok (programType, typedUserAst, _) ->
+            // Convert to ANF
+            match AST_to_ANF.convertUserOnlyCached stdlib.SpecCache stdlib.GenericFuncDefs stdlib.ANFResult typedUserAst with
+            | Error err -> Error $"ANF conversion error: {err}"
+            | Ok userOnly ->
+                // Create ConversionResult for RC insertion
+                let userConvResult : AST_to_ANF.ConversionResult = {
+                    Program = ANF.Program (userOnly.UserFunctions, userOnly.MainExpr)
+                    TypeReg = userOnly.TypeReg
+                    VariantLookup = userOnly.VariantLookup
+                    FuncReg = userOnly.FuncReg
+                    FuncParams = userOnly.FuncParams
+                    ModuleRegistry = userOnly.ModuleRegistry
+                }
+                // RC insertion to get full ANF
+                match RefCountInsertion.insertRCInProgram userConvResult with
+                | Error err -> Error $"RC insertion error: {err}"
+                | Ok (userAnfAfterRC, _typeMap) ->
+                    // Tail call detection
+                    let userAnfAfterTCO = TailCallDetection.detectTailCallsInProgram userAnfAfterRC
+                    // Print insertion
+                    let (ANF.Program (userFunctions, userMainExpr)) = userAnfAfterTCO
+                    let userAnfProgram = PrintInsertion.insertPrint userFunctions userMainExpr programType
+                    // Extract reachable stdlib functions using DCE infrastructure
+                    let (ANF.Program (userFuncsForDCE, userMainForDCE)) = userAnfProgram
+                    let userANFFuncs = { ANF.Name = "_start"; ANF.Params = []; ANF.Body = userMainForDCE } :: userFuncsForDCE
+                    let reachableStdlibNames = ANFDeadCodeElimination.getReachableStdlib stdlib.StdlibANFCallGraph userANFFuncs
+                    Ok reachableStdlibNames

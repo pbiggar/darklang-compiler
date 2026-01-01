@@ -579,6 +579,8 @@ let main args =
             println ""
 
     // Run E2E tests (in parallel)
+    // Store stdlib for reuse in coverage analysis (avoids recompiling)
+    let mutable e2eStdlib : CompilerLibrary.StdlibResult option = None
     let e2eDir = Path.Combine(assemblyDir, "e2e")
     if Directory.Exists e2eDir then
         let e2eTestFiles = Directory.GetFiles(e2eDir, "*.e2e", SearchOption.AllDirectories)
@@ -613,6 +615,7 @@ let main args =
                     println $"  {Colors.red}Stdlib compilation failed: {e}{Colors.reset}"
                     println $"  {Colors.red}Skipping all E2E tests{Colors.reset}"
                 | Ok stdlib ->
+                    e2eStdlib <- Some stdlib  // Store for coverage analysis
                     println $"  {Colors.gray}(Stdlib compiled - incremental type checking){Colors.reset}"
 
                     // Apply filter to tests
@@ -901,12 +904,12 @@ let main args =
     println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
     println ""
 
-    // Compute stdlib coverage (quick analysis of E2E test reachability)
+    // Compute stdlib coverage (reusing stdlib from E2E tests - no recompilation)
     let coveragePercent =
-        match CompilerLibrary.prepareStdlibForLazyCompile() with
-        | Error _ -> None
-        | Ok lazyStdlib ->
-            let allStdlibFuncs = CompilerLibrary.getAllStdlibFunctionNames lazyStdlib
+        match e2eStdlib with
+        | None -> None  // No stdlib compiled (no E2E tests ran)
+        | Some stdlib ->
+            let allStdlibFuncs = CompilerLibrary.getAllStdlibFunctionNamesFromStdlib stdlib
             let coveredFuncs = System.Collections.Generic.HashSet<string>()
             let e2eDir = Path.Combine(assemblyDir, "e2e")
             if Directory.Exists e2eDir then
@@ -916,7 +919,7 @@ let main args =
                     | Error _ -> ()
                     | Ok tests ->
                         for test in tests do
-                            match CompilerLibrary.getReachableStdlibFunctions lazyStdlib test.Source with
+                            match CompilerLibrary.getReachableStdlibFunctionsFromStdlib stdlib test.Source with
                             | Error _ -> ()
                             | Ok reachable ->
                                 for func in reachable do

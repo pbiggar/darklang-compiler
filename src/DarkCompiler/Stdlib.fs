@@ -180,9 +180,8 @@ let allModules : ModuleDef list = [
     randomModule
 ]
 
-/// Build the module registry from all modules
-/// Maps qualified function names (e.g., "Stdlib.Int64.add") to their definitions
-let buildModuleRegistry () : ModuleRegistry =
+/// Cached module registry (computed once, reused across all compilations)
+let private cachedModuleRegistry = lazy (
     let moduleFuncs =
         allModules
         |> List.collect (fun m ->
@@ -194,6 +193,13 @@ let buildModuleRegistry () : ModuleRegistry =
         |> List.map (fun f -> (f.Name, f))
     (moduleFuncs @ rawMemFuncs)
     |> Map.ofList
+)
+
+/// Build the module registry from all modules
+/// Maps qualified function names (e.g., "Stdlib.Int64.add") to their definitions
+/// Uses cached singleton - computed once per process
+let buildModuleRegistry () : ModuleRegistry =
+    cachedModuleRegistry.Value
 
 /// Get a function from the registry by its full qualified name
 let tryGetFunction (registry: ModuleRegistry) (qualifiedName: string) : ModuleFunc option =
