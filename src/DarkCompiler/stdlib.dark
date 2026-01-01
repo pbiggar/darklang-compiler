@@ -1367,15 +1367,12 @@ def Stdlib.Dict.__sizeHelper<k, v>(node: Dict<k, v>) : Int64 =
         else
             0
 
-def Stdlib.Dict.__countChildren<k, v>(ptr: RawPtr, bitmap: Int64, bit: Int64) : Int64 =
-    if bit >= 64 then
+def Stdlib.Dict.__countChildren<k, v>(ptr: RawPtr, bitmap: Int64, idx: Int64) : Int64 =
+    if bitmap == 0 then
         0
-    else if Stdlib.Dict.hasBit(bitmap, bit) then
-        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
-        let child = __raw_get<Dict<k, v>>(ptr, 8 + (idx * 8)) in
-        Stdlib.Dict.__sizeHelper<k, v>(child) + Stdlib.Dict.__countChildren<k, v>(ptr, bitmap, bit + 1)
     else
-        Stdlib.Dict.__countChildren<k, v>(ptr, bitmap, bit + 1)
+        let child = __raw_get<Dict<k, v>>(ptr, 8 + (idx * 8)) in
+        Stdlib.Dict.__sizeHelper<k, v>(child) + Stdlib.Dict.__countChildren<k, v>(ptr, bitmap & (bitmap - 1), idx + 1)
 
 // =============================================================================
 // Dict Enumeration (Generic)
@@ -1400,16 +1397,13 @@ def Stdlib.Dict.__keysHelper<k, v>(node: Dict<k, v>, acc: List<k>) : List<k> =
         else
             acc
 
-def Stdlib.Dict.__collectKeysFromChildren<k, v>(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: List<k>) : List<k> =
-    if bit >= 64 then
+def Stdlib.Dict.__collectKeysFromChildren<k, v>(ptr: RawPtr, bitmap: Int64, idx: Int64, acc: List<k>) : List<k> =
+    if bitmap == 0 then
         acc
-    else if Stdlib.Dict.hasBit(bitmap, bit) then
-        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+    else
         let child = __raw_get<Dict<k, v>>(ptr, 8 + (idx * 8)) in
         let newAcc = Stdlib.Dict.__keysHelper<k, v>(child, acc) in
-        Stdlib.Dict.__collectKeysFromChildren<k, v>(ptr, bitmap, bit + 1, newAcc)
-    else
-        Stdlib.Dict.__collectKeysFromChildren<k, v>(ptr, bitmap, bit + 1, acc)
+        Stdlib.Dict.__collectKeysFromChildren<k, v>(ptr, bitmap & (bitmap - 1), idx + 1, newAcc)
 
 // Get all values from dict
 def Stdlib.Dict.values<k, v>(dict: Dict<k, v>) : List<v> =
@@ -1430,16 +1424,13 @@ def Stdlib.Dict.__valuesHelper<k, v>(node: Dict<k, v>, acc: List<v>) : List<v> =
         else
             acc
 
-def Stdlib.Dict.__collectValuesFromChildren<k, v>(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: List<v>) : List<v> =
-    if bit >= 64 then
+def Stdlib.Dict.__collectValuesFromChildren<k, v>(ptr: RawPtr, bitmap: Int64, idx: Int64, acc: List<v>) : List<v> =
+    if bitmap == 0 then
         acc
-    else if Stdlib.Dict.hasBit(bitmap, bit) then
-        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+    else
         let child = __raw_get<Dict<k, v>>(ptr, 8 + (idx * 8)) in
         let newAcc = Stdlib.Dict.__valuesHelper<k, v>(child, acc) in
-        Stdlib.Dict.__collectValuesFromChildren<k, v>(ptr, bitmap, bit + 1, newAcc)
-    else
-        Stdlib.Dict.__collectValuesFromChildren<k, v>(ptr, bitmap, bit + 1, acc)
+        Stdlib.Dict.__collectValuesFromChildren<k, v>(ptr, bitmap & (bitmap - 1), idx + 1, newAcc)
 
 // Get all entries from dict as key-value tuples
 def Stdlib.Dict.entries<k, v>(dict: Dict<k, v>) : List<(k, v)> =
@@ -1461,16 +1452,13 @@ def Stdlib.Dict.__entriesHelper<k, v>(node: Dict<k, v>, acc: List<(k, v)>) : Lis
         else
             acc
 
-def Stdlib.Dict.__collectEntriesFromChildren<k, v>(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: List<(k, v)>) : List<(k, v)> =
-    if bit >= 64 then
+def Stdlib.Dict.__collectEntriesFromChildren<k, v>(ptr: RawPtr, bitmap: Int64, idx: Int64, acc: List<(k, v)>) : List<(k, v)> =
+    if bitmap == 0 then
         acc
-    else if Stdlib.Dict.hasBit(bitmap, bit) then
-        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+    else
         let child = __raw_get<Dict<k, v>>(ptr, 8 + (idx * 8)) in
         let newAcc = Stdlib.Dict.__entriesHelper<k, v>(child, acc) in
-        Stdlib.Dict.__collectEntriesFromChildren<k, v>(ptr, bitmap, bit + 1, newAcc)
-    else
-        Stdlib.Dict.__collectEntriesFromChildren<k, v>(ptr, bitmap, bit + 1, acc)
+        Stdlib.Dict.__collectEntriesFromChildren<k, v>(ptr, bitmap & (bitmap - 1), idx + 1, newAcc)
 
 // Fold over all entries in the dictionary
 def Stdlib.Dict.fold<k, v, a>(dict: Dict<k, v>, init: a, f: (a, k, v) -> a) : a =
@@ -1492,16 +1480,13 @@ def Stdlib.Dict.__foldHelper<k, v, a>(node: Dict<k, v>, acc: a, f: (a, k, v) -> 
         else
             acc
 
-def Stdlib.Dict.__foldChildren<k, v, a>(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: a, f: (a, k, v) -> a) : a =
-    if bit >= 64 then
+def Stdlib.Dict.__foldChildren<k, v, a>(ptr: RawPtr, bitmap: Int64, idx: Int64, acc: a, f: (a, k, v) -> a) : a =
+    if bitmap == 0 then
         acc
-    else if Stdlib.Dict.hasBit(bitmap, bit) then
-        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+    else
         let child = __raw_get<Dict<k, v>>(ptr, 8 + (idx * 8)) in
         let newAcc = Stdlib.Dict.__foldHelper<k, v, a>(child, acc, f) in
-        Stdlib.Dict.__foldChildren<k, v, a>(ptr, bitmap, bit + 1, newAcc, f)
-    else
-        Stdlib.Dict.__foldChildren<k, v, a>(ptr, bitmap, bit + 1, acc, f)
+        Stdlib.Dict.__foldChildren<k, v, a>(ptr, bitmap & (bitmap - 1), idx + 1, newAcc, f)
 
 // Map over all values in the dictionary
 def Stdlib.Dict.map<k, v, w>(dict: Dict<k, v>, f: (k, v) -> w) : Dict<k, w> =
@@ -1555,16 +1540,13 @@ def Stdlib.Dict.__filterHelper<k, v>(node: Dict<k, v>, acc: Dict<k, v>, f: (k, v
         else
             acc
 
-def Stdlib.Dict.__filterChildren<k, v>(ptr: RawPtr, bitmap: Int64, bit: Int64, acc: Dict<k, v>, f: (k, v) -> Bool) : Dict<k, v> =
-    if bit >= 64 then
+def Stdlib.Dict.__filterChildren<k, v>(ptr: RawPtr, bitmap: Int64, idx: Int64, acc: Dict<k, v>, f: (k, v) -> Bool) : Dict<k, v> =
+    if bitmap == 0 then
         acc
-    else if Stdlib.Dict.hasBit(bitmap, bit) then
-        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+    else
         let child = __raw_get<Dict<k, v>>(ptr, 8 + (idx * 8)) in
         let newAcc = Stdlib.Dict.__filterHelper<k, v>(child, acc, f) in
-        Stdlib.Dict.__filterChildren<k, v>(ptr, bitmap, bit + 1, newAcc, f)
-    else
-        Stdlib.Dict.__filterChildren<k, v>(ptr, bitmap, bit + 1, acc, f)
+        Stdlib.Dict.__filterChildren<k, v>(ptr, bitmap & (bitmap - 1), idx + 1, newAcc, f)
 
 // =============================================================================
 // Dict.merge - Combine two dictionaries
@@ -1590,16 +1572,13 @@ def Stdlib.Dict.__mergeHelper<k, v>(source: Dict<k, v>, target: Dict<k, v>) : Di
         else
             target
 
-def Stdlib.Dict.__mergeChildren<k, v>(ptr: RawPtr, bitmap: Int64, bit: Int64, target: Dict<k, v>) : Dict<k, v> =
-    if bit >= 64 then
+def Stdlib.Dict.__mergeChildren<k, v>(ptr: RawPtr, bitmap: Int64, idx: Int64, target: Dict<k, v>) : Dict<k, v> =
+    if bitmap == 0 then
         target
-    else if Stdlib.Dict.hasBit(bitmap, bit) then
-        let idx = Stdlib.Dict.childIndex(bitmap, bit) in
+    else
         let child = __raw_get<Dict<k, v>>(ptr, 8 + (idx * 8)) in
         let newTarget = Stdlib.Dict.__mergeHelper<k, v>(child, target) in
-        Stdlib.Dict.__mergeChildren<k, v>(ptr, bitmap, bit + 1, newTarget)
-    else
-        Stdlib.Dict.__mergeChildren<k, v>(ptr, bitmap, bit + 1, target)
+        Stdlib.Dict.__mergeChildren<k, v>(ptr, bitmap & (bitmap - 1), idx + 1, newTarget)
 
 // =============================================================================
 // Dict.fromList - Construct dictionary from list of pairs
