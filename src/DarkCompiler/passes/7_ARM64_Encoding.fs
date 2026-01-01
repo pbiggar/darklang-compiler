@@ -441,6 +441,32 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rd = encodeReg dest
         [sf ||| op ||| rm ||| fixedBits ||| rn ||| rd]
 
+    | ARM64.LSL_imm (dest, src, shift) ->
+        // LSL Rd, Rn, #shift is alias for UBFM Rd, Rn, #(64-shift), #(63-shift)
+        // UBFM: sf=1 opc=10 100110 N=1 immr(6) imms(6) Rn(5) Rd(5)
+        let sf = 1u <<< 31  // 64-bit
+        let opc = 2u <<< 29  // UBFM
+        let op = 0b100110u <<< 23
+        let n = 1u <<< 22  // N=1 for 64-bit
+        let immr = (uint32 ((64 - shift) &&& 63)) <<< 16
+        let imms = (uint32 ((63 - shift) &&& 63)) <<< 10
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeReg dest
+        [sf ||| opc ||| op ||| n ||| immr ||| imms ||| rn ||| rd]
+
+    | ARM64.LSR_imm (dest, src, shift) ->
+        // LSR Rd, Rn, #shift is alias for UBFM Rd, Rn, #shift, #63
+        // UBFM: sf=1 opc=10 100110 N=1 immr(6) imms(6) Rn(5) Rd(5)
+        let sf = 1u <<< 31  // 64-bit
+        let opc = 2u <<< 29  // UBFM
+        let op = 0b100110u <<< 23
+        let n = 1u <<< 22  // N=1 for 64-bit
+        let immr = (uint32 (shift &&& 63)) <<< 16
+        let imms = 63u <<< 10  // imms = 63 for LSR
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeReg dest
+        [sf ||| opc ||| op ||| n ||| immr ||| imms ||| rn ||| rd]
+
     | ARM64.MVN (dest, src) ->
         // MVN is ORN Rd, XZR, Rm (OR NOT with Rn=XZR)
         // Encoding: sf=1 opc=01 01010 shift=00 1 Rm(5) imm6=000000 Rn=11111 Rd(5)

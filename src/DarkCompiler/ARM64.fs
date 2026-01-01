@@ -75,6 +75,8 @@ type Instr =
     | EOR_reg of dest:Reg * src1:Reg * src2:Reg  // Bitwise XOR (exclusive or)
     | LSL_reg of dest:Reg * src:Reg * shift:Reg  // Logical shift left by register
     | LSR_reg of dest:Reg * src:Reg * shift:Reg  // Logical shift right by register
+    | LSL_imm of dest:Reg * src:Reg * shift:int  // Logical shift left by immediate (0-63)
+    | LSR_imm of dest:Reg * src:Reg * shift:int  // Logical shift right by immediate (0-63)
     | MVN of dest:Reg * src:Reg  // Bitwise NOT
     | MOV_reg of dest:Reg * src:Reg
     | STRB of src:Reg * addr:Reg * offset:int  // Store byte [addr + offset] = src (lower 8 bits)

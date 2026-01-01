@@ -148,6 +148,10 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- Lsl({prettyPrintLIRReg src}, {prettyPrintLIRReg shift})"
     | LIR.Lsr (dest, src, shift) ->
         $"{prettyPrintLIRReg dest} <- Lsr({prettyPrintLIRReg src}, {prettyPrintLIRReg shift})"
+    | LIR.Lsl_imm (dest, src, shift) ->
+        $"{prettyPrintLIRReg dest} <- Lsl_imm({prettyPrintLIRReg src}, #{shift})"
+    | LIR.Lsr_imm (dest, src, shift) ->
+        $"{prettyPrintLIRReg dest} <- Lsr_imm({prettyPrintLIRReg src}, #{shift})"
     | LIR.Mvn (dest, src) ->
         $"{prettyPrintLIRReg dest} <- Mvn({prettyPrintLIRReg src})"
     | LIR.Sxtb (dest, src) ->
@@ -647,6 +651,10 @@ let prettyPrintARM64Instr = function
         $"LSL_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {prettyPrintARM64Reg shift})"
     | ARM64.LSR_reg (dest, src, shift) ->
         $"LSR_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {prettyPrintARM64Reg shift})"
+    | ARM64.LSL_imm (dest, src, shift) ->
+        $"LSL_imm({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, #{shift})"
+    | ARM64.LSR_imm (dest, src, shift) ->
+        $"LSR_imm({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, #{shift})"
     | ARM64.MVN (dest, src) ->
         $"MVN({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
     | ARM64.SXTB (dest, src) ->

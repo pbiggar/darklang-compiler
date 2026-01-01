@@ -326,19 +326,29 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 match ensureInRegister left (LIR.Virtual 1000) with
                 | Error err -> Error err
                 | Ok (leftInstrs, leftReg) ->
-                match ensureInRegister right (LIR.Virtual 1001) with
-                | Error err -> Error err
-                | Ok (rightInstrs, rightReg) ->
-                    Ok (leftInstrs @ rightInstrs @ [LIR.Lsl (lirDest, leftReg, rightReg)] @ truncInstrs)
+                    // Check if shift amount is a constant (0-63)
+                    match right with
+                    | MIR.IntConst n when n >= 0L && n < 64L ->
+                        Ok (leftInstrs @ [LIR.Lsl_imm (lirDest, leftReg, int n)] @ truncInstrs)
+                    | _ ->
+                        match ensureInRegister right (LIR.Virtual 1001) with
+                        | Error err -> Error err
+                        | Ok (rightInstrs, rightReg) ->
+                            Ok (leftInstrs @ rightInstrs @ [LIR.Lsl (lirDest, leftReg, rightReg)] @ truncInstrs)
 
             | MIR.Shr ->
                 match ensureInRegister left (LIR.Virtual 1000) with
                 | Error err -> Error err
                 | Ok (leftInstrs, leftReg) ->
-                match ensureInRegister right (LIR.Virtual 1001) with
-                | Error err -> Error err
-                | Ok (rightInstrs, rightReg) ->
-                    Ok (leftInstrs @ rightInstrs @ [LIR.Lsr (lirDest, leftReg, rightReg)] @ truncInstrs)
+                    // Check if shift amount is a constant (0-63)
+                    match right with
+                    | MIR.IntConst n when n >= 0L && n < 64L ->
+                        Ok (leftInstrs @ [LIR.Lsr_imm (lirDest, leftReg, int n)] @ truncInstrs)
+                    | _ ->
+                        match ensureInRegister right (LIR.Virtual 1001) with
+                        | Error err -> Error err
+                        | Ok (rightInstrs, rightReg) ->
+                            Ok (leftInstrs @ rightInstrs @ [LIR.Lsr (lirDest, leftReg, rightReg)] @ truncInstrs)
 
             | MIR.BitAnd ->
                 match ensureInRegister left (LIR.Virtual 1000) with
@@ -1371,7 +1381,7 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.FLoad (dest, floatIdx) -> LIR.FLoad (dest, floatIdx + fltOffset)
     // Instructions without pool references - pass through unchanged
     | LIR.Store _ | LIR.Mul _ | LIR.Sdiv _ | LIR.Msub _ | LIR.Madd _ | LIR.Cset _
-    | LIR.And _ | LIR.Orr _ | LIR.Eor _ | LIR.Lsl _ | LIR.Lsr _ | LIR.Mvn _
+    | LIR.And _ | LIR.Orr _ | LIR.Eor _ | LIR.Lsl _ | LIR.Lsr _ | LIR.Lsl_imm _ | LIR.Lsr_imm _ | LIR.Mvn _
     | LIR.Sxtb _ | LIR.Sxth _ | LIR.Sxtw _ | LIR.Uxtb _ | LIR.Uxth _ | LIR.Uxtw _
     | LIR.SaveRegs _ | LIR.RestoreRegs _ | LIR.PrintInt _ | LIR.PrintBool _ | LIR.PrintFloat _
     | LIR.PrintIntNoNewline _ | LIR.PrintBoolNoNewline _ | LIR.PrintFloatNoNewline _

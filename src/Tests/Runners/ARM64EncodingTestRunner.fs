@@ -55,6 +55,8 @@ let formatMismatches (mismatches: (int * Instr * uint32 * uint32) list) : string
                     | EOR_reg (dest, src1, src2) -> $"EOR_reg({dest}, {src1}, {src2})"
                     | LSL_reg (dest, src, shift) -> $"LSL_reg({dest}, {src}, {shift})"
                     | LSR_reg (dest, src, shift) -> $"LSR_reg({dest}, {src}, {shift})"
+                    | LSL_imm (dest, src, shift) -> $"LSL_imm({dest}, {src}, #{shift})"
+                    | LSR_imm (dest, src, shift) -> $"LSR_imm({dest}, {src}, #{shift})"
                     | MVN (dest, src) -> $"MVN({dest}, {src})"
                     | SXTB (dest, src) -> $"SXTB({dest}, {src})"
                     | SXTH (dest, src) -> $"SXTH({dest}, {src})"

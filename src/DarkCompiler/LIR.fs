@@ -79,6 +79,8 @@ type Instr =
     | Eor of dest:Reg * left:Reg * right:Reg    // Bitwise XOR (^)
     | Lsl of dest:Reg * src:Reg * shift:Reg     // Logical shift left (<<)
     | Lsr of dest:Reg * src:Reg * shift:Reg     // Logical shift right (>>)
+    | Lsl_imm of dest:Reg * src:Reg * shift:int // Logical shift left by immediate
+    | Lsr_imm of dest:Reg * src:Reg * shift:int // Logical shift right by immediate
     | Mvn of dest:Reg * src:Reg                 // Bitwise NOT
     // Sign/zero extension for integer overflow (truncation to target width)
     | Sxtb of dest:Reg * src:Reg               // Sign-extend byte (8-bit) to 64-bit
