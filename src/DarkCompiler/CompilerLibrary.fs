@@ -89,6 +89,9 @@ type StdlibResult = {
     SpecCache: SpecializationCache
 }
 
+/// Cache for lazily compiled LIR functions - thread-safe for parallel test execution
+type LIRCache = ConcurrentDictionary<string, LIR.Function>
+
 /// Lazy stdlib result - defers expensive compilation until we know what's needed
 /// Only compiles stdlib functions that user code actually calls
 type LazyStdlibResult = {
@@ -108,11 +111,13 @@ type LazyStdlibResult = {
     StdlibTypeMap: ANF.TypeMap
     /// Cache for specialized functions (shared across test compilations)
     SpecCache: SpecializationCache
-    /// Pre-compiled stdlib LIR functions (after register allocation), indexed by name
-    StdlibLIRFunctions: Map<string, LIR.Function>
-    /// String pool for all stdlib functions
+    /// Stdlib MIR functions (after SSA + optimization), indexed by name for lazy LIR compilation
+    StdlibMIRFunctions: Map<string, MIR.Function>
+    /// Lazy cache for compiled LIR functions (compiled on-demand, thread-safe)
+    LIRCache: LIRCache
+    /// String pool for all stdlib functions (built during MIR conversion)
     StdlibStringPool: MIR.StringPool
-    /// Float pool for all stdlib functions
+    /// Float pool for all stdlib functions (built during MIR conversion)
     StdlibFloatPool: MIR.FloatPool
 }
 
@@ -236,8 +241,8 @@ let compileStdlib () : Result<StdlibResult, string> =
                                 SpecCache = SpecializationCache()
                             }
 
-/// Prepare stdlib for lazy compilation - pre-compiles all stdlib to LIR
-/// This is a one-time cost that speeds up all subsequent user compilations
+/// Prepare stdlib for lazy compilation - stops at MIR level
+/// LIR conversion and register allocation are done lazily when functions are needed
 let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
     match loadStdlib() with
     | Error e -> Error e
@@ -271,8 +276,8 @@ let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
                     // Build call graph at ANF level for early DCE
                     let stdlibCallGraph = ANFDeadCodeElimination.buildCallGraph stdlibFuncs
 
-                    // Pre-compile ALL stdlib functions to LIR (one-time cost)
-                    // This speeds up all subsequent user compilations
+                    // Convert ALL stdlib to MIR (builds string/float pools once)
+                    // LIR conversion is deferred until functions are actually needed
                     let stdlibAnfProgram = ANF.Program (stdlibFuncs, ANF.Return ANF.UnitLiteral)
                     let stdlibTypeReg = anfResult.FuncParams
                     let stdlibVariantLookup = anfResult.VariantLookup
@@ -288,36 +293,27 @@ let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
                         // MIR Optimizations
                         let stdlibOptimized = MIR_Optimize.optimizeProgram stdlibSsaProgram
 
-                        // Convert to LIR
-                        match MIR_to_LIR.toLIR stdlibOptimized with
-                        | Error e -> Error $"Stdlib LIR error: {e}"
-                        | Ok stdlibLirProgram ->
-                            // LIR Optimizations
-                            let stdlibLirOptimized = LIR_Optimize.optimizeProgram stdlibLirProgram
+                        // Extract optimized MIR functions into a map for lazy LIR compilation
+                        let (MIR.Program (optimizedMirFuncs, mirStrings, mirFloats, _, _)) = stdlibOptimized
+                        let stdlibMirMap =
+                            optimizedMirFuncs
+                            |> List.map (fun f -> f.Name, f)
+                            |> Map.ofList
 
-                            // Register allocation for all stdlib functions
-                            let (LIR.Program (stdlibLirFuncs, lirStrings, lirFloats)) = stdlibLirOptimized
-                            let allocatedStdlibFuncs = stdlibLirFuncs |> List.map RegisterAllocation.allocateRegisters
-
-                            // Build map of allocated functions by name
-                            let stdlibLirMap =
-                                allocatedStdlibFuncs
-                                |> List.map (fun f -> f.Name, f)
-                                |> Map.ofList
-
-                            Ok {
-                                TypeCheckEnv = typeCheckEnv
-                                GenericFuncDefs = genericFuncDefs
-                                ModuleRegistry = moduleRegistry
-                                ANFResult = anfResult
-                                StdlibANFFunctions = stdlibFuncMap
-                                StdlibANFCallGraph = stdlibCallGraph
-                                StdlibTypeMap = typeMap
-                                SpecCache = SpecializationCache()
-                                StdlibLIRFunctions = stdlibLirMap
-                                StdlibStringPool = lirStrings
-                                StdlibFloatPool = lirFloats
-                            }
+                        Ok {
+                            TypeCheckEnv = typeCheckEnv
+                            GenericFuncDefs = genericFuncDefs
+                            ModuleRegistry = moduleRegistry
+                            ANFResult = anfResult
+                            StdlibANFFunctions = stdlibFuncMap
+                            StdlibANFCallGraph = stdlibCallGraph
+                            StdlibTypeMap = typeMap
+                            SpecCache = SpecializationCache()
+                            StdlibMIRFunctions = stdlibMirMap
+                            LIRCache = LIRCache()
+                            StdlibStringPool = mirStrings
+                            StdlibFloatPool = mirFloats
+                        }
 
 /// Internal: Compile user code with stdlib AST (shared implementation)
 /// This is the core compilation pipeline that does one pass of type-checking and ANF conversion
@@ -1044,6 +1040,41 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
           Success = false
           ErrorMessage = Some $"Compilation failed: {ex.Message}" }
 
+/// Lazily compile a stdlib function from MIR to LIR with caching
+/// Returns the compiled LIR function (from cache if available, or compiles and caches)
+let private getOrCompileStdlibLIR (stdlib: LazyStdlibResult) (funcName: string) : LIR.Function option =
+    // Check cache first
+    match stdlib.LIRCache.TryGetValue(funcName) with
+    | true, cached -> Some cached
+    | false, _ ->
+        // Not in cache - compile from MIR
+        match Map.tryFind funcName stdlib.StdlibMIRFunctions with
+        | None -> None  // Function not found in stdlib
+        | Some mirFunc ->
+            // Create a mini MIR program with just this function
+            let miniProgram = MIR.Program ([mirFunc], stdlib.StdlibStringPool, stdlib.StdlibFloatPool, Map.empty, Map.empty)
+
+            // Convert to LIR
+            match MIR_to_LIR.toLIR miniProgram with
+            | Error _ -> None  // Conversion failed
+            | Ok lirProgram ->
+                // LIR Optimizations
+                let optimizedLir = LIR_Optimize.optimizeProgram lirProgram
+                let (LIR.Program (lirFuncs, _, _)) = optimizedLir
+
+                // Register allocation
+                match lirFuncs with
+                | [lirFunc] ->
+                    let allocated = RegisterAllocation.allocateRegisters lirFunc
+                    // Cache the result (thread-safe: if another thread beat us, that's fine)
+                    stdlib.LIRCache.TryAdd(funcName, allocated) |> ignore
+                    Some allocated
+                | _ -> None  // Unexpected: should have exactly one function
+
+/// Get multiple stdlib functions, lazily compiling as needed
+let private getStdlibLIRFunctions (stdlib: LazyStdlibResult) (funcNames: string list) : LIR.Function list =
+    funcNames |> List.choose (getOrCompileStdlibLIR stdlib)
+
 /// Compile user code with lazy stdlib - only compiles stdlib functions that are actually called
 /// This avoids compiling unused stdlib functions through expensive passes (MIR, LIR, RegAlloc)
 let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: LazyStdlibResult) (source: string) : CompileResult =
@@ -1167,11 +1198,12 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                         println $"        {t}ms"
 
                     // Early DCE: Determine which stdlib functions are actually needed
-                    // Then look up pre-compiled LIR functions from cache (no compilation needed!)
+                    // Lazily compile needed functions from MIR to LIR (cached for future use)
                     let (allocatedStdlibFuncs, stdlibLirStrings, stdlibLirFloats) =
                         if options.DisableDCE then
                             // Include all stdlib functions when DCE is disabled
-                            let allFuncs = stdlib.StdlibLIRFunctions |> Map.values |> List.ofSeq
+                            let allNames = stdlib.StdlibMIRFunctions |> Map.keys |> List.ofSeq
+                            let allFuncs = getStdlibLIRFunctions stdlib allNames
                             (allFuncs, stdlib.StdlibStringPool, stdlib.StdlibFloatPool)
                         else
                             let (ANF.Program (userFuncsForDCE, userMainForDCE)) = userAnfProgram
@@ -1179,11 +1211,8 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                             let reachableStdlibNames = ANFDeadCodeElimination.getReachableStdlib stdlib.StdlibANFCallGraph userANFFuncs
                             if verbosity >= 2 then
                                 println $"        DCE: {reachableStdlibNames.Count} stdlib functions needed"
-                            // Look up pre-compiled LIR functions from cache
-                            let reachableFuncs =
-                                reachableStdlibNames
-                                |> Set.toList
-                                |> List.choose (fun name -> Map.tryFind name stdlib.StdlibLIRFunctions)
+                            // Lazily compile needed LIR functions (from MIR, cached for future use)
+                            let reachableFuncs = getStdlibLIRFunctions stdlib (Set.toList reachableStdlibNames)
                             (reachableFuncs, stdlib.StdlibStringPool, stdlib.StdlibFloatPool)
 
                     // Pass 3: ANF → MIR (user code only)
