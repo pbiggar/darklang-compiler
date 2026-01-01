@@ -227,10 +227,14 @@ nqueen(8) = 92
 
 
 // ===================================================================
-// TODO: Additional benchmarks to implement
+// BLOCKED BENCHMARKS - require compiler bug fixes
 // ===================================================================
 //
-// The following benchmarks can now be implemented (bugs fixed):
-// - nsieve: Sieve of Eratosthenes using List.repeat + List.setAt
-// - spectral_norm: Spectral norm calculation using List.getAt<Float>
-// - matmul: Matrix multiplication using 2D arrays
+// nsieve, spectral_norm, matmul are blocked by List.repeat memory corruption:
+//
+// Bug: List.repeat creates cons cells that share memory incorrectly.
+// When List.setAt modifies one element, other elements also change.
+// Example: List.repeat(42, 6) then setAt(list, 0, 99) corrupts index 5.
+//
+// The pattern matching fix resolved Some(true)/Some(false) patterns
+// and List.getAt<Float>, but List.repeat has a separate memory sharing bug.
