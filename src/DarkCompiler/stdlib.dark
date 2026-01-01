@@ -481,6 +481,59 @@ def Stdlib.List.__partitionHelper<a>(list: List<a>, fn: (a) -> Bool, trueAcc: Li
 def Stdlib.List.all<a>(list: List<a>, fn: (a) -> Bool) : Bool =
     Stdlib.List.forAll<a>(list, fn)
 
+// Convert list to display string representation: "[elem1, elem2, ...]"
+// Note: Generic version disabled due to function reference bug
+// def Stdlib.List.toDisplayString<a>(list: List<a>, elemToString: (a) -> String) : String =
+//     let strs = Stdlib.List.map<a, String>(list, elemToString) in
+//     "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
+
+// Type-specific toDisplayString implementations (workaround for function reference bug)
+
+// Helper to build string list from Int64 list
+def Stdlib.List.__int64sToStrings(list: List<Int64>, acc: List<String>) : List<String> =
+    if Stdlib.FingerTree.isEmpty<Int64>(list) then acc
+    else
+        match Stdlib.FingerTree.head<Int64>(list) with
+        | None -> acc
+        | Some(h) ->
+            let s = Stdlib.Int64.toString(h) in
+            let newAcc = Stdlib.FingerTree.pushBack<String>(acc, s) in
+            Stdlib.List.__int64sToStrings(Stdlib.FingerTree.tail<Int64>(list), newAcc)
+
+def Stdlib.List.toDisplayString_i64(list: List<Int64>) : String =
+    let strs = Stdlib.List.__int64sToStrings(list, Stdlib.FingerTree.empty<String>()) in
+    "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
+
+// Helper to build string list from String list (with single quotes for display)
+def Stdlib.List.__stringsToStrings(list: List<String>, acc: List<String>) : List<String> =
+    if Stdlib.FingerTree.isEmpty<String>(list) then acc
+    else
+        match Stdlib.FingerTree.head<String>(list) with
+        | None -> acc
+        | Some(h) ->
+            let quoted = "'" ++ h ++ "'" in
+            let newAcc = Stdlib.FingerTree.pushBack<String>(acc, quoted) in
+            Stdlib.List.__stringsToStrings(Stdlib.FingerTree.tail<String>(list), newAcc)
+
+def Stdlib.List.toDisplayString_str(list: List<String>) : String =
+    let strs = Stdlib.List.__stringsToStrings(list, Stdlib.FingerTree.empty<String>()) in
+    "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
+
+// Helper to build string list from Bool list
+def Stdlib.List.__boolsToStrings(list: List<Bool>, acc: List<String>) : List<String> =
+    if Stdlib.FingerTree.isEmpty<Bool>(list) then acc
+    else
+        match Stdlib.FingerTree.head<Bool>(list) with
+        | None -> acc
+        | Some(h) ->
+            let s = Stdlib.Bool.toString(h) in
+            let newAcc = Stdlib.FingerTree.pushBack<String>(acc, s) in
+            Stdlib.List.__boolsToStrings(Stdlib.FingerTree.tail<Bool>(list), newAcc)
+
+def Stdlib.List.toDisplayString_bool(list: List<Bool>) : String =
+    let strs = Stdlib.List.__boolsToStrings(list, Stdlib.FingerTree.empty<String>()) in
+    "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
+
 // TODO: List.zip is disabled due to compiler bug with tuple recursion
 // def Stdlib.List.zip<a, b>(list1: List<a>, list2: List<b>) : List<(a, b)> =
 //     match (list1, list2) with

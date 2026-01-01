@@ -9,14 +9,40 @@ module PrintInsertion
 
 open ANF
 
+/// Get the toDisplayString function name for list element type
+let getListDisplayStringFunc (elemType: AST.Type) : string option =
+    match elemType with
+    | AST.TInt64 -> Some "Stdlib.List.toDisplayString_i64"
+    | AST.TBool -> Some "Stdlib.List.toDisplayString_bool"
+    | AST.TString -> Some "Stdlib.List.toDisplayString_str"
+    | _ -> None
+
 /// Wrap the return value with a Print instruction
 /// Transforms: Return atom  →  Let (_, Print (atom, type), Return atom)
+/// For list types, generates: Call toDisplayString, then Print the string
 let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExpr) : AExpr * VarGen =
     match expr with
     | Return atom ->
-        // Insert Print before Return
-        let (printTmp, varGen') = freshVar varGen
-        (Let (printTmp, Print (atom, programType), Return atom), varGen')
+        // For list types, call toDisplayString first
+        match programType with
+        | AST.TList elemType ->
+            match getListDisplayStringFunc elemType with
+            | Some toDisplayStringName ->
+                // Generate: let strTmp = Call(toDisplayString, [list]) in
+                //           let _ = Print(strTmp, String) in Return atom
+                let (strTmp, varGen1) = freshVar varGen
+                let (printTmp, varGen2) = freshVar varGen1
+                let callExpr = Call (toDisplayStringName, [atom])
+                let printExpr = Print (Var strTmp, AST.TString)
+                (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
+            | None ->
+                // Unsupported element type, fall back to simple print
+                let (printTmp, varGen') = freshVar varGen
+                (Let (printTmp, Print (atom, programType), Return atom), varGen')
+        | _ ->
+            // Non-list types: simple print
+            let (printTmp, varGen') = freshVar varGen
+            (Let (printTmp, Print (atom, programType), Return atom), varGen')
     | Let (tempId, cexpr, body) ->
         // Recurse into body
         let (body', varGen') = wrapReturnWithPrint programType varGen body
