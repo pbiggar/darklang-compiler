@@ -230,14 +230,13 @@ nqueen(8) = 92
 // BLOCKED BENCHMARKS - require compiler bug fixes
 // ===================================================================
 //
-// nsieve, spectral_norm, matmul are blocked by a closure + List.repeat bug:
+// nsieve, spectral_norm, matmul are blocked by a tail call optimization bug:
 //
-// Bug: When cons [x, ...t] is inside a lambda AND t is from List.repeat,
-// the original list gets corrupted. Direct cons in match expressions works.
+// Bug: Lists built by TAIL-RECURSIVE functions get corrupted when modified.
+// Non-tail-recursive list building works correctly.
 //
-// Works:    match List.tail(repeatList) with | Some(t) -> [99, ...t] -> OK
-// Corrupts: Option.map(maybeTail, (t) => [99, ...t]) -> corrupts original!
+// Corrupts: def repeat(v, n, acc) = repeat(v, n-1, [v, ...acc])  // tail-recursive
+// Works:    def repeat(v, n) = [v, ...repeat(v, n-1)]            // non-tail-recursive
 //
-// List.setAt uses recursion with [h, ...t] which triggers this when called
-// on List.repeat lists. Appears to be a reference counting bug with shared
-// list structures.
+// List.repeat and List.setAt both use tail recursion, triggering corruption.
+// The tail call optimization appears to incorrectly reuse memory for cons cells.

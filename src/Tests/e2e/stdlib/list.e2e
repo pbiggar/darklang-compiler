@@ -182,10 +182,10 @@ match List.repeat(7, 3) with | [a, b, c] -> a + b + c | _ -> 0 = 21
 Option.withDefault(List.getAt(List.setAt([10, 20, 30], 1, 99), 1), 0) = 99
 List.length(List.setAt([1, 2, 3], 0, 100)) = stdout="3\n"
 
-// NOTE: List.repeat + cons-in-recursion has memory corruption bug - see benchmarks.e2e
-// When setAt recursively does [h, ...setAt(...)] on a List.repeat list,
-// the original list gets corrupted. This is a reference counting bug with
-// shared list structures from List.repeat.
+// NOTE: Tail call optimization bug corrupts lists - see benchmarks.e2e
+// Lists built by tail-recursive functions (like List.repeat) get corrupted
+// when modified by other tail-recursive functions (like List.setAt).
+// Non-tail-recursive versions work correctly.
 
 // ===================================================================
 // List.indexedMap - Map with index
