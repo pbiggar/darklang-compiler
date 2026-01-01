@@ -3179,6 +3179,8 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64.In
 /// 6. B_label X + Label X → remove branch (branch to next instruction)
 /// 7. CMP #0 + B.EQ → CBZ (compare zero and branch equal)
 /// 8. CMP #0 + B.NE → CBNZ (compare zero and branch not equal)
+/// 9. AND Xn, Xn, Xn → MOV (AND with self is identity)
+/// 10. ORR Xn, Xn, Xn → MOV (OR with self is identity)
 let peepholeOptimize (instrs: ARM64.Instr list) : ARM64.Instr list =
     let rec optimize acc remaining =
         match remaining with
@@ -3204,6 +3206,18 @@ let peepholeOptimize (instrs: ARM64.Instr list) : ARM64.Instr list =
         // Remove subtract zero
         | ARM64.SUB_imm (dest, src, 0us) :: rest when dest = src ->
             optimize acc rest
+        // AND with self is identity - simplify to MOV if dest differs from operand
+        | ARM64.AND_reg (dest, src1, src2) :: rest when src1 = src2 ->
+            if dest = src1 then
+                optimize acc rest  // dest = src AND src = src, remove entirely
+            else
+                optimize (ARM64.MOV_reg (dest, src1) :: acc) rest
+        // OR with self is identity - simplify to MOV if dest differs from operand
+        | ARM64.ORR_reg (dest, src1, src2) :: rest when src1 = src2 ->
+            if dest = src1 then
+                optimize acc rest  // dest = src OR src = src, remove entirely
+            else
+                optimize (ARM64.MOV_reg (dest, src1) :: acc) rest
         // Remove branch to next instruction
         | ARM64.B_label target :: ARM64.Label lbl :: rest when target = lbl ->
             optimize (ARM64.Label lbl :: acc) rest
