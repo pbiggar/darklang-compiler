@@ -1,0 +1,15 @@
+// Minimal test case for tuple recursion bug
+def makePairs(n: Int64) : List<(Int64, Int64)> =
+    if n <= 0 then
+        []
+    else
+        [(n, n + 1), ...makePairs(n - 1)]
+
+def main() : Int64 =
+    let pairs = makePairs(1) in
+    match pairs with
+    | [(a, b)] ->
+        Stdlib.IO.printLine(Stdlib.Int64.toString(a))
+        Stdlib.IO.printLine(Stdlib.Int64.toString(b))
+        a
+    | _ -> 999

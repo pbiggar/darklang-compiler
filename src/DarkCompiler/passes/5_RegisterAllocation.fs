@@ -985,17 +985,19 @@ let greedyColorReverse (graph: InterferenceGraph) (peo: int list) (precolored: M
 
     // First pass: color vregs with no preferences or all partners already colored
     // Defer vregs that have uncolored partners (so partners get colored first)
-    let mutable deferred = []
+    let mutable deferred = Set.empty<int>
     for v in List.rev peo do
         if not (Map.containsKey v colors) then
             if hasUncoloredPartners v then
-                deferred <- v :: deferred
+                deferred <- Set.add v deferred
             else
                 colorVertex v
 
-    // Second pass: color deferred vregs (their partners should now be colored)
-    for v in deferred do
-        colorVertex v
+    // Second pass: color deferred vregs in reverse PEO order (crucial for chordal graphs!)
+    // We must maintain the PEO ordering even for deferred vertices
+    for v in List.rev peo do
+        if Set.contains v deferred && not (Map.containsKey v colors) then
+            colorVertex v
 
     { Colors = colors
       Spills = spills
