@@ -840,6 +840,73 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     // X0 has string address, load len/data and print
                     [ARM64.LDR (ARM64.X10, ARM64.X0, 0s); ARM64.ADD_imm (ARM64.X9, ARM64.X0, 8us)] @
                     Runtime.generatePrintStringNoNewline ()
+                | AST.TTuple elemTypes ->
+                    // Print tuple inside list: (elem1, elem2, ...)
+                    // Use X21 for tuple ptr (callee-saved), keep X19 for list ptr
+                    let moveTupleToX21 = [ARM64.MOV_reg (ARM64.X21, ARM64.X0)]
+
+                    // Print "("
+                    let printOpenParen = [
+                        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
+                        ARM64.MOVZ (ARM64.X0, uint16 (byte '('), 0)
+                        ARM64.STRB (ARM64.X0, ARM64.SP, 0)
+                        ARM64.MOVZ (ARM64.X0, 1us, 0)
+                        ARM64.MOV_reg (ARM64.X1, ARM64.SP)
+                        ARM64.MOVZ (ARM64.X2, 1us, 0)
+                        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+                        ARM64.SVC syscalls.SvcImmediate
+                        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
+                    ]
+
+                    // Print ", " helper
+                    let printTupleCommaSpace = [
+                        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
+                        ARM64.MOVZ (ARM64.X0, uint16 (byte ','), 0)
+                        ARM64.STRB (ARM64.X0, ARM64.SP, 0)
+                        ARM64.MOVZ (ARM64.X0, uint16 (byte ' '), 0)
+                        ARM64.STRB (ARM64.X0, ARM64.SP, 1)
+                        ARM64.MOVZ (ARM64.X0, 1us, 0)
+                        ARM64.MOV_reg (ARM64.X1, ARM64.SP)
+                        ARM64.MOVZ (ARM64.X2, 2us, 0)
+                        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+                        ARM64.SVC syscalls.SvcImmediate
+                        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
+                    ]
+
+                    // Generate code for each tuple element (load from X21)
+                    let tupleElemInstrs =
+                        elemTypes
+                        |> List.mapi (fun i eType ->
+                            let loadElem = [ARM64.LDR (ARM64.X0, ARM64.X21, int16 (i * 8))]
+                            let printElem =
+                                match eType with
+                                | AST.TInt64 -> Runtime.generatePrintIntNoNewline ()
+                                | AST.TBool -> Runtime.generatePrintBoolNoNewline ()
+                                | AST.TFloat64 ->
+                                    [ARM64.FMOV_from_gp (ARM64.D0, ARM64.X0)] @ Runtime.generatePrintFloatNoNewline ()
+                                | AST.TString ->
+                                    [ARM64.LDR (ARM64.X10, ARM64.X0, 0s); ARM64.ADD_imm (ARM64.X9, ARM64.X0, 8us)] @
+                                    Runtime.generatePrintStringNoNewline ()
+                                | _ -> Runtime.generatePrintIntNoNewline ()
+                            let comma = if i < List.length elemTypes - 1 then printTupleCommaSpace else []
+                            loadElem @ printElem @ comma
+                        )
+                        |> List.concat
+
+                    // Print ")"
+                    let printCloseParen = [
+                        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
+                        ARM64.MOVZ (ARM64.X0, uint16 (byte ')'), 0)
+                        ARM64.STRB (ARM64.X0, ARM64.SP, 0)
+                        ARM64.MOVZ (ARM64.X0, 1us, 0)
+                        ARM64.MOV_reg (ARM64.X1, ARM64.SP)
+                        ARM64.MOVZ (ARM64.X2, 1us, 0)
+                        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+                        ARM64.SVC syscalls.SvcImmediate
+                        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
+                    ]
+
+                    moveTupleToX21 @ printOpenParen @ tupleElemInstrs @ printCloseParen
                 | _ ->
                     // For other types (nested lists, etc.), print as integer for now
                     Runtime.generatePrintIntNoNewline ()
