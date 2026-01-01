@@ -3150,16 +3150,32 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64.In
         // All Ret terminators jump to the epilogue label
         Ok (functionEntryLabel @ prologue @ heapInit @ paramSetup @ cfgInstrs @ epilogueLabelInstr @ epilogue)
 
-/// Peephole optimization: fuse SUB + CMP #0 into SUBS
-/// Pattern: SUB_imm dest, src, #N followed by CMP_imm dest, #0
-/// becomes: SUBS_imm dest, src, #N (sets flags as side effect)
+/// Peephole optimization pass
+/// Patterns:
+/// 1. SUB_imm + CMP #0 → SUBS (fuse subtract and compare)
+/// 2. MOV Xn, Xn → remove (redundant self-move)
+/// 3. FMOV Dn, Dn → remove (redundant FP self-move)
+/// 4. ADD Xn, Xn, #0 → remove (add zero)
+/// 5. SUB Xn, Xn, #0 → remove (subtract zero)
 let peepholeOptimize (instrs: ARM64.Instr list) : ARM64.Instr list =
     let rec optimize acc remaining =
         match remaining with
         | [] -> List.rev acc
+        // Fuse SUB + CMP #0 into SUBS
         | ARM64.SUB_imm (dest, src, imm) :: ARM64.CMP_imm (cmpReg, 0us) :: rest when dest = cmpReg ->
-            // Fuse SUB + CMP #0 into SUBS
             optimize (ARM64.SUBS_imm (dest, src, imm) :: acc) rest
+        // Remove redundant self-move (integer)
+        | ARM64.MOV_reg (dest, src) :: rest when dest = src ->
+            optimize acc rest
+        // Remove redundant self-move (FP)
+        | ARM64.FMOV_reg (dest, src) :: rest when dest = src ->
+            optimize acc rest
+        // Remove add zero
+        | ARM64.ADD_imm (dest, src, 0us) :: rest when dest = src ->
+            optimize acc rest
+        // Remove subtract zero
+        | ARM64.SUB_imm (dest, src, 0us) :: rest when dest = src ->
+            optimize acc rest
         | instr :: rest ->
             optimize (instr :: acc) rest
     optimize [] instrs
