@@ -77,6 +77,38 @@ let private parseAttribute (attr: string) : Result<string * string, string> =
     | [| key; value |] -> Ok (key.Trim(), value.Trim())
     | _ -> Error $"Invalid attribute format: {attr}"
 
+/// Split string by spaces, respecting quoted strings with escape sequences
+/// e.g., 'stdout="hello world" exit=0' -> ['stdout="hello world"'; 'exit=0']
+let private splitBySpacesRespectingQuotes (s: string) : string list =
+    let mutable result = []
+    let mutable current = System.Text.StringBuilder()
+    let mutable inQuotes = false
+    let mutable i = 0
+    while i < s.Length do
+        let c = s.[i]
+        if c = '\\' && i + 1 < s.Length then
+            // Escape sequence - add both characters
+            current.Append(c) |> ignore
+            current.Append(s.[i + 1]) |> ignore
+            i <- i + 2
+        elif c = '"' then
+            inQuotes <- not inQuotes
+            current.Append(c) |> ignore
+            i <- i + 1
+        elif c = ' ' && not inQuotes then
+            // Space outside quotes - end current token
+            if current.Length > 0 then
+                result <- current.ToString() :: result
+                current.Clear() |> ignore
+            i <- i + 1
+        else
+            current.Append(c) |> ignore
+            i <- i + 1
+    // Add final token
+    if current.Length > 0 then
+        result <- current.ToString() :: result
+    List.rev result
+
 /// Check if string starts with expectation keywords (digit, -, stdout, etc.)
 let private isExpectationStart (rest: string) : bool =
     let trimmed = rest.TrimStart()
@@ -232,10 +264,8 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                         errors <- $"Invalid {attrName} value: {value} (expected true/false)" :: errors
                         None
 
-                // Split by spaces, but respect quoted strings
-                // Use regex to split on whitespace outside of quotes
-                let attrRegex = System.Text.RegularExpressions.Regex(@"\s+(?=(?:[^""]*""[^""]*"")*[^""]*$)")
-                let attrs = attrRegex.Split(trimmed)
+                // Split by spaces, respecting quoted strings with escape sequences
+                let attrs = splitBySpacesRespectingQuotes trimmed |> Array.ofList
 
                 for attr in attrs do
                     let attrTrimmed = attr.Trim()

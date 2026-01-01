@@ -504,14 +504,14 @@ def Stdlib.List.toDisplayString_i64(list: List<Int64>) : String =
     let strs = Stdlib.List.__int64sToStrings(list, Stdlib.FingerTree.empty<String>()) in
     "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
 
-// Helper to build string list from String list (with single quotes for display)
+// Helper to build string list from String list (with double quotes for display)
 def Stdlib.List.__stringsToStrings(list: List<String>, acc: List<String>) : List<String> =
     if Stdlib.FingerTree.isEmpty<String>(list) then acc
     else
         match Stdlib.FingerTree.head<String>(list) with
         | None -> acc
         | Some(h) ->
-            let quoted = "'" ++ h ++ "'" in
+            let quoted = "\"" ++ h ++ "\"" in
             let newAcc = Stdlib.FingerTree.pushBack<String>(acc, quoted) in
             Stdlib.List.__stringsToStrings(Stdlib.FingerTree.tail<String>(list), newAcc)
 
