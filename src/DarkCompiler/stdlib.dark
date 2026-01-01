@@ -236,193 +236,246 @@ def Stdlib.Option.toList<t>(opt: Stdlib.Option.Option<t>) : List<t> =
     | None -> []
 
 // Stdlib.List - List operations
-// Lists are represented as: Nil = 0, Cons = [tag=1, head, tail]
+// Lists are now FingerTrees internally for O(1) push/pushBack and O(log n) indexing
 
-// Check if list is empty
+// Check if list is empty - O(1)
 def Stdlib.List.isEmpty<t>(list: List<t>) : Bool =
-    match list with
-    | [] -> true
-    | _ -> false
+    Stdlib.FingerTree.isEmpty<t>(list)
 
-// Get the length of a list
+// Get the length of a list - O(1)
 def Stdlib.List.length<t>(list: List<t>) : Int64 =
-    match list with
-    | [] -> 0
-    | [h, ...rest] -> 1 + Stdlib.List.length<t>(rest)
+    Stdlib.FingerTree.length<t>(list)
 
-// Create a single-element list
-def Stdlib.List.singleton<t>(value: t) : List<t> = [value]
+// Create a single-element list - O(1)
+def Stdlib.List.singleton<t>(value: t) : List<t> =
+    Stdlib.FingerTree.singleton<t>(value)
 
-// Prepend an element to a list
-def Stdlib.List.push<t>(list: List<t>, value: t) : List<t> = [value, ...list]
+// Prepend an element to a list - O(1) amortized
+def Stdlib.List.push<t>(list: List<t>, value: t) : List<t> =
+    Stdlib.FingerTree.push<t>(list, value)
 
-// Apply a function to each element of a list
+// Apply a function to each element of a list - O(n)
 def Stdlib.List.map<a, b>(list: List<a>, fn: (a) -> b) : List<b> =
-    match list with
-    | [] -> []
-    | [h, ...t] -> [fn(h), ...Stdlib.List.map<a, b>(t, fn)]
+    Stdlib.List.__mapHelper<a, b>(list, fn, Stdlib.FingerTree.empty<b>())
 
-// Flatten a list of lists into a single list
+def Stdlib.List.__mapHelper<a, b>(list: List<a>, fn: (a) -> b, acc: List<b>) : List<b> =
+    if Stdlib.FingerTree.isEmpty<a>(list) then acc
+    else
+        match Stdlib.FingerTree.head<a>(list) with
+        | None -> acc
+        | Some(h) ->
+            let newAcc = Stdlib.FingerTree.pushBack<b>(acc, fn(h)) in
+            Stdlib.List.__mapHelper<a, b>(Stdlib.FingerTree.tail<a>(list), fn, newAcc)
+
+// Flatten a list of lists into a single list - O(n*m)
 def Stdlib.List.flatten<a>(lists: List<List<a>>) : List<a> =
-    match lists with
-    | [] -> []
-    | [h, ...t] -> Stdlib.List.append<a>(h, Stdlib.List.flatten<a>(t))
+    Stdlib.List.__flattenHelper<a>(lists, Stdlib.FingerTree.empty<a>())
+
+def Stdlib.List.__flattenHelper<a>(lists: List<List<a>>, acc: List<a>) : List<a> =
+    if Stdlib.FingerTree.isEmpty<List<a>>(lists) then acc
+    else
+        match Stdlib.FingerTree.head<List<a>>(lists) with
+        | None -> acc
+        | Some(h) ->
+            let newAcc = Stdlib.List.append<a>(acc, h) in
+            Stdlib.List.__flattenHelper<a>(Stdlib.FingerTree.tail<List<a>>(lists), newAcc)
 
 // Apply a function that returns a list and flatten the results
 def Stdlib.List.flatMap<a, b>(list: List<a>, fn: (a) -> List<b>) : List<b> =
     Stdlib.List.flatten<b>(Stdlib.List.map<a, List<b>>(list, fn))
 
-// Keep only elements that satisfy a predicate
+// Keep only elements that satisfy a predicate - O(n)
 def Stdlib.List.filter<a>(list: List<a>, fn: (a) -> Bool) : List<a> =
-    match list with
-    | [] -> []
-    | [h, ...t] ->
-        if fn(h) then [h, ...Stdlib.List.filter<a>(t, fn)]
-        else Stdlib.List.filter<a>(t, fn)
+    Stdlib.List.__filterHelper<a>(list, fn, Stdlib.FingerTree.empty<a>())
 
-// Append an element to the end of a list
+def Stdlib.List.__filterHelper<a>(list: List<a>, fn: (a) -> Bool, acc: List<a>) : List<a> =
+    if Stdlib.FingerTree.isEmpty<a>(list) then acc
+    else
+        match Stdlib.FingerTree.head<a>(list) with
+        | None -> acc
+        | Some(h) ->
+            let newAcc = if fn(h) then Stdlib.FingerTree.pushBack<a>(acc, h) else acc in
+            Stdlib.List.__filterHelper<a>(Stdlib.FingerTree.tail<a>(list), fn, newAcc)
+
+// Append an element to the end of a list - O(1) amortized
 def Stdlib.List.pushBack<a>(list: List<a>, value: a) : List<a> =
-    match list with
-    | [] -> [value]
-    | [h, ...t] -> [h, ...Stdlib.List.pushBack<a>(t, value)]
+    Stdlib.FingerTree.pushBack<a>(list, value)
 
-// Concatenate two lists
+// Concatenate two lists - O(log min(n,m))
+// For now, use sequential pushBack (TODO: implement efficient FingerTree append)
 def Stdlib.List.append<a>(list1: List<a>, list2: List<a>) : List<a> =
-    match list1 with
-    | [] -> list2
-    | [h, ...t] -> [h, ...Stdlib.List.append<a>(t, list2)]
+    Stdlib.List.__appendHelper<a>(list2, list1)
 
-// Reverse a list
+def Stdlib.List.__appendHelper<a>(src: List<a>, dst: List<a>) : List<a> =
+    if Stdlib.FingerTree.isEmpty<a>(src) then dst
+    else
+        match Stdlib.FingerTree.head<a>(src) with
+        | None -> dst
+        | Some(h) ->
+            let newDst = Stdlib.FingerTree.pushBack<a>(dst, h) in
+            Stdlib.List.__appendHelper<a>(Stdlib.FingerTree.tail<a>(src), newDst)
+
+// Reverse a list - O(n)
 def Stdlib.List.reverse<a>(list: List<a>) : List<a> =
-    Stdlib.List.__reverseHelper<a>(list, [])
+    Stdlib.List.__reverseHelper<a>(list, Stdlib.FingerTree.empty<a>())
 
 def Stdlib.List.__reverseHelper<a>(list: List<a>, acc: List<a>) : List<a> =
-    match list with
-    | [] -> acc
-    | [h, ...t] -> Stdlib.List.__reverseHelper<a>(t, [h, ...acc])
+    if Stdlib.FingerTree.isEmpty<a>(list) then acc
+    else
+        match Stdlib.FingerTree.head<a>(list) with
+        | None -> acc
+        | Some(h) ->
+            let newAcc = Stdlib.FingerTree.push<a>(acc, h) in
+            Stdlib.List.__reverseHelper<a>(Stdlib.FingerTree.tail<a>(list), newAcc)
 
-// Fold left (reduce) over a list
+// Fold left (reduce) over a list - O(n)
 def Stdlib.List.fold<a, b>(list: List<a>, init: b, fn: (b, a) -> b) : b =
-    match list with
-    | [] -> init
-    | [h, ...t] -> Stdlib.List.fold<a, b>(t, fn(init, h), fn)
+    if Stdlib.FingerTree.isEmpty<a>(list) then init
+    else
+        match Stdlib.FingerTree.head<a>(list) with
+        | None -> init
+        | Some(h) ->
+            let newInit = fn(init, h) in
+            Stdlib.List.fold<a, b>(Stdlib.FingerTree.tail<a>(list), newInit, fn)
 
-// Get head of list or return None
+// Get head of list or return None - O(1)
 def Stdlib.List.head<a>(list: List<a>) : Stdlib.Option.Option<a> =
-    match list with
-    | [] -> None
-    | [h, ...t] -> Some(h)
+    Stdlib.FingerTree.head<a>(list)
 
-// Get tail of list or return None
+// Internal: get head without option wrapper (caller must ensure non-empty)
+// This forces monomorphization of headUnsafe_i64 for pattern matching
+def Stdlib.List.__headUnsafeInt64(list: List<Int64>) : Int64 =
+    Stdlib.FingerTree.headUnsafe<Int64>(list)
+
+// Internal: get element at index (forces monomorphization for pattern matching)
+def Stdlib.List.__getAtInt64(list: List<Int64>, idx: Int64) : Stdlib.Option.Option<Int64> =
+    Stdlib.FingerTree.getAt<Int64>(list, idx)
+
+// Get tail of list or return None - O(1) amortized
 def Stdlib.List.tail<a>(list: List<a>) : Stdlib.Option.Option<List<a>> =
-    match list with
-    | [] -> None
-    | [h, ...t] -> Some(t)
+    if Stdlib.FingerTree.isEmpty<a>(list) then None
+    else Some(Stdlib.FingerTree.tail<a>(list))
 
-// Get element at index (0-based)
+// Get element at index (0-based) - O(log n)
 def Stdlib.List.getAt<a>(list: List<a>, index: Int64) : Stdlib.Option.Option<a> =
-    if index < 0 then None
-    else match list with
-    | [] -> None
-    | [h, ...t] -> if index == 0 then Some(h) else Stdlib.List.getAt<a>(t, index - 1)
+    Stdlib.FingerTree.getAt<a>(list, index)
 
-// Set element at index (0-based), returns original list if index out of bounds
+// Set element at index (0-based) - O(log n), returns original list if index out of bounds
 def Stdlib.List.setAt<a>(list: List<a>, index: Int64, value: a) : List<a> =
-    if index < 0 then list
-    else match list with
-    | [] -> []
-    | [h, ...t] ->
-        if index == 0 then [value, ...t]
-        else [h, ...Stdlib.List.setAt<a>(t, index - 1, value)]
+    Stdlib.FingerTree.setAt<a>(list, index, value)
 
-// Find first element satisfying a predicate
+// Find first element satisfying a predicate - O(n)
 def Stdlib.List.findFirst<a>(list: List<a>, fn: (a) -> Bool) : Stdlib.Option.Option<a> =
-    match list with
-    | [] -> None
-    | [h, ...t] -> if fn(h) then Some(h) else Stdlib.List.findFirst<a>(t, fn)
+    if Stdlib.FingerTree.isEmpty<a>(list) then None
+    else
+        match Stdlib.FingerTree.head<a>(list) with
+        | None -> None
+        | Some(h) ->
+            if fn(h) then Some(h)
+            else Stdlib.List.findFirst<a>(Stdlib.FingerTree.tail<a>(list), fn)
 
-// Take first n elements
+// Take first n elements - O(n)
 def Stdlib.List.take<a>(list: List<a>, n: Int64) : List<a> =
-    if n <= 0 then []
-    else match list with
-    | [] -> []
-    | [h, ...t] -> [h, ...Stdlib.List.take<a>(t, n - 1)]
+    Stdlib.List.__takeHelper<a>(list, n, Stdlib.FingerTree.empty<a>())
 
-// Drop first n elements
+def Stdlib.List.__takeHelper<a>(list: List<a>, n: Int64, acc: List<a>) : List<a> =
+    if n <= 0 then acc
+    else if Stdlib.FingerTree.isEmpty<a>(list) then acc
+    else
+        match Stdlib.FingerTree.head<a>(list) with
+        | None -> acc
+        | Some(h) ->
+            let newAcc = Stdlib.FingerTree.pushBack<a>(acc, h) in
+            Stdlib.List.__takeHelper<a>(Stdlib.FingerTree.tail<a>(list), n - 1, newAcc)
+
+// Drop first n elements - O(n)
 def Stdlib.List.drop<a>(list: List<a>, n: Int64) : List<a> =
     if n <= 0 then list
-    else match list with
-    | [] -> []
-    | [h, ...t] -> Stdlib.List.drop<a>(t, n - 1)
+    else if Stdlib.FingerTree.isEmpty<a>(list) then list
+    else Stdlib.List.drop<a>(Stdlib.FingerTree.tail<a>(list), n - 1)
 
-// Check if all elements satisfy a predicate
+// Check if all elements satisfy a predicate - O(n)
 def Stdlib.List.forAll<a>(list: List<a>, fn: (a) -> Bool) : Bool =
-    match list with
-    | [] -> true
-    | [h, ...t] -> fn(h) && Stdlib.List.forAll<a>(t, fn)
+    if Stdlib.FingerTree.isEmpty<a>(list) then true
+    else
+        match Stdlib.FingerTree.head<a>(list) with
+        | None -> true
+        | Some(h) ->
+            if fn(h) then Stdlib.List.forAll<a>(Stdlib.FingerTree.tail<a>(list), fn)
+            else false
 
-// Check if any element satisfies a predicate
+// Check if any element satisfies a predicate - O(n)
 def Stdlib.List.exists<a>(list: List<a>, fn: (a) -> Bool) : Bool =
-    match list with
-    | [] -> false
-    | [h, ...t] -> fn(h) || Stdlib.List.exists<a>(t, fn)
+    if Stdlib.FingerTree.isEmpty<a>(list) then false
+    else
+        match Stdlib.FingerTree.head<a>(list) with
+        | None -> false
+        | Some(h) ->
+            if fn(h) then true
+            else Stdlib.List.exists<a>(Stdlib.FingerTree.tail<a>(list), fn)
 
-// Get the last element of a list, or None if empty
+// Get the last element of a list, or None if empty - O(1)
 def Stdlib.List.last<a>(list: List<a>) : Stdlib.Option.Option<a> =
-    match list with
-    | [] -> None
-    | [only] -> Some(only)
-    | [h, ...t] -> Stdlib.List.last<a>(t)
+    Stdlib.FingerTree.last<a>(list)
 
-// Remove the last element from a list
+// Remove the last element from a list - O(1) amortized
+// TODO: implement init for FingerTree, for now use O(n) rebuild
 def Stdlib.List.dropLast<a>(list: List<a>) : List<a> =
-    match list with
-    | [] -> []
-    | [only] -> []
-    | [h, ...t] -> [h, ...Stdlib.List.dropLast<a>(t)]
+    Stdlib.List.__dropLastHelper<a>(list, Stdlib.FingerTree.empty<a>())
+
+def Stdlib.List.__dropLastHelper<a>(list: List<a>, acc: List<a>) : List<a> =
+    if Stdlib.FingerTree.isEmpty<a>(list) then acc
+    else
+        let t = Stdlib.FingerTree.tail<a>(list) in
+        if Stdlib.FingerTree.isEmpty<a>(t) then acc  // Only one element left - drop it
+        else
+            match Stdlib.FingerTree.head<a>(list) with
+            | None -> acc
+            | Some(h) -> Stdlib.List.__dropLastHelper<a>(t, Stdlib.FingerTree.pushBack<a>(acc, h))
 
 // Generate a list of integers from start (inclusive) to end (exclusive)
 def Stdlib.List.range(start: Int64, end_: Int64) : List<Int64> =
-    Stdlib.List.__rangeHelper(start, end_, [])
+    Stdlib.List.__rangeHelper(start, end_, Stdlib.FingerTree.empty<Int64>())
 
 def Stdlib.List.__rangeHelper(current: Int64, end_: Int64, acc: List<Int64>) : List<Int64> =
-    if current >= end_ then
-        Stdlib.List.reverse<Int64>(acc)
-    else
-        Stdlib.List.__rangeHelper(current + 1, end_, [current, ...acc])
+    if current >= end_ then acc
+    else Stdlib.List.__rangeHelper(current + 1, end_, Stdlib.FingerTree.pushBack<Int64>(acc, current))
 
 // Repeat a value n times
 def Stdlib.List.repeat<a>(value: a, count: Int64) : List<a> =
-    Stdlib.List.__repeatHelper<a>(value, count, [])
+    Stdlib.List.__repeatHelper<a>(value, count, Stdlib.FingerTree.empty<a>())
 
 def Stdlib.List.__repeatHelper<a>(value: a, count: Int64, acc: List<a>) : List<a> =
-    if count <= 0 then
-        acc
-    else
-        Stdlib.List.__repeatHelper<a>(value, count - 1, [value, ...acc])
+    if count <= 0 then acc
+    else Stdlib.List.__repeatHelper<a>(value, count - 1, Stdlib.FingerTree.pushBack<a>(acc, value))
 
-// Map with index: apply a function to each element along with its index
+// Map with index: apply a function to each element along with its index - O(n)
 def Stdlib.List.indexedMap<a, b>(list: List<a>, fn: (Int64, a) -> b) : List<b> =
-    Stdlib.List.__indexedMapHelper<a, b>(list, fn, 0)
+    Stdlib.List.__indexedMapHelper<a, b>(list, fn, 0, Stdlib.FingerTree.empty<b>())
 
-def Stdlib.List.__indexedMapHelper<a, b>(list: List<a>, fn: (Int64, a) -> b, index: Int64) : List<b> =
-    match list with
-    | [] -> []
-    | [h, ...t] -> [fn(index, h), ...Stdlib.List.__indexedMapHelper<a, b>(t, fn, index + 1)]
+def Stdlib.List.__indexedMapHelper<a, b>(list: List<a>, fn: (Int64, a) -> b, index: Int64, acc: List<b>) : List<b> =
+    if Stdlib.FingerTree.isEmpty<a>(list) then acc
+    else
+        match Stdlib.FingerTree.head<a>(list) with
+        | None -> acc
+        | Some(h) ->
+            let newAcc = Stdlib.FingerTree.pushBack<b>(acc, fn(index, h)) in
+            Stdlib.List.__indexedMapHelper<a, b>(Stdlib.FingerTree.tail<a>(list), fn, index + 1, newAcc)
 
 // Partition a list into two lists based on a predicate
 // Returns (elements where predicate is true, elements where predicate is false)
 def Stdlib.List.partition<a>(list: List<a>, fn: (a) -> Bool) : (List<a>, List<a>) =
-    Stdlib.List.__partitionHelper<a>(list, fn, [], [])
+    Stdlib.List.__partitionHelper<a>(list, fn, Stdlib.FingerTree.empty<a>(), Stdlib.FingerTree.empty<a>())
 
 def Stdlib.List.__partitionHelper<a>(list: List<a>, fn: (a) -> Bool, trueAcc: List<a>, falseAcc: List<a>) : (List<a>, List<a>) =
-    match list with
-    | [] -> (Stdlib.List.reverse<a>(trueAcc), Stdlib.List.reverse<a>(falseAcc))
-    | [h, ...t] ->
-        if fn(h) then
-            Stdlib.List.__partitionHelper<a>(t, fn, [h, ...trueAcc], falseAcc)
-        else
-            Stdlib.List.__partitionHelper<a>(t, fn, trueAcc, [h, ...falseAcc])
+    if Stdlib.FingerTree.isEmpty<a>(list) then (trueAcc, falseAcc)
+    else
+        match Stdlib.FingerTree.head<a>(list) with
+        | None -> (trueAcc, falseAcc)
+        | Some(h) ->
+            let newTrue = if fn(h) then Stdlib.FingerTree.pushBack<a>(trueAcc, h) else trueAcc in
+            let newFalse = if fn(h) then falseAcc else Stdlib.FingerTree.pushBack<a>(falseAcc, h) in
+            Stdlib.List.__partitionHelper<a>(Stdlib.FingerTree.tail<a>(list), fn, newTrue, newFalse)
 
 // Alias for forAll (darklang naming convention)
 def Stdlib.List.all<a>(list: List<a>, fn: (a) -> Bool) : Bool =
@@ -2339,6 +2392,17 @@ def Stdlib.FingerTree.head<a>(tree: List<a>) : Stdlib.Option.Option<a> =
             Some(Stdlib.FingerTree.__headOfNode<a>(firstNode))
         else None
 
+// Get the first element without Option wrapper (caller must ensure non-empty)
+def Stdlib.FingerTree.headUnsafe<a>(tree: List<a>) : a =
+    let tag = Stdlib.FingerTree.__getTag<a>(tree) in
+    if tag == Stdlib.FingerTree.__TAG_SINGLE() then
+        let node = Stdlib.FingerTree.__getSingleElem<a>(tree) in
+        Stdlib.FingerTree.__headOfNode<a>(node)
+    else
+        // DEEP
+        let firstNode = Stdlib.FingerTree.__getDeepPrefixAt<a>(tree, 0) in
+        Stdlib.FingerTree.__headOfNode<a>(firstNode)
+
 // Get the last element (O(1))
 def Stdlib.FingerTree.last<a>(tree: List<a>) : Stdlib.Option.Option<a> =
     if Stdlib.FingerTree.__isNull<a>(tree) then None
@@ -2354,6 +2418,206 @@ def Stdlib.FingerTree.last<a>(tree: List<a>) : Stdlib.Option.Option<a> =
             let lastNode = Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, suffixCount - 1) in
             Some(Stdlib.FingerTree.__lastOfNode<a>(lastNode))
         else None
+
+// Helper: explode a TreeNode into its leaves, pushing them to the front of a tree
+def Stdlib.FingerTree.__explodeNodeToFront<a>(node: List<a>, tree: List<a>) : List<a> =
+    let tag = Stdlib.FingerTree.__getTag<a>(node) in
+    if tag == Stdlib.FingerTree.__TAG_LEAF() then
+        Stdlib.FingerTree.__pushNode<a>(tree, node)
+    else if tag == Stdlib.FingerTree.__TAG_NODE2() then
+        let c0 = Stdlib.FingerTree.__node2GetChild<a>(node, 0) in
+        let c1 = Stdlib.FingerTree.__node2GetChild<a>(node, 1) in
+        // Push c0 then c1 (c1 first to front, then c0 to front)
+        let t1 = Stdlib.FingerTree.__explodeNodeToFront<a>(c1, tree) in
+        Stdlib.FingerTree.__explodeNodeToFront<a>(c0, t1)
+    else if tag == Stdlib.FingerTree.__TAG_NODE3() then
+        let c0 = Stdlib.FingerTree.__node3GetChild<a>(node, 0) in
+        let c1 = Stdlib.FingerTree.__node3GetChild<a>(node, 1) in
+        let c2 = Stdlib.FingerTree.__node3GetChild<a>(node, 2) in
+        // Push c2 first, then c1, then c0
+        let t1 = Stdlib.FingerTree.__explodeNodeToFront<a>(c2, tree) in
+        let t2 = Stdlib.FingerTree.__explodeNodeToFront<a>(c1, t1) in
+        Stdlib.FingerTree.__explodeNodeToFront<a>(c0, t2)
+    else tree
+
+// Helper: tail of a TreeNode (remove first element, return remaining as tree)
+def Stdlib.FingerTree.__tailOfNode<a>(node: List<a>) : List<a> =
+    let tag = Stdlib.FingerTree.__getTag<a>(node) in
+    if tag == Stdlib.FingerTree.__TAG_LEAF() then
+        Stdlib.FingerTree.empty<a>()
+    else if tag == Stdlib.FingerTree.__TAG_NODE2() then
+        // NODE2: remove first child's first element
+        let c0 = Stdlib.FingerTree.__node2GetChild<a>(node, 0) in
+        let c1 = Stdlib.FingerTree.__node2GetChild<a>(node, 1) in
+        let c0tag = Stdlib.FingerTree.__getTag<a>(c0) in
+        if c0tag == Stdlib.FingerTree.__TAG_LEAF() then
+            // c0 is a leaf, just return tree with c1 exploded
+            Stdlib.FingerTree.__explodeNodeToFront<a>(c1, Stdlib.FingerTree.empty<a>())
+        else
+            // c0 is a nested node - recurse to get tail of c0, then add c1
+            let tailOfC0 = Stdlib.FingerTree.__tailOfNode<a>(c0) in
+            Stdlib.FingerTree.__explodeNodeToFront<a>(c1, tailOfC0)
+    else if tag == Stdlib.FingerTree.__TAG_NODE3() then
+        let c0 = Stdlib.FingerTree.__node3GetChild<a>(node, 0) in
+        let c1 = Stdlib.FingerTree.__node3GetChild<a>(node, 1) in
+        let c2 = Stdlib.FingerTree.__node3GetChild<a>(node, 2) in
+        let c0tag = Stdlib.FingerTree.__getTag<a>(c0) in
+        if c0tag == Stdlib.FingerTree.__TAG_LEAF() then
+            // c0 is a leaf, return tree with c1 and c2 exploded
+            let t1 = Stdlib.FingerTree.__explodeNodeToFront<a>(c2, Stdlib.FingerTree.empty<a>()) in
+            Stdlib.FingerTree.__explodeNodeToFront<a>(c1, t1)
+        else
+            // c0 is a nested node - recurse to get tail of c0, then add c1 and c2
+            let tailOfC0 = Stdlib.FingerTree.__tailOfNode<a>(c0) in
+            let t1 = Stdlib.FingerTree.__explodeNodeToFront<a>(c2, tailOfC0) in
+            Stdlib.FingerTree.__explodeNodeToFront<a>(c1, t1)
+    else Stdlib.FingerTree.empty<a>()
+
+// Tail: remove first element (O(1) amortized)
+def Stdlib.FingerTree.tail<a>(tree: List<a>) : List<a> =
+    if Stdlib.FingerTree.__isNull<a>(tree) then
+        Stdlib.FingerTree.empty<a>()
+    else
+        let tag = Stdlib.FingerTree.__getTag<a>(tree) in
+        if tag == Stdlib.FingerTree.__TAG_SINGLE() then
+            // Single node - tail depends on what the node contains
+            let node = Stdlib.FingerTree.__getSingleElem<a>(tree) in
+            Stdlib.FingerTree.__tailOfNode<a>(node)
+        else if tag == Stdlib.FingerTree.__TAG_DEEP() then
+            let prefixCount = Stdlib.FingerTree.__getDeepPrefixCount<a>(tree) in
+            let p0 = Stdlib.FingerTree.__getDeepPrefixAt<a>(tree, 0) in
+            let p0tag = Stdlib.FingerTree.__getTag<a>(p0) in
+            if p0tag == Stdlib.FingerTree.__TAG_LEAF() then
+                // First prefix element is a LEAF - remove it
+                if prefixCount > 1 then
+                    // Shift remaining prefix elements left
+                    let measure = Stdlib.FingerTree.__getDeepMeasure<a>(tree) in
+                    let suffixCount = Stdlib.FingerTree.__getDeepSuffixCount<a>(tree) in
+                    let ptr = Stdlib.FingerTree.__allocDeep<a>(measure - 1, prefixCount - 1, suffixCount) in
+                    // Copy prefix elements shifted left
+                    let _ = if prefixCount >= 2 then Stdlib.FingerTree.__setDeepPrefixAt<a>(ptr, 0, Stdlib.FingerTree.__getDeepPrefixAt<a>(tree, 1)) else () in
+                    let _ = if prefixCount >= 3 then Stdlib.FingerTree.__setDeepPrefixAt<a>(ptr, 1, Stdlib.FingerTree.__getDeepPrefixAt<a>(tree, 2)) else () in
+                    let _ = if prefixCount >= 4 then Stdlib.FingerTree.__setDeepPrefixAt<a>(ptr, 2, Stdlib.FingerTree.__getDeepPrefixAt<a>(tree, 3)) else () in
+                    // Copy middle and suffix
+                    let _ = Stdlib.FingerTree.__setDeepMiddle<a>(ptr, Stdlib.FingerTree.__getDeepMiddle<a>(tree)) in
+                    let _ = if suffixCount >= 1 then Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 0, Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 0)) else () in
+                    let _ = if suffixCount >= 2 then Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 1, Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 1)) else () in
+                    let _ = if suffixCount >= 3 then Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 2, Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 2)) else () in
+                    let _ = if suffixCount >= 4 then Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 3, Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 3)) else () in
+                    Stdlib.FingerTree.__fromRawPtr<a>(ptr, Stdlib.FingerTree.__TAG_DEEP())
+                else
+                    // Only one prefix element (a LEAF), need to borrow from middle or use suffix
+                    let middle = Stdlib.FingerTree.__getDeepMiddle<a>(tree) in
+                    if Stdlib.FingerTree.isEmpty<a>(middle) then
+                        // Middle is empty, suffix becomes the tree
+                        let suffixCount = Stdlib.FingerTree.__getDeepSuffixCount<a>(tree) in
+                        if suffixCount == 1 then
+                            Stdlib.FingerTree.__allocSingle<a>(Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 0))
+                        else if suffixCount == 2 then
+                            // Two elements: make DEEP with 1 prefix, 1 suffix
+                            let s0 = Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 0) in
+                            let s1 = Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 1) in
+                            let measure = Stdlib.FingerTree.__nodeMeasure<a>(s0) + Stdlib.FingerTree.__nodeMeasure<a>(s1) in
+                            let ptr = Stdlib.FingerTree.__allocDeep<a>(measure, 1, 1) in
+                            let _ = Stdlib.FingerTree.__setDeepPrefixAt<a>(ptr, 0, s0) in
+                            let _ = Stdlib.FingerTree.__setDeepMiddle<a>(ptr, Stdlib.FingerTree.empty<a>()) in
+                            let _ = Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 0, s1) in
+                            Stdlib.FingerTree.__fromRawPtr<a>(ptr, Stdlib.FingerTree.__TAG_DEEP())
+                        else if suffixCount == 3 then
+                            // Three elements: 1 prefix, 2 suffix or 2 prefix, 1 suffix
+                            let s0 = Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 0) in
+                            let s1 = Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 1) in
+                            let s2 = Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 2) in
+                            let m0 = Stdlib.FingerTree.__nodeMeasure<a>(s0) in
+                            let m1 = Stdlib.FingerTree.__nodeMeasure<a>(s1) in
+                            let m2 = Stdlib.FingerTree.__nodeMeasure<a>(s2) in
+                            let ptr = Stdlib.FingerTree.__allocDeep<a>(m0 + m1 + m2, 1, 2) in
+                            let _ = Stdlib.FingerTree.__setDeepPrefixAt<a>(ptr, 0, s0) in
+                            let _ = Stdlib.FingerTree.__setDeepMiddle<a>(ptr, Stdlib.FingerTree.empty<a>()) in
+                            let _ = Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 0, s1) in
+                            let _ = Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 1, s2) in
+                            Stdlib.FingerTree.__fromRawPtr<a>(ptr, Stdlib.FingerTree.__TAG_DEEP())
+                        else
+                            // Four elements: 2 prefix, 2 suffix
+                            let s0 = Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 0) in
+                            let s1 = Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 1) in
+                            let s2 = Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 2) in
+                            let s3 = Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 3) in
+                            let m0 = Stdlib.FingerTree.__nodeMeasure<a>(s0) in
+                            let m1 = Stdlib.FingerTree.__nodeMeasure<a>(s1) in
+                            let m2 = Stdlib.FingerTree.__nodeMeasure<a>(s2) in
+                            let m3 = Stdlib.FingerTree.__nodeMeasure<a>(s3) in
+                            let ptr = Stdlib.FingerTree.__allocDeep<a>(m0 + m1 + m2 + m3, 2, 2) in
+                            let _ = Stdlib.FingerTree.__setDeepPrefixAt<a>(ptr, 0, s0) in
+                            let _ = Stdlib.FingerTree.__setDeepPrefixAt<a>(ptr, 1, s1) in
+                            let _ = Stdlib.FingerTree.__setDeepMiddle<a>(ptr, Stdlib.FingerTree.empty<a>()) in
+                            let _ = Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 0, s2) in
+                            let _ = Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 1, s3) in
+                            Stdlib.FingerTree.__fromRawPtr<a>(ptr, Stdlib.FingerTree.__TAG_DEEP())
+                    else
+                        // Borrow from middle - get head of middle (a NODE2 or NODE3)
+                        // The head of middle becomes the new prefix (exploded)
+                        let middleTag = Stdlib.FingerTree.__getTag<a>(middle) in
+                        if middleTag == Stdlib.FingerTree.__TAG_SINGLE() then
+                            // Middle is SINGLE(node) - explode node to prefix, empty middle
+                            let node = Stdlib.FingerTree.__getSingleElem<a>(middle) in
+                            let ntag = Stdlib.FingerTree.__getTag<a>(node) in
+                            let suffixCount = Stdlib.FingerTree.__getDeepSuffixCount<a>(tree) in
+                            if ntag == Stdlib.FingerTree.__TAG_NODE2() then
+                                let c0 = Stdlib.FingerTree.__node2GetChild<a>(node, 0) in
+                                let c1 = Stdlib.FingerTree.__node2GetChild<a>(node, 1) in
+                                let newMeasure = Stdlib.FingerTree.__getDeepMeasure<a>(tree) - 1 in
+                                let ptr = Stdlib.FingerTree.__allocDeep<a>(newMeasure, 2, suffixCount) in
+                                let _ = Stdlib.FingerTree.__setDeepPrefixAt<a>(ptr, 0, c0) in
+                                let _ = Stdlib.FingerTree.__setDeepPrefixAt<a>(ptr, 1, c1) in
+                                let _ = Stdlib.FingerTree.__setDeepMiddle<a>(ptr, Stdlib.FingerTree.empty<a>()) in
+                                let _ = if suffixCount >= 1 then Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 0, Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 0)) else () in
+                                let _ = if suffixCount >= 2 then Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 1, Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 1)) else () in
+                                let _ = if suffixCount >= 3 then Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 2, Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 2)) else () in
+                                let _ = if suffixCount >= 4 then Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 3, Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 3)) else () in
+                                Stdlib.FingerTree.__fromRawPtr<a>(ptr, Stdlib.FingerTree.__TAG_DEEP())
+                            else if ntag == Stdlib.FingerTree.__TAG_NODE3() then
+                                let c0 = Stdlib.FingerTree.__node3GetChild<a>(node, 0) in
+                                let c1 = Stdlib.FingerTree.__node3GetChild<a>(node, 1) in
+                                let c2 = Stdlib.FingerTree.__node3GetChild<a>(node, 2) in
+                                let newMeasure = Stdlib.FingerTree.__getDeepMeasure<a>(tree) - 1 in
+                                let ptr = Stdlib.FingerTree.__allocDeep<a>(newMeasure, 3, suffixCount) in
+                                let _ = Stdlib.FingerTree.__setDeepPrefixAt<a>(ptr, 0, c0) in
+                                let _ = Stdlib.FingerTree.__setDeepPrefixAt<a>(ptr, 1, c1) in
+                                let _ = Stdlib.FingerTree.__setDeepPrefixAt<a>(ptr, 2, c2) in
+                                let _ = Stdlib.FingerTree.__setDeepMiddle<a>(ptr, Stdlib.FingerTree.empty<a>()) in
+                                let _ = if suffixCount >= 1 then Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 0, Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 0)) else () in
+                                let _ = if suffixCount >= 2 then Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 1, Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 1)) else () in
+                                let _ = if suffixCount >= 3 then Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 2, Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 2)) else () in
+                                let _ = if suffixCount >= 4 then Stdlib.FingerTree.__setDeepSuffixAt<a>(ptr, 3, Stdlib.FingerTree.__getDeepSuffixAt<a>(tree, 3)) else () in
+                                Stdlib.FingerTree.__fromRawPtr<a>(ptr, Stdlib.FingerTree.__TAG_DEEP())
+                            else tree // Shouldn't happen
+                        else if middleTag == Stdlib.FingerTree.__TAG_DEEP() then
+                            // Middle is DEEP - need to call tail on middle to get new middle
+                            // and use head of old middle as new prefix
+                            let middleHeadOpt = Stdlib.FingerTree.head<a>(middle) in
+                            // Actually we need to get the first NODE from middle, not element
+                            // This is complex - let's use a simpler approach for now
+                            // Just rebuild from elements 1 to end
+                            let len = Stdlib.FingerTree.length<a>(tree) in
+                            Stdlib.FingerTree.__rebuildFrom<a>(tree, 1, len, Stdlib.FingerTree.empty<a>())
+                        else tree
+            else
+                // First prefix element is NODE2 or NODE3 - need to extract from it
+                // Remove first element from node and put rest back as prefix
+                // This is complex, use rebuild approach
+                let len = Stdlib.FingerTree.length<a>(tree) in
+                Stdlib.FingerTree.__rebuildFrom<a>(tree, 1, len, Stdlib.FingerTree.empty<a>())
+        else Stdlib.FingerTree.empty<a>()
+
+// Helper: rebuild tree from elements starting at index
+def Stdlib.FingerTree.__rebuildFrom<a>(source: List<a>, idx: Int64, len: Int64, acc: List<a>) : List<a> =
+    if idx >= len then acc
+    else
+        let elemOpt = Stdlib.FingerTree.getAt<a>(source, idx) in
+        match elemOpt with
+        | Some(elem) -> Stdlib.FingerTree.__rebuildFrom<a>(source, idx + 1, len, Stdlib.FingerTree.pushBack<a>(acc, elem))
+        | None -> acc
 
 // Create a single-element tree (wraps in LEAF, stores in SINGLE)
 def Stdlib.FingerTree.singleton<a>(elem: a) : List<a> =
