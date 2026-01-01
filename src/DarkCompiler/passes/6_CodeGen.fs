@@ -435,8 +435,10 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
                     Ok ([
                         // Load pool string address into X9
+                        // Pool format: [length:8][data:N] - skip length prefix to get data address
                         ARM64.ADRP (ARM64.X9, label)
                         ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                        ARM64.ADD_imm (ARM64.X9, ARM64.X9, 8us)  // X9 = data address (skip 8-byte length)
                         // Allocate heap space (bump allocator)
                         ARM64.MOV_reg (destReg, ARM64.X28)  // dest = current heap pointer
                         ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)  // bump pointer
@@ -1391,15 +1393,16 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             | LIR.StringRef idx ->
                 // Convert pool string to heap format for function arguments
                 // Functions expect heap strings: [length:8][data:N][refcount:8]
-                // Pool strings are just raw data, so we must convert
+                // Pool strings have: [length:8][data:N] - skip length to copy data
                 match Map.tryFind idx ctx.StringPool.Strings with
                 | Some (_, len) ->
                     let label = "str_" + string idx
                     let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
                     Ok ([
-                        // Load pool string address into X9
+                        // Load pool string data address into X9 (skip 8-byte length prefix)
                         ARM64.ADRP (ARM64.X9, label)
                         ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                        ARM64.ADD_imm (ARM64.X9, ARM64.X9, 8us)  // Skip length prefix
                         // Allocate heap space (bump allocator)
                         ARM64.MOV_reg (destARM64, ARM64.X28)  // dest = current heap pointer
                         ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)  // bump pointer
@@ -1481,14 +1484,16 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             | LIR.StringRef idx ->
                 // Convert pool string to heap format for tail call arguments
                 // Same pattern as ArgMoves - functions expect heap strings
+                // Pool strings have: [length:8][data:N] - skip length to copy data
                 match Map.tryFind idx ctx.StringPool.Strings with
                 | Some (_, len) ->
                     let label = "str_" + string idx
                     let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
                     Ok ([
-                        // Load pool string address into X9
+                        // Load pool string data address into X9 (skip 8-byte length prefix)
                         ARM64.ADRP (ARM64.X9, label)
                         ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                        ARM64.ADD_imm (ARM64.X9, ARM64.X9, 8us)  // Skip length prefix
                         // Allocate heap space (bump allocator)
                         ARM64.MOV_reg (destARM64, ARM64.X28)  // dest = current heap pointer
                         ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)  // bump pointer
@@ -1946,12 +1951,14 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 match operand with
                 | LIR.StringRef idx ->
                     // Pool string: address via ADRP+ADD, length from pool (compile-time)
+                    // Pool format: [length:8][data:N] - skip length prefix to get data address
                     match Map.tryFind idx ctx.StringPool.Strings with
                     | Some (_, len) ->
                         let label = "str_" + string idx
                         Ok ([
                             ARM64.ADRP (addrReg, label)
                             ARM64.ADD_label (addrReg, addrReg, label)
+                            ARM64.ADD_imm (addrReg, addrReg, 8us)    // Skip 8-byte length prefix
                         ] @ loadImmediate lenReg (int64 len))
                     | None -> Error $"String index {idx} not found in pool"
                 | LIR.Reg reg ->
@@ -2099,6 +2106,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     Runtime.generateFileReadText destReg pathARM64)
             | LIR.StringRef idx ->
                 // Pool string - convert to heap format first (same as FileExists)
+                // Pool format: [length:8][data:N] - skip length to copy data
                 match Map.tryFind idx ctx.StringPool.Strings with
                 | Some (_, len) ->
                     let label = "str_" + string idx
@@ -2108,6 +2116,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)
                         ARM64.ADRP (ARM64.X9, label)
                         ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                        ARM64.ADD_imm (ARM64.X9, ARM64.X9, 8us)  // Skip 8-byte length prefix
                     ] @ loadImmediate ARM64.X10 (int64 len) @ [
                         ARM64.STR (ARM64.X10, ARM64.X15, 0s)
                         ARM64.MOVZ (ARM64.X0, 0us, 0)
@@ -2146,6 +2155,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     Runtime.generateFileExists destReg pathARM64)
             | LIR.StringRef idx ->
                 // Pool string - convert to heap format first, then call FileExists
+                // Pool format: [length:8][data:N] - skip length to copy data
                 // Heap format: [length:8][data:N][refcount:8]
                 match Map.tryFind idx ctx.StringPool.Strings with
                 | Some (_, len) ->
@@ -2156,9 +2166,10 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         // Allocate heap space for converted string
                         ARM64.MOV_reg (ARM64.X15, ARM64.X28)  // X15 = heap pointer
                         ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)  // bump allocator
-                        // Load pool string address into X9
+                        // Load pool string data address into X9 (skip 8-byte length prefix)
                         ARM64.ADRP (ARM64.X9, label)
                         ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                        ARM64.ADD_imm (ARM64.X9, ARM64.X9, 8us)  // Skip length prefix
                         // Store length at [X15]
                     ] @ loadImmediate ARM64.X10 (int64 len) @ [
                         ARM64.STR (ARM64.X10, ARM64.X15, 0s)  // [X15] = length
@@ -2205,6 +2216,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     lirRegToARM64Reg reg |> Result.map (fun r -> ([], r))
                 | LIR.StringRef idx ->
                     // Pool string - convert to heap format
+                    // Pool format: [length:8][data:N] - skip length to copy data
                     match Map.tryFind idx ctx.StringPool.Strings with
                     | Some (_, len) ->
                         let label = "str_" + string idx
@@ -2214,6 +2226,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                             ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)
                             ARM64.ADRP (ARM64.X9, label)
                             ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                            ARM64.ADD_imm (ARM64.X9, ARM64.X9, 8us)  // Skip 8-byte length prefix
                         ] @ loadImmediate ARM64.X10 (int64 len) @ [
                             ARM64.STR (ARM64.X10, tempReg, 0s)
                             ARM64.MOVZ (ARM64.X0, 0us, 0)
@@ -2254,6 +2267,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         lirRegToARM64Reg dest
         |> Result.bind (fun destReg ->
             // Same helper as FileWriteText
+            // Pool format: [length:8][data:N] - skip length to copy data
             let getOperandReg operand tempReg =
                 match operand with
                 | LIR.Reg reg ->
@@ -2268,6 +2282,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                             ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)
                             ARM64.ADRP (ARM64.X9, label)
                             ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                            ARM64.ADD_imm (ARM64.X9, ARM64.X9, 8us)  // Skip 8-byte length prefix
                         ] @ loadImmediate ARM64.X10 (int64 len) @ [
                             ARM64.STR (ARM64.X10, tempReg, 0s)
                             ARM64.MOVZ (ARM64.X0, 0us, 0)
@@ -2316,6 +2331,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     Runtime.generateFileDelete destReg pathARM64)
             | LIR.StringRef idx ->
                 // Pool string - convert to heap format first, then call FileDelete
+                // Pool format: [length:8][data:N] - skip length to copy data
                 // Heap format: [length:8][data:N][refcount:8]
                 match Map.tryFind idx ctx.StringPool.Strings with
                 | Some (_, len) ->
@@ -2326,9 +2342,10 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         // Allocate heap space for converted string
                         ARM64.MOV_reg (ARM64.X15, ARM64.X28)  // X15 = heap pointer
                         ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)  // bump allocator
-                        // Load pool string address into X9
+                        // Load pool string data address into X9 (skip 8-byte length prefix)
                         ARM64.ADRP (ARM64.X9, label)
                         ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                        ARM64.ADD_imm (ARM64.X9, ARM64.X9, 8us)  // Skip length prefix
                         // Store length at [X15]
                     ] @ loadImmediate ARM64.X10 (int64 len) @ [
                         ARM64.STR (ARM64.X10, ARM64.X15, 0s)  // [X15] = length
@@ -2377,6 +2394,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     Runtime.generateFileSetExecutable destReg pathARM64)
             | LIR.StringRef idx ->
                 // Pool string - convert to heap format first
+                // Pool format: [length:8][data:N] - skip length to copy data
                 match Map.tryFind idx ctx.StringPool.Strings with
                 | Some (_, len) ->
                     let label = "str_" + string idx
@@ -2386,6 +2404,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)
                         ARM64.ADRP (ARM64.X9, label)
                         ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                        ARM64.ADD_imm (ARM64.X9, ARM64.X9, 8us)  // Skip 8-byte length prefix
                     ] @ loadImmediate ARM64.X10 (int64 len) @ [
                         ARM64.STR (ARM64.X10, ARM64.X15, 0s)
                         ARM64.MOVZ (ARM64.X0, 0us, 0)
@@ -2427,6 +2446,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                             Runtime.generateFileWriteFromPtr destReg pathARM64 ptrARM64 lengthARM64)
                     | LIR.StringRef idx ->
                         // Pool string - convert to heap format first
+                        // Pool format: [length:8][data:N] - skip length to copy data
                         match Map.tryFind idx ctx.StringPool.Strings with
                         | Some (_, len) ->
                             let label = "str_" + string idx
@@ -2436,6 +2456,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                                 ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)
                                 ARM64.ADRP (ARM64.X9, label)
                                 ARM64.ADD_label (ARM64.X9, ARM64.X9, label)
+                                ARM64.ADD_imm (ARM64.X9, ARM64.X9, 8us)  // Skip 8-byte length prefix
                             ] @ loadImmediate ARM64.X10 (int64 len) @ [
                                 ARM64.STR (ARM64.X10, ARM64.X15, 0s)
                                 ARM64.MOVZ (ARM64.X0, 0us, 0)

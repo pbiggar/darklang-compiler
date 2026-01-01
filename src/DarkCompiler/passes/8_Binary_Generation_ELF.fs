@@ -111,18 +111,21 @@ let createFloatData (floatPool: MIR.FloatPool) : byte array =
             System.BitConverter.GetBytes(floatVal) |> Array.toList)
         |> Array.ofList
 
-/// Create string data bytes from string pool (same logic as Mach-O)
+/// Create string data bytes from string pool
+/// Format: [length:8 bytes][data:N bytes][null:1 byte] for each string
+/// This matches what StringEq expects (length at offset 0, data at offset 8)
 let createStringData (stringPool: MIR.StringPool) : byte array =
     if stringPool.Strings.IsEmpty then
         [||]
     else
-        // Sort by index and collect all string bytes (null-terminated)
+        // Sort by index and collect all string bytes with length prefix
         stringPool.Strings
         |> Map.toList
         |> List.sortBy fst
-        |> List.collect (fun (_idx, (str, _len)) ->
+        |> List.collect (fun (_idx, (str, len)) ->
+            let lenBytes = uint64ToBytes (uint64 len) |> Array.toList  // 8-byte length
             let strBytes = System.Text.Encoding.UTF8.GetBytes(str) |> Array.toList
-            strBytes @ [0uy])  // null-terminated
+            lenBytes @ strBytes @ [0uy])  // length + data + null
         |> Array.ofList
 
 /// Create an ELF executable with float and string data

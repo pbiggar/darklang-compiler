@@ -204,8 +204,9 @@ let generatePrintString (stringLen: int) : ARM64.Instr list =
         | Error _ -> Platform.Linux
     let syscalls = Platform.getSyscallNumbers os
     [
-        // Save string address in X1, set up for write syscall
-        ARM64.MOV_reg (ARM64.X1, ARM64.X0)  // X1 = buffer address
+        // String layout: [length:8][data:N] - skip length prefix
+        // X0 points to string start (length field), data is at X0+8
+        ARM64.ADD_imm (ARM64.X1, ARM64.X0, 8us)  // X1 = data address (skip 8-byte length)
         ARM64.MOVZ (ARM64.X0, 1us, 0)  // X0 = stdout fd (1)
 
         // Load string length into X2

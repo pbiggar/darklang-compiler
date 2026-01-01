@@ -1201,23 +1201,25 @@ let computeStringLabels (codeFileOffset: int) (codeSize: int) (floatPoolSize: in
         let floatStart = (codeFileOffset + codeSize + 7) &&& (~~~7)
         let startOffset = floatStart + floatPoolSize
 
+        // Each string has format: [length:8][data:N][null:1]
         sortedStrings
         |> List.fold (fun (offset, labelMap) (idx, (str, _len)) ->
             let label = "str_" + string idx  // Match label format in CodeGen
             let newMap = Map.add label offset labelMap
             let strBytes = System.Text.Encoding.UTF8.GetBytes(str)
-            (offset + strBytes.Length + 1, newMap))  // +1 for null terminator
+            (offset + 8 + strBytes.Length + 1, newMap))  // 8 for length + data + 1 for null
             (startOffset, Map.empty)
         |> snd
 
 /// Compute the size of the string pool in bytes
+/// Each string has format: [length:8][data:N][null:1]
 let getStringPoolSize (stringPool: MIR.StringPool) : int =
     if stringPool.Strings.IsEmpty then 0
     else
         stringPool.Strings
         |> Map.toList
         |> List.sumBy (fun (_, (str, _)) ->
-            System.Text.Encoding.UTF8.GetBytes(str).Length + 1)  // +1 for null terminator
+            8 + System.Text.Encoding.UTF8.GetBytes(str).Length + 1)  // 8 for length + data + 1 for null
 
 /// Compute coverage data label position
 /// Returns map with "_coverage_data" label after all other data, 8-byte aligned

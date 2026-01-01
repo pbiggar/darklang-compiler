@@ -262,6 +262,7 @@ let createFloatData (floatPool: MIR.FloatPool) : byte array =
         |> Array.ofList
 
 /// Create string data bytes and label map from string pool
+/// Format: [length:8][data:N][null:1] for each string
 /// Returns (string bytes, label map from "_strN" to offset within string section)
 let createStringData (stringPool: MIR.StringPool) : byte array * Map<string, int> =
     if stringPool.Strings.IsEmpty then
@@ -274,14 +275,16 @@ let createStringData (stringPool: MIR.StringPool) : byte array * Map<string, int
             |> List.sortBy fst
 
         // Build string bytes and track offsets using fold
+        // Each string has format: [length:8][data:N][null:1]
         let (allBytes, labelMap, _finalOffset) =
             sortedStrings
-            |> List.fold (fun (bytes, labels, offset) (idx, (str, _len)) ->
+            |> List.fold (fun (bytes, labels, offset) (idx, (str, len)) ->
                 let label = "str_" + string idx  // Match label format in CodeGen
+                let lenBytes = uint64ToBytes (uint64 len) |> Array.toList  // 8-byte length
                 let strBytes = System.Text.Encoding.UTF8.GetBytes(str) |> Array.toList
-                let newBytes = bytes @ strBytes @ [0uy]  // null-terminated
+                let newBytes = bytes @ lenBytes @ strBytes @ [0uy]  // length + data + null
                 let newLabels = Map.add label offset labels
-                let newOffset = offset + strBytes.Length + 1
+                let newOffset = offset + 8 + strBytes.Length + 1  // 8 for length + data + 1 for null
                 (newBytes, newLabels, newOffset))
                 ([], Map.empty, 0)
 
