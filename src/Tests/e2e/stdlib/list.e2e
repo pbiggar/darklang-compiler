@@ -182,10 +182,10 @@ match List.repeat(7, 3) with | [a, b, c] -> a + b + c | _ -> 0 = 21
 Option.withDefault(List.getAt(List.setAt([10, 20, 30], 1, 99), 1), 0) = 99
 List.length(List.setAt([1, 2, 3], 0, 100)) = stdout="3\n"
 
-// NOTE: List.repeat + setAt has memory corruption bug - see benchmarks.e2e
-// The following test would fail due to this bug:
-// let arr = List.repeat<Bool>(false, 16) in let arr2 = List.setAt<Bool>(arr, 6, true) in ...
-// Bug: setAt on List.repeat list corrupts other indices
+// NOTE: List.repeat + cons-in-recursion has memory corruption bug - see benchmarks.e2e
+// When setAt recursively does [h, ...setAt(...)] on a List.repeat list,
+// the original list gets corrupted. This is a reference counting bug with
+// shared list structures from List.repeat.
 
 // ===================================================================
 // List.indexedMap - Map with index

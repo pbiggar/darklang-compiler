@@ -230,11 +230,14 @@ nqueen(8) = 92
 // BLOCKED BENCHMARKS - require compiler bug fixes
 // ===================================================================
 //
-// nsieve, spectral_norm, matmul are blocked by List.repeat memory corruption:
+// nsieve, spectral_norm, matmul are blocked by a closure + List.repeat bug:
 //
-// Bug: List.repeat creates cons cells that share memory incorrectly.
-// When List.setAt modifies one element, other elements also change.
-// Example: List.repeat(42, 6) then setAt(list, 0, 99) corrupts index 5.
+// Bug: When cons [x, ...t] is inside a lambda AND t is from List.repeat,
+// the original list gets corrupted. Direct cons in match expressions works.
 //
-// The pattern matching fix resolved Some(true)/Some(false) patterns
-// and List.getAt<Float>, but List.repeat has a separate memory sharing bug.
+// Works:    match List.tail(repeatList) with | Some(t) -> [99, ...t] -> OK
+// Corrupts: Option.map(maybeTail, (t) => [99, ...t]) -> corrupts original!
+//
+// List.setAt uses recursion with [h, ...t] which triggers this when called
+// on List.repeat lists. Appears to be a reference counting bug with shared
+// list structures.
