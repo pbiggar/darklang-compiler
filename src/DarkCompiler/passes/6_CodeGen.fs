@@ -1951,13 +1951,15 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         ARM64.MOVZ (ARM64.X12, 0us, 0)  // X12 = 0
                         // Loop start (if X12 >= len, done)
                         ARM64.CMP_reg (ARM64.X12, ARM64.X11)
-                        ARM64.B_cond (ARM64.GE, 7)  // Skip 7 instructions to exit loop
-                        ARM64.LDRB (ARM64.X15, ARM64.X10, ARM64.X12)  // X15 = pool[X12]
+                        ARM64.B_cond (ARM64.GE, 8)  // Skip 8 instructions to exit loop
+                        // Pool strings have [length:8][data:N] format - skip 8-byte length prefix
+                        ARM64.ADD_imm (ARM64.X14, ARM64.X10, 8us)  // X14 = pool + 8 (skip length)
+                        ARM64.LDRB (ARM64.X15, ARM64.X14, ARM64.X12)  // X15 = pool_data[X12]
                         ARM64.ADD_imm (ARM64.X14, ARM64.X9, 8us)  // X14 = heap + 8
                         ARM64.ADD_reg (ARM64.X14, ARM64.X14, ARM64.X12)  // X14 = heap + 8 + X12
                         ARM64.STRB_reg (ARM64.X15, ARM64.X14)  // heap_data[X12] = byte
                         ARM64.ADD_imm (ARM64.X12, ARM64.X12, 1us)  // X12++
-                        ARM64.B (-7)  // Loop back to CMP
+                        ARM64.B (-8)  // Loop back to CMP
                         // Store refcount = 1
                         ARM64.ADD_imm (ARM64.X14, ARM64.X9, 8us)
                         ARM64.ADD_reg (ARM64.X14, ARM64.X14, ARM64.X11)  // X14 = heap + 8 + len
