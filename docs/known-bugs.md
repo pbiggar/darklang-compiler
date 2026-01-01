@@ -6,47 +6,83 @@ This document tracks known bugs that haven't been fixed yet. For each bug, we in
 
 ## Chained String Concatenation Bug
 
-**Status**: Open
-**Severity**: Medium (has workaround)
+**Status**: Fixed
+**Severity**: Medium
 **Discovered**: During string interpolation implementation
+**Fixed**: Bug-finding loop session (fix was already in place, added regression tests)
+
+### Original Reproduction
+
+```dark
+let x = "one" in let y = "two" in x ++ " and " ++ y
+```
+
+This now works correctly and outputs `one and two`.
+
+### Regression Tests Added
+
+Tests added to `src/Tests/e2e/strings.e2e`:
+- `let x = "one" in let y = "two" in x ++ " and " ++ y`
+- `let a = "hello" in let b = "world" in let c = "!" in a ++ " " ++ b ++ c`
+
+---
+
+## List of Tuples Bug
+
+**Status**: Open
+**Severity**: High (blocks List.zip)
+**Discovered**: Bug-finding loop investigation
 
 ### Reproduction
 
 ```dark
-let x = "one" in let y = "two" in x ++ " and " ++ y
+def test(n: Int64) : List<(Int64, Int64)> =
+    let pair = (5, 6) in
+    [pair]
+
+let result = test(1) in
+match result with
+| [(a, b)] -> a  // Returns 0 instead of 5
+| _ -> 999
 ```
 
-**Expected output**: `one and two`
-**Actual output**: Garbage characters or segfault
+**Expected output**: `5`
+**Actual output**: `0`
+
+### Key Observations
+
+- Bug occurs ONLY when function has parameters (even unused)
+- Without parameters, the code works correctly
+- The FIRST element of the tuple is always 0
+- The SECOND element is correct
+- Affects `List<(Int64, Int64)>` and likely other tuple types
+- Works correctly for `List<Int64>` and for tuples not in lists
+
+### Minimal Reproduction
+
+```dark
+// Works:
+def test() : List<(Int64, Int64)> = let pair = (5, 6) in [pair]
+
+// Broken (just adding an unused parameter breaks it):
+def test(n: Int64) : List<(Int64, Int64)> = let pair = (5, 6) in [pair]
+```
 
 ### Analysis
 
-The bug is NOT in parsing or type checking - those work correctly. The issue is in code generation, likely in one of:
+The bug is in register allocation or code generation. When a function has parameters:
+- The first element of tuples in lists becomes 0
+- This happens even with literal values `(5, 6)`
+- The list structure is correct, only the tuple's first element is wrong
 
-1. **Register allocation**: Variables `x` and `y` may be getting the same register
-2. **String memory management**: Reference counting may free strings prematurely
-3. **Evaluation order**: Left-to-right concatenation may have issues with multiple variables
+Likely causes:
+1. Parameter vreg presence affects interference graph construction
+2. Something clobbers tuple[0] during list construction
+3. HeapStore for first tuple element uses a temp register incorrectly
 
 ### Workaround
 
-Use intermediate let bindings to avoid chained concatenation with variables:
-
-```dark
-// Instead of:
-let x = "one" in let y = "two" in x ++ " and " ++ y
-
-// Use:
-let x = "one" in
-let y = "two" in
-let temp = x ++ " and " in
-temp ++ y
-```
-
-### Investigation Notes
-
-- Single concatenation works: `x ++ y` is fine
-- Literal-only chains work: `"a" ++ "b" ++ "c"` is fine
-- Issue appears when mixing variables with chained `++`
+Currently none known. This blocks `List.zip` and other functions returning `List<tuple>`.
 
 ---
 

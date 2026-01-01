@@ -56,6 +56,10 @@
 let x = "hello" in x ++ " world" = stdout="hello world\n"
 let x = "a" in let y = "b" in x ++ y = stdout="ab\n"
 
+// Chained concatenation with multiple variables (regression test for known bug)
+let x = "one" in let y = "two" in x ++ " and " ++ y = stdout="one and two\n"
+let a = "hello" in let b = "world" in let c = "!" in a ++ " " ++ b ++ c = stdout="hello world!\n"
+
 // Concatenation in let binding
 let result = "foo" ++ "bar" in result = stdout="foobar\n"
 
