@@ -1,0 +1,132 @@
+// FingerTree Tests - Comprehensive tests for FingerTree data structure
+//
+// FingerTree provides:
+//   - O(1) amortized push/pushBack
+//   - O(log n) getAt/setAt
+//   - O(1) length/head/last
+
+// ===================================================================
+// Basic Operations
+// ===================================================================
+
+// Empty tree
+Stdlib.FingerTree.length<Int64>(Stdlib.FingerTree.empty<Int64>()) = 0
+Stdlib.FingerTree.isEmpty<Int64>(Stdlib.FingerTree.empty<Int64>()) = stdout="true\n"
+
+// Singleton
+Stdlib.FingerTree.length<Int64>(Stdlib.FingerTree.singleton<Int64>(42)) = 1
+Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.head<Int64>(Stdlib.FingerTree.singleton<Int64>(42)), -1) = 42
+Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.last<Int64>(Stdlib.FingerTree.singleton<Int64>(42)), -1) = 42
+
+// ===================================================================
+// pushBack - Add elements to back
+// ===================================================================
+
+// 2 elements
+Stdlib.FingerTree.length<Int64>(Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.singleton<Int64>(1), 2)) = 2
+
+// 5 elements (triggers DEEP structure)
+let t1 = Stdlib.FingerTree.singleton<Int64>(1) in let t2 = Stdlib.FingerTree.pushBack<Int64>(t1, 2) in let t3 = Stdlib.FingerTree.pushBack<Int64>(t2, 3) in let t4 = Stdlib.FingerTree.pushBack<Int64>(t3, 4) in let t5 = Stdlib.FingerTree.pushBack<Int64>(t4, 5) in Stdlib.FingerTree.length<Int64>(t5) = 5
+
+// 10 elements (triggers overflow and NODE3 creation)
+let t = Stdlib.FingerTree.empty<Int64>() in let t = Stdlib.FingerTree.pushBack<Int64>(t, 1) in let t = Stdlib.FingerTree.pushBack<Int64>(t, 2) in let t = Stdlib.FingerTree.pushBack<Int64>(t, 3) in let t = Stdlib.FingerTree.pushBack<Int64>(t, 4) in let t = Stdlib.FingerTree.pushBack<Int64>(t, 5) in let t = Stdlib.FingerTree.pushBack<Int64>(t, 6) in let t = Stdlib.FingerTree.pushBack<Int64>(t, 7) in let t = Stdlib.FingerTree.pushBack<Int64>(t, 8) in let t = Stdlib.FingerTree.pushBack<Int64>(t, 9) in let t = Stdlib.FingerTree.pushBack<Int64>(t, 10) in Stdlib.FingerTree.length<Int64>(t) = 10
+
+// ===================================================================
+// push - Add elements to front
+// ===================================================================
+
+// Push to front - head check
+let t1 = Stdlib.FingerTree.push<Int64>(Stdlib.FingerTree.empty<Int64>(), 3) in let t2 = Stdlib.FingerTree.push<Int64>(t1, 2) in let t3 = Stdlib.FingerTree.push<Int64>(t2, 1) in Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.head<Int64>(t3), -1) = 1
+
+// Push to front - last check
+let t1 = Stdlib.FingerTree.push<Int64>(Stdlib.FingerTree.empty<Int64>(), 3) in let t2 = Stdlib.FingerTree.push<Int64>(t1, 2) in let t3 = Stdlib.FingerTree.push<Int64>(t2, 1) in Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.last<Int64>(t3), -1) = 3
+
+// ===================================================================
+// getAt - Indexed access
+// ===================================================================
+
+// getAt on small tree - first element
+let t = Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.singleton<Int64>(10), 20), 30) in Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t, 0), -1) = 10
+
+// getAt on small tree - middle element
+let t = Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.singleton<Int64>(10), 20), 30) in Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t, 1), -1) = 20
+
+// getAt on small tree - last element
+let t = Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.singleton<Int64>(10), 20), 30) in Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t, 2), -1) = 30
+
+// getAt out of bounds - positive
+let t = Stdlib.FingerTree.singleton<Int64>(42) in Stdlib.Option.isNone<Int64>(Stdlib.FingerTree.getAt<Int64>(t, 1)) = stdout="true\n"
+
+// getAt out of bounds - negative
+let t = Stdlib.FingerTree.singleton<Int64>(42) in Stdlib.Option.isNone<Int64>(Stdlib.FingerTree.getAt<Int64>(t, -1)) = stdout="true\n"
+
+// ===================================================================
+// setAt - Indexed update
+// ===================================================================
+
+// setAt on small tree - first element
+let t1 = Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.singleton<Int64>(10), 20) in let t2 = Stdlib.FingerTree.setAt<Int64>(t1, 0, 100) in Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t2, 0), -1) = 100
+
+// setAt on small tree - second element
+let t1 = Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.singleton<Int64>(10), 20) in let t2 = Stdlib.FingerTree.setAt<Int64>(t1, 1, 200) in Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t2, 1), -1) = 200
+
+// setAt preserves other elements
+let t1 = Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.singleton<Int64>(10), 20) in let t2 = Stdlib.FingerTree.setAt<Int64>(t1, 0, 100) in Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t2, 1), -1) = 20
+
+// ===================================================================
+// head/last
+// ===================================================================
+
+// head on empty
+let t = Stdlib.FingerTree.empty<Int64>() in Stdlib.Option.isNone<Int64>(Stdlib.FingerTree.head<Int64>(t)) = stdout="true\n"
+
+// head on 5 elements
+let t = Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.empty<Int64>(), 1), 2), 3), 4), 5) in Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.head<Int64>(t), -1) = 1
+
+// last on 5 elements
+let t = Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.empty<Int64>(), 1), 2), 3), 4), 5) in Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.last<Int64>(t), -1) = 5
+
+// ===================================================================
+// Large Scale Tests - Using helper functions
+// ===================================================================
+
+// Build 100 elements and verify length
+def buildTree(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack<Int64>(tree, n))
+Stdlib.FingerTree.length<Int64>(buildTree(1, 100, Stdlib.FingerTree.empty<Int64>())) = 100
+
+// Build 100 elements and verify head
+def buildTree(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack<Int64>(tree, n))
+let t = buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()) in Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.head<Int64>(t), -1) = 1
+
+// Build 100 elements and verify last
+def buildTree(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack<Int64>(tree, n))
+let t = buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()) in Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.last<Int64>(t), -1) = 100
+
+// Build 100 elements and verify middle element (index 49 = value 50)
+def buildTree(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack<Int64>(tree, n))
+let t = buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()) in Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t, 49), -1) = 50
+
+// Build 1000 elements and verify length
+def buildTree(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack<Int64>(tree, n))
+Stdlib.FingerTree.length<Int64>(buildTree(1, 1000, Stdlib.FingerTree.empty<Int64>())) = 1000
+
+// Build 1000 elements with push (front) and verify head=1000, last=1
+def buildTreeFront(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTreeFront(n + 1, count, Stdlib.FingerTree.push<Int64>(tree, n))
+let t = buildTreeFront(1, 1000, Stdlib.FingerTree.empty<Int64>()) in let h = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.head<Int64>(t), -1) in let l = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.last<Int64>(t), -1) in h * 1000 + l = 1000001
+
+// Build 1000 elements, verify sum = 500500
+def buildTree(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack<Int64>(tree, n))
+def sumTree(tree: List<Int64>, idx: Int64, count: Int64, acc: Int64) : Int64 = if idx >= count then acc else let val = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(tree, idx), 0) in sumTree(tree, idx + 1, count, acc + val)
+let t = buildTree(1, 1000, Stdlib.FingerTree.empty<Int64>()) in sumTree(t, 0, 1000, 0) = 500500
+
+// setAt test on 100 element tree: set index 50 to 999, verify neighbors unchanged
+def buildTree(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack<Int64>(tree, n))
+let t1 = buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()) in let t2 = Stdlib.FingerTree.setAt<Int64>(t1, 50, 999) in let v50 = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t2, 50), -1) in let v49 = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t2, 49), -1) in let v51 = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t2, 51), -1) in v50 * 10000 + v49 * 100 + v51 = 9995052
+
+// Mixed push/pushBack: evens to front, odds to back
+def buildMixed(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else let newTree = if n % 2 == 0 then Stdlib.FingerTree.push<Int64>(tree, n) else Stdlib.FingerTree.pushBack<Int64>(tree, n) in buildMixed(n + 1, count, newTree)
+let t = buildMixed(1, 100, Stdlib.FingerTree.empty<Int64>()) in let len = Stdlib.FingerTree.length<Int64>(t) in let h = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.head<Int64>(t), -1) in let l = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.last<Int64>(t), -1) in len * 10000 + h * 100 + l = 1010099
+
+// 10000 element test - verify length and spot checks
+def buildTree(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack<Int64>(tree, n))
+let t = buildTree(1, 10000, Stdlib.FingerTree.empty<Int64>()) in let len = Stdlib.FingerTree.length<Int64>(t) in let v0 = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t, 0), -1) in let v4999 = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t, 4999), -1) in let v9999 = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t, 9999), -1) in (if len == 10000 then 1000 else 0) + (if v0 == 1 then 100 else 0) + (if v4999 == 5000 then 10 else 0) + (if v9999 == 10000 then 1 else 0) = 1111
