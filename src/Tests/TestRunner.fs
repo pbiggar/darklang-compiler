@@ -94,13 +94,9 @@ let parseFilterArg (args: string array) : string option =
     |> Array.tryFind (fun arg -> arg.StartsWith("--filter="))
     |> Option.map (fun arg -> arg.Substring(9))
 
-// Check if --coverage flag is present (full coverage analysis mode)
+// Check if --coverage flag is present (show inline coverage after tests)
 let hasCoverageArg (args: string array) : bool =
     args |> Array.exists (fun arg -> arg = "--coverage")
-
-// Check if --show-coverage flag is present (show inline coverage after tests)
-let hasShowCoverageArg (args: string array) : bool =
-    args |> Array.exists (fun arg -> arg = "--show-coverage")
 
 // Check if a test name matches the filter (case-insensitive substring match)
 let matchesFilter (filter: string option) (testName: string) : bool =
@@ -119,8 +115,7 @@ let printHelp () =
     println "Options:"
     println "  --filter=PATTERN   Run only tests matching PATTERN (case-insensitive substring)"
     println "  --parallel=N       Run with N parallel test workers"
-    println "  --coverage         Analyze which stdlib functions are covered by E2E tests (no test execution)"
-    println "  --show-coverage    Show stdlib coverage percentage after running tests"
+    println "  --coverage         Show stdlib coverage percentage after running tests"
     println "  --help, -h         Show this help message"
     println ""
     println "Examples:"
@@ -128,8 +123,7 @@ let printHelp () =
     println "  Tests --filter=tuple       Run tests with 'tuple' in the name"
     println "  Tests --filter=string      Run tests with 'string' in the name"
     println "  Tests --parallel=4         Run with 4 parallel workers"
-    println "  Tests --coverage           Show detailed stdlib coverage report"
-    println "  Tests --show-coverage      Run tests and show coverage percentage"
+    println "  Tests --coverage           Run tests and show coverage percentage"
 
 [<EntryPoint>]
 let main args =
@@ -147,92 +141,8 @@ let main args =
     // Check for --filter=PATTERN argument
     let filter = parseFilterArg args
 
-    // Check for --coverage flag (full coverage analysis mode)
-    let coverageMode = hasCoverageArg args
-
-    // Check for --show-coverage flag (inline coverage after tests)
-    let showCoverage = hasShowCoverageArg args
-
-    // Coverage mode: analyze stdlib function coverage without running tests
-    if coverageMode then
-        println $"{Colors.bold}{Colors.cyan}📊 Analyzing Stdlib Coverage{Colors.reset}"
-        println ""
-
-        // Get the directory where the assembly is located
-        let assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)
-        let e2eDir = Path.Combine(assemblyDir, "e2e")
-
-        if not (Directory.Exists e2eDir) then
-            println $"{Colors.red}Error: e2e directory not found at {e2eDir}{Colors.reset}"
-            1
-        else
-            // Prepare lazy stdlib for coverage analysis
-            match CompilerLibrary.prepareStdlibForLazyCompile() with
-            | Error e ->
-                println $"{Colors.red}Error preparing stdlib: {e}{Colors.reset}"
-                1
-            | Ok lazyStdlib ->
-                // Get all stdlib function names
-                let allStdlibFuncs = CompilerLibrary.getAllStdlibFunctionNames lazyStdlib
-
-                // Track covered functions across all tests
-                let coveredFuncs = System.Collections.Generic.HashSet<string>()
-                let mutable testCount = 0
-                let mutable errorCount = 0
-
-                // Parse all E2E tests
-                let e2eTestFiles = Directory.GetFiles(e2eDir, "*.e2e", SearchOption.AllDirectories)
-                for testFile in e2eTestFiles do
-                    match TestDSL.E2EFormat.parseE2ETestFile testFile with
-                    | Error msg ->
-                        errorCount <- errorCount + 1
-                    | Ok tests ->
-                        for test in tests do
-                            testCount <- testCount + 1
-                            match CompilerLibrary.getReachableStdlibFunctions lazyStdlib test.Source with
-                            | Error _ ->
-                                errorCount <- errorCount + 1
-                            | Ok reachable ->
-                                for func in reachable do
-                                    coveredFuncs.Add(func) |> ignore
-
-                // Generate coverage report
-                // Only count functions that are in the base stdlib (not monomorphized variants)
-                let coveredStdlibFuncs =
-                    coveredFuncs
-                    |> Seq.filter (fun f -> Set.contains f allStdlibFuncs)
-                    |> Set.ofSeq
-                let totalFuncs = Set.count allStdlibFuncs
-                let coveredCount = Set.count coveredStdlibFuncs
-                let coveragePercent = if totalFuncs > 0 then float coveredCount / float totalFuncs * 100.0 else 0.0
-
-                println $"  Analyzed {testCount} E2E tests ({errorCount} errors)"
-                println ""
-                println $"{Colors.bold}═══════════════════════════════════════{Colors.reset}"
-                println $"{Colors.bold}📊 Stdlib Coverage Report{Colors.reset}"
-                println $"{Colors.bold}═══════════════════════════════════════{Colors.reset}"
-                println $"  Total stdlib functions: {totalFuncs}"
-                println $"  Covered by tests:       {coveredCount} ({coveragePercent:F1}%%)"
-                println ""
-
-                // Find uncovered functions (only base stdlib functions)
-                let uncovered =
-                    allStdlibFuncs
-                    |> Set.filter (fun f -> not (Set.contains f coveredStdlibFuncs))
-                    |> Set.toList
-                    |> List.sort
-
-                if uncovered.Length > 0 then
-                    println $"{Colors.yellow}Uncovered functions ({uncovered.Length}):{Colors.reset}"
-                    for func in uncovered do
-                        println $"  - {func}"
-                    println ""
-
-                totalTimer.Stop()
-                println $"{Colors.gray}⏱  Completed in {formatTime totalTimer.Elapsed}{Colors.reset}"
-
-                if coveragePercent >= 100.0 then 0 else 1
-    else
+    // Check for --coverage flag (show inline coverage after tests)
+    let showCoverage = hasCoverageArg args
 
     println $"{Colors.bold}{Colors.cyan}🧪 Running DSL-based Tests{Colors.reset}"
     match filter with
@@ -913,7 +823,7 @@ let main args =
     println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
     println ""
 
-    // Compute stdlib coverage only if --show-coverage flag is set
+    // Compute stdlib coverage only if --coverage flag is set
     let coveragePercent =
         if not showCoverage then None
         else
