@@ -849,6 +849,35 @@ let buildFloatInterferenceGraph (cfg: LIR.CFG) (liveness: Map<LIR.Label, BlockLi
 
     { Vertices = vertices; Edges = edges }
 
+/// Collect phi coalescing preferences from CFG.
+/// Returns Map<vregId, Set<vregId>> where each vreg maps to vregs it should prefer
+/// to share a color with.
+/// For each Phi(dest, sources), the dest should prefer the same color as sources.
+let collectPhiPreferences (cfg: LIR.CFG) : Map<int, Set<int>> =
+    let mutable preferences = Map.empty<int, Set<int>>
+
+    let addPreference (v1: int) (v2: int) =
+        if v1 <> v2 then
+            let existing1 = Map.tryFind v1 preferences |> Option.defaultValue Set.empty
+            preferences <- Map.add v1 (Set.add v2 existing1) preferences
+            let existing2 = Map.tryFind v2 preferences |> Option.defaultValue Set.empty
+            preferences <- Map.add v2 (Set.add v1 existing2) preferences
+
+    for kvp in cfg.Blocks do
+        let block = kvp.Value
+        for instr in block.Instrs do
+            match instr with
+            | LIR.Phi (LIR.Virtual destId, sources, _) ->
+                // Add preferences between dest and each virtual register source
+                for (src, _) in sources do
+                    match src with
+                    | LIR.Reg (LIR.Virtual srcId) ->
+                        addPreference destId srcId
+                    | _ -> ()
+            | _ -> ()
+
+    preferences
+
 /// Maximum Cardinality Search - computes Perfect Elimination Ordering for chordal graphs
 /// Returns vertices in PEO order (first vertex is most "central")
 let maximumCardinalitySearch (graph: InterferenceGraph) : int list =
@@ -891,9 +920,12 @@ let maximumCardinalitySearch (graph: InterferenceGraph) : int list =
 
         List.rev ordering  // Return in PEO order
 
-/// Greedy color in reverse PEO order
-/// For chordal graphs, this produces an optimal coloring
-let greedyColorReverse (graph: InterferenceGraph) (peo: int list) (precolored: Map<int, int>) (numColors: int) : ColoringResult =
+/// Greedy color in reverse PEO order with phi coalescing preferences
+/// For chordal graphs, this produces an optimal coloring.
+/// When preferences are provided, try to use colors that match coalesced partners.
+/// Uses two-pass approach: first color vregs with no uncolored phi partners,
+/// then color deferred vregs (whose partners are now colored).
+let greedyColorReverse (graph: InterferenceGraph) (peo: int list) (precolored: Map<int, int>) (numColors: int) (preferences: Map<int, Set<int>>) : ColoringResult =
     let mutable colors = precolored
     let mutable spills = Set.empty<int>
     let mutable maxColor = -1
@@ -903,8 +935,7 @@ let greedyColorReverse (graph: InterferenceGraph) (peo: int list) (precolored: M
         if kvp.Value > maxColor then
             maxColor <- kvp.Value
 
-    // Process in REVERSE PEO order
-    for v in List.rev peo do
+    let colorVertex (v: int) : unit =
         if not (Map.containsKey v colors) then
             // Find colors used by already-colored neighbors
             let neighbors = Map.tryFind v graph.Edges |> Option.defaultValue Set.empty
@@ -914,29 +945,69 @@ let greedyColorReverse (graph: InterferenceGraph) (peo: int list) (precolored: M
                 |> List.choose (fun u -> Map.tryFind u colors)
                 |> Set.ofList
 
-            // Find smallest available color
+            // Get preferred colors from coalesced partners that are already colored
+            let preferredColors =
+                match Map.tryFind v preferences with
+                | Some partners ->
+                    partners
+                    |> Set.toList
+                    |> List.choose (fun partner -> Map.tryFind partner colors)
+                    |> List.filter (fun c -> not (Set.contains c usedColors))
+                | None -> []
+
             let mutable assigned = false
-            for c in 0 .. numColors - 1 do
-                if not assigned && not (Set.contains c usedColors) then
-                    colors <- Map.add v c colors
-                    if c > maxColor then maxColor <- c
+
+            // First try preferred colors (in order of first appearance)
+            for prefColor in preferredColors do
+                if not assigned then
+                    colors <- Map.add v prefColor colors
+                    if prefColor > maxColor then maxColor <- prefColor
                     assigned <- true
+
+            // If no preferred color worked, find smallest available color
+            if not assigned then
+                for c in 0 .. numColors - 1 do
+                    if not assigned && not (Set.contains c usedColors) then
+                        colors <- Map.add v c colors
+                        if c > maxColor then maxColor <- c
+                        assigned <- true
 
             // If no color available, mark for spill
             if not assigned then
                 spills <- Set.add v spills
 
+    // Check if a vreg has any uncolored phi partners
+    let hasUncoloredPartners (v: int) : bool =
+        match Map.tryFind v preferences with
+        | Some partners ->
+            partners |> Set.exists (fun p -> not (Map.containsKey p colors))
+        | None -> false
+
+    // First pass: color vregs with no preferences or all partners already colored
+    // Defer vregs that have uncolored partners (so partners get colored first)
+    let mutable deferred = []
+    for v in List.rev peo do
+        if not (Map.containsKey v colors) then
+            if hasUncoloredPartners v then
+                deferred <- v :: deferred
+            else
+                colorVertex v
+
+    // Second pass: color deferred vregs (their partners should now be colored)
+    for v in deferred do
+        colorVertex v
+
     { Colors = colors
       Spills = spills
       ChromaticNumber = if maxColor < 0 then 0 else maxColor + 1 }
 
-/// Main chordal graph coloring function
-let chordalGraphColor (graph: InterferenceGraph) (precolored: Map<int, int>) (numColors: int) : ColoringResult =
+/// Main chordal graph coloring function with phi coalescing preferences
+let chordalGraphColor (graph: InterferenceGraph) (precolored: Map<int, int>) (numColors: int) (preferences: Map<int, Set<int>>) : ColoringResult =
     if Set.isEmpty graph.Vertices then
         { Colors = Map.empty; Spills = Set.empty; ChromaticNumber = 0 }
     else
         let peo = maximumCardinalitySearch graph
-        greedyColorReverse graph peo precolored numColors
+        greedyColorReverse graph peo precolored numColors preferences
 
 /// Convert chordal graph coloring result to allocation result
 /// Colors map to physical registers, spills map to stack slots
@@ -977,7 +1048,8 @@ let coloringToAllocation (colorResult: ColoringResult) (registers: LIR.PhysReg l
 /// Run chordal graph coloring register allocation
 let chordalAllocation (cfg: LIR.CFG) (liveness: Map<LIR.Label, BlockLiveness>) : AllocationResult =
     let graph = buildInterferenceGraph cfg liveness
-    let colorResult = chordalGraphColor graph Map.empty (List.length allocatableRegs)
+    let preferences = collectPhiPreferences cfg
+    let colorResult = chordalGraphColor graph Map.empty (List.length allocatableRegs) preferences
     coloringToAllocation colorResult allocatableRegs
 
 // ============================================================================
@@ -1035,7 +1107,8 @@ let chordalFloatAllocation (cfg: LIR.CFG) : FAllocationResult =
         // No float registers used - return empty allocation
         { FMapping = Map.empty; UsedCalleeSavedF = [] }
     else
-        let colorResult = chordalGraphColor graph Map.empty (List.length allocatableFloatRegs)
+        // No preferences for floats for now (could add FPhi coalescing later)
+        let colorResult = chordalGraphColor graph Map.empty (List.length allocatableFloatRegs) Map.empty
         floatColoringToAllocation colorResult allocatableFloatRegs
 
 /// Apply float allocation to an FReg, converting FVirtual to FPhysical
@@ -2434,12 +2507,15 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
     // Step 2: Build interference graph
     let graph = buildInterferenceGraph func.CFG liveness
 
-    // Step 3: Run chordal graph coloring
+    // Step 2b: Collect phi coalescing preferences
+    let preferences = collectPhiPreferences func.CFG
+
+    // Step 3: Run chordal graph coloring with phi coalescing
     // Use optimal register order based on calling pattern:
     // - Functions with non-tail calls: callee-saved first (save once in prologue/epilogue)
     // - Leaf functions / tail-call-only: caller-saved first (no prologue overhead)
     let regs = getAllocatableRegs func.CFG
-    let colorResult = chordalGraphColor graph Map.empty (List.length regs)
+    let colorResult = chordalGraphColor graph Map.empty (List.length regs) preferences
     let result = coloringToAllocation colorResult regs
 
     // Step 3b: Run float register allocation
