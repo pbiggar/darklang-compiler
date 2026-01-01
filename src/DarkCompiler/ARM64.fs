@@ -56,6 +56,7 @@ type Condition =
 /// ARM64 instruction types
 type Instr =
     | MOVZ of dest:Reg * imm:uint16 * shift:int  // Move with zero
+    | MOVN of dest:Reg * imm:uint16 * shift:int  // Move with NOT (for negative constants)
     | MOVK of dest:Reg * imm:uint16 * shift:int  // Move with keep
     | ADD_imm of dest:Reg * src:Reg * imm:uint16
     | ADD_reg of dest:Reg * src1:Reg * src2:Reg

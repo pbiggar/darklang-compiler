@@ -36,6 +36,7 @@ let formatMismatches (mismatches: (int * Instr * uint32 * uint32) list) : string
                 let instrStr =
                     match instr with
                     | MOVZ (reg, imm, shift) -> $"MOVZ({reg}, {imm}, {shift})"
+                    | MOVN (reg, imm, shift) -> $"MOVN({reg}, {imm}, {shift})"
                     | MOVK (reg, imm, shift) -> $"MOVK({reg}, {imm}, {shift})"
                     | ADD_imm (dest, src, imm) -> $"ADD_imm({dest}, {src}, {imm})"
                     | ADD_reg (dest, src1, src2) -> $"ADD_reg({dest}, {src1}, {src2})"

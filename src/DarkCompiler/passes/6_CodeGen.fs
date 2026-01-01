@@ -185,20 +185,48 @@ let virtualToFVirtual (reg: LIR.Reg) : LIR.FReg =
 
 /// Generate ARM64 instructions to load an immediate into a register
 let loadImmediate (dest: ARM64.Reg) (value: int64) : ARM64.Instr list =
-    // Load 64-bit immediate using MOVZ + MOVK sequence
+    // Load 64-bit immediate using MOVZ/MOVN + MOVK sequence
+    // For negative numbers, MOVN (move NOT) can be more efficient
+
     // Extract each 16-bit chunk
     let chunk0 = uint16 (value >>> 0) &&& 0xFFFFus
     let chunk1 = uint16 (value >>> 16) &&& 0xFFFFus
     let chunk2 = uint16 (value >>> 32) &&& 0xFFFFus
     let chunk3 = uint16 (value >>> 48) &&& 0xFFFFus
 
-    // Build instruction sequence functionally
-    // Start with MOVZ for the first chunk (or chunk0 if all zero)
-    // Add MOVK for remaining non-zero chunks
-    [ARM64.MOVZ (dest, chunk0, 0)]
-    @ (if chunk1 <> 0us then [ARM64.MOVK (dest, chunk1, 16)] else [])
-    @ (if chunk2 <> 0us then [ARM64.MOVK (dest, chunk2, 32)] else [])
-    @ (if chunk3 <> 0us then [ARM64.MOVK (dest, chunk3, 48)] else [])
+    // Count how many chunks are all-zeros vs all-ones
+    let zeroCount =
+        (if chunk0 = 0us then 1 else 0) +
+        (if chunk1 = 0us then 1 else 0) +
+        (if chunk2 = 0us then 1 else 0) +
+        (if chunk3 = 0us then 1 else 0)
+    let onesCount =
+        (if chunk0 = 0xFFFFus then 1 else 0) +
+        (if chunk1 = 0xFFFFus then 1 else 0) +
+        (if chunk2 = 0xFFFFus then 1 else 0) +
+        (if chunk3 = 0xFFFFus then 1 else 0)
+
+    // Use MOVN if more chunks are 0xFFFF (inverted gives more zeros)
+    if onesCount > zeroCount then
+        // Use MOVN: invert the value and load, then MOVK for non-0xFFFF chunks
+        // MOVN Xd, #imm, LSL #shift sets Xd = NOT(imm << shift)
+        // Find first non-0xFFFF chunk to use with MOVN
+        let invChunk0 = ~~~chunk0
+        let invChunk1 = ~~~chunk1
+        let invChunk2 = ~~~chunk2
+        let invChunk3 = ~~~chunk3
+
+        // Start with MOVN using the first chunk (inverted gives zeros for 0xFFFF)
+        [ARM64.MOVN (dest, invChunk0, 0)]
+        @ (if chunk1 <> 0xFFFFus then [ARM64.MOVK (dest, chunk1, 16)] else [])
+        @ (if chunk2 <> 0xFFFFus then [ARM64.MOVK (dest, chunk2, 32)] else [])
+        @ (if chunk3 <> 0xFFFFus then [ARM64.MOVK (dest, chunk3, 48)] else [])
+    else
+        // Use MOVZ: standard approach for positive numbers
+        [ARM64.MOVZ (dest, chunk0, 0)]
+        @ (if chunk1 <> 0us then [ARM64.MOVK (dest, chunk1, 16)] else [])
+        @ (if chunk2 <> 0us then [ARM64.MOVK (dest, chunk2, 32)] else [])
+        @ (if chunk3 <> 0us then [ARM64.MOVK (dest, chunk3, 48)] else [])
 
 /// Generate ARM64 instructions to load a stack slot into a register
 /// Stack slots are accessed relative to FP (X29)

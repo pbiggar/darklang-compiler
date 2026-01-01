@@ -57,6 +57,18 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rd = encodeReg dest
         [sf ||| opc ||| opcode ||| hw ||| imm16 ||| rd]
 
+    | ARM64.MOVN (dest, imm, shift) ->
+        // MOVN encoding: sf=1 opc=00 100101 hw imm16 Rd
+        // Sets Rd = NOT(imm16 << shift), useful for negative constants
+        // Bits: sf(31) opc(30-29) 100101(28-23) hw(22-21) imm16(20-5) Rd(4-0)
+        let sf = 1u <<< 31
+        let opc = 0u <<< 29  // MOVN has opc=00
+        let opcode = 0b100101u <<< 23
+        let hw = (uint32 shift / 16u) <<< 21
+        let imm16 = (uint32 imm) <<< 5
+        let rd = encodeReg dest
+        [sf ||| opc ||| opcode ||| hw ||| imm16 ||| rd]
+
     | ARM64.MOVK (dest, imm, shift) ->
         // MOVK encoding: sf=1 opc=11 100101 hw imm16 Rd
         // Bits: sf(31) opc(30-29) 100101(28-23) hw(22-21) imm16(20-5) Rd(4-0)

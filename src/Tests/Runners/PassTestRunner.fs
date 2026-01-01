@@ -609,6 +609,8 @@ let prettyPrintARM64Reg = function
 let prettyPrintARM64Instr = function
     | ARM64.MOVZ (dest, imm, shift) ->
         $"MOVZ({prettyPrintARM64Reg dest}, {imm}, {shift})"
+    | ARM64.MOVN (dest, imm, shift) ->
+        $"MOVN({prettyPrintARM64Reg dest}, {imm}, {shift})"
     | ARM64.MOVK (dest, imm, shift) ->
         $"MOVK({prettyPrintARM64Reg dest}, {imm}, {shift})"
     | ARM64.ADD_imm (dest, src, imm) ->
