@@ -3101,6 +3101,20 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64.In
         // All Ret terminators jump to the epilogue label
         Ok (functionEntryLabel @ prologue @ heapInit @ paramSetup @ cfgInstrs @ epilogueLabelInstr @ epilogue)
 
+/// Peephole optimization: fuse SUB + CMP #0 into SUBS
+/// Pattern: SUB_imm dest, src, #N followed by CMP_imm dest, #0
+/// becomes: SUBS_imm dest, src, #N (sets flags as side effect)
+let peepholeOptimize (instrs: ARM64.Instr list) : ARM64.Instr list =
+    let rec optimize acc remaining =
+        match remaining with
+        | [] -> List.rev acc
+        | ARM64.SUB_imm (dest, src, imm) :: ARM64.CMP_imm (cmpReg, 0us) :: rest when dest = cmpReg ->
+            // Fuse SUB + CMP #0 into SUBS
+            optimize (ARM64.SUBS_imm (dest, src, imm) :: acc) rest
+        | instr :: rest ->
+            optimize (instr :: acc) rest
+    optimize [] instrs
+
 /// Convert LIR program to ARM64 instructions with options
 let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : Result<ARM64.Instr list, string> =
     let (LIR.Program (functions, stringPool, _floatPool)) = program
@@ -3124,6 +3138,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         | Ok instrs, Ok newInstrs -> Ok (instrs @ newInstrs)
         | Error err, _ -> Error err
         | _, Error err -> Error err) (Ok [])
+    |> Result.map peepholeOptimize
 
 /// Convert LIR program to ARM64 instructions (uses default options)
 let generateARM64 (program: LIR.Program) : Result<ARM64.Instr list, string> =

@@ -125,6 +125,19 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rd = encodeReg dest
         [sf ||| op ||| s ||| opcode ||| shift ||| rm ||| rn ||| rd]
 
+    | ARM64.SUBS_imm (dest, src, imm) ->
+        // SUBS immediate: like SUB but sets condition flags
+        // sf=1 op=1 S=1 10001 shift=00 imm12(12) Rn(5) Rd(5)
+        let sf = 1u <<< 31          // 64-bit operation
+        let op = 1u <<< 30          // SUB (vs ADD which has op=0)
+        let s = 1u <<< 29           // Set flags (this is SUBS, not SUB)
+        let opcode = 0b10001u <<< 24 // Fixed opcode bits
+        let shift = 0u <<< 22       // No shift on immediate
+        let imm12 = (uint32 imm) <<< 10
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeReg dest
+        [sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd]
+
     | ARM64.MUL (dest, src1, src2) ->
         // MADD: sf=1 0 0 11011 000 Rm(5) 0 Ra=11111 Rn(5) Rd(5)
         // Using Ra=XZR(31) for pure multiply

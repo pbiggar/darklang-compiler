@@ -621,6 +621,8 @@ let prettyPrintARM64Instr = function
         $"SUB_imm12({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {imm})"
     | ARM64.SUB_reg (dest, src1, src2) ->
         $"SUB_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
+    | ARM64.SUBS_imm (dest, src, imm) ->
+        $"SUBS_imm({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, {imm})"
     | ARM64.MUL (dest, src1, src2) ->
         $"MUL({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
     | ARM64.SDIV (dest, src1, src2) ->

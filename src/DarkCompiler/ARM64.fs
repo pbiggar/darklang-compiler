@@ -62,6 +62,7 @@ type Instr =
     | SUB_imm of dest:Reg * src:Reg * imm:uint16
     | SUB_imm12 of dest:Reg * src:Reg * imm:uint16  // SUB with shift=12, value = imm * 4096
     | SUB_reg of dest:Reg * src1:Reg * src2:Reg
+    | SUBS_imm of dest:Reg * src:Reg * imm:uint16  // SUB and set flags (for fused SUB+CMP)
     | MUL of dest:Reg * src1:Reg * src2:Reg
     | SDIV of dest:Reg * src1:Reg * src2:Reg
     | UDIV of dest:Reg * src1:Reg * src2:Reg  // Unsigned division (for positive integers)
