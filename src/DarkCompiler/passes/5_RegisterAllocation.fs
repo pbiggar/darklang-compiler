@@ -983,6 +983,68 @@ let greedyColorReverse (graph: InterferenceGraph) (peo: int list) (precolored: M
             partners |> Set.exists (fun p -> not (Map.containsKey p colors))
         | None -> false
 
+    // Check if two vertices interfere
+    let interferes (v1: int) (v2: int) : bool =
+        match Map.tryFind v1 graph.Edges with
+        | Some neighbors -> Set.contains v2 neighbors
+        | None -> false
+
+    // Color a vertex and all its non-interfering, uncolored phi partners together
+    // This ensures mutual phi partners get the same color when possible
+    let colorVertexWithPartners (v: int) : unit =
+        if not (Map.containsKey v colors) then
+            // Find non-interfering, uncolored phi partners
+            // Must ensure they don't interfere with v AND don't interfere with each other
+            let candidates =
+                match Map.tryFind v preferences with
+                | Some partners ->
+                    partners
+                    |> Set.filter (fun p ->
+                        not (Map.containsKey p colors) &&
+                        not (interferes v p))
+                    |> Set.toList
+                | None -> []
+
+            // Filter to only include partners that don't interfere with each other
+            let rec filterMutuallyCompatible (acc: int list) (remaining: int list) =
+                match remaining with
+                | [] -> List.rev acc
+                | p :: rest ->
+                    // Check if p interferes with any already-accepted partner
+                    let compatible = acc |> List.forall (fun a -> not (interferes p a))
+                    if compatible then
+                        filterMutuallyCompatible (p :: acc) rest
+                    else
+                        filterMutuallyCompatible acc rest
+
+            let coalesceable = filterMutuallyCompatible [] candidates
+
+            // Find colors used by neighbors of v and all coalesceable partners
+            let allVertices = v :: coalesceable
+            let usedColors =
+                allVertices
+                |> List.collect (fun vertex ->
+                    let neighbors = Map.tryFind vertex graph.Edges |> Option.defaultValue Set.empty
+                    neighbors
+                    |> Set.toList
+                    |> List.choose (fun u -> Map.tryFind u colors))
+                |> Set.ofList
+
+            // Find smallest available color
+            let mutable assigned = false
+            for c in 0 .. numColors - 1 do
+                if not assigned && not (Set.contains c usedColors) then
+                    // Assign this color to v and all coalesceable partners
+                    for vertex in allVertices do
+                        if not (Map.containsKey vertex colors) then
+                            colors <- Map.add vertex c colors
+                    if c > maxColor then maxColor <- c
+                    assigned <- true
+
+            // If no color available, mark for spill (only the main vertex)
+            if not assigned then
+                spills <- Set.add v spills
+
     // First pass: color vregs with no preferences or all partners already colored
     // Defer vregs that have uncolored partners (so partners get colored first)
     let mutable deferred = Set.empty<int>
@@ -993,11 +1055,11 @@ let greedyColorReverse (graph: InterferenceGraph) (peo: int list) (precolored: M
             else
                 colorVertex v
 
-    // Second pass: color deferred vregs in reverse PEO order (crucial for chordal graphs!)
-    // We must maintain the PEO ordering even for deferred vertices
+    // Second pass: color deferred vregs with aggressive coalescing
+    // For mutual phi partners that don't interfere, color them together
     for v in List.rev peo do
         if Set.contains v deferred && not (Map.containsKey v colors) then
-            colorVertex v
+            colorVertexWithPartners v
 
     { Colors = colors
       Spills = spills
