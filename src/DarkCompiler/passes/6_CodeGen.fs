@@ -2926,11 +2926,11 @@ let convertCFG (ctx: CodeGenContext) (epilogueLabel: string) (cfg: LIR.CFG) : Re
     convertBlocks [] allBlocks
 
 /// Generate heap initialization code for _start function
-/// Reserves 64KB of stack space for heap allocations and initializes X27/X28
+/// Uses mmap to allocate 64MB of heap space and initializes X27/X28
 ///
 /// Memory layout:
 ///   X27 -> [free list heads: 256 bytes (32 entries × 8 bytes)]
-///   X28 -> [heap allocation area: rest of 64KB]
+///   X28 -> [heap allocation area: rest of 64MB]
 ///
 /// Free list heads are indexed by (totalSize / 8), where totalSize includes
 /// the 8-byte ref count. Size class 0 and 1 are unused (too small).
@@ -2939,39 +2939,39 @@ let convertCFG (ctx: CodeGenContext) (epilogueLabel: string) (cfg: LIR.CFG) : Re
 /// X27 is the base for free list heads (constant after init)
 /// X28 is the bump pointer for new allocations
 let generateHeapInit () : ARM64.Instr list =
-    // Reserve 256 bytes for free list heads
     let freeListSize = 256
+    let os =
+        match Platform.detectOS () with
+        | Ok platform -> platform
+        | Error _ -> Platform.Linux
+    let syscalls = Platform.getSyscallNumbers os
+    let mmapFlags =
+        match os with
+        | Platform.MacOS -> 0x1002us  // MAP_PRIVATE | MAP_ANON
+        | Platform.Linux -> 0x22us    // MAP_PRIVATE | MAP_ANONYMOUS
     [
-        // Allocate 64KB (0x10000) of stack space for heap
-        // Note: We use SUB_imm12 (shifted immediate) because:
-        // 1. SUB_reg with SP doesn't work - register 31 is interpreted as XZR, not SP
-        // 2. 64KB = 16 * 4096, so we use SUB_imm12 with imm=16 (value is imm << 12)
-        ARM64.SUB_imm12 (ARM64.SP, ARM64.SP, 16us)  // SP -= 16 * 4096 = 64KB
-        ARM64.MOV_reg (ARM64.X27, ARM64.SP)  // X27 = free list heads base
-        // X28 = X27 + 256 (skip free list heads area)
-        ARM64.ADD_imm (ARM64.X28, ARM64.X27, uint16 freeListSize)
-        // Initialize free list heads to 0 (all empty)
-        // We zero the first 256 bytes using a loop
-        // For simplicity, just zero the common size classes (first 128 bytes = 16 entries)
-        ARM64.MOVZ (ARM64.X15, 0us, 0)  // X15 = 0
-        // Store zeros at each free list head slot
-        // Size classes 2-17 (16 entries × 8 bytes = 128 bytes)
-        ARM64.STR (ARM64.X15, ARM64.X27, 0s)
-        ARM64.STR (ARM64.X15, ARM64.X27, 8s)
-        ARM64.STR (ARM64.X15, ARM64.X27, 16s)
-        ARM64.STR (ARM64.X15, ARM64.X27, 24s)
-        ARM64.STR (ARM64.X15, ARM64.X27, 32s)
-        ARM64.STR (ARM64.X15, ARM64.X27, 40s)
-        ARM64.STR (ARM64.X15, ARM64.X27, 48s)
-        ARM64.STR (ARM64.X15, ARM64.X27, 56s)
-        ARM64.STR (ARM64.X15, ARM64.X27, 64s)
-        ARM64.STR (ARM64.X15, ARM64.X27, 72s)
-        ARM64.STR (ARM64.X15, ARM64.X27, 80s)
-        ARM64.STR (ARM64.X15, ARM64.X27, 88s)
-        ARM64.STR (ARM64.X15, ARM64.X27, 96s)
-        ARM64.STR (ARM64.X15, ARM64.X27, 104s)
-        ARM64.STR (ARM64.X15, ARM64.X27, 112s)
-        ARM64.STR (ARM64.X15, ARM64.X27, 120s)
+        // mmap(NULL, 64MB, PROT_READ|PROT_WRITE, flags, -1, 0)
+        ARM64.MOVZ (ARM64.X0, 0us, 0)              // addr = NULL
+        ARM64.MOVZ (ARM64.X1, 0x400us, 16)         // size = 0x4000000 (64MB, high 16 bits)
+        ARM64.MOVZ (ARM64.X2, 3us, 0)              // PROT_READ | PROT_WRITE
+        ARM64.MOVZ (ARM64.X3, mmapFlags, 0)        // flags
+        ARM64.MOVZ (ARM64.X4, 0us, 0)              // X4 = 0
+        ARM64.MVN (ARM64.X4, ARM64.X4)             // X4 = ~0 = -1 (fd)
+        ARM64.MOVZ (ARM64.X5, 0us, 0)              // offset = 0
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Mmap, 0)
+        ARM64.SVC syscalls.SvcImmediate
+        // Check for mmap failure (returns -1 on error)
+        ARM64.MOVZ (ARM64.X15, 0us, 0)             // X15 = 0
+        ARM64.MVN (ARM64.X15, ARM64.X15)           // X15 = -1
+        ARM64.CMP_reg (ARM64.X0, ARM64.X15)        // Compare X0 with -1
+        ARM64.B_cond (ARM64.NE, 3)                 // Skip exit if not error (+3 instructions)
+        ARM64.MOVZ (ARM64.X0, 1us, 0)              // exit code = 1
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Exit, 0)
+        ARM64.SVC syscalls.SvcImmediate
+        // X0 now contains mmap result (valid address)
+        ARM64.MOV_reg (ARM64.X27, ARM64.X0)        // X27 = free list heads base
+        ARM64.ADD_imm (ARM64.X28, ARM64.X27, uint16 freeListSize)  // X28 = heap start
+        // No need to zero free list - MAP_ANONYMOUS provides zeroed pages
     ]
 
 /// Convert LIR function to ARM64 instructions with prologue and epilogue
