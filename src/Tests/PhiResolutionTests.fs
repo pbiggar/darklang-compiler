@@ -58,6 +58,10 @@ let countMoves (block: BasicBlock) : int =
         | Mov _ -> true
         | _ -> false) |> List.length
 
+/// Empty float allocation for tests that don't use float phis
+let emptyFloatAllocation : RegisterAllocation.FAllocationResult =
+    { FMapping = Map.empty; UsedCalleeSavedF = [] }
+
 /// Check if a block has a specific move instruction
 let hasMove (block: BasicBlock) (dest: Reg) (src: Operand) : bool =
     block.Instrs |> List.exists (fun instr ->
@@ -105,7 +109,7 @@ let testSimplePhiResolution () : TestResult =
             (4, RegisterAllocation.PhysReg X5)
         ]
 
-    let resolvedCFG = RegisterAllocation.resolvePhiNodes cfg allocation
+    let resolvedCFG = RegisterAllocation.resolvePhiNodes cfg allocation emptyFloatAllocation
 
     // Check D has no phi nodes
     let blockD' = Map.find labelD resolvedCFG.Blocks
@@ -159,7 +163,7 @@ let testMultiplePhisParallel () : TestResult =
             (6, RegisterAllocation.PhysReg X7)
         ]
 
-    let resolvedCFG = RegisterAllocation.resolvePhiNodes cfg allocation
+    let resolvedCFG = RegisterAllocation.resolvePhiNodes cfg allocation emptyFloatAllocation
 
     // D should have no phi nodes
     let blockD' = Map.find labelD resolvedCFG.Blocks
@@ -216,7 +220,7 @@ let testPhiSwap () : TestResult =
             (6, RegisterAllocation.PhysReg X2)
         ]
 
-    let resolvedCFG = RegisterAllocation.resolvePhiNodes cfg allocation
+    let resolvedCFG = RegisterAllocation.resolvePhiNodes cfg allocation emptyFloatAllocation
 
     // D should have no phi nodes
     let blockD' = Map.find labelD resolvedCFG.Blocks
@@ -262,7 +266,7 @@ let testPhiWithImmediate () : TestResult =
             (3, RegisterAllocation.PhysReg X4)
         ]
 
-    let resolvedCFG = RegisterAllocation.resolvePhiNodes cfg allocation
+    let resolvedCFG = RegisterAllocation.resolvePhiNodes cfg allocation emptyFloatAllocation
 
     // D should have no phi nodes
     let blockD' = Map.find labelD resolvedCFG.Blocks
@@ -310,7 +314,7 @@ let testLoopPhi () : TestResult =
             (99, RegisterAllocation.PhysReg X4)
         ]
 
-    let resolvedCFG = RegisterAllocation.resolvePhiNodes cfg allocation
+    let resolvedCFG = RegisterAllocation.resolvePhiNodes cfg allocation emptyFloatAllocation
 
     // B should have no phi nodes
     let blockB' = Map.find labelB resolvedCFG.Blocks

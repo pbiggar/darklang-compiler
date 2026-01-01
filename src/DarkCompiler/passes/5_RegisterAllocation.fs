@@ -290,6 +290,52 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.Phi (dest, _, _) -> regToVReg dest
     | _ -> None
 
+// ============================================================================
+// Float Register Liveness Analysis
+// ============================================================================
+
+/// Get FVirtual register IDs used (read) by an instruction
+let getUsedFVRegs (instr: LIR.Instr) : Set<int> =
+    let fregToId (freg: LIR.FReg) : int option =
+        match freg with
+        | LIR.FVirtual id -> Some id
+        | LIR.FPhysical _ -> None
+
+    match instr with
+    | LIR.FMov (_, src) -> fregToId src |> Option.toList |> Set.ofList
+    | LIR.FAdd (_, left, right) | LIR.FSub (_, left, right)
+    | LIR.FMul (_, left, right) | LIR.FDiv (_, left, right) ->
+        [fregToId left; fregToId right] |> List.choose id |> Set.ofList
+    | LIR.FNeg (_, src) | LIR.FAbs (_, src) | LIR.FSqrt (_, src) ->
+        fregToId src |> Option.toList |> Set.ofList
+    | LIR.FCmp (left, right) ->
+        [fregToId left; fregToId right] |> List.choose id |> Set.ofList
+    | LIR.FloatToInt (_, src) -> fregToId src |> Option.toList |> Set.ofList
+    | LIR.PrintFloat freg | LIR.PrintFloatNoNewline freg ->
+        fregToId freg |> Option.toList |> Set.ofList
+    | LIR.FArgMoves moves ->
+        moves |> List.choose (fun (_, src) -> fregToId src) |> Set.ofList
+    | LIR.FPhi _ -> Set.empty  // Phi sources handled specially
+    | _ -> Set.empty
+
+/// Get FVirtual register ID defined (written) by an instruction
+let getDefinedFVReg (instr: LIR.Instr) : int option =
+    let fregToId (freg: LIR.FReg) : int option =
+        match freg with
+        | LIR.FVirtual id -> Some id
+        | LIR.FPhysical _ -> None
+
+    match instr with
+    | LIR.FMov (dest, _) -> fregToId dest
+    | LIR.FAdd (dest, _, _) | LIR.FSub (dest, _, _)
+    | LIR.FMul (dest, _, _) | LIR.FDiv (dest, _, _) -> fregToId dest
+    | LIR.FNeg (dest, _) | LIR.FAbs (dest, _) | LIR.FSqrt (dest, _) -> fregToId dest
+    | LIR.FLoad (dest, _) -> fregToId dest
+    | LIR.IntToFloat (dest, _) -> fregToId dest
+    | LIR.GpToFp (dest, _) -> fregToId dest
+    | LIR.FPhi (dest, _) -> fregToId dest
+    | _ -> None
+
 /// Get virtual register used by terminator
 let getTerminatorUsedVRegs (term: LIR.Terminator) : Set<int> =
     match term with
@@ -321,6 +367,26 @@ let getPhiUsesByPredecessor (block: LIR.BasicBlock) : Map<LIR.Label, Set<int>> =
         | LIR.Phi (_, sources, _) ->
             Some (sources |> List.choose (fun (op, predLabel) ->
                 operandToVReg op |> Option.map (fun vregId -> (predLabel, vregId))))
+        | _ -> None)
+    |> List.concat
+    |> List.groupBy fst
+    |> List.map (fun (label, pairs) -> (label, pairs |> List.map snd |> Set.ofList))
+    |> Map.ofList
+
+/// Get FPhi uses grouped by predecessor label
+/// Returns a map from predecessor label to the set of FVRegIds used from that predecessor
+let getFPhiUsesByPredecessor (block: LIR.BasicBlock) : Map<LIR.Label, Set<int>> =
+    let fregToId (freg: LIR.FReg) : int option =
+        match freg with
+        | LIR.FVirtual id -> Some id
+        | LIR.FPhysical _ -> None
+
+    block.Instrs
+    |> List.choose (fun instr ->
+        match instr with
+        | LIR.FPhi (_, sources) ->
+            Some (sources |> List.choose (fun (freg, predLabel) ->
+                fregToId freg |> Option.map (fun id -> (predLabel, id))))
         | _ -> None)
     |> List.concat
     |> List.groupBy fst
@@ -409,6 +475,71 @@ let computeLiveness (cfg: LIR.CFG) : Map<LIR.Label, BlockLiveness> =
                 ) Set.empty
 
             // LiveIn = GEN ∪ (LiveOut - KILL)
+            let newLiveIn = Set.union gen (Set.difference newLiveOut kill)
+
+            if newLiveIn <> oldLiveness.LiveIn || newLiveOut <> oldLiveness.LiveOut then
+                changed <- true
+                liveness <- Map.add label { LiveIn = newLiveIn; LiveOut = newLiveOut } liveness
+
+    liveness
+
+/// Compute float GEN and KILL sets for a basic block
+/// GEN = float variables used before being defined
+/// KILL = float variables defined
+let computeFloatGenKill (block: LIR.BasicBlock) : Set<int> * Set<int> =
+    let mutable gen = Set.empty
+    let mutable kill = Set.empty
+
+    for instr in block.Instrs do
+        let used = getUsedFVRegs instr
+        let defined = getDefinedFVReg instr
+
+        for u in used do
+            if not (Set.contains u kill) then
+                gen <- Set.add u gen
+
+        match defined with
+        | Some d -> kill <- Set.add d kill
+        | None -> ()
+
+    (gen, kill)
+
+/// Compute float liveness using backward dataflow analysis
+/// Handles SSA FPhi nodes: phi sources are live at predecessor exits, not at phi's block entry
+let computeFloatLiveness (cfg: LIR.CFG) : Map<LIR.Label, BlockLiveness> =
+    let mutable liveness : Map<LIR.Label, BlockLiveness> =
+        cfg.Blocks |> Map.map (fun _ _ -> { LiveIn = Set.empty; LiveOut = Set.empty })
+
+    let genKill = cfg.Blocks |> Map.map (fun _ block -> computeFloatGenKill block)
+    let fphiUsesByBlock = cfg.Blocks |> Map.map (fun _ block -> getFPhiUsesByPredecessor block)
+
+    let mutable changed = true
+    while changed do
+        changed <- false
+        for kvp in cfg.Blocks do
+            let label = kvp.Key
+            let block = kvp.Value
+            let (gen, kill) = Map.find label genKill
+            let oldLiveness = Map.find label liveness
+
+            let successors = getSuccessors block.Terminator
+            let newLiveOut =
+                successors
+                |> List.fold (fun acc succLabel ->
+                    let liveInContrib =
+                        match Map.tryFind succLabel liveness with
+                        | Some succ -> succ.LiveIn
+                        | None -> Set.empty
+                    let fphiContrib =
+                        match Map.tryFind succLabel fphiUsesByBlock with
+                        | Some fphiUses ->
+                            match Map.tryFind label fphiUses with
+                            | Some vregs -> vregs
+                            | None -> Set.empty
+                        | None -> Set.empty
+                    Set.union acc (Set.union liveInContrib fphiContrib)
+                ) Set.empty
+
             let newLiveIn = Set.union gen (Set.difference newLiveOut kill)
 
             if newLiveIn <> oldLiveness.LiveIn || newLiveOut <> oldLiveness.LiveOut then
@@ -657,6 +788,63 @@ let buildInterferenceGraph (cfg: LIR.CFG) (liveness: Map<LIR.Label, BlockLivenes
 
     { Vertices = vertices; Edges = edges }
 
+/// Build float interference graph from CFG and float liveness information
+/// Two float variables interfere if they are both live at any program point
+let buildFloatInterferenceGraph (cfg: LIR.CFG) (liveness: Map<LIR.Label, BlockLiveness>) : InterferenceGraph =
+    let mutable vertices = Set.empty<int>
+    let mutable edges = Map.empty<int, Set<int>>
+
+    let addVertex (v: int) =
+        vertices <- Set.add v vertices
+        if not (Map.containsKey v edges) then
+            edges <- Map.add v Set.empty edges
+
+    let addEdge (u: int) (v: int) =
+        if u <> v then
+            addVertex u
+            addVertex v
+            edges <- Map.add u (Set.add v (Map.find u edges)) edges
+            edges <- Map.add v (Set.add u (Map.find v edges)) edges
+
+    for kvp in cfg.Blocks do
+        let block = kvp.Value
+        let label = kvp.Key
+
+        match Map.tryFind label liveness with
+        | None -> ()
+        | Some blockLiveness ->
+            let mutable live = blockLiveness.LiveOut
+
+            for v in live do addVertex v
+
+            let liveList = Set.toList live
+            for i in 0 .. liveList.Length - 2 do
+                for j in i + 1 .. liveList.Length - 1 do
+                    addEdge liveList.[i] liveList.[j]
+
+            for instr in List.rev block.Instrs do
+                let def = getDefinedFVReg instr
+                let uses = getUsedFVRegs instr
+
+                match def with
+                | Some d ->
+                    addVertex d
+                    for v in live do
+                        if v <> d then addEdge d v
+                    live <- Set.remove d live
+                | None -> ()
+
+                for u in uses do
+                    addVertex u
+                    live <- Set.add u live
+
+                let liveList = Set.toList live
+                for i in 0 .. liveList.Length - 2 do
+                    for j in i + 1 .. liveList.Length - 1 do
+                        addEdge liveList.[i] liveList.[j]
+
+    { Vertices = vertices; Edges = edges }
+
 /// Maximum Cardinality Search - computes Perfect Elimination Ordering for chordal graphs
 /// Returns vertices in PEO order (first vertex is most "central")
 let maximumCardinalitySearch (graph: InterferenceGraph) : int list =
@@ -787,6 +975,110 @@ let chordalAllocation (cfg: LIR.CFG) (liveness: Map<LIR.Label, BlockLiveness>) :
     let graph = buildInterferenceGraph cfg liveness
     let colorResult = chordalGraphColor graph Map.empty (List.length allocatableRegs)
     coloringToAllocation colorResult allocatableRegs
+
+// ============================================================================
+// Float Register Allocation
+// ============================================================================
+
+/// Float caller-saved registers (D0-D7)
+let floatCallerSavedRegs : LIR.PhysFPReg list = [
+    LIR.D0; LIR.D1; LIR.D2; LIR.D3; LIR.D4; LIR.D5; LIR.D6; LIR.D7
+]
+
+/// Float callee-saved registers (D8-D15)
+let floatCalleeSavedRegs : LIR.PhysFPReg list = [
+    LIR.D8; LIR.D9; LIR.D10; LIR.D11; LIR.D12; LIR.D13; LIR.D14; LIR.D15
+]
+
+/// All allocatable float registers - caller-saved first, then callee-saved
+let allocatableFloatRegs : LIR.PhysFPReg list = floatCallerSavedRegs @ floatCalleeSavedRegs
+
+/// Float allocation result
+type FAllocationResult = {
+    FMapping: Map<int, LIR.PhysFPReg>
+    UsedCalleeSavedF: LIR.PhysFPReg list
+}
+
+/// Convert physical FP register to integer for graph coloring
+let physFPRegToInt (reg: LIR.PhysFPReg) : int =
+    match reg with
+    | LIR.D0 -> 0 | LIR.D1 -> 1 | LIR.D2 -> 2 | LIR.D3 -> 3
+    | LIR.D4 -> 4 | LIR.D5 -> 5 | LIR.D6 -> 6 | LIR.D7 -> 7
+    | LIR.D8 -> 8 | LIR.D9 -> 9 | LIR.D10 -> 10 | LIR.D11 -> 11
+    | LIR.D12 -> 12 | LIR.D13 -> 13 | LIR.D14 -> 14 | LIR.D15 -> 15
+
+/// Convert float coloring result to allocation
+let floatColoringToAllocation (colorResult: ColoringResult) (registers: LIR.PhysFPReg list) : FAllocationResult =
+    let mutable mapping = Map.empty<int, LIR.PhysFPReg>
+    let mutable usedCalleeSaved = Set.empty<LIR.PhysFPReg>
+
+    for kvp in colorResult.Colors do
+        let fvregId = kvp.Key
+        let color = kvp.Value
+        if color < List.length registers then
+            let reg = List.item color registers
+            mapping <- Map.add fvregId reg mapping
+            if List.contains reg floatCalleeSavedRegs then
+                usedCalleeSaved <- Set.add reg usedCalleeSaved
+
+    { FMapping = mapping; UsedCalleeSavedF = usedCalleeSaved |> Set.toList |> List.sort }
+
+/// Run chordal graph coloring for float register allocation
+let chordalFloatAllocation (cfg: LIR.CFG) : FAllocationResult =
+    let liveness = computeFloatLiveness cfg
+    let graph = buildFloatInterferenceGraph cfg liveness
+    if Set.isEmpty graph.Vertices then
+        // No float registers used - return empty allocation
+        { FMapping = Map.empty; UsedCalleeSavedF = [] }
+    else
+        let colorResult = chordalGraphColor graph Map.empty (List.length allocatableFloatRegs)
+        floatColoringToAllocation colorResult allocatableFloatRegs
+
+/// Apply float allocation to an FReg, converting FVirtual to FPhysical
+let applyFloatAllocationToFReg (floatAllocation: FAllocationResult) (freg: LIR.FReg) : LIR.FReg =
+    match freg with
+    | LIR.FPhysical _ -> freg  // Already physical
+    | LIR.FVirtual 1000 -> freg  // Fixed temp - keep as is, CodeGen handles it
+    | LIR.FVirtual 1001 -> freg  // Fixed temp
+    | LIR.FVirtual 2000 -> freg  // Fixed temp
+    | LIR.FVirtual n when n >= 3000 && n < 4000 -> freg  // Call arg temps - fixed
+    | LIR.FVirtual id ->
+        match Map.tryFind id floatAllocation.FMapping with
+        | Some physReg -> LIR.FPhysical physReg
+        | None -> freg  // Keep as FVirtual if not in allocation (shouldn't happen)
+
+/// Apply float allocation to an instruction
+let applyFloatAllocationToInstr (floatAllocation: FAllocationResult) (instr: LIR.Instr) : LIR.Instr =
+    let applyF = applyFloatAllocationToFReg floatAllocation
+    match instr with
+    | LIR.FMov (dest, src) -> LIR.FMov (applyF dest, applyF src)
+    | LIR.FAdd (dest, left, right) -> LIR.FAdd (applyF dest, applyF left, applyF right)
+    | LIR.FSub (dest, left, right) -> LIR.FSub (applyF dest, applyF left, applyF right)
+    | LIR.FMul (dest, left, right) -> LIR.FMul (applyF dest, applyF left, applyF right)
+    | LIR.FDiv (dest, left, right) -> LIR.FDiv (applyF dest, applyF left, applyF right)
+    | LIR.FNeg (dest, src) -> LIR.FNeg (applyF dest, applyF src)
+    | LIR.FAbs (dest, src) -> LIR.FAbs (applyF dest, applyF src)
+    | LIR.FSqrt (dest, src) -> LIR.FSqrt (applyF dest, applyF src)
+    | LIR.FCmp (left, right) -> LIR.FCmp (applyF left, applyF right)
+    | LIR.FLoad (dest, idx) -> LIR.FLoad (applyF dest, idx)
+    | LIR.IntToFloat (dest, src) -> LIR.IntToFloat (applyF dest, src)
+    | LIR.FloatToInt (dest, src) -> LIR.FloatToInt (dest, applyF src)
+    | LIR.GpToFp (dest, src) -> LIR.GpToFp (applyF dest, src)
+    | LIR.PrintFloat freg -> LIR.PrintFloat (applyF freg)
+    | LIR.PrintFloatNoNewline freg -> LIR.PrintFloatNoNewline (applyF freg)
+    | LIR.FPhi (dest, sources) ->
+        LIR.FPhi (applyF dest, sources |> List.map (fun (src, label) -> (applyF src, label)))
+    | LIR.FArgMoves moves ->
+        LIR.FArgMoves (moves |> List.map (fun (physReg, src) -> (physReg, applyF src)))
+    | _ -> instr  // Non-float instructions unchanged
+
+/// Apply float allocation to a basic block
+let applyFloatAllocationToBlock (floatAllocation: FAllocationResult) (block: LIR.BasicBlock) : LIR.BasicBlock =
+    { block with Instrs = block.Instrs |> List.map (applyFloatAllocationToInstr floatAllocation) }
+
+/// Apply float allocation to a CFG
+let applyFloatAllocationToCFG (floatAllocation: FAllocationResult) (cfg: LIR.CFG) : LIR.CFG =
+    { cfg with Blocks = cfg.Blocks |> Map.map (fun _ block -> applyFloatAllocationToBlock floatAllocation block) }
 
 // ============================================================================
 // Linear Scan Register Allocation (kept for reference, not used)
@@ -1825,6 +2117,65 @@ let generateFloatMoveInstrs (moves: (LIR.FReg * LIR.FReg) list) : LIR.Instr list
                 | Some destFreg -> [LIR.FMov (destFreg, LIR.FVirtual 2000)]
                 | None -> [])
 
+/// Generate float move instructions using allocation-based register mapping.
+/// Uses the float allocation result instead of modulo-based mapping.
+let generateFloatMoveInstrsWithAllocation
+    (moves: (LIR.FReg * LIR.FReg) list)
+    (floatAllocation: FAllocationResult) : LIR.Instr list =
+
+    if List.isEmpty moves then []
+    else
+        // Map FVirtual to physical register ID using allocation
+        let fregToPhysId (freg: LIR.FReg) : int =
+            match freg with
+            | LIR.FPhysical p -> physFPRegToInt p
+            | LIR.FVirtual 1000 -> 18  // D18 (left temp for binary ops) - fixed
+            | LIR.FVirtual 1001 -> 17  // D17 (right temp for binary ops) - fixed
+            | LIR.FVirtual 2000 -> 16  // D16 (cycle resolution temp) - fixed
+            | LIR.FVirtual n when n >= 3000 && n < 4000 ->
+                19 + ((n - 3000) % 8)  // D19-D26 (call arg temps) - fixed
+            | LIR.FVirtual id ->
+                // Look up in allocation
+                match Map.tryFind id floatAllocation.FMapping with
+                | Some physReg -> physFPRegToInt physReg
+                | None ->
+                    // Fallback to old modulo mapping for unallocated VRegs
+                    // This can happen for VRegs that weren't in the CFG (e.g., dead code)
+                    if id >= 0 && id <= 7 then 2 + id  // D2-D9 for params 0-7
+                    elif id < 10000 then
+                        let tempRegs = [| 0; 1; 10; 11; 12; 13; 14; 15; 27; 28; 29; 30; 31 |]
+                        tempRegs[(id - 8) % 13]
+                    else
+                        let tempRegs = [| 0; 1; 10; 11; 12; 13; 14; 15; 27; 28; 29; 30; 31 |]
+                        tempRegs[((id - 10000) + 7) % 13]
+
+        // Convert moves to physical register IDs for cycle detection
+        let physMoves = moves |> List.map (fun (dest, src) -> (fregToPhysId dest, fregToPhysId src))
+
+        let getSrcPhysId (src: int) : int option = Some src
+
+        let actions = ParallelMoves.resolve physMoves getSrcPhysId
+
+        // Convert actions back to FMov instructions using original FRegs
+        let destMap = moves |> List.map (fun (dest, _) -> (fregToPhysId dest, dest)) |> Map.ofList
+        let srcMap = moves |> List.map (fun (_, src) -> (fregToPhysId src, src)) |> Map.ofList
+
+        actions
+        |> List.collect (fun action ->
+            match action with
+            | ParallelMoves.SaveToTemp physId ->
+                match Map.tryFind physId srcMap with
+                | Some srcFreg -> [LIR.FMov (LIR.FVirtual 2000, srcFreg)]
+                | None -> []
+            | ParallelMoves.Move (destPhysId, srcPhysId) ->
+                match Map.tryFind destPhysId destMap, Map.tryFind srcPhysId srcMap with
+                | Some destFreg, Some srcFreg -> [LIR.FMov (destFreg, srcFreg)]
+                | _ -> []
+            | ParallelMoves.MoveFromTemp destPhysId ->
+                match Map.tryFind destPhysId destMap with
+                | Some destFreg -> [LIR.FMov (destFreg, LIR.FVirtual 2000)]
+                | None -> [])
+
 // ============================================================================
 // Phi Resolution
 // ============================================================================
@@ -1836,7 +2187,7 @@ let generateFloatMoveInstrs (moves: (LIR.FReg * LIR.FReg) list) : LIR.Instr list
 /// 3. Uses ParallelMoves.resolve to sequence the moves properly (handling cycles)
 /// 4. Inserts the moves at the end of each predecessor (before terminator)
 /// 5. Removes phi nodes from blocks
-let resolvePhiNodes (cfg: LIR.CFG) (allocation: Map<int, Allocation>) : LIR.CFG =
+let resolvePhiNodes (cfg: LIR.CFG) (allocation: Map<int, Allocation>) (floatAllocation: FAllocationResult) : LIR.CFG =
     // Get the allocation for a virtual register (register or stack slot)
     let getDestAllocation (reg: LIR.Reg) : Allocation =
         match reg with
@@ -2016,7 +2367,7 @@ let resolvePhiNodes (cfg: LIR.CFG) (allocation: Map<int, Allocation>) : LIR.CFG 
         match Map.tryFind predLabel updatedBlocks with
         | Some predBlock ->
             // Add phi moves at end of predecessor block
-            let moveInstrs = generateFloatMoveInstrs moves
+            let moveInstrs = generateFloatMoveInstrsWithAllocation moves floatAllocation
             let updatedBlock = { predBlock with Instrs = predBlock.Instrs @ moveInstrs }
             updatedBlocks <- Map.add predLabel updatedBlock updatedBlocks
         | None ->
@@ -2060,6 +2411,9 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
     let regs = getAllocatableRegs func.CFG
     let colorResult = chordalGraphColor graph Map.empty (List.length regs)
     let result = coloringToAllocation colorResult regs
+
+    // Step 3b: Run float register allocation
+    let floatAllocation = chordalFloatAllocation func.CFG
 
     // Step 4: Build parameter info with separate int/float counters (AAPCS64)
     // Each parameter type uses its own register counter
@@ -2150,7 +2504,7 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
                 Some (destFVirtual, LIR.FPhysical srcDReg)
             | LIR.Physical _ -> None)
 
-    let floatParamCopyInstrs = generateFloatMoveInstrs floatParamMoves
+    let floatParamCopyInstrs = generateFloatMoveInstrsWithAllocation floatParamMoves floatAllocation
 
     // Step 6b: Extract entry-edge phi moves for float phis
     // For phis at the entry block, we need to add moves from entry-edge sources
@@ -2178,23 +2532,33 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
 
     // Generate FMov instructions for entry-edge phi resolution
     // Use parallel move resolution to handle potential register conflicts
-    let entryEdgePhiInstrs = generateFloatMoveInstrs entryEdgeFloatPhiMoves
+    let entryEdgePhiInstrs = generateFloatMoveInstrsWithAllocation entryEdgeFloatPhiMoves floatAllocation
 
     // Step 7: Resolve phi nodes (convert to moves at predecessor exits)
     // This must happen BEFORE applying allocation since we need to know where each
     // value is allocated to generate the correct moves
-    let cfgWithPhiResolved = resolvePhiNodes func.CFG result.Mapping
+    let cfgWithPhiResolved = resolvePhiNodes func.CFG result.Mapping floatAllocation
 
     // Step 8: Apply allocation to CFG with liveness info for SaveRegs/RestoreRegs population
     let allocatedCFG = applyToCFGWithLiveness result.Mapping cfgWithPhiResolved liveness
 
+    // Step 8b: Apply float allocation to CFG - convert FVirtual to FPhysical
+    let allocatedCFG = applyFloatAllocationToCFG floatAllocation allocatedCFG
+
     // Step 9: Insert parameter copy instructions at the start of the entry block
     // Float param copies go first (they use separate register bank)
     // Entry-edge phi moves come after param copies (they copy from param FVirtual to phi dest FVirtual)
+    // IMPORTANT: Apply float allocation to param copy instructions since they were generated
+    // before applyFloatAllocationToCFG ran and still contain FVirtual registers
+    let allocatedFloatParamCopyInstrs =
+        floatParamCopyInstrs |> List.map (applyFloatAllocationToInstr floatAllocation)
+    let allocatedEntryEdgePhiInstrs =
+        entryEdgePhiInstrs |> List.map (applyFloatAllocationToInstr floatAllocation)
+
     let entryBlock = Map.find allocatedCFG.Entry allocatedCFG.Blocks
     let entryBlockWithCopies = {
         entryBlock with
-            Instrs = floatParamCopyInstrs @ entryEdgePhiInstrs @ intParamCopyInstrs @ entryBlock.Instrs
+            Instrs = allocatedFloatParamCopyInstrs @ allocatedEntryEdgePhiInstrs @ intParamCopyInstrs @ entryBlock.Instrs
     }
 
     let updatedBlocks = Map.add allocatedCFG.Entry entryBlockWithCopies allocatedCFG.Blocks
