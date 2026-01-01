@@ -6,12 +6,15 @@
 // - ClosureCall → ClosureTailCall
 //
 // A call is in tail position if:
-// - It's in a Let binding where the body is Return of the same variable
+// - It's in a Let binding where the body eventually returns the same variable
 // - Both branches of an If are in tail position if the If itself is
 //
-// This runs AFTER RefCountInsertion, so RefCountDec operations are already
-// inserted. For safety in V1, we only optimize calls that are immediately
-// followed by Return (no intervening RefCountDec).
+// This runs AFTER RefCountInsertion, so RefCountDec operations may be inserted
+// between the call and the return. We look through any RefCountDec operations
+// to find the final Return. This is crucial because without TCO, functions like
+// __reverseHelper would use regular calls instead of tail calls, causing the
+// intermediate cons cells to be freed prematurely (leading to corrupted results
+// when the free list reuses those cells for subsequent allocations).
 //
 // CURRENT STATUS: TCO is ENABLED. The DCE bug that caused 197 test failures
 // has been fixed (DeadCodeElimination.fs was not recognizing TailCall as a
@@ -23,10 +26,20 @@ module TailCallDetection
 
 open ANF
 
-/// Check if an expression is a simple Return of a specific TempId
-let isReturnOf (tempId: TempId) (expr: AExpr) : bool =
+/// Check if a CExpr is a RefCountDec operation
+let isRefCountDec (cexpr: CExpr) : bool =
+    match cexpr with
+    | RefCountDec _ -> true
+    | _ -> false
+
+/// Check if an expression eventually returns a specific TempId
+/// Looks through any RefCountDec operations to find the final Return
+let rec isReturnOf (tempId: TempId) (expr: AExpr) : bool =
     match expr with
     | Return (Var tid) when tid = tempId -> true
+    | Let (_, cexpr, body) when isRefCountDec cexpr ->
+        // RefCountDec followed by more expressions - look through it
+        isReturnOf tempId body
     | _ -> false
 
 /// Transform a Call to TailCall if it's in tail position

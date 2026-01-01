@@ -234,6 +234,11 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         operandToVReg str |> Option.toList |> Set.ofList
     | LIR.RandomInt64 _ ->
         Set.empty  // No operands to read
+    // ArgMoves/TailArgMoves contain operands that use virtual registers
+    | LIR.ArgMoves moves ->
+        moves |> List.choose (fun (_, op) -> operandToVReg op) |> Set.ofList
+    | LIR.TailArgMoves moves ->
+        moves |> List.choose (fun (_, op) -> operandToVReg op) |> Set.ofList
     // Phi sources are NOT regular uses - they are used at predecessor exits, not at the phi's block
     // The liveness analysis handles phi sources specially in computeLiveness
     | LIR.Phi _ -> Set.empty
@@ -720,6 +725,7 @@ let getAllocatableRegs (cfg: LIR.CFG) : LIR.PhysReg list =
 let buildInterferenceGraph (cfg: LIR.CFG) (liveness: Map<LIR.Label, BlockLiveness>) : InterferenceGraph =
     let mutable vertices = Set.empty<int>
     let mutable edges = Map.empty<int, Set<int>>
+
 
     /// Add a vertex to the graph
     let addVertex (v: int) =
