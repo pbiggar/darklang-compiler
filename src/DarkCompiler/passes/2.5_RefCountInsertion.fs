@@ -296,15 +296,51 @@ let rec insertRC (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * Var
         // Process the body recursively
         let (body', varGen1, accTypes) = insertRC ctx'' body varGen
 
+        // For TupleAlloc, insert RefCountInc for heap-typed elements.
+        // This is necessary because the new tuple stores a reference to the element,
+        // so the element's refcount should reflect this additional reference.
+        // Without this, if the original owner of the element decrements it, the
+        // element could be freed while the tuple still holds a pointer to it.
+        // Note: RefCountInc in codegen safely handles null pointers (e.g., empty list = 0).
+        let (incBindings, varGen2) =
+            match cexpr with
+            | TupleAlloc elems ->
+                let rec collectIncs (atoms: Atom list) (vg: VarGen) (acc: (TempId * CExpr) list) =
+                    match atoms with
+                    | [] -> (List.rev acc, vg)
+                    | atom :: rest ->
+                        match atom with
+                        | Var tid ->
+                            // Check if this variable is heap-typed
+                            match tryGetType ctx tid with
+                            | Some t when isHeapType t ->
+                                // Insert RefCountInc for this heap element
+                                let size = payloadSize t ctx.TypeReg
+                                let (dummyId, vg') = freshVar vg
+                                collectIncs rest vg' ((dummyId, RefCountInc (Var tid, size)) :: acc)
+                            | _ ->
+                                collectIncs rest vg acc
+                        | _ ->
+                            // Literals don't need refcount operations
+                            collectIncs rest vg acc
+                collectIncs elems varGen1 []
+            | _ -> ([], varGen1)
+
         // Check if this TempId is heap-typed, not returned, and not borrowed
         // Borrowed values don't own their memory - the parent does
         match maybeType with
         | Some t when isHeapType t && not (isTempReturned tempId body') && not (isBorrowingExpr cexpr) ->
             // Insert Dec after body completes but value isn't returned
-            let (bodyWithDec, varGen2) = wrapWithDec tempId t ctx' body' varGen1
-            (Let (tempId, cexpr, bodyWithDec), varGen2, accTypes)
+            let (bodyWithDec, varGen3) = wrapWithDec tempId t ctx' body' varGen2
+            // Wrap with Inc bindings, then the Let, then Dec
+            let letExpr = Let (tempId, cexpr, bodyWithDec)
+            let exprWithIncs = wrapBindings incBindings letExpr
+            (exprWithIncs, varGen3, accTypes)
         | _ ->
-            (Let (tempId, cexpr, body'), varGen1, accTypes)
+            // Wrap with Inc bindings, then the Let
+            let letExpr = Let (tempId, cexpr, body')
+            let exprWithIncs = wrapBindings incBindings letExpr
+            (exprWithIncs, varGen2, accTypes)
 
 /// Insert RC operations into a function
 /// Returns (transformed function, varGen, accumulated TempTypes)

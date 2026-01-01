@@ -1907,10 +1907,12 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
 
     | LIR.RefCountInc (addr, payloadSize) ->
         // Increment ref count at [addr + payloadSize]
+        // Skip if addr is null (e.g., empty list = 0)
         // Use X15 as temp register
         lirRegToARM64Reg addr
         |> Result.map (fun addrReg ->
             [
+                ARM64.CBZ_offset (addrReg, 4)                       // If null, skip 3 instructions
                 ARM64.LDR (ARM64.X15, addrReg, int16 payloadSize)   // Load ref count
                 ARM64.ADD_imm (ARM64.X15, ARM64.X15, 1us)           // Increment
                 ARM64.STR (ARM64.X15, addrReg, int16 payloadSize)   // Store back
@@ -1918,6 +1920,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
 
     | LIR.RefCountDec (addr, payloadSize) ->
         // Decrement ref count at [addr + payloadSize]
+        // Skip if addr is null (e.g., empty list = 0)
         // When ref count hits 0, add block to free list for memory reuse
         //
         // Free list structure:
@@ -1926,7 +1929,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         // - sizeClassOffset = payloadSize (for 8-aligned payloads)
         // - Freed blocks use first 8 bytes as next pointer
         //
-        // Code structure (7 instructions):
+        // Code structure (8 instructions):
+        //   CBZ addr, +8                      ; If null, skip all 7 instructions
         //   LDR X15, [addr, payloadSize]      ; Load ref count
         //   SUB X15, X15, 1                   ; Decrement
         //   STR X15, [addr, payloadSize]      ; Store back
@@ -1938,6 +1942,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         lirRegToARM64Reg addr
         |> Result.map (fun addrReg ->
             [
+                ARM64.CBZ_offset (addrReg, 8)                       // If null, skip 7 instructions
                 ARM64.LDR (ARM64.X15, addrReg, int16 payloadSize)   // Load ref count
                 ARM64.SUB_imm (ARM64.X15, ARM64.X15, 1us)           // Decrement
                 ARM64.STR (ARM64.X15, addrReg, int16 payloadSize)   // Store back
