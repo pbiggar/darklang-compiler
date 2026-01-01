@@ -354,3 +354,21 @@ match [13] with | [13] -> 1 | _ -> 0 = stdout="1\n"
 // Single literal pattern - no match
 match [14] with | [13] -> 1 | _ -> 0 = stdout="0\n"
 
+// === Nested Bool patterns in constructors (regression tests) ===
+// These test that Option<Bool> with literal patterns work correctly
+
+// Some(false) should NOT match Some(true)
+match Some(false) with | Some(true) -> 100 | Some(false) -> 0 | None -> -1 = stdout="0\n"
+
+// Some(true) should match Some(true)
+match Some(true) with | Some(true) -> 100 | Some(false) -> 0 | None -> -1 = stdout="100\n"
+
+// Order of patterns doesn't matter for correctness
+match Some(false) with | Some(false) -> 0 | Some(true) -> 100 | None -> -1 = stdout="0\n"
+
+// Wildcard should work as fallback
+match Some(false) with | Some(true) -> 100 | _ -> 0 = stdout="0\n"
+
+// Variable binding in Some still works
+match Some(true) with | Some(x) -> match x with | true -> 42 | false -> 0 | None -> -1 = stdout="42\n"
+

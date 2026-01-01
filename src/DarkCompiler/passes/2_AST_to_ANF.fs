@@ -2803,16 +2803,37 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     let (cmpVar, vg1) = ANF.freshVar vg
                     let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.FloatLiteral f)
                     Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-                | AST.PConstructor (variantName, _) ->
+                | AST.PConstructor (variantName, payloadPattern) ->
                     match Map.tryFind variantName variantLookup with
                     | Some (_, _, tag, _) ->
                         if typeHasAnyPayload variantName then
                             // Load tag from heap (index 0), then compare
                             let (tagVar, vg1) = ANF.freshVar vg
                             let tagLoadExpr = ANF.TupleGet (scrutAtom, 0)
-                            let (cmpVar, vg2) = ANF.freshVar vg1
-                            let cmpExpr = ANF.Prim (ANF.Eq, ANF.Var tagVar, ANF.IntLiteral (ANF.Int64 (int64 tag)))
-                            Ok (Some (ANF.Var cmpVar, [(tagVar, tagLoadExpr); (cmpVar, cmpExpr)], vg2))
+                            let (tagCmpVar, vg2) = ANF.freshVar vg1
+                            let tagCmpExpr = ANF.Prim (ANF.Eq, ANF.Var tagVar, ANF.IntLiteral (ANF.Int64 (int64 tag)))
+
+                            // Check if payload pattern needs comparison (e.g., Some(true) vs Some(false))
+                            match payloadPattern with
+                            | Some innerPattern ->
+                                // Extract payload and check if inner pattern needs comparison
+                                let (payloadVar, vg3) = ANF.freshVar vg2
+                                let payloadLoadExpr = ANF.TupleGet (scrutAtom, 1)
+                                buildPatternComparison innerPattern (ANF.Var payloadVar) vg3
+                                |> Result.map (fun innerResult ->
+                                    match innerResult with
+                                    | None ->
+                                        // Inner pattern is variable/wildcard, only need tag check
+                                        Some (ANF.Var tagCmpVar, [(tagVar, tagLoadExpr); (tagCmpVar, tagCmpExpr)], vg3)
+                                    | Some (innerCond, innerBindings, vg4) ->
+                                        // Need to AND tag check with payload check
+                                        let (andVar, vg5) = ANF.freshVar vg4
+                                        let andExpr = ANF.Prim (ANF.And, ANF.Var tagCmpVar, innerCond)
+                                        let allBindings = [(tagVar, tagLoadExpr); (tagCmpVar, tagCmpExpr); (payloadVar, payloadLoadExpr)] @ innerBindings @ [(andVar, andExpr)]
+                                        Some (ANF.Var andVar, allBindings, vg5))
+                            | None ->
+                                // No payload pattern, just check tag
+                                Ok (Some (ANF.Var tagCmpVar, [(tagVar, tagLoadExpr); (tagCmpVar, tagCmpExpr)], vg2))
                         else
                             // Simple enum - scrutinee IS the tag
                             let (cmpVar, vg1) = ANF.freshVar vg

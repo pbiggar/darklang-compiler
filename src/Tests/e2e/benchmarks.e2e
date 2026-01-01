@@ -227,21 +227,10 @@ nqueen(8) = 92
 
 
 // ===================================================================
-// BLOCKED BENCHMARKS - require compiler bug fixes
+// TODO: Additional benchmarks to implement
 // ===================================================================
 //
-// The following benchmarks cannot be implemented due to compiler bugs:
-//
-// 1. nsieve - Requires List.repeat + List.setAt which has memory corruption bug
-//    Bug: Setting index 6 then 10 on a List.repeat<Bool> list causes index 13
-//    to become corrupted.
-//
-// 2. spectral_norm - Requires List.getAt<Float> which returns wrong values
-//    Bug: Extracting Float from Option<Float> via pattern match returns 0
-//    instead of the actual value.
-//
-// 3. matmul - Blocked by same issues as nsieve (needs List.setAt for 2D arrays)
-//
-// Additional bug found:
-// - Pattern matching on Option<Bool> with literal patterns (Some(true), Some(false))
-//   doesn't work correctly - Some(false) matches the Some(true) pattern.
+// The following benchmarks can now be implemented (bugs fixed):
+// - nsieve: Sieve of Eratosthenes using List.repeat + List.setAt
+// - spectral_norm: Spectral norm calculation using List.getAt<Float>
+// - matmul: Matrix multiplication using 2D arrays
