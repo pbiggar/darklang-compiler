@@ -80,6 +80,33 @@ let isRegUsedInInstrs (reg: Reg) (instrs: Instr list) : bool =
         | _ -> false  // Conservative: assume not used for other instructions
     )
 
+/// Try to fuse MUL + ADD into MADD (multiply-add)
+/// Pattern: MUL temp, a, b; ADD dest, temp, Reg c → MADD dest, a, b, c
+/// Or:      MUL temp, a, b; ADD dest, Reg c, temp → MADD dest, a, b, c (commutative)
+let tryFuseMulAdd (instrs: Instr list) : Instr list =
+    let rec loop acc remaining =
+        match remaining with
+        | [] -> List.rev acc
+        | [single] -> List.rev (single :: acc)
+        | Mul (mulDest, mulLeft, mulRight) :: Add (addDest, addLeft, Reg addRight) :: rest
+            when sameReg mulDest addLeft && not (sameReg mulDest addRight) ->
+            // MUL temp, a, b; ADD dest, temp, c → MADD dest, a, b, c
+            // Check that temp is not used later (dead after the ADD)
+            if not (isRegUsedInInstrs mulDest rest) then
+                loop (Madd (addDest, mulLeft, mulRight, addRight) :: acc) rest
+            else
+                loop (Mul (mulDest, mulLeft, mulRight) :: acc) (Add (addDest, addLeft, Reg addRight) :: rest)
+        | Mul (mulDest, mulLeft, mulRight) :: Add (addDest, addLeft, Reg addRight) :: rest
+            when sameReg mulDest addRight && not (sameReg mulDest addLeft) ->
+            // MUL temp, a, b; ADD dest, c, temp → MADD dest, a, b, c (commutative)
+            if not (isRegUsedInInstrs mulDest rest) then
+                loop (Madd (addDest, mulLeft, mulRight, addLeft) :: acc) rest
+            else
+                loop (Mul (mulDest, mulLeft, mulRight) :: acc) (Add (addDest, addLeft, Reg addRight) :: rest)
+        | instr :: rest ->
+            loop (instr :: acc) rest
+    loop [] instrs
+
 /// Try to fuse Cset + Branch into CondBranch
 /// Pattern: last instruction is Cset dest, cond; terminator is Branch dest, trueL, falseL
 /// Result: remove Cset, replace Branch with CondBranch cond, trueL, falseL
@@ -127,9 +154,11 @@ let tryFuseCmpZeroBranch (instrs: Instr list) (terminator: Terminator) : (Instr 
 /// Optimize a basic block
 let optimizeBlock (block: BasicBlock) : BasicBlock =
     let instrs' = optimizeInstrs block.Instrs
+    // Apply MUL + ADD → MADD fusion
+    let instrs'' = tryFuseMulAdd instrs'
 
     // Try to fuse Cset + Branch into CondBranch
-    match tryFuseCondBranch instrs' block.Terminator with
+    match tryFuseCondBranch instrs'' block.Terminator with
     | Some (fusedInstrs, fusedTerminator) ->
         // After fusing Cset + Branch → CondBranch, try to fuse CMP #0 + CondBranch → CBZ/CBNZ
         match tryFuseCmpZeroBranch fusedInstrs fusedTerminator with
@@ -139,11 +168,11 @@ let optimizeBlock (block: BasicBlock) : BasicBlock =
             { block with Instrs = fusedInstrs; Terminator = fusedTerminator }
     | None ->
         // Also try CMP #0 + CondBranch fusion on the original terminator
-        match tryFuseCmpZeroBranch instrs' block.Terminator with
+        match tryFuseCmpZeroBranch instrs'' block.Terminator with
         | Some (fusedInstrs, fusedTerminator) ->
             { block with Instrs = fusedInstrs; Terminator = fusedTerminator }
         | None ->
-            { block with Instrs = instrs' }
+            { block with Instrs = instrs'' }
 
 /// Optimize a CFG
 let optimizeCFG (cfg: CFG) : CFG =

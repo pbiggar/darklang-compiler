@@ -65,7 +65,8 @@ type Instr =
     | MUL of dest:Reg * src1:Reg * src2:Reg
     | SDIV of dest:Reg * src1:Reg * src2:Reg
     | UDIV of dest:Reg * src1:Reg * src2:Reg  // Unsigned division (for positive integers)
-    | MSUB of dest:Reg * src1:Reg * src2:Reg * src3:Reg  // Multiply-subtract (for modulo)
+    | MSUB of dest:Reg * src1:Reg * src2:Reg * src3:Reg  // Multiply-subtract: dest = src3 - src1 * src2 (for modulo)
+    | MADD of dest:Reg * src1:Reg * src2:Reg * src3:Reg  // Multiply-add: dest = src3 + src1 * src2
     | CMP_imm of src:Reg * imm:uint16  // Compare with immediate (sets condition flags)
     | CMP_reg of src1:Reg * src2:Reg  // Compare registers (sets condition flags)
     | CSET of dest:Reg * cond:Condition  // Set register to 1 if condition, 0 otherwise

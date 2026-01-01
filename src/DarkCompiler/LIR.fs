@@ -71,6 +71,7 @@ type Instr =
     | Mul of dest:Reg * left:Reg * right:Reg
     | Sdiv of dest:Reg * left:Reg * right:Reg  // Signed division
     | Msub of dest:Reg * mulLeft:Reg * mulRight:Reg * sub:Reg  // dest = sub - mulLeft * mulRight
+    | Madd of dest:Reg * mulLeft:Reg * mulRight:Reg * add:Reg  // dest = add + mulLeft * mulRight
     | Cmp of left:Reg * right:Operand           // Compare (sets flags)
     | Cset of dest:Reg * cond:Condition         // Set register based on condition
     | And of dest:Reg * left:Reg * right:Reg    // Bitwise AND (for boolean && and &)

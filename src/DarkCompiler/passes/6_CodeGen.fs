@@ -558,6 +558,18 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     |> Result.map (fun subReg ->
                         [ARM64.MSUB (destReg, mulLeftReg, mulRightReg, subReg)]))))
 
+    | LIR.Madd (dest, mulLeft, mulRight, add) ->
+        // MADD: dest = add + mulLeft * mulRight
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg mulLeft
+            |> Result.bind (fun mulLeftReg ->
+                lirRegToARM64Reg mulRight
+                |> Result.bind (fun mulRightReg ->
+                    lirRegToARM64Reg add
+                    |> Result.map (fun addReg ->
+                        [ARM64.MADD (destReg, mulLeftReg, mulRightReg, addReg)]))))
+
     | LIR.Cmp (left, right) ->
         lirRegToARM64Reg left
         |> Result.bind (fun leftReg ->

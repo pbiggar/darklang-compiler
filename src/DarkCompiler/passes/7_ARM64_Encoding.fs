@@ -168,6 +168,18 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rd = encodeReg dest
         [sf ||| op ||| rm ||| flagBit ||| ra ||| rn ||| rd]
 
+    | ARM64.MADD (dest, src1, src2, src3) ->
+        // MADD: sf=1 0 0 11011 000 Rm(5) 0 Ra(5) Rn(5) Rd(5)
+        // Computes: Rd = Ra + (Rn * Rm)
+        let sf = 1u <<< 31
+        let op = 0b11011000u <<< 21
+        let rm = (encodeReg src2) <<< 16
+        // flagBit = 0 for MADD (vs 1 for MSUB)
+        let ra = (encodeReg src3) <<< 10
+        let rn = (encodeReg src1) <<< 5
+        let rd = encodeReg dest
+        [sf ||| op ||| rm ||| ra ||| rn ||| rd]
+
     | ARM64.MOV_reg (dest, src) ->
         // Special case: MOV Xd, SP cannot use ORR (register 31 = XZR in ORR context)
         // Use ADD Xd, SP, #0 instead

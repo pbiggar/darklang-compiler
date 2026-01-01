@@ -132,6 +132,8 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- Sdiv({prettyPrintLIRReg left}, Reg {prettyPrintLIRReg right})"
     | LIR.Msub (dest, mulLeft, mulRight, sub) ->
         $"{prettyPrintLIRReg dest} <- Msub({prettyPrintLIRReg mulLeft}, {prettyPrintLIRReg mulRight}, {prettyPrintLIRReg sub})"
+    | LIR.Madd (dest, mulLeft, mulRight, add) ->
+        $"{prettyPrintLIRReg dest} <- Madd({prettyPrintLIRReg mulLeft}, {prettyPrintLIRReg mulRight}, {prettyPrintLIRReg add})"
     | LIR.Cmp (left, right) ->
         $"Cmp({prettyPrintLIRReg left}, {prettyPrintLIROperand right})"
     | LIR.Cset (dest, cond) ->
@@ -617,6 +619,8 @@ let prettyPrintARM64Instr = function
         $"UDIV({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
     | ARM64.MSUB (dest, src1, src2, src3) ->
         $"MSUB({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2}, {prettyPrintARM64Reg src3})"
+    | ARM64.MADD (dest, src1, src2, src3) ->
+        $"MADD({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2}, {prettyPrintARM64Reg src3})"
     | ARM64.MOV_reg (dest, src) ->
         $"MOV_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src})"
     | ARM64.STRB (src, addr, offset) ->

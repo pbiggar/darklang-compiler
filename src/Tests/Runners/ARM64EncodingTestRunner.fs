@@ -46,6 +46,7 @@ let formatMismatches (mismatches: (int * Instr * uint32 * uint32) list) : string
                     | SDIV (dest, src1, src2) -> $"SDIV({dest}, {src1}, {src2})"
                     | UDIV (dest, src1, src2) -> $"UDIV({dest}, {src1}, {src2})"
                     | MSUB (dest, src1, src2, src3) -> $"MSUB({dest}, {src1}, {src2}, {src3})"
+                    | MADD (dest, src1, src2, src3) -> $"MADD({dest}, {src1}, {src2}, {src3})"
                     | CMP_imm (src, imm) -> $"CMP_imm({src}, {imm})"
                     | CMP_reg (src1, src2) -> $"CMP_reg({src1}, {src2})"
                     | CSET (dest, cond) -> $"CSET({dest}, {cond})"
