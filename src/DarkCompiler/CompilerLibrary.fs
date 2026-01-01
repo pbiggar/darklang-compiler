@@ -108,6 +108,12 @@ type LazyStdlibResult = {
     StdlibTypeMap: ANF.TypeMap
     /// Cache for specialized functions (shared across test compilations)
     SpecCache: SpecializationCache
+    /// Pre-compiled stdlib LIR functions (after register allocation), indexed by name
+    StdlibLIRFunctions: Map<string, LIR.Function>
+    /// String pool for all stdlib functions
+    StdlibStringPool: MIR.StringPool
+    /// Float pool for all stdlib functions
+    StdlibFloatPool: MIR.FloatPool
 }
 
 // Helper functions for exception-to-Result conversion (Darklang compatibility)
@@ -230,8 +236,8 @@ let compileStdlib () : Result<StdlibResult, string> =
                                 SpecCache = SpecializationCache()
                             }
 
-/// Prepare stdlib for lazy compilation - stops at ANF level
-/// Expensive passes (MIR, LIR, RegAlloc) are deferred until we know what's needed
+/// Prepare stdlib for lazy compilation - pre-compiles all stdlib to LIR
+/// This is a one-time cost that speeds up all subsequent user compilations
 let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
     match loadStdlib() with
     | Error e -> Error e
@@ -264,16 +270,54 @@ let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
                         |> Map.ofList
                     // Build call graph at ANF level for early DCE
                     let stdlibCallGraph = ANFDeadCodeElimination.buildCallGraph stdlibFuncs
-                    Ok {
-                        TypeCheckEnv = typeCheckEnv
-                        GenericFuncDefs = genericFuncDefs
-                        ModuleRegistry = moduleRegistry
-                        ANFResult = anfResult
-                        StdlibANFFunctions = stdlibFuncMap
-                        StdlibANFCallGraph = stdlibCallGraph
-                        StdlibTypeMap = typeMap
-                        SpecCache = SpecializationCache()
-                    }
+
+                    // Pre-compile ALL stdlib functions to LIR (one-time cost)
+                    // This speeds up all subsequent user compilations
+                    let stdlibAnfProgram = ANF.Program (stdlibFuncs, ANF.Return ANF.UnitLiteral)
+                    let stdlibTypeReg = anfResult.FuncParams
+                    let stdlibVariantLookup = anfResult.VariantLookup
+
+                    // Convert stdlib to MIR
+                    match ANF_to_MIR.toMIRFunctionsOnly stdlibAnfProgram typeMap stdlibTypeReg stdlibVariantLookup Map.empty false with
+                    | Error e -> Error $"Stdlib MIR error: {e}"
+                    | Ok (stdlibMirFuncs, stdlibStrings, stdlibFloats, stdlibVariants, stdlibRecords) ->
+                        // SSA Construction
+                        let stdlibMirProgram = MIR.Program (stdlibMirFuncs, stdlibStrings, stdlibFloats, stdlibVariants, stdlibRecords)
+                        let stdlibSsaProgram = SSA_Construction.convertToSSA stdlibMirProgram
+
+                        // MIR Optimizations
+                        let stdlibOptimized = MIR_Optimize.optimizeProgram stdlibSsaProgram
+
+                        // Convert to LIR
+                        match MIR_to_LIR.toLIR stdlibOptimized with
+                        | Error e -> Error $"Stdlib LIR error: {e}"
+                        | Ok stdlibLirProgram ->
+                            // LIR Optimizations
+                            let stdlibLirOptimized = LIR_Optimize.optimizeProgram stdlibLirProgram
+
+                            // Register allocation for all stdlib functions
+                            let (LIR.Program (stdlibLirFuncs, lirStrings, lirFloats)) = stdlibLirOptimized
+                            let allocatedStdlibFuncs = stdlibLirFuncs |> List.map RegisterAllocation.allocateRegisters
+
+                            // Build map of allocated functions by name
+                            let stdlibLirMap =
+                                allocatedStdlibFuncs
+                                |> List.map (fun f -> f.Name, f)
+                                |> Map.ofList
+
+                            Ok {
+                                TypeCheckEnv = typeCheckEnv
+                                GenericFuncDefs = genericFuncDefs
+                                ModuleRegistry = moduleRegistry
+                                ANFResult = anfResult
+                                StdlibANFFunctions = stdlibFuncMap
+                                StdlibANFCallGraph = stdlibCallGraph
+                                StdlibTypeMap = typeMap
+                                SpecCache = SpecializationCache()
+                                StdlibLIRFunctions = stdlibLirMap
+                                StdlibStringPool = lirStrings
+                                StdlibFloatPool = lirFloats
+                            }
 
 /// Internal: Compile user code with stdlib AST (shared implementation)
 /// This is the core compilation pipeline that does one pass of type-checking and ANF conversion
@@ -1123,57 +1167,24 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                         println $"        {t}ms"
 
                     // Early DCE: Determine which stdlib functions are actually needed
-                    let reachableStdlibFuncs =
+                    // Then look up pre-compiled LIR functions from cache (no compilation needed!)
+                    let (allocatedStdlibFuncs, stdlibLirStrings, stdlibLirFloats) =
                         if options.DisableDCE then
                             // Include all stdlib functions when DCE is disabled
-                            stdlib.StdlibANFFunctions |> Map.values |> List.ofSeq
+                            let allFuncs = stdlib.StdlibLIRFunctions |> Map.values |> List.ofSeq
+                            (allFuncs, stdlib.StdlibStringPool, stdlib.StdlibFloatPool)
                         else
                             let (ANF.Program (userFuncsForDCE, userMainForDCE)) = userAnfProgram
                             let userANFFuncs = { ANF.Name = "_start"; ANF.Params = []; ANF.Body = userMainForDCE } :: userFuncsForDCE
                             let reachableStdlibNames = ANFDeadCodeElimination.getReachableStdlib stdlib.StdlibANFCallGraph userANFFuncs
                             if verbosity >= 2 then
                                 println $"        DCE: {reachableStdlibNames.Count} stdlib functions needed"
-                            reachableStdlibNames
-                            |> Set.toList
-                            |> List.choose (fun name -> Map.tryFind name stdlib.StdlibANFFunctions)
-
-                    // Compile reachable stdlib functions: ANF → MIR → LIR → RegAlloc
-                    // Use cached typeMap and FuncParams from stdlib preparation
-                    let stdlibTypeReg = stdlib.ANFResult.FuncParams
-                    let stdlibVariantLookup = stdlib.ANFResult.VariantLookup
-
-                    // Convert reachable stdlib to MIR (if any)
-                    let emptyStringPool : MIR.StringPool = { Strings = Map.empty; StringToId = Map.empty; NextId = 0 }
-                    let emptyFloatPool : MIR.FloatPool = { Floats = Map.empty; FloatToId = Map.empty; NextId = 0 }
-                    let stdlibMirResult =
-                        if List.isEmpty reachableStdlibFuncs then
-                            Ok ([], emptyStringPool, emptyFloatPool, Map.empty, Map.empty)
-                        else
-                            let stdlibAnfProgram = ANF.Program (reachableStdlibFuncs, ANF.Return ANF.UnitLiteral)
-                            // Use cached typeMap and typeReg from stdlib preparation
-                            ANF_to_MIR.toMIRFunctionsOnly stdlibAnfProgram stdlib.StdlibTypeMap stdlibTypeReg stdlibVariantLookup Map.empty options.EnableCoverage
-
-                    match stdlibMirResult with
-                    | Error err ->
-                        { Binary = Array.empty
-                          Success = false
-                          ErrorMessage = Some $"Stdlib MIR conversion error: {err}" }
-                    | Ok (stdlibMirFuncs, stdlibStrings, stdlibFloats, stdlibVariants, stdlibRecords) ->
-
-                    // Convert reachable stdlib to LIR
-                    let stdlibMirProgram = MIR.Program (stdlibMirFuncs, stdlibStrings, stdlibFloats, stdlibVariants, stdlibRecords)
-                    let stdlibLirResult = MIR_to_LIR.toLIR stdlibMirProgram
-
-                    match stdlibLirResult with
-                    | Error err ->
-                        { Binary = Array.empty
-                          Success = false
-                          ErrorMessage = Some $"Stdlib LIR conversion error: {err}" }
-                    | Ok stdlibLirProgram ->
-
-                    // Allocate registers for reachable stdlib
-                    let (LIR.Program (stdlibLirFuncs, stdlibLirStrings, stdlibLirFloats)) = stdlibLirProgram
-                    let allocatedStdlibFuncs = stdlibLirFuncs |> List.map RegisterAllocation.allocateRegisters
+                            // Look up pre-compiled LIR functions from cache
+                            let reachableFuncs =
+                                reachableStdlibNames
+                                |> Set.toList
+                                |> List.choose (fun name -> Map.tryFind name stdlib.StdlibLIRFunctions)
+                            (reachableFuncs, stdlib.StdlibStringPool, stdlib.StdlibFloatPool)
 
                     // Pass 3: ANF → MIR (user code only)
                     if verbosity >= 1 then println "  [3/8] ANF → MIR (user only)..."
