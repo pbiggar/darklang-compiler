@@ -208,25 +208,39 @@ let loadImmediate (dest: ARM64.Reg) (value: int64) : ARM64.Instr list =
 
     // Use MOVN if more chunks are 0xFFFF (inverted gives more zeros)
     if onesCount > zeroCount then
-        // Use MOVN: invert the value and load, then MOVK for non-0xFFFF chunks
-        // MOVN Xd, #imm, LSL #shift sets Xd = NOT(imm << shift)
-        // Find first non-0xFFFF chunk to use with MOVN
-        let invChunk0 = ~~~chunk0
-        let invChunk1 = ~~~chunk1
-        let invChunk2 = ~~~chunk2
-        let invChunk3 = ~~~chunk3
-
-        // Start with MOVN using the first chunk (inverted gives zeros for 0xFFFF)
-        [ARM64.MOVN (dest, invChunk0, 0)]
-        @ (if chunk1 <> 0xFFFFus then [ARM64.MOVK (dest, chunk1, 16)] else [])
-        @ (if chunk2 <> 0xFFFFus then [ARM64.MOVK (dest, chunk2, 32)] else [])
-        @ (if chunk3 <> 0xFFFFus then [ARM64.MOVK (dest, chunk3, 48)] else [])
+        // Use MOVN: start with first non-0xFFFF chunk, then MOVK for remaining non-0xFFFF chunks
+        // MOVN Xd, #imm, LSL #shift sets Xd = NOT(imm << shift), filling rest with 1s
+        // Find first chunk that is NOT 0xFFFF (so inverting gives a meaningful value)
+        let chunks = [(chunk0, 0); (chunk1, 16); (chunk2, 32); (chunk3, 48)]
+        let firstNonOnes = chunks |> List.tryFind (fun (c, _) -> c <> 0xFFFFus)
+        match firstNonOnes with
+        | Some (firstChunk, firstShift) ->
+            // Start with MOVN using inverted first non-0xFFFF chunk
+            let invFirstChunk = ~~~firstChunk
+            [ARM64.MOVN (dest, invFirstChunk, firstShift)]
+            @ (if firstShift <> 0 && chunk0 <> 0xFFFFus then [ARM64.MOVK (dest, chunk0, 0)] else [])
+            @ (if firstShift <> 16 && chunk1 <> 0xFFFFus then [ARM64.MOVK (dest, chunk1, 16)] else [])
+            @ (if firstShift <> 32 && chunk2 <> 0xFFFFus then [ARM64.MOVK (dest, chunk2, 32)] else [])
+            @ (if firstShift <> 48 && chunk3 <> 0xFFFFus then [ARM64.MOVK (dest, chunk3, 48)] else [])
+        | None ->
+            // All chunks are 0xFFFF, use MOVN #0 to get all 1s (-1)
+            [ARM64.MOVN (dest, 0us, 0)]
     else
-        // Use MOVZ: standard approach for positive numbers
-        [ARM64.MOVZ (dest, chunk0, 0)]
-        @ (if chunk1 <> 0us then [ARM64.MOVK (dest, chunk1, 16)] else [])
-        @ (if chunk2 <> 0us then [ARM64.MOVK (dest, chunk2, 32)] else [])
-        @ (if chunk3 <> 0us then [ARM64.MOVK (dest, chunk3, 48)] else [])
+        // Use MOVZ: find first non-zero chunk, then MOVK for remaining non-zero chunks
+        // MOVZ Xd, #imm, LSL #shift sets Xd = imm << shift, zeros elsewhere
+        let chunks = [(chunk0, 0); (chunk1, 16); (chunk2, 32); (chunk3, 48)]
+        let firstNonZero = chunks |> List.tryFind (fun (c, _) -> c <> 0us)
+        match firstNonZero with
+        | Some (firstChunk, firstShift) ->
+            // Start with MOVZ using first non-zero chunk
+            [ARM64.MOVZ (dest, firstChunk, firstShift)]
+            @ (if firstShift <> 0 && chunk0 <> 0us then [ARM64.MOVK (dest, chunk0, 0)] else [])
+            @ (if firstShift <> 16 && chunk1 <> 0us then [ARM64.MOVK (dest, chunk1, 16)] else [])
+            @ (if firstShift <> 32 && chunk2 <> 0us then [ARM64.MOVK (dest, chunk2, 32)] else [])
+            @ (if firstShift <> 48 && chunk3 <> 0us then [ARM64.MOVK (dest, chunk3, 48)] else [])
+        | None ->
+            // All chunks are zero, just use MOVZ #0
+            [ARM64.MOVZ (dest, 0us, 0)]
 
 /// Generate ARM64 instructions to load a stack slot into a register
 /// Stack slots are accessed relative to FP (X29)
