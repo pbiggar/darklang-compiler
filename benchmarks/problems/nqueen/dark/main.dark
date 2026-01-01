@@ -1,0 +1,31 @@
+// N-Queens Benchmark - Dark implementation
+// Counts solutions to the N-queens problem using bit manipulation
+
+// Solve N-Queens using bitmasks for columns and diagonals
+// allOnes: bitmask with n bits set (valid column range)
+// cols: columns that have queens
+// diag1, diag2: diagonal constraints
+// avail: bitmask of available positions to try in current row
+// count: accumulated solution count
+def nqueenSolve(allOnes: Int64, cols: Int64, diag1: Int64, diag2: Int64, avail: Int64, count: Int64) : Int64 =
+    if avail == 0 then count
+    else
+        let pos = avail & (0 - avail) in
+        let newAvail = avail - pos in
+        let newCols = Int64.bitwiseOr(cols, pos) in
+        let subCount =
+            if newCols == allOnes then 1
+            else
+                let newDiag1 = (Int64.bitwiseOr(diag1, pos)) << 1 in
+                let newDiag2 = (Int64.bitwiseOr(diag2, pos)) >> 1 in
+                let blocked = Int64.bitwiseOr(Int64.bitwiseOr(newCols, newDiag1), newDiag2) in
+                let nextRowAvail = allOnes & (~~~blocked) in
+                nqueenSolve(allOnes, newCols, newDiag1, newDiag2, nextRowAvail, 0) in
+        nqueenSolve(allOnes, cols, diag1, diag2, newAvail, count + subCount)
+
+def nqueen(n: Int64) : Int64 =
+    let allOnes = (1 << n) - 1 in
+    nqueenSolve(allOnes, 0, 0, 0, allOnes, 0)
+
+// N=13 gives reasonable runtime
+nqueen(13)

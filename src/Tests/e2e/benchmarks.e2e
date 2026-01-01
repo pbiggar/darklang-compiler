@@ -185,7 +185,63 @@ Stdlib.Float.toInt(pisum(1, 10, 0.0) * 1000000.0) = 1549767
 
 
 // ===================================================================
+// N-Queens (nqueen) - count solutions using bit manipulation
+// ===================================================================
+
+// Solve N-Queens using bitmasks for columns and diagonals
+// avail: bitmask of available positions to try in current row
+// count: accumulated solution count
+def nqueenSolve(allOnes: Int64, cols: Int64, diag1: Int64, diag2: Int64, avail: Int64, count: Int64) : Int64 =
+    if avail == 0 then count
+    else
+        let pos = avail & (0 - avail) in
+        let newAvail = avail - pos in
+        let newCols = Int64.bitwiseOr(cols, pos) in
+        let subCount =
+            if newCols == allOnes then 1
+            else
+                let newDiag1 = (Int64.bitwiseOr(diag1, pos)) << 1 in
+                let newDiag2 = (Int64.bitwiseOr(diag2, pos)) >> 1 in
+                let blocked = Int64.bitwiseOr(Int64.bitwiseOr(newCols, newDiag1), newDiag2) in
+                let nextRowAvail = allOnes & (~~~blocked) in
+                nqueenSolve(allOnes, newCols, newDiag1, newDiag2, nextRowAvail, 0) in
+        nqueenSolve(allOnes, cols, diag1, diag2, newAvail, count + subCount)
+
+def nqueen(n: Int64) : Int64 =
+    let allOnes = (1 << n) - 1 in
+    nqueenSolve(allOnes, 0, 0, 0, allOnes, 0)
+
+nqueen(1) = 1
+nqueen(4) = 2
+nqueen(5) = 10
+nqueen(6) = 4
+nqueen(7) = 40
+nqueen(8) = 92
+
+
+// ===================================================================
 // Hello World (helloworld) - simplest benchmark
 // ===================================================================
 
 42 = 42
+
+
+// ===================================================================
+// BLOCKED BENCHMARKS - require compiler bug fixes
+// ===================================================================
+//
+// The following benchmarks cannot be implemented due to compiler bugs:
+//
+// 1. nsieve - Requires List.repeat + List.setAt which has memory corruption bug
+//    Bug: Setting index 6 then 10 on a List.repeat<Bool> list causes index 13
+//    to become corrupted.
+//
+// 2. spectral_norm - Requires List.getAt<Float> which returns wrong values
+//    Bug: Extracting Float from Option<Float> via pattern match returns 0
+//    instead of the actual value.
+//
+// 3. matmul - Blocked by same issues as nsieve (needs List.setAt for 2D arrays)
+//
+// Additional bug found:
+// - Pattern matching on Option<Bool> with literal patterns (Some(true), Some(false))
+//   doesn't work correctly - Some(false) matches the Some(true) pattern.
