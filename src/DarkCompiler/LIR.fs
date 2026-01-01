@@ -173,6 +173,8 @@ type Terminator =
     | Ret                                              // Return from function
     | Branch of cond:Reg * trueLabel:Label * falseLabel:Label  // Conditional branch (test register != 0, uses CBNZ)
     | BranchZero of cond:Reg * zeroLabel:Label * nonZeroLabel:Label  // Conditional branch (test register == 0, uses CBZ)
+    | BranchBitZero of reg:Reg * bit:int * zeroLabel:Label * nonZeroLabel:Label  // Test bit and branch (uses TBZ)
+    | BranchBitNonZero of reg:Reg * bit:int * nonZeroLabel:Label * zeroLabel:Label  // Test bit and branch (uses TBNZ)
     | CondBranch of cond:Condition * trueLabel:Label * falseLabel:Label  // Conditional branch (test flags)
     | Jump of Label                                     // Unconditional jump
 

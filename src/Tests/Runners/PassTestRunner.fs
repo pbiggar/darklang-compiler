@@ -327,6 +327,10 @@ let prettyPrintLIRTerminator (term: LIR.Terminator) : string =
         $"Branch({prettyPrintLIRReg cond}, {trueLabel}, {falseLabel})"
     | LIR.BranchZero (cond, zeroLabel, nonZeroLabel) ->
         $"BranchZero({prettyPrintLIRReg cond}, {zeroLabel}, {nonZeroLabel})"
+    | LIR.BranchBitZero (reg, bit, zeroLabel, nonZeroLabel) ->
+        $"BranchBitZero({prettyPrintLIRReg reg}, #{bit}, {zeroLabel}, {nonZeroLabel})"
+    | LIR.BranchBitNonZero (reg, bit, nonZeroLabel, zeroLabel) ->
+        $"BranchBitNonZero({prettyPrintLIRReg reg}, #{bit}, {nonZeroLabel}, {zeroLabel})"
     | LIR.CondBranch (cond, trueLabel, falseLabel) ->
         $"CondBranch({cond}, {trueLabel}, {falseLabel})"
     | LIR.Jump label -> $"Jump({label})"
@@ -681,8 +685,14 @@ let prettyPrintARM64Instr = function
         $"CBNZ({prettyPrintARM64Reg reg}, {label})"
     | ARM64.CBNZ_offset (reg, offset) ->
         $"CBNZ_offset({prettyPrintARM64Reg reg}, {offset})"
+    | ARM64.TBZ (reg, bit, offset) ->
+        $"TBZ({prettyPrintARM64Reg reg}, {bit}, {offset})"
     | ARM64.TBNZ (reg, bit, offset) ->
         $"TBNZ({prettyPrintARM64Reg reg}, {bit}, {offset})"
+    | ARM64.TBZ_label (reg, bit, label) ->
+        $"TBZ_label({prettyPrintARM64Reg reg}, {bit}, {label})"
+    | ARM64.TBNZ_label (reg, bit, label) ->
+        $"TBNZ_label({prettyPrintARM64Reg reg}, {bit}, {label})"
     | ARM64.B offset ->
         $"B({offset})"
     | ARM64.B_cond (cond, offset) ->

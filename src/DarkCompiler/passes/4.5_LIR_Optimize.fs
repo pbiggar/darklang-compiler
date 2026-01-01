@@ -126,6 +126,41 @@ let tryFuseCondBranch (instrs: Instr list) (terminator: Terminator) : (Instr lis
         | _ -> None
     | _ -> None
 
+/// Check if a value is a power of 2 (exactly one bit set)
+let isPowerOf2 (n: int64) : bool =
+    n > 0L && (n &&& (n - 1L)) = 0L
+
+/// Get the bit position of a power-of-2 value (log2)
+let bitPosition (n: int64) : int =
+    let rec loop pos x =
+        if x = 1L then pos
+        else loop (pos + 1) (x >>> 1)
+    loop 0 n
+
+/// Try to fuse AND_imm (power-of-2 mask) + BranchZero/Branch into BranchBitZero/BranchBitNonZero
+/// Pattern: last instruction is AND_imm dest, src, mask where mask is power of 2
+///          terminator is BranchZero(dest, ...) or Branch(dest, ...)
+/// Result: BranchBitZero(src, bitNum, ...) or BranchBitNonZero(src, bitNum, ...)
+/// This uses TBZ/TBNZ instructions which test a single bit
+let tryFuseAndBitBranch (instrs: Instr list) (terminator: Terminator) : (Instr list * Terminator) option =
+    match List.tryLast instrs with
+    | Some (And_imm (andDest, andSrc, mask)) when isPowerOf2 mask ->
+        let bit = bitPosition mask
+        let otherInstrs = instrs |> List.take (List.length instrs - 1)
+        // Check that andDest is not used in the remaining instructions
+        if isRegUsedInInstrs andDest otherInstrs then
+            None
+        else
+            match terminator with
+            | BranchZero (condReg, zeroLabel, nonZeroLabel) when sameReg condReg andDest ->
+                // AND_imm + CBZ → TBZ
+                Some (otherInstrs, BranchBitZero (andSrc, bit, zeroLabel, nonZeroLabel))
+            | Branch (condReg, nonZeroLabel, zeroLabel) when sameReg condReg andDest ->
+                // AND_imm + CBNZ → TBNZ
+                Some (otherInstrs, BranchBitNonZero (andSrc, bit, nonZeroLabel, zeroLabel))
+            | _ -> None
+    | _ -> None
+
 /// Try to fuse CMP reg, #0 + CondBranch into Branch/BranchZero
 /// Pattern: last instruction is CMP reg, #0; terminator is CondBranch(EQ/NE, ...)
 /// Result:
@@ -151,6 +186,15 @@ let tryFuseCmpZeroBranch (instrs: Instr list) (terminator: Terminator) : (Instr 
         | _ -> None
     | _ -> None
 
+/// Apply TBZ/TBNZ fusion if applicable
+/// NOTE: Currently disabled because it causes extra register moves that negate the savings.
+/// The AND_imm defines a new register, but TBZ uses the source register directly,
+/// which can conflict with register allocation and cause spills/moves.
+/// TODO: Enable this once register allocation can handle the pattern better.
+let applyAndBitBranchFusion (instrs: Instr list) (terminator: Terminator) : (Instr list * Terminator) =
+    // Disabled - causes performance regression due to extra register moves
+    (instrs, terminator)
+
 /// Optimize a basic block
 let optimizeBlock (block: BasicBlock) : BasicBlock =
     let instrs' = optimizeInstrs block.Instrs
@@ -158,21 +202,26 @@ let optimizeBlock (block: BasicBlock) : BasicBlock =
     let instrs'' = tryFuseMulAdd instrs'
 
     // Try to fuse Cset + Branch into CondBranch
-    match tryFuseCondBranch instrs'' block.Terminator with
-    | Some (fusedInstrs, fusedTerminator) ->
-        // After fusing Cset + Branch → CondBranch, try to fuse CMP #0 + CondBranch → CBZ/CBNZ
-        match tryFuseCmpZeroBranch fusedInstrs fusedTerminator with
-        | Some (fusedInstrs2, fusedTerminator2) ->
-            { block with Instrs = fusedInstrs2; Terminator = fusedTerminator2 }
-        | None ->
-            { block with Instrs = fusedInstrs; Terminator = fusedTerminator }
-    | None ->
-        // Also try CMP #0 + CondBranch fusion on the original terminator
-        match tryFuseCmpZeroBranch instrs'' block.Terminator with
+    let (instrs''', terminator') =
+        match tryFuseCondBranch instrs'' block.Terminator with
         | Some (fusedInstrs, fusedTerminator) ->
-            { block with Instrs = fusedInstrs; Terminator = fusedTerminator }
+            // After fusing Cset + Branch → CondBranch, try to fuse CMP #0 + CondBranch → CBZ/CBNZ
+            match tryFuseCmpZeroBranch fusedInstrs fusedTerminator with
+            | Some (fusedInstrs2, fusedTerminator2) ->
+                (fusedInstrs2, fusedTerminator2)
+            | None ->
+                (fusedInstrs, fusedTerminator)
         | None ->
-            { block with Instrs = instrs'' }
+            // Also try CMP #0 + CondBranch fusion on the original terminator
+            match tryFuseCmpZeroBranch instrs'' block.Terminator with
+            | Some (fusedInstrs, fusedTerminator) ->
+                (fusedInstrs, fusedTerminator)
+            | None ->
+                (instrs'', block.Terminator)
+
+    // Try to fuse AND_imm (power-of-2) + BranchZero/Branch → TBZ/TBNZ
+    let (finalInstrs, finalTerminator) = applyAndBitBranchFusion instrs''' terminator'
+    { block with Instrs = finalInstrs; Terminator = finalTerminator }
 
 /// Optimize a CFG
 let optimizeCFG (cfg: CFG) : CFG =

@@ -2854,6 +2854,32 @@ let convertTerminator (epilogueLabel: string) (terminator: LIR.Terminator) : Res
                 ARM64.B_label nonZeroLbl          // Otherwise jump to non-zero branch
             ])
 
+    | LIR.BranchBitZero (condReg, bit, zeroLabel, nonZeroLabel) ->
+        // Branch if specified bit is zero, otherwise fall through to non-zero case
+        // Use TBZ (test bit and branch if zero) to zero label
+        // Then unconditional branch to non-zero label
+        lirRegToARM64Reg condReg
+        |> Result.map (fun arm64Reg ->
+            let (LIR.Label zeroLbl) = zeroLabel
+            let (LIR.Label nonZeroLbl) = nonZeroLabel
+            [
+                ARM64.TBZ_label (arm64Reg, bit, zeroLbl)  // If bit is zero, jump to zero branch
+                ARM64.B_label nonZeroLbl                   // Otherwise jump to non-zero branch
+            ])
+
+    | LIR.BranchBitNonZero (condReg, bit, nonZeroLabel, zeroLabel) ->
+        // Branch if specified bit is non-zero, otherwise fall through to zero case
+        // Use TBNZ (test bit and branch if not zero) to non-zero label
+        // Then unconditional branch to zero label
+        lirRegToARM64Reg condReg
+        |> Result.map (fun arm64Reg ->
+            let (LIR.Label nonZeroLbl) = nonZeroLabel
+            let (LIR.Label zeroLbl) = zeroLabel
+            [
+                ARM64.TBNZ_label (arm64Reg, bit, nonZeroLbl)  // If bit is not zero, jump to non-zero branch
+                ARM64.B_label zeroLbl                          // Otherwise jump to zero branch
+            ])
+
     | LIR.Jump label ->
         let (LIR.Label lbl) = label
         Ok [ARM64.B_label lbl]

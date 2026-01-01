@@ -104,7 +104,10 @@ type Instr =
     // Offset-based branches (for handcrafted runtime code with known offsets)
     | CBZ_offset of reg:Reg * offset:int  // CBZ with immediate offset
     | CBNZ_offset of reg:Reg * offset:int  // CBNZ with immediate offset
+    | TBZ of reg:Reg * bit:int * offset:int  // Test bit and branch if zero
     | TBNZ of reg:Reg * bit:int * offset:int  // Test bit and branch if not zero
+    | TBZ_label of reg:Reg * bit:int * label:string  // Test bit and branch if zero (label will be resolved)
+    | TBNZ_label of reg:Reg * bit:int * label:string  // Test bit and branch if not zero (label will be resolved)
     | B of offset:int  // Unconditional branch with immediate offset
     | B_cond of cond:Condition * offset:int  // Conditional branch with immediate offset
     | NEG of dest:Reg * src:Reg  // Negate: dest = 0 - src

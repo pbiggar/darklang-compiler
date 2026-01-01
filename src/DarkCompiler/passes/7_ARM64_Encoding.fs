@@ -304,6 +304,18 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rt = encodeReg reg
         [sf ||| op ||| flag ||| imm19 ||| rt]
 
+    | ARM64.TBZ (reg, bit, offset) ->
+        // TBZ: b5 011011 0 b40 imm14 Rt
+        // Test bit and Branch if Zero
+        // b5 = bit[5], b40 = bit[4:0]
+        let b5 = (uint32 bit >>> 5) <<< 31
+        let op = 0b011011u <<< 25
+        let flag = 0u <<< 24  // TBZ (vs TBNZ which has 1)
+        let b40 = (uint32 bit &&& 0x1Fu) <<< 19
+        let imm14 = ((uint32 offset) &&& 0x3FFFu) <<< 5
+        let rt = encodeReg reg
+        [b5 ||| op ||| flag ||| b40 ||| imm14 ||| rt]
+
     | ARM64.TBNZ (reg, bit, offset) ->
         // TBNZ: b5 011011 1 b40 imm14 Rt
         // Test bit and Branch if Not Zero
@@ -315,6 +327,10 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let imm14 = ((uint32 offset) &&& 0x3FFFu) <<< 5
         let rt = encodeReg reg
         [b5 ||| op ||| flag ||| b40 ||| imm14 ||| rt]
+
+    | ARM64.TBZ_label _ | ARM64.TBNZ_label _ ->
+        // Resolved in encodeWithLabels with computed label offsets
+        []
 
     | ARM64.B offset ->
         // B: 000101 imm26
@@ -919,7 +935,8 @@ let computeLabelPositions (instructions: ARM64.Instr list) : Map<string, int> =
                 // Record this label's position, don't increment offset (pseudo-instruction)
                 loop rest offset (Map.add name offset labelMap)
             | ARM64.CBZ _ | ARM64.CBNZ _ | ARM64.B_label _ | ARM64.B_cond_label _ | ARM64.BL _
-            | ARM64.ADRP _ | ARM64.ADR _ | ARM64.ADD_label _ ->
+            | ARM64.ADRP _ | ARM64.ADR _ | ARM64.ADD_label _
+            | ARM64.TBZ_label _ | ARM64.TBNZ_label _ ->
                 // These will be resolved in pass 2, each is 4 bytes
                 loop rest (offset + 4) labelMap
             | _ ->
@@ -964,6 +981,38 @@ let encodeWithLabels (instr: ARM64.Instr) (currentOffset: int) (labelMap: Map<st
             let imm19 = ((uint32 instrOffset) &&& 0x7FFFFu) <<< 5
             let rt = encodeReg reg
             [sf ||| op ||| flag ||| imm19 ||| rt]
+        | None ->
+            []
+
+    | ARM64.TBZ_label (reg, bit, label) ->
+        match Map.tryFind label labelMap with
+        | Some targetOffset ->
+            let byteOffset = targetOffset - currentOffset
+            let instrOffset = byteOffset / 4
+            // Encode as TBZ with immediate offset
+            let b5 = (uint32 bit >>> 5) <<< 31
+            let op = 0b011011u <<< 25
+            let flag = 0u <<< 24  // TBZ
+            let b40 = (uint32 bit &&& 0x1Fu) <<< 19
+            let imm14 = ((uint32 instrOffset) &&& 0x3FFFu) <<< 5
+            let rt = encodeReg reg
+            [b5 ||| op ||| flag ||| b40 ||| imm14 ||| rt]
+        | None ->
+            []
+
+    | ARM64.TBNZ_label (reg, bit, label) ->
+        match Map.tryFind label labelMap with
+        | Some targetOffset ->
+            let byteOffset = targetOffset - currentOffset
+            let instrOffset = byteOffset / 4
+            // Encode as TBNZ with immediate offset
+            let b5 = (uint32 bit >>> 5) <<< 31
+            let op = 0b011011u <<< 25
+            let flag = 1u <<< 24  // TBNZ
+            let b40 = (uint32 bit &&& 0x1Fu) <<< 19
+            let imm14 = ((uint32 instrOffset) &&& 0x3FFFu) <<< 5
+            let rt = encodeReg reg
+            [b5 ||| op ||| flag ||| b40 ||| imm14 ||| rt]
         | None ->
             []
 

@@ -341,6 +341,8 @@ let getTerminatorUsedVRegs (term: LIR.Terminator) : Set<int> =
     match term with
     | LIR.Branch (LIR.Virtual id, _, _) -> Set.singleton id
     | LIR.BranchZero (LIR.Virtual id, _, _) -> Set.singleton id
+    | LIR.BranchBitZero (LIR.Virtual id, _, _, _) -> Set.singleton id
+    | LIR.BranchBitNonZero (LIR.Virtual id, _, _, _) -> Set.singleton id
     | LIR.CondBranch _ -> Set.empty  // CondBranch uses condition flags, not a register
     | _ -> Set.empty
 
@@ -350,6 +352,8 @@ let getSuccessors (term: LIR.Terminator) : LIR.Label list =
     | LIR.Ret -> []
     | LIR.Branch (_, trueLabel, falseLabel) -> [trueLabel; falseLabel]
     | LIR.BranchZero (_, zeroLabel, nonZeroLabel) -> [zeroLabel; nonZeroLabel]
+    | LIR.BranchBitZero (_, _, zeroLabel, nonZeroLabel) -> [zeroLabel; nonZeroLabel]
+    | LIR.BranchBitNonZero (_, _, nonZeroLabel, zeroLabel) -> [nonZeroLabel; zeroLabel]
     | LIR.CondBranch (_, trueLabel, falseLabel) -> [trueLabel; falseLabel]
     | LIR.Jump label -> [label]
 
@@ -1959,6 +1963,32 @@ let applyToTerminator (mapping: Map<int, Allocation>) (term: LIR.Terminator)
                 ([], LIR.BranchZero (LIR.Physical LIR.X11, zeroLabel, nonZeroLabel))
         | LIR.Physical p ->
             ([], LIR.BranchZero (LIR.Physical p, zeroLabel, nonZeroLabel))
+    | LIR.BranchBitZero (reg, bit, zeroLabel, nonZeroLabel) ->
+        match reg with
+        | LIR.Virtual id ->
+            match Map.tryFind id mapping with
+            | Some (PhysReg physReg) ->
+                ([], LIR.BranchBitZero (LIR.Physical physReg, bit, zeroLabel, nonZeroLabel))
+            | Some (StackSlot offset) ->
+                let loadInstr = LIR.Mov (LIR.Physical LIR.X11, LIR.StackSlot offset)
+                ([loadInstr], LIR.BranchBitZero (LIR.Physical LIR.X11, bit, zeroLabel, nonZeroLabel))
+            | None ->
+                ([], LIR.BranchBitZero (LIR.Physical LIR.X11, bit, zeroLabel, nonZeroLabel))
+        | LIR.Physical p ->
+            ([], LIR.BranchBitZero (LIR.Physical p, bit, zeroLabel, nonZeroLabel))
+    | LIR.BranchBitNonZero (reg, bit, nonZeroLabel, zeroLabel) ->
+        match reg with
+        | LIR.Virtual id ->
+            match Map.tryFind id mapping with
+            | Some (PhysReg physReg) ->
+                ([], LIR.BranchBitNonZero (LIR.Physical physReg, bit, nonZeroLabel, zeroLabel))
+            | Some (StackSlot offset) ->
+                let loadInstr = LIR.Mov (LIR.Physical LIR.X11, LIR.StackSlot offset)
+                ([loadInstr], LIR.BranchBitNonZero (LIR.Physical LIR.X11, bit, nonZeroLabel, zeroLabel))
+            | None ->
+                ([], LIR.BranchBitNonZero (LIR.Physical LIR.X11, bit, nonZeroLabel, zeroLabel))
+        | LIR.Physical p ->
+            ([], LIR.BranchBitNonZero (LIR.Physical p, bit, nonZeroLabel, zeroLabel))
     | LIR.Jump label -> ([], LIR.Jump label)
     | LIR.CondBranch (cond, trueLabel, falseLabel) ->
         // CondBranch uses condition flags, not a register - pass through unchanged
