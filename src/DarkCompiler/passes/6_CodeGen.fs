@@ -1939,8 +1939,10 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                     let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
                     Ok ([
                         // Load pool string address into X10
+                        // Pool strings have format [length:8][data:N] - we need the data pointer
                         ARM64.ADRP (ARM64.X10, label)
                         ARM64.ADD_label (ARM64.X10, ARM64.X10, label)
+                        ARM64.ADD_imm (ARM64.X10, ARM64.X10, 8us)  // Skip 8-byte length prefix to point at data
                         // Allocate heap space (bump allocator), store address in X9
                         ARM64.MOV_reg (ARM64.X9, ARM64.X28)  // X9 = current heap pointer (result)
                         ARM64.ADD_imm (ARM64.X28, ARM64.X28, uint16 totalSize)  // bump pointer

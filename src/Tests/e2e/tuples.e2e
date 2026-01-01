@@ -100,3 +100,20 @@ let (x, y) = (6, 4) in x * y - x + y = stdout="22\n"
 // Tuple with computed values
 let x = 5 in (x, x + 1) = stdout="(5, 6)\n"
 (3 + 4, 5 * 2) = stdout="(7, 10)\n"
+
+// ===================================================================
+// String Extraction from Tuples
+// ===================================================================
+
+// Extract string from first position
+match ("hello", 5) with | (a, _) -> a = stdout="hello\n"
+
+// Extract string from second position
+match (5, "world") with | (_, b) -> b = stdout="world\n"
+
+// Extract string using let-pattern
+let (s, _) = ("test", 42) in s = stdout="test\n"
+let (_, s) = (42, "test") in s = stdout="test\n"
+
+// Extract string alongside other values
+let (a, s, b) = (1, "middle", 2) in s = stdout="middle\n"
