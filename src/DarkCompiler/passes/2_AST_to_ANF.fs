@@ -16,8 +16,41 @@
 
 module AST_to_ANF
 
+open System.Collections.Concurrent
 open ANF
 open Output
+
+/// Thread-safe cache for specialized (monomorphized) functions
+/// Key: (funcName, typeArgs as strings), Value: specialized AST.FunctionDef
+/// Using string list for type args to ensure proper equality comparison
+type SpecializationCache = ConcurrentDictionary<string * string list, AST.FunctionDef>
+
+/// Convert AST.Type to a string for cache key
+let rec typeToString (ty: AST.Type) : string =
+    match ty with
+    | AST.TInt64 -> "i64"
+    | AST.TInt32 -> "i32"
+    | AST.TInt16 -> "i16"
+    | AST.TInt8 -> "i8"
+    | AST.TUInt64 -> "u64"
+    | AST.TUInt32 -> "u32"
+    | AST.TUInt16 -> "u16"
+    | AST.TUInt8 -> "u8"
+    | AST.TBool -> "bool"
+    | AST.TString -> "str"
+    | AST.TBytes -> "bytes"
+    | AST.TChar -> "char"
+    | AST.TFloat64 -> "f64"
+    | AST.TUnit -> "unit"
+    | AST.TRawPtr -> "ptr"
+    | AST.TVar name -> name
+    | AST.TRecord name -> name
+    | AST.TSum (name, args) -> name + "<" + (args |> List.map typeToString |> String.concat ",") + ">"
+    | AST.TList elemType -> "List<" + typeToString elemType + ">"
+    | AST.TDict (keyType, valueType) -> "Dict<" + typeToString keyType + "," + typeToString valueType + ">"
+    | AST.TFunction (paramTypes, retType) ->
+        "(" + (paramTypes |> List.map typeToString |> String.concat ",") + ")->" + typeToString retType
+    | AST.TTuple types -> "(" + (types |> List.map typeToString |> String.concat "*") + ")"
 
 /// Try to convert a function call to a file I/O intrinsic CExpr
 /// Returns Some CExpr if it's a file intrinsic, None otherwise
@@ -434,6 +467,11 @@ let specializeFunction (funcDef: AST.FunctionDef) (typeArgs: AST.Type list) : AS
       Params = specializedParams
       ReturnType = specializedReturnType
       Body = specializedBody }
+
+/// Specialize a generic function with caching to avoid redundant work across tests
+let specializeFunctionCached (cache: SpecializationCache) (funcDef: AST.FunctionDef) (typeArgs: AST.Type list) : AST.FunctionDef =
+    let key = (funcDef.Name, typeArgs |> List.map typeToString)
+    cache.GetOrAdd(key, fun _ -> specializeFunction funcDef typeArgs)
 
 /// Collect all TypeApp call sites from an expression
 let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
@@ -1346,6 +1384,79 @@ let monomorphizeWithExternalDefs (externalGenericDefs: GenericFuncDefs) (program
                     match Map.tryFind funcName genericFuncDefs with
                     | Some funcDef ->
                         let specialized = specializeFunction funcDef typeArgs
+                        // Collect TypeApps from the specialized body (these may be new specs)
+                        let bodySpecs = collectTypeAppsFromFunc specialized
+                        (specialized :: funcs, Set.union pending bodySpecs)
+                    | None ->
+                        (funcs, pending)) ([], Set.empty)
+
+            // Continue with new pending specs
+            iterate newPendingSpecs (Set.union processedSpecs newSpecs) (newFuncs @ accFuncs)
+
+    // Run iterative specialization
+    let specializedFuncs = iterate initialSpecs Set.empty []
+
+    // Now replace all TypeApps with Calls in all specialized functions
+    let specializedFuncsReplaced = specializedFuncs |> List.map replaceTypeAppsInFunc
+
+    // Replace TypeApps with Calls in all original top-levels (except generic function defs)
+    let transformedTopLevels =
+        topLevels
+        |> List.choose (function
+            | AST.FunctionDef f when not (List.isEmpty f.TypeParams) ->
+                // Skip generic function definitions (they're replaced by specializations)
+                None
+            | AST.FunctionDef f ->
+                Some (AST.FunctionDef (replaceTypeAppsInFunc f))
+            | AST.Expression e ->
+                Some (AST.Expression (replaceTypeApps e))
+            | AST.TypeDef td ->
+                Some (AST.TypeDef td))
+
+    // Add specialized functions to the program
+    let specializationTopLevels =
+        specializedFuncsReplaced |> List.map AST.FunctionDef
+
+    AST.Program (specializationTopLevels @ transformedTopLevels)
+
+/// Monomorphize with caching - reuses specialized functions from previous compilations
+/// This dramatically speeds up repeated compilations that use the same type combinations
+let monomorphizeWithExternalDefsCached (cache: SpecializationCache) (externalGenericDefs: GenericFuncDefs) (program: AST.Program) : AST.Program =
+    let (AST.Program topLevels) = program
+
+    // Collect generic function definitions from this program
+    let localGenericDefs = extractGenericFuncDefs program
+
+    // Merge external defs with local defs (local takes precedence)
+    let genericFuncDefs =
+        Map.fold (fun acc k v -> Map.add k v acc) externalGenericDefs localGenericDefs
+
+    // Collect initial specialization sites from non-generic functions and expressions
+    let initialSpecs : Set<SpecKey> =
+        topLevels
+        |> List.map (function
+            | AST.FunctionDef f when List.isEmpty f.TypeParams -> collectTypeAppsFromFunc f
+            | AST.Expression e -> collectTypeApps e
+            | _ -> Set.empty)
+        |> List.fold Set.union Set.empty
+
+    // Iterate: specialize, collect new TypeApps from specialized bodies, repeat
+    let rec iterate (pendingSpecs: Set<SpecKey>) (processedSpecs: Set<SpecKey>) (accFuncs: AST.FunctionDef list) =
+        // Filter to only specs not yet processed
+        let newSpecs = Set.difference pendingSpecs processedSpecs
+        if Set.isEmpty newSpecs then
+            // No new specs, we're done
+            accFuncs
+        else
+            // Generate specialized functions for new specs (WITH CACHING)
+            let (newFuncs, newPendingSpecs) =
+                newSpecs
+                |> Set.toList
+                |> List.fold (fun (funcs, pending) (funcName, typeArgs) ->
+                    match Map.tryFind funcName genericFuncDefs with
+                    | Some funcDef ->
+                        // USE CACHED SPECIALIZATION
+                        let specialized = specializeFunctionCached cache funcDef typeArgs
                         // Collect TypeApps from the specialized body (these may be new specs)
                         let bodySpecs = collectTypeAppsFromFunc specialized
                         (specialized :: funcs, Set.union pending bodySpecs)
@@ -4368,6 +4479,120 @@ let convertUserOnly
     (userProgram: AST.Program) : Result<UserOnlyResult, string> =
     // 1. Run transformations on user code only (with access to stdlib generics)
     let monomorphizedProgram = monomorphizeWithExternalDefs stdlibGenericDefs userProgram
+    let inlinedProgram = inlineLambdasInProgram monomorphizedProgram
+    liftLambdasInProgram inlinedProgram
+    |> Result.bind (fun liftedProgram ->
+    let (AST.Program topLevels) = liftedProgram
+    let varGen = ANF.VarGen 0
+
+    // 2. Build registries from user code only
+    let userTypeRegBase : TypeRegistry =
+        topLevels
+        |> List.choose (function
+            | AST.TypeDef (AST.RecordDef (name, _typeParams, fields)) -> Some (name, fields)
+            | _ -> None)
+        |> Map.ofList
+
+    let userVariantLookup : VariantLookup =
+        topLevels
+        |> List.choose (function
+            | AST.TypeDef (AST.SumTypeDef (typeName, typeParams, variants)) ->
+                Some (typeName, typeParams, variants)
+            | _ -> None)
+        |> List.collect (fun (typeName, typeParams, variants) ->
+            variants
+            |> List.mapi (fun idx variant -> (variant.Name, (typeName, typeParams, idx, variant.Payload))))
+        |> Map.ofList
+
+    // Build alias registry from type alias definitions
+    let userAliasReg : AliasRegistry =
+        topLevels
+        |> List.choose (function
+            | AST.TypeDef (AST.TypeAlias (name, [], targetType)) -> Some (name, targetType)
+            | _ -> None)
+        |> Map.ofList
+
+    // Expand userTypeReg with alias entries so "Vec" can be looked up when it aliases "Point"
+    let userTypeReg = expandTypeRegWithAliases userTypeRegBase userAliasReg
+
+    let functions = topLevels |> List.choose (function AST.FunctionDef f -> Some f | _ -> None)
+    let expressions = topLevels |> List.choose (function AST.Expression e -> Some e | _ -> None)
+
+    let userFuncReg : FunctionRegistry =
+        functions
+        |> List.map (fun f ->
+            let paramTypes = f.Params |> List.map snd
+            let funcType = AST.TFunction (paramTypes, f.ReturnType)
+            (f.Name, funcType))
+        |> Map.ofList
+
+    let userFuncParams : Map<string, (string * AST.Type) list> =
+        functions
+        |> List.map (fun f -> (f.Name, f.Params))
+        |> Map.ofList
+
+    // 3. Merge with stdlib registries (stdlib first, user overlays)
+    let mergedTypeReg = mergeMaps stdlibResult.TypeReg userTypeReg
+    let mergedVariantLookup = mergeMaps stdlibResult.VariantLookup userVariantLookup
+    let mergedFuncReg = mergeMaps stdlibResult.FuncReg userFuncReg
+
+    // Get module function parameters from cached stdlib result
+    let moduleRegistry = stdlibResult.ModuleRegistry
+    let moduleFuncParams : Map<string, (string * AST.Type) list> =
+        moduleRegistry
+        |> Map.toList
+        |> List.map (fun (qualifiedName, moduleFunc) ->
+            let paramList = moduleFunc.ParamTypes |> List.mapi (fun i t -> ($"arg{i}", t))
+            (qualifiedName, paramList))
+        |> Map.ofList
+
+    let mergedFuncParams = mergeMaps stdlibResult.FuncParams (mergeMaps userFuncParams moduleFuncParams)
+
+    // 4. Convert user functions with merged registries for lookups
+    let rec convertFunctions (funcs: AST.FunctionDef list) (vg: ANF.VarGen) (acc: ANF.Function list) : Result<ANF.Function list * ANF.VarGen, string> =
+        match funcs with
+        | [] -> Ok (List.rev acc, vg)
+        | func :: rest ->
+            convertFunction func vg mergedTypeReg mergedVariantLookup mergedFuncReg moduleRegistry
+            |> Result.bind (fun (anfFunc, vg') ->
+                convertFunctions rest vg' (anfFunc :: acc))
+
+    // Validate no function is named "main" (reserved for synthesized entry point)
+    let hasMainFunc = functions |> List.exists (fun f -> f.Name = "main")
+    if hasMainFunc then
+        Error "Function name 'main' is reserved"
+    else
+
+    convertFunctions functions varGen []
+    |> Result.bind (fun (userAnfFuncs, varGen1) ->
+        match expressions with
+        | [expr] ->
+            let emptyEnv : VarEnv = Map.empty
+            toANF expr varGen1 emptyEnv mergedTypeReg mergedVariantLookup mergedFuncReg moduleRegistry
+            |> Result.map (fun (anfExpr, _) ->
+                // Return user functions ONLY (not merged with stdlib)
+                { UserFunctions = userAnfFuncs
+                  MainExpr = anfExpr
+                  TypeReg = mergedTypeReg
+                  VariantLookup = mergedVariantLookup
+                  FuncReg = mergedFuncReg
+                  FuncParams = mergedFuncParams
+                  ModuleRegistry = moduleRegistry })
+        | [] ->
+            Error "Program must have a main expression"
+        | _ ->
+            Error "Multiple top-level expressions not allowed"))
+
+/// Convert user program to ANF with specialization caching.
+/// Uses the provided cache to avoid re-monomorphizing the same generic functions.
+let convertUserOnlyCached
+    (cache: SpecializationCache)
+    (stdlibGenericDefs: GenericFuncDefs)
+    (stdlibResult: ConversionResult)
+    (userProgram: AST.Program) : Result<UserOnlyResult, string> =
+    // 1. Run transformations on user code only (with access to stdlib generics)
+    // Use cached monomorphization to avoid re-specializing the same functions
+    let monomorphizedProgram = monomorphizeWithExternalDefsCached cache stdlibGenericDefs userProgram
     let inlinedProgram = inlineLambdasInProgram monomorphizedProgram
     liftLambdasInProgram inlinedProgram
     |> Result.bind (fun liftedProgram ->

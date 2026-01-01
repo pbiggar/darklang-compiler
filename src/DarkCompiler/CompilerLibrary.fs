@@ -9,6 +9,7 @@ open System
 open System.IO
 open System.Diagnostics
 open System.Reflection
+open System.Collections.Concurrent
 open Output
 
 /// Result of compilation
@@ -57,6 +58,10 @@ let defaultOptions : CompilerOptions = {
     EnableCoverage = false
 }
 
+/// Cache for specialized (monomorphized) functions - thread-safe for parallel test execution
+/// Key: (funcName, typeArgs as strings), Value: specialized AST.FunctionDef
+type SpecializationCache = ConcurrentDictionary<string * string list, AST.FunctionDef>
+
 /// Result of compiling stdlib - can be reused across compilations
 type StdlibResult = {
     /// Parsed stdlib AST (for merging with user AST)
@@ -80,6 +85,8 @@ type StdlibResult = {
     AllocatedFunctions: LIR.Function list
     /// Call graph for dead code elimination (which stdlib funcs call which other funcs)
     StdlibCallGraph: Map<string, Set<string>>
+    /// Cache for specialized functions (shared across test compilations)
+    SpecCache: SpecializationCache
 }
 
 /// Lazy stdlib result - defers expensive compilation until we know what's needed
@@ -99,6 +106,8 @@ type LazyStdlibResult = {
     StdlibANFCallGraph: Map<string, Set<string>>
     /// TypeMap from RC insertion - needed for MIR conversion (tail call arg types, etc.)
     StdlibTypeMap: ANF.TypeMap
+    /// Cache for specialized functions (shared across test compilations)
+    SpecCache: SpecializationCache
 }
 
 // Helper functions for exception-to-Result conversion (Darklang compatibility)
@@ -218,6 +227,7 @@ let compileStdlib () : Result<StdlibResult, string> =
                                 LIRProgram = lirProgram
                                 AllocatedFunctions = allocatedFuncs
                                 StdlibCallGraph = stdlibCallGraph
+                                SpecCache = SpecializationCache()
                             }
 
 /// Prepare stdlib for lazy compilation - stops at ANF level
@@ -262,6 +272,7 @@ let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
                         StdlibANFFunctions = stdlibFuncMap
                         StdlibANFCallGraph = stdlibCallGraph
                         StdlibTypeMap = typeMap
+                        SpecCache = SpecializationCache()
                     }
 
 /// Internal: Compile user code with stdlib AST (shared implementation)
@@ -722,9 +733,11 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                 // Pass 2: AST → ANF (user only, separate from stdlib)
                 // User code is converted with access to stdlib's registries for lookups.
                 // User ANF is kept separate for MIR-level caching optimization.
+                // Use cached version to avoid re-monomorphizing same generic functions.
                 if verbosity >= 1 then println "  [2/8] AST → ANF (user only)..."
                 let userOnlyResult =
-                    AST_to_ANF.convertUserOnly
+                    AST_to_ANF.convertUserOnlyCached
+                        stdlib.SpecCache
                         stdlib.GenericFuncDefs
                         stdlib.ANFResult
                         typedUserAst
@@ -1025,9 +1038,11 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                     println ""
 
                 // Pass 2: AST → ANF (user only)
+                // Use cached version to avoid re-monomorphizing same generic functions.
                 if verbosity >= 1 then println "  [2/8] AST → ANF (user only)..."
                 let userOnlyResult =
-                    AST_to_ANF.convertUserOnly
+                    AST_to_ANF.convertUserOnlyCached
+                        stdlib.SpecCache
                         stdlib.GenericFuncDefs
                         stdlib.ANFResult
                         typedUserAst
@@ -1494,7 +1509,7 @@ let getReachableStdlibFunctions (stdlib: LazyStdlibResult) (source: string) : Re
         | Error typeErr -> Error $"Type error: {TypeChecking.typeErrorToString typeErr}"
         | Ok (programType, typedUserAst, _) ->
             // Convert to ANF
-            match AST_to_ANF.convertUserOnly stdlib.GenericFuncDefs stdlib.ANFResult typedUserAst with
+            match AST_to_ANF.convertUserOnlyCached stdlib.SpecCache stdlib.GenericFuncDefs stdlib.ANFResult typedUserAst with
             | Error err -> Error $"ANF conversion error: {err}"
             | Ok userOnly ->
                 // Create ConversionResult for RC insertion
