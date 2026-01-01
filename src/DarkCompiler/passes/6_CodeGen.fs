@@ -624,6 +624,12 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                 lirRegToARM64Reg right
                 |> Result.map (fun rightReg -> [ARM64.AND_reg (destReg, leftReg, rightReg)])))
 
+    | LIR.And_imm (dest, src, imm) ->
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirRegToARM64Reg src
+            |> Result.map (fun srcReg -> [ARM64.AND_imm (destReg, srcReg, uint64 imm)]))
+
     | LIR.Orr (dest, left, right) ->
         lirRegToARM64Reg dest
         |> Result.bind (fun destReg ->

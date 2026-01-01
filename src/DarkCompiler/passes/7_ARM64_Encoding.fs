@@ -399,6 +399,24 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rd = encodeReg dest
         [sf ||| opc ||| op ||| shift ||| rm ||| rn ||| rd]
 
+    | ARM64.AND_imm (dest, src, imm) ->
+        // AND immediate: sf=1 opc=00 100100 N(1) immr(6) imms(6) Rn(5) Rd(5)
+        // For 64-bit (sf=1, N=1), logical immediate encoding:
+        // - immr = rotation amount
+        // - imms = ones run length - 1
+        // For power-of-2 minus 1 masks (0x1, 0x3, 0x7, etc.): immr=0, imms=popcount-1
+        let sf = 1u <<< 31
+        let opc = 0u <<< 29  // AND
+        let op = 0b100100u <<< 23
+        let n = 1u <<< 22  // N=1 for 64-bit element size
+        // Calculate imms from the mask (assumes power-of-2 minus 1)
+        let popcount = System.Numerics.BitOperations.PopCount(imm)
+        let immr = 0u <<< 16
+        let imms = (uint32 (popcount - 1)) <<< 10
+        let rn = (encodeReg src) <<< 5
+        let rd = encodeReg dest
+        [sf ||| opc ||| op ||| n ||| immr ||| imms ||| rn ||| rd]
+
     | ARM64.ORR_reg (dest, src1, src2) ->
         // ORR register: sf=1 opc=01 01010 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
         let sf = 1u <<< 31  // 64-bit

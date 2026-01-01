@@ -108,7 +108,7 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         let l = regToVReg left |> Option.toList
         let r = regToVReg right |> Option.toList
         Set.ofList (l @ r)
-    | LIR.Lsl_imm (_, src, _) | LIR.Lsr_imm (_, src, _) ->
+    | LIR.Lsl_imm (_, src, _) | LIR.Lsr_imm (_, src, _) | LIR.And_imm (_, src, _) ->
         regToVReg src |> Option.toList |> Set.ofList
     | LIR.Msub (_, mulLeft, mulRight, sub) ->
         let ml = regToVReg mulLeft |> Option.toList
@@ -251,7 +251,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.Add (dest, _, _) | LIR.Sub (dest, _, _) -> regToVReg dest
     | LIR.Mul (dest, _, _) | LIR.Sdiv (dest, _, _) | LIR.Msub (dest, _, _, _) | LIR.Madd (dest, _, _, _) -> regToVReg dest
     | LIR.Cset (dest, _) -> regToVReg dest
-    | LIR.And (dest, _, _) | LIR.Orr (dest, _, _) | LIR.Eor (dest, _, _)
+    | LIR.And (dest, _, _) | LIR.And_imm (dest, _, _) | LIR.Orr (dest, _, _) | LIR.Eor (dest, _, _)
     | LIR.Lsl (dest, _, _) | LIR.Lsr (dest, _, _) | LIR.Lsl_imm (dest, _, _) | LIR.Lsr_imm (dest, _, _) -> regToVReg dest
     | LIR.Mvn (dest, _) -> regToVReg dest
     | LIR.Sxtb (dest, _) | LIR.Sxth (dest, _) | LIR.Sxtw (dest, _)
@@ -1065,6 +1065,16 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
             | _ -> []
         leftLoads @ rightLoads @ [andInstr] @ storeInstrs
+
+    | LIR.And_imm (dest, src, imm) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (srcReg, srcLoads) = loadSpilled mapping src LIR.X12
+        let andInstr = LIR.And_imm (destReg, srcReg, imm)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        srcLoads @ [andInstr] @ storeInstrs
 
     | LIR.Orr (dest, left, right) ->
         let (destReg, destAlloc) = applyToReg mapping dest

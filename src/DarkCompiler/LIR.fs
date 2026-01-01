@@ -75,6 +75,7 @@ type Instr =
     | Cmp of left:Reg * right:Operand           // Compare (sets flags)
     | Cset of dest:Reg * cond:Condition         // Set register based on condition
     | And of dest:Reg * left:Reg * right:Reg    // Bitwise AND (for boolean && and &)
+    | And_imm of dest:Reg * src:Reg * imm:int64 // Bitwise AND with immediate
     | Orr of dest:Reg * left:Reg * right:Reg    // Bitwise OR (for boolean || and |)
     | Eor of dest:Reg * left:Reg * right:Reg    // Bitwise XOR (^)
     | Lsl of dest:Reg * src:Reg * shift:Reg     // Logical shift left (<<)

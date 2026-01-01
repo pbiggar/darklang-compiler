@@ -51,6 +51,7 @@ let formatMismatches (mismatches: (int * Instr * uint32 * uint32) list) : string
                     | CMP_reg (src1, src2) -> $"CMP_reg({src1}, {src2})"
                     | CSET (dest, cond) -> $"CSET({dest}, {cond})"
                     | AND_reg (dest, src1, src2) -> $"AND_reg({dest}, {src1}, {src2})"
+                    | AND_imm (dest, src, imm) -> $"AND_imm({dest}, {src}, #{imm})"
                     | ORR_reg (dest, src1, src2) -> $"ORR_reg({dest}, {src1}, {src2})"
                     | EOR_reg (dest, src1, src2) -> $"EOR_reg({dest}, {src1}, {src2})"
                     | LSL_reg (dest, src, shift) -> $"LSL_reg({dest}, {src}, {shift})"

@@ -140,6 +140,8 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- Cset({cond})"
     | LIR.And (dest, left, right) ->
         $"{prettyPrintLIRReg dest} <- And({prettyPrintLIRReg left}, {prettyPrintLIRReg right})"
+    | LIR.And_imm (dest, src, imm) ->
+        $"{prettyPrintLIRReg dest} <- And_imm({prettyPrintLIRReg src}, #{imm})"
     | LIR.Orr (dest, left, right) ->
         $"{prettyPrintLIRReg dest} <- Orr({prettyPrintLIRReg left}, {prettyPrintLIRReg right})"
     | LIR.Eor (dest, left, right) ->
@@ -643,6 +645,8 @@ let prettyPrintARM64Instr = function
         $"CSET({prettyPrintARM64Reg dest}, {cond})"
     | ARM64.AND_reg (dest, src1, src2) ->
         $"AND_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
+    | ARM64.AND_imm (dest, src, imm) ->
+        $"AND_imm({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src}, #{imm})"
     | ARM64.ORR_reg (dest, src1, src2) ->
         $"ORR_reg({prettyPrintARM64Reg dest}, {prettyPrintARM64Reg src1}, {prettyPrintARM64Reg src2})"
     | ARM64.EOR_reg (dest, src1, src2) ->

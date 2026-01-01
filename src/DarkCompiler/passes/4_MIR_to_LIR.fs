@@ -354,10 +354,17 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 match ensureInRegister left (LIR.Virtual 1000) with
                 | Error err -> Error err
                 | Ok (leftInstrs, leftReg) ->
-                match ensureInRegister right (LIR.Virtual 1001) with
-                | Error err -> Error err
-                | Ok (rightInstrs, rightReg) ->
-                    Ok (leftInstrs @ rightInstrs @ [LIR.And (lirDest, leftReg, rightReg)] @ truncInstrs)
+                    // Check if right operand is a valid bitmask immediate (power-of-2 minus 1)
+                    // These are values like 0x1, 0x3, 0x7, 0xF, etc. (ones run from bit 0)
+                    let isPowerOf2Minus1 n = n > 0L && (n &&& (n + 1L)) = 0L
+                    match right with
+                    | MIR.IntConst n when isPowerOf2Minus1 n ->
+                        Ok (leftInstrs @ [LIR.And_imm (lirDest, leftReg, n)] @ truncInstrs)
+                    | _ ->
+                        match ensureInRegister right (LIR.Virtual 1001) with
+                        | Error err -> Error err
+                        | Ok (rightInstrs, rightReg) ->
+                            Ok (leftInstrs @ rightInstrs @ [LIR.And (lirDest, leftReg, rightReg)] @ truncInstrs)
 
             | MIR.BitOr ->
                 match ensureInRegister left (LIR.Virtual 1000) with
@@ -1381,7 +1388,7 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.FLoad (dest, floatIdx) -> LIR.FLoad (dest, floatIdx + fltOffset)
     // Instructions without pool references - pass through unchanged
     | LIR.Store _ | LIR.Mul _ | LIR.Sdiv _ | LIR.Msub _ | LIR.Madd _ | LIR.Cset _
-    | LIR.And _ | LIR.Orr _ | LIR.Eor _ | LIR.Lsl _ | LIR.Lsr _ | LIR.Lsl_imm _ | LIR.Lsr_imm _ | LIR.Mvn _
+    | LIR.And _ | LIR.And_imm _ | LIR.Orr _ | LIR.Eor _ | LIR.Lsl _ | LIR.Lsr _ | LIR.Lsl_imm _ | LIR.Lsr_imm _ | LIR.Mvn _
     | LIR.Sxtb _ | LIR.Sxth _ | LIR.Sxtw _ | LIR.Uxtb _ | LIR.Uxth _ | LIR.Uxtw _
     | LIR.SaveRegs _ | LIR.RestoreRegs _ | LIR.PrintInt _ | LIR.PrintBool _ | LIR.PrintFloat _
     | LIR.PrintIntNoNewline _ | LIR.PrintBoolNoNewline _ | LIR.PrintFloatNoNewline _
