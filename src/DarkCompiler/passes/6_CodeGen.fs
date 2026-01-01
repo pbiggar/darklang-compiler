@@ -3177,6 +3177,8 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64.In
 /// 4. ADD Xn, Xn, #0 → remove (add zero)
 /// 5. SUB Xn, Xn, #0 → remove (subtract zero)
 /// 6. B_label X + Label X → remove branch (branch to next instruction)
+/// 7. CMP #0 + B.EQ → CBZ (compare zero and branch equal)
+/// 8. CMP #0 + B.NE → CBNZ (compare zero and branch not equal)
 let peepholeOptimize (instrs: ARM64.Instr list) : ARM64.Instr list =
     let rec optimize acc remaining =
         match remaining with
@@ -3184,6 +3186,12 @@ let peepholeOptimize (instrs: ARM64.Instr list) : ARM64.Instr list =
         // Fuse SUB + CMP #0 into SUBS
         | ARM64.SUB_imm (dest, src, imm) :: ARM64.CMP_imm (cmpReg, 0us) :: rest when dest = cmpReg ->
             optimize (ARM64.SUBS_imm (dest, src, imm) :: acc) rest
+        // Fuse CMP #0 + B.EQ into CBZ
+        | ARM64.CMP_imm (reg, 0us) :: ARM64.B_cond_label (ARM64.EQ, label) :: rest ->
+            optimize (ARM64.CBZ (reg, label) :: acc) rest
+        // Fuse CMP #0 + B.NE into CBNZ
+        | ARM64.CMP_imm (reg, 0us) :: ARM64.B_cond_label (ARM64.NE, label) :: rest ->
+            optimize (ARM64.CBNZ (reg, label) :: acc) rest
         // Remove redundant self-move (integer)
         | ARM64.MOV_reg (dest, src) :: rest when dest = src ->
             optimize acc rest
