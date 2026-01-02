@@ -36,7 +36,7 @@ let runE2ETest (stdlib: CompilerLibrary.StdlibResult) (test: E2ETest) : E2ETestR
             DisableDCE = test.DisableDCE
             EnableCoverage = false  // Coverage integration handled separately
         }
-        let execResult = CompilerLibrary.compileAndRunWithStdlib 0 options stdlib test.Source
+        let execResult = CompilerLibrary.compileAndRunWithStdlibCached 0 options stdlib test.Source test.Preamble test.SourceFile test.FunctionLineMap
 
         // Handle error expectation
         if test.ExpectCompileError then

@@ -25,6 +25,11 @@ open Output
 /// Using string list for type args to ensure proper equality comparison
 type SpecializationCache = ConcurrentDictionary<string * string list, AST.FunctionDef>
 
+/// Thread-safe cache for ANF user functions - avoids re-converting same function across tests
+/// Key: (filename, line_number, function_name)
+/// Value: (ANF.Function, ending VarGen) - we need the VarGen to avoid variable ID collisions
+type ANFFunctionCache = ConcurrentDictionary<string * int * string, ANF.Function * ANF.VarGen>
+
 /// Convert AST.Type to a string for cache key
 let rec typeToString (ty: AST.Type) : string =
     match ty with
@@ -5138,8 +5143,12 @@ let convertUserOnly
 
 /// Convert user program to ANF with specialization caching.
 /// Uses the provided cache to avoid re-monomorphizing the same generic functions.
+/// Also caches converted ANF functions to avoid re-converting the same function across tests.
 let convertUserOnlyCached
     (cache: SpecializationCache)
+    (anfFuncCache: ANFFunctionCache)
+    (sourceFile: string)
+    (funcLineMap: Map<string, int>)
     (stdlibGenericDefs: GenericFuncDefs)
     (stdlibResult: ConversionResult)
     (userProgram: AST.Program) : Result<UserOnlyResult, string> =
@@ -5216,13 +5225,34 @@ let convertUserOnlyCached
     let mergedFuncParams = mergeMaps stdlibResult.FuncParams (mergeMaps userFuncParams moduleFuncParams)
 
     // 4. Convert user functions with merged registries for lookups
+    // Uses cache to avoid re-converting the same function across tests
+    // Only cache non-specialized functions (no __ in name) since specialized functions
+    // are generated during monomorphization and may have context-dependent behavior
     let rec convertFunctions (funcs: AST.FunctionDef list) (vg: ANF.VarGen) (acc: ANF.Function list) : Result<ANF.Function list * ANF.VarGen, string> =
         match funcs with
         | [] -> Ok (List.rev acc, vg)
         | func :: rest ->
-            convertFunction func vg mergedTypeReg mergedVariantLookup mergedFuncReg moduleRegistry
-            |> Result.bind (fun (anfFunc, vg') ->
-                convertFunctions rest vg' (anfFunc :: acc))
+            // Only cache non-specialized functions (those without __ in name)
+            let isSpecialized = func.Name.Contains("__")
+            let lineNum = Map.tryFind func.Name funcLineMap |> Option.defaultValue 0
+            let cacheKey = (sourceFile, lineNum, func.Name)
+            // Only use cache for non-specialized functions with valid line numbers
+            let canCache = not isSpecialized && lineNum > 0 && sourceFile <> ""
+            match canCache, anfFuncCache.TryGetValue(cacheKey) with
+            | true, (true, (cachedFunc, cachedEndVg)) ->
+                // Cache hit - reuse cached ANF function
+                // Use max of current VarGen and cached ending VarGen to avoid variable ID collisions
+                let (ANF.VarGen currentId) = vg
+                let (ANF.VarGen cachedId) = cachedEndVg
+                let newVg = ANF.VarGen (max currentId cachedId)
+                convertFunctions rest newVg (cachedFunc :: acc)
+            | _ ->
+                // Cache miss or not cacheable - compile (and maybe cache)
+                convertFunction func vg mergedTypeReg mergedVariantLookup mergedFuncReg moduleRegistry
+                |> Result.bind (fun (anfFunc, vg') ->
+                    if canCache then
+                        anfFuncCache.TryAdd(cacheKey, (anfFunc, vg')) |> ignore
+                    convertFunctions rest vg' (anfFunc :: acc))
 
     // Validate no function is named "main" (reserved for synthesized entry point)
     let hasMainFunc = functions |> List.exists (fun f -> f.Name = "main")

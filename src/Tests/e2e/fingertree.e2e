@@ -90,43 +90,38 @@ let t = Stdlib.FingerTree.pushBack<Int64>(Stdlib.FingerTree.pushBack<Int64>(Stdl
 // Large Scale Tests - Using helper functions
 // ===================================================================
 
-// Build 100 elements and verify length
+// Helper functions (defined once, used by all tests below)
 def buildTree(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack<Int64>(tree, n))
+def buildTreeFront(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTreeFront(n + 1, count, Stdlib.FingerTree.push<Int64>(tree, n))
+def sumTree(tree: List<Int64>, idx: Int64, count: Int64, acc: Int64) : Int64 = if idx >= count then acc else let val = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(tree, idx), 0) in sumTree(tree, idx + 1, count, acc + val)
+def buildMixed(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else let newTree = if n % 2 == 0 then Stdlib.FingerTree.push<Int64>(tree, n) else Stdlib.FingerTree.pushBack<Int64>(tree, n) in buildMixed(n + 1, count, newTree)
+
+// Build 100 elements and verify length
 Stdlib.FingerTree.length<Int64>(buildTree(1, 100, Stdlib.FingerTree.empty<Int64>())) = 100
 
 // Build 100 elements and verify head
-def buildTree(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack<Int64>(tree, n))
 let t = buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()) in Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.head<Int64>(t), -1) = 1
 
 // Build 100 elements and verify last
-def buildTree(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack<Int64>(tree, n))
 let t = buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()) in Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.last<Int64>(t), -1) = 100
 
 // Build 100 elements and verify middle element (index 49 = value 50)
-def buildTree(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack<Int64>(tree, n))
 let t = buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()) in Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t, 49), -1) = 50
 
 // Build 1000 elements and verify length
-def buildTree(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack<Int64>(tree, n))
 Stdlib.FingerTree.length<Int64>(buildTree(1, 1000, Stdlib.FingerTree.empty<Int64>())) = 1000
 
 // Build 1000 elements with push (front) and verify head=1000, last=1
-def buildTreeFront(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTreeFront(n + 1, count, Stdlib.FingerTree.push<Int64>(tree, n))
 let t = buildTreeFront(1, 1000, Stdlib.FingerTree.empty<Int64>()) in let h = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.head<Int64>(t), -1) in let l = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.last<Int64>(t), -1) in h * 1000 + l = 1000001
 
 // Build 1000 elements, verify sum = 500500
-def buildTree(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack<Int64>(tree, n))
-def sumTree(tree: List<Int64>, idx: Int64, count: Int64, acc: Int64) : Int64 = if idx >= count then acc else let val = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(tree, idx), 0) in sumTree(tree, idx + 1, count, acc + val)
 let t = buildTree(1, 1000, Stdlib.FingerTree.empty<Int64>()) in sumTree(t, 0, 1000, 0) = 500500
 
 // setAt test on 100 element tree: set index 50 to 999, verify neighbors unchanged
-def buildTree(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack<Int64>(tree, n))
 let t1 = buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()) in let t2 = Stdlib.FingerTree.setAt<Int64>(t1, 50, 999) in let v50 = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t2, 50), -1) in let v49 = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t2, 49), -1) in let v51 = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t2, 51), -1) in v50 * 10000 + v49 * 100 + v51 = 9995052
 
 // Mixed push/pushBack: evens to front, odds to back
-def buildMixed(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else let newTree = if n % 2 == 0 then Stdlib.FingerTree.push<Int64>(tree, n) else Stdlib.FingerTree.pushBack<Int64>(tree, n) in buildMixed(n + 1, count, newTree)
 let t = buildMixed(1, 100, Stdlib.FingerTree.empty<Int64>()) in let len = Stdlib.FingerTree.length<Int64>(t) in let h = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.head<Int64>(t), -1) in let l = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.last<Int64>(t), -1) in len * 10000 + h * 100 + l = 1010099
 
 // 10000 element test - verify length and spot checks
-def buildTree(n: Int64, count: Int64, tree: List<Int64>) : List<Int64> = if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack<Int64>(tree, n))
 let t = buildTree(1, 10000, Stdlib.FingerTree.empty<Int64>()) in let len = Stdlib.FingerTree.length<Int64>(t) in let v0 = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t, 0), -1) in let v4999 = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t, 4999), -1) in let v9999 = Stdlib.Option.withDefault<Int64>(Stdlib.FingerTree.getAt<Int64>(t, 9999), -1) in (if len == 10000 then 1000 else 0) + (if v0 == 1 then 100 else 0) + (if v4999 == 5000 then 10 else 0) + (if v9999 == 10000 then 1 else 0) = 1111

@@ -16,7 +16,10 @@ open System
 /// End-to-end test specification
 type E2ETest = {
     Name: string
+    /// The test expression only (NOT including preamble)
     Source: string
+    /// Preamble code (function/type definitions shared across tests in file)
+    Preamble: string
     ExpectedStdout: string option
     ExpectedStderr: string option
     ExpectedExitCode: int
@@ -34,6 +37,9 @@ type E2ETest = {
     DisableDCE: bool
     /// Source file this test came from (for grouping in output)
     SourceFile: string
+    /// Maps function names to their definition line numbers in the source file
+    /// Used for caching compiled functions across tests
+    FunctionLineMap: Map<string, int>
 }
 
 /// Optimization flags for test parsing (internal type)
@@ -56,6 +62,16 @@ let private defaultOptFlags = {
     DisableLIROpt = false
     DisableDCE = false
 }
+
+/// Extract function name from a definition line (e.g., "def buildTree(...)" -> "buildTree")
+let private extractFuncName (line: string) : string option =
+    let trimmed = line.Trim()
+    if trimmed.StartsWith("def ") then
+        let afterDef = trimmed.Substring(4).TrimStart()
+        let endIdx = afterDef.IndexOfAny([|'('; '<'; ' '|])
+        if endIdx > 0 then Some (afterDef.Substring(0, endIdx))
+        else None
+    else None
 
 /// Parse string literal with escape sequences (\n, \t, \\, \")
 let private parseStringLiteral (s: string) : Result<string, string> =
@@ -165,7 +181,7 @@ let private isTestLine (lineWithoutComment: string) : bool =
 /// Supports two formats:
 ///   Old: source = exit_code  // comment
 ///   New: source = [exit=N] [stdout="..."] [stderr="..."]  // comment
-let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath: string) (preamble: string) : Result<E2ETest, string> =
+let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath: string) (preamble: string) (funcLineMap: Map<string, int>) : Result<E2ETest, string> =
     // First, remove any comment
     let lineWithoutComment, comment =
         let commentIdx = line.IndexOf("//")
@@ -180,10 +196,8 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
         Error $"Line {lineNumber}: Expected format 'source = expectations', got: {line}"
     | Some equalsIdx ->
         let testExpr = lineWithoutComment.Substring(0, equalsIdx).Trim()
-        // Prepend preamble (definitions) to the test expression
-        let source =
-            if preamble.Length > 0 then preamble + "\n" + testExpr
-            else testExpr
+        // Source is just the test expression - preamble is stored separately
+        let source = testExpr
         let expectationsStr = lineWithoutComment.Substring(equalsIdx + 1).Trim()
 
         // Parse expectations - either old format (bare number), new format (attributes), or error
@@ -331,6 +345,7 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
             Ok {
                 Name = $"L{lineNumber}: {displayName}"
                 Source = source
+                Preamble = preamble
                 ExpectedStdout = stdout
                 ExpectedStderr = stderr
                 ExpectedExitCode = exitCode
@@ -344,13 +359,14 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                 DisableLIROpt = optFlags.DisableLIROpt
                 DisableDCE = optFlags.DisableDCE
                 SourceFile = filePath
+                FunctionLineMap = funcLineMap
             }
         | Error e ->
             Error $"Line {lineNumber}: {e}"
 
 /// Parse a multi-line test expression wrapped in parens
 /// Format: (expr...\n...) = expectations
-let private parseMultilineTest (fullText: string) (startLineNumber: int) (filePath: string) (preamble: string) : Result<E2ETest, string> =
+let private parseMultilineTest (fullText: string) (startLineNumber: int) (filePath: string) (preamble: string) (funcLineMap: Map<string, int>) : Result<E2ETest, string> =
     // Find the `) = <expectation>` pattern that closes the expression
     // We need to find the LAST ) that's followed by ` = <expectation>`
     let rec findClosingParen (i: int) (inQuotes: bool) (lastMatch: int option) : int option =
@@ -388,7 +404,7 @@ let private parseMultilineTest (fullText: string) (startLineNumber: int) (filePa
             // Note: The expression itself might contain = signs, but that's fine since
             // we've already extracted the expectations part
             let reconstructed = exprContent + " = " + expectationsStr
-            parseTestLineWithPreamble reconstructed startLineNumber filePath preamble
+            parseTestLineWithPreamble reconstructed startLineNumber filePath preamble funcLineMap
 
 /// Remove trailing comment from a line
 let private stripComment (line: string) : string =
@@ -412,6 +428,8 @@ let parseE2ETestFile (path: string) : Result<E2ETest list, string> =
         let mutable tests = []
         let mutable errors = []
         let mutable preambleLines = []
+        // Track function definitions for caching: funcName -> line number
+        let mutable functionLineMap : Map<string, int> = Map.empty
         // Multi-line expression state
         let mutable pendingExprLines : string list = []
         let mutable pendingStartLine = 0
@@ -434,7 +452,7 @@ let parseE2ETestFile (path: string) : Result<E2ETest list, string> =
                         // Combine all accumulated lines and parse as multi-line test
                         let fullExpr = String.concat "\n" (List.rev pendingExprLines)
                         let preamble = String.concat "\n" (List.rev preambleLines)
-                        match parseMultilineTest fullExpr pendingStartLine path preamble with
+                        match parseMultilineTest fullExpr pendingStartLine path preamble functionLineMap with
                         | Ok test -> tests <- test :: tests
                         | Error err -> errors <- err :: errors
                         // Reset multi-line state
@@ -456,13 +474,17 @@ let parseE2ETestFile (path: string) : Result<E2ETest list, string> =
                     elif isTestLine lineWithoutComment then
                         // This is a single-line test - parse it with accumulated preamble
                         let preamble = String.concat "\n" (List.rev preambleLines)
-                        match parseTestLineWithPreamble trimmedLine lineNumber path preamble with
+                        match parseTestLineWithPreamble trimmedLine lineNumber path preamble functionLineMap with
                         | Ok test -> tests <- test :: tests
                         | Error err -> errors <- err :: errors
                     else
                         // This is a definition line - add to preamble
                         // Preserve original indentation for multi-line definitions
                         preambleLines <- line :: preambleLines
+                        // Track function definitions for caching
+                        match extractFuncName line with
+                        | Some funcName -> functionLineMap <- Map.add funcName lineNumber functionLineMap
+                        | None -> ()
 
         // Check for unclosed multi-line expression
         if inMultilineExpr then

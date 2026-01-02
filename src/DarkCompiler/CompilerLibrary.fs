@@ -62,6 +62,46 @@ let defaultOptions : CompilerOptions = {
 /// Key: (funcName, typeArgs as strings), Value: specialized AST.FunctionDef
 type SpecializationCache = ConcurrentDictionary<string * string list, AST.FunctionDef>
 
+/// Cached fully-compiled user function (after all passes through register allocation)
+/// Includes the strings/floats it references so pools can be reconstructed
+type CachedUserFunction = {
+    /// The compiled LIR function (after register allocation)
+    LIRFunction: LIR.Function
+    /// Strings referenced by this function (for pool reconstruction)
+    Strings: (int * string) list  // (original pool id, string value)
+    /// Floats referenced by this function (for pool reconstruction)
+    Floats: (int * float) list    // (original pool id, float value)
+}
+
+/// Cache for user-defined functions - avoids recompiling same function across tests
+/// Key: (filename, line_number, function_name)
+/// Value: Fully compiled LIR function with pool entries
+type UserFunctionCache = ConcurrentDictionary<string * int * string, CachedUserFunction>
+
+/// Cache for ANF-level user functions - avoids re-converting same function across tests
+/// Key: (filename, line_number, function_name)
+/// Value: (ANF.Function, VarGen) - includes ending VarGen to avoid variable ID collisions
+type ANFFunctionCache = ConcurrentDictionary<string * int * string, ANF.Function * ANF.VarGen>
+
+/// Compiled preamble context - extends stdlib for a test file
+/// Preamble functions are compiled ONCE per file, then reused for all tests in that file
+type PreambleContext = {
+    /// Extended type checking environment (stdlib + preamble types/functions)
+    TypeCheckEnv: TypeChecking.TypeCheckEnv
+    /// Preamble's generic function definitions for monomorphization
+    GenericFuncDefs: AST_to_ANF.GenericFuncDefs
+    /// Preamble's ANF functions (after mono, inline, lift, ANF, RC, TCO)
+    ANFFunctions: ANF.Function list
+    /// Type map from RC insertion (merged with stdlib's TypeMap)
+    TypeMap: ANF.TypeMap
+    /// Preamble's registries for ANF conversion
+    ANFResult: AST_to_ANF.ConversionResult
+}
+
+/// Cache for compiled preambles - thread-safe for parallel test execution
+/// Key: (sourceFile, preambleHash), Value: compiled PreambleContext
+type PreambleCache = ConcurrentDictionary<string * int, PreambleContext>
+
 /// Result of compiling stdlib - can be reused across compilations
 type StdlibResult = {
     /// Parsed stdlib AST (for merging with user AST)
@@ -93,6 +133,12 @@ type StdlibResult = {
     StdlibANFCallGraph: Map<string, Set<string>>
     /// TypeMap from RC insertion (needed for getReachableStdlibFunctions)
     StdlibTypeMap: ANF.TypeMap
+    /// Cache for user functions (shared across test compilations)
+    UserFuncCache: UserFunctionCache
+    /// Cache for ANF-level user functions (shared across test compilations)
+    ANFFuncCache: ANFFunctionCache
+    /// Cache for compiled preambles (shared across test compilations)
+    PreambleCache: PreambleCache
 }
 
 /// Cache for lazily compiled LIR functions - thread-safe for parallel test execution
@@ -118,6 +164,8 @@ type LazyStdlibResult = {
     StdlibTypeMap: ANF.TypeMap
     /// Cache for specialized functions (shared across test compilations)
     SpecCache: SpecializationCache
+    /// Cache for ANF-level user functions (shared across test compilations)
+    ANFFuncCache: ANFFunctionCache
     /// Stdlib MIR functions (after SSA + optimization), indexed by name for lazy LIR compilation
     StdlibMIRFunctions: Map<string, MIR.Function>
     /// Lazy cache for compiled LIR functions (compiled on-demand, thread-safe)
@@ -257,6 +305,9 @@ let compileStdlib () : Result<StdlibResult, string> =
                                 StdlibANFFunctions = stdlibFuncMap
                                 StdlibANFCallGraph = stdlibANFCallGraph
                                 StdlibTypeMap = typeMap
+                                UserFuncCache = UserFunctionCache()
+                                ANFFuncCache = ANFFunctionCache()
+                                PreambleCache = PreambleCache()
                             }
 
 /// Prepare stdlib for lazy compilation - stops at MIR level
@@ -327,6 +378,7 @@ let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
                             StdlibANFCallGraph = stdlibCallGraph
                             StdlibTypeMap = typeMap
                             SpecCache = SpecializationCache()
+                            ANFFuncCache = ANFFunctionCache()
                             StdlibMIRFunctions = stdlibMirMap
                             LIRCache = LIRCache()
                             StdlibStringPool = mirStrings
@@ -753,7 +805,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
 /// Compile user code with pre-compiled stdlib (separate compilation)
 /// Uses stdlib.TypeCheckEnv for type checking user code, avoiding re-type-checking stdlib
 /// Still merges typed ASTs for ANF conversion (Phase 2 will optimize that)
-let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (source: string) : CompileResult =
+let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (source: string) (sourceFile: string) (funcLineMap: Map<string, int>) : CompileResult =
     let sw = Stopwatch.StartNew()
     try
         // Pass 1: Parse user code only
@@ -796,6 +848,9 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                 let userOnlyResult =
                     AST_to_ANF.convertUserOnlyCached
                         stdlib.SpecCache
+                        stdlib.ANFFuncCache
+                        sourceFile
+                        funcLineMap
                         stdlib.GenericFuncDefs
                         stdlib.ANFResult
                         typedUserAst
@@ -1058,6 +1113,381 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
           Success = false
           ErrorMessage = Some $"Compilation failed: {ex.Message}" }
 
+/// Compile preamble with stdlib as base, returning extended context for test compilation
+/// Preamble functions go through the full pipeline (parse → typecheck → mono → inline → lift → ANF → RC → TCO)
+/// The result is cached and reused for all tests in the same file
+let compilePreamble (stdlib: StdlibResult) (preamble: string) (sourceFile: string) (funcLineMap: Map<string, int>) : Result<PreambleContext, string> =
+    // Handle empty preamble - return a context that just wraps stdlib
+    if String.IsNullOrWhiteSpace(preamble) then
+        Ok {
+            TypeCheckEnv = stdlib.TypeCheckEnv
+            GenericFuncDefs = stdlib.GenericFuncDefs
+            ANFFunctions = []
+            TypeMap = stdlib.StdlibTypeMap
+            ANFResult = stdlib.ANFResult
+        }
+    else
+        // Parse preamble with dummy expression (parser requires a main expression)
+        let preambleSource = preamble + "\n0"
+        match Parser.parseString preambleSource with
+        | Error err -> Error $"Preamble parse error: {err}"
+        | Ok preambleAst ->
+            // Type-check preamble with stdlib.TypeCheckEnv
+            match TypeChecking.checkProgramWithBaseEnv stdlib.TypeCheckEnv preambleAst with
+            | Error typeErr -> Error $"Preamble type error: {TypeChecking.typeErrorToString typeErr}"
+            | Ok (_programType, typedPreambleAst, preambleTypeCheckEnv) ->
+                // Extract generic function definitions from preamble
+                let preambleGenericDefs = AST_to_ANF.extractGenericFuncDefs typedPreambleAst
+                // Merge stdlib generics with preamble generics
+                let mergedGenericDefs = Map.fold (fun acc k v -> Map.add k v acc) stdlib.GenericFuncDefs preambleGenericDefs
+
+                // Convert preamble to ANF (mono → inline → lift → ANF)
+                match AST_to_ANF.convertUserOnlyCached stdlib.SpecCache stdlib.ANFFuncCache sourceFile funcLineMap mergedGenericDefs stdlib.ANFResult typedPreambleAst with
+                | Error err -> Error $"Preamble ANF conversion error: {err}"
+                | Ok preambleUserOnly ->
+                    // ANF Optimization (preamble functions)
+                    let preambleProgram = ANF.Program (preambleUserOnly.UserFunctions, preambleUserOnly.MainExpr)
+                    let anfOptimized = ANF_Optimize.optimizeProgram preambleProgram
+
+                    // ANF Inlining (keep functions separate for now, can inline later)
+                    let anfInlined = ANF_Inlining.inlineProgramDefault anfOptimized
+
+                    // Create ConversionResult for RC insertion
+                    let preambleConvResult : AST_to_ANF.ConversionResult = {
+                        Program = anfInlined
+                        TypeReg = preambleUserOnly.TypeReg
+                        VariantLookup = preambleUserOnly.VariantLookup
+                        FuncReg = preambleUserOnly.FuncReg
+                        FuncParams = preambleUserOnly.FuncParams
+                        ModuleRegistry = preambleUserOnly.ModuleRegistry
+                    }
+
+                    // RC Insertion
+                    match RefCountInsertion.insertRCInProgram preambleConvResult with
+                    | Error err -> Error $"Preamble RC insertion error: {err}"
+                    | Ok (preambleAnfAfterRC, typeMap) ->
+                        // Tail Call Detection
+                        let preambleAnfAfterTCO = TailCallDetection.detectTailCallsInProgram preambleAnfAfterRC
+
+                        // Extract just the functions (ignore main expr which is dummy `0`)
+                        let (ANF.Program (preambleFunctions, _dummyMainExpr)) = preambleAnfAfterTCO
+
+                        // Merge TypeMaps (stdlib + preamble)
+                        let mergedTypeMap = Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibTypeMap typeMap
+
+                        Ok {
+                            TypeCheckEnv = preambleTypeCheckEnv
+                            GenericFuncDefs = mergedGenericDefs
+                            ANFFunctions = preambleFunctions
+                            TypeMap = mergedTypeMap
+                            ANFResult = preambleConvResult
+                        }
+
+/// Compile test expression with pre-compiled preamble context
+/// Only the tiny test expression is parsed/compiled - preamble functions are merged in
+let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult)
+                            (preambleCtx: PreambleContext) (testExpr: string) : CompileResult =
+    let sw = Stopwatch.StartNew()
+    try
+        // Pass 1: Parse test expression only (tiny)
+        if verbosity >= 1 then println "  [1/8] Parse (test expr only)..."
+        let parseResult = Parser.parseString testExpr
+        let parseTime = sw.Elapsed.TotalMilliseconds
+        if verbosity >= 2 then
+            let t = System.Math.Round(parseTime, 1)
+            println $"        {t}ms"
+
+        match parseResult with
+        | Error err ->
+            { Binary = Array.empty
+              Success = false
+              ErrorMessage = Some $"Parse error: {err}" }
+        | Ok testAst ->
+            // Pass 1.5: Type Checking (test expr with preamble's TypeCheckEnv)
+            if verbosity >= 1 then println "  [1.5/8] Type Checking (with preamble env)..."
+            let typeCheckResult = TypeChecking.checkProgramWithBaseEnv preambleCtx.TypeCheckEnv testAst
+            let typeCheckTime = sw.Elapsed.TotalMilliseconds - parseTime
+            if verbosity >= 2 then
+                let t = System.Math.Round(typeCheckTime, 1)
+                println $"        {t}ms"
+
+            match typeCheckResult with
+            | Error typeErr ->
+                { Binary = Array.empty
+                  Success = false
+                  ErrorMessage = Some $"Type error: {TypeChecking.typeErrorToString typeErr}" }
+            | Ok (programType, typedTestAst, _testEnv) ->
+                if verbosity >= 3 then
+                    println $"Program type: {TypeChecking.typeToString programType}"
+                    println ""
+
+                // Pass 2: AST → ANF (test expr only, with preamble's generics and registries)
+                if verbosity >= 1 then println "  [2/8] AST → ANF (test expr only)..."
+                let testOnlyResult =
+                    AST_to_ANF.convertUserOnlyCached
+                        stdlib.SpecCache
+                        stdlib.ANFFuncCache
+                        ""  // No source file for test expr
+                        Map.empty  // No function line map for test expr
+                        preambleCtx.GenericFuncDefs
+                        preambleCtx.ANFResult
+                        typedTestAst
+                let anfTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime
+                if verbosity >= 2 then
+                    let t = System.Math.Round(anfTime, 1)
+                    println $"        {t}ms"
+
+                match testOnlyResult with
+                | Error err ->
+                    { Binary = Array.empty
+                      Success = false
+                      ErrorMessage = Some $"ANF conversion error: {err}" }
+                | Ok testOnly ->
+                    // Pass 2.3: ANF Optimization (test expr only)
+                    if verbosity >= 1 then println "  [2.3/8] ANF Optimization..."
+                    let testProgram = ANF.Program (testOnly.UserFunctions, testOnly.MainExpr)
+                    let anfOptimized =
+                        if options.DisableANFOpt then testProgram
+                        else ANF_Optimize.optimizeProgram testProgram
+                    let anfOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(anfOptTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 2.4: ANF Inlining (test expr only)
+                    if verbosity >= 1 then println "  [2.4/8] ANF Inlining..."
+                    let anfInlined =
+                        if options.DisableInlining then anfOptimized
+                        else ANF_Inlining.inlineProgramDefault anfOptimized
+                    let inlineTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(inlineTime, 1)
+                        println $"        {t}ms"
+
+                    // Create ConversionResult for RC insertion (uses preamble's registries)
+                    let testConvResult : AST_to_ANF.ConversionResult = {
+                        Program = anfInlined
+                        TypeReg = testOnly.TypeReg
+                        VariantLookup = testOnly.VariantLookup
+                        FuncReg = testOnly.FuncReg
+                        FuncParams = testOnly.FuncParams
+                        ModuleRegistry = testOnly.ModuleRegistry
+                    }
+
+                    // Pass 2.5: Reference Count Insertion (test expr only)
+                    if verbosity >= 1 then println "  [2.5/8] Reference Count Insertion..."
+                    let rcResult = RefCountInsertion.insertRCInProgram testConvResult
+                    let rcTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - inlineTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(rcTime, 1)
+                        println $"        {t}ms"
+
+                    match rcResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"Reference count insertion error: {err}" }
+                    | Ok (testAnfAfterRC, testTypeMap) ->
+
+                    // Pass 2.7: Tail Call Detection (test expr only)
+                    if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
+                    let testAnfAfterTCO =
+                        if options.DisableTCO then testAnfAfterRC
+                        else TailCallDetection.detectTailCallsInProgram testAnfAfterRC
+                    let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(tcoTime, 1)
+                        println $"        {t}ms"
+
+                    // Merge preamble's ANF functions with test expr's ANF
+                    let (ANF.Program (testFunctions, testMainExpr)) = testAnfAfterTCO
+                    let mergedFunctions = preambleCtx.ANFFunctions @ testFunctions
+                    let mergedTypeMap = Map.fold (fun acc k v -> Map.add k v acc) preambleCtx.TypeMap testTypeMap
+
+                    // Pass 2.8: Print Insertion (on merged program)
+                    if verbosity >= 1 then println "  [2.8/8] Print Insertion..."
+                    let mergedAnfProgram = PrintInsertion.insertPrint mergedFunctions testMainExpr programType
+                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - tcoTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(printTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 3: ANF → MIR (merged program)
+                    if verbosity >= 1 then println "  [3/8] ANF → MIR..."
+                    let userMirResult = ANF_to_MIR.toMIR mergedAnfProgram (MIR.RegGen 0) mergedTypeMap testOnly.FuncParams programType testConvResult.VariantLookup testConvResult.TypeReg options.EnableCoverage
+
+                    match userMirResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"MIR conversion error: {err}" }
+                    | Ok (userMirProgram, _) ->
+
+                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(mirTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 3.1: SSA Construction
+                    if verbosity >= 1 then println "  [3.1/8] SSA Construction..."
+                    let userSsaProgram = SSA_Construction.convertToSSA userMirProgram
+                    let ssaTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(ssaTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 3.5: MIR Optimizations
+                    if verbosity >= 1 then println "  [3.5/8] MIR Optimizations..."
+                    let userOptimizedProgram =
+                        if options.DisableMIROpt then userSsaProgram
+                        else MIR_Optimize.optimizeProgram userSsaProgram
+                    let mirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - ssaTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(mirOptTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 4: MIR → LIR
+                    if verbosity >= 1 then println "  [4/8] MIR → LIR..."
+                    let userLirResult = MIR_to_LIR.toLIR userOptimizedProgram
+
+                    match userLirResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"LIR conversion error: {err}" }
+                    | Ok userLirProgram ->
+
+                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(lirTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 4.5: LIR Optimizations (peephole)
+                    if verbosity >= 1 then println "  [4.5/8] LIR Optimizations..."
+                    let userOptimizedLirProgram =
+                        if options.DisableLIROpt then userLirProgram
+                        else LIR_Optimize.optimizeProgram userLirProgram
+
+                    let lirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(lirOptTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 5: Register Allocation
+                    if verbosity >= 1 then println "  [5/8] Register Allocation..."
+                    let (LIR.Program (userFuncs, userStrings, userFloats)) = userOptimizedLirProgram
+                    let (LIR.Program (_, stdlibStrings, stdlibFloats)) = stdlib.LIRProgram
+
+                    // Allocate user functions
+                    let allocatedUserFuncs = userFuncs |> List.map RegisterAllocation.allocateRegisters
+
+                    // Merge pools (stdlib first, user appended with offset)
+                    let stringOffset = stdlibStrings.NextId
+                    let floatOffset = stdlibFloats.NextId
+                    let mergedStrings = ANF_to_MIR.appendStringPools stdlibStrings userStrings
+                    let mergedFloats = ANF_to_MIR.appendFloatPools stdlibFloats userFloats
+
+                    // Offset pool refs in allocated user functions
+                    let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
+
+                    // Filter stdlib functions to only include reachable ones (dead code elimination)
+                    let reachableStdlib =
+                        if options.DisableDCE then stdlib.AllocatedFunctions
+                        else
+                            DeadCodeElimination.filterFunctions
+                                stdlib.StdlibCallGraph
+                                offsetUserFuncs
+                                stdlib.AllocatedFunctions
+
+                    // Combine reachable stdlib functions with user functions
+                    let allFuncs = reachableStdlib @ offsetUserFuncs
+                    let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
+
+                    let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(allocTime, 1)
+                        println $"        {t}ms"
+
+                    // Pass 6: Code Generation
+                    if verbosity >= 1 then println "  [6/8] Code Generation..."
+                    let coverageExprCount = if options.EnableCoverage then LIR.countCoverageHits allocatedProgram else 0
+                    let codegenOptions : CodeGen.CodeGenOptions = {
+                        DisableFreeList = options.DisableFreeList
+                        EnableCoverage = options.EnableCoverage
+                        CoverageExprCount = coverageExprCount
+                    }
+                    let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
+                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(codegenTime, 1)
+                        println $"        {t}ms"
+
+                    match codegenResult with
+                    | Error err ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"Code generation error: {err}" }
+                    | Ok arm64Instructions ->
+                        let osResult = Platform.detectOS ()
+                        match osResult with
+                        | Error err ->
+                            { Binary = Array.empty
+                              Success = false
+                              ErrorMessage = Some $"Platform detection error: {err}" }
+                        | Ok os ->
+
+                        // Pass 7: ARM64 Encoding
+                        if verbosity >= 1 then println "  [7/7] ARM64 Encoding..."
+                        let codeFileOffset =
+                            match os with
+                            | Platform.Linux -> 64 + 56
+                            | Platform.MacOS ->
+                                let headerSize = 32
+                                let pageZeroCommandSize = 72
+                                let numTextSections = if mergedStrings.Strings.IsEmpty then 1 else 2
+                                let textSegmentCommandSize = 72 + (80 * numTextSections)
+                                let linkeditSegmentCommandSize = 72
+                                let dylinkerCommandSize = 32
+                                let dylibCommandSize = 56
+                                let symtabCommandSize = 24
+                                let dysymtabCommandSize = 80
+                                let uuidCommandSize = 24
+                                let buildVersionCommandSize = 24
+                                let mainCommandSize = 24
+                                let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + dylibCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
+                                (headerSize + commandsSize + 200 + 7) &&& (~~~7)
+                        let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions mergedStrings mergedFloats codeFileOffset
+
+                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime
+                        if verbosity >= 2 then
+                            let t = System.Math.Round(encodeTime, 1)
+                            println $"        {t}ms"
+
+                        // Pass 8: Binary Generation
+                        let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
+                        if verbosity >= 1 then println $"  [7/7] Binary Generation ({formatName})..."
+                        let binary =
+                            match os with
+                            | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode mergedStrings mergedFloats
+                            | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode mergedStrings mergedFloats
+                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
+                        if verbosity >= 2 then
+                            let t = System.Math.Round(binaryTime, 1)
+                            println $"        {t}ms"
+
+                        sw.Stop()
+                        if verbosity >= 1 then
+                            println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
+
+                        { Binary = binary
+                          Success = true
+                          ErrorMessage = None }
+    with
+    | ex ->
+        { Binary = Array.empty
+          Success = false
+          ErrorMessage = Some $"Compilation failed: {ex.Message}" }
+
 /// Compile a single MIR function to LIR (used by cache factory)
 let private compileMIRToLIR (stdlib: LazyStdlibResult) (mirFunc: MIR.Function) : LIR.Function option =
     // Create a mini MIR program with just this function
@@ -1137,6 +1567,9 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                 let userOnlyResult =
                     AST_to_ANF.convertUserOnlyCached
                         stdlib.SpecCache
+                        stdlib.ANFFuncCache
+                        ""  // No source file for non-test compilation
+                        Map.empty  // No function line map
                         stdlib.GenericFuncDefs
                         stdlib.ANFResult
                         typedUserAst
@@ -1543,7 +1976,7 @@ let compileAndRunWithOptions (verbosity: int) (options: CompilerOptions) (source
 
 /// Compile and run source code with pre-compiled stdlib
 let compileAndRunWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (source: string) : ExecutionResult =
-    let compileResult = compileWithStdlib verbosity options stdlib source
+    let compileResult = compileWithStdlib verbosity options stdlib source "" Map.empty
 
     if not compileResult.Success then
         { ExitCode = 1
@@ -1551,6 +1984,42 @@ let compileAndRunWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib:
           Stderr = compileResult.ErrorMessage |> Option.defaultValue "Compilation failed" }
     else
         execute verbosity compileResult.Binary
+
+/// Compile and run source code with pre-compiled stdlib and user function caching
+/// sourceFile and funcLineMap are used to build cache keys for user functions
+/// Cache key: (sourceFile, lineNumber, functionName)
+let compileAndRunWithStdlibCached (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (testExpr: string) (preamble: string) (sourceFile: string) (funcLineMap: Map<string, int>) : ExecutionResult =
+    // Check preamble cache
+    let preambleHash = preamble.GetHashCode()
+    let cacheKey = (sourceFile, preambleHash)
+
+    let preambleCtxResult =
+        match stdlib.PreambleCache.TryGetValue(cacheKey) with
+        | true, cached ->
+            if verbosity >= 2 then println $"  [Preamble cache hit for {sourceFile}]"
+            Ok cached
+        | false, _ ->
+            if verbosity >= 2 then println $"  [Preamble cache miss for {sourceFile}]"
+            match compilePreamble stdlib preamble sourceFile funcLineMap with
+            | Ok ctx ->
+                stdlib.PreambleCache.TryAdd(cacheKey, ctx) |> ignore
+                Ok ctx
+            | Error err -> Error err
+
+    match preambleCtxResult with
+    | Error err ->
+        { ExitCode = 1
+          Stdout = ""
+          Stderr = err }
+    | Ok preambleCtx ->
+        let compileResult = compileTestWithPreamble verbosity options stdlib preambleCtx testExpr
+
+        if not compileResult.Success then
+            { ExitCode = 1
+              Stdout = ""
+              Stderr = compileResult.ErrorMessage |> Option.defaultValue "Compilation failed" }
+        else
+            execute verbosity compileResult.Binary
 
 /// Compile and run source code with lazy stdlib (caches LIR compilation across tests)
 let compileAndRunWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: LazyStdlibResult) (source: string) : ExecutionResult =
@@ -1579,7 +2048,7 @@ let getReachableStdlibFunctions (stdlib: LazyStdlibResult) (source: string) : Re
         | Error typeErr -> Error $"Type error: {TypeChecking.typeErrorToString typeErr}"
         | Ok (programType, typedUserAst, _) ->
             // Convert to ANF
-            match AST_to_ANF.convertUserOnlyCached stdlib.SpecCache stdlib.GenericFuncDefs stdlib.ANFResult typedUserAst with
+            match AST_to_ANF.convertUserOnlyCached stdlib.SpecCache stdlib.ANFFuncCache "" Map.empty stdlib.GenericFuncDefs stdlib.ANFResult typedUserAst with
             | Error err -> Error $"ANF conversion error: {err}"
             | Ok userOnly ->
                 // Create ConversionResult for RC insertion
@@ -1626,7 +2095,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
         | Error typeErr -> Error $"Type error: {TypeChecking.typeErrorToString typeErr}"
         | Ok (programType, typedUserAst, _) ->
             // Convert to ANF
-            match AST_to_ANF.convertUserOnlyCached stdlib.SpecCache stdlib.GenericFuncDefs stdlib.ANFResult typedUserAst with
+            match AST_to_ANF.convertUserOnlyCached stdlib.SpecCache stdlib.ANFFuncCache "" Map.empty stdlib.GenericFuncDefs stdlib.ANFResult typedUserAst with
             | Error err -> Error $"ANF conversion error: {err}"
             | Ok userOnly ->
                 // Create ConversionResult for RC insertion
