@@ -49,3 +49,16 @@ cachegrind.out.*
 # Coverage
 coverage.xml
 coverage-report/
+
+# OCaml build artifacts
+*.cmi
+*.cmx
+*.cmo
+*.cma
+*.cmxa
+*.o
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
