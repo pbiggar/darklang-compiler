@@ -13,6 +13,30 @@
 // Mutual recursion detection uses Kosaraju's algorithm to find strongly
 // connected components (SCCs) in the call graph. Any function in an SCC
 // of size > 1, or that calls itself, is considered recursive.
+//
+// LIMITATION: Literal Arguments Not Supported
+// --------------------------------------------
+// Currently, we only inline calls where ALL arguments are Var references.
+// Calls with literal arguments (IntLiteral, StringLiteral, etc.) are skipped.
+//
+// The naive fix (allocate fresh TempIds for literals, wrap body with Let
+// bindings) causes a subtle bug related to depth tracking:
+//
+// Problem: After inlining function A, we recursively process the result at
+// depth+1. But the result contains BOTH the inlined function body AND the
+// original continuation (code after the call). The continuation should be
+// processed at the original depth, not depth+1.
+//
+// Example: In __expandLeaf, when we inline __allocLeaf (which contains
+// __setTag with a literal tag), the nested inlining causes depth to increase
+// incorrectly for subsequent calls in __expandLeaf. This causes some __setTag
+// calls to not be inlined (hitting depth limit), resulting in inconsistent
+// code where some tags are inlined BitOr operations and others are function
+// calls. This breaks Dict operations when keys collide.
+//
+// Fix required: Restructure inlineCall to process the function body and
+// continuation separately, with the body at depth+1 and continuation at the
+// original depth. This requires changes to how substituteReturn merges them.
 
 module ANF_Inlining
 
@@ -325,9 +349,9 @@ let inlineCall (info: FunctionInfo) (args: Atom list) (resultTid: TempId)
             | _ -> m  // Literal args handled differently
         ) Map.empty
 
-    // Step 2: For literal arguments, we need to insert Let bindings
-    // This is a simplification - for now, we only inline when args are Vars
-    // TODO: Handle literal arguments by inserting Let bindings
+    // Note: Literal arguments are silently ignored here. The caller (inlineInExpr)
+    // checks allVars and skips inlining if any args are literals.
+    // See file header for why literal arg support is non-trivial (depth tracking bug).
 
     // Step 3: Rename all TempIds in the function body to fresh ones
     let (renamedBody, varGen') = renameExpr paramMapping varGen info.Func.Body
@@ -346,7 +370,7 @@ let rec inlineInExpr (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
         // Check if this is a regular call (not tail call) to a user function
         match Map.tryFind funcName funcs with
         | Some info when shouldInline info config depth ->
-            // Check that all args are Vars (simplification for now)
+            // Skip calls with literal args - see file header for why this is non-trivial
             let allVars = args |> List.forall (function Var _ -> true | _ -> false)
             if allVars then
                 // Inline the call
