@@ -56,9 +56,9 @@ Tuple2.first(Tuple2.swap((100, 42))) = 42
 // Tuple2.mapFirst((x: Int64) => x + 1, (5, 10)) |> Tuple2.first() = 6
 // Tuple2.mapFirst((x: Int64) => x * 2, (5, 10)) |> Tuple2.first() = 10
 // Tuple2.mapFirst((x: Int64) => x + 1, (5, 10)) |> Tuple2.second() = 10
-Tuple2.first<Int64, Int64>(Tuple2.mapFirst<Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10))) = 6
-Tuple2.first<Int64, Int64>(Tuple2.mapFirst<Int64, Int64, Int64>((x: Int64) => x * 2, (5, 10))) = 10
-Tuple2.second<Int64, Int64>(Tuple2.mapFirst<Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10))) = 10
+Tuple2.first(Tuple2.mapFirst((x: Int64) => x + 1, (5, 10))) = 6
+Tuple2.first(Tuple2.mapFirst((x: Int64) => x * 2, (5, 10))) = 10
+Tuple2.second(Tuple2.mapFirst((x: Int64) => x + 1, (5, 10))) = 10
 
 // ===================================================================
 // Tuple2.mapSecond - Transform the second value in a pair
@@ -68,9 +68,9 @@ Tuple2.second<Int64, Int64>(Tuple2.mapFirst<Int64, Int64, Int64>((x: Int64) => x
 // Tuple2.mapSecond((x: Int64) => x + 1, (5, 10)) |> Tuple2.second() = 11
 // Tuple2.mapSecond((x: Int64) => x * 2, (5, 10)) |> Tuple2.second() = 20
 // Tuple2.mapSecond((x: Int64) => x + 1, (5, 10)) |> Tuple2.first() = 5
-Tuple2.second<Int64, Int64>(Tuple2.mapSecond<Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10))) = 11
-Tuple2.second<Int64, Int64>(Tuple2.mapSecond<Int64, Int64, Int64>((x: Int64) => x * 2, (5, 10))) = 20
-Tuple2.first<Int64, Int64>(Tuple2.mapSecond<Int64, Int64, Int64>((x: Int64) => x + 1, (5, 10))) = 5
+Tuple2.second(Tuple2.mapSecond((x: Int64) => x + 1, (5, 10))) = 11
+Tuple2.second(Tuple2.mapSecond((x: Int64) => x * 2, (5, 10))) = 20
+Tuple2.first(Tuple2.mapSecond((x: Int64) => x + 1, (5, 10))) = 5
 
 // ===================================================================
 // Tuple2.mapBoth - Transform both values in a pair
@@ -79,5 +79,5 @@ Tuple2.first<Int64, Int64>(Tuple2.mapSecond<Int64, Int64, Int64>((x: Int64) => x
 // NOTE: Pipe with partial function application not supported - use nested calls
 // Tuple2.mapBoth((x: Int64) => x + 1, (y: Int64) => y * 2, (5, 10)) |> Tuple2.first() = 6
 // Tuple2.mapBoth((x: Int64) => x + 1, (y: Int64) => y * 2, (5, 10)) |> Tuple2.second() = 20
-Tuple2.first<Int64, Int64>(Tuple2.mapBoth<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (y: Int64) => y * 2, (5, 10))) = 6
-Tuple2.second<Int64, Int64>(Tuple2.mapBoth<Int64, Int64, Int64, Int64>((x: Int64) => x + 1, (y: Int64) => y * 2, (5, 10))) = 20
+Tuple2.first(Tuple2.mapBoth((x: Int64) => x + 1, (y: Int64) => y * 2, (5, 10))) = 6
+Tuple2.second(Tuple2.mapBoth((x: Int64) => x + 1, (y: Int64) => y * 2, (5, 10))) = 20

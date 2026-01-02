@@ -5,47 +5,47 @@
 // =====================================================
 
 // Generic identity function with int
-def identity<t>(x: t) : t = x identity<Int64>(42) = 42
+def identity<t>(x: t) : t = x identity(42) = 42
 
 // Identity with bool
-def id<t>(x: t) : t = x id<Bool>(true) = stdout="true\n"
+def id<t>(x: t) : t = x id(true) = stdout="true\n"
 
 // Identity with different int value
-def ident<t>(x: t) : t = x ident<Int64>(100) = 100
+def ident<t>(x: t) : t = x ident(100) = 100
 
 // =====================================================
 // Multiple Instantiations
 // =====================================================
 
 // Using identity with different types in same expression
-def myid<t>(x: t) : t = x myid<Int64>(40) + myid<Int64>(2) = 42
+def myid<t>(x: t) : t = x myid(40) + myid(2) = 42
 
 // =====================================================
 // Generic Functions with Expressions
 // =====================================================
 
 // Generic function that uses its parameter
-def return_it<t>(value: t) : t = value return_it<Int64>(42) = 42
+def return_it<t>(value: t) : t = value return_it(42) = 42
 
-def ret<t>(v: t) : t = v ret<Bool>(false) = stdout="false\n"
+def ret<t>(v: t) : t = v ret(false) = stdout="false\n"
 
 // =====================================================
 // Generic with Operations on Result
 // =====================================================
 
 // Use generic result in arithmetic
-def i<t>(x: t) : t = x i<Int64>(6) * i<Int64>(7) = 42
+def i<t>(x: t) : t = x i(6) * i(7) = 42
 
-def j<t>(x: t) : t = x j<Int64>(10) + 32 = 42
+def j<t>(x: t) : t = x j(10) + 32 = 42
 
 // =====================================================
 // Generic with Let Bindings
 // =====================================================
 
 // Use generic in let binding
-def k<t>(x: t) : t = x let x = k<Int64>(21) in x * 2 = 42
+def k<t>(x: t) : t = x let x = k(21) in x * 2 = 42
 
-def l<t>(x: t) : t = x let a = l<Int64>(10) in let b = l<Int64>(32) in a + b = 42
+def l<t>(x: t) : t = x let a = l(10) in let b = l(32) in a + b = 42
 
 // =====================================================
 // Type Inference at Call Sites
@@ -70,7 +70,7 @@ def inf_op<t>(x: t) : t = x inf_op(6) * inf_op(7) = 42
 def inf_let<t>(x: t) : t = x let y = inf_let(21) in y * 2 = 42
 
 // Mixed explicit and inferred - explicit still works
-def mixed<t>(x: t) : t = x mixed<Int64>(20) + mixed(22) = 42
+def mixed<t>(x: t) : t = x mixed(20) + mixed(22) = 42
 
 // Inference with bool in conditional
 def inf_cond<t>(x: t) : t = x if inf_cond(true) then 42 else 0 = 42
@@ -80,17 +80,17 @@ def inf_cond<t>(x: t) : t = x if inf_cond(true) then 42 else 0 = 42
 // =====================================================
 
 // Two type parameters - return first
-def first<a, b>(a: a, b: b) : a = a first<Int64, Bool>(42, true) = 42
+def first<a, b>(a: a, b: b) : a = a first(42, true) = 42
 
 // Two type parameters - return second
-def second<a, b>(a: a, b: b) : b = b second<Int64, Bool>(42, true) = stdout="true\n"
+def second<a, b>(a: a, b: b) : b = b second(42, true) = stdout="true\n"
 
 // Three type parameters
-def pick1<a, b, c>(a: a, b: b, c: c) : a = a pick1<Int64, Bool, Int64>(42, false, 99) = 42
+def pick1<a, b, c>(a: a, b: b, c: c) : a = a pick1(42, false, 99) = 42
 
-def pick2<a, b, c>(a: a, b: b, c: c) : b = b pick2<Int64, Bool, Int64>(99, true, 99) = stdout="true\n"
+def pick2<a, b, c>(a: a, b: b, c: c) : b = b pick2(99, true, 99) = stdout="true\n"
 
-def pick3<a, b, c>(a: a, b: b, c: c) : c = c pick3<Int64, Bool, Int64>(99, false, 42) = 42
+def pick3<a, b, c>(a: a, b: b, c: c) : c = c pick3(99, false, 42) = 42
 
 // Type inference with multiple type parameters
 def fst<a, b>(a: a, b: b) : a = a fst(10, true) = 10
@@ -105,7 +105,7 @@ def get2<a, b, c>(a: a, b: b, c: c) : b = b get2(99, true, false) = stdout="true
 def get3<a, b, c>(a: a, b: b, c: c) : c = c get3(99, true, false) = stdout="false\n"
 
 // Multiple params with same type
-def both_int<a, b>(a: a, b: b) : a = a both_int<Int64, Int64>(42, 99) = 42
+def both_int<a, b>(a: a, b: b) : a = a both_int(42, 99) = 42
 
 // Use result in expression
 def fst2<a, b>(a: a, b: b) : a = a fst2(40, true) + 2 = 42

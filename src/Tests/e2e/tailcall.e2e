@@ -137,14 +137,14 @@ def genericTail<t>(x: t, n: Int64) : t =
     if n <= 0 then x
     else genericTail<t>(x, n - 1)
 
-genericTail<Int64>(42, 5) = 42
+genericTail(42, 5) = 42
 
 // Bug 11: Generic tail recursion with two type params
 def genericTail2<k, v>(kv: k, vv: v, n: Int64) : k =
     if n <= 0 then kv
     else genericTail2<k, v>(kv, vv, n - 1)
 
-genericTail2<Int64, String>(99, "test", 3) = 99
+genericTail2(99, "test", 3) = 99
 
 // Bug 12: Compare with function calls before tail call (like __compareBytes)
 // This is the exact pattern that fails in stdlib String operations
