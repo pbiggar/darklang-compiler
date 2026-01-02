@@ -266,7 +266,7 @@ let x = [3, 4] in Stdlib.List.length([1, 2, ...x]) = stdout="4\n"
 let x = [1, 2, 3] in Stdlib.List.length([...x]) = stdout="3\n"
 
 // Spread with empty tail (use function to get typed empty list)
-def emptyList() : List<Int64> = [] Stdlib.List.length<Int64>([1, 2, ...emptyList()]) = stdout="2\n"
+def emptyList() : List<Int64> = [] Stdlib.List.length([1, 2, ...emptyList()]) = stdout="2\n"
 
 // Verify element values with pattern matching
 let x = [2, 3] in match [1, ...x] with | [a, b, c] -> a + b + c | _ -> 0 = stdout="6\n"

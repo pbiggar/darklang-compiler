@@ -549,6 +549,13 @@ let typesCompatible (expected: Type) (actual: Type) : bool =
     | Ok _ -> true
     | Error _ -> false
 
+/// Check if two types are compatible after resolving type aliases
+/// Combines alias resolution with type variable unification
+let typesCompatibleWithAliases (aliasReg: AliasRegistry) (expected: Type) (actual: Type) : bool =
+    let resolvedExpected = resolveType aliasReg expected
+    let resolvedActual = resolveType aliasReg actual
+    typesCompatible resolvedExpected resolvedActual
+
 /// Consolidate bindings, checking for conflicts where the same type variable
 /// is bound to different types. Returns a map from type var name to concrete type.
 /// When a type var is bound to both a type containing TVars and a concrete type, prefer the concrete type.
@@ -1133,7 +1140,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         | arg :: restArgs, paramT :: restParams ->
                             checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
                             |> Result.bind (fun (argType, arg') ->
-                                if typesEqual aliasReg argType paramT then
+                                if typesCompatibleWithAliases aliasReg paramT argType then
                                     checkProvidedArgs restArgs restParams (arg' :: accArgs)
                                 else
                                     Error (TypeMismatch (paramT, argType, $"argument to {funcName}")))
@@ -1157,7 +1164,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         let partialType = TFunction (remainingParamTypes, origReturnType)
 
                         match expectedType with
-                        | Some expected when not (typesEqual aliasReg expected partialType) ->
+                        | Some expected when not (typesCompatibleWithAliases aliasReg expected partialType) ->
                             Error (TypeMismatch (expected, partialType, $"partial application of {funcName}"))
                         | _ -> Ok (partialType, lambdaExpr))
                 else
@@ -1168,7 +1175,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         | arg :: restArgs, paramT :: restParams ->
                             checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
                             |> Result.bind (fun (argType, arg') ->
-                                if typesEqual aliasReg argType paramT then
+                                if typesCompatibleWithAliases aliasReg paramT argType then
                                     checkArgsWithTypes restArgs restParams (arg' :: accArgs)
                                 else
                                     Error (TypeMismatch (paramT, argType, $"argument to {funcName}")))
@@ -1177,7 +1184,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     checkArgsWithTypes args origParamTypes []
                     |> Result.bind (fun args' ->
                         match expectedType with
-                        | Some expected when not (typesEqual aliasReg expected origReturnType) ->
+                        | Some expected when not (typesCompatibleWithAliases aliasReg expected origReturnType) ->
                             Error (TypeMismatch (expected, origReturnType, $"result of call to {funcName}"))
                         | _ -> Ok (origReturnType, Call (resolvedFuncName, args')))
         | Some (other, _) ->
@@ -1336,7 +1343,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         | arg :: restArgs, paramT :: restParams ->
                             checkExpr arg env typeReg variantLookup genericFuncReg moduleRegistry aliasReg (Some paramT)
                             |> Result.bind (fun (argType, arg') ->
-                                if typesEqual aliasReg argType paramT then
+                                if typesCompatibleWithAliases aliasReg paramT argType then
                                     checkArgsWithTypes restArgs restParams (arg' :: accArgs)
                                 else
                                     Error (TypeMismatch (paramT, argType, $"argument to {funcName}")))
@@ -1345,7 +1352,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     checkArgsWithTypes args paramTypes []
                     |> Result.bind (fun args' ->
                         match expectedType with
-                        | Some expected when not (typesEqual aliasReg expected returnType) ->
+                        | Some expected when not (typesCompatibleWithAliases aliasReg expected returnType) ->
                             Error (TypeMismatch (expected, returnType, $"result of call to {funcName}"))
                         | _ -> Ok (returnType, Call (resolvedFuncName, args')))
             | None ->
