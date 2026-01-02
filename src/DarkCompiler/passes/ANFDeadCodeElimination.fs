@@ -59,11 +59,11 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.FloatToInt atom -> extractFromAtom atom
     | ANF.RawAlloc numBytes -> extractFromAtom numBytes
     | ANF.RawFree ptr -> extractFromAtom ptr
-    | ANF.RawGet (ptr, offset) ->
+    | ANF.RawGet (ptr, offset, _) ->
         extractFromAtom ptr @ extractFromAtom offset
     | ANF.RawGetByte (ptr, offset) ->
         extractFromAtom ptr @ extractFromAtom offset
-    | ANF.RawSet (ptr, offset, value) ->
+    | ANF.RawSet (ptr, offset, value, _) ->
         extractFromAtom ptr @ extractFromAtom offset @ extractFromAtom value
     | ANF.RawSetByte (ptr, offset, value) ->
         extractFromAtom ptr @ extractFromAtom offset @ extractFromAtom value
@@ -73,6 +73,7 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.RefCountIncString atom -> extractFromAtom atom
     | ANF.RefCountDecString atom -> extractFromAtom atom
     | ANF.RandomInt64 -> []  // No atoms
+    | ANF.FloatToString atom -> extractFromAtom atom
 
 /// Extract function names from an ANF expression
 let rec private extractFromAExpr (aexpr: ANF.AExpr) : string list =

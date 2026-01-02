@@ -255,15 +255,16 @@ let renameCExpr (mapping: Map<TempId, TempId>) (cexpr: CExpr) : CExpr =
     | FloatToInt a -> FloatToInt (r a)
     | RawAlloc numBytes -> RawAlloc (r numBytes)
     | RawFree ptr -> RawFree (r ptr)
-    | RawGet (ptr, offset) -> RawGet (r ptr, r offset)
+    | RawGet (ptr, offset, valueType) -> RawGet (r ptr, r offset, valueType)
     | RawGetByte (ptr, offset) -> RawGetByte (r ptr, r offset)
-    | RawSet (ptr, offset, value) -> RawSet (r ptr, r offset, r value)
+    | RawSet (ptr, offset, value, valueType) -> RawSet (r ptr, r offset, r value, valueType)
     | RawSetByte (ptr, offset, value) -> RawSetByte (r ptr, r offset, r value)
     | StringHash str -> StringHash (r str)
     | StringEq (left, right) -> StringEq (r left, r right)
     | RefCountIncString a -> RefCountIncString (r a)
     | RefCountDecString a -> RefCountDecString (r a)
     | RandomInt64 -> RandomInt64
+    | FloatToString a -> FloatToString (r a)
 
 /// Rename all TempIds in an expression, allocating fresh TempIds
 let rec renameExpr (mapping: Map<TempId, TempId>) (varGen: VarGen) (expr: AExpr)

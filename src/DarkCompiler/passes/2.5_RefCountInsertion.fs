@@ -198,6 +198,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | FloatNeg _ -> Some AST.TFloat64
     | IntToFloat _ -> Some AST.TFloat64
     | FloatToInt _ -> Some AST.TInt64
+    | FloatToString _ -> Some AST.TString  // Returns heap String
     // String intrinsics
     | StringHash _ -> Some AST.TInt64  // Returns hash as Int64
     | StringEq _ -> Some AST.TBool  // Returns Bool

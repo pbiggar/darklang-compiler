@@ -2941,6 +2941,14 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         |> Result.map (fun destReg ->
             Runtime.generateRandomInt64 destReg)
 
+    | LIR.FloatToString (dest, value) ->
+        // Convert float in FP register to heap string
+        lirRegToARM64Reg dest
+        |> Result.bind (fun destReg ->
+            lirFRegToARM64FReg value
+            |> Result.map (fun valueReg ->
+                Runtime.generateFloatToString destReg valueReg))
+
     | LIR.CoverageHit exprId ->
         // Increment coverage counter at _coverage_data[exprId * 8]
         // Uses PC-relative addressing (ADRP+ADD) to get BSS buffer address

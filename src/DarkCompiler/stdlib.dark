@@ -534,6 +534,26 @@ def Stdlib.List.toDisplayString_bool(list: List<Bool>) : String =
     let strs = Stdlib.List.__boolsToStrings(list, Stdlib.FingerTree.empty<String>()) in
     "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
 
+// Stdlib.Float64 - Float64 operations
+
+// Convert Float to String (intrinsic - body is never executed)
+def Stdlib.Float64.toString(f: Float) : String = ""
+
+// Helper to build string list from Float list
+def Stdlib.List.__floatsToStrings(list: List<Float>, acc: List<String>) : List<String> =
+    if Stdlib.FingerTree.isEmpty<Float>(list) then acc
+    else
+        match Stdlib.FingerTree.head<Float>(list) with
+        | None -> acc
+        | Some(h) ->
+            let s = Stdlib.Float64.toString(h) in
+            let newAcc = Stdlib.FingerTree.pushBack<String>(acc, s) in
+            Stdlib.List.__floatsToStrings(Stdlib.FingerTree.tail<Float>(list), newAcc)
+
+def Stdlib.List.toDisplayString_f64(list: List<Float>) : String =
+    let strs = Stdlib.List.__floatsToStrings(list, Stdlib.FingerTree.empty<String>()) in
+    "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
+
 // TODO: List.zip is disabled due to compiler bug with tuple recursion
 // def Stdlib.List.zip<a, b>(list1: List<a>, list2: List<b>) : List<(a, b)> =
 //     match (list1, list2) with
@@ -2244,16 +2264,16 @@ def Stdlib.FingerTree.__isNull<a>(tree: List<a>) : Bool =
 // Single node operations
 // -----------------------------------------------------------------------------
 
-// Create a Single node: [elem:8] with tag 1
-def Stdlib.FingerTree.__allocSingle<a>(elem: a) : List<a> =
+// Create a Single node: [node:8] with tag 1 (stores TreeNode pointer, not element directly)
+def Stdlib.FingerTree.__allocSingle<a>(node: List<a>) : List<a> =
     let ptr = __raw_alloc(8) in
-    let _ = __raw_set<a>(ptr, 0, elem) in
+    let _ = __raw_set<List<a>>(ptr, 0, node) in
     Stdlib.FingerTree.__fromRawPtr<a>(ptr, Stdlib.FingerTree.__TAG_SINGLE())
 
-// Get element from Single node
-def Stdlib.FingerTree.__getSingleElem<a>(tree: List<a>) : a =
+// Get element from Single node (returns TreeNode pointer, not element directly)
+def Stdlib.FingerTree.__getSingleElem<a>(tree: List<a>) : List<a> =
     let ptr = Stdlib.FingerTree.__toRawPtr<a>(tree) in
-    __raw_get<a>(ptr, 0)
+    __raw_get<List<a>>(ptr, 0)
 
 // -----------------------------------------------------------------------------
 // LEAF node operations (wraps actual elements for type-uniform design)

@@ -58,6 +58,7 @@ let hasSideEffects (instr: Instr) : bool =
     | RefCountIncString _ -> true   // Mutates refcount
     | RefCountDecString _ -> true   // Mutates refcount
     | RandomInt64 _ -> true  // Syscall
+    | FloatToString _ -> false  // Pure conversion (allocates but no visible side effect)
     | CoverageHit _ -> true  // Must not be eliminated (tracking side effect)
 
 /// Get the destination VReg of an instruction (if any)
@@ -85,7 +86,7 @@ let getInstrDest (instr: Instr) : VReg option =
     | FileWriteFromPtr (dest, _, _, _) -> Some dest
     | Phi (dest, _, _) -> Some dest
     | RawAlloc (dest, _) -> Some dest
-    | RawGet (dest, _, _) -> Some dest
+    | RawGet (dest, _, _, _) -> Some dest
     | RawGetByte (dest, _, _) -> Some dest
     | FloatSqrt (dest, _) -> Some dest
     | FloatAbs (dest, _) -> Some dest
@@ -104,6 +105,7 @@ let getInstrDest (instr: Instr) : VReg option =
     | RefCountIncString _ -> None
     | RefCountDecString _ -> None
     | RandomInt64 dest -> Some dest
+    | FloatToString (dest, _) -> Some dest
     | CoverageHit _ -> None
 
 /// Get all VRegs used by an instruction
@@ -141,9 +143,9 @@ let getInstrUses (instr: Instr) : Set<VReg> =
     | Phi (_, sources, _) -> sources |> List.map (fun (op, _) -> fromOperand op) |> Set.unionMany
     | RawAlloc (_, numBytes) -> fromOperand numBytes
     | RawFree ptr -> fromOperand ptr
-    | RawGet (_, ptr, byteOffset) -> Set.union (fromOperand ptr) (fromOperand byteOffset)
+    | RawGet (_, ptr, byteOffset, _) -> Set.union (fromOperand ptr) (fromOperand byteOffset)
     | RawGetByte (_, ptr, byteOffset) -> Set.union (fromOperand ptr) (fromOperand byteOffset)
-    | RawSet (ptr, byteOffset, value) -> Set.unionMany [fromOperand ptr; fromOperand byteOffset; fromOperand value]
+    | RawSet (ptr, byteOffset, value, _) -> Set.unionMany [fromOperand ptr; fromOperand byteOffset; fromOperand value]
     | RawSetByte (ptr, byteOffset, value) -> Set.unionMany [fromOperand ptr; fromOperand byteOffset; fromOperand value]
     | FloatSqrt (_, src) -> fromOperand src
     | FloatAbs (_, src) -> fromOperand src
@@ -155,6 +157,7 @@ let getInstrUses (instr: Instr) : Set<VReg> =
     | RefCountIncString str -> fromOperand str
     | RefCountDecString str -> fromOperand str
     | RandomInt64 _ -> Set.empty  // No operand uses
+    | FloatToString (_, value) -> fromOperand value
     | CoverageHit _ -> Set.empty  // No operand uses
 
 /// Get VRegs used by terminator
@@ -319,9 +322,9 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | Phi (dest, sources, valueType) -> Phi (dest, sources, valueType)
     | RawAlloc (dest, numBytes) -> RawAlloc (dest, p numBytes)
     | RawFree ptr -> RawFree (p ptr)
-    | RawGet (dest, ptr, byteOffset) -> RawGet (dest, p ptr, p byteOffset)
+    | RawGet (dest, ptr, byteOffset, valueType) -> RawGet (dest, p ptr, p byteOffset, valueType)
     | RawGetByte (dest, ptr, byteOffset) -> RawGetByte (dest, p ptr, p byteOffset)
-    | RawSet (ptr, byteOffset, value) -> RawSet (p ptr, p byteOffset, p value)
+    | RawSet (ptr, byteOffset, value, valueType) -> RawSet (p ptr, p byteOffset, p value, valueType)
     | RawSetByte (ptr, byteOffset, value) -> RawSetByte (p ptr, p byteOffset, p value)
     | FloatSqrt (dest, src) -> FloatSqrt (dest, p src)
     | FloatAbs (dest, src) -> FloatAbs (dest, p src)
@@ -333,6 +336,7 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | RefCountIncString str -> RefCountIncString (p str)
     | RefCountDecString str -> RefCountDecString (p str)
     | RandomInt64 dest -> RandomInt64 dest
+    | FloatToString (dest, value) -> FloatToString (dest, p value)
     | CoverageHit exprId -> CoverageHit exprId
 
 /// Apply copy propagation to terminator

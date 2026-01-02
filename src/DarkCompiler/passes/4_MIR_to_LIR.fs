@@ -30,6 +30,25 @@ let convertOperand (operand: MIR.Operand) : LIR.Operand =
     | MIR.Register vreg -> LIR.Reg (vregToLIRReg vreg)
     | MIR.FuncAddr name -> LIR.FuncAddr name  // Function address (for higher-order functions)
 
+/// Apply type substitution - replaces type variables with concrete types
+let rec applyTypeSubst (typeParams: string list) (typeArgs: AST.Type list) (typ: AST.Type) : AST.Type =
+    // Build substitution map from type params to type args
+    let subst = List.zip typeParams typeArgs |> Map.ofList
+    let rec substitute t =
+        match t with
+        | AST.TVar name ->
+            match Map.tryFind name subst with
+            | Some concrete -> concrete
+            | None -> t  // Unbound - keep as-is
+        | AST.TFunction (paramTypes, retType) ->
+            AST.TFunction (List.map substitute paramTypes, substitute retType)
+        | AST.TTuple elemTypes -> AST.TTuple (List.map substitute elemTypes)
+        | AST.TList elemType -> AST.TList (substitute elemType)
+        | AST.TDict (keyType, valType) -> AST.TDict (substitute keyType, substitute valType)
+        | AST.TSum (name, args) -> AST.TSum (name, List.map substitute args)
+        | _ -> t  // Concrete types unchanged
+    substitute typ
+
 /// Ensure operand is in a register (may need to load immediate)
 let ensureInRegister (operand: MIR.Operand) (tempReg: LIR.Reg) : Result<LIR.Instr list * LIR.Reg, string> =
     match operand with
@@ -505,7 +524,8 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 ([], intMove)
 
         let (saveReturnValue, copyReturnValue) = moveResult
-        Ok (saveInstrs @ intArgMoves @ floatArgMoves @ [callInstr] @ saveReturnValue @ restoreInstrs @ copyReturnValue)
+        let result = saveInstrs @ intArgMoves @ floatArgMoves @ [callInstr] @ saveReturnValue @ restoreInstrs @ copyReturnValue
+        Ok result
 
     | MIR.TailCall (funcName, args, argTypes, _returnType) ->
         // Tail call optimization: Skip SaveRegs/RestoreRegs, use B instead of BL
@@ -734,6 +754,9 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
     | MIR.HeapStore (addr, offset, src, valueType) ->
         let lirAddr = vregToLIRReg addr
         let lirSrc = convertOperand src
+        // For float values, the Virtual register ID is shared with FVirtual
+        // CodeGen will use virtualToFVirtual to convert Virtual(n) -> FVirtual(n)
+        // which then gets allocated to a physical D register
         Ok [LIR.HeapStore (lirAddr, offset, lirSrc, valueType)]
 
     | MIR.HeapLoad (dest, addr, offset, valueType) ->
@@ -883,10 +906,19 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 | other -> [LIR.Mov (LIR.Physical LIR.X19, other)]
             Ok (moveToX19 @ [LIR.PrintList (LIR.Physical LIR.X19, elemType)])
 
-        | AST.TSum (typeName, _) ->
+        | AST.TSum (typeName, typeArgs) ->
             // Sum type printing: look up variants and generate PrintSum
             match Map.tryFind typeName variantRegistry with
-            | Some variants ->
+            | Some (typeParams, variants) ->
+                // Apply type substitution to payload types
+                let substitutedVariants =
+                    variants |> List.map (fun (name, tag, payloadOpt) ->
+                        let subPayload =
+                            match payloadOpt with
+                            | Some payload when List.length typeParams = List.length typeArgs ->
+                                Some (applyTypeSubst typeParams typeArgs payload)
+                            | other -> other
+                        (name, tag, subPayload))
                 // Move sum pointer to X19 (callee-saved for print operations)
                 let lirSrc = convertOperand src
                 let moveToX19 =
@@ -894,7 +926,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                     | LIR.Reg (LIR.Physical LIR.X19) -> []
                     | LIR.Reg r -> [LIR.Mov (LIR.Physical LIR.X19, LIR.Reg r)]
                     | other -> [LIR.Mov (LIR.Physical LIR.X19, other)]
-                Ok (moveToX19 @ [LIR.PrintSum (LIR.Physical LIR.X19, variants)])
+                Ok (moveToX19 @ [LIR.PrintSum (LIR.Physical LIR.X19, substitutedVariants)])
             | None ->
                 // Unknown type, just print address
                 let lirSrc = convertOperand src
@@ -1027,8 +1059,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         | Ok (loadInstrs, ptrReg) ->
             Ok (loadInstrs @ [LIR.RawFree ptrReg])
 
-    | MIR.RawGet (dest, ptr, byteOffset) ->
-        let lirDest = vregToLIRReg dest
+    | MIR.RawGet (dest, ptr, byteOffset, valueType) ->
         // Both ptr and byteOffset must be in registers
         match ensureInRegister ptr (LIR.Virtual 1000) with
         | Error err -> Error err
@@ -1036,7 +1067,16 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         match ensureInRegister byteOffset (LIR.Virtual 1001) with
         | Error err -> Error err
         | Ok (offsetInstrs, offsetReg) ->
-            Ok (ptrInstrs @ offsetInstrs @ [LIR.RawGet (lirDest, ptrReg, offsetReg)])
+            match valueType with
+            | Some AST.TFloat64 ->
+                // Float load: load raw bits into GP register, then move to FP register
+                let lirFDest = vregToLIRFReg dest
+                let tempReg = LIR.Physical LIR.X9  // Use temp register for raw get
+                Ok (ptrInstrs @ offsetInstrs @ [LIR.RawGet (tempReg, ptrReg, offsetReg); LIR.GpToFp (lirFDest, tempReg)])
+            | _ ->
+                // Integer/other load
+                let lirDest = vregToLIRReg dest
+                Ok (ptrInstrs @ offsetInstrs @ [LIR.RawGet (lirDest, ptrReg, offsetReg)])
 
     | MIR.RawGetByte (dest, ptr, byteOffset) ->
         let lirDest = vregToLIRReg dest
@@ -1049,7 +1089,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         | Ok (offsetInstrs, offsetReg) ->
             Ok (ptrInstrs @ offsetInstrs @ [LIR.RawGetByte (lirDest, ptrReg, offsetReg)])
 
-    | MIR.RawSet (ptr, byteOffset, value) ->
+    | MIR.RawSet (ptr, byteOffset, value, valueType) ->
         // All three operands must be in registers
         match ensureInRegister ptr (LIR.Virtual 1000) with
         | Error err -> Error err
@@ -1064,10 +1104,19 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
             let movInstr = LIR.Mov (tempReg, convertOperand value)
             Ok (ptrInstrs @ offsetInstrs @ [movInstr; LIR.RawSet (ptrReg, offsetReg, tempReg)])
         | _ ->
-            match ensureInRegister value (LIR.Virtual 1002) with
-            | Error err -> Error err
-            | Ok (valueInstrs, valueReg) ->
-                Ok (ptrInstrs @ offsetInstrs @ valueInstrs @ [LIR.RawSet (ptrReg, offsetReg, valueReg)])
+            match valueType with
+            | Some AST.TFloat64 ->
+                // Float store: ensure value is in FP register, then convert to GP for storage
+                match ensureInFRegister value (LIR.FVirtual 1002) with
+                | Error err -> Error err
+                | Ok (valueInstrs, valueFReg) ->
+                    let tempReg = LIR.Physical LIR.X9  // Use temp register for FpToGp
+                    Ok (ptrInstrs @ offsetInstrs @ valueInstrs @ [LIR.FpToGp (tempReg, valueFReg); LIR.RawSet (ptrReg, offsetReg, tempReg)])
+            | _ ->
+                match ensureInRegister value (LIR.Virtual 1002) with
+                | Error err -> Error err
+                | Ok (valueInstrs, valueReg) ->
+                    Ok (ptrInstrs @ offsetInstrs @ valueInstrs @ [LIR.RawSet (ptrReg, offsetReg, valueReg)])
 
     | MIR.RawSetByte (ptr, byteOffset, value) ->
         // All three operands must be in registers
@@ -1141,6 +1190,14 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
     | MIR.RandomInt64 dest ->
         let lirDest = vregToLIRReg dest
         Ok [LIR.RandomInt64 lirDest]
+
+    | MIR.FloatToString (dest, value) ->
+        let lirDest = vregToLIRReg dest
+        // Ensure value is in an FP register
+        match ensureInFRegister value (LIR.FVirtual 1000) with
+        | Error err -> Error err
+        | Ok (valueInstrs, valueFReg) ->
+            Ok (valueInstrs @ [LIR.FloatToString (lirDest, valueFReg)])
 
     | MIR.CoverageHit exprId ->
         Ok [LIR.CoverageHit exprId]
@@ -1391,6 +1448,7 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.RefCountIncString str -> LIR.RefCountIncString (offsetLIROperand strOffset fltOffset str)
     | LIR.RefCountDecString str -> LIR.RefCountDecString (offsetLIROperand strOffset fltOffset str)
     | LIR.RandomInt64 dest -> LIR.RandomInt64 dest  // No operands to offset
+    | LIR.FloatToString (dest, value) -> LIR.FloatToString (dest, value)  // No operands to offset
     // Instructions with direct pool indices
     | LIR.PrintString (strIdx, strLen) -> LIR.PrintString (strIdx + strOffset, strLen)
     | LIR.FLoad (dest, floatIdx) -> LIR.FLoad (dest, floatIdx + fltOffset)

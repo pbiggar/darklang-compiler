@@ -140,9 +140,9 @@ type CExpr =
     // Raw memory intrinsics (internal, for HAMT implementation)
     | RawAlloc of numBytes:Atom               // Allocate raw bytes (no header), returns RawPtr
     | RawFree of ptr:Atom                     // Manually free raw memory
-    | RawGet of ptr:Atom * byteOffset:Atom    // Read 8 bytes at offset, returns Int64
+    | RawGet of ptr:Atom * byteOffset:Atom * valueType:AST.Type option  // Read 8 bytes at offset, valueType for float
     | RawGetByte of ptr:Atom * byteOffset:Atom  // Read 1 byte at offset, returns Int64 (zero-extended)
-    | RawSet of ptr:Atom * byteOffset:Atom * value:Atom  // Write 8 bytes at offset
+    | RawSet of ptr:Atom * byteOffset:Atom * value:Atom * valueType:AST.Type option  // Write 8 bytes at offset, valueType for float
     | RawSetByte of ptr:Atom * byteOffset:Atom * value:Atom  // Write 1 byte at offset
     // String intrinsics (for Dict with string keys)
     | StringHash of str:Atom                  // FNV-1a hash of string, returns Int64
@@ -152,6 +152,8 @@ type CExpr =
     | RefCountDecString of Atom               // Decrement string ref count, free if zero
     // Random intrinsics
     | RandomInt64                             // Get 8 random bytes as Int64
+    // Float to String conversion
+    | FloatToString of Atom                   // Convert Float to heap String
 
 /// ANF expressions with explicit sequencing
 type AExpr =

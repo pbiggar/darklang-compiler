@@ -27,16 +27,18 @@ module ANF_to_MIR
 
 /// Build VariantRegistry from VariantLookup
 /// VariantLookup: variantName -> (typeName, typeParams, tagIndex, payloadType)
-/// VariantRegistry: typeName -> list of (variantName, tagIndex, payloadType)
+/// VariantRegistry: typeName -> (typeParams, list of (variantName, tagIndex, payloadType))
 let buildVariantRegistry (variantLookup: AST_to_ANF.VariantLookup) : MIR.VariantRegistry =
     variantLookup
     |> Map.toList
-    |> List.map (fun (variantName, (typeName, _typeParams, tagIndex, payloadType)) ->
-        (typeName, (variantName, tagIndex, payloadType)))
-    |> List.groupBy fst
+    |> List.map (fun (variantName, (typeName, typeParams, tagIndex, payloadType)) ->
+        (typeName, typeParams, (variantName, tagIndex, payloadType)))
+    |> List.groupBy (fun (typeName, _, _) -> typeName)
     |> List.map (fun (typeName, entries) ->
-        let variants = entries |> List.map snd |> List.sortBy (fun (_, tag, _) -> tag)
-        (typeName, variants))
+        // Get typeParams from first entry (all entries for same type have same params)
+        let typeParams = entries |> List.head |> (fun (_, tp, _) -> tp)
+        let variants = entries |> List.map (fun (_, _, v) -> v) |> List.sortBy (fun (_, tag, _) -> tag)
+        (typeName, (typeParams, variants)))
     |> Map.ofList
 
 /// Convert ANF.BinOp to MIR.BinOp
@@ -128,9 +130,9 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.FileWriteFromPtr (path, ptr, length) -> max (maxTempIdInAtom path) (max (maxTempIdInAtom ptr) (maxTempIdInAtom length))
     | ANF.RawAlloc numBytes -> maxTempIdInAtom numBytes
     | ANF.RawFree ptr -> maxTempIdInAtom ptr
-    | ANF.RawGet (ptr, offset) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom offset)
+    | ANF.RawGet (ptr, offset, _) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom offset)
     | ANF.RawGetByte (ptr, offset) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom offset)
-    | ANF.RawSet (ptr, offset, value) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
+    | ANF.RawSet (ptr, offset, value, _) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
     | ANF.RawSetByte (ptr, offset, value) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
     | ANF.FloatSqrt atom -> maxTempIdInAtom atom
     | ANF.FloatAbs atom -> maxTempIdInAtom atom
@@ -142,6 +144,7 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.RefCountIncString str -> maxTempIdInAtom str
     | ANF.RefCountDecString str -> maxTempIdInAtom str
     | ANF.RandomInt64 -> -1  // No atoms, so no TempIds
+    | ANF.FloatToString atom -> maxTempIdInAtom atom
 
 /// Find the maximum TempId in an AExpr
 let rec maxTempIdInAExpr (expr: ANF.AExpr) : int =
@@ -224,9 +227,9 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.FileWriteFromPtr (path, ptr, length) -> collectStringsFromAtom path @ collectStringsFromAtom ptr @ collectStringsFromAtom length
     | ANF.RawAlloc numBytes -> collectStringsFromAtom numBytes
     | ANF.RawFree ptr -> collectStringsFromAtom ptr
-    | ANF.RawGet (ptr, offset) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset
+    | ANF.RawGet (ptr, offset, _) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset
     | ANF.RawGetByte (ptr, offset) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset
-    | ANF.RawSet (ptr, offset, value) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset @ collectStringsFromAtom value
+    | ANF.RawSet (ptr, offset, value, _) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset @ collectStringsFromAtom value
     | ANF.RawSetByte (ptr, offset, value) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset @ collectStringsFromAtom value
     | ANF.FloatSqrt atom -> collectStringsFromAtom atom
     | ANF.FloatAbs atom -> collectStringsFromAtom atom
@@ -238,6 +241,7 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.RefCountIncString str -> collectStringsFromAtom str
     | ANF.RefCountDecString str -> collectStringsFromAtom str
     | ANF.RandomInt64 -> []  // No atoms, so no strings
+    | ANF.FloatToString atom -> collectStringsFromAtom atom
 
 /// Collect all float literals from a CExpr
 let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
@@ -281,9 +285,9 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
     | ANF.FileWriteFromPtr (path, ptr, length) -> collectFloatsFromAtom path @ collectFloatsFromAtom ptr @ collectFloatsFromAtom length
     | ANF.RawAlloc numBytes -> collectFloatsFromAtom numBytes
     | ANF.RawFree ptr -> collectFloatsFromAtom ptr
-    | ANF.RawGet (ptr, offset) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset
+    | ANF.RawGet (ptr, offset, _) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset
     | ANF.RawGetByte (ptr, offset) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset
-    | ANF.RawSet (ptr, offset, value) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset @ collectFloatsFromAtom value
+    | ANF.RawSet (ptr, offset, value, _) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset @ collectFloatsFromAtom value
     | ANF.RawSetByte (ptr, offset, value) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset @ collectFloatsFromAtom value
     | ANF.FloatSqrt atom -> collectFloatsFromAtom atom
     | ANF.FloatAbs atom -> collectFloatsFromAtom atom
@@ -295,6 +299,7 @@ let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
     | ANF.RefCountIncString str -> collectFloatsFromAtom str
     | ANF.RefCountDecString str -> collectFloatsFromAtom str
     | ANF.RandomInt64 -> []  // No atoms, so no floats
+    | ANF.FloatToString atom -> collectFloatsFromAtom atom
 
 /// Collect all string literals from an ANF expression
 let rec collectStringsFromExpr (expr: ANF.AExpr) : string list =
@@ -525,14 +530,16 @@ let atomType (builder: CFGBuilder) (atom: ANF.Atom) : AST.Type =
     | ANF.FloatLiteral _ -> AST.TFloat64
     | ANF.Var (ANF.TempId id) ->
         // Check if this VReg is known to hold a float
-        if Set.contains id builder.FloatRegs then AST.TFloat64
-        else
-            match Map.tryFind (ANF.TempId id) builder.TypeMap with
-            | Some t -> t
-            | None ->
-                // TypeMap is populated by RefCountInsertion pass with fallback to TInt64.
-                // If we reach here, a pass after RefCountInsertion created a TempId without tracking.
-                failwith $"atomType: unknown type for TempId {id} - TempId created after RefCountInsertion?"
+        let result =
+            if Set.contains id builder.FloatRegs then AST.TFloat64
+            else
+                match Map.tryFind (ANF.TempId id) builder.TypeMap with
+                | Some t -> t
+                | None ->
+                    // TypeMap is populated by RefCountInsertion pass with fallback to TInt64.
+                    // If we reach here, a pass after RefCountInsertion created a TempId without tracking.
+                    failwith $"atomType: unknown type for TempId {id} - TempId created after RefCountInsertion?"
+        result
     | ANF.FuncRef _ -> AST.TInt64  // Function addresses are pointer-sized
 
 /// Get the operand type for a binary operation (checks both operands)
@@ -600,6 +607,7 @@ let cexprDescription (cexpr: ANF.CExpr) : string =
     | ANF.RefCountIncString _ -> "RefCountIncString"
     | ANF.RefCountDecString _ -> "RefCountDecString"
     | ANF.RandomInt64 -> "RandomInt64"
+    | ANF.FloatToString _ -> "FloatToString"
 
 /// Generate coverage instrumentation for an expression
 /// Returns: (CoverageHit instruction option, updated builder with new ExprId)
@@ -968,26 +976,26 @@ let rec convertExpr
                 | ANF.RawFree ptrAtom ->
                     atomToOperand builder ptrAtom
                     |> Result.map (fun ptrOp -> [MIR.RawFree ptrOp])
-                | ANF.RawGet (ptrAtom, offsetAtom) ->
+                | ANF.RawGet (ptrAtom, offsetAtom, valueType) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder offsetAtom
                         |> Result.map (fun offsetOp ->
-                            [MIR.RawGet (destReg, ptrOp, offsetOp)]))
+                            [MIR.RawGet (destReg, ptrOp, offsetOp, valueType)]))
                 | ANF.RawGetByte (ptrAtom, offsetAtom) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder offsetAtom
                         |> Result.map (fun offsetOp ->
                             [MIR.RawGetByte (destReg, ptrOp, offsetOp)]))
-                | ANF.RawSet (ptrAtom, offsetAtom, valueAtom) ->
+                | ANF.RawSet (ptrAtom, offsetAtom, valueAtom, valueType) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder offsetAtom
                         |> Result.bind (fun offsetOp ->
                             atomToOperand builder valueAtom
                             |> Result.map (fun valueOp ->
-                                [MIR.RawSet (ptrOp, offsetOp, valueOp)])))
+                                [MIR.RawSet (ptrOp, offsetOp, valueOp, valueType)])))
                 | ANF.RawSetByte (ptrAtom, offsetAtom, valueAtom) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
@@ -1032,6 +1040,9 @@ let rec convertExpr
                     |> Result.map (fun strOp -> [MIR.RefCountDecString strOp])
                 | ANF.RandomInt64 ->
                     Ok [MIR.RandomInt64 destReg]
+                | ANF.FloatToString valueAtom ->
+                    atomToOperand builder valueAtom
+                    |> Result.map (fun valueOp -> [MIR.FloatToString (destReg, valueOp)])
 
             match instrsResult with
             | Error err -> Error err
@@ -1524,26 +1535,26 @@ and convertExprToOperand
                 | ANF.RawFree ptrAtom ->
                     atomToOperand builder ptrAtom
                     |> Result.map (fun ptrOp -> [MIR.RawFree ptrOp])
-                | ANF.RawGet (ptrAtom, offsetAtom) ->
+                | ANF.RawGet (ptrAtom, offsetAtom, valueType) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder offsetAtom
                         |> Result.map (fun offsetOp ->
-                            [MIR.RawGet (destReg, ptrOp, offsetOp)]))
+                            [MIR.RawGet (destReg, ptrOp, offsetOp, valueType)]))
                 | ANF.RawGetByte (ptrAtom, offsetAtom) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder offsetAtom
                         |> Result.map (fun offsetOp ->
                             [MIR.RawGetByte (destReg, ptrOp, offsetOp)]))
-                | ANF.RawSet (ptrAtom, offsetAtom, valueAtom) ->
+                | ANF.RawSet (ptrAtom, offsetAtom, valueAtom, valueType) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder offsetAtom
                         |> Result.bind (fun offsetOp ->
                             atomToOperand builder valueAtom
                             |> Result.map (fun valueOp ->
-                                [MIR.RawSet (ptrOp, offsetOp, valueOp)])))
+                                [MIR.RawSet (ptrOp, offsetOp, valueOp, valueType)])))
                 | ANF.RawSetByte (ptrAtom, offsetAtom, valueAtom) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
@@ -1588,6 +1599,9 @@ and convertExprToOperand
                     |> Result.map (fun strOp -> [MIR.RefCountDecString strOp])
                 | ANF.RandomInt64 ->
                     Ok [MIR.RandomInt64 destReg]
+                | ANF.FloatToString valueAtom ->
+                    atomToOperand builder valueAtom
+                    |> Result.map (fun valueOp -> [MIR.FloatToString (destReg, valueOp)])
 
             // Let bindings accumulate instructions, pass through join label
             match instrsResult with
@@ -2012,15 +2026,16 @@ let private offsetInstr (strOffset: int) (fltOffset: int) (instr: MIR.Instr) : M
     | MIR.FloatToInt (dest, src) -> MIR.FloatToInt (dest, offsetOperand strOffset fltOffset src)
     | MIR.RawAlloc (dest, numBytes) -> MIR.RawAlloc (dest, offsetOperand strOffset fltOffset numBytes)
     | MIR.RawFree ptr -> MIR.RawFree (offsetOperand strOffset fltOffset ptr)
-    | MIR.RawGet (dest, ptr, offset) -> MIR.RawGet (dest, offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset offset)
+    | MIR.RawGet (dest, ptr, offset, valueType) -> MIR.RawGet (dest, offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset offset, valueType)
     | MIR.RawGetByte (dest, ptr, offset) -> MIR.RawGetByte (dest, offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset offset)
-    | MIR.RawSet (ptr, offset, value) -> MIR.RawSet (offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset offset, offsetOperand strOffset fltOffset value)
+    | MIR.RawSet (ptr, offset, value, valueType) -> MIR.RawSet (offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset offset, offsetOperand strOffset fltOffset value, valueType)
     | MIR.RawSetByte (ptr, offset, value) -> MIR.RawSetByte (offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset offset, offsetOperand strOffset fltOffset value)
     | MIR.StringHash (dest, str) -> MIR.StringHash (dest, offsetOperand strOffset fltOffset str)
     | MIR.StringEq (dest, left, right) -> MIR.StringEq (dest, offsetOperand strOffset fltOffset left, offsetOperand strOffset fltOffset right)
     | MIR.RefCountIncString str -> MIR.RefCountIncString (offsetOperand strOffset fltOffset str)
     | MIR.RefCountDecString str -> MIR.RefCountDecString (offsetOperand strOffset fltOffset str)
     | MIR.RandomInt64 dest -> MIR.RandomInt64 dest  // No operands to offset
+    | MIR.FloatToString (dest, value) -> MIR.FloatToString (dest, offsetOperand strOffset fltOffset value)
     | MIR.Phi (dest, sources, valueType) -> MIR.Phi (dest, List.map (offsetPhiSource strOffset fltOffset) sources, valueType)
     | MIR.CoverageHit exprId -> MIR.CoverageHit exprId  // No operands to offset
 

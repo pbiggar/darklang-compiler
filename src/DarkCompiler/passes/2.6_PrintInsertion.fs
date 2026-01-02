@@ -15,6 +15,7 @@ let getListDisplayStringFunc (elemType: AST.Type) : string option =
     | AST.TInt64 -> Some "Stdlib.List.toDisplayString_i64"
     | AST.TBool -> Some "Stdlib.List.toDisplayString_bool"
     | AST.TString -> Some "Stdlib.List.toDisplayString_str"
+    | AST.TFloat64 -> Some "Stdlib.List.toDisplayString_f64"
     | _ -> None
 
 /// Wrap the return value with a Print instruction

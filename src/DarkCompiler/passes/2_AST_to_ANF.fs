@@ -86,6 +86,8 @@ let tryFloatIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr optio
         Some (ANF.FloatToInt xAtom)
     | "Stdlib.Int64.toFloat", [xAtom] ->
         Some (ANF.IntToFloat xAtom)
+    | "Stdlib.Float64.toString", [xAtom] ->
+        Some (ANF.FloatToString xAtom)
     | _ -> None
 
 /// Try to constant-fold platform/path intrinsics at compile time
@@ -122,15 +124,21 @@ let tryRawMemoryIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr o
         // IMPORTANT: Must come before the generic __raw_get_* pattern
         Some (ANF.RawGetByte (ptrAtom, offsetAtom))
     | name, [ptrAtom; offsetAtom] when name = "__raw_get" || name.StartsWith("__raw_get_") ->
-        // Generic __raw_get<v> monomorphizes to __raw_get_i64, __raw_get_str, etc.
-        Some (ANF.RawGet (ptrAtom, offsetAtom))
+        // Generic __raw_get<v> monomorphizes to __raw_get_i64, __raw_get_str, __raw_get_f64, etc.
+        // Track Float type so we can convert GP bits to FP register
+        // IMPORTANT: Only detect _f64 when it's the ENTIRE suffix (not list_f64 or other containers)
+        let valueType = if name = "__raw_get_f64" then Some AST.TFloat64 else None
+        Some (ANF.RawGet (ptrAtom, offsetAtom, valueType))
     | "__raw_set_byte", [ptrAtom; offsetAtom; valueAtom] ->
         // Write single byte at offset
         // IMPORTANT: Must come before the generic __raw_set_* pattern
         Some (ANF.RawSetByte (ptrAtom, offsetAtom, valueAtom))
     | name, [ptrAtom; offsetAtom; valueAtom] when name = "__raw_set" || name.StartsWith("__raw_set_") ->
-        // Generic __raw_set<v> monomorphizes to __raw_set_i64, __raw_set_str, etc.
-        Some (ANF.RawSet (ptrAtom, offsetAtom, valueAtom))
+        // Generic __raw_set<v> monomorphizes to __raw_set_i64, __raw_set_str, __raw_set_f64, etc.
+        // Track Float type so we can convert FP register to GP bits for storage
+        // IMPORTANT: Only detect _f64 when it's the ENTIRE suffix (not list_f64 or other containers)
+        let valueType = if name = "__raw_set_f64" then Some AST.TFloat64 else None
+        Some (ANF.RawSet (ptrAtom, offsetAtom, valueAtom, valueType))
     // Cast operations are no-ops at runtime - just pass through the value
     | "__rawptr_to_int64", [ptrAtom] ->
         Some (ANF.Atom ptrAtom)
@@ -2453,7 +2461,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             let (setVar, vg2) = ANF.freshVar vg1
             let (taggedVar, vg3) = ANF.freshVar vg2
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 8L))
-            let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), elemAtom)
+            let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), elemAtom, None)
             let tagExpr = ANF.Prim (ANF.BitOr, ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 5L))  // tag 5 = LEAF
             let newBindings = bindings @ [(ptrVar, allocExpr); (setVar, setExpr); (taggedVar, tagExpr)]
             (ANF.Var taggedVar, newBindings, vg3)
@@ -2464,7 +2472,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             let (setVar, vg2) = ANF.freshVar vg1
             let (taggedVar, vg3) = ANF.freshVar vg2
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 8L))
-            let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom)
+            let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom, None)
             let tagExpr = ANF.Prim (ANF.BitOr, ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 1L))  // tag 1 = SINGLE
             let newBindings = bindings @ [(ptrVar, allocExpr); (setVar, setExpr); (taggedVar, tagExpr)]
             (ANF.Var taggedVar, newBindings, vg3)
@@ -2479,7 +2487,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             // Build all the set operations
             let setAt offset value vg bindings =
                 let (setVar, vg') = ANF.freshVar vg
-                let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 (int64 offset)), value)
+                let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 (int64 offset)), value, None)
                 (vg', bindings @ [(setVar, setExpr)])
 
             let (vg2, bindings2) = setAt 0 (ANF.IntLiteral (ANF.Int64 (int64 measure))) vg1 (bindings @ [(ptrVar, allocExpr)])
@@ -2801,7 +2809,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let (leafPtrVar, vg1) = ANF.freshVar vg
                         let leafPtrExpr = ANF.Prim (ANF.BitAnd, leafTaggedPtr, ANF.IntLiteral (ANF.Int64 0xFFFFFFFFFFFFFFF8L))
                         let (valueVar, vg2) = ANF.freshVar vg1
-                        let valueExpr = ANF.RawGet (ANF.Var leafPtrVar, ANF.IntLiteral (ANF.Int64 0L))
+                        let valueExpr = ANF.RawGet (ANF.Var leafPtrVar, ANF.IntLiteral (ANF.Int64 0L), None)
                         let newBindings = bindings @ [(leafPtrVar, leafPtrExpr); (valueVar, valueExpr)]
                         (ANF.Var valueVar, valueVar, newBindings, vg2)
 
@@ -2835,7 +2843,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let ptrExpr = ANF.Prim (ANF.BitAnd, scrutAtom, ANF.IntLiteral (ANF.Int64 0xFFFFFFFFFFFFFFF8L))
                         // Get the LEAF-tagged node at offset 0
                         let (nodeVar, vg2) = ANF.freshVar vg1
-                        let nodeExpr = ANF.RawGet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L))
+                        let nodeExpr = ANF.RawGet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), None)
                         // Unwrap the LEAF to get the value
                         let (valueAtom, valueVar, bindings, vg3) = unwrapLeaf (ANF.Var nodeVar) vg2 [(ptrVar, ptrExpr); (nodeVar, nodeExpr)]
                         // Bind the pattern
@@ -2883,7 +2891,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
                                 // Get the LEAF-tagged node
                                 let (nodeVar, vg1) = ANF.freshVar vg
-                                let nodeExpr = ANF.RawGet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 offset))
+                                let nodeExpr = ANF.RawGet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 offset), None)
                                 // Unwrap the LEAF to get the value
                                 let (valueAtom, valueVar, newBindings, vg2) = unwrapLeaf (ANF.Var nodeVar) vg1 (bindings @ [(nodeVar, nodeExpr)])
 
@@ -3263,7 +3271,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     let (leafPtrVar, vg1) = ANF.freshVar vg
                     let leafPtrExpr = ANF.Prim (ANF.BitAnd, leafTaggedPtr, ANF.IntLiteral (ANF.Int64 0xFFFFFFFFFFFFFFF8L))
                     let (valueVar, vg2) = ANF.freshVar vg1
-                    let valueExpr = ANF.RawGet (ANF.Var leafPtrVar, ANF.IntLiteral (ANF.Int64 0L))
+                    let valueExpr = ANF.RawGet (ANF.Var leafPtrVar, ANF.IntLiteral (ANF.Int64 0L), None)
                     let newBindings = bindings @ [(leafPtrVar, leafPtrExpr); (valueVar, valueExpr)]
                     (ANF.Var valueVar, valueVar, newBindings, vg2)
 
@@ -3313,7 +3321,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     let ptrExpr = ANF.Prim (ANF.BitAnd, listAtom, ANF.IntLiteral (ANF.Int64 0xFFFFFFFFFFFFFFF8L))
                     // Get the LEAF-tagged node at offset 0
                     let (nodeVar, vg4) = ANF.freshVar vg3
-                    let nodeExpr = ANF.RawGet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L))
+                    let nodeExpr = ANF.RawGet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), None)
                     // Unwrap the LEAF to get the value
                     let (valueAtom, valueVar, bindings, vg5) = unwrapLeaf (ANF.Var nodeVar) vg4 [(ptrVar, ptrExpr); (nodeVar, nodeExpr)]
 
@@ -3390,7 +3398,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             let getAtExpr = ANF.Call ("Stdlib.List.__getAtInt64", [listAtom; ANF.IntLiteral (ANF.Int64 (int64 idx))])
                             // Unwrap the Some - getAt returns tagged value with tag 1 for Some
                             let (valueVar, vg2) = ANF.freshVar vg1
-                            let valueExpr = ANF.RawGet (ANF.Var optVar, ANF.IntLiteral (ANF.Int64 8L))  // Some payload at offset 8
+                            let valueExpr = ANF.RawGet (ANF.Var optVar, ANF.IntLiteral (ANF.Int64 8L), None)  // Some payload at offset 8
                             let newBindings = bindings @ [(optVar, getAtExpr); (valueVar, valueExpr)]
 
                             match pat with
@@ -3469,7 +3477,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     let (leafPtrVar, vg1) = ANF.freshVar vg
                     let leafPtrExpr = ANF.Prim (ANF.BitAnd, leafTaggedPtr, ANF.IntLiteral (ANF.Int64 0xFFFFFFFFFFFFFFF8L))
                     let (valueVar, vg2) = ANF.freshVar vg1
-                    let valueExpr = ANF.RawGet (ANF.Var leafPtrVar, ANF.IntLiteral (ANF.Int64 0L))
+                    let valueExpr = ANF.RawGet (ANF.Var leafPtrVar, ANF.IntLiteral (ANF.Int64 0L), None)
                     let newBindings = bindings @ [(leafPtrVar, leafPtrExpr); (valueVar, valueExpr)]
                     (ANF.Var valueVar, valueVar, newBindings, vg2)
 
@@ -3539,7 +3547,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     // Compile the SINGLE branch: node at offset 0, tail = EMPTY
                     let compileSingleBranch vg =
                         let (singleNodeVar, vg1) = ANF.freshVar vg
-                        let singleNodeExpr = ANF.RawGet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L))
+                        let singleNodeExpr = ANF.RawGet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), None)
                         let (headAtom, headVar, headBindings, vg2) = unwrapLeaf (ANF.Var singleNodeVar) vg1 [(singleNodeVar, singleNodeExpr)]
                         let (tailVar, vg3) = ANF.freshVar vg2
                         let tailExpr = ANF.Atom (ANF.IntLiteral (ANF.Int64 0L))  // EMPTY
@@ -3592,7 +3600,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     // For tail, call Stdlib.FingerTree.tail to properly compute the tail
                     let compileDeepBranch vg =
                         let (deepNodeVar, vg1) = ANF.freshVar vg
-                        let deepNodeExpr = ANF.RawGet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L))
+                        let deepNodeExpr = ANF.RawGet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), None)
                         let (headAtom, headVar, headBindings, vg2) = unwrapLeaf (ANF.Var deepNodeVar) vg1 [(deepNodeVar, deepNodeExpr)]
 
                         // Call Stdlib.FingerTree.tail to get the tail
@@ -4467,7 +4475,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             let (setVar, vg2) = ANF.freshVar vg1
             let (taggedVar, vg3) = ANF.freshVar vg2
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 8L))
-            let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), elemAtom)
+            let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), elemAtom, None)
             let tagExpr = ANF.Prim (ANF.BitOr, ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 5L))  // tag 5 = LEAF
             let newBindings = bindings @ [(ptrVar, allocExpr); (setVar, setExpr); (taggedVar, tagExpr)]
             (ANF.Var taggedVar, newBindings, vg3)
@@ -4478,7 +4486,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             let (setVar, vg2) = ANF.freshVar vg1
             let (taggedVar, vg3) = ANF.freshVar vg2
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 8L))
-            let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom)
+            let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom, None)
             let tagExpr = ANF.Prim (ANF.BitOr, ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 1L))  // tag 1 = SINGLE
             let newBindings = bindings @ [(ptrVar, allocExpr); (setVar, setExpr); (taggedVar, tagExpr)]
             (ANF.Var taggedVar, newBindings, vg3)
@@ -4493,7 +4501,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             // Build all the set operations
             let setAt offset value vg bindings =
                 let (setVar, vg') = ANF.freshVar vg
-                let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 (int64 offset)), value)
+                let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 (int64 offset)), value, None)
                 (vg', bindings @ [(setVar, setExpr)])
 
             let (vg2, bindings2) = setAt 0 (ANF.IntLiteral (ANF.Int64 (int64 measure))) vg1 (bindings @ [(ptrVar, allocExpr)])

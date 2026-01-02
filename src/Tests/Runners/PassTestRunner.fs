@@ -302,6 +302,8 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- StringHash({prettyPrintLIROperand str})"
     | LIR.StringEq (dest, left, right) ->
         $"{prettyPrintLIRReg dest} <- StringEq({prettyPrintLIROperand left}, {prettyPrintLIROperand right})"
+    | LIR.FloatToString (dest, value) ->
+        $"{prettyPrintLIRReg dest} <- FloatToString({prettyPrintLIRFReg value})"
     | LIR.RefCountIncString str ->
         $"RefCountIncString({prettyPrintLIROperand str})"
     | LIR.RefCountDecString str ->
@@ -483,11 +485,11 @@ let prettyPrintANFCExpr = function
         $"RawAlloc({prettyPrintANFAtom numBytes})"
     | ANF.RawFree ptr ->
         $"RawFree({prettyPrintANFAtom ptr})"
-    | ANF.RawGet (ptr, byteOffset) ->
+    | ANF.RawGet (ptr, byteOffset, _) ->
         $"RawGet({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset})"
     | ANF.RawGetByte (ptr, byteOffset) ->
         $"RawGetByte({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset})"
-    | ANF.RawSet (ptr, byteOffset, value) ->
+    | ANF.RawSet (ptr, byteOffset, value, _) ->
         $"RawSet({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset}, {prettyPrintANFAtom value})"
     | ANF.RawSetByte (ptr, byteOffset, value) ->
         $"RawSetByte({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset}, {prettyPrintANFAtom value})"
@@ -507,6 +509,8 @@ let prettyPrintANFCExpr = function
         $"StringHash({prettyPrintANFAtom str})"
     | ANF.StringEq (left, right) ->
         $"StringEq({prettyPrintANFAtom left}, {prettyPrintANFAtom right})"
+    | ANF.FloatToString atom ->
+        $"FloatToString({prettyPrintANFAtom atom})"
     | ANF.RefCountIncString str ->
         $"RefCountIncString({prettyPrintANFAtom str})"
     | ANF.RefCountDecString str ->

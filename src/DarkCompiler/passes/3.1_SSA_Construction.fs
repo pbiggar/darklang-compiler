@@ -210,7 +210,7 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | Phi (dest, _, _) -> Set.add dest defs
         | RawAlloc (dest, _) -> Set.add dest defs
         | RawFree _ -> defs
-        | RawGet (dest, _, _) -> Set.add dest defs
+        | RawGet (dest, _, _, _) -> Set.add dest defs
         | RawGetByte (dest, _, _) -> Set.add dest defs
         | RawSet _ -> defs
         | RawSetByte _ -> defs
@@ -224,6 +224,7 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | RefCountIncString _ -> defs
         | RefCountDecString _ -> defs
         | RandomInt64 dest -> Set.add dest defs
+        | FloatToString (dest, _) -> Set.add dest defs
         | CoverageHit _ -> defs  // No destination register
     ) Set.empty
 
@@ -301,11 +302,11 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
                 sources |> List.fold (fun u (src, _) -> Set.union u (getOperandUses src)) uses
             | RawAlloc (_, numBytes) -> Set.union uses (getOperandUses numBytes)
             | RawFree ptr -> Set.union uses (getOperandUses ptr)
-            | RawGet (_, ptr, offset) ->
+            | RawGet (_, ptr, offset, _) ->
                 uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset)
             | RawGetByte (_, ptr, offset) ->
                 uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset)
-            | RawSet (ptr, offset, value) ->
+            | RawSet (ptr, offset, value, _) ->
                 uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset) |> Set.union (getOperandUses value)
             | RawSetByte (ptr, offset, value) ->
                 uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset) |> Set.union (getOperandUses value)
@@ -320,6 +321,7 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
             | RefCountIncString str -> Set.union uses (getOperandUses str)
             | RefCountDecString str -> Set.union uses (getOperandUses str)
             | RandomInt64 _ -> uses  // No operand uses
+            | FloatToString (_, value) -> Set.union uses (getOperandUses value)
             | CoverageHit _ -> uses  // No operand uses
         ) Set.empty
 
@@ -726,11 +728,11 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let ptr' = renameOperand state ptr
         (RawFree ptr', state)
 
-    | RawGet (dest, ptr, byteOffset) ->
+    | RawGet (dest, ptr, byteOffset, valueType) ->
         let ptr' = renameOperand state ptr
         let byteOffset' = renameOperand state byteOffset
         let (_, newDest, state') = newVersion state dest
-        (RawGet (newDest, ptr', byteOffset'), state')
+        (RawGet (newDest, ptr', byteOffset', valueType), state')
 
     | RawGetByte (dest, ptr, byteOffset) ->
         let ptr' = renameOperand state ptr
@@ -738,11 +740,11 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let (_, newDest, state') = newVersion state dest
         (RawGetByte (newDest, ptr', byteOffset'), state')
 
-    | RawSet (ptr, byteOffset, value) ->
+    | RawSet (ptr, byteOffset, value, valueType) ->
         let ptr' = renameOperand state ptr
         let byteOffset' = renameOperand state byteOffset
         let value' = renameOperand state value
-        (RawSet (ptr', byteOffset', value'), state)
+        (RawSet (ptr', byteOffset', value', valueType), state)
 
     | RawSetByte (ptr, byteOffset, value) ->
         let ptr' = renameOperand state ptr
@@ -797,6 +799,11 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
     | RandomInt64 dest ->
         let (_, newDest, state') = newVersion state dest
         (RandomInt64 newDest, state')
+
+    | FloatToString (dest, value) ->
+        let value' = renameOperand state value
+        let (_, newDest, state') = newVersion state dest
+        (FloatToString (newDest, value'), state')
 
     | CoverageHit exprId ->
         (CoverageHit exprId, state)  // No registers to rename

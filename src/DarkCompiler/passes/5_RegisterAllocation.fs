@@ -160,9 +160,14 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
     | LIR.PrintFloatNoNewline _ -> Set.empty  // FP register, not GP
     | LIR.PrintChars _ -> Set.empty  // No registers used
     | LIR.HeapAlloc (_, _) -> Set.empty
-    | LIR.HeapStore (addr, _, src, _) ->
+    | LIR.HeapStore (addr, _, src, valueType) ->
         let a = regToVReg addr |> Option.toList
-        let s = operandToVReg src |> Option.toList
+        // For float values, the src register is an FVirtual (handled by float allocation)
+        // so we don't include it in integer liveness
+        let s =
+            match valueType with
+            | Some AST.TFloat64 -> []
+            | _ -> operandToVReg src |> Option.toList
         Set.ofList (a @ s)
     | LIR.HeapLoad (_, addr, _) ->
         regToVReg addr |> Option.toList |> Set.ofList
@@ -234,6 +239,8 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         operandToVReg str |> Option.toList |> Set.ofList
     | LIR.RandomInt64 _ ->
         Set.empty  // No operands to read
+    | LIR.FloatToString _ ->
+        Set.empty  // Float value is in FP register, tracked by getUsedFVRegs
     // ArgMoves/TailArgMoves contain operands that use virtual registers
     | LIR.ArgMoves moves ->
         moves |> List.choose (fun (_, op) -> operandToVReg op) |> Set.ofList
@@ -293,6 +300,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.RefCountIncString _ -> None
     | LIR.RefCountDecString _ -> None
     | LIR.RandomInt64 dest -> regToVReg dest
+    | LIR.FloatToString (dest, _) -> regToVReg dest
     // Phi defines its destination at block entry
     | LIR.Phi (dest, _, _) -> regToVReg dest
     | _ -> None
@@ -324,6 +332,7 @@ let getUsedFVRegs (instr: LIR.Instr) : Set<int> =
     | LIR.FArgMoves moves ->
         moves |> List.choose (fun (_, src) -> fregToId src) |> Set.ofList
     | LIR.FPhi _ -> Set.empty  // Phi sources handled specially
+    | LIR.FloatToString (_, value) -> fregToId value |> Option.toList |> Set.ofList
     | _ -> Set.empty
 
 /// Get FVirtual register ID defined (written) by an instruction
@@ -1221,6 +1230,27 @@ let applyFloatAllocationToInstr (floatAllocation: FAllocationResult) (instr: LIR
         LIR.FPhi (applyF dest, sources |> List.map (fun (src, label) -> (applyF src, label)))
     | LIR.FArgMoves moves ->
         LIR.FArgMoves (moves |> List.map (fun (physReg, src) -> (physReg, applyF src)))
+    | LIR.FloatToString (dest, value) -> LIR.FloatToString (dest, applyF value)
+    // HeapStore with float value: the Virtual register ID is shared with FVirtual
+    // We need to apply float allocation to convert Virtual(n) to the allocated physical register
+    | LIR.HeapStore (addr, offset, LIR.Reg (LIR.Virtual vregId), Some AST.TFloat64) ->
+        // Convert Virtual to the allocated FPhysical if it's in the float mapping
+        let allocatedFReg = applyF (LIR.FVirtual vregId)
+        // Convert the FReg back to a Virtual/Physical Reg for HeapStore
+        let allocatedReg =
+            match allocatedFReg with
+            | LIR.FPhysical physFReg ->
+                // Convert physical float reg to physical GP reg (for HeapStore operand format)
+                // The actual STR_fp instruction will be generated in CodeGen based on valueType
+                let physReg =
+                    match physFReg with
+                    | LIR.D0 -> LIR.X0 | LIR.D1 -> LIR.X1 | LIR.D2 -> LIR.X2 | LIR.D3 -> LIR.X3
+                    | LIR.D4 -> LIR.X4 | LIR.D5 -> LIR.X5 | LIR.D6 -> LIR.X6 | LIR.D7 -> LIR.X7
+                    | LIR.D8 -> LIR.X8 | LIR.D9 -> LIR.X9 | LIR.D10 -> LIR.X10 | LIR.D11 -> LIR.X11
+                    | LIR.D12 -> LIR.X12 | LIR.D13 -> LIR.X13 | LIR.D14 -> LIR.X14 | LIR.D15 -> LIR.X15
+                LIR.Physical physReg
+            | LIR.FVirtual n -> LIR.Virtual n
+        LIR.HeapStore (addr, offset, LIR.Reg allocatedReg, Some AST.TFloat64)
     | _ -> instr  // Non-float instructions unchanged
 
 /// Apply float allocation to a basic block
@@ -1353,7 +1383,9 @@ let applyToOperand (mapping: Map<int, Allocation>) (operand: LIR.Operand) (tempR
             | Some (StackSlot offset) ->
                 let loadInstr = LIR.Mov (LIR.Physical tempReg, LIR.StackSlot offset)
                 (LIR.Reg (LIR.Physical tempReg), [loadInstr])
-            | None -> (LIR.Reg (LIR.Physical tempReg), [])
+            // Keep Virtual unchanged if not in integer mapping - it may be a float register
+            // that will be handled by float allocation later
+            | None -> (LIR.Reg (LIR.Virtual id), [])
     | LIR.FuncAddr name -> (LIR.FuncAddr name, [])
 
 /// Apply allocation to an operand WITHOUT generating load instructions for spills.
@@ -1373,7 +1405,8 @@ let applyToOperandNoLoad (mapping: Map<int, Allocation>) (operand: LIR.Operand) 
             match Map.tryFind id mapping with
             | Some (PhysReg physReg) -> LIR.Reg (LIR.Physical physReg)
             | Some (StackSlot offset) -> LIR.StackSlot offset
-            | None -> LIR.Reg (LIR.Physical LIR.X11)  // Fallback
+            // Keep Virtual unchanged if not in integer mapping - it may be a float register
+            | None -> LIR.Reg (LIR.Virtual id)
     | LIR.FuncAddr name -> LIR.FuncAddr name
 
 /// Helper to load a spilled register
@@ -2081,6 +2114,16 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
             | _ -> []
         [randomInstr] @ storeInstrs
+
+    | LIR.FloatToString (dest, value) ->
+        // FP register value is already physical after float allocation
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let floatToStrInstr = LIR.FloatToString (destReg, value)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        [floatToStrInstr] @ storeInstrs
 
     | LIR.CoverageHit exprId ->
         [LIR.CoverageHit exprId]  // No registers to allocate

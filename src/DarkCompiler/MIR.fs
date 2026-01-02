@@ -155,9 +155,9 @@ type Instr =
     // Raw memory intrinsics (internal, for HAMT implementation)
     | RawAlloc of dest:VReg * numBytes:Operand    // Allocate raw bytes (no header), returns RawPtr
     | RawFree of ptr:Operand                      // Manually free raw memory
-    | RawGet of dest:VReg * ptr:Operand * byteOffset:Operand  // Read 8 bytes at offset
+    | RawGet of dest:VReg * ptr:Operand * byteOffset:Operand * valueType:AST.Type option  // Read 8 bytes at offset, valueType for float
     | RawGetByte of dest:VReg * ptr:Operand * byteOffset:Operand  // Read 1 byte at offset (zero-extended)
-    | RawSet of ptr:Operand * byteOffset:Operand * value:Operand  // Write 8 bytes at offset
+    | RawSet of ptr:Operand * byteOffset:Operand * value:Operand * valueType:AST.Type option  // Write 8 bytes at offset, valueType for float
     | RawSetByte of ptr:Operand * byteOffset:Operand * value:Operand  // Write 1 byte at offset
     // String intrinsics (for Dict with string keys)
     | StringHash of dest:VReg * str:Operand       // FNV-1a hash of string, returns Int64
@@ -167,6 +167,8 @@ type Instr =
     | RefCountDecString of str:Operand             // Decrement string ref count, free if zero
     // Random intrinsics
     | RandomInt64 of dest:VReg                     // Get 8 random bytes as Int64
+    // Float to String conversion
+    | FloatToString of dest:VReg * value:Operand   // Convert Float to heap String
     // SSA phi node - merges values from different predecessor blocks
     // Phi nodes must appear at the beginning of a basic block, before other instructions
     // valueType distinguishes between integer (X registers) and float (D registers) phi nodes
@@ -204,8 +206,8 @@ type Function = {
 }
 
 /// Variant info for sum type printing
-/// Maps type name -> list of (variant name, tag index, payload type)
-type VariantRegistry = Map<string, (string * int * AST.Type option) list>
+/// Maps type name -> (type params, list of (variant name, tag index, payload type))
+type VariantRegistry = Map<string, (string list * (string * int * AST.Type option) list)>
 
 /// Record field info for record printing
 /// Maps type name -> list of (field name, field type)

@@ -183,6 +183,7 @@ let hasSideEffects (cexpr: CExpr) : bool =
     | RefCountIncString _ -> true   // Mutates refcount
     | RefCountDecString _ -> true   // Mutates refcount
     | RandomInt64 -> true   // Reads from OS random source
+    | FloatToString _ -> false  // Pure conversion (but allocates - maybe should be true?)
 
 /// Collect all TempIds used in an atom
 let collectAtomUses (atom: Atom) : Set<TempId> =
@@ -224,9 +225,9 @@ let collectCExprUses (cexpr: CExpr) : Set<TempId> =
     | FileWriteFromPtr (path, ptr, length) -> Set.unionMany [collectAtomUses path; collectAtomUses ptr; collectAtomUses length]
     | RawAlloc numBytes -> collectAtomUses numBytes
     | RawFree ptr -> collectAtomUses ptr
-    | RawGet (ptr, byteOffset) -> Set.union (collectAtomUses ptr) (collectAtomUses byteOffset)
+    | RawGet (ptr, byteOffset, _) -> Set.union (collectAtomUses ptr) (collectAtomUses byteOffset)
     | RawGetByte (ptr, byteOffset) -> Set.union (collectAtomUses ptr) (collectAtomUses byteOffset)
-    | RawSet (ptr, byteOffset, value) -> Set.unionMany [collectAtomUses ptr; collectAtomUses byteOffset; collectAtomUses value]
+    | RawSet (ptr, byteOffset, value, _) -> Set.unionMany [collectAtomUses ptr; collectAtomUses byteOffset; collectAtomUses value]
     | RawSetByte (ptr, byteOffset, value) -> Set.unionMany [collectAtomUses ptr; collectAtomUses byteOffset; collectAtomUses value]
     | FloatSqrt atom -> collectAtomUses atom
     | FloatAbs atom -> collectAtomUses atom
@@ -238,6 +239,7 @@ let collectCExprUses (cexpr: CExpr) : Set<TempId> =
     | RefCountIncString str -> collectAtomUses str
     | RefCountDecString str -> collectAtomUses str
     | RandomInt64 -> Set.empty  // No atoms
+    | FloatToString atom -> collectAtomUses atom
 
 /// Collect all TempIds used in an AExpr
 let rec collectAExprUses (aexpr: AExpr) : Set<TempId> =
@@ -284,9 +286,9 @@ let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | FileWriteFromPtr (path, ptr, length) -> FileWriteFromPtr (s path, s ptr, s length)
     | RawAlloc numBytes -> RawAlloc (s numBytes)
     | RawFree ptr -> RawFree (s ptr)
-    | RawGet (ptr, byteOffset) -> RawGet (s ptr, s byteOffset)
+    | RawGet (ptr, byteOffset, valueType) -> RawGet (s ptr, s byteOffset, valueType)
     | RawGetByte (ptr, byteOffset) -> RawGetByte (s ptr, s byteOffset)
-    | RawSet (ptr, byteOffset, value) -> RawSet (s ptr, s byteOffset, s value)
+    | RawSet (ptr, byteOffset, value, valueType) -> RawSet (s ptr, s byteOffset, s value, valueType)
     | RawSetByte (ptr, byteOffset, value) -> RawSetByte (s ptr, s byteOffset, s value)
     | FloatSqrt atom -> FloatSqrt (s atom)
     | FloatAbs atom -> FloatAbs (s atom)
@@ -298,6 +300,7 @@ let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | RefCountIncString str -> RefCountIncString (s str)
     | RefCountDecString str -> RefCountDecString (s str)
     | RandomInt64 -> RandomInt64
+    | FloatToString atom -> FloatToString (s atom)
 
 /// Optimize a CExpr with constant folding
 let optimizeCExpr (env: ConstEnv) (cexpr: CExpr) : CExpr * bool =
