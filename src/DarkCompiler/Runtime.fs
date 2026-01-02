@@ -824,6 +824,57 @@ let generatePrintChars (chars: byte list) : ARM64.Instr list =
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 stackSize)
     ]
 
+/// Generate ARM64 instructions to print bytes as "<N bytes>\n"
+/// Expects: X19 = bytes pointer (callee-saved)
+/// Bytes layout: [length:8][data:N][refcount:8]
+let generatePrintBytes () : ARM64.Instr list =
+    let os =
+        match Platform.detectOS () with
+        | Ok platform -> platform
+        | Error _ -> Platform.Linux
+    let syscalls = Platform.getSyscallNumbers os
+    // Print "<"
+    [
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
+        ARM64.MOVZ (ARM64.X3, uint16 (byte '<'), 0)
+        ARM64.STRB (ARM64.X3, ARM64.SP, 0)
+        ARM64.MOVZ (ARM64.X0, 1us, 0)
+        ARM64.MOV_reg (ARM64.X1, ARM64.SP)
+        ARM64.MOVZ (ARM64.X2, 1us, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.SVC syscalls.SvcImmediate
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
+        // Load length from [X19] into X0
+        ARM64.LDR (ARM64.X0, ARM64.X19, 0s)
+    ]
+    @ generatePrintIntNoNewline ()
+    @ [
+        // Print " bytes>\n" (8 characters)
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
+        ARM64.MOVZ (ARM64.X3, uint16 (byte ' '), 0)
+        ARM64.STRB (ARM64.X3, ARM64.SP, 0)
+        ARM64.MOVZ (ARM64.X3, uint16 (byte 'b'), 0)
+        ARM64.STRB (ARM64.X3, ARM64.SP, 1)
+        ARM64.MOVZ (ARM64.X3, uint16 (byte 'y'), 0)
+        ARM64.STRB (ARM64.X3, ARM64.SP, 2)
+        ARM64.MOVZ (ARM64.X3, uint16 (byte 't'), 0)
+        ARM64.STRB (ARM64.X3, ARM64.SP, 3)
+        ARM64.MOVZ (ARM64.X3, uint16 (byte 'e'), 0)
+        ARM64.STRB (ARM64.X3, ARM64.SP, 4)
+        ARM64.MOVZ (ARM64.X3, uint16 (byte 's'), 0)
+        ARM64.STRB (ARM64.X3, ARM64.SP, 5)
+        ARM64.MOVZ (ARM64.X3, uint16 (byte '>'), 0)
+        ARM64.STRB (ARM64.X3, ARM64.SP, 6)
+        ARM64.MOVZ (ARM64.X3, 10us, 0)
+        ARM64.STRB (ARM64.X3, ARM64.SP, 7)
+        ARM64.MOVZ (ARM64.X0, 1us, 0)
+        ARM64.MOV_reg (ARM64.X1, ARM64.SP)
+        ARM64.MOVZ (ARM64.X2, 8us, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.SVC syscalls.SvcImmediate
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
+    ]
+
 /// Generate ARM64 instructions to perform write syscall only
 ///
 /// Assumes caller has set up:

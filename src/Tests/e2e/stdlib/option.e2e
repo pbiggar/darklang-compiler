@@ -78,8 +78,7 @@ let x = Option.None in Option.withDefault(x, 3.14) = stdout="3.14\n"
 let x = Option.None in Option.withDefault(x, 'a') = stdout="a\n"
 
 // Unit
-// TODO: Runtime bug - outputs nothing instead of () (being fixed in another branch)
-// let x = Option.None in Option.withDefault(x, ()) = stdout="()\n"
+let x = Option.None in Option.withDefault(x, ()) = stdout="()\n"
 
 // Int8
 let x = Option.None in Option.withDefault(x, 42y) = stdout="42\n"

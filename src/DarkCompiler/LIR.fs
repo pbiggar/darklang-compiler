@@ -111,6 +111,7 @@ type Instr =
     | PrintString of stringIndex:int * stringLen:int  // Print string from pool to stdout
     | PrintHeapStringNoNewline of Reg           // Print heap string without newline (for tuple/list elements)
     | PrintChars of byte list                   // Print literal characters (for tuple/list delimiters)
+    | PrintBytes of Reg                         // Print bytes as "<N bytes>\n" where N is the length
     | PrintList of listPtr:Reg * elemType:AST.Type  // Print list [elem1, elem2, ...] with proper element formatting
     | PrintSum of sumPtr:Reg * variants:(string * int * AST.Type option) list  // Print sum type: variantName, tag, payloadType
     | PrintRecord of recordPtr:Reg * typeName:string * fields:(string * AST.Type) list  // Print record: TypeName { field1 = val1, ... }

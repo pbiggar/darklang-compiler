@@ -159,6 +159,7 @@ let getUsedVRegs (instr: LIR.Instr) : Set<int> =
         regToVReg reg |> Option.toList |> Set.ofList
     | LIR.PrintFloatNoNewline _ -> Set.empty  // FP register, not GP
     | LIR.PrintChars _ -> Set.empty  // No registers used
+    | LIR.PrintBytes reg -> regToVReg reg |> Option.toList |> Set.ofList
     | LIR.HeapAlloc (_, _) -> Set.empty
     | LIR.HeapStore (addr, _, src, valueType) ->
         let a = regToVReg addr |> Option.toList
@@ -1858,6 +1859,9 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
     | LIR.PrintFloat freg -> [LIR.PrintFloat freg]
     | LIR.PrintString (idx, len) -> [LIR.PrintString (idx, len)]
     | LIR.PrintChars chars -> [LIR.PrintChars chars]
+    | LIR.PrintBytes reg ->
+        let (regFinal, regLoads) = loadSpilled mapping reg LIR.X12
+        regLoads @ [LIR.PrintBytes regFinal]
 
     // FP instructions pass through unchanged
     | LIR.FMov (dest, src) -> [LIR.FMov (dest, src)]

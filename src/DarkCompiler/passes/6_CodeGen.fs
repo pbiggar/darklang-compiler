@@ -774,6 +774,15 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
         // Print literal characters (for tuple/list delimiters like "(", ", ", ")")
         Ok (Runtime.generatePrintChars chars)
 
+    | LIR.PrintBytes reg ->
+        // Print bytes as "<N bytes>\n"
+        lirRegToARM64Reg reg
+        |> Result.map (fun regARM64 ->
+            if regARM64 <> ARM64.X19 then
+                [ARM64.MOV_reg (ARM64.X19, regARM64)] @ Runtime.generatePrintBytes ()
+            else
+                Runtime.generatePrintBytes ())
+
     | LIR.PrintIntNoNewline reg ->
         // Print integer without newline (for tuple elements)
         lirRegToARM64Reg reg

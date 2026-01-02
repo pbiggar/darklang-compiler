@@ -964,8 +964,8 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
             Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
         | AST.TUnit ->
-            // Unit: print nothing
-            Ok []
+            // Unit: print "()" with newline
+            Ok [LIR.PrintChars [byte '('; byte ')'; byte '\n']]
         | AST.TFunction _ ->
             // Functions shouldn't be printed, but just print address
             let lirSrc = convertOperand src
@@ -983,13 +983,14 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
             Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
         | AST.TBytes ->
-            // Bytes: print address for now (TODO: print as hex or length)
+            // Bytes: print as "<N bytes>" where N is the length
             let lirSrc = convertOperand src
-            let moveToX0 =
+            let moveToX19 =
                 match lirSrc with
-                | LIR.Reg (LIR.Physical LIR.X0) -> []
-                | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
-            Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
+                | LIR.Reg (LIR.Physical LIR.X19) -> []
+                | LIR.Reg r -> [LIR.Mov (LIR.Physical LIR.X19, LIR.Reg r)]
+                | other -> [LIR.Mov (LIR.Physical LIR.X19, other)]
+            Ok (moveToX19 @ [LIR.PrintBytes (LIR.Physical LIR.X19)])
         | AST.TVar _ ->
             // Type variables should be monomorphized away before reaching LIR
             Error "Internal error: Type variable reached MIR_to_LIR (should be monomorphized)"
@@ -1459,7 +1460,7 @@ let private offsetLIRInstr (strOffset: int) (fltOffset: int) (instr: LIR.Instr) 
     | LIR.SaveRegs _ | LIR.RestoreRegs _ | LIR.PrintInt _ | LIR.PrintBool _ | LIR.PrintFloat _
     | LIR.PrintIntNoNewline _ | LIR.PrintBoolNoNewline _ | LIR.PrintFloatNoNewline _
     | LIR.PrintHeapStringNoNewline _ | LIR.PrintList _ | LIR.PrintSum _ | LIR.PrintRecord _
-    | LIR.PrintChars _ | LIR.Exit | LIR.FMov _ | LIR.FAdd _ | LIR.FSub _ | LIR.FMul _ | LIR.FDiv _
+    | LIR.PrintChars _ | LIR.PrintBytes _ | LIR.Exit | LIR.FMov _ | LIR.FAdd _ | LIR.FSub _ | LIR.FMul _ | LIR.FDiv _
     | LIR.FNeg _ | LIR.FAbs _ | LIR.FSqrt _ | LIR.FCmp _ | LIR.IntToFloat _ | LIR.FloatToInt _
     | LIR.GpToFp _ | LIR.FpToGp _ | LIR.HeapAlloc _ | LIR.HeapLoad _ | LIR.RefCountInc _ | LIR.RefCountDec _
     | LIR.PrintHeapString _ | LIR.LoadFuncAddr _ | LIR.RawAlloc _ | LIR.RawFree _

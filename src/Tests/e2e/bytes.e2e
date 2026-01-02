@@ -29,3 +29,9 @@ Bytes.length(Bytes.fromList([])) = 0
 
 // Round-trip: create, set values, toList
 let b = Bytes.create(3) in let b = Bytes.set(b, 0, 10) in let b = Bytes.set(b, 1, 20) in let b = Bytes.set(b, 2, 30) in Bytes.toList(b) = stdout="[10, 20, 30]\n"
+
+// Print bytes directly (shows as "<N bytes>")
+Bytes.create(0) = stdout="<0 bytes>\n"
+Bytes.create(10) = stdout="<10 bytes>\n"
+Bytes.create(100) = stdout="<100 bytes>\n"
+Bytes.fromList([1, 2, 3]) = stdout="<3 bytes>\n"

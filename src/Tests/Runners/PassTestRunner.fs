@@ -191,6 +191,8 @@ let prettyPrintLIRInstr (instr: LIR.Instr) : string =
     | LIR.PrintChars chars ->
         let s = chars |> List.map (fun b -> char b) |> System.String.Concat
         $"PrintChars(\"{s}\")"
+    | LIR.PrintBytes reg ->
+        $"PrintBytes({prettyPrintLIRReg reg})"
     | LIR.PrintIntNoNewline reg ->
         $"PrintIntNoNewline({prettyPrintLIRReg reg})"
     | LIR.PrintBoolNoNewline reg ->
