@@ -29,11 +29,13 @@ Tests added to `src/Tests/e2e/strings.e2e`:
 
 ## List of Tuples Bug
 
-**Status**: Open
+**Status**: Fixed
 **Severity**: High (blocks List.zip)
 **Discovered**: Bug-finding loop investigation
+**Fixed**: Pattern matching for list cons patterns inside tuple patterns was using TupleGet
+         (assuming cons-cell structure) instead of proper FingerTree head/tail calls.
 
-### Reproduction
+### Original Reproduction
 
 ```dark
 def test(n: Int64) : List<(Int64, Int64)> =
@@ -42,47 +44,30 @@ def test(n: Int64) : List<(Int64, Int64)> =
 
 let result = test(1) in
 match result with
-| [(a, b)] -> a  // Returns 0 instead of 5
+| [(a, b)] -> a  // Previously returned 0 instead of 5
 | _ -> 999
 ```
 
-**Expected output**: `5`
-**Actual output**: `0`
+This now works correctly and outputs `5`.
 
-### Key Observations
+### Root Cause
 
-- Bug occurs ONLY when function has parameters (even unused)
-- Without parameters, the code works correctly
-- The FIRST element of the tuple is always 0
-- The SECOND element is correct
-- Affects `List<(Int64, Int64)>` and likely other tuple types
-- Works correctly for `List<Int64>` and for tuples not in lists
+In `2_AST_to_ANF.fs`, the `collectPatternBindings` function for `PListCons` patterns inside
+`PTuple` patterns was incorrectly using `TupleGet(list, 1)` for head and `TupleGet(list, 2)`
+for tail, assuming lists are simple cons cells. However, lists in this compiler are FingerTrees.
 
-### Minimal Reproduction
+The fix was to use proper FingerTree operations:
+- `ANF.Call ("Stdlib.FingerTree.headUnsafe_i64", [currentList])` for head
+- `ANF.Call ("Stdlib.FingerTree.tail_i64", [currentList])` for tail
+
+### List.zip Now Works
 
 ```dark
-// Works:
-def test() : List<(Int64, Int64)> = let pair = (5, 6) in [pair]
-
-// Broken (just adding an unused parameter breaks it):
-def test(n: Int64) : List<(Int64, Int64)> = let pair = (5, 6) in [pair]
+let zipped = List.zip<Int64, Int64>([1, 2, 3], [4, 5, 6]) in
+match zipped with
+| [(a, b), (c, d), (e, f)] -> a + b + c + d + e + f  // Returns 21
+| _ -> 999
 ```
-
-### Analysis
-
-The bug is in register allocation or code generation. When a function has parameters:
-- The first element of tuples in lists becomes 0
-- This happens even with literal values `(5, 6)`
-- The list structure is correct, only the tuple's first element is wrong
-
-Likely causes:
-1. Parameter vreg presence affects interference graph construction
-2. Something clobbers tuple[0] during list construction
-3. HeapStore for first tuple element uses a temp register incorrectly
-
-### Workaround
-
-Currently none known. This blocks `List.zip` and other functions returning `List<tuple>`.
 
 ---
 

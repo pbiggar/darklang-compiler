@@ -187,13 +187,11 @@ let tryFuseCmpZeroBranch (instrs: Instr list) (terminator: Terminator) : (Instr 
     | _ -> None
 
 /// Apply TBZ/TBNZ fusion if applicable
-/// NOTE: Currently disabled because it causes extra register moves that negate the savings.
-/// The AND_imm defines a new register, but TBZ uses the source register directly,
-/// which can conflict with register allocation and cause spills/moves.
-/// TODO: Enable this once register allocation can handle the pattern better.
+/// Fuses AND_imm (power-of-2 mask) + BranchZero/Branch → BranchBitZero/BranchBitNonZero
 let applyAndBitBranchFusion (instrs: Instr list) (terminator: Terminator) : (Instr list * Terminator) =
-    // Disabled - causes performance regression due to extra register moves
-    (instrs, terminator)
+    match tryFuseAndBitBranch instrs terminator with
+    | Some (fusedInstrs, fusedTerminator) -> (fusedInstrs, fusedTerminator)
+    | None -> (instrs, terminator)
 
 /// Optimize a basic block
 let optimizeBlock (block: BasicBlock) : BasicBlock =

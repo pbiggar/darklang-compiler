@@ -533,12 +533,11 @@ def Stdlib.List.toDisplayString_f64(list: List<Float>) : String =
     let strs = Stdlib.List.__floatsToStrings(list, Stdlib.FingerTree.empty<String>()) in
     "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
 
-// TODO: List.zip is disabled due to compiler bug with tuple recursion
-// def Stdlib.List.zip<a, b>(list1: List<a>, list2: List<b>) : List<(a, b)> =
-//     match (list1, list2) with
-//     | ([], _) -> []
-//     | (_, []) -> []
-//     | ([h1, ...t1], [h2, ...t2]) -> [(h1, h2), ...Stdlib.List.zip<a, b>(t1, t2)]
+def Stdlib.List.zip<a, b>(list1: List<a>, list2: List<b>) : List<(a, b)> =
+    match (list1, list2) with
+    | ([], _) -> []
+    | (_, []) -> []
+    | ([h1, ...t1], [h2, ...t2]) -> [(h1, h2), ...Stdlib.List.zip<a, b>(t1, t2)]
 
 // Stdlib.Path - Path operations
 
@@ -1158,6 +1157,181 @@ def Stdlib.Dict.__allocInternal(bitmap: Int64, numChildren: Int64) : RawPtr =
     ptr
 
 // =============================================================================
+// Collision Node Functions (Tag 3)
+// =============================================================================
+// Collision node layout: [count:8][key1:8][val1:8][key2:8][val2:8]...
+// Used when multiple keys have identical hash values through all levels
+
+// Allocate a collision node with 2 initial entries
+def Stdlib.Dict.__allocCollision<k, v>(key1: k, val1: v, key2: k, val2: v) : Dict<k, v> =
+    // 8 bytes for count + 2 * 16 bytes for entries = 40 bytes
+    let ptr = __raw_alloc(40) in
+    let _ = __raw_set<Int64>(ptr, 0, 2) in  // count = 2
+    let _ = __raw_set<k>(ptr, 8, key1) in
+    let _ = __raw_set<v>(ptr, 16, val1) in
+    let _ = __raw_set<k>(ptr, 24, key2) in
+    let _ = __raw_set<v>(ptr, 32, val2) in
+    Stdlib.Dict.__setTag<k, v>(ptr, 3)
+
+// Get count from collision node
+def Stdlib.Dict.__collisionCount<k, v>(ptr: RawPtr) : Int64 =
+    __raw_get<Int64>(ptr, 0)
+
+// Find key in collision node, returns index (0-based) or -1 if not found
+def Stdlib.Dict.__findInCollision<k, v>(ptr: RawPtr, key: k, count: Int64, i: Int64) : Int64 =
+    if i >= count then -1
+    else
+        let offset = 8 + (i * 16) in
+        let storedKey = __raw_get<k>(ptr, offset) in
+        if __key_eq<k>(storedKey, key) then i
+        else Stdlib.Dict.__findInCollision<k, v>(ptr, key, count, i + 1)
+
+// Get value from collision node at index
+def Stdlib.Dict.__getCollisionValue<k, v>(ptr: RawPtr, idx: Int64) : v =
+    let offset = 8 + (idx * 16) + 8 in
+    __raw_get<v>(ptr, offset)
+
+// Get key from collision node at index
+def Stdlib.Dict.__getCollisionKey<k, v>(ptr: RawPtr, idx: Int64) : k =
+    let offset = 8 + (idx * 16) in
+    __raw_get<k>(ptr, offset)
+
+// Lookup in collision node
+def Stdlib.Dict.__getFromCollision<k, v>(ptr: RawPtr, key: k) : Stdlib.Option.Option<v> =
+    let count = Stdlib.Dict.__collisionCount<k, v>(ptr) in
+    let idx = Stdlib.Dict.__findInCollision<k, v>(ptr, key, count, 0) in
+    if idx >= 0 then Some(Stdlib.Dict.__getCollisionValue<k, v>(ptr, idx))
+    else None
+
+// Copy collision entries except one index
+def Stdlib.Dict.__copyCollisionExcept<k, v>(oldPtr: RawPtr, newPtr: RawPtr, count: Int64, exceptIdx: Int64, i: Int64, destI: Int64) : Unit =
+    if i >= count then ()
+    else if i == exceptIdx then
+        Stdlib.Dict.__copyCollisionExcept<k, v>(oldPtr, newPtr, count, exceptIdx, i + 1, destI)
+    else
+        let srcOffset = 8 + (i * 16) in
+        let destOffset = 8 + (destI * 16) in
+        let key = __raw_get<k>(oldPtr, srcOffset) in
+        let value = __raw_get<v>(oldPtr, srcOffset + 8) in
+        let _ = __raw_set<k>(newPtr, destOffset, key) in
+        let _ = __raw_set<v>(newPtr, destOffset + 8, value) in
+        Stdlib.Dict.__copyCollisionExcept<k, v>(oldPtr, newPtr, count, exceptIdx, i + 1, destI + 1)
+
+// Copy all collision entries
+def Stdlib.Dict.__copyAllCollision<k, v>(oldPtr: RawPtr, newPtr: RawPtr, count: Int64, i: Int64) : Unit =
+    if i >= count then ()
+    else
+        let offset = 8 + (i * 16) in
+        let key = __raw_get<k>(oldPtr, offset) in
+        let value = __raw_get<v>(oldPtr, offset + 8) in
+        let _ = __raw_set<k>(newPtr, offset, key) in
+        let _ = __raw_set<v>(newPtr, offset + 8, value) in
+        Stdlib.Dict.__copyAllCollision<k, v>(oldPtr, newPtr, count, i + 1)
+
+// Update or add entry in collision node
+def Stdlib.Dict.__setInCollision<k, v>(ptr: RawPtr, key: k, value: v) : Dict<k, v> =
+    let count = Stdlib.Dict.__collisionCount<k, v>(ptr) in
+    let idx = Stdlib.Dict.__findInCollision<k, v>(ptr, key, count, 0) in
+    if idx >= 0 then
+        // Key exists - create new collision node with updated value
+        let newPtr = __raw_alloc(8 + (count * 16)) in
+        let _ = __raw_set<Int64>(newPtr, 0, count) in
+        let _ = Stdlib.Dict.__copyAllCollision<k, v>(ptr, newPtr, count, 0) in
+        let updateOffset = 8 + (idx * 16) + 8 in
+        let _ = __raw_set<v>(newPtr, updateOffset, value) in
+        Stdlib.Dict.__setTag<k, v>(newPtr, 3)
+    else
+        // Key doesn't exist - create new collision node with added entry
+        let newCount = count + 1 in
+        let newPtr = __raw_alloc(8 + (newCount * 16)) in
+        let _ = __raw_set<Int64>(newPtr, 0, newCount) in
+        let _ = Stdlib.Dict.__copyAllCollision<k, v>(ptr, newPtr, count, 0) in
+        let newOffset = 8 + (count * 16) in
+        let _ = __raw_set<k>(newPtr, newOffset, key) in
+        let _ = __raw_set<v>(newPtr, newOffset + 8, value) in
+        Stdlib.Dict.__setTag<k, v>(newPtr, 3)
+
+// Remove entry from collision node
+def Stdlib.Dict.__removeFromCollision<k, v>(ptr: RawPtr, key: k) : Dict<k, v> =
+    let count = Stdlib.Dict.__collisionCount<k, v>(ptr) in
+    let idx = Stdlib.Dict.__findInCollision<k, v>(ptr, key, count, 0) in
+    if idx < 0 then
+        // Key not found - return unchanged
+        Stdlib.Dict.__setTag<k, v>(ptr, 3)
+    else if count == 2 then
+        // Removing one of two entries - collapse to leaf
+        let otherIdx = if idx == 0 then 1 else 0 in
+        let otherKey = Stdlib.Dict.__getCollisionKey<k, v>(ptr, otherIdx) in
+        let otherValue = Stdlib.Dict.__getCollisionValue<k, v>(ptr, otherIdx) in
+        Stdlib.Dict.__allocLeaf<k, v>(otherKey, otherValue)
+    else
+        // Remove entry - create smaller collision node
+        let newCount = count - 1 in
+        let newPtr = __raw_alloc(8 + (newCount * 16)) in
+        let _ = __raw_set<Int64>(newPtr, 0, newCount) in
+        let _ = Stdlib.Dict.__copyCollisionExcept<k, v>(ptr, newPtr, count, idx, 0, 0) in
+        Stdlib.Dict.__setTag<k, v>(newPtr, 3)
+
+// Check if key exists in collision node
+def Stdlib.Dict.__containsInCollision<k, v>(ptr: RawPtr, key: k) : Bool =
+    let count = Stdlib.Dict.__collisionCount<k, v>(ptr) in
+    let idx = Stdlib.Dict.__findInCollision<k, v>(ptr, key, count, 0) in
+    idx >= 0
+
+// Collect keys from collision node
+def Stdlib.Dict.__collectCollisionKeys<k, v>(ptr: RawPtr, count: Int64, i: Int64, acc: List<k>) : List<k> =
+    if i >= count then acc
+    else
+        let key = Stdlib.Dict.__getCollisionKey<k, v>(ptr, i) in
+        Stdlib.Dict.__collectCollisionKeys<k, v>(ptr, count, i + 1, [key, ...acc])
+
+// Collect values from collision node
+def Stdlib.Dict.__collectCollisionValues<k, v>(ptr: RawPtr, count: Int64, i: Int64, acc: List<v>) : List<v> =
+    if i >= count then acc
+    else
+        let value = Stdlib.Dict.__getCollisionValue<k, v>(ptr, i) in
+        Stdlib.Dict.__collectCollisionValues<k, v>(ptr, count, i + 1, [value, ...acc])
+
+// Collect entries from collision node
+def Stdlib.Dict.__collectCollisionEntries<k, v>(ptr: RawPtr, count: Int64, i: Int64, acc: List<(k, v)>) : List<(k, v)> =
+    if i >= count then acc
+    else
+        let key = Stdlib.Dict.__getCollisionKey<k, v>(ptr, i) in
+        let value = Stdlib.Dict.__getCollisionValue<k, v>(ptr, i) in
+        Stdlib.Dict.__collectCollisionEntries<k, v>(ptr, count, i + 1, [(key, value), ...acc])
+
+// Fold over collision node entries
+def Stdlib.Dict.__foldCollision<k, v, a>(ptr: RawPtr, count: Int64, i: Int64, acc: a, f: (a, k, v) -> a) : a =
+    if i >= count then acc
+    else
+        let key = Stdlib.Dict.__getCollisionKey<k, v>(ptr, i) in
+        let value = Stdlib.Dict.__getCollisionValue<k, v>(ptr, i) in
+        Stdlib.Dict.__foldCollision<k, v, a>(ptr, count, i + 1, f(acc, key, value), f)
+
+// Map over collision node entries
+def Stdlib.Dict.__mapCollision<k, v, w>(ptr: RawPtr, count: Int64, f: (k, v) -> w) : Dict<k, w> =
+    // Collision nodes have >= 2 entries, so we can safely get key0/key1
+    let key0 = Stdlib.Dict.__getCollisionKey<k, v>(ptr, 0) in
+    let val0 = Stdlib.Dict.__getCollisionValue<k, v>(ptr, 0) in
+    let key1 = Stdlib.Dict.__getCollisionKey<k, v>(ptr, 1) in
+    let val1 = Stdlib.Dict.__getCollisionValue<k, v>(ptr, 1) in
+    let newVal0 = f(key0, val0) in
+    let newVal1 = f(key1, val1) in
+    let result = Stdlib.Dict.__allocCollision<k, w>(key0, newVal0, key1, newVal1) in
+    Stdlib.Dict.__mapCollisionRest<k, v, w>(ptr, Stdlib.Dict.__clearTag<k, w>(result), count, 2, f)
+
+def Stdlib.Dict.__mapCollisionRest<k, v, w>(oldPtr: RawPtr, newPtr: RawPtr, count: Int64, i: Int64, f: (k, v) -> w) : Dict<k, w> =
+    if i >= count then Stdlib.Dict.__setTag<k, w>(newPtr, 3)
+    else
+        // For additional entries beyond first 2, we need to add them
+        // This is a simplification - we use setInCollision which handles growing
+        let key = Stdlib.Dict.__getCollisionKey<k, v>(oldPtr, i) in
+        let value = Stdlib.Dict.__getCollisionValue<k, v>(oldPtr, i) in
+        let newValue = f(key, value) in
+        let newNode = Stdlib.Dict.__setInCollision<k, w>(newPtr, key, newValue) in
+        Stdlib.Dict.__mapCollisionRest<k, v, w>(oldPtr, Stdlib.Dict.__clearTag<k, w>(newNode), count, i + 1, f)
+
+// =============================================================================
 // Dict.empty - returns an empty dictionary
 // =============================================================================
 // Empty is represented as 0 (NULL with tag 0)
@@ -1193,8 +1367,11 @@ def Stdlib.Dict.__getHelper<k, v>(node: Dict<k, v>, key: k, keyHash: Int64, leve
                 Stdlib.Dict.__getHelper<k, v>(child, key, keyHash, level + 1)
             else
                 None
+        else if tag == 3 then
+            // Collision node - linear search
+            Stdlib.Dict.__getFromCollision<k, v>(ptr, key)
         else
-            // Unknown tag (collision node not yet implemented)
+            // Unknown tag
             None
 
 def Stdlib.Dict.get<k, v>(dict: Dict<k, v>, key: k) : Stdlib.Option.Option<v> =
@@ -1240,6 +1417,9 @@ def Stdlib.Dict.__setHelper<k, v>(node: Dict<k, v>, key: k, keyHash: Int64, valu
                 let newLeaf = Stdlib.Dict.__allocLeaf<k, v>(key, value) in
                 let newBitmap = Stdlib.Dict.setBit(bitmap, chunk) in
                 Stdlib.Dict.__copyInternalWithInsert<k, v>(ptr, bitmap, newBitmap, idx, newLeaf)
+        else if tag == 3 then
+            // Collision node - update or add
+            Stdlib.Dict.__setInCollision<k, v>(ptr, key, value)
         else
             // Unknown tag - return node unchanged
             node
@@ -1251,9 +1431,8 @@ def Stdlib.Dict.__expandLeaf<k, v>(key1: k, key1Hash: Int64, val1: v, key2: k, k
     if chunk1 == chunk2 then
         // Same chunk - need to go deeper
         if level >= 10 then
-            // Max depth reached - just keep key2 (overwrites key1)
-            // TODO: Implement collision nodes
-            Stdlib.Dict.__allocLeaf<k, v>(key2, val2)
+            // Max depth reached - create collision node
+            Stdlib.Dict.__allocCollision<k, v>(key1, val1, key2, val2)
         else
             // Create internal node with single child (recursive case)
             let child = Stdlib.Dict.__expandLeaf<k, v>(key1, key1Hash, val1, key2, key2Hash, val2, level + 1) in
@@ -1411,6 +1590,9 @@ def Stdlib.Dict.__removeHelper<k, v>(node: Dict<k, v>, key: k, keyHash: Int64, l
             else
                 // Bit not set - key not in this subtree
                 node
+        else if tag == 3 then
+            // Collision node - remove from collision
+            Stdlib.Dict.__removeFromCollision<k, v>(ptr, key)
         else
             // Unknown tag - return unchanged
             node
@@ -1451,6 +1633,9 @@ def Stdlib.Dict.__containsHelper<k, v>(node: Dict<k, v>, key: k, keyHash: Int64,
                 Stdlib.Dict.__containsHelper<k, v>(child, key, keyHash, level + 1)
             else
                 false
+        else if tag == 3 then
+            // Collision node
+            Stdlib.Dict.__containsInCollision<k, v>(ptr, key)
         else
             false
 
@@ -1469,6 +1654,9 @@ def Stdlib.Dict.__sizeHelper<k, v>(node: Dict<k, v>) : Int64 =
         else if tag == 1 then
             let bitmap = __raw_get<Int64>(ptr, 0) in
             Stdlib.Dict.__countChildren<k, v>(ptr, bitmap, 0)
+        else if tag == 3 then
+            // Collision node - return count of entries
+            Stdlib.Dict.__collisionCount<k, v>(ptr)
         else
             0
 
@@ -1499,6 +1687,9 @@ def Stdlib.Dict.__keysHelper<k, v>(node: Dict<k, v>, acc: List<k>) : List<k> =
         else if tag == 1 then
             let bitmap = __raw_get<Int64>(ptr, 0) in
             Stdlib.Dict.__collectKeysFromChildren<k, v>(ptr, bitmap, 0, acc)
+        else if tag == 3 then
+            let count = Stdlib.Dict.__collisionCount<k, v>(ptr) in
+            Stdlib.Dict.__collectCollisionKeys<k, v>(ptr, count, 0, acc)
         else
             acc
 
@@ -1526,6 +1717,9 @@ def Stdlib.Dict.__valuesHelper<k, v>(node: Dict<k, v>, acc: List<v>) : List<v> =
         else if tag == 1 then
             let bitmap = __raw_get<Int64>(ptr, 0) in
             Stdlib.Dict.__collectValuesFromChildren<k, v>(ptr, bitmap, 0, acc)
+        else if tag == 3 then
+            let count = Stdlib.Dict.__collisionCount<k, v>(ptr) in
+            Stdlib.Dict.__collectCollisionValues<k, v>(ptr, count, 0, acc)
         else
             acc
 
@@ -1554,6 +1748,9 @@ def Stdlib.Dict.__entriesHelper<k, v>(node: Dict<k, v>, acc: List<(k, v)>) : Lis
         else if tag == 1 then
             let bitmap = __raw_get<Int64>(ptr, 0) in
             Stdlib.Dict.__collectEntriesFromChildren<k, v>(ptr, bitmap, 0, acc)
+        else if tag == 3 then
+            let count = Stdlib.Dict.__collisionCount<k, v>(ptr) in
+            Stdlib.Dict.__collectCollisionEntries<k, v>(ptr, count, 0, acc)
         else
             acc
 
@@ -1582,6 +1779,9 @@ def Stdlib.Dict.__foldHelper<k, v, a>(node: Dict<k, v>, acc: a, f: (a, k, v) -> 
         else if tag == 1 then
             let bitmap = __raw_get<Int64>(ptr, 0) in
             Stdlib.Dict.__foldChildren<k, v, a>(ptr, bitmap, 0, acc, f)
+        else if tag == 3 then
+            let count = Stdlib.Dict.__collisionCount<k, v>(ptr) in
+            Stdlib.Dict.__foldCollision<k, v, a>(ptr, count, 0, acc, f)
         else
             acc
 
@@ -1613,6 +1813,9 @@ def Stdlib.Dict.__mapHelper<k, v, w>(node: Dict<k, v>, f: (k, v) -> w) : Dict<k,
             let numChildren = Stdlib.Int64.popcount(bitmap) in
             let newPtr = Stdlib.Dict.__allocInternal(bitmap, numChildren) in
             Stdlib.Dict.__mapChildren<k, v, w>(ptr, newPtr, bitmap, 0, numChildren, f)
+        else if tag == 3 then
+            let count = Stdlib.Dict.__collisionCount<k, v>(ptr) in
+            Stdlib.Dict.__mapCollision<k, v, w>(ptr, count, f)
         else
             __empty_dict<k, w>()
 

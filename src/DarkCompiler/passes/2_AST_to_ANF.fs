@@ -2729,14 +2729,14 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                         collectFromRecord rest (idx + 1) env' bindings' vg')
                             collectFromRecord fieldPatterns 0 env bindings vg
                         | AST.PList innerPatterns ->
-                            // For list patterns, extract head elements
+                            // For list patterns, extract head elements using FingerTree operations
                             let rec collectFromList (pats: AST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
                                 match pats with
                                 | [] -> Ok (env, bindings, vg)
                                 | p :: rest ->
-                                    // List layout: [tag=1, head, tail] - head at index 1, tail at index 2
+                                    // Lists are FingerTrees - use headUnsafe/tail to extract
                                     let (headVar, vg1) = ANF.freshVar vg
-                                    let headExpr = ANF.TupleGet (currentList, 1)
+                                    let headExpr = ANF.Call ("Stdlib.FingerTree.headUnsafe_i64", [currentList])
                                     let headBinding = (headVar, headExpr)
                                     collectPatternBindings p (ANF.Var headVar) env (headBinding :: bindings) vg1
                                     |> Result.bind (fun (env', bindings', vg') ->
@@ -2745,26 +2745,26 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                         else
                                             // Get tail for next iteration
                                             let (tailVar, vg2) = ANF.freshVar vg'
-                                            let tailExpr = ANF.TupleGet (currentList, 2)
+                                            let tailExpr = ANF.Call ("Stdlib.FingerTree.tail_i64", [currentList])
                                             let tailBinding = (tailVar, tailExpr)
                                             collectFromList rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                             collectFromList innerPatterns sourceAtom env bindings vg
                         | AST.PListCons (headPatterns, tailPattern) ->
-                            // Extract head elements then bind tail
+                            // Extract head elements then bind tail using FingerTree operations
                             let rec collectHeads (pats: AST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
                                 match pats with
                                 | [] ->
                                     // Bind the remaining list to tail pattern
                                     collectPatternBindings tailPattern currentList env bindings vg
                                 | p :: rest ->
-                                    // List layout: [tag=1, head, tail] - head at index 1, tail at index 2
+                                    // Lists are FingerTrees - use headUnsafe/tail to extract
                                     let (headVar, vg1) = ANF.freshVar vg
-                                    let headExpr = ANF.TupleGet (currentList, 1)
+                                    let headExpr = ANF.Call ("Stdlib.FingerTree.headUnsafe_i64", [currentList])
                                     let headBinding = (headVar, headExpr)
                                     collectPatternBindings p (ANF.Var headVar) env (headBinding :: bindings) vg1
                                     |> Result.bind (fun (env', bindings', vg') ->
                                         let (tailVar, vg2) = ANF.freshVar vg'
-                                        let tailExpr = ANF.TupleGet (currentList, 2)
+                                        let tailExpr = ANF.Call ("Stdlib.FingerTree.tail_i64", [currentList])
                                         let tailBinding = (tailVar, tailExpr)
                                         collectHeads rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                             collectHeads headPatterns sourceAtom env bindings vg
@@ -3031,14 +3031,14 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 collectFromRecord rest (idx + 1) env' bindings' vg'
                         collectFromRecord fieldPatterns 0 env bindings vg
                     | AST.PList innerPatterns ->
-                        // For list patterns, extract head elements recursively
+                        // For list patterns, extract head elements using FingerTree operations
                         let rec collectFromList (pats: AST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
                             match pats with
                             | [] -> (env, bindings, vg)
                             | p :: rest ->
-                                // List layout: [tag=1, head, tail] - head at index 1, tail at index 2
+                                // Lists are FingerTrees - use headUnsafe/tail to extract
                                 let (headVar, vg1) = ANF.freshVar vg
-                                let headExpr = ANF.TupleGet (currentList, 1)
+                                let headExpr = ANF.Call ("Stdlib.FingerTree.headUnsafe_i64", [currentList])
                                 let headBinding = (headVar, headExpr)
                                 let (env', bindings', vg') = collectBindings p (ANF.Var headVar) env (headBinding :: bindings) vg1
                                 if List.isEmpty rest then
@@ -3046,25 +3046,25 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 else
                                     // Get tail for next iteration
                                     let (tailVar, vg2) = ANF.freshVar vg'
-                                    let tailExpr = ANF.TupleGet (currentList, 2)
+                                    let tailExpr = ANF.Call ("Stdlib.FingerTree.tail_i64", [currentList])
                                     let tailBinding = (tailVar, tailExpr)
                                     collectFromList rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2
                         collectFromList innerPatterns sourceAtom env bindings vg
                     | AST.PListCons (headPatterns, tailPattern) ->
-                        // Extract head elements then bind tail
+                        // Extract head elements then bind tail using FingerTree operations
                         let rec collectHeads (pats: AST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
                             match pats with
                             | [] ->
                                 // Bind the remaining list to tail pattern
                                 collectBindings tailPattern currentList env bindings vg
                             | p :: rest ->
-                                // List layout: [tag=1, head, tail] - head at index 1, tail at index 2
+                                // Lists are FingerTrees - use headUnsafe/tail to extract
                                 let (headVar, vg1) = ANF.freshVar vg
-                                let headExpr = ANF.TupleGet (currentList, 1)
+                                let headExpr = ANF.Call ("Stdlib.FingerTree.headUnsafe_i64", [currentList])
                                 let headBinding = (headVar, headExpr)
                                 let (env', bindings', vg') = collectBindings p (ANF.Var headVar) env (headBinding :: bindings) vg1
                                 let (tailVar, vg2) = ANF.freshVar vg'
-                                let tailExpr = ANF.TupleGet (currentList, 2)
+                                let tailExpr = ANF.Call ("Stdlib.FingerTree.tail_i64", [currentList])
                                 let tailBinding = (tailVar, tailExpr)
                                 collectHeads rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2
                         collectHeads headPatterns sourceAtom env bindings vg
