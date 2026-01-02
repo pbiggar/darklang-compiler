@@ -71,6 +71,62 @@ match zipped with
 
 ---
 
+## FingerTree Deep Operation Chain Bug
+
+**Status**: Open
+**Severity**: Medium (affects recursive list operations with 5+ elements)
+**Discovered**: Investigation of Dict.fromList failures
+
+### Description
+
+When performing 4 or more chained FingerTree tail operations followed by element extraction
+(headUnsafe, getAt), incorrect values are returned. The issue appears to be related to
+register allocation or stack management for deeply nested function calls.
+
+### Reproduction
+
+```dark
+// Works (3 tails + headUnsafe)
+let nums = [1L, 2L, 3L, 4L, 5L] in
+let rest0 = Stdlib.FingerTree.tail<Int64>(nums) in
+let rest1 = Stdlib.FingerTree.tail<Int64>(rest0) in
+let rest2 = Stdlib.FingerTree.tail<Int64>(rest1) in
+Stdlib.FingerTree.headUnsafe<Int64>(rest2)  // Returns 4 (correct)
+
+// Fails (4 tails + headUnsafe)
+let nums = [1L, 2L, 3L, 4L, 5L] in
+let rest0 = Stdlib.FingerTree.tail<Int64>(nums) in
+let rest1 = Stdlib.FingerTree.tail<Int64>(rest0) in
+let rest2 = Stdlib.FingerTree.tail<Int64>(rest1) in
+let rest3 = Stdlib.FingerTree.tail<Int64>(rest2) in
+Stdlib.FingerTree.headUnsafe<Int64>(rest3)  // Returns garbage instead of 5
+```
+
+### Key Observations
+
+1. `length` still works correctly after 4 tails (returns 1)
+2. `__getTag` returns correct tag (1 = SINGLE)
+3. The issue is specific to value extraction (headUnsafe, getAt)
+4. Affects Option<List> extraction as well (wrapping in Some and extracting)
+
+### Impact
+
+- Dict.fromList with 5+ tuple elements fails
+- Recursive list iteration with 5+ elements produces wrong values
+- List.fold with 5+ elements produces wrong values
+
+### Likely Cause
+
+Register spilling edge case in code generation. The compiled code for deeply nested
+FingerTree operations may be corrupting local variables or using wrong register values.
+
+### Workaround
+
+Use iteration/fold patterns that don't require deep chains, or limit operations to
+fewer than 4 consecutive FingerTree operations.
+
+---
+
 ## Register Spilling Edge Cases
 
 **Status**: Partially documented
