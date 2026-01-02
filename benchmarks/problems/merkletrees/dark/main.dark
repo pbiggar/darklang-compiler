@@ -1,45 +1,55 @@
 // Merkle Trees Benchmark
 // Builds binary Merkle trees and computes root hashes
 //
-// STATUS: PARTIALLY IMPLEMENTABLE
-// MISSING FEATURES:
-// - 64-bit overflow semantics (wrapping arithmetic)
-// - Bitwise XOR operations
-//
 // This benchmark tests:
 // - Tree recursion
-// - Hash computation
+// - Hash computation (FNV-1a variant)
 // - Memory allocation for tree nodes
 //
 // The merkletrees benchmark builds complete binary trees
 // where each leaf is hashed, and internal nodes hash
 // their children's hashes together.
 
-// Simple hash approximation without XOR
-// Note: This won't produce the same results as reference implementations
-def simpleHash(data: Int64) : Int64 =
-    let h = 14695981039346656 in
-    let h1 = h * 1099511628211 + data in
-    h1 % 1000000000000000
+// FNV-1a hash function (matches OCaml implementation)
+// Iterates 8 times, XORing with low byte of data and multiplying
+def hashLoop(h: Int64, data: Int64, i: Int64) : Int64 =
+    if i >= 8 then h
+    else
+        let h1 = (h ^ (data & 255)) * 1099511628211 in
+        hashLoop(h1, data, i + 1)
+
+def hashVal(data: Int64) : Int64 =
+    // FNV offset basis (signed): -3750763034362895579
+    hashLoop(-3750763034362895579, data, 0)
 
 def hashPair(left: Int64, right: Int64) : Int64 =
-    simpleHash(left + right * 31)
+    hashVal(left + right * 31)
 
 // Build a complete binary Merkle tree of given depth
+// Returns the root hash
 def buildTree(depth: Int64, leafStart: Int64) : Int64 =
-    if depth == 0 then simpleHash(leafStart)
+    if depth == 0 then hashVal(leafStart)
     else
-        let leftSize = 1 in  // Simplified - would need bit shift
+        let leftSize = 1 << (depth - 1) in
         let left = buildTree(depth - 1, leafStart) in
         let right = buildTree(depth - 1, leafStart + leftSize) in
         hashPair(left, right)
+
+// Verify a tree by rebuilding and comparing
+def verifyTree(depth: Int64, leafStart: Int64, expectedRoot: Int64) : Bool =
+    buildTree(depth, leafStart) == expectedRoot
 
 // Full benchmark: depth=15, iterations=50 (matching reference implementations)
 def benchmark(depth: Int64, iterations: Int64, i: Int64, checksum: Int64) : Int64 =
     if i >= iterations then checksum
     else
+        // Build tree
         let root = buildTree(depth, i) in
+        // Verify tree (rebuilds it)
+        let verified = verifyTree(depth, i, root) in
+        // Accumulate checksum
         let newChecksum = (checksum + root) % 1000000007 in
-        benchmark(depth, iterations, i + 1, newChecksum)
+        let finalChecksum = if verified then (newChecksum + 1) % 1000000007 else newChecksum in
+        benchmark(depth, iterations, i + 1, finalChecksum)
 
 benchmark(15, 50, 0, 0)

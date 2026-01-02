@@ -2,10 +2,10 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-01-01 13:00:00
-**Commit:** `ea6aaec` - Add aggressive phi coalescing for deferred vertices
+**Last Updated:** 2026-01-02 13:07:49
+**Commit:** `900db8a7` - Fix type inference for user-defined function return types
 
-| Benchmark     |           Dark (2.86x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
+| Benchmark     |           Dark (3.38x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
 | ackermann     | 13,239,409,128 (2.64x) | 5,009,839,130 | 8,946,136,766 (1.79x) |                      - | 3,094,160,411 (0.62x) |
 | binary_trees  |    163,838,331 (0.09x) | 1,842,791,955 |    82,339,690 (0.04x) | 24,066,589,690 (13.1x) |   699,817,640 (0.38x) |
@@ -18,7 +18,7 @@ Latest Dark compiler performance vs other languages (instruction counts).
 | leibniz       |  1,700,000,159 (2.43x) |   700,256,039 | 2,504,990,630 (3.58x) |                      - |   388,457,894 (0.55x) |
 | mandelbrot    |     14,865,926 (1.18x) |    12,553,096 |    23,390,326 (1.86x) |   1,299,960,761 (104x) |   435,644,625 (34.7x) |
 | matmul        |                      - |    16,956,533 |    34,895,082 (2.06x) |    894,891,413 (52.8x) |   487,674,868 (28.8x) |
-| merkletrees   |    134,348,003 (1.19x) |   113,304,119 | 1,004,581,199 (8.87x) |                      - |                     - |
+| merkletrees   |  1,114,096,152 (9.83x) |   113,304,119 | 1,004,581,199 (8.87x) |                      - |                     - |
 | nbody         |                      - |   208,254,521 |   659,530,997 (3.17x) |  41,766,944,942 (201x) |   997,799,106 (4.79x) |
 | nqueen        |                      - |   164,529,075 |   297,970,462 (1.81x) |  17,205,881,478 (105x) |   804,233,231 (4.89x) |
 | nsieve        |                      - |   234,163,043 |   559,365,264 (2.39x) | 16,683,353,450 (71.2x) | 1,229,182,783 (5.25x) |
