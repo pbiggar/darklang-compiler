@@ -1574,7 +1574,7 @@ let private compileMIRToLIR (stdlib: LazyStdlibResult) (mirFunc: MIR.Function) :
         // Register allocation
         match lirFuncs with
         | [lirFunc] -> Some (RegisterAllocation.allocateRegisters lirFunc)
-        | _ -> None  // Unexpected: should have exactly one function
+        | funcs -> failwith $"compileMIRToLIR: Expected exactly 1 function, got {List.length funcs}"
 
 /// Lazily compile a stdlib function from MIR to LIR with caching
 /// Returns the compiled LIR function (from cache if available, or compiles and caches)
