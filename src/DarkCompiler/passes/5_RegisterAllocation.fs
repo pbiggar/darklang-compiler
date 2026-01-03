@@ -2429,7 +2429,7 @@ let resolvePhiNodes (cfg: LIR.CFG) (allocation: Map<int, Allocation>) (floatAllo
         | LIR.Virtual id ->
             match Map.tryFind id allocation with
             | Some alloc -> alloc
-            | None -> PhysReg LIR.X11  // Fallback
+            | None -> failwith $"RegisterAllocation: Virtual register {id} not found in allocation"
         | LIR.Physical p -> PhysReg p
 
     // Helper to convert a LIR.Operand to allocated version
