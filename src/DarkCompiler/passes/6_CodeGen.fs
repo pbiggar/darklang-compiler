@@ -3136,7 +3136,7 @@ let generateHeapInit () : ARM64.Instr list =
     let os =
         match Platform.detectOS () with
         | Ok platform -> platform
-        | Error _ -> Platform.Linux
+        | Error msg -> failwith $"Platform detection failed: {msg}"
     let syscalls = Platform.getSyscallNumbers os
     let mmapFlags =
         match os with
