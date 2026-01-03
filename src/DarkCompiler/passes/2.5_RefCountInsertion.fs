@@ -136,8 +136,14 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                 | BoolLiteral _ -> AST.TBool
                 | StringLiteral _ -> AST.TString
                 | FloatLiteral _ -> AST.TFloat64
-                | Var tid -> tryGetType ctx tid |> Option.defaultValue AST.TInt64
-                | FuncRef funcName -> Map.tryFind funcName ctx.FuncReg |> Option.defaultValue AST.TInt64)
+                | Var tid ->
+                    match tryGetType ctx tid with
+                    | Some t -> t
+                    | None -> failwith $"RefCountInsertion: Type not found for temp {tid} in TupleAlloc"
+                | FuncRef funcName ->
+                    match Map.tryFind funcName ctx.FuncReg with
+                    | Some t -> t
+                    | None -> failwith $"RefCountInsertion: Type not found for function {funcName} in TupleAlloc")
         Some (AST.TTuple elemTypes)
     | TupleGet (tupleAtom, index) ->
         // Get element type from tuple type
