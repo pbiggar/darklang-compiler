@@ -1260,16 +1260,14 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                       ErrorMessage = Some $"ANF conversion error: {err}" }
                 | Ok testOnly ->
                     // Partition specialized functions: cached (skip compilation) vs needs-compilation
-                    // NOTE: LIR caching is disabled due to a bug that causes incorrect results
-                    // for FingerTree.concat (and thus List.append). When caching is enabled,
-                    // tests like `match List.append([1, 2], [3, 4]) with | [a, b, c, d] -> a + b + c + d`
-                    // return 12 instead of 10. The exact cause is unknown but appears to be
-                    // related to how cached LIR functions interact with the rest of the compilation.
-                    // TODO: Investigate and fix the caching bug to re-enable for test performance.
                     let (cachedFuncs, functionsToCompile) =
                         testOnly.UserFunctions
                         |> List.partition (fun f ->
-                            false)  // Caching disabled - forces fresh compilation for each test
+                            // Use cached LIR if available (specialized stdlib functions)
+                            // Disable FingerTree/List caching until root cause is found
+                            stdlib.CompiledFuncCache.ContainsKey(f.Name) &&
+                            not (f.Name.Contains("FingerTree")) &&
+                            not (f.Name.Contains("List")))
                     let cachedFuncNames = cachedFuncs |> List.map (fun f -> f.Name)
 
                     // Extract return types for cached specialized functions (needed for ANF→MIR conversion)
@@ -1437,24 +1435,26 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                     // Offset pool refs in allocated user functions
                     let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
 
-                    // Cache newly-compiled specialized functions (after offset, for reuse)
-                    // Specialized stdlib functions use stdlib pool entries which have stable offsets
-                    for func in offsetUserFuncs do
-                        // DEBUG: Skip caching List.append_i64 entirely
-                        if Set.contains func.Name specializedNeedingCache && func.Name <> "Stdlib.List.append_i64" then
+                    // Cache newly-compiled specialized functions BEFORE offset adjustment.
+                    // We cache un-offset functions so they can be re-offset correctly when
+                    // retrieved in different test contexts (each test has different user pools).
+                    for func in allocatedUserFuncs do
+                        if Set.contains func.Name specializedNeedingCache then
                             let entry : CachedUserFunction = {
-                                LIRFunction = func
-                                Strings = []  // Specialized stdlib typically don't have literals
+                                LIRFunction = func  // UN-OFFSET version
+                                Strings = []
                                 Floats = []
                             }
                             stdlib.CompiledFuncCache.TryAdd(func.Name, entry) |> ignore
 
-                    // Retrieve cached specialized functions (already at correct pool offsets)
+                    // Retrieve cached specialized functions and apply current test's offsets
                     let cachedSpecializedFuncs =
                         cachedFuncNames
                         |> List.choose (fun name ->
                             match stdlib.CompiledFuncCache.TryGetValue(name) with
-                            | true, cached -> Some cached.LIRFunction
+                            | true, cached ->
+                                // Apply current test's pool offsets to cached function
+                                Some (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset cached.LIRFunction)
                             | false, _ -> None)
 
                     // Combine newly-compiled and cached user functions
