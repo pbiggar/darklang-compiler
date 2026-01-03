@@ -1825,17 +1825,26 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
             | AST.PConstructor (_, payloadPat) ->
                 payloadPat |> Option.map (fun p -> extractPatternBindings p AST.TInt64) |> Option.defaultValue Map.empty
             | AST.PList innerPats ->
-                let elemType = match scrutType with AST.TList t -> t | _ -> AST.TInt64
+                let elemType =
+                    match scrutType with
+                    | AST.TList t -> t
+                    | _ -> failwith $"PList pattern expects TList scrutinee, got {scrutType}"
                 innerPats |> List.fold (fun acc pat -> Map.fold (fun m k v -> Map.add k v m) acc (extractPatternBindings pat elemType)) Map.empty
             | AST.PListCons (headPats, tailPat) ->
-                let elemType = match scrutType with AST.TList t -> t | _ -> AST.TInt64
+                let elemType =
+                    match scrutType with
+                    | AST.TList t -> t
+                    | _ -> failwith $"PListCons pattern expects TList scrutinee, got {scrutType}"
                 let headBindings = headPats |> List.fold (fun acc pat -> Map.fold (fun m k v -> Map.add k v m) acc (extractPatternBindings pat elemType)) Map.empty
                 let tailBindings = extractPatternBindings tailPat scrutType
                 Map.fold (fun m k v -> Map.add k v m) headBindings tailBindings
 
         match cases with
         | mc :: _ ->
-            let patternType = scrutineeTypeResult |> Result.defaultValue AST.TInt64
+            let patternType =
+                match scrutineeTypeResult with
+                | Ok t -> t
+                | Error msg -> failwith $"Pattern match: Could not determine scrutinee type: {msg}"
             // Get bindings from first pattern (cases can have multiple patterns, use first)
             let patBindings =
                 mc.Patterns
