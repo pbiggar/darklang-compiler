@@ -238,7 +238,10 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (c
     let result = CompilerLibrary.compileWithOptions (verbosityToInt verbosity) options source
 
     if not result.Success then
-        let errorMsg = result.ErrorMessage |> Option.defaultValue "Unknown error"
+        let errorMsg =
+            match result.ErrorMessage with
+            | Some msg -> msg
+            | None -> failwith "Compilation failed but no error message was provided"
         eprintln $"Compilation failed: {errorMsg}"
         1
     else
