@@ -942,13 +942,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                     | _ -> [LIR.Mov (LIR.Physical LIR.X19, lirSrc)]
                 Ok (moveToX19 @ [LIR.PrintRecord (LIR.Physical LIR.X19, typeName, fields)])
             | None ->
-                // Fallback: print address if record type not in registry
-                let lirSrc = convertOperand src
-                let moveToX0 =
-                    match lirSrc with
-                    | LIR.Reg (LIR.Physical LIR.X0) -> []
-                    | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
-                Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
+                Error $"Print: Record type '{typeName}' not found in recordRegistry"
         | AST.TDict _ ->
             // Dict: print address for now
             let lirSrc = convertOperand src
