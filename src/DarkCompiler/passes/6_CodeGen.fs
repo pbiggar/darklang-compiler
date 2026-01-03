@@ -1269,7 +1269,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                                 [ARM64.MOV_reg (ARM64.X15, srcReg); ARM64.STR (ARM64.X15, destReg, int16 offset)]
                             else
                                 [ARM64.STR (srcReg, destReg, int16 offset)]
-                        | Error _ -> []  // Shouldn't happen
+                        | Error msg -> failwith $"ClosureAlloc: lirRegToARM64Reg failed: {msg}"
                     | LIR.FuncAddr fname ->
                         [ARM64.ADR (ARM64.X15, fname); ARM64.STR (ARM64.X15, destReg, int16 offset)]
                     | _ -> [])  // Other operand types not expected
