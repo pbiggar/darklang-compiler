@@ -1272,7 +1272,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         | Error msg -> failwith $"ClosureAlloc: lirRegToARM64Reg failed: {msg}"
                     | LIR.FuncAddr fname ->
                         [ARM64.ADR (ARM64.X15, fname); ARM64.STR (ARM64.X15, destReg, int16 offset)]
-                    | _ -> [])  // Other operand types not expected
+                    | other -> failwith $"ClosureAlloc: Unexpected capture operand type: {other}")
 
             Ok (allocInstrs @ storeFuncAddr @ storeCaptures))
 
@@ -1498,9 +1498,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                         | Some offset ->
                             Ok [ARM64.LDR (destARM64, ARM64.SP, int16 offset)]
                         | None ->
-                            // Shouldn't happen, but fall back to MOV
-                            let srcARM64 = lirPhysRegToARM64Reg srcPhysReg
-                            Ok [ARM64.MOV_reg (destARM64, srcARM64)]
+                            Error $"ArgMoves: Source register {srcPhysReg} will be clobbered but has no SaveRegs offset"
                     else
                         let srcARM64 = lirPhysRegToARM64Reg srcPhysReg
                         Ok [ARM64.MOV_reg (destARM64, srcARM64)]
