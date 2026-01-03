@@ -812,8 +812,10 @@ let rec convertExpr
                         [MIR.Call (destReg, funcName, argOperands, argTypes, returnType)])
                 | ANF.IndirectCall (func, args) ->
                     let argTypes = args |> List.map (atomType builder)
-                    // For indirect calls, we don't know the return type - default to TInt64
-                    let returnType = AST.TInt64
+                    let returnType =
+                        match atomType builder func with
+                        | AST.TFunction (_, retType) -> retType
+                        | other -> failwith $"IndirectCall: Expected TFunction type for func, got {other}"
                     atomToOperand builder func
                     |> Result.bind (fun funcOp ->
                         args
@@ -863,7 +865,10 @@ let rec convertExpr
                 | ANF.IndirectTailCall (func, args) ->
                     // Indirect tail call: no destination register
                     let argTypes = args |> List.map (atomType builder)
-                    let returnType = AST.TInt64
+                    let returnType =
+                        match atomType builder func with
+                        | AST.TFunction (_, retType) -> retType
+                        | other -> failwith $"IndirectTailCall: Expected TFunction type for func, got {other}"
                     atomToOperand builder func
                     |> Result.bind (fun funcOp ->
                         args
@@ -1377,8 +1382,10 @@ and convertExprToOperand
                         [MIR.Call (destReg, funcName, argOperands, argTypes, returnType)])
                 | ANF.IndirectCall (func, args) ->
                     let argTypes = args |> List.map (atomType builder)
-                    // For indirect calls, we don't know the return type - default to TInt64
-                    let returnType = AST.TInt64
+                    let returnType =
+                        match atomType builder func with
+                        | AST.TFunction (_, retType) -> retType
+                        | other -> failwith $"IndirectCall: Expected TFunction type for func, got {other}"
                     atomToOperand builder func
                     |> Result.bind (fun funcOp ->
                         args
@@ -1428,7 +1435,10 @@ and convertExprToOperand
                 | ANF.IndirectTailCall (func, args) ->
                     // Indirect tail call: no destination register
                     let argTypes = args |> List.map (atomType builder)
-                    let returnType = AST.TInt64
+                    let returnType =
+                        match atomType builder func with
+                        | AST.TFunction (_, retType) -> retType
+                        | other -> failwith $"IndirectTailCall: Expected TFunction type for func, got {other}"
                     atomToOperand builder func
                     |> Result.bind (fun funcOp ->
                         args
