@@ -1458,7 +1458,9 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                             | false, _ -> None)
 
                     // Combine newly-compiled and cached user functions
-                    let allUserFuncs = offsetUserFuncs @ cachedSpecializedFuncs
+                    // IMPORTANT: Maintain consistent ordering - specialized functions first, then _start
+                    // This ensures code generation produces the same layout regardless of caching
+                    let allUserFuncs = cachedSpecializedFuncs @ offsetUserFuncs
 
                     // Filter stdlib functions to only include reachable ones (dead code elimination)
                     let reachableStdlib =
