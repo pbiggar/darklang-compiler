@@ -50,6 +50,7 @@
     <None Include="passes/**/*.lir2arm64" CopyToOutputDirectory="PreserveNewest" />
     <None Include="passes/**/*.arm64enc" CopyToOutputDirectory="PreserveNewest" />
     <None Include="e2e/**/*.e2e" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="verification/**/*.e2e" CopyToOutputDirectory="PreserveNewest" />
     <None Include="typecheck/**/*.typecheck" CopyToOutputDirectory="PreserveNewest" />
     <None Include="optimization/**/*.opt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

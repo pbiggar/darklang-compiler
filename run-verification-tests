@@ -1,0 +1,39 @@
+#!/bin/bash
+# Run verification test suites for Dict and FingerTree
+# These are extensive correctness tests not run by default
+#
+# Usage: ./run-verification-tests [OPTIONS]
+#
+# These tests verify:
+# - Dict: Large-scale insert/retrieve, collision handling, enumeration
+# - FingerTree: Index verification, push/tail operations, concat
+#
+# Note: Some tests may fail due to known bugs (TCO, FingerTree deep chain bug)
+
+set -e
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+echo "Building tests..."
+if ! timeout 120 dotnet build --verbosity quiet 2>&1; then
+    echo "Build failed!"
+    exit 1
+fi
+echo "Build complete."
+echo ""
+
+# Find and run the test executable
+TEST_EXE="$SCRIPT_DIR/bin/Tests/Debug/net9.0/Tests"
+
+if [ ! -f "$TEST_EXE" ]; then
+    echo "Error: Test executable not found at $TEST_EXE"
+    exit 1
+fi
+
+echo "Running verification tests..."
+echo "(ENABLE_VERIFICATION_TESTS is set)"
+echo ""
+
+ENABLE_VERIFICATION_TESTS=true exec "$TEST_EXE" "$@"

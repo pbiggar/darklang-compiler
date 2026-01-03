@@ -1,0 +1,229 @@
+// FingerTree Verification Tests - Extensive correctness tests for FingerTree implementation
+//
+// These tests are NOT run by default. Run with:
+//   ENABLE_VERIFICATION_TESTS=true ./run-tests --filter=verification
+// Or use: ./run-verification-tests
+//
+// Note: Known bug - 4+ chained tail operations + headUnsafe returns garbage
+
+// ===================================================================
+// Helper Functions
+// ===================================================================
+
+// Build tree with pushBack: [1, 2, 3, ..., n]
+def buildTree(n: Int64, count: Int64, tree: List<Int64>): List<Int64> =
+    if n > count then tree else buildTree(n + 1, count, Stdlib.FingerTree.pushBack(tree, n))
+
+// Build tree with push (front): [n, n-1, ..., 2, 1]
+def buildTreeFront(n: Int64, count: Int64, tree: List<Int64>): List<Int64> =
+    if n > count then tree else buildTreeFront(n + 1, count, Stdlib.FingerTree.push(tree, n))
+
+// Verify all indices have correct values (for pushBack-built tree)
+// Returns count of correct values
+def verifyIndices(tree: List<Int64>, idx: Int64, count: Int64, correct: Int64): Int64 =
+    if idx >= count then correct
+    else
+        let expected = idx + 1 in
+        let actual = Stdlib.Option.withDefault(Stdlib.FingerTree.getAt(tree, idx), -1) in
+        let newCorrect = if actual == expected then correct + 1 else correct in
+        verifyIndices(tree, idx + 1, count, newCorrect)
+
+// Sum all elements via getAt
+def sumTree(tree: List<Int64>, idx: Int64, count: Int64, acc: Int64): Int64 =
+    if idx >= count then acc
+    else
+        let val = Stdlib.Option.withDefault(Stdlib.FingerTree.getAt(tree, idx), 0) in
+        sumTree(tree, idx + 1, count, acc + val)
+
+// Build tree with mixed push/pushBack
+def buildMixed(n: Int64, count: Int64, tree: List<Int64>): List<Int64> =
+    if n > count then tree
+    else
+        let newTree = if n % 2 == 0 then Stdlib.FingerTree.push(tree, n) else Stdlib.FingerTree.pushBack(tree, n) in
+        buildMixed(n + 1, count, newTree)
+
+// ===================================================================
+// Scale Tests - Large Tree Construction
+// ===================================================================
+
+// Build 100 elements
+Stdlib.FingerTree.length(buildTree(1, 100, Stdlib.FingerTree.empty<Int64>())) = 100
+
+// Build 500 elements
+Stdlib.FingerTree.length(buildTree(1, 500, Stdlib.FingerTree.empty<Int64>())) = 500
+
+// Build 1000 elements
+Stdlib.FingerTree.length(buildTree(1, 1000, Stdlib.FingerTree.empty<Int64>())) = 1000
+
+// ===================================================================
+// Index Verification - getAt returns correct values
+// ===================================================================
+
+// 100 elements: verify all indices
+verifyIndices(buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()), 0, 100, 0) = 100
+
+// 500 elements: verify all indices
+verifyIndices(buildTree(1, 500, Stdlib.FingerTree.empty<Int64>()), 0, 500, 0) = 500
+
+// 1000 elements: verify all indices
+verifyIndices(buildTree(1, 1000, Stdlib.FingerTree.empty<Int64>()), 0, 1000, 0) = 1000
+
+// ===================================================================
+// Sum Verification - Mathematical correctness
+// ===================================================================
+
+// Sum of 1..100 = 5050
+sumTree(buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()), 0, 100, 0) = 5050
+
+// Sum of 1..500 = 125250
+sumTree(buildTree(1, 500, Stdlib.FingerTree.empty<Int64>()), 0, 500, 0) = 125250
+
+// Sum of 1..1000 = 500500
+sumTree(buildTree(1, 1000, Stdlib.FingerTree.empty<Int64>()), 0, 1000, 0) = 500500
+
+// ===================================================================
+// Push/PushBack Consistency
+// ===================================================================
+
+// pushBack then head = first element
+Stdlib.Option.withDefault(Stdlib.FingerTree.head(buildTree(1, 100, Stdlib.FingerTree.empty<Int64>())), -1) = 1
+
+// pushBack then last = last element pushed
+Stdlib.Option.withDefault(Stdlib.FingerTree.last(buildTree(1, 100, Stdlib.FingerTree.empty<Int64>())), -1) = 100
+
+// push (front) then head = last element pushed
+Stdlib.Option.withDefault(Stdlib.FingerTree.head(buildTreeFront(1, 100, Stdlib.FingerTree.empty<Int64>())), -1) = 100
+
+// push (front) then last = first element pushed
+Stdlib.Option.withDefault(Stdlib.FingerTree.last(buildTreeFront(1, 100, Stdlib.FingerTree.empty<Int64>())), -1) = 1
+
+// ===================================================================
+// setAt Preserves Other Elements
+// ===================================================================
+
+// setAt middle, check neighbors unchanged
+def testSetAt(): Int64 =
+    let t1 = buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()) in
+    let t2 = Stdlib.FingerTree.setAt(t1, 50, 999) in
+    let v49 = Stdlib.Option.withDefault(Stdlib.FingerTree.getAt(t2, 49), -1) in
+    let v50 = Stdlib.Option.withDefault(Stdlib.FingerTree.getAt(t2, 50), -1) in
+    let v51 = Stdlib.Option.withDefault(Stdlib.FingerTree.getAt(t2, 51), -1) in
+    v49 * 10000 + v50 * 100 + v51
+
+testSetAt() = 5099952
+
+// setAt first element
+let t = Stdlib.FingerTree.setAt(buildTree(1, 10, Stdlib.FingerTree.empty<Int64>()), 0, 999) in Stdlib.Option.withDefault(Stdlib.FingerTree.head(t), -1) = 999
+
+// setAt last element
+let t = Stdlib.FingerTree.setAt(buildTree(1, 10, Stdlib.FingerTree.empty<Int64>()), 9, 999) in Stdlib.Option.withDefault(Stdlib.FingerTree.last(t), -1) = 999
+
+// ===================================================================
+// Concat Verification
+// ===================================================================
+
+// Concat two 50-element trees = 100 elements
+let t1 = buildTree(1, 50, Stdlib.FingerTree.empty<Int64>()) in let t2 = buildTree(51, 100, Stdlib.FingerTree.empty<Int64>()) in Stdlib.FingerTree.length(Stdlib.FingerTree.concat(t1, t2)) = 100
+
+// Concat preserves head from first tree
+let t1 = buildTree(1, 50, Stdlib.FingerTree.empty<Int64>()) in let t2 = buildTree(51, 100, Stdlib.FingerTree.empty<Int64>()) in Stdlib.Option.withDefault(Stdlib.FingerTree.head(Stdlib.FingerTree.concat(t1, t2)), -1) = 1
+
+// Concat preserves last from second tree
+let t1 = buildTree(1, 50, Stdlib.FingerTree.empty<Int64>()) in let t2 = buildTree(51, 100, Stdlib.FingerTree.empty<Int64>()) in Stdlib.Option.withDefault(Stdlib.FingerTree.last(Stdlib.FingerTree.concat(t1, t2)), -1) = 100
+
+// ===================================================================
+// Property: Length Invariants
+// ===================================================================
+
+// push increases length by 1
+let t = buildTree(1, 10, Stdlib.FingerTree.empty<Int64>()) in Stdlib.FingerTree.length(Stdlib.FingerTree.push(t, 0)) = 11
+
+// pushBack increases length by 1
+let t = buildTree(1, 10, Stdlib.FingerTree.empty<Int64>()) in Stdlib.FingerTree.length(Stdlib.FingerTree.pushBack(t, 11)) = 11
+
+// tail decreases length by 1
+let t = buildTree(1, 10, Stdlib.FingerTree.empty<Int64>()) in Stdlib.FingerTree.length(Stdlib.FingerTree.tail(t)) = 9
+
+// init decreases length by 1
+let t = buildTree(1, 10, Stdlib.FingerTree.empty<Int64>()) in Stdlib.FingerTree.length(Stdlib.FingerTree.init(t)) = 9
+
+// ===================================================================
+// Property: head/last Correctness
+// ===================================================================
+
+// head equals getAt(0)
+let t = buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()) in let h = Stdlib.Option.withDefault(Stdlib.FingerTree.head(t), -1) in let g = Stdlib.Option.withDefault(Stdlib.FingerTree.getAt(t, 0), -2) in h == g = stdout="true\n"
+
+// last equals getAt(length-1)
+let t = buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()) in let l = Stdlib.Option.withDefault(Stdlib.FingerTree.last(t), -1) in let len = Stdlib.FingerTree.length(t) in let g = Stdlib.Option.withDefault(Stdlib.FingerTree.getAt(t, len - 1), -2) in l == g = stdout="true\n"
+
+// ===================================================================
+// Property: pushBack-last and push-head
+// ===================================================================
+
+// pushBack then last returns pushed value
+Stdlib.Option.withDefault(Stdlib.FingerTree.last(Stdlib.FingerTree.pushBack(buildTree(1, 10, Stdlib.FingerTree.empty<Int64>()), 999)), -1) = 999
+
+// push then head returns pushed value
+Stdlib.Option.withDefault(Stdlib.FingerTree.head(Stdlib.FingerTree.push(buildTree(1, 10, Stdlib.FingerTree.empty<Int64>()), 999)), -1) = 999
+
+// ===================================================================
+// Empty Tree Edge Cases
+// ===================================================================
+
+// isEmpty on empty
+Stdlib.FingerTree.isEmpty(Stdlib.FingerTree.empty<Int64>()) = stdout="true\n"
+
+// isEmpty on non-empty
+Stdlib.FingerTree.isEmpty(Stdlib.FingerTree.singleton(1)) = stdout="false\n"
+
+// head on empty returns None
+Stdlib.Option.isNone(Stdlib.FingerTree.head(Stdlib.FingerTree.empty<Int64>())) = stdout="true\n"
+
+// last on empty returns None
+Stdlib.Option.isNone(Stdlib.FingerTree.last(Stdlib.FingerTree.empty<Int64>())) = stdout="true\n"
+
+// getAt on empty returns None
+Stdlib.Option.isNone(Stdlib.FingerTree.getAt(Stdlib.FingerTree.empty<Int64>(), 0)) = stdout="true\n"
+
+// ===================================================================
+// Mixed Operations
+// ===================================================================
+
+// Mixed push/pushBack maintains length
+Stdlib.FingerTree.length(buildMixed(1, 100, Stdlib.FingerTree.empty<Int64>())) = 100
+
+// ===================================================================
+// KNOWN BUG TESTS - Deep Operation Chain Bug
+// The following tests document the bug where 4+ chained tail operations
+// followed by headUnsafe returns garbage.
+// ===================================================================
+
+// 3 tails + headUnsafe WORKS (boundary case)
+let nums = Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.empty<Int64>(), 1), 2), 3), 4), 5) in let rest0 = Stdlib.FingerTree.tail(nums) in let rest1 = Stdlib.FingerTree.tail(rest0) in let rest2 = Stdlib.FingerTree.tail(rest1) in Stdlib.FingerTree.headUnsafe(rest2) = 4
+
+// Length still correct after 4 tails (bug affects value extraction, not length)
+let nums = Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.empty<Int64>(), 1), 2), 3), 4), 5) in let rest0 = Stdlib.FingerTree.tail(nums) in let rest1 = Stdlib.FingerTree.tail(rest0) in let rest2 = Stdlib.FingerTree.tail(rest1) in let rest3 = Stdlib.FingerTree.tail(rest2) in Stdlib.FingerTree.length(rest3) = 1
+
+// 4 tails + headUnsafe - KNOWN BUG: returns garbage instead of 5
+// Uncomment when bug is fixed:
+// let nums = Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.empty<Int64>(), 1), 2), 3), 4), 5) in let rest0 = Stdlib.FingerTree.tail(nums) in let rest1 = Stdlib.FingerTree.tail(rest0) in let rest2 = Stdlib.FingerTree.tail(rest1) in let rest3 = Stdlib.FingerTree.tail(rest2) in Stdlib.FingerTree.headUnsafe(rest3) = 5
+
+// 6 element tree with 5 tails - KNOWN BUG
+// let nums = Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.empty<Int64>(), 1), 2), 3), 4), 5), 6) in let rest0 = Stdlib.FingerTree.tail(nums) in let rest1 = Stdlib.FingerTree.tail(rest0) in let rest2 = Stdlib.FingerTree.tail(rest1) in let rest3 = Stdlib.FingerTree.tail(rest2) in let rest4 = Stdlib.FingerTree.tail(rest3) in Stdlib.FingerTree.headUnsafe(rest4) = 6
+
+// ===================================================================
+// Spot Checks on Large Trees
+// ===================================================================
+
+// 10000 elements: verify length
+Stdlib.FingerTree.length(buildTree(1, 10000, Stdlib.FingerTree.empty<Int64>())) = 10000
+
+// 10000 elements: verify head
+Stdlib.Option.withDefault(Stdlib.FingerTree.head(buildTree(1, 10000, Stdlib.FingerTree.empty<Int64>())), -1) = 1
+
+// 10000 elements: verify last
+Stdlib.Option.withDefault(Stdlib.FingerTree.last(buildTree(1, 10000, Stdlib.FingerTree.empty<Int64>())), -1) = 10000
+
+// 10000 elements: verify middle element
+Stdlib.Option.withDefault(Stdlib.FingerTree.getAt(buildTree(1, 10000, Stdlib.FingerTree.empty<Int64>()), 4999), -1) = 5000

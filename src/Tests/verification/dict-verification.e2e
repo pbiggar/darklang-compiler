@@ -1,0 +1,221 @@
+// Dict Verification Tests - Extensive correctness tests for HAMT Dict implementation
+//
+// These tests are NOT run by default. Run with:
+//   ENABLE_VERIFICATION_TESTS=true ./run-tests --filter=verification
+// Or use: ./run-verification-tests
+//
+// Note: Some tests may fail due to known bugs (TCO, FingerTree deep chain bug)
+
+// ===================================================================
+// Helper Functions
+// ===================================================================
+
+def emptyDict(): Dict<Int64, Int64> = Stdlib.Dict.empty<Int64, Int64>()
+def set(d: Dict<Int64, Int64>, k: Int64, v: Int64): Dict<Int64, Int64> = Stdlib.Dict.set(d, k, v)
+def get(d: Dict<Int64, Int64>, k: Int64): Stdlib.Option.Option<Int64> = Stdlib.Dict.get(d, k)
+def remove(d: Dict<Int64, Int64>, k: Int64): Dict<Int64, Int64> = Stdlib.Dict.remove(d, k)
+def getOrDefault(d: Dict<Int64, Int64>, k: Int64, default: Int64): Int64 = Stdlib.Option.withDefault(get(d, k), default)
+
+// Build a dict with entries 1->10, 2->20, ..., n->n*10
+def buildDict(n: Int64, d: Dict<Int64, Int64>): Dict<Int64, Int64> =
+    if n <= 0 then d else buildDict(n - 1, set(d, n, n * 10))
+
+// Verify all keys 1..n have correct values (returns number of correct entries)
+def verifyDict(n: Int64, d: Dict<Int64, Int64>, count: Int64): Int64 =
+    if n <= 0 then count
+    else
+        let expected = n * 10 in
+        let actual = getOrDefault(d, n, -1) in
+        let newCount = if actual == expected then count + 1 else count in
+        verifyDict(n - 1, d, newCount)
+
+// Build dict and remove odd keys
+def buildAndRemoveOdds(n: Int64, d: Dict<Int64, Int64>): Dict<Int64, Int64> =
+    if n <= 0 then d
+    else
+        let d2 = set(d, n, n * 10) in
+        let d3 = if n % 2 == 1 then remove(d2, n) else d2 in
+        buildAndRemoveOdds(n - 1, d3)
+
+// Count even keys that have correct values
+def verifyEvenKeys(n: Int64, d: Dict<Int64, Int64>, count: Int64): Int64 =
+    if n <= 0 then count
+    else
+        if n % 2 == 0 then
+            let expected = n * 10 in
+            let actual = getOrDefault(d, n, -1) in
+            let newCount = if actual == expected then count + 1 else count in
+            verifyEvenKeys(n - 2, d, newCount)
+        else
+            verifyEvenKeys(n - 1, d, count)
+
+// Verify odd keys are removed (returns count of correctly removed)
+def verifyOddsRemoved(n: Int64, d: Dict<Int64, Int64>, count: Int64): Int64 =
+    if n <= 0 then count
+    else
+        if n % 2 == 1 then
+            let isRemoved = Stdlib.Option.isNone(get(d, n)) in
+            let newCount = if isRemoved then count + 1 else count in
+            verifyOddsRemoved(n - 2, d, newCount)
+        else
+            verifyOddsRemoved(n - 1, d, count)
+
+// ===================================================================
+// Scale Tests - Large Dict Construction
+// ===================================================================
+
+// Build 100 entries
+Stdlib.Dict.size(buildDict(100, emptyDict())) = 100
+
+// Build 500 entries
+Stdlib.Dict.size(buildDict(500, emptyDict())) = 500
+
+// Build 1000 entries
+Stdlib.Dict.size(buildDict(1000, emptyDict())) = 1000
+
+// ===================================================================
+// Round-trip Verification - Insert then retrieve all
+// ===================================================================
+
+// 100 entries: verify all values correct
+verifyDict(100, buildDict(100, emptyDict()), 0) = 100
+
+// 500 entries: verify all values correct
+verifyDict(500, buildDict(500, emptyDict()), 0) = 500
+
+// 1000 entries: verify all values correct
+verifyDict(1000, buildDict(1000, emptyDict()), 0) = 1000
+
+// ===================================================================
+// Remove Operations on Large Dicts
+// ===================================================================
+
+// Build 100, remove odds: 50 evens remain
+Stdlib.Dict.size(buildAndRemoveOdds(100, emptyDict())) = 50
+
+// Verify even values correct after removing odds (50 evens in 1..100)
+verifyEvenKeys(100, buildAndRemoveOdds(100, emptyDict()), 0) = 50
+
+// Verify odd keys are actually removed (50 odds in 1..100)
+verifyOddsRemoved(99, buildAndRemoveOdds(100, emptyDict()), 0) = 50
+
+// ===================================================================
+// Enumeration Correctness
+// ===================================================================
+
+// keys() count matches size()
+let d = buildDict(100, emptyDict()) in Stdlib.List.length(Stdlib.Dict.keys(d)) = 100
+
+// values() count matches size()
+let d = buildDict(100, emptyDict()) in Stdlib.List.length(Stdlib.Dict.values(d)) = 100
+
+// entries() count matches size()
+let d = buildDict(100, emptyDict()) in Stdlib.List.length(Stdlib.Dict.entries(d)) = 100
+
+// ===================================================================
+// Immutability Verification
+// ===================================================================
+
+// Original dict unchanged after set
+let d1 = buildDict(10, emptyDict()) in let d2 = set(d1, 100, 1000) in Stdlib.Dict.size(d1) = 10
+
+// Original dict unchanged after remove
+let d1 = buildDict(10, emptyDict()) in let d2 = remove(d1, 5) in getOrDefault(d1, 5, -1) = 50
+
+// ===================================================================
+// Hash Collision Path Testing
+// Keys 0, 64, 128, 192 share first 6-bit hash chunk (level 0)
+// ===================================================================
+
+// Two keys with same level-0 chunk
+let d = set(set(emptyDict(), 0, 100), 64, 200) in getOrDefault(d, 0, -1) * 10 + getOrDefault(d, 64, -1) / 20 = 1010
+
+// Three keys with same level-0 chunk
+let d = set(set(set(emptyDict(), 0, 100), 64, 200), 128, 300) in Stdlib.Dict.size(d) = 3
+
+// Four keys with same level-0 chunk
+let d = set(set(set(set(emptyDict(), 0, 100), 64, 200), 128, 300), 192, 400) in Stdlib.Dict.size(d) = 4
+
+// Verify all four values correct
+let d = set(set(set(set(emptyDict(), 0, 100), 64, 200), 128, 300), 192, 400) in getOrDefault(d, 0, -1) + getOrDefault(d, 64, -1) + getOrDefault(d, 128, -1) + getOrDefault(d, 192, -1) = 1000
+
+// ===================================================================
+// Property: Insert-Get Roundtrip
+// ===================================================================
+
+// Single insert-get
+getOrDefault(set(emptyDict(), 42, 999), 42, -1) = 999
+
+// Multiple inserts maintain earlier values
+let d = set(set(set(emptyDict(), 1, 10), 2, 20), 3, 30) in getOrDefault(d, 1, -1) + getOrDefault(d, 2, -1) + getOrDefault(d, 3, -1) = 60
+
+// Overwrite returns new value
+getOrDefault(set(set(emptyDict(), 1, 100), 1, 999), 1, -1) = 999
+
+// ===================================================================
+// Property: Size Correctness
+// ===================================================================
+
+// Size after sequential inserts
+let d = set(set(set(emptyDict(), 1, 10), 2, 20), 3, 30) in Stdlib.Dict.size(d) = 3
+
+// Size unchanged on overwrite
+let d = set(set(emptyDict(), 1, 10), 1, 20) in Stdlib.Dict.size(d) = 1
+
+// Size decreases on remove
+let d = remove(set(set(emptyDict(), 1, 10), 2, 20), 1) in Stdlib.Dict.size(d) = 1
+
+// ===================================================================
+// Property: Remove-Get Returns None
+// ===================================================================
+
+// Remove then get returns None
+Stdlib.Option.isNone(get(remove(set(emptyDict(), 1, 100), 1), 1)) = stdout="true\n"
+
+// Remove non-existent key, original still there
+getOrDefault(remove(set(emptyDict(), 1, 100), 999), 1, -1) = 100
+
+// ===================================================================
+// Edge Cases
+// ===================================================================
+
+// Zero as key
+getOrDefault(set(emptyDict(), 0, 42), 0, -1) = 42
+
+// Negative keys
+getOrDefault(set(emptyDict(), -1, 100), -1, -1) = 100
+getOrDefault(set(emptyDict(), -999999, 42), -999999, -1) = 42
+
+// Large keys
+getOrDefault(set(emptyDict(), 9223372036854775807, 42), 9223372036854775807, -1) = 42
+
+// ===================================================================
+// Fold Tests (with TCO workaround)
+// ===================================================================
+
+// Sum values of 10-entry dict
+let d = buildDict(10, emptyDict()) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + v) = stdout="550\n" disable_opt_tco=true
+
+// Sum keys of 10-entry dict
+let d = buildDict(10, emptyDict()) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + k) = stdout="55\n" disable_opt_tco=true
+
+// Count entries via fold
+let d = buildDict(50, emptyDict()) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + 1) = stdout="50\n" disable_opt_tco=true
+
+// ===================================================================
+// Contains Tests at Scale
+// ===================================================================
+
+// All inserted keys contained
+def checkContains(n: Int64, d: Dict<Int64, Int64>, count: Int64): Int64 =
+    if n <= 0 then count
+    else
+        let contained = Stdlib.Dict.contains(d, n) in
+        let newCount = if contained then count + 1 else count in
+        checkContains(n - 1, d, newCount)
+
+checkContains(100, buildDict(100, emptyDict()), 0) = 100
+
+// Non-inserted keys not contained
+Stdlib.Dict.contains(buildDict(100, emptyDict()), 101) = stdout="false\n"
+Stdlib.Dict.contains(buildDict(100, emptyDict()), 999) = stdout="false\n"

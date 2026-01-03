@@ -687,6 +687,240 @@ let main args =
             println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
             println ""
 
+    // Run Verification tests (only if ENABLE_VERIFICATION_TESTS=true)
+    let verificationDir = Path.Combine(assemblyDir, "verification")
+    let enableVerification =
+        Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS") = "true"
+    if enableVerification && Directory.Exists verificationDir then
+        let verificationTestFiles = Directory.GetFiles(verificationDir, "*.e2e", SearchOption.AllDirectories)
+        if verificationTestFiles.Length > 0 then
+            let sectionTimer = Stopwatch.StartNew()
+            println $"{Colors.cyan}🔬 Verification Tests{Colors.reset}"
+            println $"  {Colors.gray}(Extensive correctness tests - may take a while){Colors.reset}"
+            println ""
+
+            // Parse all tests from .e2e files
+            let allTests = ResizeArray<TestDSL.E2EFormat.E2ETest>()
+            let mutable parseErrors = []
+
+            for testFile in verificationTestFiles do
+                match TestDSL.E2EFormat.parseE2ETestFile testFile with
+                | Ok tests -> allTests.AddRange(tests)
+                | Error msg ->
+                    parseErrors <- (testFile, msg) :: parseErrors
+
+            // Report parse errors
+            for (filePath, msg) in parseErrors do
+                let fileName = Path.GetFileName filePath
+                println $"{Colors.red}✗ ERROR parsing {fileName}{Colors.reset}"
+                println $"    {msg}"
+                failedTests.Add({ File = filePath; Name = $"Verification: {fileName}"; Message = msg; Details = [] })
+                failed <- failed + 1
+
+            // Run tests in parallel (using same pattern as E2E tests)
+            if allTests.Count > 0 then
+                match e2eStdlib with
+                | None ->
+                    // Compile stdlib if not already done (no E2E tests ran)
+                    match TestDSL.E2ETestRunner.compileStdlib() with
+                    | Error e ->
+                        println $"  {Colors.red}Stdlib compilation failed: {e}{Colors.reset}"
+                        println $"  {Colors.red}Skipping all verification tests{Colors.reset}"
+                    | Ok stdlib ->
+                        println $"  {Colors.gray}(Stdlib compiled){Colors.reset}"
+
+                        // Apply filter to tests
+                        let testsArray =
+                            allTests.ToArray()
+                            |> Array.filter (fun test -> matchesFilter filter test.Name)
+                        let numTests = testsArray.Length
+                        let results = Array.zeroCreate<option<E2ETest * E2ETestResult * TimeSpan>> numTests
+                        let mutable nextToPrint = 0
+                        let lockObj = obj()
+
+                        // Use same parallelism as E2E tests
+                        let maxParallel = overrideParallel |> Option.defaultWith getOptimalParallelism
+                        println $"  {Colors.gray}(Running with {maxParallel} parallel tests){Colors.reset}"
+                        println ""
+
+                        // Track current file for printing headers
+                        let mutable currentFile = ""
+
+                        // Helper function to print a test result
+                        let printTestResult (test: E2ETest) (result: E2ETestResult) (elapsed: TimeSpan) =
+                            if test.SourceFile <> currentFile then
+                                currentFile <- test.SourceFile
+                                let fileName = System.IO.Path.GetFileName(test.SourceFile)
+                                println $"  {Colors.yellow}── {fileName} ──{Colors.reset}"
+                            let cleanName = test.Name.Replace("Stdlib.", "")
+                            let displayName =
+                                if cleanName.Length > 75 then cleanName.Substring(0, 72) + "..."
+                                else cleanName
+                            print $"  {displayName}... "
+                            if result.Success then
+                                println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime elapsed}){Colors.reset}"
+                                lock lockObj (fun () -> passed <- passed + 1)
+                            else
+                                println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime elapsed}){Colors.reset}"
+                                println $"    {result.Message}"
+                                let details = ResizeArray<string>()
+                                match result.ExitCode with
+                                | Some code when code <> test.ExpectedExitCode ->
+                                    println $"    Expected exit code: {test.ExpectedExitCode}"
+                                    println $"    Actual exit code: {code}"
+                                    details.Add($"Expected exit code: {test.ExpectedExitCode}")
+                                    details.Add($"Actual exit code: {code}")
+                                | _ -> ()
+                                match test.ExpectedStdout, result.Stdout with
+                                | Some expected, Some actual when actual.Trim() <> expected.Trim() ->
+                                    let expectedDisplay = expected.Replace("\n", "\\n")
+                                    let actualDisplay = actual.Replace("\n", "\\n")
+                                    println $"    Expected stdout: {expectedDisplay}"
+                                    println $"    Actual stdout: {actualDisplay}"
+                                    details.Add($"Expected stdout: {expectedDisplay}")
+                                    details.Add($"Actual stdout: {actualDisplay}")
+                                | _ -> ()
+                                lock lockObj (fun () ->
+                                    failedTests.Add({ File = test.SourceFile; Name = $"Verification: {test.Name}"; Message = result.Message; Details = details |> Seq.toList })
+                                    failed <- failed + 1
+                                )
+
+                        let printPendingResults () =
+                            lock lockObj (fun () ->
+                                while nextToPrint < numTests && results.[nextToPrint].IsSome do
+                                    let (test, result, elapsed) = results.[nextToPrint].Value
+                                    printTestResult test result elapsed
+                                    nextToPrint <- nextToPrint + 1
+                            )
+
+                        let options = System.Threading.Tasks.ParallelOptions()
+                        options.MaxDegreeOfParallelism <- maxParallel
+                        System.Threading.Tasks.Parallel.For(
+                            0,
+                            numTests,
+                            options,
+                            fun i ->
+                                let test = testsArray.[i]
+                                let testTimer = Stopwatch.StartNew()
+                                let result = runE2ETest stdlib test
+                                testTimer.Stop()
+                                lock lockObj (fun () ->
+                                    results.[i] <- Some (test, result, testTimer.Elapsed)
+                                )
+                                printPendingResults ()
+                        ) |> ignore
+
+                        let mutable sectionPassed = 0
+                        let mutable sectionFailed = 0
+                        for result in results do
+                            match result with
+                            | Some (_, testResult, _) ->
+                                if testResult.Success then sectionPassed <- sectionPassed + 1
+                                else sectionFailed <- sectionFailed + 1
+                            | None -> ()
+
+                        if sectionFailed = 0 then
+                            println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
+                        else
+                            println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
+
+                | Some stdlib ->
+                    // Reuse stdlib from E2E tests
+                    let testsArray =
+                        allTests.ToArray()
+                        |> Array.filter (fun test -> matchesFilter filter test.Name)
+                    let numTests = testsArray.Length
+                    let results = Array.zeroCreate<option<E2ETest * E2ETestResult * TimeSpan>> numTests
+                    let mutable nextToPrint = 0
+                    let lockObj = obj()
+
+                    let maxParallel = overrideParallel |> Option.defaultWith getOptimalParallelism
+                    println $"  {Colors.gray}(Running with {maxParallel} parallel tests, reusing stdlib){Colors.reset}"
+                    println ""
+
+                    let mutable currentFile = ""
+
+                    let printTestResult (test: E2ETest) (result: E2ETestResult) (elapsed: TimeSpan) =
+                        if test.SourceFile <> currentFile then
+                            currentFile <- test.SourceFile
+                            let fileName = System.IO.Path.GetFileName(test.SourceFile)
+                            println $"  {Colors.yellow}── {fileName} ──{Colors.reset}"
+                        let cleanName = test.Name.Replace("Stdlib.", "")
+                        let displayName =
+                            if cleanName.Length > 75 then cleanName.Substring(0, 72) + "..."
+                            else cleanName
+                        print $"  {displayName}... "
+                        if result.Success then
+                            println $"{Colors.green}✓ PASS{Colors.reset} {Colors.gray}({formatTime elapsed}){Colors.reset}"
+                            lock lockObj (fun () -> passed <- passed + 1)
+                        else
+                            println $"{Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime elapsed}){Colors.reset}"
+                            println $"    {result.Message}"
+                            let details = ResizeArray<string>()
+                            match result.ExitCode with
+                            | Some code when code <> test.ExpectedExitCode ->
+                                println $"    Expected exit code: {test.ExpectedExitCode}"
+                                println $"    Actual exit code: {code}"
+                                details.Add($"Expected exit code: {test.ExpectedExitCode}")
+                                details.Add($"Actual exit code: {code}")
+                            | _ -> ()
+                            match test.ExpectedStdout, result.Stdout with
+                            | Some expected, Some actual when actual.Trim() <> expected.Trim() ->
+                                let expectedDisplay = expected.Replace("\n", "\\n")
+                                let actualDisplay = actual.Replace("\n", "\\n")
+                                println $"    Expected stdout: {expectedDisplay}"
+                                println $"    Actual stdout: {actualDisplay}"
+                                details.Add($"Expected stdout: {expectedDisplay}")
+                                details.Add($"Actual stdout: {actualDisplay}")
+                            | _ -> ()
+                            lock lockObj (fun () ->
+                                failedTests.Add({ File = test.SourceFile; Name = $"Verification: {test.Name}"; Message = result.Message; Details = details |> Seq.toList })
+                                failed <- failed + 1
+                            )
+
+                    let printPendingResults () =
+                        lock lockObj (fun () ->
+                            while nextToPrint < numTests && results.[nextToPrint].IsSome do
+                                let (test, result, elapsed) = results.[nextToPrint].Value
+                                printTestResult test result elapsed
+                                nextToPrint <- nextToPrint + 1
+                        )
+
+                    let options = System.Threading.Tasks.ParallelOptions()
+                    options.MaxDegreeOfParallelism <- maxParallel
+                    System.Threading.Tasks.Parallel.For(
+                        0,
+                        numTests,
+                        options,
+                        fun i ->
+                            let test = testsArray.[i]
+                            let testTimer = Stopwatch.StartNew()
+                            let result = runE2ETest stdlib test
+                            testTimer.Stop()
+                            lock lockObj (fun () ->
+                                results.[i] <- Some (test, result, testTimer.Elapsed)
+                            )
+                            printPendingResults ()
+                    ) |> ignore
+
+                    let mutable sectionPassed = 0
+                    let mutable sectionFailed = 0
+                    for result in results do
+                        match result with
+                        | Some (_, testResult, _) ->
+                            if testResult.Success then sectionPassed <- sectionPassed + 1
+                            else sectionFailed <- sectionFailed + 1
+                        | None -> ()
+
+                    if sectionFailed = 0 then
+                        println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
+                    else
+                        println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
+
+            sectionTimer.Stop()
+            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
+            println ""
+
     // Run unit tests
     let sectionTimer = Stopwatch.StartNew()
     println $"{Colors.cyan}🔧 Unit Tests{Colors.reset}"
