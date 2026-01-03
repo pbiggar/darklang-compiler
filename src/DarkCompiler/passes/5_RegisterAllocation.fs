@@ -1205,7 +1205,8 @@ let applyFloatAllocationToFReg (floatAllocation: FAllocationResult) (freg: LIR.F
     | LIR.FVirtual id ->
         match Map.tryFind id floatAllocation.FMapping with
         | Some physReg -> LIR.FPhysical physReg
-        | None -> freg  // Keep as FVirtual if not in allocation (shouldn't happen)
+        // TODO: This fallback masks a float register allocation bug (FVirtual escapes unallocated)
+        | None -> freg
 
 /// Apply float allocation to an instruction
 let applyFloatAllocationToInstr (floatAllocation: FAllocationResult) (instr: LIR.Instr) : LIR.Instr =
