@@ -828,14 +828,8 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                 // Heap string (from concatenation): use PrintHeapString
                 let lirReg = vregToLIRReg vreg
                 Ok [LIR.PrintHeapString lirReg]
-            | _ ->
-                // Other cases (shouldn't happen for strings)
-                let lirSrc = convertOperand src
-                let moveToX0 =
-                    match lirSrc with
-                    | LIR.Reg (LIR.Physical LIR.X0) -> []
-                    | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
-                Ok (moveToX0 @ [LIR.PrintInt (LIR.Physical LIR.X0)])
+            | other ->
+                Error $"Print: Unexpected operand type for string: {other}"
         | AST.TTuple elemTypes ->
             // Tuple printing: (elem1, elem2, ...)
             // Use X19 (callee-saved) to hold tuple address throughout printing
