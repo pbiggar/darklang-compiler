@@ -1109,8 +1109,7 @@ let encodeWithLabels (instr: ARM64.Instr) (currentOffset: int) (labelMap: Map<st
             let opcode = 0b10000u <<< 24
             [op ||| immlo ||| opcode ||| immhi ||| rd]
         | None ->
-            // Label not found - return placeholder (will fail)
-            []
+            failwith $"ADRP: Label '{label}' not found in labelMap"
 
     | ARM64.ADR (dest, label) ->
         // ADR: form PC-relative address
