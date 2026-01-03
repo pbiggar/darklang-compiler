@@ -1434,7 +1434,8 @@ let monomorphizeWithExternalDefs (externalGenericDefs: GenericFuncDefs) (program
 
 /// Monomorphize with caching - reuses specialized functions from previous compilations
 /// This dramatically speeds up repeated compilations that use the same type combinations
-let monomorphizeWithExternalDefsCached (cache: SpecializationCache) (externalGenericDefs: GenericFuncDefs) (program: AST.Program) : AST.Program =
+/// Returns the monomorphized program AND the set of specialized function names
+let monomorphizeWithExternalDefsCached (cache: SpecializationCache) (externalGenericDefs: GenericFuncDefs) (program: AST.Program) : AST.Program * Set<string> =
     let (AST.Program topLevels) = program
 
     // Collect generic function definitions from this program
@@ -1482,6 +1483,9 @@ let monomorphizeWithExternalDefsCached (cache: SpecializationCache) (externalGen
     // Run iterative specialization
     let specializedFuncs = iterate initialSpecs Set.empty []
 
+    // Collect the names of all specialized functions
+    let specializedFuncNames = specializedFuncs |> List.map (fun f -> f.Name) |> Set.ofList
+
     // Now replace all TypeApps with Calls in all specialized functions
     let specializedFuncsReplaced = specializedFuncs |> List.map replaceTypeAppsInFunc
 
@@ -1503,7 +1507,7 @@ let monomorphizeWithExternalDefsCached (cache: SpecializationCache) (externalGen
     let specializationTopLevels =
         specializedFuncsReplaced |> List.map AST.FunctionDef
 
-    AST.Program (specializationTopLevels @ transformedTopLevels)
+    (AST.Program (specializationTopLevels @ transformedTopLevels), specializedFuncNames)
 
 /// Convert AST.BinOp to ANF.BinOp
 /// Note: StringConcat is handled separately as ANF.StringConcat CExpr
@@ -4798,6 +4802,7 @@ type UserOnlyResult = {
     FuncReg: FunctionRegistry
     FuncParams: Map<string, (string * AST.Type) list>
     ModuleRegistry: AST.ModuleRegistry
+    SpecializedFuncNames: Set<string>  // Names of specialized stdlib functions from monomorphization
 }
 
 /// Convert a program to ANF with type information for reference counting
@@ -5135,7 +5140,8 @@ let convertUserOnly
                   VariantLookup = mergedVariantLookup
                   FuncReg = mergedFuncReg
                   FuncParams = mergedFuncParams
-                  ModuleRegistry = moduleRegistry })
+                  ModuleRegistry = moduleRegistry
+                  SpecializedFuncNames = Set.empty })  // Non-cached path has no specialization tracking
         | [] ->
             Error "Program must have a main expression"
         | _ ->
@@ -5154,7 +5160,7 @@ let convertUserOnlyCached
     (userProgram: AST.Program) : Result<UserOnlyResult, string> =
     // 1. Run transformations on user code only (with access to stdlib generics)
     // Use cached monomorphization to avoid re-specializing the same functions
-    let monomorphizedProgram = monomorphizeWithExternalDefsCached cache stdlibGenericDefs userProgram
+    let (monomorphizedProgram, specializedFuncNames) = monomorphizeWithExternalDefsCached cache stdlibGenericDefs userProgram
     let inlinedProgram = inlineLambdasInProgram monomorphizedProgram
     liftLambdasInProgram inlinedProgram
     |> Result.bind (fun liftedProgram ->
@@ -5274,7 +5280,8 @@ let convertUserOnlyCached
                   VariantLookup = mergedVariantLookup
                   FuncReg = mergedFuncReg
                   FuncParams = mergedFuncParams
-                  ModuleRegistry = moduleRegistry })
+                  ModuleRegistry = moduleRegistry
+                  SpecializedFuncNames = specializedFuncNames })
         | [] ->
             Error "Program must have a main expression"
         | _ ->

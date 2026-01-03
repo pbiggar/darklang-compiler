@@ -73,10 +73,10 @@ type CachedUserFunction = {
     Floats: (int * float) list    // (original pool id, float value)
 }
 
-/// Cache for user-defined functions - avoids recompiling same function across tests
-/// Key: (filename, line_number, function_name)
+/// Cache for compiled specialized stdlib functions - avoids recompiling same specialization across tests
+/// Key: function name (e.g., "FingerTree.empty_i64")
 /// Value: Fully compiled LIR function with pool entries
-type UserFunctionCache = ConcurrentDictionary<string * int * string, CachedUserFunction>
+type CompiledFunctionCache = ConcurrentDictionary<string, CachedUserFunction>
 
 /// Cache for ANF-level user functions - avoids re-converting same function across tests
 /// Key: (filename, line_number, function_name)
@@ -133,8 +133,8 @@ type StdlibResult = {
     StdlibANFCallGraph: Map<string, Set<string>>
     /// TypeMap from RC insertion (needed for getReachableStdlibFunctions)
     StdlibTypeMap: ANF.TypeMap
-    /// Cache for user functions (shared across test compilations)
-    UserFuncCache: UserFunctionCache
+    /// Cache for compiled specialized stdlib functions (shared across test compilations)
+    CompiledFuncCache: CompiledFunctionCache
     /// Cache for ANF-level user functions (shared across test compilations)
     ANFFuncCache: ANFFunctionCache
     /// Cache for compiled preambles (shared across test compilations)
@@ -305,7 +305,7 @@ let compileStdlib () : Result<StdlibResult, string> =
                                 StdlibANFFunctions = stdlibFuncMap
                                 StdlibANFCallGraph = stdlibANFCallGraph
                                 StdlibTypeMap = typeMap
-                                UserFuncCache = UserFunctionCache()
+                                CompiledFuncCache = CompiledFunctionCache()
                                 ANFFuncCache = ANFFunctionCache()
                                 PreambleCache = PreambleCache()
                             }
@@ -1243,9 +1243,24 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                       Success = false
                       ErrorMessage = Some $"ANF conversion error: {err}" }
                 | Ok testOnly ->
-                    // Pass 2.3: ANF Optimization (test expr only)
+                    // Partition specialized functions: cached (skip compilation) vs needs-compilation
+                    let (cachedFuncs, functionsToCompile) =
+                        testOnly.UserFunctions
+                        |> List.partition (fun f ->
+                            Set.contains f.Name testOnly.SpecializedFuncNames &&
+                            stdlib.CompiledFuncCache.ContainsKey(f.Name))
+                    let cachedFuncNames = cachedFuncs |> List.map (fun f -> f.Name)
+
+                    // Track which specialized functions need to be cached after compilation
+                    let specializedNeedingCache =
+                        functionsToCompile
+                        |> List.filter (fun f -> Set.contains f.Name testOnly.SpecializedFuncNames)
+                        |> List.map (fun f -> f.Name)
+                        |> Set.ofList
+
+                    // Pass 2.3: ANF Optimization (only non-cached functions)
                     if verbosity >= 1 then println "  [2.3/8] ANF Optimization..."
-                    let testProgram = ANF.Program (testOnly.UserFunctions, testOnly.MainExpr)
+                    let testProgram = ANF.Program (functionsToCompile, testOnly.MainExpr)
                     let anfOptimized =
                         if options.DisableANFOpt then testProgram
                         else ANF_Optimize.optimizeProgram testProgram
@@ -1390,17 +1405,39 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                     // Offset pool refs in allocated user functions
                     let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
 
+                    // Cache newly-compiled specialized functions (after offset, for reuse)
+                    // Specialized stdlib functions use stdlib pool entries which have stable offsets
+                    for func in offsetUserFuncs do
+                        if Set.contains func.Name specializedNeedingCache then
+                            let entry : CachedUserFunction = {
+                                LIRFunction = func
+                                Strings = []  // Specialized stdlib typically don't have literals
+                                Floats = []
+                            }
+                            stdlib.CompiledFuncCache.TryAdd(func.Name, entry) |> ignore
+
+                    // Retrieve cached specialized functions (already at correct pool offsets)
+                    let cachedSpecializedFuncs =
+                        cachedFuncNames
+                        |> List.choose (fun name ->
+                            match stdlib.CompiledFuncCache.TryGetValue(name) with
+                            | true, cached -> Some cached.LIRFunction
+                            | false, _ -> None)
+
+                    // Combine newly-compiled and cached user functions
+                    let allUserFuncs = offsetUserFuncs @ cachedSpecializedFuncs
+
                     // Filter stdlib functions to only include reachable ones (dead code elimination)
                     let reachableStdlib =
                         if options.DisableDCE then stdlib.AllocatedFunctions
                         else
                             DeadCodeElimination.filterFunctions
                                 stdlib.StdlibCallGraph
-                                offsetUserFuncs
+                                allUserFuncs
                                 stdlib.AllocatedFunctions
 
                     // Combine reachable stdlib functions with user functions
-                    let allFuncs = reachableStdlib @ offsetUserFuncs
+                    let allFuncs = reachableStdlib @ allUserFuncs
                     let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
 
                     let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
