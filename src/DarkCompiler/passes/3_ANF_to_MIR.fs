@@ -459,18 +459,21 @@ let computeReturnTypeWithReg (anfFunc: ANF.Function) (typeMap: ANF.TypeMap) (typ
 
 /// Build a map from function name to return type for all functions
 /// Uses iterative fixpoint algorithm since functions may call each other
-let buildReturnTypeReg (functions: ANF.Function list) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) : Map<string, AST.Type> =
+/// externalReturnTypes: return types for functions not in `functions` (e.g., cached specialized functions)
+let buildReturnTypeReg (functions: ANF.Function list) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (externalReturnTypes: Map<string, AST.Type>) : Map<string, AST.Type> =
     // Iterate until the map stabilizes (handles mutual recursion and call dependencies)
     let rec fixpoint (currentReg: Map<string, AST.Type>) (iterations: int) =
         if iterations > 100 then currentReg  // Safety limit
         else
-            let newReg =
+            let computedReg =
                 functions
                 |> List.map (fun f -> (f.Name, computeReturnTypeWithReg f typeMap typeReg currentReg))
                 |> Map.ofList
+            // Merge external types with computed types (computed takes precedence)
+            let newReg = Map.fold (fun acc k v -> Map.add k v acc) externalReturnTypes computedReg
             if newReg = currentReg then newReg
             else fixpoint newReg (iterations + 1)
-    fixpoint Map.empty 0
+    fixpoint externalReturnTypes 0
 
 /// CFG builder state - includes lookups to avoid mutable module-level state
 /// which would cause race conditions in parallel test execution
@@ -797,7 +800,10 @@ let rec convertExpr
                         [MIR.UnaryOp (destReg, convertUnaryOp op, operand)])
                 | ANF.Call (funcName, args) ->
                     let argTypes = args |> List.map (atomType builder)
-                    let returnType = Map.tryFind funcName builder.ReturnTypeReg |> Option.defaultValue AST.TInt64
+                    let returnType =
+                        match Map.tryFind funcName builder.ReturnTypeReg with
+                        | Some t -> t
+                        | None -> failwith $"ANF_to_MIR: Return type not found for function: {funcName}"
                     destType := returnType  // Track call result type for FloatRegs update
                     args
                     |> List.map (atomToOperand builder)
@@ -845,7 +851,10 @@ let rec convertExpr
                     // Non-self-recursive tail call (self-recursive handled specially above)
                     // Emits TailCall instruction with full epilogue + branch
                     let argTypes = args |> List.map (atomType builder)
-                    let returnType = Map.tryFind funcName builder.ReturnTypeReg |> Option.defaultValue AST.TInt64
+                    let returnType =
+                        match Map.tryFind funcName builder.ReturnTypeReg with
+                        | Some t -> t
+                        | None -> failwith $"ANF_to_MIR: Return type not found for function: {funcName}"
                     args
                     |> List.map (atomToOperand builder)
                     |> sequenceResults
@@ -1356,7 +1365,10 @@ and convertExprToOperand
                         [MIR.UnaryOp (destReg, convertUnaryOp op, operand)])
                 | ANF.Call (funcName, args) ->
                     let argTypes = args |> List.map (atomType builder)
-                    let returnType = Map.tryFind funcName builder.ReturnTypeReg |> Option.defaultValue AST.TInt64
+                    let returnType =
+                        match Map.tryFind funcName builder.ReturnTypeReg with
+                        | Some t -> t
+                        | None -> failwith $"ANF_to_MIR: Return type not found for function: {funcName}"
                     destType := returnType  // Track call result type for FloatRegs update
                     args
                     |> List.map (atomToOperand builder)
@@ -1404,7 +1416,10 @@ and convertExprToOperand
                     // Non-self-recursive tail call (self-recursive handled specially above)
                     // Emits TailCall instruction with full epilogue + branch
                     let argTypes = args |> List.map (atomType builder)
-                    let returnType = Map.tryFind funcName builder.ReturnTypeReg |> Option.defaultValue AST.TInt64
+                    let returnType =
+                        match Map.tryFind funcName builder.ReturnTypeReg with
+                        | Some t -> t
+                        | None -> failwith $"ANF_to_MIR: Return type not found for function: {funcName}"
                     args
                     |> List.map (atomToOperand builder)
                     |> sequenceResults
@@ -1862,7 +1877,8 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
 /// mainExprType: the type of the main expression (used for _start's return type)
 /// variantLookup: mapping from variant names to type info (for enum printing)
 /// recordRegistry: mapping from record type names to field info (for record printing)
-let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (mainExprType: AST.Type) (variantLookup: AST_to_ANF.VariantLookup) (recordRegistry: MIR.RecordRegistry) (enableCoverage: bool) : Result<MIR.Program * MIR.RegGen, string> =
+/// externalReturnTypes: return types for functions not in the program (e.g., cached specialized functions)
+let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (mainExprType: AST.Type) (variantLookup: AST_to_ANF.VariantLookup) (recordRegistry: MIR.RecordRegistry) (enableCoverage: bool) (externalReturnTypes: Map<string, AST.Type>) : Result<MIR.Program * MIR.RegGen, string> =
     let (ANF.Program (functions, mainExpr)) = program
 
     // Critical: freshReg must generate VRegs that don't conflict with TempId-derived VRegs.
@@ -1881,7 +1897,7 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
     let fltLookup = buildFloatLookup floatPool
 
     // Build return type registry for all functions (needed for caller to know return type)
-    let returnTypeReg = buildReturnTypeReg functions typeMap typeReg
+    let returnTypeReg = buildReturnTypeReg functions typeMap typeReg externalReturnTypes
 
     // Phase 2: Convert all functions to MIR
     let rec convertFunctions funcs rg remaining =
@@ -1939,7 +1955,8 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
 /// Convert ANF program to MIR (functions only, no _start)
 /// Use for stdlib where there's no real main expression to convert.
 /// Returns just the function list, pools, variant registry, and record registry without wrapping in MIR.Program.
-let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (variantLookup: AST_to_ANF.VariantLookup) (recordRegistry: MIR.RecordRegistry) (enableCoverage: bool) : Result<MIR.Function list * MIR.StringPool * MIR.FloatPool * MIR.VariantRegistry * MIR.RecordRegistry, string> =
+/// externalReturnTypes: return types for functions not in the program (e.g., cached specialized functions)
+let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (variantLookup: AST_to_ANF.VariantLookup) (recordRegistry: MIR.RecordRegistry) (enableCoverage: bool) (externalReturnTypes: Map<string, AST.Type>) : Result<MIR.Function list * MIR.StringPool * MIR.FloatPool * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     let (ANF.Program (functions, _mainExpr)) = program
 
     // Same regGen calculation as toMIR
@@ -1956,7 +1973,7 @@ let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: M
     let fltLookup = buildFloatLookup floatPool
 
     // Build return type registry for all functions (needed for caller to know return type)
-    let returnTypeReg = buildReturnTypeReg functions typeMap typeReg
+    let returnTypeReg = buildReturnTypeReg functions typeMap typeReg externalReturnTypes
 
     // Phase 2: Convert all functions to MIR (skip main/_start)
     let rec convertFunctions funcs rg remaining =

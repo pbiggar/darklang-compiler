@@ -881,8 +881,17 @@ let main args =
 
         for i in 0 .. displayCount - 1 do
             let test = failedTests.[i]
-            let fileInfo = if test.File <> "" then $" ({Path.GetFileName test.File})" else ""
-            println $"{Colors.red}{i + 1}. {test.Name}{fileInfo}{Colors.reset}"
+            let fileName = if test.File <> "" then Path.GetFileName test.File else ""
+            // Format: "1. E2E: file.e2e:L43: expression" with file:line in cyan
+            let displayName =
+                if fileName <> "" && test.Name.StartsWith("E2E: L") then
+                    let afterPrefix = test.Name.Substring(5)  // "L43: expression" (skip "E2E: ")
+                    $"E2E: {Colors.cyan}{fileName}:{afterPrefix}{Colors.reset}"
+                elif fileName <> "" then
+                    $"{Colors.cyan}{fileName}: {Colors.reset}{Colors.red}{test.Name}"
+                else
+                    test.Name
+            println $"{Colors.red}{i + 1}. {displayName}{Colors.reset}"
             println $"   {Colors.gray}{test.Message}{Colors.reset}"
             for detail in test.Details do
                 println $"   {Colors.gray}{detail}{Colors.reset}"

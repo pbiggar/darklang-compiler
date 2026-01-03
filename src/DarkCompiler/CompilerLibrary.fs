@@ -178,6 +178,18 @@ type LazyStdlibResult = {
 
 // Helper functions for exception-to-Result conversion (Darklang compatibility)
 
+/// Extract return types from a FuncReg (FunctionRegistry maps func name -> full type)
+/// This is needed because buildReturnTypeReg only includes functions in the current program,
+/// but we need return types for all callable functions (including stdlib)
+let extractReturnTypes (funcReg: Map<string, AST.Type>) : Map<string, AST.Type> =
+    funcReg
+    |> Map.toSeq
+    |> Seq.choose (fun (name, typ) ->
+        match typ with
+        | AST.TFunction (_, retType) -> Some (name, retType)
+        | _ -> None)  // Non-function types (shouldn't happen in FuncReg)
+    |> Map.ofSeq
+
 /// Try to delete a file, ignoring any errors
 let tryDeleteFile (path: string) : unit =
     try File.Delete(path) with _ -> ()
@@ -276,7 +288,8 @@ let compileStdlib () : Result<StdlibResult, string> =
                     // Convert stdlib ANF to MIR (functions only, no _start)
                     // Use FuncParams for typeReg (needed for tail call argument types)
                     // Coverage is false here since stdlib is precompiled for caching
-                    match ANF_to_MIR.toMIRFunctionsOnly anfAfterTCO typeMap anfResult.FuncParams anfResult.VariantLookup Map.empty false with
+                    let externalReturnTypes = extractReturnTypes anfResult.FuncReg
+                    match ANF_to_MIR.toMIRFunctionsOnly anfAfterTCO typeMap anfResult.FuncParams anfResult.VariantLookup Map.empty false externalReturnTypes with
                     | Error e -> Error e
                     | Ok (mirFuncs, stringPool, floatPool, variantRegistry, recordRegistry) ->
                         // Wrap in MIR.Program for LIR conversion
@@ -352,7 +365,8 @@ let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
                     let stdlibVariantLookup = anfResult.VariantLookup
 
                     // Convert stdlib to MIR
-                    match ANF_to_MIR.toMIRFunctionsOnly stdlibAnfProgram typeMap stdlibTypeReg stdlibVariantLookup Map.empty false with
+                    let stdlibExternalReturnTypes = extractReturnTypes anfResult.FuncReg
+                    match ANF_to_MIR.toMIRFunctionsOnly stdlibAnfProgram typeMap stdlibTypeReg stdlibVariantLookup Map.empty false stdlibExternalReturnTypes with
                     | Error e -> Error $"Stdlib MIR error: {e}"
                     | Ok (stdlibMirFuncs, stdlibStrings, stdlibFloats, stdlibVariants, stdlibRecords) ->
                         // SSA Construction
@@ -576,7 +590,8 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                     // Use funcParams for MIR conversion (float param handling)
                     // TypeReg from ConversionResult contains record type definitions for printing
                     // typeMap contains TempId -> Type mappings from RC insertion
-                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) typeMap funcParams programType convResultOptimized.VariantLookup convResultOptimized.TypeReg options.EnableCoverage
+                    let externalReturnTypes = extractReturnTypes convResultOptimized.FuncReg
+                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) typeMap funcParams programType convResultOptimized.VariantLookup convResultOptimized.TypeReg options.EnableCoverage externalReturnTypes
 
                     match mirResult with
                     | Error err ->
@@ -935,7 +950,8 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     // Use FuncParams (maps function names to param types) for correct float param handling
                     // Use TypeReg from ConversionResult for record type definitions (for record printing)
                     // typeMap contains TempId -> Type mappings from RC insertion
-                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg options.EnableCoverage
+                    let externalReturnTypes = extractReturnTypes userOnly.FuncReg
+                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg options.EnableCoverage externalReturnTypes
 
                     match userMirResult with
                     | Error err ->
@@ -1244,12 +1260,26 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                       ErrorMessage = Some $"ANF conversion error: {err}" }
                 | Ok testOnly ->
                     // Partition specialized functions: cached (skip compilation) vs needs-compilation
+                    // NOTE: LIR caching is disabled due to a bug that causes incorrect results
+                    // for FingerTree.concat (and thus List.append). When caching is enabled,
+                    // tests like `match List.append([1, 2], [3, 4]) with | [a, b, c, d] -> a + b + c + d`
+                    // return 12 instead of 10. The exact cause is unknown but appears to be
+                    // related to how cached LIR functions interact with the rest of the compilation.
+                    // TODO: Investigate and fix the caching bug to re-enable for test performance.
                     let (cachedFuncs, functionsToCompile) =
                         testOnly.UserFunctions
                         |> List.partition (fun f ->
-                            Set.contains f.Name testOnly.SpecializedFuncNames &&
-                            stdlib.CompiledFuncCache.ContainsKey(f.Name))
+                            false)  // Caching disabled - forces fresh compilation for each test
                     let cachedFuncNames = cachedFuncs |> List.map (fun f -> f.Name)
+
+                    // Extract return types for cached specialized functions (needed for ANF→MIR conversion)
+                    let cachedReturnTypes =
+                        cachedFuncNames
+                        |> List.choose (fun name ->
+                            match Map.tryFind name testOnly.FuncReg with
+                            | Some (AST.TFunction (_, returnType)) -> Some (name, returnType)
+                            | _ -> None)
+                        |> Map.ofList
 
                     // Track which specialized functions need to be cached after compilation
                     let specializedNeedingCache =
@@ -1328,8 +1358,10 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                         println $"        {t}ms"
 
                     // Pass 3: ANF → MIR (merged program)
+                    // Use FuncReg to get return types for all callable functions (including stdlib and cached)
                     if verbosity >= 1 then println "  [3/8] ANF → MIR..."
-                    let userMirResult = ANF_to_MIR.toMIR mergedAnfProgram (MIR.RegGen 0) mergedTypeMap testOnly.FuncParams programType testConvResult.VariantLookup testConvResult.TypeReg options.EnableCoverage
+                    let allReturnTypes = extractReturnTypes testOnly.FuncReg
+                    let userMirResult = ANF_to_MIR.toMIR mergedAnfProgram (MIR.RegGen 0) mergedTypeMap testOnly.FuncParams programType testConvResult.VariantLookup testConvResult.TypeReg options.EnableCoverage allReturnTypes
 
                     match userMirResult with
                     | Error err ->
@@ -1408,7 +1440,8 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                     // Cache newly-compiled specialized functions (after offset, for reuse)
                     // Specialized stdlib functions use stdlib pool entries which have stable offsets
                     for func in offsetUserFuncs do
-                        if Set.contains func.Name specializedNeedingCache then
+                        // DEBUG: Skip caching List.append_i64 entirely
+                        if Set.contains func.Name specializedNeedingCache && func.Name <> "Stdlib.List.append_i64" then
                             let entry : CachedUserFunction = {
                                 LIRFunction = func
                                 Strings = []  // Specialized stdlib typically don't have literals
@@ -1708,7 +1741,8 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                     if verbosity >= 1 then println "  [3/8] ANF → MIR (user only)..."
                     // Use FuncParams for correct float param handling, VariantLookup for enum printing, TypeReg for record printing
                     // typeMap contains TempId -> Type mappings from RC insertion
-                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg options.EnableCoverage
+                    let externalReturnTypes = extractReturnTypes userOnly.FuncReg
+                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg options.EnableCoverage externalReturnTypes
                     let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(mirTime, 1)
