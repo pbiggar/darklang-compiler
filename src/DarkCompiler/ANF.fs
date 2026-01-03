@@ -208,7 +208,7 @@ let payloadSize (t: AST.Type) (typeReg: Map<string, (string * AST.Type) list>) :
     | AST.TRecord name ->
         match Map.tryFind name typeReg with
         | Some fields -> List.length fields * 8
-        | None -> 16  // Fallback for unknown records
+        | None -> failwith $"payloadSize: Record type '{name}' not found in typeReg"
     | AST.TList _ -> 24  // [tag, head, tail] - same size for all element types
     | AST.TSum _ -> 16  // [tag, payload]
     | AST.TDict _ -> 8  // Root pointer only (HAMT structure is variable-sized raw memory)
