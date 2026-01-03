@@ -1128,8 +1128,7 @@ let encodeWithLabels (instr: ARM64.Instr) (currentOffset: int) (labelMap: Map<st
             let opcode = 0b10000u <<< 24
             [op ||| immlo ||| opcode ||| immhi ||| rd]
         | None ->
-            // Label not found - return placeholder (will fail)
-            []
+            failwith $"ADR: Label '{label}' not found in labelMap"
 
     | ARM64.ADD_label (dest, src, label) ->
         // ADD with label offset (page offset portion)
