@@ -1009,7 +1009,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
             let os =
                 match Platform.detectOS () with
                 | Ok platform -> platform
-                | Error _ -> Platform.Linux
+                | Error msg -> failwith $"Platform detection failed: {msg}"
             let syscalls = Platform.getSyscallNumbers os
 
             // Check if any variant has a payload
