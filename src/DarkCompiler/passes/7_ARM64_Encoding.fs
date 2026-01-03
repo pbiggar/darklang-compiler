@@ -1006,7 +1006,7 @@ let encodeWithLabels (instr: ARM64.Instr) (currentOffset: int) (labelMap: Map<st
             let rt = encodeReg reg
             [sf ||| op ||| flag ||| imm19 ||| rt]
         | None ->
-            []
+            failwith $"CBNZ: Label '{label}' not found in labelMap"
 
     | ARM64.TBZ_label (reg, bit, label) ->
         match Map.tryFind label labelMap with
