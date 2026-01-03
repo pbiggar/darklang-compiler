@@ -334,6 +334,8 @@ let getUsedFVRegs (instr: LIR.Instr) : Set<int> =
         moves |> List.choose (fun (_, src) -> fregToId src) |> Set.ofList
     | LIR.FPhi _ -> Set.empty  // Phi sources handled specially
     | LIR.FloatToString (_, value) -> fregToId value |> Option.toList |> Set.ofList
+    // HeapStore with float value: the Virtual register ID is shared with FVirtual
+    | LIR.HeapStore (_, _, LIR.Reg (LIR.Virtual vregId), Some AST.TFloat64) -> Set.singleton vregId
     | _ -> Set.empty
 
 /// Get FVirtual register ID defined (written) by an instruction
@@ -1205,8 +1207,7 @@ let applyFloatAllocationToFReg (floatAllocation: FAllocationResult) (freg: LIR.F
     | LIR.FVirtual id ->
         match Map.tryFind id floatAllocation.FMapping with
         | Some physReg -> LIR.FPhysical physReg
-        // TODO: This fallback masks a float register allocation bug (FVirtual escapes unallocated)
-        | None -> freg
+        | None -> failwith $"Float register allocation bug: FVirtual {id} not found in allocation"
 
 /// Apply float allocation to an instruction
 let applyFloatAllocationToInstr (floatAllocation: FAllocationResult) (instr: LIR.Instr) : LIR.Instr =
