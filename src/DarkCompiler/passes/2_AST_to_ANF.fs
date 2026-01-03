@@ -2366,7 +2366,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             else
                 match Map.tryFind typeName typeReg with
                 | Some typeFields -> typeFields |> List.map fst
-                | None -> fields |> List.map fst  // Fallback to literal order
+                | None -> failwith $"Record type '{typeName}' not found in typeReg"
 
         // Reorder field values according to type definition order
         let fieldMap = Map.ofList fields
