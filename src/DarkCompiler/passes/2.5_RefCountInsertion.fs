@@ -120,12 +120,25 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         // Try to find the closure's function name and look up return type
         match tryGetClosureFunc ctx closureAtom with
         | Some funcName -> Map.tryFind funcName ctx.FuncReg
-        | None -> None
+        | None ->
+            // Fallback: infer from closure's type (TFunction)
+            match closureAtom with
+            | Var tid ->
+                match tryGetType ctx tid with
+                | Some (AST.TFunction (_, retType)) -> Some retType
+                | _ -> None
+            | _ -> None
     | ClosureTailCall (closureAtom, _) ->
         // Same as ClosureCall
         match tryGetClosureFunc ctx closureAtom with
         | Some funcName -> Map.tryFind funcName ctx.FuncReg
-        | None -> None
+        | None ->
+            match closureAtom with
+            | Var tid ->
+                match tryGetType ctx tid with
+                | Some (AST.TFunction (_, retType)) -> Some retType
+                | _ -> None
+            | _ -> None
     | TupleAlloc elems ->
         // Infer element types and create TTuple
         let elemTypes =
@@ -175,8 +188,13 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                     // the payload type is the first type argument
                     match typeArgs with
                     | [singleType] -> Some singleType
-                    | _ -> None  // Multiple type args - can't determine without variant info
+                    | _ -> Some AST.TInt64  // Multiple type args - use Int64 as fallback
                 | _ -> None
+            | Some (AST.TFunction _) ->
+                // Closures are typed as TFunction but laid out as tuples:
+                // [func_ptr:8][cap1:8][cap2:8]...
+                // Index 0 is the function pointer (Int64), rest are captures
+                Some AST.TInt64  // All closure slots are pointer-sized
             | _ -> None
         | _ -> None
     | StringConcat (_, _) -> Some AST.TString  // String concatenation returns a string
@@ -301,8 +319,8 @@ let rec insertRC (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * Var
     | Let (tempId, cexpr, body) ->
         // First, infer the type of this binding and add to context
         let maybeType = inferCExprType ctx cexpr
-        // Always add the type to context - use TInt64 as fallback when inference fails
-        // This ensures all TempIds are tracked even if we can't determine exact type
+        // Use TInt64 as fallback when inference fails - this handles complex cases
+        // like Dict operations with tuple types where full type tracking is incomplete
         let inferredType = Option.defaultValue AST.TInt64 maybeType
         let ctx' = addType ctx tempId inferredType
 
