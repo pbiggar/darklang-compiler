@@ -3235,7 +3235,7 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64.In
                         []  // Already in the right place
                     else
                         [ARM64.MOV_reg (paramArm64, tempReg)]
-                | Error _ -> [])  // Shouldn't happen
+                | Error msg -> failwith $"ParamSetup: lirRegToARM64Reg failed: {msg}")
             |> List.concat
 
         let paramSetup = saveIntToTemps @ moveIntFromTemps
