@@ -1185,15 +1185,25 @@ let floatColoringToAllocation (colorResult: ColoringResult) (registers: LIR.Phys
     { FMapping = mapping; UsedCalleeSavedF = usedCalleeSaved |> Set.toList |> List.sort }
 
 /// Run chordal graph coloring for float register allocation
-let chordalFloatAllocation (cfg: LIR.CFG) : FAllocationResult =
+/// additionalVRegs: FVirtual IDs that must be allocated (e.g., float parameters)
+/// even if they don't appear in the CFG instructions
+let chordalFloatAllocation (cfg: LIR.CFG) (additionalVRegs: Set<int>) : FAllocationResult =
     let liveness = computeFloatLiveness cfg
     let graph = buildFloatInterferenceGraph cfg liveness
-    if Set.isEmpty graph.Vertices then
+    // Add additional VRegs (like float params) as isolated vertices if not already in graph
+    let graphWithParams =
+        additionalVRegs
+        |> Set.fold (fun g vregId ->
+            if Set.contains vregId g.Vertices then g
+            else { g with Vertices = Set.add vregId g.Vertices
+                          Edges = Map.add vregId Set.empty g.Edges }
+        ) graph
+    if Set.isEmpty graphWithParams.Vertices then
         // No float registers used - return empty allocation
         { FMapping = Map.empty; UsedCalleeSavedF = [] }
     else
         // No preferences for floats for now (could add FPhi coalescing later)
-        let colorResult = chordalGraphColor graph Map.empty (List.length allocatableFloatRegs) Map.empty
+        let colorResult = chordalGraphColor graphWithParams Map.empty (List.length allocatableFloatRegs) Map.empty
         floatColoringToAllocation colorResult allocatableFloatRegs
 
 /// Apply float allocation to an FReg, converting FVirtual to FPhysical
@@ -2651,11 +2661,10 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
     let colorResult = chordalGraphColor graph Map.empty (List.length regs) preferences
     let result = coloringToAllocation colorResult regs
 
-    // Step 3b: Run float register allocation
-    let floatAllocation = chordalFloatAllocation func.CFG
-
-    // Step 4: Build parameter info with separate int/float counters (AAPCS64)
+    // Step 3b: Build parameter info with separate int/float counters (AAPCS64)
     // Each parameter type uses its own register counter
+    // IMPORTANT: This must happen BEFORE float allocation so we can include
+    // float param FVirtuals in the interference graph
     let paramsWithTypes = List.zip func.Params func.ParamTypes
     let _, _, intParams, floatParams =
         paramsWithTypes
@@ -2669,6 +2678,20 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
         ) (0, 0, [], [])
     let intParams = List.rev intParams
     let floatParams = List.rev floatParams
+
+    // Extract FVirtual IDs from float params for allocation
+    // Float params use Virtual register IDs that are also FVirtual IDs
+    let floatParamFVirtualIds =
+        floatParams
+        |> List.choose (fun (reg, _) ->
+            match reg with
+            | LIR.Virtual id -> Some id
+            | LIR.Physical _ -> None)
+        |> Set.ofList
+
+    // Step 3c: Run float register allocation
+    // Include float param FVirtuals so they get allocated even if not used in CFG
+    let floatAllocation = chordalFloatAllocation func.CFG floatParamFVirtualIds
 
     // Step 5: Build mapping that copies INT parameters from X0-X7
     // to wherever chordal graph coloring allocated them.
