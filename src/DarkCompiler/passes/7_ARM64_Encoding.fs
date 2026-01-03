@@ -1050,7 +1050,7 @@ let encodeWithLabels (instr: ARM64.Instr) (currentOffset: int) (labelMap: Map<st
             let imm26 = (uint32 instrOffset) &&& 0x3FFFFFFu
             [op ||| imm26]
         | None ->
-            []
+            failwith $"B: Label '{label}' not found in labelMap"
 
     | ARM64.B_cond_label (cond, label) ->
         match Map.tryFind label labelMap with
