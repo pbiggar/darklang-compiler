@@ -1147,7 +1147,7 @@ let encodeWithLabels (instr: ARM64.Instr) (currentOffset: int) (labelMap: Map<st
             let rd = encodeReg dest
             [sf ||| op ||| shift ||| imm12 ||| rn ||| rd]
         | None ->
-            []
+            failwith $"ADD_label: Label '{label}' not found in labelMap"
 
     // All other instructions: use single-pass encoding
     | _ ->
