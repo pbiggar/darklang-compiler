@@ -26,6 +26,8 @@ These benchmarks compile and run reliably.
 | primes | Arithmetic | Integer ops, conditionals, loops |
 | collatz | Iteration | Collatz sequence steps |
 | leibniz | Numerical | Float arithmetic, pi approximation |
+| nqueen | Backtracking | N-Queens via bitwise operations |
+| merkletrees | Tree/Hashing | Recursive tree hashing |
 
 ---
 
@@ -119,11 +121,9 @@ These benchmarks have placeholder implementations that return 0.
 | Benchmark | Category | Missing Features |
 |-----------|----------|------------------|
 | fannkuch | Permutation | Mutable arrays, in-place reversal |
-| nqueen | Backtracking | Bitwise NOT (`~~~` operator or `-x` trick) |
 | nsieve | Sieve | Mutable arrays for sieve |
 | fasta | Bioinformatics | Random numbers, efficient string building |
 | edigits | Numerical | Unknown requirements |
-| merkletrees | Tree/Hashing | Tree hashing (similar to binary_trees) |
 
 ---
 
@@ -134,7 +134,6 @@ These benchmarks have placeholder implementations that return 0.
 | **Non-deterministic segfault bug** | spectral_norm, nbody, matmul |
 | Stack depth / TCO | pisum (full), mandelbrot (full), quicksort |
 | Mutable arrays | fannkuch, nsieve |
-| Bitwise NOT | nqueen |
 | String operations | fasta |
 
 ---
