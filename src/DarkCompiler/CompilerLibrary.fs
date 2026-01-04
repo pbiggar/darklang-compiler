@@ -26,6 +26,15 @@ type ExecutionResult = {
     Stderr: string
 }
 
+/// Result of execution with timing breakdown
+type TimedExecutionResult = {
+    ExitCode: int
+    Stdout: string
+    Stderr: string
+    CompileTime: TimeSpan
+    RuntimeTime: TimeSpan
+}
+
 /// Compiler options for controlling optimization behavior
 type CompilerOptions = {
     /// Disable free list memory reuse (always bump allocate)
@@ -2093,6 +2102,54 @@ let compileAndRunWithStdlibCached (verbosity: int) (options: CompilerOptions) (s
               Stderr = compileResult.ErrorMessage |> Option.defaultValue "Compilation failed" }
         else
             execute verbosity compileResult.Binary
+
+/// Compile and run with timing breakdown (for test output)
+let compileAndRunWithStdlibCachedTimed (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (testExpr: string) (preamble: string) (sourceFile: string) (funcLineMap: Map<string, int>) : TimedExecutionResult =
+    // Check preamble cache
+    let preambleHash = preamble.GetHashCode()
+    let cacheKey = (sourceFile, preambleHash)
+
+    let preambleCtxResult =
+        match stdlib.PreambleCache.TryGetValue(cacheKey) with
+        | true, cached ->
+            if verbosity >= 2 then println $"  [Preamble cache hit for {sourceFile}]"
+            Ok cached
+        | false, _ ->
+            if verbosity >= 2 then println $"  [Preamble cache miss for {sourceFile}]"
+            match compilePreamble stdlib preamble sourceFile funcLineMap with
+            | Ok ctx ->
+                stdlib.PreambleCache.TryAdd(cacheKey, ctx) |> ignore
+                Ok ctx
+            | Error err -> Error err
+
+    match preambleCtxResult with
+    | Error err ->
+        { ExitCode = 1
+          Stdout = ""
+          Stderr = err
+          CompileTime = TimeSpan.Zero
+          RuntimeTime = TimeSpan.Zero }
+    | Ok preambleCtx ->
+        let compileTimer = Stopwatch.StartNew()
+        let compileResult = compileTestWithPreamble verbosity options stdlib preambleCtx testExpr
+        compileTimer.Stop()
+        let compileTime = compileTimer.Elapsed
+
+        if not compileResult.Success then
+            { ExitCode = 1
+              Stdout = ""
+              Stderr = compileResult.ErrorMessage |> Option.defaultValue "Compilation failed"
+              CompileTime = compileTime
+              RuntimeTime = TimeSpan.Zero }
+        else
+            let runtimeTimer = Stopwatch.StartNew()
+            let execResult = execute verbosity compileResult.Binary
+            runtimeTimer.Stop()
+            { ExitCode = execResult.ExitCode
+              Stdout = execResult.Stdout
+              Stderr = execResult.Stderr
+              CompileTime = compileTime
+              RuntimeTime = runtimeTimer.Elapsed }
 
 /// Compile and run source code with lazy stdlib (caches LIR compilation across tests)
 let compileAndRunWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: LazyStdlibResult) (source: string) : ExecutionResult =

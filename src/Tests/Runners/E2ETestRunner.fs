@@ -16,6 +16,8 @@ type E2ETestResult = {
     Stdout: string option
     Stderr: string option
     ExitCode: int option
+    CompileTime: TimeSpan
+    RuntimeTime: TimeSpan
 }
 
 /// Compile stdlib once (call at test startup, pass result to runE2ETest)
@@ -36,7 +38,7 @@ let runE2ETest (stdlib: CompilerLibrary.StdlibResult) (test: E2ETest) : E2ETestR
             DisableDCE = test.DisableDCE
             EnableCoverage = false  // Coverage integration handled separately
         }
-        let execResult = CompilerLibrary.compileAndRunWithStdlibCached 0 options stdlib test.Source test.Preamble test.SourceFile test.FunctionLineMap
+        let execResult = CompilerLibrary.compileAndRunWithStdlibCachedTimed 0 options stdlib test.Source test.Preamble test.SourceFile test.FunctionLineMap
 
         // Handle error expectation
         if test.ExpectCompileError then
@@ -46,7 +48,9 @@ let runE2ETest (stdlib: CompilerLibrary.StdlibResult) (test: E2ETest) : E2ETestR
                   Message = "Expected compilation error but compilation succeeded"
                   Stdout = Some execResult.Stdout
                   Stderr = Some execResult.Stderr
-                  ExitCode = Some execResult.ExitCode }
+                  ExitCode = Some execResult.ExitCode
+                  CompileTime = execResult.CompileTime
+                  RuntimeTime = execResult.RuntimeTime }
             else
                 match test.ExpectedErrorMessage with
                 | Some expectedMsg ->
@@ -56,19 +60,25 @@ let runE2ETest (stdlib: CompilerLibrary.StdlibResult) (test: E2ETest) : E2ETestR
                           Message = "Compilation failed with expected error message"
                           Stdout = Some execResult.Stdout
                           Stderr = Some execResult.Stderr
-                          ExitCode = Some execResult.ExitCode }
+                          ExitCode = Some execResult.ExitCode
+                          CompileTime = execResult.CompileTime
+                          RuntimeTime = execResult.RuntimeTime }
                     else
                         { Success = false
                           Message = $"Expected error message '{expectedMsg}' not found in stderr"
                           Stdout = Some execResult.Stdout
                           Stderr = Some execResult.Stderr
-                          ExitCode = Some execResult.ExitCode }
+                          ExitCode = Some execResult.ExitCode
+                          CompileTime = execResult.CompileTime
+                          RuntimeTime = execResult.RuntimeTime }
                 | None ->
                     { Success = true
                       Message = "Compilation failed as expected"
                       Stdout = Some execResult.Stdout
                       Stderr = Some execResult.Stderr
-                      ExitCode = Some execResult.ExitCode }
+                      ExitCode = Some execResult.ExitCode
+                      CompileTime = execResult.CompileTime
+                      RuntimeTime = execResult.RuntimeTime }
         else
             let stdoutMatches =
                 match test.ExpectedStdout with
@@ -88,12 +98,16 @@ let runE2ETest (stdlib: CompilerLibrary.StdlibResult) (test: E2ETest) : E2ETestR
               Message = if success then "Test passed" else "Output mismatch"
               Stdout = Some execResult.Stdout
               Stderr = Some execResult.Stderr
-              ExitCode = Some execResult.ExitCode }
+              ExitCode = Some execResult.ExitCode
+              CompileTime = execResult.CompileTime
+              RuntimeTime = execResult.RuntimeTime }
     with
     | ex ->
         { Success = false
           Message = $"Test execution failed: {ex.Message}"
           Stdout = None
           Stderr = None
-          ExitCode = None }
+          ExitCode = None
+          CompileTime = TimeSpan.Zero
+          RuntimeTime = TimeSpan.Zero }
 
