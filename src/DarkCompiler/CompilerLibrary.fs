@@ -1269,11 +1269,13 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                       ErrorMessage = Some $"ANF conversion error: {err}" }
                 | Ok testOnly ->
                     // Partition specialized functions: cached (skip compilation) vs needs-compilation
+                    // NOTE: FingerTree/List caching disabled due to a bug in caching infrastructure
+                    // that causes incorrect results (e.g., List.append returns wrong values).
+                    // The bug is NOT in compilation (which is now deterministic) but in how
+                    // cached LIR is stored/retrieved. See issue for investigation.
                     let (cachedFuncs, functionsToCompile) =
                         testOnly.UserFunctions
                         |> List.partition (fun f ->
-                            // Use cached LIR if available (specialized stdlib functions)
-                            // Disable FingerTree/List caching until root cause is found
                             stdlib.CompiledFuncCache.ContainsKey(f.Name) &&
                             not (f.Name.Contains("FingerTree")) &&
                             not (f.Name.Contains("List")))

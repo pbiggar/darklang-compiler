@@ -21,15 +21,11 @@ module TypeChecking
 
 open AST
 
-/// Unique name generator for partial application parameters
-/// Uses a mutable counter to ensure generated names are unique across nested partial applications
-let mutable private partialParamCounter = 0
-
-/// Generate a unique parameter name for partial application
-let private freshPartialParam () =
-    let name = $"__partial_{partialParamCounter}"
-    partialParamCounter <- partialParamCounter + 1
-    name
+/// Generate unique parameter names for partial application
+/// Includes function name to avoid variable capture with nested partial applications
+let private makePartialParams (funcName: string) (types: Type list) : (string * Type) list =
+    let safeName = funcName.Replace('.', '_')
+    types |> List.mapi (fun i t -> ($"__partial_{safeName}_{i}", t))
 
 /// Type errors
 type TypeError =
@@ -87,21 +83,11 @@ let typeErrorToString (err: TypeError) : string =
     | GenericError msg ->
         msg
 
-/// Counter for generating fresh type variable names
-let mutable private freshCounter = 0
-
-/// Generate a fresh type variable name
-let private freshVarName (baseName: string) : string =
-    freshCounter <- freshCounter + 1
-    $"{baseName}${freshCounter}"
-
-/// Reset the fresh counter (for testing)
-let resetFreshCounter () = freshCounter <- 0
-
 /// Freshen type parameters - generate new unique names for each type param
 /// Returns (fresh type params, substitution map from old to fresh names)
+/// Uses index-based naming for deterministic compilation (no global state)
 let freshenTypeParams (typeParams: string list) : string list * Map<string, string> =
-    let freshParams = typeParams |> List.map freshVarName
+    let freshParams = typeParams |> List.mapi (fun i baseName -> $"{baseName}${i}")
     let subst = List.zip typeParams freshParams |> Map.ofList
     (freshParams, subst)
 
@@ -1071,9 +1057,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                                 let concreteArgs = List.map (applySubstToExpr subst) args'
 
                                 // Create unique parameter names for the remaining parameters
-                                let remainingParams =
-                                    concreteRemainingParamTypes
-                                    |> List.map (fun t -> (freshPartialParam (), t))
+                                let remainingParams = makePartialParams resolvedFuncName concreteRemainingParamTypes
 
                                 // Create the lambda body: TypeApp with all args
                                 let allArgs = concreteArgs @ (remainingParams |> List.map (fun (name, _) -> Var name))
@@ -1150,9 +1134,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     checkProvidedArgs args providedParamTypes []
                     |> Result.bind (fun args' ->
                         // Create unique parameter names for the remaining parameters
-                        let remainingParams =
-                            remainingParamTypes
-                            |> List.map (fun t -> (freshPartialParam (), t))
+                        let remainingParams = makePartialParams resolvedFuncName remainingParamTypes
 
                         // Create the lambda body: call the original function with all args (using resolved name)
                         let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
@@ -1226,9 +1208,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     checkProvidedArgs args providedParamTypes []
                     |> Result.bind (fun args' ->
                         // Create unique parameter names for the remaining parameters
-                        let remainingParams =
-                            remainingParamTypes
-                            |> List.map (fun t -> (freshPartialParam (), t))
+                        let remainingParams = makePartialParams resolvedFuncName remainingParamTypes
 
                         // Create the lambda body: call the original function with all args (using resolved name)
                         let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
@@ -1287,9 +1267,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                             let concreteReturnType = applySubst subst returnType
 
                             // Create unique parameter names for the remaining parameters
-                            let remainingParams =
-                                concreteRemainingTypes
-                                |> List.map (fun t -> (freshPartialParam (), t))
+                            let remainingParams = makePartialParams resolvedFuncName concreteRemainingTypes
 
                             // Create the lambda body: TypeApp call with all args (using resolved name)
                             let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
@@ -1402,9 +1380,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         checkProvidedArgs args providedParamTypes []
                         |> Result.bind (fun args' ->
                             // Create unique parameter names for the remaining parameters
-                            let remainingParams =
-                                remainingParamTypes
-                                |> List.map (fun t -> (freshPartialParam (), t))
+                            let remainingParams = makePartialParams resolvedFuncName remainingParamTypes
 
                             // Create the lambda body: TypeApp call with all args (using resolved name)
                             let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
@@ -1490,9 +1466,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                         checkProvidedArgs args providedParamTypes []
                         |> Result.bind (fun args' ->
                             // Create unique parameter names for the remaining parameters
-                            let remainingParams =
-                                remainingParamTypes
-                                |> List.map (fun t -> (freshPartialParam (), t))
+                            let remainingParams = makePartialParams resolvedFuncName remainingParamTypes
 
                             // Create the lambda body: TypeApp call with all args (using resolved name)
                             let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
@@ -2095,9 +2069,8 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                     checkProvidedArgs args providedParamTypes []
                     |> Result.bind (fun args' ->
                         // Create fresh parameter names for the remaining parameters
-                        let remainingParams =
-                            remainingParamTypes
-                            |> List.map (fun t -> (freshPartialParam (), t))
+                        // Use "lambda" as identifier since we're applying a function value, not a named function
+                        let remainingParams = makePartialParams "lambda" remainingParamTypes
 
                         // Create the lambda body: apply the original function with all args
                         let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
