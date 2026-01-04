@@ -362,6 +362,7 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
             // Collect bindings from all patterns (all patterns in a group bind same vars)
             let patternBindings =
                 matchCase.Patterns
+                |> NonEmptyList.toList
                 |> List.map collectPatternBindings
                 |> List.fold Set.union Set.empty
             let bodyBound = Set.union bound patternBindings
@@ -1914,7 +1915,7 @@ let rec checkExpr (expr: Expr) (env: TypeEnv) (typeReg: TypeRegistry) (variantLo
                 | matchCase :: rest ->
                     // Extract bindings from first pattern (all patterns in group bind same vars)
                     // For pattern grouping, we check the first pattern's bindings
-                    let firstPattern = List.head matchCase.Patterns
+                    let firstPattern = NonEmptyList.head matchCase.Patterns
                     extractPatternBindings firstPattern scrutineeType
                     |> Result.bind (fun bindings ->
                         let caseEnv = List.fold (fun e (name, ty) -> Map.add name ty e) env bindings

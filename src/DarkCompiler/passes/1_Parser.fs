@@ -1192,6 +1192,8 @@ let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Tok
 
     parsePatterns tokens []
     |> Result.bind (fun (patterns, remaining) ->
+        // Convert patterns list to NonEmptyList (safe since parsePatterns ensures at least one pattern)
+        let patternsNel = NonEmptyList.fromList patterns
         // Parse optional guard
         match remaining with
         | TWhen :: rest' ->
@@ -1203,13 +1205,13 @@ let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Tok
                     // Parse body
                     parseExprFn rest''
                     |> Result.map (fun (body, remaining''') ->
-                        ({ Patterns = patterns; Guard = Some guard; Body = body }, remaining'''))
+                        ({ Patterns = patternsNel; Guard = Some guard; Body = body }, remaining'''))
                 | _ -> Error "Expected '->' after guard expression")
         | TArrow :: rest' ->
             // No guard, parse body directly
             parseExprFn rest'
             |> Result.map (fun (body, remaining') ->
-                ({ Patterns = patterns; Guard = None; Body = body }, remaining'))
+                ({ Patterns = patternsNel; Guard = None; Body = body }, remaining'))
         | _ -> Error "Expected 'when' or '->' after pattern")
 
 /// Try to parse lambda parameters: (ident : type, ident : type, ...)
@@ -1275,7 +1277,7 @@ let parse (tokens: Token list) : Result<Program, string> =
                                 // If pattern is just PVar, use Let; otherwise desugar to Match
                                 match pattern with
                                 | PVar name -> (Let (name, value, body), remaining'')
-                                | _ -> (Match (value, [{ Patterns = [pattern]; Guard = None; Body = body }]), remaining''))
+                                | _ -> (Match (value, [{ Patterns = NonEmptyList.singleton pattern; Guard = None; Body = body }]), remaining''))
                         | _ -> Error "Expected 'in' after let binding value")
                 | _ -> Error "Expected '=' after let binding pattern")
         | TIf :: rest ->

@@ -1848,6 +1848,7 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
             // Get bindings from first pattern (cases can have multiple patterns, use first)
             let patBindings =
                 mc.Patterns
+                |> AST.NonEmptyList.toList
                 |> List.fold (fun acc pat -> Map.fold (fun m k v -> Map.add k v m) acc (extractPatternBindings pat patternType)) Map.empty
             let typeEnv' = Map.fold (fun m k v -> Map.add k v m) typeEnv patBindings
             inferType mc.Body typeEnv' typeReg variantLookup funcReg moduleRegistry
@@ -2626,7 +2627,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             // If so, we must ensure scrutinee is a variable (can't TupleGet on literal)
             let hasNonEmptyListPattern =
                 cases |> List.exists (fun mc ->
-                    mc.Patterns |> List.exists (fun pat ->
+                    mc.Patterns |> AST.NonEmptyList.toList |> List.exists (fun pat ->
                         match pat with
                         | AST.PList (_ :: _) -> true
                         | AST.PListCons (_ :: _, _) -> true  // [h, ...t] also needs list access
@@ -3791,7 +3792,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | [mc] ->
                     // Last case - for most patterns just compile the body
                     // For now, use first pattern (pattern grouping not yet fully supported)
-                    let pattern = List.head mc.Patterns
+                    let pattern = AST.NonEmptyList.head mc.Patterns
                     let body = mc.Body
                     // For non-empty list patterns, we still need proper length checking
                     match pattern with
@@ -3816,7 +3817,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             extractAndCompileBodyWithGuard pattern guardExpr body scrutineeAtom' env vg fallbackExpr
                 | mc :: rest ->
                     // For pattern grouping, use first pattern for bindings but OR all patterns for comparison
-                    let firstPattern = List.head mc.Patterns
+                    let firstPattern = AST.NonEmptyList.head mc.Patterns
                     let body = mc.Body
                     if patternAlwaysMatches firstPattern then
                         // Wildcard or var - matches everything, but may still need guard
@@ -3844,7 +3845,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 compileListConsPatternWithChecks headPatterns tailPattern scrutineeAtom' env body elseExpr vg1)
                         | _ ->
                             // Use pattern grouping: OR all patterns in the group
-                            buildPatternGroupComparison mc.Patterns scrutineeAtom' vg
+                            buildPatternGroupComparison (AST.NonEmptyList.toList mc.Patterns) scrutineeAtom' vg
                             |> Result.bind (fun cmpOpt ->
                                 match cmpOpt with
                                 | None ->

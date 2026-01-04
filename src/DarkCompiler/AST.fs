@@ -78,6 +78,23 @@ type UnaryOp =
     | Not     // Boolean not: !expr
     | BitNot  // Bitwise not: ~~~expr
 
+/// A list guaranteed to have at least one element (makes invalid states unrepresentable)
+type NonEmptyList<'a> = { Head: 'a; Tail: 'a list }
+
+/// NonEmptyList helper functions
+module NonEmptyList =
+    let singleton x = { Head = x; Tail = [] }
+    let cons x nel = { Head = x; Tail = nel.Head :: nel.Tail }
+    let toList nel = nel.Head :: nel.Tail
+    let map f nel = { Head = f nel.Head; Tail = List.map f nel.Tail }
+    let head nel = nel.Head
+    let tryFromList = function
+        | [] -> None
+        | h :: t -> Some { Head = h; Tail = t }
+    let fromList = function
+        | [] -> failwith "NonEmptyList.fromList: empty list"
+        | h :: t -> { Head = h; Tail = t }
+
 /// Pattern matching patterns
 type Pattern =
     | PUnit                                                // () - matches unit value
@@ -138,9 +155,9 @@ and Expr =
 /// Match case with optional guard clause and pattern grouping
 /// Syntax: | pat1 | pat2 when guard -> body
 and MatchCase = {
-    Patterns: Pattern list    // One or more patterns (pattern grouping via |)
-    Guard: Expr option        // Optional guard clause (when condition)
-    Body: Expr                // Body expression
+    Patterns: NonEmptyList<Pattern>  // One or more patterns (pattern grouping via |)
+    Guard: Expr option               // Optional guard clause (when condition)
+    Body: Expr                       // Body expression
 }
 
 /// Function definition
