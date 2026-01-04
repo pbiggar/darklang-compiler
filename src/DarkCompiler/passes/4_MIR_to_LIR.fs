@@ -684,9 +684,6 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
             | LIR.Reg r -> LIR.Mov (closureReg, LIR.Reg r)
             | other -> LIR.Mov (closureReg, other)
 
-        // Load function pointer from closure[0] into X9
-        let loadFuncPtrInstr = LIR.HeapLoad (LIR.Physical LIR.X9, closureReg, 0)
-
         // Use ArgMoves for parallel move - closure goes to X0, args to X1-X7
         // Closure is already safe in X10, include it in the ArgMoves
         let argMoves =
@@ -702,6 +699,12 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                         (targetReg, convertOperand arg))
                 [LIR.ArgMoves (closureMove :: regularArgMoves)]
 
+        // Load function pointer from closure[0] into X9
+        // IMPORTANT: This must come AFTER argMoves because ArgMoves may use X9 as a temp
+        // (e.g., StringRef conversion uses X9 for ADRP/ADD_label)
+        // After ArgMoves, X0 contains the closure, so we load from [X0, 0]
+        let loadFuncPtrInstr = LIR.HeapLoad (LIR.Physical LIR.X9, LIR.Physical LIR.X0, 0)
+
         let callInstr = LIR.ClosureCall (lirDest, LIR.Physical LIR.X9, List.map convertOperand args)
 
         // Restore caller-saved registers
@@ -714,7 +717,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
             | LIR.Physical LIR.X0 -> []
             | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
 
-        Ok (saveInstrs @ [loadClosureInstr; loadFuncPtrInstr] @ argMoves @ [callInstr] @ restoreInstrs @ moveResult)
+        Ok (saveInstrs @ [loadClosureInstr] @ argMoves @ [loadFuncPtrInstr] @ [callInstr] @ restoreInstrs @ moveResult)
 
     | MIR.ClosureTailCall (closure, args) ->
         // Closure tail call: skip SaveRegs/RestoreRegs, use BR
@@ -728,9 +731,6 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
             | LIR.Reg r -> LIR.Mov (closureReg, LIR.Reg r)
             | other -> LIR.Mov (closureReg, other)
 
-        // Load function pointer from closure[0] into X9
-        let loadFuncPtrInstr = LIR.HeapLoad (LIR.Physical LIR.X9, closureReg, 0)
-
         // Closure goes to X0, args to X1-X7 (using TailArgMoves - no SaveRegs)
         let argMoves =
             if List.length args > 7 then []
@@ -743,9 +743,15 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                         (targetReg, convertOperand arg))
                 [LIR.TailArgMoves (closureMove :: regularArgMoves)]
 
+        // Load function pointer from closure[0] into X9
+        // IMPORTANT: This must come AFTER argMoves because TailArgMoves may use X9 as a temp
+        // (e.g., StringRef conversion uses X9 for ADRP/ADD_label)
+        // After TailArgMoves, X0 contains the closure, so we load from [X0, 0]
+        let loadFuncPtrInstr = LIR.HeapLoad (LIR.Physical LIR.X9, LIR.Physical LIR.X0, 0)
+
         let callInstr = LIR.ClosureTailCall (LIR.Physical LIR.X9, List.map convertOperand args)
 
-        Ok ([loadClosureInstr; loadFuncPtrInstr] @ argMoves @ [callInstr])
+        Ok ([loadClosureInstr] @ argMoves @ [loadFuncPtrInstr] @ [callInstr])
 
     | MIR.HeapAlloc (dest, sizeBytes) ->
         let lirDest = vregToLIRReg dest
