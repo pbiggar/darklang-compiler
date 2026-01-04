@@ -282,3 +282,65 @@ match [1, 2, 3] with | [h, ...rest] -> match [h + 10, ...rest] with | [a, b, c] 
 
 // Chain of spreads
 let a = [3] in let b = [2, ...a] in Stdlib.List.length([1, ...b]) = stdout="3\n"
+
+// =====================================================
+// Lists of Floats
+// KNOWN BUG: Float list pattern matching fails - lists fall through to wildcard
+// =====================================================
+
+// Float list - basic
+// DISABLED: match [1.0, 2.0, 3.0] with | [a, b, c] -> a + b + c | _ -> 0.0 = stdout="6.00\n"
+
+// Float list - two elements
+// DISABLED: match [1.5, 2.5] with | [a, b] -> a * b | _ -> 0.0 = stdout="3.75\n"
+
+// Float list in variable
+// DISABLED: let fs = [1.0, 2.0] in match fs with | [a, b] -> a + b | _ -> 0.0 = stdout="3.00\n"
+
+// =====================================================
+// Lists of Tuples
+// =====================================================
+
+// List of 2-tuples
+match [(1, 2), (3, 4)] with | [t1, t2] -> t1.0 + t2.1 | _ -> 0 = stdout="5\n"
+
+// List of 2-tuples - product
+match [(2, 3), (4, 5)] with | [t1, t2] -> t1.0 * t1.1 + t2.0 * t2.1 | _ -> 0 = stdout="26\n"
+
+// Single tuple in list
+match [(10, 20)] with | [t] -> t.0 + t.1 | _ -> 0 = stdout="30\n"
+
+// =====================================================
+// Lists of Strings
+// =====================================================
+
+// List of strings - basic
+match ["hello", "world"] with | [a, b] -> a ++ " " ++ b | _ -> "" = stdout="hello world\n"
+
+// Single string in list
+match ["test"] with | [s] -> s | _ -> "" = stdout="test\n"
+
+// Three strings
+match ["a", "b", "c"] with | [x, y, z] -> x ++ y ++ z | _ -> "" = stdout="abc\n"
+
+// =====================================================
+// Lists of Bools
+// =====================================================
+
+// List of bools - all true
+match [true, true, true] with | [a, b, c] -> if a && b && c then 1 else 0 | _ -> -1 = stdout="1\n"
+
+// List of bools - mixed
+match [true, false] with | [a, b] -> if a && b then 1 else 0 | _ -> -1 = stdout="0\n"
+
+// =====================================================
+// Recursive Functions on Complex Element Types
+// =====================================================
+
+// Sum list of floats recursively
+// DISABLED (same float list bug): def sumFloats(xs: List<Float>) : Float = match xs with | [] -> 0.0 | [h, ...t] -> h + sumFloats(t)
+// DISABLED: sumFloats([1.0, 2.0, 3.0, 4.0]) = stdout="10.00\n"
+
+// Concatenate list of strings
+def concatStrings(xs: List<String>) : String = match xs with | [] -> "" | [h, ...t] -> h ++ concatStrings(t)
+concatStrings(["a", "b", "c"]) = stdout="abc\n"

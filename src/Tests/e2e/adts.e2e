@@ -24,3 +24,73 @@ type MyResult = MyOk of Int64 | MyErr match MyOk(100) with | MyOk(v) -> v | MyEr
 // Verify B(77) returns payload
 type Three = A | B of Int64 | C match B(77) with | A -> 0 | B(x) -> x | C -> 0 = stdout="77\n"
 
+// ===================================================================
+// Sum Types with String Payloads
+// ===================================================================
+
+// Sum type with string payload
+type Message = NoMessage | Text of String
+match Text("hello") with | Text(s) -> s | NoMessage -> "none" = stdout="hello\n"
+match NoMessage with | Text(s) -> s | NoMessage -> "none" = stdout="none\n"
+
+// String payload in let binding
+type Msg = NoMsg | Msg of String
+let m = Msg("world") in match m with | Msg(s) -> s | NoMsg -> "" = stdout="world\n"
+
+// ===================================================================
+// Sum Types with Float Payloads
+// ===================================================================
+
+// Sum type with float payload
+type MaybeFloat = NoFloat | SomeFloat of Float
+match SomeFloat(3.14) with | SomeFloat(f) -> f | NoFloat -> 0.0 = stdout="3.14\n"
+match NoFloat with | SomeFloat(f) -> f | NoFloat -> 0.0 = stdout="0.00\n"
+
+// Float payload with arithmetic
+type OptFloat = NoneF | JustF of Float
+match JustF(2.5) with | JustF(f) -> f * 2.0 | NoneF -> 0.0 = stdout="5.00\n"
+
+// ===================================================================
+// Sum Types with Bool Payloads
+// ===================================================================
+
+// Sum type with bool payload
+type MaybeBool = NoBool | SomeBool of Bool
+match SomeBool(true) with | SomeBool(b) -> if b then 1 else 0 | NoBool -> -1 = stdout="1\n"
+match SomeBool(false) with | SomeBool(b) -> if b then 1 else 0 | NoBool -> -1 = stdout="0\n"
+
+// ===================================================================
+// Sum Types with Tuple Payloads
+// ===================================================================
+
+// Sum type with tuple payload
+type Pair = NoPair | MkPair of (Int64, Int64)
+match MkPair((10, 20)) with | MkPair(t) -> t.0 + t.1 | NoPair -> 0 = stdout="30\n"
+match NoPair with | MkPair(t) -> t.0 | NoPair -> 99 = stdout="99\n"
+
+// Tuple payload with 3 elements
+type Triple = NoTriple | MkTriple of (Int64, Int64, Int64)
+match MkTriple((1, 2, 3)) with | MkTriple(t) -> t.0 + t.1 + t.2 | NoTriple -> 0 = stdout="6\n"
+
+// ===================================================================
+// Multiple Payload Variants
+// ===================================================================
+
+// Multiple variants with payloads
+type Value = VInt of Int64 | VString of String | VBool of Bool
+match VInt(42) with | VInt(n) -> n | VString(s) -> 0 | VBool(b) -> 0 = stdout="42\n"
+match VBool(true) with | VInt(n) -> 0 | VString(s) -> 0 | VBool(b) -> if b then 1 else 0 = stdout="1\n"
+
+// ===================================================================
+// Result-like Types with Different Payloads
+// ===================================================================
+
+// Result with int ok and string error
+type IntResult = IntOk of Int64 | IntErr of String
+match IntOk(42) with | IntOk(n) -> n | IntErr(s) -> 0 = stdout="42\n"
+
+// Result with both string payloads
+type StrResult = StrOk of String | StrErr of String
+match StrOk("success") with | StrOk(s) -> s | StrErr(e) -> e = stdout="success\n"
+match StrErr("failed") with | StrOk(s) -> s | StrErr(e) -> e = stdout="failed\n"
+

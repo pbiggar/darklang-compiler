@@ -117,3 +117,47 @@ let (_, s) = (42, "test") in s = stdout="test\n"
 
 // Extract string alongside other values
 let (a, s, b) = (1, "middle", 2) in s = stdout="middle\n"
+
+// ===================================================================
+// Tuples with Floats (GpToFp/FpToGp conversion tests)
+// ===================================================================
+
+// Float in first position
+(3.14, 42).0 = stdout="3.14\n"
+(3.14, 42).1 = stdout="42\n"
+
+// Float in second position
+(42, 3.14).0 = stdout="42\n"
+(42, 3.14).1 = stdout="3.14\n"
+
+// All floats
+(1.0, 2.0).0 + (1.0, 2.0).1 = stdout="3.00\n"
+
+// Mixed float/int/bool
+(1.5, true, 42).0 = stdout="1.50\n"
+(1.5, true, 42).1 = stdout="true\n"
+(1.5, true, 42).2 = stdout="42\n"
+
+// Float in last position of 3-tuple
+(10, 20, 3.14).2 = stdout="3.14\n"
+
+// Float tuple destructuring
+let (a, b) = (1.5, 2.5) in a + b = stdout="4.00\n"
+
+// Mixed destructuring with float
+let (x, y, z) = (1.0, 42, 2.0) in x + z = stdout="3.00\n"
+
+// Float tuple in let binding
+let t = (3.14, 2.71) in t.0 = stdout="3.14\n"
+let t = (3.14, 2.71) in t.1 = stdout="2.71\n"
+
+// Float tuple with arithmetic on access
+let t = (1.5, 2.5) in t.0 * t.1 = stdout="3.75\n"
+
+// Nested tuple with float
+let t = ((1.0, 2.0), 3) in t.1 = stdout="3\n"
+
+// Float tuple printing
+(1.0, 2.0) = stdout="(1.00, 2.00)\n"
+(3.14, 42) = stdout="(3.14, 42)\n"
+(42, 3.14) = stdout="(42, 3.14)\n"
