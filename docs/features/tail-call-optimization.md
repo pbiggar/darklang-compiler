@@ -6,7 +6,7 @@ This document explains how the Dark compiler handles tail call optimization.
 
 Tail call optimization converts tail-recursive calls into jumps, avoiding stack growth. This allows unbounded recursion for tail-recursive functions.
 
-**Current Status**: TCO is **partially disabled** due to parallel move resolution bugs. The detection and transformation code exists, but `detectTailCallsInProgram` returns the program unchanged.
+**Current Status**: TCO is **ENABLED**. The DCE bug that caused 197 test failures has been fixed (DeadCodeElimination.fs was not recognizing TailCall as a function call, causing stdlib functions called via tail call to be removed).
 
 ## What is a Tail Call?
 
@@ -82,26 +82,25 @@ swap(x, y) calls swap(y, x)
 2. **Phase 2**: Move registers that don't create cycles
 3. **Phase 3**: Break cycles using temp register
 
-### Known Bugs
+### Historical Bugs (Now Fixed)
 
-From git history (`eb7cf84`):
+These bugs were fixed and TCO is now enabled:
 
-1. **Phase 1 ordering**: Non-register moves were emitted unconditionally, clobbering sources needed by other moves
+1. **Phase 1 ordering** (fixed in `eb7cf84`): Non-register moves were emitted unconditionally, clobbering sources needed by other moves
 
-2. **Phase 3 cycle handling**: Cycle moves were emitted in arbitrary order, clobbering values
+2. **Phase 3 cycle handling** (fixed in `eb7cf84`): Cycle moves were emitted in arbitrary order, clobbering values
 
-3. **Float returns**: `TailCall` with float return types needs special handling that isn't fully implemented
+3. **DCE bug** (fixed): DeadCodeElimination.fs was not recognizing TailCall as a function call, causing stdlib functions called via tail call to be removed. This caused 197 test failures when TCO was enabled.
 
 ## Interaction with Reference Counting
 
-TCO runs AFTER RefCountInsertion. For safety, the V1 implementation only optimizes calls that are **immediately** followed by Return with no intervening RefCountDec.
+TCO runs AFTER RefCountInsertion. The implementation looks through RefCountDec operations
+between the call and return to detect tail calls. This is crucial because without TCO,
+functions like `__reverseHelper` would use regular calls, causing intermediate cons cells
+to be freed prematurely when the free list reuses those cells.
 
 ```dark
-// CAN be optimized - no RC between call and return
-let result = tailCall() in
-return result
-
-// CANNOT be optimized - RC cleanup needed
+// CAN be optimized - looks through RefCountDec to find tail position
 let result = tailCall() in
 let _ = RefCountDec(someValue) in
 return result
@@ -143,6 +142,7 @@ Key commits:
 - `57f0f20` - Fix TailCall float return type tracking
 - `9dcb1f4` - Disable countDown(100000) test - TCO not fully working
 - `9446a3d` - Disable TCO due to parallel move resolution bugs
+- (later) - Re-enable TCO after fixing DCE bug (TailCall now recognized as function call)
 
 ## Design from Claude Plan
 

@@ -5,9 +5,10 @@ to physical ARM64 registers.
 
 ## Overview
 
-The Dark compiler uses a **linear scan** register allocator with liveness analysis.
-Virtual registers from LIR are mapped to physical ARM64 registers, with spilling
-to stack when registers are exhausted.
+The Dark compiler uses **chordal graph coloring** for register allocation, which is
+optimal for SSA-form programs. SSA guarantees that interference graphs are chordal,
+enabling optimal coloring in linear time. Virtual registers from LIR are mapped to
+physical ARM64 registers, with spilling to stack when register pressure is too high.
 
 ## ARM64 Register Conventions
 
@@ -52,26 +53,30 @@ Where:
 
 The analysis iterates until reaching a fixed point.
 
-### Phase 2: Live Interval Construction
+### Phase 2: Interference Graph Construction
 
-For each virtual register, compute its **live interval** (start, end):
-- **Start**: First definition or use
-- **End**: Last use
+Build an interference graph where:
+- **Vertices**: Virtual registers
+- **Edges**: Two registers interfere if they are simultaneously live at any program point
 
-Intervals are sorted by start position for linear scan.
+In SSA form, this graph is guaranteed to be **chordal** (every cycle of 4+ vertices has a chord).
 
-### Phase 3: Linear Scan Allocation
+### Phase 3: Chordal Graph Coloring
 
-Process intervals in start-position order:
+Chordal graphs can be optimally colored using a simple greedy algorithm:
 
-```
-for each interval I in sorted order:
-    expire_old_intervals(I.start)
-    if no free registers:
-        spill_at_interval(I)
-    else:
-        allocate_register(I)
-```
+1. **Maximum Cardinality Search (MCS)**: Compute a Perfect Elimination Ordering (PEO)
+   - Process vertices, always picking the vertex with most already-processed neighbors
+   - This ordering has the property that for chordal graphs, greedy coloring is optimal
+
+2. **Greedy Coloring in Reverse PEO**: Assign colors (registers) to vertices
+   - Process vertices in reverse PEO order
+   - Assign the smallest color not used by any neighbor
+   - For chordal graphs, this produces an **optimal** coloring (minimum colors)
+
+3. **Phi Coalescing**: When coloring, prefer colors that match phi partners
+   - Reduces register moves at control flow join points
+   - Two-pass approach: first color non-deferred, then color deferred with partner preferences
 
 **Register preference**: Caller-saved registers (X1-X8) are preferred over
 callee-saved (X19-X26) to minimize prologue/epilogue overhead.
@@ -152,10 +157,11 @@ type LiveInterval = {
 
 | File | Purpose |
 |------|---------|
-| `5_RegisterAllocation.fs:1-200` | Liveness analysis |
-| `5_RegisterAllocation.fs:366-442` | Live interval construction |
-| `5_RegisterAllocation.fs:443-553` | Linear scan algorithm |
-| `5_RegisterAllocation.fs:555-700` | Apply allocation to LIR |
+| `5_RegisterAllocation.fs:85-400` | Liveness analysis |
+| `5_RegisterAllocation.fs:743-906` | Interference graph construction |
+| `5_RegisterAllocation.fs:907-951` | Maximum Cardinality Search (PEO) |
+| `5_RegisterAllocation.fs:952-1092` | Greedy coloring with phi coalescing |
+| `5_RegisterAllocation.fs:1093-1140` | Main chordal allocation entry points |
 
 ## Tests
 

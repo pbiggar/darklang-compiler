@@ -4,9 +4,12 @@
 //
 // Algorithm:
 // 1. Compute liveness information using backward dataflow analysis
-// 2. Build live intervals for each virtual register
-// 3. Use linear scan algorithm to allocate registers
-// 4. Spill to stack when registers are exhausted
+// 2. Build interference graph from liveness data
+// 3. Use chordal graph coloring (SSA guarantees chordal interference graphs)
+//    - Maximum Cardinality Search for Perfect Elimination Ordering (PEO)
+//    - Greedy coloring in reverse PEO order (optimal for chordal graphs)
+//    - Phi coalescing preferences to reduce register moves
+// 4. Spill to stack when register pressure exceeds available registers
 //
 // General-Purpose Registers:
 // - X0: reserved for return values
