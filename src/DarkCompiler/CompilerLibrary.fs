@@ -475,7 +475,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                         let (ANF.Program (funcs, mainExprDbg)) = convResult.Program
                         for func in funcs do
                             println $"Function: {func.Name}"
-                            println $"  Params: {func.Params}"
+                            println $"  TypedParams: {func.TypedParams}"
                             println $"  Body: {func.Body}"
                             println ""
                         println $"Main: {mainExprDbg}"
@@ -497,7 +497,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                         let (ANF.Program (funcs, mainExprDbg)) = anfOptimized
                         for func in funcs do
                             println $"Function: {func.Name}"
-                            println $"  Params: {func.Params}"
+                            println $"  TypedParams: {func.TypedParams}"
                             println $"  Body: {func.Body}"
                             println ""
                         println $"Main: {mainExprDbg}"
@@ -537,7 +537,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                         let (ANF.Program (funcs, mainExprDbg)) = anfAfterRC
                         for func in funcs do
                             println $"Function: {func.Name}"
-                            println $"  Params: {func.Params}"
+                            println $"  TypedParams: {func.TypedParams}"
                             println $"  Body: {func.Body}"
                             println ""
                         println $"Main: {mainExprDbg}"
@@ -559,7 +559,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                         let (ANF.Program (funcs, mainExprDbg)) = anfAfterTCO
                         for func in funcs do
                             println $"Function: {func.Name}"
-                            println $"  Params: {func.Params}"
+                            println $"  TypedParams: {func.TypedParams}"
                             println $"  Body: {func.Body}"
                             println ""
                         println $"Main: {mainExprDbg}"
@@ -580,7 +580,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                         let (ANF.Program (funcs, mainExprDbg)) = anfProgram
                         for func in funcs do
                             println $"Function: {func.Name}"
-                            println $"  Params: {func.Params}"
+                            println $"  TypedParams: {func.TypedParams}"
                             println $"  Body: {func.Body}"
                             println ""
                         println $"Main: {mainExprDbg}"
@@ -1740,7 +1740,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                             (allFuncs, stdlib.StdlibStringPool, stdlib.StdlibFloatPool)
                         else
                             let (ANF.Program (userFuncsForDCE, userMainForDCE)) = userAnfProgram
-                            let userANFFuncs = { ANF.Name = "_start"; ANF.Params = []; ANF.Body = userMainForDCE } :: userFuncsForDCE
+                            let userANFFuncs = { ANF.Name = "_start"; ANF.TypedParams = []; ANF.ReturnType = AST.TUnit; ANF.Body = userMainForDCE } :: userFuncsForDCE
                             let reachableStdlibNames = ANFDeadCodeElimination.getReachableStdlib stdlib.StdlibANFCallGraph userANFFuncs
                             if verbosity >= 2 then
                                 println $"        DCE: {reachableStdlibNames.Count} stdlib functions needed"
@@ -2201,7 +2201,7 @@ let getReachableStdlibFunctions (stdlib: LazyStdlibResult) (source: string) : Re
                     let userAnfProgram = PrintInsertion.insertPrint userFunctions userMainExpr programType
                     // Extract reachable stdlib functions using DCE infrastructure
                     let (ANF.Program (userFuncsForDCE, userMainForDCE)) = userAnfProgram
-                    let userANFFuncs = { ANF.Name = "_start"; ANF.Params = []; ANF.Body = userMainForDCE } :: userFuncsForDCE
+                    let userANFFuncs = { ANF.Name = "_start"; ANF.TypedParams = []; ANF.ReturnType = AST.TUnit; ANF.Body = userMainForDCE } :: userFuncsForDCE
                     let reachableStdlibNames = ANFDeadCodeElimination.getReachableStdlib stdlib.StdlibANFCallGraph userANFFuncs
                     Ok reachableStdlibNames
 
@@ -2248,6 +2248,6 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     let userAnfProgram = PrintInsertion.insertPrint userFunctions userMainExpr programType
                     // Extract reachable stdlib functions using DCE infrastructure
                     let (ANF.Program (userFuncsForDCE, userMainForDCE)) = userAnfProgram
-                    let userANFFuncs = { ANF.Name = "_start"; ANF.Params = []; ANF.Body = userMainForDCE } :: userFuncsForDCE
+                    let userANFFuncs = { ANF.Name = "_start"; ANF.TypedParams = []; ANF.ReturnType = AST.TUnit; ANF.Body = userMainForDCE } :: userFuncsForDCE
                     let reachableStdlibNames = ANFDeadCodeElimination.getReachableStdlib stdlib.StdlibANFCallGraph userANFFuncs
                     Ok reachableStdlibNames

@@ -942,7 +942,9 @@ let convertFunctionToSSA (func: Function) : Function =
 
     // Insert phi nodes (only for live variables)
     // Pass function params so they're treated as defined at entry (for self-recursive functions)
-    let cfgWithPhis = insertPhiNodes cfg df preds liveIn func.Params func.ParamTypes
+    let paramRegs = func.TypedParams |> List.map (fun tp -> tp.Reg)
+    let paramTypes = func.TypedParams |> List.map (fun tp -> tp.Type)
+    let cfgWithPhis = insertPhiNodes cfg df preds liveIn paramRegs paramTypes
 
     // Rename variables and update floatRegs with SSA versions
     let (ssaCFG, updatedFloatRegs) = renameCFG cfgWithPhis idoms func.FloatRegs

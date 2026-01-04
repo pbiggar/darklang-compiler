@@ -145,8 +145,7 @@ let parseMIR (text: string) : Result<MIR.Program, string> =
                 }
                 let func = {
                     Name = "_start"
-                    Params = []
-                    ParamTypes = []
+                    TypedParams = []
                     ReturnType = AST.TInt64
                     CFG = cfg
                     FloatRegs = Set.empty

@@ -39,6 +39,9 @@ type FReg =
     | FPhysical of PhysFPReg
     | FVirtual of int
 
+/// Parameter with register and type bundled (makes invalid states unrepresentable)
+type TypedLIRParam = { Reg: Reg; Type: AST.Type }
+
 /// Operands
 type Operand =
     | Imm of int64           // Immediate value
@@ -198,8 +201,7 @@ type CFG = {
 /// Function with CFG
 type Function = {
     Name: string
-    Params: Reg list  // Parameter registers (before allocation: Virtual, after: Physical)
-    ParamTypes: AST.Type list  // Parameter types (for distinguishing int vs float)
+    TypedParams: TypedLIRParam list  // Parameters with types bundled
     CFG: CFG
     StackSize: int  // Bytes needed for spills (16-byte aligned)
     UsedCalleeSaved: PhysReg list  // Callee-saved registers used (for prologue/epilogue)

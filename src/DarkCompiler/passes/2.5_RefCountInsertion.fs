@@ -382,15 +382,10 @@ let rec insertRC (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * Var
 /// Insert RC operations into a function
 /// Returns (transformed function, varGen, accumulated TempTypes)
 let insertRCInFunction (ctx: TypeContext) (func: Function) (varGen: VarGen) : Function * VarGen * Map<TempId, AST.Type> =
-    // Add parameter types to context
-    let paramTypes =
-        match Map.tryFind func.Name ctx.FuncParams with
-        | Some paramList -> paramList |> List.map snd
-        | None -> []
-
+    // Add parameter types to context (types are now bundled in TypedParams)
     let ctx' =
-        List.zip func.Params paramTypes
-        |> List.fold (fun c (tid, t) -> addType c tid t) ctx
+        func.TypedParams
+        |> List.fold (fun c tp -> addType c tp.Id tp.Type) ctx
 
     // Process function body
     let (body', varGen', accTypes) = insertRC ctx' func.Body varGen

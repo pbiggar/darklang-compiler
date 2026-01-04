@@ -405,7 +405,7 @@ let optimizeProgram (program: Program) : Program =
 
     // Optimize main expression
     let (mainExpr', _) = optimizeAExpr Map.empty mainExpr
-    let mainFunc = { Name = "__main__"; Params = []; Body = mainExpr' }
+    let mainFunc = { Name = "__main__"; TypedParams = []; ReturnType = AST.TUnit; Body = mainExpr' }
     let mainOptimized = optimizeToFixedPoint mainFunc 10
 
     Program (functions', mainOptimized.Body)

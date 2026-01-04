@@ -342,7 +342,7 @@ let inlineCall (info: FunctionInfo) (args: Atom list) (resultTid: TempId)
     : AExpr * VarGen =
     // Step 1: Build parameter -> argument mapping
     let paramMapping =
-        List.zip info.Func.Params args
+        List.zip (info.Func.TypedParams |> List.map (fun p -> p.Id)) args
         |> List.fold (fun m (param, arg) ->
             match arg with
             | Var tid -> Map.add param tid m
@@ -421,7 +421,7 @@ let rec maxTempId (expr: AExpr) : int =
 
 /// Find the maximum TempId in a function
 let maxTempIdInFunction (func: Function) : int =
-    let paramMax = func.Params |> List.map (fun (TempId n) -> n) |> List.fold max 0
+    let paramMax = func.TypedParams |> List.map (fun p -> let (TempId n) = p.Id in n) |> List.fold max 0
     max paramMax (maxTempId func.Body)
 
 /// Find the maximum TempId in a program

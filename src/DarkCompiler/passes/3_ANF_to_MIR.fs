@@ -158,8 +158,8 @@ let rec maxTempIdInAExpr (expr: ANF.AExpr) : int =
 /// Find the maximum TempId in a function
 let maxTempIdInFunction (func: ANF.Function) : int =
     let paramMax =
-        func.Params
-        |> List.map (fun (ANF.TempId id) -> id)
+        func.TypedParams
+        |> List.map (fun tp -> let (ANF.TempId id) = tp.Id in id)
         |> List.fold max -1
     max paramMax (maxTempIdInAExpr func.Body)
 
@@ -442,19 +442,12 @@ let rec getExprReturnType (floatRegs: Set<int>) (typeMap: ANF.TypeMap) (returnTy
 /// Uses typeReg to determine which parameters are floats
 /// Uses returnTypeReg to check return types of called functions
 let computeReturnTypeWithReg (anfFunc: ANF.Function) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (returnTypeReg: Map<string, AST.Type>) : AST.Type =
-    // Get float parameter IDs for this function
-    let funcParamTypes =
-        match Map.tryFind anfFunc.Name typeReg with
-        | Some paramInfos -> paramInfos |> List.map snd
-        | None -> []
+    // Get float parameter IDs for this function (types are now bundled in TypedParams)
     let floatParamIds =
-        if List.length funcParamTypes = List.length anfFunc.Params then
-            List.zip anfFunc.Params funcParamTypes
-            |> List.filter (fun (_, typ) -> typ = AST.TFloat64)
-            |> List.map (fun (ANF.TempId id, _) -> id)
-            |> Set.ofList
-        else
-            Set.empty
+        anfFunc.TypedParams
+        |> List.filter (fun tp -> tp.Type = AST.TFloat64)
+        |> List.map (fun tp -> let (ANF.TempId id) = tp.Id in id)
+        |> Set.ofList
     getExprReturnType floatParamIds typeMap returnTypeReg anfFunc.Body
 
 /// Build a map from function name to return type for all functions
@@ -1765,29 +1758,17 @@ and convertExprToOperand
 
 /// Convert an ANF function to a MIR function
 let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: Map<string, int>) (fltLookup: Map<float, int>) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (returnTypeReg: Map<string, AST.Type>) (enableCoverage: bool) : Result<MIR.Function * MIR.RegGen, string> =
-    // Initialize FloatRegs with float parameter IDs
-    // This is critical so that the function body knows which VRegs hold floats
-    // Use typeReg to look up function's parameter types by name, since typeMap is empty
-    let funcParamTypes =
-        match Map.tryFind anfFunc.Name typeReg with
-        | Some paramInfos -> paramInfos |> List.map snd
-        | None -> failwith $"Type information not found for function '{anfFunc.Name}'"
-
-    // Zip params with types and find the float ones
-    // Guard against length mismatch (can happen if typeReg is incomplete)
+    // Initialize FloatRegs with float parameter IDs (types are now bundled in TypedParams)
     let floatParamIds =
-        if List.length funcParamTypes = List.length anfFunc.Params then
-            List.zip anfFunc.Params funcParamTypes
-            |> List.filter (fun (_, typ) -> typ = AST.TFloat64)
-            |> List.map (fun (ANF.TempId id, _) -> id)
-            |> Set.ofList
-        else
-            Set.empty
+        anfFunc.TypedParams
+        |> List.filter (fun tp -> tp.Type = AST.TFloat64)
+        |> List.map (fun tp -> let (ANF.TempId id) = tp.Id in id)
+        |> Set.ofList
 
     // Convert ANF parameter TempIds to MIR VRegs
     // Must use tempToVReg to preserve the TempId values, not fresh VRegs,
     // because the body uses Var (TempId n) which converts to VReg n
-    let paramVRegs = anfFunc.Params |> List.map tempToVReg
+    let paramVRegs = anfFunc.TypedParams |> List.map (fun tp -> tempToVReg tp.Id)
 
     // Create initial builder with lookups
     let initialBuilder = {
@@ -1810,12 +1791,8 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
     // Create entry label for CFG (internal to function body)
     let entryLabel = MIR.Label $"{anfFunc.Name}_body"
 
-    // Get parameter types from funcParamTypes (already extracted from typeReg)
-    let paramTypes =
-        if List.length funcParamTypes = List.length anfFunc.Params then
-            funcParamTypes
-        else
-            failwith $"Parameter count mismatch for '{anfFunc.Name}': expected {List.length anfFunc.Params} params but got {List.length funcParamTypes} types"
+    // Get parameter types from TypedParams (types are now bundled)
+    let paramTypes = anfFunc.TypedParams |> List.map (fun tp -> tp.Type)
 
     // Helper to get return type by finding return atoms in the body
     // Uses returnTypeReg to check if function calls return floats
@@ -1872,10 +1849,14 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
         MIR.Blocks = allBlocks
     }
 
+    // Create TypedMIRParams by zipping VRegs with types
+    let typedMIRParams : MIR.TypedMIRParam list =
+        List.zip paramVRegs paramTypes
+        |> List.map (fun (reg, typ) -> { Reg = reg; Type = typ })
+
     let mirFunc = {
         MIR.Name = anfFunc.Name
-        MIR.Params = paramVRegs
-        MIR.ParamTypes = paramTypes
+        MIR.TypedParams = typedMIRParams
         MIR.ReturnType = returnType
         MIR.CFG = cfg
         MIR.FloatRegs = finalBuilder.FloatRegs
@@ -1951,8 +1932,7 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
     // This is needed for proper float handling in the Ret terminator
     let startFunc = {
         MIR.Name = "_start"
-        MIR.Params = []
-        MIR.ParamTypes = []
+        MIR.TypedParams = []
         MIR.ReturnType = mainExprType
         MIR.CFG = cfg
         MIR.FloatRegs = finalBuilder.FloatRegs
@@ -2085,8 +2065,7 @@ let private offsetFunction (strOffset: int) (fltOffset: int) (func: MIR.Function
         func.CFG.Blocks
         |> Map.map (fun _ block -> offsetBlock strOffset fltOffset block)
     { Name = func.Name
-      Params = func.Params
-      ParamTypes = func.ParamTypes
+      TypedParams = func.TypedParams
       ReturnType = func.ReturnType
       CFG = { Entry = func.CFG.Entry; Blocks = offsetBlocks }
       FloatRegs = func.FloatRegs }

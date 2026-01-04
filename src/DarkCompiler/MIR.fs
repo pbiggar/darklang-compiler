@@ -18,6 +18,9 @@ module MIR
 /// Virtual register (infinite supply)
 type VReg = VReg of int
 
+/// Parameter with register and type bundled (makes invalid states unrepresentable)
+type TypedMIRParam = { Reg: VReg; Type: AST.Type }
+
 /// String pool for deduplicating string literals
 /// Maps pool index to (string value, length)
 type StringPool = {
@@ -198,11 +201,10 @@ type CFG = {
 /// MIR function with CFG
 type Function = {
     Name: string
-    Params: VReg list
-    ParamTypes: AST.Type list  // Parameter types (for distinguishing int vs float)
-    ReturnType: AST.Type       // Return type (for distinguishing int vs float returns)
+    TypedParams: TypedMIRParam list  // Parameters with types bundled
+    ReturnType: AST.Type             // Return type (for distinguishing int vs float returns)
     CFG: CFG
-    FloatRegs: Set<int>        // VReg IDs that hold float values (for SSA phi nodes)
+    FloatRegs: Set<int>              // VReg IDs that hold float values (for SSA phi nodes)
 }
 
 /// Variant info for sum type printing

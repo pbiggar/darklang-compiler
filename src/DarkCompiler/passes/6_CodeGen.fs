@@ -3195,7 +3195,7 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64.In
         let tempRegs = [ARM64.X9; ARM64.X10; ARM64.X11; ARM64.X12; ARM64.X13; ARM64.X14; ARM64.X15]
 
         // AAPCS64: int and float use SEPARATE register counters
-        let paramsWithTypes = List.zip func.Params func.ParamTypes
+        let paramsWithTypes = func.TypedParams |> List.map (fun tp -> (tp.Reg, tp.Type))
 
         // Collect integer parameters with their calling convention index
         let intParamsWithIdx =

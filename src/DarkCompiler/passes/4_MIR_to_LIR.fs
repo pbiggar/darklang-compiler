@@ -1329,10 +1329,10 @@ let selectCFG (cfg: MIR.CFG) (stringPool: MIR.StringPool) (variantRegistry: MIR.
 let private checkParameterLimits (mirFuncs: MIR.Function list) : Result<unit, string> =
     let funcWithTooManyParams =
         mirFuncs
-        |> List.tryFind (fun f -> List.length f.Params > 8)
+        |> List.tryFind (fun f -> List.length f.TypedParams > 8)
     match funcWithTooManyParams with
     | Some f ->
-        Error $"Function '{f.Name}' has {List.length f.Params} parameters, but only 8 are supported (ARM64 calling convention limit)"
+        Error $"Function '{f.Name}' has {List.length f.TypedParams} parameters, but only 8 are supported (ARM64 calling convention limit)"
     | None -> Ok ()
 
 /// Check if any function call has more than 8 arguments
@@ -1373,12 +1373,15 @@ let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
         match selectCFG mirFunc.CFG stringPool variantRegistry recordRegistry mirFunc.ReturnType mirFunc.FloatRegs with
         | Error err -> Error err
         | Ok lirCFG ->
-            // Convert MIR VRegs to LIR Virtual registers for parameters
-            let lirParams = mirFunc.Params |> List.map (fun (MIR.VReg id) -> LIR.Virtual id)
+            // Convert MIR TypedParams to LIR TypedLIRParams
+            let lirTypedParams : LIR.TypedLIRParam list =
+                mirFunc.TypedParams
+                |> List.map (fun tp ->
+                    let (MIR.VReg id) = tp.Reg
+                    { Reg = LIR.Virtual id; Type = tp.Type })
             Ok {
                 LIR.Name = mirFunc.Name
-                LIR.Params = lirParams
-                LIR.ParamTypes = mirFunc.ParamTypes
+                LIR.TypedParams = lirTypedParams
                 LIR.CFG = lirCFG
                 LIR.StackSize = 0  // Will be determined by register allocation
                 LIR.UsedCalleeSaved = []  // Will be determined by register allocation
@@ -1468,8 +1471,7 @@ let offsetLIRFunction (strOffset: int) (fltOffset: int) (func: LIR.Function) : L
         func.CFG.Blocks
         |> Map.map (fun _ block -> offsetLIRBlock strOffset fltOffset block)
     { Name = func.Name
-      Params = func.Params
-      ParamTypes = func.ParamTypes
+      TypedParams = func.TypedParams
       CFG = { Entry = func.CFG.Entry; Blocks = offsetBlocks }
       StackSize = func.StackSize
       UsedCalleeSaved = func.UsedCalleeSaved }

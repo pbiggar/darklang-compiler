@@ -2665,7 +2665,7 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
     // Each parameter type uses its own register counter
     // IMPORTANT: This must happen BEFORE float allocation so we can include
     // float param FVirtuals in the interference graph
-    let paramsWithTypes = List.zip func.Params func.ParamTypes
+    let paramsWithTypes = func.TypedParams |> List.map (fun tp -> (tp.Reg, tp.Type))
     let _, _, intParams, floatParams =
         paramsWithTypes
         |> List.fold (fun (intIdx, floatIdx, intAcc, floatAcc) (reg, typ) ->
@@ -2827,16 +2827,14 @@ let allocateRegisters (func: LIR.Function) : LIR.Function =
     let cfgWithParamCopies = { allocatedCFG with Blocks = updatedBlocks }
 
     // Step 10: Set parameters to calling convention registers
-    // For floats, we still record as X register in Params since Params is Reg list
-    // The actual float handling is done via ParamTypes
-    let allocatedParams =
-        func.Params
-        |> List.mapi (fun i _ -> LIR.Physical (List.item i parameterRegs))
+    // Create TypedLIRParams with physical registers
+    let allocatedTypedParams : LIR.TypedLIRParam list =
+        func.TypedParams
+        |> List.mapi (fun i tp -> { Reg = LIR.Physical (List.item i parameterRegs); Type = tp.Type })
 
     {
         LIR.Name = func.Name
-        LIR.Params = allocatedParams
-        LIR.ParamTypes = func.ParamTypes
+        LIR.TypedParams = allocatedTypedParams
         LIR.CFG = cfgWithParamCopies
         LIR.StackSize = result.StackSize
         LIR.UsedCalleeSaved = result.UsedCalleeSaved

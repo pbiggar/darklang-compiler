@@ -23,6 +23,9 @@ module ANF
 /// Unique identifier for temporary variables
 type TempId = TempId of int
 
+/// Parameter with type information bundled together (makes invalid states unrepresentable)
+type TypedParam = { Id: TempId; Type: AST.Type }
+
 /// Integer value with explicit size - invalid states unrepresentable
 /// Following "make invalid states unrepresentable" principle
 type SizedInt =
@@ -164,7 +167,8 @@ type AExpr =
 /// ANF function definition
 type Function = {
     Name: string
-    Params: TempId list
+    TypedParams: TypedParam list  // Parameter IDs with their types bundled
+    ReturnType: AST.Type
     Body: AExpr
 }
 

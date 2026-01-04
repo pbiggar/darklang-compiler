@@ -4773,23 +4773,23 @@ and wrapBindings (bindings: (ANF.TempId * ANF.CExpr) list) (expr: ANF.AExpr) : A
 
 /// Convert a function definition to ANF
 let convertFunction (funcDef: AST.FunctionDef) (varGen: ANF.VarGen) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Function * ANF.VarGen, string> =
-    // Allocate TempIds for parameters
-    let (paramIds, varGen1) =
+    // Allocate TempIds for parameters, bundled with their types
+    let (typedParams, varGen1) =
         funcDef.Params
-        |> List.fold (fun (ids, vg) (_, _) ->
+        |> List.fold (fun (acc, vg) (_, typ) ->
             let (tempId, vg') = ANF.freshVar vg
-            (ids @ [tempId], vg')) ([], varGen)
+            (acc @ [{ ANF.TypedParam.Id = tempId; Type = typ }], vg')) ([], varGen)
 
     // Build environment mapping param names to (TempId, Type)
     let paramEnv : VarEnv =
-        List.zip funcDef.Params paramIds
-        |> List.map (fun ((name, typ), tempId) -> (name, (tempId, typ)))
+        List.zip funcDef.Params typedParams
+        |> List.map (fun ((name, _), typedParam) -> (name, (typedParam.Id, typedParam.Type)))
         |> Map.ofList
 
     // Convert body
     toANF funcDef.Body varGen1 paramEnv typeReg variantLookup funcReg moduleRegistry
     |> Result.map (fun (body, varGen2) ->
-        ({ Name = funcDef.Name; Params = paramIds; Body = body }, varGen2))
+        ({ Name = funcDef.Name; TypedParams = typedParams; ReturnType = funcDef.ReturnType; Body = body }, varGen2))
 
 /// Result type that includes registries needed for later passes
 type ConversionResult = {

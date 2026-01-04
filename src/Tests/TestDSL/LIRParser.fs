@@ -237,8 +237,7 @@ let parseLIR (text: string) : Result<LIR.Program, string> =
         }
         let func = {
             Name = "_start"
-            Params = []
-            ParamTypes = []
+            TypedParams = []
             CFG = cfg
             StackSize = 0
             UsedCalleeSaved = []
