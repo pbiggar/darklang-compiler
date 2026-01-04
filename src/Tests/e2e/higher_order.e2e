@@ -67,3 +67,6 @@ def outer(f: (Int64) -> Int64, x: Int64): Int64 = f(x) def inner(g: (Int64) -> I
 
 // CPS-style with captured variables
 def cpsAdd(x: Int64, k: (Int64) -> Int64): Int64 = k(x) let base = 10 in cpsAdd(5, (r: Int64) => r + base) = 15
+
+// Capturing function parameter in nested lambda (requires proper type tracking)
+def apply(f: (Int64) -> Int64, x: Int64): Int64 = f(x) def wrapper(k: (Int64) -> Int64, x: Int64): Int64 = apply((r: Int64) => k(r), x) wrapper((n: Int64) => n * 2, 21) = 42

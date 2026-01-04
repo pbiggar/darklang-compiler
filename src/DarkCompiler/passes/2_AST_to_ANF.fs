@@ -804,6 +804,7 @@ let inlineLambdasInProgram (program: AST.Program) : AST.Program =
 type LiftState = {
     Counter: int
     LiftedFunctions: AST.FunctionDef list
+    TypeEnv: Map<string, AST.Type>  // Variable name -> Type (for tracking types of captured variables)
 }
 
 /// Collect free variables in an expression (variables not bound by let or lambda parameters)
@@ -821,7 +822,13 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
         Set.union valueVars bodyVars
     | AST.If (cond, thenBr, elseBr) ->
         Set.union (freeVars cond bound) (Set.union (freeVars thenBr bound) (freeVars elseBr bound))
-    | AST.Call (_, args) | AST.TypeApp (_, _, args) ->
+    | AST.Call (funcName, args) ->
+        // Check if funcName is a local variable (not in bound) - if so, it's a free variable
+        // Top-level function names will be filtered out later since they won't be in TypeEnv
+        let funcFree = if Set.contains funcName bound then Set.empty else Set.singleton funcName
+        let argsFree = args |> List.map (fun a -> freeVars a bound) |> List.fold Set.union Set.empty
+        Set.union funcFree argsFree
+    | AST.TypeApp (_, _, args) ->
         args |> List.map (fun a -> freeVars a bound) |> List.fold Set.union Set.empty
     | AST.TupleLiteral elems | AST.ListLiteral elems ->
         elems |> List.map (fun e -> freeVars e bound) |> List.fold Set.union Set.empty
@@ -862,6 +869,32 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
             | AST.StringExpr e -> Some (freeVars e bound))
         |> List.fold Set.union Set.empty
 
+/// Simple type inference for lambda lifting - infers types of simple expressions
+/// This allows let-bound variables to be captured in nested lambdas
+let simpleInferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) : AST.Type option =
+    match expr with
+    | AST.IntLiteral _ -> Some AST.TInt64
+    | AST.Int8Literal _ -> Some AST.TInt8
+    | AST.Int16Literal _ -> Some AST.TInt16
+    | AST.Int32Literal _ -> Some AST.TInt32
+    | AST.UInt8Literal _ -> Some AST.TUInt8
+    | AST.UInt16Literal _ -> Some AST.TUInt16
+    | AST.UInt32Literal _ -> Some AST.TUInt32
+    | AST.UInt64Literal _ -> Some AST.TUInt64
+    | AST.BoolLiteral _ -> Some AST.TBool
+    | AST.StringLiteral _ -> Some AST.TString
+    | AST.CharLiteral _ -> Some AST.TChar
+    | AST.FloatLiteral _ -> Some AST.TFloat64
+    | AST.UnitLiteral -> Some AST.TUnit
+    | AST.Var name -> Map.tryFind name typeEnv
+    | AST.BinOp (op, _, _) ->
+        match op with
+        | AST.Add | AST.Sub | AST.Mul | AST.Div | AST.Mod
+        | AST.Shl | AST.Shr | AST.BitAnd | AST.BitOr | AST.BitXor -> Some AST.TInt64
+        | AST.Eq | AST.Neq | AST.Lt | AST.Gt | AST.Lte | AST.Gte | AST.And | AST.Or -> Some AST.TBool
+        | AST.StringConcat -> Some AST.TString
+    | _ -> None  // Complex expressions require full type inference
+
 /// Lift lambdas in an expression, returning (transformed expr, new state)
 let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr * LiftState, string> =
     match expr with
@@ -880,8 +913,16 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
     | AST.Let (name, value, body) ->
         liftLambdasInExpr value state
         |> Result.bind (fun (value', state1) ->
-            liftLambdasInExpr body state1
-            |> Result.map (fun (body', state2) -> (AST.Let (name, value', body'), state2)))
+            // Try to infer the type of the value for capturing in nested lambdas
+            let valueType = simpleInferType value' state1.TypeEnv
+            let state1' = match valueType with
+                          | Some t -> { state1 with TypeEnv = Map.add name t state1.TypeEnv }
+                          | None -> state1
+            liftLambdasInExpr body state1'
+            |> Result.map (fun (body', state2) ->
+                // Restore TypeEnv (remove the let binding)
+                let state2' = { state2 with TypeEnv = Map.remove name state2.TypeEnv }
+                (AST.Let (name, value', body'), state2')))
     | AST.If (cond, thenBr, elseBr) ->
         liftLambdasInExpr cond state
         |> Result.bind (fun (cond', state1) ->
@@ -934,17 +975,27 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
             |> Result.map (fun (cases', state2) -> (AST.Match (scrutinee', cases'), state2)))
     | AST.Lambda (parameters, body) ->
         // Lambda in expression position - lift it to a closure
+        // Add lambda parameters to type environment before processing body
+        let lambdaParamTypes = parameters |> Map.ofList
+        let stateWithLambdaParams = { state with TypeEnv = Map.fold (fun acc k v -> Map.add k v acc) state.TypeEnv lambdaParamTypes }
         // First, lift any lambdas within the body
-        liftLambdasInExpr body state
+        liftLambdasInExpr body stateWithLambdaParams
         |> Result.bind (fun (body', state1) ->
             // Now lift this lambda itself to a closure
             let paramNames = parameters |> List.map fst |> Set.ofList
             let freeVarsInBody = freeVars body' paramNames
-            let captures = Set.toList freeVarsInBody
+            // Filter to only include variables actually in TypeEnv (excludes top-level function names)
+            let captures = freeVarsInBody |> Set.filter (fun name -> Map.containsKey name state.TypeEnv) |> Set.toList
+
+            // Get actual types of captured variables from type environment
+            let captureTypes = captures |> List.map (fun name ->
+                Map.tryFind name state.TypeEnv |> Option.defaultValue AST.TInt64)
 
             // Create lifted function
             let funcName = $"__closure_{state1.Counter}"
-            let closureParam = ("__closure", AST.TTuple (List.replicate (List.length captures + 1) AST.TInt64))
+            // First element is function pointer (Int64), rest are captures with their actual types
+            let closureTupleTypes = AST.TInt64 :: captureTypes
+            let closureParam = ("__closure", AST.TTuple closureTupleTypes)
 
             // Build body that extracts captures from closure tuple
             let bodyWithExtractions =
@@ -967,6 +1018,7 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
             let state' = {
                 Counter = state1.Counter + 1
                 LiftedFunctions = funcDef :: state1.LiftedFunctions
+                TypeEnv = state.TypeEnv  // Restore original TypeEnv (exclude lambda params)
             }
             // Replace lambda with Closure
             let captureExprs = captures |> List.map AST.Var
@@ -999,18 +1051,28 @@ and liftLambdasInArgs (args: AST.Expr list) (state: LiftState) : Result<AST.Expr
         | arg :: rest ->
             match arg with
             | AST.Lambda (parameters, body) ->
+                // Add lambda parameters to type environment before processing body
+                let lambdaParamTypes = parameters |> Map.ofList
+                let stateWithLambdaParams = { state with TypeEnv = Map.fold (fun acc k v -> Map.add k v acc) state.TypeEnv lambdaParamTypes }
                 // First, recursively lift any nested lambdas in the body
-                liftLambdasInExpr body state
+                liftLambdasInExpr body stateWithLambdaParams
                 |> Result.bind (fun (body', state1) ->
                     // Check for free variables (captures)
                     let paramNames = parameters |> List.map fst |> Set.ofList
                     let freeVarsInBody = freeVars body' paramNames
-                    let captures = Set.toList freeVarsInBody
+                    // Filter to only include variables actually in TypeEnv (excludes top-level function names)
+                    let captures = freeVarsInBody |> Set.filter (fun name -> Map.containsKey name state.TypeEnv) |> Set.toList
+
+                    // Get actual types of captured variables from type environment
+                    let captureTypes = captures |> List.map (fun name ->
+                        Map.tryFind name state.TypeEnv |> Option.defaultValue AST.TInt64)
 
                     // All lambdas become closures (even non-capturing ones) for uniform calling convention
                     // The lifted function takes closure as first param, then original params
                     let funcName = $"__closure_{state1.Counter}"
-                    let closureParam = ("__closure", AST.TTuple (List.replicate (List.length captures + 1) AST.TInt64))
+                    // First element is function pointer (Int64), rest are captures with their actual types
+                    let closureTupleTypes = AST.TInt64 :: captureTypes
+                    let closureParam = ("__closure", AST.TTuple closureTupleTypes)
 
                     // Build body that extracts captures from closure tuple:
                     // let cap1 = __closure.1 in let cap2 = __closure.2 in ... original_body
@@ -1035,6 +1097,7 @@ and liftLambdasInArgs (args: AST.Expr list) (state: LiftState) : Result<AST.Expr
                     let state' = {
                         Counter = state1.Counter + 1
                         LiftedFunctions = funcDef :: state1.LiftedFunctions
+                        TypeEnv = state.TypeEnv  // Restore original TypeEnv (exclude lambda params)
                     }
                     // Replace lambda with Closure (captures may be empty for non-capturing lambdas)
                     let captureExprs = captures |> List.map AST.Var
@@ -1058,6 +1121,7 @@ and liftLambdasInArgs (args: AST.Expr list) (state: LiftState) : Result<AST.Expr
                 let state' = {
                     Counter = state.Counter + 1
                     LiftedFunctions = wrapperDef :: state.LiftedFunctions
+                    TypeEnv = state.TypeEnv
                 }
                 // Create trivial closure with no captures
                 loop rest state' (AST.Closure (wrapperName, []) :: acc)
@@ -1116,8 +1180,13 @@ and liftLambdasInCases (cases: AST.MatchCase list) (state: LiftState) : Result<A
 
 /// Lift lambdas in a function definition
 let liftLambdasInFunc (funcDef: AST.FunctionDef) (state: LiftState) : Result<AST.FunctionDef * LiftState, string> =
-    liftLambdasInExpr funcDef.Body state
-    |> Result.map (fun (body', state') -> ({ funcDef with Body = body' }, state'))
+    // Add function parameters to the type environment
+    let paramTypes = funcDef.Params |> List.map (fun (name, typ) -> (name, typ)) |> Map.ofList
+    let stateWithParams = { state with TypeEnv = Map.fold (fun acc k v -> Map.add k v acc) state.TypeEnv paramTypes }
+    liftLambdasInExpr funcDef.Body stateWithParams
+    |> Result.map (fun (body', state') ->
+        // Restore original TypeEnv (remove parameters) after processing the function
+        ({ funcDef with Body = body' }, { state' with TypeEnv = state.TypeEnv }))
 
 /// State extended to include known function names and their parameters
 type LiftStateWithFuncs = {
@@ -1153,7 +1222,7 @@ let generateFuncWrapper (origFuncName: string) (funcParams: Map<string, (string 
 /// Lift lambdas in a program, generating new top-level functions
 let rec liftLambdasInProgram (program: AST.Program) : Result<AST.Program, string> =
     let (AST.Program topLevels) = program
-    let initialState = { Counter = 0; LiftedFunctions = [] }
+    let initialState = { Counter = 0; LiftedFunctions = []; TypeEnv = Map.empty }
 
     // First pass: collect all function definitions and their parameters
     let userFuncParams : Map<string, (string * AST.Type) list> =
