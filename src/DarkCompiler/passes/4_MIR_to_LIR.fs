@@ -667,10 +667,11 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
             |> List.mapi (fun i cap -> LIR.HeapStore (lirDest, (i + 1) * 8, convertOperand cap, None))
         Ok (allocInstr :: storeFuncInstr :: storeInstrs)
 
-    | MIR.ClosureCall (dest, closure, args) ->
+    | MIR.ClosureCall (dest, closure, args, argTypes) ->
         // Call through closure: extract func_ptr from closure[0], call with (closure, args...)
         let lirDest = vregToLIRReg dest
-        let argRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
+        let intRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
+        let floatRegs = [LIR.D0; LIR.D1; LIR.D2; LIR.D3; LIR.D4; LIR.D5; LIR.D6; LIR.D7]
 
         // Save caller-saved registers
         // Empty placeholder - register allocator will fill in the actual registers to save
@@ -684,20 +685,42 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
             | LIR.Reg r -> LIR.Mov (closureReg, LIR.Reg r)
             | other -> LIR.Mov (closureReg, other)
 
-        // Use ArgMoves for parallel move - closure goes to X0, args to X1-X7
-        // Closure is already safe in X10, include it in the ArgMoves
-        let argMoves =
-            if List.length args > 7 then
-                // Error: too many args for closure call (8 - 1 for closure = 7 max)
-                []  // Will be caught by validation
+        // Separate args into int and float based on argTypes
+        let argsWithTypes = List.zip args argTypes
+        let intArgs = argsWithTypes |> List.filter (fun (_, t) -> t <> AST.TFloat64)
+        let floatArgs = argsWithTypes |> List.filter (fun (_, t) -> t = AST.TFloat64)
+
+        // Generate ArgMoves for closure (X0) and integer arguments (X1-X7)
+        let intArgMoves =
+            let closureMove = (LIR.X0, LIR.Reg closureReg)
+            if List.isEmpty intArgs then
+                [LIR.ArgMoves [closureMove]]
             else
-                let closureMove = (LIR.X0, LIR.Reg closureReg)
                 let regularArgMoves =
-                    args
-                    |> List.mapi (fun i arg ->
-                        let targetReg = List.item (i + 1) argRegs  // X1, X2, ...
-                        (targetReg, convertOperand arg))
+                    List.zip (List.map fst intArgs) (List.skip 1 intRegs |> List.take (List.length intArgs))
+                    |> List.map (fun (arg, reg) -> (reg, convertOperand arg))
                 [LIR.ArgMoves (closureMove :: regularArgMoves)]
+
+        // Generate FArgMoves for float arguments (D0-D7)
+        let floatArgMoves =
+            if List.isEmpty floatArgs then []
+            else
+                let mutable tempFRegCounter = 3000
+                let loadInstrsAndPairs =
+                    List.zip (List.map fst floatArgs) (List.take (List.length floatArgs) floatRegs)
+                    |> List.map (fun (arg, destReg) ->
+                        match arg with
+                        | MIR.FloatRef idx ->
+                            let tempFReg = LIR.FVirtual tempFRegCounter
+                            tempFRegCounter <- tempFRegCounter + 1
+                            ([LIR.FLoad (tempFReg, idx)], (destReg, tempFReg))
+                        | MIR.Register vreg ->
+                            ([], (destReg, vregToLIRFReg vreg))
+                        | _ ->
+                            ([], (destReg, LIR.FVirtual 9999)))
+                let loadInstrs = loadInstrsAndPairs |> List.collect fst
+                let argPairs = loadInstrsAndPairs |> List.map snd
+                loadInstrs @ [LIR.FArgMoves argPairs]
 
         // Load function pointer from closure[0] into X9
         // IMPORTANT: This must come AFTER argMoves because ArgMoves may use X9 as a temp
@@ -717,11 +740,12 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
             | LIR.Physical LIR.X0 -> []
             | _ -> [LIR.Mov (lirDest, LIR.Reg (LIR.Physical LIR.X0))]
 
-        Ok (saveInstrs @ [loadClosureInstr] @ argMoves @ [loadFuncPtrInstr] @ [callInstr] @ restoreInstrs @ moveResult)
+        Ok (saveInstrs @ [loadClosureInstr] @ intArgMoves @ floatArgMoves @ [loadFuncPtrInstr] @ [callInstr] @ restoreInstrs @ moveResult)
 
-    | MIR.ClosureTailCall (closure, args) ->
+    | MIR.ClosureTailCall (closure, args, argTypes) ->
         // Closure tail call: skip SaveRegs/RestoreRegs, use BR
-        let argRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
+        let intRegs = [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7]
+        let floatRegs = [LIR.D0; LIR.D1; LIR.D2; LIR.D3; LIR.D4; LIR.D5; LIR.D6; LIR.D7]
 
         // Load closure into a temp register first
         let closureOp = convertOperand closure
@@ -731,17 +755,42 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
             | LIR.Reg r -> LIR.Mov (closureReg, LIR.Reg r)
             | other -> LIR.Mov (closureReg, other)
 
-        // Closure goes to X0, args to X1-X7 (using TailArgMoves - no SaveRegs)
-        let argMoves =
-            if List.length args > 7 then []
+        // Separate args into int and float based on argTypes
+        let argsWithTypes = List.zip args argTypes
+        let intArgs = argsWithTypes |> List.filter (fun (_, t) -> t <> AST.TFloat64)
+        let floatArgs = argsWithTypes |> List.filter (fun (_, t) -> t = AST.TFloat64)
+
+        // Generate TailArgMoves for closure (X0) and integer arguments (X1-X7)
+        let intArgMoves =
+            let closureMove = (LIR.X0, LIR.Reg closureReg)
+            if List.isEmpty intArgs then
+                [LIR.TailArgMoves [closureMove]]
             else
-                let closureMove = (LIR.X0, LIR.Reg closureReg)
                 let regularArgMoves =
-                    args
-                    |> List.mapi (fun i arg ->
-                        let targetReg = List.item (i + 1) argRegs
-                        (targetReg, convertOperand arg))
+                    List.zip (List.map fst intArgs) (List.skip 1 intRegs |> List.take (List.length intArgs))
+                    |> List.map (fun (arg, reg) -> (reg, convertOperand arg))
                 [LIR.TailArgMoves (closureMove :: regularArgMoves)]
+
+        // Generate FArgMoves for float arguments (D0-D7)
+        let floatArgMoves =
+            if List.isEmpty floatArgs then []
+            else
+                let mutable tempFRegCounter = 3000
+                let loadInstrsAndPairs =
+                    List.zip (List.map fst floatArgs) (List.take (List.length floatArgs) floatRegs)
+                    |> List.map (fun (arg, destReg) ->
+                        match arg with
+                        | MIR.FloatRef idx ->
+                            let tempFReg = LIR.FVirtual tempFRegCounter
+                            tempFRegCounter <- tempFRegCounter + 1
+                            ([LIR.FLoad (tempFReg, idx)], (destReg, tempFReg))
+                        | MIR.Register vreg ->
+                            ([], (destReg, vregToLIRFReg vreg))
+                        | _ ->
+                            ([], (destReg, LIR.FVirtual 9999)))
+                let loadInstrs = loadInstrsAndPairs |> List.collect fst
+                let argPairs = loadInstrsAndPairs |> List.map snd
+                loadInstrs @ [LIR.FArgMoves argPairs]
 
         // Load function pointer from closure[0] into X9
         // IMPORTANT: This must come AFTER argMoves because TailArgMoves may use X9 as a temp
@@ -751,7 +800,7 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
 
         let callInstr = LIR.ClosureTailCall (LIR.Physical LIR.X9, List.map convertOperand args)
 
-        Ok ([loadClosureInstr] @ argMoves @ [loadFuncPtrInstr] @ [callInstr])
+        Ok ([loadClosureInstr] @ intArgMoves @ floatArgMoves @ [loadFuncPtrInstr] @ [callInstr])
 
     | MIR.HeapAlloc (dest, sizeBytes) ->
         let lirDest = vregToLIRReg dest

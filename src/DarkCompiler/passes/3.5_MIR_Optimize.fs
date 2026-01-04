@@ -72,7 +72,7 @@ let getInstrDest (instr: Instr) : VReg option =
     | IndirectCall (dest, _, _, _, _) -> Some dest
     | IndirectTailCall _ -> None  // Indirect tail calls don't return here
     | ClosureAlloc (dest, _, _) -> Some dest
-    | ClosureCall (dest, _, _) -> Some dest
+    | ClosureCall (dest, _, _, _) -> Some dest
     | ClosureTailCall _ -> None  // Closure tail calls don't return here
     | HeapAlloc (dest, _) -> Some dest
     | HeapLoad (dest, _, _, _) -> Some dest
@@ -124,8 +124,8 @@ let getInstrUses (instr: Instr) : Set<VReg> =
     | IndirectCall (_, func, args, _, _) -> Set.unionMany ((fromOperand func) :: (args |> List.map fromOperand))
     | IndirectTailCall (func, args, _, _) -> Set.unionMany ((fromOperand func) :: (args |> List.map fromOperand))
     | ClosureAlloc (_, _, captures) -> captures |> List.map fromOperand |> Set.unionMany
-    | ClosureCall (_, closure, args) -> Set.unionMany ((fromOperand closure) :: (args |> List.map fromOperand))
-    | ClosureTailCall (closure, args) -> Set.unionMany ((fromOperand closure) :: (args |> List.map fromOperand))
+    | ClosureCall (_, closure, args, _) -> Set.unionMany ((fromOperand closure) :: (args |> List.map fromOperand))
+    | ClosureTailCall (closure, args, _) -> Set.unionMany ((fromOperand closure) :: (args |> List.map fromOperand))
     | HeapAlloc _ -> Set.empty
     | HeapStore (addr, _, src, _) -> Set.add addr (fromOperand src)
     | HeapLoad (_, addr, _, _) -> Set.singleton addr
@@ -293,8 +293,8 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | IndirectCall (dest, func, args, argTypes, retType) -> IndirectCall (dest, p func, List.map p args, argTypes, retType)
     | IndirectTailCall (func, args, argTypes, retType) -> IndirectTailCall (p func, List.map p args, argTypes, retType)
     | ClosureAlloc (dest, name, captures) -> ClosureAlloc (dest, name, List.map p captures)
-    | ClosureCall (dest, closure, args) -> ClosureCall (dest, p closure, List.map p args)
-    | ClosureTailCall (closure, args) -> ClosureTailCall (p closure, List.map p args)
+    | ClosureCall (dest, closure, args, argTypes) -> ClosureCall (dest, p closure, List.map p args, argTypes)
+    | ClosureTailCall (closure, args, argTypes) -> ClosureTailCall (p closure, List.map p args, argTypes)
     | HeapAlloc (dest, size) -> HeapAlloc (dest, size)
     | HeapStore (addr, offset, src, vt) ->
         let addr' = match p (Register addr) with Register v -> v | _ -> addr

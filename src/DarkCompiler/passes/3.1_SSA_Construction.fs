@@ -188,7 +188,7 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | IndirectCall (dest, _, _, _, _) -> Set.add dest defs
         | IndirectTailCall _ -> defs  // Indirect tail calls have no destination
         | ClosureAlloc (dest, _, _) -> Set.add dest defs
-        | ClosureCall (dest, _, _) -> Set.add dest defs
+        | ClosureCall (dest, _, _, _) -> Set.add dest defs
         | ClosureTailCall _ -> defs  // Closure tail calls have no destination
         | HeapAlloc (dest, _) -> Set.add dest defs
         | HeapStore _ -> defs  // No destination register
@@ -268,11 +268,11 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
                 uses |> Set.union funcUses |> Set.union argUses
             | ClosureAlloc (_, _, captures) ->
                 captures |> List.fold (fun u c -> Set.union u (getOperandUses c)) uses
-            | ClosureCall (_, closure, args) ->
+            | ClosureCall (_, closure, args, _) ->
                 let closureUses = getOperandUses closure
                 let argUses = args |> List.fold (fun u a -> Set.union u (getOperandUses a)) Set.empty
                 uses |> Set.union closureUses |> Set.union argUses
-            | ClosureTailCall (closure, args) ->
+            | ClosureTailCall (closure, args, _) ->
                 let closureUses = getOperandUses closure
                 let argUses = args |> List.fold (fun u a -> Set.union u (getOperandUses a)) Set.empty
                 uses |> Set.union closureUses |> Set.union argUses
@@ -506,7 +506,7 @@ let createInitialRenamingState (cfg: CFG) (floatRegs: Set<int>) : RenamingState 
                     | Call (VReg n, _, _, _, _) -> max m n
                     | IndirectCall (VReg n, _, _, _, _) -> max m n
                     | ClosureAlloc (VReg n, _, _) -> max m n
-                    | ClosureCall (VReg n, _, _) -> max m n
+                    | ClosureCall (VReg n, _, _, _) -> max m n
                     | HeapAlloc (VReg n, _) -> max m n
                     | HeapLoad (VReg n, _, _, _) -> max m n
                     | StringConcat (VReg n, _, _) -> max m n
@@ -627,16 +627,16 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let (_, newDest, state') = newVersion state dest
         (ClosureAlloc (newDest, funcName, captures'), state')
 
-    | ClosureCall (dest, closure, args) ->
+    | ClosureCall (dest, closure, args, argTypes) ->
         let closure' = renameOperand state closure
         let args' = args |> List.map (renameOperand state)
         let (_, newDest, state') = newVersion state dest
-        (ClosureCall (newDest, closure', args'), state')
+        (ClosureCall (newDest, closure', args', argTypes), state')
 
-    | ClosureTailCall (closure, args) ->
+    | ClosureTailCall (closure, args, argTypes) ->
         let closure' = renameOperand state closure
         let args' = args |> List.map (renameOperand state)
-        (ClosureTailCall (closure', args'), state)  // No dest
+        (ClosureTailCall (closure', args', argTypes), state)  // No dest
 
     | HeapAlloc (dest, size) ->
         let (_, newDest, state') = newVersion state dest

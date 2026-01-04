@@ -858,13 +858,14 @@ let rec convertExpr
                     |> Result.map (fun storeInstrs -> allocInstr :: storeFuncInstr :: storeInstrs)
                 | ANF.ClosureCall (closure, args) ->
                     // Call through closure: extract func_ptr, call with (closure, args...)
+                    let argTypes = args |> List.map (atomType builder)
                     atomToOperand builder closure
                     |> Result.bind (fun closureOp ->
                         args
                         |> List.map (atomToOperand builder)
                         |> sequenceResults
                         |> Result.map (fun argOperands ->
-                            [MIR.ClosureCall (destReg, closureOp, argOperands)]))
+                            [MIR.ClosureCall (destReg, closureOp, argOperands, argTypes)]))
                 | ANF.TailCall (funcName, args) ->
                     // Non-self-recursive tail call (self-recursive handled specially above)
                     // Emits TailCall instruction with full epilogue + branch
@@ -894,13 +895,14 @@ let rec convertExpr
                             [MIR.IndirectTailCall (funcOp, argOperands, argTypes, returnType)]))
                 | ANF.ClosureTailCall (closure, args) ->
                     // Closure tail call: no destination register
+                    let argTypes = args |> List.map (atomType builder)
                     atomToOperand builder closure
                     |> Result.bind (fun closureOp ->
                         args
                         |> List.map (atomToOperand builder)
                         |> sequenceResults
                         |> Result.map (fun argOperands ->
-                            [MIR.ClosureTailCall (closureOp, argOperands)]))
+                            [MIR.ClosureTailCall (closureOp, argOperands, argTypes)]))
                 | ANF.TupleAlloc elems ->
                     // Allocate heap space: 8 bytes per element
                     let sizeBytes = List.length elems * 8
@@ -1428,13 +1430,14 @@ and convertExprToOperand
                     |> Result.map (fun storeInstrs -> allocInstr :: storeFuncInstr :: storeInstrs)
                 | ANF.ClosureCall (closure, args) ->
                     // Call through closure: extract func_ptr, call with (closure, args...)
+                    let argTypes = args |> List.map (atomType builder)
                     atomToOperand builder closure
                     |> Result.bind (fun closureOp ->
                         args
                         |> List.map (atomToOperand builder)
                         |> sequenceResults
                         |> Result.map (fun argOperands ->
-                            [MIR.ClosureCall (destReg, closureOp, argOperands)]))
+                            [MIR.ClosureCall (destReg, closureOp, argOperands, argTypes)]))
                 | ANF.TailCall (funcName, args) ->
                     // Non-self-recursive tail call (self-recursive handled specially above)
                     // Emits TailCall instruction with full epilogue + branch
@@ -1464,13 +1467,14 @@ and convertExprToOperand
                             [MIR.IndirectTailCall (funcOp, argOperands, argTypes, returnType)]))
                 | ANF.ClosureTailCall (closure, args) ->
                     // Closure tail call: no destination register
+                    let argTypes = args |> List.map (atomType builder)
                     atomToOperand builder closure
                     |> Result.bind (fun closureOp ->
                         args
                         |> List.map (atomToOperand builder)
                         |> sequenceResults
                         |> Result.map (fun argOperands ->
-                            [MIR.ClosureTailCall (closureOp, argOperands)]))
+                            [MIR.ClosureTailCall (closureOp, argOperands, argTypes)]))
                 | ANF.TupleAlloc elems ->
                     // Allocate heap space: 8 bytes per element
                     let sizeBytes = List.length elems * 8
@@ -2041,8 +2045,8 @@ let private offsetInstr (strOffset: int) (fltOffset: int) (instr: MIR.Instr) : M
     | MIR.IndirectCall (dest, func, args, argTypes, returnType) -> MIR.IndirectCall (dest, offsetOperand strOffset fltOffset func, offsetOperands strOffset fltOffset args, argTypes, returnType)
     | MIR.IndirectTailCall (func, args, argTypes, returnType) -> MIR.IndirectTailCall (offsetOperand strOffset fltOffset func, offsetOperands strOffset fltOffset args, argTypes, returnType)
     | MIR.ClosureAlloc (dest, name, caps) -> MIR.ClosureAlloc (dest, name, offsetOperands strOffset fltOffset caps)
-    | MIR.ClosureCall (dest, closure, args) -> MIR.ClosureCall (dest, offsetOperand strOffset fltOffset closure, offsetOperands strOffset fltOffset args)
-    | MIR.ClosureTailCall (closure, args) -> MIR.ClosureTailCall (offsetOperand strOffset fltOffset closure, offsetOperands strOffset fltOffset args)
+    | MIR.ClosureCall (dest, closure, args, argTypes) -> MIR.ClosureCall (dest, offsetOperand strOffset fltOffset closure, offsetOperands strOffset fltOffset args, argTypes)
+    | MIR.ClosureTailCall (closure, args, argTypes) -> MIR.ClosureTailCall (offsetOperand strOffset fltOffset closure, offsetOperands strOffset fltOffset args, argTypes)
     | MIR.HeapAlloc (dest, size) -> MIR.HeapAlloc (dest, size)
     | MIR.HeapStore (addr, offset, src, vt) -> MIR.HeapStore (addr, offset, offsetOperand strOffset fltOffset src, vt)
     | MIR.HeapLoad (dest, addr, offset, vt) -> MIR.HeapLoad (dest, addr, offset, vt)

@@ -147,17 +147,16 @@ let sq = (x: Int64) => x * x in sq(6) + 6 = 42
 
 // =====================================================
 // Closures Capturing Float Values
-// DISABLED: Float capture in closures not yet implemented
 // =====================================================
 
 // Capture float in arithmetic
-// DISABLED: let f = 3.14 in ((x: Float) => f + x)(1.0) = stdout="4.14\n"
+let f = 3.14 in ((x: Float) => f + x)(1.0) = stdout="4.14\n"
 
 // Capture multiple floats
-// DISABLED: let a = 1.5 in let b = 2.5 in ((x: Float) => a + b + x)(1.0) = stdout="5.00\n"
+let a = 1.5 in let b = 2.5 in ((x: Float) => a + b + x)(1.0) = stdout="5.00\n"
 
 // Capture float, use in multiplication
-// DISABLED: let scale = 2.0 in ((x: Float) => x * scale)(3.5) = stdout="7.00\n"
+let scale = 2.0 in ((x: Float) => x * scale)(3.5) = stdout="7.00\n"
 
 // =====================================================
 // Closures Capturing String Values
