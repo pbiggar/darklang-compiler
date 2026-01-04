@@ -143,6 +143,7 @@ let foldUnaryOp (op: UnaryOp) (src: Atom) : CExpr option =
 let hasSideEffects (cexpr: CExpr) : bool =
     match cexpr with
     | Atom _ -> false
+    | TypedAtom _ -> false
     | Prim _ -> false
     | UnaryPrim _ -> false
     | IfValue _ -> false
@@ -195,6 +196,7 @@ let collectAtomUses (atom: Atom) : Set<TempId> =
 let collectCExprUses (cexpr: CExpr) : Set<TempId> =
     match cexpr with
     | Atom a -> collectAtomUses a
+    | TypedAtom (a, _) -> collectAtomUses a
     | Prim (_, left, right) -> Set.union (collectAtomUses left) (collectAtomUses right)
     | UnaryPrim (_, src) -> collectAtomUses src
     | IfValue (cond, thenVal, elseVal) ->
@@ -261,6 +263,7 @@ let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     let s = substAtom env
     match cexpr with
     | Atom a -> Atom (s a)
+    | TypedAtom (a, t) -> TypedAtom (s a, t)
     | Prim (op, left, right) -> Prim (op, s left, s right)
     | UnaryPrim (op, src) -> UnaryPrim (op, s src)
     | IfValue (cond, thenVal, elseVal) -> IfValue (s cond, s thenVal, s elseVal)

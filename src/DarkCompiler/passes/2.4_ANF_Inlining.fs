@@ -249,6 +249,7 @@ let renameCExpr (mapping: Map<TempId, TempId>) (cexpr: CExpr) : CExpr =
     let r = renameAtom mapping
     match cexpr with
     | Atom a -> Atom (r a)
+    | TypedAtom (a, t) -> TypedAtom (r a, t)
     | Prim (op, left, right) -> Prim (op, r left, r right)
     | UnaryPrim (op, src) -> UnaryPrim (op, r src)
     | IfValue (cond, thenVal, elseVal) -> IfValue (r cond, r thenVal, r elseVal)

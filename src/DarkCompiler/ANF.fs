@@ -107,6 +107,7 @@ type UnaryOp =
 /// Complex expressions (produce values)
 type CExpr =
     | Atom of Atom
+    | TypedAtom of Atom * AST.Type  // Atom with explicit type (for pattern matching where inferred types would be wrong)
     | Prim of BinOp * Atom * Atom
     | UnaryPrim of UnaryOp * Atom
     | IfValue of cond:Atom * thenValue:Atom * elseValue:Atom  // If-expression that produces a value

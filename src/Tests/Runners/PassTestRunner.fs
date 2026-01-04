@@ -437,6 +437,7 @@ let prettyPrintANFUnaryOp = function
 /// Pretty-print ANF complex expression
 let prettyPrintANFCExpr = function
     | ANF.Atom atom -> prettyPrintANFAtom atom
+    | ANF.TypedAtom (atom, typ) -> $"{prettyPrintANFAtom atom} : {typ}"
     | ANF.Prim (op, left, right) ->
         $"{prettyPrintANFAtom left} {prettyPrintANFOp op} {prettyPrintANFAtom right}"
     | ANF.UnaryPrim (op, operand) ->

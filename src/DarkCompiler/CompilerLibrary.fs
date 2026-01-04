@@ -1306,47 +1306,26 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                       Success = false
                       ErrorMessage = Some $"ANF conversion error: {err}" }
                 | Ok testOnly ->
-                    // Partition specialized functions: cached (skip compilation) vs needs-compilation
-                    // Each function is compiled deterministically with its own local counters (VarGen, RegGen),
-                    // so the same function always produces identical LIR regardless of compilation context.
-                    // When verbosity >= 4, compile everything fresh for LIR comparison debugging.
-                    let (cachedFuncs, functionsToCompile) =
-                        if verbosity >= 4 then
-                            // Compile ALL functions fresh for comparison
-                            ([], testOnly.UserFunctions)
-                        else
-                            testOnly.UserFunctions
-                            |> List.partition (fun f ->
-                                stdlib.CompiledFuncCache.ContainsKey(f.Name))
-                    let cachedFuncNames = cachedFuncs |> List.map (fun f -> f.Name)
-                    // Names of functions we have cached (for comparison even when compiling fresh)
-                    let cachedFuncNamesForComparison =
-                        testOnly.UserFunctions
-                        |> List.filter (fun f -> stdlib.CompiledFuncCache.ContainsKey(f.Name))
-                        |> List.map (fun f -> f.Name)
+                    // With per-function RegGen, all functions are compiled fresh (no caching needed
+                    // for determinism). Specialized stdlib functions get deterministic VRegs.
+                    //
+                    // NOTE: There's a known pre-existing compiler bug that causes crashes with:
+                    // - (String, Int64) tuples extracted via Tuple2.first/second
+                    // - Both values passed to Dict.set
+                    // - Result passed to tail call
+                    // See the Dict.fromList tests that are expected to fail until this is fixed.
+                    let functionsToCompile = testOnly.UserFunctions
+                    let cachedFuncs : ANF.Function list = []
+                    let cachedFuncNames : string list = []
 
                     if verbosity >= 3 then
-                        println $"  [CACHING] Total user funcs: {testOnly.UserFunctions.Length}, Cached: {cachedFuncs.Length}, To compile: {functionsToCompile.Length}"
-                        for name in cachedFuncNames do
-                            println $"    - Will use cached: {name}"
+                        println $"  [COMPILE] All {functionsToCompile.Length} user functions compiled fresh"
                         for f in functionsToCompile do
-                            println $"    - Will compile: {f.Name}"
+                            println $"    - {f.Name}"
 
-                    // Extract return types for cached specialized functions (needed for ANF→MIR conversion)
-                    let cachedReturnTypes =
-                        cachedFuncNames
-                        |> List.choose (fun name ->
-                            match Map.tryFind name testOnly.FuncReg with
-                            | Some (AST.TFunction (_, returnType)) -> Some (name, returnType)
-                            | _ -> None)
-                        |> Map.ofList
-
-                    // Track which specialized functions need to be cached after compilation
-                    let specializedNeedingCache =
-                        functionsToCompile
-                        |> List.filter (fun f -> Set.contains f.Name testOnly.SpecializedFuncNames)
-                        |> List.map (fun f -> f.Name)
-                        |> Set.ofList
+                    // No cached functions, so no cached return types needed
+                    let cachedReturnTypes : Map<string, AST.Type> = Map.empty
+                    let specializedNeedingCache : Set<string> = Set.empty
 
                     // Pass 2.3: ANF Optimization (only non-cached functions)
                     if verbosity >= 1 then println "  [2.3/8] ANF Optimization..."
@@ -1497,22 +1476,8 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                     // Offset pool refs in allocated user functions
                     let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
 
-                    // Compare freshly compiled vs cached functions (when verbosity >= 4)
-                    if verbosity >= 4 then
-                        for freshFunc in offsetUserFuncs do
-                            if List.contains freshFunc.Name cachedFuncNamesForComparison then
-                                match stdlib.CompiledFuncCache.TryGetValue(freshFunc.Name) with
-                                | true, cached ->
-                                    // Apply same offsets to cached function for comparison
-                                    let cachedFunc = MIR_to_LIR.offsetLIRFunction stringOffset floatOffset cached.LIRFunction
-                                    let diffs = compareLIRFunctions freshFunc.Name cachedFunc freshFunc
-                                    if diffs.Length > 0 then
-                                        println $"  [LIR DIFF] {freshFunc.Name} has {diffs.Length} differences:"
-                                        for diff in diffs do
-                                            println $"    {diff}"
-                                    else
-                                        println $"  [LIR SAME] {freshFunc.Name} - cached and fresh are identical"
-                                | false, _ -> ()
+                    // LIR comparison code disabled since caching is disabled
+                    // TODO: Re-enable when caching bug is fixed
 
                     // Cache newly-compiled specialized functions BEFORE offset adjustment.
                     // We cache un-offset functions so they can be re-offset correctly when

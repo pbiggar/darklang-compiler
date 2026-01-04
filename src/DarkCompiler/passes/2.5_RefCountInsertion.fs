@@ -70,6 +70,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | Atom (FloatLiteral _) -> Some AST.TFloat64
     | Atom (Var tid) -> tryGetType ctx tid
     | Atom (FuncRef funcName) -> Map.tryFind funcName ctx.FuncReg
+    | TypedAtom (_, typ) -> Some typ  // Use the explicit type annotation
     | Prim (op, _, _) ->
         // Binary ops return int or bool depending on op
         match op with

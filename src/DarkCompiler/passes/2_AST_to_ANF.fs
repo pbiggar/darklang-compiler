@@ -2745,6 +2745,12 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     (exprWithBindings, varGen2)))
 
     | AST.Match (scrutinee, cases) ->
+        // Infer scrutinee type to pass to pattern extraction for correct typing
+        let typeEnv = typeEnvFromVarEnv env
+        let scrutType =
+            match inferType scrutinee typeEnv typeReg variantLookup funcReg moduleRegistry with
+            | Ok t -> t
+            | Error _ -> AST.TInt64  // Fallback if type inference fails
         // Compile match to if-else chain
         // First convert scrutinee to atom
         toAtom scrutinee varGen env typeReg variantLookup funcReg moduleRegistry
@@ -2786,9 +2792,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | _ -> false
 
             // Extract pattern bindings and compile body with extended environment
-            // Note: Pattern-bound variables use TInt64 as placeholder type since full type inference
-            // for pattern variables requires scrutinee type analysis (future improvement)
-            let rec extractAndCompileBody (pattern: AST.Pattern) (body: AST.Expr) (scrutAtom: ANF.Atom) (currentEnv: VarEnv) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
+            // scrutType is the type of the scrutinee, used to determine correct types for pattern variables
+            let rec extractAndCompileBody (pattern: AST.Pattern) (body: AST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.Type) (currentEnv: VarEnv) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
                 match pattern with
                 | AST.PUnit -> toANF body vg currentEnv typeReg variantLookup funcReg moduleRegistry
                 | AST.PWildcard -> toANF body vg currentEnv typeReg variantLookup funcReg moduleRegistry
@@ -2797,15 +2802,14 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | AST.PString _ -> toANF body vg currentEnv typeReg variantLookup funcReg moduleRegistry
                 | AST.PFloat _ -> toANF body vg currentEnv typeReg variantLookup funcReg moduleRegistry
                 | AST.PVar name ->
-                    // Bind scrutinee to variable name
+                    // Bind scrutinee to variable name with the correct type
                     let (tempId, vg1) = ANF.freshVar vg
-                    // Use TInt64 as placeholder - pattern variable type tracking is future work
-                    let env' = Map.add name (tempId, AST.TInt64) currentEnv
+                    let env' = Map.add name (tempId, scrutType) currentEnv
                     toANF body vg1 env' typeReg variantLookup funcReg moduleRegistry
                     |> Result.map (fun (bodyExpr, vg2) ->
                         let expr = ANF.Let (tempId, ANF.Atom scrutAtom, bodyExpr)
                         (expr, vg2))
-                | AST.PConstructor (_, payloadPattern) ->
+                | AST.PConstructor (constructorName, payloadPattern) ->
                     match payloadPattern with
                     | None -> toANF body vg currentEnv typeReg variantLookup funcReg moduleRegistry
                     | Some innerPattern ->
@@ -2813,63 +2817,122 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         // Variant layout: [tag:8][payload:8], so payload is at index 1
                         let (payloadVar, vg1) = ANF.freshVar vg
                         let payloadExpr = ANF.TupleGet (scrutAtom, 1)
+                        // Get payload type from variant lookup if available
+                        let payloadType =
+                            match Map.tryFind constructorName variantLookup with
+                            | Some (_, typeParams, _, Some payloadTypeTemplate) ->
+                                // Apply type substitution if scrutType has type args
+                                match scrutType with
+                                | AST.TSum (_, typeArgs) when List.length typeParams = List.length typeArgs ->
+                                    let subst = List.zip typeParams typeArgs |> Map.ofList
+                                    let rec substitute t =
+                                        match t with
+                                        | AST.TVar name -> Map.tryFind name subst |> Option.defaultValue t
+                                        | AST.TTuple elems -> AST.TTuple (List.map substitute elems)
+                                        | AST.TList elem -> AST.TList (substitute elem)
+                                        | AST.TDict (k, v) -> AST.TDict (substitute k, substitute v)
+                                        | AST.TSum (name, args) -> AST.TSum (name, List.map substitute args)
+                                        | AST.TFunction (args, ret) -> AST.TFunction (List.map substitute args, substitute ret)
+                                        | _ -> t
+                                    substitute payloadTypeTemplate
+                                | _ -> payloadTypeTemplate
+                            | _ -> AST.TInt64  // Fallback
                         // Now compile the inner pattern with the payload
-                        extractAndCompileBody innerPattern body (ANF.Var payloadVar) currentEnv vg1
+                        extractAndCompileBody innerPattern body (ANF.Var payloadVar) payloadType currentEnv vg1
                         |> Result.map (fun (innerExpr, vg2) ->
                             let expr = ANF.Let (payloadVar, payloadExpr, innerExpr)
                             (expr, vg2))
                 | AST.PTuple patterns ->
                     // Recursively collect all variable bindings from a pattern
                     // Returns: updated env, list of bindings, updated vargen
-                    let rec collectPatternBindings (pat: AST.Pattern) (sourceAtom: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                    // sourceType is the type of the source being matched, used to get correct element types
+                    let rec collectPatternBindings (pat: AST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.Type) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                         match pat with
                         | AST.PUnit | AST.PWildcard | AST.PLiteral _ | AST.PBool _ | AST.PString _ | AST.PFloat _ ->
                             // No variable bindings
                             Ok (env, bindings, vg)
                         | AST.PVar name ->
-                            // Bind the source to a variable
+                            // Bind the source to a variable with the correct type
+                            // Use TypedAtom to preserve the semantic type (e.g., tuple element type)
+                            // even when the source comes from a function with generic return type
                             let (tempId, vg1) = ANF.freshVar vg
-                            let binding = (tempId, ANF.Atom sourceAtom)
-                            let newEnv = Map.add name (tempId, AST.TInt64) env
+                            let binding = (tempId, ANF.TypedAtom (sourceAtom, sourceType))
+                            let newEnv = Map.add name (tempId, sourceType) env
                             Ok (newEnv, binding :: bindings, vg1)
                         | AST.PTuple innerPatterns ->
+                            // Extract element types from the tuple type
+                            let elemTypes =
+                                match sourceType with
+                                | AST.TTuple types -> types
+                                | _ -> List.replicate (List.length innerPatterns) AST.TInt64
                             // Extract each element and recursively collect bindings
-                            let rec collectFromTuple (pats: AST.Pattern list) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
-                                match pats with
-                                | [] -> Ok (env, bindings, vg)
-                                | p :: rest ->
+                            let rec collectFromTuple (pats: AST.Pattern list) (types: AST.Type list) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
+                                match pats, types with
+                                | [], _ -> Ok (env, bindings, vg)
+                                | p :: rest, t :: restTypes ->
                                     let (elemVar, vg1) = ANF.freshVar vg
                                     let elemExpr = ANF.TupleGet (sourceAtom, idx)
                                     let elemBinding = (elemVar, elemExpr)
-                                    // Recursively collect bindings from this element's pattern
-                                    collectPatternBindings p (ANF.Var elemVar) env (elemBinding :: bindings) vg1
+                                    // Recursively collect bindings from this element's pattern with correct type
+                                    collectPatternBindings p (ANF.Var elemVar) t env (elemBinding :: bindings) vg1
                                     |> Result.bind (fun (env', bindings', vg') ->
-                                        collectFromTuple rest (idx + 1) env' bindings' vg')
-                            collectFromTuple innerPatterns 0 env bindings vg
+                                        collectFromTuple rest restTypes (idx + 1) env' bindings' vg')
+                                | p :: rest, [] ->
+                                    // Fallback if types list is shorter (shouldn't happen)
+                                    let (elemVar, vg1) = ANF.freshVar vg
+                                    let elemExpr = ANF.TupleGet (sourceAtom, idx)
+                                    let elemBinding = (elemVar, elemExpr)
+                                    collectPatternBindings p (ANF.Var elemVar) AST.TInt64 env (elemBinding :: bindings) vg1
+                                    |> Result.bind (fun (env', bindings', vg') ->
+                                        collectFromTuple rest [] (idx + 1) env' bindings' vg')
+                            collectFromTuple innerPatterns elemTypes 0 env bindings vg
                         | AST.PConstructor (_, payloadPattern) ->
                             match payloadPattern with
                             | None -> Ok (env, bindings, vg)
                             | Some innerPat ->
                                 // Extract payload (at index 1) and recursively collect
+                                // For constructors, fallback to TInt64 as payload type extraction is complex
                                 let (payloadVar, vg1) = ANF.freshVar vg
                                 let payloadExpr = ANF.TupleGet (sourceAtom, 1)
                                 let payloadBinding = (payloadVar, payloadExpr)
-                                collectPatternBindings innerPat (ANF.Var payloadVar) env (payloadBinding :: bindings) vg1
+                                collectPatternBindings innerPat (ANF.Var payloadVar) AST.TInt64 env (payloadBinding :: bindings) vg1
                         | AST.PRecord (_, fieldPatterns) ->
+                            // Extract field types from record type (look up in type registry)
+                            let fieldTypes =
+                                match sourceType with
+                                | AST.TRecord recordName ->
+                                    match Map.tryFind recordName typeReg with
+                                    | Some fields -> fields |> List.map snd
+                                    | None -> List.replicate (List.length fieldPatterns) AST.TInt64
+                                | _ -> List.replicate (List.length fieldPatterns) AST.TInt64
                             // Extract each field and recursively collect bindings
-                            let rec collectFromRecord (fields: (string * AST.Pattern) list) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
-                                match fields with
-                                | [] -> Ok (env, bindings, vg)
-                                | (_, p) :: rest ->
+                            let rec collectFromRecord (fields: (string * AST.Pattern) list) (types: AST.Type list) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
+                                match fields, types with
+                                | [], _ -> Ok (env, bindings, vg)
+                                | (_, p) :: rest, t :: restTypes ->
                                     let (fieldVar, vg1) = ANF.freshVar vg
                                     let fieldExpr = ANF.TupleGet (sourceAtom, idx)
                                     let fieldBinding = (fieldVar, fieldExpr)
-                                    collectPatternBindings p (ANF.Var fieldVar) env (fieldBinding :: bindings) vg1
+                                    collectPatternBindings p (ANF.Var fieldVar) t env (fieldBinding :: bindings) vg1
                                     |> Result.bind (fun (env', bindings', vg') ->
-                                        collectFromRecord rest (idx + 1) env' bindings' vg')
-                            collectFromRecord fieldPatterns 0 env bindings vg
+                                        collectFromRecord rest restTypes (idx + 1) env' bindings' vg')
+                                | (_, p) :: rest, [] ->
+                                    let (fieldVar, vg1) = ANF.freshVar vg
+                                    let fieldExpr = ANF.TupleGet (sourceAtom, idx)
+                                    let fieldBinding = (fieldVar, fieldExpr)
+                                    collectPatternBindings p (ANF.Var fieldVar) AST.TInt64 env (fieldBinding :: bindings) vg1
+                                    |> Result.bind (fun (env', bindings', vg') ->
+                                        collectFromRecord rest [] (idx + 1) env' bindings' vg')
+                            collectFromRecord fieldPatterns fieldTypes 0 env bindings vg
                         | AST.PList innerPatterns ->
+                            // Extract element type from list type
+                            let elemType =
+                                match sourceType with
+                                | AST.TList t -> t
+                                | _ -> AST.TInt64
                             // For list patterns, extract head elements using FingerTree operations
+                            // Use _i64 versions which work for any element type at runtime (all values are 64-bit)
+                            // The correct element type is tracked in the VarEnv/TypeMap, not in the function name
                             let rec collectFromList (pats: AST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
                                 match pats with
                                 | [] -> Ok (env, bindings, vg)
@@ -2878,7 +2941,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                     let (headVar, vg1) = ANF.freshVar vg
                                     let headExpr = ANF.Call ("Stdlib.FingerTree.headUnsafe_i64", [currentList])
                                     let headBinding = (headVar, headExpr)
-                                    collectPatternBindings p (ANF.Var headVar) env (headBinding :: bindings) vg1
+                                    collectPatternBindings p (ANF.Var headVar) elemType env (headBinding :: bindings) vg1
                                     |> Result.bind (fun (env', bindings', vg') ->
                                         if List.isEmpty rest then
                                             Ok (env', bindings', vg')
@@ -2890,18 +2953,25 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                             collectFromList rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                             collectFromList innerPatterns sourceAtom env bindings vg
                         | AST.PListCons (headPatterns, tailPattern) ->
+                            // Extract element type from list type
+                            let elemType =
+                                match sourceType with
+                                | AST.TList t -> t
+                                | _ -> AST.TInt64
                             // Extract head elements then bind tail using FingerTree operations
+                            // Use _i64 versions which work for any element type at runtime (all values are 64-bit)
+                            // The correct element type is tracked in the VarEnv/TypeMap, not in the function name
                             let rec collectHeads (pats: AST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
                                 match pats with
                                 | [] ->
-                                    // Bind the remaining list to tail pattern
-                                    collectPatternBindings tailPattern currentList env bindings vg
+                                    // Bind the remaining list to tail pattern (tail has same type as source)
+                                    collectPatternBindings tailPattern currentList sourceType env bindings vg
                                 | p :: rest ->
                                     // Lists are FingerTrees - use headUnsafe/tail to extract
                                     let (headVar, vg1) = ANF.freshVar vg
                                     let headExpr = ANF.Call ("Stdlib.FingerTree.headUnsafe_i64", [currentList])
                                     let headBinding = (headVar, headExpr)
-                                    collectPatternBindings p (ANF.Var headVar) env (headBinding :: bindings) vg1
+                                    collectPatternBindings p (ANF.Var headVar) elemType env (headBinding :: bindings) vg1
                                     |> Result.bind (fun (env', bindings', vg') ->
                                         let (tailVar, vg2) = ANF.freshVar vg'
                                         let tailExpr = ANF.Call ("Stdlib.FingerTree.tail_i64", [currentList])
@@ -2910,33 +2980,54 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             collectHeads headPatterns sourceAtom env bindings vg
 
                     // Collect all bindings from the tuple pattern, then compile body
-                    collectPatternBindings (AST.PTuple patterns) scrutAtom currentEnv [] vg
+                    collectPatternBindings (AST.PTuple patterns) scrutAtom scrutType currentEnv [] vg
                     |> Result.bind (fun (newEnv, bindings, vg1) ->
                         toANF body vg1 newEnv typeReg variantLookup funcReg moduleRegistry
                         |> Result.map (fun (bodyExpr, vg2) ->
                             let finalExpr = wrapBindings (List.rev bindings) bodyExpr
                             (finalExpr, vg2)))
                 | AST.PRecord (_, fieldPatterns) ->
+                    // Extract field types from record type
+                    let fieldTypes =
+                        match scrutType with
+                        | AST.TRecord recordName ->
+                            match Map.tryFind recordName typeReg with
+                            | Some fields -> fields |> List.map snd
+                            | None -> List.replicate (List.length fieldPatterns) AST.TInt64
+                        | _ -> List.replicate (List.length fieldPatterns) AST.TInt64
                     // Extract each field and bind pattern variables
-                    let rec collectRecordBindings (fields: (string * AST.Pattern) list) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) (fieldIdx: int) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
-                        match fields with
-                        | [] -> Ok (env, List.rev bindings, vg)
-                        | (_, pat) :: rest ->
+                    let rec collectRecordBindings (fields: (string * AST.Pattern) list) (types: AST.Type list) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) (fieldIdx: int) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                        match fields, types with
+                        | [], _ -> Ok (env, List.rev bindings, vg)
+                        | (_, pat) :: rest, t :: restTypes ->
                             let (fieldVar, vg1) = ANF.freshVar vg
                             let fieldExpr = ANF.TupleGet (scrutAtom, fieldIdx)
                             let binding = (fieldVar, fieldExpr)
                             match pat with
                             | AST.PVar name ->
-                                // Use TInt64 as placeholder type
-                                let newEnv = Map.add name (fieldVar, AST.TInt64) env
-                                collectRecordBindings rest newEnv (binding :: bindings) vg1 (fieldIdx + 1)
+                                // Use the correct field type
+                                let newEnv = Map.add name (fieldVar, t) env
+                                collectRecordBindings rest restTypes newEnv (binding :: bindings) vg1 (fieldIdx + 1)
                             | AST.PWildcard ->
-                                collectRecordBindings rest env bindings vg1 (fieldIdx + 1)
+                                collectRecordBindings rest restTypes env bindings vg1 (fieldIdx + 1)
                             | AST.PUnit | AST.PConstructor _ | AST.PLiteral _ | AST.PBool _
                             | AST.PString _ | AST.PFloat _ | AST.PTuple _ | AST.PRecord _
                             | AST.PList _ | AST.PListCons _ ->
                                 Error $"Nested pattern in record field not yet supported: {pat}"
-                    collectRecordBindings fieldPatterns currentEnv [] vg 0
+                        | (_, pat) :: rest, [] ->
+                            // Fallback
+                            let (fieldVar, vg1) = ANF.freshVar vg
+                            let fieldExpr = ANF.TupleGet (scrutAtom, fieldIdx)
+                            let binding = (fieldVar, fieldExpr)
+                            match pat with
+                            | AST.PVar name ->
+                                let newEnv = Map.add name (fieldVar, AST.TInt64) env
+                                collectRecordBindings rest [] newEnv (binding :: bindings) vg1 (fieldIdx + 1)
+                            | AST.PWildcard ->
+                                collectRecordBindings rest [] env bindings vg1 (fieldIdx + 1)
+                            | _ ->
+                                Error $"Nested pattern in record field not yet supported: {pat}"
+                    collectRecordBindings fieldPatterns fieldTypes currentEnv [] vg 0
                     |> Result.bind (fun (newEnv, bindings, vg1) ->
                         toANF body vg1 newEnv typeReg variantLookup funcReg moduleRegistry
                         |> Result.map (fun (bodyExpr, vg2) ->
@@ -2949,6 +3040,12 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     // DEEP (tag 2): [measure:8][prefixCount:8][p0:8][p1:8][p2:8][p3:8][middle:8][suffixCount:8][s0:8][s1:8][s2:8][s3:8]
                     // LEAF (tag 5): [value:8]
 
+                    // Get element type from list type
+                    let elemType =
+                        match scrutType with
+                        | AST.TList t -> t
+                        | _ -> AST.TInt64
+
                     // Helper to unwrap a LEAF node and get the value
                     let unwrapLeaf (leafTaggedPtr: ANF.Atom) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
                         let (leafPtrVar, vg1) = ANF.freshVar vg
@@ -2959,19 +3056,25 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         (ANF.Var valueVar, valueVar, newBindings, vg2)
 
                     // Helper to extract tuple elements from a value
-                    let rec collectTupleBindings (tupPats: AST.Pattern list) (tupleAtom: ANF.Atom) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                    // tupleType is the type of the tuple being destructured
+                    let rec collectTupleBindings (tupPats: AST.Pattern list) (tupleAtom: ANF.Atom) (tupleType: AST.Type) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                        let tupleElemTypes =
+                            match tupleType with
+                            | AST.TTuple types -> types
+                            | _ -> List.replicate (List.length tupPats) AST.TInt64
                         match tupPats with
                         | [] -> Ok (env, bindings, vg)
                         | tupPat :: tupRest ->
                             let (elemVar, vg1) = ANF.freshVar vg
                             let elemExpr = ANF.TupleGet (tupleAtom, idx)
                             let elemBinding = (elemVar, elemExpr)
+                            let elemT = if idx < List.length tupleElemTypes then List.item idx tupleElemTypes else AST.TInt64
                             match tupPat with
                             | AST.PVar name ->
-                                let newEnv = Map.add name (elemVar, AST.TInt64) env
-                                collectTupleBindings tupRest tupleAtom (idx + 1) newEnv (bindings @ [elemBinding]) vg1
+                                let newEnv = Map.add name (elemVar, elemT) env
+                                collectTupleBindings tupRest tupleAtom tupleType (idx + 1) newEnv (bindings @ [elemBinding]) vg1
                             | AST.PWildcard ->
-                                collectTupleBindings tupRest tupleAtom (idx + 1) env bindings vg1
+                                collectTupleBindings tupRest tupleAtom tupleType (idx + 1) env bindings vg1
                             | AST.PUnit | AST.PConstructor _ | AST.PLiteral _ | AST.PBool _
                             | AST.PString _ | AST.PFloat _ | AST.PTuple _ | AST.PRecord _
                             | AST.PList _ | AST.PListCons _ ->
@@ -2994,7 +3097,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         // Bind the pattern
                         match List.head patterns with
                         | AST.PVar name ->
-                            let newEnv = Map.add name (valueVar, AST.TInt64) currentEnv
+                            let newEnv = Map.add name (valueVar, elemType) currentEnv
                             toANF body vg3 newEnv typeReg variantLookup funcReg moduleRegistry
                             |> Result.map (fun (bodyExpr, vg4) ->
                                 (wrapBindings bindings bodyExpr, vg4))
@@ -3003,7 +3106,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             |> Result.map (fun (bodyExpr, vg4) ->
                                 (wrapBindings bindings bodyExpr, vg4))
                         | AST.PTuple innerPatterns ->
-                            collectTupleBindings innerPatterns valueAtom 0 currentEnv bindings vg3
+                            // elemType is the list element type, use it as tuple type
+                            collectTupleBindings innerPatterns valueAtom elemType 0 currentEnv bindings vg3
                             |> Result.bind (fun (newEnv, newBindings, vg4) ->
                                 toANF body vg4 newEnv typeReg variantLookup funcReg moduleRegistry
                                 |> Result.map (fun (bodyExpr, vg5) ->
@@ -3042,12 +3146,13 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
                                 match pat with
                                 | AST.PVar name ->
-                                    let newEnv = Map.add name (valueVar, AST.TInt64) env
+                                    let newEnv = Map.add name (valueVar, elemType) env
                                     extractElements rest (idx + 1) newEnv newBindings vg2
                                 | AST.PWildcard ->
                                     extractElements rest (idx + 1) env newBindings vg2
                                 | AST.PTuple innerPatterns ->
-                                    collectTupleBindings innerPatterns valueAtom 0 env newBindings vg2
+                                    // elemType is the list element type, use it as tuple type
+                                    collectTupleBindings innerPatterns valueAtom elemType 0 env newBindings vg2
                                     |> Result.bind (fun (tupEnv, tupBindings, vg3) ->
                                         extractElements rest (idx + 1) tupEnv tupBindings vg3)
                                 | _ ->
@@ -3059,6 +3164,11 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             |> Result.map (fun (bodyExpr, vg3) ->
                                 (wrapBindings bindings bodyExpr, vg3)))
                 | AST.PListCons (headPatterns, tailPattern) ->
+                    // Get element type from list type
+                    let elemType =
+                        match scrutType with
+                        | AST.TList t -> t
+                        | _ -> AST.TInt64
                     // Extract head elements and bind tail
                     // List layout: Nil = 0, Cons = [tag=1, head, tail]
                     let rec collectListConsBindings (pats: AST.Pattern list) (listAtom: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.Atom * ANF.VarGen, string> =
@@ -3066,39 +3176,61 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         | [] -> Ok (env, List.rev bindings, listAtom, vg)
                         | pat :: rest ->
                             // Extract head from current Cons cell (index 1)
-                            let (headVar, vg1) = ANF.freshVar vg
-                            let headExpr = ANF.TupleGet (listAtom, 1)
+                            let (rawHeadVar, vg1) = ANF.freshVar vg
+                            let rawHeadExpr = ANF.TupleGet (listAtom, 1)
+                            let rawHeadBinding = (rawHeadVar, rawHeadExpr)
+                            // Wrap with TypedAtom to preserve correct element type in TypeMap
+                            let (headVar, vg1') = ANF.freshVar vg1
+                            let headExpr = ANF.TypedAtom (ANF.Var rawHeadVar, elemType)
                             let headBinding = (headVar, headExpr)
                             // Extract tail from current Cons cell (index 2)
-                            let (tailVar, vg2) = ANF.freshVar vg1
-                            let tailExpr = ANF.TupleGet (listAtom, 2)
+                            let (rawTailVar, vg2) = ANF.freshVar vg1'
+                            let rawTailExpr = ANF.TupleGet (listAtom, 2)
+                            let rawTailBinding = (rawTailVar, rawTailExpr)
+                            // Wrap with TypedAtom to preserve list type for tail
+                            let listType = AST.TList elemType
+                            let (tailVar, vg2') = ANF.freshVar vg2
+                            let tailExpr = ANF.TypedAtom (ANF.Var rawTailVar, listType)
                             let tailBinding = (tailVar, tailExpr)
+                            // All bindings including raw extractions
+                            let allBaseBindings = rawTailBinding :: tailBinding :: rawHeadBinding :: headBinding :: bindings
                             match pat with
                             | AST.PVar name ->
-                                let newEnv = Map.add name (headVar, AST.TInt64) env
-                                collectListConsBindings rest (ANF.Var tailVar) newEnv (tailBinding :: headBinding :: bindings) vg2
+                                let newEnv = Map.add name (headVar, elemType) env
+                                collectListConsBindings rest (ANF.Var tailVar) newEnv allBaseBindings vg2'
                             | AST.PWildcard ->
-                                collectListConsBindings rest (ANF.Var tailVar) env (tailBinding :: bindings) vg2
+                                collectListConsBindings rest (ANF.Var tailVar) env allBaseBindings vg2'
                             | AST.PTuple innerPatterns ->
                                 // For tuple patterns inside list cons, extract each tuple element and bind variables
-                                let rec collectTupleBindings (tupPats: AST.Pattern list) (tupleAtom: ANF.Atom) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                                // elemType is the tuple type (since list elements are tuples)
+                                let tupleElemTypes =
+                                    match elemType with
+                                    | AST.TTuple types -> types
+                                    | _ -> List.replicate (List.length innerPatterns) AST.TInt64
+                                let rec collectTupleBindings (tupPats: AST.Pattern list) (types: AST.Type list) (tupleAtom: ANF.Atom) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                                     match tupPats with
                                     | [] -> Ok (env, bindings, vg)
                                     | tupPat :: tupRest ->
-                                        let (elemVar, vg1) = ANF.freshVar vg
-                                        let elemExpr = ANF.TupleGet (tupleAtom, idx)
+                                        // Extract raw element with TupleGet
+                                        let (rawElemVar, vg1) = ANF.freshVar vg
+                                        let rawElemExpr = ANF.TupleGet (tupleAtom, idx)
+                                        let rawElemBinding = (rawElemVar, rawElemExpr)
+                                        let elemT = if idx < List.length types then List.item idx types else AST.TInt64
+                                        // Wrap with TypedAtom to preserve correct element type
+                                        let (elemVar, vg1') = ANF.freshVar vg1
+                                        let elemExpr = ANF.TypedAtom (ANF.Var rawElemVar, elemT)
                                         let elemBinding = (elemVar, elemExpr)
                                         match tupPat with
                                         | AST.PVar name ->
-                                            let newEnv = Map.add name (elemVar, AST.TInt64) env
-                                            collectTupleBindings tupRest tupleAtom (idx + 1) newEnv (elemBinding :: bindings) vg1
+                                            let newEnv = Map.add name (elemVar, elemT) env
+                                            collectTupleBindings tupRest types tupleAtom (idx + 1) newEnv (elemBinding :: rawElemBinding :: bindings) vg1'
                                         | AST.PWildcard ->
-                                            collectTupleBindings tupRest tupleAtom (idx + 1) env bindings vg1
+                                            collectTupleBindings tupRest types tupleAtom (idx + 1) env (rawElemBinding :: bindings) vg1
                                         | AST.PUnit | AST.PConstructor _ | AST.PLiteral _ | AST.PBool _
                                         | AST.PString _ | AST.PFloat _ | AST.PTuple _ | AST.PRecord _
                                         | AST.PList _ | AST.PListCons _ ->
                                             Error $"Nested pattern in tuple element not yet supported: {tupPat}"
-                                collectTupleBindings innerPatterns (ANF.Var headVar) 0 env (tailBinding :: headBinding :: bindings) vg2
+                                collectTupleBindings innerPatterns tupleElemTypes (ANF.Var headVar) 0 env allBaseBindings vg2'
                                 |> Result.bind (fun (newEnv, newBindings, vg3) ->
                                     collectListConsBindings rest (ANF.Var tailVar) newEnv newBindings vg3)
                             | AST.PUnit | AST.PConstructor _ | AST.PLiteral _ | AST.PBool _
@@ -3111,8 +3243,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         match tailPattern with
                         | AST.PVar name ->
                             let (tailVar, vg2) = ANF.freshVar vg1
-                            // Tail is a list, use TList TInt64 as placeholder
-                            let newEnv' = Map.add name (tailVar, AST.TList AST.TInt64) newEnv
+                            // Tail has the same list type as the scrutinee
+                            let newEnv' = Map.add name (tailVar, scrutType) newEnv
                             toANF body vg2 newEnv' typeReg variantLookup funcReg moduleRegistry
                             |> Result.map (fun (bodyExpr, vg3) ->
                                 let tailBinding = (tailVar, ANF.Atom tailAtom)
@@ -3128,50 +3260,80 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
             // Extract pattern bindings, check guard, and compile body
             // Returns: if guard is true, execute body; otherwise execute elseExpr
-            and extractAndCompileBodyWithGuard (pattern: AST.Pattern) (guardExpr: AST.Expr) (body: AST.Expr) (scrutAtom: ANF.Atom) (currentEnv: VarEnv) (vg: ANF.VarGen) (elseExpr: ANF.AExpr) : Result<ANF.AExpr * ANF.VarGen, string> =
+            // scrutType is the type of the scrutinee for correct pattern variable typing
+            and extractAndCompileBodyWithGuard (pattern: AST.Pattern) (guardExpr: AST.Expr) (body: AST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.Type) (currentEnv: VarEnv) (vg: ANF.VarGen) (elseExpr: ANF.AExpr) : Result<ANF.AExpr * ANF.VarGen, string> =
                 // First, we need to extract bindings from the pattern
                 // Then compile the guard with those bindings in scope
                 // Then compile the body with those bindings in scope
                 // Finally, generate: let <bindings> in if <guard> then <body> else <elseExpr>
 
                 // Helper to collect pattern variable bindings (simplified version for common patterns)
-                let rec collectBindings (pat: AST.Pattern) (sourceAtom: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
+                // sourceType is the type of the source being matched
+                let rec collectBindings (pat: AST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.Type) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
                     match pat with
                     | AST.PUnit | AST.PWildcard | AST.PLiteral _ | AST.PBool _ | AST.PString _ | AST.PFloat _ ->
                         (env, bindings, vg)
                     | AST.PVar name ->
                         let (tempId, vg1) = ANF.freshVar vg
                         let binding = (tempId, ANF.Atom sourceAtom)
-                        let newEnv = Map.add name (tempId, AST.TInt64) env
+                        let newEnv = Map.add name (tempId, sourceType) env
                         (newEnv, binding :: bindings, vg1)
                     | AST.PTuple innerPatterns ->
-                        let rec collectFromTuple pats idx env bindings vg =
-                            match pats with
-                            | [] -> (env, bindings, vg)
-                            | p :: rest ->
+                        let elemTypes =
+                            match sourceType with
+                            | AST.TTuple types -> types
+                            | _ -> List.replicate (List.length innerPatterns) AST.TInt64
+                        let rec collectFromTuple pats types idx env bindings vg =
+                            match pats, types with
+                            | [], _ -> (env, bindings, vg)
+                            | p :: rest, t :: restTypes ->
                                 let (elemVar, vg1) = ANF.freshVar vg
                                 let elemExpr = ANF.TupleGet (sourceAtom, idx)
-                                let (env', bindings', vg') = collectBindings p (ANF.Var elemVar) env ((elemVar, elemExpr) :: bindings) vg1
-                                collectFromTuple rest (idx + 1) env' bindings' vg'
-                        collectFromTuple innerPatterns 0 env bindings vg
+                                let (env', bindings', vg') = collectBindings p (ANF.Var elemVar) t env ((elemVar, elemExpr) :: bindings) vg1
+                                collectFromTuple rest restTypes (idx + 1) env' bindings' vg'
+                            | p :: rest, [] ->
+                                let (elemVar, vg1) = ANF.freshVar vg
+                                let elemExpr = ANF.TupleGet (sourceAtom, idx)
+                                let (env', bindings', vg') = collectBindings p (ANF.Var elemVar) AST.TInt64 env ((elemVar, elemExpr) :: bindings) vg1
+                                collectFromTuple rest [] (idx + 1) env' bindings' vg'
+                        collectFromTuple innerPatterns elemTypes 0 env bindings vg
                     | AST.PConstructor (_, Some innerPat) ->
                         let (payloadVar, vg1) = ANF.freshVar vg
                         let payloadExpr = ANF.TupleGet (sourceAtom, 1)
-                        collectBindings innerPat (ANF.Var payloadVar) env ((payloadVar, payloadExpr) :: bindings) vg1
+                        // Fallback to TInt64 for constructor payload (complex type extraction)
+                        collectBindings innerPat (ANF.Var payloadVar) AST.TInt64 env ((payloadVar, payloadExpr) :: bindings) vg1
                     | AST.PConstructor (_, None) ->
                         (env, bindings, vg)
                     | AST.PRecord (_, fieldPatterns) ->
-                        let rec collectFromRecord fields idx env bindings vg =
-                            match fields with
-                            | [] -> (env, bindings, vg)
-                            | (_, p) :: rest ->
+                        let fieldTypes =
+                            match sourceType with
+                            | AST.TRecord recordName ->
+                                match Map.tryFind recordName typeReg with
+                                | Some fields -> fields |> List.map snd
+                                | None -> List.replicate (List.length fieldPatterns) AST.TInt64
+                            | _ -> List.replicate (List.length fieldPatterns) AST.TInt64
+                        let rec collectFromRecord fields types idx env bindings vg =
+                            match fields, types with
+                            | [], _ -> (env, bindings, vg)
+                            | (_, p) :: rest, t :: restTypes ->
                                 let (fieldVar, vg1) = ANF.freshVar vg
                                 let fieldExpr = ANF.TupleGet (sourceAtom, idx)
-                                let (env', bindings', vg') = collectBindings p (ANF.Var fieldVar) env ((fieldVar, fieldExpr) :: bindings) vg1
-                                collectFromRecord rest (idx + 1) env' bindings' vg'
-                        collectFromRecord fieldPatterns 0 env bindings vg
+                                let (env', bindings', vg') = collectBindings p (ANF.Var fieldVar) t env ((fieldVar, fieldExpr) :: bindings) vg1
+                                collectFromRecord rest restTypes (idx + 1) env' bindings' vg'
+                            | (_, p) :: rest, [] ->
+                                let (fieldVar, vg1) = ANF.freshVar vg
+                                let fieldExpr = ANF.TupleGet (sourceAtom, idx)
+                                let (env', bindings', vg') = collectBindings p (ANF.Var fieldVar) AST.TInt64 env ((fieldVar, fieldExpr) :: bindings) vg1
+                                collectFromRecord rest [] (idx + 1) env' bindings' vg'
+                        collectFromRecord fieldPatterns fieldTypes 0 env bindings vg
                     | AST.PList innerPatterns ->
+                        let elemType =
+                            match sourceType with
+                            | AST.TList t -> t
+                            | _ -> AST.TInt64
                         // For list patterns, extract head elements using FingerTree operations
+                        // Use _i64 versions which work for any element type at runtime (all values are 64-bit)
+                        // The correct element type is tracked in the VarEnv/TypeMap, not in the function name
                         let rec collectFromList (pats: AST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
                             match pats with
                             | [] -> (env, bindings, vg)
@@ -3180,7 +3342,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 let (headVar, vg1) = ANF.freshVar vg
                                 let headExpr = ANF.Call ("Stdlib.FingerTree.headUnsafe_i64", [currentList])
                                 let headBinding = (headVar, headExpr)
-                                let (env', bindings', vg') = collectBindings p (ANF.Var headVar) env (headBinding :: bindings) vg1
+                                let (env', bindings', vg') = collectBindings p (ANF.Var headVar) elemType env (headBinding :: bindings) vg1
                                 if List.isEmpty rest then
                                     (env', bindings', vg')
                                 else
@@ -3191,25 +3353,31 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                     collectFromList rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2
                         collectFromList innerPatterns sourceAtom env bindings vg
                     | AST.PListCons (headPatterns, tailPattern) ->
+                        let elemType =
+                            match sourceType with
+                            | AST.TList t -> t
+                            | _ -> AST.TInt64
                         // Extract head elements then bind tail using FingerTree operations
+                        // Use _i64 versions which work for any element type at runtime (all values are 64-bit)
+                        // The correct element type is tracked in the VarEnv/TypeMap, not in the function name
                         let rec collectHeads (pats: AST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
                             match pats with
                             | [] ->
-                                // Bind the remaining list to tail pattern
-                                collectBindings tailPattern currentList env bindings vg
+                                // Bind the remaining list to tail pattern (tail has same type as source)
+                                collectBindings tailPattern currentList sourceType env bindings vg
                             | p :: rest ->
                                 // Lists are FingerTrees - use headUnsafe/tail to extract
                                 let (headVar, vg1) = ANF.freshVar vg
                                 let headExpr = ANF.Call ("Stdlib.FingerTree.headUnsafe_i64", [currentList])
                                 let headBinding = (headVar, headExpr)
-                                let (env', bindings', vg') = collectBindings p (ANF.Var headVar) env (headBinding :: bindings) vg1
+                                let (env', bindings', vg') = collectBindings p (ANF.Var headVar) elemType env (headBinding :: bindings) vg1
                                 let (tailVar, vg2) = ANF.freshVar vg'
                                 let tailExpr = ANF.Call ("Stdlib.FingerTree.tail_i64", [currentList])
                                 let tailBinding = (tailVar, tailExpr)
                                 collectHeads rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2
                         collectHeads headPatterns sourceAtom env bindings vg
 
-                let (newEnv, bindings, vg1) = collectBindings pattern scrutAtom currentEnv [] vg
+                let (newEnv, bindings, vg1) = collectBindings pattern scrutAtom scrutType currentEnv [] vg
 
                 // Compile guard expression in the extended environment
                 toAtom guardExpr vg1 newEnv typeReg variantLookup funcReg moduleRegistry
@@ -3400,14 +3568,22 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             // SINGLE (tag 1): [node:8] where node is LEAF-tagged
             // DEEP (tag 2): [measure:8][prefixCount:8][p0:8][p1:8][p2:8][p3:8][middle:8][suffixCount:8][s0:8][s1:8][s2:8][s3:8]
             // LEAF (tag 5): [value:8]
+            // listType is the list type (TList elemType) for correct pattern variable typing
             let compileListPatternWithChecks
                 (patterns: AST.Pattern list)
                 (listAtom: ANF.Atom)
+                (listType: AST.Type)
                 (currentEnv: VarEnv)
                 (body: AST.Expr)
                 (elseExpr: ANF.AExpr)
                 (vg: ANF.VarGen)
                 : Result<ANF.AExpr * ANF.VarGen, string> =
+
+                // Extract element type from list type
+                let elemType =
+                    match listType with
+                    | AST.TList t -> t
+                    | _ -> AST.TInt64  // Fallback
 
                 let patternLen = List.length patterns
 
@@ -3421,26 +3597,38 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     (ANF.Var valueVar, valueVar, newBindings, vg2)
 
                 // Helper to extract tuple elements from a value
+                // tupleType is the type of the tuple being matched (TTuple elemTypes)
                 let rec extractTupleBindings
                     (tupPats: AST.Pattern list)
                     (tupleAtom: ANF.Atom)
+                    (tupleType: AST.Type)
                     (idx: int)
                     (env: VarEnv)
                     (bindings: (ANF.TempId * ANF.CExpr) list)
                     (vg: ANF.VarGen)
                     : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                    // Extract element types from tuple type
+                    let tupleElemTypes =
+                        match tupleType with
+                        | AST.TTuple types -> types
+                        | _ -> List.replicate (List.length tupPats) AST.TInt64
                     match tupPats with
                     | [] -> Ok (env, bindings, vg)
                     | tupPat :: tupRest ->
-                        let (elemVar, vg1) = ANF.freshVar vg
-                        let elemExpr = ANF.TupleGet (tupleAtom, idx)
+                        let (rawElemVar, vg1) = ANF.freshVar vg
+                        let rawElemExpr = ANF.TupleGet (tupleAtom, idx)
+                        let rawElemBinding = (rawElemVar, rawElemExpr)
+                        let elemT = if idx < List.length tupleElemTypes then List.item idx tupleElemTypes else AST.TInt64
+                        // Wrap with TypedAtom to preserve correct element type in TypeMap
+                        let (elemVar, vg1') = ANF.freshVar vg1
+                        let elemExpr = ANF.TypedAtom (ANF.Var rawElemVar, elemT)
                         let elemBinding = (elemVar, elemExpr)
                         match tupPat with
                         | AST.PVar name ->
-                            let newEnv = Map.add name (elemVar, AST.TInt64) env
-                            extractTupleBindings tupRest tupleAtom (idx + 1) newEnv (bindings @ [elemBinding]) vg1
+                            let newEnv = Map.add name (elemVar, elemT) env  // Use correct element type
+                            extractTupleBindings tupRest tupleAtom tupleType (idx + 1) newEnv (bindings @ [rawElemBinding; elemBinding]) vg1'
                         | AST.PWildcard ->
-                            extractTupleBindings tupRest tupleAtom (idx + 1) env bindings vg1
+                            extractTupleBindings tupRest tupleAtom tupleType (idx + 1) env (bindings @ [rawElemBinding]) vg1
                         | AST.PUnit | AST.PConstructor _ | AST.PLiteral _ | AST.PBool _
                         | AST.PString _ | AST.PFloat _ | AST.PTuple _ | AST.PRecord _
                         | AST.PList _ | AST.PListCons _ ->
@@ -3474,7 +3662,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     let pat = List.head patterns
                     match pat with
                     | AST.PVar name ->
-                        let newEnv = Map.add name (valueVar, AST.TInt64) currentEnv
+                        let newEnv = Map.add name (valueVar, elemType) currentEnv  // Use element type
                         toANF body vg5 newEnv typeReg variantLookup funcReg moduleRegistry
                         |> Result.map (fun (bodyExpr, vg6) ->
                             let withBindings = wrapBindings bindings bodyExpr
@@ -3487,7 +3675,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             let ifExpr = ANF.If (ANF.Var checkVar, withBindings, elseExpr)
                             (ANF.Let (tagVar, tagExpr, ANF.Let (checkVar, checkExpr, ifExpr)), vg6))
                     | AST.PTuple innerPatterns ->
-                        extractTupleBindings innerPatterns valueAtom 0 currentEnv bindings vg5
+                        extractTupleBindings innerPatterns valueAtom elemType 0 currentEnv bindings vg5  // Pass tuple type
                         |> Result.bind (fun (newEnv, newBindings, vg6) ->
                             toANF body vg6 newEnv typeReg variantLookup funcReg moduleRegistry
                             |> Result.map (fun (bodyExpr, vg7) ->
@@ -3548,12 +3736,12 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
                             match pat with
                             | AST.PVar name ->
-                                let newEnv = Map.add name (valueVar, AST.TInt64) env
+                                let newEnv = Map.add name (valueVar, elemType) env  // Use element type
                                 extractElements rest (idx + 1) newEnv newBindings litChecks vg2
                             | AST.PWildcard ->
                                 extractElements rest (idx + 1) env newBindings litChecks vg2
                             | AST.PTuple innerPatterns ->
-                                extractTupleBindings innerPatterns (ANF.Var valueVar) 0 env newBindings vg2
+                                extractTupleBindings innerPatterns (ANF.Var valueVar) elemType 0 env newBindings vg2  // Pass tuple type
                                 |> Result.bind (fun (tupEnv, tupBindings, vg3) ->
                                     extractElements rest (idx + 1) tupEnv tupBindings litChecks vg3)
                             | AST.PLiteral n ->
@@ -3607,15 +3795,26 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             // For FingerTree:
             // - SINGLE (tag 1): head is the element, tail is EMPTY
             // - DEEP (tag 2): head is prefix[0], tail requires calling FingerTree.tail
+            // listType is the list type (TList elemType) for correct pattern variable typing
             let rec compileListConsPatternWithChecks
                 (headPatterns: AST.Pattern list)
                 (tailPattern: AST.Pattern)
                 (listAtom: ANF.Atom)
+                (listType: AST.Type)
                 (currentEnv: VarEnv)
                 (body: AST.Expr)
                 (elseExpr: ANF.AExpr)
                 (vg: ANF.VarGen)
                 : Result<ANF.AExpr * ANF.VarGen, string> =
+
+                // Extract element type from list type
+                let elemType =
+                    match listType with
+                    | AST.TList t -> t
+                    | _ -> AST.TInt64  // Fallback
+
+                // Use _i64 versions which work for any element type at runtime (all values are 64-bit)
+                // The correct element type is tracked in the VarEnv/TypeMap, not in the function name
 
                 // Helper to unwrap a LEAF node and get the value
                 let unwrapLeaf (leafTaggedPtr: ANF.Atom) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
@@ -3627,26 +3826,40 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     (ANF.Var valueVar, valueVar, newBindings, vg2)
 
                 // Helper to extract tuple elements
+                // tupleType is the type of the tuple being matched (TTuple elemTypes)
                 let rec extractTupleBindings
                     (tupPats: AST.Pattern list)
                     (tupleAtom: ANF.Atom)
+                    (tupleType: AST.Type)
                     (idx: int)
                     (env: VarEnv)
                     (bindings: (ANF.TempId * ANF.CExpr) list)
                     (vg: ANF.VarGen)
                     : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                    // Extract element types from tuple type
+                    let elemTypes =
+                        match tupleType with
+                        | AST.TTuple types -> types
+                        | _ -> List.replicate (List.length tupPats) AST.TInt64
                     match tupPats with
                     | [] -> Ok (env, bindings, vg)
                     | tupPat :: tupRest ->
-                        let (elemVar, vg1) = ANF.freshVar vg
-                        let elemExpr = ANF.TupleGet (tupleAtom, idx)
+                        let (rawElemVar, vg1) = ANF.freshVar vg
+                        let rawElemExpr = ANF.TupleGet (tupleAtom, idx)
+                        let rawElemBinding = (rawElemVar, rawElemExpr)
+                        let elemT = if idx < List.length elemTypes then List.item idx elemTypes else AST.TInt64
+                        // Wrap with TypedAtom to preserve correct element type in TypeMap
+                        let (elemVar, vg1') = ANF.freshVar vg1
+                        let elemExpr = ANF.TypedAtom (ANF.Var rawElemVar, elemT)
                         let elemBinding = (elemVar, elemExpr)
                         match tupPat with
                         | AST.PVar name ->
-                            let newEnv = Map.add name (elemVar, AST.TInt64) env
-                            extractTupleBindings tupRest tupleAtom (idx + 1) newEnv (bindings @ [elemBinding]) vg1
+                            let newEnv = Map.add name (elemVar, elemT) env
+                            extractTupleBindings tupRest tupleAtom tupleType (idx + 1) newEnv (bindings @ [rawElemBinding; elemBinding]) vg1'
                         | AST.PWildcard ->
-                            extractTupleBindings tupRest tupleAtom (idx + 1) env bindings vg1
+                            // Even for wildcard, we need to extract the element (for proper tuple access)
+                            // but don't bind it to a name. Just add the raw binding and continue.
+                            extractTupleBindings tupRest tupleAtom tupleType (idx + 1) env (bindings @ [rawElemBinding]) vg1
                         | _ ->
                             Error $"Nested pattern in tuple element not yet supported: {tupPat}"
 
@@ -3656,7 +3869,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     match tailPattern with
                     | AST.PVar name ->
                         let (tailVar, vg1) = ANF.freshVar vg
-                        let newEnv = Map.add name (tailVar, AST.TList AST.TInt64) currentEnv
+                        let newEnv = Map.add name (tailVar, listType) currentEnv  // Use actual list type
                         toANF body vg1 newEnv typeReg variantLookup funcReg moduleRegistry
                         |> Result.map (fun (bodyExpr, vg2) ->
                             let withTail = ANF.Let (tailVar, ANF.Atom listAtom, bodyExpr)
@@ -3694,22 +3907,31 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let (singleNodeVar, vg1) = ANF.freshVar vg
                         let singleNodeExpr = ANF.RawGet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), None)
                         let (headAtom, headVar, headBindings, vg2) = unwrapLeaf (ANF.Var singleNodeVar) vg1 [(singleNodeVar, singleNodeExpr)]
-                        let (tailVar, vg3) = ANF.freshVar vg2
-                        let tailExpr = ANF.Atom (ANF.IntLiteral (ANF.Int64 0L))  // EMPTY
+                        // Wrap headVar with TypedAtom to preserve correct element type in TypeMap
+                        let (typedHeadVar, vg2') = ANF.freshVar vg2
+                        let typedHeadExpr = ANF.TypedAtom (ANF.Var headVar, elemType)
+                        let typedHeadBinding = (typedHeadVar, typedHeadExpr)
+                        let headBindingsWithType = headBindings @ [typedHeadBinding]
+                        let typedHeadAtom = ANF.Var typedHeadVar
+                        // Tail is empty list (0 = EMPTY sentinel) - wrap with TypedAtom to preserve list type
+                        let (rawTailVar, vg3) = ANF.freshVar vg2'
+                        let rawTailExpr = ANF.Atom (ANF.IntLiteral (ANF.Int64 0L))  // EMPTY
+                        let (tailVar, vg3') = ANF.freshVar vg3
+                        let tailExpr = ANF.TypedAtom (ANF.Var rawTailVar, listType)
 
                         // Bind head pattern - returns (env, tupleBindings, vg, guardOpt)
                         // guardOpt is Some(var, expr) for literal patterns that need comparison
                         let headEnvResult =
                             match singleHeadPattern with
-                            | AST.PVar name -> Ok (Map.add name (headVar, AST.TInt64) currentEnv, [], vg3, None)
-                            | AST.PWildcard -> Ok (currentEnv, [], vg3, None)
+                            | AST.PVar name -> Ok (Map.add name (typedHeadVar, elemType) currentEnv, [], vg3', None)  // Use typed head var with element type
+                            | AST.PWildcard -> Ok (currentEnv, [], vg3', None)
                             | AST.PTuple innerPatterns ->
-                                extractTupleBindings innerPatterns headAtom 0 currentEnv [] vg3
+                                extractTupleBindings innerPatterns typedHeadAtom elemType 0 currentEnv [] vg3'  // Pass tuple type
                                 |> Result.map (fun (env, bindings, vg') -> (env, bindings, vg', None))
                             | AST.PLiteral n ->
                                 // Compare head value to literal - guard check
-                                let (guardVar, vg4) = ANF.freshVar vg3
-                                let guardExpr = ANF.Prim (ANF.Eq, ANF.Var headVar, ANF.IntLiteral (ANF.Int64 n))
+                                let (guardVar, vg4) = ANF.freshVar vg3'
+                                let guardExpr = ANF.Prim (ANF.Eq, ANF.Var typedHeadVar, ANF.IntLiteral (ANF.Int64 n))
                                 Ok (currentEnv, [], vg4, Some (guardVar, guardExpr))
                             | AST.PConstructor _ ->
                                 Error "Nested pattern in list cons element not yet supported"
@@ -3719,7 +3941,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         |> Result.bind (fun (envWithHead, tupleBindings, vg4, guardOpt) ->
                             let tailEnvResult =
                                 match tailPattern with
-                                | AST.PVar name -> Ok (Map.add name (tailVar, AST.TList AST.TInt64) envWithHead, vg4)
+                                | AST.PVar name -> Ok (Map.add name (tailVar, listType) envWithHead, vg4)  // Use actual list type
                                 | AST.PWildcard -> Ok (envWithHead, vg4)
                                 | _ -> Error "Tail pattern must be variable or wildcard"
 
@@ -3728,17 +3950,18 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                 toANF body vg5 finalEnv typeReg variantLookup funcReg moduleRegistry
                                 |> Result.map (fun (bodyExpr, vg6) ->
                                     let withTupleBindings = wrapBindings tupleBindings bodyExpr
-                                    let withTail = ANF.Let (tailVar, tailExpr, withTupleBindings)
+                                    let withTypedTail = ANF.Let (tailVar, tailExpr, withTupleBindings)
+                                    let withTail = ANF.Let (rawTailVar, rawTailExpr, withTypedTail)
                                     // If there's a guard (literal pattern), add check AFTER head bindings
                                     // because guardExpr uses headVar which is defined in headBindings
                                     let withGuard =
                                         match guardOpt with
                                         | Some (guardVar, guardExpr) ->
-                                            // headBindings -> guardVar -> if guard then body else elseExpr
+                                            // headBindingsWithType -> guardVar -> if guard then body else elseExpr
                                             let ifGuard = ANF.If (ANF.Var guardVar, withTail, elseExpr)
                                             let withGuardBinding = ANF.Let (guardVar, guardExpr, ifGuard)
-                                            wrapBindings headBindings withGuardBinding
-                                        | None -> wrapBindings headBindings withTail
+                                            wrapBindings headBindingsWithType withGuardBinding
+                                        | None -> wrapBindings headBindingsWithType withTail
                                     (withGuard, vg6))))
 
                     // Compile the DEEP branch: node at offset 16 (prefix[0])
@@ -3747,25 +3970,34 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         let (deepNodeVar, vg1) = ANF.freshVar vg
                         let deepNodeExpr = ANF.RawGet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), None)
                         let (headAtom, headVar, headBindings, vg2) = unwrapLeaf (ANF.Var deepNodeVar) vg1 [(deepNodeVar, deepNodeExpr)]
+                        // Wrap headVar with TypedAtom to preserve correct element type in TypeMap
+                        let (typedHeadVar, vg2') = ANF.freshVar vg2
+                        let typedHeadExpr = ANF.TypedAtom (ANF.Var headVar, elemType)
+                        let typedHeadBinding = (typedHeadVar, typedHeadExpr)
+                        let headBindingsWithType = headBindings @ [typedHeadBinding]
+                        let typedHeadAtom = ANF.Var typedHeadVar
 
                         // Call Stdlib.FingerTree.tail to get the tail
-                        let (tailResultVar, vg3) = ANF.freshVar vg2
+                        let (tailResultVar, vg3) = ANF.freshVar vg2'
                         let tailCallExpr = ANF.Call ("Stdlib.FingerTree.tail_i64", [listAtom])
+                        // Wrap with TypedAtom to preserve correct list type in TypeMap
+                        let (typedTailVar, vg3') = ANF.freshVar vg3
+                        let typedTailExpr = ANF.TypedAtom (ANF.Var tailResultVar, listType)
 
-                        let tailBindings = [(tailResultVar, tailCallExpr)]
+                        let tailBindings = [(tailResultVar, tailCallExpr); (typedTailVar, typedTailExpr)]
 
                         // Bind head pattern - returns (env, tupleBindings, vg, guardOpt)
                         let headEnvResult =
                             match singleHeadPattern with
-                            | AST.PVar name -> Ok (Map.add name (headVar, AST.TInt64) currentEnv, [], vg3, None)
-                            | AST.PWildcard -> Ok (currentEnv, [], vg3, None)
+                            | AST.PVar name -> Ok (Map.add name (typedHeadVar, elemType) currentEnv, [], vg3', None)  // Use typed head var with element type
+                            | AST.PWildcard -> Ok (currentEnv, [], vg3', None)
                             | AST.PTuple innerPatterns ->
-                                extractTupleBindings innerPatterns headAtom 0 currentEnv [] vg3
+                                extractTupleBindings innerPatterns typedHeadAtom elemType 0 currentEnv [] vg3'  // Pass tuple type
                                 |> Result.map (fun (env, bindings, vg') -> (env, bindings, vg', None))
                             | AST.PLiteral n ->
                                 // Compare head value to literal - guard check
-                                let (guardVar, vg4) = ANF.freshVar vg3
-                                let guardExpr = ANF.Prim (ANF.Eq, ANF.Var headVar, ANF.IntLiteral (ANF.Int64 n))
+                                let (guardVar, vg4) = ANF.freshVar vg3'
+                                let guardExpr = ANF.Prim (ANF.Eq, ANF.Var typedHeadVar, ANF.IntLiteral (ANF.Int64 n))
                                 Ok (currentEnv, [], vg4, Some (guardVar, guardExpr))
                             | AST.PConstructor _ ->
                                 Error "Nested pattern in list cons element not yet supported"
@@ -3775,7 +4007,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         |> Result.bind (fun (envWithHead, tupleBindings, vg4, guardOpt) ->
                             let tailEnvResult =
                                 match tailPattern with
-                                | AST.PVar name -> Ok (Map.add name (tailResultVar, AST.TList AST.TInt64) envWithHead, vg4)
+                                | AST.PVar name -> Ok (Map.add name (typedTailVar, listType) envWithHead, vg4)  // Use typed tail var with correct list type
                                 | AST.PWildcard -> Ok (envWithHead, vg4)
                                 | _ -> Error "Tail pattern must be variable or wildcard"
 
@@ -3786,15 +4018,15 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                     let withTupleBindings = wrapBindings tupleBindings bodyExpr
                                     let withTailBinding = wrapBindings tailBindings withTupleBindings
                                     // If there's a guard (literal pattern), add check AFTER head bindings
-                                    // because guardExpr uses headVar which is defined in headBindings
+                                    // because guardExpr uses headVar which is defined in headBindingsWithType
                                     let withGuard =
                                         match guardOpt with
                                         | Some (guardVar, guardExpr) ->
-                                            // headBindings -> guardVar -> if guard then body else elseExpr
+                                            // headBindingsWithType -> guardVar -> if guard then body else elseExpr
                                             let ifGuard = ANF.If (ANF.Var guardVar, withTailBinding, elseExpr)
                                             let withGuardBinding = ANF.Let (guardVar, guardExpr, ifGuard)
-                                            wrapBindings headBindings withGuardBinding
-                                        | None -> wrapBindings headBindings withTailBinding
+                                            wrapBindings headBindingsWithType withGuardBinding
+                                        | None -> wrapBindings headBindingsWithType withTailBinding
                                     (withGuard, vg6))))
 
                     // Build the combined expression with branching
@@ -3822,6 +4054,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     let lengthCheckExpr = ANF.Prim (ANF.Gte, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 numHeads)))
 
                     // Extract head elements and final tail using head/tail calls
+                    // Use _i64 versions which work for any element type at runtime (all values are 64-bit)
+                    // The correct element type is tracked in the VarEnv/TypeMap, not in the function name
                     let rec extractElements (pats: AST.Pattern list) (currentListVar: ANF.TempId) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.TempId * ANF.VarGen, string> =
                         match pats with
                         | [] ->
@@ -3838,7 +4072,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
                             match pat with
                             | AST.PVar name ->
-                                let newEnv = Map.add name (headResultVar, AST.TInt64) env
+                                let newEnv = Map.add name (headResultVar, elemType) env  // Use element type
                                 extractElements rest tailResultVar newEnv newBindings vg2
                             | AST.PWildcard ->
                                 extractElements rest tailResultVar env newBindings vg2
@@ -3856,7 +4090,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         // Bind tail pattern
                         let tailEnvResult =
                             match tailPattern with
-                            | AST.PVar name -> Ok (Map.add name (finalTailVar, AST.TList AST.TInt64) envAfterHeads, vg4)
+                            | AST.PVar name -> Ok (Map.add name (finalTailVar, listType) envAfterHeads, vg4)  // Use actual list type
                             | AST.PWildcard -> Ok (envAfterHeads, vg4)
                             | _ -> Error "Tail pattern must be variable or wildcard"
 
@@ -3929,18 +4163,18 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     | AST.PListCons (headPatterns, tailPattern) ->
                         // List cons pattern as last case
                         let fallbackExpr = ANF.Return (ANF.IntLiteral (ANF.Int64 0L))
-                        compileListConsPatternWithChecks headPatterns tailPattern scrutineeAtom' env body fallbackExpr vg
+                        compileListConsPatternWithChecks headPatterns tailPattern scrutineeAtom' scrutType env body fallbackExpr vg
                     | _ ->
                         // Other patterns - original behavior
                         // Handle guard if present
                         match mc.Guard with
                         | None ->
-                            extractAndCompileBody pattern body scrutineeAtom' env vg
+                            extractAndCompileBody pattern body scrutineeAtom' scrutType env vg
                         | Some guardExpr ->
                             // With guard: compile pattern match with guard check
                             // Note: If guard fails, fallback returns 0 (not ideal, but safe if match is exhaustive)
                             let fallbackExpr = ANF.Return (ANF.IntLiteral (ANF.Int64 0L))
-                            extractAndCompileBodyWithGuard pattern guardExpr body scrutineeAtom' env vg fallbackExpr
+                            extractAndCompileBodyWithGuard pattern guardExpr body scrutineeAtom' scrutType env vg fallbackExpr
                 | mc :: rest ->
                     // For pattern grouping, use first pattern for bindings but OR all patterns for comparison
                     let firstPattern = AST.NonEmptyList.head mc.Patterns
@@ -3949,12 +4183,12 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                         // Wildcard or var - matches everything, but may still need guard
                         match mc.Guard with
                         | None ->
-                            extractAndCompileBody firstPattern body scrutineeAtom' env vg
+                            extractAndCompileBody firstPattern body scrutineeAtom' scrutType env vg
                         | Some guardExpr ->
                             // Wildcard with guard - still need to check guard, fall through if false
                             buildChain rest vg
                             |> Result.bind (fun (elseExpr, vg1) ->
-                                extractAndCompileBodyWithGuard firstPattern guardExpr body scrutineeAtom' env vg1 elseExpr)
+                                extractAndCompileBodyWithGuard firstPattern guardExpr body scrutineeAtom' scrutType env vg1 elseExpr)
                     else
                         // Non-empty list patterns need special handling with interleaved checks
                         match firstPattern with
@@ -3963,12 +4197,12 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             buildChain rest vg
                             |> Result.bind (fun (elseExpr, vg1) ->
                                 // Use the new interleaved check-and-extract function
-                                compileListPatternWithChecks listPatterns scrutineeAtom' env body elseExpr vg1)
+                                compileListPatternWithChecks listPatterns scrutineeAtom' scrutType env body elseExpr vg1)
                         | AST.PListCons (headPatterns, tailPattern) ->
                             // List cons pattern - needs interleaved checks
                             buildChain rest vg
                             |> Result.bind (fun (elseExpr, vg1) ->
-                                compileListConsPatternWithChecks headPatterns tailPattern scrutineeAtom' env body elseExpr vg1)
+                                compileListConsPatternWithChecks headPatterns tailPattern scrutineeAtom' scrutType env body elseExpr vg1)
                         | _ ->
                             // Use pattern grouping: OR all patterns in the group
                             buildPatternGroupComparison (AST.NonEmptyList.toList mc.Patterns) scrutineeAtom' vg
@@ -3978,15 +4212,15 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                     // Pattern always matches
                                     match mc.Guard with
                                     | None ->
-                                        extractAndCompileBody firstPattern body scrutineeAtom' env vg
+                                        extractAndCompileBody firstPattern body scrutineeAtom' scrutType env vg
                                     | Some guardExpr ->
                                         buildChain rest vg
                                         |> Result.bind (fun (elseExpr, vg1) ->
-                                            extractAndCompileBodyWithGuard firstPattern guardExpr body scrutineeAtom' env vg1 elseExpr)
+                                            extractAndCompileBodyWithGuard firstPattern guardExpr body scrutineeAtom' scrutType env vg1 elseExpr)
                                 | Some (condAtom, bindings, vg1) ->
                                     match mc.Guard with
                                     | None ->
-                                        extractAndCompileBody firstPattern body scrutineeAtom' env vg1
+                                        extractAndCompileBody firstPattern body scrutineeAtom' scrutType env vg1
                                         |> Result.bind (fun (thenExpr, vg2) ->
                                             buildChain rest vg2
                                             |> Result.map (fun (elseExpr, vg3) ->
@@ -3997,7 +4231,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                         // Pattern match + guard: if pattern matches, bind, check guard
                                         buildChain rest vg1
                                         |> Result.bind (fun (elseExpr, vg2) ->
-                                            extractAndCompileBodyWithGuard firstPattern guardExpr body scrutineeAtom' env vg2 elseExpr
+                                            extractAndCompileBodyWithGuard firstPattern guardExpr body scrutineeAtom' scrutType env vg2 elseExpr
                                             |> Result.map (fun (guardedBody, vg3) ->
                                                 let ifExpr = ANF.If (condAtom, guardedBody, elseExpr)
                                                 let finalExpr = wrapBindings bindings ifExpr

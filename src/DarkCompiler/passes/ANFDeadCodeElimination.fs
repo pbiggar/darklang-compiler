@@ -30,6 +30,7 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.ClosureTailCall (closure, args) ->
         extractFromAtom closure @ (args |> List.collect extractFromAtom)
     | ANF.Atom atom -> extractFromAtom atom
+    | ANF.TypedAtom (atom, _) -> extractFromAtom atom
     | ANF.Prim (_, left, right) ->
         extractFromAtom left @ extractFromAtom right
     | ANF.UnaryPrim (_, atom) -> extractFromAtom atom

@@ -117,6 +117,7 @@ let maxTempIdInAtom (atom: ANF.Atom) : int =
 let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     match cexpr with
     | ANF.Atom atom -> maxTempIdInAtom atom
+    | ANF.TypedAtom (atom, _) -> maxTempIdInAtom atom
     | ANF.Prim (_, left, right) ->
         max (maxTempIdInAtom left) (maxTempIdInAtom right)
     | ANF.UnaryPrim (_, atom) -> maxTempIdInAtom atom
@@ -212,6 +213,7 @@ let collectFloatsFromAtom (atom: ANF.Atom) : float list =
 let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
     match cexpr with
     | ANF.Atom atom -> collectStringsFromAtom atom
+    | ANF.TypedAtom (atom, _) -> collectStringsFromAtom atom
     | ANF.Prim (_, left, right) ->
         collectStringsFromAtom left @ collectStringsFromAtom right
     | ANF.UnaryPrim (_, atom) -> collectStringsFromAtom atom
@@ -270,6 +272,7 @@ let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
 let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
     match cexpr with
     | ANF.Atom atom -> collectFloatsFromAtom atom
+    | ANF.TypedAtom (atom, _) -> collectFloatsFromAtom atom
     | ANF.Prim (_, left, right) ->
         collectFloatsFromAtom left @ collectFloatsFromAtom right
     | ANF.UnaryPrim (_, atom) -> collectFloatsFromAtom atom
@@ -587,6 +590,7 @@ let operandType (builder: CFGBuilder) (operand: MIR.Operand) : AST.Type =
 let cexprDescription (cexpr: ANF.CExpr) : string =
     match cexpr with
     | ANF.Atom _ -> "Atom"
+    | ANF.TypedAtom _ -> "TypedAtom"
     | ANF.Prim (op, _, _) -> $"Prim {op}"
     | ANF.UnaryPrim (op, _) -> $"UnaryPrim {op}"
     | ANF.IfValue _ -> "IfValue"
@@ -799,6 +803,11 @@ let rec convertExpr
                 match cexpr with
                 | ANF.Atom atom ->
                     let aType = atomType builder atom
+                    destType := aType
+                    atomToOperand builder atom
+                    |> Result.map (fun op -> [MIR.Mov (destReg, op, Some aType)])
+                | ANF.TypedAtom (atom, aType) ->
+                    // Use the explicit type annotation (for pattern matching with correct types)
                     destType := aType
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.Mov (destReg, op, Some aType)])
@@ -1371,6 +1380,11 @@ and convertExprToOperand
                 match cexpr with
                 | ANF.Atom atom ->
                     let aType = atomType builder atom
+                    destType := aType
+                    atomToOperand builder atom
+                    |> Result.map (fun op -> [MIR.Mov (destReg, op, Some aType)])
+                | ANF.TypedAtom (atom, aType) ->
+                    // Use the explicit type annotation (for pattern matching with correct types)
                     destType := aType
                     atomToOperand builder atom
                     |> Result.map (fun op -> [MIR.Mov (destReg, op, Some aType)])
