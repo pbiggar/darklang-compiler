@@ -25,9 +25,21 @@
 
 module ANF_to_MIR
 
+/// Helper to create VariantInfo record
+let private mkVariantInfo (name: string) (tag: int) (payload: AST.Type option) : MIR.VariantInfo =
+    { MIR.VariantInfo.Name = name; MIR.VariantInfo.Tag = tag; MIR.VariantInfo.Payload = payload }
+
+/// Helper to create TypeVariants record
+let private mkTypeVariants (typeParams: string list) (variants: MIR.VariantInfo list) : MIR.TypeVariants =
+    { MIR.TypeVariants.TypeParams = typeParams; MIR.TypeVariants.Variants = variants }
+
+/// Helper to create RecordField record
+let private mkRecordField (name: string) (typ: AST.Type) : MIR.RecordField =
+    { MIR.RecordField.Name = name; MIR.RecordField.Type = typ }
+
 /// Build VariantRegistry from VariantLookup
 /// VariantLookup: variantName -> (typeName, typeParams, tagIndex, payloadType)
-/// VariantRegistry: typeName -> (typeParams, list of (variantName, tagIndex, payloadType))
+/// VariantRegistry: typeName -> TypeVariants (with named record types)
 let buildVariantRegistry (variantLookup: AST_to_ANF.VariantLookup) : MIR.VariantRegistry =
     variantLookup
     |> Map.toList
@@ -37,9 +49,20 @@ let buildVariantRegistry (variantLookup: AST_to_ANF.VariantLookup) : MIR.Variant
     |> List.map (fun (typeName, entries) ->
         // Get typeParams from first entry (all entries for same type have same params)
         let typeParams = entries |> List.head |> (fun (_, tp, _) -> tp)
-        let variants = entries |> List.map (fun (_, _, v) -> v) |> List.sortBy (fun (_, tag, _) -> tag)
-        (typeName, (typeParams, variants)))
+        let variants =
+            entries
+            |> List.map (fun (_, _, (name, tag, payload)) -> mkVariantInfo name tag payload)
+            |> List.sortBy (fun v -> v.Tag)
+        (typeName, mkTypeVariants typeParams variants))
     |> Map.ofList
+
+/// Build RecordRegistry from TypeReg
+/// TypeReg: typeName -> (fieldName, fieldType) list
+/// RecordRegistry: typeName -> RecordField list
+let buildRecordRegistry (typeReg: Map<string, (string * AST.Type) list>) : MIR.RecordRegistry =
+    typeReg
+    |> Map.map (fun _typeName fields ->
+        fields |> List.map (fun (name, typ) -> mkRecordField name typ))
 
 /// Convert ANF.BinOp to MIR.BinOp
 let convertBinOp (op: ANF.BinOp) : MIR.BinOp =
@@ -1867,9 +1890,9 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
 /// Convert ANF program to MIR program
 /// mainExprType: the type of the main expression (used for _start's return type)
 /// variantLookup: mapping from variant names to type info (for enum printing)
-/// recordRegistry: mapping from record type names to field info (for record printing)
+/// typeReg: mapping from record type names to field info (for record printing, converted to RecordRegistry)
 /// externalReturnTypes: return types for functions not in the program (e.g., cached specialized functions)
-let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (mainExprType: AST.Type) (variantLookup: AST_to_ANF.VariantLookup) (recordRegistry: MIR.RecordRegistry) (enableCoverage: bool) (externalReturnTypes: Map<string, AST.Type>) : Result<MIR.Program * MIR.RegGen, string> =
+let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (mainExprType: AST.Type) (variantLookup: AST_to_ANF.VariantLookup) (typeRegForRecords: Map<string, (string * AST.Type) list>) (enableCoverage: bool) (externalReturnTypes: Map<string, AST.Type>) : Result<MIR.Program * MIR.RegGen, string> =
     let (ANF.Program (functions, mainExpr)) = program
 
     // Critical: freshReg must generate VRegs that don't conflict with TempId-derived VRegs.
@@ -1939,14 +1962,15 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
     }
     let allFuncs = mirFuncs @ [startFunc]
     let variantRegistry = buildVariantRegistry variantLookup
-    // recordRegistry is passed in from ConversionResult.TypeReg
+    // Build recordRegistry from typeRegForRecords (converts tuples to RecordField records)
+    let recordRegistry = buildRecordRegistry typeRegForRecords
     Ok (MIR.Program (allFuncs, stringPool, floatPool, variantRegistry, recordRegistry), finalBuilder.RegGen)
 
 /// Convert ANF program to MIR (functions only, no _start)
 /// Use for stdlib where there's no real main expression to convert.
 /// Returns just the function list, pools, variant registry, and record registry without wrapping in MIR.Program.
 /// externalReturnTypes: return types for functions not in the program (e.g., cached specialized functions)
-let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (variantLookup: AST_to_ANF.VariantLookup) (recordRegistry: MIR.RecordRegistry) (enableCoverage: bool) (externalReturnTypes: Map<string, AST.Type>) : Result<MIR.Function list * MIR.StringPool * MIR.FloatPool * MIR.VariantRegistry * MIR.RecordRegistry, string> =
+let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (variantLookup: AST_to_ANF.VariantLookup) (typeRegForRecords: Map<string, (string * AST.Type) list>) (enableCoverage: bool) (externalReturnTypes: Map<string, AST.Type>) : Result<MIR.Function list * MIR.StringPool * MIR.FloatPool * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     let (ANF.Program (functions, _mainExpr)) = program
 
     // Same regGen calculation as toMIR
@@ -1978,6 +2002,7 @@ let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: M
     | Error err -> Error err
     | Ok (mirFuncs, _) ->
         let variantRegistry = buildVariantRegistry variantLookup
+        let recordRegistry = buildRecordRegistry typeRegForRecords
         Ok (mirFuncs, stringPool, floatPool, variantRegistry, recordRegistry)
 
 // ============================================================================

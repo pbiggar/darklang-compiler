@@ -207,13 +207,30 @@ type Function = {
     FloatRegs: Set<int>              // VReg IDs that hold float values (for SSA phi nodes)
 }
 
-/// Variant info for sum type printing
-/// Maps type name -> (type params, list of (variant name, tag index, payload type))
-type VariantRegistry = Map<string, (string list * (string * int * AST.Type option) list)>
+/// Info about a single variant in a sum type (makes structure explicit)
+type VariantInfo = {
+    Name: string
+    Tag: int
+    Payload: AST.Type option
+}
 
-/// Record field info for record printing
-/// Maps type name -> list of (field name, field type)
-type RecordRegistry = Map<string, (string * AST.Type) list>
+/// All variants for a sum type, with type parameters
+type TypeVariants = {
+    TypeParams: string list
+    Variants: VariantInfo list
+}
+
+/// Maps type name -> variant information
+type VariantRegistry = Map<string, TypeVariants>
+
+/// Info about a single record field (makes structure explicit)
+type RecordField = {
+    Name: string
+    Type: AST.Type
+}
+
+/// Maps type name -> list of fields
+type RecordRegistry = Map<string, RecordField list>
 
 /// MIR program (list of functions with string and float pools)
 type Program = Program of functions:Function list * strings:StringPool * floats:FloatPool * variants:VariantRegistry * records:RecordRegistry

@@ -903,16 +903,16 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
         | AST.TSum (typeName, typeArgs) ->
             // Sum type printing: look up variants and generate PrintSum
             match Map.tryFind typeName variantRegistry with
-            | Some (typeParams, variants) ->
+            | Some typeVariants ->
                 // Apply type substitution to payload types
                 let substitutedVariants =
-                    variants |> List.map (fun (name, tag, payloadOpt) ->
+                    typeVariants.Variants |> List.map (fun v ->
                         let subPayload =
-                            match payloadOpt with
-                            | Some payload when List.length typeParams = List.length typeArgs ->
-                                Some (applyTypeSubst typeParams typeArgs payload)
+                            match v.Payload with
+                            | Some payload when List.length typeVariants.TypeParams = List.length typeArgs ->
+                                Some (applyTypeSubst typeVariants.TypeParams typeArgs payload)
                             | other -> other
-                        (name, tag, subPayload))
+                        (v.Name, v.Tag, subPayload))
                 // Move sum pointer to X19 (callee-saved for print operations)
                 let lirSrc = convertOperand src
                 let moveToX19 =
@@ -940,7 +940,9 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
                     match lirSrc with
                     | LIR.Reg (LIR.Physical LIR.X19) -> []
                     | _ -> [LIR.Mov (LIR.Physical LIR.X19, lirSrc)]
-                Ok (moveToX19 @ [LIR.PrintRecord (LIR.Physical LIR.X19, typeName, fields)])
+                // Convert RecordField list to tuple format for LIR
+                let fieldTuples = fields |> List.map (fun f -> (f.Name, f.Type))
+                Ok (moveToX19 @ [LIR.PrintRecord (LIR.Physical LIR.X19, typeName, fieldTuples)])
             | None ->
                 Error $"Print: Record type '{typeName}' not found in recordRegistry"
         | AST.TDict _ ->
