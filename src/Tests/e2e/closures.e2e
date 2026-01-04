@@ -170,40 +170,37 @@ let a = "one" in let b = "two" in ((x: String) => a ++ " " ++ b ++ " " ++ x)("th
 
 // =====================================================
 // Closures Capturing Tuples
-// DISABLED: Tuple capture in closures not yet implemented
 // =====================================================
 
 // Capture tuple, access elements
-// DISABLED: let t = (10, 20) in ((x: Int64) => t.0 + t.1 + x)(5) = stdout="35\n"
+let t = (10, 20) in ((x: Int64) => t.0 + t.1 + x)(5) = stdout="35\n"
 
 // Capture 3-tuple
-// DISABLED: let t = (1, 2, 3) in ((x: Int64) => t.0 + t.1 + t.2 + x)(4) = stdout="10\n"
+let t = (1, 2, 3) in ((x: Int64) => t.0 + t.1 + t.2 + x)(4) = stdout="10\n"
 
 // Capture tuple, use in arithmetic
-// DISABLED: let pair = (5, 3) in ((x: Int64) => (pair.0 - pair.1) * x)(7) = stdout="14\n"
+let pair = (5, 3) in ((x: Int64) => (pair.0 - pair.1) * x)(7) = stdout="14\n"
 
 // =====================================================
 // Closures Capturing Records
-// DISABLED: Record capture in closures not yet implemented
 // =====================================================
 
 // Capture record, access field
-// DISABLED: type Point = { x: Int64, y: Int64 }
-// DISABLED: let p = Point { x = 3, y = 4 } in ((n: Int64) => p.x + p.y + n)(3) = stdout="10\n"
+type Point = { x: Int64, y: Int64 }
+let p = Point { x = 3, y = 4 } in ((n: Int64) => p.x + p.y + n)(3) = stdout="10\n"
 
 // Capture record, use both fields
-// DISABLED: type Vec = { dx: Int64, dy: Int64 }
-// DISABLED: let v = Vec { dx = 5, dy = 10 } in ((scale: Int64) => v.dx * scale + v.dy)(2) = stdout="20\n"
+type Vec = { dx: Int64, dy: Int64 }
+let v = Vec { dx = 5, dy = 10 } in ((scale: Int64) => v.dx * scale + v.dy)(2) = stdout="20\n"
 
 // =====================================================
 // Closures Capturing Sum Types
-// DISABLED: Sum type capture in closures not yet implemented
 // =====================================================
 
 // Capture Option-like value
-// DISABLED: type Opt = None2 | Some2 of Int64
-// DISABLED: let opt = Some2(42) in ((x: Int64) => match opt with | Some2(v) -> v + x | None2 -> 0)(8) = stdout="50\n"
-// DISABLED: let opt = None2 in ((x: Int64) => match opt with | Some2(v) -> v + x | None2 -> x)(8) = stdout="8\n"
+type Opt = None2 | Some2 of Int64
+let opt = Some2(42) in ((x: Int64) => match opt with | Some2(v) -> v + x | None2 -> 0)(8) = stdout="50\n"
+let opt = None2 in ((x: Int64) => match opt with | Some2(v) -> v + x | None2 -> x)(8) = stdout="8\n"
 
 // =====================================================
 // Many Captures (Testing Capture Slot Limits)

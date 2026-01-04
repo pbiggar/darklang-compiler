@@ -871,7 +871,7 @@ let rec freeVars (expr: AST.Expr) (bound: Set<string>) : Set<string> =
 
 /// Simple type inference for lambda lifting - infers types of simple expressions
 /// This allows let-bound variables to be captured in nested lambdas
-let simpleInferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) : AST.Type option =
+let rec simpleInferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) : AST.Type option =
     match expr with
     | AST.IntLiteral _ -> Some AST.TInt64
     | AST.Int8Literal _ -> Some AST.TInt8
@@ -887,6 +887,19 @@ let simpleInferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) : AST.Type
     | AST.FloatLiteral _ -> Some AST.TFloat64
     | AST.UnitLiteral -> Some AST.TUnit
     | AST.Var name -> Map.tryFind name typeEnv
+    | AST.TupleLiteral elements ->
+        // Recursively infer types of tuple elements
+        let elemTypes = elements |> List.map (fun e -> simpleInferType e typeEnv)
+        if List.forall Option.isSome elemTypes then
+            Some (AST.TTuple (elemTypes |> List.map Option.get))
+        else
+            None
+    | AST.RecordLiteral (typeName, _) ->
+        // Record literal has the record's type
+        Some (AST.TRecord typeName)
+    | AST.Constructor (typeName, _, _) ->
+        // Sum type constructor has the sum type
+        Some (AST.TSum (typeName, []))
     | AST.BinOp (op, _, _) ->
         match op with
         | AST.Add | AST.Sub | AST.Mul | AST.Div | AST.Mod
