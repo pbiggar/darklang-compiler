@@ -22,6 +22,25 @@ BASELINES_FILE = "BASELINES.md"
 HISTORY_FILE = "HISTORY.md"
 
 
+def is_reduced_size_benchmark(benchmarks_dir: Path, benchmark: str) -> bool:
+    """Check if a benchmark runs at reduced size for Dark.
+
+    A benchmark is reduced-size if it has a dark/expected_output.txt that differs
+    from the main expected_output.txt. These should not be included in RESULTS.md
+    or HISTORY.md since the instruction counts aren't comparable.
+    """
+    problems_dir = benchmarks_dir / "problems" / benchmark
+    main_expected = problems_dir / "expected_output.txt"
+    dark_expected = problems_dir / "dark" / "expected_output.txt"
+
+    if not dark_expected.exists():
+        return False
+    if not main_expected.exists():
+        return False
+
+    return main_expected.read_text().strip() != dark_expected.read_text().strip()
+
+
 def format_number(n: int) -> str:
     """Format large numbers with commas."""
     return f"{n:,}"
@@ -155,7 +174,7 @@ def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dic
             existing[benchmark] = {}
         existing[benchmark].update(langs)
 
-    # Merge with new results
+    # Merge with new results (skip reduced-size Dark benchmarks)
     for benchmark, benchmark_results in json_results.items():
         if benchmark not in existing:
             existing[benchmark] = {}
@@ -163,6 +182,10 @@ def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dic
             lang = r.get("language", "").lower()
             instrs = r.get("instructions", 0)
             if instrs > 0:
+                # Skip Dark results for reduced-size benchmarks
+                if lang == "dark" and is_reduced_size_benchmark(benchmarks_dir, benchmark):
+                    print(f"  Skipping {benchmark} Dark results (reduced-size benchmark)")
+                    continue
                 existing[benchmark][lang] = instrs
 
     # Merge with baselines
@@ -386,13 +409,17 @@ def append_to_history(benchmarks_dir: Path, json_results: dict, metadata: dict):
     """Append Dark results to HISTORY.md."""
     history_path = benchmarks_dir / HISTORY_FILE
 
-    # Generate new rows for Dark results only
+    # Generate new rows for Dark results only (skip reduced-size benchmarks)
     new_rows = []
     for benchmark, benchmark_results in sorted(json_results.items()):
         for r in benchmark_results:
             lang = r.get("language", "").lower()
             if lang != "dark":
                 continue  # Only log Dark results
+
+            # Skip reduced-size benchmarks
+            if is_reduced_size_benchmark(benchmarks_dir, benchmark):
+                continue
 
             instrs = format_number(r.get("instructions", 0))
             data_refs = format_number(r.get("data_refs", 0))
