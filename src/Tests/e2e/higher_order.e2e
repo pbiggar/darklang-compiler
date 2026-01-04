@@ -48,3 +48,22 @@ def twice(f: (Int64) -> Int64, x: Int64): Int64 = f(f(x)) twice((y: Int64) => y 
 
 // Twice with capturing lambda
 def twice(f: (Int64) -> Int64, x: Int64): Int64 = f(f(x)) let inc = 3 in twice((y: Int64) => y + inc, 5) = 11
+
+// =====================================================
+// Nested Lambdas (CPS-style)
+// =====================================================
+
+// Nested lambda passed as continuation
+def withCont(x: Int64, cont: (Int64) -> Int64): Int64 = cont(x + 1) withCont(5, (r: Int64) => r * 2) = 12
+
+// Two levels of nesting - inner lambda calls outer function
+def cps1(x: Int64, k: (Int64) -> Int64): Int64 = k(x) def cps2(x: Int64): Int64 = cps1(x + 1, (r: Int64) => r * 2) cps2(5) = 12
+
+// Three levels of CPS-style nesting
+def step(x: Int64, k: (Int64) -> Int64): Int64 = k(x + 1) step(1, (a: Int64) => step(a, (b: Int64) => step(b, (c: Int64) => c))) = 4
+
+// Nested lambda capturing outer lambda's parameter
+def outer(f: (Int64) -> Int64, x: Int64): Int64 = f(x) def inner(g: (Int64) -> Int64, y: Int64): Int64 = g(y) outer((a: Int64) => inner((b: Int64) => a + b, 10), 32) = 42
+
+// CPS-style with captured variables
+def cpsAdd(x: Int64, k: (Int64) -> Int64): Int64 = k(x) let base = 10 in cpsAdd(5, (r: Int64) => r + base) = 15

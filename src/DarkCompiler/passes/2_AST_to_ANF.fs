@@ -933,9 +933,44 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
             liftLambdasInCases cases state1
             |> Result.map (fun (cases', state2) -> (AST.Match (scrutinee', cases'), state2)))
     | AST.Lambda (parameters, body) ->
-        // Lambda not in argument position - just recurse into body
+        // Lambda in expression position - lift it to a closure
+        // First, lift any lambdas within the body
         liftLambdasInExpr body state
-        |> Result.map (fun (body', state') -> (AST.Lambda (parameters, body'), state'))
+        |> Result.bind (fun (body', state1) ->
+            // Now lift this lambda itself to a closure
+            let paramNames = parameters |> List.map fst |> Set.ofList
+            let freeVarsInBody = freeVars body' paramNames
+            let captures = Set.toList freeVarsInBody
+
+            // Create lifted function
+            let funcName = $"__closure_{state1.Counter}"
+            let closureParam = ("__closure", AST.TTuple (List.replicate (List.length captures + 1) AST.TInt64))
+
+            // Build body that extracts captures from closure tuple
+            let bodyWithExtractions =
+                if List.isEmpty captures then
+                    body'
+                else
+                    captures
+                    |> List.mapi (fun i capName ->
+                        (capName, AST.TupleAccess (AST.Var "__closure", i + 1)))
+                    |> List.foldBack (fun (capName, accessor) acc ->
+                        AST.Let (capName, accessor, acc)) <| body'
+
+            let funcDef : AST.FunctionDef = {
+                Name = funcName
+                TypeParams = []
+                Params = closureParam :: parameters
+                ReturnType = AST.TInt64
+                Body = bodyWithExtractions
+            }
+            let state' = {
+                Counter = state1.Counter + 1
+                LiftedFunctions = funcDef :: state1.LiftedFunctions
+            }
+            // Replace lambda with Closure
+            let captureExprs = captures |> List.map AST.Var
+            Ok (AST.Closure (funcName, captureExprs), state'))
     | AST.Apply (func, args) ->
         liftLambdasInExpr func state
         |> Result.bind (fun (func', state1) ->
@@ -964,43 +999,46 @@ and liftLambdasInArgs (args: AST.Expr list) (state: LiftState) : Result<AST.Expr
         | arg :: rest ->
             match arg with
             | AST.Lambda (parameters, body) ->
-                // Check for free variables (captures)
-                let paramNames = parameters |> List.map fst |> Set.ofList
-                let freeVarsInBody = freeVars body paramNames
-                let captures = Set.toList freeVarsInBody
+                // First, recursively lift any nested lambdas in the body
+                liftLambdasInExpr body state
+                |> Result.bind (fun (body', state1) ->
+                    // Check for free variables (captures)
+                    let paramNames = parameters |> List.map fst |> Set.ofList
+                    let freeVarsInBody = freeVars body' paramNames
+                    let captures = Set.toList freeVarsInBody
 
-                // All lambdas become closures (even non-capturing ones) for uniform calling convention
-                // The lifted function takes closure as first param, then original params
-                let funcName = $"__closure_{state.Counter}"
-                let closureParam = ("__closure", AST.TTuple (List.replicate (List.length captures + 1) AST.TInt64))
+                    // All lambdas become closures (even non-capturing ones) for uniform calling convention
+                    // The lifted function takes closure as first param, then original params
+                    let funcName = $"__closure_{state1.Counter}"
+                    let closureParam = ("__closure", AST.TTuple (List.replicate (List.length captures + 1) AST.TInt64))
 
-                // Build body that extracts captures from closure tuple:
-                // let cap1 = __closure.1 in let cap2 = __closure.2 in ... original_body
-                let bodyWithExtractions =
-                    if List.isEmpty captures then
-                        body  // No captures to extract
-                    else
-                        captures
-                        |> List.mapi (fun i capName ->
-                            // Capture at index i+1 (index 0 is the function pointer)
-                            (capName, AST.TupleAccess (AST.Var "__closure", i + 1)))
-                        |> List.foldBack (fun (capName, accessor) acc ->
-                            AST.Let (capName, accessor, acc)) <| body
+                    // Build body that extracts captures from closure tuple:
+                    // let cap1 = __closure.1 in let cap2 = __closure.2 in ... original_body
+                    let bodyWithExtractions =
+                        if List.isEmpty captures then
+                            body'  // No captures to extract
+                        else
+                            captures
+                            |> List.mapi (fun i capName ->
+                                // Capture at index i+1 (index 0 is the function pointer)
+                                (capName, AST.TupleAccess (AST.Var "__closure", i + 1)))
+                            |> List.foldBack (fun (capName, accessor) acc ->
+                                AST.Let (capName, accessor, acc)) <| body'
 
-                let funcDef : AST.FunctionDef = {
-                    Name = funcName
-                    TypeParams = []
-                    Params = closureParam :: parameters  // Closure is always first param
-                    ReturnType = AST.TInt64
-                    Body = bodyWithExtractions
-                }
-                let state' = {
-                    Counter = state.Counter + 1
-                    LiftedFunctions = funcDef :: state.LiftedFunctions
-                }
-                // Replace lambda with Closure (captures may be empty for non-capturing lambdas)
-                let captureExprs = captures |> List.map AST.Var
-                loop rest state' (AST.Closure (funcName, captureExprs) :: acc)
+                    let funcDef : AST.FunctionDef = {
+                        Name = funcName
+                        TypeParams = []
+                        Params = closureParam :: parameters  // Closure is always first param
+                        ReturnType = AST.TInt64
+                        Body = bodyWithExtractions
+                    }
+                    let state' = {
+                        Counter = state1.Counter + 1
+                        LiftedFunctions = funcDef :: state1.LiftedFunctions
+                    }
+                    // Replace lambda with Closure (captures may be empty for non-capturing lambdas)
+                    let captureExprs = captures |> List.map AST.Var
+                    loop rest state' (AST.Closure (funcName, captureExprs) :: acc))
 
             | AST.FuncRef origFuncName ->
                 // Named function used as value - wrap in a closure for uniform calling convention
