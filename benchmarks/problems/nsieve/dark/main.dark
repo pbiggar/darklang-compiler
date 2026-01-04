@@ -1,0 +1,37 @@
+// Nsieve Benchmark - Sieve of Eratosthenes
+// Counts primes up to n using Dict as sparse composite set
+// Note: Uses reduced size (n=1000) due to stack depth limits with deep recursion
+
+// Mark all multiples of prime as composite
+def markMultiples(j: Int64, step: Int64, n: Int64, composites: Dict<Int64, Bool>) : Dict<Int64, Bool> =
+    if j > n then composites
+    else markMultiples(j + step, step, n, Stdlib.Dict.set<Int64, Bool>(composites, j, true))
+
+// Run sieve for numbers from i to n
+def sieveLoop(i: Int64, n: Int64, composites: Dict<Int64, Bool>) : Dict<Int64, Bool> =
+    if i > n then composites
+    else
+        let newComposites =
+            if Stdlib.Dict.contains<Int64, Bool>(composites, i) then composites
+            else markMultiples(i + i, i, n, composites)
+        in
+        sieveLoop(i + 1, n, newComposites)
+
+// Count primes (numbers not in composites set)
+def countPrimes(i: Int64, n: Int64, composites: Dict<Int64, Bool>, count: Int64) : Int64 =
+    if i > n then count
+    else
+        let newCount = if Stdlib.Dict.contains<Int64, Bool>(composites, i) then count else count + 1 in
+        countPrimes(i + 1, n, composites, newCount)
+
+def nsieve(n: Int64) : Int64 =
+    let composites = sieveLoop(2, n, Stdlib.Dict.empty<Int64, Bool>()) in
+    countPrimes(2, n, composites, 0)
+
+// Run with n=1000 (168 primes), multiple iterations for meaningful benchmark time
+def runBenchmark(iterations: Int64, result: Int64) : Int64 =
+    if iterations <= 0 then result
+    else runBenchmark(iterations - 1, nsieve(1000))
+
+// Single run
+nsieve(1000)

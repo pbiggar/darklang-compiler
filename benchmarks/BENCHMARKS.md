@@ -111,6 +111,8 @@ These benchmarks have implementations but are limited by stack depth or bugs.
 | pisum | Working (reduced) | Uses 5 rounds, n=1000 (full size causes stack overflow) |
 | matmul | INTERMITTENT SEGFAULT | Implemented with n=3, crashes intermittently |
 | quicksort | Stack overflow | Works only with 3 elements |
+| nsieve | Stack overflow | Uses n=1000 (n=100000 causes stack overflow) - outputs 168 |
+| fannkuch | Stack overflow | Uses n=6 (n=9 causes stack overflow) - outputs 10 |
 
 ---
 
@@ -120,8 +122,6 @@ These benchmarks have placeholder implementations that return 0.
 
 | Benchmark | Category | Missing Features |
 |-----------|----------|------------------|
-| fannkuch | Permutation | Mutable arrays, in-place reversal |
-| nsieve | Sieve | Mutable arrays for sieve |
 | fasta | Bioinformatics | Random numbers, efficient string building |
 | edigits | Numerical | Unknown requirements |
 
@@ -132,8 +132,7 @@ These benchmarks have placeholder implementations that return 0.
 | Feature | Benchmarks Blocked |
 |---------|-------------------|
 | **Non-deterministic segfault bug** | spectral_norm, nbody, matmul |
-| Stack depth / TCO | pisum (full), mandelbrot (full), quicksort |
-| Mutable arrays | fannkuch, nsieve |
+| Stack depth / TCO | pisum (full), mandelbrot (full), quicksort, nsieve (full), fannkuch (full) |
 | String operations | fasta |
 
 ---

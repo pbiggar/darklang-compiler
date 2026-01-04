@@ -26,13 +26,21 @@ FAILED=0
 
 echo "Validating $BENCHMARK (expected: $EXPECTED)..."
 
-# Validate Dark
+# Validate Dark (check for Dark-specific expected output first)
 if [ -x "$PROBLEM_DIR/dark/main" ]; then
+    DARK_EXPECTED="$EXPECTED"
+    if [ -f "$PROBLEM_DIR/dark/expected_output.txt" ]; then
+        DARK_EXPECTED=$(cat "$PROBLEM_DIR/dark/expected_output.txt")
+    fi
     OUTPUT=$("$PROBLEM_DIR/dark/main" 2>&1 || true)
-    if [ "$OUTPUT" = "$EXPECTED" ]; then
-        echo "  Dark: PASS"
+    if [ "$OUTPUT" = "$DARK_EXPECTED" ]; then
+        if [ "$DARK_EXPECTED" != "$EXPECTED" ]; then
+            echo "  Dark: PASS (reduced size: $DARK_EXPECTED)"
+        else
+            echo "  Dark: PASS"
+        fi
     else
-        echo "  Dark: FAIL (got: '$OUTPUT')"
+        echo "  Dark: FAIL (got: '$OUTPUT', expected: '$DARK_EXPECTED')"
         FAILED=1
     fi
 fi

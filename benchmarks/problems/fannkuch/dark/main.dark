@@ -1,0 +1,68 @@
+// Fannkuch Benchmark - Pancake flipping
+// Count maximum flips needed to sort any permutation
+
+// Get element at index (unsafe - assumes valid index)
+def getAt(list: List<Int64>, index: Int64) : Int64 =
+    match Stdlib.List.getAt<Int64>(list, index) with
+    | Some(v) -> v
+    | None -> 0
+
+// Reverse first k+1 elements of list
+def reversePrefix(list: List<Int64>, k: Int64) : List<Int64> =
+    let prefix = Stdlib.List.take<Int64>(list, k + 1) in
+    let suffix = Stdlib.List.drop<Int64>(list, k + 1) in
+    Stdlib.List.append<Int64>(Stdlib.List.reverse<Int64>(prefix), suffix)
+
+// Count flips until first element is 0
+def countFlips(perm: List<Int64>, flips: Int64) : Int64 =
+    let first = getAt(perm, 0) in
+    if first == 0 then flips
+    else countFlips(reversePrefix(perm, first), flips + 1)
+
+// Rotate first i+1 elements left by 1: [a,b,c,d,...] -> [b,c,d,a,...]
+def rotateLeft(list: List<Int64>, i: Int64) : List<Int64> =
+    let first = getAt(list, 0) in
+    let middle = Stdlib.List.take<Int64>(Stdlib.List.drop<Int64>(list, 1), i) in
+    let rest = Stdlib.List.drop<Int64>(list, i + 1) in
+    Stdlib.List.append<Int64>(Stdlib.List.append<Int64>(middle, Stdlib.List.singleton<Int64>(first)), rest)
+
+// Set element at index
+def setAt(list: List<Int64>, index: Int64, value: Int64) : List<Int64> =
+    Stdlib.List.setAt<Int64>(list, index, value)
+
+// Generate next permutation, returns (newPerm, newCount, done)
+def nextPerm(perm: List<Int64>, count: List<Int64>, i: Int64, n: Int64) : (List<Int64>, List<Int64>, Bool) =
+    if i >= n then (perm, count, true)
+    else
+        let newPerm = rotateLeft(perm, i) in
+        let ci = getAt(count, i) in
+        if ci > 0 then
+            (newPerm, setAt(count, i, ci - 1), false)
+        else
+            let newCount = setAt(count, i, i) in
+            nextPerm(newPerm, newCount, i + 1, n)
+
+// Main loop: process all permutations
+def fannkuchLoop(perm: List<Int64>, count: List<Int64>, n: Int64, maxFlips: Int64) : Int64 =
+    let first = getAt(perm, 0) in
+    let flips = if first == 0 then 0 else countFlips(perm, 0) in
+    let newMax = if flips > maxFlips then flips else maxFlips in
+    let result = nextPerm(perm, count, 1, n) in
+    let newPerm = Stdlib.Tuple3.first<List<Int64>, List<Int64>, Bool>(result) in
+    let newCount = Stdlib.Tuple3.second<List<Int64>, List<Int64>, Bool>(result) in
+    let done = Stdlib.Tuple3.third<List<Int64>, List<Int64>, Bool>(result) in
+    if done then newMax
+    else fannkuchLoop(newPerm, newCount, n, newMax)
+
+// Create initial list [0, 1, 2, ..., n-1]
+def createRange(n: Int64) : List<Int64> =
+    Stdlib.List.range(0, n)
+
+def fannkuch(n: Int64) : Int64 =
+    let perm = createRange(n) in
+    let count = createRange(n) in
+    fannkuchLoop(perm, count, n, 0)
+
+// n=6 is max size under cachegrind (output: 10)
+// Standard benchmark uses n=9 (output: 23) but we're stack-limited
+fannkuch(6)
