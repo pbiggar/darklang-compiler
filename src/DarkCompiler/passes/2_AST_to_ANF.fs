@@ -27,7 +27,7 @@ type SpecializationCache = ConcurrentDictionary<string * string list, AST.Functi
 
 /// Thread-safe cache for ANF user functions - avoids re-converting same function across tests
 /// Key: (filename, line_number, function_name)
-/// Value: (ANF.Function, ending VarGen) - we need the VarGen to avoid variable ID collisions
+/// Value: (ANF.Function, ending VarGen) - we need the VarGen to avoid TempId collisions
 type ANFFunctionCache = ConcurrentDictionary<string * int * string, ANF.Function * ANF.VarGen>
 
 /// Convert AST.Type to a string for cache key
@@ -4773,6 +4773,8 @@ and wrapBindings (bindings: (ANF.TempId * ANF.CExpr) list) (expr: ANF.AExpr) : A
     List.foldBack (fun (var, cexpr) acc -> ANF.Let (var, cexpr, acc)) bindings expr
 
 /// Convert a function definition to ANF
+/// VarGen is passed in and out to maintain globally unique TempIds across functions
+/// (needed for TypeMap which maps TempId -> Type across the whole program)
 let convertFunction (funcDef: AST.FunctionDef) (varGen: ANF.VarGen) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Function * ANF.VarGen, string> =
     // Allocate TempIds for parameters, bundled with their types
     let (typedParams, varGen1) =
@@ -4892,7 +4894,7 @@ let convertProgramWithTypes (program: AST.Program) : Result<ConversionResult, st
 
     let funcParams = Map.fold (fun acc k v -> Map.add k v acc) userFuncParams moduleFuncParams
 
-    // Convert all functions
+    // Convert all functions, passing VarGen between them for globally unique TempIds
     let rec convertFunctions (funcs: AST.FunctionDef list) (vg: ANF.VarGen) (acc: ANF.Function list) : Result<ANF.Function list * ANF.VarGen, string> =
         match funcs with
         | [] -> Ok (List.rev acc, vg)
@@ -5009,6 +5011,7 @@ let convertUserWithStdlib
     let mergedFuncParams = mergeMaps stdlibResult.FuncParams (mergeMaps userFuncParams moduleFuncParams)
 
     // 4. Convert user functions with merged registries for lookups
+    // Pass VarGen between functions for globally unique TempIds
     let rec convertFunctions (funcs: AST.FunctionDef list) (vg: ANF.VarGen) (acc: ANF.Function list) : Result<ANF.Function list * ANF.VarGen, string> =
         match funcs with
         | [] -> Ok (List.rev acc, vg)
@@ -5122,6 +5125,7 @@ let convertUserOnly
     let mergedFuncParams = mergeMaps stdlibResult.FuncParams (mergeMaps userFuncParams moduleFuncParams)
 
     // 4. Convert user functions with merged registries for lookups
+    // Pass VarGen between functions for globally unique TempIds
     let rec convertFunctions (funcs: AST.FunctionDef list) (vg: ANF.VarGen) (acc: ANF.Function list) : Result<ANF.Function list * ANF.VarGen, string> =
         match funcs with
         | [] -> Ok (List.rev acc, vg)
@@ -5244,6 +5248,7 @@ let convertUserOnlyCached
     // Uses cache to avoid re-converting the same function across tests
     // Only cache non-specialized functions (no __ in name) since specialized functions
     // are generated during monomorphization and may have context-dependent behavior
+    // Pass VarGen between functions for globally unique TempIds
     let rec convertFunctions (funcs: AST.FunctionDef list) (vg: ANF.VarGen) (acc: ANF.Function list) : Result<ANF.Function list * ANF.VarGen, string> =
         match funcs with
         | [] -> Ok (List.rev acc, vg)
@@ -5257,7 +5262,7 @@ let convertUserOnlyCached
             match canCache, anfFuncCache.TryGetValue(cacheKey) with
             | true, (true, (cachedFunc, cachedEndVg)) ->
                 // Cache hit - reuse cached ANF function
-                // Use max of current VarGen and cached ending VarGen to avoid variable ID collisions
+                // Use max of current VarGen and cached ending VarGen to avoid TempId collisions
                 let (ANF.VarGen currentId) = vg
                 let (ANF.VarGen cachedId) = cachedEndVg
                 let newVg = ANF.VarGen (max currentId cachedId)
@@ -5357,7 +5362,7 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
             (f.Name, funcType))
         |> Map.ofList
 
-    // Convert all functions
+    // Convert all functions - VarGen is passed between functions for globally unique TempIds
     let rec convertFunctions (funcs: AST.FunctionDef list) (vg: ANF.VarGen) (acc: ANF.Function list) : Result<ANF.Function list * ANF.VarGen, string> =
         match funcs with
         | [] -> Ok (List.rev acc, vg)
@@ -5373,12 +5378,13 @@ let convertProgram (program: AST.Program) : Result<ANF.Program, string> =
     else
 
     // Stdlib functions are now loaded from stdlib.dark and included as regular functions
-    convertFunctions functions varGen []
-    |> Result.bind (fun (anfFuncs, varGen1) ->
+    convertFunctions functions ANF.initialVarGen []
+    |> Result.bind (fun (anfFuncs, vg) ->
         match expressions with
         | [expr] ->
             let emptyEnv : VarEnv = Map.empty
-            toANF expr varGen1 emptyEnv typeReg variantLookup funcReg moduleRegistry
+            // Main expression continues with VarGen from functions for globally unique TempIds
+            toANF expr vg emptyEnv typeReg variantLookup funcReg moduleRegistry
             |> Result.map (fun (anfExpr, _) ->
                 ANF.Program (anfFuncs, anfExpr))
         | [] ->

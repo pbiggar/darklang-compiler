@@ -116,9 +116,9 @@ let getOptimizedMIR (source: string) : Result<string, string> =
                     let anfProgram = PrintInsertion.insertPrint functions mainExpr programType
 
                     // Convert to MIR
-                    match ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) typeMap Map.empty programType convResultOptimized.VariantLookup convResultOptimized.TypeReg false Map.empty with
+                    match ANF_to_MIR.toMIR anfProgram typeMap Map.empty programType convResultOptimized.VariantLookup convResultOptimized.TypeReg false Map.empty with
                     | Error e -> Error $"MIR conversion error: {e}"
-                    | Ok (mirProgram, _) ->
+                    | Ok mirProgram ->
                         // SSA construction
                         let ssaProgram = SSA_Construction.convertToSSA mirProgram
 
@@ -155,9 +155,9 @@ let getOptimizedLIR (source: string) : Result<string, string> =
                     let anfProgram = PrintInsertion.insertPrint functions mainExpr programType
 
                     // Convert to MIR
-                    match ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) typeMap Map.empty programType convResultOptimized.VariantLookup convResultOptimized.TypeReg false Map.empty with
+                    match ANF_to_MIR.toMIR anfProgram typeMap Map.empty programType convResultOptimized.VariantLookup convResultOptimized.TypeReg false Map.empty with
                     | Error e -> Error $"MIR conversion error: {e}"
-                    | Ok (mirProgram, _) ->
+                    | Ok mirProgram ->
                         // SSA construction and optimization
                         let ssaProgram = SSA_Construction.convertToSSA mirProgram
                         let optimizedMir = MIR_Optimize.optimizeProgram ssaProgram

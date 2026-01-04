@@ -89,7 +89,7 @@ type CompiledFunctionCache = ConcurrentDictionary<string, CachedUserFunction>
 
 /// Cache for ANF-level user functions - avoids re-converting same function across tests
 /// Key: (filename, line_number, function_name)
-/// Value: (ANF.Function, VarGen) - includes ending VarGen to avoid variable ID collisions
+/// Value: (ANF.Function, ANF.VarGen) - VarGen tracks next available TempId after this function
 type ANFFunctionCache = ConcurrentDictionary<string * int * string, ANF.Function * ANF.VarGen>
 
 /// Compiled preamble context - extends stdlib for a test file
@@ -186,6 +186,44 @@ type LazyStdlibResult = {
 }
 
 // Helper functions for exception-to-Result conversion (Darklang compatibility)
+
+/// Compare two LIR functions and return differences
+let compareLIRFunctions (name: string) (cached: LIR.Function) (fresh: LIR.Function) : string list =
+    let differences = ResizeArray<string>()
+
+    // Compare basic properties
+    if cached.Name <> fresh.Name then
+        differences.Add($"Name: cached={cached.Name}, fresh={fresh.Name}")
+    if cached.StackSize <> fresh.StackSize then
+        differences.Add($"StackSize: cached={cached.StackSize}, fresh={fresh.StackSize}")
+    if cached.UsedCalleeSaved <> fresh.UsedCalleeSaved then
+        differences.Add($"UsedCalleeSaved: cached={cached.UsedCalleeSaved}, fresh={fresh.UsedCalleeSaved}")
+    if cached.TypedParams <> fresh.TypedParams then
+        differences.Add($"TypedParams: cached={cached.TypedParams}, fresh={fresh.TypedParams}")
+
+    // Compare CFG
+    let cachedBlocks = cached.CFG.Blocks |> Map.toList |> List.sortBy fst
+    let freshBlocks = fresh.CFG.Blocks |> Map.toList |> List.sortBy fst
+
+    if cached.CFG.Entry <> fresh.CFG.Entry then
+        differences.Add($"CFG.Entry: cached={cached.CFG.Entry}, fresh={fresh.CFG.Entry}")
+
+    if cachedBlocks.Length <> freshBlocks.Length then
+        differences.Add($"Block count: cached={cachedBlocks.Length}, fresh={freshBlocks.Length}")
+    else
+        for ((cLabel, cBlock), (fLabel, fBlock)) in List.zip cachedBlocks freshBlocks do
+            if cLabel <> fLabel then
+                differences.Add($"Block label mismatch: cached={cLabel}, fresh={fLabel}")
+            if cBlock.Terminator <> fBlock.Terminator then
+                differences.Add($"Block {cLabel} terminator: cached={cBlock.Terminator}, fresh={fBlock.Terminator}")
+            if cBlock.Instrs.Length <> fBlock.Instrs.Length then
+                differences.Add($"Block {cLabel} instr count: cached={cBlock.Instrs.Length}, fresh={fBlock.Instrs.Length}")
+            else
+                for i, (cInstr, fInstr) in List.indexed (List.zip cBlock.Instrs fBlock.Instrs) do
+                    if cInstr <> fInstr then
+                        differences.Add($"Block {cLabel} instr {i}: cached={cInstr}, fresh={fInstr}")
+
+    differences |> Seq.toList
 
 /// Extract return types from a FuncReg (FunctionRegistry maps func name -> full type)
 /// This is needed because buildReturnTypeReg only includes functions in the current program,
@@ -600,14 +638,14 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                     // TypeReg from ConversionResult contains record type definitions for printing
                     // typeMap contains TempId -> Type mappings from RC insertion
                     let externalReturnTypes = extractReturnTypes convResultOptimized.FuncReg
-                    let mirResult = ANF_to_MIR.toMIR anfProgram (MIR.RegGen 0) typeMap funcParams programType convResultOptimized.VariantLookup convResultOptimized.TypeReg options.EnableCoverage externalReturnTypes
+                    let mirResult = ANF_to_MIR.toMIR anfProgram typeMap funcParams programType convResultOptimized.VariantLookup convResultOptimized.TypeReg options.EnableCoverage externalReturnTypes
 
                     match mirResult with
                     | Error err ->
                         { Binary = Array.empty
                           Success = false
                           ErrorMessage = Some $"MIR conversion error: {err}" }
-                    | Ok (mirProgram, _) ->
+                    | Ok mirProgram ->
 
                     // Show MIR
                     if verbosity >= 3 then
@@ -960,14 +998,14 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     // Use TypeReg from ConversionResult for record type definitions (for record printing)
                     // typeMap contains TempId -> Type mappings from RC insertion
                     let externalReturnTypes = extractReturnTypes userOnly.FuncReg
-                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg options.EnableCoverage externalReturnTypes
+                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg options.EnableCoverage externalReturnTypes
 
                     match userMirResult with
                     | Error err ->
                         { Binary = Array.empty
                           Success = false
                           ErrorMessage = Some $"MIR conversion error: {err}" }
-                    | Ok (userMirProgram, _) ->
+                    | Ok userMirProgram ->
 
                     let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime
                     if verbosity >= 2 then
@@ -1269,17 +1307,30 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                       ErrorMessage = Some $"ANF conversion error: {err}" }
                 | Ok testOnly ->
                     // Partition specialized functions: cached (skip compilation) vs needs-compilation
-                    // NOTE: FingerTree/List caching disabled due to a bug in caching infrastructure
-                    // that causes incorrect results (e.g., List.append returns wrong values).
-                    // The bug is NOT in compilation (which is now deterministic) but in how
-                    // cached LIR is stored/retrieved. See issue for investigation.
+                    // Each function is compiled deterministically with its own local counters (VarGen, RegGen),
+                    // so the same function always produces identical LIR regardless of compilation context.
+                    // When verbosity >= 4, compile everything fresh for LIR comparison debugging.
                     let (cachedFuncs, functionsToCompile) =
-                        testOnly.UserFunctions
-                        |> List.partition (fun f ->
-                            stdlib.CompiledFuncCache.ContainsKey(f.Name) &&
-                            not (f.Name.Contains("FingerTree")) &&
-                            not (f.Name.Contains("List")))
+                        if verbosity >= 4 then
+                            // Compile ALL functions fresh for comparison
+                            ([], testOnly.UserFunctions)
+                        else
+                            testOnly.UserFunctions
+                            |> List.partition (fun f ->
+                                stdlib.CompiledFuncCache.ContainsKey(f.Name))
                     let cachedFuncNames = cachedFuncs |> List.map (fun f -> f.Name)
+                    // Names of functions we have cached (for comparison even when compiling fresh)
+                    let cachedFuncNamesForComparison =
+                        testOnly.UserFunctions
+                        |> List.filter (fun f -> stdlib.CompiledFuncCache.ContainsKey(f.Name))
+                        |> List.map (fun f -> f.Name)
+
+                    if verbosity >= 3 then
+                        println $"  [CACHING] Total user funcs: {testOnly.UserFunctions.Length}, Cached: {cachedFuncs.Length}, To compile: {functionsToCompile.Length}"
+                        for name in cachedFuncNames do
+                            println $"    - Will use cached: {name}"
+                        for f in functionsToCompile do
+                            println $"    - Will compile: {f.Name}"
 
                     // Extract return types for cached specialized functions (needed for ANF→MIR conversion)
                     let cachedReturnTypes =
@@ -1370,14 +1421,14 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                     // Use FuncReg to get return types for all callable functions (including stdlib and cached)
                     if verbosity >= 1 then println "  [3/8] ANF → MIR..."
                     let allReturnTypes = extractReturnTypes testOnly.FuncReg
-                    let userMirResult = ANF_to_MIR.toMIR mergedAnfProgram (MIR.RegGen 0) mergedTypeMap testOnly.FuncParams programType testConvResult.VariantLookup testConvResult.TypeReg options.EnableCoverage allReturnTypes
+                    let userMirResult = ANF_to_MIR.toMIR mergedAnfProgram mergedTypeMap testOnly.FuncParams programType testConvResult.VariantLookup testConvResult.TypeReg options.EnableCoverage allReturnTypes
 
                     match userMirResult with
                     | Error err ->
                         { Binary = Array.empty
                           Success = false
                           ErrorMessage = Some $"MIR conversion error: {err}" }
-                    | Ok (userMirProgram, _) ->
+                    | Ok userMirProgram ->
 
                     let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime
                     if verbosity >= 2 then
@@ -1446,6 +1497,23 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                     // Offset pool refs in allocated user functions
                     let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
 
+                    // Compare freshly compiled vs cached functions (when verbosity >= 4)
+                    if verbosity >= 4 then
+                        for freshFunc in offsetUserFuncs do
+                            if List.contains freshFunc.Name cachedFuncNamesForComparison then
+                                match stdlib.CompiledFuncCache.TryGetValue(freshFunc.Name) with
+                                | true, cached ->
+                                    // Apply same offsets to cached function for comparison
+                                    let cachedFunc = MIR_to_LIR.offsetLIRFunction stringOffset floatOffset cached.LIRFunction
+                                    let diffs = compareLIRFunctions freshFunc.Name cachedFunc freshFunc
+                                    if diffs.Length > 0 then
+                                        println $"  [LIR DIFF] {freshFunc.Name} has {diffs.Length} differences:"
+                                        for diff in diffs do
+                                            println $"    {diff}"
+                                    else
+                                        println $"  [LIR SAME] {freshFunc.Name} - cached and fresh are identical"
+                                | false, _ -> ()
+
                     // Cache newly-compiled specialized functions BEFORE offset adjustment.
                     // We cache un-offset functions so they can be re-offset correctly when
                     // retrieved in different test contexts (each test has different user pools).
@@ -1456,7 +1524,11 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                                 Strings = []
                                 Floats = []
                             }
-                            stdlib.CompiledFuncCache.TryAdd(func.Name, entry) |> ignore
+                            let added = stdlib.CompiledFuncCache.TryAdd(func.Name, entry)
+                            if verbosity >= 3 then
+                                let blockCount = func.CFG.Blocks.Count
+                                let instrCount = func.CFG.Blocks |> Map.toList |> List.sumBy (fun (_, b) -> b.Instrs.Length)
+                                println $"  [CACHE STORE] {func.Name}: {blockCount} blocks, {instrCount} instrs, added={added}"
 
                     // Retrieve cached specialized functions and apply current test's offsets
                     let cachedSpecializedFuncs =
@@ -1465,13 +1537,21 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                             match stdlib.CompiledFuncCache.TryGetValue(name) with
                             | true, cached ->
                                 // Apply current test's pool offsets to cached function
-                                Some (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset cached.LIRFunction)
+                                let func = MIR_to_LIR.offsetLIRFunction stringOffset floatOffset cached.LIRFunction
+                                if verbosity >= 3 then
+                                    let blockCount = func.CFG.Blocks.Count
+                                    let instrCount = func.CFG.Blocks |> Map.toList |> List.sumBy (fun (_, b) -> b.Instrs.Length)
+                                    println $"  [CACHE HIT] {name}: {blockCount} blocks, {instrCount} instrs"
+                                Some func
                             | false, _ -> None)
 
                     // Combine newly-compiled and cached user functions
-                    // IMPORTANT: Maintain consistent ordering - specialized functions first, then _start
-                    // This ensures code generation produces the same layout regardless of caching
                     let allUserFuncs = cachedSpecializedFuncs @ offsetUserFuncs
+
+                    if verbosity >= 3 then
+                        println $"  [COMBINED] cached: {cachedSpecializedFuncs.Length}, fresh: {offsetUserFuncs.Length}, total: {allUserFuncs.Length}"
+                        for f in allUserFuncs do
+                            println $"    - {f.Name}"
 
                     // Filter stdlib functions to only include reachable ones (dead code elimination)
                     let reachableStdlib =
@@ -1755,7 +1835,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                     // Use FuncParams for correct float param handling, VariantLookup for enum printing, TypeReg for record printing
                     // typeMap contains TempId -> Type mappings from RC insertion
                     let externalReturnTypes = extractReturnTypes userOnly.FuncReg
-                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram (MIR.RegGen 0) typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg options.EnableCoverage externalReturnTypes
+                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg options.EnableCoverage externalReturnTypes
                     let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime
                     if verbosity >= 2 then
                         let t = System.Math.Round(mirTime, 1)
@@ -1766,7 +1846,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                         { Binary = Array.empty
                           Success = false
                           ErrorMessage = Some $"MIR conversion error: {err}" }
-                    | Ok (userMirProgram, _) ->
+                    | Ok userMirProgram ->
 
                     // Pass 3.1: SSA Construction (user code only)
                     if verbosity >= 1 then println "  [3.1/8] SSA Construction (user only)..."

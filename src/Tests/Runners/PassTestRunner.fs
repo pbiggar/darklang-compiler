@@ -583,13 +583,13 @@ let runANF2MIRTest (input: ANF.Program) (expected: MIR.Program) : PassTestResult
     // Use TInt64 as default for pass tests (E2E tests use actual program type)
     let emptyTypeMap : ANF.TypeMap = Map.empty
     let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
-    match ANF_to_MIR.toMIR input MIR.initialRegGen emptyTypeMap emptyTypeReg AST.TInt64 Map.empty Map.empty false Map.empty with
+    match ANF_to_MIR.toMIR input emptyTypeMap emptyTypeReg AST.TInt64 Map.empty Map.empty false Map.empty with
     | Error err ->
         { Success = false
           Message = $"MIR conversion error: {err}"
           Expected = Some (prettyPrintMIR expected)
           Actual = None }
-    | Ok (actual, _) ->
+    | Ok actual ->
         if actual = expected then
             { Success = true
               Message = "Test passed"

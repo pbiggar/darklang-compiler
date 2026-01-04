@@ -1780,7 +1780,15 @@ and convertExprToOperand
             Ok (MIR.Register resultReg, Some joinLabel, builder7))
 
 /// Convert an ANF function to a MIR function
-let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: Map<string, int>) (fltLookup: Map<float, int>) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (returnTypeReg: Map<string, AST.Type>) (enableCoverage: bool) : Result<MIR.Function * MIR.RegGen, string> =
+/// Each function gets its own RegGen starting from (maxTempId + 1) for deterministic VReg assignment.
+/// This ensures the same function always produces identical MIR regardless of compilation context.
+let convertANFFunction (anfFunc: ANF.Function) (strLookup: Map<string, int>) (fltLookup: Map<float, int>) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (returnTypeReg: Map<string, AST.Type>) (enableCoverage: bool) : Result<MIR.Function, string> =
+    // Calculate RegGen for THIS function only
+    // freshReg must generate VRegs that don't conflict with TempId-derived VRegs.
+    // tempToVReg (TempId n) → VReg n, so freshReg must start past the max TempId used.
+    let maxId = maxTempIdInFunction anfFunc
+    let regGen = MIR.RegGen (maxId + 1)
+
     // Initialize FloatRegs with float parameter IDs (types are now bundled in TypedParams)
     let floatParamIds =
         anfFunc.TypedParams
@@ -1885,20 +1893,16 @@ let convertANFFunction (anfFunc: ANF.Function) (regGen: MIR.RegGen) (strLookup: 
         MIR.FloatRegs = finalBuilder.FloatRegs
     }
 
-    Ok (mirFunc, finalBuilder.RegGen)
+    Ok mirFunc
 
 /// Convert ANF program to MIR program
 /// mainExprType: the type of the main expression (used for _start's return type)
 /// variantLookup: mapping from variant names to type info (for enum printing)
 /// typeReg: mapping from record type names to field info (for record printing, converted to RecordRegistry)
 /// externalReturnTypes: return types for functions not in the program (e.g., cached specialized functions)
-let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (mainExprType: AST.Type) (variantLookup: AST_to_ANF.VariantLookup) (typeRegForRecords: Map<string, (string * AST.Type) list>) (enableCoverage: bool) (externalReturnTypes: Map<string, AST.Type>) : Result<MIR.Program * MIR.RegGen, string> =
+/// Each function gets its own RegGen for deterministic VReg assignment.
+let toMIR (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (mainExprType: AST.Type) (variantLookup: AST_to_ANF.VariantLookup) (typeRegForRecords: Map<string, (string * AST.Type) list>) (enableCoverage: bool) (externalReturnTypes: Map<string, AST.Type>) : Result<MIR.Program, string> =
     let (ANF.Program (functions, mainExpr)) = program
-
-    // Critical: freshReg must generate VRegs that don't conflict with TempId-derived VRegs.
-    // tempToVReg (TempId n) → VReg n, so freshReg must start past the max TempId used.
-    let maxId = maxTempIdInProgram program
-    let regGen = MIR.RegGen (maxId + 1)
 
     // Phase 1: Collect all strings and floats, build pools and lookups
     // Lookups are local (not mutable module-level) to avoid race conditions in parallel tests
@@ -1914,22 +1918,26 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
     let returnTypeReg = buildReturnTypeReg functions typeMap typeReg externalReturnTypes
 
     // Phase 2: Convert all functions to MIR
-    let rec convertFunctions funcs rg remaining =
+    // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
+    let rec convertFunctions funcs remaining =
         match remaining with
-        | [] -> Ok (funcs, rg)
+        | [] -> Ok funcs
         | anfFunc :: rest ->
-            match convertANFFunction anfFunc rg strLookup fltLookup typeMap typeReg returnTypeReg enableCoverage with
+            match convertANFFunction anfFunc strLookup fltLookup typeMap typeReg returnTypeReg enableCoverage with
             | Error err -> Error err
-            | Ok (mirFunc, rg') -> convertFunctions (funcs @ [mirFunc]) rg' rest
+            | Ok mirFunc -> convertFunctions (funcs @ [mirFunc]) rest
 
-    match convertFunctions [] regGen functions with
+    match convertFunctions [] functions with
     | Error err -> Error err
-    | Ok (mirFuncs, regGen1) ->
+    | Ok mirFuncs ->
 
     // Convert main expression to a synthetic "_start" function
+    // _start gets its own RegGen based on the main expression's TempIds
+    let startMaxId = maxTempIdInAExpr mainExpr
+    let startRegGen = MIR.RegGen (startMaxId + 1)
     let entryLabel = MIR.Label "_start_body"
     let initialBuilder = {
-        RegGen = regGen1
+        RegGen = startRegGen
         LabelGen = MIR.initialLabelGen
         Blocks = Map.empty
         StringLookup = strLookup
@@ -1964,18 +1972,15 @@ let toMIR (program: ANF.Program) (_regGen: MIR.RegGen) (typeMap: ANF.TypeMap) (t
     let variantRegistry = buildVariantRegistry variantLookup
     // Build recordRegistry from typeRegForRecords (converts tuples to RecordField records)
     let recordRegistry = buildRecordRegistry typeRegForRecords
-    Ok (MIR.Program (allFuncs, stringPool, floatPool, variantRegistry, recordRegistry), finalBuilder.RegGen)
+    Ok (MIR.Program (allFuncs, stringPool, floatPool, variantRegistry, recordRegistry))
 
 /// Convert ANF program to MIR (functions only, no _start)
 /// Use for stdlib where there's no real main expression to convert.
 /// Returns just the function list, pools, variant registry, and record registry without wrapping in MIR.Program.
 /// externalReturnTypes: return types for functions not in the program (e.g., cached specialized functions)
+/// Each function gets its own RegGen for deterministic VReg assignment.
 let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (variantLookup: AST_to_ANF.VariantLookup) (typeRegForRecords: Map<string, (string * AST.Type) list>) (enableCoverage: bool) (externalReturnTypes: Map<string, AST.Type>) : Result<MIR.Function list * MIR.StringPool * MIR.FloatPool * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     let (ANF.Program (functions, _mainExpr)) = program
-
-    // Same regGen calculation as toMIR
-    let maxId = maxTempIdInProgram program
-    let regGen = MIR.RegGen (maxId + 1)
 
     // Phase 1: Collect all strings and floats, build pools and lookups
     let allStrings = collectStringsFromProgram program
@@ -1990,17 +1995,18 @@ let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: M
     let returnTypeReg = buildReturnTypeReg functions typeMap typeReg externalReturnTypes
 
     // Phase 2: Convert all functions to MIR (skip main/_start)
-    let rec convertFunctions funcs rg remaining =
+    // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
+    let rec convertFunctions funcs remaining =
         match remaining with
-        | [] -> Ok (funcs, rg)
+        | [] -> Ok funcs
         | anfFunc :: rest ->
-            match convertANFFunction anfFunc rg strLookup fltLookup typeMap typeReg returnTypeReg enableCoverage with
+            match convertANFFunction anfFunc strLookup fltLookup typeMap typeReg returnTypeReg enableCoverage with
             | Error err -> Error err
-            | Ok (mirFunc, rg') -> convertFunctions (funcs @ [mirFunc]) rg' rest
+            | Ok mirFunc -> convertFunctions (funcs @ [mirFunc]) rest
 
-    match convertFunctions [] regGen functions with
+    match convertFunctions [] functions with
     | Error err -> Error err
-    | Ok (mirFuncs, _) ->
+    | Ok mirFuncs ->
         let variantRegistry = buildVariantRegistry variantLookup
         let recordRegistry = buildRecordRegistry typeRegForRecords
         Ok (mirFuncs, stringPool, floatPool, variantRegistry, recordRegistry)
