@@ -161,14 +161,13 @@ let sq = (x: Int64) => x * x in sq(6) + 6 = 42
 
 // =====================================================
 // Closures Capturing String Values
-// DISABLED: String capture in closures not yet implemented
 // =====================================================
 
 // Capture string for concatenation
-// DISABLED: let prefix = "Hello" in ((s: String) => prefix ++ " " ++ s)("World") = stdout="Hello World\n"
+let prefix = "Hello" in ((s: String) => prefix ++ " " ++ s)("World") = stdout="Hello World\n"
 
 // Capture multiple strings
-// DISABLED: let a = "one" in let b = "two" in ((x: String) => a ++ " " ++ b ++ " " ++ x)("three") = stdout="one two three\n"
+let a = "one" in let b = "two" in ((x: String) => a ++ " " ++ b ++ " " ++ x)("three") = stdout="one two three\n"
 
 // =====================================================
 // Closures Capturing Tuples
@@ -226,11 +225,10 @@ let sq = (x: Int64) => x * x in sq(6) + 6 = 42
 
 // =====================================================
 // Mixed Type Captures
-// DISABLED: Mixed type capture in closures not yet implemented
 // =====================================================
 
 // Capture int and float
 // DISABLED: let i = 10 in let f = 2.5 in ((x: Int64) => Stdlib.Int64.toFloat(i + x) + f)(5) = stdout="17.50\n"
 
 // Capture bool and int
-// DISABLED: let flag = true in let n = 42 in ((x: Int64) => if flag then n + x else 0)(8) = stdout="50\n"
+let flag = true in let n = 42 in ((x: Int64) => if flag then n + x else 0)(8) = stdout="50\n"
