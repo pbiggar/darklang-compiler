@@ -84,9 +84,8 @@ List.length(Dict.values(Dict.singleton("key", 42))) = stdout="1\n"
 // ===================================================================
 
 Dict.size(Dict.fromList<String, Int64>([])) = stdout="0\n"
-// TODO: Uncomment when tuple-in-list crash is fixed
-// Dict.size(Dict.fromList([("a", 1), ("b", 2), ("c", 3)])) = stdout="3\n"
-// Option.withDefault(Dict.get(Dict.fromList([("x", 100)]), "x"), 0) = 100
+Dict.size(Dict.fromList([("a", 1), ("b", 2), ("c", 3)])) = stdout="3\n"
+Option.withDefault(Dict.get(Dict.fromList([("x", 100)]), "x"), 0) = 100
 
 // ===================================================================
 // Dict.merge - Combine dictionaries
