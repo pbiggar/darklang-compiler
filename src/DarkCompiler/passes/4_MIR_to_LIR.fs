@@ -753,11 +753,19 @@ let selectInstr (instr: MIR.Instr) (stringPool: MIR.StringPool) (variantRegistry
 
     | MIR.HeapStore (addr, offset, src, valueType) ->
         let lirAddr = vregToLIRReg addr
-        let lirSrc = convertOperand src
-        // For float values, the Virtual register ID is shared with FVirtual
-        // CodeGen will use virtualToFVirtual to convert Virtual(n) -> FVirtual(n)
-        // which then gets allocated to a physical D register
-        Ok [LIR.HeapStore (lirAddr, offset, lirSrc, valueType)]
+        // For float values, we need to move the float bits from FReg to GP register
+        // since HeapStore uses GP registers. Use FpToGp to transfer bits.
+        match src, valueType with
+        | MIR.Register vreg, Some AST.TFloat64 ->
+            // Float in FVirtual register - need to move bits to GP register first
+            let srcFReg = vregToLIRFReg vreg
+            let tempReg = LIR.Physical LIR.X9  // Use temp register for FpToGp
+            // After FpToGp, value is in GP register, so use None for valueType
+            // (otherwise CodeGen would try to treat X9 as a float register)
+            Ok [LIR.FpToGp (tempReg, srcFReg); LIR.HeapStore (lirAddr, offset, LIR.Reg tempReg, None)]
+        | _ ->
+            let lirSrc = convertOperand src
+            Ok [LIR.HeapStore (lirAddr, offset, lirSrc, valueType)]
 
     | MIR.HeapLoad (dest, addr, offset, valueType) ->
         let lirAddr = vregToLIRReg addr
