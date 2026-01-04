@@ -207,27 +207,26 @@ let a = "one" in let b = "two" in ((x: String) => a ++ " " ++ b ++ " " ++ x)("th
 
 // =====================================================
 // Many Captures (Testing Capture Slot Limits)
-// DISABLED: Many captures not yet implemented
 // =====================================================
 
 // 5 captures
-// DISABLED: let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in ((x: Int64) => a + b + c + d + e + x)(5) = stdout="20\n"
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in ((x: Int64) => a + b + c + d + e + x)(5) = stdout="20\n"
 
 // 6 captures
-// DISABLED: let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in ((x: Int64) => a + b + c + d + e + f + x)(4) = stdout="25\n"
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in ((x: Int64) => a + b + c + d + e + f + x)(4) = stdout="25\n"
 
 // 7 captures
-// DISABLED: let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in ((x: Int64) => a + b + c + d + e + f + g + x)(8) = stdout="36\n"
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in ((x: Int64) => a + b + c + d + e + f + g + x)(8) = stdout="36\n"
 
 // 8 captures
-// DISABLED: let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in ((x: Int64) => a + b + c + d + e + f + g + h + x)(1) = stdout="37\n"
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in ((x: Int64) => a + b + c + d + e + f + g + h + x)(1) = stdout="37\n"
 
 // =====================================================
 // Mixed Type Captures
 // =====================================================
 
 // Capture int and float
-// DISABLED: let i = 10 in let f = 2.5 in ((x: Int64) => Stdlib.Int64.toFloat(i + x) + f)(5) = stdout="17.50\n"
+let i = 10 in let f = 2.5 in ((x: Int64) => Stdlib.Int64.toFloat(i + x) + f)(5) = stdout="17.50\n"
 
 // Capture bool and int
 let flag = true in let n = 42 in ((x: Int64) => if flag then n + x else 0)(8) = stdout="50\n"
