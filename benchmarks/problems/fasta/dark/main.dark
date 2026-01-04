@@ -1,0 +1,64 @@
+// Fasta Benchmark - DNA Sequence Generation
+// Uses linear congruential generator for pseudo-random numbers
+// Computes checksum of generated DNA sequences
+
+// LCG constants: IM=139968, IA=3877, IC=29573
+// LCG random number generator (returns new seed)
+def nextRandom(seed: Int64) : Int64 =
+    (seed * 3877 + 29573) % 139968
+
+// Get element from ALU at position i (mod 287)
+def getAlu(aluBytes: List<Int64>, i: Int64) : Int64 =
+    match Stdlib.List.getAt<Int64>(aluBytes, i % 287) with
+    | Some(v) -> v
+    | None -> 0
+
+// Select character based on cumulative probability tables
+def selectFromTable(chars: List<Int64>, probs: List<Int64>, r: Int64, idx: Int64) : Int64 =
+    match Stdlib.List.getAt<Int64>(probs, idx) with
+    | None -> 0
+    | Some(prob) ->
+        if r < prob then
+            match Stdlib.List.getAt<Int64>(chars, idx) with
+            | Some(c) -> c
+            | None -> 0
+        else selectFromTable(chars, probs, r, idx + 1)
+
+// Generate repeat fasta checksum
+def makeRepeatFasta(aluBytes: List<Int64>, n: Int64, i: Int64, checksum: Int64) : Int64 =
+    if i >= n then checksum
+    else
+        let c = getAlu(aluBytes, i) in
+        let newChecksum = (checksum + c * (i + 1)) % 1000000007 in
+        makeRepeatFasta(aluBytes, n, i + 1, newChecksum)
+
+// Generate random fasta checksum - returns (checksum, seed)
+def makeRandomFasta(chars: List<Int64>, probs: List<Int64>, n: Int64, seed: Int64, i: Int64, checksum: Int64) : (Int64, Int64) =
+    if i >= n then (checksum, seed)
+    else
+        let newSeed = nextRandom(seed) in
+        let c = selectFromTable(chars, probs, newSeed, 0) in
+        let newChecksum = (checksum + c * (i + 1)) % 1000000007 in
+        makeRandomFasta(chars, probs, n, newSeed, i + 1, newChecksum)
+
+// Reduced size: n=100 instead of n=100000
+// Full: 2n=200000 repeat, 3n=300000 random iub, 5n=500000 random homo
+// Reduced: 2n=200, 3n=300, 5n=500
+
+// ALU sequence bytes (287 chars)
+let aluBytes = [71, 71, 67, 67, 71, 71, 71, 67, 71, 67, 71, 71, 84, 71, 71, 67, 84, 67, 65, 67, 71, 67, 67, 84, 71, 84, 65, 65, 84, 67, 67, 67, 65, 71, 67, 65, 67, 84, 84, 84, 71, 71, 71, 65, 71, 71, 67, 67, 71, 65, 71, 71, 67, 71, 71, 71, 67, 71, 71, 65, 84, 67, 65, 67, 67, 84, 71, 65, 71, 71, 84, 67, 65, 71, 71, 65, 71, 84, 84, 67, 71, 65, 71, 65, 67, 67, 65, 71, 67, 67, 84, 71, 71, 67, 67, 65, 65, 67, 65, 84, 71, 71, 84, 71, 65, 65, 65, 67, 67, 67, 67, 71, 84, 67, 84, 67, 84, 65, 67, 84, 65, 65, 65, 65, 65, 84, 65, 67, 65, 65, 65, 65, 65, 65, 84, 84, 65, 71, 67, 67, 71, 71, 71, 67, 71, 84, 71, 71, 84, 71, 71, 67, 71, 67, 71, 67, 71, 67, 67, 84, 71, 84, 65, 65, 84, 67, 67, 67, 65, 71, 67, 84, 65, 67, 84, 67, 71, 71, 71, 65, 71, 71, 67, 84, 71, 65, 71, 71, 67, 65, 71, 71, 65, 71, 65, 65, 84, 67, 71, 67, 84, 84, 71, 65, 65, 67, 67, 67, 71, 71, 71, 65, 71, 71, 67, 71, 71, 65, 71, 71, 84, 84, 71, 67, 65, 71, 84, 71, 65, 71, 67, 67, 71, 65, 71, 65, 84, 67, 71, 67, 71, 67, 67, 65, 67, 84, 71, 67, 65, 67, 84, 67, 67, 65, 71, 67, 67, 84, 71, 71, 71, 67, 71, 65, 67, 65, 71, 65, 71, 67, 71, 65, 71, 65, 67, 84, 67, 67, 71, 84, 67, 84, 67, 65, 65, 65, 65, 65] in
+// IUB table - chars and cumulative probs
+let iubChars = [97, 99, 103, 116, 66, 68, 72, 75, 77, 78, 82, 83, 86, 87, 89] in
+let iubProbs = [37791, 54587, 71383, 109174, 111973, 114772, 117571, 120370, 123169, 125968, 128767, 131566, 134365, 137164, 139968] in
+// HomoSapiens table
+let homoChars = [97, 99, 103, 116] in
+let homoProbs = [42397, 70107, 97757, 139968] in
+let n = 100 in
+let c1 = makeRepeatFasta(aluBytes, n * 2, 0, 0) in
+let result2 = makeRandomFasta(iubChars, iubProbs, n * 3, 42, 0, 0) in
+let c2 = Stdlib.Tuple2.first<Int64, Int64>(result2) in
+let seed2 = Stdlib.Tuple2.second<Int64, Int64>(result2) in
+let result3 = makeRandomFasta(homoChars, homoProbs, n * 5, seed2, 0, 0) in
+let c3 = Stdlib.Tuple2.first<Int64, Int64>(result3) in
+let total = (c1 + c2 + c3) % 1000000007 in
+Stdlib.Int64.toString(total)

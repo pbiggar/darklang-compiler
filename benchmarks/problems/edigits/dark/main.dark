@@ -1,0 +1,85 @@
+// Edigits Benchmark - Computing digits of e
+// Uses series expansion: e = sum(1/n!) for n=0 to infinity
+// Computes checksum of first N digits
+
+// Divide each digit by n, propagating carry left-to-right
+def divideByN(digits: List<Int64>, n: Int64, carry: Int64, idx: Int64, len: Int64) : List<Int64> =
+    if idx >= len then digits
+    else
+        let d = Stdlib.List.getAt<Int64>(digits, idx) in
+        match d with
+        | None -> digits
+        | Some(digit) ->
+            let current = carry * 10 + digit in
+            let newDigit = current / n in
+            let newCarry = current % n in
+            let updated = Stdlib.List.setAt<Int64>(digits, idx, newDigit) in
+            divideByN(updated, n, newCarry, idx + 1, len)
+
+// Add term to e, propagating carry right-to-left
+def addWithCarry(e: List<Int64>, term: List<Int64>, carry: Int64, idx: Int64) : List<Int64> =
+    if idx < 0 then e
+    else
+        let eOpt = Stdlib.List.getAt<Int64>(e, idx) in
+        let termOpt = Stdlib.List.getAt<Int64>(term, idx) in
+        match (eOpt, termOpt) with
+        | (Some(eDigit), Some(termDigit)) ->
+            let total = eDigit + termDigit + carry in
+            let newDigit = total % 10 in
+            let newCarry = total / 10 in
+            let updated = Stdlib.List.setAt<Int64>(e, idx, newDigit) in
+            addWithCarry(updated, term, newCarry, idx - 1)
+        | _ -> e
+
+// Add one factorial term to e: e += term, then term /= n
+def addFactorialTerm(e: List<Int64>, term: List<Int64>, n: Int64, maxN: Int64, len: Int64) : List<Int64> =
+    if n > maxN then e
+    else
+        // term = term / n
+        let newTerm = divideByN(term, n, 0, 0, len) in
+        // e = e + term
+        let newE = addWithCarry(e, newTerm, 0, len - 1) in
+        addFactorialTerm(newE, newTerm, n + 1, maxN, len)
+
+// Create a list of n zeros by mapping range to constant 0
+def zeros(n: Int64) : List<Int64> =
+    Stdlib.List.map<Int64, Int64>(Stdlib.List.range(0, n), (x: Int64) => 0)
+
+// Set first element to 1, rest to 0
+def initDigits(n: Int64) : List<Int64> =
+    Stdlib.List.setAt<Int64>(zeros(n), 0, 1)
+
+// Compute digits of e
+def computeEDigits(numDigits: Int64) : List<Int64> =
+    let precision = numDigits + 10 in
+    let e = initDigits(precision) in
+    let term = initDigits(precision) in
+    addFactorialTerm(e, term, 1, 50, precision)
+
+// Compute checksum: sum(digit * (index + 1)) mod 1000000007
+def computeChecksum(digits: List<Int64>, idx: Int64, acc: Int64, numDigits: Int64) : Int64 =
+    if idx >= numDigits then acc
+    else
+        let d = Stdlib.List.getAt<Int64>(digits, idx) in
+        match d with
+        | None -> acc
+        | Some(digit) ->
+            let newAcc = (acc + digit * (idx + 1)) % 1000000007 in
+            computeChecksum(digits, idx + 1, newAcc, numDigits)
+
+// Run multiple iterations
+def runIterations(n: Int64, numDigits: Int64) : Int64 =
+    if n <= 0 then 0
+    else
+        let digits = computeEDigits(numDigits) in
+        let checksum = computeChecksum(digits, 0, 0, numDigits) in
+        if n == 1 then checksum
+        else runIterations(n - 1, numDigits)
+
+// Use reduced size due to stack limitations
+// Full benchmark: 10 iterations, 1000 digits
+// Reduced: 1 iteration, 50 digits
+let numDigits = 50 in
+let iterations = 1 in
+let result = runIterations(iterations, numDigits) in
+Stdlib.Int64.toString(result)
