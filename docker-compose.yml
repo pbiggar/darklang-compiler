@@ -13,8 +13,8 @@ services:
       # Source code (editable from host) - matches host path
       - .:/Users/paulbiggar/projects/compiler-for-dark:cached
 
-      # Claude Code configuration and session data
-      - ~/.claude:/home/paulbiggar/.claude:cached
+      # Codex configuration and session data
+      - ~/.codex:/home/paulbiggar/.codex:cached
 
       # Persist .NET packages across container restarts
       - dotnet-packages:/home/paulbiggar/.nuget/packages

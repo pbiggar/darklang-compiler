@@ -1,6 +1,6 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0-noble
 
-# Install development tools, benchmarking dependencies, and curl for Claude Code installation
+# Install development tools, benchmarking dependencies, and curl for Codex CLI installation
 RUN apt-get update && apt-get install -y \
     git \
     vim \
@@ -8,12 +8,17 @@ RUN apt-get update && apt-get install -y \
     less \
     curl \
     sudo \
+    nodejs \
+    npm \
     # Benchmarking tools
     python3 \
     hyperfine \
     valgrind \
     gcc \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Codex CLI
+RUN npm install -g @openai/codex
 
 # Create project directory structure as root
 RUN mkdir -p /Users/paulbiggar/projects
@@ -26,15 +31,10 @@ RUN useradd -m -u 501 -s /bin/bash paulbiggar && \
 # Switch to paulbiggar user
 USER paulbiggar
 
-# Install Claude Code CLI as paulbiggar user
-RUN curl -fsSL https://claude.ai/install.sh -o /tmp/install.sh && \
-    bash /tmp/install.sh && \
-    rm /tmp/install.sh
-
 # Install Rust for benchmarking
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
-# Add Claude Code and Rust to PATH
+# Add Rust to PATH
 ENV PATH="/home/paulbiggar/.local/bin:/home/paulbiggar/.cargo/bin:${PATH}"
 
 # Set working directory to match host path

@@ -125,12 +125,12 @@ otool -tv <binary>          # Disassemble text section
 file <binary>               # Check file type
 ```
 
-## Docker Development (with Claude Code Integration)
+## Docker Development (with Codex Integration)
 
 ### Initial Setup
 
 ```bash
-# Build container image (includes Claude Code CLI)
+# Build container image (includes Codex CLI)
 ./docker.sh build
 
 # Start container
@@ -140,38 +140,38 @@ file <binary>               # Check file type
 ./docker.sh shell
 ```
 
-### Using Claude Code Inside Container
+### Using Codex Inside Container
 
 **First time setup - Authenticate:**
 ```bash
 # Enter container
 ./docker.sh shell
 
-# Inside container - authenticate Claude Code
-claude login
+# Inside container - authenticate Codex
+codex login
 # Follow prompts to enter your API key
 
-# Start Claude Code in /workspace
+# Start Codex in /workspace
 cd /workspace
-claude
+codex
 ```
 
 **Subsequent sessions:**
 ```bash
 ./docker.sh shell
 cd /workspace
-claude
+codex
 ```
 
-Your Claude Code configuration, conversation history, and session memory are persisted via volume mount at `~/.claude`.
+Your Codex configuration, conversation history, and session memory are persisted via volume mount at `~/.codex`.
 
 ### Development Workflow
 
-**Option A: Using Claude Code inside container (recommended for full sandboxing)**
+**Option A: Using Codex inside container (recommended for full sandboxing)**
 ```bash
 ./docker.sh shell
-claude  # Start Claude Code session
-# Work with Claude Code interactively in the sandboxed environment
+codex  # Start Codex session
+# Work with Codex interactively in the sandboxed environment
 ```
 
 **Option B: Manual development**
@@ -199,10 +199,10 @@ dotnet clean                    # Clean build artifacts
 
 ### What's Included
 
-- ✅ Claude Code CLI pre-installed
+- ✅ Codex CLI pre-installed
 - ✅ Build compiler DLL in container
 - ✅ Volume mount for source code (edit on host or in container)
-- ✅ Claude Code config/history persisted via volume mount
+- ✅ Codex config/history persisted via volume mount
 - ✅ Full filesystem isolation and sandboxing
 - ✅ Run all tests in container (generates Linux ELF binaries)
 
