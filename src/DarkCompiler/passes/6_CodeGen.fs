@@ -2099,7 +2099,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64.Instr l
                             ARM64.LDR (lenReg, srcReg, 0s)           // len = [srcReg]
                             ARM64.ADD_imm (addrReg, srcReg, 8us)     // addr = srcReg + 8 (data start)
                         ])
-                | _ -> Error "StringConcat requires StringRef or Reg operand"
+                | other -> Error $"StringConcat requires StringRef or Reg operand, got: {other}"
 
             // Load both operands
             loadOperandInfo left ARM64.X9 ARM64.X10

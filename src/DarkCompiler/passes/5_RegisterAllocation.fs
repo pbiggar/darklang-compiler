@@ -688,11 +688,12 @@ let buildLiveIntervals (cfg: LIR.CFG) (liveness: Map<LIR.Label, BlockLiveness>) 
 // Register Definitions
 // ============================================================================
 
-/// Caller-saved registers (X1-X8) - preferred for allocation
+/// Caller-saved registers (X1-X7) - preferred for allocation
+/// Note: X8 is excluded because StringConcat uses it as a scratch register for byte copying
 /// Note: X9-X10 are excluded because StringHash/StringEq use them internally
 let callerSavedRegs = [
     LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5
-    LIR.X6; LIR.X7; LIR.X8
+    LIR.X6; LIR.X7
 ]
 
 /// Callee-saved registers (X19-X26) - used when caller-saved exhausted

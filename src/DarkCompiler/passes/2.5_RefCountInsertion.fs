@@ -273,24 +273,26 @@ let isTempReturned (tempId: TempId) (expr: AExpr) : bool =
 
 /// Insert RefCountDec before all Return points in an expression
 /// This ensures Dec happens AFTER the body is evaluated but BEFORE returning
-let rec insertDecBeforeReturn (tempId: TempId) (size: int) (expr: AExpr) (varGen: VarGen) : AExpr * VarGen =
+/// Returns (transformed expr, varGen, list of new TempIds created for Dec operations)
+let rec insertDecBeforeReturn (tempId: TempId) (size: int) (expr: AExpr) (varGen: VarGen) : AExpr * VarGen * TempId list =
     match expr with
     | Return atom ->
         // Insert Dec right before Return
         let (dummyId, varGen') = freshVar varGen
-        (Let (dummyId, RefCountDec (Var tempId, size), Return atom), varGen')
+        (Let (dummyId, RefCountDec (Var tempId, size), Return atom), varGen', [dummyId])
     | Let (x, c, body) ->
         // Recurse into body
-        let (body', varGen') = insertDecBeforeReturn tempId size body varGen
-        (Let (x, c, body'), varGen')
+        let (body', varGen', newIds) = insertDecBeforeReturn tempId size body varGen
+        (Let (x, c, body'), varGen', newIds)
     | If (cond, thenBr, elseBr) ->
         // Insert in both branches
-        let (thenBr', varGen1) = insertDecBeforeReturn tempId size thenBr varGen
-        let (elseBr', varGen2) = insertDecBeforeReturn tempId size elseBr varGen1
-        (If (cond, thenBr', elseBr'), varGen2)
+        let (thenBr', varGen1, thenIds) = insertDecBeforeReturn tempId size thenBr varGen
+        let (elseBr', varGen2, elseIds) = insertDecBeforeReturn tempId size elseBr varGen1
+        (If (cond, thenBr', elseBr'), varGen2, thenIds @ elseIds)
 
 /// Insert RefCountDec for a TempId at all return points
-let wrapWithDec (tempId: TempId) (typ: AST.Type) (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * VarGen =
+/// Returns (transformed expr, varGen, list of new TempIds created)
+let wrapWithDecAndTrack (tempId: TempId) (typ: AST.Type) (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * VarGen * TempId list =
     let size = payloadSize typ ctx.TypeReg
     insertDecBeforeReturn tempId size expr varGen
 
@@ -300,6 +302,12 @@ let isBorrowingExpr (cexpr: CExpr) : bool =
     match cexpr with
     | TupleGet _ -> true           // Extracts pointer from tuple/list - borrowed from parent
     | Atom (Var _) -> true         // Alias/copy of existing variable - don't double-dec
+    | TypedAtom (Var _, _) -> true // TypedAtom wrapping a variable - also borrowed
+    | Call (funcName, _) ->
+        // List element extraction functions return borrowed references
+        funcName = "Stdlib.FingerTree.headUnsafe_i64" ||
+        funcName = "Stdlib.FingerTree.head_i64" ||
+        funcName = "Stdlib.FingerTree.head"
     | _ -> false
 
 /// Insert reference counting operations into an AExpr
@@ -364,21 +372,48 @@ let rec insertRC (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * Var
                 collectIncs elems varGen1 []
             | _ -> ([], varGen1)
 
+        // Add incBinding TempIds to accTypes with TUnit (RefCountInc returns unit)
+        let accTypesWithIncs =
+            incBindings
+            |> List.fold (fun m (tid, _) -> Map.add tid AST.TUnit m) accTypes
+
+        // If a borrowed heap value is returned, we need to increment its refcount.
+        // This is because the borrowed-from source may be decremented, which would free
+        // the borrowed value before the caller can use the return value.
+        // For example: returning a string extracted from a list - without this Inc,
+        // when the list is decremented, the string inside would be freed.
+        let (returnIncBinding, varGen2a, accTypesWithReturnInc) =
+            match maybeType with
+            | Some t when isHeapType t && isTempReturned tempId body' && isBorrowingExpr cexpr ->
+                // Borrowed heap value is returned - need to Inc to ensure it survives
+                let size = payloadSize t ctx'.TypeReg
+                let (incId, vg) = freshVar varGen2
+                let incExpr = RefCountInc (Var tempId, size)
+                ([(incId, incExpr)], vg, Map.add incId AST.TUnit accTypesWithIncs)
+            | _ ->
+                ([], varGen2, accTypesWithIncs)
+
         // Check if this TempId is heap-typed, not returned, and not borrowed
         // Borrowed values don't own their memory - the parent does
         match maybeType with
         | Some t when isHeapType t && not (isTempReturned tempId body') && not (isBorrowingExpr cexpr) ->
             // Insert Dec after body completes but value isn't returned
-            let (bodyWithDec, varGen3) = wrapWithDec tempId t ctx' body' varGen2
-            // Wrap with Inc bindings, then the Let, then Dec
-            let letExpr = Let (tempId, cexpr, bodyWithDec)
+            let (bodyWithDec, varGen3, decTempIds) = wrapWithDecAndTrack tempId t ctx' body' varGen2a
+            // Add Dec TempIds to accTypes with TUnit
+            let accTypesWithDecs =
+                decTempIds
+                |> List.fold (fun m tid -> Map.add tid AST.TUnit m) accTypesWithReturnInc
+            // Wrap with Inc bindings, returnInc bindings, then the Let, then Dec
+            let bodyWithReturnInc = wrapBindings returnIncBinding bodyWithDec
+            let letExpr = Let (tempId, cexpr, bodyWithReturnInc)
             let exprWithIncs = wrapBindings incBindings letExpr
-            (exprWithIncs, varGen3, accTypes)
+            (exprWithIncs, varGen3, accTypesWithDecs)
         | _ ->
-            // Wrap with Inc bindings, then the Let
-            let letExpr = Let (tempId, cexpr, body')
+            // Wrap with Inc bindings, returnInc bindings, then the Let
+            let bodyWithReturnInc = wrapBindings returnIncBinding body'
+            let letExpr = Let (tempId, cexpr, bodyWithReturnInc)
             let exprWithIncs = wrapBindings incBindings letExpr
-            (exprWithIncs, varGen2, accTypes)
+            (exprWithIncs, varGen2a, accTypesWithReturnInc)
 
 /// Insert RC operations into a function
 /// Returns (transformed function, varGen, accumulated TempTypes)
@@ -391,6 +426,37 @@ let insertRCInFunction (ctx: TypeContext) (func: Function) (varGen: VarGen) : Fu
     // Process function body
     let (body', varGen', accTypes) = insertRC ctx' func.Body varGen
     ({ func with Body = body' }, varGen', accTypes)
+
+// ============================================================================
+// TypeMap Completeness Verification
+// ============================================================================
+
+/// Collect all TempIds defined in an AExpr (from Let bindings)
+let rec collectDefinedTempIds (expr: AExpr) : Set<TempId> =
+    match expr with
+    | Return _ -> Set.empty
+    | Let (tempId, _, body) ->
+        Set.add tempId (collectDefinedTempIds body)
+    | If (_, thenBranch, elseBranch) ->
+        Set.union (collectDefinedTempIds thenBranch) (collectDefinedTempIds elseBranch)
+
+/// Collect all TempIds defined in a function (params + body)
+let collectFunctionTempIds (func: Function) : Set<TempId> =
+    let paramIds = func.TypedParams |> List.map (fun tp -> tp.Id) |> Set.ofList
+    Set.union paramIds (collectDefinedTempIds func.Body)
+
+/// Collect all TempIds defined in a program
+let collectProgramTempIds (ANF.Program (functions, mainExpr)) : Set<TempId> =
+    let funcIds = functions |> List.map collectFunctionTempIds |> Set.unionMany
+    Set.union funcIds (collectDefinedTempIds mainExpr)
+
+/// Verify that all defined TempIds have types in the TypeMap
+/// Returns a list of TempIds that are missing from the TypeMap
+let verifyTypeMapCompleteness (program: ANF.Program) (typeMap: ANF.TypeMap) : TempId list =
+    let definedIds = collectProgramTempIds program
+    let typedIds = typeMap |> Map.keys |> Set.ofSeq
+    let missing = Set.difference definedIds typedIds
+    Set.toList missing
 
 /// Insert RC operations into a program
 /// Returns (ANF.Program, TypeMap) where TypeMap contains all TempId -> Type mappings
@@ -417,4 +483,11 @@ let insertRCInProgram (result: ConversionResult) : Result<ANF.Program * ANF.Type
     // Final merged TypeMap
     let finalTypeMap = Map.fold (fun m k v -> Map.add k v m) typesFromFuncs typesFromMain
 
-    Ok (ANF.Program (functions', mainExpr'), finalTypeMap)
+    // Verify TypeMap completeness - all defined TempIds should have types
+    let program' = ANF.Program (functions', mainExpr')
+    let missingTypes = verifyTypeMapCompleteness program' finalTypeMap
+    if not (List.isEmpty missingTypes) then
+        let missingStr = missingTypes |> List.map (fun (TempId n) -> $"t{n}") |> String.concat ", "
+        failwith $"RefCountInsertion: TypeMap incomplete - missing types for: {missingStr}"
+
+    Ok (program', finalTypeMap)

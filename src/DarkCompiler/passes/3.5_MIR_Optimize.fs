@@ -231,11 +231,22 @@ let buildCopyMap (cfg: CFG) : CopyMap =
         block.Instrs
         |> List.fold (fun m instr ->
             match instr with
-            | Mov (dest, Register src, _) when dest <> src ->
+            | Mov (dest, Register src, vt) when dest <> src ->
                 // Don't add if dest is a phi destination or already in map
                 if Set.contains dest phiDests || Map.containsKey dest m then m
                 else Map.add dest (Register src) m
-            | Mov (dest, (IntConst _ as src), _)
+            | Mov (dest, (IntConst _ as src), vt) ->
+                // Constant propagation: track constant moves too
+                // Only propagate if this is for integer/bool types, not for heap types like strings
+                // This prevents incorrectly propagating IntConst 0L to string variables
+                let isIntOrBoolType =
+                    match vt with
+                    | Some AST.TInt64 | Some AST.TInt32 | Some AST.TInt16 | Some AST.TInt8
+                    | Some AST.TUInt64 | Some AST.TUInt32 | Some AST.TUInt16 | Some AST.TUInt8
+                    | Some AST.TBool | Some AST.TUnit | None -> true
+                    | _ -> false  // Don't propagate for TString, TList, etc.
+                if Set.contains dest phiDests || Map.containsKey dest m || not isIntOrBoolType then m
+                else Map.add dest src m
             | Mov (dest, (BoolConst _ as src), _) ->
                 // Constant propagation: track constant moves too
                 if Set.contains dest phiDests || Map.containsKey dest m then m
@@ -244,7 +255,7 @@ let buildCopyMap (cfg: CFG) : CopyMap =
                 // Trivial phi with single register source
                 if Map.containsKey dest m then m
                 else Map.add dest (Register src) m
-            | Phi (dest, sources, _) ->
+            | Phi (dest, sources, vt) ->
                 // Check if all sources are the same register
                 if Map.containsKey dest m then m
                 else

@@ -486,7 +486,9 @@ let buildReturnTypeReg (functions: ANF.Function list) (typeMap: ANF.TypeMap) (ty
         else
             let computedReg =
                 functions
-                |> List.map (fun f -> (f.Name, computeReturnTypeWithReg f typeMap typeReg currentReg))
+                |> List.map (fun f ->
+                    let retType = computeReturnTypeWithReg f typeMap typeReg currentReg
+                    (f.Name, retType))
                 |> Map.ofList
             // Merge external types with computed types (computed takes precedence)
             let newReg = Map.fold (fun acc k v -> Map.add k v acc) externalReturnTypes computedReg
