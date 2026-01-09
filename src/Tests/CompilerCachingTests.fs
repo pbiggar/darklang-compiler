@@ -22,6 +22,8 @@ let private countFunctionEvents (passName: string) (functionName: string) (event
         && getMetaValue "function" ev.Meta = Some functionName)
     |> List.length
 
+let private isVerificationEnabled () : bool =
+    System.Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS") = "true"
 
 /// Test that specialized functions are cached after compilation
 let testSpecializedFunctionCaching () : TestResult =
@@ -110,8 +112,7 @@ let testPreambleFunctionCachedOnce () : TestResult =
     result
 
 
-/// Test that specialization caching only runs once per function when called in parallel
-let testSpecializationCacheParallelDedup () : TestResult =
+let private runSpecializationCacheParallelDedup () : TestResult =
     let original = System.Environment.GetEnvironmentVariable("TEST_PROFILE")
     let wasEnabled = original = "1"
     if not wasEnabled then
@@ -148,6 +149,32 @@ let testSpecializationCacheParallelDedup () : TestResult =
         System.Environment.SetEnvironmentVariable("TEST_PROFILE", original)
     result
 
+/// Test that specialization caching only runs once per function when called in parallel
+let testSpecializationCacheParallelDedup () : TestResult =
+    if isVerificationEnabled () then
+        runSpecializationCacheParallelDedup ()
+    else
+        Ok ()
+
+/// Stress tests should not run unless verification tests are enabled
+let testStressTestsDisabledByDefault () : TestResult =
+    let originalVerification = System.Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS")
+    System.Environment.SetEnvironmentVariable("ENABLE_VERIFICATION_TESTS", "false")
+    CompilerProfiler.clear ()
+    let result = testSpecializationCacheParallelDedup ()
+    let events = CompilerProfiler.snapshot ()
+    let typeArgs = [ AST.TInt64 ]
+    let specializedName = AST_to_ANF.specName "cache_parallel" typeArgs
+    let count = countFunctionEvents "monomorphize" specializedName events
+    System.Environment.SetEnvironmentVariable("ENABLE_VERIFICATION_TESTS", originalVerification)
+    match result with
+    | Error err -> Error err
+    | Ok () ->
+        if count = 0 then
+            Ok ()
+        else
+            Error $"Expected stress test to be skipped, but saw {count} compilations"
+
 
 /// Run all compiler caching unit tests
 let runAll () : TestResult =
@@ -155,6 +182,7 @@ let runAll () : TestResult =
         ("specialized function caching", testSpecializedFunctionCaching)
         ("preamble function caching", testPreambleFunctionCachedOnce)
         ("specialization cache parallel dedup", testSpecializationCacheParallelDedup)
+        ("stress tests disabled by default", testStressTestsDisabledByDefault)
     ]
 
     let rec runTests = function

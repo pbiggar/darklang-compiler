@@ -6,6 +6,7 @@
 # Options:
 #   --filter=PATTERN   Run only tests matching PATTERN (case-insensitive)
 #   --parallel=N       Run with N parallel test workers
+#   --verification     Enable verification/stress tests
 #   --build-only       Only build, don't run tests
 #   --no-build         Skip building, run tests directly
 #   -h, --help         Show this help message
@@ -39,6 +40,10 @@ while [[ $# -gt 0 ]]; do
             TEST_ARGS+=("--parallel=$PARALLEL")
             shift
             ;;
+        --verification)
+            TEST_ARGS+=("--verification")
+            shift
+            ;;
         --build-only)
             BUILD_ONLY=true
             shift
@@ -68,6 +73,7 @@ if [ "$HELP" = true ]; then
     echo "Options:"
     echo "  --filter=PATTERN   Run only tests matching PATTERN (case-insensitive substring)"
     echo "  --parallel=N       Run with N parallel test workers"
+    echo "  --verification     Enable verification/stress tests"
     echo "  --build-only       Only build, don't run tests"
     echo "  --no-build         Skip building, run tests directly"
     echo "  -h, --help         Show this help message"

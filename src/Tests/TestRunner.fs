@@ -144,6 +144,10 @@ let parseFilterArg (args: string array) : string option =
 let hasCoverageArg (args: string array) : bool =
     args |> Array.exists (fun arg -> arg = "--coverage")
 
+// Check if --verification flag is present (enable verification/stress tests)
+let hasVerificationArg (args: string array) : bool =
+    args |> Array.exists (fun arg -> arg = "--verification")
+
 // Check if a test name matches the filter (case-insensitive substring match)
 let matchesFilter (filter: string option) (testName: string) : bool =
     match filter with
@@ -162,6 +166,7 @@ let printHelp () =
     println "  --filter=PATTERN   Run only tests matching PATTERN (case-insensitive substring)"
     println "  --parallel=N       Run with N parallel test workers"
     println "  --coverage         Show stdlib coverage percentage after running tests"
+    println "  --verification     Enable verification/stress tests"
     println "  --help, -h         Show this help message"
     println ""
     println "Examples:"
@@ -170,6 +175,7 @@ let printHelp () =
     println "  Tests --filter=string      Run tests with 'string' in the name"
     println "  Tests --parallel=4         Run with 4 parallel workers"
     println "  Tests --coverage           Run tests and show coverage percentage"
+    println "  Tests --verification       Run verification/stress tests"
 
 [<EntryPoint>]
 let main args =
@@ -189,6 +195,11 @@ let main args =
 
     // Check for --coverage flag (show inline coverage after tests)
     let showCoverage = hasCoverageArg args
+
+    // Check for --verification flag (enable verification/stress tests)
+    let verificationEnabled = hasVerificationArg args
+    if verificationEnabled then
+        Environment.SetEnvironmentVariable("ENABLE_VERIFICATION_TESTS", "true")
 
     println $"{Colors.bold}{Colors.cyan}🧪 Running DSL-based Tests{Colors.reset}"
     match filter with
@@ -759,9 +770,10 @@ let main args =
             println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
             println ""
 
-    // Run Verification tests (only if ENABLE_VERIFICATION_TESTS=true)
+    // Run Verification tests (only if ENABLE_VERIFICATION_TESTS=true or --verification)
     let verificationDir = Path.Combine(assemblyDir, "verification")
-    let enableVerification = Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS") = "true"
+    let enableVerification =
+        verificationEnabled || Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS") = "true"
     if enableVerification && Directory.Exists verificationDir then
         let verificationTestFiles = Directory.GetFiles(verificationDir, "*.e2e", SearchOption.AllDirectories)
         if verificationTestFiles.Length > 0 then
