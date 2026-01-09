@@ -18,7 +18,7 @@ let t = (10, 20, 30) in let t2 = (t.2, t.0) in t2.0 + t2.1 = 40
 // Tuple construction from function return access
 // =====================================================
 
-// These functions have unique names to work with accumulating preamble
+// These functions have unique names to avoid collisions in the shared preamble
 def makeTuple3(x: Int64) : (Int64, Int64, Int64) = (x, x * 2, x * 3)
 
 let r = makeTuple3(5) in let t = (r.0, r.1) in t.0 + t.1 = 15

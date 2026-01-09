@@ -415,7 +415,7 @@ let private stripComment (line: string) : string =
 /// Parse all E2E tests from a single file
 /// Supports preamble definitions that are prepended to all tests.
 /// Lines that don't match the test format (expr = expectation) are treated as
-/// definitions and accumulated. Test lines get the accumulated preamble prepended.
+/// definitions and collected across the file, then prepended to every test.
 /// Also supports multi-line test expressions wrapped in parens:
 ///   (expr
 ///    continuation...) = expectations
@@ -493,7 +493,16 @@ let parseE2ETestFile (path: string) : Result<E2ETest list, string> =
         if errors.Length > 0 then
             Error (String.concat "\n" (List.rev errors))
         else
-            Ok (List.rev tests)
+            let fullPreamble = String.concat "\n" (List.rev preambleLines)
+            let fullFunctionLineMap = functionLineMap
+            let normalizedTests =
+                tests
+                |> List.rev
+                |> List.map (fun test ->
+                    { test with
+                        Preamble = fullPreamble
+                        FunctionLineMap = fullFunctionLineMap })
+            Ok normalizedTests
 
 /// Parse E2E test from old-format file (for backward compatibility during transition)
 let parseE2ETest (path: string) : Result<E2ETest, string> =

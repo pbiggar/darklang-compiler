@@ -22,6 +22,7 @@ let private countFunctionEvents (passName: string) (functionName: string) (event
         && getMetaValue "function" ev.Meta = Some functionName)
     |> List.length
 
+
 /// Test that specialized functions are cached after compilation
 let testSpecializedFunctionCaching () : TestResult =
     match CompilerLibrary.compileStdlib () with
@@ -108,11 +109,52 @@ let testPreambleFunctionCachedOnce () : TestResult =
         System.Environment.SetEnvironmentVariable("TEST_PROFILE", original)
     result
 
+
+/// Test that specialization caching only runs once per function when called in parallel
+let testSpecializationCacheParallelDedup () : TestResult =
+    let original = System.Environment.GetEnvironmentVariable("TEST_PROFILE")
+    let wasEnabled = original = "1"
+    if not wasEnabled then
+        System.Environment.SetEnvironmentVariable("TEST_PROFILE", "1")
+        CompilerProfiler.clear ()
+    let result =
+        let cache = SpecializationCache()
+        let funcDef : AST.FunctionDef = {
+            Name = "cache_parallel"
+            TypeParams = [ "T" ]
+            Params = [ ("x", AST.TVar "T") ]
+            ReturnType = AST.TVar "T"
+            Body = AST.Var "x"
+        }
+        let typeArgs = [ AST.TInt64 ]
+        let workerCount = 16
+        let barrier = new System.Threading.Barrier(workerCount + 1)
+        let run () =
+            barrier.SignalAndWait()
+            AST_to_ANF.specializeFunctionCached cache funcDef typeArgs |> ignore
+        let tasks =
+            [ 1 .. workerCount ]
+            |> List.map (fun _ -> System.Threading.Tasks.Task.Run(fun () -> run ()))
+        barrier.SignalAndWait()
+        System.Threading.Tasks.Task.WaitAll(tasks |> List.toArray)
+        let events = CompilerProfiler.snapshot ()
+        let specializedName = AST_to_ANF.specName funcDef.Name typeArgs
+        let count = countFunctionEvents "monomorphize" specializedName events
+        if count = 1 then
+            Ok ()
+        else
+            Error $"Expected specialization once, saw {count}"
+    if not wasEnabled then
+        System.Environment.SetEnvironmentVariable("TEST_PROFILE", original)
+    result
+
+
 /// Run all compiler caching unit tests
 let runAll () : TestResult =
     let tests = [
         ("specialized function caching", testSpecializedFunctionCaching)
         ("preamble function caching", testPreambleFunctionCachedOnce)
+        ("specialization cache parallel dedup", testSpecializationCacheParallelDedup)
     ]
 
     let rec runTests = function

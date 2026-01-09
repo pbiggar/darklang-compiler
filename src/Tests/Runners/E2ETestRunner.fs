@@ -37,11 +37,16 @@ let precompilePreamble (stdlib: CompilerLibrary.StdlibResult) (sourceFile: strin
             [ ("file", sourceFile)
               ("preamble_len", preamble.Length.ToString()) ]
         time "preamble_precompile" meta (fun () ->
-            match CompilerLibrary.compilePreamble stdlib preamble sourceFile funcLineMap with
+            let lazyCtx =
+                stdlib.PreambleCache.GetOrAdd(
+                    cacheKey,
+                    fun _ ->
+                        Lazy<Result<CompilerLibrary.PreambleContext, string>>(
+                            (fun () -> CompilerLibrary.compilePreamble stdlib preamble sourceFile funcLineMap),
+                            System.Threading.LazyThreadSafetyMode.ExecutionAndPublication))
+            match lazyCtx.Value with
             | Error err -> Error $"Preamble precompile error ({sourceFile}): {err}"
-            | Ok ctx ->
-                stdlib.PreambleCache.TryAdd(cacheKey, ctx) |> ignore
-                Ok ())
+            | Ok _ -> Ok ())
 
 /// Precompile all distinct preambles (by file + preamble text) and populate the cache
 let precompilePreambles (stdlib: CompilerLibrary.StdlibResult) (tests: E2ETest list) : Result<unit, string> =

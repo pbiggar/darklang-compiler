@@ -24,7 +24,7 @@ open Output
 /// Thread-safe cache for specialized (monomorphized) functions
 /// Key: (funcName, typeArgs as strings), Value: specialized AST.FunctionDef
 /// Using string list for type args to ensure proper equality comparison
-type SpecializationCache = ConcurrentDictionary<string * string list, AST.FunctionDef>
+type SpecializationCache = ConcurrentDictionary<string * string list, Lazy<AST.FunctionDef>>
 
 /// Thread-safe cache for ANF user functions - avoids re-converting same function across tests
 /// Key: (filename, line_number, function_name)
@@ -487,7 +487,14 @@ let specializeFunction (funcDef: AST.FunctionDef) (typeArgs: AST.Type list) : AS
 /// Specialize a generic function with caching to avoid redundant work across tests
 let specializeFunctionCached (cache: SpecializationCache) (funcDef: AST.FunctionDef) (typeArgs: AST.Type list) : AST.FunctionDef =
     let key = (funcDef.Name, typeArgs |> List.map typeToString)
-    cache.GetOrAdd(key, fun _ -> specializeFunction funcDef typeArgs)
+    let lazyFunc =
+        cache.GetOrAdd(
+            key,
+            fun _ ->
+                Lazy<AST.FunctionDef>(
+                    (fun () -> specializeFunction funcDef typeArgs),
+                    System.Threading.LazyThreadSafetyMode.ExecutionAndPublication))
+    lazyFunc.Value
 
 /// Collect all TypeApp call sites from an expression
 let rec collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
