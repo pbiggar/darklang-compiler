@@ -14,6 +14,18 @@ ANF → MIR → LIR → ARM64
 - **MIR**: Platform-independent three-address code with CFG
 - **LIR**: ARM64-specific instructions with virtual registers
 
+## Dumping IRs
+
+Use the CLI to dump textual IRs while compiling:
+
+```bash
+./dark --dump-anf prog.dark
+./dark --dump-mir prog.dark
+./dark --dump-lir prog.dark
+```
+
+`-vvv` dumps all IRs in sequence.
+
 ## MIR (Mid-level IR)
 
 ### Purpose

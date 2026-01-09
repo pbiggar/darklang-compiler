@@ -27,6 +27,7 @@
     <Compile Include="Runners/OptimizationTestRunner.fs" />
 
     <!-- Unit tests -->
+    <Compile Include="CliFlagTests.fs" />
     <Compile Include="EncodingTests.fs" />
     <Compile Include="BinaryTests.fs" />
     <Compile Include="TypeCheckingTests.fs" />

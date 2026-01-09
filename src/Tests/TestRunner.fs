@@ -806,6 +806,7 @@ let main args =
 
     // Define unit test suites with their names and test counts
     let allUnitTests : (string * int * (unit -> Result<unit, string>)) array = [|
+        ("CLI Flags Tests", 1, fun () -> CliFlagTests.runAll())
         ("Encoding Tests", 1, fun () -> EncodingTests.runAll())
         ("Binary Tests", 11, fun () -> BinaryTests.runAll())
         ("Type Checking Tests", 8, fun () -> TypeCheckingTests.runAll())

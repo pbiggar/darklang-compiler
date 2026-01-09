@@ -37,6 +37,9 @@ let runE2ETest (stdlib: CompilerLibrary.StdlibResult) (test: E2ETest) : E2ETestR
             DisableLIROpt = test.DisableLIROpt
             DisableDCE = test.DisableDCE
             EnableCoverage = false  // Coverage integration handled separately
+            DumpANF = false
+            DumpMIR = false
+            DumpLIR = false
         }
         let execResult = CompilerLibrary.compileAndRunWithStdlibCachedTimed 0 options stdlib test.Source test.Preamble test.SourceFile test.FunctionLineMap
 
@@ -110,4 +113,3 @@ let runE2ETest (stdlib: CompilerLibrary.StdlibResult) (test: E2ETest) : E2ETestR
           ExitCode = None
           CompileTime = TimeSpan.Zero
           RuntimeTime = TimeSpan.Zero }
-

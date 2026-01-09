@@ -58,6 +58,10 @@ type CliOptions = {
     DisableMIROpt: bool
     DisableLIROpt: bool
     DisableDCE: bool
+    // IR dump flags
+    DumpANF: bool
+    DumpMIR: bool
+    DumpLIR: bool
 }
 
 /// Default empty options
@@ -76,6 +80,9 @@ let defaultOptions = {
     DisableMIROpt = false
     DisableLIROpt = false
     DisableDCE = false
+    DumpANF = false
+    DumpMIR = false
+    DumpLIR = false
 }
 
 /// Parse command-line flags into options
@@ -133,6 +140,15 @@ let parseArgs (argv: string array) : Result<CliOptions, string> =
                 | VeryVerbose -> DumpIR
                 | DumpIR -> DumpIR
             parseFlags rest opts newVerbosity
+
+        | "--dump-anf" :: rest ->
+            parseFlags rest { opts with DumpANF = true } lastVerbosity
+
+        | "--dump-mir" :: rest ->
+            parseFlags rest { opts with DumpMIR = true } lastVerbosity
+
+        | "--dump-lir" :: rest ->
+            parseFlags rest { opts with DumpLIR = true } lastVerbosity
 
         | "-h" :: rest | "--help" :: rest ->
             parseFlags rest { opts with Help = true } lastVerbosity
@@ -234,6 +250,9 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (c
         DisableLIROpt = cliOpts.DisableLIROpt
         DisableDCE = cliOpts.DisableDCE
         EnableCoverage = false
+        DumpANF = cliOpts.DumpANF
+        DumpMIR = cliOpts.DumpMIR
+        DumpLIR = cliOpts.DumpLIR
     }
     let result = CompilerLibrary.compileWithOptions (verbosityToInt verbosity) options source
 
@@ -281,6 +300,9 @@ let run (source: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int
         DisableLIROpt = cliOpts.DisableLIROpt
         DisableDCE = cliOpts.DisableDCE
         EnableCoverage = false
+        DumpANF = cliOpts.DumpANF
+        DumpMIR = cliOpts.DumpMIR
+        DumpLIR = cliOpts.DumpLIR
     }
     let result = CompilerLibrary.compileAndRunWithOptions (verbosityToInt verbosity) options source
 
@@ -318,6 +340,9 @@ let printUsage () =
     println "  -v, --verbose        Show compilation pass names"
     println "  -vv                  Show pass names + timing details"
     println "  -vvv                 Dump all intermediate representations"
+    println "  --dump-anf           Dump ANF (all ANF stages)"
+    println "  --dump-mir           Dump MIR (control-flow graph)"
+    println "  --dump-lir           Dump LIR (before and after register allocation)"
     println "  -h, --help           Show this help message"
     println "  --version            Show version information"
     println ""

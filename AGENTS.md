@@ -67,6 +67,23 @@ See `docs/result-patterns.md` for comprehensive examples.
 - One compiler pass per file
 - The dotnet compiler often hangs - don't use long timeouts
 
+## IR Dumps
+
+Use these CLI flags to dump specific IRs when debugging:
+
+- `--dump-anf` (ANF stages)
+- `--dump-mir` (MIR CFG)
+- `--dump-lir` (LIR before and after register allocation)
+- `-vvv` dumps all IRs
+
+Examples:
+
+```bash
+./dark --dump-anf prog.dark
+./dark --dump-mir prog.dark
+./dark --dump-lir prog.dark
+```
+
 ## Comments
 
 - Every file should have a comment at the top explaining what it's for

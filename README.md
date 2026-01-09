@@ -69,8 +69,16 @@ echo $?  # Shows exit code
 ./dark -q -o output prog.dark
 # Both are equivalent
 
-# Verbose output (shows detailed IR)
+# Verbose output (shows pass names)
 ./dark -v prog.dark -o output
+
+# Dump specific IRs
+./dark --dump-anf prog.dark
+./dark --dump-mir prog.dark
+./dark --dump-lir prog.dark
+
+# Dump all IRs
+./dark -vvv prog.dark
 
 # Read from stdin
 ./dark -r -e - < input.txt

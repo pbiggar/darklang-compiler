@@ -94,7 +94,7 @@ cd "$SCRIPT_DIR"
 # Build if needed
 if [ "$NO_BUILD" = false ]; then
     echo "Building..."
-    if ! timeout 120 dotnet build --verbosity quiet 2>&1; then
+    if ! timeout 120 dotnet build --verbosity quiet --configfile "$SCRIPT_DIR/NuGet.Config" 2>&1; then
         echo "Build failed!"
         exit 1
     fi

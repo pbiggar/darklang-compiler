@@ -53,6 +53,12 @@ type CompilerOptions = {
     DisableDCE: bool
     /// Enable runtime expression coverage tracking
     EnableCoverage: bool
+    /// Dump ANF representations to stdout
+    DumpANF: bool
+    /// Dump MIR representations to stdout
+    DumpMIR: bool
+    /// Dump LIR representations to stdout (before and after register allocation)
+    DumpLIR: bool
 }
 
 /// Default compiler options
@@ -65,7 +71,56 @@ let defaultOptions : CompilerOptions = {
     DisableLIROpt = false
     DisableDCE = false
     EnableCoverage = false
+    DumpANF = false
+    DumpMIR = false
+    DumpLIR = false
 }
+
+/// Determine whether to dump a specific IR, based on verbosity or explicit option
+let shouldDumpIR (verbosity: int) (enabled: bool) : bool =
+    verbosity >= 3 || enabled
+
+/// Print ANF program in a consistent, human-readable format
+let printANFProgram (title: string) (program: ANF.Program) : unit =
+    println title
+    let (ANF.Program (funcs, mainExpr)) = program
+    for func in funcs do
+        println $"Function: {func.Name}"
+        println $"  TypedParams: {func.TypedParams}"
+        println $"  Body: {func.Body}"
+        println ""
+    println $"Main: {mainExpr}"
+    println ""
+
+/// Print MIR program (with CFG) in a consistent format
+let printMIRProgram (title: string) (program: MIR.Program) : unit =
+    let (MIR.Program (functions, _, _, _, _)) = program
+    println title
+    for func in functions do
+        println $"\nFunction: {func.Name}"
+        println $"Entry: {func.CFG.Entry}"
+        for kvp in func.CFG.Blocks do
+            let block = kvp.Value
+            println $"\n{block.Label}:"
+            for instr in block.Instrs do
+                println $"  {instr}"
+            println $"  {block.Terminator}"
+    println ""
+
+/// Print LIR program (with CFG) in a consistent format
+let printLIRProgram (title: string) (program: LIR.Program) : unit =
+    let (LIR.Program (funcs, _, _)) = program
+    println title
+    for func in funcs do
+        println $"Function: {func.Name}"
+        println $"Entry: {func.CFG.Entry}"
+        for kvp in func.CFG.Blocks do
+            let block = kvp.Value
+            println $"\n{block.Label}:"
+            for instr in block.Instrs do
+                println $"  {instr}"
+            println $"  {block.Terminator}"
+    println ""
 
 /// Cache for specialized (monomorphized) functions - thread-safe for parallel test execution
 /// Key: (funcName, typeArgs as strings), Value: specialized AST.FunctionDef
@@ -508,16 +563,8 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                       ErrorMessage = Some $"ANF conversion error: {err}" }
                 | Ok convResult ->
                     // Show ANF before optimization
-                    if verbosity >= 3 then
-                        println "=== ANF (before optimization) ==="
-                        let (ANF.Program (funcs, mainExprDbg)) = convResult.Program
-                        for func in funcs do
-                            println $"Function: {func.Name}"
-                            println $"  TypedParams: {func.TypedParams}"
-                            println $"  Body: {func.Body}"
-                            println ""
-                        println $"Main: {mainExprDbg}"
-                        println ""
+                    if shouldDumpIR verbosity options.DumpANF then
+                        printANFProgram "=== ANF (before optimization) ===" convResult.Program
 
                     // Pass 2.3: ANF Optimization
                     if verbosity >= 1 then println "  [2.3/8] ANF Optimization..."
@@ -530,16 +577,8 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                         println $"        {t}ms"
 
                     // Show ANF after optimization
-                    if verbosity >= 3 then
-                        println "=== ANF (after optimization) ==="
-                        let (ANF.Program (funcs, mainExprDbg)) = anfOptimized
-                        for func in funcs do
-                            println $"Function: {func.Name}"
-                            println $"  TypedParams: {func.TypedParams}"
-                            println $"  Body: {func.Body}"
-                            println ""
-                        println $"Main: {mainExprDbg}"
-                        println ""
+                    if shouldDumpIR verbosity options.DumpANF then
+                        printANFProgram "=== ANF (after optimization) ===" anfOptimized
 
                     // Pass 2.4: ANF Inlining (optional)
                     if verbosity >= 1 then println "  [2.4/8] ANF Inlining..."
@@ -570,16 +609,8 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                     | Ok (anfAfterRC, typeMap) ->
 
                     // Show ANF after RC insertion
-                    if verbosity >= 3 then
-                        println "=== ANF (after RC insertion) ==="
-                        let (ANF.Program (funcs, mainExprDbg)) = anfAfterRC
-                        for func in funcs do
-                            println $"Function: {func.Name}"
-                            println $"  TypedParams: {func.TypedParams}"
-                            println $"  Body: {func.Body}"
-                            println ""
-                        println $"Main: {mainExprDbg}"
-                        println ""
+                    if shouldDumpIR verbosity options.DumpANF then
+                        printANFProgram "=== ANF (after RC insertion) ===" anfAfterRC
 
                     // Pass 2.7: Tail Call Detection
                     if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
@@ -592,16 +623,8 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                         println $"        {t}ms"
 
                     // Show ANF after TCO
-                    if verbosity >= 3 then
-                        println "=== ANF (after Tail Call Detection) ==="
-                        let (ANF.Program (funcs, mainExprDbg)) = anfAfterTCO
-                        for func in funcs do
-                            println $"Function: {func.Name}"
-                            println $"  TypedParams: {func.TypedParams}"
-                            println $"  Body: {func.Body}"
-                            println ""
-                        println $"Main: {mainExprDbg}"
-                        println ""
+                    if shouldDumpIR verbosity options.DumpANF then
+                        printANFProgram "=== ANF (after Tail Call Detection) ===" anfAfterTCO
 
                     // Pass 2.8: Print Insertion (for main expression)
                     if verbosity >= 1 then println "  [2.8/8] Print Insertion..."
@@ -613,16 +636,8 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                         println $"        {t}ms"
 
                     // Show ANF after Print insertion
-                    if verbosity >= 3 then
-                        println "=== ANF (after Print insertion) ==="
-                        let (ANF.Program (funcs, mainExprDbg)) = anfProgram
-                        for func in funcs do
-                            println $"Function: {func.Name}"
-                            println $"  TypedParams: {func.TypedParams}"
-                            println $"  Body: {func.Body}"
-                            println ""
-                        println $"Main: {mainExprDbg}"
-                        println ""
+                    if shouldDumpIR verbosity options.DumpANF then
+                        printANFProgram "=== ANF (after Print insertion) ===" anfProgram
 
                     // Pass 3: ANF → MIR
                     if verbosity >= 1 then println "  [3/8] ANF → MIR..."
@@ -648,19 +663,8 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                     | Ok mirProgram ->
 
                     // Show MIR
-                    if verbosity >= 3 then
-                        let (MIR.Program (functions, _, _, _, _)) = mirProgram
-                        println "=== MIR (Control Flow Graph) ==="
-                        for func in functions do
-                            println $"\nFunction: {func.Name}"
-                            println $"Entry: {func.CFG.Entry}"
-                            for kvp in func.CFG.Blocks do
-                                let block = kvp.Value
-                                println $"\n{block.Label}:"
-                                for instr in block.Instrs do
-                                    println $"  {instr}"
-                                println $"  {block.Terminator}"
-                        println ""
+                    if shouldDumpIR verbosity options.DumpMIR then
+                        printMIRProgram "=== MIR (Control Flow Graph) ===" mirProgram
 
                     let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime
                     if verbosity >= 2 then
@@ -702,19 +706,8 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                     | Ok lirProgram ->
 
                     // Show LIR
-                    if verbosity >= 3 then
-                        let (LIR.Program (funcs, _, _)) = lirProgram
-                        println "=== LIR (Low-level IR with CFG) ==="
-                        for func in funcs do
-                            println $"Function: {func.Name}"
-                            println $"Entry: {func.CFG.Entry}"
-                            for kvp in func.CFG.Blocks do
-                                let block = kvp.Value
-                                println $"\n{block.Label}:"
-                                for instr in block.Instrs do
-                                    println $"  {instr}"
-                                println $"  {block.Terminator}"
-                        println ""
+                    if shouldDumpIR verbosity options.DumpLIR then
+                        printLIRProgram "=== LIR (Low-level IR with CFG) ===" lirProgram
 
                     let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime
                     if verbosity >= 2 then
@@ -739,18 +732,8 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                     let allocatedProgram = LIR.Program (allocatedFuncs, stringPool, floatPool)
 
                     // Show LIR after allocation
-                    if verbosity >= 3 then
-                        println "=== LIR (After Register Allocation) ==="
-                        for allocatedFunc in allocatedFuncs do
-                            println $"Function: {allocatedFunc.Name}"
-                            println $"Entry: {allocatedFunc.CFG.Entry}"
-                            for kvp in allocatedFunc.CFG.Blocks do
-                                let block = kvp.Value
-                                println $"\n{block.Label}:"
-                                for instr in block.Instrs do
-                                    println $"  {instr}"
-                                println $"  {block.Terminator}"
-                        println ""
+                    if shouldDumpIR verbosity options.DumpLIR then
+                        printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
 
                     let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
                     if verbosity >= 2 then
@@ -793,76 +776,76 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                               ErrorMessage = Some $"Platform detection error: {err}" }
                         | Ok os ->
 
-                        // Pass 7: ARM64 Encoding (ARM64 → machine code)
-                        // Use encodeAllWithStrings to handle ADRP/ADD_label for string addresses
-                        if verbosity >= 1 then println "  [7/7] ARM64 Encoding..."
+                            // Pass 7: ARM64 Encoding (ARM64 → machine code)
+                            // Use encodeAllWithStrings to handle ADRP/ADD_label for string addresses
+                            if verbosity >= 1 then println "  [7/7] ARM64 Encoding..."
 
-                        // Compute code file offset based on platform
-                        let codeFileOffset =
-                            match os with
-                            | Platform.Linux ->
-                                // ELF: header (64) + 1 program header (56) = 120
-                                64 + 56
-                            | Platform.MacOS ->
-                                // Mach-O: header (32) + load commands + padding
-                                // This needs to match 8_Binary_Generation_MachO.fs calculation
-                                let headerSize = 32
-                                // Same calculation as in createExecutableWithStrings
-                                let pageZeroCommandSize = 72
-                                let numTextSections = if stringPool.Strings.IsEmpty then 1 else 2
-                                let textSegmentCommandSize = 72 + (80 * numTextSections)
-                                let linkeditSegmentCommandSize = 72
-                                let dylinkerCommandSize = 32
-                                let dylibCommandSize = 56
-                                let symtabCommandSize = 24
-                                let dysymtabCommandSize = 80
-                                let uuidCommandSize = 24
-                                let buildVersionCommandSize = 24
-                                let mainCommandSize = 24
-                                let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + dylibCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
-                                // Round up: (headerSize + commandsSize + 200 + 7) &&& ~~~7
-                                (headerSize + commandsSize + 200 + 7) &&& (~~~7)
-                        let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions stringPool floatPool codeFileOffset
+                            // Compute code file offset based on platform
+                            let codeFileOffset =
+                                match os with
+                                | Platform.Linux ->
+                                    // ELF: header (64) + 1 program header (56) = 120
+                                    64 + 56
+                                | Platform.MacOS ->
+                                    // Mach-O: header (32) + load commands + padding
+                                    // This needs to match 8_Binary_Generation_MachO.fs calculation
+                                    let headerSize = 32
+                                    // Same calculation as in createExecutableWithStrings
+                                    let pageZeroCommandSize = 72
+                                    let numTextSections = if stringPool.Strings.IsEmpty then 1 else 2
+                                    let textSegmentCommandSize = 72 + (80 * numTextSections)
+                                    let linkeditSegmentCommandSize = 72
+                                    let dylinkerCommandSize = 32
+                                    let dylibCommandSize = 56
+                                    let symtabCommandSize = 24
+                                    let dysymtabCommandSize = 80
+                                    let uuidCommandSize = 24
+                                    let buildVersionCommandSize = 24
+                                    let mainCommandSize = 24
+                                    let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + dylibCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
+                                    // Round up: (headerSize + commandsSize + 200 + 7) &&& ~~~7
+                                    (headerSize + commandsSize + 200 + 7) &&& (~~~7)
+                            let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions stringPool floatPool codeFileOffset
 
-                        // Show machine code
-                        if verbosity >= 3 then
-                            println "=== Machine Code (hex) ==="
-                            for i in 0 .. 4 .. (machineCode.Length - 1) do
-                                if i + 3 < machineCode.Length then
-                                    let bytes = sprintf "%02x %02x %02x %02x" machineCode.[i] machineCode.[i+1] machineCode.[i+2] machineCode.[i+3]
-                                    println $"  {i:X4}: {bytes}"
-                            println $"Total: {machineCode.Length} bytes\n"
+                            // Show machine code
+                            if verbosity >= 3 then
+                                println "=== Machine Code (hex) ==="
+                                for i in 0 .. 4 .. (machineCode.Length - 1) do
+                                    if i + 3 < machineCode.Length then
+                                        let bytes = sprintf "%02x %02x %02x %02x" machineCode.[i] machineCode.[i+1] machineCode.[i+2] machineCode.[i+3]
+                                        println $"  {i:X4}: {bytes}"
+                                println $"Total: {machineCode.Length} bytes\n"
 
-                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime
-                        if verbosity >= 2 then
-                            let t = System.Math.Round(encodeTime, 1)
-                            println $"        {t}ms"
+                            let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime
+                            if verbosity >= 2 then
+                                let t = System.Math.Round(encodeTime, 1)
+                                println $"        {t}ms"
 
-                        // Pass 8: Binary Generation (machine code → executable)
-                        let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
-                        if verbosity >= 1 then println $"  [7/7] Binary Generation ({formatName})..."
-                        let binary =
-                            match os with
-                            | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode stringPool floatPool
-                            | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode stringPool floatPool
-                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
-                        if verbosity >= 2 then
-                            let t = System.Math.Round(binaryTime, 1)
-                            println $"        {t}ms"
+                            // Pass 8: Binary Generation (machine code → executable)
+                            let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
+                            if verbosity >= 1 then println $"  [7/7] Binary Generation ({formatName})..."
+                            let binary =
+                                match os with
+                                | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode stringPool floatPool
+                                | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode stringPool floatPool
+                            let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
+                            if verbosity >= 2 then
+                                let t = System.Math.Round(binaryTime, 1)
+                                println $"        {t}ms"
 
-                        sw.Stop()
+                            sw.Stop()
 
-                        if verbosity >= 1 then
-                            println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
+                            if verbosity >= 1 then
+                                println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
 
-                        { Binary = binary
-                          Success = true
-                          ErrorMessage = None }
-    with
-    | ex ->
-        { Binary = Array.empty
-          Success = false
-          ErrorMessage = Some $"Compilation failed: {ex.Message}" }
+                            { Binary = binary
+                              Success = true
+                              ErrorMessage = None }
+        with
+        | ex ->
+            { Binary = Array.empty
+              Success = false
+              ErrorMessage = Some $"Compilation failed: {ex.Message}" }
 
 /// Compile user code with pre-compiled stdlib (separate compilation)
 /// Uses stdlib.TypeCheckEnv for type checking user code, avoiding re-type-checking stdlib
@@ -930,6 +913,8 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     // Pass 2.3: ANF Optimization (user code only)
                     if verbosity >= 1 then println "  [2.3/8] ANF Optimization..."
                     let userProgram = ANF.Program (userOnly.UserFunctions, userOnly.MainExpr)
+                    if shouldDumpIR verbosity options.DumpANF then
+                        printANFProgram "=== ANF (before optimization) ===" userProgram
                     let anfOptimized =
                         if options.DisableANFOpt then userProgram
                         else ANF_Optimize.optimizeProgram userProgram
@@ -937,6 +922,8 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     if verbosity >= 2 then
                         let t = System.Math.Round(anfOptTime, 1)
                         println $"        {t}ms"
+                    if shouldDumpIR verbosity options.DumpANF then
+                        printANFProgram "=== ANF (after optimization) ===" anfOptimized
 
                     // Pass 2.4: ANF Inlining (optional)
                     if verbosity >= 1 then println "  [2.4/8] ANF Inlining..."
@@ -972,213 +959,225 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                           Success = false
                           ErrorMessage = Some $"Reference count insertion error: {err}" }
                     | Ok (userAnfAfterRC, typeMap) ->
+                        if shouldDumpIR verbosity options.DumpANF then
+                            printANFProgram "=== ANF (after RC insertion) ===" userAnfAfterRC
 
-                    // Pass 2.7: Tail Call Detection
-                    if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
-                    let userAnfAfterTCO =
-                        if options.DisableTCO then userAnfAfterRC
-                        else TailCallDetection.detectTailCallsInProgram userAnfAfterRC
-                    let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(tcoTime, 1)
-                        println $"        {t}ms"
+                        // Pass 2.7: Tail Call Detection
+                        if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
+                        let userAnfAfterTCO =
+                            if options.DisableTCO then userAnfAfterRC
+                            else TailCallDetection.detectTailCallsInProgram userAnfAfterRC
+                        let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime
+                        if verbosity >= 2 then
+                            let t = System.Math.Round(tcoTime, 1)
+                            println $"        {t}ms"
+                        if shouldDumpIR verbosity options.DumpANF then
+                            printANFProgram "=== ANF (after Tail Call Detection) ===" userAnfAfterTCO
 
-                    // Pass 2.8: Print Insertion (user code only)
-                    if verbosity >= 1 then println "  [2.8/8] Print Insertion..."
-                    let (ANF.Program (userFunctions, userMainExpr)) = userAnfAfterTCO
-                    let userAnfProgram = PrintInsertion.insertPrint userFunctions userMainExpr programType
-                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - tcoTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(printTime, 1)
-                        println $"        {t}ms"
+                        // Pass 2.8: Print Insertion (user code only)
+                        if verbosity >= 1 then println "  [2.8/8] Print Insertion..."
+                        let (ANF.Program (userFunctions, userMainExpr)) = userAnfAfterTCO
+                        let userAnfProgram = PrintInsertion.insertPrint userFunctions userMainExpr programType
+                        let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - tcoTime
+                        if verbosity >= 2 then
+                            let t = System.Math.Round(printTime, 1)
+                            println $"        {t}ms"
+                        if shouldDumpIR verbosity options.DumpANF then
+                            printANFProgram "=== ANF (after Print insertion) ===" userAnfProgram
 
-                    // Pass 3: ANF → MIR (user code only)
-                    if verbosity >= 1 then println "  [3/8] ANF → MIR (user only)..."
-                    // Use FuncParams (maps function names to param types) for correct float param handling
-                    // Use TypeReg from ConversionResult for record type definitions (for record printing)
-                    // typeMap contains TempId -> Type mappings from RC insertion
-                    let externalReturnTypes = extractReturnTypes userOnly.FuncReg
-                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg options.EnableCoverage externalReturnTypes
+                        // Pass 3: ANF → MIR (user code only)
+                        if verbosity >= 1 then println "  [3/8] ANF → MIR (user only)..."
+                        // Use FuncParams (maps function names to param types) for correct float param handling
+                        // Use TypeReg from ConversionResult for record type definitions (for record printing)
+                        // typeMap contains TempId -> Type mappings from RC insertion
+                        let externalReturnTypes = extractReturnTypes userOnly.FuncReg
+                        let userMirResult = ANF_to_MIR.toMIR userAnfProgram typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg options.EnableCoverage externalReturnTypes
 
-                    match userMirResult with
-                    | Error err ->
-                        { Binary = Array.empty
-                          Success = false
-                          ErrorMessage = Some $"MIR conversion error: {err}" }
-                    | Ok userMirProgram ->
-
-                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(mirTime, 1)
-                        println $"        {t}ms"
-
-                    // Pass 3.1: SSA Construction (user code only)
-                    if verbosity >= 1 then println "  [3.1/8] SSA Construction (user only)..."
-                    let userSsaProgram = SSA_Construction.convertToSSA userMirProgram
-
-                    let ssaTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(ssaTime, 1)
-                        println $"        {t}ms"
-
-                    // Pass 3.5: MIR Optimizations (user code only)
-                    if verbosity >= 1 then println "  [3.5/8] MIR Optimizations (user only)..."
-                    let userOptimizedProgram =
-                        if options.DisableMIROpt then userSsaProgram
-                        else MIR_Optimize.optimizeProgram userSsaProgram
-
-                    let mirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(mirOptTime, 1)
-                        println $"        {t}ms"
-
-                    // Pass 3.9 (SSA Destruction) removed - phi resolution handled in RegisterAllocation
-
-                    // Pass 4: MIR → LIR (user code only, phi nodes flow through)
-                    if verbosity >= 1 then println "  [4/8] MIR → LIR (user only)..."
-                    let userLirResult = MIR_to_LIR.toLIR userOptimizedProgram
-
-                    match userLirResult with
-                    | Error err ->
-                        { Binary = Array.empty
-                          Success = false
-                          ErrorMessage = Some $"LIR conversion error: {err}" }
-                    | Ok userLirProgram ->
-
-                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(lirTime, 1)
-                        println $"        {t}ms"
-
-                    // Pass 4.5: LIR Optimizations (peephole - user code)
-                    if verbosity >= 1 then println "  [4.5/8] LIR Optimizations (user only)..."
-                    let userOptimizedLirProgram =
-                        if options.DisableLIROpt then userLirProgram
-                        else LIR_Optimize.optimizeProgram userLirProgram
-
-                    let lirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(lirOptTime, 1)
-                        println $"        {t}ms"
-
-                    // Pass 5: Register Allocation (user functions only, stdlib pre-allocated)
-                    if verbosity >= 1 then println "  [5/8] Register Allocation (user only + cached stdlib)..."
-                    let (LIR.Program (userFuncs, userStrings, userFloats)) = userOptimizedLirProgram
-                    let (LIR.Program (_, stdlibStrings, stdlibFloats)) = stdlib.LIRProgram
-
-                    // Allocate only user functions
-                    let allocatedUserFuncs = userFuncs |> List.map RegisterAllocation.allocateRegisters
-
-                    // Merge pools (stdlib first, user appended with offset)
-                    let stringOffset = stdlibStrings.NextId
-                    let floatOffset = stdlibFloats.NextId
-                    let mergedStrings = ANF_to_MIR.appendStringPools stdlibStrings userStrings
-                    let mergedFloats = ANF_to_MIR.appendFloatPools stdlibFloats userFloats
-
-                    // Offset pool refs in allocated user functions
-                    let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
-
-                    // Filter stdlib functions to only include reachable ones (dead code elimination)
-                    let reachableStdlib =
-                        if options.DisableDCE then stdlib.AllocatedFunctions
-                        else
-                            DeadCodeElimination.filterFunctions
-                                stdlib.StdlibCallGraph
-                                offsetUserFuncs
-                                stdlib.AllocatedFunctions
-
-                    // Combine reachable stdlib functions with user functions
-                    let allFuncs = reachableStdlib @ offsetUserFuncs
-                    let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
-
-                    let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(allocTime, 1)
-                        println $"        {t}ms"
-
-                    // Pass 6: Code Generation
-                    if verbosity >= 1 then println "  [6/8] Code Generation..."
-                    let coverageExprCount = if options.EnableCoverage then LIR.countCoverageHits allocatedProgram else 0
-                    let codegenOptions : CodeGen.CodeGenOptions = {
-                        DisableFreeList = options.DisableFreeList
-                        EnableCoverage = options.EnableCoverage
-                        CoverageExprCount = coverageExprCount
-                    }
-                    let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
-                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(codegenTime, 1)
-                        println $"        {t}ms"
-
-                    match codegenResult with
-                    | Error err ->
-                        { Binary = Array.empty
-                          Success = false
-                          ErrorMessage = Some $"Code generation error: {err}" }
-                    | Ok arm64Instructions ->
-                        let osResult = Platform.detectOS ()
-                        match osResult with
+                        match userMirResult with
                         | Error err ->
                             { Binary = Array.empty
                               Success = false
-                              ErrorMessage = Some $"Platform detection error: {err}" }
-                        | Ok os ->
+                              ErrorMessage = Some $"MIR conversion error: {err}" }
+                        | Ok userMirProgram ->
+                            if shouldDumpIR verbosity options.DumpMIR then
+                                printMIRProgram "=== MIR (Control Flow Graph) ===" userMirProgram
 
-                        // Pass 7: ARM64 Encoding
-                        if verbosity >= 1 then println "  [7/7] ARM64 Encoding..."
-                        let codeFileOffset =
-                            match os with
-                            | Platform.Linux -> 64 + 56
-                            | Platform.MacOS ->
-                                let headerSize = 32
-                                let pageZeroCommandSize = 72
-                                let numTextSections = if mergedStrings.Strings.IsEmpty then 1 else 2
-                                let textSegmentCommandSize = 72 + (80 * numTextSections)
-                                let linkeditSegmentCommandSize = 72
-                                let dylinkerCommandSize = 32
-                                let dylibCommandSize = 56
-                                let symtabCommandSize = 24
-                                let dysymtabCommandSize = 80
-                                let uuidCommandSize = 24
-                                let buildVersionCommandSize = 24
-                                let mainCommandSize = 24
-                                let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + dylibCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
-                                (headerSize + commandsSize + 200 + 7) &&& (~~~7)
-                        let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions mergedStrings mergedFloats codeFileOffset
+                            let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime
+                            if verbosity >= 2 then
+                                let t = System.Math.Round(mirTime, 1)
+                                println $"        {t}ms"
 
-                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime
-                        if verbosity >= 2 then
-                            let t = System.Math.Round(encodeTime, 1)
-                            println $"        {t}ms"
+                            // Pass 3.1: SSA Construction (user code only)
+                            if verbosity >= 1 then println "  [3.1/8] SSA Construction (user only)..."
+                            let userSsaProgram = SSA_Construction.convertToSSA userMirProgram
 
-                        // Pass 8: Binary Generation
-                        let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
-                        if verbosity >= 1 then println $"  [7/7] Binary Generation ({formatName})..."
-                        let binary =
-                            match os with
-                            | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode mergedStrings mergedFloats
-                            | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode mergedStrings mergedFloats
-                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
-                        if verbosity >= 2 then
-                            let t = System.Math.Round(binaryTime, 1)
-                            println $"        {t}ms"
+                            let ssaTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime
+                            if verbosity >= 2 then
+                                let t = System.Math.Round(ssaTime, 1)
+                                println $"        {t}ms"
 
-                        sw.Stop()
-                        if verbosity >= 1 then
-                            println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
+                            // Pass 3.5: MIR Optimizations (user code only)
+                            if verbosity >= 1 then println "  [3.5/8] MIR Optimizations (user only)..."
+                            let userOptimizedProgram =
+                                if options.DisableMIROpt then userSsaProgram
+                                else MIR_Optimize.optimizeProgram userSsaProgram
 
-                        { Binary = binary
-                          Success = true
-                          ErrorMessage = None }
-    with
-    | ex ->
-        { Binary = Array.empty
-          Success = false
-          ErrorMessage = Some $"Compilation failed: {ex.Message}" }
+                            let mirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - rcTime - printTime - mirTime - ssaTime
+                            if verbosity >= 2 then
+                                let t = System.Math.Round(mirOptTime, 1)
+                                println $"        {t}ms"
 
-/// Compile preamble with stdlib as base, returning extended context for test compilation
-/// Preamble functions go through the full pipeline (parse → typecheck → mono → inline → lift → ANF → RC → TCO)
-/// The result is cached and reused for all tests in the same file
+                            // Pass 3.9 (SSA Destruction) removed - phi resolution handled in RegisterAllocation
+
+                            // Pass 4: MIR → LIR (user code only, phi nodes flow through)
+                            if verbosity >= 1 then println "  [4/8] MIR → LIR (user only)..."
+                            let userLirResult = MIR_to_LIR.toLIR userOptimizedProgram
+
+                            match userLirResult with
+                            | Error err ->
+                                { Binary = Array.empty
+                                  Success = false
+                                  ErrorMessage = Some $"LIR conversion error: {err}" }
+                            | Ok userLirProgram ->
+                                if shouldDumpIR verbosity options.DumpLIR then
+                                    printLIRProgram "=== LIR (Low-level IR with CFG) ===" userLirProgram
+
+                                let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime
+                                if verbosity >= 2 then
+                                    let t = System.Math.Round(lirTime, 1)
+                                    println $"        {t}ms"
+
+                                // Pass 4.5: LIR Optimizations (peephole - user code)
+                                if verbosity >= 1 then println "  [4.5/8] LIR Optimizations (user only)..."
+                                let userOptimizedLirProgram =
+                                    if options.DisableLIROpt then userLirProgram
+                                    else LIR_Optimize.optimizeProgram userLirProgram
+
+                                let lirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
+                                if verbosity >= 2 then
+                                    let t = System.Math.Round(lirOptTime, 1)
+                                    println $"        {t}ms"
+
+                                // Pass 5: Register Allocation (user functions only, stdlib pre-allocated)
+                                if verbosity >= 1 then println "  [5/8] Register Allocation (user only + cached stdlib)..."
+                                let (LIR.Program (userFuncs, userStrings, userFloats)) = userOptimizedLirProgram
+                                let (LIR.Program (_, stdlibStrings, stdlibFloats)) = stdlib.LIRProgram
+
+                                // Allocate only user functions
+                                let allocatedUserFuncs = userFuncs |> List.map RegisterAllocation.allocateRegisters
+
+                                // Merge pools (stdlib first, user appended with offset)
+                                let stringOffset = stdlibStrings.NextId
+                                let floatOffset = stdlibFloats.NextId
+                                let mergedStrings = ANF_to_MIR.appendStringPools stdlibStrings userStrings
+                                let mergedFloats = ANF_to_MIR.appendFloatPools stdlibFloats userFloats
+
+                                // Offset pool refs in allocated user functions
+                                let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
+
+                                // Filter stdlib functions to only include reachable ones (dead code elimination)
+                                let reachableStdlib =
+                                    if options.DisableDCE then stdlib.AllocatedFunctions
+                                    else
+                                        DeadCodeElimination.filterFunctions
+                                            stdlib.StdlibCallGraph
+                                            offsetUserFuncs
+                                            stdlib.AllocatedFunctions
+
+                                // Combine reachable stdlib functions with user functions
+                                let allFuncs = reachableStdlib @ offsetUserFuncs
+                                let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
+                                if shouldDumpIR verbosity options.DumpLIR then
+                                    printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
+
+                                let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
+                                if verbosity >= 2 then
+                                    let t = System.Math.Round(allocTime, 1)
+                                    println $"        {t}ms"
+
+                                // Pass 6: Code Generation
+                                if verbosity >= 1 then println "  [6/8] Code Generation..."
+                                let coverageExprCount = if options.EnableCoverage then LIR.countCoverageHits allocatedProgram else 0
+                                let codegenOptions : CodeGen.CodeGenOptions = {
+                                    DisableFreeList = options.DisableFreeList
+                                    EnableCoverage = options.EnableCoverage
+                                    CoverageExprCount = coverageExprCount
+                                }
+                                let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
+                                let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime
+                                if verbosity >= 2 then
+                                    let t = System.Math.Round(codegenTime, 1)
+                                    println $"        {t}ms"
+
+                                match codegenResult with
+                                | Error err ->
+                                    { Binary = Array.empty
+                                      Success = false
+                                      ErrorMessage = Some $"Code generation error: {err}" }
+                                | Ok arm64Instructions ->
+                                    let osResult = Platform.detectOS ()
+                                    match osResult with
+                                    | Error err ->
+                                        { Binary = Array.empty
+                                          Success = false
+                                          ErrorMessage = Some $"Platform detection error: {err}" }
+                                    | Ok os ->
+
+                                        // Pass 7: ARM64 Encoding
+                                        if verbosity >= 1 then println "  [7/7] ARM64 Encoding..."
+                                        let codeFileOffset =
+                                            match os with
+                                            | Platform.Linux -> 64 + 56
+                                            | Platform.MacOS ->
+                                                let headerSize = 32
+                                                let pageZeroCommandSize = 72
+                                                let numTextSections = if mergedStrings.Strings.IsEmpty then 1 else 2
+                                                let textSegmentCommandSize = 72 + (80 * numTextSections)
+                                                let linkeditSegmentCommandSize = 72
+                                                let dylinkerCommandSize = 32
+                                                let dylibCommandSize = 56
+                                                let symtabCommandSize = 24
+                                                let dysymtabCommandSize = 80
+                                                let uuidCommandSize = 24
+                                                let buildVersionCommandSize = 24
+                                                let mainCommandSize = 24
+                                                let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + dylibCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
+                                                (headerSize + commandsSize + 200 + 7) &&& (~~~7)
+                                        let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions mergedStrings mergedFloats codeFileOffset
+
+                                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime
+                                        if verbosity >= 2 then
+                                            let t = System.Math.Round(encodeTime, 1)
+                                            println $"        {t}ms"
+
+                                        // Pass 8: Binary Generation
+                                        let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
+                                        if verbosity >= 1 then println $"  [7/7] Binary Generation ({formatName})..."
+                                        let binary =
+                                            match os with
+                                            | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode mergedStrings mergedFloats
+                                            | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode mergedStrings mergedFloats
+                                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
+                                        if verbosity >= 2 then
+                                            let t = System.Math.Round(binaryTime, 1)
+                                            println $"        {t}ms"
+
+                                        sw.Stop()
+                                        if verbosity >= 1 then
+                                            println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
+
+                                        { Binary = binary
+                                          Success = true
+                                          ErrorMessage = None }
+                    with
+                    | ex ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"Compilation failed: {ex.Message}" }
+
+                /// Compile preamble with stdlib as base, returning extended context for test compilation
+                /// Preamble functions go through the full pipeline (parse → typecheck → mono → inline → lift → ANF → RC → TCO)
+                /// The result is cached and reused for all tests in the same file
 let compilePreamble (stdlib: StdlibResult) (preamble: string) (sourceFile: string) (funcLineMap: Map<string, int>) : Result<PreambleContext, string> =
     // Handle empty preamble - return a context that just wraps stdlib
     if String.IsNullOrWhiteSpace(preamble) then
@@ -1330,6 +1329,8 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                     // Pass 2.3: ANF Optimization (only non-cached functions)
                     if verbosity >= 1 then println "  [2.3/8] ANF Optimization..."
                     let testProgram = ANF.Program (functionsToCompile, testOnly.MainExpr)
+                    if shouldDumpIR verbosity options.DumpANF then
+                        printANFProgram "=== ANF (before optimization) ===" testProgram
                     let anfOptimized =
                         if options.DisableANFOpt then testProgram
                         else ANF_Optimize.optimizeProgram testProgram
@@ -1337,6 +1338,8 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                     if verbosity >= 2 then
                         let t = System.Math.Round(anfOptTime, 1)
                         println $"        {t}ms"
+                    if shouldDumpIR verbosity options.DumpANF then
+                        printANFProgram "=== ANF (after optimization) ===" anfOptimized
 
                     // Pass 2.4: ANF Inlining (test expr only)
                     if verbosity >= 1 then println "  [2.4/8] ANF Inlining..."
@@ -1372,251 +1375,263 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                           Success = false
                           ErrorMessage = Some $"Reference count insertion error: {err}" }
                     | Ok (testAnfAfterRC, testTypeMap) ->
+                        if shouldDumpIR verbosity options.DumpANF then
+                            printANFProgram "=== ANF (after RC insertion) ===" testAnfAfterRC
 
-                    // Pass 2.7: Tail Call Detection (test expr only)
-                    if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
-                    let testAnfAfterTCO =
-                        if options.DisableTCO then testAnfAfterRC
-                        else TailCallDetection.detectTailCallsInProgram testAnfAfterRC
-                    let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(tcoTime, 1)
-                        println $"        {t}ms"
+                        // Pass 2.7: Tail Call Detection (test expr only)
+                        if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
+                        let testAnfAfterTCO =
+                            if options.DisableTCO then testAnfAfterRC
+                            else TailCallDetection.detectTailCallsInProgram testAnfAfterRC
+                        let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime
+                        if verbosity >= 2 then
+                            let t = System.Math.Round(tcoTime, 1)
+                            println $"        {t}ms"
+                        if shouldDumpIR verbosity options.DumpANF then
+                            printANFProgram "=== ANF (after Tail Call Detection) ===" testAnfAfterTCO
 
-                    // Merge preamble's ANF functions with test expr's ANF
-                    let (ANF.Program (testFunctions, testMainExpr)) = testAnfAfterTCO
-                    let mergedFunctions = preambleCtx.ANFFunctions @ testFunctions
-                    let mergedTypeMap = Map.fold (fun acc k v -> Map.add k v acc) preambleCtx.TypeMap testTypeMap
+                        // Merge preamble's ANF functions with test expr's ANF
+                        let (ANF.Program (testFunctions, testMainExpr)) = testAnfAfterTCO
+                        let mergedFunctions = preambleCtx.ANFFunctions @ testFunctions
+                        let mergedTypeMap = Map.fold (fun acc k v -> Map.add k v acc) preambleCtx.TypeMap testTypeMap
 
-                    // Pass 2.8: Print Insertion (on merged program)
-                    if verbosity >= 1 then println "  [2.8/8] Print Insertion..."
-                    let mergedAnfProgram = PrintInsertion.insertPrint mergedFunctions testMainExpr programType
-                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - tcoTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(printTime, 1)
-                        println $"        {t}ms"
+                        // Pass 2.8: Print Insertion (on merged program)
+                        if verbosity >= 1 then println "  [2.8/8] Print Insertion..."
+                        let mergedAnfProgram = PrintInsertion.insertPrint mergedFunctions testMainExpr programType
+                        let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - tcoTime
+                        if verbosity >= 2 then
+                            let t = System.Math.Round(printTime, 1)
+                            println $"        {t}ms"
+                        if shouldDumpIR verbosity options.DumpANF then
+                            printANFProgram "=== ANF (after Print insertion) ===" mergedAnfProgram
 
-                    // Pass 3: ANF → MIR (merged program)
-                    // Use FuncReg to get return types for all callable functions (including stdlib and cached)
-                    if verbosity >= 1 then println "  [3/8] ANF → MIR..."
-                    let allReturnTypes = extractReturnTypes testOnly.FuncReg
-                    let userMirResult = ANF_to_MIR.toMIR mergedAnfProgram mergedTypeMap testOnly.FuncParams programType testConvResult.VariantLookup testConvResult.TypeReg options.EnableCoverage allReturnTypes
+                        // Pass 3: ANF → MIR (merged program)
+                        // Use FuncReg to get return types for all callable functions (including stdlib and cached)
+                        if verbosity >= 1 then println "  [3/8] ANF → MIR..."
+                        let allReturnTypes = extractReturnTypes testOnly.FuncReg
+                        let userMirResult = ANF_to_MIR.toMIR mergedAnfProgram mergedTypeMap testOnly.FuncParams programType testConvResult.VariantLookup testConvResult.TypeReg options.EnableCoverage allReturnTypes
 
-                    match userMirResult with
-                    | Error err ->
-                        { Binary = Array.empty
-                          Success = false
-                          ErrorMessage = Some $"MIR conversion error: {err}" }
-                    | Ok userMirProgram ->
-
-                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(mirTime, 1)
-                        println $"        {t}ms"
-
-                    // Pass 3.1: SSA Construction
-                    if verbosity >= 1 then println "  [3.1/8] SSA Construction..."
-                    let userSsaProgram = SSA_Construction.convertToSSA userMirProgram
-                    let ssaTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(ssaTime, 1)
-                        println $"        {t}ms"
-
-                    // Pass 3.5: MIR Optimizations
-                    if verbosity >= 1 then println "  [3.5/8] MIR Optimizations..."
-                    let userOptimizedProgram =
-                        if options.DisableMIROpt then userSsaProgram
-                        else MIR_Optimize.optimizeProgram userSsaProgram
-                    let mirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - ssaTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(mirOptTime, 1)
-                        println $"        {t}ms"
-
-                    // Pass 4: MIR → LIR
-                    if verbosity >= 1 then println "  [4/8] MIR → LIR..."
-                    let userLirResult = MIR_to_LIR.toLIR userOptimizedProgram
-
-                    match userLirResult with
-                    | Error err ->
-                        { Binary = Array.empty
-                          Success = false
-                          ErrorMessage = Some $"LIR conversion error: {err}" }
-                    | Ok userLirProgram ->
-
-                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(lirTime, 1)
-                        println $"        {t}ms"
-
-                    // Pass 4.5: LIR Optimizations (peephole)
-                    if verbosity >= 1 then println "  [4.5/8] LIR Optimizations..."
-                    let userOptimizedLirProgram =
-                        if options.DisableLIROpt then userLirProgram
-                        else LIR_Optimize.optimizeProgram userLirProgram
-
-                    let lirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(lirOptTime, 1)
-                        println $"        {t}ms"
-
-                    // Pass 5: Register Allocation
-                    if verbosity >= 1 then println "  [5/8] Register Allocation..."
-                    let (LIR.Program (userFuncs, userStrings, userFloats)) = userOptimizedLirProgram
-                    let (LIR.Program (_, stdlibStrings, stdlibFloats)) = stdlib.LIRProgram
-
-                    // Allocate user functions
-                    let allocatedUserFuncs = userFuncs |> List.map RegisterAllocation.allocateRegisters
-
-                    // Merge pools (stdlib first, user appended with offset)
-                    let stringOffset = stdlibStrings.NextId
-                    let floatOffset = stdlibFloats.NextId
-                    let mergedStrings = ANF_to_MIR.appendStringPools stdlibStrings userStrings
-                    let mergedFloats = ANF_to_MIR.appendFloatPools stdlibFloats userFloats
-
-                    // Offset pool refs in allocated user functions
-                    let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
-
-                    // LIR comparison code disabled since caching is disabled
-                    // TODO: Re-enable when caching bug is fixed
-
-                    // Cache newly-compiled specialized functions BEFORE offset adjustment.
-                    // We cache un-offset functions so they can be re-offset correctly when
-                    // retrieved in different test contexts (each test has different user pools).
-                    for func in allocatedUserFuncs do
-                        if Set.contains func.Name specializedNeedingCache then
-                            let entry : CachedUserFunction = {
-                                LIRFunction = func  // UN-OFFSET version
-                                Strings = []
-                                Floats = []
-                            }
-                            let added = stdlib.CompiledFuncCache.TryAdd(func.Name, entry)
-                            if verbosity >= 3 then
-                                let blockCount = func.CFG.Blocks.Count
-                                let instrCount = func.CFG.Blocks |> Map.toList |> List.sumBy (fun (_, b) -> b.Instrs.Length)
-                                println $"  [CACHE STORE] {func.Name}: {blockCount} blocks, {instrCount} instrs, added={added}"
-
-                    // Retrieve cached specialized functions and apply current test's offsets
-                    let cachedSpecializedFuncs =
-                        cachedFuncNames
-                        |> List.choose (fun name ->
-                            match stdlib.CompiledFuncCache.TryGetValue(name) with
-                            | true, cached ->
-                                // Apply current test's pool offsets to cached function
-                                let func = MIR_to_LIR.offsetLIRFunction stringOffset floatOffset cached.LIRFunction
-                                if verbosity >= 3 then
-                                    let blockCount = func.CFG.Blocks.Count
-                                    let instrCount = func.CFG.Blocks |> Map.toList |> List.sumBy (fun (_, b) -> b.Instrs.Length)
-                                    println $"  [CACHE HIT] {name}: {blockCount} blocks, {instrCount} instrs"
-                                Some func
-                            | false, _ -> None)
-
-                    // Combine newly-compiled and cached user functions
-                    let allUserFuncs = cachedSpecializedFuncs @ offsetUserFuncs
-
-                    if verbosity >= 3 then
-                        println $"  [COMBINED] cached: {cachedSpecializedFuncs.Length}, fresh: {offsetUserFuncs.Length}, total: {allUserFuncs.Length}"
-                        for f in allUserFuncs do
-                            println $"    - {f.Name}"
-
-                    // Filter stdlib functions to only include reachable ones (dead code elimination)
-                    let reachableStdlib =
-                        if options.DisableDCE then stdlib.AllocatedFunctions
-                        else
-                            DeadCodeElimination.filterFunctions
-                                stdlib.StdlibCallGraph
-                                allUserFuncs
-                                stdlib.AllocatedFunctions
-
-                    // Combine reachable stdlib functions with user functions
-                    let allFuncs = reachableStdlib @ allUserFuncs
-                    let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
-
-                    let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(allocTime, 1)
-                        println $"        {t}ms"
-
-                    // Pass 6: Code Generation
-                    if verbosity >= 1 then println "  [6/8] Code Generation..."
-                    let coverageExprCount = if options.EnableCoverage then LIR.countCoverageHits allocatedProgram else 0
-                    let codegenOptions : CodeGen.CodeGenOptions = {
-                        DisableFreeList = options.DisableFreeList
-                        EnableCoverage = options.EnableCoverage
-                        CoverageExprCount = coverageExprCount
-                    }
-                    let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
-                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(codegenTime, 1)
-                        println $"        {t}ms"
-
-                    match codegenResult with
-                    | Error err ->
-                        { Binary = Array.empty
-                          Success = false
-                          ErrorMessage = Some $"Code generation error: {err}" }
-                    | Ok arm64Instructions ->
-                        let osResult = Platform.detectOS ()
-                        match osResult with
+                        match userMirResult with
                         | Error err ->
                             { Binary = Array.empty
                               Success = false
-                              ErrorMessage = Some $"Platform detection error: {err}" }
-                        | Ok os ->
+                              ErrorMessage = Some $"MIR conversion error: {err}" }
+                        | Ok userMirProgram ->
+                            if shouldDumpIR verbosity options.DumpMIR then
+                                printMIRProgram "=== MIR (Control Flow Graph) ===" userMirProgram
 
-                        // Pass 7: ARM64 Encoding
-                        if verbosity >= 1 then println "  [7/7] ARM64 Encoding..."
-                        let codeFileOffset =
-                            match os with
-                            | Platform.Linux -> 64 + 56
-                            | Platform.MacOS ->
-                                let headerSize = 32
-                                let pageZeroCommandSize = 72
-                                let numTextSections = if mergedStrings.Strings.IsEmpty then 1 else 2
-                                let textSegmentCommandSize = 72 + (80 * numTextSections)
-                                let linkeditSegmentCommandSize = 72
-                                let dylinkerCommandSize = 32
-                                let dylibCommandSize = 56
-                                let symtabCommandSize = 24
-                                let dysymtabCommandSize = 80
-                                let uuidCommandSize = 24
-                                let buildVersionCommandSize = 24
-                                let mainCommandSize = 24
-                                let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + dylibCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
-                                (headerSize + commandsSize + 200 + 7) &&& (~~~7)
-                        let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions mergedStrings mergedFloats codeFileOffset
+                            let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime
+                            if verbosity >= 2 then
+                                let t = System.Math.Round(mirTime, 1)
+                                println $"        {t}ms"
 
-                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime
-                        if verbosity >= 2 then
-                            let t = System.Math.Round(encodeTime, 1)
-                            println $"        {t}ms"
+                            // Pass 3.1: SSA Construction
+                            if verbosity >= 1 then println "  [3.1/8] SSA Construction..."
+                            let userSsaProgram = SSA_Construction.convertToSSA userMirProgram
+                            let ssaTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime
+                            if verbosity >= 2 then
+                                let t = System.Math.Round(ssaTime, 1)
+                                println $"        {t}ms"
 
-                        // Pass 8: Binary Generation
-                        let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
-                        if verbosity >= 1 then println $"  [7/7] Binary Generation ({formatName})..."
-                        let binary =
-                            match os with
-                            | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode mergedStrings mergedFloats
-                            | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode mergedStrings mergedFloats
-                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
-                        if verbosity >= 2 then
-                            let t = System.Math.Round(binaryTime, 1)
-                            println $"        {t}ms"
+                            // Pass 3.5: MIR Optimizations
+                            if verbosity >= 1 then println "  [3.5/8] MIR Optimizations..."
+                            let userOptimizedProgram =
+                                if options.DisableMIROpt then userSsaProgram
+                                else MIR_Optimize.optimizeProgram userSsaProgram
+                            let mirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - ssaTime
+                            if verbosity >= 2 then
+                                let t = System.Math.Round(mirOptTime, 1)
+                                println $"        {t}ms"
 
-                        sw.Stop()
-                        if verbosity >= 1 then
-                            println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
+                            // Pass 4: MIR → LIR
+                            if verbosity >= 1 then println "  [4/8] MIR → LIR..."
+                            let userLirResult = MIR_to_LIR.toLIR userOptimizedProgram
 
-                        { Binary = binary
-                          Success = true
-                          ErrorMessage = None }
-    with
-    | ex ->
-        { Binary = Array.empty
-          Success = false
-          ErrorMessage = Some $"Compilation failed: {ex.Message}" }
+                            match userLirResult with
+                            | Error err ->
+                                { Binary = Array.empty
+                                  Success = false
+                                  ErrorMessage = Some $"LIR conversion error: {err}" }
+                            | Ok userLirProgram ->
+                                if shouldDumpIR verbosity options.DumpLIR then
+                                    printLIRProgram "=== LIR (Low-level IR with CFG) ===" userLirProgram
 
-/// Compile a single MIR function to LIR (used by cache factory)
+                                let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime
+                                if verbosity >= 2 then
+                                    let t = System.Math.Round(lirTime, 1)
+                                    println $"        {t}ms"
+
+                                // Pass 4.5: LIR Optimizations (peephole)
+                                if verbosity >= 1 then println "  [4.5/8] LIR Optimizations..."
+                                let userOptimizedLirProgram =
+                                    if options.DisableLIROpt then userLirProgram
+                                    else LIR_Optimize.optimizeProgram userLirProgram
+
+                                let lirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
+                                if verbosity >= 2 then
+                                    let t = System.Math.Round(lirOptTime, 1)
+                                    println $"        {t}ms"
+
+                                // Pass 5: Register Allocation
+                                if verbosity >= 1 then println "  [5/8] Register Allocation..."
+                                let (LIR.Program (userFuncs, userStrings, userFloats)) = userOptimizedLirProgram
+                                let (LIR.Program (_, stdlibStrings, stdlibFloats)) = stdlib.LIRProgram
+
+                                // Allocate user functions
+                                let allocatedUserFuncs = userFuncs |> List.map RegisterAllocation.allocateRegisters
+
+                                // Merge pools (stdlib first, user appended with offset)
+                                let stringOffset = stdlibStrings.NextId
+                                let floatOffset = stdlibFloats.NextId
+                                let mergedStrings = ANF_to_MIR.appendStringPools stdlibStrings userStrings
+                                let mergedFloats = ANF_to_MIR.appendFloatPools stdlibFloats userFloats
+
+                                // Offset pool refs in allocated user functions
+                                let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
+
+                                // LIR comparison code disabled since caching is disabled
+                                // TODO: Re-enable when caching bug is fixed
+
+                                // Cache newly-compiled specialized functions BEFORE offset adjustment.
+                                // We cache un-offset functions so they can be re-offset correctly when
+                                // retrieved in different test contexts (each test has different user pools).
+                                for func in allocatedUserFuncs do
+                                    if Set.contains func.Name specializedNeedingCache then
+                                        let entry : CachedUserFunction = {
+                                            LIRFunction = func  // UN-OFFSET version
+                                            Strings = []
+                                            Floats = []
+                                        }
+                                        let added = stdlib.CompiledFuncCache.TryAdd(func.Name, entry)
+                                        if verbosity >= 3 then
+                                            let blockCount = func.CFG.Blocks.Count
+                                            let instrCount = func.CFG.Blocks |> Map.toList |> List.sumBy (fun (_, b) -> b.Instrs.Length)
+                                            println $"  [CACHE STORE] {func.Name}: {blockCount} blocks, {instrCount} instrs, added={added}"
+
+                                // Retrieve cached specialized functions and apply current test's offsets
+                                let cachedSpecializedFuncs =
+                                    cachedFuncNames
+                                    |> List.choose (fun name ->
+                                        match stdlib.CompiledFuncCache.TryGetValue(name) with
+                                        | true, cached ->
+                                            // Apply current test's pool offsets to cached function
+                                            let func = MIR_to_LIR.offsetLIRFunction stringOffset floatOffset cached.LIRFunction
+                                            if verbosity >= 3 then
+                                                let blockCount = func.CFG.Blocks.Count
+                                                let instrCount = func.CFG.Blocks |> Map.toList |> List.sumBy (fun (_, b) -> b.Instrs.Length)
+                                                println $"  [CACHE HIT] {name}: {blockCount} blocks, {instrCount} instrs"
+                                            Some func
+                                        | false, _ -> None)
+
+                                // Combine newly-compiled and cached user functions
+                                let allUserFuncs = cachedSpecializedFuncs @ offsetUserFuncs
+
+                                if verbosity >= 3 then
+                                    println $"  [COMBINED] cached: {cachedSpecializedFuncs.Length}, fresh: {offsetUserFuncs.Length}, total: {allUserFuncs.Length}"
+                                    for f in allUserFuncs do
+                                        println $"    - {f.Name}"
+
+                                // Filter stdlib functions to only include reachable ones (dead code elimination)
+                                let reachableStdlib =
+                                    if options.DisableDCE then stdlib.AllocatedFunctions
+                                    else
+                                        DeadCodeElimination.filterFunctions
+                                            stdlib.StdlibCallGraph
+                                            allUserFuncs
+                                            stdlib.AllocatedFunctions
+
+                                // Combine reachable stdlib functions with user functions
+                                let allFuncs = reachableStdlib @ allUserFuncs
+                                let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
+                                if shouldDumpIR verbosity options.DumpLIR then
+                                    printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
+
+                                let allocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
+                                if verbosity >= 2 then
+                                    let t = System.Math.Round(allocTime, 1)
+                                    println $"        {t}ms"
+
+                                // Pass 6: Code Generation
+                                if verbosity >= 1 then println "  [6/8] Code Generation..."
+                                let coverageExprCount = if options.EnableCoverage then LIR.countCoverageHits allocatedProgram else 0
+                                let codegenOptions : CodeGen.CodeGenOptions = {
+                                    DisableFreeList = options.DisableFreeList
+                                    EnableCoverage = options.EnableCoverage
+                                    CoverageExprCount = coverageExprCount
+                                }
+                                let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
+                                let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime
+                                if verbosity >= 2 then
+                                    let t = System.Math.Round(codegenTime, 1)
+                                    println $"        {t}ms"
+
+                                match codegenResult with
+                                | Error err ->
+                                    { Binary = Array.empty
+                                      Success = false
+                                      ErrorMessage = Some $"Code generation error: {err}" }
+                                | Ok arm64Instructions ->
+                                    let osResult = Platform.detectOS ()
+                                    match osResult with
+                                    | Error err ->
+                                        { Binary = Array.empty
+                                          Success = false
+                                          ErrorMessage = Some $"Platform detection error: {err}" }
+                                    | Ok os ->
+
+                                        // Pass 7: ARM64 Encoding
+                                        if verbosity >= 1 then println "  [7/7] ARM64 Encoding..."
+                                        let codeFileOffset =
+                                            match os with
+                                            | Platform.Linux -> 64 + 56
+                                            | Platform.MacOS ->
+                                                let headerSize = 32
+                                                let pageZeroCommandSize = 72
+                                                let numTextSections = if mergedStrings.Strings.IsEmpty then 1 else 2
+                                                let textSegmentCommandSize = 72 + (80 * numTextSections)
+                                                let linkeditSegmentCommandSize = 72
+                                                let dylinkerCommandSize = 32
+                                                let dylibCommandSize = 56
+                                                let symtabCommandSize = 24
+                                                let dysymtabCommandSize = 80
+                                                let uuidCommandSize = 24
+                                                let buildVersionCommandSize = 24
+                                                let mainCommandSize = 24
+                                                let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + dylibCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
+                                                (headerSize + commandsSize + 200 + 7) &&& (~~~7)
+                                        let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions mergedStrings mergedFloats codeFileOffset
+
+                                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime
+                                        if verbosity >= 2 then
+                                            let t = System.Math.Round(encodeTime, 1)
+                                            println $"        {t}ms"
+
+                                        // Pass 8: Binary Generation
+                                        let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
+                                        if verbosity >= 1 then println $"  [7/7] Binary Generation ({formatName})..."
+                                        let binary =
+                                            match os with
+                                            | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode mergedStrings mergedFloats
+                                            | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode mergedStrings mergedFloats
+                                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - allocTime - codegenTime - encodeTime
+                                        if verbosity >= 2 then
+                                            let t = System.Math.Round(binaryTime, 1)
+                                            println $"        {t}ms"
+
+                                        sw.Stop()
+                                        if verbosity >= 1 then
+                                            println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
+
+                                        { Binary = binary
+                                          Success = true
+                                          ErrorMessage = None }
+                    with
+                    | ex ->
+                        { Binary = Array.empty
+                          Success = false
+                          ErrorMessage = Some $"Compilation failed: {ex.Message}" }
+
+                /// Compile a single MIR function to LIR (used by cache factory)
 let private compileMIRToLIR (stdlib: LazyStdlibResult) (mirFunc: MIR.Function) : LIR.Function option =
     // Create a mini MIR program with just this function
     let miniProgram = MIR.Program ([mirFunc], stdlib.StdlibStringPool, stdlib.StdlibFloatPool, Map.empty, Map.empty)
@@ -1715,6 +1730,8 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                     // Pass 2.3: ANF Optimization (user code only)
                     if verbosity >= 1 then println "  [2.3/8] ANF Optimization..."
                     let userProgram = ANF.Program (userOnly.UserFunctions, userOnly.MainExpr)
+                    if shouldDumpIR verbosity options.DumpANF then
+                        printANFProgram "=== ANF (before optimization) ===" userProgram
                     let anfOptimized =
                         if options.DisableANFOpt then userProgram
                         else ANF_Optimize.optimizeProgram userProgram
@@ -1722,6 +1739,8 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                     if verbosity >= 2 then
                         let t = System.Math.Round(anfOptTime, 1)
                         println $"        {t}ms"
+                    if shouldDumpIR verbosity options.DumpANF then
+                        printANFProgram "=== ANF (after optimization) ===" anfOptimized
 
                     // Pass 2.4: ANF Inlining (optional)
                     if verbosity >= 1 then println "  [2.4/8] ANF Inlining..."
@@ -1757,208 +1776,220 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                           Success = false
                           ErrorMessage = Some $"Reference count insertion error: {err}" }
                     | Ok (userAnfAfterRC, typeMap) ->
+                        if shouldDumpIR verbosity options.DumpANF then
+                            printANFProgram "=== ANF (after RC insertion) ===" userAnfAfterRC
 
-                    // Pass 2.7: Tail Call Detection
-                    if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
-                    let userAnfAfterTCO =
-                        if options.DisableTCO then userAnfAfterRC
-                        else TailCallDetection.detectTailCallsInProgram userAnfAfterRC
-                    let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(tcoTime, 1)
-                        println $"        {t}ms"
+                        // Pass 2.7: Tail Call Detection
+                        if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
+                        let userAnfAfterTCO =
+                            if options.DisableTCO then userAnfAfterRC
+                            else TailCallDetection.detectTailCallsInProgram userAnfAfterRC
+                        let tcoTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime
+                        if verbosity >= 2 then
+                            let t = System.Math.Round(tcoTime, 1)
+                            println $"        {t}ms"
+                        if shouldDumpIR verbosity options.DumpANF then
+                            printANFProgram "=== ANF (after Tail Call Detection) ===" userAnfAfterTCO
 
-                    // Pass 2.8: Print Insertion (user code only)
-                    if verbosity >= 1 then println "  [2.8/8] Print Insertion..."
-                    let (ANF.Program (userFunctions, userMainExpr)) = userAnfAfterTCO
-                    let userAnfProgram = PrintInsertion.insertPrint userFunctions userMainExpr programType
-                    let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - tcoTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(printTime, 1)
-                        println $"        {t}ms"
+                        // Pass 2.8: Print Insertion (user code only)
+                        if verbosity >= 1 then println "  [2.8/8] Print Insertion..."
+                        let (ANF.Program (userFunctions, userMainExpr)) = userAnfAfterTCO
+                        let userAnfProgram = PrintInsertion.insertPrint userFunctions userMainExpr programType
+                        let printTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - tcoTime
+                        if verbosity >= 2 then
+                            let t = System.Math.Round(printTime, 1)
+                            println $"        {t}ms"
+                        if shouldDumpIR verbosity options.DumpANF then
+                            printANFProgram "=== ANF (after Print insertion) ===" userAnfProgram
 
-                    // Early DCE: Determine which stdlib functions are actually needed
-                    // Lazily compile needed functions from MIR to LIR (cached for future use)
-                    let (allocatedStdlibFuncs, stdlibLirStrings, stdlibLirFloats) =
-                        if options.DisableDCE then
-                            // Include all stdlib functions when DCE is disabled
-                            let allNames = stdlib.StdlibMIRFunctions |> Map.keys |> List.ofSeq
-                            let allFuncs = getStdlibLIRFunctions stdlib allNames
-                            (allFuncs, stdlib.StdlibStringPool, stdlib.StdlibFloatPool)
-                        else
-                            let (ANF.Program (userFuncsForDCE, userMainForDCE)) = userAnfProgram
-                            let userANFFuncs = { ANF.Name = "_start"; ANF.TypedParams = []; ANF.ReturnType = AST.TUnit; ANF.Body = userMainForDCE } :: userFuncsForDCE
-                            let reachableStdlibNames = ANFDeadCodeElimination.getReachableStdlib stdlib.StdlibANFCallGraph userANFFuncs
-                            if verbosity >= 2 then
-                                println $"        DCE: {reachableStdlibNames.Count} stdlib functions needed"
-                            // Lazily compile needed LIR functions (from MIR, cached for future use)
-                            let reachableFuncs = getStdlibLIRFunctions stdlib (Set.toList reachableStdlibNames)
-                            (reachableFuncs, stdlib.StdlibStringPool, stdlib.StdlibFloatPool)
+                        // Early DCE: Determine which stdlib functions are actually needed
+                        // Lazily compile needed functions from MIR to LIR (cached for future use)
+                        let (allocatedStdlibFuncs, stdlibLirStrings, stdlibLirFloats) =
+                            if options.DisableDCE then
+                                // Include all stdlib functions when DCE is disabled
+                                let allNames = stdlib.StdlibMIRFunctions |> Map.keys |> List.ofSeq
+                                let allFuncs = getStdlibLIRFunctions stdlib allNames
+                                (allFuncs, stdlib.StdlibStringPool, stdlib.StdlibFloatPool)
+                            else
+                                let (ANF.Program (userFuncsForDCE, userMainForDCE)) = userAnfProgram
+                                let userANFFuncs = { ANF.Name = "_start"; ANF.TypedParams = []; ANF.ReturnType = AST.TUnit; ANF.Body = userMainForDCE } :: userFuncsForDCE
+                                let reachableStdlibNames = ANFDeadCodeElimination.getReachableStdlib stdlib.StdlibANFCallGraph userANFFuncs
+                                if verbosity >= 2 then
+                                    println $"        DCE: {reachableStdlibNames.Count} stdlib functions needed"
+                                // Lazily compile needed LIR functions (from MIR, cached for future use)
+                                let reachableFuncs = getStdlibLIRFunctions stdlib (Set.toList reachableStdlibNames)
+                                (reachableFuncs, stdlib.StdlibStringPool, stdlib.StdlibFloatPool)
 
-                    // Pass 3: ANF → MIR (user code only)
-                    if verbosity >= 1 then println "  [3/8] ANF → MIR (user only)..."
-                    // Use FuncParams for correct float param handling, VariantLookup for enum printing, TypeReg for record printing
-                    // typeMap contains TempId -> Type mappings from RC insertion
-                    let externalReturnTypes = extractReturnTypes userOnly.FuncReg
-                    let userMirResult = ANF_to_MIR.toMIR userAnfProgram typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg options.EnableCoverage externalReturnTypes
-                    let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(mirTime, 1)
-                        println $"        {t}ms"
+                        // Pass 3: ANF → MIR (user code only)
+                        if verbosity >= 1 then println "  [3/8] ANF → MIR (user only)..."
+                        // Use FuncParams for correct float param handling, VariantLookup for enum printing, TypeReg for record printing
+                        // typeMap contains TempId -> Type mappings from RC insertion
+                        let externalReturnTypes = extractReturnTypes userOnly.FuncReg
+                        let userMirResult = ANF_to_MIR.toMIR userAnfProgram typeMap userOnly.FuncParams programType userConvResult.VariantLookup userConvResult.TypeReg options.EnableCoverage externalReturnTypes
+                        let mirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime
+                        if verbosity >= 2 then
+                            let t = System.Math.Round(mirTime, 1)
+                            println $"        {t}ms"
 
-                    match userMirResult with
-                    | Error err ->
-                        { Binary = Array.empty
-                          Success = false
-                          ErrorMessage = Some $"MIR conversion error: {err}" }
-                    | Ok userMirProgram ->
+                        match userMirResult with
+                        | Error err ->
+                            { Binary = Array.empty
+                              Success = false
+                              ErrorMessage = Some $"MIR conversion error: {err}" }
+                        | Ok userMirProgram ->
+                            if shouldDumpIR verbosity options.DumpMIR then
+                                printMIRProgram "=== MIR (Control Flow Graph) ===" userMirProgram
 
-                    // Pass 3.1: SSA Construction (user code only)
-                    if verbosity >= 1 then println "  [3.1/8] SSA Construction (user only)..."
-                    let userSsaProgram = SSA_Construction.convertToSSA userMirProgram
+                            // Pass 3.1: SSA Construction (user code only)
+                            if verbosity >= 1 then println "  [3.1/8] SSA Construction (user only)..."
+                            let userSsaProgram = SSA_Construction.convertToSSA userMirProgram
 
-                    // Pass 3.5: MIR Optimizations (user code only)
-                    if verbosity >= 1 then println "  [3.5/8] MIR Optimizations (user only)..."
-                    let userOptimizedProgram =
-                        if options.DisableMIROpt then userSsaProgram
-                        else MIR_Optimize.optimizeProgram userSsaProgram
+                            // Pass 3.5: MIR Optimizations (user code only)
+                            if verbosity >= 1 then println "  [3.5/8] MIR Optimizations (user only)..."
+                            let userOptimizedProgram =
+                                if options.DisableMIROpt then userSsaProgram
+                                else MIR_Optimize.optimizeProgram userSsaProgram
 
-                    // Pass 3.9 (SSA Destruction) removed - phi resolution handled in RegisterAllocation
+                            // Pass 3.9 (SSA Destruction) removed - phi resolution handled in RegisterAllocation
 
-                    // Pass 4: MIR → LIR (user code only, phi nodes flow through)
-                    if verbosity >= 1 then println "  [4/8] MIR → LIR (user only)..."
-                    let userLirResult = MIR_to_LIR.toLIR userOptimizedProgram
+                            // Pass 4: MIR → LIR (user code only, phi nodes flow through)
+                            if verbosity >= 1 then println "  [4/8] MIR → LIR (user only)..."
+                            let userLirResult = MIR_to_LIR.toLIR userOptimizedProgram
 
-                    match userLirResult with
-                    | Error err ->
-                        { Binary = Array.empty
-                          Success = false
-                          ErrorMessage = Some $"LIR conversion error: {err}" }
-                    | Ok userLirProgram ->
+                            match userLirResult with
+                            | Error err ->
+                                { Binary = Array.empty
+                                  Success = false
+                                  ErrorMessage = Some $"LIR conversion error: {err}" }
+                            | Ok userLirProgram ->
+                                if shouldDumpIR verbosity options.DumpLIR then
+                                    printLIRProgram "=== LIR (Low-level IR with CFG) ===" userLirProgram
 
-                    let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(lirTime, 1)
-                        println $"        {t}ms"
+                                let lirTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime
+                                if verbosity >= 2 then
+                                    let t = System.Math.Round(lirTime, 1)
+                                    println $"        {t}ms"
 
-                    // Pass 4.5: LIR Optimizations (peephole - user code)
-                    if verbosity >= 1 then println "  [4.5/8] LIR Optimizations (user only)..."
-                    let userOptimizedLirProgram =
-                        if options.DisableLIROpt then userLirProgram
-                        else LIR_Optimize.optimizeProgram userLirProgram
+                                // Pass 4.5: LIR Optimizations (peephole - user code)
+                                if verbosity >= 1 then println "  [4.5/8] LIR Optimizations (user only)..."
+                                let userOptimizedLirProgram =
+                                    if options.DisableLIROpt then userLirProgram
+                                    else LIR_Optimize.optimizeProgram userLirProgram
 
-                    let lirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(lirOptTime, 1)
-                        println $"        {t}ms"
+                                let lirOptTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
+                                if verbosity >= 2 then
+                                    let t = System.Math.Round(lirOptTime, 1)
+                                    println $"        {t}ms"
 
-                    // Pass 5: Register Allocation (user functions)
-                    if verbosity >= 1 then println "  [5/8] Register Allocation..."
-                    let (LIR.Program (userFuncs, userStrings, userFloats)) = userOptimizedLirProgram
+                                // Pass 5: Register Allocation (user functions)
+                                if verbosity >= 1 then println "  [5/8] Register Allocation..."
+                                let (LIR.Program (userFuncs, userStrings, userFloats)) = userOptimizedLirProgram
 
-                    // Allocate user functions
-                    let allocatedUserFuncs = userFuncs |> List.map RegisterAllocation.allocateRegisters
+                                // Allocate user functions
+                                let allocatedUserFuncs = userFuncs |> List.map RegisterAllocation.allocateRegisters
 
-                    // Merge pools (stdlib first, user appended with offset)
-                    let stringOffset = stdlibLirStrings.NextId
-                    let floatOffset = stdlibLirFloats.NextId
-                    let mergedStrings = ANF_to_MIR.appendStringPools stdlibLirStrings userStrings
-                    let mergedFloats = ANF_to_MIR.appendFloatPools stdlibLirFloats userFloats
+                                // Merge pools (stdlib first, user appended with offset)
+                                let stringOffset = stdlibLirStrings.NextId
+                                let floatOffset = stdlibLirFloats.NextId
+                                let mergedStrings = ANF_to_MIR.appendStringPools stdlibLirStrings userStrings
+                                let mergedFloats = ANF_to_MIR.appendFloatPools stdlibLirFloats userFloats
 
-                    // Offset pool refs in allocated user functions
-                    let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
+                                // Offset pool refs in allocated user functions
+                                let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
 
-                    // Combine stdlib + user functions
-                    let allFuncs = allocatedStdlibFuncs @ offsetUserFuncs
-                    let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
+                                // Combine stdlib + user functions
+                                let allFuncs = allocatedStdlibFuncs @ offsetUserFuncs
+                                let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
+                                if shouldDumpIR verbosity options.DumpLIR then
+                                    printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
 
-                    let regAllocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(regAllocTime, 1)
-                        println $"        {t}ms"
+                                let regAllocTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime
+                                if verbosity >= 2 then
+                                    let t = System.Math.Round(regAllocTime, 1)
+                                    println $"        {t}ms"
 
-                    // Pass 6: Code Generation
-                    if verbosity >= 1 then println "  [6/8] Code Generation..."
-                    let coverageExprCount = if options.EnableCoverage then LIR.countCoverageHits allocatedProgram else 0
-                    let codegenOptions : CodeGen.CodeGenOptions = {
-                        DisableFreeList = options.DisableFreeList
-                        EnableCoverage = options.EnableCoverage
-                        CoverageExprCount = coverageExprCount
-                    }
-                    let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
-                    let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - regAllocTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(codegenTime, 1)
-                        println $"        {t}ms"
+                                // Pass 6: Code Generation
+                                if verbosity >= 1 then println "  [6/8] Code Generation..."
+                                let coverageExprCount = if options.EnableCoverage then LIR.countCoverageHits allocatedProgram else 0
+                                let codegenOptions : CodeGen.CodeGenOptions = {
+                                    DisableFreeList = options.DisableFreeList
+                                    EnableCoverage = options.EnableCoverage
+                                    CoverageExprCount = coverageExprCount
+                                }
+                                let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
+                                let codegenTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - regAllocTime
+                                if verbosity >= 2 then
+                                    let t = System.Math.Round(codegenTime, 1)
+                                    println $"        {t}ms"
 
-                    match codegenResult with
-                    | Error err ->
-                        { Binary = Array.empty
-                          Success = false
-                          ErrorMessage = Some $"Code generation error: {err}" }
-                    | Ok arm64Instructions ->
+                                match codegenResult with
+                                | Error err ->
+                                    { Binary = Array.empty
+                                      Success = false
+                                      ErrorMessage = Some $"Code generation error: {err}" }
+                                | Ok arm64Instructions ->
 
-                    let osResult = Platform.detectOS ()
-                    match osResult with
-                    | Error err ->
-                        { Binary = Array.empty
-                          Success = false
-                          ErrorMessage = Some $"Platform detection error: {err}" }
-                    | Ok os ->
+                                    let osResult = Platform.detectOS ()
+                                    match osResult with
+                                    | Error err ->
+                                        { Binary = Array.empty
+                                          Success = false
+                                          ErrorMessage = Some $"Platform detection error: {err}" }
+                                    | Ok os ->
 
-                    // Pass 7: ARM64 Encoding
-                    if verbosity >= 1 then println "  [7/7] ARM64 Encoding..."
-                    let codeFileOffset =
-                        match os with
-                        | Platform.Linux -> 64 + 56
-                        | Platform.MacOS ->
-                            let headerSize = 32
-                            let pageZeroCommandSize = 72
-                            let numTextSections = if mergedStrings.Strings.IsEmpty then 1 else 2
-                            let textSegmentCommandSize = 72 + (80 * numTextSections)
-                            let linkeditSegmentCommandSize = 72
-                            let dylinkerCommandSize = 32
-                            let dylibCommandSize = 56
-                            let symtabCommandSize = 24
-                            let dysymtabCommandSize = 80
-                            let uuidCommandSize = 24
-                            let buildVersionCommandSize = 24
-                            let mainCommandSize = 24
-                            let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + dylibCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
-                            (headerSize + commandsSize + 200 + 7) &&& (~~~7)
-                    let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions mergedStrings mergedFloats codeFileOffset
-                    let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - regAllocTime - codegenTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(encodeTime, 1)
-                        println $"        {t}ms"
+                                        // Pass 7: ARM64 Encoding
+                                        if verbosity >= 1 then println "  [7/7] ARM64 Encoding..."
+                                        let codeFileOffset =
+                                            match os with
+                                            | Platform.Linux -> 64 + 56
+                                            | Platform.MacOS ->
+                                                let headerSize = 32
+                                                let pageZeroCommandSize = 72
+                                                let numTextSections = if mergedStrings.Strings.IsEmpty then 1 else 2
+                                                let textSegmentCommandSize = 72 + (80 * numTextSections)
+                                                let linkeditSegmentCommandSize = 72
+                                                let dylinkerCommandSize = 32
+                                                let dylibCommandSize = 56
+                                                let symtabCommandSize = 24
+                                                let dysymtabCommandSize = 80
+                                                let uuidCommandSize = 24
+                                                let buildVersionCommandSize = 24
+                                                let mainCommandSize = 24
+                                                let commandsSize = pageZeroCommandSize + textSegmentCommandSize + linkeditSegmentCommandSize + dylinkerCommandSize + dylibCommandSize + symtabCommandSize + dysymtabCommandSize + uuidCommandSize + buildVersionCommandSize + mainCommandSize
+                                                (headerSize + commandsSize + 200 + 7) &&& (~~~7)
+                                        let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions mergedStrings mergedFloats codeFileOffset
+                                        let encodeTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - regAllocTime - codegenTime
+                                        if verbosity >= 2 then
+                                            let t = System.Math.Round(encodeTime, 1)
+                                            println $"        {t}ms"
 
-                    // Pass 8: Binary Generation
-                    let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
-                    if verbosity >= 1 then println $"  [7/7] Binary Generation ({formatName})..."
-                    let binary =
-                        match os with
-                        | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode mergedStrings mergedFloats
-                        | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode mergedStrings mergedFloats
-                    let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - regAllocTime - codegenTime - encodeTime
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(binaryTime, 1)
-                        println $"        {t}ms"
+                                        // Pass 8: Binary Generation
+                                        let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
+                                        if verbosity >= 1 then println $"  [7/7] Binary Generation ({formatName})..."
+                                        let binary =
+                                            match os with
+                                            | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode mergedStrings mergedFloats
+                                            | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode mergedStrings mergedFloats
+                                        let binaryTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime - anfTime - anfOptTime - rcTime - printTime - mirTime - lirTime - regAllocTime - codegenTime - encodeTime
+                                        if verbosity >= 2 then
+                                            let t = System.Math.Round(binaryTime, 1)
+                                            println $"        {t}ms"
 
-                    sw.Stop()
-                    if verbosity >= 1 then
-                        println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
+                                        sw.Stop()
+                                        if verbosity >= 1 then
+                                            println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
 
-                    { Binary = binary
-                      Success = true
-                      ErrorMessage = None }
-    with
-    | ex ->
-        { Binary = Array.empty
-          Success = false
-          ErrorMessage = Some $"Compilation failed: {ex.Message}" }
+                                        { Binary = binary
+                                          Success = true
+                                          ErrorMessage = None }
+                        with
+                        | ex ->
+                            { Binary = Array.empty
+                              Success = false
+                              ErrorMessage = Some $"Compilation failed: {ex.Message}" }
 
-/// Compile source code to binary using lazy stdlib compilation
-/// Only compiles stdlib functions that are actually called by user code
+                    /// Compile source code to binary using lazy stdlib compilation
+                    /// Only compiles stdlib functions that are actually called by user code
 let compileWithOptionsLazy (verbosity: int) (options: CompilerOptions) (source: string) : CompileResult =
     match prepareStdlibForLazyCompile() with
     | Error err ->
