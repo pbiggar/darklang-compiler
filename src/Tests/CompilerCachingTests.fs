@@ -25,6 +25,16 @@ let private countFunctionEvents (passName: string) (functionName: string) (event
 let private isVerificationEnabled () : bool =
     System.Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS") = "true"
 
+let private makeTestLirFunction (name: string) : LIR.Function =
+    let label = LIR.Label "entry"
+    let block: LIR.BasicBlock = { Label = label; Instrs = []; Terminator = LIR.Ret }
+    let cfg: LIR.CFG = { Entry = label; Blocks = Map.ofList [ (label, block) ] }
+    { Name = name
+      TypedParams = []
+      CFG = cfg
+      StackSize = 0
+      UsedCalleeSaved = [] }
+
 /// Test that specialized functions are cached after compilation
 let testSpecializedFunctionCaching () : TestResult =
     match CompilerLibrary.compileStdlib () with
@@ -51,12 +61,13 @@ let testSpecializedFunctionCaching () : TestResult =
                         else
                             let missing =
                                 userOnly.SpecializedFuncNames
-                                |> Set.filter (fun name -> not (stdlib.CompiledFuncCache.ContainsKey name))
+                                |> Set.filter (fun name ->
+                                    not (stdlib.CompiledFuncCache.ContainsKey (CompiledFunctionKey.Stdlib name)))
                             if Set.isEmpty missing then
                                 Ok ()
                             else
-                            let missingList = System.String.Join(", ", Set.toList missing)
-                            Error $"Missing cached specialized functions: {missingList}"
+                                let missingList = System.String.Join(", ", Set.toList missing)
+                                Error $"Missing cached specialized functions: {missingList}"
 
 /// Test that preamble functions are compiled once across tests in the same file
 let testPreambleFunctionCachedOnce () : TestResult =
@@ -110,6 +121,29 @@ let testPreambleFunctionCachedOnce () : TestResult =
     if not wasEnabled then
         System.Environment.SetEnvironmentVariable("TEST_PROFILE", original)
     result
+
+/// Test that the compiled function cache returns the same Lazy for a repeated key
+let testCompiledFunctionCacheIsLazy () : TestResult =
+    let cache = CompilerLibrary.createCompiledFunctionCache ()
+    let key = CompilerLibrary.CompiledFunctionKey.Stdlib "cache_lazy"
+    let entry1 : CachedUserFunction = {
+        LIRFunction = makeTestLirFunction "cache_lazy"
+        Strings = []
+        Floats = []
+    }
+    let entry2 : CachedUserFunction = {
+        LIRFunction = makeTestLirFunction "cache_lazy_alt"
+        Strings = []
+        Floats = []
+    }
+    let lazy1 =
+        CompilerLibrary.getOrAddCompiledFunctionLazy cache key (fun () -> Ok entry1)
+    let lazy2 =
+        CompilerLibrary.getOrAddCompiledFunctionLazy cache key (fun () -> Ok entry2)
+    if obj.ReferenceEquals(lazy1, lazy2) then
+        Ok ()
+    else
+        Error "Expected compiled function cache to return the same Lazy for the same key"
 
 
 let private runSpecializationCacheParallelDedup () : TestResult =
@@ -181,6 +215,7 @@ let runAll () : TestResult =
     let tests = [
         ("specialized function caching", testSpecializedFunctionCaching)
         ("preamble function caching", testPreambleFunctionCachedOnce)
+        ("compiled function cache is lazy", testCompiledFunctionCacheIsLazy)
         ("specialization cache parallel dedup", testSpecializationCacheParallelDedup)
         ("stress tests disabled by default", testStressTestsDisabledByDefault)
     ]
