@@ -25,6 +25,32 @@ type E2ETestResult = {
 let compileStdlib () : Result<CompilerLibrary.StdlibResult, string> =
     CompilerLibrary.compileStdlib()
 
+/// Precompile all distinct preambles (by file + preamble text) and populate the cache
+let precompilePreambles (stdlib: CompilerLibrary.StdlibResult) (tests: E2ETest list) : Result<unit, string> =
+    let preambleGroups = tests |> List.groupBy (fun test -> (test.SourceFile, test.Preamble))
+
+    let rec compileAll remaining =
+        match remaining with
+        | [] -> Ok ()
+        | ((sourceFile, preamble), group) :: rest ->
+            let preambleHash = preamble.GetHashCode()
+            let cacheKey = (sourceFile, preambleHash)
+            if stdlib.PreambleCache.ContainsKey cacheKey then
+                compileAll rest
+            else
+                let funcLineMap =
+                    group
+                    |> List.tryHead
+                    |> Option.map (fun test -> test.FunctionLineMap)
+                    |> Option.defaultValue Map.empty
+                match CompilerLibrary.compilePreamble stdlib preamble sourceFile funcLineMap with
+                | Error err -> Error $"Preamble precompile error ({sourceFile}): {err}"
+                | Ok ctx ->
+                    stdlib.PreambleCache.TryAdd(cacheKey, ctx) |> ignore
+                    compileAll rest
+
+    compileAll preambleGroups
+
 /// Run E2E test with pre-compiled stdlib
 let runE2ETest (stdlib: CompilerLibrary.StdlibResult) (test: E2ETest) : E2ETestResult =
     try
