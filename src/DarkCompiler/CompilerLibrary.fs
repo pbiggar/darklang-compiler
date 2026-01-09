@@ -5,6 +5,8 @@
 
 module CompilerLibrary
 
+open CompilerProfiler
+
 open System
 open System.IO
 open System.Diagnostics
@@ -79,6 +81,27 @@ let defaultOptions : CompilerOptions = {
 /// Determine whether to dump a specific IR, based on verbosity or explicit option
 let shouldDumpIR (verbosity: int) (enabled: bool) : bool =
     verbosity >= 3 || enabled
+
+let private recordFunctions (passName: string) (meta: (string * string) list) (names: string list) : unit =
+    if CompilerProfiler.isEnabled() then
+        names
+        |> List.iter (fun name ->
+            CompilerProfiler.recordFunction passName name [] meta)
+
+let private recordAnfFunctions (passName: string) (meta: (string * string) list) (program: ANF.Program) : unit =
+    let (ANF.Program (funcs, _)) = program
+    let names = funcs |> List.map (fun f -> f.Name)
+    recordFunctions passName meta names
+
+let private recordMirFunctions (passName: string) (meta: (string * string) list) (program: MIR.Program) : unit =
+    let (MIR.Program (funcs, _, _, _, _)) = program
+    let names = funcs |> List.map (fun f -> f.Name)
+    recordFunctions passName meta names
+
+let private recordLirFunctions (passName: string) (meta: (string * string) list) (program: LIR.Program) : unit =
+    let (LIR.Program (funcs, _, _)) = program
+    let names = funcs |> List.map (fun f -> f.Name)
+    recordFunctions passName meta names
 
 /// Print ANF program in a consistent, human-readable format
 let printANFProgram (title: string) (program: ANF.Program) : unit =
@@ -157,6 +180,7 @@ let private compileAnfToLir
     (convResult: AST_to_ANF.ConversionResult)
     (programType: AST.Type)
     (externalReturnTypes: Map<string, AST.Type>)
+    (meta: (string * string) list)
     : Result<LIR.Program, string> =
 
     let suffix = if stageSuffix = "" then "" else $" ({stageSuffix})"
@@ -164,18 +188,20 @@ let private compileAnfToLir
     if verbosity >= 1 then println $"  [3/8] ANF → MIR{suffix}..."
     let mirStart = sw.Elapsed.TotalMilliseconds
     let mirResult =
-        ANF_to_MIR.toMIR
-            anfProgram
-            typeMap
-            convResult.FuncParams
-            programType
-            convResult.VariantLookup
-            convResult.TypeReg
-            options.EnableCoverage
-            externalReturnTypes
+        time "anf_to_mir" meta (fun () ->
+            ANF_to_MIR.toMIR
+                anfProgram
+                typeMap
+                convResult.FuncParams
+                programType
+                convResult.VariantLookup
+                convResult.TypeReg
+                options.EnableCoverage
+                externalReturnTypes)
     match mirResult with
     | Error err -> Error $"MIR conversion error: {err}"
     | Ok mirProgram ->
+        recordMirFunctions "anf_to_mir" meta mirProgram
         if shouldDumpIR verbosity options.DumpMIR then
             printMIRProgram "=== MIR (Control Flow Graph) ===" mirProgram
         if verbosity >= 2 then
@@ -184,7 +210,8 @@ let private compileAnfToLir
 
         if verbosity >= 1 then println $"  [3.1/8] SSA Construction{suffix}..."
         let ssaStart = sw.Elapsed.TotalMilliseconds
-        let ssaProgram = SSA_Construction.convertToSSA mirProgram
+        let ssaProgram = time "ssa_construction" meta (fun () -> SSA_Construction.convertToSSA mirProgram)
+        recordMirFunctions "ssa_construction" meta ssaProgram
         if verbosity >= 2 then
             let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - ssaStart, 1)
             println $"        {t}ms"
@@ -192,18 +219,21 @@ let private compileAnfToLir
         if verbosity >= 1 then println $"  [3.5/8] MIR Optimizations{suffix}..."
         let mirOptStart = sw.Elapsed.TotalMilliseconds
         let optimizedProgram =
-            if options.DisableMIROpt then ssaProgram
-            else MIR_Optimize.optimizeProgram ssaProgram
+            time "mir_optimize" meta (fun () ->
+                if options.DisableMIROpt then ssaProgram
+                else MIR_Optimize.optimizeProgram ssaProgram)
+        recordMirFunctions "mir_optimize" meta optimizedProgram
         if verbosity >= 2 then
             let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - mirOptStart, 1)
             println $"        {t}ms"
 
         if verbosity >= 1 then println $"  [4/8] MIR → LIR{suffix}..."
         let lirStart = sw.Elapsed.TotalMilliseconds
-        let lirResult = MIR_to_LIR.toLIR optimizedProgram
+        let lirResult = time "mir_to_lir" meta (fun () -> MIR_to_LIR.toLIR optimizedProgram)
         match lirResult with
         | Error err -> Error $"LIR conversion error: {err}"
         | Ok lirProgram ->
+            recordLirFunctions "mir_to_lir" meta lirProgram
             if shouldDumpIR verbosity options.DumpLIR then
                 printLIRProgram "=== LIR (Low-level IR with CFG) ===" lirProgram
             if verbosity >= 2 then
@@ -213,8 +243,10 @@ let private compileAnfToLir
             if verbosity >= 1 then println $"  [4.5/8] LIR Optimizations{suffix}..."
             let lirOptStart = sw.Elapsed.TotalMilliseconds
             let optimizedLir =
-                if options.DisableLIROpt then lirProgram
-                else LIR_Optimize.optimizeProgram lirProgram
+                time "lir_optimize" meta (fun () ->
+                    if options.DisableLIROpt then lirProgram
+                    else LIR_Optimize.optimizeProgram lirProgram)
+            recordLirFunctions "lir_optimize" meta optimizedLir
             if verbosity >= 2 then
                 let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - lirOptStart, 1)
                 println $"        {t}ms"
@@ -231,6 +263,7 @@ let private buildAnfProgram
     (userOnly: AST_to_ANF.UserOnlyResult)
     (extraFunctions: ANF.Function list)
     (extraTypeMap: ANF.TypeMap)
+    (meta: (string * string) list)
     : Result<ANF.Program * ANF.TypeMap * AST_to_ANF.ConversionResult, string> =
 
     if verbosity >= 1 then println "  [2.3/8] ANF Optimization..."
@@ -239,8 +272,10 @@ let private buildAnfProgram
         printANFProgram "=== ANF (before optimization) ===" anfProgram
     let anfOptStart = sw.Elapsed.TotalMilliseconds
     let anfOptimized =
-        if options.DisableANFOpt then anfProgram
-        else ANF_Optimize.optimizeProgram anfProgram
+        time "anf_optimize" meta (fun () ->
+            if options.DisableANFOpt then anfProgram
+            else ANF_Optimize.optimizeProgram anfProgram)
+    recordAnfFunctions "anf_optimize" meta anfOptimized
     if verbosity >= 2 then
         let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - anfOptStart, 1)
         println $"        {t}ms"
@@ -250,8 +285,10 @@ let private buildAnfProgram
     if verbosity >= 1 then println "  [2.4/8] ANF Inlining..."
     let inlineStart = sw.Elapsed.TotalMilliseconds
     let anfInlined =
-        if options.DisableInlining then anfOptimized
-        else ANF_Inlining.inlineProgramDefault anfOptimized
+        time "anf_inlining" meta (fun () ->
+            if options.DisableInlining then anfOptimized
+            else ANF_Inlining.inlineProgramDefault anfOptimized)
+    recordAnfFunctions "anf_inlining" meta anfInlined
     if verbosity >= 2 then
         let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - inlineStart, 1)
         println $"        {t}ms"
@@ -267,9 +304,10 @@ let private buildAnfProgram
 
     if verbosity >= 1 then println "  [2.5/8] Reference Count Insertion..."
     let rcStart = sw.Elapsed.TotalMilliseconds
-    match RefCountInsertion.insertRCInProgram convResult with
+    match time "rc_insertion" meta (fun () -> RefCountInsertion.insertRCInProgram convResult) with
     | Error err -> Error $"Reference count insertion error: {err}"
     | Ok (anfAfterRC, typeMap) ->
+        recordAnfFunctions "rc_insertion" meta anfAfterRC
         if verbosity >= 2 then
             let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - rcStart, 1)
             println $"        {t}ms"
@@ -279,8 +317,10 @@ let private buildAnfProgram
         if verbosity >= 1 then println "  [2.7/8] Tail Call Detection..."
         let tcoStart = sw.Elapsed.TotalMilliseconds
         let anfAfterTCO =
-            if options.DisableTCO then anfAfterRC
-            else TailCallDetection.detectTailCallsInProgram anfAfterRC
+            time "tco_detection" meta (fun () ->
+                if options.DisableTCO then anfAfterRC
+                else TailCallDetection.detectTailCallsInProgram anfAfterRC)
+        recordAnfFunctions "tco_detection" meta anfAfterTCO
         if verbosity >= 2 then
             let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - tcoStart, 1)
             println $"        {t}ms"
@@ -293,7 +333,10 @@ let private buildAnfProgram
 
         if verbosity >= 1 then println "  [2.8/8] Print Insertion..."
         let printStart = sw.Elapsed.TotalMilliseconds
-        let mergedProgram = PrintInsertion.insertPrint mergedFunctions postTcoMain programType
+        let mergedProgram =
+            time "print_insertion" meta (fun () ->
+                PrintInsertion.insertPrint mergedFunctions postTcoMain programType)
+        recordAnfFunctions "print_insertion" meta mergedProgram
         if verbosity >= 2 then
             let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - printStart, 1)
             println $"        {t}ms"
@@ -311,9 +354,11 @@ let private generateBinary
     (binaryLabel: string)
     (dumpAsm: bool)
     (dumpMachineCode: bool)
+    (meta: (string * string) list)
     (allocatedProgram: LIR.Program)
     : Result<byte array, string> =
 
+    recordLirFunctions "codegen" meta allocatedProgram
     if verbosity >= 1 then println codegenLabel
     let codegenStart = sw.Elapsed.TotalMilliseconds
     let coverageExprCount = if options.EnableCoverage then LIR.countCoverageHits allocatedProgram else 0
@@ -322,7 +367,9 @@ let private generateBinary
         EnableCoverage = options.EnableCoverage
         CoverageExprCount = coverageExprCount
     }
-    let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
+    let codegenResult =
+        time "codegen" meta (fun () ->
+            CodeGen.generateARM64WithOptions codegenOptions allocatedProgram)
     match codegenResult with
     | Error err -> Error $"Code generation error: {err}"
     | Ok arm64Instructions ->
@@ -343,7 +390,9 @@ let private generateBinary
             let encodeStart = sw.Elapsed.TotalMilliseconds
             let (LIR.Program (_, stringPool, floatPool)) = allocatedProgram
             let codeFileOffset = computeCodeFileOffset os stringPool
-            let machineCode = ARM64_Encoding.encodeAllWithPools arm64Instructions stringPool floatPool codeFileOffset
+            let machineCode =
+                time "arm64_encode" meta (fun () ->
+                    ARM64_Encoding.encodeAllWithPools arm64Instructions stringPool floatPool codeFileOffset)
             if verbosity >= 2 then
                 let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - encodeStart, 1)
                 println $"        {t}ms"
@@ -360,9 +409,10 @@ let private generateBinary
             if verbosity >= 1 then println (binaryLabel.Replace("{format}", formatName))
             let binaryStart = sw.Elapsed.TotalMilliseconds
             let binary =
-                match os with
-                | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode stringPool floatPool
-                | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode stringPool floatPool
+                time "binary_generation" meta (fun () ->
+                    match os with
+                    | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools machineCode stringPool floatPool
+                    | Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools machineCode stringPool floatPool)
             if verbosity >= 2 then
                 let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - binaryStart, 1)
                 println $"        {t}ms"
@@ -407,6 +457,8 @@ type PreambleContext = {
     TypeMap: ANF.TypeMap
     /// Preamble's registries for ANF conversion
     ANFResult: AST_to_ANF.ConversionResult
+    /// Preamble's LIR program after register allocation (functions + pools)
+    LIRProgram: LIR.Program
 }
 
 /// Cache for compiled preambles - thread-safe for parallel test execution
@@ -890,6 +942,7 @@ let mergeTypedPrograms (stdlibTyped: AST.Program) (userTyped: AST.Program) : AST
 /// Compile stdlib in isolation, returning reusable result
 /// This can be called once and the result reused for multiple user program compilations
 let compileStdlib () : Result<StdlibResult, string> =
+    let meta = [ ("file", "stdlib") ]
     match loadStdlib() with
     | Error e -> Error e
     | Ok stdlibAst ->
@@ -911,8 +964,10 @@ let compileStdlib () : Result<StdlibResult, string> =
                 match RefCountInsertion.insertRCInProgram anfResult with
                 | Error e -> Error e
                 | Ok (anfAfterRC, typeMap) ->
+                    recordAnfFunctions "rc_insertion" meta anfAfterRC
                     // Pass 2.7: Tail Call Detection
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
+                    recordAnfFunctions "tco_detection" meta anfAfterTCO
                     // Extract stdlib ANF functions for coverage analysis
                     let (ANF.Program (stdlibFuncs, _)) = anfAfterTCO
                     let stdlibFuncMap =
@@ -930,13 +985,17 @@ let compileStdlib () : Result<StdlibResult, string> =
                     | Ok (mirFuncs, stringPool, floatPool, variantRegistry, recordRegistry) ->
                         // Wrap in MIR.Program for LIR conversion
                         let mirProgram = MIR.Program (mirFuncs, stringPool, floatPool, variantRegistry, recordRegistry)
+                        recordMirFunctions "anf_to_mir" meta mirProgram
                         // Convert stdlib MIR to LIR (cached for reuse)
                         match MIR_to_LIR.toLIR mirProgram with
                         | Error e -> Error e
                         | Ok lirProgram ->
+                            recordLirFunctions "mir_to_lir" meta lirProgram
                             // Pre-allocate stdlib functions (cached for reuse)
                             let (LIR.Program (lirFuncs, lirStrings, lirFloats)) = lirProgram
                             let allocatedFuncs = lirFuncs |> List.map RegisterAllocation.allocateRegisters
+                            let allocatedProgram = LIR.Program (allocatedFuncs, lirStrings, lirFloats)
+                            recordLirFunctions "register_allocation" meta allocatedProgram
                             // Build call graph for dead code elimination
                             let stdlibCallGraph = DeadCodeElimination.buildCallGraph allocatedFuncs
                             Ok {
@@ -962,6 +1021,7 @@ let compileStdlib () : Result<StdlibResult, string> =
 /// Prepare stdlib for lazy compilation - stops at MIR level
 /// LIR conversion and register allocation are done lazily when functions are needed
 let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
+    let meta = [ ("file", "stdlib") ]
     match loadStdlib() with
     | Error e -> Error e
     | Ok stdlibAst ->
@@ -983,8 +1043,10 @@ let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
                 match RefCountInsertion.insertRCInProgram anfResult with
                 | Error e -> Error e
                 | Ok (anfAfterRC, typeMap) ->
+                    recordAnfFunctions "rc_insertion" meta anfAfterRC
                     // Pass 2.7: Tail Call Detection
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
+                    recordAnfFunctions "tco_detection" meta anfAfterTCO
                     // Extract stdlib functions into a map for lazy lookup
                     let (ANF.Program (stdlibFuncs, _)) = anfAfterTCO
                     let stdlibFuncMap =
@@ -1007,10 +1069,13 @@ let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
                     | Ok (stdlibMirFuncs, stdlibStrings, stdlibFloats, stdlibVariants, stdlibRecords) ->
                         // SSA Construction
                         let stdlibMirProgram = MIR.Program (stdlibMirFuncs, stdlibStrings, stdlibFloats, stdlibVariants, stdlibRecords)
+                        recordMirFunctions "anf_to_mir" meta stdlibMirProgram
                         let stdlibSsaProgram = SSA_Construction.convertToSSA stdlibMirProgram
+                        recordMirFunctions "ssa_construction" meta stdlibSsaProgram
 
                         // MIR Optimizations
                         let stdlibOptimized = MIR_Optimize.optimizeProgram stdlibSsaProgram
+                        recordMirFunctions "mir_optimize" meta stdlibOptimized
 
                         // Extract optimized MIR functions into a map for lazy LIR compilation
                         let (MIR.Program (optimizedMirFuncs, mirStrings, mirFloats, _, _)) = stdlibOptimized
@@ -1195,6 +1260,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                             convResultWithParams
                             programType
                             externalReturnTypes
+                            []
                     match lirResult with
                     | Error err ->
                         { Binary = Array.empty
@@ -1207,6 +1273,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                     let (LIR.Program (funcs, stringPool, floatPool)) = optimizedLirProgram
                     let allocatedFuncs = funcs |> List.map RegisterAllocation.allocateRegisters
                     let allocatedProgram = LIR.Program (allocatedFuncs, stringPool, floatPool)
+                    recordLirFunctions "register_allocation" [] allocatedProgram
 
                     if shouldDumpIR verbosity options.DumpLIR then
                         printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
@@ -1225,6 +1292,7 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
                             "  [7/7] Binary Generation ({format})..."
                             true
                             true
+                            []
                             allocatedProgram
                     match binaryResult with
                     | Error err ->
@@ -1282,6 +1350,10 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                     println $"Program type: {TypeChecking.typeToString programType}"
                     println ""
 
+                let baseMeta =
+                    [ ("file", sourceFile)
+                      ("source_len", source.Length.ToString()) ]
+
                 // Pass 2: AST → ANF (user only, separate from stdlib)
                 // User code is converted with access to stdlib's registries for lookups.
                 // User ANF is kept separate for MIR-level caching optimization.
@@ -1318,6 +1390,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                             userOnly
                             []
                             Map.empty
+                            baseMeta
                     match anfResult with
                     | Error err ->
                         { Binary = Array.empty
@@ -1336,6 +1409,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                                 userConvResult
                                 programType
                                 externalReturnTypes
+                                baseMeta
                         match userLirResult with
                         | Error err ->
                             { Binary = Array.empty
@@ -1367,6 +1441,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
 
                             let allFuncs = reachableStdlib @ offsetUserFuncs
                             let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
+                            recordLirFunctions "register_allocation" baseMeta allocatedProgram
                             if shouldDumpIR verbosity options.DumpLIR then
                                 printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
 
@@ -1384,6 +1459,7 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                                     "  [7/7] Binary Generation ({format})..."
                                     false
                                     false
+                                    baseMeta
                                     allocatedProgram
                             match binaryResult with
                             | Error err ->
@@ -1407,6 +1483,9 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
                 /// Preamble functions go through the full pipeline (parse → typecheck → mono → inline → lift → ANF → RC → TCO)
                 /// The result is cached and reused for all tests in the same file
 let compilePreamble (stdlib: StdlibResult) (preamble: string) (sourceFile: string) (funcLineMap: Map<string, int>) : Result<PreambleContext, string> =
+    let meta =
+        [ ("file", sourceFile)
+          ("preamble_len", preamble.Length.ToString()) ]
     // Handle empty preamble - return a context that just wraps stdlib
     if String.IsNullOrWhiteSpace(preamble) then
         Ok {
@@ -1415,6 +1494,7 @@ let compilePreamble (stdlib: StdlibResult) (preamble: string) (sourceFile: strin
             ANFFunctions = []
             TypeMap = stdlib.StdlibTypeMap
             ANFResult = stdlib.ANFResult
+            LIRProgram = LIR.Program ([], MIR.emptyStringPool, MIR.emptyFloatPool)
         }
     else
         // Parse preamble with dummy expression (parser requires a main expression)
@@ -1438,9 +1518,11 @@ let compilePreamble (stdlib: StdlibResult) (preamble: string) (sourceFile: strin
                     // ANF Optimization (preamble functions)
                     let preambleProgram = ANF.Program (preambleUserOnly.UserFunctions, preambleUserOnly.MainExpr)
                     let anfOptimized = ANF_Optimize.optimizeProgram preambleProgram
+                    recordAnfFunctions "anf_optimize" meta anfOptimized
 
                     // ANF Inlining (keep functions separate for now, can inline later)
                     let anfInlined = ANF_Inlining.inlineProgramDefault anfOptimized
+                    recordAnfFunctions "anf_inlining" meta anfInlined
 
                     // Create ConversionResult for RC insertion
                     let preambleConvResult : AST_to_ANF.ConversionResult = {
@@ -1456,32 +1538,67 @@ let compilePreamble (stdlib: StdlibResult) (preamble: string) (sourceFile: strin
                     match RefCountInsertion.insertRCInProgram preambleConvResult with
                     | Error err -> Error $"Preamble RC insertion error: {err}"
                     | Ok (preambleAnfAfterRC, typeMap) ->
+                        recordAnfFunctions "rc_insertion" meta preambleAnfAfterRC
                         // Tail Call Detection
                         let preambleAnfAfterTCO = TailCallDetection.detectTailCallsInProgram preambleAnfAfterRC
+                        recordAnfFunctions "tco_detection" meta preambleAnfAfterTCO
 
                         // Extract just the functions (ignore main expr which is dummy `0`)
                         let (ANF.Program (preambleFunctions, _dummyMainExpr)) = preambleAnfAfterTCO
 
-                        // Merge TypeMaps (stdlib + preamble)
-                        let mergedTypeMap = Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibTypeMap typeMap
+                        let preambleExternalReturnTypes = extractReturnTypes preambleConvResult.FuncReg
+                        match ANF_to_MIR.toMIRFunctionsOnly preambleAnfAfterTCO typeMap preambleConvResult.FuncParams preambleConvResult.VariantLookup Map.empty false preambleExternalReturnTypes with
+                        | Error err -> Error $"Preamble MIR conversion error: {err}"
+                        | Ok (mirFuncs, preambleStrings, preambleFloats, variantRegistry, recordRegistry) ->
+                            let mirProgram = MIR.Program (mirFuncs, preambleStrings, preambleFloats, variantRegistry, recordRegistry)
+                            recordMirFunctions "anf_to_mir" meta mirProgram
+                            let ssaProgram = SSA_Construction.convertToSSA mirProgram
+                            recordMirFunctions "ssa_construction" meta ssaProgram
+                            let optimizedProgram = MIR_Optimize.optimizeProgram ssaProgram
+                            recordMirFunctions "mir_optimize" meta optimizedProgram
+                            match MIR_to_LIR.toLIR optimizedProgram with
+                            | Error err -> Error $"Preamble LIR conversion error: {err}"
+                            | Ok lirProgram ->
+                                recordLirFunctions "mir_to_lir" meta lirProgram
+                                let optimizedLir = LIR_Optimize.optimizeProgram lirProgram
+                                recordLirFunctions "lir_optimize" meta optimizedLir
+                                let (LIR.Program (lirFuncs, lirStrings, lirFloats)) = optimizedLir
+                                let allocatedFuncs = lirFuncs |> List.map RegisterAllocation.allocateRegisters
+                                let allocatedProgram = LIR.Program (allocatedFuncs, lirStrings, lirFloats)
+                                recordLirFunctions "register_allocation" meta allocatedProgram
+                                let isStdlibSpecialized (name: string) : bool =
+                                    name.StartsWith("Stdlib.") || name.StartsWith("__")
+                                for func in allocatedFuncs do
+                                    if isStdlibSpecialized func.Name then
+                                        let entry = buildCachedEntry func lirStrings lirFloats
+                                        stdlib.CompiledFuncCache.TryAdd(func.Name, entry) |> ignore
 
-                        Ok {
-                            TypeCheckEnv = preambleTypeCheckEnv
-                            GenericFuncDefs = mergedGenericDefs
-                            ANFFunctions = preambleFunctions
-                            TypeMap = mergedTypeMap
-                            ANFResult = preambleConvResult
-                        }
+                                // Merge TypeMaps (stdlib + preamble)
+                                let mergedTypeMap = Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibTypeMap typeMap
+
+                                Ok {
+                                    TypeCheckEnv = preambleTypeCheckEnv
+                                    GenericFuncDefs = mergedGenericDefs
+                                    ANFFunctions = preambleFunctions
+                                    TypeMap = mergedTypeMap
+                                    ANFResult = preambleConvResult
+                                    LIRProgram = allocatedProgram
+                                }
 
 /// Compile test expression with pre-compiled preamble context
 /// Only the tiny test expression is parsed/compiled - preamble functions are merged in
 let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult)
-                            (preambleCtx: PreambleContext) (testExpr: string) : CompileResult =
+                            (preambleCtx: PreambleContext) (sourceFile: string) (preambleLen: int) (testName: string) (testExpr: string) : CompileResult =
     let sw = Stopwatch.StartNew()
     try
+        let baseMeta =
+            [ ("file", sourceFile)
+              ("source_len", testExpr.Length.ToString())
+              ("preamble_len", preambleLen.ToString())
+              ("test", testName) ]
         // Pass 1: Parse test expression only (tiny)
         if verbosity >= 1 then println "  [1/8] Parse (test expr only)..."
-        let parseResult = Parser.parseString testExpr
+        let parseResult = time "parse_test_expr" baseMeta (fun () -> Parser.parseString testExpr)
         let parseTime = sw.Elapsed.TotalMilliseconds
         if verbosity >= 2 then
             let t = System.Math.Round(parseTime, 1)
@@ -1495,7 +1612,9 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
         | Ok testAst ->
             // Pass 1.5: Type Checking (test expr with preamble's TypeCheckEnv)
             if verbosity >= 1 then println "  [1.5/8] Type Checking (with preamble env)..."
-            let typeCheckResult = TypeChecking.checkProgramWithBaseEnv preambleCtx.TypeCheckEnv testAst
+            let typeCheckResult =
+                time "type_check_test_expr" baseMeta (fun () ->
+                    TypeChecking.checkProgramWithBaseEnv preambleCtx.TypeCheckEnv testAst)
             let typeCheckTime = sw.Elapsed.TotalMilliseconds - parseTime
             if verbosity >= 2 then
                 let t = System.Math.Round(typeCheckTime, 1)
@@ -1514,14 +1633,15 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                 // Pass 2: AST → ANF (test expr only, with preamble's generics and registries)
                 if verbosity >= 1 then println "  [2/8] AST → ANF (test expr only)..."
                 let testOnlyResult =
-                    AST_to_ANF.convertUserOnlyCached
-                        stdlib.SpecCache
-                        stdlib.ANFFuncCache
-                        ""  // No source file for test expr
-                        Map.empty  // No function line map for test expr
-                        preambleCtx.GenericFuncDefs
-                        preambleCtx.ANFResult
-                        typedTestAst
+                    time "ast_to_anf_test_expr" baseMeta (fun () ->
+                        AST_to_ANF.convertUserOnlyCached
+                            stdlib.SpecCache
+                            stdlib.ANFFuncCache
+                            ""  // No source file for test expr
+                            Map.empty  // No function line map for test expr
+                            preambleCtx.GenericFuncDefs
+                            preambleCtx.ANFResult
+                            typedTestAst)
                 let anfTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime
                 if verbosity >= 2 then
                     let t = System.Math.Round(anfTime, 1)
@@ -1546,13 +1666,21 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                     let stdlibSpecializedNames =
                         testOnly.SpecializedFuncNames
                         |> Set.filter isStdlibSpecialized
+                    let (LIR.Program (preambleFuncs, preambleStrings, preambleFloats)) = preambleCtx.LIRProgram
+                    let preambleFuncNameSet =
+                        preambleFuncs |> List.map (fun f -> f.Name) |> Set.ofList
                     let cachedFuncNameSet =
                         stdlibSpecializedNames
                         |> Set.filter (fun name -> stdlib.CompiledFuncCache.ContainsKey name)
                     let functionsToCompile =
                         testOnly.UserFunctions
-                        |> List.filter (fun f -> not (Set.contains f.Name cachedFuncNameSet))
-                    let cachedFuncNames : string list = Set.toList cachedFuncNameSet
+                        |> List.filter (fun f ->
+                            not (Set.contains f.Name cachedFuncNameSet)
+                            && not (Set.contains f.Name preambleFuncNameSet))
+                    let cachedFuncNames : string list =
+                        cachedFuncNameSet
+                        |> Set.filter (fun name -> not (Set.contains name preambleFuncNameSet))
+                        |> Set.toList
 
                     if verbosity >= 3 then
                         println $"  [COMPILE] {functionsToCompile.Length} user functions compiled fresh"
@@ -1573,8 +1701,9 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                             functionsToCompile
                             testOnly.MainExpr
                             testOnly
-                            preambleCtx.ANFFunctions
-                            preambleCtx.TypeMap
+                            []
+                            Map.empty
+                            baseMeta
                     match anfResult with
                     | Error err ->
                         { Binary = Array.empty
@@ -1593,6 +1722,7 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                                 testConvResult
                                 programType
                                 allReturnTypes
+                                baseMeta
                         match userLirResult with
                         | Error err ->
                             { Binary = Array.empty
@@ -1602,11 +1732,14 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                                 // Pass 5: Register Allocation
                                 if verbosity >= 1 then println "  [5/8] Register Allocation..."
                                 let allocStart = sw.Elapsed.TotalMilliseconds
-                                let (LIR.Program (userFuncs, userStrings, userFloats)) = userOptimizedLirProgram
+                                let (LIR.Program (userFuncs, userStrings, userFloats)) =
+                                    time "register_allocation" baseMeta (fun () -> userOptimizedLirProgram)
                                 let (LIR.Program (_, stdlibStrings, stdlibFloats)) = stdlib.LIRProgram
 
                                 // Allocate user functions
-                                let allocatedUserFuncs = userFuncs |> List.map RegisterAllocation.allocateRegisters
+                                let allocatedUserFuncs =
+                                    time "register_allocation_functions" baseMeta (fun () ->
+                                        userFuncs |> List.map RegisterAllocation.allocateRegisters)
 
                                 // LIR comparison code disabled since caching is disabled
                                 // TODO: Re-enable when caching bug is fixed
@@ -1636,29 +1769,40 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                                       Success = false
                                       ErrorMessage = Some err }
                                 | Ok (userStringsWithCache, userFloatsWithCache, cachedSpecializedFuncs) ->
-                                    // Merge pools (stdlib first, user appended with offset)
-                                    let stringOffset = stdlibStrings.NextId
-                                    let floatOffset = stdlibFloats.NextId
-                                    let mergedStrings = ANF_to_MIR.appendStringPools stdlibStrings userStringsWithCache
-                                    let mergedFloats = ANF_to_MIR.appendFloatPools stdlibFloats userFloatsWithCache
+                                    // Merge pools (stdlib first, preamble next, user appended last)
+                                    let preambleStringOffset = stdlibStrings.NextId
+                                    let preambleFloatOffset = stdlibFloats.NextId
+                                    let mergedStringsWithPreamble =
+                                        ANF_to_MIR.appendStringPools stdlibStrings preambleStrings
+                                    let mergedFloatsWithPreamble =
+                                        ANF_to_MIR.appendFloatPools stdlibFloats preambleFloats
+                                    let userStringOffset = mergedStringsWithPreamble.NextId
+                                    let userFloatOffset = mergedFloatsWithPreamble.NextId
+                                    let mergedStrings =
+                                        ANF_to_MIR.appendStringPools mergedStringsWithPreamble userStringsWithCache
+                                    let mergedFloats =
+                                        ANF_to_MIR.appendFloatPools mergedFloatsWithPreamble userFloatsWithCache
 
-                                    // Offset pool refs in allocated user functions
+                                    // Offset pool refs in preamble and user functions
+                                    let offsetPreambleFuncs =
+                                        preambleFuncs
+                                        |> List.map (MIR_to_LIR.offsetLIRFunction preambleStringOffset preambleFloatOffset)
                                     let offsetUserFuncs =
                                         allocatedUserFuncs
-                                        |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
+                                        |> List.map (MIR_to_LIR.offsetLIRFunction userStringOffset userFloatOffset)
 
                                     let offsetCachedFuncs =
                                         cachedSpecializedFuncs
                                         |> List.map (fun (name, func) ->
-                                            let offsetFunc = MIR_to_LIR.offsetLIRFunction stringOffset floatOffset func
+                                            let offsetFunc = MIR_to_LIR.offsetLIRFunction userStringOffset userFloatOffset func
                                             if verbosity >= 3 then
                                                 let blockCount = offsetFunc.CFG.Blocks.Count
                                                 let instrCount = offsetFunc.CFG.Blocks |> Map.toList |> List.sumBy (fun (_, b) -> b.Instrs.Length)
                                                 println $"  [CACHE HIT] {name}: {blockCount} blocks, {instrCount} instrs"
                                             offsetFunc)
 
-                                    // Combine newly-compiled and cached user functions
-                                    let allUserFuncs = offsetCachedFuncs @ offsetUserFuncs
+                                    // Combine preamble, cached, and newly-compiled user functions
+                                    let allUserFuncs = offsetPreambleFuncs @ offsetCachedFuncs @ offsetUserFuncs
 
                                     if verbosity >= 3 then
                                         println $"  [COMBINED] cached: {offsetCachedFuncs.Length}, fresh: {offsetUserFuncs.Length}, total: {allUserFuncs.Length}"
@@ -1677,6 +1821,7 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                                     // Combine reachable stdlib functions with user functions
                                     let allFuncs = reachableStdlib @ allUserFuncs
                                     let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
+                                    recordLirFunctions "register_allocation" baseMeta allocatedProgram
                                     if shouldDumpIR verbosity options.DumpLIR then
                                         printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
 
@@ -1694,6 +1839,7 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                                             "  [7/7] Binary Generation ({format})..."
                                             false
                                             false
+                                            baseMeta
                                             allocatedProgram
                                     match binaryResult with
                                     | Error err ->
@@ -1786,6 +1932,10 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                     println $"Program type: {TypeChecking.typeToString programType}"
                     println ""
 
+                let baseMeta =
+                    [ ("file", "")
+                      ("source_len", source.Length.ToString()) ]
+
                 // Pass 2: AST → ANF (user only)
                 // Use cached version to avoid re-monomorphizing same generic functions.
                 if verbosity >= 1 then println "  [2/8] AST → ANF (user only)..."
@@ -1820,6 +1970,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                             userOnly
                             []
                             Map.empty
+                            baseMeta
                     match anfResult with
                     | Error err ->
                         { Binary = Array.empty
@@ -1854,6 +2005,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                                 userConvResult
                                 programType
                                 externalReturnTypes
+                                baseMeta
                         match userLirResult with
                         | Error err ->
                             { Binary = Array.empty
@@ -1876,6 +2028,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
 
                             let allFuncs = allocatedStdlibFuncs @ offsetUserFuncs
                             let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
+                            recordLirFunctions "register_allocation" baseMeta allocatedProgram
                             if shouldDumpIR verbosity options.DumpLIR then
                                 printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
 
@@ -1893,6 +2046,7 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
                                     "  [7/7] Binary Generation ({format})..."
                                     false
                                     false
+                                    baseMeta
                                     allocatedProgram
                             match binaryResult with
                             | Error err ->
@@ -2072,7 +2226,7 @@ let compileAndRunWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib:
 /// Compile and run source code with pre-compiled stdlib and user function caching
 /// sourceFile and funcLineMap are used to build cache keys for user functions
 /// Cache key: (sourceFile, lineNumber, functionName)
-let compileAndRunWithStdlibCached (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (testExpr: string) (preamble: string) (sourceFile: string) (funcLineMap: Map<string, int>) : ExecutionResult =
+let compileAndRunWithStdlibCached (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (testName: string) (testExpr: string) (preamble: string) (sourceFile: string) (funcLineMap: Map<string, int>) : ExecutionResult =
     // Check preamble cache
     let preambleHash = preamble.GetHashCode()
     let cacheKey = (sourceFile, preambleHash)
@@ -2096,7 +2250,7 @@ let compileAndRunWithStdlibCached (verbosity: int) (options: CompilerOptions) (s
           Stdout = ""
           Stderr = err }
     | Ok preambleCtx ->
-        let compileResult = compileTestWithPreamble verbosity options stdlib preambleCtx testExpr
+        let compileResult = compileTestWithPreamble verbosity options stdlib preambleCtx sourceFile preamble.Length testName testExpr
 
         if not compileResult.Success then
             { ExitCode = 1
@@ -2106,7 +2260,7 @@ let compileAndRunWithStdlibCached (verbosity: int) (options: CompilerOptions) (s
             execute verbosity compileResult.Binary
 
 /// Compile and run with timing breakdown (for test output)
-let compileAndRunWithStdlibCachedTimed (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (testExpr: string) (preamble: string) (sourceFile: string) (funcLineMap: Map<string, int>) : TimedExecutionResult =
+let compileAndRunWithStdlibCachedTimed (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (testName: string) (testExpr: string) (preamble: string) (sourceFile: string) (funcLineMap: Map<string, int>) : TimedExecutionResult =
     // Check preamble cache
     let preambleHash = preamble.GetHashCode()
     let cacheKey = (sourceFile, preambleHash)
@@ -2133,7 +2287,7 @@ let compileAndRunWithStdlibCachedTimed (verbosity: int) (options: CompilerOption
           RuntimeTime = TimeSpan.Zero }
     | Ok preambleCtx ->
         let compileTimer = Stopwatch.StartNew()
-        let compileResult = compileTestWithPreamble verbosity options stdlib preambleCtx testExpr
+        let compileResult = compileTestWithPreamble verbosity options stdlib preambleCtx sourceFile preamble.Length testName testExpr
         compileTimer.Stop()
         let compileTime = compileTimer.Elapsed
 

@@ -8,6 +8,7 @@ open System
 open System.IO
 open System.Diagnostics
 open TestDSL.E2EFormat
+open TestDSL.Profiler
 
 /// Result of running an E2E test
 type E2ETestResult = {
@@ -32,11 +33,15 @@ let precompilePreamble (stdlib: CompilerLibrary.StdlibResult) (sourceFile: strin
     if stdlib.PreambleCache.ContainsKey cacheKey then
         Ok ()
     else
-        match CompilerLibrary.compilePreamble stdlib preamble sourceFile funcLineMap with
-        | Error err -> Error $"Preamble precompile error ({sourceFile}): {err}"
-        | Ok ctx ->
-            stdlib.PreambleCache.TryAdd(cacheKey, ctx) |> ignore
-            Ok ()
+        let meta =
+            [ ("file", sourceFile)
+              ("preamble_len", preamble.Length.ToString()) ]
+        time "preamble_precompile" meta (fun () ->
+            match CompilerLibrary.compilePreamble stdlib preamble sourceFile funcLineMap with
+            | Error err -> Error $"Preamble precompile error ({sourceFile}): {err}"
+            | Ok ctx ->
+                stdlib.PreambleCache.TryAdd(cacheKey, ctx) |> ignore
+                Ok ())
 
 /// Precompile all distinct preambles (by file + preamble text) and populate the cache
 let precompilePreambles (stdlib: CompilerLibrary.StdlibResult) (tests: E2ETest list) : Result<unit, string> =
@@ -73,7 +78,14 @@ let runE2ETest (stdlib: CompilerLibrary.StdlibResult) (test: E2ETest) : E2ETestR
             DumpMIR = false
             DumpLIR = false
         }
-        let execResult = CompilerLibrary.compileAndRunWithStdlibCachedTimed 0 options stdlib test.Source test.Preamble test.SourceFile test.FunctionLineMap
+        let meta =
+            [ ("test", test.Name)
+              ("file", test.SourceFile)
+              ("preamble_len", test.Preamble.Length.ToString())
+              ("source_len", test.Source.Length.ToString()) ]
+        let execResult =
+            time "e2e_compile_and_run" meta (fun () ->
+                CompilerLibrary.compileAndRunWithStdlibCachedTimed 0 options stdlib test.Name test.Source test.Preamble test.SourceFile test.FunctionLineMap)
 
         // Handle error expectation
         if test.ExpectCompileError then

@@ -18,6 +18,7 @@
     <Compile Include="TestDSL/ARM64Parser.fs" />
     <Compile Include="TestDSL/ARM64EncodingFormat.fs" />
     <Compile Include="TestDSL/E2EFormat.fs" />
+    <Compile Include="TestDSL/Profiler.fs" />
     <Compile Include="TestDSL/TypeCheckingFormat.fs" />
     <Compile Include="TestDSL/OptimizationFormat.fs" />
     <Compile Include="Runners/PassTestRunner.fs" />
@@ -29,6 +30,7 @@
     <!-- Unit tests -->
     <Compile Include="CliFlagTests.fs" />
     <Compile Include="CompilerCachingTests.fs" />
+    <Compile Include="ProfilerTests.fs" />
     <Compile Include="PreamblePrecompileTests.fs" />
     <Compile Include="EncodingTests.fs" />
     <Compile Include="BinaryTests.fs" />

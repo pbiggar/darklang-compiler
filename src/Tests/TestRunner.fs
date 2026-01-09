@@ -14,6 +14,7 @@ open TestDSL.E2EFormat
 open TestDSL.E2ETestRunner
 open TestDSL.OptimizationFormat
 open TestDSL.OptimizationTestRunner
+open TestDSL.Profiler
 
 // ANSI color codes
 module Colors =
@@ -680,7 +681,11 @@ let main args =
                             let test = testsArray.[i]
                             let preambleResult =
                                 match Map.tryFind (test.SourceFile, test.Preamble) precompileTasks with
-                                | Some task -> task.Result
+                                | Some task ->
+                                    let meta =
+                                        [ ("file", test.SourceFile)
+                                          ("test", test.Name) ]
+                                    time "preamble_wait" meta (fun () -> task.Result)
                                 | None -> Ok ()
                             let result =
                                 match preambleResult with
@@ -809,7 +814,11 @@ let main args =
                     let test = testsArray.[i]
                     let preambleResult =
                         match Map.tryFind (test.SourceFile, test.Preamble) precompileTasks with
-                        | Some task -> task.Result
+                        | Some task ->
+                            let meta =
+                                [ ("file", test.SourceFile)
+                                  ("test", test.Name) ]
+                            time "preamble_wait" meta (fun () -> task.Result)
                         | None -> Ok ()
                     let result =
                         match preambleResult with
@@ -870,6 +879,7 @@ let main args =
     let allUnitTests : (string * int * (unit -> Result<unit, string>)) array = [|
         ("CLI Flags Tests", 1, fun () -> CliFlagTests.runAll())
         ("Compiler Caching Tests", 1, fun () -> CompilerCachingTests.runAll())
+        ("Profiler Tests", 1, fun () -> ProfilerTests.runAll())
         ("Preamble Precompile Tests", 1, fun () -> PreamblePrecompileTests.runAll())
         ("Encoding Tests", 1, fun () -> EncodingTests.runAll())
         ("Binary Tests", 11, fun () -> BinaryTests.runAll())
@@ -1035,4 +1045,8 @@ let main args =
             println $"{Colors.gray}... and {moreCount} more failing test(s){Colors.reset}"
             println ""
 
-    if failed = 0 then 0 else 1
+    (if failed = 0 then 0 else 1)
+    |> fun exitCode ->
+        writeReport "profiles/test-profile.csv"
+        CompilerProfiler.writeReport "profiles/compiler-profile.csv"
+        exitCode
