@@ -25,6 +25,19 @@ type E2ETestResult = {
 let compileStdlib () : Result<CompilerLibrary.StdlibResult, string> =
     CompilerLibrary.compileStdlib()
 
+/// Precompile a single preamble and populate the cache
+let precompilePreamble (stdlib: CompilerLibrary.StdlibResult) (sourceFile: string) (preamble: string) (funcLineMap: Map<string, int>) : Result<unit, string> =
+    let preambleHash = preamble.GetHashCode()
+    let cacheKey = (sourceFile, preambleHash)
+    if stdlib.PreambleCache.ContainsKey cacheKey then
+        Ok ()
+    else
+        match CompilerLibrary.compilePreamble stdlib preamble sourceFile funcLineMap with
+        | Error err -> Error $"Preamble precompile error ({sourceFile}): {err}"
+        | Ok ctx ->
+            stdlib.PreambleCache.TryAdd(cacheKey, ctx) |> ignore
+            Ok ()
+
 /// Precompile all distinct preambles (by file + preamble text) and populate the cache
 let precompilePreambles (stdlib: CompilerLibrary.StdlibResult) (tests: E2ETest list) : Result<unit, string> =
     let preambleGroups = tests |> List.groupBy (fun test -> (test.SourceFile, test.Preamble))
@@ -33,21 +46,14 @@ let precompilePreambles (stdlib: CompilerLibrary.StdlibResult) (tests: E2ETest l
         match remaining with
         | [] -> Ok ()
         | ((sourceFile, preamble), group) :: rest ->
-            let preambleHash = preamble.GetHashCode()
-            let cacheKey = (sourceFile, preambleHash)
-            if stdlib.PreambleCache.ContainsKey cacheKey then
-                compileAll rest
-            else
-                let funcLineMap =
-                    group
-                    |> List.tryHead
-                    |> Option.map (fun test -> test.FunctionLineMap)
-                    |> Option.defaultValue Map.empty
-                match CompilerLibrary.compilePreamble stdlib preamble sourceFile funcLineMap with
-                | Error err -> Error $"Preamble precompile error ({sourceFile}): {err}"
-                | Ok ctx ->
-                    stdlib.PreambleCache.TryAdd(cacheKey, ctx) |> ignore
-                    compileAll rest
+            let funcLineMap =
+                group
+                |> List.tryHead
+                |> Option.map (fun test -> test.FunctionLineMap)
+                |> Option.defaultValue Map.empty
+            match precompilePreamble stdlib sourceFile preamble funcLineMap with
+            | Error err -> Error err
+            | Ok () -> compileAll rest
 
     compileAll preambleGroups
 
