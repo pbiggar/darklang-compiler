@@ -11,7 +11,6 @@ open System.Diagnostics
 open Output
 open TestDSL.PassTestRunner
 open TestDSL.E2EFormat
-open TestDSL.E2EScheduling
 open TestDSL.E2ETestRunner
 open TestDSL.OptimizationFormat
 open TestDSL.OptimizationTestRunner
@@ -653,26 +652,22 @@ let main args =
 
                     let maxParallel = overrideParallel |> Option.defaultWith getOptimalParallelism
 
-                    let indexedTests = testsArray |> Array.mapi (fun idx test -> (idx, test)) |> Array.toList
-                    let testBatches = groupTestsBySourceFile indexedTests |> List.toArray
-
-                    // Run test files in parallel, tests within a file sequentially
+                    // Run tests in parallel
                     let options = System.Threading.Tasks.ParallelOptions()
                     options.MaxDegreeOfParallelism <- maxParallel
                     System.Threading.Tasks.Parallel.For(
                         0,
-                        testBatches.Length,
+                        numTests,
                         options,
                         fun i ->
-                            let batch = testBatches.[i]
-                            for (idx, test) in batch.Tests do
-                                let result = runE2ETest stdlib test
-                                let totalTime = result.CompileTime + result.RuntimeTime
-                                lock lockObj (fun () ->
-                                    results.[idx] <- Some (test, result)
-                                    allTimings.Add({ Name = $"E2E: {test.Name}"; TotalTime = totalTime; CompileTime = Some result.CompileTime; RuntimeTime = Some result.RuntimeTime })
-                                    ProgressBar.increment progress result.Success
-                                )
+                            let test = testsArray.[i]
+                            let result = runE2ETest stdlib test
+                            let totalTime = result.CompileTime + result.RuntimeTime
+                            lock lockObj (fun () ->
+                                results.[i] <- Some (test, result)
+                                allTimings.Add({ Name = $"E2E: {test.Name}"; TotalTime = totalTime; CompileTime = Some result.CompileTime; RuntimeTime = Some result.RuntimeTime })
+                                ProgressBar.increment progress result.Success
+                            )
                     ) |> ignore
 
                     ProgressBar.finish progress
@@ -760,21 +755,17 @@ let main args =
                 ProgressBar.update progress
                 let maxParallel = overrideParallel |> Option.defaultWith getOptimalParallelism
 
-                let indexedTests = testsArray |> Array.mapi (fun idx test -> (idx, test)) |> Array.toList
-                let testBatches = groupTestsBySourceFile indexedTests |> List.toArray
-
                 let options = System.Threading.Tasks.ParallelOptions()
                 options.MaxDegreeOfParallelism <- maxParallel
-                System.Threading.Tasks.Parallel.For(0, testBatches.Length, options, fun i ->
-                    let batch = testBatches.[i]
-                    for (idx, test) in batch.Tests do
-                        let result = runE2ETest stdlib test
-                        let totalTime = result.CompileTime + result.RuntimeTime
-                        lock lockObj (fun () ->
-                            results.[idx] <- Some (test, result)
-                            allTimings.Add({ Name = $"Verification: {test.Name}"; TotalTime = totalTime; CompileTime = Some result.CompileTime; RuntimeTime = Some result.RuntimeTime })
-                            ProgressBar.increment progress result.Success
-                        )
+                System.Threading.Tasks.Parallel.For(0, numTests, options, fun i ->
+                    let test = testsArray.[i]
+                    let result = runE2ETest stdlib test
+                    let totalTime = result.CompileTime + result.RuntimeTime
+                    lock lockObj (fun () ->
+                        results.[i] <- Some (test, result)
+                        allTimings.Add({ Name = $"Verification: {test.Name}"; TotalTime = totalTime; CompileTime = Some result.CompileTime; RuntimeTime = Some result.RuntimeTime })
+                        ProgressBar.increment progress result.Success
+                    )
                 ) |> ignore
 
                 ProgressBar.finish progress
@@ -817,7 +808,6 @@ let main args =
     let allUnitTests : (string * int * (unit -> Result<unit, string>)) array = [|
         ("CLI Flags Tests", 1, fun () -> CliFlagTests.runAll())
         ("Compiler Caching Tests", 1, fun () -> CompilerCachingTests.runAll())
-        ("E2E Scheduling Tests", 1, fun () -> E2ESchedulingTests.runAll())
         ("Encoding Tests", 1, fun () -> EncodingTests.runAll())
         ("Binary Tests", 11, fun () -> BinaryTests.runAll())
         ("Type Checking Tests", 8, fun () -> TypeCheckingTests.runAll())
