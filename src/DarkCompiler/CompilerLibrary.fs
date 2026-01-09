@@ -487,6 +487,293 @@ type LazyStdlibResult = {
     StdlibFloatPool: MIR.FloatPool
 }
 
+/// Helper: map a function returning Result over a list, returning Error on first failure
+let private mapResults (f: 'a -> Result<'b, string>) (items: 'a list) : Result<'b list, string> =
+    let rec loop acc remaining =
+        match remaining with
+        | [] -> Ok (List.rev acc)
+        | item :: rest ->
+            match f item with
+            | Error err -> Error err
+            | Ok result -> loop (result :: acc) rest
+    loop [] items
+
+/// Collect string/float pool references from an LIR operand
+let private collectOperandPoolRefs (op: LIR.Operand) : Set<int> * Set<int> =
+    match op with
+    | LIR.StringRef idx -> (Set.singleton idx, Set.empty)
+    | LIR.FloatRef idx -> (Set.empty, Set.singleton idx)
+    | _ -> (Set.empty, Set.empty)
+
+/// Collect string/float pool references from a list of LIR operands
+let private collectOperandsPoolRefs (ops: LIR.Operand list) : Set<int> * Set<int> =
+    ops
+    |> List.fold
+        (fun (strAcc, fltAcc) op ->
+            let (strRefs, fltRefs) = collectOperandPoolRefs op
+            (Set.union strAcc strRefs, Set.union fltAcc fltRefs))
+        (Set.empty, Set.empty)
+
+/// Collect string/float pool references from an LIR instruction
+let private collectInstrPoolRefs (instr: LIR.Instr) : Set<int> * Set<int> =
+    match instr with
+    | LIR.Mov (_, src) -> collectOperandPoolRefs src
+    | LIR.Phi (_, sources, _) ->
+        sources |> List.map fst |> collectOperandsPoolRefs
+    | LIR.Add (_, _, right) -> collectOperandPoolRefs right
+    | LIR.Sub (_, _, right) -> collectOperandPoolRefs right
+    | LIR.Cmp (_, right) -> collectOperandPoolRefs right
+    | LIR.Call (_, _, args)
+    | LIR.IndirectCall (_, _, args)
+    | LIR.ClosureCall (_, _, args) ->
+        collectOperandsPoolRefs args
+    | LIR.ClosureAlloc (_, _, captures) -> collectOperandsPoolRefs captures
+    | LIR.ArgMoves moves
+    | LIR.TailArgMoves moves ->
+        moves |> List.map snd |> collectOperandsPoolRefs
+    | LIR.HeapStore (_, _, src, _) -> collectOperandPoolRefs src
+    | LIR.StringConcat (_, left, right) ->
+        let (leftStrs, leftFlts) = collectOperandPoolRefs left
+        let (rightStrs, rightFlts) = collectOperandPoolRefs right
+        (Set.union leftStrs rightStrs, Set.union leftFlts rightFlts)
+    | LIR.FileReadText (_, path)
+    | LIR.FileExists (_, path)
+    | LIR.FileDelete (_, path)
+    | LIR.FileSetExecutable (_, path) ->
+        collectOperandPoolRefs path
+    | LIR.FileWriteText (_, path, content)
+    | LIR.FileAppendText (_, path, content) ->
+        let (pathStrs, pathFlts) = collectOperandPoolRefs path
+        let (contentStrs, contentFlts) = collectOperandPoolRefs content
+        (Set.union pathStrs contentStrs, Set.union pathFlts contentFlts)
+    | LIR.FileWriteFromPtr (_, path, _, _) -> collectOperandPoolRefs path
+    | LIR.StringHash (_, str)
+    | LIR.RefCountIncString str
+    | LIR.RefCountDecString str ->
+        collectOperandPoolRefs str
+    | LIR.StringEq (_, left, right) ->
+        let (leftStrs, leftFlts) = collectOperandPoolRefs left
+        let (rightStrs, rightFlts) = collectOperandPoolRefs right
+        (Set.union leftStrs rightStrs, Set.union leftFlts rightFlts)
+    | LIR.PrintString (strIdx, _) -> (Set.singleton strIdx, Set.empty)
+    | LIR.FLoad (_, floatIdx) -> (Set.empty, Set.singleton floatIdx)
+    | _ -> (Set.empty, Set.empty)
+
+/// Collect string/float pool references from an LIR function
+let private collectFunctionPoolRefs (func: LIR.Function) : Set<int> * Set<int> =
+    func.CFG.Blocks
+    |> Map.toList
+    |> List.fold
+        (fun (strAcc, fltAcc) (_label, block) ->
+            block.Instrs
+            |> List.fold
+                (fun (innerStrAcc, innerFltAcc) instr ->
+                    let (strRefs, fltRefs) = collectInstrPoolRefs instr
+                    (Set.union innerStrAcc strRefs, Set.union innerFltAcc fltRefs))
+                (strAcc, fltAcc))
+        (Set.empty, Set.empty)
+
+/// Build a cached function entry, capturing only pool entries it references
+let private buildCachedEntry (func: LIR.Function) (stringPool: MIR.StringPool) (floatPool: MIR.FloatPool) : CachedUserFunction =
+    let (stringRefs, floatRefs) = collectFunctionPoolRefs func
+    let strings =
+        stringRefs
+        |> Set.toList
+        |> List.choose (fun idx ->
+            Map.tryFind idx stringPool.Strings
+            |> Option.map (fun (value, _len) -> (idx, value)))
+    let floats =
+        floatRefs
+        |> Set.toList
+        |> List.choose (fun idx ->
+            Map.tryFind idx floatPool.Floats
+            |> Option.map (fun value -> (idx, value)))
+    { LIRFunction = func
+      Strings = strings
+      Floats = floats }
+
+/// Add cached string entries to a pool and return old->new index mapping
+let private addCachedStringEntries (pool: MIR.StringPool) (entries: (int * string) list) : MIR.StringPool * Map<int, int> =
+    entries
+    |> List.fold
+        (fun (poolAcc, mapAcc) (oldIdx, value) ->
+            let (newIdx, poolNext) = MIR.addString poolAcc value
+            (poolNext, Map.add oldIdx newIdx mapAcc))
+        (pool, Map.empty)
+
+/// Add cached float entries to a pool and return old->new index mapping
+let private addCachedFloatEntries (pool: MIR.FloatPool) (entries: (int * float) list) : MIR.FloatPool * Map<int, int> =
+    entries
+    |> List.fold
+        (fun (poolAcc, mapAcc) (oldIdx, value) ->
+            let (newIdx, poolNext) = MIR.addFloat poolAcc value
+            (poolNext, Map.add oldIdx newIdx mapAcc))
+        (pool, Map.empty)
+
+/// Remap pool references in an LIR operand using old->new index maps
+let private remapLIROperand (stringMap: Map<int, int>) (floatMap: Map<int, int>) (op: LIR.Operand) : Result<LIR.Operand, string> =
+    match op with
+    | LIR.StringRef idx ->
+        match Map.tryFind idx stringMap with
+        | Some newIdx -> Ok (LIR.StringRef newIdx)
+        | None -> Error $"Missing string pool mapping for index {idx}"
+    | LIR.FloatRef idx ->
+        match Map.tryFind idx floatMap with
+        | Some newIdx -> Ok (LIR.FloatRef newIdx)
+        | None -> Error $"Missing float pool mapping for index {idx}"
+    | other -> Ok other
+
+/// Remap pool references in a list of LIR operands
+let private remapLIROperands stringMap floatMap ops =
+    mapResults (remapLIROperand stringMap floatMap) ops
+
+/// Remap pool references in an LIR instruction
+let private remapLIRInstr (stringMap: Map<int, int>) (floatMap: Map<int, int>) (instr: LIR.Instr) : Result<LIR.Instr, string> =
+    match instr with
+    | LIR.Mov (dest, src) ->
+        remapLIROperand stringMap floatMap src
+        |> Result.map (fun src' -> LIR.Mov (dest, src'))
+    | LIR.Phi (dest, sources, valueType) ->
+        sources
+        |> mapResults (fun (op, lbl) ->
+            remapLIROperand stringMap floatMap op
+            |> Result.map (fun op' -> (op', lbl)))
+        |> Result.map (fun sources' -> LIR.Phi (dest, sources', valueType))
+    | LIR.Add (dest, left, right) ->
+        remapLIROperand stringMap floatMap right
+        |> Result.map (fun right' -> LIR.Add (dest, left, right'))
+    | LIR.Sub (dest, left, right) ->
+        remapLIROperand stringMap floatMap right
+        |> Result.map (fun right' -> LIR.Sub (dest, left, right'))
+    | LIR.Cmp (left, right) ->
+        remapLIROperand stringMap floatMap right
+        |> Result.map (fun right' -> LIR.Cmp (left, right'))
+    | LIR.Call (dest, name, args) ->
+        remapLIROperands stringMap floatMap args
+        |> Result.map (fun args' -> LIR.Call (dest, name, args'))
+    | LIR.IndirectCall (dest, func, args) ->
+        remapLIROperands stringMap floatMap args
+        |> Result.map (fun args' -> LIR.IndirectCall (dest, func, args'))
+    | LIR.ClosureAlloc (dest, name, caps) ->
+        remapLIROperands stringMap floatMap caps
+        |> Result.map (fun caps' -> LIR.ClosureAlloc (dest, name, caps'))
+    | LIR.ClosureCall (dest, closure, args) ->
+        remapLIROperands stringMap floatMap args
+        |> Result.map (fun args' -> LIR.ClosureCall (dest, closure, args'))
+    | LIR.ArgMoves moves ->
+        moves
+        |> mapResults (fun (reg, op) ->
+            remapLIROperand stringMap floatMap op
+            |> Result.map (fun op' -> (reg, op')))
+        |> Result.map LIR.ArgMoves
+    | LIR.TailArgMoves moves ->
+        moves
+        |> mapResults (fun (reg, op) ->
+            remapLIROperand stringMap floatMap op
+            |> Result.map (fun op' -> (reg, op')))
+        |> Result.map LIR.TailArgMoves
+    | LIR.HeapStore (addr, offset, src, vt) ->
+        remapLIROperand stringMap floatMap src
+        |> Result.map (fun src' -> LIR.HeapStore (addr, offset, src', vt))
+    | LIR.StringConcat (dest, left, right) ->
+        match remapLIROperand stringMap floatMap left with
+        | Error err -> Error err
+        | Ok left' ->
+            remapLIROperand stringMap floatMap right
+            |> Result.map (fun right' -> LIR.StringConcat (dest, left', right'))
+    | LIR.FileReadText (dest, path) ->
+        remapLIROperand stringMap floatMap path
+        |> Result.map (fun path' -> LIR.FileReadText (dest, path'))
+    | LIR.FileExists (dest, path) ->
+        remapLIROperand stringMap floatMap path
+        |> Result.map (fun path' -> LIR.FileExists (dest, path'))
+    | LIR.FileWriteText (dest, path, content) ->
+        match remapLIROperand stringMap floatMap path with
+        | Error err -> Error err
+        | Ok path' ->
+            remapLIROperand stringMap floatMap content
+            |> Result.map (fun content' -> LIR.FileWriteText (dest, path', content'))
+    | LIR.FileAppendText (dest, path, content) ->
+        match remapLIROperand stringMap floatMap path with
+        | Error err -> Error err
+        | Ok path' ->
+            remapLIROperand stringMap floatMap content
+            |> Result.map (fun content' -> LIR.FileAppendText (dest, path', content'))
+    | LIR.FileDelete (dest, path) ->
+        remapLIROperand stringMap floatMap path
+        |> Result.map (fun path' -> LIR.FileDelete (dest, path'))
+    | LIR.FileSetExecutable (dest, path) ->
+        remapLIROperand stringMap floatMap path
+        |> Result.map (fun path' -> LIR.FileSetExecutable (dest, path'))
+    | LIR.FileWriteFromPtr (dest, path, ptr, length) ->
+        remapLIROperand stringMap floatMap path
+        |> Result.map (fun path' -> LIR.FileWriteFromPtr (dest, path', ptr, length))
+    | LIR.StringHash (dest, str) ->
+        remapLIROperand stringMap floatMap str
+        |> Result.map (fun str' -> LIR.StringHash (dest, str'))
+    | LIR.StringEq (dest, left, right) ->
+        match remapLIROperand stringMap floatMap left with
+        | Error err -> Error err
+        | Ok left' ->
+            remapLIROperand stringMap floatMap right
+            |> Result.map (fun right' -> LIR.StringEq (dest, left', right'))
+    | LIR.RefCountIncString str ->
+        remapLIROperand stringMap floatMap str
+        |> Result.map LIR.RefCountIncString
+    | LIR.RefCountDecString str ->
+        remapLIROperand stringMap floatMap str
+        |> Result.map LIR.RefCountDecString
+    | LIR.PrintString (strIdx, strLen) ->
+        match Map.tryFind strIdx stringMap with
+        | Some newIdx -> Ok (LIR.PrintString (newIdx, strLen))
+        | None -> Error $"Missing string pool mapping for index {strIdx}"
+    | LIR.FLoad (dest, floatIdx) ->
+        match Map.tryFind floatIdx floatMap with
+        | Some newIdx -> Ok (LIR.FLoad (dest, newIdx))
+        | None -> Error $"Missing float pool mapping for index {floatIdx}"
+    | _ -> Ok instr
+
+/// Remap pool references in an LIR basic block
+let private remapLIRBlock (stringMap: Map<int, int>) (floatMap: Map<int, int>) (block: LIR.BasicBlock) : Result<LIR.BasicBlock, string> =
+    block.Instrs
+    |> mapResults (remapLIRInstr stringMap floatMap)
+    |> Result.map (fun instrs' ->
+        { Label = block.Label
+          Instrs = instrs'
+          Terminator = block.Terminator })
+
+/// Remap pool references in an LIR function
+let private remapLIRFunction (stringMap: Map<int, int>) (floatMap: Map<int, int>) (func: LIR.Function) : Result<LIR.Function, string> =
+    func.CFG.Blocks
+    |> Map.toList
+    |> mapResults (fun (label, block) ->
+        remapLIRBlock stringMap floatMap block
+        |> Result.map (fun block' -> (label, block')))
+    |> Result.map (fun blocks' ->
+        let blockMap = Map.ofList blocks'
+        { Name = func.Name
+          TypedParams = func.TypedParams
+          CFG = { Entry = func.CFG.Entry; Blocks = blockMap }
+          StackSize = func.StackSize
+          UsedCalleeSaved = func.UsedCalleeSaved })
+
+/// Add cached function pool entries to user pools and remap functions to new indices
+let private addCachedFunctionsToPools
+    (stringPool: MIR.StringPool)
+    (floatPool: MIR.FloatPool)
+    (cachedEntries: (string * CachedUserFunction) list)
+    : Result<MIR.StringPool * MIR.FloatPool * (string * LIR.Function) list, string> =
+    let rec loop (strPoolAcc, fltPoolAcc, funcsAcc) remaining =
+        match remaining with
+        | [] -> Ok (strPoolAcc, fltPoolAcc, List.rev funcsAcc)
+        | (name, entry) :: rest ->
+            let (strPool', strMap) = addCachedStringEntries strPoolAcc entry.Strings
+            let (fltPool', fltMap) = addCachedFloatEntries fltPoolAcc entry.Floats
+            match remapLIRFunction strMap fltMap entry.LIRFunction with
+            | Error err -> Error $"Cached function {name}: {err}"
+            | Ok func -> loop (strPool', fltPool', (name, func) :: funcsAcc) rest
+    loop (stringPool, floatPool, []) cachedEntries
+
 // Helper functions for exception-to-Result conversion (Darklang compatibility)
 
 /// Compare two LIR functions and return differences
@@ -1254,18 +1541,28 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                     // - Both values passed to Dict.set
                     // - Result passed to tail call
                     // See the Dict.fromList tests that are expected to fail until this is fixed.
-                    let functionsToCompile = testOnly.UserFunctions
-                    let cachedFuncs : ANF.Function list = []
-                    let cachedFuncNames : string list = []
+                    let isStdlibSpecialized (name: string) : bool =
+                        name.StartsWith("Stdlib.") || name.StartsWith("__")
+                    let stdlibSpecializedNames =
+                        testOnly.SpecializedFuncNames
+                        |> Set.filter isStdlibSpecialized
+                    let cachedFuncNameSet =
+                        stdlibSpecializedNames
+                        |> Set.filter (fun name -> stdlib.CompiledFuncCache.ContainsKey name)
+                    let functionsToCompile =
+                        testOnly.UserFunctions
+                        |> List.filter (fun f -> not (Set.contains f.Name cachedFuncNameSet))
+                    let cachedFuncNames : string list = Set.toList cachedFuncNameSet
 
                     if verbosity >= 3 then
-                        println $"  [COMPILE] All {functionsToCompile.Length} user functions compiled fresh"
+                        println $"  [COMPILE] {functionsToCompile.Length} user functions compiled fresh"
                         for f in functionsToCompile do
                             println $"    - {f.Name}"
 
                     // No cached functions, so no cached return types needed
-                    let cachedReturnTypes : Map<string, AST.Type> = Map.empty
-                    let specializedNeedingCache : Set<string> = Set.empty
+                    let specializedNeedingCache =
+                        stdlibSpecializedNames
+                        |> Set.filter (fun name -> not (Set.contains name cachedFuncNameSet))
 
                     let anfResult =
                         buildAnfProgram
@@ -1311,15 +1608,6 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                                 // Allocate user functions
                                 let allocatedUserFuncs = userFuncs |> List.map RegisterAllocation.allocateRegisters
 
-                                // Merge pools (stdlib first, user appended with offset)
-                                let stringOffset = stdlibStrings.NextId
-                                let floatOffset = stdlibFloats.NextId
-                                let mergedStrings = ANF_to_MIR.appendStringPools stdlibStrings userStrings
-                                let mergedFloats = ANF_to_MIR.appendFloatPools stdlibFloats userFloats
-
-                                // Offset pool refs in allocated user functions
-                                let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
-
                                 // LIR comparison code disabled since caching is disabled
                                 // TODO: Re-enable when caching bug is fixed
 
@@ -1328,82 +1616,97 @@ let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib:
                                 // retrieved in different test contexts (each test has different user pools).
                                 for func in allocatedUserFuncs do
                                     if Set.contains func.Name specializedNeedingCache then
-                                        let entry : CachedUserFunction = {
-                                            LIRFunction = func  // UN-OFFSET version
-                                            Strings = []
-                                            Floats = []
-                                        }
+                                        let entry = buildCachedEntry func userStrings userFloats
                                         let added = stdlib.CompiledFuncCache.TryAdd(func.Name, entry)
                                         if verbosity >= 3 then
                                             let blockCount = func.CFG.Blocks.Count
                                             let instrCount = func.CFG.Blocks |> Map.toList |> List.sumBy (fun (_, b) -> b.Instrs.Length)
                                             println $"  [CACHE STORE] {func.Name}: {blockCount} blocks, {instrCount} instrs, added={added}"
 
-                                // Retrieve cached specialized functions and apply current test's offsets
-                                let cachedSpecializedFuncs =
+                                let cachedEntries =
                                     cachedFuncNames
                                     |> List.choose (fun name ->
                                         match stdlib.CompiledFuncCache.TryGetValue(name) with
-                                        | true, cached ->
-                                            // Apply current test's pool offsets to cached function
-                                            let func = MIR_to_LIR.offsetLIRFunction stringOffset floatOffset cached.LIRFunction
-                                            if verbosity >= 3 then
-                                                let blockCount = func.CFG.Blocks.Count
-                                                let instrCount = func.CFG.Blocks |> Map.toList |> List.sumBy (fun (_, b) -> b.Instrs.Length)
-                                                println $"  [CACHE HIT] {name}: {blockCount} blocks, {instrCount} instrs"
-                                            Some func
+                                        | true, cached -> Some (name, cached)
                                         | false, _ -> None)
 
-                                // Combine newly-compiled and cached user functions
-                                let allUserFuncs = cachedSpecializedFuncs @ offsetUserFuncs
-
-                                if verbosity >= 3 then
-                                    println $"  [COMBINED] cached: {cachedSpecializedFuncs.Length}, fresh: {offsetUserFuncs.Length}, total: {allUserFuncs.Length}"
-                                    for f in allUserFuncs do
-                                        println $"    - {f.Name}"
-
-                                // Filter stdlib functions to only include reachable ones (dead code elimination)
-                                let reachableStdlib =
-                                    if options.DisableDCE then stdlib.AllocatedFunctions
-                                    else
-                                        DeadCodeElimination.filterFunctions
-                                            stdlib.StdlibCallGraph
-                                            allUserFuncs
-                                            stdlib.AllocatedFunctions
-
-                                // Combine reachable stdlib functions with user functions
-                                let allFuncs = reachableStdlib @ allUserFuncs
-                                let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
-                                if shouldDumpIR verbosity options.DumpLIR then
-                                    printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
-
-                                if verbosity >= 2 then
-                                    let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - allocStart, 1)
-                                    println $"        {t}ms"
-
-                                let binaryResult =
-                                    generateBinary
-                                        verbosity
-                                        options
-                                        sw
-                                        "  [6/8] Code Generation..."
-                                        "  [7/7] ARM64 Encoding..."
-                                        "  [7/7] Binary Generation ({format})..."
-                                        false
-                                        false
-                                        allocatedProgram
-                                match binaryResult with
+                                match addCachedFunctionsToPools userStrings userFloats cachedEntries with
                                 | Error err ->
                                     { Binary = Array.empty
                                       Success = false
                                       ErrorMessage = Some err }
-                                | Ok binary ->
-                                    sw.Stop()
-                                    if verbosity >= 1 then
-                                        println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
-                                    { Binary = binary
-                                      Success = true
-                                      ErrorMessage = None }
+                                | Ok (userStringsWithCache, userFloatsWithCache, cachedSpecializedFuncs) ->
+                                    // Merge pools (stdlib first, user appended with offset)
+                                    let stringOffset = stdlibStrings.NextId
+                                    let floatOffset = stdlibFloats.NextId
+                                    let mergedStrings = ANF_to_MIR.appendStringPools stdlibStrings userStringsWithCache
+                                    let mergedFloats = ANF_to_MIR.appendFloatPools stdlibFloats userFloatsWithCache
+
+                                    // Offset pool refs in allocated user functions
+                                    let offsetUserFuncs =
+                                        allocatedUserFuncs
+                                        |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
+
+                                    let offsetCachedFuncs =
+                                        cachedSpecializedFuncs
+                                        |> List.map (fun (name, func) ->
+                                            let offsetFunc = MIR_to_LIR.offsetLIRFunction stringOffset floatOffset func
+                                            if verbosity >= 3 then
+                                                let blockCount = offsetFunc.CFG.Blocks.Count
+                                                let instrCount = offsetFunc.CFG.Blocks |> Map.toList |> List.sumBy (fun (_, b) -> b.Instrs.Length)
+                                                println $"  [CACHE HIT] {name}: {blockCount} blocks, {instrCount} instrs"
+                                            offsetFunc)
+
+                                    // Combine newly-compiled and cached user functions
+                                    let allUserFuncs = offsetCachedFuncs @ offsetUserFuncs
+
+                                    if verbosity >= 3 then
+                                        println $"  [COMBINED] cached: {offsetCachedFuncs.Length}, fresh: {offsetUserFuncs.Length}, total: {allUserFuncs.Length}"
+                                        for f in allUserFuncs do
+                                            println $"    - {f.Name}"
+
+                                    // Filter stdlib functions to only include reachable ones (dead code elimination)
+                                    let reachableStdlib =
+                                        if options.DisableDCE then stdlib.AllocatedFunctions
+                                        else
+                                            DeadCodeElimination.filterFunctions
+                                                stdlib.StdlibCallGraph
+                                                allUserFuncs
+                                                stdlib.AllocatedFunctions
+
+                                    // Combine reachable stdlib functions with user functions
+                                    let allFuncs = reachableStdlib @ allUserFuncs
+                                    let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
+                                    if shouldDumpIR verbosity options.DumpLIR then
+                                        printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
+
+                                    if verbosity >= 2 then
+                                        let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - allocStart, 1)
+                                        println $"        {t}ms"
+
+                                    let binaryResult =
+                                        generateBinary
+                                            verbosity
+                                            options
+                                            sw
+                                            "  [6/8] Code Generation..."
+                                            "  [7/7] ARM64 Encoding..."
+                                            "  [7/7] Binary Generation ({format})..."
+                                            false
+                                            false
+                                            allocatedProgram
+                                    match binaryResult with
+                                    | Error err ->
+                                        { Binary = Array.empty
+                                          Success = false
+                                          ErrorMessage = Some err }
+                                    | Ok binary ->
+                                        sw.Stop()
+                                        if verbosity >= 1 then
+                                            println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
+                                        { Binary = binary
+                                          Success = true
+                                          ErrorMessage = None }
                     with
                     | ex ->
                         { Binary = Array.empty
