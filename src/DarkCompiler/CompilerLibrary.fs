@@ -6,6 +6,7 @@
 module CompilerLibrary
 
 open CodeGen
+open IRPrinter
 
 open System
 open System.IO
@@ -85,58 +86,25 @@ let shouldDumpIR (verbosity: int) (enabled: bool) : bool =
 /// Print ANF program in a consistent, human-readable format
 let printANFProgram (title: string) (program: ANF.Program) : unit =
     println title
-    let (ANF.Program (funcs, mainExpr)) = program
-    for func in funcs do
-        println $"Function: {func.Name}"
-        println $"  TypedParams: {func.TypedParams}"
-        println $"  Body: {func.Body}"
-        println ""
-    println $"Main: {mainExpr}"
+    println (formatANF program)
     println ""
 
 /// Print MIR program (with CFG) in a consistent format
 let printMIRProgram (title: string) (program: MIR.Program) : unit =
-    let (MIR.Program (functions, _, _)) = program
     println title
-    for func in functions do
-        println $"\nFunction: {func.Name}"
-        println $"Entry: {func.CFG.Entry}"
-        for kvp in func.CFG.Blocks do
-            let block = kvp.Value
-            println $"\n{block.Label}:"
-            for instr in block.Instrs do
-                println $"  {instr}"
-            println $"  {block.Terminator}"
+    println (formatMIR program)
     println ""
 
 /// Print LIR program (with CFG) in a consistent format
 let printLIRProgram (title: string) (program: LIR.Program) : unit =
-    let (LIR.Program (funcs, _, _)) = program
     println title
-    for func in funcs do
-        println $"Function: {func.Name}"
-        println $"Entry: {func.CFG.Entry}"
-        for kvp in func.CFG.Blocks do
-            let block = kvp.Value
-            println $"\n{block.Label}:"
-            for instr in block.Instrs do
-                println $"  {instr}"
-            println $"  {block.Terminator}"
+    println (formatLIR program)
     println ""
 
 /// Print symbolic LIR program (with CFG) in a consistent format
 let printLIRSymbolicProgram (title: string) (program: LIRSymbolic.Program) : unit =
-    let (LIRSymbolic.Program funcs) = program
     println title
-    for func in funcs do
-        println $"Function: {func.Name}"
-        println $"Entry: {func.CFG.Entry}"
-        for kvp in func.CFG.Blocks do
-            let block = kvp.Value
-            println $"\n{block.Label}:"
-            for instr in block.Instrs do
-                println $"  {instr}"
-            println $"  {block.Terminator}"
+    println (formatLIRSymbolic program)
     println ""
 
 /// Compute the platform-specific code file offset for encoding

@@ -34,6 +34,7 @@
     <Compile Include="CompilerCachingTests.fs" />
     <Compile Include="PreamblePrecompileTests.fs" />
     <Compile Include="IRSymbolTests.fs" />
+    <Compile Include="IRPrinterTests.fs" />
     <Compile Include="PassTestRunnerTests.fs" />
     <Compile Include="ParallelUtilsTests.fs" />
     <Compile Include="EncodingTests.fs" />

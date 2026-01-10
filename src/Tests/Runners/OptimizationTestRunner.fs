@@ -7,7 +7,7 @@ module TestDSL.OptimizationTestRunner
 
 open System
 open TestDSL.OptimizationFormat
-open TestDSL.PassTestRunner
+open IRPrinter
 
 /// Result of running an optimization test
 type OptimizationTestResult = {
@@ -27,49 +27,6 @@ let normalizeIR (ir: string) : string =
     |> Array.filter (fun line -> line.Length > 0)
     |> String.concat "\n"
 
-/// Pretty-print MIR program with CFG structure
-let prettyPrintMIRProgram (MIR.Program (functions, _, _)) : string =
-    let funcStrs =
-        functions
-        |> List.map (fun func ->
-            let blockStrs =
-                func.CFG.Blocks
-                |> Map.toList
-                |> List.sortBy fst
-                |> List.map (fun (label, block) ->
-                    let instrStrs =
-                        block.Instrs
-                        |> List.map (sprintf "    %A")
-                        |> String.concat "\n"
-                    let termStr = sprintf "    %A" block.Terminator
-                    $"  {label}:\n{instrStrs}\n{termStr}")
-                |> String.concat "\n"
-            $"{func.Name}:\n{blockStrs}")
-        |> String.concat "\n\n"
-    funcStrs
-
-/// Pretty-print LIR program with CFG structure
-let prettyPrintLIRProgram (LIR.Program (functions, _, _)) : string =
-    let funcStrs =
-        functions
-        |> List.map (fun func ->
-            let blockStrs =
-                func.CFG.Blocks
-                |> Map.toList
-                |> List.sortBy fst
-                |> List.map (fun (label, block) ->
-                    let instrStrs =
-                        block.Instrs
-                        |> List.map prettyPrintLIRInstr
-                        |> List.map (sprintf "    %s")
-                        |> String.concat "\n"
-                    let termStr = sprintf "    %s" (prettyPrintLIRTerminator block.Terminator)
-                    $"  {label}:\n{instrStrs}\n{termStr}")
-                |> String.concat "\n"
-            $"{func.Name}:\n{blockStrs}")
-        |> String.concat "\n\n"
-    funcStrs
-
 /// Compile source and get ANF after optimization
 let getOptimizedANF (source: string) : Result<string, string> =
     // Parse source
@@ -88,7 +45,7 @@ let getOptimizedANF (source: string) : Result<string, string> =
                 let optimized = ANF_Optimize.optimizeProgram convResult.Program
 
                 // Pretty-print the result
-                Ok (prettyPrintANF optimized)
+                Ok (formatANF optimized)
 
 /// Compile source and get MIR after optimization
 let getOptimizedMIR (source: string) : Result<string, string> =
@@ -127,7 +84,7 @@ let getOptimizedMIR (source: string) : Result<string, string> =
 
                         // SSA form is now preserved (phi resolution happens in register allocation)
                         // Pretty-print the optimized MIR (still in SSA form)
-                        Ok (prettyPrintMIRProgram optimizedMir)
+                        Ok (formatMIR optimizedMir)
 
 /// Compile source and get LIR after optimization
 let getOptimizedLIR (source: string) : Result<string, string> =
@@ -173,7 +130,7 @@ let getOptimizedLIR (source: string) : Result<string, string> =
                             | Error err -> Error $"LIR pool resolution error: {err}"
                             | Ok resolved ->
                                 // Pretty-print
-                                Ok (prettyPrintLIRProgram resolved)
+                                Ok (formatLIR resolved)
 
 /// Run a single optimization test
 let runOptimizationTest (test: OptimizationTest) : OptimizationTestResult =

@@ -42,6 +42,7 @@
     <Compile Include="Binary_ELF.fs" />
     <Compile Include="passes/8_Binary_Generation_MachO.fs" />
     <Compile Include="passes/8_Binary_Generation_ELF.fs" />
+    <Compile Include="IRPrinter.fs" />
     <Compile Include="CompilerLibrary.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-01-10 22:33:56
-**Commit:** `2e3d767c` - Remove dead compileWithStdlibAST path
+**Last Updated:** 2026-01-10 22:52:19
+**Commit:** `b1882490` - Factor CLI compiler option helpers
 
 | Benchmark     |           Dark (3.89x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
