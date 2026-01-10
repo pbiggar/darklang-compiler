@@ -1,0 +1,31 @@
+// TestRunnerScheduling.fs - Helpers for test runner scheduling decisions
+//
+// Provides deterministic ordering and stdlib-related scheduling helpers.
+
+module TestRunnerScheduling
+
+open TestDSL.E2EFormat
+
+type UnitTestSuite = string * int * (unit -> Result<unit, string>)
+
+let estimateE2ETestCost (test: E2ETest) : int =
+    test.Source.Length + test.Preamble.Length
+
+let orderE2ETestsByEstimatedCost (tests: E2ETest array) : E2ETest array =
+    tests
+    |> Array.map (fun test -> test, estimateE2ETestCost test)
+    |> Array.sortBy (fun (test, cost) -> (-cost, test.SourceFile, test.Name))
+    |> Array.map fst
+
+let splitUnitTestsByStdlibNeed
+    (needsStdlib: string list)
+    (suites: UnitTestSuite array)
+    : UnitTestSuite array * UnitTestSuite array =
+    let needsStdlibSet = Set.ofList needsStdlib
+    let needsStdlibSuites, noStdlibSuites =
+        suites
+        |> Array.partition (fun (name, _, _) -> Set.contains name needsStdlibSet)
+    (noStdlibSuites, needsStdlibSuites)
+
+let shouldStartStdlibCompile (hasE2E: bool) (hasVerification: bool) (needsUnitStdlib: bool) : bool =
+    hasE2E || hasVerification || needsUnitStdlib

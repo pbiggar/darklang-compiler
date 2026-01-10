@@ -28,6 +28,8 @@
 
     <!-- Unit tests -->
     <Compile Include="CliFlagTests.fs" />
+    <Compile Include="TestRunnerScheduling.fs" />
+    <Compile Include="TestRunnerSchedulingTests.fs" />
     <Compile Include="CompilerCachingTests.fs" />
     <Compile Include="PreamblePrecompileTests.fs" />
     <Compile Include="IRSymbolTests.fs" />
