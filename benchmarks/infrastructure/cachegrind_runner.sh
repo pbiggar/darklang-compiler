@@ -96,9 +96,22 @@ format_improvement() {
 
 pretty_section "Running cachegrind benchmark for $BENCHMARK..."
 
-# Create output file for parsed results
 RESULTS_FILE_PATH="$OUTPUT_DIR/${BENCHMARK}_cachegrind.json"
+STARTED_RESULTS=false
+FINALIZED_RESULTS=false
+
+finalize_results_file() {
+    if [ "$STARTED_RESULTS" = true ] && [ "$FINALIZED_RESULTS" = false ]; then
+        echo "]}" >> "$RESULTS_FILE_PATH"
+        FINALIZED_RESULTS=true
+    fi
+}
+
+trap finalize_results_file EXIT
+
+# Create output file for parsed results
 echo "{\"benchmark\": \"$BENCHMARK\", \"results\": [" > "$RESULTS_FILE_PATH"
+STARTED_RESULTS=true
 
 FIRST=true
 
@@ -310,4 +323,5 @@ fi
 # (All benchmarks show ~2.17M instructions regardless of complexity - just measuring startup)
 
 echo "]}" >> "$RESULTS_FILE_PATH"
+FINALIZED_RESULTS=true
 pretty_ok "Results saved to: $RESULTS_FILE_PATH"

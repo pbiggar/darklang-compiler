@@ -7,8 +7,6 @@
 #   --refresh-baseline       Re-run all baseline languages (default: use cached values)
 #   --refresh-baseline=LANGS Re-run specific languages only (comma-separated: rust,go,python,node,ocaml)
 
-set -e
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/infrastructure/pretty.sh"
@@ -17,6 +15,10 @@ source "$SCRIPT_DIR/infrastructure/pretty.sh"
 USE_CACHEGRIND=true
 export REFRESH_BASELINE=false
 BENCHMARK="all"
+BUILD_FAILURES=()
+VALIDATION_FAILURES=()
+RUN_FAILURES=()
+PROCESS_FAILURES=()
 VALIDATION_FAILURES=()
 
 while [[ $# -gt 0 ]]; do
@@ -77,18 +79,28 @@ for bench in $BENCHMARKS; do
     pretty_header "Benchmark: $bench"
 
     # Build all implementations
-    "$SCRIPT_DIR/infrastructure/build_all.sh" "$bench"
+    if ! "$SCRIPT_DIR/infrastructure/build_all.sh" "$bench"; then
+        BUILD_FAILURES+=("$bench")
+        pretty_warn "Build failed for $bench (continuing)"
+    fi
 
     # Validate correctness
     if ! "$SCRIPT_DIR/infrastructure/validate_all.sh" "$bench"; then
         VALIDATION_FAILURES+=("$bench")
+        pretty_warn "Validation failed for $bench (continuing)"
     fi
 
     # Run benchmark
     if [ "$USE_CACHEGRIND" = true ]; then
-        "$SCRIPT_DIR/infrastructure/cachegrind_runner.sh" "$bench" "$OUTPUT_DIR"
+        if ! "$SCRIPT_DIR/infrastructure/cachegrind_runner.sh" "$bench" "$OUTPUT_DIR"; then
+            RUN_FAILURES+=("$bench")
+            pretty_warn "Cachegrind failed for $bench (continuing)"
+        fi
     else
-        "$SCRIPT_DIR/infrastructure/hyperfine_runner.sh" "$bench" "$OUTPUT_DIR"
+        if ! "$SCRIPT_DIR/infrastructure/hyperfine_runner.sh" "$bench" "$OUTPUT_DIR"; then
+            RUN_FAILURES+=("$bench")
+            pretty_warn "Hyperfine failed for $bench (continuing)"
+        fi
     fi
 
     echo ""
@@ -96,17 +108,29 @@ done
 
 # Process results
 pretty_info "Processing results..."
-if [ "$USE_CACHEGRIND" = true ]; then
-    if [ "$REFRESH_BASELINE" = "false" ]; then
-        python3 "$SCRIPT_DIR/infrastructure/cachegrind_processor.py" "$OUTPUT_DIR" --use-baseline
+    if [ "$USE_CACHEGRIND" = true ]; then
+        if [ "$REFRESH_BASELINE" = "false" ]; then
+            if ! python3 "$SCRIPT_DIR/infrastructure/cachegrind_processor.py" "$OUTPUT_DIR" --use-baseline; then
+                PROCESS_FAILURES+=("cachegrind_processor")
+                pretty_warn "cachegrind_processor failed (continuing)"
+            fi
+        else
+            if ! python3 "$SCRIPT_DIR/infrastructure/cachegrind_processor.py" "$OUTPUT_DIR"; then
+                PROCESS_FAILURES+=("cachegrind_processor")
+                pretty_warn "cachegrind_processor failed (continuing)"
+            fi
+        fi
+        # Update history log with cachegrind results
+        if ! python3 "$SCRIPT_DIR/infrastructure/history_updater.py" "$OUTPUT_DIR"; then
+            PROCESS_FAILURES+=("history_updater")
+            pretty_warn "history_updater failed (continuing)"
+        fi
     else
-        python3 "$SCRIPT_DIR/infrastructure/cachegrind_processor.py" "$OUTPUT_DIR"
+        if ! python3 "$SCRIPT_DIR/infrastructure/result_processor.py" "$OUTPUT_DIR"; then
+            PROCESS_FAILURES+=("result_processor")
+            pretty_warn "result_processor failed (continuing)"
+        fi
     fi
-    # Update history log with cachegrind results
-    python3 "$SCRIPT_DIR/infrastructure/history_updater.py" "$OUTPUT_DIR"
-else
-    python3 "$SCRIPT_DIR/infrastructure/result_processor.py" "$OUTPUT_DIR"
-fi
 
 echo ""
 pretty_ok "Results saved to: $OUTPUT_DIR"
@@ -116,8 +140,23 @@ else
     pretty_info "Summary: $OUTPUT_DIR/summary.md"
 fi
 
+if [ ${#BUILD_FAILURES[@]} -ne 0 ]; then
+    pretty_fail "Build failures: ${BUILD_FAILURES[*]}"
+fi
+
 if [ ${#VALIDATION_FAILURES[@]} -ne 0 ]; then
     echo ""
     pretty_fail "Validation failed for: ${VALIDATION_FAILURES[*]}"
+fi
+
+if [ ${#RUN_FAILURES[@]} -ne 0 ]; then
+    pretty_fail "Benchmark run failures: ${RUN_FAILURES[*]}"
+fi
+
+if [ ${#PROCESS_FAILURES[@]} -ne 0 ]; then
+    pretty_fail "Processing failures: ${PROCESS_FAILURES[*]}"
+fi
+
+if [ ${#BUILD_FAILURES[@]} -ne 0 ] || [ ${#VALIDATION_FAILURES[@]} -ne 0 ] || [ ${#RUN_FAILURES[@]} -ne 0 ] || [ ${#PROCESS_FAILURES[@]} -ne 0 ]; then
     exit 1
 fi
