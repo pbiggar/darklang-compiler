@@ -225,6 +225,11 @@ Input (MIR):  Add(v1, v2, v3)      // v1 = v2 + v3
 Output (LIR): ADD(V1, V2, V3)      // ARM64 ADD instruction
 ```
 
+Implementation detail: some cached compilation paths store a symbolic LIR variant
+(string/float constants by value) and resolve pool indices once at final merge
+before code generation. This avoids per-function pool remapping when mixing
+stdlib, preamble, and user functions.
+
 ---
 
 ## Pass 5: Register Allocation (`5_RegisterAllocation.fs`)
