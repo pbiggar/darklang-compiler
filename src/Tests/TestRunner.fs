@@ -210,6 +210,7 @@ let main args =
         "Compiler Caching Tests"
         "Preamble Precompile Tests"
         "IR Symbol Tests"
+        "Pass Test Runner Tests"
         "Parallel Utils Tests"
         "Encoding Tests"
         "Binary Tests"
@@ -833,6 +834,7 @@ let main args =
         { Name = "Compiler Caching Tests"; Tests = wrapStdlibTests "Compiler Caching Tests" CompilerCachingTests.tests }
         { Name = "Preamble Precompile Tests"; Tests = wrapStdlibTests "Preamble Precompile Tests" PreamblePrecompileTests.tests }
         { Name = "IR Symbol Tests"; Tests = IRSymbolTests.tests }
+        { Name = "Pass Test Runner Tests"; Tests = PassTestRunnerTests.tests }
         { Name = "Parallel Utils Tests"; Tests = ParallelUtilsTests.tests }
         { Name = "Encoding Tests"; Tests = EncodingTests.tests }
         { Name = "Binary Tests"; Tests = BinaryTests.tests }

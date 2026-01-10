@@ -3,8 +3,7 @@
 // Loads pass test files (e.g., MIR→LIR tests), runs the compiler pass,
 // and compares the output with expected results.
 //
-// NOTE: Temporarily disabled - MIR/LIR structure changed to CFG, needs rewrite
-// Pass tests will be re-enabled after CFG-based test infrastructure is built
+// Pass tests are active; MIR pretty-printing reflects CFG structure for diagnostics.
 
 module TestDSL.PassTestRunner
 
@@ -60,15 +59,176 @@ let prettyPrintMIROp = function
     | MIR.And -> "&&"
     | MIR.Or -> "||"
 
+/// Pretty-print MIR unary operator
+let prettyPrintMIRUnaryOp = function
+    | MIR.Neg -> "-"
+    | MIR.Not -> "!"
+    | MIR.BitNot -> "~~~"
+
+/// Pretty-print MIR virtual register
+let prettyPrintMIRVReg (MIR.VReg n) : string =
+    $"v{n}"
+
+/// Pretty-print MIR label
+let prettyPrintMIRLabel (MIR.Label name) : string =
+    name
+
+/// Append a type suffix when available
+let appendTypeSuffix (typOpt: AST.Type option) (value: string) : string =
+    match typOpt with
+    | None -> value
+    | Some typ -> $"{value} : {typ}"
+
 /// Pretty-print MIR instruction
-/// NOTE: Disabled - MIR structure changed to CFG
 let prettyPrintMIRInstr (instr: MIR.Instr) : string =
-    "<MIR pretty-print disabled - CFG structure>"
+    match instr with
+    | MIR.Mov (dest, src, valueType) ->
+        let baseText = $"{prettyPrintMIRVReg dest} <- {prettyPrintMIROperand src}"
+        appendTypeSuffix valueType baseText
+    | MIR.BinOp (dest, op, left, right, operandType) ->
+        $"{prettyPrintMIRVReg dest} <- {prettyPrintMIROperand left} {prettyPrintMIROp op} {prettyPrintMIROperand right} : {operandType}"
+    | MIR.UnaryOp (dest, op, src) ->
+        $"{prettyPrintMIRVReg dest} <- {prettyPrintMIRUnaryOp op}{prettyPrintMIROperand src}"
+    | MIR.Call (dest, funcName, args, _, _) ->
+        let argStr = args |> List.map prettyPrintMIROperand |> String.concat ", "
+        $"{prettyPrintMIRVReg dest} <- Call({funcName}, [{argStr}])"
+    | MIR.TailCall (funcName, args, _, _) ->
+        let argStr = args |> List.map prettyPrintMIROperand |> String.concat ", "
+        $"TailCall({funcName}, [{argStr}])"
+    | MIR.IndirectCall (dest, func, args, _, _) ->
+        let argStr = args |> List.map prettyPrintMIROperand |> String.concat ", "
+        $"{prettyPrintMIRVReg dest} <- IndirectCall({prettyPrintMIROperand func}, [{argStr}])"
+    | MIR.IndirectTailCall (func, args, _, _) ->
+        let argStr = args |> List.map prettyPrintMIROperand |> String.concat ", "
+        $"IndirectTailCall({prettyPrintMIROperand func}, [{argStr}])"
+    | MIR.ClosureAlloc (dest, funcName, captures) ->
+        let capsStr = captures |> List.map prettyPrintMIROperand |> String.concat ", "
+        $"{prettyPrintMIRVReg dest} <- ClosureAlloc({funcName}, [{capsStr}])"
+    | MIR.ClosureCall (dest, closure, args, _) ->
+        let argStr = args |> List.map prettyPrintMIROperand |> String.concat ", "
+        $"{prettyPrintMIRVReg dest} <- ClosureCall({prettyPrintMIROperand closure}, [{argStr}])"
+    | MIR.ClosureTailCall (closure, args, _) ->
+        let argStr = args |> List.map prettyPrintMIROperand |> String.concat ", "
+        $"ClosureTailCall({prettyPrintMIROperand closure}, [{argStr}])"
+    | MIR.HeapAlloc (dest, sizeBytes) ->
+        $"{prettyPrintMIRVReg dest} <- HeapAlloc({sizeBytes})"
+    | MIR.HeapStore (addr, offset, src, valueType) ->
+        let baseText = $"HeapStore({prettyPrintMIRVReg addr}, {offset}, {prettyPrintMIROperand src})"
+        appendTypeSuffix valueType baseText
+    | MIR.HeapLoad (dest, addr, offset, valueType) ->
+        let baseText = $"{prettyPrintMIRVReg dest} <- HeapLoad({prettyPrintMIRVReg addr}, {offset})"
+        appendTypeSuffix valueType baseText
+    | MIR.StringConcat (dest, left, right) ->
+        $"{prettyPrintMIRVReg dest} <- StringConcat({prettyPrintMIROperand left}, {prettyPrintMIROperand right})"
+    | MIR.RefCountInc (addr, payloadSize) ->
+        $"RefCountInc({prettyPrintMIRVReg addr}, size={payloadSize})"
+    | MIR.RefCountDec (addr, payloadSize) ->
+        $"RefCountDec({prettyPrintMIRVReg addr}, size={payloadSize})"
+    | MIR.Print (src, valueType) ->
+        $"Print({prettyPrintMIROperand src}, type={valueType})"
+    | MIR.FileReadText (dest, path) ->
+        $"{prettyPrintMIRVReg dest} <- FileReadText({prettyPrintMIROperand path})"
+    | MIR.FileExists (dest, path) ->
+        $"{prettyPrintMIRVReg dest} <- FileExists({prettyPrintMIROperand path})"
+    | MIR.FileWriteText (dest, path, content) ->
+        $"{prettyPrintMIRVReg dest} <- FileWriteText({prettyPrintMIROperand path}, {prettyPrintMIROperand content})"
+    | MIR.FileAppendText (dest, path, content) ->
+        $"{prettyPrintMIRVReg dest} <- FileAppendText({prettyPrintMIROperand path}, {prettyPrintMIROperand content})"
+    | MIR.FileDelete (dest, path) ->
+        $"{prettyPrintMIRVReg dest} <- FileDelete({prettyPrintMIROperand path})"
+    | MIR.FileSetExecutable (dest, path) ->
+        $"{prettyPrintMIRVReg dest} <- FileSetExecutable({prettyPrintMIROperand path})"
+    | MIR.FileWriteFromPtr (dest, path, ptr, length) ->
+        $"{prettyPrintMIRVReg dest} <- FileWriteFromPtr({prettyPrintMIROperand path}, {prettyPrintMIROperand ptr}, {prettyPrintMIROperand length})"
+    | MIR.FloatSqrt (dest, src) ->
+        $"{prettyPrintMIRVReg dest} <- FloatSqrt({prettyPrintMIROperand src})"
+    | MIR.FloatAbs (dest, src) ->
+        $"{prettyPrintMIRVReg dest} <- FloatAbs({prettyPrintMIROperand src})"
+    | MIR.FloatNeg (dest, src) ->
+        $"{prettyPrintMIRVReg dest} <- FloatNeg({prettyPrintMIROperand src})"
+    | MIR.IntToFloat (dest, src) ->
+        $"{prettyPrintMIRVReg dest} <- IntToFloat({prettyPrintMIROperand src})"
+    | MIR.FloatToInt (dest, src) ->
+        $"{prettyPrintMIRVReg dest} <- FloatToInt({prettyPrintMIROperand src})"
+    | MIR.RawAlloc (dest, numBytes) ->
+        $"{prettyPrintMIRVReg dest} <- RawAlloc({prettyPrintMIROperand numBytes})"
+    | MIR.RawFree ptr ->
+        $"RawFree({prettyPrintMIROperand ptr})"
+    | MIR.RawGet (dest, ptr, byteOffset, valueType) ->
+        let baseText = $"{prettyPrintMIRVReg dest} <- RawGet({prettyPrintMIROperand ptr}, {prettyPrintMIROperand byteOffset})"
+        appendTypeSuffix valueType baseText
+    | MIR.RawGetByte (dest, ptr, byteOffset) ->
+        $"{prettyPrintMIRVReg dest} <- RawGetByte({prettyPrintMIROperand ptr}, {prettyPrintMIROperand byteOffset})"
+    | MIR.RawSet (ptr, byteOffset, value, valueType) ->
+        let baseText = $"RawSet({prettyPrintMIROperand ptr}, {prettyPrintMIROperand byteOffset}, {prettyPrintMIROperand value})"
+        appendTypeSuffix valueType baseText
+    | MIR.RawSetByte (ptr, byteOffset, value) ->
+        $"RawSetByte({prettyPrintMIROperand ptr}, {prettyPrintMIROperand byteOffset}, {prettyPrintMIROperand value})"
+    | MIR.StringHash (dest, str) ->
+        $"{prettyPrintMIRVReg dest} <- StringHash({prettyPrintMIROperand str})"
+    | MIR.StringEq (dest, left, right) ->
+        $"{prettyPrintMIRVReg dest} <- StringEq({prettyPrintMIROperand left}, {prettyPrintMIROperand right})"
+    | MIR.RefCountIncString str ->
+        $"RefCountIncString({prettyPrintMIROperand str})"
+    | MIR.RefCountDecString str ->
+        $"RefCountDecString({prettyPrintMIROperand str})"
+    | MIR.RandomInt64 dest ->
+        $"{prettyPrintMIRVReg dest} <- RandomInt64()"
+    | MIR.FloatToString (dest, value) ->
+        $"{prettyPrintMIRVReg dest} <- FloatToString({prettyPrintMIROperand value})"
+    | MIR.Phi (dest, sources, valueType) ->
+        let srcStrs =
+            sources
+            |> List.map (fun (operand, label) -> $"({prettyPrintMIROperand operand}, {prettyPrintMIRLabel label})")
+            |> String.concat ", "
+        let baseText = $"{prettyPrintMIRVReg dest} <- Phi([{srcStrs}])"
+        appendTypeSuffix valueType baseText
+    | MIR.CoverageHit exprId ->
+        $"CoverageHit({exprId})"
+
+/// Pretty-print MIR terminator
+let prettyPrintMIRTerminator (term: MIR.Terminator) : string =
+    match term with
+    | MIR.Ret operand -> $"ret {prettyPrintMIROperand operand}"
+    | MIR.Branch (cond, trueLabel, falseLabel) ->
+        $"branch {prettyPrintMIROperand cond} ? {prettyPrintMIRLabel trueLabel} : {prettyPrintMIRLabel falseLabel}"
+    | MIR.Jump label -> $"jump {prettyPrintMIRLabel label}"
 
 /// Pretty-print MIR program
-/// NOTE: Disabled - MIR structure changed to CFG
 let prettyPrintMIR (program: MIR.Program) : string =
-    "<MIR pretty-print disabled - CFG structure>"
+    let (MIR.Program (functions, _, _)) = program
+    let prettyPrintBlock (block: MIR.BasicBlock) =
+        let labelLine = $"  {prettyPrintMIRLabel block.Label}:"
+        let instrLines = block.Instrs |> List.map prettyPrintMIRInstr |> List.map (fun line -> $"    {line}")
+        let termLine = $"    {prettyPrintMIRTerminator block.Terminator}"
+        String.concat "\n" (labelLine :: instrLines @ [termLine])
+
+    let prettyPrintFunction (func: MIR.Function) =
+        let entryLabel = func.CFG.Entry
+        let entryBlock =
+            Map.tryFind entryLabel func.CFG.Blocks
+            |> Option.map (fun block -> (entryLabel, block))
+        let otherBlocks =
+            func.CFG.Blocks
+            |> Map.remove entryLabel
+            |> Map.toList
+            |> List.sortBy (fun (label, _) -> prettyPrintMIRLabel label)
+        let orderedBlocks =
+            match entryBlock with
+            | Some block -> block :: otherBlocks
+            | None -> otherBlocks
+        let blockLines =
+            orderedBlocks
+            |> List.map (fun (_, block) -> prettyPrintBlock block)
+            |> String.concat "\n"
+        if blockLines = "" then
+            $"Function {func.Name}:\n  <empty>"
+        else
+            $"Function {func.Name}:\n{blockLines}"
+
+    functions
+    |> List.map prettyPrintFunction
+    |> String.concat "\n\n"
 
 /// Pretty-print LIR physical register
 let prettyPrintLIRPhysReg = function
