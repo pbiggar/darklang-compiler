@@ -214,6 +214,115 @@ let main args =
     let failedTests = ResizeArray<FailedTestInfo>()
     let allTimings = ResizeArray<TestTiming>()
 
+    let loadE2ETests (testFiles: string array) : E2ETest array * (string * string) list =
+        let tests = ResizeArray<E2ETest>()
+        let mutable parseErrors = []
+        for testFile in testFiles do
+            match parseE2ETestFile testFile with
+            | Ok parsed -> tests.AddRange(parsed)
+            | Error msg -> parseErrors <- (testFile, msg) :: parseErrors
+        (tests.ToArray(), List.rev parseErrors)
+
+    let reportParseErrors (suiteName: string) (parseErrors: (string * string) list) : unit =
+        for (filePath, msg) in parseErrors do
+            let fileName = Path.GetFileName filePath
+            println $"  {Colors.red}✗ ERROR parsing {fileName}{Colors.reset}"
+            println $"    {msg}"
+            failedTests.Add({ File = filePath; Name = $"{suiteName}: {fileName}"; Message = msg; Details = [] })
+            failed <- failed + 1
+
+    let runE2ESuite
+        (suiteName: string)
+        (progressLabel: string)
+        (testsArray: E2ETest array)
+        (stdlib: CompilerLibrary.StdlibResult)
+        : unit =
+        let numTests = testsArray.Length
+        if numTests > 0 then
+            let precompileTasks = TestDSL.E2ETestRunner.startPreamblePrecompileTasks stdlib testsArray
+
+            let results = Array.zeroCreate<option<E2ETest * E2ETestResult>> numTests
+            let lockObj = obj()
+            let progress = ProgressBar.create progressLabel numTests
+            ProgressBar.update progress
+
+            let maxParallel = overrideParallel |> Option.defaultWith getOptimalParallelism
+
+            let options = System.Threading.Tasks.ParallelOptions()
+            options.MaxDegreeOfParallelism <- maxParallel
+            System.Threading.Tasks.Parallel.For(
+                0,
+                numTests,
+                options,
+                fun i ->
+                    let test = testsArray.[i]
+                    let preambleResult = TestDSL.E2ETestRunner.awaitPreamblePrecompile precompileTasks test
+                    let result =
+                        match preambleResult with
+                        | Ok () -> runE2ETest stdlib test
+                        | Error err ->
+                            { Success = false
+                              Message = $"Preamble precompile failed: {err}"
+                              Stdout = None
+                              Stderr = None
+                              ExitCode = Some 1
+                              CompileTime = TimeSpan.Zero
+                              RuntimeTime = TimeSpan.Zero }
+                    let totalTime = result.CompileTime + result.RuntimeTime
+                    lock lockObj (fun () ->
+                        results.[i] <- Some (test, result)
+                        allTimings.Add({ Name = $"{suiteName}: {test.Name}"; TotalTime = totalTime; CompileTime = Some result.CompileTime; RuntimeTime = Some result.RuntimeTime })
+                        ProgressBar.increment progress result.Success
+                    )
+            ) |> ignore
+
+            ProgressBar.finish progress
+
+            let mutable sectionPassed = 0
+            let mutable sectionFailed = 0
+            for result in results do
+                match result with
+                | Some (test, testResult) ->
+                    if testResult.Success then
+                        passed <- passed + 1
+                        sectionPassed <- sectionPassed + 1
+                    else
+                        let cleanName = test.Name.Replace("Stdlib.", "")
+                        let displayName = if cleanName.Length > 60 then cleanName.Substring(0, 57) + "..." else cleanName
+                        println $"  {displayName}... {Colors.red}✗ FAIL{Colors.reset} {Colors.gray}(compile: {formatTime testResult.CompileTime}, run: {formatTime testResult.RuntimeTime}){Colors.reset}"
+                        println $"    {testResult.Message}"
+
+                        let details = ResizeArray<string>()
+                        match testResult.ExitCode with
+                        | Some code when code <> test.ExpectedExitCode ->
+                            println $"    Expected exit code: {test.ExpectedExitCode}, Actual: {code}"
+                            details.Add($"Expected exit code: {test.ExpectedExitCode}, Actual: {code}")
+                        | _ -> ()
+                        match test.ExpectedStdout, testResult.Stdout with
+                        | Some expected, Some actual when actual.Trim() <> expected.Trim() ->
+                            let expectedDisp = expected.Replace("\n", "\\n")
+                            let actualDisp = actual.Replace("\n", "\\n")
+                            println $"    Expected stdout: {expectedDisp}"
+                            println $"    Actual stdout: {actualDisp}"
+                        | _ -> ()
+                        match test.ExpectedStderr, testResult.Stderr with
+                        | Some expected, Some actual when actual.Trim() <> expected.Trim() ->
+                            let expectedDisp = expected.Replace("\n", "\\n")
+                            let actualDisp = actual.Replace("\n", "\\n")
+                            println $"    Expected stderr: {expectedDisp}"
+                            println $"    Actual stderr: {actualDisp}"
+                        | _ -> ()
+
+                        failedTests.Add({ File = test.SourceFile; Name = $"{suiteName}: {test.Name}"; Message = testResult.Message; Details = details |> Seq.toList })
+                        failed <- failed + 1
+                        sectionFailed <- sectionFailed + 1
+                | None -> ()
+
+            if sectionFailed = 0 then
+                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
+            else
+                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
+
     // Run ANF→MIR tests
     let anf2mirDir = Path.Combine(assemblyDir, "passes/anf2mir")
     if Directory.Exists anf2mirDir then
@@ -626,26 +735,10 @@ let main args =
             let sectionTimer = Stopwatch.StartNew()
             println $"{Colors.cyan}🚀 E2E Tests{Colors.reset}"
 
-            // Parse all tests from .e2e files
-            let allE2ETests = ResizeArray<TestDSL.E2EFormat.E2ETest>()
-            let mutable parseErrors = []
+            let (allE2ETests, parseErrors) = loadE2ETests e2eTestFiles
+            reportParseErrors "E2E" parseErrors
 
-            for testFile in e2eTestFiles do
-                match TestDSL.E2EFormat.parseE2ETestFile testFile with
-                | Ok tests -> allE2ETests.AddRange(tests)
-                | Error msg ->
-                    parseErrors <- (testFile, msg) :: parseErrors
-
-            // Report parse errors
-            for (filePath, msg) in parseErrors do
-                let fileName = Path.GetFileName filePath
-                println $"  {Colors.red}✗ ERROR parsing {fileName}{Colors.reset}"
-                println $"    {msg}"
-                failedTests.Add({ File = filePath; Name = $"E2E: {fileName}"; Message = msg; Details = [] })
-                failed <- failed + 1
-
-            // Run tests in parallel with progress bar
-            if allE2ETests.Count > 0 then
+            if allE2ETests.Length > 0 then
                 match TestDSL.E2ETestRunner.compileStdlib() with
                 | Error e ->
                     println $"  {Colors.red}Stdlib compilation failed: {e}{Colors.reset}"
@@ -654,112 +747,8 @@ let main args =
                     e2eStdlib <- Some stdlib
                     println $"  {Colors.gray}(Stdlib compiled){Colors.reset}"
 
-                    let testsArray = allE2ETests.ToArray() |> Array.filter (fun test -> matchesFilter filter test.Name)
-                    let numTests = testsArray.Length
-
-                    let precompileTasks =
-                        testsArray
-                        |> Array.toList
-                        |> List.groupBy (fun test -> (test.SourceFile, test.Preamble))
-                        |> List.map (fun ((sourceFile, preamble), group) ->
-                            let funcLineMap =
-                                group
-                                |> List.tryHead
-                                |> Option.map (fun test -> test.FunctionLineMap)
-                                |> Option.defaultValue Map.empty
-                            let task =
-                                System.Threading.Tasks.Task.Run(fun () ->
-                                    TestDSL.E2ETestRunner.precompilePreamble stdlib sourceFile preamble funcLineMap)
-                            ((sourceFile, preamble), task))
-                        |> Map.ofList
-
-                    let results = Array.zeroCreate<option<E2ETest * E2ETestResult>> numTests
-                    let lockObj = obj()
-                    let progress = ProgressBar.create "E2E" numTests
-                    ProgressBar.update progress
-
-                    let maxParallel = overrideParallel |> Option.defaultWith getOptimalParallelism
-
-                    // Run tests in parallel (wait on preamble precompile per file)
-                    let options = System.Threading.Tasks.ParallelOptions()
-                    options.MaxDegreeOfParallelism <- maxParallel
-                    System.Threading.Tasks.Parallel.For(
-                        0,
-                        numTests,
-                        options,
-                        fun i ->
-                            let test = testsArray.[i]
-                            let preambleResult =
-                                match Map.tryFind (test.SourceFile, test.Preamble) precompileTasks with
-                                | Some task -> task.Result
-                                | None -> Ok ()
-                            let result =
-                                match preambleResult with
-                                | Ok () -> runE2ETest stdlib test
-                                | Error err ->
-                                    { Success = false
-                                      Message = $"Preamble precompile failed: {err}"
-                                      Stdout = None
-                                      Stderr = None
-                                      ExitCode = Some 1
-                                      CompileTime = TimeSpan.Zero
-                                      RuntimeTime = TimeSpan.Zero }
-                            let totalTime = result.CompileTime + result.RuntimeTime
-                            lock lockObj (fun () ->
-                                results.[i] <- Some (test, result)
-                                allTimings.Add({ Name = $"E2E: {test.Name}"; TotalTime = totalTime; CompileTime = Some result.CompileTime; RuntimeTime = Some result.RuntimeTime })
-                                ProgressBar.increment progress result.Success
-                            )
-                    ) |> ignore
-
-                    ProgressBar.finish progress
-
-                    // Print failures after progress bar
-                    let mutable sectionPassed = 0
-                    let mutable sectionFailed = 0
-                    for result in results do
-                        match result with
-                        | Some (test, testResult) ->
-                            if testResult.Success then
-                                passed <- passed + 1
-                                sectionPassed <- sectionPassed + 1
-                            else
-                                let totalTime = testResult.CompileTime + testResult.RuntimeTime
-                                let cleanName = test.Name.Replace("Stdlib.", "")
-                                let displayName = if cleanName.Length > 60 then cleanName.Substring(0, 57) + "..." else cleanName
-                                println $"  {displayName}... {Colors.red}✗ FAIL{Colors.reset} {Colors.gray}(compile: {formatTime testResult.CompileTime}, run: {formatTime testResult.RuntimeTime}){Colors.reset}"
-                                println $"    {testResult.Message}"
-
-                                let details = ResizeArray<string>()
-                                match testResult.ExitCode with
-                                | Some code when code <> test.ExpectedExitCode ->
-                                    println $"    Expected exit code: {test.ExpectedExitCode}, Actual: {code}"
-                                    details.Add($"Expected exit code: {test.ExpectedExitCode}, Actual: {code}")
-                                | _ -> ()
-                                match test.ExpectedStdout, testResult.Stdout with
-                                | Some expected, Some actual when actual.Trim() <> expected.Trim() ->
-                                    let expectedDisp = expected.Replace("\n", "\\n")
-                                    let actualDisp = actual.Replace("\n", "\\n")
-                                    println $"    Expected stdout: {expectedDisp}"
-                                    println $"    Actual stdout: {actualDisp}"
-                                | _ -> ()
-                                match test.ExpectedStderr, testResult.Stderr with
-                                | Some expected, Some actual when actual.Trim() <> expected.Trim() ->
-                                    let expectedDisp = expected.Replace("\n", "\\n")
-                                    let actualDisp = actual.Replace("\n", "\\n")
-                                    println $"    Expected stderr: {expectedDisp}"
-                                    println $"    Actual stderr: {actualDisp}"
-                                | _ -> ()
-
-                                failedTests.Add({ File = test.SourceFile; Name = $"E2E: {test.Name}"; Message = testResult.Message; Details = details |> Seq.toList })
-                                failed <- failed + 1
-                                sectionFailed <- sectionFailed + 1
-                        | None -> ()
-
-                    if sectionFailed = 0 then
-                        println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
-                    else
-                        println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
+                    let testsArray = allE2ETests |> Array.filter (fun test -> matchesFilter filter test.Name)
+                    runE2ESuite "E2E" "E2E" testsArray stdlib
 
             sectionTimer.Stop()
             println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
@@ -775,97 +764,21 @@ let main args =
             let sectionTimer = Stopwatch.StartNew()
             println $"{Colors.cyan}🔬 Verification Tests{Colors.reset}"
 
-            let allVerifTests = ResizeArray<TestDSL.E2EFormat.E2ETest>()
-            let mutable parseErrors = []
-            for testFile in verificationTestFiles do
-                match TestDSL.E2EFormat.parseE2ETestFile testFile with
-                | Ok tests -> allVerifTests.AddRange(tests)
-                | Error msg -> parseErrors <- (testFile, msg) :: parseErrors
+            let (allVerifTests, parseErrors) = loadE2ETests verificationTestFiles
+            reportParseErrors "Verification" parseErrors
 
-            for (filePath, msg) in parseErrors do
-                println $"  {Colors.red}✗ ERROR parsing {Path.GetFileName filePath}{Colors.reset}"
-                println $"    {msg}"
-                failedTests.Add({ File = filePath; Name = $"Verification: {Path.GetFileName filePath}"; Message = msg; Details = [] })
-                failed <- failed + 1
-
-            if allVerifTests.Count > 0 then
-                let stdlib = match e2eStdlib with Some s -> s | None -> match TestDSL.E2ETestRunner.compileStdlib() with Ok s -> s | Error _ -> failwith "Stdlib compilation failed"
-                let testsArray = allVerifTests.ToArray() |> Array.filter (fun test -> matchesFilter filter test.Name)
-                let numTests = testsArray.Length
-
-                let precompileTasks =
-                    testsArray
-                    |> Array.toList
-                    |> List.groupBy (fun test -> (test.SourceFile, test.Preamble))
-                    |> List.map (fun ((sourceFile, preamble), group) ->
-                        let funcLineMap =
-                            group
-                            |> List.tryHead
-                            |> Option.map (fun test -> test.FunctionLineMap)
-                            |> Option.defaultValue Map.empty
-                        let task =
-                            System.Threading.Tasks.Task.Run(fun () ->
-                                TestDSL.E2ETestRunner.precompilePreamble stdlib sourceFile preamble funcLineMap)
-                        ((sourceFile, preamble), task))
-                    |> Map.ofList
-
-                let results = Array.zeroCreate<option<E2ETest * E2ETestResult>> numTests
-                let lockObj = obj()
-                let progress = ProgressBar.create "Verification" numTests
-                ProgressBar.update progress
-                let maxParallel = overrideParallel |> Option.defaultWith getOptimalParallelism
-
-                let options = System.Threading.Tasks.ParallelOptions()
-                options.MaxDegreeOfParallelism <- maxParallel
-                System.Threading.Tasks.Parallel.For(0, numTests, options, fun i ->
-                    let test = testsArray.[i]
-                    let preambleResult =
-                        match Map.tryFind (test.SourceFile, test.Preamble) precompileTasks with
-                        | Some task -> task.Result
-                        | None -> Ok ()
-                    let result =
-                        match preambleResult with
-                        | Ok () -> runE2ETest stdlib test
-                        | Error err ->
-                            { Success = false
-                              Message = $"Preamble precompile failed: {err}"
-                              Stdout = None
-                              Stderr = None
-                              ExitCode = Some 1
-                              CompileTime = TimeSpan.Zero
-                              RuntimeTime = TimeSpan.Zero }
-                    let totalTime = result.CompileTime + result.RuntimeTime
-                    lock lockObj (fun () ->
-                        results.[i] <- Some (test, result)
-                        allTimings.Add({ Name = $"Verification: {test.Name}"; TotalTime = totalTime; CompileTime = Some result.CompileTime; RuntimeTime = Some result.RuntimeTime })
-                        ProgressBar.increment progress result.Success
-                    )
-                ) |> ignore
-
-                ProgressBar.finish progress
-
-                let mutable sectionPassed = 0
-                let mutable sectionFailed = 0
-                for result in results do
-                    match result with
-                    | Some (test, testResult) ->
-                        if testResult.Success then
-                            passed <- passed + 1
-                            sectionPassed <- sectionPassed + 1
-                        else
-                            let cleanName = test.Name.Replace("Stdlib.", "")
-                            let displayName = if cleanName.Length > 60 then cleanName.Substring(0, 57) + "..." else cleanName
-                            println $"  {displayName}... {Colors.red}✗ FAIL{Colors.reset} {Colors.gray}(compile: {formatTime testResult.CompileTime}, run: {formatTime testResult.RuntimeTime}){Colors.reset}"
-                            println $"    {testResult.Message}"
-                            failedTests.Add({ File = test.SourceFile; Name = $"Verification: {test.Name}"; Message = testResult.Message; Details = [] })
-                            failed <- failed + 1
-                            sectionFailed <- sectionFailed + 1
-                    | None -> ()
-
-                if sectionFailed = 0 then
-                    println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
-                else
-                    println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
+            if allVerifTests.Length > 0 then
+                let stdlibResult =
+                    match e2eStdlib with
+                    | Some stdlib -> Ok stdlib
+                    | None -> TestDSL.E2ETestRunner.compileStdlib()
+                match stdlibResult with
+                | Error err ->
+                    println $"  {Colors.red}Stdlib compilation failed: {err}{Colors.reset}"
+                    println $"  {Colors.red}Skipping verification tests{Colors.reset}"
+                | Ok stdlib ->
+                    let testsArray = allVerifTests |> Array.filter (fun test -> matchesFilter filter test.Name)
+                    runE2ESuite "Verification" "Verification" testsArray stdlib
 
             sectionTimer.Stop()
             println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"

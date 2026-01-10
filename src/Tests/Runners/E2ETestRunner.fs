@@ -5,6 +5,7 @@
 module TestDSL.E2ETestRunner
 
 open System
+open System.Threading.Tasks
 open TestDSL.E2EFormat
 
 /// Result of running an E2E test
@@ -22,6 +23,12 @@ type E2ETestResult = {
 /// Uses pre-compiled stdlib - all functions compiled to LIR upfront for maximum speed
 let compileStdlib () : Result<CompilerLibrary.StdlibResult, string> =
     CompilerLibrary.compileStdlib()
+
+/// Preamble cache key: (source file, preamble text)
+type PreambleKey = string * string
+
+/// Map of precompile tasks keyed by preamble
+type PreambleTaskMap = Map<PreambleKey, Task<Result<unit, string>>>
 
 /// Precompile a single preamble and populate the cache
 let precompilePreamble (stdlib: CompilerLibrary.StdlibResult) (sourceFile: string) (preamble: string) (funcLineMap: Map<string, int>) : Result<unit, string> =
@@ -41,24 +48,40 @@ let precompilePreamble (stdlib: CompilerLibrary.StdlibResult) (sourceFile: strin
         | Error err -> Error $"Preamble precompile error ({sourceFile}): {err}"
         | Ok _ -> Ok ()
 
+/// Start precompiling all distinct preambles (by file + preamble text)
+let startPreamblePrecompileTasks (stdlib: CompilerLibrary.StdlibResult) (tests: E2ETest array) : PreambleTaskMap =
+    tests
+    |> Array.toList
+    |> List.groupBy (fun test -> (test.SourceFile, test.Preamble))
+    |> List.map (fun ((sourceFile, preamble), group) ->
+        let funcLineMap =
+            group
+            |> List.tryHead
+            |> Option.map (fun test -> test.FunctionLineMap)
+            |> Option.defaultValue Map.empty
+        let task =
+            Task.Run(fun () ->
+                precompilePreamble stdlib sourceFile preamble funcLineMap)
+        ((sourceFile, preamble), task))
+    |> Map.ofList
+
+/// Await precompile result for a single test's preamble (or Ok if none)
+let awaitPreamblePrecompile (tasks: PreambleTaskMap) (test: E2ETest) : Result<unit, string> =
+    match Map.tryFind (test.SourceFile, test.Preamble) tasks with
+    | None -> Ok ()
+    | Some task -> task.Result
+
 /// Precompile all distinct preambles (by file + preamble text) and populate the cache
 let precompilePreambles (stdlib: CompilerLibrary.StdlibResult) (tests: E2ETest list) : Result<unit, string> =
-    let preambleGroups = tests |> List.groupBy (fun test -> (test.SourceFile, test.Preamble))
-
-    let rec compileAll remaining =
+    let tasks = startPreamblePrecompileTasks stdlib (List.toArray tests)
+    let rec awaitAll (remaining: (PreambleKey * Task<Result<unit, string>>) list) =
         match remaining with
         | [] -> Ok ()
-        | ((sourceFile, preamble), group) :: rest ->
-            let funcLineMap =
-                group
-                |> List.tryHead
-                |> Option.map (fun test -> test.FunctionLineMap)
-                |> Option.defaultValue Map.empty
-            match precompilePreamble stdlib sourceFile preamble funcLineMap with
+        | (_, task) :: rest ->
+            match task.Result with
             | Error err -> Error err
-            | Ok () -> compileAll rest
-
-    compileAll preambleGroups
+            | Ok () -> awaitAll rest
+    awaitAll (tasks |> Map.toList)
 
 /// Run E2E test with pre-compiled stdlib
 let runE2ETest (stdlib: CompilerLibrary.StdlibResult) (test: E2ETest) : E2ETestResult =
