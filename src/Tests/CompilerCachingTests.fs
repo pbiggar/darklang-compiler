@@ -56,7 +56,7 @@ let testSpecializedFunctionCaching (sharedStdlib: StdlibResult) : TestResult =
                 | Error err -> Error $"Preamble compilation failed: {err}"
                 | Ok preambleCtx ->
                     let compileResult =
-                        CompilerLibrary.compileTestWithPreamble 0 CompilerLibrary.defaultOptions stdlib preambleCtx "cache_test" 0 "specialized function caching" source
+                        CompilerLibrary.compileTestWithPreamble 0 CompilerLibrary.defaultOptions stdlib preambleCtx "cache_test" source
                     if not compileResult.Success then
                         let errorMessage = compileResult.ErrorMessage |> Option.defaultValue "(no message)"
                         Error $"Compilation failed: {errorMessage}"
@@ -90,8 +90,6 @@ let testPreambleFunctionCachedOnce (sharedStdlib: StdlibResult) : TestResult =
                     stdlib
                     preambleCtx
                     sourceFile
-                    preamble.Length
-                    "preamble cache test 1"
                     "foo(1)"
             let second =
                 CompilerLibrary.compileTestWithPreamble
@@ -100,8 +98,6 @@ let testPreambleFunctionCachedOnce (sharedStdlib: StdlibResult) : TestResult =
                     stdlib
                     preambleCtx
                     sourceFile
-                    preamble.Length
-                    "preamble cache test 2"
                     "foo(2)"
             if not first.Success then
                 let message = first.ErrorMessage |> Option.defaultValue "(no message)"

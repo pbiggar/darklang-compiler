@@ -1480,7 +1480,7 @@ let compilePreamble (stdlib: StdlibResult) (preamble: string) (sourceFile: strin
 /// Compile test expression with pre-compiled preamble context
 /// Only the tiny test expression is parsed/compiled - preamble functions are merged in
 let compileTestWithPreamble (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult)
-                            (preambleCtx: PreambleContext) (sourceFile: string) (_preambleLen: int) (_testName: string) (testExpr: string) : CompileResult =
+                            (preambleCtx: PreambleContext) (sourceFile: string) (testExpr: string) : CompileResult =
     let sw = Stopwatch.StartNew()
     try
         // Pass 1: Parse test expression only (tiny)
@@ -2129,10 +2129,7 @@ let execute (verbosity: int) (binary: byte array) : ExecutionResult =
         // Cleanup - ignore deletion errors
         tryDeleteFile tempPath
 
-/// Compile and run source code with options
-let compileAndRunWithOptions (verbosity: int) (options: CompilerOptions) (source: string) : ExecutionResult =
-    let compileResult = compileWithOptions verbosity options source
-
+let private compileResultToExecution (verbosity: int) (compileResult: CompileResult) : ExecutionResult =
     if not compileResult.Success then
         { ExitCode = 1
           Stdout = ""
@@ -2140,22 +2137,13 @@ let compileAndRunWithOptions (verbosity: int) (options: CompilerOptions) (source
     else
         execute verbosity compileResult.Binary
 
-/// Compile and run source code with pre-compiled stdlib
-let compileAndRunWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (source: string) : ExecutionResult =
-    let compileResult = compileWithStdlib verbosity options stdlib source "" Map.empty
-
-    if not compileResult.Success then
-        { ExitCode = 1
-          Stdout = ""
-          Stderr = compileResult.ErrorMessage |> Option.defaultValue "Compilation failed" }
-    else
-        execute verbosity compileResult.Binary
-
-/// Compile and run source code with pre-compiled stdlib and user function caching
-/// sourceFile and funcLineMap are used to build cache keys for user functions
-/// Cache key: (sourceFile, lineNumber, functionName)
-let compileAndRunWithStdlibCached (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (testName: string) (testExpr: string) (preamble: string) (sourceFile: string) (funcLineMap: Map<string, int>) : ExecutionResult =
-    // Check preamble cache
+let private getOrCompilePreambleContext
+    (verbosity: int)
+    (stdlib: StdlibResult)
+    (preamble: string)
+    (sourceFile: string)
+    (funcLineMap: Map<string, int>)
+    : Result<PreambleContext, string> =
     let preambleHash = preamble.GetHashCode()
     let cacheKey = (sourceFile, preambleHash)
 
@@ -2170,43 +2158,33 @@ let compileAndRunWithStdlibCached (verbosity: int) (options: CompilerOptions) (s
                 Lazy<Result<PreambleContext, string>>(
                     (fun () -> compilePreamble stdlib preamble sourceFile funcLineMap),
                     System.Threading.LazyThreadSafetyMode.ExecutionAndPublication))
-    let preambleCtxResult = lazyCtx.Value
+    lazyCtx.Value
 
-    match preambleCtxResult with
+/// Compile and run source code with options
+let compileAndRunWithOptions (verbosity: int) (options: CompilerOptions) (source: string) : ExecutionResult =
+    compileWithOptions verbosity options source |> compileResultToExecution verbosity
+
+/// Compile and run source code with pre-compiled stdlib
+let compileAndRunWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (source: string) : ExecutionResult =
+    compileWithStdlib verbosity options stdlib source "" Map.empty
+    |> compileResultToExecution verbosity
+
+/// Compile and run source code with pre-compiled stdlib and user function caching
+/// sourceFile and funcLineMap are used to build cache keys for user functions
+/// Cache key: (sourceFile, lineNumber, functionName)
+let compileAndRunWithStdlibCached (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (testExpr: string) (preamble: string) (sourceFile: string) (funcLineMap: Map<string, int>) : ExecutionResult =
+    match getOrCompilePreambleContext verbosity stdlib preamble sourceFile funcLineMap with
     | Error err ->
         { ExitCode = 1
           Stdout = ""
           Stderr = err }
     | Ok preambleCtx ->
-        let compileResult = compileTestWithPreamble verbosity options stdlib preambleCtx sourceFile preamble.Length testName testExpr
-
-        if not compileResult.Success then
-            { ExitCode = 1
-              Stdout = ""
-              Stderr = compileResult.ErrorMessage |> Option.defaultValue "Compilation failed" }
-        else
-            execute verbosity compileResult.Binary
+        compileTestWithPreamble verbosity options stdlib preambleCtx sourceFile testExpr
+        |> compileResultToExecution verbosity
 
 /// Compile and run with timing breakdown (for test output)
-let compileAndRunWithStdlibCachedTimed (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (testName: string) (testExpr: string) (preamble: string) (sourceFile: string) (funcLineMap: Map<string, int>) : TimedExecutionResult =
-    // Check preamble cache
-    let preambleHash = preamble.GetHashCode()
-    let cacheKey = (sourceFile, preambleHash)
-
-    let cacheHit = stdlib.PreambleCache.ContainsKey cacheKey
-    if verbosity >= 2 then
-        let status = if cacheHit then "hit" else "miss"
-        println $"  [Preamble cache {status} for {sourceFile}]"
-    let lazyCtx =
-        stdlib.PreambleCache.GetOrAdd(
-            cacheKey,
-            fun _ ->
-                Lazy<Result<PreambleContext, string>>(
-                    (fun () -> compilePreamble stdlib preamble sourceFile funcLineMap),
-                    System.Threading.LazyThreadSafetyMode.ExecutionAndPublication))
-    let preambleCtxResult = lazyCtx.Value
-
-    match preambleCtxResult with
+let compileAndRunWithStdlibCachedTimed (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (testExpr: string) (preamble: string) (sourceFile: string) (funcLineMap: Map<string, int>) : TimedExecutionResult =
+    match getOrCompilePreambleContext verbosity stdlib preamble sourceFile funcLineMap with
     | Error err ->
         { ExitCode = 1
           Stdout = ""
@@ -2215,7 +2193,7 @@ let compileAndRunWithStdlibCachedTimed (verbosity: int) (options: CompilerOption
           RuntimeTime = TimeSpan.Zero }
     | Ok preambleCtx ->
         let compileTimer = Stopwatch.StartNew()
-        let compileResult = compileTestWithPreamble verbosity options stdlib preambleCtx sourceFile preamble.Length testName testExpr
+        let compileResult = compileTestWithPreamble verbosity options stdlib preambleCtx sourceFile testExpr
         compileTimer.Stop()
         let compileTime = compileTimer.Elapsed
 
@@ -2237,14 +2215,8 @@ let compileAndRunWithStdlibCachedTimed (verbosity: int) (options: CompilerOption
 
 /// Compile and run source code with lazy stdlib (caches LIR compilation across tests)
 let compileAndRunWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: LazyStdlibResult) (source: string) : ExecutionResult =
-    let compileResult = compileWithLazyStdlib verbosity options stdlib source
-
-    if not compileResult.Success then
-        { ExitCode = 1
-          Stdout = ""
-          Stderr = compileResult.ErrorMessage |> Option.defaultValue "Compilation failed" }
-    else
-        execute verbosity compileResult.Binary
+    compileWithLazyStdlib verbosity options stdlib source
+    |> compileResultToExecution verbosity
 
 /// Compile and run source code (main entry point for E2E tests)
 let compileAndRun (verbosity: int) (source: string) : ExecutionResult =

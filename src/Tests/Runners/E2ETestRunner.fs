@@ -100,7 +100,7 @@ let runE2ETest (stdlib: CompilerLibrary.StdlibResult) (test: E2ETest) : E2ETestR
             DumpLIR = false
         }
         let execResult =
-            CompilerLibrary.compileAndRunWithStdlibCachedTimed 0 options stdlib test.Name test.Source test.Preamble test.SourceFile test.FunctionLineMap
+            CompilerLibrary.compileAndRunWithStdlibCachedTimed 0 options stdlib test.Source test.Preamble test.SourceFile test.FunctionLineMap
 
         // Handle error expectation
         if test.ExpectCompileError then
