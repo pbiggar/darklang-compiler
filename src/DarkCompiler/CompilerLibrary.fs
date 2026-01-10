@@ -471,6 +471,11 @@ type PreambleContext = {
 /// Key: (sourceFile, preambleHash), Value: compiled PreambleContext
 type PreambleCache = ConcurrentDictionary<string * int, Lazy<Result<PreambleContext, string>>>
 
+/// Indicates how stdlib was compiled (sequential or parallel)
+type StdlibCompileMode =
+    | Sequential
+    | Parallel
+
 /// Result of compiling stdlib - can be reused across compilations
 type StdlibResult = {
     /// Parsed stdlib AST (for merging with user AST)
@@ -492,6 +497,8 @@ type StdlibResult = {
     LIRProgram: LIR.Program
     /// Pre-allocated stdlib functions (physical registers assigned, ready for merge)
     AllocatedFunctions: LIR.Function list
+    /// Compile mode used for stdlib allocation
+    CompileMode: StdlibCompileMode
     /// Call graph for dead code elimination (which stdlib funcs call which other funcs)
     StdlibCallGraph: Map<string, Set<string>>
     /// Cache for specialized functions (shared across test compilations)
@@ -803,6 +810,16 @@ let mergeTypedPrograms (stdlibTyped: AST.Program) (userTyped: AST.Program) : AST
     let stdlibDefsOnly = stdlibItems |> List.filter (function AST.Expression _ -> false | _ -> true)
     AST.Program (stdlibDefsOnly @ userItems)
 
+/// Map over a list in parallel while preserving order
+let private mapListParallel (items: 'a list) (f: 'a -> 'b) : 'b list =
+    items
+    |> List.toArray
+    |> Array.Parallel.map f
+    |> Array.toList
+
+/// Minimum stdlib function count before parallel allocation is worth it
+let stdlibParallelThreshold = 32
+
 /// Compile stdlib in isolation, returning reusable result
 /// This can be called once and the result reused for multiple user program compilations
 let compileStdlib () : Result<StdlibResult, string> =
@@ -858,7 +875,16 @@ let compileStdlib () : Result<StdlibResult, string> =
                             let optimizedLir = LIR_Optimize.optimizeProgram lirProgram
                             // Pre-allocate stdlib functions (cached for reuse)
                             let (LIRSymbolic.Program lirFuncs) = optimizedLir
-                            let allocatedFuncs = lirFuncs |> List.map RegisterAllocation.allocateRegisters
+                            let compileMode =
+                                if System.Environment.GetEnvironmentVariable("DARK_TEST_PARALLEL_SUITES") = "true"
+                                   || List.length lirFuncs < stdlibParallelThreshold then
+                                    StdlibCompileMode.Sequential
+                                else
+                                    StdlibCompileMode.Parallel
+                            let allocatedFuncs =
+                                match compileMode with
+                                | StdlibCompileMode.Sequential -> List.map RegisterAllocation.allocateRegisters lirFuncs
+                                | StdlibCompileMode.Parallel -> mapListParallel lirFuncs RegisterAllocation.allocateRegisters
                             let allocatedSymbolic = LIRSymbolic.Program allocatedFuncs
                             match LIRSymbolic.toLIR allocatedSymbolic with
                             | Error err -> Error err
@@ -876,6 +902,7 @@ let compileStdlib () : Result<StdlibResult, string> =
                                     MIRProgram = mirProgram
                                     LIRProgram = allocatedProgram
                                     AllocatedFunctions = resolvedFuncs
+                                    CompileMode = compileMode
                                     StdlibCallGraph = stdlibCallGraph
                                     SpecCache = SpecializationCache()
                                     StdlibANFFunctions = stdlibFuncMap

@@ -215,6 +215,20 @@ let main args =
 
     let unitStdlibSuites = [ "Compiler Caching Tests"; "Preamble Precompile Tests" ]
     let needsUnitStdlib = unitStdlibSuites |> List.exists (matchesFilter filter)
+    let unitTestNames = [|
+        "CLI Flags Tests"
+        "Test Runner Scheduling Tests"
+        "Compiler Caching Tests"
+        "Preamble Precompile Tests"
+        "IR Symbol Tests"
+        "Encoding Tests"
+        "Binary Tests"
+        "Type Checking Tests"
+        "Parallel Move Tests"
+        "SSA Liveness Tests"
+        "Phi Resolution Tests"
+        "Chordal Graph Tests"
+    |]
 
     let hasE2ETests =
         Directory.Exists e2eDir
@@ -226,6 +240,17 @@ let main args =
 
     let shouldCompileStdlib =
         shouldStartStdlibCompile hasE2ETests (verificationEnabled && hasVerificationTests) needsUnitStdlib
+
+    let enableVerification =
+        verificationEnabled || Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS") = "true"
+    let hasUnitTests =
+        unitTestNames |> Array.exists (matchesFilter filter)
+    let hasE2EOrVerification =
+        hasE2ETests || (enableVerification && hasVerificationTests)
+    let runUnitAndE2EInParallel =
+        shouldRunUnitAndE2EInParallel hasUnitTests hasE2EOrVerification
+    if runUnitAndE2EInParallel then
+        Environment.SetEnvironmentVariable("DARK_TEST_PARALLEL_SUITES", "true")
 
     let compileStdlibWithTiming () : Result<CompilerLibrary.StdlibResult, string> * TimeSpan =
         let timer = Stopwatch.StartNew()
