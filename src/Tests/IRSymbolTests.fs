@@ -124,12 +124,13 @@ let testMirToLirSymbolicOperands () : TestResult =
             else Error "Expected MIR→LIR to preserve symbolic operands"
         | _ -> Error "Expected a single LIR function"
 
+let tests = [
+    ("symbolize/resolve round trip", testSymbolizeResolveRoundTrip)
+    ("mir → lir symbolic operands", testMirToLirSymbolicOperands)
+]
+
 /// Run all symbolic LIR unit tests
 let runAll () : TestResult =
-    let tests = [
-        ("symbolize/resolve round trip", testSymbolizeResolveRoundTrip)
-        ("mir → lir symbolic operands", testMirToLirSymbolicOperands)
-    ]
     tests
     |> List.fold
         (fun acc (name, test) ->

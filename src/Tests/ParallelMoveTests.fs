@@ -175,19 +175,19 @@ let testMoveFromStackSlot () : TestResult =
         else
             Ok ()
 
+let tests = [
+    ("simple move", testSimpleMove)
+    ("chain moves", testChainMoves)
+    ("two-way swap", testTwoWaySwap)
+    ("three-way cycle", testThreeWayCycle)
+    ("self-move eliminated", testSelfMoveEliminated)
+    ("mixed cycle and independent", testMixedCycleAndIndependent)
+    ("move from immediate", testMoveFromImmediate)
+    ("move from stack slot", testMoveFromStackSlot)
+]
+
 /// Run all parallel move tests
 let runAll () : TestResult =
-    let tests = [
-        ("simple move", testSimpleMove)
-        ("chain moves", testChainMoves)
-        ("two-way swap", testTwoWaySwap)
-        ("three-way cycle", testThreeWayCycle)
-        ("self-move eliminated", testSelfMoveEliminated)
-        ("mixed cycle and independent", testMixedCycleAndIndependent)
-        ("move from immediate", testMoveFromImmediate)
-        ("move from stack slot", testMoveFromStackSlot)
-    ]
-
     let rec runTests tests =
         match tests with
         | [] -> Ok ()

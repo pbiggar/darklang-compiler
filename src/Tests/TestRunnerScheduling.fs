@@ -6,7 +6,12 @@ module TestRunnerScheduling
 
 open TestDSL.E2EFormat
 
-type UnitTestSuite = string * int * (unit -> Result<unit, string>)
+type UnitTestCase = string * (unit -> Result<unit, string>)
+
+type UnitTestSuite = {
+    Name: string
+    Tests: UnitTestCase list
+}
 
 type StdlibWarmupPlan =
     | CompileStdlibBeforeTests
@@ -14,6 +19,9 @@ type StdlibWarmupPlan =
 
 let estimateE2ETestCost (test: E2ETest) : int =
     test.Source.Length + test.Preamble.Length
+
+let formatUnitTestName (suiteName: string) (testName: string) : string =
+    $"{suiteName}: {testName}"
 
 let orderE2ETestsByEstimatedCost (tests: E2ETest array) : E2ETest array =
     tests
@@ -28,7 +36,7 @@ let splitUnitTestsByStdlibNeed
     let needsStdlibSet = Set.ofList needsStdlib
     let needsStdlibSuites, noStdlibSuites =
         suites
-        |> Array.partition (fun (name, _, _) -> Set.contains name needsStdlibSet)
+        |> Array.partition (fun suite -> Set.contains suite.Name needsStdlibSet)
     (noStdlibSuites, needsStdlibSuites)
 
 let shouldStartStdlibCompile (hasE2E: bool) (hasVerification: bool) (needsUnitStdlib: bool) : bool =

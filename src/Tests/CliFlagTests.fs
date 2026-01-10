@@ -24,12 +24,12 @@ let testDumpIrFlags () : TestResult =
         else
             Ok ()
 
+let tests = [
+    ("IR dump flags", testDumpIrFlags)
+]
+
 /// Run all CLI flag unit tests
 let runAll () : TestResult =
-    let tests = [
-        ("IR dump flags", testDumpIrFlags)
-    ]
-
     let rec runTests = function
         | [] -> Ok ()
         | (name, test) :: rest ->

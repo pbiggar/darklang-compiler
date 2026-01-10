@@ -57,12 +57,15 @@ let testPrecompilePopulatesCache (sharedStdlib: StdlibResult) : TestResult =
         else
             Error "Expected preamble cache entry to be populated"
 
+let tests : (string * (StdlibResult -> TestResult)) list = [
+    ("precompile populates cache", testPrecompilePopulatesCache)
+]
+
+let testsWithStdlib (sharedStdlib: StdlibResult) : (string * (unit -> TestResult)) list =
+    tests |> List.map (fun (name, test) -> (name, fun () -> test sharedStdlib))
+
 /// Run all precompile tests
 let runAllWithStdlib (sharedStdlib: StdlibResult) : TestResult =
-    let tests = [
-        ("precompile populates cache", fun () -> testPrecompilePopulatesCache sharedStdlib)
-    ]
-
     let rec runTests = function
         | [] -> Ok ()
         | (name, test) :: rest ->
@@ -70,7 +73,7 @@ let runAllWithStdlib (sharedStdlib: StdlibResult) : TestResult =
             | Ok () -> runTests rest
             | Error msg -> Error $"{name} test failed: {msg}"
 
-    runTests tests
+    runTests (testsWithStdlib sharedStdlib)
 
 let runAll () : TestResult =
     match TestDSL.E2ETestRunner.compileStdlib() with

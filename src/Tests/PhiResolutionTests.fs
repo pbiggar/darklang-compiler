@@ -334,16 +334,16 @@ let testLoopPhi () : TestResult =
             else
                 Ok ()
 
+let tests = [
+    ("simple phi resolution", testSimplePhiResolution)
+    ("multiple phis parallel", testMultiplePhisParallel)
+    ("phi swap", testPhiSwap)
+    ("phi with immediate", testPhiWithImmediate)
+    ("loop phi", testLoopPhi)
+]
+
 /// Run all phi resolution tests
 let runAll () : TestResult =
-    let tests = [
-        ("simple phi resolution", testSimplePhiResolution)
-        ("multiple phis parallel", testMultiplePhisParallel)
-        ("phi swap", testPhiSwap)
-        ("phi with immediate", testPhiWithImmediate)
-        ("loop phi", testLoopPhi)
-    ]
-
     let rec runTests tests =
         match tests with
         | [] -> Ok ()

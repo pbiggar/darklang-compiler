@@ -167,23 +167,23 @@ let testCompleteEncodingPipeline () : TestResult =
             else
                 Ok ()
 
+let tests = [
+    ("uint32ToBytes", testUint32ToBytes)
+    ("uint64ToBytes", testUint64ToBytes)
+    ("padString", testPadString)
+    ("padString truncate", testPadStringTruncate)
+    ("serializeMachHeader size", testSerializeMachHeaderSize)
+    ("serializeMachHeader magic", testSerializeMachHeaderMagic)
+    ("serializeSection64 size", testSerializeSection64Size)
+    ("createExecutable non-empty", testCreateExecutableNonEmpty)
+    ("createExecutable magic", testCreateExecutableMagic)
+    ("createExecutable contains code", testCreateExecutableContainsCode)
+    ("complete encoding pipeline", testCompleteEncodingPipeline)
+]
+
 /// Run all binary generation unit tests
 /// Returns Ok () if all pass, Error with first failure message if any fail
 let runAll () : TestResult =
-    let tests = [
-        ("uint32ToBytes", testUint32ToBytes)
-        ("uint64ToBytes", testUint64ToBytes)
-        ("padString", testPadString)
-        ("padString truncate", testPadStringTruncate)
-        ("serializeMachHeader size", testSerializeMachHeaderSize)
-        ("serializeMachHeader magic", testSerializeMachHeaderMagic)
-        ("serializeSection64 size", testSerializeSection64Size)
-        ("createExecutable non-empty", testCreateExecutableNonEmpty)
-        ("createExecutable magic", testCreateExecutableMagic)
-        ("createExecutable contains code", testCreateExecutableContainsCode)
-        ("complete encoding pipeline", testCompleteEncodingPipeline)
-    ]
-
     let rec runTests = function
         | [] -> Ok ()
         | (name, test) :: rest ->

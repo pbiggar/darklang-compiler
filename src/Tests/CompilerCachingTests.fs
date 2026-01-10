@@ -177,16 +177,19 @@ let testSpecializationCacheParallelDedup () : TestResult =
     else
         Ok ()
 
+let tests : (string * (StdlibResult -> TestResult)) list = [
+    ("stdlib compile mode", testStdlibCompileModeIsParallel)
+    ("specialized function caching", testSpecializedFunctionCaching)
+    ("preamble function caching", testPreambleFunctionCachedOnce)
+    ("compiled function cache is lazy", fun _ -> testCompiledFunctionCacheIsLazy ())
+    ("specialization cache parallel dedup", fun _ -> testSpecializationCacheParallelDedup ())
+]
+
+let testsWithStdlib (sharedStdlib: StdlibResult) : (string * (unit -> TestResult)) list =
+    tests |> List.map (fun (name, test) -> (name, fun () -> test sharedStdlib))
+
 /// Run all compiler caching unit tests
 let runAllWithStdlib (sharedStdlib: StdlibResult) : TestResult =
-    let tests = [
-        ("stdlib compile mode", fun () -> testStdlibCompileModeIsParallel sharedStdlib)
-        ("specialized function caching", fun () -> testSpecializedFunctionCaching sharedStdlib)
-        ("preamble function caching", fun () -> testPreambleFunctionCachedOnce sharedStdlib)
-        ("compiled function cache is lazy", testCompiledFunctionCacheIsLazy)
-        ("specialization cache parallel dedup", testSpecializationCacheParallelDedup)
-    ]
-
     let rec runTests = function
         | [] -> Ok ()
         | (name, test) :: rest ->
@@ -194,7 +197,7 @@ let runAllWithStdlib (sharedStdlib: StdlibResult) : TestResult =
             | Ok () -> runTests rest
             | Error msg -> Error $"{name} test failed: {msg}"
 
-    runTests tests
+    runTests (testsWithStdlib sharedStdlib)
 
 let runAll () : TestResult =
     match CompilerLibrary.compileStdlib () with

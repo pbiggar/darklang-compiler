@@ -244,15 +244,15 @@ let testLoopPhi () : TestResult =
     else
         Ok ()
 
+let tests = [
+    ("phi def at block entry", testPhiDefAtBlockEntry)
+    ("phi source liveness scoped", testPhiSourceLivenessScoped)
+    ("multiple phis same block", testMultiplePhisSameBlock)
+    ("loop phi", testLoopPhi)
+]
+
 /// Run all SSA liveness tests
 let runAll () : TestResult =
-    let tests = [
-        ("phi def at block entry", testPhiDefAtBlockEntry)
-        ("phi source liveness scoped", testPhiSourceLivenessScoped)
-        ("multiple phis same block", testMultiplePhisSameBlock)
-        ("loop phi", testLoopPhi)
-    ]
-
     let rec runTests tests =
         match tests with
         | [] -> Ok ()

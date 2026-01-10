@@ -361,23 +361,25 @@ let testApply2Pattern () : TestResult =
             Error $"v1 or v2 not found in coloring. Colors: {colorResult.Colors}"
 
 /// Run all tests and return results
+let tests = [
+    ("Empty graph", testEmptyGraph)
+    ("Single vertex", testSingleVertex)
+    ("No interference", testNoInterference)
+    ("Simple interference", testSimpleInterference)
+    ("Triangle (clique of 3)", testTriangle)
+    ("Chain (path graph)", testChain)
+    ("Spill required", testSpillRequired)
+    ("Pre-coloring respected", testPrecoloring)
+    ("MCS ordering", testMCSOrdering)
+    ("Diamond CFG", testDiamondCFG)
+    ("Star graph", testStarGraph)
+    ("Multiple pre-colored", testMultiplePrecolored)
+    ("Exact clique", testExactClique)
+    ("Disconnected components", testDisconnectedComponents)
+    ("Build from real CFG", testBuildFromCFG)
+    ("Full chordal pipeline", testFullChordalPipeline)
+    ("Apply2 pattern", testApply2Pattern)
+]
+
 let runAllTests () : (string * TestResult) list =
-    [
-        ("Empty graph", testEmptyGraph ())
-        ("Single vertex", testSingleVertex ())
-        ("No interference", testNoInterference ())
-        ("Simple interference", testSimpleInterference ())
-        ("Triangle (clique of 3)", testTriangle ())
-        ("Chain (path graph)", testChain ())
-        ("Spill required", testSpillRequired ())
-        ("Pre-coloring respected", testPrecoloring ())
-        ("MCS ordering", testMCSOrdering ())
-        ("Diamond CFG", testDiamondCFG ())
-        ("Star graph", testStarGraph ())
-        ("Multiple pre-colored", testMultiplePrecolored ())
-        ("Exact clique", testExactClique ())
-        ("Disconnected components", testDisconnectedComponents ())
-        ("Build from real CFG", testBuildFromCFG ())
-        ("Full chordal pipeline", testFullChordalPipeline ())
-        ("Apply2 pattern", testApply2Pattern ())
-    ]
+    tests |> List.map (fun (name, test) -> (name, test ()))

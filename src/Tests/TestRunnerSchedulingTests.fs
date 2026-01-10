@@ -47,14 +47,14 @@ let testOrderE2ETestsByEstimatedCost () : TestResult =
 
 let testSplitUnitTestsByStdlibNeed () : TestResult =
     let suites : UnitTestSuite array = [|
-        ("CLI Flags Tests", 1, fun () -> Ok ())
-        ("Compiler Caching Tests", 1, fun () -> Ok ())
-        ("Parallel Move Tests", 1, fun () -> Ok ())
+        { Name = "CLI Flags Tests"; Tests = [] }
+        { Name = "Compiler Caching Tests"; Tests = [] }
+        { Name = "Parallel Move Tests"; Tests = [] }
     |]
     let (noStdlib, needsStdlib) =
         splitUnitTestsByStdlibNeed [ "Compiler Caching Tests" ] suites
-    let noStdlibNames = noStdlib |> Array.map (fun (name, _, _) -> name) |> Array.toList
-    let needsStdlibNames = needsStdlib |> Array.map (fun (name, _, _) -> name) |> Array.toList
+    let noStdlibNames = noStdlib |> Array.map (fun suite -> suite.Name) |> Array.toList
+    let needsStdlibNames = needsStdlib |> Array.map (fun suite -> suite.Name) |> Array.toList
     if noStdlibNames = [ "CLI Flags Tests"; "Parallel Move Tests" ] && needsStdlibNames = [ "Compiler Caching Tests" ] then
         Ok ()
     else
@@ -109,16 +109,25 @@ let testCalculateOptimalParallelism () : TestResult =
     else
         Error $"Expected calculateOptimalParallelism to return 14, got {actual}"
 
-let runAll () : TestResult =
-    let tests = [
-        ("E2E ordering", testOrderE2ETestsByEstimatedCost)
-        ("Unit test split", testSplitUnitTestsByStdlibNeed)
-        ("Stdlib compile decision", testShouldStartStdlibCompile)
-        ("Parallel suite decision", testShouldRunUnitAndE2EInParallel)
-        ("Stdlib warmup plan", testStdlibWarmupPlan)
-        ("Parallelism calculation", testCalculateOptimalParallelism)
-    ]
+let testFormatUnitTestName () : TestResult =
+    let actual = formatUnitTestName "Compiler Caching Tests" "specialized function caching"
+    let expected = "Compiler Caching Tests: specialized function caching"
+    if actual = expected then
+        Ok ()
+    else
+        Error $"Expected formatted name '{expected}', got '{actual}'"
 
+let tests = [
+    ("E2E ordering", testOrderE2ETestsByEstimatedCost)
+    ("Unit test split", testSplitUnitTestsByStdlibNeed)
+    ("Stdlib compile decision", testShouldStartStdlibCompile)
+    ("Parallel suite decision", testShouldRunUnitAndE2EInParallel)
+    ("Stdlib warmup plan", testStdlibWarmupPlan)
+    ("Parallelism calculation", testCalculateOptimalParallelism)
+    ("Unit test name format", testFormatUnitTestName)
+]
+
+let runAll () : TestResult =
     let rec runTests remaining =
         match remaining with
         | [] -> Ok ()

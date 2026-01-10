@@ -818,22 +818,31 @@ let main args =
         | Error err -> Error err
         | Ok stdlib -> runner stdlib
 
-    // Define unit test suites with their names and test counts
+    let wrapStdlibTests
+        (suiteName: string)
+        (tests: (string * (CompilerLibrary.StdlibResult -> Result<unit, string>)) list)
+        : (string * (unit -> Result<unit, string>)) list =
+        tests
+        |> List.map (fun (name, test) ->
+            (name, fun () -> runWithStdlib suiteName (fun stdlib -> test stdlib)))
+
+    // Define unit test suites and their per-test runners
     let allUnitTests : UnitTestSuite array = [|
-        ("CLI Flags Tests", 1, fun () -> CliFlagTests.runAll())
-        ("Test Runner Scheduling Tests", 4, fun () -> TestRunnerSchedulingTests.runAll())
-        ("Compiler Caching Tests", 1, fun () -> runWithStdlib "Compiler Caching Tests" CompilerCachingTests.runAllWithStdlib)
-        ("Preamble Precompile Tests", 1, fun () -> runWithStdlib "Preamble Precompile Tests" PreamblePrecompileTests.runAllWithStdlib)
-        ("IR Symbol Tests", 1, fun () -> IRSymbolTests.runAll())
-        ("Parallel Utils Tests", 2, fun () -> ParallelUtilsTests.runAll())
-        ("Encoding Tests", 1, fun () -> EncodingTests.runAll())
-        ("Binary Tests", 11, fun () -> BinaryTests.runAll())
-        ("Type Checking Tests", 8, fun () -> TypeCheckingTests.runAll())
-        ("Parallel Move Tests", 8, fun () -> ParallelMoveTests.runAll())
-        ("SSA Liveness Tests", 4, fun () -> SSALivenessTests.runAll())
-        ("Phi Resolution Tests", 5, fun () -> PhiResolutionTests.runAll())
+        { Name = "CLI Flags Tests"; Tests = CliFlagTests.tests }
+        { Name = "Test Runner Scheduling Tests"; Tests = TestRunnerSchedulingTests.tests }
+        { Name = "Compiler Caching Tests"; Tests = wrapStdlibTests "Compiler Caching Tests" CompilerCachingTests.tests }
+        { Name = "Preamble Precompile Tests"; Tests = wrapStdlibTests "Preamble Precompile Tests" PreamblePrecompileTests.tests }
+        { Name = "IR Symbol Tests"; Tests = IRSymbolTests.tests }
+        { Name = "Parallel Utils Tests"; Tests = ParallelUtilsTests.tests }
+        { Name = "Encoding Tests"; Tests = EncodingTests.tests }
+        { Name = "Binary Tests"; Tests = BinaryTests.tests }
+        { Name = "Type Checking Tests"; Tests = TypeCheckingTests.tests }
+        { Name = "Parallel Move Tests"; Tests = ParallelMoveTests.tests }
+        { Name = "SSA Liveness Tests"; Tests = SSALivenessTests.tests }
+        { Name = "Phi Resolution Tests"; Tests = PhiResolutionTests.tests }
+        { Name = "Chordal Graph Tests"; Tests = ChordalGraphTests.tests }
     |]
-    let unitTests = allUnitTests |> Array.filter (fun (name, _, _) -> matchesFilter filter name)
+    let unitTests = allUnitTests |> Array.filter (fun suite -> matchesFilter filter suite.Name)
 
     let (unitTestsNoStdlib, unitTestsWithStdlib) =
         splitUnitTestsByStdlibNeed unitStdlibSuites unitTests
@@ -847,51 +856,33 @@ let main args =
         let mutable unitSectionFailed = 0
         let unitFailedTests = ResizeArray<FailedTestInfo>()
 
-        let unitProgress = ProgressBar.create "Unit" (unitTestsOrdered.Length + 1)  // +1 for Chordal Graph
+        let totalUnitTests =
+            unitTestsOrdered
+            |> Array.sumBy (fun suite -> suite.Tests.Length)
+        let unitProgress = ProgressBar.create "Unit" totalUnitTests
         ProgressBar.update unitProgress
 
-        for (name, count, runTest) in unitTestsOrdered do
-            let timer = Stopwatch.StartNew()
-            match runTest() with
-            | Ok () ->
-                timer.Stop()
-                recordTiming { Name = $"Unit: {name}"; TotalTime = timer.Elapsed; CompileTime = None; RuntimeTime = None }
-                unitSectionPassed <- unitSectionPassed + count
-                ProgressBar.increment unitProgress true
-            | Error msg ->
-                timer.Stop()
-                recordTiming { Name = $"Unit: {name}"; TotalTime = timer.Elapsed; CompileTime = None; RuntimeTime = None }
-                ProgressBar.increment unitProgress false
-                ProgressBar.finish unitProgress
-                println $"  {name}... {Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime timer.Elapsed}){Colors.reset}"
-                println $"    {msg}"
-                unitFailedTests.Add({ File = ""; Name = $"Unit: {name}"; Message = msg; Details = [] })
-                unitSectionFailed <- unitSectionFailed + 1
-                ProgressBar.update unitProgress
-
-        // Handle Chordal Graph Tests separately (has different structure)
-        if matchesFilter filter "Chordal Graph Tests" then
-            let chordalTimer = Stopwatch.StartNew()
-            let results = ChordalGraphTests.runAllTests()
-            chordalTimer.Stop()
-            recordTiming { Name = "Unit: Chordal Graph Tests"; TotalTime = chordalTimer.Elapsed; CompileTime = None; RuntimeTime = None }
-            let failures = results |> List.filter (fun (_, r) -> match r with Error _ -> true | Ok _ -> false)
-            let passedCount = results |> List.filter (fun (_, r) -> match r with Ok _ -> true | Error _ -> false) |> List.length
-            unitSectionPassed <- unitSectionPassed + passedCount
-            if List.isEmpty failures then
-                ProgressBar.increment unitProgress true
-            else
-                ProgressBar.increment unitProgress false
-                ProgressBar.finish unitProgress
-                println $"  Chordal Graph Tests... {Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime chordalTimer.Elapsed}){Colors.reset}"
-                for (name, result) in failures do
-                    match result with
-                    | Error msg ->
-                        println $"    {name}: {msg}"
-                        unitFailedTests.Add({ File = ""; Name = $"Unit: Chordal Graph - {name}"; Message = msg; Details = [] })
-                        unitSectionFailed <- unitSectionFailed + 1
-                    | Ok _ -> ()
-                ProgressBar.update unitProgress
+        for suite in unitTestsOrdered do
+            for (testName, runTest) in suite.Tests do
+                let timer = Stopwatch.StartNew()
+                match runTest() with
+                | Ok () ->
+                    timer.Stop()
+                    let displayName = formatUnitTestName suite.Name testName
+                    recordTiming { Name = $"Unit: {displayName}"; TotalTime = timer.Elapsed; CompileTime = None; RuntimeTime = None }
+                    unitSectionPassed <- unitSectionPassed + 1
+                    ProgressBar.increment unitProgress true
+                | Error msg ->
+                    timer.Stop()
+                    let displayName = formatUnitTestName suite.Name testName
+                    recordTiming { Name = $"Unit: {displayName}"; TotalTime = timer.Elapsed; CompileTime = None; RuntimeTime = None }
+                    ProgressBar.increment unitProgress false
+                    ProgressBar.finish unitProgress
+                    println $"  {displayName}... {Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime timer.Elapsed}){Colors.reset}"
+                    println $"    {msg}"
+                    unitFailedTests.Add({ File = ""; Name = $"Unit: {displayName}"; Message = msg; Details = [] })
+                    unitSectionFailed <- unitSectionFailed + 1
+                    ProgressBar.update unitProgress
 
         ProgressBar.finish unitProgress
         unitSectionTimer.Stop()

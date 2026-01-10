@@ -66,20 +66,20 @@ let testComplexExpression () : TestResult =
             IntLiteral 2L)
     expectType expr TInt64
 
+let tests = [
+    ("Integer literal", testIntLiteral)
+    ("Addition", testAddition)
+    ("Subtraction", testSubtraction)
+    ("Multiplication", testMultiplication)
+    ("Division", testDivision)
+    ("Negation", testNegation)
+    ("Nested operations", testNestedOperations)
+    ("Complex expression", testComplexExpression)
+]
+
 /// Run all type checking unit tests
 /// Returns Ok () if all pass, Error with first failure message if any fail
 let runAll () : TestResult =
-    let tests = [
-        ("Integer literal", testIntLiteral)
-        ("Addition", testAddition)
-        ("Subtraction", testSubtraction)
-        ("Multiplication", testMultiplication)
-        ("Division", testDivision)
-        ("Negation", testNegation)
-        ("Nested operations", testNestedOperations)
-        ("Complex expression", testComplexExpression)
-    ]
-
     let rec runTests = function
         | [] -> Ok ()
         | (name, test) :: rest ->

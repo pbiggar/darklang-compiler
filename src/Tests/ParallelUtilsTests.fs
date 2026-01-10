@@ -32,11 +32,12 @@ let testMapResultsParallelReturnsFirstError () : TestResult =
     | Error err -> Error $"Expected first error 'bad 2', got '{err}'"
     | Ok _ -> Error "Expected error but got Ok"
 
+let tests = [
+    ("order preserved", testMapResultsParallelPreservesOrder)
+    ("first error", testMapResultsParallelReturnsFirstError)
+]
+
 let runAll () : TestResult =
-    let tests = [
-        ("order preserved", testMapResultsParallelPreservesOrder)
-        ("first error", testMapResultsParallelReturnsFirstError)
-    ]
     let rec run remaining =
         match remaining with
         | [] -> Ok ()

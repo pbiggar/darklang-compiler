@@ -91,15 +91,15 @@ let testMOVZMOVKSequence () : TestResult =
     | _ ->
         Error "MOVZ/MOVK sequence: unexpected encoding length"
 
+let tests = [
+    ("encodeReg", testEncodeReg)
+    ("MOVK shift encoding", testMOVKShiftEncoding)
+    ("MOVZ+MOVK sequence", testMOVZMOVKSequence)
+]
+
 /// Run all encoding unit tests
 /// Returns Ok () if all pass, Error with first failure message if any fail
 let runAll () : TestResult =
-    let tests = [
-        ("encodeReg", testEncodeReg)
-        ("MOVK shift encoding", testMOVKShiftEncoding)
-        ("MOVZ+MOVK sequence", testMOVZMOVKSequence)
-    ]
-
     let rec runTests = function
         | [] -> Ok ()
         | (name, test) :: rest ->
