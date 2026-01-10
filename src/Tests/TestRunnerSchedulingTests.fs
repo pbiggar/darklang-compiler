@@ -96,12 +96,19 @@ let testShouldRunUnitAndE2EInParallel () : TestResult =
                 Error $"Expected shouldRunUnitAndE2EInParallel({hasUnit}, {hasE2E}) to be {expected}, got {actual}"
     checkCases cases
 
+let testStdlibWarmupPlan () : TestResult =
+    match decideStdlibWarmupPlan true, decideStdlibWarmupPlan false with
+    | CompileStdlibBeforeTests, SkipStdlibWarmup -> Ok ()
+    | actual ->
+        Error $"Expected CompileStdlibBeforeTests/SkipStdlibWarmup, got {actual}"
+
 let runAll () : TestResult =
     let tests = [
         ("E2E ordering", testOrderE2ETestsByEstimatedCost)
         ("Unit test split", testSplitUnitTestsByStdlibNeed)
         ("Stdlib compile decision", testShouldStartStdlibCompile)
         ("Parallel suite decision", testShouldRunUnitAndE2EInParallel)
+        ("Stdlib warmup plan", testStdlibWarmupPlan)
     ]
 
     let rec runTests remaining =

@@ -21,9 +21,6 @@ let private withFreshCaches (stdlib: StdlibResult) : StdlibResult =
 let private isVerificationEnabled () : bool =
     System.Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS") = "true"
 
-let private isParallelSuitesEnabled () : bool =
-    System.Environment.GetEnvironmentVariable("DARK_TEST_PARALLEL_SUITES") = "true"
-
 let private tryGetCompiledLazy
     (stdlib: StdlibResult)
     (key: CompiledFunctionKey)
@@ -74,18 +71,11 @@ let testSpecializedFunctionCaching (sharedStdlib: StdlibResult) : TestResult =
                             let missingList = System.String.Join(", ", Set.toList missing)
                             Error $"Missing cached specialized functions: {missingList}"
 
-/// Test that stdlib compilation mode respects scheduling and threshold rules
-let testStdlibCompileModeMatchesScheduling (sharedStdlib: StdlibResult) : TestResult =
-    let stdlibFunctionCount = sharedStdlib.AllocatedFunctions.Length
-    let expectedMode =
-        if isParallelSuitesEnabled () || stdlibFunctionCount < CompilerLibrary.stdlibParallelThreshold then
-            StdlibCompileMode.Sequential
-        else
-            StdlibCompileMode.Parallel
-    if sharedStdlib.CompileMode = expectedMode then
-        Ok ()
-    else
-        Error $"Expected stdlib to compile in {expectedMode} mode, got {sharedStdlib.CompileMode}"
+/// Test that stdlib compilation uses parallel mode
+let testStdlibCompileModeIsParallel (sharedStdlib: StdlibResult) : TestResult =
+    match sharedStdlib.CompileMode with
+    | StdlibCompileMode.Parallel -> Ok ()
+    | StdlibCompileMode.Sequential -> Error "Expected stdlib to compile in parallel mode"
 
 /// Test that preamble functions are compiled once across tests in the same file
 let testPreambleFunctionCachedOnce (sharedStdlib: StdlibResult) : TestResult =
@@ -190,7 +180,7 @@ let testSpecializationCacheParallelDedup () : TestResult =
 /// Run all compiler caching unit tests
 let runAllWithStdlib (sharedStdlib: StdlibResult) : TestResult =
     let tests = [
-        ("stdlib compile mode", fun () -> testStdlibCompileModeMatchesScheduling sharedStdlib)
+        ("stdlib compile mode", fun () -> testStdlibCompileModeIsParallel sharedStdlib)
         ("specialized function caching", fun () -> testSpecializedFunctionCaching sharedStdlib)
         ("preamble function caching", fun () -> testPreambleFunctionCachedOnce sharedStdlib)
         ("compiled function cache is lazy", testCompiledFunctionCacheIsLazy)

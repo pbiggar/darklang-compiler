@@ -241,6 +241,8 @@ let main args =
     let shouldCompileStdlib =
         shouldStartStdlibCompile hasE2ETests (verificationEnabled && hasVerificationTests) needsUnitStdlib
 
+    let stdlibWarmupPlan = decideStdlibWarmupPlan shouldCompileStdlib
+
     let enableVerification =
         verificationEnabled || Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS") = "true"
     let hasUnitTests =
@@ -249,20 +251,12 @@ let main args =
         hasE2ETests || (enableVerification && hasVerificationTests)
     let runUnitAndE2EInParallel =
         shouldRunUnitAndE2EInParallel hasUnitTests hasE2EOrVerification
-    if runUnitAndE2EInParallel then
-        Environment.SetEnvironmentVariable("DARK_TEST_PARALLEL_SUITES", "true")
 
     let compileStdlibWithTiming () : Result<CompilerLibrary.StdlibResult, string> * TimeSpan =
         let timer = Stopwatch.StartNew()
         let result = TestDSL.E2ETestRunner.compileStdlib()
         timer.Stop()
         (result, timer.Elapsed)
-
-    let stdlibCompileTask : System.Threading.Tasks.Task<Result<CompilerLibrary.StdlibResult, string> * TimeSpan> option =
-        if shouldCompileStdlib then
-            Some (System.Threading.Tasks.Task.Run(fun () -> compileStdlibWithTiming ()))
-        else
-            None
 
     let mutable e2eStdlib : CompilerLibrary.StdlibResult option = None
 
@@ -289,32 +283,31 @@ let main args =
     let tryGetStdlibCompileElapsed () : TimeSpan option =
         lock stdlibLock (fun () -> stdlibCompileElapsed)
 
+    let recordStdlibCompile
+        (result: Result<CompilerLibrary.StdlibResult, string>)
+        (elapsed: TimeSpan)
+        : unit =
+        lock stdlibLock (fun () ->
+            stdlibCompileResult <- Some result
+            stdlibCompileElapsed <- Some elapsed
+            match result with
+            | Ok stdlib -> e2eStdlib <- Some stdlib
+            | Error _ -> ())
+        recordTiming { Name = "Stdlib Compile"; TotalTime = elapsed; CompileTime = None; RuntimeTime = None }
+
+    match stdlibWarmupPlan with
+    | CompileStdlibBeforeTests ->
+        let (result, elapsed) = compileStdlibWithTiming ()
+        recordStdlibCompile result elapsed
+    | SkipStdlibWarmup -> ()
+
     let getStdlibResult () : Result<CompilerLibrary.StdlibResult, string> =
         match e2eStdlib with
         | Some stdlib -> Ok stdlib
         | None ->
-            let (result, elapsed) =
-                match stdlibCompileTask with
-                | Some task -> task.Result
-                | None -> compileStdlibWithTiming ()
-            let (finalResult, shouldRecordTiming) =
-                lock stdlibLock (fun () ->
-                    match stdlibCompileResult with
-                    | Some cached -> (cached, None)
-                    | None ->
-                        stdlibCompileResult <- Some result
-                        stdlibCompileElapsed <- Some elapsed
-                        match result with
-                        | Ok stdlib ->
-                            e2eStdlib <- Some stdlib
-                            (Ok stdlib, Some elapsed)
-                        | Error err ->
-                            (Error err, Some elapsed))
-            match shouldRecordTiming with
-            | Some timing ->
-                recordTiming { Name = "Stdlib Compile"; TotalTime = timing; CompileTime = None; RuntimeTime = None }
-            | None -> ()
-            finalResult
+            match lock stdlibLock (fun () -> stdlibCompileResult) with
+            | Some cached -> cached
+            | None -> Error "Stdlib was not compiled before tests"
 
     let loadE2ETests (testFiles: string array) : E2ETest array * (string * string) list =
         let tests = ResizeArray<E2ETest>()
@@ -855,14 +848,6 @@ let main args =
         splitUnitTestsByStdlibNeed unitStdlibSuites unitTests
     let unitTestsOrdered = Array.append unitTestsNoStdlib unitTestsWithStdlib
 
-    let hasUnitTests =
-        unitTestsOrdered.Length > 0 || matchesFilter filter "Chordal Graph Tests"
-
-    let enableVerification =
-        verificationEnabled || Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS") = "true"
-    let hasE2EOrVerification =
-        hasE2ETests || (enableVerification && hasVerificationTests)
-
     let runUnitTests () : unit =
         let unitSectionTimer = Stopwatch.StartNew()
         println $"{Colors.cyan}🔧 Unit Tests{Colors.reset}"
@@ -984,7 +969,7 @@ let main args =
                 println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
                 println ""
 
-    if shouldRunUnitAndE2EInParallel hasUnitTests hasE2EOrVerification then
+    if runUnitAndE2EInParallel then
         let unitTask = System.Threading.Tasks.Task.Run(fun () -> runUnitTests ())
         let e2eTask = System.Threading.Tasks.Task.Run(fun () -> runE2EAndVerification ())
         System.Threading.Tasks.Task.WaitAll [| unitTask; e2eTask |]

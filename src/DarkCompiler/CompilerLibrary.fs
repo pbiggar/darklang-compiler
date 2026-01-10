@@ -817,15 +817,13 @@ let private mapListParallel (items: 'a list) (f: 'a -> 'b) : 'b list =
     |> Array.Parallel.map f
     |> Array.toList
 
-/// Minimum stdlib function count before parallel allocation is worth it
-let stdlibParallelThreshold = 32
-
 /// Compile stdlib in isolation, returning reusable result
 /// This can be called once and the result reused for multiple user program compilations
 let compileStdlib () : Result<StdlibResult, string> =
     match loadStdlib() with
     | Error e -> Error e
     | Ok stdlibAst ->
+        let compileMode = StdlibCompileMode.Parallel
         // Add dummy main expression for type checking (stdlib has no main)
         let (AST.Program items) = stdlibAst
         let withMain = AST.Program (items @ [AST.Expression AST.UnitLiteral])
@@ -865,22 +863,23 @@ let compileStdlib () : Result<StdlibResult, string> =
                         let mirProgram = MIR.Program (mirFuncs, variantRegistry, recordRegistry)
                         // SSA construction + MIR optimizations for stdlib (keeps RA assumptions consistent)
                         let stdlibSsaProgram =
-                            SSA_Construction.convertToSSA mirProgram
+                            let (MIR.Program (functions, variants, records)) = mirProgram
+                            let functions' = mapListParallel functions SSA_Construction.convertFunctionToSSA
+                            MIR.Program (functions', variants, records)
                         let stdlibOptimizedProgram =
-                            MIR_Optimize.optimizeProgram stdlibSsaProgram
+                            let (MIR.Program (functions, variants, records)) = stdlibSsaProgram
+                            let functions' = mapListParallel functions MIR_Optimize.optimizeFunction
+                            MIR.Program (functions', variants, records)
                         // Convert stdlib MIR to LIR (cached for reuse)
                         match MIR_to_LIR.toLIR stdlibOptimizedProgram with
                         | Error e -> Error e
                         | Ok lirProgram ->
-                            let optimizedLir = LIR_Optimize.optimizeProgram lirProgram
+                            let optimizedLir =
+                                let (LIRSymbolic.Program functions) = lirProgram
+                                let functions' = mapListParallel functions LIR_Optimize.optimizeFunction
+                                LIRSymbolic.Program functions'
                             // Pre-allocate stdlib functions (cached for reuse)
                             let (LIRSymbolic.Program lirFuncs) = optimizedLir
-                            let compileMode =
-                                if System.Environment.GetEnvironmentVariable("DARK_TEST_PARALLEL_SUITES") = "true"
-                                   || List.length lirFuncs < stdlibParallelThreshold then
-                                    StdlibCompileMode.Sequential
-                                else
-                                    StdlibCompileMode.Parallel
                             let allocatedFuncs =
                                 match compileMode with
                                 | StdlibCompileMode.Sequential -> List.map RegisterAllocation.allocateRegisters lirFuncs

@@ -8,6 +8,10 @@ open TestDSL.E2EFormat
 
 type UnitTestSuite = string * int * (unit -> Result<unit, string>)
 
+type StdlibWarmupPlan =
+    | CompileStdlibBeforeTests
+    | SkipStdlibWarmup
+
 let estimateE2ETestCost (test: E2ETest) : int =
     test.Source.Length + test.Preamble.Length
 
@@ -32,3 +36,9 @@ let shouldStartStdlibCompile (hasE2E: bool) (hasVerification: bool) (needsUnitSt
 
 let shouldRunUnitAndE2EInParallel (hasUnit: bool) (hasE2E: bool) : bool =
     hasUnit && hasE2E
+
+let decideStdlibWarmupPlan (shouldCompileStdlib: bool) : StdlibWarmupPlan =
+    if shouldCompileStdlib then
+        CompileStdlibBeforeTests
+    else
+        SkipStdlibWarmup
