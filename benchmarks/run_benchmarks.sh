@@ -17,6 +17,7 @@ source "$SCRIPT_DIR/infrastructure/pretty.sh"
 USE_CACHEGRIND=true
 export REFRESH_BASELINE=false
 BENCHMARK="all"
+VALIDATION_FAILURES=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -79,7 +80,9 @@ for bench in $BENCHMARKS; do
     "$SCRIPT_DIR/infrastructure/build_all.sh" "$bench"
 
     # Validate correctness
-    "$SCRIPT_DIR/infrastructure/validate_all.sh" "$bench"
+    if ! "$SCRIPT_DIR/infrastructure/validate_all.sh" "$bench"; then
+        VALIDATION_FAILURES+=("$bench")
+    fi
 
     # Run benchmark
     if [ "$USE_CACHEGRIND" = true ]; then
@@ -111,4 +114,10 @@ if [ "$USE_CACHEGRIND" = true ]; then
     pretty_info "Summary: $OUTPUT_DIR/cachegrind_summary.md"
 else
     pretty_info "Summary: $OUTPUT_DIR/summary.md"
+fi
+
+if [ ${#VALIDATION_FAILURES[@]} -ne 0 ]; then
+    echo ""
+    pretty_fail "Validation failed for: ${VALIDATION_FAILURES[*]}"
+    exit 1
 fi

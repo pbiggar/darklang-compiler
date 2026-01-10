@@ -20,6 +20,7 @@ if [ -z "$BENCHMARK" ] || [ -z "$OUTPUT_DIR" ]; then
 fi
 
 PROBLEM_DIR="$BENCHMARKS_DIR/problems/$BENCHMARK"
+RESULTS_FILE="$BENCHMARKS_DIR/RESULTS.md"
 
 # Check for valgrind
 if ! command -v valgrind &> /dev/null; then
@@ -40,11 +41,42 @@ should_run_lang() {
     echo ",$REFRESH_BASELINE," | grep -q ",$lang,"
 }
 
+latest_results_count() {
+    local lang="$1"
+    local column_index=""
+
+    case "$lang" in
+        dark) column_index=3 ;;
+        rust) column_index=4 ;;
+        ocaml) column_index=5 ;;
+        python) column_index=6 ;;
+        node) column_index=7 ;;
+        *) return ;;
+    esac
+
+    if [ ! -f "$RESULTS_FILE" ]; then
+        return
+    fi
+
+    awk -F'|' -v bench="$BENCHMARK" -v idx="$column_index" '
+        function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+        /^\|/ {
+            name = trim($2)
+            if (name == bench) {
+                value = trim($(idx))
+                gsub(/\([^)]*\)/, "", value)
+                value = trim(value)
+                print value
+                exit
+            }
+        }' "$RESULTS_FILE"
+}
+
 pretty_section "Running cachegrind benchmark for $BENCHMARK..."
 
 # Create output file for parsed results
-RESULTS_FILE="$OUTPUT_DIR/${BENCHMARK}_cachegrind.json"
-echo "{\"benchmark\": \"$BENCHMARK\", \"results\": [" > "$RESULTS_FILE"
+RESULTS_FILE_PATH="$OUTPUT_DIR/${BENCHMARK}_cachegrind.json"
+echo "{\"benchmark\": \"$BENCHMARK\", \"results\": [" > "$RESULTS_FILE_PATH"
 
 FIRST=true
 
@@ -80,11 +112,11 @@ for impl in $IMPLS; do
         if [ "$FIRST" = true ]; then
             FIRST=false
         else
-            echo "," >> "$RESULTS_FILE"
+            echo "," >> "$RESULTS_FILE_PATH"
         fi
 
         # Write JSON entry
-        cat >> "$RESULTS_FILE" << EOF
+        cat >> "$RESULTS_FILE_PATH" << EOF
   {
     "language": "$impl",
     "instructions": $I_REFS,
@@ -97,7 +129,12 @@ for impl in $IMPLS; do
   }
 EOF
 
-        pretty_info "Instructions: $I_REFS"
+        LATEST_RESULTS=$(latest_results_count "$impl")
+        if [ -n "$LATEST_RESULTS" ] && [ "$LATEST_RESULTS" != "-" ]; then
+            pretty_info "Instructions: $I_REFS (latest RESULTS.md: $LATEST_RESULTS)"
+        else
+            pretty_info "Instructions: $I_REFS"
+        fi
     fi
 done
 
@@ -135,10 +172,10 @@ if should_run_lang "python" && [ -f "$PROBLEM_DIR/python/main.py" ]; then
             if [ "$FIRST" = true ]; then
                 FIRST=false
             else
-                echo "," >> "$RESULTS_FILE"
+                echo "," >> "$RESULTS_FILE_PATH"
             fi
 
-            cat >> "$RESULTS_FILE" << EOF
+            cat >> "$RESULTS_FILE_PATH" << EOF
   {
     "language": "python",
     "instructions": $I_REFS,
@@ -151,7 +188,12 @@ if should_run_lang "python" && [ -f "$PROBLEM_DIR/python/main.py" ]; then
   }
 EOF
 
-            pretty_info "Instructions: $I_REFS"
+            LATEST_RESULTS=$(latest_results_count "python")
+            if [ -n "$LATEST_RESULTS" ] && [ "$LATEST_RESULTS" != "-" ]; then
+                pretty_info "Instructions: $I_REFS (latest RESULTS.md: $LATEST_RESULTS)"
+            else
+                pretty_info "Instructions: $I_REFS"
+            fi
         fi
     fi
 fi
@@ -189,10 +231,10 @@ if should_run_lang "node" && [ -f "$PROBLEM_DIR/node/main.js" ]; then
             if [ "$FIRST" = true ]; then
                 FIRST=false
             else
-                echo "," >> "$RESULTS_FILE"
+                echo "," >> "$RESULTS_FILE_PATH"
             fi
 
-            cat >> "$RESULTS_FILE" << EOF
+            cat >> "$RESULTS_FILE_PATH" << EOF
   {
     "language": "node",
     "instructions": $I_REFS,
@@ -205,7 +247,12 @@ if should_run_lang "node" && [ -f "$PROBLEM_DIR/node/main.js" ]; then
   }
 EOF
 
-            pretty_info "Instructions: $I_REFS"
+            LATEST_RESULTS=$(latest_results_count "node")
+            if [ -n "$LATEST_RESULTS" ] && [ "$LATEST_RESULTS" != "-" ]; then
+                pretty_info "Instructions: $I_REFS (latest RESULTS.md: $LATEST_RESULTS)"
+            else
+                pretty_info "Instructions: $I_REFS"
+            fi
         fi
     fi
 fi
@@ -219,5 +266,5 @@ fi
 # Bun is NOT supported with cachegrind - JIT-compiled code isn't properly instrumented
 # (All benchmarks show ~2.17M instructions regardless of complexity - just measuring startup)
 
-echo "]}" >> "$RESULTS_FILE"
-pretty_ok "Results saved to: $RESULTS_FILE"
+echo "]}" >> "$RESULTS_FILE_PATH"
+pretty_ok "Results saved to: $RESULTS_FILE_PATH"
