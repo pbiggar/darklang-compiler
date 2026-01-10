@@ -163,6 +163,20 @@ LIR: X12 <- Mov(Imm 1000000)  // Load large immediate
      v2 <- Add(v0, X12)       // Use register
 ```
 
+## Symbolic LIR (Pool-less LIR)
+
+Some compiler paths store functions in a symbolic LIR variant where string/float
+constants are referenced by value instead of pool index. This avoids remapping
+pool indices when merging cached functions (stdlib, preamble, user code).
+
+Key differences from indexed LIR:
+- `StringSymbol "hello"` and `FloatSymbol 1.5` replace `StringRef`/`FloatRef`.
+- `PrintString` carries the string value directly.
+
+When building the final program, symbolic LIR is resolved into indexed LIR once,
+using the combined string/float pools. See `LIRSymbolic.fs` for the conversion
+helpers (`fromLIR`, `toLIRWithPools`).
+
 ## Constant Pools
 
 ### String Pool
