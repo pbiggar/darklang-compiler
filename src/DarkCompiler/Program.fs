@@ -41,6 +41,12 @@ let verbosityToInt (level: VerbosityLevel) : int =
     | VeryVerbose -> 2 // Library shows pass names + timing
     | DumpIR -> 3     // Library dumps all IRs
 
+/// Determine whether the CLI should emit normal output for a verbosity level
+let shouldShowNormal (level: VerbosityLevel) : bool =
+    match level with
+    | Quiet -> false
+    | Normal | Verbose | VeryVerbose | DumpIR -> true
+
 /// Parsed CLI options
 type CliOptions = {
     Run: bool                    // True = run, False = compile (default)
@@ -83,6 +89,21 @@ let defaultOptions = {
     DumpANF = false
     DumpMIR = false
     DumpLIR = false
+}
+
+/// Build compiler options from CLI options
+let buildCompilerOptions (cliOpts: CliOptions) : CompilerLibrary.CompilerOptions = {
+    DisableFreeList = cliOpts.DisableFreeList
+    DisableANFOpt = cliOpts.DisableANFOpt
+    DisableInlining = cliOpts.DisableInlining
+    DisableTCO = cliOpts.DisableTCO
+    DisableMIROpt = cliOpts.DisableMIROpt
+    DisableLIROpt = cliOpts.DisableLIROpt
+    DisableDCE = cliOpts.DisableDCE
+    EnableCoverage = false
+    DumpANF = cliOpts.DumpANF
+    DumpMIR = cliOpts.DumpMIR
+    DumpLIR = cliOpts.DumpLIR
 }
 
 /// Parse command-line flags into options
@@ -235,25 +256,13 @@ let validateOptions (opts: CliOptions) : Result<CliOptions, string> =
 
 /// Compile source expression to executable
 let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int =
-    let showNormal = verbosity = Normal || verbosity = Verbose || verbosity = VeryVerbose || verbosity = DumpIR
+    let showNormal = shouldShowNormal verbosity
 
     if showNormal then
         println $"Compiling: {source}"
 
     // Use library for compilation
-    let options : CompilerLibrary.CompilerOptions = {
-        DisableFreeList = cliOpts.DisableFreeList
-        DisableANFOpt = cliOpts.DisableANFOpt
-        DisableInlining = cliOpts.DisableInlining
-        DisableTCO = cliOpts.DisableTCO
-        DisableMIROpt = cliOpts.DisableMIROpt
-        DisableLIROpt = cliOpts.DisableLIROpt
-        DisableDCE = cliOpts.DisableDCE
-        EnableCoverage = false
-        DumpANF = cliOpts.DumpANF
-        DumpMIR = cliOpts.DumpMIR
-        DumpLIR = cliOpts.DumpLIR
-    }
+    let options = buildCompilerOptions cliOpts
     let result = CompilerLibrary.compileWithOptions (verbosityToInt verbosity) options source
 
     if not result.Success then
@@ -284,26 +293,14 @@ let compile (source: string) (outputPath: string) (verbosity: VerbosityLevel) (c
 
 /// Run an expression (compile to temp and execute)
 let run (source: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int =
-    let showNormal = verbosity = Normal || verbosity = Verbose || verbosity = VeryVerbose || verbosity = DumpIR
+    let showNormal = shouldShowNormal verbosity
 
     if showNormal then
         println $"Compiling and running: {source}"
         println "---"
 
     // Use library for compile and run
-    let options : CompilerLibrary.CompilerOptions = {
-        DisableFreeList = cliOpts.DisableFreeList
-        DisableANFOpt = cliOpts.DisableANFOpt
-        DisableInlining = cliOpts.DisableInlining
-        DisableTCO = cliOpts.DisableTCO
-        DisableMIROpt = cliOpts.DisableMIROpt
-        DisableLIROpt = cliOpts.DisableLIROpt
-        DisableDCE = cliOpts.DisableDCE
-        EnableCoverage = false
-        DumpANF = cliOpts.DumpANF
-        DumpMIR = cliOpts.DumpMIR
-        DumpLIR = cliOpts.DumpLIR
-    }
+    let options = buildCompilerOptions cliOpts
     let result = CompilerLibrary.compileAndRunWithOptions (verbosityToInt verbosity) options source
 
     if showNormal then

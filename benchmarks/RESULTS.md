@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-01-04 09:19:13
-**Commit:** `4a32968a` - Add nsieve and fannkuch benchmarks using functional List/Dict
+**Last Updated:** 2026-01-10 22:33:56
+**Commit:** `2e3d767c` - Remove dead compileWithStdlibAST path
 
 | Benchmark     |           Dark (3.89x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
@@ -26,5 +26,5 @@ Latest Dark compiler performance vs other languages (instruction counts).
 | primes        |      6,919,177 (5.54x) |     1,249,930 |     8,621,503 (6.90x) |     91,373,724 (73.1x) |    432,249,217 (346x) |
 | quicksort     |                      - |     6,506,788 |    47,643,021 (7.32x) |    110,817,924 (17.0x) |   493,043,509 (75.8x) |
 | spectral_norm |                      - |     5,093,977 |    22,589,955 (4.43x) |     854,810,286 (168x) |   462,646,283 (90.8x) |
-| sum_to_n      |      7,003,128 (27.3x) |       256,081 |     9,421,844 (36.8x) |    940,653,312 (3673x) |   386,134,136 (1508x) |
+| sum_to_n      |      7,002,627 (27.3x) |       256,081 |     9,421,844 (36.8x) |    940,653,312 (3673x) |   386,134,136 (1508x) |
 | tak           |    716,838,059 (18.2x) |    39,336,450 |   424,289,197 (10.8x) |  12,227,140,145 (311x) | 1,607,169,992 (40.9x) |

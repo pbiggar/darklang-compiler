@@ -7,3 +7,7 @@
 - Completed: Removed dead compileWithStdlibAST path; added CompilerLibrary unit test coverage.
 - Tests: dotnet build src/Tests/Tests.fsproj; ./run-tests --filter="Compiler Library Tests"; ./run-tests.
 - Benchmarks: ./benchmarks/run_benchmarks.sh sum_to_n (cachegrind, dark-only).
+2026-01-10
+- Completed: Factored CLI normal output + compiler option mapping helpers and added unit coverage.
+- Tests: dotnet build src/Tests/Tests.fsproj; ./run-tests --no-build.
+- Benchmarks: ./benchmarks/run_benchmarks.sh sum_to_n (cachegrind, dark-only).
