@@ -385,8 +385,8 @@ let fromLIR (program: LIR.Program) : Result<Program, string> =
     |> mapResults symbolFunction
     |> Result.map (fun funcs' -> Program funcs')
 
-/// Convert symbolic LIR into indexed LIR with pools
-let toLIR (Program functions) : Result<LIR.Program, string> =
+/// Resolve symbolic LIR into indexed LIR with pools
+let private resolveProgram (initialState: PoolState) (functions: Function list) : Result<LIR.Program, string> =
     let addStringWithLen (pool: MIR.StringPool) (value: string) : Result<int * int * MIR.StringPool, string> =
         let (idx, pool') = MIR.addString pool value
         match Map.tryFind idx pool'.Strings with
@@ -624,8 +624,19 @@ let toLIR (Program functions) : Result<LIR.Program, string> =
                StackSize = func.StackSize
                UsedCalleeSaved = func.UsedCalleeSaved }, st))
 
-    let initialState = { StringPool = MIR.emptyStringPool; FloatPool = MIR.emptyFloatPool }
-
     mapWithState resolveFunction initialState functions
     |> Result.map (fun (funcs', finalState) ->
         LIR.Program (funcs', finalState.StringPool, finalState.FloatPool))
+
+/// Convert symbolic LIR into indexed LIR with fresh pools
+let toLIR (Program functions) : Result<LIR.Program, string> =
+    let initialState = { StringPool = MIR.emptyStringPool; FloatPool = MIR.emptyFloatPool }
+    resolveProgram initialState functions
+
+/// Convert symbolic LIR into indexed LIR with provided pools
+let toLIRWithPools
+    (stringPool: MIR.StringPool)
+    (floatPool: MIR.FloatPool)
+    (functions: Function list)
+    : Result<LIR.Program, string> =
+    resolveProgram { StringPool = stringPool; FloatPool = floatPool } functions

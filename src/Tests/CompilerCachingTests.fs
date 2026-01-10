@@ -25,10 +25,10 @@ let private countFunctionEvents (passName: string) (functionName: string) (event
 let private isVerificationEnabled () : bool =
     System.Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS") = "true"
 
-let private makeTestLirFunction (name: string) : LIR.Function =
+let private makeTestSymbolicFunction (name: string) : LIRSymbolic.Function =
     let label = LIR.Label "entry"
-    let block: LIR.BasicBlock = { Label = label; Instrs = []; Terminator = LIR.Ret }
-    let cfg: LIR.CFG = { Entry = label; Blocks = Map.ofList [ (label, block) ] }
+    let block: LIRSymbolic.BasicBlock = { Label = label; Instrs = []; Terminator = LIRSymbolic.Ret }
+    let cfg: LIRSymbolic.CFG = { Entry = label; Blocks = Map.ofList [ (label, block) ] }
     { Name = name
       TypedParams = []
       CFG = cfg
@@ -127,14 +127,10 @@ let testCompiledFunctionCacheIsLazy () : TestResult =
     let cache = CompilerLibrary.createCompiledFunctionCache ()
     let key = CompilerLibrary.CompiledFunctionKey.Stdlib "cache_lazy"
     let entry1 : CachedUserFunction = {
-        LIRFunction = makeTestLirFunction "cache_lazy"
-        Strings = []
-        Floats = []
+        SymbolicFunction = makeTestSymbolicFunction "cache_lazy"
     }
     let entry2 : CachedUserFunction = {
-        LIRFunction = makeTestLirFunction "cache_lazy_alt"
-        Strings = []
-        Floats = []
+        SymbolicFunction = makeTestSymbolicFunction "cache_lazy_alt"
     }
     let lazy1 =
         CompilerLibrary.getOrAddCompiledFunctionLazy cache key (fun () -> Ok entry1)
