@@ -49,6 +49,7 @@ cachegrind.out.*
 # Coverage
 coverage.xml
 coverage-report/
+profiles/
 
 # OCaml build artifacts
 *.cmi
