@@ -14,7 +14,7 @@ iterations="${2:-1}"
 # For each iteration, run Codex with the following prompt.
 # This prompt is basic, we'll expand it later.
 for ((i=1; i<=$iterations; i++)); do
-  result=$(codex -p \
+  result=$(codex exec \
 "@$plan_file @progress.txt \
 1. Decide which task to work on next. \
 This should be the one YOU decide has the highest priority, \
