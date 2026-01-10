@@ -887,12 +887,33 @@ let main args =
     let mutable unitSectionPassed = 0
     let mutable unitSectionFailed = 0
 
+    let needsUnitStdlib =
+        [ "Compiler Caching Tests"; "Preamble Precompile Tests" ]
+        |> List.exists (matchesFilter filter)
+
+    let unitStdlibResult : Result<CompilerLibrary.StdlibResult option, string> =
+        if needsUnitStdlib then
+            match e2eStdlib with
+            | Some stdlib -> Ok (Some stdlib)
+            | None -> CompilerLibrary.compileStdlib () |> Result.map Some
+        else
+            Ok None
+
+    let runWithStdlib
+        (suiteName: string)
+        (runner: CompilerLibrary.StdlibResult -> Result<unit, string>)
+        : Result<unit, string> =
+        match unitStdlibResult with
+        | Error err -> Error err
+        | Ok None -> Error $"Stdlib unavailable for {suiteName}"
+        | Ok (Some stdlib) -> runner stdlib
+
     // Define unit test suites with their names and test counts
     let allUnitTests : (string * int * (unit -> Result<unit, string>)) array = [|
         ("CLI Flags Tests", 1, fun () -> CliFlagTests.runAll())
-        ("Compiler Caching Tests", 1, fun () -> CompilerCachingTests.runAll())
+        ("Compiler Caching Tests", 1, fun () -> runWithStdlib "Compiler Caching Tests" CompilerCachingTests.runAllWithStdlib)
         ("Profiler Tests", 1, fun () -> ProfilerTests.runAll())
-        ("Preamble Precompile Tests", 1, fun () -> PreamblePrecompileTests.runAll())
+        ("Preamble Precompile Tests", 1, fun () -> runWithStdlib "Preamble Precompile Tests" PreamblePrecompileTests.runAllWithStdlib)
         ("IR Symbol Tests", 1, fun () -> IRSymbolTests.runAll())
         ("Encoding Tests", 1, fun () -> EncodingTests.runAll())
         ("Binary Tests", 11, fun () -> BinaryTests.runAll())
