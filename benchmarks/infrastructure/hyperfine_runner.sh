@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCHMARKS_DIR="$(dirname "$SCRIPT_DIR")"
 BENCHMARK=$1
 OUTPUT_DIR=$2
+source "$SCRIPT_DIR/pretty.sh"
 
 if [ -z "$BENCHMARK" ] || [ -z "$OUTPUT_DIR" ]; then
     echo "Usage: $0 <benchmark_name> <output_dir>"
@@ -18,8 +19,8 @@ PROBLEM_DIR="$BENCHMARKS_DIR/problems/$BENCHMARK"
 
 # Check for hyperfine
 if ! command -v hyperfine &> /dev/null; then
-    echo "Error: hyperfine is not installed"
-    echo "Install with: brew install hyperfine (macOS) or cargo install hyperfine"
+    pretty_fail "hyperfine is not installed"
+    pretty_info "Install with: brew install hyperfine (macOS) or cargo install hyperfine"
     exit 1
 fi
 
@@ -39,11 +40,11 @@ if [ -f "$PROBLEM_DIR/python/main.py" ]; then
 fi
 
 if [ ${#COMMANDS[@]} -eq 0 ]; then
-    echo "Error: No implementations found for $BENCHMARK"
+    pretty_fail "No implementations found for $BENCHMARK"
     exit 1
 fi
 
-echo "Running hyperfine benchmark for $BENCHMARK..."
+pretty_section "Running hyperfine benchmark for $BENCHMARK..."
 
 hyperfine \
     --warmup 3 \

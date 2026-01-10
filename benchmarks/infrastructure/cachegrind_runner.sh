@@ -12,6 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCHMARKS_DIR="$(dirname "$SCRIPT_DIR")"
 BENCHMARK=$1
 OUTPUT_DIR=$2
+source "$SCRIPT_DIR/pretty.sh"
 
 if [ -z "$BENCHMARK" ] || [ -z "$OUTPUT_DIR" ]; then
     echo "Usage: $0 <benchmark_name> <output_dir>"
@@ -22,8 +23,8 @@ PROBLEM_DIR="$BENCHMARKS_DIR/problems/$BENCHMARK"
 
 # Check for valgrind
 if ! command -v valgrind &> /dev/null; then
-    echo "Error: valgrind is not installed"
-    echo "Install with: sudo apt-get install valgrind"
+    pretty_fail "valgrind is not installed"
+    pretty_info "Install with: sudo apt-get install valgrind"
     exit 1
 fi
 
@@ -39,7 +40,7 @@ should_run_lang() {
     echo ",$REFRESH_BASELINE," | grep -q ",$lang,"
 }
 
-echo "Running cachegrind benchmark for $BENCHMARK..."
+pretty_section "Running cachegrind benchmark for $BENCHMARK..."
 
 # Create output file for parsed results
 RESULTS_FILE="$OUTPUT_DIR/${BENCHMARK}_cachegrind.json"
@@ -61,7 +62,7 @@ done
 for impl in $IMPLS; do
     BINARY="$PROBLEM_DIR/$impl/main"
     if [ -x "$BINARY" ]; then
-        echo "  Running cachegrind on $impl..."
+        pretty_info "Running cachegrind on $impl..."
 
         # Run cachegrind and capture stderr (where stats are printed)
         CG_OUTPUT=$(valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes "$BINARY" 2>&1)
@@ -96,7 +97,7 @@ for impl in $IMPLS; do
   }
 EOF
 
-        echo "    Instructions: $I_REFS"
+        pretty_info "Instructions: $I_REFS"
     fi
 done
 
@@ -106,7 +107,7 @@ PYTHON_TIMEOUT=${PYTHON_TIMEOUT:-300}
 
 if should_run_lang "python" && [ -f "$PROBLEM_DIR/python/main.py" ]; then
     if command -v python3 &> /dev/null; then
-        echo "  Running cachegrind on python (timeout: ${PYTHON_TIMEOUT}s)..."
+        pretty_info "Running cachegrind on python (timeout: ${PYTHON_TIMEOUT}s)..."
 
         # Use timeout to avoid hanging on slow benchmarks
         if CG_OUTPUT=$(timeout "$PYTHON_TIMEOUT" valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes python3 "$PROBLEM_DIR/python/main.py" 2>&1); then
@@ -114,7 +115,7 @@ if should_run_lang "python" && [ -f "$PROBLEM_DIR/python/main.py" ]; then
         else
             EXIT_CODE=$?
             if [ $EXIT_CODE -eq 124 ]; then
-                echo "    TIMEOUT: Python benchmark exceeded ${PYTHON_TIMEOUT}s, skipping"
+                pretty_warn "Python timeout exceeded ${PYTHON_TIMEOUT}s, skipping"
                 PYTHON_SUCCESS=false
             else
                 # Other error - still try to parse output
@@ -150,7 +151,7 @@ if should_run_lang "python" && [ -f "$PROBLEM_DIR/python/main.py" ]; then
   }
 EOF
 
-            echo "    Instructions: $I_REFS"
+            pretty_info "Instructions: $I_REFS"
         fi
     fi
 fi
@@ -160,7 +161,7 @@ NODE_TIMEOUT=${NODE_TIMEOUT:-300}
 
 if should_run_lang "node" && [ -f "$PROBLEM_DIR/node/main.js" ]; then
     if command -v node &> /dev/null; then
-        echo "  Running cachegrind on node (timeout: ${NODE_TIMEOUT}s)..."
+        pretty_info "Running cachegrind on node (timeout: ${NODE_TIMEOUT}s)..."
 
         # Use timeout to avoid hanging on slow benchmarks
         if CG_OUTPUT=$(timeout "$NODE_TIMEOUT" valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes node "$PROBLEM_DIR/node/main.js" 2>&1); then
@@ -168,7 +169,7 @@ if should_run_lang "node" && [ -f "$PROBLEM_DIR/node/main.js" ]; then
         else
             EXIT_CODE=$?
             if [ $EXIT_CODE -eq 124 ]; then
-                echo "    TIMEOUT: Node benchmark exceeded ${NODE_TIMEOUT}s, skipping"
+                pretty_warn "Node timeout exceeded ${NODE_TIMEOUT}s, skipping"
                 NODE_SUCCESS=false
             else
                 # Other error - still try to parse output
@@ -204,7 +205,7 @@ if should_run_lang "node" && [ -f "$PROBLEM_DIR/node/main.js" ]; then
   }
 EOF
 
-            echo "    Instructions: $I_REFS"
+            pretty_info "Instructions: $I_REFS"
         fi
     fi
 fi
@@ -219,4 +220,4 @@ fi
 # (All benchmarks show ~2.17M instructions regardless of complexity - just measuring startup)
 
 echo "]}" >> "$RESULTS_FILE"
-echo "  Results saved to: $RESULTS_FILE"
+pretty_ok "Results saved to: $RESULTS_FILE"

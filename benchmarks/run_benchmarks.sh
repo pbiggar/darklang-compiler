@@ -11,6 +11,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+source "$SCRIPT_DIR/infrastructure/pretty.sh"
 
 # Parse options
 USE_CACHEGRIND=true
@@ -42,7 +43,7 @@ OUTPUT_DIR="$SCRIPT_DIR/results/$(date +%Y-%m-%d_%H%M%S)"
 mkdir -p "$OUTPUT_DIR"
 
 # Record compiler version
-echo "Recording compiler version..."
+pretty_info "Recording compiler version..."
 git -C "$PROJECT_ROOT" rev-parse HEAD > "$OUTPUT_DIR/compiler_version.txt"
 git -C "$PROJECT_ROOT" log -1 --format="%s" >> "$OUTPUT_DIR/compiler_version.txt"
 
@@ -55,22 +56,24 @@ fi
 
 if [ "$USE_CACHEGRIND" = true ]; then
     if [ "$REFRESH_BASELINE" = "false" ]; then
-        echo "Mode: Cachegrind (instruction counts) - Dark only (use --refresh-baseline for baselines)"
+        export RUN_BASELINES=false
+        pretty_section "Mode: Cachegrind (instruction counts) - Dark only (use --refresh-baseline for baselines)"
     elif [ "$REFRESH_BASELINE" = "all" ]; then
-        echo "Mode: Cachegrind (instruction counts) - refreshing all baselines"
+        export RUN_BASELINES=true
+        pretty_section "Mode: Cachegrind (instruction counts) - refreshing all baselines"
     else
-        echo "Mode: Cachegrind (instruction counts) - refreshing: $REFRESH_BASELINE"
+        export RUN_BASELINES=true
+        pretty_section "Mode: Cachegrind (instruction counts) - refreshing: $REFRESH_BASELINE"
     fi
 else
-    echo "Mode: Hyperfine (timing)"
+    export RUN_BASELINES=true
+    pretty_section "Mode: Hyperfine (timing)"
 fi
-echo "Benchmarks to run: $BENCHMARKS"
+pretty_info "Benchmarks to run: $BENCHMARKS"
 echo ""
 
 for bench in $BENCHMARKS; do
-    echo "=========================================="
-    echo "Benchmark: $bench"
-    echo "=========================================="
+    pretty_header "Benchmark: $bench"
 
     # Build all implementations
     "$SCRIPT_DIR/infrastructure/build_all.sh" "$bench"
@@ -89,7 +92,7 @@ for bench in $BENCHMARKS; do
 done
 
 # Process results
-echo "Processing results..."
+pretty_info "Processing results..."
 if [ "$USE_CACHEGRIND" = true ]; then
     if [ "$REFRESH_BASELINE" = "false" ]; then
         python3 "$SCRIPT_DIR/infrastructure/cachegrind_processor.py" "$OUTPUT_DIR" --use-baseline
@@ -103,9 +106,9 @@ else
 fi
 
 echo ""
-echo "Results saved to: $OUTPUT_DIR"
+pretty_ok "Results saved to: $OUTPUT_DIR"
 if [ "$USE_CACHEGRIND" = true ]; then
-    echo "Summary: $OUTPUT_DIR/cachegrind_summary.md"
+    pretty_info "Summary: $OUTPUT_DIR/cachegrind_summary.md"
 else
-    echo "Summary: $OUTPUT_DIR/summary.md"
+    pretty_info "Summary: $OUTPUT_DIR/summary.md"
 fi

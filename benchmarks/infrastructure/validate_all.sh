@@ -7,6 +7,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCHMARKS_DIR="$(dirname "$SCRIPT_DIR")"
 BENCHMARK=$1
+source "$SCRIPT_DIR/pretty.sh"
 
 if [ -z "$BENCHMARK" ]; then
     echo "Usage: $0 <benchmark_name>"
@@ -17,14 +18,16 @@ PROBLEM_DIR="$BENCHMARKS_DIR/problems/$BENCHMARK"
 EXPECTED_FILE="$PROBLEM_DIR/expected_output.txt"
 
 if [ ! -f "$EXPECTED_FILE" ]; then
-    echo "Warning: No expected_output.txt for $BENCHMARK, skipping validation"
+    pretty_warn "No expected_output.txt for $BENCHMARK, skipping validation"
     exit 0
 fi
 
 EXPECTED=$(cat "$EXPECTED_FILE")
 FAILED=0
 
-echo "Validating $BENCHMARK (expected: $EXPECTED)..."
+pretty_section "Validating $BENCHMARK (expected: $EXPECTED)..."
+
+RUN_BASELINES=${RUN_BASELINES:-true}
 
 # Validate Dark (check for Dark-specific expected output first)
 if [ -x "$PROBLEM_DIR/dark/main" ]; then
@@ -35,53 +38,63 @@ if [ -x "$PROBLEM_DIR/dark/main" ]; then
     OUTPUT=$("$PROBLEM_DIR/dark/main" 2>&1 || true)
     if [ "$OUTPUT" = "$DARK_EXPECTED" ]; then
         if [ "$DARK_EXPECTED" != "$EXPECTED" ]; then
-            echo "  Dark: PASS (reduced size: $DARK_EXPECTED)"
+            pretty_ok "Dark PASS (reduced size: $DARK_EXPECTED)"
         else
-            echo "  Dark: PASS"
+            pretty_ok "Dark PASS"
         fi
     else
-        echo "  Dark: FAIL (got: '$OUTPUT', expected: '$DARK_EXPECTED')"
+        pretty_fail "Dark FAIL (got: '$OUTPUT', expected: '$DARK_EXPECTED')"
         FAILED=1
     fi
+fi
+
+if [ "$RUN_BASELINES" != "true" ]; then
+    pretty_info "Baseline validations skipped (set RUN_BASELINES=true or --refresh-baseline)"
+    if [ $FAILED -eq 1 ]; then
+        echo "Validation failed!"
+        exit 1
+    fi
+    pretty_ok "All validations passed."
+    exit 0
 fi
 
 # Validate Rust
 if [ -x "$PROBLEM_DIR/rust/main" ]; then
     OUTPUT=$("$PROBLEM_DIR/rust/main" 2>&1 || true)
     if [ "$OUTPUT" = "$EXPECTED" ]; then
-        echo "  Rust: PASS"
+        pretty_ok "Rust PASS"
     else
-        echo "  Rust: FAIL (got: '$OUTPUT')"
+        pretty_fail "Rust FAIL (got: '$OUTPUT')"
         FAILED=1
     fi
 elif [ -f "$PROBLEM_DIR/rust/main.rs" ]; then
-    echo "  Rust: skipped (not built)"
+    pretty_warn "Rust skipped (not built)"
 fi
 
 # Validate OCaml
 if [ -x "$PROBLEM_DIR/ocaml/main" ]; then
     OUTPUT=$("$PROBLEM_DIR/ocaml/main" 2>&1 || true)
     if [ "$OUTPUT" = "$EXPECTED" ]; then
-        echo "  OCaml: PASS"
+        pretty_ok "OCaml PASS"
     else
-        echo "  OCaml: FAIL (got: '$OUTPUT')"
+        pretty_fail "OCaml FAIL (got: '$OUTPUT')"
         FAILED=1
     fi
 elif [ -f "$PROBLEM_DIR/ocaml/main.ml" ]; then
-    echo "  OCaml: skipped (not built)"
+    pretty_warn "OCaml skipped (not built)"
 fi
 
 # Validate Go
 if [ -x "$PROBLEM_DIR/go/main" ]; then
     OUTPUT=$("$PROBLEM_DIR/go/main" 2>&1 || true)
     if [ "$OUTPUT" = "$EXPECTED" ]; then
-        echo "  Go: PASS"
+        pretty_ok "Go PASS"
     else
-        echo "  Go: FAIL (got: '$OUTPUT')"
+        pretty_fail "Go FAIL (got: '$OUTPUT')"
         FAILED=1
     fi
 elif [ -f "$PROBLEM_DIR/go/main.go" ]; then
-    echo "  Go: skipped (not built)"
+    pretty_warn "Go skipped (not built)"
 fi
 
 # Validate F#
@@ -89,13 +102,13 @@ if [ -f "$PROBLEM_DIR/fsharp/main.fsx" ]; then
     if command -v dotnet &> /dev/null; then
         OUTPUT=$(dotnet fsi --optimize+ "$PROBLEM_DIR/fsharp/main.fsx" 2>&1 || true)
         if [ "$OUTPUT" = "$EXPECTED" ]; then
-            echo "  F#: PASS"
+            pretty_ok "F# PASS"
         else
-            echo "  F#: FAIL (got: '$OUTPUT')"
+            pretty_fail "F# FAIL (got: '$OUTPUT')"
             FAILED=1
         fi
     else
-        echo "  F#: skipped (dotnet not installed)"
+        pretty_warn "F# skipped (dotnet not installed)"
     fi
 fi
 
@@ -104,13 +117,13 @@ if [ -f "$PROBLEM_DIR/python/main.py" ]; then
     if command -v python3 &> /dev/null; then
         OUTPUT=$(python3 "$PROBLEM_DIR/python/main.py" 2>&1 || true)
         if [ "$OUTPUT" = "$EXPECTED" ]; then
-            echo "  Python: PASS"
+            pretty_ok "Python PASS"
         else
-            echo "  Python: FAIL (got: '$OUTPUT')"
+            pretty_fail "Python FAIL (got: '$OUTPUT')"
             FAILED=1
         fi
     else
-        echo "  Python: skipped (python3 not installed)"
+        pretty_warn "Python skipped (python3 not installed)"
     fi
 fi
 
@@ -119,14 +132,14 @@ if [ -f "$PROBLEM_DIR/node/main.js" ]; then
     if command -v node &> /dev/null; then
         OUTPUT=$(node "$PROBLEM_DIR/node/main.js" 2>&1 || true)
         if [ "$OUTPUT" = "$EXPECTED" ]; then
-            echo "  Node.js: PASS"
+            pretty_ok "Node.js PASS"
         elif echo "$OUTPUT" | grep -q "Maximum call stack size exceeded"; then
-            echo "  Node.js: SKIP (stack overflow - runs under cachegrind)"
+            pretty_warn "Node.js SKIP (stack overflow - runs under cachegrind)"
         else
-            echo "  Node.js: WARN (got: '${OUTPUT:0:50}...')"
+            pretty_warn "Node.js WARN (got: '${OUTPUT:0:50}...')"
         fi
     else
-        echo "  Node.js: skipped (node not installed)"
+        pretty_warn "Node.js skipped (node not installed)"
     fi
 fi
 
@@ -136,20 +149,20 @@ if [ -f "$PROBLEM_DIR/node/main.js" ]; then
     if command -v bun &> /dev/null; then
         OUTPUT=$(bun run "$PROBLEM_DIR/node/main.js" 2>&1 || true)
         if [ "$OUTPUT" = "$EXPECTED" ]; then
-            echo "  Bun: PASS"
+            pretty_ok "Bun PASS"
         elif echo "$OUTPUT" | grep -q "Maximum call stack size exceeded"; then
-            echo "  Bun: SKIP (stack overflow - runs under cachegrind)"
+            pretty_warn "Bun SKIP (stack overflow - runs under cachegrind)"
         else
-            echo "  Bun: WARN (got: '${OUTPUT:0:50}...')"
+            pretty_warn "Bun WARN (got: '${OUTPUT:0:50}...')"
         fi
     else
-        echo "  Bun: skipped (bun not installed)"
+        pretty_warn "Bun skipped (bun not installed)"
     fi
 fi
 
 if [ $FAILED -eq 1 ]; then
-    echo "Validation failed!"
+    pretty_fail "Validation failed!"
     exit 1
 fi
 
-echo "  All validations passed."
+pretty_ok "All validations passed."
