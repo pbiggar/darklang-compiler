@@ -20,6 +20,7 @@
     <Compile Include="TestDSL/E2EFormat.fs" />
     <Compile Include="TestDSL/TypeCheckingFormat.fs" />
     <Compile Include="TestDSL/OptimizationFormat.fs" />
+    <Compile Include="StdlibTestHarness.fs" />
     <Compile Include="Runners/PassTestRunner.fs" />
     <Compile Include="Runners/ARM64EncodingTestRunner.fs" />
     <Compile Include="Runners/E2ETestRunner.fs" />
@@ -31,10 +32,12 @@
     <Compile Include="TestRunnerScheduling.fs" />
     <Compile Include="TestRunnerSchedulingTests.fs" />
     <Compile Include="CompilerLibraryTests.fs" />
+    <Compile Include="StdlibTestHarnessTests.fs" />
     <Compile Include="CompilerCachingTests.fs" />
     <Compile Include="PreamblePrecompileTests.fs" />
     <Compile Include="IRSymbolTests.fs" />
     <Compile Include="IRPrinterTests.fs" />
+    <Compile Include="ScriptHelperTests.fs" />
     <Compile Include="PassTestRunnerTests.fs" />
     <Compile Include="ParallelUtilsTests.fs" />
     <Compile Include="EncodingTests.fs" />

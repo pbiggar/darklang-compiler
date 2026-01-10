@@ -15,6 +15,7 @@ open TestDSL.E2ETestRunner
 open TestDSL.OptimizationFormat
 open TestDSL.OptimizationTestRunner
 open TestRunnerScheduling
+open StdlibTestHarness
 
 // ANSI color codes
 module Colors =
@@ -216,6 +217,7 @@ let main args =
         "Test Runner Scheduling Tests"
         "Compiler Caching Tests"
         "Preamble Precompile Tests"
+        "Stdlib Test Harness Tests"
         "IR Symbol Tests"
         "IR Printer Tests"
         "Pass Test Runner Tests"
@@ -731,9 +733,7 @@ let main args =
         (suiteName: string)
         (runner: CompilerLibrary.StdlibResult -> Result<unit, string>)
         : Result<unit, string> =
-        match getStdlibResult () with
-        | Error err -> Error err
-        | Ok stdlib -> runner stdlib
+        StdlibTestHarness.withStdlib getStdlibResult (fun stdlib -> runner stdlib)
 
     let wrapStdlibTests
         (suiteName: string)
@@ -748,10 +748,12 @@ let main args =
         { Name = "CLI Flags Tests"; Tests = CliFlagTests.tests }
         { Name = "Test Runner Scheduling Tests"; Tests = TestRunnerSchedulingTests.tests }
         { Name = "Compiler Library Tests"; Tests = CompilerLibraryTests.tests }
+        { Name = "Stdlib Test Harness Tests"; Tests = StdlibTestHarnessTests.tests }
         { Name = "Compiler Caching Tests"; Tests = wrapStdlibTests "Compiler Caching Tests" CompilerCachingTests.tests }
         { Name = "Preamble Precompile Tests"; Tests = wrapStdlibTests "Preamble Precompile Tests" PreamblePrecompileTests.tests }
         { Name = "IR Symbol Tests"; Tests = IRSymbolTests.tests }
         { Name = "IR Printer Tests"; Tests = IRPrinterTests.tests }
+        { Name = "Script Helper Tests"; Tests = ScriptHelperTests.tests }
         { Name = "Pass Test Runner Tests"; Tests = PassTestRunnerTests.tests }
         { Name = "Parallel Utils Tests"; Tests = ParallelUtilsTests.tests }
         { Name = "Encoding Tests"; Tests = EncodingTests.tests }

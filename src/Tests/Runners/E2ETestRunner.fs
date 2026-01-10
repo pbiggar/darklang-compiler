@@ -7,6 +7,7 @@ module TestDSL.E2ETestRunner
 open System
 open System.Threading.Tasks
 open TestDSL.E2EFormat
+open StdlibTestHarness
 
 /// Result of running an E2E test
 type E2ETestResult = {
@@ -22,7 +23,7 @@ type E2ETestResult = {
 /// Compile stdlib once (call at test startup, pass result to runE2ETest)
 /// Uses pre-compiled stdlib - all functions compiled to LIR upfront for maximum speed
 let compileStdlib () : Result<CompilerLibrary.StdlibResult, string> =
-    CompilerLibrary.compileStdlib()
+    StdlibTestHarness.compileStdlib()
 
 /// Preamble cache key: (source file, preamble text)
 type PreambleKey = string * string

@@ -19,3 +19,11 @@
 - Completed: Reduced duplication in file-based test suites via shared TestRunner helpers.
 - Tests: dotnet build src/Tests/Tests.fsproj; ./run-tests.
 - Benchmarks: ./benchmarks/run_benchmarks.sh sum_to_n (cachegrind, dark-only).
+2026-01-10
+- Completed: Normalized test runner scripts onto scripts/test-common.sh and added unit coverage.
+- Tests: ./run-tests --filter="Script Helper"; ./run-tests.
+- Benchmarks: ./benchmarks/run_benchmarks.sh (cachegrind, dark-only) failed at quicksort: ANF conversion error: Undefined variable: pivot.
+2026-01-10
+- Completed: Added StdlibTestHarness with shared stdlib + cache reset helpers; wired E2E/unit test runners and added harness tests.
+- Tests: ./run-tests --filter="Stdlib Test Harness Tests"; dotnet build src/Tests/Tests.fsproj; ./run-tests.
+- Benchmarks: ./benchmarks/run_benchmarks.sh sum_to_n (cachegrind, dark-only).

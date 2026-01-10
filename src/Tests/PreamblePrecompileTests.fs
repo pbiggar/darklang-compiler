@@ -7,17 +7,10 @@ module PreamblePrecompileTests
 open CompilerLibrary
 open TestDSL.E2EFormat
 open TestDSL.E2ETestRunner
+open StdlibTestHarness
 
 /// Test result type
 type TestResult = Result<unit, string>
-
-let private withFreshCaches (stdlib: StdlibResult) : StdlibResult =
-    { stdlib with
-        SpecCache = SpecializationCache()
-        CompiledFuncCache = createCompiledFunctionCache ()
-        ANFFuncCache = ANFFunctionCache()
-        PreambleCache = PreambleCache()
-        CodegenCache = CodegenCache() }
 
 let private makeTest (name: string) (source: string) (preamble: string) (sourceFile: string) : E2ETest =
     {
@@ -41,7 +34,7 @@ let private makeTest (name: string) (source: string) (preamble: string) (sourceF
     }
 
 let testPrecompilePopulatesCache (sharedStdlib: StdlibResult) : TestResult =
-    let stdlib = withFreshCaches sharedStdlib
+    let stdlib = StdlibTestHarness.resetCaches sharedStdlib
     let preamble = "def add(x: Int64, y: Int64) : Int64 = x + y"
     let tests = [
         makeTest "precompile-1" "add(1, 2)" preamble "precompile.e2e"
@@ -76,6 +69,6 @@ let runAllWithStdlib (sharedStdlib: StdlibResult) : TestResult =
     runTests (testsWithStdlib sharedStdlib)
 
 let runAll () : TestResult =
-    match TestDSL.E2ETestRunner.compileStdlib() with
+    match StdlibTestHarness.compileStdlib() with
     | Error err -> Error $"Stdlib compile failed: {err}"
     | Ok stdlib -> runAllWithStdlib stdlib

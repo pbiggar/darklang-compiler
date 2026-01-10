@@ -6,17 +6,10 @@
 module CompilerCachingTests
 
 open CompilerLibrary
+open StdlibTestHarness
 
 /// Test result type
 type TestResult = Result<unit, string>
-
-let private withFreshCaches (stdlib: StdlibResult) : StdlibResult =
-    { stdlib with
-        SpecCache = SpecializationCache()
-        CompiledFuncCache = createCompiledFunctionCache ()
-        ANFFuncCache = ANFFunctionCache()
-        PreambleCache = PreambleCache()
-        CodegenCache = CodegenCache() }
 
 let private isVerificationEnabled () : bool =
     System.Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS") = "true"
@@ -41,7 +34,7 @@ let private makeTestSymbolicFunction (name: string) : LIRSymbolic.Function =
 
 /// Test that specialized functions are cached after compilation
 let testSpecializedFunctionCaching (sharedStdlib: StdlibResult) : TestResult =
-    let stdlib = withFreshCaches sharedStdlib
+    let stdlib = StdlibTestHarness.resetCaches sharedStdlib
     let source = "Stdlib.List.length<Int64>(Stdlib.List.map<Int64, Int64>([1, 2, 3], (x: Int64) => x + 1))"
     match Parser.parseString source with
     | Error err -> Error $"Parse error: {err}"
@@ -79,7 +72,7 @@ let testStdlibCompileModeIsParallel (sharedStdlib: StdlibResult) : TestResult =
 
 /// Test that preamble functions are compiled once across tests in the same file
 let testPreambleFunctionCachedOnce (sharedStdlib: StdlibResult) : TestResult =
-    let stdlib = withFreshCaches sharedStdlib
+    let stdlib = StdlibTestHarness.resetCaches sharedStdlib
     let preamble = "def foo(x: Int64): Int64 = x + 1"
     let sourceFile = "cache_preamble_test.e2e"
     let cacheKey = CompiledFunctionKey.Preamble (sourceFile, "foo")
@@ -200,6 +193,6 @@ let runAllWithStdlib (sharedStdlib: StdlibResult) : TestResult =
     runTests (testsWithStdlib sharedStdlib)
 
 let runAll () : TestResult =
-    match CompilerLibrary.compileStdlib () with
+    match StdlibTestHarness.compileStdlib () with
     | Error err -> Error $"Stdlib compile failed: {err}"
     | Ok stdlib -> runAllWithStdlib stdlib
