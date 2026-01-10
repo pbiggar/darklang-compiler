@@ -11,6 +11,7 @@
     <Compile Include="Output.fs" />
     <Compile Include="AST.fs" />
     <Compile Include="Stdlib.fs" />
+    <Compile Include="ParallelUtils.fs" />
     <Compile Include="passes/1_Parser.fs" />
     <Compile Include="passes/1.5_TypeChecking.fs" />
     <Compile Include="ANF.fs" />

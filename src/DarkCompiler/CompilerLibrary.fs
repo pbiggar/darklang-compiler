@@ -810,13 +810,6 @@ let mergeTypedPrograms (stdlibTyped: AST.Program) (userTyped: AST.Program) : AST
     let stdlibDefsOnly = stdlibItems |> List.filter (function AST.Expression _ -> false | _ -> true)
     AST.Program (stdlibDefsOnly @ userItems)
 
-/// Map over a list in parallel while preserving order
-let private mapListParallel (items: 'a list) (f: 'a -> 'b) : 'b list =
-    items
-    |> List.toArray
-    |> Array.Parallel.map f
-    |> Array.toList
-
 /// Compile stdlib in isolation, returning reusable result
 /// This can be called once and the result reused for multiple user program compilations
 let compileStdlib () : Result<StdlibResult, string> =
@@ -864,11 +857,11 @@ let compileStdlib () : Result<StdlibResult, string> =
                         // SSA construction + MIR optimizations for stdlib (keeps RA assumptions consistent)
                         let stdlibSsaProgram =
                             let (MIR.Program (functions, variants, records)) = mirProgram
-                            let functions' = mapListParallel functions SSA_Construction.convertFunctionToSSA
+                            let functions' = ParallelUtils.mapListParallel functions SSA_Construction.convertFunctionToSSA
                             MIR.Program (functions', variants, records)
                         let stdlibOptimizedProgram =
                             let (MIR.Program (functions, variants, records)) = stdlibSsaProgram
-                            let functions' = mapListParallel functions MIR_Optimize.optimizeFunction
+                            let functions' = ParallelUtils.mapListParallel functions MIR_Optimize.optimizeFunction
                             MIR.Program (functions', variants, records)
                         // Convert stdlib MIR to LIR (cached for reuse)
                         match MIR_to_LIR.toLIR stdlibOptimizedProgram with
@@ -876,14 +869,14 @@ let compileStdlib () : Result<StdlibResult, string> =
                         | Ok lirProgram ->
                             let optimizedLir =
                                 let (LIRSymbolic.Program functions) = lirProgram
-                                let functions' = mapListParallel functions LIR_Optimize.optimizeFunction
+                                let functions' = ParallelUtils.mapListParallel functions LIR_Optimize.optimizeFunction
                                 LIRSymbolic.Program functions'
                             // Pre-allocate stdlib functions (cached for reuse)
                             let (LIRSymbolic.Program lirFuncs) = optimizedLir
                             let allocatedFuncs =
                                 match compileMode with
                                 | StdlibCompileMode.Sequential -> List.map RegisterAllocation.allocateRegisters lirFuncs
-                                | StdlibCompileMode.Parallel -> mapListParallel lirFuncs RegisterAllocation.allocateRegisters
+                                | StdlibCompileMode.Parallel -> ParallelUtils.mapListParallel lirFuncs RegisterAllocation.allocateRegisters
                             let allocatedSymbolic = LIRSymbolic.Program allocatedFuncs
                             match LIRSymbolic.toLIR allocatedSymbolic with
                             | Error err -> Error err

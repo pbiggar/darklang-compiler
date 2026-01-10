@@ -25,6 +25,8 @@
 
 module ANF_to_MIR
 
+open ParallelUtils
+
 /// Helper to create VariantInfo record
 let private mkVariantInfo (name: string) (tag: int) (payload: AST.Type option) : MIR.VariantInfo =
     { MIR.VariantInfo.Name = name; MIR.VariantInfo.Tag = tag; MIR.VariantInfo.Payload = payload }
@@ -1701,15 +1703,11 @@ let toMIR (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (s
 
     // Phase 2: Convert all functions to MIR
     // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
-    let rec convertFunctions funcs remaining =
-        match remaining with
-        | [] -> Ok funcs
-        | anfFunc :: rest ->
-            match convertANFFunction anfFunc typeMap typeReg returnTypeReg enableCoverage with
-            | Error err -> Error err
-            | Ok mirFunc -> convertFunctions (funcs @ [mirFunc]) rest
-
-    match convertFunctions [] functions with
+    match
+        mapResultsParallel
+            (fun anfFunc -> convertANFFunction anfFunc typeMap typeReg returnTypeReg enableCoverage)
+            functions
+    with
     | Error err -> Error err
     | Ok mirFuncs ->
 
@@ -1767,15 +1765,11 @@ let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: M
 
     // Phase 2: Convert all functions to MIR (skip main/_start)
     // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
-    let rec convertFunctions funcs remaining =
-        match remaining with
-        | [] -> Ok funcs
-        | anfFunc :: rest ->
-            match convertANFFunction anfFunc typeMap typeReg returnTypeReg enableCoverage with
-            | Error err -> Error err
-            | Ok mirFunc -> convertFunctions (funcs @ [mirFunc]) rest
-
-    match convertFunctions [] functions with
+    match
+        mapResultsParallel
+            (fun anfFunc -> convertANFFunction anfFunc typeMap typeReg returnTypeReg enableCoverage)
+            functions
+    with
     | Error err -> Error err
     | Ok mirFuncs ->
         let variantRegistry = buildVariantRegistry variantLookup

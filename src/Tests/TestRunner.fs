@@ -221,6 +221,7 @@ let main args =
         "Compiler Caching Tests"
         "Preamble Precompile Tests"
         "IR Symbol Tests"
+        "Parallel Utils Tests"
         "Encoding Tests"
         "Binary Tests"
         "Type Checking Tests"
@@ -835,6 +836,7 @@ let main args =
         ("Compiler Caching Tests", 1, fun () -> runWithStdlib "Compiler Caching Tests" CompilerCachingTests.runAllWithStdlib)
         ("Preamble Precompile Tests", 1, fun () -> runWithStdlib "Preamble Precompile Tests" PreamblePrecompileTests.runAllWithStdlib)
         ("IR Symbol Tests", 1, fun () -> IRSymbolTests.runAll())
+        ("Parallel Utils Tests", 2, fun () -> ParallelUtilsTests.runAll())
         ("Encoding Tests", 1, fun () -> EncodingTests.runAll())
         ("Binary Tests", 11, fun () -> BinaryTests.runAll())
         ("Type Checking Tests", 8, fun () -> TypeCheckingTests.runAll())

@@ -14,6 +14,8 @@
 
 module MIR_to_LIR
 
+open ParallelUtils
+
 /// Convert MIR.VReg to LIRSymbolic.Reg (virtual)
 let vregToLIRReg (MIR.VReg id) : LIRSymbolic.Reg = LIR.Virtual id
 
@@ -1453,7 +1455,7 @@ let toLIR (program: MIR.Program) : Result<LIRSymbolic.Program, string> =
                   StackSize = 0  // Will be determined by register allocation
                   UsedCalleeSaved = [] }  // Will be determined by register allocation
 
-    match mapResults convertFunc mirFuncs with
+    match mapResultsParallel convertFunc mirFuncs with
     | Error err -> Error err
     | Ok lirFuncs ->
         Ok (LIRSymbolic.Program lirFuncs)
