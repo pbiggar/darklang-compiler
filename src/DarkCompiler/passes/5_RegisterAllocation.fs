@@ -1814,15 +1814,14 @@ let applyToInstr (mapping: Map<int, Allocation>) (instr: LIR.Instr) : LIR.Instr 
     | LIR.RestoreRegs (intRegs, floatRegs) -> [LIR.RestoreRegs (intRegs, floatRegs)]
 
     | LIR.ArgMoves moves ->
-        // Apply allocation to each operand in the arg moves
+        // ArgMoves must preserve distinct sources for each argument.
+        // Use no-load allocation so spilled values remain StackSlot and are
+        // loaded per-move in CodeGen (avoids reusing a single temp).
         let allocatedMoves =
             moves |> List.map (fun (destReg, srcOp) ->
-                let (allocatedOp, loads) = applyToOperand mapping srcOp LIR.X12
-                (destReg, allocatedOp, loads))
-        // Collect all load instructions and the allocated moves
-        let allLoads = allocatedMoves |> List.collect (fun (_, _, loads) -> loads)
-        let finalMoves = allocatedMoves |> List.map (fun (destReg, op, _) -> (destReg, op))
-        allLoads @ [LIR.ArgMoves finalMoves]
+                let allocatedOp = applyToOperandNoLoad mapping srcOp
+                (destReg, allocatedOp))
+        [LIR.ArgMoves allocatedMoves]
 
     | LIR.TailArgMoves moves ->
         // Apply allocation WITHOUT loading spilled values into a temp register.
