@@ -18,7 +18,6 @@ module AST_to_ANF
 
 open System.Collections.Concurrent
 open ANF
-open CompilerProfiler
 open Output
 
 /// Thread-safe cache for specialized (monomorphized) functions
@@ -476,8 +475,6 @@ let specializeFunction (funcDef: AST.FunctionDef) (typeArgs: AST.Type list) : AS
     let specializedParams = funcDef.Params |> List.map (fun (name, ty) -> (name, applySubstToType subst ty))
     let specializedReturnType = applySubstToType subst funcDef.ReturnType
     let specializedBody = applySubstToExpr subst funcDef.Body
-    let typeArgsStrings = typeArgs |> List.map typeToString
-    CompilerProfiler.recordFunction "monomorphize" specializedName typeArgsStrings [ ("generic", funcDef.Name) ]
     { Name = specializedName
       TypeParams = []  // Specialized function has no type parameters
       Params = specializedParams
