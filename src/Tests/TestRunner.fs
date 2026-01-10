@@ -14,7 +14,6 @@ open TestDSL.E2EFormat
 open TestDSL.E2ETestRunner
 open TestDSL.OptimizationFormat
 open TestDSL.OptimizationTestRunner
-open TestDSL.Profiler
 
 // ANSI color codes
 module Colors =
@@ -692,11 +691,7 @@ let main args =
                             let test = testsArray.[i]
                             let preambleResult =
                                 match Map.tryFind (test.SourceFile, test.Preamble) precompileTasks with
-                                | Some task ->
-                                    let meta =
-                                        [ ("file", test.SourceFile)
-                                          ("test", test.Name) ]
-                                    time "preamble_wait" meta (fun () -> task.Result)
+                                | Some task -> task.Result
                                 | None -> Ok ()
                             let result =
                                 match preambleResult with
@@ -826,11 +821,7 @@ let main args =
                     let test = testsArray.[i]
                     let preambleResult =
                         match Map.tryFind (test.SourceFile, test.Preamble) precompileTasks with
-                        | Some task ->
-                            let meta =
-                                [ ("file", test.SourceFile)
-                                  ("test", test.Name) ]
-                            time "preamble_wait" meta (fun () -> task.Result)
+                        | Some task -> task.Result
                         | None -> Ok ()
                     let result =
                         match preambleResult with
@@ -912,7 +903,6 @@ let main args =
     let allUnitTests : (string * int * (unit -> Result<unit, string>)) array = [|
         ("CLI Flags Tests", 1, fun () -> CliFlagTests.runAll())
         ("Compiler Caching Tests", 1, fun () -> runWithStdlib "Compiler Caching Tests" CompilerCachingTests.runAllWithStdlib)
-        ("Profiler Tests", 1, fun () -> ProfilerTests.runAll())
         ("Preamble Precompile Tests", 1, fun () -> runWithStdlib "Preamble Precompile Tests" PreamblePrecompileTests.runAllWithStdlib)
         ("IR Symbol Tests", 1, fun () -> IRSymbolTests.runAll())
         ("Encoding Tests", 1, fun () -> EncodingTests.runAll())
@@ -1081,6 +1071,4 @@ let main args =
 
     (if failed = 0 then 0 else 1)
     |> fun exitCode ->
-        writeReport "profiles/test-profile.csv"
-        CompilerProfiler.writeReport "profiles/compiler-profile.csv"
         exitCode

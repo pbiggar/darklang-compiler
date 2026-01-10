@@ -6,7 +6,6 @@
 module CompilerCachingTests
 
 open CompilerLibrary
-open CompilerProfiler
 
 /// Test result type
 type TestResult = Result<unit, string>
@@ -19,19 +18,16 @@ let private withFreshCaches (stdlib: StdlibResult) : StdlibResult =
         PreambleCache = PreambleCache()
         CodegenCache = CodegenCache() }
 
-let private getMetaValue (key: string) (meta: (string * string) list) : string option =
-    meta |> List.tryFind (fun (k, _) -> k = key) |> Option.map snd
-
-let private countFunctionEvents (passName: string) (functionName: string) (events: ProfileEvent list) : int =
-    events
-    |> List.filter (fun ev ->
-        ev.Name = "function_compiled"
-        && getMetaValue "pass" ev.Meta = Some passName
-        && getMetaValue "function" ev.Meta = Some functionName)
-    |> List.length
-
 let private isVerificationEnabled () : bool =
     System.Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS") = "true"
+
+let private tryGetCompiledLazy
+    (stdlib: StdlibResult)
+    (key: CompiledFunctionKey)
+    : Lazy<Result<CachedUserFunction, string>> option =
+    match stdlib.CompiledFuncCache.TryGetValue key with
+    | true, lazyEntry -> Some lazyEntry
+    | false, _ -> None
 
 let private makeTestSymbolicFunction (name: string) : LIRSymbolic.Function =
     let label = LIR.Label "entry"
@@ -77,18 +73,16 @@ let testSpecializedFunctionCaching (sharedStdlib: StdlibResult) : TestResult =
 
 /// Test that preamble functions are compiled once across tests in the same file
 let testPreambleFunctionCachedOnce (sharedStdlib: StdlibResult) : TestResult =
-    let original = System.Environment.GetEnvironmentVariable("TEST_PROFILE")
-    let wasEnabled = original = "1"
-    let result =
-        let stdlib = withFreshCaches sharedStdlib
-        if not wasEnabled then
-            System.Environment.SetEnvironmentVariable("TEST_PROFILE", "1")
-        CompilerProfiler.clear ()
-        let preamble = "def foo(x: Int64): Int64 = x + 1"
-        let sourceFile = "cache_preamble_test.e2e"
-        match CompilerLibrary.compilePreamble stdlib preamble sourceFile Map.empty with
-        | Error err -> Error $"Preamble compilation failed: {err}"
-        | Ok preambleCtx ->
+    let stdlib = withFreshCaches sharedStdlib
+    let preamble = "def foo(x: Int64): Int64 = x + 1"
+    let sourceFile = "cache_preamble_test.e2e"
+    let cacheKey = CompiledFunctionKey.Preamble (sourceFile, "foo")
+    match CompilerLibrary.compilePreamble stdlib preamble sourceFile Map.empty with
+    | Error err -> Error $"Preamble compilation failed: {err}"
+    | Ok preambleCtx ->
+        match tryGetCompiledLazy stdlib cacheKey with
+        | None -> Error "Expected preamble function to be cached"
+        | Some firstLazy ->
             let first =
                 CompilerLibrary.compileTestWithPreamble
                     0
@@ -116,15 +110,10 @@ let testPreambleFunctionCachedOnce (sharedStdlib: StdlibResult) : TestResult =
                 let message = second.ErrorMessage |> Option.defaultValue "(no message)"
                 Error $"Second compilation failed: {message}"
             else
-                let events = CompilerProfiler.snapshot ()
-                let count = countFunctionEvents "anf_to_mir" "foo" events
-                if count = 1 then
-                    Ok ()
-                else
-                    Error $"Expected preamble function 'foo' to be compiled once, but saw {count} compilations"
-    if not wasEnabled then
-        System.Environment.SetEnvironmentVariable("TEST_PROFILE", original)
-    result
+                match tryGetCompiledLazy stdlib cacheKey with
+                | Some secondLazy when obj.ReferenceEquals(firstLazy, secondLazy) -> Ok ()
+                | Some _ -> Error "Expected preamble cache to reuse the same Lazy"
+                | None -> Error "Expected preamble cache entry to remain available"
 
 /// Test that the compiled function cache returns the same Lazy for a repeated key
 let testCompiledFunctionCacheIsLazy () : TestResult =
@@ -147,41 +136,37 @@ let testCompiledFunctionCacheIsLazy () : TestResult =
 
 
 let private runSpecializationCacheParallelDedup () : TestResult =
-    let original = System.Environment.GetEnvironmentVariable("TEST_PROFILE")
-    let wasEnabled = original = "1"
-    if not wasEnabled then
-        System.Environment.SetEnvironmentVariable("TEST_PROFILE", "1")
-        CompilerProfiler.clear ()
-    let result =
-        let cache = SpecializationCache()
-        let funcDef : AST.FunctionDef = {
-            Name = "cache_parallel"
-            TypeParams = [ "T" ]
-            Params = [ ("x", AST.TVar "T") ]
-            ReturnType = AST.TVar "T"
-            Body = AST.Var "x"
-        }
-        let typeArgs = [ AST.TInt64 ]
-        let workerCount = 16
-        let barrier = new System.Threading.Barrier(workerCount + 1)
-        let run () =
-            barrier.SignalAndWait()
-            AST_to_ANF.specializeFunctionCached cache funcDef typeArgs |> ignore
-        let tasks =
-            [ 1 .. workerCount ]
-            |> List.map (fun _ -> System.Threading.Tasks.Task.Run(fun () -> run ()))
+    let cache = SpecializationCache()
+    let funcDef : AST.FunctionDef = {
+        Name = "cache_parallel"
+        TypeParams = [ "T" ]
+        Params = [ ("x", AST.TVar "T") ]
+        ReturnType = AST.TVar "T"
+        Body = AST.Var "x"
+    }
+    let typeArgs = [ AST.TInt64 ]
+    let workerCount = 16
+    let barrier = new System.Threading.Barrier(workerCount + 1)
+    let run () =
         barrier.SignalAndWait()
-        System.Threading.Tasks.Task.WaitAll(tasks |> List.toArray)
-        let events = CompilerProfiler.snapshot ()
-        let specializedName = AST_to_ANF.specName funcDef.Name typeArgs
-        let count = countFunctionEvents "monomorphize" specializedName events
-        if count = 1 then
+        AST_to_ANF.specializeFunctionCached cache funcDef typeArgs
+    let tasks =
+        [ 1 .. workerCount ]
+        |> List.map (fun _ -> System.Threading.Tasks.Task.Run(fun () -> run ()))
+    barrier.SignalAndWait()
+    let waitTasks =
+        tasks
+        |> List.map (fun task -> task :> System.Threading.Tasks.Task)
+        |> List.toArray
+    System.Threading.Tasks.Task.WaitAll(waitTasks)
+    let results = tasks |> List.map (fun task -> task.Result)
+    match results with
+    | [] -> Error "Expected specialization results"
+    | first :: rest ->
+        if rest |> List.forall (fun item -> obj.ReferenceEquals(first, item)) then
             Ok ()
         else
-            Error $"Expected specialization once, saw {count}"
-    if not wasEnabled then
-        System.Environment.SetEnvironmentVariable("TEST_PROFILE", original)
-    result
+            Error "Expected specialization cache to return the same instance across threads"
 
 /// Test that specialization caching only runs once per function when called in parallel
 let testSpecializationCacheParallelDedup () : TestResult =
@@ -190,26 +175,6 @@ let testSpecializationCacheParallelDedup () : TestResult =
     else
         Ok ()
 
-/// Stress tests should not run unless verification tests are enabled
-let testStressTestsDisabledByDefault () : TestResult =
-    let originalVerification = System.Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS")
-    System.Environment.SetEnvironmentVariable("ENABLE_VERIFICATION_TESTS", "false")
-    CompilerProfiler.clear ()
-    let result = testSpecializationCacheParallelDedup ()
-    let events = CompilerProfiler.snapshot ()
-    let typeArgs = [ AST.TInt64 ]
-    let specializedName = AST_to_ANF.specName "cache_parallel" typeArgs
-    let count = countFunctionEvents "monomorphize" specializedName events
-    System.Environment.SetEnvironmentVariable("ENABLE_VERIFICATION_TESTS", originalVerification)
-    match result with
-    | Error err -> Error err
-    | Ok () ->
-        if count = 0 then
-            Ok ()
-        else
-            Error $"Expected stress test to be skipped, but saw {count} compilations"
-
-
 /// Run all compiler caching unit tests
 let runAllWithStdlib (sharedStdlib: StdlibResult) : TestResult =
     let tests = [
@@ -217,7 +182,6 @@ let runAllWithStdlib (sharedStdlib: StdlibResult) : TestResult =
         ("preamble function caching", fun () -> testPreambleFunctionCachedOnce sharedStdlib)
         ("compiled function cache is lazy", testCompiledFunctionCacheIsLazy)
         ("specialization cache parallel dedup", testSpecializationCacheParallelDedup)
-        ("stress tests disabled by default", testStressTestsDisabledByDefault)
     ]
 
     let rec runTests = function
