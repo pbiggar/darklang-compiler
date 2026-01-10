@@ -78,11 +78,30 @@ let testShouldStartStdlibCompile () : TestResult =
                 Error $"Expected shouldStartStdlibCompile({hasE2E}, {hasVerification}, {needsUnitStdlib}) to be {expected}, got {actual}"
     checkCases cases
 
+let testShouldRunUnitAndE2EInParallel () : TestResult =
+    let cases = [
+        (true, true, true)
+        (true, false, false)
+        (false, true, false)
+        (false, false, false)
+    ]
+    let rec checkCases remaining =
+        match remaining with
+        | [] -> Ok ()
+        | (hasUnit, hasE2E, expected) :: rest ->
+            let actual = shouldRunUnitAndE2EInParallel hasUnit hasE2E
+            if actual = expected then
+                checkCases rest
+            else
+                Error $"Expected shouldRunUnitAndE2EInParallel({hasUnit}, {hasE2E}) to be {expected}, got {actual}"
+    checkCases cases
+
 let runAll () : TestResult =
     let tests = [
         ("E2E ordering", testOrderE2ETestsByEstimatedCost)
         ("Unit test split", testSplitUnitTestsByStdlibNeed)
         ("Stdlib compile decision", testShouldStartStdlibCompile)
+        ("Parallel suite decision", testShouldRunUnitAndE2EInParallel)
     ]
 
     let rec runTests remaining =

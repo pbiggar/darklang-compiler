@@ -227,32 +227,69 @@ let main args =
     let shouldCompileStdlib =
         shouldStartStdlibCompile hasE2ETests (verificationEnabled && hasVerificationTests) needsUnitStdlib
 
-    let stdlibCompileTask : System.Threading.Tasks.Task<Result<CompilerLibrary.StdlibResult, string>> option =
+    let compileStdlibWithTiming () : Result<CompilerLibrary.StdlibResult, string> * TimeSpan =
+        let timer = Stopwatch.StartNew()
+        let result = TestDSL.E2ETestRunner.compileStdlib()
+        timer.Stop()
+        (result, timer.Elapsed)
+
+    let stdlibCompileTask : System.Threading.Tasks.Task<Result<CompilerLibrary.StdlibResult, string> * TimeSpan> option =
         if shouldCompileStdlib then
-            Some (System.Threading.Tasks.Task.Run(fun () -> TestDSL.E2ETestRunner.compileStdlib()))
+            Some (System.Threading.Tasks.Task.Run(fun () -> compileStdlibWithTiming ()))
         else
             None
 
     let mutable e2eStdlib : CompilerLibrary.StdlibResult option = None
 
-    let getStdlibResult () : Result<CompilerLibrary.StdlibResult, string> =
-        match e2eStdlib with
-        | Some stdlib -> Ok stdlib
-        | None ->
-            let result =
-                match stdlibCompileTask with
-                | Some task -> task.Result
-                | None -> TestDSL.E2ETestRunner.compileStdlib()
-            match result with
-            | Ok stdlib ->
-                e2eStdlib <- Some stdlib
-                Ok stdlib
-            | Error err -> Error err
-
     let mutable passed = 0
     let mutable failed = 0
     let failedTests = ResizeArray<FailedTestInfo>()
     let allTimings = ResizeArray<TestTiming>()
+    let resultsLock = obj()
+
+    let recordTiming (timing: TestTiming) : unit =
+        lock resultsLock (fun () -> allTimings.Add timing)
+
+    let recordResults (passedDelta: int) (failedDelta: int) (failedTestsDelta: FailedTestInfo list) : unit =
+        lock resultsLock (fun () ->
+            passed <- passed + passedDelta
+            failed <- failed + failedDelta
+            for test in failedTestsDelta do
+                failedTests.Add test)
+
+    let stdlibLock = obj()
+    let mutable stdlibCompileResult : Result<CompilerLibrary.StdlibResult, string> option = None
+    let mutable stdlibCompileElapsed : TimeSpan option = None
+
+    let tryGetStdlibCompileElapsed () : TimeSpan option =
+        lock stdlibLock (fun () -> stdlibCompileElapsed)
+
+    let getStdlibResult () : Result<CompilerLibrary.StdlibResult, string> =
+        match e2eStdlib with
+        | Some stdlib -> Ok stdlib
+        | None ->
+            let (result, elapsed) =
+                match stdlibCompileTask with
+                | Some task -> task.Result
+                | None -> compileStdlibWithTiming ()
+            let (finalResult, shouldRecordTiming) =
+                lock stdlibLock (fun () ->
+                    match stdlibCompileResult with
+                    | Some cached -> (cached, None)
+                    | None ->
+                        stdlibCompileResult <- Some result
+                        stdlibCompileElapsed <- Some elapsed
+                        match result with
+                        | Ok stdlib ->
+                            e2eStdlib <- Some stdlib
+                            (Ok stdlib, Some elapsed)
+                        | Error err ->
+                            (Error err, Some elapsed))
+            match shouldRecordTiming with
+            | Some timing ->
+                recordTiming { Name = "Stdlib Compile"; TotalTime = timing; CompileTime = None; RuntimeTime = None }
+            | None -> ()
+            finalResult
 
     let loadE2ETests (testFiles: string array) : E2ETest array * (string * string) list =
         let tests = ResizeArray<E2ETest>()
@@ -268,8 +305,7 @@ let main args =
             let fileName = Path.GetFileName filePath
             println $"  {Colors.red}✗ ERROR parsing {fileName}{Colors.reset}"
             println $"    {msg}"
-            failedTests.Add({ File = filePath; Name = $"{suiteName}: {fileName}"; Message = msg; Details = [] })
-            failed <- failed + 1
+            recordResults 0 1 [{ File = filePath; Name = $"{suiteName}: {fileName}"; Message = msg; Details = [] }]
 
     let runE2ESuite
         (suiteName: string)
@@ -311,7 +347,7 @@ let main args =
                     let totalTime = result.CompileTime + result.RuntimeTime
                     lock lockObj (fun () ->
                         results.[i] <- Some (test, result)
-                        allTimings.Add({ Name = $"{suiteName}: {test.Name}"; TotalTime = totalTime; CompileTime = Some result.CompileTime; RuntimeTime = Some result.RuntimeTime })
+                        recordTiming { Name = $"{suiteName}: {test.Name}"; TotalTime = totalTime; CompileTime = Some result.CompileTime; RuntimeTime = Some result.RuntimeTime }
                         ProgressBar.increment progress result.Success
                     )
             ) |> ignore
@@ -320,11 +356,11 @@ let main args =
 
             let mutable sectionPassed = 0
             let mutable sectionFailed = 0
+            let failedTestsLocal = ResizeArray<FailedTestInfo>()
             for result in results do
                 match result with
                 | Some (test, testResult) ->
                     if testResult.Success then
-                        passed <- passed + 1
                         sectionPassed <- sectionPassed + 1
                     else
                         let cleanName = test.Name.Replace("Stdlib.", "")
@@ -353,10 +389,11 @@ let main args =
                             println $"    Actual stderr: {actualDisp}"
                         | _ -> ()
 
-                        failedTests.Add({ File = test.SourceFile; Name = $"{suiteName}: {test.Name}"; Message = testResult.Message; Details = details |> Seq.toList })
-                        failed <- failed + 1
+                        failedTestsLocal.Add({ File = test.SourceFile; Name = $"{suiteName}: {test.Name}"; Message = testResult.Message; Details = details |> Seq.toList })
                         sectionFailed <- sectionFailed + 1
                 | None -> ()
+
+            recordResults sectionPassed sectionFailed (failedTestsLocal |> Seq.toList)
 
             if sectionFailed = 0 then
                 println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
@@ -765,13 +802,6 @@ let main args =
             println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
             println ""
 
-    // Run unit tests (early)
-    let unitSectionTimer = Stopwatch.StartNew()
-    println $"{Colors.cyan}🔧 Unit Tests{Colors.reset}"
-
-    let mutable unitSectionPassed = 0
-    let mutable unitSectionFailed = 0
-
     let runWithStdlib
         (suiteName: string)
         (runner: CompilerLibrary.StdlibResult -> Result<unit, string>)
@@ -783,7 +813,7 @@ let main args =
     // Define unit test suites with their names and test counts
     let allUnitTests : UnitTestSuite array = [|
         ("CLI Flags Tests", 1, fun () -> CliFlagTests.runAll())
-        ("Test Runner Scheduling Tests", 3, fun () -> TestRunnerSchedulingTests.runAll())
+        ("Test Runner Scheduling Tests", 4, fun () -> TestRunnerSchedulingTests.runAll())
         ("Compiler Caching Tests", 1, fun () -> runWithStdlib "Compiler Caching Tests" CompilerCachingTests.runAllWithStdlib)
         ("Preamble Precompile Tests", 1, fun () -> runWithStdlib "Preamble Precompile Tests" PreamblePrecompileTests.runAllWithStdlib)
         ("IR Symbol Tests", 1, fun () -> IRSymbolTests.runAll())
@@ -800,120 +830,142 @@ let main args =
         splitUnitTestsByStdlibNeed unitStdlibSuites unitTests
     let unitTestsOrdered = Array.append unitTestsNoStdlib unitTestsWithStdlib
 
-    let unitProgress = ProgressBar.create "Unit" (unitTestsOrdered.Length + 1)  // +1 for Chordal Graph
-    ProgressBar.update unitProgress
+    let hasUnitTests =
+        unitTestsOrdered.Length > 0 || matchesFilter filter "Chordal Graph Tests"
 
-    for (name, count, runTest) in unitTestsOrdered do
-        let timer = Stopwatch.StartNew()
-        match runTest() with
-        | Ok () ->
-            timer.Stop()
-            allTimings.Add({ Name = $"Unit: {name}"; TotalTime = timer.Elapsed; CompileTime = None; RuntimeTime = None })
-            passed <- passed + count
-            unitSectionPassed <- unitSectionPassed + count
-            ProgressBar.increment unitProgress true
-        | Error msg ->
-            timer.Stop()
-            allTimings.Add({ Name = $"Unit: {name}"; TotalTime = timer.Elapsed; CompileTime = None; RuntimeTime = None })
-            ProgressBar.increment unitProgress false
-            ProgressBar.finish unitProgress
-            println $"  {name}... {Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime timer.Elapsed}){Colors.reset}"
-            println $"    {msg}"
-            failedTests.Add({ File = ""; Name = $"Unit: {name}"; Message = msg; Details = [] })
-            failed <- failed + 1
-            unitSectionFailed <- unitSectionFailed + 1
-            ProgressBar.update unitProgress
-
-    // Handle Chordal Graph Tests separately (has different structure)
-    if matchesFilter filter "Chordal Graph Tests" then
-        let chordalTimer = Stopwatch.StartNew()
-        let results = ChordalGraphTests.runAllTests()
-        chordalTimer.Stop()
-        allTimings.Add({ Name = "Unit: Chordal Graph Tests"; TotalTime = chordalTimer.Elapsed; CompileTime = None; RuntimeTime = None })
-        let failures = results |> List.filter (fun (_, r) -> match r with Error _ -> true | Ok _ -> false)
-        let passedCount = results |> List.filter (fun (_, r) -> match r with Ok _ -> true | Error _ -> false) |> List.length
-        passed <- passed + passedCount
-        unitSectionPassed <- unitSectionPassed + passedCount
-        if List.isEmpty failures then
-            ProgressBar.increment unitProgress true
-        else
-            ProgressBar.increment unitProgress false
-            ProgressBar.finish unitProgress
-            println $"  Chordal Graph Tests... {Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime chordalTimer.Elapsed}){Colors.reset}"
-            for (name, result) in failures do
-                match result with
-                | Error msg ->
-                    println $"    {name}: {msg}"
-                    failedTests.Add({ File = ""; Name = $"Unit: Chordal Graph - {name}"; Message = msg; Details = [] })
-                    failed <- failed + 1
-                    unitSectionFailed <- unitSectionFailed + 1
-                | Ok _ -> ()
-            ProgressBar.update unitProgress
-
-    ProgressBar.finish unitProgress
-    unitSectionTimer.Stop()
-    if unitSectionFailed = 0 then
-        println $"  {Colors.green}✓ {unitSectionPassed} passed{Colors.reset}"
-    else
-        println $"  {Colors.green}✓ {unitSectionPassed} passed{Colors.reset}, {Colors.red}✗ {unitSectionFailed} failed{Colors.reset}"
-    println $"  {Colors.gray}└─ Completed in {formatTime unitSectionTimer.Elapsed}{Colors.reset}"
-    println ""
-
-    // Run E2E tests (in parallel)
-    if Directory.Exists e2eDir then
-        let e2eTestFiles = Directory.GetFiles(e2eDir, "*.e2e", SearchOption.AllDirectories)
-        if e2eTestFiles.Length > 0 then
-            let sectionTimer = Stopwatch.StartNew()
-            println $"{Colors.cyan}🚀 E2E Tests{Colors.reset}"
-
-            let (allE2ETests, parseErrors) = loadE2ETests e2eTestFiles
-            reportParseErrors "E2E" parseErrors
-
-            if allE2ETests.Length > 0 then
-                match getStdlibResult () with
-                | Error e ->
-                    println $"  {Colors.red}Stdlib compilation failed: {e}{Colors.reset}"
-                    println $"  {Colors.red}Skipping all E2E tests{Colors.reset}"
-                | Ok stdlib ->
-                    println $"  {Colors.gray}(Stdlib compiled){Colors.reset}"
-
-                    let testsArray =
-                        allE2ETests
-                        |> Array.filter (fun test -> matchesFilter filter test.Name)
-                        |> orderE2ETestsByEstimatedCost
-                    runE2ESuite "E2E" "E2E" testsArray stdlib
-
-            sectionTimer.Stop()
-            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
-            println ""
-
-    // Run Verification tests (only if ENABLE_VERIFICATION_TESTS=true or --verification)
     let enableVerification =
         verificationEnabled || Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS") = "true"
-    if enableVerification && Directory.Exists verificationDir then
-        let verificationTestFiles = Directory.GetFiles(verificationDir, "*.e2e", SearchOption.AllDirectories)
-        if verificationTestFiles.Length > 0 then
-            let sectionTimer = Stopwatch.StartNew()
-            println $"{Colors.cyan}🔬 Verification Tests{Colors.reset}"
+    let hasE2EOrVerification =
+        hasE2ETests || (enableVerification && hasVerificationTests)
 
-            let (allVerifTests, parseErrors) = loadE2ETests verificationTestFiles
-            reportParseErrors "Verification" parseErrors
+    let runUnitTests () : unit =
+        let unitSectionTimer = Stopwatch.StartNew()
+        println $"{Colors.cyan}🔧 Unit Tests{Colors.reset}"
 
-            if allVerifTests.Length > 0 then
-                match getStdlibResult () with
-                | Error err ->
-                    println $"  {Colors.red}Stdlib compilation failed: {err}{Colors.reset}"
-                    println $"  {Colors.red}Skipping verification tests{Colors.reset}"
-                | Ok stdlib ->
-                    let testsArray =
-                        allVerifTests
-                        |> Array.filter (fun test -> matchesFilter filter test.Name)
-                        |> orderE2ETestsByEstimatedCost
-                    runE2ESuite "Verification" "Verification" testsArray stdlib
+        let mutable unitSectionPassed = 0
+        let mutable unitSectionFailed = 0
+        let unitFailedTests = ResizeArray<FailedTestInfo>()
 
-            sectionTimer.Stop()
-            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
-            println ""
+        let unitProgress = ProgressBar.create "Unit" (unitTestsOrdered.Length + 1)  // +1 for Chordal Graph
+        ProgressBar.update unitProgress
+
+        for (name, count, runTest) in unitTestsOrdered do
+            let timer = Stopwatch.StartNew()
+            match runTest() with
+            | Ok () ->
+                timer.Stop()
+                recordTiming { Name = $"Unit: {name}"; TotalTime = timer.Elapsed; CompileTime = None; RuntimeTime = None }
+                unitSectionPassed <- unitSectionPassed + count
+                ProgressBar.increment unitProgress true
+            | Error msg ->
+                timer.Stop()
+                recordTiming { Name = $"Unit: {name}"; TotalTime = timer.Elapsed; CompileTime = None; RuntimeTime = None }
+                ProgressBar.increment unitProgress false
+                ProgressBar.finish unitProgress
+                println $"  {name}... {Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime timer.Elapsed}){Colors.reset}"
+                println $"    {msg}"
+                unitFailedTests.Add({ File = ""; Name = $"Unit: {name}"; Message = msg; Details = [] })
+                unitSectionFailed <- unitSectionFailed + 1
+                ProgressBar.update unitProgress
+
+        // Handle Chordal Graph Tests separately (has different structure)
+        if matchesFilter filter "Chordal Graph Tests" then
+            let chordalTimer = Stopwatch.StartNew()
+            let results = ChordalGraphTests.runAllTests()
+            chordalTimer.Stop()
+            recordTiming { Name = "Unit: Chordal Graph Tests"; TotalTime = chordalTimer.Elapsed; CompileTime = None; RuntimeTime = None }
+            let failures = results |> List.filter (fun (_, r) -> match r with Error _ -> true | Ok _ -> false)
+            let passedCount = results |> List.filter (fun (_, r) -> match r with Ok _ -> true | Error _ -> false) |> List.length
+            unitSectionPassed <- unitSectionPassed + passedCount
+            if List.isEmpty failures then
+                ProgressBar.increment unitProgress true
+            else
+                ProgressBar.increment unitProgress false
+                ProgressBar.finish unitProgress
+                println $"  Chordal Graph Tests... {Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime chordalTimer.Elapsed}){Colors.reset}"
+                for (name, result) in failures do
+                    match result with
+                    | Error msg ->
+                        println $"    {name}: {msg}"
+                        unitFailedTests.Add({ File = ""; Name = $"Unit: Chordal Graph - {name}"; Message = msg; Details = [] })
+                        unitSectionFailed <- unitSectionFailed + 1
+                    | Ok _ -> ()
+                ProgressBar.update unitProgress
+
+        ProgressBar.finish unitProgress
+        unitSectionTimer.Stop()
+        if unitSectionFailed = 0 then
+            println $"  {Colors.green}✓ {unitSectionPassed} passed{Colors.reset}"
+        else
+            println $"  {Colors.green}✓ {unitSectionPassed} passed{Colors.reset}, {Colors.red}✗ {unitSectionFailed} failed{Colors.reset}"
+        println $"  {Colors.gray}└─ Completed in {formatTime unitSectionTimer.Elapsed}{Colors.reset}"
+        println ""
+        recordResults unitSectionPassed unitSectionFailed (unitFailedTests |> Seq.toList)
+
+    let runE2EAndVerification () : unit =
+        if Directory.Exists e2eDir then
+            let e2eTestFiles = Directory.GetFiles(e2eDir, "*.e2e", SearchOption.AllDirectories)
+            if e2eTestFiles.Length > 0 then
+                let sectionTimer = Stopwatch.StartNew()
+                println $"{Colors.cyan}🚀 E2E Tests{Colors.reset}"
+
+                let (allE2ETests, parseErrors) = loadE2ETests e2eTestFiles
+                reportParseErrors "E2E" parseErrors
+
+                if allE2ETests.Length > 0 then
+                    match getStdlibResult () with
+                    | Error e ->
+                        println $"  {Colors.red}Stdlib compilation failed: {e}{Colors.reset}"
+                        println $"  {Colors.red}Skipping all E2E tests{Colors.reset}"
+                    | Ok stdlib ->
+                        let timingText =
+                            match tryGetStdlibCompileElapsed () with
+                            | Some elapsed -> $"(Stdlib compiled in {formatTime elapsed})"
+                            | None -> "(Stdlib compiled)"
+                        println $"  {Colors.gray}{timingText}{Colors.reset}"
+
+                        let testsArray =
+                            allE2ETests
+                            |> Array.filter (fun test -> matchesFilter filter test.Name)
+                            |> orderE2ETestsByEstimatedCost
+                        runE2ESuite "E2E" "E2E" testsArray stdlib
+
+                sectionTimer.Stop()
+                println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
+                println ""
+
+        if enableVerification && Directory.Exists verificationDir then
+            let verificationTestFiles = Directory.GetFiles(verificationDir, "*.e2e", SearchOption.AllDirectories)
+            if verificationTestFiles.Length > 0 then
+                let sectionTimer = Stopwatch.StartNew()
+                println $"{Colors.cyan}🔬 Verification Tests{Colors.reset}"
+
+                let (allVerifTests, parseErrors) = loadE2ETests verificationTestFiles
+                reportParseErrors "Verification" parseErrors
+
+                if allVerifTests.Length > 0 then
+                    match getStdlibResult () with
+                    | Error err ->
+                        println $"  {Colors.red}Stdlib compilation failed: {err}{Colors.reset}"
+                        println $"  {Colors.red}Skipping verification tests{Colors.reset}"
+                    | Ok stdlib ->
+                        let testsArray =
+                            allVerifTests
+                            |> Array.filter (fun test -> matchesFilter filter test.Name)
+                            |> orderE2ETestsByEstimatedCost
+                        runE2ESuite "Verification" "Verification" testsArray stdlib
+
+                sectionTimer.Stop()
+                println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
+                println ""
+
+    if shouldRunUnitAndE2EInParallel hasUnitTests hasE2EOrVerification then
+        let unitTask = System.Threading.Tasks.Task.Run(fun () -> runUnitTests ())
+        let e2eTask = System.Threading.Tasks.Task.Run(fun () -> runE2EAndVerification ())
+        System.Threading.Tasks.Task.WaitAll [| unitTask; e2eTask |]
+    else
+        runUnitTests ()
+        runE2EAndVerification ()
 
     // Compute stdlib coverage only if --coverage flag is set
     let coveragePercent =

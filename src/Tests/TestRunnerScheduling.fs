@@ -29,3 +29,6 @@ let splitUnitTestsByStdlibNeed
 
 let shouldStartStdlibCompile (hasE2E: bool) (hasVerification: bool) (needsUnitStdlib: bool) : bool =
     hasE2E || hasVerification || needsUnitStdlib
+
+let shouldRunUnitAndE2EInParallel (hasUnit: bool) (hasE2E: bool) : bool =
+    hasUnit && hasE2E
