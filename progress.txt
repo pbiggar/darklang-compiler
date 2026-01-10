@@ -3,3 +3,7 @@
 - Tests: dotnet build src/Tests/Tests.fsproj; ./run-tests --no-build --filter="Pass Test Runner Tests"; ./run-tests --no-build.
 - Benchmarks: ./benchmarks/run_benchmarks.sh sum_to_n (cachegrind, dark-only).
 - Note: dotnet build DarkCompiler.sln fails with no errors; used per-project build + --no-build runs.
+2026-01-10
+- Completed: Removed dead compileWithStdlibAST path; added CompilerLibrary unit test coverage.
+- Tests: dotnet build src/Tests/Tests.fsproj; ./run-tests --filter="Compiler Library Tests"; ./run-tests.
+- Benchmarks: ./benchmarks/run_benchmarks.sh sum_to_n (cachegrind, dark-only).

@@ -831,6 +831,7 @@ let main args =
     let allUnitTests : UnitTestSuite array = [|
         { Name = "CLI Flags Tests"; Tests = CliFlagTests.tests }
         { Name = "Test Runner Scheduling Tests"; Tests = TestRunnerSchedulingTests.tests }
+        { Name = "Compiler Library Tests"; Tests = CompilerLibraryTests.tests }
         { Name = "Compiler Caching Tests"; Tests = wrapStdlibTests "Compiler Caching Tests" CompilerCachingTests.tests }
         { Name = "Preamble Precompile Tests"; Tests = wrapStdlibTests "Preamble Precompile Tests" PreamblePrecompileTests.tests }
         { Name = "IR Symbol Tests"; Tests = IRSymbolTests.tests }
