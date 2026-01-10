@@ -42,3 +42,15 @@ let decideStdlibWarmupPlan (shouldCompileStdlib: bool) : StdlibWarmupPlan =
         CompileStdlibBeforeTests
     else
         SkipStdlibWarmup
+
+let calculateOptimalParallelism (cpuCores: int) (totalMemoryGB: float) : int =
+    // Each E2E test needs roughly ~100MB of memory (compiler + generated binary + overhead)
+    let estimatedMemoryPerTestGB = 0.1
+    let maxByMemory = int (totalMemoryGB / estimatedMemoryPerTestGB)
+    let oversubscriptionFactor = 1.5
+    let maxByCPU =
+        float (cpuCores + 1) * oversubscriptionFactor
+        |> System.Math.Ceiling
+        |> int
+    let optimal = min maxByMemory maxByCPU |> max 4
+    optimal

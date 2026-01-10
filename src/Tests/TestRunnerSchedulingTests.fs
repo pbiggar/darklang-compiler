@@ -102,6 +102,13 @@ let testStdlibWarmupPlan () : TestResult =
     | actual ->
         Error $"Expected CompileStdlibBeforeTests/SkipStdlibWarmup, got {actual}"
 
+let testCalculateOptimalParallelism () : TestResult =
+    let actual = calculateOptimalParallelism 8 64.0
+    if actual = 14 then
+        Ok ()
+    else
+        Error $"Expected calculateOptimalParallelism to return 14, got {actual}"
+
 let runAll () : TestResult =
     let tests = [
         ("E2E ordering", testOrderE2ETestsByEstimatedCost)
@@ -109,6 +116,7 @@ let runAll () : TestResult =
         ("Stdlib compile decision", testShouldStartStdlibCompile)
         ("Parallel suite decision", testShouldRunUnitAndE2EInParallel)
         ("Stdlib warmup plan", testStdlibWarmupPlan)
+        ("Parallelism calculation", testCalculateOptimalParallelism)
     ]
 
     let rec runTests remaining =

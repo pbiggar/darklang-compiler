@@ -98,18 +98,7 @@ let getOptimalParallelism () : int =
     // Each E2E test needs roughly:
     // - Minimal CPU (tests are mostly I/O bound - compile + exec)
     // - ~100MB memory (compiler + generated binary + test overhead)
-    let estimatedMemoryPerTestGB = 0.1
-
-    // Calculate max based on memory
-    let maxByMemory = int (totalMemoryGB / estimatedMemoryPerTestGB)
-
-    // Empirically, optimal parallelism is CPU cores + 1 (slight oversubscription)
-    // Benchmarking showed cores+1 is ~4% faster than exact core count
-    let maxByCPU = cpuCores + 1
-
-    // Use the smaller of the two, with a minimum of 4
-    let optimal = min maxByMemory maxByCPU |> max 4
-
+    let optimal = calculateOptimalParallelism cpuCores totalMemoryGB
     optimal
 
 // Parallel map with limited degree of parallelism
