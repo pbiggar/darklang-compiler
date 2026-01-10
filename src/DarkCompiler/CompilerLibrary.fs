@@ -889,7 +889,7 @@ let compileStdlib () : Result<StdlibResult, string> =
 
 /// Prepare stdlib for lazy compilation - stops at MIR level
 /// LIR conversion and register allocation are done lazily when functions are needed
-let prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
+let private prepareStdlibForLazyCompile () : Result<LazyStdlibResult, string> =
     match loadStdlib() with
     | Error e -> Error e
     | Ok stdlibAst ->
@@ -1175,189 +1175,9 @@ let private compileWithStdlibAST (verbosity: int) (options: CompilerOptions) (st
               Success = false
               ErrorMessage = Some $"Compilation failed: {ex.Message}" }
 
-/// Compile user code with pre-compiled stdlib (separate compilation)
-/// Uses stdlib.TypeCheckEnv for type checking user code, avoiding re-type-checking stdlib
-/// Still merges typed ASTs for ANF conversion (Phase 2 will optimize that)
-let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (source: string) (sourceFile: string) (funcLineMap: Map<string, int>) : CompileResult =
-    let sw = Stopwatch.StartNew()
-    try
-        // Pass 1: Parse user code only
-        if verbosity >= 1 then println "  [1/8] Parse..."
-        let parseResult = Parser.parseString source
-        let parseTime = sw.Elapsed.TotalMilliseconds
-        if verbosity >= 2 then
-            let t = System.Math.Round(parseTime, 1)
-            println $"        {t}ms"
-
-        match parseResult with
-        | Error err ->
-            { Binary = Array.empty
-              Success = false
-              ErrorMessage = Some $"Parse error: {err}" }
-        | Ok userAst ->
-            // Pass 1.5: Type Checking (separate - user code with stdlib's TypeCheckEnv)
-            if verbosity >= 1 then println "  [1.5/8] Type Checking (incremental)..."
-            let typeCheckResult = TypeChecking.checkProgramWithBaseEnv stdlib.TypeCheckEnv userAst
-            let typeCheckTime = sw.Elapsed.TotalMilliseconds - parseTime
-            if verbosity >= 2 then
-                let t = System.Math.Round(typeCheckTime, 1)
-                println $"        {t}ms"
-
-            match typeCheckResult with
-            | Error typeErr ->
-                { Binary = Array.empty
-                  Success = false
-                  ErrorMessage = Some $"Type error: {TypeChecking.typeErrorToString typeErr}" }
-            | Ok (programType, typedUserAst, _userEnv) ->
-                if verbosity >= 3 then
-                    println $"Program type: {TypeChecking.typeToString programType}"
-                    println ""
-
-                // Pass 2: AST → ANF (user only, separate from stdlib)
-                // User code is converted with access to stdlib's registries for lookups.
-                // User ANF is kept separate for MIR-level caching optimization.
-                // Use cached version to avoid re-monomorphizing same generic functions.
-                if verbosity >= 1 then println "  [2/8] AST → ANF (user only)..."
-                let userOnlyResult =
-                    AST_to_ANF.convertUserOnlyCached
-                        stdlib.SpecCache
-                        stdlib.ANFFuncCache
-                        sourceFile
-                        funcLineMap
-                        stdlib.GenericFuncDefs
-                        stdlib.ANFResult
-                        typedUserAst
-                let anfTime = sw.Elapsed.TotalMilliseconds - parseTime - typeCheckTime
-                if verbosity >= 2 then
-                    let t = System.Math.Round(anfTime, 1)
-                    println $"        {t}ms"
-
-                match userOnlyResult with
-                | Error err ->
-                    { Binary = Array.empty
-                      Success = false
-                      ErrorMessage = Some $"ANF conversion error: {err}" }
-                | Ok userOnly ->
-                    let anfResult =
-                        buildAnfProgram
-                            verbosity
-                            options
-                            sw
-                            programType
-                            userOnly.UserFunctions
-                            userOnly.MainExpr
-                            userOnly
-                            []
-                            Map.empty
-                    match anfResult with
-                    | Error err ->
-                        { Binary = Array.empty
-                          Success = false
-                          ErrorMessage = Some err }
-                    | Ok (userAnfProgram, typeMap, userConvResult) ->
-                        let externalReturnTypes = extractReturnTypes userOnly.FuncReg
-                        let userLirResult =
-                            compileAnfToLir
-                                verbosity
-                                options
-                                sw
-                                "user only"
-                                userAnfProgram
-                                typeMap
-                                userConvResult
-                                programType
-                                externalReturnTypes
-                        match userLirResult with
-                        | Error err ->
-                            { Binary = Array.empty
-                              Success = false
-                              ErrorMessage = Some err }
-                        | Ok userOptimizedLirProgram ->
-                            // Pass 5: Register Allocation (user functions only, stdlib pre-allocated)
-                            if verbosity >= 1 then println "  [5/8] Register Allocation (user only + cached stdlib)..."
-                            let allocStart = sw.Elapsed.TotalMilliseconds
-                            let (LIRSymbolic.Program userFuncs) = userOptimizedLirProgram
-                            let (LIR.Program (_, stdlibStrings, stdlibFloats)) = stdlib.LIRProgram
-
-                            let allocatedUserFuncs = userFuncs |> List.map RegisterAllocation.allocateRegisters
-                            let allocatedSymbolic = LIRSymbolic.Program allocatedUserFuncs
-                            if shouldDumpIR verbosity options.DumpLIR then
-                                printLIRSymbolicProgram "=== LIR (After Register Allocation) ===" allocatedSymbolic
-
-                            match LIRSymbolic.toLIRWithPools stdlibStrings stdlibFloats allocatedUserFuncs with
-                            | Error err ->
-                                { Binary = Array.empty
-                                  Success = false
-                                  ErrorMessage = Some $"LIR pool resolution error: {err}" }
-                            | Ok (LIR.Program (resolvedUserFuncs, mergedStrings, mergedFloats)) ->
-                                let reachableStdlib =
-                                    if options.DisableDCE then stdlib.AllocatedFunctions
-                                    else
-                                        DeadCodeElimination.filterFunctions
-                                            stdlib.StdlibCallGraph
-                                            resolvedUserFuncs
-                                            stdlib.AllocatedFunctions
-
-                                let allFuncs = reachableStdlib @ resolvedUserFuncs
-                                let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
-                                if shouldDumpIR verbosity options.DumpLIR then
-                                    printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
-
-                                if verbosity >= 2 then
-                                    let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - allocStart, 1)
-                                    println $"        {t}ms"
-
-                                let binaryResult =
-                                    let cacheableNames =
-                                        reachableStdlib
-                                        |> List.map (fun f -> f.Name)
-                                        |> List.filter (fun name -> name.StartsWith("Stdlib.") || name.StartsWith("__"))
-                                        |> Set.ofList
-                                    if cacheableNames.IsEmpty then
-                                        generateBinary
-                                            verbosity
-                                            options
-                                            sw
-                                            "  [6/8] Code Generation..."
-                                            "  [7/7] ARM64 Encoding..."
-                                            "  [7/7] Binary Generation ({format})..."
-                                            false
-                                            false
-                                            allocatedProgram
-                                    else
-                                        generateBinaryWithCodegenCache
-                                            verbosity
-                                            options
-                                            sw
-                                            "  [6/8] Code Generation..."
-                                            "  [7/7] ARM64 Encoding..."
-                                            "  [7/7] Binary Generation ({format})..."
-                                            false
-                                            false
-                                            stdlib.CodegenCache
-                                            cacheableNames
-                                            allocatedProgram
-                                match binaryResult with
-                                | Error err ->
-                                    { Binary = Array.empty
-                                      Success = false
-                                      ErrorMessage = Some err }
-                                | Ok binary ->
-                                    sw.Stop()
-                                    if verbosity >= 1 then
-                                        println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
-                                    { Binary = binary
-                                      Success = true
-                                      ErrorMessage = None }
-                    with
-                    | ex ->
-                        { Binary = Array.empty
-                          Success = false
-                          ErrorMessage = Some $"Compilation failed: {ex.Message}" }
-
-                /// Compile preamble with stdlib as base, returning extended context for test compilation
-                /// Preamble functions go through the full pipeline (parse → typecheck → mono → inline → lift → ANF → RC → TCO)
-                /// The result is cached and reused for all tests in the same file
+/// Compile preamble with stdlib as base, returning extended context for test compilation
+/// Preamble functions go through the full pipeline (parse → typecheck → mono → inline → lift → ANF → RC → TCO)
+/// The result is cached and reused for all tests in the same file
 let compilePreamble (stdlib: StdlibResult) (preamble: string) (sourceFile: string) (funcLineMap: Map<string, int>) : Result<PreambleContext, string> =
     // Handle empty preamble - return a context that just wraps stdlib
     if String.IsNullOrWhiteSpace(preamble) then
@@ -1836,7 +1656,7 @@ let private getStdlibLIRFunctions (stdlib: LazyStdlibResult) (funcNames: string 
 
 /// Compile user code with lazy stdlib - only compiles stdlib functions that are actually called
 /// This avoids compiling unused stdlib functions through expensive passes (MIR, LIR, RegAlloc)
-let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: LazyStdlibResult) (source: string) : CompileResult =
+let private compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: LazyStdlibResult) (source: string) : CompileResult =
     let sw = Stopwatch.StartNew()
     try
         // Pass 1: Parse user code only
@@ -2006,11 +1826,8 @@ let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: stri
         compileWithLazyStdlib verbosity options lazyStdlib source
 
 /// Compile source code to binary (uses default options)
-let compile (verbosity: int) (source: string) : CompileResult =
-    compileWithOptions verbosity defaultOptions source
-
 /// Execute compiled binary and capture output
-let execute (verbosity: int) (binary: byte array) : ExecutionResult =
+let private execute (verbosity: int) (binary: byte array) : ExecutionResult =
     let sw = Stopwatch.StartNew()
 
     if verbosity >= 1 then println ""
@@ -2159,24 +1976,6 @@ let private getOrCompilePreambleContext
 let compileAndRunWithOptions (verbosity: int) (options: CompilerOptions) (source: string) : ExecutionResult =
     compileWithOptions verbosity options source |> compileResultToExecution verbosity
 
-/// Compile and run source code with pre-compiled stdlib
-let compileAndRunWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (source: string) : ExecutionResult =
-    compileWithStdlib verbosity options stdlib source "" Map.empty
-    |> compileResultToExecution verbosity
-
-/// Compile and run source code with pre-compiled stdlib and user function caching
-/// sourceFile and funcLineMap are used to build cache keys for user functions
-/// Cache key: (sourceFile, lineNumber, functionName)
-let compileAndRunWithStdlibCached (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (testExpr: string) (preamble: string) (sourceFile: string) (funcLineMap: Map<string, int>) : ExecutionResult =
-    match getOrCompilePreambleContext verbosity stdlib preamble sourceFile funcLineMap with
-    | Error err ->
-        { ExitCode = 1
-          Stdout = ""
-          Stderr = err }
-    | Ok preambleCtx ->
-        compileTestWithPreamble verbosity options stdlib preambleCtx sourceFile testExpr
-        |> compileResultToExecution verbosity
-
 /// Compile and run with timing breakdown (for test output)
 let compileAndRunWithStdlibCachedTimed (verbosity: int) (options: CompilerOptions) (stdlib: StdlibResult) (testExpr: string) (preamble: string) (sourceFile: string) (funcLineMap: Map<string, int>) : TimedExecutionResult =
     match getOrCompilePreambleContext verbosity stdlib preamble sourceFile funcLineMap with
@@ -2207,15 +2006,6 @@ let compileAndRunWithStdlibCachedTimed (verbosity: int) (options: CompilerOption
               Stderr = execResult.Stderr
               CompileTime = compileTime
               RuntimeTime = runtimeTimer.Elapsed }
-
-/// Compile and run source code with lazy stdlib (caches LIR compilation across tests)
-let compileAndRunWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: LazyStdlibResult) (source: string) : ExecutionResult =
-    compileWithLazyStdlib verbosity options stdlib source
-    |> compileResultToExecution verbosity
-
-/// Compile and run source code (main entry point for E2E tests)
-let compileAndRun (verbosity: int) (source: string) : ExecutionResult =
-    compileAndRunWithOptions verbosity defaultOptions source
 
 /// Get the set of stdlib function names reachable from user code
 /// Used for coverage analysis without full compilation
