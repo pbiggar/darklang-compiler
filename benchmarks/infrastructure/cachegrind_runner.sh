@@ -72,6 +72,28 @@ latest_results_count() {
         }' "$RESULTS_FILE"
 }
 
+numeric_count() {
+    echo "$1" | tr -d ',' | tr -d ' '
+}
+
+format_improvement() {
+    local current="$1"
+    local baseline="$2"
+
+    if [ -z "$current" ] || [ -z "$baseline" ] || [ "$baseline" = "0" ]; then
+        return
+    fi
+
+    awk -v current="$current" -v baseline="$baseline" 'BEGIN {
+        diff = (baseline - current) / baseline * 100.0
+        if (diff >= 0) {
+            printf "+%.1f%% vs latest", diff
+        } else {
+            printf "%.1f%% vs latest", diff
+        }
+    }'
+}
+
 pretty_section "Running cachegrind benchmark for $BENCHMARK..."
 
 # Create output file for parsed results
@@ -130,8 +152,15 @@ for impl in $IMPLS; do
 EOF
 
         LATEST_RESULTS=$(latest_results_count "$impl")
-        if [ -n "$LATEST_RESULTS" ] && [ "$LATEST_RESULTS" != "-" ]; then
-            pretty_info "Instructions: $I_REFS (latest RESULTS.md: $LATEST_RESULTS)"
+        LATEST_NUM=$(numeric_count "$LATEST_RESULTS")
+        CURRENT_NUM=$(numeric_count "$I_REFS")
+        if [ -n "$LATEST_NUM" ] && [ "$LATEST_RESULTS" != "-" ] && [ "$LATEST_NUM" != "$CURRENT_NUM" ]; then
+            IMPROVEMENT=$(format_improvement "$CURRENT_NUM" "$LATEST_NUM")
+            if [ -n "$IMPROVEMENT" ]; then
+                pretty_info "Instructions: $I_REFS (latest RESULTS.md: $LATEST_RESULTS, $IMPROVEMENT)"
+            else
+                pretty_info "Instructions: $I_REFS"
+            fi
         else
             pretty_info "Instructions: $I_REFS"
         fi
@@ -189,8 +218,15 @@ if should_run_lang "python" && [ -f "$PROBLEM_DIR/python/main.py" ]; then
 EOF
 
             LATEST_RESULTS=$(latest_results_count "python")
-            if [ -n "$LATEST_RESULTS" ] && [ "$LATEST_RESULTS" != "-" ]; then
-                pretty_info "Instructions: $I_REFS (latest RESULTS.md: $LATEST_RESULTS)"
+            LATEST_NUM=$(numeric_count "$LATEST_RESULTS")
+            CURRENT_NUM=$(numeric_count "$I_REFS")
+            if [ -n "$LATEST_NUM" ] && [ "$LATEST_RESULTS" != "-" ] && [ "$LATEST_NUM" != "$CURRENT_NUM" ]; then
+                IMPROVEMENT=$(format_improvement "$CURRENT_NUM" "$LATEST_NUM")
+                if [ -n "$IMPROVEMENT" ]; then
+                    pretty_info "Instructions: $I_REFS (latest RESULTS.md: $LATEST_RESULTS, $IMPROVEMENT)"
+                else
+                    pretty_info "Instructions: $I_REFS"
+                fi
             else
                 pretty_info "Instructions: $I_REFS"
             fi
@@ -248,8 +284,15 @@ if should_run_lang "node" && [ -f "$PROBLEM_DIR/node/main.js" ]; then
 EOF
 
             LATEST_RESULTS=$(latest_results_count "node")
-            if [ -n "$LATEST_RESULTS" ] && [ "$LATEST_RESULTS" != "-" ]; then
-                pretty_info "Instructions: $I_REFS (latest RESULTS.md: $LATEST_RESULTS)"
+            LATEST_NUM=$(numeric_count "$LATEST_RESULTS")
+            CURRENT_NUM=$(numeric_count "$I_REFS")
+            if [ -n "$LATEST_NUM" ] && [ "$LATEST_RESULTS" != "-" ] && [ "$LATEST_NUM" != "$CURRENT_NUM" ]; then
+                IMPROVEMENT=$(format_improvement "$CURRENT_NUM" "$LATEST_NUM")
+                if [ -n "$IMPROVEMENT" ]; then
+                    pretty_info "Instructions: $I_REFS (latest RESULTS.md: $LATEST_RESULTS, $IMPROVEMENT)"
+                else
+                    pretty_info "Instructions: $I_REFS"
+                fi
             else
                 pretty_info "Instructions: $I_REFS"
             fi
