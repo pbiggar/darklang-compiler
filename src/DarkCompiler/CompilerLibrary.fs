@@ -1994,9 +1994,9 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
           Success = false
           ErrorMessage = Some $"Compilation failed: {ex.Message}" }
 
-/// Compile source code to binary using lazy stdlib compilation
-/// Only compiles stdlib functions that are actually called by user code
-let compileWithOptionsLazy (verbosity: int) (options: CompilerOptions) (source: string) : CompileResult =
+/// Compile source code to binary (in-memory, no file I/O)
+/// Uses lazy stdlib compilation - only compiles stdlib functions that are actually called
+let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: string) : CompileResult =
     match prepareStdlibForLazyCompile() with
     | Error err ->
         { Binary = Array.empty
@@ -2004,11 +2004,6 @@ let compileWithOptionsLazy (verbosity: int) (options: CompilerOptions) (source: 
           ErrorMessage = Some err }
     | Ok lazyStdlib ->
         compileWithLazyStdlib verbosity options lazyStdlib source
-
-/// Compile source code to binary (in-memory, no file I/O)
-/// Uses lazy stdlib compilation - only compiles stdlib functions that are actually called
-let compileWithOptions (verbosity: int) (options: CompilerOptions) (source: string) : CompileResult =
-    compileWithOptionsLazy verbosity options source
 
 /// Compile source code to binary (uses default options)
 let compile (verbosity: int) (source: string) : CompileResult =
