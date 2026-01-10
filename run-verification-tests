@@ -16,24 +16,17 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "Building tests..."
-if ! timeout 120 dotnet build --verbosity quiet 2>&1; then
-    echo "Build failed!"
+. "$SCRIPT_DIR/scripts/test-common.sh"
+
+if ! build_tests "$SCRIPT_DIR" "" "Building tests..."; then
     exit 1
 fi
-echo "Build complete."
-echo ""
 
 # Find and run the test executable
-TEST_EXE="$SCRIPT_DIR/bin/Tests/Debug/net9.0/Tests"
-
-if [ ! -f "$TEST_EXE" ]; then
-    echo "Error: Test executable not found at $TEST_EXE"
-    exit 1
-fi
+TEST_EXE="$(find_test_exe "$SCRIPT_DIR" "")" || exit 1
 
 echo "Running verification tests..."
 echo "(ENABLE_VERIFICATION_TESTS is set)"
 echo ""
 
-ENABLE_VERIFICATION_TESTS=true exec "$TEST_EXE" "$@"
+ENABLE_VERIFICATION_TESTS=true run_tests "$TEST_EXE" "$@"

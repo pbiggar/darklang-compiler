@@ -97,15 +97,13 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+. "$SCRIPT_DIR/scripts/test-common.sh"
+
 # Build if needed
 if [ "$NO_BUILD" = false ]; then
-    echo "Building..."
-    if ! timeout 120 dotnet build --verbosity quiet --configfile "$SCRIPT_DIR/NuGet.Config" 2>&1; then
-        echo "Build failed!"
+    if ! build_tests "$SCRIPT_DIR" "$SCRIPT_DIR/NuGet.Config"; then
         exit 1
     fi
-    echo "Build complete."
-    echo ""
 fi
 
 if [ "$BUILD_ONLY" = true ]; then
@@ -114,13 +112,7 @@ if [ "$BUILD_ONLY" = true ]; then
 fi
 
 # Find and run the test executable
-TEST_EXE="$SCRIPT_DIR/bin/Tests/Debug/net9.0/Tests"
-
-if [ ! -f "$TEST_EXE" ]; then
-    echo "Error: Test executable not found at $TEST_EXE"
-    echo "Try running without --no-build first."
-    exit 1
-fi
+TEST_EXE="$(find_test_exe "$SCRIPT_DIR" "Try running without --no-build first.")" || exit 1
 
 # Run tests
-exec "$TEST_EXE" "${TEST_ARGS[@]}"
+run_tests "$TEST_EXE" "${TEST_ARGS[@]}"

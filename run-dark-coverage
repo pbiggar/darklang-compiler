@@ -12,14 +12,13 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+. "$SCRIPT_DIR/scripts/test-common.sh"
+
 # Build if needed
-echo "Building..."
-if ! timeout 120 dotnet build --verbosity quiet 2>&1; then
-    echo "Build failed!"
+if ! build_tests "$SCRIPT_DIR" ""; then
     exit 1
 fi
-echo "Build complete."
-echo ""
 
 # Run coverage analysis
-exec ./bin/Tests/Debug/net9.0/Tests --coverage
+TEST_EXE="$(find_test_exe "$SCRIPT_DIR" "")" || exit 1
+run_tests "$TEST_EXE" --coverage
