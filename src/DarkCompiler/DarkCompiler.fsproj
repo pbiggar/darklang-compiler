@@ -27,6 +27,7 @@
     <Compile Include="passes/3.1_SSA_Construction.fs" />
     <Compile Include="passes/3.5_MIR_Optimize.fs" />
     <Compile Include="LIR.fs" />
+    <Compile Include="LIRSymbolic.fs" />
     <Compile Include="ParallelMoves.fs" />
     <Compile Include="passes/4_MIR_to_LIR.fs" />
     <Compile Include="passes/4.5_LIR_Optimize.fs" />

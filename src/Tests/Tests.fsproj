@@ -32,6 +32,7 @@
     <Compile Include="CompilerCachingTests.fs" />
     <Compile Include="ProfilerTests.fs" />
     <Compile Include="PreamblePrecompileTests.fs" />
+    <Compile Include="IRSymbolTests.fs" />
     <Compile Include="EncodingTests.fs" />
     <Compile Include="BinaryTests.fs" />
     <Compile Include="TypeCheckingTests.fs" />

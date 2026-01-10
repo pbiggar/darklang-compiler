@@ -893,6 +893,7 @@ let main args =
         ("Compiler Caching Tests", 1, fun () -> CompilerCachingTests.runAll())
         ("Profiler Tests", 1, fun () -> ProfilerTests.runAll())
         ("Preamble Precompile Tests", 1, fun () -> PreamblePrecompileTests.runAll())
+        ("IR Symbol Tests", 1, fun () -> IRSymbolTests.runAll())
         ("Encoding Tests", 1, fun () -> EncodingTests.runAll())
         ("Binary Tests", 11, fun () -> BinaryTests.runAll())
         ("Type Checking Tests", 8, fun () -> TypeCheckingTests.runAll())
