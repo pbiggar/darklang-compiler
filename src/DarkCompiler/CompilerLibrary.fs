@@ -1343,75 +1343,80 @@ let compileWithStdlib (verbosity: int) (options: CompilerOptions) (stdlib: Stdli
 
                             let allocatedUserFuncs = userFuncs |> List.map RegisterAllocation.allocateRegisters
 
-                            let stringOffset = stdlibStrings.NextId
-                            let floatOffset = stdlibFloats.NextId
-                            let mergedStrings = ANF_to_MIR.appendStringPools stdlibStrings userStrings
-                            let mergedFloats = ANF_to_MIR.appendFloatPools stdlibFloats userFloats
-
-                            let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
-
-                            let reachableStdlib =
-                                if options.DisableDCE then stdlib.AllocatedFunctions
-                                else
-                                    DeadCodeElimination.filterFunctions
-                                        stdlib.StdlibCallGraph
-                                        offsetUserFuncs
-                                        stdlib.AllocatedFunctions
-
-                            let allFuncs = reachableStdlib @ offsetUserFuncs
-                            let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
-                            recordFunctions "register_allocation" baseMeta (allocatedUserFuncs |> List.map (fun f -> f.Name))
-                            if shouldDumpIR verbosity options.DumpLIR then
-                                printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
-
-                            if verbosity >= 2 then
-                                let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - allocStart, 1)
-                                println $"        {t}ms"
-
-                            let binaryResult =
-                                let cacheableNames =
-                                    reachableStdlib
-                                    |> List.map (fun f -> f.Name)
-                                    |> List.filter (fun name -> name.StartsWith("Stdlib.") || name.StartsWith("__"))
-                                    |> Set.ofList
-                                if cacheableNames.IsEmpty then
-                                    generateBinary
-                                        verbosity
-                                        options
-                                        sw
-                                        "  [6/8] Code Generation..."
-                                        "  [7/7] ARM64 Encoding..."
-                                        "  [7/7] Binary Generation ({format})..."
-                                        false
-                                        false
-                                        baseMeta
-                                        allocatedProgram
-                                else
-                                    generateBinaryWithCodegenCache
-                                        verbosity
-                                        options
-                                        sw
-                                        "  [6/8] Code Generation..."
-                                        "  [7/7] ARM64 Encoding..."
-                                        "  [7/7] Binary Generation ({format})..."
-                                        false
-                                        false
-                                        baseMeta
-                                        stdlib.CodegenCache
-                                        cacheableNames
-                                        allocatedProgram
-                            match binaryResult with
+                            match toSymbolicFunctions allocatedUserFuncs userStrings userFloats with
                             | Error err ->
                                 { Binary = Array.empty
                                   Success = false
-                                  ErrorMessage = Some err }
-                            | Ok binary ->
-                                sw.Stop()
-                                if verbosity >= 1 then
-                                    println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
-                                { Binary = binary
-                                  Success = true
-                                  ErrorMessage = None }
+                                  ErrorMessage = Some $"Symbolic LIR error: {err}" }
+                            | Ok symbolicUserFuncs ->
+                                match LIRSymbolic.toLIRWithPools stdlibStrings stdlibFloats symbolicUserFuncs with
+                                | Error err ->
+                                    { Binary = Array.empty
+                                      Success = false
+                                      ErrorMessage = Some $"LIR pool resolution error: {err}" }
+                                | Ok (LIR.Program (resolvedUserFuncs, mergedStrings, mergedFloats)) ->
+                                    let reachableStdlib =
+                                        if options.DisableDCE then stdlib.AllocatedFunctions
+                                        else
+                                            DeadCodeElimination.filterFunctions
+                                                stdlib.StdlibCallGraph
+                                                resolvedUserFuncs
+                                                stdlib.AllocatedFunctions
+
+                                    let allFuncs = reachableStdlib @ resolvedUserFuncs
+                                    let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
+                                    recordFunctions "register_allocation" baseMeta (allocatedUserFuncs |> List.map (fun f -> f.Name))
+                                    if shouldDumpIR verbosity options.DumpLIR then
+                                        printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
+
+                                    if verbosity >= 2 then
+                                        let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - allocStart, 1)
+                                        println $"        {t}ms"
+
+                                    let binaryResult =
+                                        let cacheableNames =
+                                            reachableStdlib
+                                            |> List.map (fun f -> f.Name)
+                                            |> List.filter (fun name -> name.StartsWith("Stdlib.") || name.StartsWith("__"))
+                                            |> Set.ofList
+                                        if cacheableNames.IsEmpty then
+                                            generateBinary
+                                                verbosity
+                                                options
+                                                sw
+                                                "  [6/8] Code Generation..."
+                                                "  [7/7] ARM64 Encoding..."
+                                                "  [7/7] Binary Generation ({format})..."
+                                                false
+                                                false
+                                                baseMeta
+                                                allocatedProgram
+                                        else
+                                            generateBinaryWithCodegenCache
+                                                verbosity
+                                                options
+                                                sw
+                                                "  [6/8] Code Generation..."
+                                                "  [7/7] ARM64 Encoding..."
+                                                "  [7/7] Binary Generation ({format})..."
+                                                false
+                                                false
+                                                baseMeta
+                                                stdlib.CodegenCache
+                                                cacheableNames
+                                                allocatedProgram
+                                    match binaryResult with
+                                    | Error err ->
+                                        { Binary = Array.empty
+                                          Success = false
+                                          ErrorMessage = Some err }
+                                    | Ok binary ->
+                                        sw.Stop()
+                                        if verbosity >= 1 then
+                                            println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
+                                        { Binary = binary
+                                          Success = true
+                                          ErrorMessage = None }
                     with
                     | ex ->
                         { Binary = Array.empty
@@ -2060,47 +2065,52 @@ let compileWithLazyStdlib (verbosity: int) (options: CompilerOptions) (stdlib: L
 
                             let allocatedUserFuncs = userFuncs |> List.map RegisterAllocation.allocateRegisters
 
-                            let stringOffset = stdlibLirStrings.NextId
-                            let floatOffset = stdlibLirFloats.NextId
-                            let mergedStrings = ANF_to_MIR.appendStringPools stdlibLirStrings userStrings
-                            let mergedFloats = ANF_to_MIR.appendFloatPools stdlibLirFloats userFloats
-
-                            let offsetUserFuncs = allocatedUserFuncs |> List.map (MIR_to_LIR.offsetLIRFunction stringOffset floatOffset)
-
-                            let allFuncs = allocatedStdlibFuncs @ offsetUserFuncs
-                            let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
-                            recordFunctions "register_allocation" baseMeta (allocatedUserFuncs |> List.map (fun f -> f.Name))
-                            if shouldDumpIR verbosity options.DumpLIR then
-                                printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
-
-                            if verbosity >= 2 then
-                                let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - allocStart, 1)
-                                println $"        {t}ms"
-
-                            let binaryResult =
-                                generateBinary
-                                    verbosity
-                                    options
-                                    sw
-                                    "  [6/8] Code Generation..."
-                                    "  [7/7] ARM64 Encoding..."
-                                    "  [7/7] Binary Generation ({format})..."
-                                    false
-                                    false
-                                    baseMeta
-                                    allocatedProgram
-                            match binaryResult with
+                            match toSymbolicFunctions allocatedUserFuncs userStrings userFloats with
                             | Error err ->
                                 { Binary = Array.empty
                                   Success = false
-                                  ErrorMessage = Some err }
-                            | Ok binary ->
-                                sw.Stop()
-                                if verbosity >= 1 then
-                                    println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
-                                { Binary = binary
-                                  Success = true
-                                  ErrorMessage = None }
+                                  ErrorMessage = Some $"Symbolic LIR error: {err}" }
+                            | Ok symbolicUserFuncs ->
+                                match LIRSymbolic.toLIRWithPools stdlibLirStrings stdlibLirFloats symbolicUserFuncs with
+                                | Error err ->
+                                    { Binary = Array.empty
+                                      Success = false
+                                      ErrorMessage = Some $"LIR pool resolution error: {err}" }
+                                | Ok (LIR.Program (resolvedUserFuncs, mergedStrings, mergedFloats)) ->
+                                    let allFuncs = allocatedStdlibFuncs @ resolvedUserFuncs
+                                    let allocatedProgram = LIR.Program (allFuncs, mergedStrings, mergedFloats)
+                                    recordFunctions "register_allocation" baseMeta (allocatedUserFuncs |> List.map (fun f -> f.Name))
+                                    if shouldDumpIR verbosity options.DumpLIR then
+                                        printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
+
+                                    if verbosity >= 2 then
+                                        let t = System.Math.Round(sw.Elapsed.TotalMilliseconds - allocStart, 1)
+                                        println $"        {t}ms"
+
+                                    let binaryResult =
+                                        generateBinary
+                                            verbosity
+                                            options
+                                            sw
+                                            "  [6/8] Code Generation..."
+                                            "  [7/7] ARM64 Encoding..."
+                                            "  [7/7] Binary Generation ({format})..."
+                                            false
+                                            false
+                                            baseMeta
+                                            allocatedProgram
+                                    match binaryResult with
+                                    | Error err ->
+                                        { Binary = Array.empty
+                                          Success = false
+                                          ErrorMessage = Some err }
+                                    | Ok binary ->
+                                        sw.Stop()
+                                        if verbosity >= 1 then
+                                            println $"  ✓ Compilation complete ({System.Math.Round(sw.Elapsed.TotalMilliseconds, 1)}ms)"
+                                        { Binary = binary
+                                          Success = true
+                                          ErrorMessage = None }
     with
     | ex ->
         { Binary = Array.empty
