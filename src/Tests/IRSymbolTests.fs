@@ -7,6 +7,7 @@ module IRSymbolTests
 open LIR
 open MIR
 open LIRSymbolic
+open MIRSymbolic
 
 /// Test result type
 type TestResult = Result<unit, string>
@@ -90,10 +91,65 @@ let testSymbolizeResolveRoundTrip () : TestResult =
                                     Error "Resolved program did not reference pooled indices as expected"
                             | _ -> Error "Expected a single resolved function"
 
+let private buildSymbolicMirProgram () : Result<MIR.Program * string * float, string> =
+    let stringValue = "mir_symbolic"
+    let floatValue = 2.5
+    let (stringIdx, stringPool) = MIR.addString MIR.emptyStringPool stringValue
+    let (floatIdx, floatPool) = MIR.addFloat MIR.emptyFloatPool floatValue
+    let label = MIR.Label "entry"
+    let instrs = [
+        MIR.Mov (MIR.VReg 0, MIR.StringRef stringIdx, Some AST.TString)
+        MIR.Mov (MIR.VReg 1, MIR.FloatRef floatIdx, Some AST.TFloat64)
+    ]
+    let block: MIR.BasicBlock = { Label = label; Instrs = instrs; Terminator = MIR.Ret (MIR.Register (MIR.VReg 0)) }
+    let cfg: MIR.CFG = { Entry = label; Blocks = Map.ofList [ (label, block) ] }
+    let func: MIR.Function = {
+        Name = "mir_symbolic_test"
+        TypedParams = []
+        ReturnType = AST.TString
+        CFG = cfg
+        FloatRegs = Set.ofList [ 1 ]
+    }
+    let program = MIR.Program ([func], stringPool, floatPool, Map.empty, Map.empty)
+    Ok (program, stringValue, floatValue)
+
+let testMirSymbolizeResolveRoundTrip () : TestResult =
+    match buildSymbolicMirProgram () with
+    | Error err -> Error err
+    | Ok (program, stringValue, floatValue) ->
+        match MIRSymbolic.fromMIR program with
+        | Error err -> Error $"Symbolize failed: {err}"
+        | Ok (MIRSymbolic.Program (symFuncs, variants, records)) ->
+            let hasSymbols =
+                match symFuncs with
+                | [func] ->
+                    func.CFG.Blocks
+                    |> Map.toList
+                    |> List.collect (fun (_, block) -> block.Instrs)
+                    |> List.exists (function
+                        | MIRSymbolic.Mov (_, MIRSymbolic.StringSymbol value, _) -> value = stringValue
+                        | MIRSymbolic.Mov (_, MIRSymbolic.FloatSymbol value, _) -> value = floatValue
+                        | _ -> false)
+                | _ -> false
+            if not hasSymbols then
+                Error "Expected symbolized MIR to contain symbolic refs"
+            else
+                match MIRSymbolic.toMIR (MIRSymbolic.Program (symFuncs, variants, records)) with
+                | Error err -> Error $"Resolve failed: {err}"
+                | Ok resolved ->
+                    let (MIR.Program (_resolvedFuncs, resolvedStrings, resolvedFloats, _, _)) = resolved
+                    match Map.tryFind stringValue resolvedStrings.StringToId with
+                    | None -> Error "Resolved string pool missing expected value"
+                    | Some _ ->
+                        match Map.tryFind floatValue resolvedFloats.FloatToId with
+                        | None -> Error "Resolved float pool missing expected value"
+                        | Some _ -> Ok ()
+
 /// Run all symbolic LIR unit tests
 let runAll () : TestResult =
     let tests = [
         ("symbolize/resolve round trip", testSymbolizeResolveRoundTrip)
+        ("mir symbolize/resolve round trip", testMirSymbolizeResolveRoundTrip)
     ]
     tests
     |> List.fold

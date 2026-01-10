@@ -23,6 +23,7 @@
     <Compile Include="passes/2.6_PrintInsertion.fs" />
     <Compile Include="passes/2.7_TailCallDetection.fs" />
     <Compile Include="MIR.fs" />
+    <Compile Include="MIRSymbolic.fs" />
     <Compile Include="passes/3_ANF_to_MIR.fs" />
     <Compile Include="passes/3.1_SSA_Construction.fs" />
     <Compile Include="passes/3.5_MIR_Optimize.fs" />
