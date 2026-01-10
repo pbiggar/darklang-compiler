@@ -131,6 +131,10 @@ let printMIRProgram (title: string) (program: MIR.Program) : unit =
             println $"  {block.Terminator}"
     println ""
 
+let private normalizeMirPools (program: MIR.Program) : Result<MIR.Program, string> =
+    MIRSymbolic.normalizePools program
+    |> Result.mapError (fun err -> $"Symbolic MIR error: {err}")
+
 /// Print LIR program (with CFG) in a consistent format
 let printLIRProgram (title: string) (program: LIR.Program) : unit =
     let (LIR.Program (funcs, _, _)) = program
@@ -230,7 +234,11 @@ let private compileAnfToLir
 
         if verbosity >= 1 then println $"  [4/8] MIR → LIR{suffix}..."
         let lirStart = sw.Elapsed.TotalMilliseconds
-        let lirResult = time "mir_to_lir" meta (fun () -> MIR_to_LIR.toLIR optimizedProgram)
+        let lirResult =
+            time "mir_to_lir" meta (fun () ->
+                match normalizeMirPools optimizedProgram with
+                | Error err -> Error err
+                | Ok normalized -> MIR_to_LIR.toLIR normalized)
         match lirResult with
         | Error err -> Error $"LIR conversion error: {err}"
         | Ok lirProgram ->
@@ -905,9 +913,12 @@ let compileStdlib () : Result<StdlibResult, string> =
                         let mirProgram = MIR.Program (mirFuncs, stringPool, floatPool, variantRegistry, recordRegistry)
                         recordMirFunctions "anf_to_mir" meta mirProgram
                         // Convert stdlib MIR to LIR (cached for reuse)
-                        match MIR_to_LIR.toLIR mirProgram with
+                        match normalizeMirPools mirProgram with
                         | Error e -> Error e
-                        | Ok lirProgram ->
+                        | Ok normalizedMir ->
+                            match MIR_to_LIR.toLIR normalizedMir with
+                            | Error e -> Error e
+                            | Ok lirProgram ->
                             recordLirFunctions "mir_to_lir" meta lirProgram
                             // Pre-allocate stdlib functions (cached for reuse)
                             let (LIR.Program (lirFuncs, lirStrings, lirFloats)) = lirProgram
@@ -1501,9 +1512,12 @@ let compilePreamble (stdlib: StdlibResult) (preamble: string) (sourceFile: strin
                             recordMirFunctions "ssa_construction" meta ssaProgram
                             let optimizedProgram = MIR_Optimize.optimizeProgram ssaProgram
                             recordMirFunctions "mir_optimize" meta optimizedProgram
-                            match MIR_to_LIR.toLIR optimizedProgram with
-                            | Error err -> Error $"Preamble LIR conversion error: {err}"
-                            | Ok lirProgram ->
+                            match normalizeMirPools optimizedProgram with
+                            | Error err -> Error $"Preamble MIR normalization error: {err}"
+                            | Ok normalizedMir ->
+                                match MIR_to_LIR.toLIR normalizedMir with
+                                | Error err -> Error $"Preamble LIR conversion error: {err}"
+                                | Ok lirProgram ->
                                 recordLirFunctions "mir_to_lir" meta lirProgram
                                 let optimizedLir = LIR_Optimize.optimizeProgram lirProgram
                                 recordLirFunctions "lir_optimize" meta optimizedLir
@@ -1911,6 +1925,7 @@ let private compileMIRToLIR (stdlib: LazyStdlibResult) (mirFunc: MIR.Function) :
     let miniProgram = MIR.Program ([mirFunc], stdlib.StdlibStringPool, stdlib.StdlibFloatPool, Map.empty, Map.empty)
 
     // Convert to LIR
+    // Keep stdlib pools intact so lazily compiled functions share global indices.
     match MIR_to_LIR.toLIR miniProgram with
     | Error _ -> None  // Conversion failed
     | Ok lirProgram ->

@@ -560,3 +560,7 @@ let toMIRWithPools
     (Program (functions, variants, records))
     : Result<MIR.Program, string> =
     resolveProgram { StringPool = stringPool; FloatPool = floatPool } functions variants records
+
+/// Normalize pools by round-tripping through symbolic MIR
+let normalizePools (program: MIR.Program) : Result<MIR.Program, string> =
+    fromMIR program |> Result.bind toMIR

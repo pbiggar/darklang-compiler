@@ -214,6 +214,7 @@ Output: block0:
 - **Instruction selection**: Choose ARM64 instructions for MIR operations
 - **Address constraints**: Handle ARM64 immediate value limits
 - **Calling convention**: Set up function calls per ARM64 ABI
+- **Pool normalization**: Rebuild string/float pools right before lowering
 
 ### Key Algorithms
 - **Pattern matching**: Each MIR operation maps to ARM64 sequence
