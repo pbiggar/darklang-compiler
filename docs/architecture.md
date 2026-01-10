@@ -83,6 +83,16 @@ Why ref counting?
   - `8_Binary_Generation_ELF.fs` for Linux
 - No external assembler or linker required
 
+## Compiler Library API
+
+`CompilerLibrary.fs` exposes a narrow surface for tools/tests:
+
+- `compileWithOptions` for in-memory compilation with explicit options
+- `compileAndRunWithOptions` for compile+execute with explicit options
+- `compileStdlib` for test harnesses and tooling that cache stdlib
+- `compilePreamble` and `compileTestWithPreamble` for preamble reuse in tests
+- `compileAndRunWithStdlibCachedTimed` for E2E tests with timing breakdown
+
 ## Key Invariants
 
 Each pass must maintain certain properties:

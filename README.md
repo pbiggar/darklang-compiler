@@ -133,6 +133,16 @@ otool -tv <binary>          # Disassemble text section
 file <binary>               # Check file type
 ```
 
+## Compiler Library API (internal)
+
+The library surface in `src/DarkCompiler/CompilerLibrary.fs` is intentionally small:
+
+- `compileWithOptions` for in-memory compilation with explicit `CompilerOptions`
+- `compileAndRunWithOptions` for compile+execute with explicit `CompilerOptions`
+- `compileStdlib` to precompile stdlib for tests and tooling
+- `compilePreamble` and `compileTestWithPreamble` for test preamble caching
+- `compileAndRunWithStdlibCachedTimed` for E2E test execution with timing
+
 ## Docker Development (with Codex Integration)
 
 ### Initial Setup

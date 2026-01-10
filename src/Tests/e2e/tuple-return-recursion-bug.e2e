@@ -1,6 +1,6 @@
 // E2E tests for tuple-returning functions
 // BUG FIXED: "let t = (tuple) in t" pattern now works correctly
-// Root cause: ANF optimization (beta reduction) was missing in compileWithStdlib path
+// Root cause: ANF optimization (beta reduction) was missing in the stdlib-cached test pipeline
 
 // =====================================================
 // FIXED: "let t = (a, b) in t" pattern now works
