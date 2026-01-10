@@ -197,204 +197,6 @@ let maxTempIdInProgram (program: ANF.Program) : int =
     let mainMax = maxTempIdInAExpr mainExpr
     max funcMax mainMax
 
-/// Collect all string literals from an ANF atom
-let collectStringsFromAtom (atom: ANF.Atom) : string list =
-    match atom with
-    | ANF.StringLiteral s -> [s]
-    | _ -> []
-
-/// Collect all float literals from an ANF atom
-let collectFloatsFromAtom (atom: ANF.Atom) : float list =
-    match atom with
-    | ANF.FloatLiteral f -> [f]
-    | _ -> []
-
-/// Collect all string literals from a CExpr
-let collectStringsFromCExpr (cexpr: ANF.CExpr) : string list =
-    match cexpr with
-    | ANF.Atom atom -> collectStringsFromAtom atom
-    | ANF.TypedAtom (atom, _) -> collectStringsFromAtom atom
-    | ANF.Prim (_, left, right) ->
-        collectStringsFromAtom left @ collectStringsFromAtom right
-    | ANF.UnaryPrim (_, atom) -> collectStringsFromAtom atom
-    | ANF.IfValue (cond, thenAtom, elseAtom) ->
-        collectStringsFromAtom cond @
-        collectStringsFromAtom thenAtom @
-        collectStringsFromAtom elseAtom
-    | ANF.Call (_, args) ->
-        args |> List.collect collectStringsFromAtom
-    | ANF.TailCall (_, args) ->
-        args |> List.collect collectStringsFromAtom
-    | ANF.IndirectCall (func, args) ->
-        collectStringsFromAtom func @ (args |> List.collect collectStringsFromAtom)
-    | ANF.IndirectTailCall (func, args) ->
-        collectStringsFromAtom func @ (args |> List.collect collectStringsFromAtom)
-    | ANF.TupleAlloc elems ->
-        elems |> List.collect collectStringsFromAtom
-    | ANF.TupleGet (tupleAtom, _) ->
-        collectStringsFromAtom tupleAtom
-    | ANF.StringConcat (left, right) ->
-        collectStringsFromAtom left @ collectStringsFromAtom right
-    | ANF.RefCountInc (atom, _) -> collectStringsFromAtom atom
-    | ANF.RefCountDec (atom, _) -> collectStringsFromAtom atom
-    | ANF.Print (atom, _) -> collectStringsFromAtom atom
-    | ANF.ClosureAlloc (_, captures) -> captures |> List.collect collectStringsFromAtom
-    | ANF.ClosureCall (closure, args) ->
-        collectStringsFromAtom closure @ (args |> List.collect collectStringsFromAtom)
-    | ANF.ClosureTailCall (closure, args) ->
-        collectStringsFromAtom closure @ (args |> List.collect collectStringsFromAtom)
-    | ANF.FileReadText path -> collectStringsFromAtom path
-    | ANF.FileExists path -> collectStringsFromAtom path
-    | ANF.FileWriteText (path, content) -> collectStringsFromAtom path @ collectStringsFromAtom content
-    | ANF.FileAppendText (path, content) -> collectStringsFromAtom path @ collectStringsFromAtom content
-    | ANF.FileDelete path -> collectStringsFromAtom path
-    | ANF.FileSetExecutable path -> collectStringsFromAtom path
-    | ANF.FileWriteFromPtr (path, ptr, length) -> collectStringsFromAtom path @ collectStringsFromAtom ptr @ collectStringsFromAtom length
-    | ANF.RawAlloc numBytes -> collectStringsFromAtom numBytes
-    | ANF.RawFree ptr -> collectStringsFromAtom ptr
-    | ANF.RawGet (ptr, offset, _) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset
-    | ANF.RawGetByte (ptr, offset) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset
-    | ANF.RawSet (ptr, offset, value, _) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset @ collectStringsFromAtom value
-    | ANF.RawSetByte (ptr, offset, value) -> collectStringsFromAtom ptr @ collectStringsFromAtom offset @ collectStringsFromAtom value
-    | ANF.FloatSqrt atom -> collectStringsFromAtom atom
-    | ANF.FloatAbs atom -> collectStringsFromAtom atom
-    | ANF.FloatNeg atom -> collectStringsFromAtom atom
-    | ANF.IntToFloat atom -> collectStringsFromAtom atom
-    | ANF.FloatToInt atom -> collectStringsFromAtom atom
-    | ANF.StringHash str -> collectStringsFromAtom str
-    | ANF.StringEq (left, right) -> collectStringsFromAtom left @ collectStringsFromAtom right
-    | ANF.RefCountIncString str -> collectStringsFromAtom str
-    | ANF.RefCountDecString str -> collectStringsFromAtom str
-    | ANF.RandomInt64 -> []  // No atoms, so no strings
-    | ANF.FloatToString atom -> collectStringsFromAtom atom
-
-/// Collect all float literals from a CExpr
-let collectFloatsFromCExpr (cexpr: ANF.CExpr) : float list =
-    match cexpr with
-    | ANF.Atom atom -> collectFloatsFromAtom atom
-    | ANF.TypedAtom (atom, _) -> collectFloatsFromAtom atom
-    | ANF.Prim (_, left, right) ->
-        collectFloatsFromAtom left @ collectFloatsFromAtom right
-    | ANF.UnaryPrim (_, atom) -> collectFloatsFromAtom atom
-    | ANF.IfValue (cond, thenAtom, elseAtom) ->
-        collectFloatsFromAtom cond @
-        collectFloatsFromAtom thenAtom @
-        collectFloatsFromAtom elseAtom
-    | ANF.Call (_, args) ->
-        args |> List.collect collectFloatsFromAtom
-    | ANF.TailCall (_, args) ->
-        args |> List.collect collectFloatsFromAtom
-    | ANF.IndirectCall (func, args) ->
-        collectFloatsFromAtom func @ (args |> List.collect collectFloatsFromAtom)
-    | ANF.IndirectTailCall (func, args) ->
-        collectFloatsFromAtom func @ (args |> List.collect collectFloatsFromAtom)
-    | ANF.TupleAlloc elems ->
-        elems |> List.collect collectFloatsFromAtom
-    | ANF.TupleGet (tupleAtom, _) ->
-        collectFloatsFromAtom tupleAtom
-    | ANF.StringConcat (left, right) ->
-        collectFloatsFromAtom left @ collectFloatsFromAtom right
-    | ANF.RefCountInc (atom, _) -> collectFloatsFromAtom atom
-    | ANF.RefCountDec (atom, _) -> collectFloatsFromAtom atom
-    | ANF.Print (atom, _) -> collectFloatsFromAtom atom
-    | ANF.ClosureAlloc (_, captures) -> captures |> List.collect collectFloatsFromAtom
-    | ANF.ClosureCall (closure, args) ->
-        collectFloatsFromAtom closure @ (args |> List.collect collectFloatsFromAtom)
-    | ANF.ClosureTailCall (closure, args) ->
-        collectFloatsFromAtom closure @ (args |> List.collect collectFloatsFromAtom)
-    | ANF.FileReadText path -> collectFloatsFromAtom path
-    | ANF.FileExists path -> collectFloatsFromAtom path
-    | ANF.FileWriteText (path, content) -> collectFloatsFromAtom path @ collectFloatsFromAtom content
-    | ANF.FileAppendText (path, content) -> collectFloatsFromAtom path @ collectFloatsFromAtom content
-    | ANF.FileDelete path -> collectFloatsFromAtom path
-    | ANF.FileSetExecutable path -> collectFloatsFromAtom path
-    | ANF.FileWriteFromPtr (path, ptr, length) -> collectFloatsFromAtom path @ collectFloatsFromAtom ptr @ collectFloatsFromAtom length
-    | ANF.RawAlloc numBytes -> collectFloatsFromAtom numBytes
-    | ANF.RawFree ptr -> collectFloatsFromAtom ptr
-    | ANF.RawGet (ptr, offset, _) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset
-    | ANF.RawGetByte (ptr, offset) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset
-    | ANF.RawSet (ptr, offset, value, _) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset @ collectFloatsFromAtom value
-    | ANF.RawSetByte (ptr, offset, value) -> collectFloatsFromAtom ptr @ collectFloatsFromAtom offset @ collectFloatsFromAtom value
-    | ANF.FloatSqrt atom -> collectFloatsFromAtom atom
-    | ANF.FloatAbs atom -> collectFloatsFromAtom atom
-    | ANF.FloatNeg atom -> collectFloatsFromAtom atom
-    | ANF.IntToFloat atom -> collectFloatsFromAtom atom
-    | ANF.FloatToInt atom -> collectFloatsFromAtom atom
-    | ANF.StringHash str -> collectFloatsFromAtom str
-    | ANF.StringEq (left, right) -> collectFloatsFromAtom left @ collectFloatsFromAtom right
-    | ANF.RefCountIncString str -> collectFloatsFromAtom str
-    | ANF.RefCountDecString str -> collectFloatsFromAtom str
-    | ANF.RandomInt64 -> []  // No atoms, so no floats
-    | ANF.FloatToString atom -> collectFloatsFromAtom atom
-
-/// Collect all string literals from an ANF expression
-let rec collectStringsFromExpr (expr: ANF.AExpr) : string list =
-    match expr with
-    | ANF.Return atom -> collectStringsFromAtom atom
-    | ANF.Let (_, cexpr, rest) ->
-        collectStringsFromCExpr cexpr @ collectStringsFromExpr rest
-    | ANF.If (cond, thenBranch, elseBranch) ->
-        collectStringsFromAtom cond @
-        collectStringsFromExpr thenBranch @
-        collectStringsFromExpr elseBranch
-
-/// Collect all float literals from an ANF expression
-let rec collectFloatsFromExpr (expr: ANF.AExpr) : float list =
-    match expr with
-    | ANF.Return atom -> collectFloatsFromAtom atom
-    | ANF.Let (_, cexpr, rest) ->
-        collectFloatsFromCExpr cexpr @ collectFloatsFromExpr rest
-    | ANF.If (cond, thenBranch, elseBranch) ->
-        collectFloatsFromAtom cond @
-        collectFloatsFromExpr thenBranch @
-        collectFloatsFromExpr elseBranch
-
-/// Collect all string literals from an ANF function
-let collectStringsFromFunction (func: ANF.Function) : string list =
-    collectStringsFromExpr func.Body
-
-/// Collect all float literals from an ANF function
-let collectFloatsFromFunction (func: ANF.Function) : float list =
-    collectFloatsFromExpr func.Body
-
-/// Collect all string literals from an ANF program
-let collectStringsFromProgram (program: ANF.Program) : string list =
-    let (ANF.Program (functions, mainExpr)) = program
-    let funcStrings = functions |> List.collect collectStringsFromFunction
-    let mainStrings = collectStringsFromExpr mainExpr
-    funcStrings @ mainStrings
-
-/// Collect all float literals from an ANF program
-let collectFloatsFromProgram (program: ANF.Program) : float list =
-    let (ANF.Program (functions, mainExpr)) = program
-    let funcFloats = functions |> List.collect collectFloatsFromFunction
-    let mainFloats = collectFloatsFromExpr mainExpr
-    funcFloats @ mainFloats
-
-/// Build a string pool from a list of strings (deduplicates)
-let buildStringPool (strings: string list) : MIR.StringPool =
-    strings
-    |> List.fold (fun pool s ->
-        let (_, pool') = MIR.addString pool s
-        pool') MIR.emptyStringPool
-
-/// Build a float pool from a list of floats (deduplicates)
-let buildFloatPool (floats: float list) : MIR.FloatPool =
-    floats
-    |> List.fold (fun pool f ->
-        let (_, pool') = MIR.addFloat pool f
-        pool') MIR.emptyFloatPool
-
-/// Build a lookup map from string content to pool index
-let buildStringLookup (pool: MIR.StringPool) : Map<string, int> =
-    pool.Strings
-    |> Map.fold (fun lookup idx (s, _) -> Map.add s idx lookup) Map.empty
-
-/// Build a lookup map from float value to pool index
-let buildFloatLookup (pool: MIR.FloatPool) : Map<float, int> =
-    pool.Floats
-    |> Map.fold (fun lookup idx f -> Map.add f idx lookup) Map.empty
-
 /// Helper to check if an atom is a float value
 let isFloatAtom (floatRegs: Set<int>) (atom: ANF.Atom) : bool =
     match atom with
@@ -502,8 +304,6 @@ type CFGBuilder = {
     Blocks: Map<MIR.Label, MIR.BasicBlock>
     LabelGen: MIR.LabelGen
     RegGen: MIR.RegGen
-    StringLookup: Map<string, int>
-    FloatLookup: Map<float, int>
     TypeMap: ANF.TypeMap
     TypeReg: Map<string, (string * AST.Type) list>
     ReturnTypeReg: Map<string, AST.Type>  // Function name -> return type
@@ -533,14 +333,8 @@ let atomToOperand (builder: CFGBuilder) (atom: ANF.Atom) : Result<MIR.Operand, s
     | ANF.UnitLiteral -> Ok (MIR.IntConst 0L)  // Unit is represented as 0
     | ANF.IntLiteral n -> Ok (MIR.IntConst (ANF.sizedIntToInt64 n))
     | ANF.BoolLiteral b -> Ok (MIR.BoolConst b)
-    | ANF.FloatLiteral f ->
-        match Map.tryFind f builder.FloatLookup with
-        | Some idx -> Ok (MIR.FloatRef idx)
-        | None -> Error $"Internal error: float literal {f} not found in pool"
-    | ANF.StringLiteral s ->
-        match Map.tryFind s builder.StringLookup with
-        | Some idx -> Ok (MIR.StringRef idx)
-        | None -> Error $"Internal error: string literal not found in pool"
+    | ANF.FloatLiteral f -> Ok (MIR.FloatSymbol f)
+    | ANF.StringLiteral s -> Ok (MIR.StringSymbol s)
     | ANF.Var tempId -> Ok (MIR.Register (tempToVReg tempId))
     | ANF.FuncRef funcName -> Ok (MIR.FuncAddr funcName)
 
@@ -580,8 +374,8 @@ let operandType (builder: CFGBuilder) (operand: MIR.Operand) : AST.Type =
     match operand with
     | MIR.IntConst _ -> AST.TInt64
     | MIR.BoolConst _ -> AST.TBool
-    | MIR.FloatRef _ -> AST.TFloat64
-    | MIR.StringRef _ -> AST.TString
+    | MIR.FloatSymbol _ -> AST.TFloat64
+    | MIR.StringSymbol _ -> AST.TString
     | MIR.FuncAddr _ -> AST.TInt64  // Function addresses are pointer-sized
     | MIR.Register (MIR.VReg id) ->
         // Check if this VReg is known to hold a float
@@ -1128,20 +922,10 @@ let rec convertExpr
         }
 
         let builder1 = {
-            Blocks = Map.add currentLabel currentBlock builder.Blocks
-            LabelGen = labelGen3
-            RegGen = regGen1
-            StringLookup = builder.StringLookup
-            FloatLookup = builder.FloatLookup
-            TypeMap = builder.TypeMap
-            TypeReg = builder.TypeReg
-            ReturnTypeReg = builder.ReturnTypeReg
-            FuncName = builder.FuncName
-            ParamRegs = builder.ParamRegs
-            FloatRegs = builder.FloatRegs
-            EnableCoverage = builder.EnableCoverage
-            ExprIdGen = builder.ExprIdGen
-            CoverageMapping = builder.CoverageMapping
+            builder with
+                Blocks = Map.add currentLabel currentBlock builder.Blocks
+                LabelGen = labelGen3
+                RegGen = regGen1
         }
 
         // Convert then-branch: result goes into resultReg, then jump to join
@@ -1693,20 +1477,10 @@ and convertExprToOperand
             }
 
             let builder1 = {
-                Blocks = Map.add startLabel startBlock builder.Blocks
-                LabelGen = labelGen3
-                RegGen = regGen1
-                StringLookup = builder.StringLookup
-                FloatLookup = builder.FloatLookup
-                TypeMap = builder.TypeMap
-                TypeReg = builder.TypeReg
-                ReturnTypeReg = builder.ReturnTypeReg
-                FuncName = builder.FuncName
-                ParamRegs = builder.ParamRegs
-                FloatRegs = builder.FloatRegs
-                EnableCoverage = builder.EnableCoverage
-                ExprIdGen = builder.ExprIdGen
-                CoverageMapping = builder.CoverageMapping
+                builder with
+                    Blocks = Map.add startLabel startBlock builder.Blocks
+                    LabelGen = labelGen3
+                    RegGen = regGen1
             }
 
             // Helper: check if a block is a self-recursive loop-back (jumps to _body label)
@@ -1802,7 +1576,7 @@ and convertExprToOperand
 /// Convert an ANF function to a MIR function
 /// Each function gets its own RegGen starting from (maxTempId + 1) for deterministic VReg assignment.
 /// This ensures the same function always produces identical MIR regardless of compilation context.
-let convertANFFunction (anfFunc: ANF.Function) (strLookup: Map<string, int>) (fltLookup: Map<float, int>) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (returnTypeReg: Map<string, AST.Type>) (enableCoverage: bool) : Result<MIR.Function, string> =
+let convertANFFunction (anfFunc: ANF.Function) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (returnTypeReg: Map<string, AST.Type>) (enableCoverage: bool) : Result<MIR.Function, string> =
     // Calculate RegGen for THIS function only
     // freshReg must generate VRegs that don't conflict with TempId-derived VRegs.
     // tempToVReg (TempId n) → VReg n, so freshReg must start past the max TempId used.
@@ -1821,13 +1595,11 @@ let convertANFFunction (anfFunc: ANF.Function) (strLookup: Map<string, int>) (fl
     // because the body uses Var (TempId n) which converts to VReg n
     let paramVRegs = anfFunc.TypedParams |> List.map (fun tp -> tempToVReg tp.Id)
 
-    // Create initial builder with lookups
+    // Create initial builder
     let initialBuilder = {
         RegGen = regGen
         LabelGen = MIR.initialLabelGen
         Blocks = Map.empty
-        StringLookup = strLookup
-        FloatLookup = fltLookup
         TypeMap = typeMap
         TypeReg = typeReg
         ReturnTypeReg = returnTypeReg
@@ -1924,16 +1696,6 @@ let convertANFFunction (anfFunc: ANF.Function) (strLookup: Map<string, int>) (fl
 let toMIR (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (mainExprType: AST.Type) (variantLookup: AST_to_ANF.VariantLookup) (typeRegForRecords: Map<string, (string * AST.Type) list>) (enableCoverage: bool) (externalReturnTypes: Map<string, AST.Type>) : Result<MIR.Program, string> =
     let (ANF.Program (functions, mainExpr)) = program
 
-    // Phase 1: Collect all strings and floats, build pools and lookups
-    // Lookups are local (not mutable module-level) to avoid race conditions in parallel tests
-    let allStrings = collectStringsFromProgram program
-    let stringPool = buildStringPool allStrings
-    let strLookup = buildStringLookup stringPool
-
-    let allFloats = collectFloatsFromProgram program
-    let floatPool = buildFloatPool allFloats
-    let fltLookup = buildFloatLookup floatPool
-
     // Build return type registry for all functions (needed for caller to know return type)
     let returnTypeReg = buildReturnTypeReg functions typeMap typeReg externalReturnTypes
 
@@ -1943,7 +1705,7 @@ let toMIR (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (s
         match remaining with
         | [] -> Ok funcs
         | anfFunc :: rest ->
-            match convertANFFunction anfFunc strLookup fltLookup typeMap typeReg returnTypeReg enableCoverage with
+            match convertANFFunction anfFunc typeMap typeReg returnTypeReg enableCoverage with
             | Error err -> Error err
             | Ok mirFunc -> convertFunctions (funcs @ [mirFunc]) rest
 
@@ -1960,8 +1722,6 @@ let toMIR (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (s
         RegGen = startRegGen
         LabelGen = MIR.initialLabelGen
         Blocks = Map.empty
-        StringLookup = strLookup
-        FloatLookup = fltLookup
         TypeMap = typeMap
         TypeReg = typeReg
         ReturnTypeReg = returnTypeReg
@@ -1992,24 +1752,15 @@ let toMIR (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (s
     let variantRegistry = buildVariantRegistry variantLookup
     // Build recordRegistry from typeRegForRecords (converts tuples to RecordField records)
     let recordRegistry = buildRecordRegistry typeRegForRecords
-    Ok (MIR.Program (allFuncs, stringPool, floatPool, variantRegistry, recordRegistry))
+    Ok (MIR.Program (allFuncs, variantRegistry, recordRegistry))
 
 /// Convert ANF program to MIR (functions only, no _start)
 /// Use for stdlib where there's no real main expression to convert.
-/// Returns just the function list, pools, variant registry, and record registry without wrapping in MIR.Program.
+/// Returns just the function list, variant registry, and record registry without wrapping in MIR.Program.
 /// externalReturnTypes: return types for functions not in the program (e.g., cached specialized functions)
 /// Each function gets its own RegGen for deterministic VReg assignment.
-let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (variantLookup: AST_to_ANF.VariantLookup) (typeRegForRecords: Map<string, (string * AST.Type) list>) (enableCoverage: bool) (externalReturnTypes: Map<string, AST.Type>) : Result<MIR.Function list * MIR.StringPool * MIR.FloatPool * MIR.VariantRegistry * MIR.RecordRegistry, string> =
+let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: Map<string, (string * AST.Type) list>) (variantLookup: AST_to_ANF.VariantLookup) (typeRegForRecords: Map<string, (string * AST.Type) list>) (enableCoverage: bool) (externalReturnTypes: Map<string, AST.Type>) : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     let (ANF.Program (functions, _mainExpr)) = program
-
-    // Phase 1: Collect all strings and floats, build pools and lookups
-    let allStrings = collectStringsFromProgram program
-    let stringPool = buildStringPool allStrings
-    let strLookup = buildStringLookup stringPool
-
-    let allFloats = collectFloatsFromProgram program
-    let floatPool = buildFloatPool allFloats
-    let fltLookup = buildFloatLookup floatPool
 
     // Build return type registry for all functions (needed for caller to know return type)
     let returnTypeReg = buildReturnTypeReg functions typeMap typeReg externalReturnTypes
@@ -2020,7 +1771,7 @@ let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: M
         match remaining with
         | [] -> Ok funcs
         | anfFunc :: rest ->
-            match convertANFFunction anfFunc strLookup fltLookup typeMap typeReg returnTypeReg enableCoverage with
+            match convertANFFunction anfFunc typeMap typeReg returnTypeReg enableCoverage with
             | Error err -> Error err
             | Ok mirFunc -> convertFunctions (funcs @ [mirFunc]) rest
 
@@ -2029,160 +1780,4 @@ let toMIRFunctionsOnly (program: ANF.Program) (typeMap: ANF.TypeMap) (typeReg: M
     | Ok mirFuncs ->
         let variantRegistry = buildVariantRegistry variantLookup
         let recordRegistry = buildRecordRegistry typeRegForRecords
-        Ok (mirFuncs, stringPool, floatPool, variantRegistry, recordRegistry)
-
-// ============================================================================
-// MIR Program Merging (for stdlib MIR caching optimization)
-// ============================================================================
-
-/// Offset pool references in an operand
-let private offsetOperand (strOffset: int) (fltOffset: int) (op: MIR.Operand) : MIR.Operand =
-    match op with
-    | MIR.StringRef idx -> MIR.StringRef (idx + strOffset)
-    | MIR.FloatRef idx -> MIR.FloatRef (idx + fltOffset)
-    | other -> other
-
-/// Offset pool references in a list of operands
-let private offsetOperands strOffset fltOffset ops =
-    List.map (offsetOperand strOffset fltOffset) ops
-
-/// Offset pool references in a phi source
-let private offsetPhiSource strOffset fltOffset (op, label) =
-    (offsetOperand strOffset fltOffset op, label)
-
-/// Offset pool references in an instruction
-let private offsetInstr (strOffset: int) (fltOffset: int) (instr: MIR.Instr) : MIR.Instr =
-    match instr with
-    | MIR.Mov (dest, src, vt) -> MIR.Mov (dest, offsetOperand strOffset fltOffset src, vt)
-    | MIR.BinOp (dest, op, left, right, t) -> MIR.BinOp (dest, op, offsetOperand strOffset fltOffset left, offsetOperand strOffset fltOffset right, t)
-    | MIR.UnaryOp (dest, op, src) -> MIR.UnaryOp (dest, op, offsetOperand strOffset fltOffset src)
-    | MIR.Call (dest, name, args, argTypes, returnType) -> MIR.Call (dest, name, offsetOperands strOffset fltOffset args, argTypes, returnType)
-    | MIR.TailCall (name, args, argTypes, returnType) -> MIR.TailCall (name, offsetOperands strOffset fltOffset args, argTypes, returnType)
-    | MIR.IndirectCall (dest, func, args, argTypes, returnType) -> MIR.IndirectCall (dest, offsetOperand strOffset fltOffset func, offsetOperands strOffset fltOffset args, argTypes, returnType)
-    | MIR.IndirectTailCall (func, args, argTypes, returnType) -> MIR.IndirectTailCall (offsetOperand strOffset fltOffset func, offsetOperands strOffset fltOffset args, argTypes, returnType)
-    | MIR.ClosureAlloc (dest, name, caps) -> MIR.ClosureAlloc (dest, name, offsetOperands strOffset fltOffset caps)
-    | MIR.ClosureCall (dest, closure, args, argTypes) -> MIR.ClosureCall (dest, offsetOperand strOffset fltOffset closure, offsetOperands strOffset fltOffset args, argTypes)
-    | MIR.ClosureTailCall (closure, args, argTypes) -> MIR.ClosureTailCall (offsetOperand strOffset fltOffset closure, offsetOperands strOffset fltOffset args, argTypes)
-    | MIR.HeapAlloc (dest, size) -> MIR.HeapAlloc (dest, size)
-    | MIR.HeapStore (addr, offset, src, vt) -> MIR.HeapStore (addr, offset, offsetOperand strOffset fltOffset src, vt)
-    | MIR.HeapLoad (dest, addr, offset, vt) -> MIR.HeapLoad (dest, addr, offset, vt)
-    | MIR.StringConcat (dest, left, right) -> MIR.StringConcat (dest, offsetOperand strOffset fltOffset left, offsetOperand strOffset fltOffset right)
-    | MIR.RefCountInc (addr, size) -> MIR.RefCountInc (addr, size)
-    | MIR.RefCountDec (addr, size) -> MIR.RefCountDec (addr, size)
-    | MIR.Print (src, vt) -> MIR.Print (offsetOperand strOffset fltOffset src, vt)
-    | MIR.FileReadText (dest, path) -> MIR.FileReadText (dest, offsetOperand strOffset fltOffset path)
-    | MIR.FileExists (dest, path) -> MIR.FileExists (dest, offsetOperand strOffset fltOffset path)
-    | MIR.FileWriteText (dest, path, content) -> MIR.FileWriteText (dest, offsetOperand strOffset fltOffset path, offsetOperand strOffset fltOffset content)
-    | MIR.FileAppendText (dest, path, content) -> MIR.FileAppendText (dest, offsetOperand strOffset fltOffset path, offsetOperand strOffset fltOffset content)
-    | MIR.FileDelete (dest, path) -> MIR.FileDelete (dest, offsetOperand strOffset fltOffset path)
-    | MIR.FileSetExecutable (dest, path) -> MIR.FileSetExecutable (dest, offsetOperand strOffset fltOffset path)
-    | MIR.FileWriteFromPtr (dest, path, ptr, length) -> MIR.FileWriteFromPtr (dest, offsetOperand strOffset fltOffset path, offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset length)
-    | MIR.FloatSqrt (dest, src) -> MIR.FloatSqrt (dest, offsetOperand strOffset fltOffset src)
-    | MIR.FloatAbs (dest, src) -> MIR.FloatAbs (dest, offsetOperand strOffset fltOffset src)
-    | MIR.FloatNeg (dest, src) -> MIR.FloatNeg (dest, offsetOperand strOffset fltOffset src)
-    | MIR.IntToFloat (dest, src) -> MIR.IntToFloat (dest, offsetOperand strOffset fltOffset src)
-    | MIR.FloatToInt (dest, src) -> MIR.FloatToInt (dest, offsetOperand strOffset fltOffset src)
-    | MIR.RawAlloc (dest, numBytes) -> MIR.RawAlloc (dest, offsetOperand strOffset fltOffset numBytes)
-    | MIR.RawFree ptr -> MIR.RawFree (offsetOperand strOffset fltOffset ptr)
-    | MIR.RawGet (dest, ptr, offset, valueType) -> MIR.RawGet (dest, offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset offset, valueType)
-    | MIR.RawGetByte (dest, ptr, offset) -> MIR.RawGetByte (dest, offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset offset)
-    | MIR.RawSet (ptr, offset, value, valueType) -> MIR.RawSet (offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset offset, offsetOperand strOffset fltOffset value, valueType)
-    | MIR.RawSetByte (ptr, offset, value) -> MIR.RawSetByte (offsetOperand strOffset fltOffset ptr, offsetOperand strOffset fltOffset offset, offsetOperand strOffset fltOffset value)
-    | MIR.StringHash (dest, str) -> MIR.StringHash (dest, offsetOperand strOffset fltOffset str)
-    | MIR.StringEq (dest, left, right) -> MIR.StringEq (dest, offsetOperand strOffset fltOffset left, offsetOperand strOffset fltOffset right)
-    | MIR.RefCountIncString str -> MIR.RefCountIncString (offsetOperand strOffset fltOffset str)
-    | MIR.RefCountDecString str -> MIR.RefCountDecString (offsetOperand strOffset fltOffset str)
-    | MIR.RandomInt64 dest -> MIR.RandomInt64 dest  // No operands to offset
-    | MIR.FloatToString (dest, value) -> MIR.FloatToString (dest, offsetOperand strOffset fltOffset value)
-    | MIR.Phi (dest, sources, valueType) -> MIR.Phi (dest, List.map (offsetPhiSource strOffset fltOffset) sources, valueType)
-    | MIR.CoverageHit exprId -> MIR.CoverageHit exprId  // No operands to offset
-
-/// Offset pool references in a terminator
-let private offsetTerminator (strOffset: int) (fltOffset: int) (term: MIR.Terminator) : MIR.Terminator =
-    match term with
-    | MIR.Ret op -> MIR.Ret (offsetOperand strOffset fltOffset op)
-    | MIR.Branch (cond, trueL, falseL) -> MIR.Branch (offsetOperand strOffset fltOffset cond, trueL, falseL)
-    | MIR.Jump label -> MIR.Jump label
-
-/// Offset pool references in a basic block
-let private offsetBlock (strOffset: int) (fltOffset: int) (block: MIR.BasicBlock) : MIR.BasicBlock =
-    { Label = block.Label
-      Instrs = List.map (offsetInstr strOffset fltOffset) block.Instrs
-      Terminator = offsetTerminator strOffset fltOffset block.Terminator }
-
-/// Offset pool references in a function
-let private offsetFunction (strOffset: int) (fltOffset: int) (func: MIR.Function) : MIR.Function =
-    let offsetBlocks =
-        func.CFG.Blocks
-        |> Map.map (fun _ block -> offsetBlock strOffset fltOffset block)
-    { Name = func.Name
-      TypedParams = func.TypedParams
-      ReturnType = func.ReturnType
-      CFG = { Entry = func.CFG.Entry; Blocks = offsetBlocks }
-      FloatRegs = func.FloatRegs }
-
-/// Append a user string pool to stdlib string pool with offset
-let appendStringPools (stdlibPool: MIR.StringPool) (userPool: MIR.StringPool) : MIR.StringPool =
-    let offset = stdlibPool.NextId
-    let offsetUserStrings =
-        userPool.Strings
-        |> Map.toList
-        |> List.map (fun (idx, value) -> (idx + offset, value))
-        |> Map.ofList
-    let mergedStrings = Map.fold (fun acc k v -> Map.add k v acc) stdlibPool.Strings offsetUserStrings
-    // Build reverse index from merged strings
-    let mergedStringToId =
-        mergedStrings
-        |> Map.toSeq
-        |> Seq.map (fun (idx, (s, _)) -> (s, idx))
-        |> Map.ofSeq
-    { Strings = mergedStrings
-      StringToId = mergedStringToId
-      NextId = stdlibPool.NextId + userPool.NextId }
-
-/// Append a user float pool to stdlib float pool with offset
-let appendFloatPools (stdlibPool: MIR.FloatPool) (userPool: MIR.FloatPool) : MIR.FloatPool =
-    let offset = stdlibPool.NextId
-    let offsetUserFloats =
-        userPool.Floats
-        |> Map.toList
-        |> List.map (fun (idx, value) -> (idx + offset, value))
-        |> Map.ofList
-    let mergedFloats = Map.fold (fun acc k v -> Map.add k v acc) stdlibPool.Floats offsetUserFloats
-    // Build reverse index from merged floats
-    let mergedFloatToId =
-        mergedFloats
-        |> Map.toSeq
-        |> Seq.map (fun (idx, f) -> (f, idx))
-        |> Map.ofSeq
-    { Floats = mergedFloats
-      FloatToId = mergedFloatToId
-      NextId = stdlibPool.NextId + userPool.NextId }
-
-/// Merge user MIR with cached stdlib MIR.
-/// Offsets user's StringRef/FloatRef indices to account for stdlib pools.
-/// Excludes stdlib's _start function (user's _start is the entry point).
-let mergeMIRPrograms (stdlibMIR: MIR.Program) (userMIR: MIR.Program) : MIR.Program =
-    let (MIR.Program (stdlibFuncs, stdlibStrings, stdlibFloats, stdlibVariants, stdlibRecords)) = stdlibMIR
-    let (MIR.Program (userFuncs, userStrings, userFloats, userVariants, userRecords)) = userMIR
-
-    let stringOffset = stdlibStrings.NextId
-    let floatOffset = stdlibFloats.NextId
-
-    // Exclude stdlib's _start function (user's _start is the real entry point)
-    let stdlibFuncsNoStart = stdlibFuncs |> List.filter (fun f -> f.Name <> "_start")
-
-    // Offset user function pool references
-    let offsetUserFuncs = userFuncs |> List.map (offsetFunction stringOffset floatOffset)
-
-    // Merge pools (stdlib first, user appended with offset)
-    let mergedStrings = appendStringPools stdlibStrings userStrings
-    let mergedFloats = appendFloatPools stdlibFloats userFloats
-
-    // Merge variant registries (user overrides stdlib for same type names)
-    let mergedVariants = Map.fold (fun acc k v -> Map.add k v acc) stdlibVariants userVariants
-
-    // Merge record registries (user overrides stdlib for same type names)
-    let mergedRecords = Map.fold (fun acc k v -> Map.add k v acc) stdlibRecords userRecords
-
-    MIR.Program (stdlibFuncsNoStart @ offsetUserFuncs, mergedStrings, mergedFloats, mergedVariants, mergedRecords)
+        Ok (mirFuncs, variantRegistry, recordRegistry)

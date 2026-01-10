@@ -13,6 +13,7 @@ module ChordalGraphTests
 
 open RegisterAllocation
 open LIR
+open LIRSymbolic
 
 /// Test result type
 type TestResult = Result<unit, string>
@@ -219,16 +220,16 @@ let testBuildFromCFG () : TestResult =
     // Virtual 0 = a (parameter)
     // Virtual 1 = b (parameter)
     // Virtual 2 = a * b (result)
-    let v0 = Virtual 0
-    let v1 = Virtual 1
-    let v2 = Virtual 2
+    let v0 = LIR.Virtual 0
+    let v1 = LIR.Virtual 1
+    let v2 = LIR.Virtual 2
 
-    let entryLabel = Label "entry"
+    let entryLabel = LIR.Label "entry"
     let entryBlock : BasicBlock = {
         Label = entryLabel
         Instrs = [
-            Mul(v2, v0, v1)                         // v2 = v0 * v1
-            Mov(Physical X0, Reg v2)                // X0 = v2 (return value)
+            Mul(v2, v0, v1)                          // v2 = v0 * v1
+            Mov(LIR.Physical X0, Reg v2)            // X0 = v2 (return value)
         ]
         Terminator = Ret
     }
@@ -262,16 +263,16 @@ let testBuildFromCFG () : TestResult =
 /// Verify that interfering parameters get different register colors
 let testFullChordalPipeline () : TestResult =
     // Same CFG as testBuildFromCFG
-    let v0 = Virtual 0
-    let v1 = Virtual 1
-    let v2 = Virtual 2
+    let v0 = LIR.Virtual 0
+    let v1 = LIR.Virtual 1
+    let v2 = LIR.Virtual 2
 
-    let entryLabel = Label "entry"
+    let entryLabel = LIR.Label "entry"
     let entryBlock : BasicBlock = {
         Label = entryLabel
         Instrs = [
             Mul(v2, v0, v1)
-            Mov(Physical X0, Reg v2)
+            Mov(LIR.Physical X0, Reg v2)
         ]
         Terminator = Ret
     }
@@ -304,18 +305,18 @@ let testApply2Pattern () : TestResult =
     // Virtual 1 = a (first int parameter)
     // Virtual 2 = b (second int parameter)
     // Virtual 3 = result of f(a, b)
-    let v0 = Virtual 0  // f
-    let v1 = Virtual 1  // a
-    let v2 = Virtual 2  // b
-    let v3 = Virtual 3  // result
+    let v0 = LIR.Virtual 0  // f
+    let v1 = LIR.Virtual 1  // a
+    let v2 = LIR.Virtual 2  // b
+    let v3 = LIR.Virtual 3  // result
 
-    let entryLabel = Label "entry"
+    let entryLabel = LIR.Label "entry"
     let entryBlock : BasicBlock = {
         Label = entryLabel
         Instrs = [
             // ClosureCall(result, closure, args)
             ClosureCall(v3, v0, [Reg v1; Reg v2])
-            Mov(Physical X0, Reg v3)
+            Mov(LIR.Physical X0, Reg v3)
         ]
         Terminator = Ret
     }

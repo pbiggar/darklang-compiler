@@ -21,66 +21,12 @@ type VReg = VReg of int
 /// Parameter with register and type bundled (makes invalid states unrepresentable)
 type TypedMIRParam = { Reg: VReg; Type: AST.Type }
 
-/// String pool for deduplicating string literals
-/// Maps pool index to (string value, length)
-type StringPool = {
-    Strings: Map<int, string * int>  // index -> (string, length)
-    StringToId: Map<string, int>     // reverse index for O(log n) lookup
-    NextId: int
-}
-
-/// Empty string pool
-let emptyStringPool = { Strings = Map.empty; StringToId = Map.empty; NextId = 0 }
-
-/// Add a string to the pool, returning its index
-/// If string already exists, returns existing index
-let addString (pool: StringPool) (s: string) : int * StringPool =
-    // O(log n) lookup via reverse index
-    match Map.tryFind s pool.StringToId with
-    | Some idx -> (idx, pool)
-    | None ->
-        let idx = pool.NextId
-        // Use UTF-8 byte count, not UTF-16 char count
-        let utf8Length = System.Text.Encoding.UTF8.GetByteCount(s)
-        let pool' = {
-            Strings = Map.add idx (s, utf8Length) pool.Strings
-            StringToId = Map.add s idx pool.StringToId
-            NextId = idx + 1
-        }
-        (idx, pool')
-
-/// Float pool for storing float constants in data section
-/// Maps pool index to float value
-type FloatPool = {
-    Floats: Map<int, float>    // index -> float value
-    FloatToId: Map<float, int> // reverse index for O(log n) lookup
-    NextId: int
-}
-
-/// Empty float pool
-let emptyFloatPool = { Floats = Map.empty; FloatToId = Map.empty; NextId = 0 }
-
-/// Add a float to the pool, returning its index
-/// If float already exists, returns existing index
-let addFloat (pool: FloatPool) (f: float) : int * FloatPool =
-    // O(log n) lookup via reverse index
-    match Map.tryFind f pool.FloatToId with
-    | Some idx -> (idx, pool)
-    | None ->
-        let idx = pool.NextId
-        let pool' = {
-            Floats = Map.add idx f pool.Floats
-            FloatToId = Map.add f idx pool.FloatToId
-            NextId = idx + 1
-        }
-        (idx, pool')
-
 /// Operands
 type Operand =
     | IntConst of int64
     | BoolConst of bool
-    | FloatRef of int   // Index into float pool
-    | StringRef of int  // Index into string pool
+    | FloatSymbol of float
+    | StringSymbol of string
     | Register of VReg
     | FuncAddr of string  // Address of a function (for higher-order functions)
 
@@ -232,8 +178,8 @@ type RecordField = {
 /// Maps type name -> list of fields
 type RecordRegistry = Map<string, RecordField list>
 
-/// MIR program (list of functions with string and float pools)
-type Program = Program of functions:Function list * strings:StringPool * floats:FloatPool * variants:VariantRegistry * records:RecordRegistry
+/// MIR program (list of functions plus type/record registries)
+type Program = Program of functions:Function list * variants:VariantRegistry * records:RecordRegistry
 
 /// Fresh register generator
 type RegGen = RegGen of int
@@ -258,3 +204,54 @@ let freshLabel (LabelGen n) : Label * LabelGen =
 
 /// Initial label generator
 let initialLabelGen = LabelGen 0
+
+/// String pool for late constant resolution (used by LIR/codegen)
+type StringPool = {
+    Strings: Map<int, string * int>
+    StringToId: Map<string, int>
+    NextId: int
+}
+
+/// Float pool for late constant resolution (used by LIR/codegen)
+type FloatPool = {
+    Floats: Map<int, float>
+    FloatToId: Map<float, int>
+    NextId: int
+}
+
+/// Empty string pool
+let emptyStringPool : StringPool = {
+    Strings = Map.empty
+    StringToId = Map.empty
+    NextId = 0
+}
+
+/// Empty float pool
+let emptyFloatPool : FloatPool = {
+    Floats = Map.empty
+    FloatToId = Map.empty
+    NextId = 0
+}
+
+/// Add a string to the pool (deduplicated), returning index and updated pool
+let addString (pool: StringPool) (value: string) : int * StringPool =
+    match Map.tryFind value pool.StringToId with
+    | Some idx -> (idx, pool)
+    | None ->
+        let len = System.Text.Encoding.UTF8.GetByteCount value
+        let idx = pool.NextId
+        let strings = Map.add idx (value, len) pool.Strings
+        let stringToId = Map.add value idx pool.StringToId
+        let pool' = { pool with Strings = strings; StringToId = stringToId; NextId = idx + 1 }
+        (idx, pool')
+
+/// Add a float to the pool (deduplicated), returning index and updated pool
+let addFloat (pool: FloatPool) (value: float) : int * FloatPool =
+    match Map.tryFind value pool.FloatToId with
+    | Some idx -> (idx, pool)
+    | None ->
+        let idx = pool.NextId
+        let floats = Map.add idx value pool.Floats
+        let floatToId = Map.add value idx pool.FloatToId
+        let pool' = { pool with Floats = floats; FloatToId = floatToId; NextId = idx + 1 }
+        (idx, pool')

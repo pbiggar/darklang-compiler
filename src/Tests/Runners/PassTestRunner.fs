@@ -34,8 +34,8 @@ type PassTestResult = {
 let prettyPrintMIROperand = function
     | MIR.IntConst n -> string n
     | MIR.BoolConst b -> if b then "true" else "false"
-    | MIR.FloatRef idx -> $"float[{idx}]"
-    | MIR.StringRef idx -> $"str[{idx}]"
+    | MIR.FloatSymbol value -> $"float[{value}]"
+    | MIR.StringSymbol value -> $"str[{value}]"
     | MIR.Register (MIR.VReg n) -> $"v{n}"
     | MIR.FuncAddr name -> $"&{name}"
 
@@ -385,17 +385,24 @@ let runMIR2LIRTest (input: MIR.Program) (expected: LIR.Program) : PassTestResult
           Message = $"LIR conversion error: {err}"
           Expected = Some (prettyPrintLIR expected)
           Actual = None }
-    | Ok actual ->
-        if actual = expected then
-            { Success = true
-              Message = "Test passed"
-              Expected = None
-              Actual = None }
-        else
+    | Ok symbolic ->
+        match LIRSymbolic.toLIR symbolic with
+        | Error err ->
             { Success = false
-              Message = "Output mismatch"
+              Message = $"LIR pool resolution error: {err}"
               Expected = Some (prettyPrintLIR expected)
-              Actual = Some (prettyPrintLIR actual) }
+              Actual = None }
+        | Ok actual ->
+            if actual = expected then
+                { Success = true
+                  Message = "Test passed"
+                  Expected = None
+                  Actual = None }
+            else
+                { Success = false
+                  Message = "Output mismatch"
+                  Expected = Some (prettyPrintLIR expected)
+                  Actual = Some (prettyPrintLIR actual) }
 
 /// Pretty-print ANF atom
 let prettyPrintANFAtom = function

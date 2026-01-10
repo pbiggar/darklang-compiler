@@ -10,7 +10,7 @@
 
 module LIR_Optimize
 
-open LIR
+open LIRSymbolic
 
 /// Check if an operand is an immediate with value 0
 let isZero (op: Operand) : bool =
@@ -27,8 +27,8 @@ let isOne (op: Operand) : bool =
 /// Check if two registers are the same
 let sameReg (r1: Reg) (r2: Reg) : bool =
     match r1, r2 with
-    | Physical p1, Physical p2 -> p1 = p2
-    | Virtual v1, Virtual v2 -> v1 = v2
+    | LIR.Physical p1, LIR.Physical p2 -> p1 = p2
+    | LIR.Virtual v1, LIR.Virtual v2 -> v1 = v2
     | _ -> false
 
 /// Optimize a single instruction (returns None to remove, Some to replace)
@@ -174,10 +174,10 @@ let tryFuseCmpZeroBranch (instrs: Instr list) (terminator: Terminator) : (Instr 
         | Some (Cmp (cmpReg, Imm 0L)) ->
             let otherInstrs = instrs |> List.take (List.length instrs - 1)
             match cond with
-            | EQ ->
+            | LIR.EQ ->
                 // CMP reg, #0 + B.eq → CBZ reg (BranchZero)
                 Some (otherInstrs, BranchZero (cmpReg, trueLabel, falseLabel))
-            | NE ->
+            | LIR.NE ->
                 // CMP reg, #0 + B.ne → CBNZ reg (Branch)
                 Some (otherInstrs, Branch (cmpReg, trueLabel, falseLabel))
             | _ ->
@@ -234,6 +234,6 @@ let optimizeFunction (func: Function) : Function =
 
 /// Optimize a program
 let optimizeProgram (program: Program) : Program =
-    let (Program (functions, strings, floats)) = program
+    let (Program functions) = program
     let functions' = functions |> List.map optimizeFunction
-    Program (functions', strings, floats)
+    Program functions'

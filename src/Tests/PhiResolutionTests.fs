@@ -11,21 +11,22 @@
 module PhiResolutionTests
 
 open LIR
+open LIRSymbolic
 
 /// Test result type
 type TestResult = Result<unit, string>
 
 /// Create a label
-let makeLabel (name: string) = Label name
+let makeLabel (name: string) = LIR.Label name
 
 /// Create a virtual register
-let vr (n: int) = Virtual n
+let vr (n: int) = LIR.Virtual n
 
 /// Create a VReg operand
-let vreg (n: int) = Reg (Virtual n)
+let vreg (n: int) = Reg (LIR.Virtual n)
 
 /// Create a physical register
-let phys (r: PhysReg) = Physical r
+let phys (r: PhysReg) = LIR.Physical r
 
 /// Create a simple basic block with a jump terminator
 let makeJumpBlock (label: Label) (instrs: Instr list) (target: Label) : BasicBlock =

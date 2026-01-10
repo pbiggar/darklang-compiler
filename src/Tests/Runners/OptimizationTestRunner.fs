@@ -28,7 +28,7 @@ let normalizeIR (ir: string) : string =
     |> String.concat "\n"
 
 /// Pretty-print MIR program with CFG structure
-let prettyPrintMIRProgram (MIR.Program (functions, _, _, _, _)) : string =
+let prettyPrintMIRProgram (MIR.Program (functions, _, _)) : string =
     let funcStrs =
         functions
         |> List.map (fun func ->
@@ -169,9 +169,11 @@ let getOptimizedLIR (source: string) : Result<string, string> =
                         | Ok lirProgram ->
                             // LIR optimization
                             let optimizedLir = LIR_Optimize.optimizeProgram lirProgram
-
-                            // Pretty-print
-                            Ok (prettyPrintLIRProgram optimizedLir)
+                            match LIRSymbolic.toLIR optimizedLir with
+                            | Error err -> Error $"LIR pool resolution error: {err}"
+                            | Ok resolved ->
+                                // Pretty-print
+                                Ok (prettyPrintLIRProgram resolved)
 
 /// Run a single optimization test
 let runOptimizationTest (test: OptimizationTest) : OptimizationTestResult =

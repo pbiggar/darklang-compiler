@@ -180,7 +180,7 @@ Output: let t0 = 2 * 3 in
 ### Responsibilities
 - **Build CFG**: Convert structured control flow to basic blocks
 - **Handle branches**: If/else becomes conditional jumps
-- **String/float pooling**: Collect constants into data sections
+- **Literal lowering**: Keep string/float constants as symbolic values
 
 ### Key Concepts
 - **Basic block**: Sequence of instructions with single entry/exit
@@ -214,7 +214,7 @@ Output: block0:
 - **Instruction selection**: Choose ARM64 instructions for MIR operations
 - **Address constraints**: Handle ARM64 immediate value limits
 - **Calling convention**: Set up function calls per ARM64 ABI
-- **Pool normalization**: Rebuild string/float pools right before lowering
+- **Symbolic constants**: Keep string/float constants by value until late pool resolution
 
 ### Key Algorithms
 - **Pattern matching**: Each MIR operation maps to ARM64 sequence

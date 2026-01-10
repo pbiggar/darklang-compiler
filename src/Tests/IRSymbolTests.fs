@@ -1,4 +1,4 @@
-// IRSymbolTests.fs - Unit tests for symbolic LIR pool references
+// IRSymbolTests.fs - Unit tests for symbolic IR pool references
 //
 // Validates conversion between pooled refs and symbolic refs used for late pool resolution.
 
@@ -7,7 +7,6 @@ module IRSymbolTests
 open LIR
 open MIR
 open LIRSymbolic
-open MIRSymbolic
 
 /// Test result type
 type TestResult = Result<unit, string>
@@ -91,126 +90,45 @@ let testSymbolizeResolveRoundTrip () : TestResult =
                                     Error "Resolved program did not reference pooled indices as expected"
                             | _ -> Error "Expected a single resolved function"
 
-let private buildSymbolicMirProgram () : Result<MIR.Program * string * float, string> =
-    let stringValue = "mir_symbolic"
-    let floatValue = 2.5
-    let (stringIdx, stringPool) = MIR.addString MIR.emptyStringPool stringValue
-    let (floatIdx, floatPool) = MIR.addFloat MIR.emptyFloatPool floatValue
+
+let testMirToLirSymbolicOperands () : TestResult =
     let label = MIR.Label "entry"
     let instrs = [
-        MIR.Mov (MIR.VReg 0, MIR.StringRef stringIdx, Some AST.TString)
-        MIR.Mov (MIR.VReg 1, MIR.FloatRef floatIdx, Some AST.TFloat64)
+        MIR.Mov (MIR.VReg 0, MIR.StringSymbol "mir_symbolic", Some AST.TString)
+        MIR.Mov (MIR.VReg 1, MIR.FloatSymbol 4.5, Some AST.TFloat64)
     ]
     let block: MIR.BasicBlock = { Label = label; Instrs = instrs; Terminator = MIR.Ret (MIR.Register (MIR.VReg 0)) }
     let cfg: MIR.CFG = { Entry = label; Blocks = Map.ofList [ (label, block) ] }
     let func: MIR.Function = {
-        Name = "mir_symbolic_test"
+        Name = "mir_symbolic_operands"
         TypedParams = []
         ReturnType = AST.TString
         CFG = cfg
         FloatRegs = Set.ofList [ 1 ]
     }
-    let program = MIR.Program ([func], stringPool, floatPool, Map.empty, Map.empty)
-    Ok (program, stringValue, floatValue)
-
-let testMirSymbolizeResolveRoundTrip () : TestResult =
-    match buildSymbolicMirProgram () with
-    | Error err -> Error err
-    | Ok (program, stringValue, floatValue) ->
-        match MIRSymbolic.fromMIR program with
-        | Error err -> Error $"Symbolize failed: {err}"
-        | Ok (MIRSymbolic.Program (symFuncs, variants, records)) ->
-            let hasSymbols =
-                match symFuncs with
-                | [func] ->
-                    func.CFG.Blocks
-                    |> Map.toList
-                    |> List.collect (fun (_, block) -> block.Instrs)
-                    |> List.exists (function
-                        | MIRSymbolic.Mov (_, MIRSymbolic.StringSymbol value, _) -> value = stringValue
-                        | MIRSymbolic.Mov (_, MIRSymbolic.FloatSymbol value, _) -> value = floatValue
-                        | _ -> false)
-                | _ -> false
-            if not hasSymbols then
-                Error "Expected symbolized MIR to contain symbolic refs"
-            else
-                match MIRSymbolic.toMIR (MIRSymbolic.Program (symFuncs, variants, records)) with
-                | Error err -> Error $"Resolve failed: {err}"
-                | Ok resolved ->
-                    let (MIR.Program (_resolvedFuncs, resolvedStrings, resolvedFloats, _, _)) = resolved
-                    match Map.tryFind stringValue resolvedStrings.StringToId with
-                    | None -> Error "Resolved string pool missing expected value"
-                    | Some _ ->
-                        match Map.tryFind floatValue resolvedFloats.FloatToId with
-                        | None -> Error "Resolved float pool missing expected value"
-                        | Some _ -> Ok ()
-
-let testMirNormalizePools () : TestResult =
-    let stringValue = "pool_normalize"
-    let floatValue = 3.25
-    let stringLen = System.Text.Encoding.UTF8.GetByteCount stringValue
-    let stringPool: MIR.StringPool = {
-        Strings = Map.ofList [ (5, (stringValue, stringLen)) ]
-        StringToId = Map.ofList [ (stringValue, 5) ]
-        NextId = 6
-    }
-    let floatPool: MIR.FloatPool = {
-        Floats = Map.ofList [ (8, floatValue) ]
-        FloatToId = Map.ofList [ (floatValue, 8) ]
-        NextId = 9
-    }
-    let label = MIR.Label "entry"
-    let instrs = [
-        MIR.Mov (MIR.VReg 0, MIR.StringRef 5, Some AST.TString)
-        MIR.Mov (MIR.VReg 1, MIR.FloatRef 8, Some AST.TFloat64)
-    ]
-    let block: MIR.BasicBlock = { Label = label; Instrs = instrs; Terminator = MIR.Ret (MIR.Register (MIR.VReg 0)) }
-    let cfg: MIR.CFG = { Entry = label; Blocks = Map.ofList [ (label, block) ] }
-    let func: MIR.Function = {
-        Name = "mir_pool_normalize"
-        TypedParams = []
-        ReturnType = AST.TString
-        CFG = cfg
-        FloatRegs = Set.ofList [ 1 ]
-    }
-    let program = MIR.Program ([func], stringPool, floatPool, Map.empty, Map.empty)
-    match MIRSymbolic.normalizePools program with
-    | Error err -> Error $"Normalize failed: {err}"
-    | Ok (MIR.Program (normalizedFuncs, normalizedStrings, normalizedFloats, _, _)) ->
-        match Map.tryFind stringValue normalizedStrings.StringToId with
-        | None -> Error "Normalized string pool missing expected value"
-        | Some stringIdx ->
-            match Map.tryFind floatValue normalizedFloats.FloatToId with
-            | None -> Error "Normalized float pool missing expected value"
-            | Some floatIdx ->
-                match normalizedFuncs with
-                | [func] ->
-                    let instrs =
-                        func.CFG.Blocks
-                        |> Map.toList
-                        |> List.collect (fun (_, block) -> block.Instrs)
-                    let hasStringRef =
-                        instrs
-                        |> List.exists (function
-                            | MIR.Mov (_, MIR.StringRef idx, _) -> idx = stringIdx
-                            | _ -> false)
-                    let hasFloatRef =
-                        instrs
-                        |> List.exists (function
-                            | MIR.Mov (_, MIR.FloatRef idx, _) -> idx = floatIdx
-                            | _ -> false)
-                    if hasStringRef && hasFloatRef then
-                        Ok ()
-                    else
-                        Error "Normalized MIR did not use pooled indices from rebuilt pools"
-                | _ -> Error "Expected a single normalized function"
+    let program = MIR.Program ([func], Map.empty, Map.empty)
+    match MIR_to_LIR.toLIR program with
+    | Error err -> Error $"MIR→LIR failed: {err}"
+    | Ok (LIRSymbolic.Program funcs) ->
+        match funcs with
+        | [lirFunc] ->
+            let hasSymbolic =
+                lirFunc.CFG.Blocks
+                |> Map.toList
+                |> List.collect (fun (_, block) -> block.Instrs)
+                |> List.exists (function
+                    | LIRSymbolic.Mov (_, LIRSymbolic.StringSymbol value) -> value = "mir_symbolic"
+                    | LIRSymbolic.Mov (_, LIRSymbolic.FloatSymbol value) -> value = 4.5
+                    | _ -> false)
+            if hasSymbolic then Ok ()
+            else Error "Expected MIR→LIR to preserve symbolic operands"
+        | _ -> Error "Expected a single LIR function"
 
 /// Run all symbolic LIR unit tests
 let runAll () : TestResult =
     let tests = [
         ("symbolize/resolve round trip", testSymbolizeResolveRoundTrip)
-        ("mir symbolize/resolve round trip", testMirSymbolizeResolveRoundTrip)
-        ("mir normalize pools", testMirNormalizePools)
+        ("mir → lir symbolic operands", testMirToLirSymbolicOperands)
     ]
     tests
     |> List.fold

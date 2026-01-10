@@ -34,6 +34,7 @@ MIR provides a clean three-address representation:
 - Platform-independent operations
 - Control flow graph structure
 - Virtual registers (infinite supply)
+- String/float constants stored by value (pool indices assigned later)
 
 ### Key Types
 
@@ -43,8 +44,8 @@ type VReg = VReg of int  // Virtual register
 type Operand =
     | IntConst of int64
     | BoolConst of bool
-    | FloatRef of int      // Float pool index
-    | StringRef of int     // String pool index
+    | FloatSymbol of float  // Float value (resolved to pool later)
+    | StringSymbol of string // String value (resolved to pool later)
     | Register of VReg
     | FuncAddr of string   // Function address
 
