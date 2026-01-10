@@ -15,3 +15,7 @@
 - Completed: Consolidated ANF/MIR/LIR/LIRSymbolic formatting into IRPrinter and updated compiler/test runners.
 - Tests: dotnet build src/Tests/Tests.fsproj; ./run-tests --no-build.
 - Benchmarks: ./benchmarks/run_benchmarks.sh sum_to_n (cachegrind, dark-only).
+2026-01-10
+- Completed: Reduced duplication in file-based test suites via shared TestRunner helpers.
+- Tests: dotnet build src/Tests/Tests.fsproj; ./run-tests.
+- Benchmarks: ./benchmarks/run_benchmarks.sh sum_to_n (cachegrind, dark-only).

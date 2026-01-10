@@ -42,6 +42,13 @@ type TestTiming = {
     RuntimeTime: TimeSpan option
 }
 
+// Summary of per-file test suite results
+type FileSuiteSummary = {
+    Passed: int
+    Failed: int
+    FailedTests: FailedTestInfo list
+}
+
 // Progress bar for test execution
 module ProgressBar =
     let private barWidth = 20
@@ -317,6 +324,68 @@ let main args =
             println $"    {msg}"
             recordResults 0 1 [{ File = filePath; Name = $"{suiteName}: {fileName}"; Message = msg; Details = [] }]
 
+    let addExpectedActualDetails (expected: string option) (actual: string option) : string list =
+        let details = ResizeArray<string>()
+        match expected, actual with
+        | Some exp, Some act ->
+            println "    Expected:"
+            for line in exp.Split('\n') do
+                println $"      {line}"
+                details.Add($"Expected: {line}")
+            println "    Actual:"
+            for line in act.Split('\n') do
+                println $"      {line}"
+                details.Add($"Actual: {line}")
+        | _ -> ()
+        details |> Seq.toList
+
+    let runFileSuite
+        (suiteTitle: string)
+        (progressLabel: string)
+        (testFiles: string array)
+        (getTestName: string -> string)
+        (formatTimingName: string -> string)
+        (runFile: string -> Result<'result, string>)
+        (handleSuccess: ProgressBar.State -> string -> string -> TimeSpan -> 'result -> FileSuiteSummary)
+        (handleError: ProgressBar.State -> string -> string -> TimeSpan -> string -> FileSuiteSummary)
+        : unit =
+        if testFiles.Length > 0 then
+            let sectionTimer = Stopwatch.StartNew()
+            println $"{Colors.cyan}{suiteTitle}{Colors.reset}"
+
+            let mutable sectionPassed = 0
+            let mutable sectionFailed = 0
+            let progress = ProgressBar.create progressLabel testFiles.Length
+            ProgressBar.update progress
+
+            for testPath in testFiles do
+                let testName = getTestName testPath
+                let testTimer = Stopwatch.StartNew()
+                let summary =
+                    match runFile testPath with
+                    | Ok result ->
+                        testTimer.Stop()
+                        handleSuccess progress testPath testName testTimer.Elapsed result
+                    | Error msg ->
+                        testTimer.Stop()
+                        handleError progress testPath testName testTimer.Elapsed msg
+                allTimings.Add({ Name = formatTimingName testName; TotalTime = testTimer.Elapsed; CompileTime = None; RuntimeTime = None })
+                sectionPassed <- sectionPassed + summary.Passed
+                sectionFailed <- sectionFailed + summary.Failed
+                passed <- passed + summary.Passed
+                failed <- failed + summary.Failed
+                for failedTest in summary.FailedTests do
+                    failedTests.Add failedTest
+
+            ProgressBar.finish progress
+            sectionTimer.Stop()
+            if sectionFailed = 0 then
+                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
+            else
+                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
+            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
+            println ""
+
     let runE2ESuite
         (suiteName: string)
         (progressLabel: string)
@@ -410,407 +479,253 @@ let main args =
             else
                 println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
 
+    let runPassTestFile
+        (loadTest: string -> Result<'input, string>)
+        (runTest: 'input -> PassTestResult)
+        (testPath: string)
+        : Result<PassTestResult, string> =
+        match loadTest testPath with
+        | Ok input -> Ok (runTest input)
+        | Error msg -> Error msg
+
+    let handlePassTestSuccess
+        (suiteLabel: string)
+        (progress: ProgressBar.State)
+        (testPath: string)
+        (testName: string)
+        (elapsed: TimeSpan)
+        (result: PassTestResult)
+        : FileSuiteSummary =
+        if result.Success then
+            ProgressBar.increment progress true
+            { Passed = 1; Failed = 0; FailedTests = [] }
+        else
+            ProgressBar.increment progress false
+            ProgressBar.finish progress
+            println $"  {testName}... {Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime elapsed}){Colors.reset}"
+            println $"    {result.Message}"
+            let details = addExpectedActualDetails result.Expected result.Actual
+            let failedInfo =
+                { File = testPath
+                  Name = $"{suiteLabel}: {testName}"
+                  Message = result.Message
+                  Details = details }
+            ProgressBar.update progress
+            { Passed = 0; Failed = 1; FailedTests = [ failedInfo ] }
+
+    let handlePassTestError
+        (suiteLabel: string)
+        (progress: ProgressBar.State)
+        (testPath: string)
+        (testName: string)
+        (elapsed: TimeSpan)
+        (msg: string)
+        : FileSuiteSummary =
+        ProgressBar.increment progress false
+        ProgressBar.finish progress
+        println $"  {testName}... {Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime elapsed}){Colors.reset}"
+        println $"    Failed to load test: {msg}"
+        let failedInfo =
+            { File = testPath
+              Name = $"{suiteLabel}: {testName}"
+              Message = $"Failed to load test: {msg}"
+              Details = [] }
+        ProgressBar.update progress
+        { Passed = 0; Failed = 1; FailedTests = [ failedInfo ] }
+
     // Run ANF→MIR tests
     let anf2mirDir = Path.Combine(assemblyDir, "passes/anf2mir")
     if Directory.Exists anf2mirDir then
         let anf2mirTests = Directory.GetFiles(anf2mirDir, "*.anf2mir") |> Array.filter (fun p -> matchesFilter filter (Path.GetFileName p))
-        if anf2mirTests.Length > 0 then
-            let sectionTimer = Stopwatch.StartNew()
-            println $"{Colors.cyan}📦 ANF→MIR Tests{Colors.reset}"
-
-            let mutable sectionPassed = 0
-            let mutable sectionFailed = 0
-            let progress = ProgressBar.create "ANF→MIR" anf2mirTests.Length
-            ProgressBar.update progress
-
-            for testPath in anf2mirTests do
-                let testName = Path.GetFileName testPath
-                let testTimer = Stopwatch.StartNew()
-
-                match loadANF2MIRTest testPath with
-                | Ok (input, expected) ->
-                    let result = runANF2MIRTest input expected
-                    testTimer.Stop()
-                    allTimings.Add({ Name = $"ANF→MIR: {testName}"; TotalTime = testTimer.Elapsed; CompileTime = None; RuntimeTime = None })
-                    if result.Success then
-                        passed <- passed + 1
-                        sectionPassed <- sectionPassed + 1
-                        ProgressBar.increment progress true
-                    else
-                        ProgressBar.increment progress false
-                        ProgressBar.finish progress
-                        println $"  {testName}... {Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                        println $"    {result.Message}"
-                        let details = ResizeArray<string>()
-                        match result.Expected, result.Actual with
-                        | Some exp, Some act ->
-                            println "    Expected:"
-                            for line in exp.Split('\n') do
-                                println $"      {line}"
-                                details.Add($"Expected: {line}")
-                            println "    Actual:"
-                            for line in act.Split('\n') do
-                                println $"      {line}"
-                                details.Add($"Actual: {line}")
-                        | _ -> ()
-                        failedTests.Add({ File = testPath; Name = $"ANF→MIR: {testName}"; Message = result.Message; Details = details |> Seq.toList })
-                        failed <- failed + 1
-                        sectionFailed <- sectionFailed + 1
-                        ProgressBar.update progress
-                | Error msg ->
-                    testTimer.Stop()
-                    allTimings.Add({ Name = $"ANF→MIR: {testName}"; TotalTime = testTimer.Elapsed; CompileTime = None; RuntimeTime = None })
-                    ProgressBar.increment progress false
-                    ProgressBar.finish progress
-                    println $"  {testName}... {Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                    println $"    Failed to load test: {msg}"
-                    failedTests.Add({ File = testPath; Name = $"ANF→MIR: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
-                    failed <- failed + 1
-                    sectionFailed <- sectionFailed + 1
-                    ProgressBar.update progress
-
-            ProgressBar.finish progress
-            sectionTimer.Stop()
-            if sectionFailed = 0 then
-                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
-            else
-                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
-            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
-            println ""
+        let runANF2MIRFile =
+            runPassTestFile loadANF2MIRTest (fun (input, expected) -> runANF2MIRTest input expected)
+        runFileSuite
+            "📦 ANF→MIR Tests"
+            "ANF→MIR"
+            anf2mirTests
+            Path.GetFileName
+            (fun testName -> $"ANF→MIR: {testName}")
+            runANF2MIRFile
+            (handlePassTestSuccess "ANF→MIR")
+            (handlePassTestError "ANF→MIR")
 
     // Run MIR→LIR tests
     let mir2lirDir = Path.Combine(assemblyDir, "passes/mir2lir")
     if Directory.Exists mir2lirDir then
         let mir2lirTests = Directory.GetFiles(mir2lirDir, "*.mir2lir") |> Array.filter (fun p -> matchesFilter filter (Path.GetFileName p))
-        if mir2lirTests.Length > 0 then
-            let sectionTimer = Stopwatch.StartNew()
-            println $"{Colors.cyan}🔄 MIR→LIR Tests{Colors.reset}"
-
-            let mutable sectionPassed = 0
-            let mutable sectionFailed = 0
-            let progress = ProgressBar.create "MIR→LIR" mir2lirTests.Length
-            ProgressBar.update progress
-
-            for testPath in mir2lirTests do
-                let testName = Path.GetFileName testPath
-                let testTimer = Stopwatch.StartNew()
-
-                match loadMIR2LIRTest testPath with
-                | Ok (input, expected) ->
-                    let result = runMIR2LIRTest input expected
-                    testTimer.Stop()
-                    allTimings.Add({ Name = $"MIR→LIR: {testName}"; TotalTime = testTimer.Elapsed; CompileTime = None; RuntimeTime = None })
-                    if result.Success then
-                        passed <- passed + 1
-                        sectionPassed <- sectionPassed + 1
-                        ProgressBar.increment progress true
-                    else
-                        ProgressBar.increment progress false
-                        ProgressBar.finish progress
-                        println $"  {testName}... {Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                        println $"    {result.Message}"
-                        let details = ResizeArray<string>()
-                        match result.Expected, result.Actual with
-                        | Some exp, Some act ->
-                            println "    Expected:"
-                            for line in exp.Split('\n') do
-                                println $"      {line}"
-                                details.Add($"Expected: {line}")
-                            println "    Actual:"
-                            for line in act.Split('\n') do
-                                println $"      {line}"
-                                details.Add($"Actual: {line}")
-                        | _ -> ()
-                        failedTests.Add({ File = testPath; Name = $"MIR→LIR: {testName}"; Message = result.Message; Details = details |> Seq.toList })
-                        failed <- failed + 1
-                        sectionFailed <- sectionFailed + 1
-                        ProgressBar.update progress
-                | Error msg ->
-                    testTimer.Stop()
-                    allTimings.Add({ Name = $"MIR→LIR: {testName}"; TotalTime = testTimer.Elapsed; CompileTime = None; RuntimeTime = None })
-                    ProgressBar.increment progress false
-                    ProgressBar.finish progress
-                    println $"  {testName}... {Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                    println $"    Failed to load test: {msg}"
-                    failedTests.Add({ File = testPath; Name = $"MIR→LIR: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
-                    failed <- failed + 1
-                    sectionFailed <- sectionFailed + 1
-                    ProgressBar.update progress
-
-            ProgressBar.finish progress
-            sectionTimer.Stop()
-            if sectionFailed = 0 then
-                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
-            else
-                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
-            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
-            println ""
+        let runMIR2LIRFile =
+            runPassTestFile loadMIR2LIRTest (fun (input, expected) -> runMIR2LIRTest input expected)
+        runFileSuite
+            "🔄 MIR→LIR Tests"
+            "MIR→LIR"
+            mir2lirTests
+            Path.GetFileName
+            (fun testName -> $"MIR→LIR: {testName}")
+            runMIR2LIRFile
+            (handlePassTestSuccess "MIR→LIR")
+            (handlePassTestError "MIR→LIR")
 
     // Run LIR→ARM64 tests
     let lir2arm64Dir = Path.Combine(assemblyDir, "passes/lir2arm64")
     if Directory.Exists lir2arm64Dir then
         let lir2arm64Tests = Directory.GetFiles(lir2arm64Dir, "*.lir2arm64") |> Array.filter (fun p -> matchesFilter filter (Path.GetFileName p))
-        if lir2arm64Tests.Length > 0 then
-            let sectionTimer = Stopwatch.StartNew()
-            println $"{Colors.cyan}🎯 LIR→ARM64 Tests{Colors.reset}"
-
-            let mutable sectionPassed = 0
-            let mutable sectionFailed = 0
-            let progress = ProgressBar.create "LIR→ARM64" lir2arm64Tests.Length
-            ProgressBar.update progress
-
-            for testPath in lir2arm64Tests do
-                let testName = Path.GetFileName testPath
-                let testTimer = Stopwatch.StartNew()
-
-                match loadLIR2ARM64Test testPath with
-                | Ok (input, expected) ->
-                    let result = runLIR2ARM64Test input expected
-                    testTimer.Stop()
-                    allTimings.Add({ Name = $"LIR→ARM64: {testName}"; TotalTime = testTimer.Elapsed; CompileTime = None; RuntimeTime = None })
-                    if result.Success then
-                        passed <- passed + 1
-                        sectionPassed <- sectionPassed + 1
-                        ProgressBar.increment progress true
-                    else
-                        ProgressBar.increment progress false
-                        ProgressBar.finish progress
-                        println $"  {testName}... {Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                        println $"    {result.Message}"
-                        let details = ResizeArray<string>()
-                        match result.Expected, result.Actual with
-                        | Some exp, Some act ->
-                            println "    Expected:"
-                            for line in exp.Split('\n') do
-                                println $"      {line}"
-                                details.Add($"Expected: {line}")
-                            println "    Actual:"
-                            for line in act.Split('\n') do
-                                println $"      {line}"
-                                details.Add($"Actual: {line}")
-                        | _ -> ()
-                        failedTests.Add({ File = testPath; Name = $"LIR→ARM64: {testName}"; Message = result.Message; Details = details |> Seq.toList })
-                        failed <- failed + 1
-                        sectionFailed <- sectionFailed + 1
-                        ProgressBar.update progress
-                | Error msg ->
-                    testTimer.Stop()
-                    allTimings.Add({ Name = $"LIR→ARM64: {testName}"; TotalTime = testTimer.Elapsed; CompileTime = None; RuntimeTime = None })
-                    ProgressBar.increment progress false
-                    ProgressBar.finish progress
-                    println $"  {testName}... {Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                    println $"    Failed to load test: {msg}"
-                    failedTests.Add({ File = testPath; Name = $"LIR→ARM64: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
-                    failed <- failed + 1
-                    sectionFailed <- sectionFailed + 1
-                    ProgressBar.update progress
-
-            ProgressBar.finish progress
-            sectionTimer.Stop()
-            if sectionFailed = 0 then
-                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
-            else
-                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
-            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
-            println ""
+        let runLIR2ARM64File =
+            runPassTestFile loadLIR2ARM64Test (fun (input, expected) -> runLIR2ARM64Test input expected)
+        runFileSuite
+            "🎯 LIR→ARM64 Tests"
+            "LIR→ARM64"
+            lir2arm64Tests
+            Path.GetFileName
+            (fun testName -> $"LIR→ARM64: {testName}")
+            runLIR2ARM64File
+            (handlePassTestSuccess "LIR→ARM64")
+            (handlePassTestError "LIR→ARM64")
 
     // Run ARM64 encoding tests
     let arm64encDir = Path.Combine(assemblyDir, "passes/arm64enc")
     if Directory.Exists arm64encDir then
         let arm64encTests = Directory.GetFiles(arm64encDir, "*.arm64enc") |> Array.filter (fun p -> matchesFilter filter (Path.GetFileName p))
-        if arm64encTests.Length > 0 then
-            let sectionTimer = Stopwatch.StartNew()
-            println $"{Colors.cyan}⚙️  ARM64 Encoding Tests{Colors.reset}"
-
-            let mutable sectionPassed = 0
-            let mutable sectionFailed = 0
-            let progress = ProgressBar.create "ARM64 Enc" arm64encTests.Length
-            ProgressBar.update progress
-
-            for testPath in arm64encTests do
-                let testName = Path.GetFileName testPath
-                let testTimer = Stopwatch.StartNew()
-
-                match TestDSL.ARM64EncodingTestRunner.loadARM64EncodingTest testPath with
-                | Ok test ->
-                    let result = TestDSL.ARM64EncodingTestRunner.runARM64EncodingTest test
-                    testTimer.Stop()
-                    allTimings.Add({ Name = $"ARM64 Encoding: {testName}"; TotalTime = testTimer.Elapsed; CompileTime = None; RuntimeTime = None })
-                    if result.Success then
-                        passed <- passed + 1
-                        sectionPassed <- sectionPassed + 1
-                        ProgressBar.increment progress true
-                    else
-                        ProgressBar.increment progress false
-                        ProgressBar.finish progress
-                        println $"  {testName}... {Colors.red}✗ FAIL{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                        println $"    {result.Message}"
-                        failedTests.Add({ File = testPath; Name = $"ARM64 Encoding: {testName}"; Message = result.Message; Details = [] })
-                        failed <- failed + 1
-                        sectionFailed <- sectionFailed + 1
-                        ProgressBar.update progress
-                | Error msg ->
-                    testTimer.Stop()
-                    allTimings.Add({ Name = $"ARM64 Encoding: {testName}"; TotalTime = testTimer.Elapsed; CompileTime = None; RuntimeTime = None })
-                    ProgressBar.increment progress false
-                    ProgressBar.finish progress
-                    println $"  {testName}... {Colors.red}✗ ERROR{Colors.reset} {Colors.gray}({formatTime testTimer.Elapsed}){Colors.reset}"
-                    println $"    Failed to load test: {msg}"
-                    failedTests.Add({ File = testPath; Name = $"ARM64 Encoding: {testName}"; Message = $"Failed to load test: {msg}"; Details = [] })
-                    failed <- failed + 1
-                    sectionFailed <- sectionFailed + 1
-                    ProgressBar.update progress
-
-            ProgressBar.finish progress
-            sectionTimer.Stop()
-            if sectionFailed = 0 then
-                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
-            else
-                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
-            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
-            println ""
+        let runARM64EncodingFile =
+            runPassTestFile
+                TestDSL.ARM64EncodingTestRunner.loadARM64EncodingTest
+                TestDSL.ARM64EncodingTestRunner.runARM64EncodingTest
+        runFileSuite
+            "⚙️  ARM64 Encoding Tests"
+            "ARM64 Enc"
+            arm64encTests
+            Path.GetFileName
+            (fun testName -> $"ARM64 Encoding: {testName}")
+            runARM64EncodingFile
+            (handlePassTestSuccess "ARM64 Encoding")
+            (handlePassTestError "ARM64 Encoding")
 
     // Run Type Checking tests
     let typecheckDir = Path.Combine(assemblyDir, "typecheck")
     if Directory.Exists typecheckDir then
         let typecheckTestFiles = Directory.GetFiles(typecheckDir, "*.typecheck", SearchOption.AllDirectories) |> Array.filter (fun p -> matchesFilter filter (Path.GetFileNameWithoutExtension p))
-        if typecheckTestFiles.Length > 0 then
-            let sectionTimer = Stopwatch.StartNew()
-            println $"{Colors.cyan}📋 Type Checking Tests{Colors.reset}"
-
-            // Parse and run all tests from .typecheck files
-            let mutable sectionPassed = 0
-            let mutable sectionFailed = 0
-            let progress = ProgressBar.create "TypeCheck" typecheckTestFiles.Length
-            ProgressBar.update progress
-
-            for testFile in typecheckTestFiles do
-                let fileName = Path.GetFileNameWithoutExtension testFile
-                let testTimer = Stopwatch.StartNew()
-                match TestDSL.TypeCheckingTestRunner.runTypeCheckingTestFile testFile with
-                | Ok results ->
-                    testTimer.Stop()
-                    let fileSuccess = results |> List.forall (fun r -> r.Success)
-                    let filePassCount = results |> List.filter (fun r -> r.Success) |> List.length
-                    let fileFailCount = results |> List.filter (fun r -> not r.Success) |> List.length
-                    allTimings.Add({ Name = $"TypeCheck: {fileName}"; TotalTime = testTimer.Elapsed; CompileTime = None; RuntimeTime = None })
-                    sectionPassed <- sectionPassed + filePassCount
-                    passed <- passed + filePassCount
-                    if fileSuccess then
-                        ProgressBar.increment progress true
-                    else
-                        for result in results do
-                            if not result.Success then
-                                ProgressBar.increment progress false
-                                ProgressBar.finish progress
-                                let typeDesc =
-                                    match result.ExpectedType with
-                                    | Some t -> TypeChecking.typeToString t
-                                    | None -> "error"
-                                println $"  {typeDesc} ({fileName})... {Colors.red}✗ FAIL{Colors.reset}"
-                                println $"    {result.Message}"
-                                failedTests.Add({ File = testFile; Name = $"Type Checking: {typeDesc} ({fileName})"; Message = result.Message; Details = [] })
-                                sectionFailed <- sectionFailed + 1
-                                failed <- failed + 1
-                                ProgressBar.update progress
-                | Error msg ->
-                    testTimer.Stop()
-                    allTimings.Add({ Name = $"TypeCheck: {fileName}"; TotalTime = testTimer.Elapsed; CompileTime = None; RuntimeTime = None })
-                    ProgressBar.increment progress false
-                    ProgressBar.finish progress
-                    println $"  {Colors.red}✗ ERROR parsing {Path.GetFileName testFile}{Colors.reset}"
-                    println $"    {msg}"
-                    failedTests.Add({ File = testFile; Name = $"Type Checking: {Path.GetFileName testFile}"; Message = msg; Details = [] })
-                    sectionFailed <- sectionFailed + 1
-                    failed <- failed + 1
-                    ProgressBar.update progress
-
-            ProgressBar.finish progress
-            sectionTimer.Stop()
-            if sectionFailed = 0 then
-                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
+        let runTypecheckFile testFile =
+            TestDSL.TypeCheckingTestRunner.runTypeCheckingTestFile testFile
+        let handleTypecheckSuccess
+            (progress: ProgressBar.State)
+            (testPath: string)
+            (fileName: string)
+            (_: TimeSpan)
+            (results: TestDSL.TypeCheckingTestRunner.TypeCheckingTestResult list)
+            : FileSuiteSummary =
+            let fileSuccess = results |> List.forall (fun r -> r.Success)
+            let filePassCount = results |> List.filter (fun r -> r.Success) |> List.length
+            let fileFailCount = results |> List.filter (fun r -> not r.Success) |> List.length
+            if fileSuccess then
+                ProgressBar.increment progress true
+                { Passed = filePassCount; Failed = 0; FailedTests = [] }
             else
-                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
-            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
-            println ""
+                let failures = ResizeArray<FailedTestInfo>()
+                for result in results do
+                    if not result.Success then
+                        ProgressBar.increment progress false
+                        ProgressBar.finish progress
+                        let typeDesc =
+                            match result.ExpectedType with
+                            | Some t -> TypeChecking.typeToString t
+                            | None -> "error"
+                        println $"  {typeDesc} ({fileName})... {Colors.red}✗ FAIL{Colors.reset}"
+                        println $"    {result.Message}"
+                        failures.Add({ File = testPath; Name = $"Type Checking: {typeDesc} ({fileName})"; Message = result.Message; Details = [] })
+                        ProgressBar.update progress
+                { Passed = filePassCount; Failed = fileFailCount; FailedTests = failures |> Seq.toList }
+        let handleTypecheckError
+            (progress: ProgressBar.State)
+            (testPath: string)
+            (_: string)
+            (_: TimeSpan)
+            (msg: string)
+            : FileSuiteSummary =
+            ProgressBar.increment progress false
+            ProgressBar.finish progress
+            println $"  {Colors.red}✗ ERROR parsing {Path.GetFileName testPath}{Colors.reset}"
+            println $"    {msg}"
+            let failedInfo =
+                { File = testPath
+                  Name = $"Type Checking: {Path.GetFileName testPath}"
+                  Message = msg
+                  Details = [] }
+            ProgressBar.update progress
+            { Passed = 0; Failed = 1; FailedTests = [ failedInfo ] }
+        runFileSuite
+            "📋 Type Checking Tests"
+            "TypeCheck"
+            typecheckTestFiles
+            (fun testPath -> Path.GetFileNameWithoutExtension (testPath: string))
+            (fun fileName -> $"TypeCheck: {fileName}")
+            runTypecheckFile
+            handleTypecheckSuccess
+            handleTypecheckError
 
     // Run Optimization Tests (ANF, MIR, LIR)
     let optDir = Path.Combine(assemblyDir, "optimization")
     if Directory.Exists optDir then
         let optTestFiles = Directory.GetFiles(optDir, "*.opt", SearchOption.AllDirectories)
-        if optTestFiles.Length > 0 then
-            let sectionTimer = Stopwatch.StartNew()
-            println $"{Colors.cyan}⚡ Optimization Tests{Colors.reset}"
-
-            let mutable sectionPassed = 0
-            let mutable sectionFailed = 0
-            let progress = ProgressBar.create "Optimization" optTestFiles.Length
-            ProgressBar.update progress
-
-            for testFile in optTestFiles do
-                let fileName = Path.GetFileNameWithoutExtension testFile
-                let testTimer = Stopwatch.StartNew()
-                // Determine stage from filename (anf.opt -> ANF, mir.opt -> MIR, lir.opt -> LIR)
-                let stage =
-                    if fileName.ToLower().Contains("anf") then TestDSL.OptimizationFormat.ANF
-                    elif fileName.ToLower().Contains("mir") then TestDSL.OptimizationFormat.MIR
-                    elif fileName.ToLower().Contains("lir") then TestDSL.OptimizationFormat.LIR
-                    else TestDSL.OptimizationFormat.ANF  // Default to ANF
-
-                match TestDSL.OptimizationTestRunner.runTestFile stage testFile with
-                | Error msg ->
-                    testTimer.Stop()
-                    allTimings.Add({ Name = $"Optimization: {fileName}"; TotalTime = testTimer.Elapsed; CompileTime = None; RuntimeTime = None })
-                    ProgressBar.increment progress false
-                    ProgressBar.finish progress
-                    println $"  {Colors.red}✗ ERROR parsing {Path.GetFileName testFile}{Colors.reset}"
-                    println $"    {msg}"
-                    failedTests.Add({ File = testFile; Name = $"Optimization: {Path.GetFileName testFile}"; Message = msg; Details = [] })
-                    sectionFailed <- sectionFailed + 1
-                    failed <- failed + 1
-                    ProgressBar.update progress
-                | Ok results ->
-                    testTimer.Stop()
-                    let filteredResults = results |> List.filter (fun (test, _) -> matchesFilter filter test.Name)
-                    let fileSuccess = filteredResults |> List.forall (fun (_, r) -> r.Success)
-                    let filePassCount = filteredResults |> List.filter (fun (_, r) -> r.Success) |> List.length
-                    allTimings.Add({ Name = $"Optimization: {fileName}"; TotalTime = testTimer.Elapsed; CompileTime = None; RuntimeTime = None })
-                    sectionPassed <- sectionPassed + filePassCount
-                    passed <- passed + filePassCount
-                    if fileSuccess then
-                        ProgressBar.increment progress true
-                    else
-                        for (test, result) in filteredResults do
-                            if not result.Success then
-                                ProgressBar.increment progress false
-                                ProgressBar.finish progress
-                                println $"  {test.Name}... {Colors.red}✗ FAIL{Colors.reset}"
-                                println $"    {result.Message}"
-                                let details = ResizeArray<string>()
-                                match result.Expected, result.Actual with
-                                | Some exp, Some act ->
-                                    println "    Expected:"
-                                    for line in exp.Split('\n') do
-                                        println $"      {line}"
-                                        details.Add($"Expected: {line}")
-                                    println "    Actual:"
-                                    for line in act.Split('\n') do
-                                        println $"      {line}"
-                                        details.Add($"Actual: {line}")
-                                | _ -> ()
-                                failedTests.Add({ File = testFile; Name = $"Optimization: {test.Name}"; Message = result.Message; Details = details |> Seq.toList })
-                                sectionFailed <- sectionFailed + 1
-                                failed <- failed + 1
-                                ProgressBar.update progress
-
-            ProgressBar.finish progress
-            sectionTimer.Stop()
-            if sectionFailed = 0 then
-                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}"
+        let runOptimizationFile testFile =
+            let fileName = Path.GetFileNameWithoutExtension (testFile: string)
+            let stage =
+                if fileName.ToLower().Contains("anf") then TestDSL.OptimizationFormat.ANF
+                elif fileName.ToLower().Contains("mir") then TestDSL.OptimizationFormat.MIR
+                elif fileName.ToLower().Contains("lir") then TestDSL.OptimizationFormat.LIR
+                else TestDSL.OptimizationFormat.ANF
+            TestDSL.OptimizationTestRunner.runTestFile stage testFile
+        let handleOptimizationSuccess
+            (progress: ProgressBar.State)
+            (testPath: string)
+            (_: string)
+            (_: TimeSpan)
+            (results: (TestDSL.OptimizationFormat.OptimizationTest * TestDSL.OptimizationTestRunner.OptimizationTestResult) list)
+            : FileSuiteSummary =
+            let filteredResults = results |> List.filter (fun (test, _) -> matchesFilter filter test.Name)
+            let fileSuccess = filteredResults |> List.forall (fun (_, r) -> r.Success)
+            let filePassCount = filteredResults |> List.filter (fun (_, r) -> r.Success) |> List.length
+            let fileFailCount = filteredResults |> List.filter (fun (_, r) -> not r.Success) |> List.length
+            if fileSuccess then
+                ProgressBar.increment progress true
+                { Passed = filePassCount; Failed = 0; FailedTests = [] }
             else
-                println $"  {Colors.green}✓ {sectionPassed} passed{Colors.reset}, {Colors.red}✗ {sectionFailed} failed{Colors.reset}"
-            println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
-            println ""
+                let failures = ResizeArray<FailedTestInfo>()
+                for (test, result) in filteredResults do
+                    if not result.Success then
+                        ProgressBar.increment progress false
+                        ProgressBar.finish progress
+                        println $"  {test.Name}... {Colors.red}✗ FAIL{Colors.reset}"
+                        println $"    {result.Message}"
+                        let details = addExpectedActualDetails result.Expected result.Actual
+                        failures.Add({ File = testPath; Name = $"Optimization: {test.Name}"; Message = result.Message; Details = details })
+                        ProgressBar.update progress
+                { Passed = filePassCount; Failed = fileFailCount; FailedTests = failures |> Seq.toList }
+        let handleOptimizationError
+            (progress: ProgressBar.State)
+            (testPath: string)
+            (_: string)
+            (_: TimeSpan)
+            (msg: string)
+            : FileSuiteSummary =
+            ProgressBar.increment progress false
+            ProgressBar.finish progress
+            println $"  {Colors.red}✗ ERROR parsing {Path.GetFileName testPath}{Colors.reset}"
+            println $"    {msg}"
+            let failedInfo =
+                { File = testPath
+                  Name = $"Optimization: {Path.GetFileName testPath}"
+                  Message = msg
+                  Details = [] }
+            ProgressBar.update progress
+            { Passed = 0; Failed = 1; FailedTests = [ failedInfo ] }
+        runFileSuite
+            "⚡ Optimization Tests"
+            "Optimization"
+            optTestFiles
+            (fun testPath -> Path.GetFileNameWithoutExtension (testPath: string))
+            (fun fileName -> $"Optimization: {fileName}")
+            runOptimizationFile
+            handleOptimizationSuccess
+            handleOptimizationError
 
     let runWithStdlib
         (suiteName: string)
