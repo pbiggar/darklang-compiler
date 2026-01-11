@@ -1,6 +1,8 @@
 # Dark Compiler - AI Agent Guidelines
 
-Use 'bd' for task tracking. Run `bd prime` to see how.
+## Task tracking
+
+We use 'bd' for task tracking. See WORKFLOW.md.
 
 ## Quick Overview
 
