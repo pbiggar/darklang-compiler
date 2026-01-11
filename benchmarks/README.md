@@ -7,13 +7,13 @@ Cross-language benchmarking system to measure runtime performance of compiled Da
 Install before running benchmarks:
 
 ```bash
-# hyperfine (timing benchmarks)
-brew install hyperfine  # macOS
-sudo apt-get install hyperfine  # Linux
-
 # valgrind (instruction count benchmarks)
 sudo apt-get install valgrind  # Linux
 brew install valgrind  # macOS (may require extra setup)
+
+# hyperfine (timing benchmarks)
+brew install hyperfine  # macOS
+sudo apt-get install hyperfine  # Linux
 
 # Rust compiler
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -39,21 +39,18 @@ python3 --version
 ## Benchmark Modes
 
 ### Cachegrind Mode (default)
+
 Uses **Valgrind Cachegrind** to count instructions. Slower (~50x) but deterministic - same input always produces identical counts. Useful for:
+
 - Detecting performance regressions in CI
 - Comparing instruction efficiency between languages
 - Tracking optimization improvements over time
 
+This is the primary way we are tracking performance.
+
 ### Timing Mode (`--hyperfine`)
+
 Uses **hyperfine** to measure wall-clock execution time. Fast but results vary between runs.
-
-## Available Benchmarks
-
-| Benchmark | Description | Tests |
-|-----------|-------------|-------|
-| `fib` | Fibonacci(35) naive recursive | Function call overhead, double recursion |
-| `factorial` | Factorial(20) x 10000 iterations | Arithmetic, tail-like recursion |
-| `sum_to_n` | Sum 1 to 10000, repeated 100x | Accumulator pattern, tail recursion |
 
 ## Directory Structure
 
@@ -101,11 +98,13 @@ After running benchmarks, you'll see output like:
 ## Adding New Benchmarks
 
 1. Create a new directory under `problems/`:
+
    ```bash
    mkdir -p benchmarks/problems/new_bench/{dark,rust,python}
    ```
 
 2. Implement in each language:
+
    - `dark/main.dark` - Dark implementation
    - `rust/main.rs` - Rust implementation
    - `python/main.py` - Python implementation
@@ -117,6 +116,6 @@ After running benchmarks, you'll see output like:
 ## Benchmark Guidelines
 
 - **Single-threaded**: All implementations must be single-threaded for fair comparison
-- **Same algorithm**: Use equivalent algorithms across languages (e.g., naive recursion, not memoization)
+- **Same algorithm**: Use equivalent algorithms across languages
 - **Output validation**: All implementations must produce identical output
 - **Sufficient runtime**: Benchmarks should run for at least 100ms to minimize startup overhead
