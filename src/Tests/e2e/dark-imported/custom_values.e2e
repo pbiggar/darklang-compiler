@@ -6,17 +6,12 @@
 
 // ===================================================================
 // User-defined values
-// NOTE: All tests commented out - requires type suffixes (L, UL, s, y, etc.),
-// String literals, Char literals, Unit type, and Stdlib support
+// NOTE: Some tests still commented out - requires type suffixes (UL, s, y, etc.),
+// Char literals, Unit type, and full Stdlib support
 // ===================================================================
 
-// let stringValue = "test"
-// stringValue = "test"
-// "test" = stringValue
-
-// let intValue = 5L
-// intValue = 5
-// 5L = intValue
+let stringValue = "test" in stringValue = stdout="test\n"
+let intValue = 5 in intValue = 5
 
 // let uint64Value = 5UL
 // uint64Value = 5UL
@@ -39,14 +34,11 @@
 // let uint8Value = 5uy
 // uint8Value = 5uy
 
-// let floatValue = 5.6
-// floatValue = 5.6
+let floatValue = 5.5 in floatValue = stdout="5.50\n"
 
-// let boolValue = true
-// boolValue = stdout="true\n"
+let boolValue = true in boolValue = stdout="true\n"
 
-// let tupleValue = (1L, 2L, 3L)
-// tupleValue = stdout="(1, 2, 3)\n"
+let tupleValue = (1, 2, 3) in tupleValue = stdout="(1, 2, 3)\n"
 
 // let charValue = 'c'
 // charValue = 'c'
