@@ -1,12 +1,11 @@
 // TestRunner.fs - Standalone test runner for DSL-based tests
 //
-// Discovers and runs test files from passes/ directories.
+// Discovers and runs test files from src/Tests directories.
 
 module TestRunner.Main
 
 open System
 open System.IO
-open System.Reflection
 open System.Diagnostics
 open Output
 open TestDSL.PassTestRunner
@@ -202,11 +201,11 @@ let main args =
     | None -> ()
     println ""
 
-    // Get the directory where the assembly is located (where test files are copied)
-    let assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)
+    // Use the source tree for test data to avoid copying files into the build output.
+    let testDataRoot = Path.GetFullPath(__SOURCE_DIRECTORY__)
 
-    let e2eDir = Path.Combine(assemblyDir, "e2e")
-    let verificationDir = Path.Combine(assemblyDir, "verification")
+    let e2eDir = Path.Combine(testDataRoot, "e2e")
+    let verificationDir = Path.Combine(testDataRoot, "verification")
 
     let unitStdlibSuites = [ "Compiler Caching Tests"; "Preamble Precompile Tests" ]
     let needsUnitStdlib = unitStdlibSuites |> List.exists (matchesFilter filter)
@@ -533,7 +532,7 @@ let main args =
         { Passed = 0; Failed = 1; FailedTests = [ failedInfo ] }
 
     // Run ANF→MIR tests
-    let anf2mirDir = Path.Combine(assemblyDir, "passes/anf2mir")
+    let anf2mirDir = Path.Combine(testDataRoot, "passes", "anf2mir")
     if Directory.Exists anf2mirDir then
         let anf2mirTests = Directory.GetFiles(anf2mirDir, "*.anf2mir") |> Array.filter (fun p -> matchesFilter filter (Path.GetFileName p))
         let runANF2MIRFile =
@@ -549,7 +548,7 @@ let main args =
             (handlePassTestError "ANF→MIR")
 
     // Run MIR→LIR tests
-    let mir2lirDir = Path.Combine(assemblyDir, "passes/mir2lir")
+    let mir2lirDir = Path.Combine(testDataRoot, "passes", "mir2lir")
     if Directory.Exists mir2lirDir then
         let mir2lirTests = Directory.GetFiles(mir2lirDir, "*.mir2lir") |> Array.filter (fun p -> matchesFilter filter (Path.GetFileName p))
         let runMIR2LIRFile =
@@ -565,7 +564,7 @@ let main args =
             (handlePassTestError "MIR→LIR")
 
     // Run LIR→ARM64 tests
-    let lir2arm64Dir = Path.Combine(assemblyDir, "passes/lir2arm64")
+    let lir2arm64Dir = Path.Combine(testDataRoot, "passes", "lir2arm64")
     if Directory.Exists lir2arm64Dir then
         let lir2arm64Tests = Directory.GetFiles(lir2arm64Dir, "*.lir2arm64") |> Array.filter (fun p -> matchesFilter filter (Path.GetFileName p))
         let runLIR2ARM64File =
@@ -581,7 +580,7 @@ let main args =
             (handlePassTestError "LIR→ARM64")
 
     // Run ARM64 encoding tests
-    let arm64encDir = Path.Combine(assemblyDir, "passes/arm64enc")
+    let arm64encDir = Path.Combine(testDataRoot, "passes", "arm64enc")
     if Directory.Exists arm64encDir then
         let arm64encTests = Directory.GetFiles(arm64encDir, "*.arm64enc") |> Array.filter (fun p -> matchesFilter filter (Path.GetFileName p))
         let runARM64EncodingFile =
@@ -599,7 +598,7 @@ let main args =
             (handlePassTestError "ARM64 Encoding")
 
     // Run Type Checking tests
-    let typecheckDir = Path.Combine(assemblyDir, "typecheck")
+    let typecheckDir = Path.Combine(testDataRoot, "typecheck")
     if Directory.Exists typecheckDir then
         let typecheckTestFiles = Directory.GetFiles(typecheckDir, "*.typecheck", SearchOption.AllDirectories) |> Array.filter (fun p -> matchesFilter filter (Path.GetFileNameWithoutExtension p))
         let runTypecheckFile testFile =
@@ -661,7 +660,7 @@ let main args =
             handleTypecheckError
 
     // Run Optimization Tests (ANF, MIR, LIR)
-    let optDir = Path.Combine(assemblyDir, "optimization")
+    let optDir = Path.Combine(testDataRoot, "optimization")
     if Directory.Exists optDir then
         let optTestFiles = Directory.GetFiles(optDir, "*.opt", SearchOption.AllDirectories)
         let runOptimizationFile testFile =
@@ -887,7 +886,7 @@ let main args =
             | Some stdlib ->
                 let allStdlibFuncs = CompilerLibrary.getAllStdlibFunctionNamesFromStdlib stdlib
                 let coveredFuncs = System.Collections.Generic.HashSet<string>()
-                let e2eDir = Path.Combine(assemblyDir, "e2e")
+                let e2eDir = Path.Combine(testDataRoot, "e2e")
                 if Directory.Exists e2eDir then
                     let e2eTestFiles = Directory.GetFiles(e2eDir, "*.e2e", SearchOption.AllDirectories)
                     for testFile in e2eTestFiles do

@@ -58,14 +58,14 @@
 
   <!-- Test data files -->
   <ItemGroup>
-    <None Include="passes/**/*.mir2lir" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="passes/**/*.anf2mir" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="passes/**/*.lir2arm64" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="passes/**/*.arm64enc" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="e2e/**/*.e2e" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="verification/**/*.e2e" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="typecheck/**/*.typecheck" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="optimization/**/*.opt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="passes/**/*.mir2lir" />
+    <None Include="passes/**/*.anf2mir" />
+    <None Include="passes/**/*.lir2arm64" />
+    <None Include="passes/**/*.arm64enc" />
+    <None Include="e2e/**/*.e2e" />
+    <None Include="verification/**/*.e2e" />
+    <None Include="typecheck/**/*.typecheck" />
+    <None Include="optimization/**/*.opt" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />

@@ -82,6 +82,13 @@ let testRunDarkCoverageUsesCommonHelper () : TestResult =
     | Ok text ->
         requireAll path [ "test-common.sh"; "build_tests"; "find_test_exe"; "run_tests" ] text
 
+let testTestsProjectDoesNotCopyTestData () : TestResult =
+    let path = Path.Combine(repoRoot, "src", "Tests", "Tests.fsproj")
+    match readFile path with
+    | Error msg -> Error msg
+    | Ok text ->
+        requireNotContains path "CopyToOutputDirectory" text
+
 let tests = [
     ("run-tests uses test-common", testRunTestsUsesCommonHelper)
     ("run-verification-tests uses test-common", testRunVerificationUsesCommonHelper)
@@ -89,4 +96,5 @@ let tests = [
     ("test runner avoids env vars", testRunnerDoesNotUseEnvVar)
     ("compiler caching tests avoid env vars", testCompilerCachingDoesNotUseEnvVar)
     ("run-dark-coverage uses test-common", testRunDarkCoverageUsesCommonHelper)
+    ("Tests project avoids copying test data", testTestsProjectDoesNotCopyTestData)
 ]
