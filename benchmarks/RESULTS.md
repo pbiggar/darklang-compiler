@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-01-11 10:30:10
-**Commit:** `3fcdcf98` - Update AGENTS and documents for the AI
+**Last Updated:** 2026-01-11 11:06:40
+**Commit:** `04bc92a0` - Run tests from source tree
 
 | Benchmark     |           Dark (3.83x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
