@@ -7,15 +7,15 @@
 // Dict.empty - Create empty dictionary
 // ===================================================================
 
-Dict.isEmpty<String, Int64>(Dict.empty<String, Int64>()) = stdout="true\n"
-Dict.size<String, Int64>(Dict.empty<String, Int64>()) = stdout="0\n"
+Dict.isEmpty<String, Int64>(Dict.empty<String, Int64>()) = true
+Dict.size<String, Int64>(Dict.empty<String, Int64>()) = 0
 
 // ===================================================================
 // Dict.singleton - Create single-entry dictionary
 // ===================================================================
 
-Dict.size(Dict.singleton("key", 42)) = stdout="1\n"
-Dict.isEmpty(Dict.singleton("key", 42)) = stdout="false\n"
+Dict.size(Dict.singleton("key", 42)) = 1
+Dict.isEmpty(Dict.singleton("key", 42)) = false
 Option.withDefault(Dict.get(Dict.singleton("key", 42), "key"), 0) = 42
 
 // ===================================================================
@@ -23,31 +23,31 @@ Option.withDefault(Dict.get(Dict.singleton("key", 42), "key"), 0) = 42
 // ===================================================================
 
 Option.withDefault(Dict.get(Dict.set(Dict.empty<String, Int64>(), "a", 1), "a"), 0) = 1
-Dict.size(Dict.set(Dict.set(Dict.empty<String, Int64>(), "a", 1), "b", 2)) = stdout="2\n"
+Dict.size(Dict.set(Dict.set(Dict.empty<String, Int64>(), "a", 1), "b", 2)) = 2
 
 // ===================================================================
 // Dict.get - Lookup values
 // ===================================================================
 
-Option.isNone<Int64>(Dict.get<String, Int64>(Dict.empty<String, Int64>(), "missing")) = stdout="true\n"
+Option.isNone<Int64>(Dict.get<String, Int64>(Dict.empty<String, Int64>(), "missing")) = true
 Option.withDefault(Dict.get(Dict.singleton("hello", 100), "hello"), 0) = 100
-Option.isNone<Int64>(Dict.get(Dict.singleton("hello", 100), "world")) = stdout="true\n"
+Option.isNone<Int64>(Dict.get(Dict.singleton("hello", 100), "world")) = true
 
 // ===================================================================
 // Dict.contains - Check if key exists
 // ===================================================================
 
-Dict.contains(Dict.singleton("key", 42), "key") = stdout="true\n"
-Dict.contains(Dict.singleton("key", 42), "other") = stdout="false\n"
-Dict.contains<String, Int64>(Dict.empty<String, Int64>(), "any") = stdout="false\n"
+Dict.contains(Dict.singleton("key", 42), "key") = true
+Dict.contains(Dict.singleton("key", 42), "other") = false
+Dict.contains<String, Int64>(Dict.empty<String, Int64>(), "any") = false
 
 // ===================================================================
 // Dict.remove - Remove entries
 // ===================================================================
 
-Dict.isEmpty(Dict.remove(Dict.singleton("key", 42), "key")) = stdout="true\n"
-Dict.contains(Dict.remove(Dict.singleton("key", 42), "key"), "key") = stdout="false\n"
-Dict.size(Dict.remove(Dict.set(Dict.set(Dict.empty<String, Int64>(), "a", 1), "b", 2), "a")) = stdout="1\n"
+Dict.isEmpty(Dict.remove(Dict.singleton("key", 42), "key")) = true
+Dict.contains(Dict.remove(Dict.singleton("key", 42), "key"), "key") = false
+Dict.size(Dict.remove(Dict.set(Dict.set(Dict.empty<String, Int64>(), "a", 1), "b", 2), "a")) = 1
 
 // ===================================================================
 // Dict.getOrDefault - Get with fallback
@@ -61,36 +61,36 @@ Dict.getOrDefault(Dict.singleton("hello", 100), "world", 50) = 50
 // Dict.toList - Convert to list of pairs (alias for entries)
 // ===================================================================
 
-List.length(Dict.toList<String, Int64>(Dict.empty<String, Int64>())) = stdout="0\n"
-List.length(Dict.toList(Dict.singleton("key", 42))) = stdout="1\n"
-List.length(Dict.toList(Dict.set(Dict.set(Dict.empty<String, Int64>(), "a", 1), "b", 2))) = stdout="2\n"
+List.length(Dict.toList<String, Int64>(Dict.empty<String, Int64>())) = 0
+List.length(Dict.toList(Dict.singleton("key", 42))) = 1
+List.length(Dict.toList(Dict.set(Dict.set(Dict.empty<String, Int64>(), "a", 1), "b", 2))) = 2
 
 // ===================================================================
 // Dict.keys - Get all keys
 // ===================================================================
 
-List.length(Dict.keys<String, Int64>(Dict.empty<String, Int64>())) = stdout="0\n"
-List.length(Dict.keys(Dict.singleton("key", 42))) = stdout="1\n"
+List.length(Dict.keys<String, Int64>(Dict.empty<String, Int64>())) = 0
+List.length(Dict.keys(Dict.singleton("key", 42))) = 1
 
 // ===================================================================
 // Dict.values - Get all values
 // ===================================================================
 
-List.length(Dict.values<String, Int64>(Dict.empty<String, Int64>())) = stdout="0\n"
-List.length(Dict.values(Dict.singleton("key", 42))) = stdout="1\n"
+List.length(Dict.values<String, Int64>(Dict.empty<String, Int64>())) = 0
+List.length(Dict.values(Dict.singleton("key", 42))) = 1
 
 // ===================================================================
 // Dict.fromList - Build from list of pairs
 // ===================================================================
 
-Dict.size(Dict.fromList<String, Int64>([])) = stdout="0\n"
-Dict.size(Dict.fromList([("a", 1), ("b", 2), ("c", 3)])) = stdout="3\n"
+Dict.size(Dict.fromList<String, Int64>([])) = 0
+Dict.size(Dict.fromList([("a", 1), ("b", 2), ("c", 3)])) = 3
 Option.withDefault(Dict.get(Dict.fromList([("x", 100)]), "x"), 0) = 100
 
 // ===================================================================
 // Dict.merge - Combine dictionaries
 // ===================================================================
 
-Dict.size(Dict.merge(Dict.singleton("a", 1), Dict.singleton("b", 2))) = stdout="2\n"
+Dict.size(Dict.merge(Dict.singleton("a", 1), Dict.singleton("b", 2))) = 2
 // Second dict wins on conflicts
 Option.withDefault(Dict.get(Dict.merge(Dict.singleton("key", 1), Dict.singleton("key", 2)), "key"), 0) = 2

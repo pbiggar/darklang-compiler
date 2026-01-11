@@ -3,178 +3,178 @@
 // === Empty List ===
 
 // Empty list is Nil (represented as 0)
-match [] with | [] -> 1 | _ -> 0 = stdout="1\n"
+match [] with | [] -> 1 | _ -> 0 = 1
 
 // Empty list fallback
-match [] with | [x] -> x | [] -> 99 = stdout="99\n"
+match [] with | [x] -> x | [] -> 99 = 99
 
 // === Single Element List ===
 
 // Single element list
-match [42] with | [x] -> x | _ -> 0 = stdout="42\n"
+match [42] with | [x] -> x | _ -> 0 = 42
 
 // Single element list with arithmetic
-match [10] with | [x] -> x * 2 | _ -> 0 = stdout="20\n"
+match [10] with | [x] -> x * 2 | _ -> 0 = 20
 
 // Single element wildcard
-match [100] with | [_] -> 1 | _ -> 0 = stdout="1\n"
+match [100] with | [_] -> 1 | _ -> 0 = 1
 
 // === Two Element List ===
 
 // Two element list - sum
-match [1, 2] with | [a, b] -> a + b | _ -> 0 = stdout="3\n"
+match [1, 2] with | [a, b] -> a + b | _ -> 0 = 3
 
 // Two element list - product
-match [3, 4] with | [a, b] -> a * b | _ -> 0 = stdout="12\n"
+match [3, 4] with | [a, b] -> a * b | _ -> 0 = 12
 
 // Two element list - first element
-match [10, 20] with | [a, _] -> a | _ -> 0 = stdout="10\n"
+match [10, 20] with | [a, _] -> a | _ -> 0 = 10
 
 // Two element list - second element
-match [10, 20] with | [_, b] -> b | _ -> 0 = stdout="20\n"
+match [10, 20] with | [_, b] -> b | _ -> 0 = 20
 
 // === Three Element List ===
 
 // Three element list - sum
-match [10, 20, 30] with | [a, b, c] -> a + b + c | _ -> 0 = stdout="60\n"
+match [10, 20, 30] with | [a, b, c] -> a + b + c | _ -> 0 = 60
 
 // Three element list - middle element
-match [1, 2, 3] with | [_, x, _] -> x | _ -> 0 = stdout="2\n"
+match [1, 2, 3] with | [_, x, _] -> x | _ -> 0 = 2
 
 // Three element list - product
-match [2, 3, 4] with | [a, b, c] -> a * b * c | _ -> 0 = stdout="24\n"
+match [2, 3, 4] with | [a, b, c] -> a * b * c | _ -> 0 = 24
 
 // === Four Element List ===
 
 // Four element list
-match [1, 2, 3, 4] with | [a, b, c, d] -> a + b + c + d | _ -> 0 = stdout="10\n"
+match [1, 2, 3, 4] with | [a, b, c, d] -> a + b + c + d | _ -> 0 = 10
 
 // === Five Element List ===
 
 // Five element list
-match [1, 2, 3, 4, 5] with | [a, b, c, d, e] -> a + b + c + d + e | _ -> 0 = stdout="15\n"
+match [1, 2, 3, 4, 5] with | [a, b, c, d, e] -> a + b + c + d + e | _ -> 0 = 15
 
 // === Wildcard Patterns ===
 
 // All wildcards in list pattern
-match [1, 2, 3] with | [_, _, _] -> 42 | _ -> 0 = stdout="42\n"
+match [1, 2, 3] with | [_, _, _] -> 42 | _ -> 0 = 42
 
 // Mix of binding and wildcard (3 elements)
-match [5, 10, 15] with | [a, _, c] -> a + c | _ -> 0 = stdout="20\n"
+match [5, 10, 15] with | [a, _, c] -> a + c | _ -> 0 = 20
 
 // === Non-Matching Cases ===
 
 // Empty list doesn't match single element pattern
-match [] with | [x] -> x | [] -> 99 = stdout="99\n"
+match [] with | [x] -> x | [] -> 99 = 99
 
 // Shorter list falls through to fallback
 // (Note: matching longer pattern against shorter list crashes due to null deref)
-match [1] with | [x] -> x | _ -> 99 = stdout="1\n"
+match [1] with | [x] -> x | _ -> 99 = 1
 
 // === List in Variable ===
 
 // Store list in variable
-let xs = [5, 10] in match xs with | [a, b] -> a * b | _ -> 0 = stdout="50\n"
+let xs = [5, 10] in match xs with | [a, b] -> a * b | _ -> 0 = 50
 
 // Store empty list in variable
-let xs = [] in match xs with | [] -> 42 | _ -> 0 = stdout="42\n"
+let xs = [] in match xs with | [] -> 42 | _ -> 0 = 42
 
 // Store longer list in variable
-let xs = [1, 2, 3, 4] in match xs with | [a, b, c, d] -> a + b + c + d | _ -> 0 = stdout="10\n"
+let xs = [1, 2, 3, 4] in match xs with | [a, b, c, d] -> a + b + c + d | _ -> 0 = 10
 
 // === Computed List Elements ===
 
 // List with computed elements
-let x = 5 in match [x, x + 1, x + 2] with | [a, b, c] -> a + b + c | _ -> 0 = stdout="18\n"
+let x = 5 in match [x, x + 1, x + 2] with | [a, b, c] -> a + b + c | _ -> 0 = 18
 
 // List with arithmetic expressions (2 elements to avoid register pressure)
-match [2 + 3, 4 * 5] with | [a, b] -> a + b | _ -> 0 = stdout="25\n"
+match [2 + 3, 4 * 5] with | [a, b] -> a + b | _ -> 0 = 25
 
 // === Nested Match ===
 
 // Match result is a list, then match that
-match [1] with | [x] -> (match [x, x + 1] with | [a, b] -> a + b | _ -> 0) | _ -> 0 = stdout="3\n"
+match [1] with | [x] -> (match [x, x + 1] with | [a, b] -> a + b | _ -> 0) | _ -> 0 = 3
 
 // Chain of list matches
-match [2] with | [x] -> (let y = x * 3 in match [y] with | [z] -> z | _ -> 0) | _ -> 0 = stdout="6\n"
+match [2] with | [x] -> (let y = x * 3 in match [y] with | [z] -> z | _ -> 0) | _ -> 0 = 6
 
 // === List in Let Body ===
 
 // Use match result in computation
-match [5, 10] with | [a, b] -> (a + b) * 2 | _ -> 0 = stdout="30\n"
+match [5, 10] with | [a, b] -> (a + b) * 2 | _ -> 0 = 30
 
 // Multiple bindings then use
-match [1, 2] with | [x, y] -> (match [3, 4] with | [a, b] -> x + y + a + b | _ -> 0) | _ -> 0 = stdout="10\n"
+match [1, 2] with | [x, y] -> (match [3, 4] with | [a, b] -> x + y + a + b | _ -> 0) | _ -> 0 = 10
 
 // === Edge Cases ===
 
 // Single element list equals empty fallback
-match [0] with | [] -> 1 | [x] -> x | _ -> 99 = stdout="0\n"
+match [0] with | [] -> 1 | [x] -> x | _ -> 99 = 0
 
 // Large numbers in list
-match [1000000, 2000000] with | [a, b] -> a + b | _ -> 0 = stdout="3000000\n"
+match [1000000, 2000000] with | [a, b] -> a + b | _ -> 0 = 3000000
 
 // Zero in list
-match [0, 0, 0] with | [a, b, c] -> a + b + c | _ -> 99 = stdout="0\n"
+match [0, 0, 0] with | [a, b, c] -> a + b + c | _ -> 99 = 0
 
 // Negative numbers in list (via subtraction)
-match [0 - 5, 0 - 10] with | [a, b] -> a + b | _ -> 0 = stdout="-15\n"
+match [0 - 5, 0 - 10] with | [a, b] -> a + b | _ -> 0 = -15
 
 // === Pattern Order ===
 
 // More specific pattern first
-match [1] with | [] -> 0 | [x] -> x | _ -> 99 = stdout="1\n"
+match [1] with | [] -> 0 | [x] -> x | _ -> 99 = 1
 
 // Catch-all at end (use 2 elements to avoid pattern length mismatch issues)
-match [1, 2] with | [] -> 0 | _ -> 99 = stdout="99\n"
+match [1, 2] with | [] -> 0 | _ -> 99 = 99
 
 // === Complex Bodies ===
 
 // Conditional in body
-match [5, 10] with | [a, b] -> if a < b then b else a | _ -> 0 = stdout="10\n"
+match [5, 10] with | [a, b] -> if a < b then b else a | _ -> 0 = 10
 
 // Let in body
-match [3, 4] with | [a, b] -> let c = a * b in c + 1 | _ -> 0 = stdout="13\n"
+match [3, 4] with | [a, b] -> let c = a * b in c + 1 | _ -> 0 = 13
 
 // Nested let in body
-match [2, 3] with | [a, b] -> let x = a + b in let y = x * 2 in y | _ -> 0 = stdout="10\n"
+match [2, 3] with | [a, b] -> let x = a + b in let y = x * 2 in y | _ -> 0 = 10
 
 // === Length Mismatch Tests ===
 // These test proper length validation - patterns should fall through when list is too short
 
 // Match [a, b] against [1] - should fall through to wildcard
-match [1] with | [a, b] -> a + b | _ -> 99 = stdout="99\n"
+match [1] with | [a, b] -> a + b | _ -> 99 = 99
 
 // Match [a, b, c] against [1, 2] - should fall through
-match [1, 2] with | [a, b, c] -> a + b + c | _ -> 99 = stdout="99\n"
+match [1, 2] with | [a, b, c] -> a + b + c | _ -> 99 = 99
 
 // Match [a] against [] - should fall through
-match [] with | [a] -> a | _ -> 99 = stdout="99\n"
+match [] with | [a] -> a | _ -> 99 = 99
 
 // Multiple length patterns - choose correct one
-match [1] with | [a, b] -> 1 | [a] -> 2 | [] -> 3 | _ -> 99 = stdout="2\n"
+match [1] with | [a, b] -> 1 | [a] -> 2 | [] -> 3 | _ -> 99 = 2
 
 // Empty list with multiple length patterns
-match [] with | [a, b] -> 1 | [a] -> 2 | [] -> 3 = stdout="3\n"
+match [] with | [a, b] -> 1 | [a] -> 2 | [] -> 3 = 3
 
 // Two-element list with various length patterns
-match [1, 2] with | [a, b, c] -> 1 | [a, b] -> 2 | [a] -> 3 | _ -> 99 = stdout="2\n"
+match [1, 2] with | [a, b, c] -> 1 | [a, b] -> 2 | [a] -> 3 | _ -> 99 = 2
 
 // Pattern too long - 4 elements expected, 3 provided
-match [1, 2, 3] with | [a, b, c, d] -> a + b + c + d | _ -> 99 = stdout="99\n"
+match [1, 2, 3] with | [a, b, c, d] -> a + b + c + d | _ -> 99 = 99
 
 // Pattern too long - 5 elements expected, 2 provided
-match [1, 2] with | [a, b, c, d, e] -> a | _ -> 99 = stdout="99\n"
+match [1, 2] with | [a, b, c, d, e] -> a | _ -> 99 = 99
 
 // === Exact-length matching (fixed) ===
 // Pattern [a, b] now correctly matches only lists with exactly 2 elements
 // VReg conflict issue fixed by initializing RegGen past max TempId
-match [1, 2, 3] with | [a, b] -> a + b | _ -> 99 = stdout="99\n"
-match [1, 2, 3, 4] with | [a, b, c] -> a + b + c | _ -> 99 = stdout="99\n"
+match [1, 2, 3] with | [a, b] -> a + b | _ -> 99 = 99
+match [1, 2, 3, 4] with | [a, b, c] -> a + b + c | _ -> 99 = 99
 
 // Verify exact matching works correctly
-match [1, 2] with | [a, b] -> a + b | _ -> 99 = stdout="3\n"
-match [1, 2, 3] with | [a, b, c] -> a + b + c | _ -> 99 = stdout="6\n"
+match [1, 2] with | [a, b] -> a + b | _ -> 99 = 3
+match [1, 2, 3] with | [a, b, c] -> a + b + c | _ -> 99 = 6
 
 // =====================================================
 // Polymorphic List Tests (List<t>)
@@ -238,50 +238,50 @@ def sum(xs: List<Int64>) : Int64 = match xs with | [] -> 0 | [h, ...t] -> h + su
 // =====================================================
 
 // Stdlib.List.isEmpty
-Stdlib.List.isEmpty<Int64>([]) = stdout="true\n"
-Stdlib.List.isEmpty([1]) = stdout="false\n"
-Stdlib.List.isEmpty([1, 2, 3]) = stdout="false\n"
+Stdlib.List.isEmpty<Int64>([]) = true
+Stdlib.List.isEmpty([1]) = false
+Stdlib.List.isEmpty([1, 2, 3]) = false
 
 // Stdlib.List.length
-Stdlib.List.length<Int64>([]) = stdout="0\n"
-Stdlib.List.length([1]) = stdout="1\n"
-Stdlib.List.length([1, 2]) = stdout="2\n"
-Stdlib.List.length([1, 2, 3]) = stdout="3\n"
-Stdlib.List.length([1, 2, 3, 4, 5]) = stdout="5\n"
+Stdlib.List.length<Int64>([]) = 0
+Stdlib.List.length([1]) = 1
+Stdlib.List.length([1, 2]) = 2
+Stdlib.List.length([1, 2, 3]) = 3
+Stdlib.List.length([1, 2, 3, 4, 5]) = 5
 
 // Stdlib.List.length with different types
-Stdlib.List.length([true, false, true]) = stdout="3\n"
+Stdlib.List.length([true, false, true]) = 3
 
 // =====================================================
 // List Spread Construction Tests [a, b, ...rest]
 // =====================================================
 
 // Basic spread construction - prepend single element
-let x = [2, 3] in Stdlib.List.length([1, ...x]) = stdout="3\n"
+let x = [2, 3] in Stdlib.List.length([1, ...x]) = 3
 
 // Prepend multiple elements
-let x = [3, 4] in Stdlib.List.length([1, 2, ...x]) = stdout="4\n"
+let x = [3, 4] in Stdlib.List.length([1, 2, ...x]) = 4
 
 // Empty spread - just return tail
-let x = [1, 2, 3] in Stdlib.List.length([...x]) = stdout="3\n"
+let x = [1, 2, 3] in Stdlib.List.length([...x]) = 3
 
 // Spread with empty tail (use function to get typed empty list)
-def emptyList() : List<Int64> = [] Stdlib.List.length([1, 2, ...emptyList()]) = stdout="2\n"
+def emptyList() : List<Int64> = [] Stdlib.List.length([1, 2, ...emptyList()]) = 2
 
 // Verify element values with pattern matching
-let x = [2, 3] in match [1, ...x] with | [a, b, c] -> a + b + c | _ -> 0 = stdout="6\n"
+let x = [2, 3] in match [1, ...x] with | [a, b, c] -> a + b + c | _ -> 0 = 6
 
 // Prepend computed value
-let x = [2, 3] in match [10 + 1, ...x] with | [a, b, c] -> a | _ -> 0 = stdout="11\n"
+let x = [2, 3] in match [10 + 1, ...x] with | [a, b, c] -> a | _ -> 0 = 11
 
 // Use in match case body
-match [1, 2, 3] with | [h, ...rest] -> Stdlib.List.length([h, ...rest]) | [] -> 0 = stdout="3\n"
+match [1, 2, 3] with | [h, ...rest] -> Stdlib.List.length([h, ...rest]) | [] -> 0 = 3
 
 // Rebuild list with modified head
-match [1, 2, 3] with | [h, ...rest] -> match [h + 10, ...rest] with | [a, b, c] -> a + b + c | _ -> 0 | [] -> 0 = stdout="16\n"
+match [1, 2, 3] with | [h, ...rest] -> match [h + 10, ...rest] with | [a, b, c] -> a + b + c | _ -> 0 | [] -> 0 = 16
 
 // Chain of spreads
-let a = [3] in let b = [2, ...a] in Stdlib.List.length([1, ...b]) = stdout="3\n"
+let a = [3] in let b = [2, ...a] in Stdlib.List.length([1, ...b]) = 3
 
 // =====================================================
 // Lists of Floats
@@ -302,36 +302,36 @@ let a = [3] in let b = [2, ...a] in Stdlib.List.length([1, ...b]) = stdout="3\n"
 // =====================================================
 
 // List of 2-tuples
-match [(1, 2), (3, 4)] with | [t1, t2] -> t1.0 + t2.1 | _ -> 0 = stdout="5\n"
+match [(1, 2), (3, 4)] with | [t1, t2] -> t1.0 + t2.1 | _ -> 0 = 5
 
 // List of 2-tuples - product
-match [(2, 3), (4, 5)] with | [t1, t2] -> t1.0 * t1.1 + t2.0 * t2.1 | _ -> 0 = stdout="26\n"
+match [(2, 3), (4, 5)] with | [t1, t2] -> t1.0 * t1.1 + t2.0 * t2.1 | _ -> 0 = 26
 
 // Single tuple in list
-match [(10, 20)] with | [t] -> t.0 + t.1 | _ -> 0 = stdout="30\n"
+match [(10, 20)] with | [t] -> t.0 + t.1 | _ -> 0 = 30
 
 // =====================================================
 // Lists of Strings
 // =====================================================
 
 // List of strings - basic
-match ["hello", "world"] with | [a, b] -> a ++ " " ++ b | _ -> "" = stdout="hello world\n"
+match ["hello", "world"] with | [a, b] -> a ++ " " ++ b | _ -> "" = hello world
 
 // Single string in list
-match ["test"] with | [s] -> s | _ -> "" = stdout="test\n"
+match ["test"] with | [s] -> s | _ -> "" = test
 
 // Three strings
-match ["a", "b", "c"] with | [x, y, z] -> x ++ y ++ z | _ -> "" = stdout="abc\n"
+match ["a", "b", "c"] with | [x, y, z] -> x ++ y ++ z | _ -> "" = abc
 
 // =====================================================
 // Lists of Bools
 // =====================================================
 
 // List of bools - all true
-match [true, true, true] with | [a, b, c] -> if a && b && c then 1 else 0 | _ -> -1 = stdout="1\n"
+match [true, true, true] with | [a, b, c] -> if a && b && c then 1 else 0 | _ -> -1 = 1
 
 // List of bools - mixed
-match [true, false] with | [a, b] -> if a && b then 1 else 0 | _ -> -1 = stdout="0\n"
+match [true, false] with | [a, b] -> if a && b then 1 else 0 | _ -> -1 = 0
 
 // =====================================================
 // Recursive Functions on Complex Element Types
@@ -343,4 +343,4 @@ match [true, false] with | [a, b] -> if a && b then 1 else 0 | _ -> -1 = stdout=
 
 // Concatenate list of strings
 def concatStrings(xs: List<String>) : String = match xs with | [] -> "" | [h, ...t] -> h ++ concatStrings(t)
-concatStrings(["a", "b", "c"]) = stdout="abc\n"
+concatStrings(["a", "b", "c"]) = abc

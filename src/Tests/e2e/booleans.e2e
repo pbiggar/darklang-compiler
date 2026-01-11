@@ -11,8 +11,8 @@
 // Boolean Literals
 // ===================================================================
 // Boolean literals print as "true" and "false"
-true = stdout="true\n"
-false = stdout="false\n"
+true = true
+false = false
 
 
 // ===================================================================
@@ -20,42 +20,42 @@ false = stdout="false\n"
 // ===================================================================
 
 // Equality
-1 == 1 = stdout="true\n"
-1 == 2 = stdout="false\n"
-5 == 5 = stdout="true\n"
-0 == 0 = stdout="true\n"
-42 == 42 = stdout="true\n"
+1 == 1 = true
+1 == 2 = false
+5 == 5 = true
+0 == 0 = true
+42 == 42 = true
 
 // Inequality
-1 != 2 = stdout="true\n"
-5 != 5 = stdout="false\n"
-0 != 1 = stdout="true\n"
-42 != 0 = stdout="true\n"
+1 != 2 = true
+5 != 5 = false
+0 != 1 = true
+42 != 0 = true
 
 // Less than
-1 < 2 = stdout="true\n"
-2 < 1 = stdout="false\n"
-5 < 5 = stdout="false\n"
-0 < 1 = stdout="true\n"
-10 < 20 = stdout="true\n"
+1 < 2 = true
+2 < 1 = false
+5 < 5 = false
+0 < 1 = true
+10 < 20 = true
 
 // Greater than
-2 > 1 = stdout="true\n"
-1 > 2 = stdout="false\n"
-5 > 5 = stdout="false\n"
-20 > 10 = stdout="true\n"
+2 > 1 = true
+1 > 2 = false
+5 > 5 = false
+20 > 10 = true
 
 // Less than or equal
-1 <= 2 = stdout="true\n"
-2 <= 2 = stdout="true\n"
-3 <= 2 = stdout="false\n"
-5 <= 10 = stdout="true\n"
+1 <= 2 = true
+2 <= 2 = true
+3 <= 2 = false
+5 <= 10 = true
 
 // Greater than or equal
-2 >= 1 = stdout="true\n"
-2 >= 2 = stdout="true\n"
-1 >= 2 = stdout="false\n"
-10 >= 5 = stdout="true\n"
+2 >= 1 = true
+2 >= 2 = true
+1 >= 2 = false
+10 >= 5 = true
 
 
 // ===================================================================
@@ -63,22 +63,22 @@ false = stdout="false\n"
 // ===================================================================
 
 // AND (&&)
-true && true = stdout="true\n"
-true && false = stdout="false\n"
-false && true = stdout="false\n"
-false && false = stdout="false\n"
+true && true = true
+true && false = false
+false && true = false
+false && false = false
 
 // OR (||)
-true || true = stdout="true\n"
-true || false = stdout="true\n"
-false || true = stdout="true\n"
-false || false = stdout="false\n"
+true || true = true
+true || false = true
+false || true = true
+false || false = false
 
 // NOT (!)
-!true = stdout="false\n"
-!false = stdout="true\n"
-!!true = stdout="true\n"
-!!false = stdout="false\n"
+!true = false
+!false = true
+!!true = true
+!!false = false
 
 
 // ===================================================================
@@ -86,38 +86,38 @@ false || false = stdout="false\n"
 // ===================================================================
 
 // Comparisons with boolean operators
-1 == 1 && 2 == 2 = stdout="true\n"
-1 == 1 && 1 == 2 = stdout="false\n"
-1 == 2 || 2 == 2 = stdout="true\n"
-1 == 2 || 3 == 4 = stdout="false\n"
+1 == 1 && 2 == 2 = true
+1 == 1 && 1 == 2 = false
+1 == 2 || 2 == 2 = true
+1 == 2 || 3 == 4 = false
 
 // Negated comparisons
-!(1 == 1) = stdout="false\n"
-!(1 == 2) = stdout="true\n"
-!(5 < 3) = stdout="true\n"
-!(5 > 3) = stdout="false\n"
+!(1 == 1) = false
+!(1 == 2) = true
+!(5 < 3) = true
+!(5 > 3) = false
 
 
 // ===================================================================
 // Let Bindings with Booleans
 // ===================================================================
 
-let x = true in x = stdout="true\n"
-let x = false in x = stdout="false\n"
-let x = 1 == 1 in x = stdout="true\n"
-let x = 1 == 2 in x = stdout="false\n"
-let x = 5 < 10 in x = stdout="true\n"
+let x = true in x = true
+let x = false in x = false
+let x = 1 == 1 in x = true
+let x = 1 == 2 in x = false
+let x = 5 < 10 in x = true
 
 // Multiple let bindings
-let x = true in let y = false in x && y = stdout="false\n"
-let x = true in let y = false in x || y = stdout="true\n"
-let x = 1 < 2 in let y = 3 > 2 in x && y = stdout="true\n"
+let x = true in let y = false in x && y = false
+let x = true in let y = false in x || y = true
+let x = 1 < 2 in let y = 3 > 2 in x && y = true
 
 // Boolean operations in let values
-let x = true && false in x = stdout="false\n"
-let x = true || false in x = stdout="true\n"
-let x = !true in x = stdout="false\n"
-let x = !(1 == 2) in x = stdout="true\n"
+let x = true && false in x = false
+let x = true || false in x = true
+let x = !true in x = false
+let x = !(1 == 2) in x = true
 
 
 // ===================================================================
@@ -125,21 +125,21 @@ let x = !(1 == 2) in x = stdout="true\n"
 // ===================================================================
 
 // Nested boolean operations
-(true || false) && true = stdout="true\n"
-true && (false || true) = stdout="true\n"
-(true && false) || (true && true) = stdout="true\n"
+(true || false) && true = true
+true && (false || true) = true
+(true && false) || (true && true) = true
 
 // Comparisons with arithmetic
-1 + 1 == 2 = stdout="true\n"
-3 * 4 == 12 = stdout="true\n"
-10 - 5 == 5 = stdout="true\n"
-8 / 2 == 4 = stdout="true\n"
+1 + 1 == 2 = true
+3 * 4 == 12 = true
+10 - 5 == 5 = true
+8 / 2 == 4 = true
 
 // More complex
-(1 + 2) < (4 + 5) = stdout="true\n"
-(10 - 3) > (2 * 2) = stdout="true\n"
-(6 / 2) == 3 = stdout="true\n"
+(1 + 2) < (4 + 5) = true
+(10 - 3) > (2 * 2) = true
+(6 / 2) == 3 = true
 
 // Negation with arithmetic
-!(5 + 5 == 11) = stdout="true\n"
-!(3 * 3 == 9) = stdout="false\n"
+!(5 + 5 == 11) = true
+!(3 * 3 == 9) = false

@@ -5,89 +5,89 @@
 // Char.isDigit - Check if character is digit (0-9)
 // ===================================================================
 
-Char.isDigit("0") = stdout="true\n"
-Char.isDigit("5") = stdout="true\n"
-Char.isDigit("9") = stdout="true\n"
-Char.isDigit("a") = stdout="false\n"
-Char.isDigit("A") = stdout="false\n"
-Char.isDigit(" ") = stdout="false\n"
-Char.isDigit("") = stdout="false\n"
+Char.isDigit("0") = true
+Char.isDigit("5") = true
+Char.isDigit("9") = true
+Char.isDigit("a") = false
+Char.isDigit("A") = false
+Char.isDigit(" ") = false
+Char.isDigit("") = false
 
 // ===================================================================
 // Char.isLetter - Check if character is letter (a-z, A-Z)
 // ===================================================================
 
-Char.isLetter("a") = stdout="true\n"
-Char.isLetter("z") = stdout="true\n"
-Char.isLetter("A") = stdout="true\n"
-Char.isLetter("Z") = stdout="true\n"
-Char.isLetter("0") = stdout="false\n"
-Char.isLetter(" ") = stdout="false\n"
-Char.isLetter("") = stdout="false\n"
+Char.isLetter("a") = true
+Char.isLetter("z") = true
+Char.isLetter("A") = true
+Char.isLetter("Z") = true
+Char.isLetter("0") = false
+Char.isLetter(" ") = false
+Char.isLetter("") = false
 
 // ===================================================================
 // Char.isWhitespace - Check if character is whitespace
 // ===================================================================
 
-Char.isWhitespace(" ") = stdout="true\n"
-Char.isWhitespace("\t") = stdout="true\n"
-Char.isWhitespace("\n") = stdout="true\n"
-Char.isWhitespace("a") = stdout="false\n"
-Char.isWhitespace("0") = stdout="false\n"
-Char.isWhitespace("") = stdout="false\n"
+Char.isWhitespace(" ") = true
+Char.isWhitespace("\t") = true
+Char.isWhitespace("\n") = true
+Char.isWhitespace("a") = false
+Char.isWhitespace("0") = false
+Char.isWhitespace("") = false
 
 // ===================================================================
 // Char.isUppercase - Check if character is uppercase (A-Z)
 // ===================================================================
 
-Char.isUppercase("A") = stdout="true\n"
-Char.isUppercase("Z") = stdout="true\n"
-Char.isUppercase("a") = stdout="false\n"
-Char.isUppercase("z") = stdout="false\n"
-Char.isUppercase("0") = stdout="false\n"
-Char.isUppercase("") = stdout="false\n"
+Char.isUppercase("A") = true
+Char.isUppercase("Z") = true
+Char.isUppercase("a") = false
+Char.isUppercase("z") = false
+Char.isUppercase("0") = false
+Char.isUppercase("") = false
 
 // ===================================================================
 // Char.isLowercase - Check if character is lowercase (a-z)
 // ===================================================================
 
-Char.isLowercase("a") = stdout="true\n"
-Char.isLowercase("z") = stdout="true\n"
-Char.isLowercase("A") = stdout="false\n"
-Char.isLowercase("Z") = stdout="false\n"
-Char.isLowercase("0") = stdout="false\n"
-Char.isLowercase("") = stdout="false\n"
+Char.isLowercase("a") = true
+Char.isLowercase("z") = true
+Char.isLowercase("A") = false
+Char.isLowercase("Z") = false
+Char.isLowercase("0") = false
+Char.isLowercase("") = false
 
 // ===================================================================
 // Char.isAlphanumeric - Check if character is alphanumeric
 // ===================================================================
 
-Char.isAlphanumeric("a") = stdout="true\n"
-Char.isAlphanumeric("Z") = stdout="true\n"
-Char.isAlphanumeric("5") = stdout="true\n"
-Char.isAlphanumeric(" ") = stdout="false\n"
-Char.isAlphanumeric("!") = stdout="false\n"
-Char.isAlphanumeric("") = stdout="false\n"
+Char.isAlphanumeric("a") = true
+Char.isAlphanumeric("Z") = true
+Char.isAlphanumeric("5") = true
+Char.isAlphanumeric(" ") = false
+Char.isAlphanumeric("!") = false
+Char.isAlphanumeric("") = false
 
 // ===================================================================
 // Char.toUppercase - Convert to uppercase
 // ===================================================================
 
-Char.toUppercase("a") = stdout="A\n"
-Char.toUppercase("z") = stdout="Z\n"
-Char.toUppercase("A") = stdout="A\n"
-Char.toUppercase("5") = stdout="5\n"
-Char.toUppercase("") = stdout="\n"
+Char.toUppercase("a") = "A"
+Char.toUppercase("z") = "Z"
+Char.toUppercase("A") = "A"
+Char.toUppercase("5") = 5
+Char.toUppercase("") = ""
 
 // ===================================================================
 // Char.toLowercase - Convert to lowercase
 // ===================================================================
 
-Char.toLowercase("A") = stdout="a\n"
-Char.toLowercase("Z") = stdout="z\n"
-Char.toLowercase("a") = stdout="a\n"
-Char.toLowercase("5") = stdout="5\n"
-Char.toLowercase("") = stdout="\n"
+Char.toLowercase("A") = a
+Char.toLowercase("Z") = z
+Char.toLowercase("a") = a
+Char.toLowercase("5") = 5
+Char.toLowercase("") = ""
 
 // ===================================================================
 // Char.toCode - Get codepoint value
@@ -103,7 +103,7 @@ Char.toCode("") = 0
 // Char.fromCode - Create character from codepoint
 // ===================================================================
 
-Char.fromCode(65) = stdout="A\n"
-Char.fromCode(97) = stdout="a\n"
-Char.fromCode(48) = stdout="0\n"
-Char.fromCode(32) = stdout=" \n"
+Char.fromCode(65) = "A"
+Char.fromCode(97) = a
+Char.fromCode(48) = 0
+Char.fromCode(32) = " "

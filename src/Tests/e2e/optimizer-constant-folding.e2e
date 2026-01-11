@@ -21,12 +21,12 @@ let x = 3 in let y = 2 in -(x + y) = -5
 let x = 10 in let y = 3 in -(x - y) = -7
 
 // Boolean not through variables
-let b = true in !b = stdout="false\n"
-let b = false in !b = stdout="true\n"
+let b = true in !b = false
+let b = false in !b = true
 
 // Nested not
-let b = true in !!b = stdout="true\n"
-let b = false in !!b = stdout="false\n"
+let b = true in !!b = true
+let b = false in !!b = false
 
 // ===================================================================
 // Constant Propagation

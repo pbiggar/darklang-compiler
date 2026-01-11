@@ -133,8 +133,8 @@ let f = (x: Int64) => (y: Int64) => (z: Int64) => x + y + z in f(1)(2)(3) = 6
 // ===================================================================
 
 // Return tuple (printing)
-((x: Int64) => (x, x + 1))(5) = stdout="(5, 6)\n"
-((x: Int64, y: Int64) => (x + y, x * y))(3, 4) = stdout="(7, 12)\n"
+((x: Int64) => (x, x + 1))(5) = (5, 6)
+((x: Int64, y: Int64) => (x + y, x * y))(3, 4) = (7, 12)
 
 // Return tuple - verify via pattern match extraction
 ((x: Int64) => match (x, x + 1) with | (a, b) -> a + b)(5) = 11
@@ -170,15 +170,15 @@ let sumList = List.fold([1, 2, 3], 0) in sumList((acc: Int64, x: Int64) => acc +
 // ===================================================================
 
 // Boolean result
-((x: Int64) => x > 10)(15) = stdout="true\n"
-((x: Int64) => x > 10)(5) = stdout="false\n"
-((x: Int64, y: Int64) => x == y)(5, 5) = stdout="true\n"
-((x: Int64, y: Int64) => x == y)(5, 6) = stdout="false\n"
+((x: Int64) => x > 10)(15) = true
+((x: Int64) => x > 10)(5) = false
+((x: Int64, y: Int64) => x == y)(5, 5) = true
+((x: Int64, y: Int64) => x == y)(5, 6) = false
 
 // Boolean operations
-((x: Bool, y: Bool) => x && y)(true, true) = stdout="true\n"
-((x: Bool, y: Bool) => x && y)(true, false) = stdout="false\n"
-((x: Bool, y: Bool) => x || y)(false, true) = stdout="true\n"
+((x: Bool, y: Bool) => x && y)(true, true) = true
+((x: Bool, y: Bool) => x && y)(true, false) = false
+((x: Bool, y: Bool) => x || y)(false, true) = true
 
 // ===================================================================
 // Complex Lambda Expressions

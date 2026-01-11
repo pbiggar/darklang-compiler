@@ -9,18 +9,18 @@
 // ===================================================================
 
 // Basic enum definition and equality
-type Color = Red | Green | Blue Red == Red = stdout="true\n"
-type Color = Red | Green | Blue Green == Green = stdout="true\n"
-type Color = Red | Green | Blue Blue == Blue = stdout="true\n"
+type Color = Red | Green | Blue Red == Red = true
+type Color = Red | Green | Blue Green == Green = true
+type Color = Red | Green | Blue Blue == Blue = true
 
 // Different variants are not equal
-type Color = Red | Green | Blue Red == Green = stdout="false\n"
-type Color = Red | Green | Blue Red == Blue = stdout="false\n"
-type Color = Red | Green | Blue Green == Blue = stdout="false\n"
+type Color = Red | Green | Blue Red == Green = false
+type Color = Red | Green | Blue Red == Blue = false
+type Color = Red | Green | Blue Green == Blue = false
 
 // Inequality
-type Color = Red | Green | Blue Red != Green = stdout="true\n"
-type Color = Red | Green | Blue Red != Red = stdout="false\n"
+type Color = Red | Green | Blue Red != Green = true
+type Color = Red | Green | Blue Red != Red = false
 
 // ===================================================================
 // Enum Pattern Matching
@@ -40,10 +40,10 @@ type Color = Red | Green | Blue match Blue with | Red -> 1 | Green -> 2 | _ -> 1
 // ===================================================================
 
 // Option-like type - equality tests
-type MyOption = MyNone | MySome of Int64 MySome(42) == MySome(42) = stdout="true\n"
-type MyOption = MyNone | MySome of Int64 MySome(42) == MySome(43) = stdout="false\n"
-type MyOption = MyNone | MySome of Int64 MyNone == MyNone = stdout="true\n"
-type MyOption = MyNone | MySome of Int64 MySome(42) == MyNone = stdout="false\n"
+type MyOption = MyNone | MySome of Int64 MySome(42) == MySome(42) = true
+type MyOption = MyNone | MySome of Int64 MySome(42) == MySome(43) = false
+type MyOption = MyNone | MySome of Int64 MyNone == MyNone = true
+type MyOption = MyNone | MySome of Int64 MySome(42) == MyNone = false
 
 // Extract payload
 type MyOption = MyNone | MySome of Int64 match MySome(42) with | MySome(x) -> x | MyNone -> 0 = 42
@@ -57,10 +57,10 @@ type MyOption = MyNone | MySome of Int64 match MySome(5) with | MySome(x) -> x +
 // Result-like Type - equality tests
 // ===================================================================
 
-type MyResult = MyOk of Int64 | MyErr of Int64 MyOk(42) == MyOk(42) = stdout="true\n"
-type MyResult = MyOk of Int64 | MyErr of Int64 MyOk(42) == MyOk(43) = stdout="false\n"
-type MyResult = MyOk of Int64 | MyErr of Int64 MyOk(42) == MyErr(42) = stdout="false\n"
-type MyResult = MyOk of Int64 | MyErr of Int64 MyErr(1) == MyErr(1) = stdout="true\n"
+type MyResult = MyOk of Int64 | MyErr of Int64 MyOk(42) == MyOk(42) = true
+type MyResult = MyOk of Int64 | MyErr of Int64 MyOk(42) == MyOk(43) = false
+type MyResult = MyOk of Int64 | MyErr of Int64 MyOk(42) == MyErr(42) = false
+type MyResult = MyOk of Int64 | MyErr of Int64 MyErr(1) == MyErr(1) = true
 
 // Match on MyResult
 type MyResult = MyOk of Int64 | MyErr of Int64 match MyOk(100) with | MyOk(v) -> v | MyErr(e) -> 0 - e = 100
@@ -70,9 +70,9 @@ type MyResult = MyOk of Int64 | MyErr of Int64 match MyErr(5) with | MyOk(v) -> 
 // Either Type (Two Payload Variants) - equality tests
 // ===================================================================
 
-type Either = Left of Int64 | Right of Int64 Left(5) == Left(5) = stdout="true\n"
-type Either = Left of Int64 | Right of Int64 Right(5) == Right(5) = stdout="true\n"
-type Either = Left of Int64 | Right of Int64 Left(5) == Right(5) = stdout="false\n"
+type Either = Left of Int64 | Right of Int64 Left(5) == Left(5) = true
+type Either = Left of Int64 | Right of Int64 Right(5) == Right(5) = true
+type Either = Left of Int64 | Right of Int64 Left(5) == Right(5) = false
 
 // Pattern match Either
 type Either = Left of Int64 | Right of Int64 match Left(10) with | Left(x) -> x | Right(y) -> y * 2 = 10
@@ -132,10 +132,10 @@ type MyOption = MyNone | MySome of Int64 let x = 0 - 5 in let opt = if x > 0 the
 // ===================================================================
 
 // Enum printing (pretty-printing of ADT values)
-type MyOption = MyNone | MySome of Int64 MySome(20) = stdout="MySome(20)\n"
-type MyOption = MyNone | MySome of Int64 MyNone = stdout="MyNone\n"
-type Color = Red | Green | Blue Red = stdout="Red\n"
-type Color = Red | Green | Blue Green = stdout="Green\n"
+type MyOption = MyNone | MySome of Int64 MySome(20) = "MySome(20)"
+type MyOption = MyNone | MySome of Int64 MyNone = "MyNone"
+type Color = Red | Green | Blue Red = "Red"
+type Color = Red | Green | Blue Green = "Green"
 
 // Map-like behavior (manual)
 type MyOption = MyNone | MySome of Int64 let opt = MySome(10) in match opt with | MySome(x) -> match MySome(x * 2) with | MySome(v) -> v | MyNone -> 0 | MyNone -> 0 = 20

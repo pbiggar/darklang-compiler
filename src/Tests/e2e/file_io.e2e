@@ -16,26 +16,26 @@
 // Check if a file exists using Stdlib.File.exists
 
 // /etc/passwd exists on both Linux and macOS
-Stdlib.File.exists("/etc/passwd") = stdout="true\n"
+Stdlib.File.exists("/etc/passwd") = true
 
 // Non-existent file
-Stdlib.File.exists("/nonexistent/file/path/that/does/not/exist") = stdout="false\n"
+Stdlib.File.exists("/nonexistent/file/path/that/does/not/exist") = false
 
 // Root directory exists (should work as a path)
-Stdlib.File.exists("/") = stdout="true\n"
+Stdlib.File.exists("/") = true
 
 // Another standard file
-Stdlib.File.exists("/etc/hosts") = stdout="true\n"
+Stdlib.File.exists("/etc/hosts") = true
 
 // Empty string path (edge case - should be false)
-Stdlib.File.exists("") = stdout="false\n"
+Stdlib.File.exists("") = false
 
 // Use with let binding
-let exists = Stdlib.File.exists("/etc/passwd") in exists = stdout="true\n"
+let exists = Stdlib.File.exists("/etc/passwd") in exists = true
 
 // Use in conditional
-if Stdlib.File.exists("/etc/passwd") then 1 else 0 = stdout="1\n"
-if Stdlib.File.exists("/nonexistent") then 1 else 0 = stdout="0\n"
+if Stdlib.File.exists("/etc/passwd") then 1 else 0 = 1
+if Stdlib.File.exists("/nonexistent") then 1 else 0 = 0
 
 
 // ===================================================================
@@ -44,20 +44,20 @@ if Stdlib.File.exists("/nonexistent") then 1 else 0 = stdout="0\n"
 // Reading file contents using Stdlib.File.readText
 
 // Reading an existing file returns Ok - test with pattern matching
-match Stdlib.File.readText("/etc/hosts") with | Ok(_) -> true | Error(_) -> false = stdout="true\n"
+match Stdlib.File.readText("/etc/hosts") with | Ok(_) -> true | Error(_) -> false = true
 
 // Reading a non-existent file returns Error
-match Stdlib.File.readText("/nonexistent/file") with | Ok(_) -> false | Error(_) -> true = stdout="true\n"
+match Stdlib.File.readText("/nonexistent/file") with | Ok(_) -> false | Error(_) -> true = true
 
 // Read the error message from a non-existent file
-match Stdlib.File.readText("/nonexistent") with | Ok(s) -> s | Error(e) -> e = stdout="Error\n"
+match Stdlib.File.readText("/nonexistent") with | Ok(s) -> s | Error(e) -> e = "Error"
 
 // Use in let binding
-let result = Stdlib.File.readText("/etc/hosts") in match result with | Ok(_) -> 1 | Error(_) -> 0 = stdout="1\n"
+let result = Stdlib.File.readText("/etc/hosts") in match result with | Ok(_) -> 1 | Error(_) -> 0 = 1
 
 // Use in conditional - return different values based on file existence
-match Stdlib.File.readText("/etc/hosts") with | Ok(_) -> 42 | Error(_) -> 0 = stdout="42\n"
-match Stdlib.File.readText("/nonexistent") with | Ok(_) -> 42 | Error(_) -> 0 = stdout="0\n"
+match Stdlib.File.readText("/etc/hosts") with | Ok(_) -> 42 | Error(_) -> 0 = 42
+match Stdlib.File.readText("/nonexistent") with | Ok(_) -> 42 | Error(_) -> 0 = 0
 
 
 // ===================================================================
@@ -66,19 +66,19 @@ match Stdlib.File.readText("/nonexistent") with | Ok(_) -> 42 | Error(_) -> 0 = 
 // Writing file contents using Stdlib.File.writeText
 
 // Write to a new file and verify success
-match Stdlib.File.writeText("/tmp/dark_test_write1.txt", "hello") with | Ok(_) -> "ok" | Error(e) -> e = stdout="ok\n"
+match Stdlib.File.writeText("/tmp/dark_test_write1.txt", "hello") with | Ok(_) -> "ok" | Error(e) -> e = ok
 
 // Write to a file and read it back
-let _ = Stdlib.File.writeText("/tmp/dark_test_write2.txt", "test content") in match Stdlib.File.readText("/tmp/dark_test_write2.txt") with | Ok(s) -> s | Error(_) -> "error" = stdout="test content\n"
+let _ = Stdlib.File.writeText("/tmp/dark_test_write2.txt", "test content") in match Stdlib.File.readText("/tmp/dark_test_write2.txt") with | Ok(s) -> s | Error(_) -> "error" = test content
 
 // Write creates file - verify it exists
-let _ = Stdlib.File.writeText("/tmp/dark_test_write3.txt", "content") in Stdlib.File.exists("/tmp/dark_test_write3.txt") = stdout="true\n"
+let _ = Stdlib.File.writeText("/tmp/dark_test_write3.txt", "content") in Stdlib.File.exists("/tmp/dark_test_write3.txt") = true
 
 // Write to invalid path returns Error
-match Stdlib.File.writeText("/nonexistent/directory/file.txt", "test") with | Ok(_) -> "ok" | Error(_) -> "error" = stdout="error\n"
+match Stdlib.File.writeText("/nonexistent/directory/file.txt", "test") with | Ok(_) -> "ok" | Error(_) -> "error" = "error"
 
 // Write empty string
-let _ = Stdlib.File.writeText("/tmp/dark_test_empty.txt", "") in Stdlib.File.exists("/tmp/dark_test_empty.txt") = stdout="true\n"
+let _ = Stdlib.File.writeText("/tmp/dark_test_empty.txt", "") in Stdlib.File.exists("/tmp/dark_test_empty.txt") = true
 
 
 // ===================================================================
@@ -87,16 +87,16 @@ let _ = Stdlib.File.writeText("/tmp/dark_test_empty.txt", "") in Stdlib.File.exi
 // Appending to files using Stdlib.File.appendText
 
 // Append to a file creates it if it doesn't exist
-match Stdlib.File.appendText("/tmp/dark_test_append1.txt", "hello") with | Ok(_) -> "ok" | Error(e) -> e = stdout="ok\n"
+match Stdlib.File.appendText("/tmp/dark_test_append1.txt", "hello") with | Ok(_) -> "ok" | Error(e) -> e = ok
 
 // Append to existing file - verify append returns Ok
-let _ = Stdlib.File.writeText("/tmp/dark_test_append2.txt", "first") in match Stdlib.File.appendText("/tmp/dark_test_append2.txt", "second") with | Ok(_) -> "ok" | Error(_) -> "error" = stdout="ok\n"
+let _ = Stdlib.File.writeText("/tmp/dark_test_append2.txt", "first") in match Stdlib.File.appendText("/tmp/dark_test_append2.txt", "second") with | Ok(_) -> "ok" | Error(_) -> "error" = ok
 
 // Multiple appends accumulate - verify the operations succeed
-let _ = Stdlib.File.writeText("/tmp/dark_test_append3.txt", "a") in match Stdlib.File.appendText("/tmp/dark_test_append3.txt", "b") with | Ok(_) -> "ok" | Error(_) -> "error" = stdout="ok\n"
+let _ = Stdlib.File.writeText("/tmp/dark_test_append3.txt", "a") in match Stdlib.File.appendText("/tmp/dark_test_append3.txt", "b") with | Ok(_) -> "ok" | Error(_) -> "error" = ok
 
 // Append to invalid path returns Error
-match Stdlib.File.appendText("/nonexistent/directory/file.txt", "test") with | Ok(_) -> "ok" | Error(_) -> "error" = stdout="error\n"
+match Stdlib.File.appendText("/nonexistent/directory/file.txt", "test") with | Ok(_) -> "ok" | Error(_) -> "error" = "error"
 
 
 // ===================================================================
@@ -104,16 +104,16 @@ match Stdlib.File.appendText("/nonexistent/directory/file.txt", "test") with | O
 // ===================================================================
 
 // Path.combine joins paths with /
-Path.combine("foo", "bar") = stdout="foo/bar\n"
-Path.combine("/usr", "bin") = stdout="/usr/bin\n"
-Path.combine("", "file.txt") = stdout="/file.txt\n"
-Path.combine("/tmp", "test.txt") = stdout="/tmp/test.txt\n"
+Path.combine("foo", "bar") = foo/bar
+Path.combine("/usr", "bin") = "/usr/bin"
+Path.combine("", "file.txt") = "/file.txt"
+Path.combine("/tmp", "test.txt") = "/tmp/test.txt"
 
 // Path.tempDir returns /tmp
-Path.tempDir() = stdout="/tmp\n"
+Path.tempDir() = "/tmp"
 
 // Combine with tempDir
-Path.combine(Path.tempDir(), "myfile.txt") = stdout="/tmp/myfile.txt\n"
+Path.combine(Path.tempDir(), "myfile.txt") = "/tmp/myfile.txt"
 
 
 // ===================================================================
@@ -126,4 +126,4 @@ Path.combine(Path.tempDir(), "myfile.txt") = stdout="/tmp/myfile.txt\n"
 // These tests verify the functions compile and run
 
 // At least one must be callable (we can't predict which platform)
-if Platform.isMacOS() then true else if Platform.isLinux() then true else true = stdout="true\n"
+if Platform.isMacOS() then true else if Platform.isLinux() then true else true = true

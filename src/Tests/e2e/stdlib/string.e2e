@@ -24,298 +24,298 @@
 // String.append - String concatenation
 // ===================================================================
 
-String.append("hello", " world") = stdout="hello world\n"
-String.append("", "") = stdout="\n"
-String.append("a", "b") = stdout="ab\n"
-String.append("foo", "bar") = stdout="foobar\n"
-String.append("", "test") = stdout="test\n"
-String.append("test", "") = stdout="test\n"
+String.append("hello", " world") = hello world
+String.append("", "") = ""
+String.append("a", "b") = ab
+String.append("foo", "bar") = foobar
+String.append("", "test") = test
+String.append("test", "") = test
 
 // Unicode append tests
-String.append("żółw", "😄") = stdout="żółw😄\n"
-String.append("🧑🏼‍💻", "🧑🏻‍🍼") = stdout="🧑🏼‍💻🧑🏻‍🍼\n"
-String.append("﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽", "👱👱🏻👱🏼👱🏽👱🏾👱🏿") = stdout="﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽👱👱🏻👱🏼👱🏽👱🏾👱🏿\n"
-String.append("🧟‍♂️🧟‍♀️", "🧟‍♂️") = stdout="🧟‍♂️🧟‍♀️🧟‍♂️\n"
-String.append("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇", "👨‍❤️‍💋‍👨") = stdout="Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇👨‍❤️‍💋‍👨\n"
+String.append("żółw", "😄") = żółw😄
+String.append("🧑🏼‍💻", "🧑🏻‍🍼") = "🧑🏼‍💻🧑🏻‍🍼"
+String.append("﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽", "👱👱🏻👱🏼👱🏽👱🏾👱🏿") = "﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽👱👱🏻👱🏼👱🏽👱🏾👱🏿"
+String.append("🧟‍♂️🧟‍♀️", "🧟‍♂️") = "🧟‍♂️🧟‍♀️🧟‍♂️"
+String.append("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇", "👨‍❤️‍💋‍👨") = "Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇👨‍❤️‍💋‍👨"
 
 // ===================================================================
 // String.prepend - Prepend first string to second
 // ===================================================================
 
-String.prepend(" world", "hello") = stdout="hello world\n"
-String.prepend("bar", "foo") = stdout="foobar\n"
-String.prepend("", "test") = stdout="test\n"
-String.prepend("test", "") = stdout="test\n"
+String.prepend(" world", "hello") = hello world
+String.prepend("bar", "foo") = foobar
+String.prepend("", "test") = test
+String.prepend("test", "") = test
 
 // Unicode prepend tests
-String.prepend("żółw", "😄") = stdout="😄żółw\n"
-String.prepend("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇", "Z̤͔ͧ̑̓") = stdout="Z̤͔ͧ̑̓Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇\n"
-String.prepend("﷽﷽﷽﷽﷽", "👨‍❤️‍💋‍👨") = stdout="👨‍❤️‍💋‍👨﷽﷽﷽﷽﷽\n"
-String.prepend("👱👱🏻👱🏼👱🏽👱🏾👱🏿", "✋🏻") = stdout="✋🏻👱👱🏻👱🏼👱🏽👱🏾👱🏿\n"
-String.prepend("🧟‍♀️🧟‍♂️", "🧟‍♂️") = stdout="🧟‍♂️🧟‍♀️🧟‍♂️\n"
+String.prepend("żółw", "😄") = "😄żółw"
+String.prepend("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇", "Z̤͔ͧ̑̓") = "Z̤͔ͧ̑̓Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇"
+String.prepend("﷽﷽﷽﷽﷽", "👨‍❤️‍💋‍👨") = "👨‍❤️‍💋‍👨﷽﷽﷽﷽﷽"
+String.prepend("👱👱🏻👱🏼👱🏽👱🏾👱🏿", "✋🏻") = "✋🏻👱👱🏻👱🏼👱🏽👱🏾👱🏿"
+String.prepend("🧟‍♀️🧟‍♂️", "🧟‍♂️") = "🧟‍♂️🧟‍♀️🧟‍♂️"
 
 // ===================================================================
 // String.newline - Returns newline character
 // ===================================================================
 
-String.newline() = stdout="\n\n"
+String.newline() = "\n"
 
 // ===================================================================
 // String.length - Byte length of string
 // ===================================================================
 
-String.length("hello") = stdout="5\n"
-String.length("") = stdout="0\n"
-String.length("a") = stdout="1\n"
-String.length("hello world") = stdout="11\n"
+String.length("hello") = 5
+String.length("") = 0
+String.length("a") = 1
+String.length("hello world") = 11
 
 // Unicode byte lengths
-String.length("żółw") = stdout="7\n"
-String.length("😄") = stdout="4\n"
+String.length("żółw") = 7
+String.length("😄") = 4
 
 // ===================================================================
 // String.isEmpty - Check if string is empty
 // ===================================================================
 
-String.isEmpty("") = stdout="true\n"
-String.isEmpty("hello") = stdout="false\n"
-String.isEmpty(" ") = stdout="false\n"
+String.isEmpty("") = true
+String.isEmpty("hello") = false
+String.isEmpty(" ") = false
 
 // Unicode isEmpty tests
-String.isEmpty("🧑🏼‍💻🧑🏻‍🍼") = stdout="false\n"
-String.isEmpty("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇") = stdout="false\n"
-String.isEmpty("﷽﷽﷽﷽﷽") = stdout="false\n"
-String.isEmpty("👱👱🏻👱🏼👱🏽👱🏾👱🏿") = stdout="false\n"
-String.isEmpty("🧟‍♀️🧟‍♂️") = stdout="false\n"
-String.isEmpty("👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷") = stdout="false\n"
+String.isEmpty("🧑🏼‍💻🧑🏻‍🍼") = false
+String.isEmpty("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇") = false
+String.isEmpty("﷽﷽﷽﷽﷽") = false
+String.isEmpty("👱👱🏻👱🏼👱🏽👱🏾👱🏿") = false
+String.isEmpty("🧟‍♀️🧟‍♂️") = false
+String.isEmpty("👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷") = false
 
 // ===================================================================
 // String.toUpperCase - Convert to uppercase (ASCII)
 // ===================================================================
 
-String.toUpperCase("hello") = stdout="HELLO\n"
-String.toUpperCase("HELLO") = stdout="HELLO\n"
-String.toUpperCase("Hello World") = stdout="HELLO WORLD\n"
-String.toUpperCase("") = stdout="\n"
-String.toUpperCase("abc123") = stdout="ABC123\n"
-String.toUpperCase("mixedCASE") = stdout="MIXEDCASE\n"
-String.toUpperCase("ab323cdef") = stdout="AB323CDEF\n"
+String.toUpperCase("hello") = "HELLO"
+String.toUpperCase("HELLO") = "HELLO"
+String.toUpperCase("Hello World") = "HELLO WORLD"
+String.toUpperCase("") = ""
+String.toUpperCase("abc123") = "ABC123"
+String.toUpperCase("mixedCASE") = "MIXEDCASE"
+String.toUpperCase("ab323cdef") = "AB323CDEF"
 
 // Unicode uppercase - emoji should be unchanged
-String.toUpperCase("hello😄world") = stdout="HELLO😄WORLD\n"
-String.toUpperCase("😄orange") = stdout="😄ORANGE\n"
+String.toUpperCase("hello😄world") = "HELLO😄WORLD"
+String.toUpperCase("😄orange") = "😄ORANGE"
 
 // ===================================================================
 // String.toLowerCase - Convert to lowercase (ASCII)
 // ===================================================================
 
-String.toLowerCase("HELLO") = stdout="hello\n"
-String.toLowerCase("hello") = stdout="hello\n"
-String.toLowerCase("Hello World") = stdout="hello world\n"
-String.toLowerCase("") = stdout="\n"
-String.toLowerCase("ABC123") = stdout="abc123\n"
-String.toLowerCase("MIXEDcase") = stdout="mixedcase\n"
-String.toLowerCase("AB323CDEF") = stdout="ab323cdef\n"
+String.toLowerCase("HELLO") = hello
+String.toLowerCase("hello") = hello
+String.toLowerCase("Hello World") = hello world
+String.toLowerCase("") = ""
+String.toLowerCase("ABC123") = abc123
+String.toLowerCase("MIXEDcase") = mixedcase
+String.toLowerCase("AB323CDEF") = ab323cdef
 
 // Unicode lowercase - emoji should be unchanged
-String.toLowerCase("HELLO😄WORLD") = stdout="hello😄world\n"
-String.toLowerCase("😄ORANGE") = stdout="😄orange\n"
+String.toLowerCase("HELLO😄WORLD") = hello😄world
+String.toLowerCase("😄ORANGE") = "😄orange"
 
 // ===================================================================
 // String.contains - Check if string contains substring
 // ===================================================================
 
-String.contains("hello world", "world") = stdout="true\n"
-String.contains("hello world", "hello") = stdout="true\n"
-String.contains("hello", "xyz") = stdout="false\n"
-String.contains("hello", "hello") = stdout="true\n"
-String.contains("hello", "") = stdout="true\n"
-String.contains("", "") = stdout="true\n"
-String.contains("", "a") = stdout="false\n"
-String.contains("abcabc", "bc") = stdout="true\n"
+String.contains("hello world", "world") = true
+String.contains("hello world", "hello") = true
+String.contains("hello", "xyz") = false
+String.contains("hello", "hello") = true
+String.contains("hello", "") = true
+String.contains("", "") = true
+String.contains("", "a") = false
+String.contains("abcabc", "bc") = true
 
 // Unicode contains tests
-String.contains("﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽", "2223") = stdout="false\n"
-String.contains("👱👱🏻👱🏼👱🏽👱🏾", "👱🏿") = stdout="false\n"
-String.contains("🧟‍♀️🧟‍♂️", "🧟‍♂️") = stdout="true\n"
-String.contains("🧟‍♀️🧟‍♂️", "🧟‍♂️🧟‍♂️") = stdout="false\n"
-String.contains("👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️🇵🇷", "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦") = stdout="true\n"
-String.contains("اختبار", "اختبار") = stdout="true\n"
+String.contains("﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽", "2223") = false
+String.contains("👱👱🏻👱🏼👱🏽👱🏾", "👱🏿") = false
+String.contains("🧟‍♀️🧟‍♂️", "🧟‍♂️") = true
+String.contains("🧟‍♀️🧟‍♂️", "🧟‍♂️🧟‍♂️") = false
+String.contains("👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️🇵🇷", "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦") = true
+String.contains("اختبار", "اختبار") = true
 
 // ===================================================================
 // String.startsWith - Check if string starts with prefix
 // ===================================================================
 
-String.startsWith("hello world", "hello") = stdout="true\n"
-String.startsWith("hello world", "world") = stdout="false\n"
-String.startsWith("hello", "hello") = stdout="true\n"
-String.startsWith("hello", "") = stdout="true\n"
-String.startsWith("", "") = stdout="true\n"
-String.startsWith("", "a") = stdout="false\n"
-String.startsWith("abc", "abcd") = stdout="false\n"
+String.startsWith("hello world", "hello") = true
+String.startsWith("hello world", "world") = false
+String.startsWith("hello", "hello") = true
+String.startsWith("hello", "") = true
+String.startsWith("", "") = true
+String.startsWith("", "a") = false
+String.startsWith("abc", "abcd") = false
 
 // Unicode startsWith tests
-String.startsWith("żółw", "żó") = stdout="true\n"
-String.startsWith("żółw", "r22") = stdout="false\n"
-String.startsWith("👩🏻‍🚀🍇", "🍇") = stdout="false\n"
-String.startsWith("🧑🏽‍🦰🧑🏼‍💻🧑🏻‍🍼✋✋🏻✋🏿", "🧑🏾‍🦰") = stdout="false\n"
-String.startsWith("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇", "Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚") = stdout="true\n"
-String.startsWith("﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽", "﷽﷽﷽﷽") = stdout="true\n"
-String.startsWith("👱👱🏻👱🏼👱🏽👱🏾👱🏿", "👱🏿") = stdout="false\n"
-String.startsWith("🧟‍♀️🧟‍♂️", "🧟‍♂️") = stdout="false\n"
-String.startsWith("👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷", "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️") = stdout="true\n"
+String.startsWith("żółw", "żó") = true
+String.startsWith("żółw", "r22") = false
+String.startsWith("👩🏻‍🚀🍇", "🍇") = false
+String.startsWith("🧑🏽‍🦰🧑🏼‍💻🧑🏻‍🍼✋✋🏻✋🏿", "🧑🏾‍🦰") = false
+String.startsWith("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇", "Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚") = true
+String.startsWith("﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽", "﷽﷽﷽﷽") = true
+String.startsWith("👱👱🏻👱🏼👱🏽👱🏾👱🏿", "👱🏿") = false
+String.startsWith("🧟‍♀️🧟‍♂️", "🧟‍♂️") = false
+String.startsWith("👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷", "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️") = true
 
 // ===================================================================
 // String.endsWith - Check if string ends with suffix
 // ===================================================================
 
-String.endsWith("hello world", "world") = stdout="true\n"
-String.endsWith("hello world", "hello") = stdout="false\n"
-String.endsWith("hello", "hello") = stdout="true\n"
-String.endsWith("hello", "") = stdout="true\n"
-String.endsWith("", "") = stdout="true\n"
-String.endsWith("", "a") = stdout="false\n"
-String.endsWith("abc", "abcd") = stdout="false\n"
+String.endsWith("hello world", "world") = true
+String.endsWith("hello world", "hello") = false
+String.endsWith("hello", "hello") = true
+String.endsWith("hello", "") = true
+String.endsWith("", "") = true
+String.endsWith("", "a") = false
+String.endsWith("abc", "abcd") = false
 
 // Unicode endsWith tests
-String.endsWith("żółw", "żó") = stdout="false\n"
-String.endsWith("żółw", "łw") = stdout="true\n"
-String.endsWith("👩🏻‍🚀🍇", "🍇") = stdout="true\n"
-String.endsWith("🧑🏽‍🦰🧑🏼‍💻🧑🏻‍🍼✋✋🏻✋🏿", "✋✋🏿✋🏿") = stdout="false\n"
-String.endsWith("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇", "ǧ̗͚̚o̙̔ͮ̇͐̇") = stdout="true\n"
-String.endsWith("﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽", "12xsd") = stdout="false\n"
-String.endsWith("👱👱🏻👱🏼👱🏽👱🏾👱🏿", "﷽") = stdout="false\n"
-String.endsWith("🧟‍♀️🧟‍♂️", "🧟‍♀️") = stdout="false\n"
-String.endsWith("👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷", "🏳️‍⚧️‍️🇵🇷") = stdout="true\n"
+String.endsWith("żółw", "żó") = false
+String.endsWith("żółw", "łw") = true
+String.endsWith("👩🏻‍🚀🍇", "🍇") = true
+String.endsWith("🧑🏽‍🦰🧑🏼‍💻🧑🏻‍🍼✋✋🏻✋🏿", "✋✋🏿✋🏿") = false
+String.endsWith("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇", "ǧ̗͚̚o̙̔ͮ̇͐̇") = true
+String.endsWith("﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽", "12xsd") = false
+String.endsWith("👱👱🏻👱🏼👱🏽👱🏾👱🏿", "﷽") = false
+String.endsWith("🧟‍♀️🧟‍♂️", "🧟‍♀️") = false
+String.endsWith("👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷", "🏳️‍⚧️‍️🇵🇷") = true
 
 // ===================================================================
 // String.indexOf - Find index of substring (byte-based)
 // ===================================================================
 
-String.indexOf("hello", "l") = stdout="2\n"
-String.indexOf("hello", "ll") = stdout="2\n"
-String.indexOf("hello", "o") = stdout="4\n"
-String.indexOf("hello", "x") = stdout="-1\n"
-String.indexOf("hello", "") = stdout="0\n"
-String.indexOf("", "") = stdout="0\n"
-String.indexOf("abcabc", "bc") = stdout="1\n"
-String.indexOf("", "a") = stdout="-1\n"
+String.indexOf("hello", "l") = 2
+String.indexOf("hello", "ll") = 2
+String.indexOf("hello", "o") = 4
+String.indexOf("hello", "x") = -1
+String.indexOf("hello", "") = 0
+String.indexOf("", "") = 0
+String.indexOf("abcabc", "bc") = 1
+String.indexOf("", "a") = -1
 
 // ===================================================================
 // String.slice - Extract substring by start and length (byte-based)
 // ===================================================================
 
-String.slice("hello", 0, 2) = stdout="he\n"
-String.slice("hello", 0, 5) = stdout="hello\n"
-String.slice("hello", 1, 3) = stdout="ell\n"
-String.slice("hello", 2, 10) = stdout="llo\n"
-String.slice("hello", 0, 0) = stdout="\n"
-String.slice("hello", 5, 5) = stdout="\n"
+String.slice("hello", 0, 2) = he
+String.slice("hello", 0, 5) = hello
+String.slice("hello", 1, 3) = ell
+String.slice("hello", 2, 10) = llo
+String.slice("hello", 0, 0) = ""
+String.slice("hello", 5, 5) = ""
 
 // ===================================================================
 // String.substring - Extract substring by start and end index
 // ===================================================================
 
-String.substring("hello", 0, 2) = stdout="he\n"
-String.substring("hello", 1, 4) = stdout="ell\n"
-String.substring("hello", 0, 5) = stdout="hello\n"
+String.substring("hello", 0, 2) = he
+String.substring("hello", 1, 4) = ell
+String.substring("hello", 0, 5) = hello
 
 // ===================================================================
 // String.take - Take first n bytes
 // ===================================================================
 
-String.take("hello", 3) = stdout="hel\n"
-String.take("hello", 0) = stdout="\n"
-String.take("hello", 5) = stdout="hello\n"
-String.take("hello", 10) = stdout="hello\n"
-String.take("", 5) = stdout="\n"
+String.take("hello", 3) = hel
+String.take("hello", 0) = ""
+String.take("hello", 5) = hello
+String.take("hello", 10) = hello
+String.take("", 5) = ""
 
 // ===================================================================
 // String.drop - Drop first n bytes
 // ===================================================================
 
-String.drop("hello", 2) = stdout="llo\n"
-String.drop("hello", 0) = stdout="hello\n"
-String.drop("hello", 5) = stdout="\n"
-String.drop("hello", 10) = stdout="\n"
-String.drop("", 5) = stdout="\n"
+String.drop("hello", 2) = llo
+String.drop("hello", 0) = hello
+String.drop("hello", 5) = ""
+String.drop("hello", 10) = ""
+String.drop("", 5) = ""
 
 // ===================================================================
 // String.trim - Remove leading and trailing whitespace
 // ===================================================================
 
-String.trim("  hello  ") = stdout="hello\n"
-String.trim("hello") = stdout="hello\n"
-String.trim("  hello") = stdout="hello\n"
-String.trim("hello  ") = stdout="hello\n"
-String.trim("   ") = stdout="\n"
-String.trim("") = stdout="\n"
+String.trim("  hello  ") = hello
+String.trim("hello") = hello
+String.trim("  hello") = hello
+String.trim("hello  ") = hello
+String.trim("   ") = ""
+String.trim("") = ""
 
 // Unicode trim tests
-String.trim("     żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿   ") = stdout="żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿\n"
-String.trim("  Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇  ") = stdout="Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇\n"
-String.trim("       ﷽﷽") = stdout="﷽﷽\n"
-String.trim(" 🧟‍♀️🧟‍♂️ ") = stdout="🧟‍♀️🧟‍♂️\n"
-String.trim(" 👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷     ") = stdout="👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷\n"
-String.trim(" 😄foobar😄 ") = stdout="😄foobar😄\n"
+String.trim("     żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿   ") = żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿
+String.trim("  Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇  ") = "Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇"
+String.trim("       ﷽﷽") = "﷽﷽"
+String.trim(" 🧟‍♀️🧟‍♂️ ") = "🧟‍♀️🧟‍♂️"
+String.trim(" 👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷     ") = "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷"
+String.trim(" 😄foobar😄 ") = "😄foobar😄"
 
 // ===================================================================
 // String.trimStart - Remove leading whitespace
 // ===================================================================
 
-String.trimStart("  hello") = stdout="hello\n"
-String.trimStart("hello  ") = stdout="hello  \n"
-String.trimStart("  hello  ") = stdout="hello  \n"
-String.trimStart("hello") = stdout="hello\n"
-String.trimStart("") = stdout="\n"
-String.trimStart("      ") = stdout="\n"
+String.trimStart("  hello") = hello
+String.trimStart("hello  ") = "hello  "
+String.trimStart("  hello  ") = "hello  "
+String.trimStart("hello") = hello
+String.trimStart("") = ""
+String.trimStart("      ") = ""
 
 // Unicode trimStart tests
-String.trimStart("     żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿   ") = stdout="żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿   \n"
-String.trimStart("  Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇  ") = stdout="Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇  \n"
-String.trimStart("       ﷽﷽  ") = stdout="﷽﷽  \n"
-String.trimStart(" 🧟‍♀️🧟‍♂️ ") = stdout="🧟‍♀️🧟‍♂️ \n"
-String.trimStart(" 👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷     ") = stdout="👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷     \n"
-String.trimStart(" 😄foobar😄 ") = stdout="😄foobar😄 \n"
+String.trimStart("     żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿   ") = "żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿   "
+String.trimStart("  Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇  ") = "Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇  "
+String.trimStart("       ﷽﷽  ") = "﷽﷽  "
+String.trimStart(" 🧟‍♀️🧟‍♂️ ") = "🧟‍♀️🧟‍♂️ "
+String.trimStart(" 👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷     ") = "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷     "
+String.trimStart(" 😄foobar😄 ") = "😄foobar😄 "
 
 // ===================================================================
 // String.trimEnd - Remove trailing whitespace
 // ===================================================================
 
-String.trimEnd("hello  ") = stdout="hello\n"
-String.trimEnd("  hello") = stdout="  hello\n"
-String.trimEnd("  hello  ") = stdout="  hello\n"
-String.trimEnd("hello") = stdout="hello\n"
-String.trimEnd("") = stdout="\n"
-String.trimEnd("      ") = stdout="\n"
+String.trimEnd("hello  ") = hello
+String.trimEnd("  hello") = "  hello"
+String.trimEnd("  hello  ") = "  hello"
+String.trimEnd("hello") = hello
+String.trimEnd("") = ""
+String.trimEnd("      ") = ""
 
 // Unicode trimEnd tests
-String.trimEnd("     żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿   ") = stdout="     żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿\n"
-String.trimEnd("  Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇  ") = stdout="  Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇\n"
-String.trimEnd("       ﷽﷽  ") = stdout="       ﷽﷽\n"
-String.trimEnd(" 🧟‍♀️🧟‍♂️ ") = stdout=" 🧟‍♀️🧟‍♂️\n"
-String.trimEnd(" 👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷     ") = stdout=" 👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷\n"
-String.trimEnd(" 😄foobar😄 ") = stdout=" 😄foobar😄\n"
+String.trimEnd("     żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿   ") = "     żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿"
+String.trimEnd("  Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇  ") = "  Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇"
+String.trimEnd("       ﷽﷽  ") = "       ﷽﷽"
+String.trimEnd(" 🧟‍♀️🧟‍♂️ ") = " 🧟‍♀️🧟‍♂️"
+String.trimEnd(" 👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷     ") = " 👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷"
+String.trimEnd(" 😄foobar😄 ") = " 😄foobar😄"
 
 // ===================================================================
 // String.reverse - Reverse string (grapheme-aware)
 // ===================================================================
 
-String.reverse("hello") = stdout="olleh\n"
-String.reverse("") = stdout="\n"
-String.reverse("a") = stdout="a\n"
-String.reverse("ab") = stdout="ba\n"
-String.reverse("abc") = stdout="cba\n"
-String.reverse("abcde") = stdout="edcba\n"
-String.reverse("0abcde") = stdout="edcba0\n"
+String.reverse("hello") = olleh
+String.reverse("") = ""
+String.reverse("a") = a
+String.reverse("ab") = ba
+String.reverse("abc") = cba
+String.reverse("abcde") = edcba
+String.reverse("0abcde") = edcba0
 
 // Unicode reverse tests
-String.reverse("ábc") = stdout="cbá\n"
-String.reverse("🎁🧸Ǆʠ123") = stdout="321ʠǄ🧸🎁\n"
-String.reverse("😄foobar👽") = stdout="👽raboof😄\n"
+String.reverse("ábc") = cbá
+String.reverse("🎁🧸Ǆʠ123") = 321ʠǄ🧸🎁
+String.reverse("😄foobar👽") = "👽raboof😄"
 // NOTE: Skin tone modifiers require full UAX #29 grapheme segmentation
 // String.reverse("żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿") = stdout="✋🏿✋🏻✋🧑🏻‍🍼🧑🏽‍🦰włóż\n"
-String.reverse("﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽") = stdout="﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽\n"
+String.reverse("﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽") = "﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽"
 // String.reverse("👱👱🏻👱🏼👱🏽👱🏾👱🏿") = stdout="👱🏿👱🏾👱🏽👱🏼👱🏻👱\n"
 // NOTE: ZWJ emoji sequences require full UAX #29 grapheme segmentation
 // Our simplified implementation doesn't fully handle these yet
@@ -327,71 +327,71 @@ String.reverse("﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽") = stdout="﷽
 // String.repeat - Repeat string n times
 // ===================================================================
 
-String.repeat("ab", 3) = stdout="ababab\n"
-String.repeat("x", 5) = stdout="xxxxx\n"
-String.repeat("hello", 0) = stdout="\n"
-String.repeat("hello", 1) = stdout="hello\n"
-String.repeat("", 5) = stdout="\n"
+String.repeat("ab", 3) = ababab
+String.repeat("x", 5) = xxxxx
+String.repeat("hello", 0) = ""
+String.repeat("hello", 1) = hello
+String.repeat("", 5) = ""
 
 // ===================================================================
 // String.replace - Replace occurrences of substring
 // ===================================================================
 
-String.replace("hello world", "world", "there") = stdout="hello there\n"
-String.replace("hello hello", "hello", "hi") = stdout="hi hi\n"
-String.replace("hello", "x", "y") = stdout="hello\n"
-String.replace("aaa", "a", "b") = stdout="bbb\n"
-String.replace("", "a", "b") = stdout="\n"
-String.replace("abcABCcbaCBA", "b", "x") = stdout="axcABCcxaCBA\n"
+String.replace("hello world", "world", "there") = hello there
+String.replace("hello hello", "hello", "hi") = hi hi
+String.replace("hello", "x", "y") = hello
+String.replace("aaa", "a", "b") = bbb
+String.replace("", "a", "b") = ""
+String.replace("abcABCcbaCBA", "b", "x") = axcABCcxaCBA
 // Empty old string inserts at every position (including boundaries)
-String.replace("abcABCcbaCBA", "", "x") = stdout="xaxbxcxAxBxCxcxbxaxCxBxAx\n"
-String.replace("", "", "&") = stdout="&\n"
-String.replace("abcABCcbaCBA", "b", "") = stdout="acABCcaCBA\n"
+String.replace("abcABCcbaCBA", "", "x") = xaxbxcxAxBxCxcxbxaxCxBxAx
+String.replace("", "", "&") = "&"
+String.replace("abcABCcbaCBA", "b", "") = acABCcaCBA
 
 // Unicode replace tests
-String.replace("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇", "ä͖̭̈̇", "$") = stdout="Z̤͔ͧ̑̓$lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇\n"
-String.replace("﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽", "﷽﷽", "$") = stdout="$$$$$$$$\n"
-String.replace("👱👱🏻👱🏼👱🏽👱🏾👱🏿", "👱🏽", "✋🏻") = stdout="👱👱🏻👱🏼✋🏻👱🏾👱🏿\n"
-String.replace("🧟‍♀️🧟‍♂️", "🧟‍♂️", "🧑🏽‍🦰") = stdout="🧟‍♀️🧑🏽‍🦰\n"
-String.replace("👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷", "👨‍❤️‍💋‍👨", "👨‍❤️‍💋‍👨") = stdout="👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷\n"
-String.replace("żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿", "🧑🏻‍🍼", "🧟‍♂️") = stdout="żółw🧑🏽‍🦰🧟‍♂️✋✋🏻✋🏿\n"
+String.replace("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇", "ä͖̭̈̇", "$") = "Z̤͔ͧ̑̓$lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇"
+String.replace("﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽", "﷽﷽", "$") = "$$$$$$$$"
+String.replace("👱👱🏻👱🏼👱🏽👱🏾👱🏿", "👱🏽", "✋🏻") = "👱👱🏻👱🏼✋🏻👱🏾👱🏿"
+String.replace("🧟‍♀️🧟‍♂️", "🧟‍♂️", "🧑🏽‍🦰") = "🧟‍♀️🧑🏽‍🦰"
+String.replace("👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷", "👨‍❤️‍💋‍👨", "👨‍❤️‍💋‍👨") = "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷"
+String.replace("żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿", "🧑🏻‍🍼", "🧟‍♂️") = żółw🧑🏽‍🦰🧟‍♂️✋✋🏻✋🏿
 
 // ===================================================================
 // String.split - Split string by delimiter
 // ===================================================================
 
-String.split("a,b,c", ",") = stdout="[\"a\", \"b\", \"c\"]\n"
-String.split("hello", ",") = stdout="[\"hello\"]\n"
-String.split("a::b::c", "::") = stdout="[\"a\", \"b\", \"c\"]\n"
-String.split("", ",") = stdout="[\"\"]\n"
-String.split("hello world", "notfound") = stdout="[\"hello world\"]\n"
+String.split("a,b,c", ",") = "[\"a\", \"b\", \"c\"]"
+String.split("hello", ",") = "[\"hello\"]"
+String.split("a::b::c", "::") = "[\"a\", \"b\", \"c\"]"
+String.split("", ",") = "[\"\"]"
+String.split("hello world", "notfound") = "[\"hello world\"]"
 
 // Unicode split tests
-String.split("hello😄world", "😄") = stdout="[\"hello\", \"world\"]\n"
-String.split("hello&&&&world", "&&&&") = stdout="[\"hello\", \"world\"]\n"
-String.split("hello34564world34564sun", "😄") = stdout="[\"hello34564world34564sun\"]\n"
-String.split("hello34564world34564sun", "34564") = stdout="[\"hello\", \"world\", \"sun\"]\n"
-String.split("🧑🏽‍🦰🧑🏼‍💻🧑🏻‍🍼✋✋🏻✋🏿", "🧑🏻‍🍼") = stdout="[\"🧑🏽‍🦰🧑🏼‍💻\", \"✋✋🏻✋🏿\"]\n"
-String.split("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇", "Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇") = stdout="[\"\", \"\"]\n"
-String.split("﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽", "﷽﷽﷽﷽") = stdout="[\"\", \"\", \"\", \"\", \"\"]\n"
-String.split("👱👱🏻👱🏼👱🏽👱🏾👱🏿", "👱🏼👱🏽") = stdout="[\"👱👱🏻\", \"👱🏾👱🏿\"]\n"
-String.split("🧟‍♀️🧟‍♂️", "👱🏽") = stdout="[\"🧟‍♀️🧟‍♂️\"]\n"
-String.split("👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷", "👩‍👩‍👧‍👦") = stdout="[\"👨‍❤️‍💋‍👨\", \"🏳️‍⚧️‍️🇵🇷\"]\n"
-String.split("żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿", "🧑🏽‍🦰") = stdout="[\"żółw\", \"🧑🏻‍🍼✋✋🏻✋🏿\"]\n"
-String.split("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇", "Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫ") = stdout="[\"\", \"ǧ̗͚̚o̙̔ͮ̇͐̇\"]\n"
+String.split("hello😄world", "😄") = "[\"hello\", \"world\"]"
+String.split("hello&&&&world", "&&&&") = "[\"hello\", \"world\"]"
+String.split("hello34564world34564sun", "😄") = "[\"hello34564world34564sun\"]"
+String.split("hello34564world34564sun", "34564") = "[\"hello\", \"world\", \"sun\"]"
+String.split("🧑🏽‍🦰🧑🏼‍💻🧑🏻‍🍼✋✋🏻✋🏿", "🧑🏻‍🍼") = "[\"🧑🏽‍🦰🧑🏼‍💻\", \"✋✋🏻✋🏿\"]"
+String.split("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇", "Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇") = "[\"\", \"\"]"
+String.split("﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽", "﷽﷽﷽﷽") = "[\"\", \"\", \"\", \"\", \"\"]"
+String.split("👱👱🏻👱🏼👱🏽👱🏾👱🏿", "👱🏼👱🏽") = "[\"👱👱🏻\", \"👱🏾👱🏿\"]"
+String.split("🧟‍♀️🧟‍♂️", "👱🏽") = "[\"🧟‍♀️🧟‍♂️\"]"
+String.split("👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷", "👩‍👩‍👧‍👦") = "[\"👨‍❤️‍💋‍👨\", \"🏳️‍⚧️‍️🇵🇷\"]"
+String.split("żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿", "🧑🏽‍🦰") = "[\"żółw\", \"🧑🏻‍🍼✋✋🏻✋🏿\"]"
+String.split("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇", "Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫ") = "[\"\", \"ǧ̗͚̚o̙̔ͮ̇͐̇\"]"
 
 // Split edge cases with delimiters at boundaries
-String.split("666666", "6") = stdout="[\"\", \"\", \"\", \"\", \"\", \"\", \"\"]\n"
-String.split("55555", "5") = stdout="[\"\", \"\", \"\", \"\", \"\", \"\"]\n"
-String.split("4444", "4") = stdout="[\"\", \"\", \"\", \"\", \"\"]\n"
-String.split("333", "3") = stdout="[\"\", \"\", \"\", \"\"]\n"
-String.split("22", "2") = stdout="[\"\", \"\", \"\"]\n"
-String.split("1", "1") = stdout="[\"\", \"\"]\n"
+String.split("666666", "6") = "[\"\", \"\", \"\", \"\", \"\", \"\", \"\"]"
+String.split("55555", "5") = "[\"\", \"\", \"\", \"\", \"\", \"\"]"
+String.split("4444", "4") = "[\"\", \"\", \"\", \"\", \"\"]"
+String.split("333", "3") = "[\"\", \"\", \"\", \"\"]"
+String.split("22", "2") = "[\"\", \"\", \"\"]"
+String.split("1", "1") = "[\"\", \"\"]"
 // NOTE: Empty delimiter causes crash - implementation bug
 // String.split("", "") = stdout="[]\n"
-String.split("666666x", "6") = stdout="[\"\", \"\", \"\", \"\", \"\", \"\", \"x\"]\n"
-String.split("x666666", "6") = stdout="[\"x\", \"\", \"\", \"\", \"\", \"\", \"\"]\n"
-String.split("x666666y", "6") = stdout="[\"x\", \"\", \"\", \"\", \"\", \"\", \"y\"]\n"
+String.split("666666x", "6") = "[\"\", \"\", \"\", \"\", \"\", \"\", \"x\"]"
+String.split("x666666", "6") = "[\"x\", \"\", \"\", \"\", \"\", \"\", \"\"]"
+String.split("x666666y", "6") = "[\"x\", \"\", \"\", \"\", \"\", \"\", \"y\"]"
 
 // ===================================================================
 // String.join - Join strings with separator
@@ -416,27 +416,27 @@ String.split("x666666y", "6") = stdout="[\"x\", \"\", \"\", \"\", \"\", \"\", \"
 // String.equals - String equality
 // ===================================================================
 
-String.equals("hello", "hello") = stdout="true\n"
-String.equals("hello", "world") = stdout="false\n"
-String.equals("", "") = stdout="true\n"
-String.equals("Hello", "hello") = stdout="false\n"
+String.equals("hello", "hello") = true
+String.equals("hello", "world") = false
+String.equals("", "") = true
+String.equals("Hello", "hello") = false
 
 // ===================================================================
 // String.codepointLength - Count Unicode codepoints
 // ===================================================================
 
-String.codepointLength("hello") = stdout="5\n"
-String.codepointLength("") = stdout="0\n"
-String.codepointLength("żółw") = stdout="4\n"
-String.codepointLength("😄") = stdout="1\n"
+String.codepointLength("hello") = 5
+String.codepointLength("") = 0
+String.codepointLength("żółw") = 4
+String.codepointLength("😄") = 1
 
 // ===================================================================
 // String.graphemeLength - Count grapheme clusters
 // ===================================================================
 
-String.graphemeLength("hello") = stdout="5\n"
-String.graphemeLength("") = stdout="0\n"
-String.graphemeLength("😄") = stdout="1\n"
+String.graphemeLength("hello") = 5
+String.graphemeLength("") = 0
+String.graphemeLength("😄") = 1
 // NOTE: graphemeLength issue with ASCII strings
 // String.graphemeLength("abcdef") = stdout="6\n"
 
@@ -444,7 +444,7 @@ String.graphemeLength("😄") = stdout="1\n"
 // Our simplified grapheme segmentation doesn't fully handle these
 // String.graphemeLength("🧑🏽‍🦰🧑🏼‍💻🧑🏻‍🍼✋✋🏻✋🏿") = stdout="6\n"
 // String.graphemeLength("Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇") = stdout="5\n"
-String.graphemeLength("﷽﷽﷽﷽﷽") = stdout="5\n"
+String.graphemeLength("﷽﷽﷽﷽﷽") = 5
 // String.graphemeLength("👱👱🏻👱🏼👱🏽👱🏾👱🏿") = stdout="6\n"
 // String.graphemeLength("🧟‍♀️🧟‍♂️") = stdout="2\n"
 // String.graphemeLength("👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷") = stdout="4\n"
@@ -453,17 +453,17 @@ String.graphemeLength("﷽﷽﷽﷽﷽") = stdout="5\n"
 // String.toCodepoints - Convert to list of codepoints
 // ===================================================================
 
-String.toCodepoints("abc") = stdout="[97, 98, 99]\n"
-String.toCodepoints("") = stdout="[]\n"
-String.toCodepoints("Hi") = stdout="[72, 105]\n"
+String.toCodepoints("abc") = [97, 98, 99]
+String.toCodepoints("") = []
+String.toCodepoints("Hi") = [72, 105]
 
 // ===================================================================
 // String.fromCodepoints - Create string from codepoints
 // ===================================================================
 
-String.fromCodepoints([97, 98, 99]) = stdout="abc\n"
-String.fromCodepoints([]) = stdout="\n"
-String.fromCodepoints([72, 105]) = stdout="Hi\n"
+String.fromCodepoints([97, 98, 99]) = abc
+String.fromCodepoints([]) = ""
+String.fromCodepoints([72, 105]) = "Hi"
 
 // ===================================================================
 // String.toGraphemes - Split into grapheme clusters
@@ -471,68 +471,68 @@ String.fromCodepoints([72, 105]) = stdout="Hi\n"
 // ===================================================================
 
 // String.toGraphemes("abc") = stdout="[a, b, c]\n"
-String.toGraphemes("") = stdout="[]\n"
+String.toGraphemes("") = []
 // String.toGraphemes("hello") = stdout="[h, e, l, l, o]\n"
 
 // ===================================================================
 // String.first - Get first n bytes (alias for take)
 // ===================================================================
 
-String.first("hello", 3) = stdout="hel\n"
-String.first("hello", 0) = stdout="\n"
-String.first("hello", 10) = stdout="hello\n"
+String.first("hello", 3) = hel
+String.first("hello", 0) = ""
+String.first("hello", 10) = hello
 
 // ===================================================================
 // String.last - Get last n bytes
 // ===================================================================
 
-String.last("hello", 3) = stdout="llo\n"
-String.last("hello", 0) = stdout="\n"
-String.last("hello", 10) = stdout="hello\n"
-String.last("hello", 5) = stdout="hello\n"
-String.last("abcdef", 2) = stdout="ef\n"
+String.last("hello", 3) = llo
+String.last("hello", 0) = ""
+String.last("hello", 10) = hello
+String.last("hello", 5) = hello
+String.last("abcdef", 2) = ef
 
 // ===================================================================
 // String.dropFirst - Drop first n bytes (alias for drop)
 // ===================================================================
 
-String.dropFirst("hello", 2) = stdout="llo\n"
-String.dropFirst("hello", 0) = stdout="hello\n"
-String.dropFirst("hello", 10) = stdout="\n"
+String.dropFirst("hello", 2) = llo
+String.dropFirst("hello", 0) = hello
+String.dropFirst("hello", 10) = ""
 
 // ===================================================================
 // String.dropLast - Drop last n bytes
 // ===================================================================
 
-String.dropLast("hello", 2) = stdout="hel\n"
-String.dropLast("hello", 0) = stdout="hello\n"
-String.dropLast("hello", 10) = stdout="\n"
-String.dropLast("hello", 5) = stdout="\n"
-String.dropLast("abcdef", 3) = stdout="abc\n"
+String.dropLast("hello", 2) = hel
+String.dropLast("hello", 0) = hello
+String.dropLast("hello", 10) = ""
+String.dropLast("hello", 5) = ""
+String.dropLast("abcdef", 3) = abc
 
 // ===================================================================
 // String.head - Get first character as Option
 // ===================================================================
 
-Option.withDefault<String>(String.head("hello"), "") = stdout="h\n"
-Option.isNone<String>(String.head("")) = stdout="true\n"
+Option.withDefault<String>(String.head("hello"), "") = h
+Option.isNone<String>(String.head("")) = true
 
 // ===================================================================
 // String.padStart - Pad on the left
 // ===================================================================
 
-String.padStart("hi", 5, " ") = stdout="   hi\n"
-String.padStart("hello", 5, " ") = stdout="hello\n"
-String.padStart("hello", 3, " ") = stdout="hello\n"
-String.padStart("5", 3, "0") = stdout="005\n"
-String.padStart("42", 5, "0") = stdout="00042\n"
+String.padStart("hi", 5, " ") = "   hi"
+String.padStart("hello", 5, " ") = hello
+String.padStart("hello", 3, " ") = hello
+String.padStart("5", 3, "0") = 005
+String.padStart("42", 5, "0") = 00042
 
 // ===================================================================
 // String.padEnd - Pad on the right
 // ===================================================================
 
-String.padEnd("hi", 5, " ") = stdout="hi   \n"
-String.padEnd("hello", 5, " ") = stdout="hello\n"
-String.padEnd("hello", 3, " ") = stdout="hello\n"
-String.padEnd("5", 3, "0") = stdout="500\n"
-String.padEnd("42", 5, "0") = stdout="42000\n"
+String.padEnd("hi", 5, " ") = "hi   "
+String.padEnd("hello", 5, " ") = hello
+String.padEnd("hello", 3, " ") = hello
+String.padEnd("5", 3, "0") = 500
+String.padEnd("42", 5, "0") = 42000

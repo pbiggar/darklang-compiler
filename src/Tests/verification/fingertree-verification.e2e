@@ -152,10 +152,10 @@ let t = buildTree(1, 10, Stdlib.FingerTree.empty<Int64>()) in Stdlib.FingerTree.
 // ===================================================================
 
 // head equals getAt(0)
-let t = buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()) in let h = Stdlib.Option.withDefault(Stdlib.FingerTree.head(t), -1) in let g = Stdlib.Option.withDefault(Stdlib.FingerTree.getAt(t, 0), -2) in h == g = stdout="true\n"
+let t = buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()) in let h = Stdlib.Option.withDefault(Stdlib.FingerTree.head(t), -1) in let g = Stdlib.Option.withDefault(Stdlib.FingerTree.getAt(t, 0), -2) in h == g = true
 
 // last equals getAt(length-1)
-let t = buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()) in let l = Stdlib.Option.withDefault(Stdlib.FingerTree.last(t), -1) in let len = Stdlib.FingerTree.length(t) in let g = Stdlib.Option.withDefault(Stdlib.FingerTree.getAt(t, len - 1), -2) in l == g = stdout="true\n"
+let t = buildTree(1, 100, Stdlib.FingerTree.empty<Int64>()) in let l = Stdlib.Option.withDefault(Stdlib.FingerTree.last(t), -1) in let len = Stdlib.FingerTree.length(t) in let g = Stdlib.Option.withDefault(Stdlib.FingerTree.getAt(t, len - 1), -2) in l == g = true
 
 // ===================================================================
 // Property: pushBack-last and push-head
@@ -172,19 +172,19 @@ Stdlib.Option.withDefault(Stdlib.FingerTree.head(Stdlib.FingerTree.push(buildTre
 // ===================================================================
 
 // isEmpty on empty
-Stdlib.FingerTree.isEmpty(Stdlib.FingerTree.empty<Int64>()) = stdout="true\n"
+Stdlib.FingerTree.isEmpty(Stdlib.FingerTree.empty<Int64>()) = true
 
 // isEmpty on non-empty
-Stdlib.FingerTree.isEmpty(Stdlib.FingerTree.singleton(1)) = stdout="false\n"
+Stdlib.FingerTree.isEmpty(Stdlib.FingerTree.singleton(1)) = false
 
 // head on empty returns None
-Stdlib.Option.isNone(Stdlib.FingerTree.head(Stdlib.FingerTree.empty<Int64>())) = stdout="true\n"
+Stdlib.Option.isNone(Stdlib.FingerTree.head(Stdlib.FingerTree.empty<Int64>())) = true
 
 // last on empty returns None
-Stdlib.Option.isNone(Stdlib.FingerTree.last(Stdlib.FingerTree.empty<Int64>())) = stdout="true\n"
+Stdlib.Option.isNone(Stdlib.FingerTree.last(Stdlib.FingerTree.empty<Int64>())) = true
 
 // getAt on empty returns None
-Stdlib.Option.isNone(Stdlib.FingerTree.getAt(Stdlib.FingerTree.empty<Int64>(), 0)) = stdout="true\n"
+Stdlib.Option.isNone(Stdlib.FingerTree.getAt(Stdlib.FingerTree.empty<Int64>(), 0)) = true
 
 // ===================================================================
 // Mixed Operations

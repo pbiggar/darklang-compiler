@@ -8,10 +8,10 @@
 // Basic AND operations (from Dark eand.dark)
 // ===================================================================
 
-(true && true) = stdout="true\n"
-(true && false) = stdout="false\n"
-(false && true) = stdout="false\n"
-(false && false) = stdout="false\n"
+(true && true) = true
+(true && false) = false
+(false && true) = false
+(false && false) = false
 
 // ===================================================================
 // Type error tests - compiler should reject these
@@ -27,55 +27,55 @@
 // Pipe operator with AND
 // ===================================================================
 
-(true |> (&&) true) = stdout="true\n"
-(true |> (&&) false) = stdout="false\n"
-(false |> (&&) true) = stdout="false\n"
-(false |> (&&) false) = stdout="false\n"
+(true |> (&&) true) = true
+(true |> (&&) false) = false
+(false |> (&&) true) = false
+(false |> (&&) false) = false
 
 // ===================================================================
 // Additional tests (from our extended suite)
 // ===================================================================
 
 // Short-circuit Evaluation
-let x = false in (x && true) = stdout="false\n"
-let x = false in (x && false) = stdout="false\n"
-let x = true in (x && true) = stdout="true\n"
-let x = true in (x && false) = stdout="false\n"
+let x = false in (x && true) = false
+let x = false in (x && false) = false
+let x = true in (x && true) = true
+let x = true in (x && false) = false
 
 // Nested AND Expressions
-(true && true && true) = stdout="true\n"
-(true && true && false) = stdout="false\n"
-(true && false && true) = stdout="false\n"
-(false && true && true) = stdout="false\n"
+(true && true && true) = true
+(true && true && false) = false
+(true && false && true) = false
+(false && true && true) = false
 
 // AND with Comparisons
-(1 == 1 && 2 == 2) = stdout="true\n"
-(1 == 1 && 1 == 2) = stdout="false\n"
-(1 == 2 && 2 == 2) = stdout="false\n"
-(1 == 2 && 3 == 4) = stdout="false\n"
+(1 == 1 && 2 == 2) = true
+(1 == 1 && 1 == 2) = false
+(1 == 2 && 2 == 2) = false
+(1 == 2 && 3 == 4) = false
 
 // Less than with AND
-(1 < 2 && 2 < 3) = stdout="true\n"
-(1 < 2 && 3 < 2) = stdout="false\n"
-(2 < 1 && 2 < 3) = stdout="false\n"
+(1 < 2 && 2 < 3) = true
+(1 < 2 && 3 < 2) = false
+(2 < 1 && 2 < 3) = false
 
 // Greater than with AND
-(2 > 1 && 3 > 2) = stdout="true\n"
-(2 > 1 && 2 > 3) = stdout="false\n"
+(2 > 1 && 3 > 2) = true
+(2 > 1 && 2 > 3) = false
 
 // Mixed comparisons
-(1 < 2 && 2 > 1) = stdout="true\n"
-(5 >= 5 && 5 <= 5) = stdout="true\n"
+(1 < 2 && 2 > 1) = true
+(5 >= 5 && 5 <= 5) = true
 
 // AND with Let Bindings
-let a = true in let b = true in (a && b) = stdout="true\n"
-let a = true in let b = false in (a && b) = stdout="false\n"
-let a = false in let b = true in (a && b) = stdout="false\n"
-let a = false in let b = false in (a && b) = stdout="false\n"
+let a = true in let b = true in (a && b) = true
+let a = true in let b = false in (a && b) = false
+let a = false in let b = true in (a && b) = false
+let a = false in let b = false in (a && b) = false
 
 // AND result stored in variable
-let result = (true && true) in result = stdout="true\n"
-let result = (true && false) in result = stdout="false\n"
+let result = (true && true) in result = true
+let result = (true && false) in result = false
 
 // AND in Control Flow
 if true && true then 1 else 0 = 1
@@ -88,22 +88,22 @@ if (1 < 2) && (2 < 3) then 42 else 0 = 42
 if (5 > 3) && (10 > 1) then 100 else 0 = 100
 
 // Complex AND Expressions
-let x = 5 in (x > 0 && x < 10 && x != 3) = stdout="true\n"
-let x = 5 in (x > 0 && x < 10 && x == 3) = stdout="false\n"
+let x = 5 in (x > 0 && x < 10 && x != 3) = true
+let x = 5 in (x > 0 && x < 10 && x == 3) = false
 
 // Parenthesized expressions
-((true && true) && true) = stdout="true\n"
-(true && (true && true)) = stdout="true\n"
-((true && false) && true) = stdout="false\n"
-(true && (false && true)) = stdout="false\n"
+((true && true) && true) = true
+(true && (true && true)) = true
+((true && false) && true) = false
+(true && (false && true)) = false
 
 // AND with Arithmetic Results
-((1 + 1) == 2 && (2 + 2) == 4) = stdout="true\n"
-((1 + 1) == 3 && (2 + 2) == 4) = stdout="false\n"
-((5 * 2) == 10 && (10 / 2) == 5) = stdout="true\n"
+((1 + 1) == 2 && (2 + 2) == 4) = true
+((1 + 1) == 3 && (2 + 2) == 4) = false
+((5 * 2) == 10 && (10 / 2) == 5) = true
 
 // Double negation with AND
-(!!true && !!true) = stdout="true\n"
-(!!true && !!false) = stdout="false\n"
-(!false && !false) = stdout="true\n"
-(!true && !false) = stdout="false\n"
+(!!true && !!true) = true
+(!!true && !!false) = false
+(!false && !false) = true
+(!true && !false) = false

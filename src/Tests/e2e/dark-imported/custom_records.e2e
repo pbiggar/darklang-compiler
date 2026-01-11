@@ -9,9 +9,9 @@
 // Record Printing (Pretty-printing of record values)
 // ===================================================================
 
-type Point = { x: Int64, y: Int64 } Point { x = 5, y = 10 } = stdout="Point { x = 5, y = 10 }\n"
-type Point1 = { x: Int64 } Point1 { x = 42 } = stdout="Point1 { x = 42 }\n"
-type Vec3 = { x: Int64, y: Int64, z: Int64 } Vec3 { x = 1, y = 2, z = 3 } = stdout="Vec3 { x = 1, y = 2, z = 3 }\n"
+type Point = { x: Int64, y: Int64 } Point { x = 5, y = 10 } = "Point { x = 5, y = 10 }"
+type Point1 = { x: Int64 } Point1 { x = 42 } = "Point1 { x = 42 }"
+type Vec3 = { x: Int64, y: Int64, z: Int64 } Vec3 { x = 1, y = 2, z = 3 } = "Vec3 { x = 1, y = 2, z = 3 }"
 
 // ===================================================================
 // Record Field Access
@@ -43,15 +43,15 @@ type Point = { x: Int64, y: Int64 } let p = Point { x = 5, y = 10 } in p.y = 10
 // ===================================================================
 
 // Same records are equal
-type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 2 } = stdout="true\n"
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 2 } = true
 
 // Different field values are not equal
-type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 3 } = stdout="false\n"
-type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 2, y = 2 } = stdout="false\n"
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 3 } = false
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 2, y = 2 } = false
 
 // Inequality
-type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 3, y = 4 } = stdout="true\n"
-type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 1, y = 2 } = stdout="false\n"
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 3, y = 4 } = true
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 1, y = 2 } = false
 
 // ===================================================================
 // Record Pattern Matching

@@ -3,8 +3,8 @@
 // Format: source = expectations  // optional comment
 //
 // Expectations:
-//   Simple format: value (e.g., "42 = 42")
-//     - Interprets as: stdout="42\n", exit=0
+//   Simple format: output (e.g., "42 = 42", "\"hi\" = \"hi\"")
+//     - Interprets as: stdout="<output>\n", exit=0
 //     - Verifies the printed output (binaries exit with 0 on success)
 //   Explicit format: [exit=N] [stdout="..."] [stderr="..."]
 //     - For error cases or when you need non-zero exit codes
@@ -17,6 +17,7 @@
 // Examples:
 //   42 = 42                           // stdout="42\n", exit=0 (simple format)
 //   2 + 3 = 5                         // stdout="5\n", exit=0 (simple format)
+//   "hi" = "hi"                       // stdout="hi\n", exit=0 (simple format)
 //   42 = stdout="42\n"                // explicit stdout (exit defaults to 0)
 //   1/0 = exit=1 stderr="error\n"     // error case with non-zero exit
 //
@@ -122,5 +123,5 @@
 // Explicit Format Examples
 // ===================================================================
 
-100 = stdout="100\n"  // explicit stdout, exit defaults to 0
-10 + 5 = stdout="15\n"  // same as simple format "10 + 5 = 15"
+100 = 100  // explicit stdout, exit defaults to 0
+10 + 5 = 15  // same as simple format "10 + 5 = 15"

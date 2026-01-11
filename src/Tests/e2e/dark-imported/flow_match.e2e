@@ -238,73 +238,73 @@ let x = 0 - 5 in match x with | x -> x + 10 = 5
 // Converted: removed L suffix (Int64 is default)
 // ===================================================================
 
-(match 6 with | 5 -> "fail" | -6 -> "fail" | 6 -> "pass" | var -> "fail") = stdout="pass\n"
-(match 6 with | 6 -> "pass" | 5 -> "fail" | var -> "fail") = stdout="pass\n"
-(match 6 with | var -> "pass" | 6 -> "fail" | 5 -> "fail") = stdout="pass\n"
-(match 999999999999999 with | 0 -> "fail" | 999999999999999 -> "pass") = stdout="pass\n"
+(match 6 with | 5 -> "fail" | -6 -> "fail" | 6 -> "pass" | var -> "fail") = pass
+(match 6 with | 6 -> "pass" | 5 -> "fail" | var -> "fail") = pass
+(match 6 with | var -> "pass" | 6 -> "fail" | 5 -> "fail") = pass
+(match 999999999999999 with | 0 -> "fail" | 999999999999999 -> "pass") = pass
 
 // ===================================================================
 // UInt64 Matching
 // ===================================================================
 
-(match 6UL with | 5UL -> "fail" | 6UL -> "pass" | var -> "fail") = stdout="pass\n"
-(match 6UL with | 6UL -> "pass" | 5UL -> "fail" | var -> "fail") = stdout="pass\n"
-(match 6UL with | var -> "pass" | 6UL -> "fail" | 5UL -> "fail") = stdout="pass\n"
+(match 6UL with | 5UL -> "fail" | 6UL -> "pass" | var -> "fail") = pass
+(match 6UL with | 6UL -> "pass" | 5UL -> "fail" | var -> "fail") = pass
+(match 6UL with | var -> "pass" | 6UL -> "fail" | 5UL -> "fail") = pass
 // NOTE: 18446744073709551615UL exceeds Int64 range, skipping
 
 // ===================================================================
 // Int8 Matching
 // ===================================================================
 
-(match 6y with | 5y -> "fail" | -6y -> "fail" | 6y -> "pass" | var -> "fail") = stdout="pass\n"
-(match 6y with | 6y -> "pass" | 5y -> "fail" | var -> "fail") = stdout="pass\n"
-(match 6y with | var -> "pass" | 6y -> "fail" | 5y -> "fail") = stdout="pass\n"
-(match 127y with | 0y -> "fail" | 127y -> "pass") = stdout="pass\n"
+(match 6y with | 5y -> "fail" | -6y -> "fail" | 6y -> "pass" | var -> "fail") = pass
+(match 6y with | 6y -> "pass" | 5y -> "fail" | var -> "fail") = pass
+(match 6y with | var -> "pass" | 6y -> "fail" | 5y -> "fail") = pass
+(match 127y with | 0y -> "fail" | 127y -> "pass") = pass
 
 // ===================================================================
 // UInt8 Matching
 // ===================================================================
 
-(match 6uy with | 5uy -> "fail" | 6uy -> "pass" | var -> "fail") = stdout="pass\n"
-(match 6uy with | 6uy -> "pass" | 5uy -> "fail" | var -> "fail") = stdout="pass\n"
-(match 6uy with | var -> "pass" | 6uy -> "fail" | 5uy -> "fail") = stdout="pass\n"
-(match 255uy with | 0uy -> "fail" | 255uy -> "pass") = stdout="pass\n"
+(match 6uy with | 5uy -> "fail" | 6uy -> "pass" | var -> "fail") = pass
+(match 6uy with | 6uy -> "pass" | 5uy -> "fail" | var -> "fail") = pass
+(match 6uy with | var -> "pass" | 6uy -> "fail" | 5uy -> "fail") = pass
+(match 255uy with | 0uy -> "fail" | 255uy -> "pass") = pass
 
 // ===================================================================
 // Int16 Matching
 // ===================================================================
 
-(match 6s with | 5s -> "fail" | -6s -> "fail" | 6s -> "pass" | var -> "fail") = stdout="pass\n"
-(match 6s with | 6s -> "pass" | 5s -> "fail" | var -> "fail") = stdout="pass\n"
-(match 6s with | var -> "pass" | 6s -> "fail" | 5s -> "fail") = stdout="pass\n"
-(match 32767s with | 0s -> "fail" | 32767s -> "pass") = stdout="pass\n"
+(match 6s with | 5s -> "fail" | -6s -> "fail" | 6s -> "pass" | var -> "fail") = pass
+(match 6s with | 6s -> "pass" | 5s -> "fail" | var -> "fail") = pass
+(match 6s with | var -> "pass" | 6s -> "fail" | 5s -> "fail") = pass
+(match 32767s with | 0s -> "fail" | 32767s -> "pass") = pass
 
 // ===================================================================
 // UInt16 Matching
 // ===================================================================
 
-(match 6us with | 5us -> "fail" | 6us -> "pass" | var -> "fail") = stdout="pass\n"
-(match 6us with | 6us -> "pass" | 5us -> "fail" | var -> "fail") = stdout="pass\n"
-(match 6us with | var -> "pass" | 6us -> "fail" | 5us -> "fail") = stdout="pass\n"
-(match 65535us with | 0us -> "fail" | 65535us -> "pass") = stdout="pass\n"
+(match 6us with | 5us -> "fail" | 6us -> "pass" | var -> "fail") = pass
+(match 6us with | 6us -> "pass" | 5us -> "fail" | var -> "fail") = pass
+(match 6us with | var -> "pass" | 6us -> "fail" | 5us -> "fail") = pass
+(match 65535us with | 0us -> "fail" | 65535us -> "pass") = pass
 
 // ===================================================================
 // Int32 Matching
 // ===================================================================
 
-(match 6l with | 5l -> "fail" | -6l -> "fail" | 6l -> "pass" | var -> "fail") = stdout="pass\n"
-(match 6l with | 6l -> "pass" | 5l -> "fail" | var -> "fail") = stdout="pass\n"
-(match 6l with | var -> "pass" | 6l -> "fail" | 5l -> "fail") = stdout="pass\n"
-(match 2147483647l with | 0l -> "fail" | 2147483647l -> "pass") = stdout="pass\n"
+(match 6l with | 5l -> "fail" | -6l -> "fail" | 6l -> "pass" | var -> "fail") = pass
+(match 6l with | 6l -> "pass" | 5l -> "fail" | var -> "fail") = pass
+(match 6l with | var -> "pass" | 6l -> "fail" | 5l -> "fail") = pass
+(match 2147483647l with | 0l -> "fail" | 2147483647l -> "pass") = pass
 
 // ===================================================================
 // UInt32 Matching
 // ===================================================================
 
-(match 6ul with | 5ul -> "fail" | 6ul -> "pass" | var -> "fail") = stdout="pass\n"
-(match 6ul with | 6ul -> "pass" | 5ul -> "fail" | var -> "fail") = stdout="pass\n"
-(match 6ul with | var -> "pass" | 6ul -> "fail" | 5ul -> "fail") = stdout="pass\n"
-(match 4294967295ul with | 0ul -> "fail" | 4294967295ul -> "pass") = stdout="pass\n"
+(match 6ul with | 5ul -> "fail" | 6ul -> "pass" | var -> "fail") = pass
+(match 6ul with | 6ul -> "pass" | 5ul -> "fail" | var -> "fail") = pass
+(match 6ul with | var -> "pass" | 6ul -> "fail" | 5ul -> "fail") = pass
+(match 4294967295ul with | 0ul -> "fail" | 4294967295ul -> "pass") = pass
 
 // ===================================================================
 // Int128 Matching
@@ -331,11 +331,11 @@ let x = 0 - 5 in match x with | x -> x + 10 = 5
 // NOTE: Negative float patterns not supported in parser
 // ===================================================================
 
-(match 6.5 with | 5.5 -> "fail" | 6.5 -> "pass" | var -> "fail") = stdout="pass\n"
-(match 6.5 with | 6.5 -> "pass" | 5.5 -> "fail" | var -> "fail") = stdout="pass\n"
-(match 6.5 with | var -> "pass" | 6.5 -> "fail" | 5.5 -> "fail") = stdout="pass\n"
-(match 3.14 with | 3.14 -> "pass" | _ -> "fail") = stdout="pass\n"
-(match 0.5 with | 0.5 -> "pass" | _ -> "fail") = stdout="pass\n"
+(match 6.5 with | 5.5 -> "fail" | 6.5 -> "pass" | var -> "fail") = pass
+(match 6.5 with | 6.5 -> "pass" | 5.5 -> "fail" | var -> "fail") = pass
+(match 6.5 with | var -> "pass" | 6.5 -> "fail" | 5.5 -> "fail") = pass
+(match 3.14 with | 3.14 -> "pass" | _ -> "fail") = pass
+(match 0.5 with | 0.5 -> "pass" | _ -> "fail") = pass
 
 // ===================================================================
 // Char Matching
@@ -406,21 +406,21 @@ match 2 with | 1 -> 10 | 2 | 3 | 4 -> 20 | _ -> 99 = 20
 match 6 with | 1 | 2 -> 10 | 3 | 4 -> 20 | 5 | 6 -> 30 | _ -> 0 = 30
 
 // Pattern grouping with tuples
-(match (1, 2) with | (1, 2) | (2, 1) -> "pass" | _ -> "fail") = stdout="pass\n"
-(match (1, 3) with | (1, 2) | (2, 1) -> "pass" | _ -> "fail") = stdout="fail\n"
-(match (1, 2) with | (1, _) | (_, 1) -> "pass" | _ -> "fail") = stdout="pass\n"
+(match (1, 2) with | (1, 2) | (2, 1) -> "pass" | _ -> "fail") = pass
+(match (1, 3) with | (1, 2) | (2, 1) -> "pass" | _ -> "fail") = fail
+(match (1, 2) with | (1, _) | (_, 1) -> "pass" | _ -> "fail") = pass
 
 // Pattern grouping with lists
-(match [1, 2] with | [1, _] | [_, 1] -> "pass" | _ -> "fail") = stdout="pass\n"
+(match [1, 2] with | [1, _] | [_, 1] -> "pass" | _ -> "fail") = pass
 
 // Pattern grouping with let binding
-(let x = 4 in match x with | 1 | 2 | 3 | 4 -> "pass" | _ -> "fail") = stdout="pass\n"
+(let x = 4 in match x with | 1 | 2 | 3 | 4 -> "pass" | _ -> "fail") = pass
 
 // Pattern grouping across multiple branches
-(match 5 with | 1 | 2 | 3 -> "fail" | 4 | 5 | 6 -> "pass" | _ -> "fail") = stdout="pass\n"
+(match 5 with | 1 | 2 | 3 -> "fail" | 4 | 5 | 6 -> "pass" | _ -> "fail") = pass
 
 // Pattern grouping with guard clause
-(match 5 with | 4 | 5 | 6 when true -> "pass" | _ -> "fail") = stdout="pass\n"
+(match 5 with | 4 | 5 | 6 when true -> "pass" | _ -> "fail") = pass
 // (match (1L,2L) with | (x,2L) | (2L,x) when x == 1L -> "pass" | _ -> "fail") = "pass"
 // (match (1L, 2L, 3L) with | (x, 2L, y) | (y, x, 2L) when x + y == 4L -> "pass" | _ -> "fail") = "pass"
 // (match ([1L;2L], 3L) with | ([x], y) | (x :: xs, y) when x > 0L -> "pass" | _ -> "fail") = "pass"

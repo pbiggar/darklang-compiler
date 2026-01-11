@@ -37,13 +37,13 @@ def swapFloat(a: Float, b: Float, n: Int64) : Float =
     if n <= 0 then a
     else swapFloat(b, a, n - 1)
 
-swapFloat(1.0, 2.0, 1) = stdout="2.00\n"
+swapFloat(1.0, 2.0, 1) = 2.00
 
 def swapFloat2(a: Float, b: Float, n: Int64) : Float =
     if n <= 0 then a
     else swapFloat2(b, a, n - 1)
 
-swapFloat2(1.0, 2.0, 2) = stdout="1.00\n"
+swapFloat2(1.0, 2.0, 2) = 1.00
 
 // Bug 2: Integer argument swap (TailArgMoves cycle)
 // Tests X0 <- X1, X1 <- X0 cycle handling
@@ -79,13 +79,13 @@ def rotate3Float(a: Float, b: Float, c: Float, n: Int64) : Float =
     if n <= 0 then a
     else rotate3Float(b, c, a, n - 1)
 
-rotate3Float(1.0, 2.0, 3.0, 1) = stdout="2.00\n"
+rotate3Float(1.0, 2.0, 3.0, 1) = 2.00
 
 def rotate3Floatb(a: Float, b: Float, c: Float, n: Int64) : Float =
     if n <= 0 then a
     else rotate3Floatb(b, c, a, n - 1)
 
-rotate3Floatb(1.0, 2.0, 3.0, 3) = stdout="1.00\n"
+rotate3Floatb(1.0, 2.0, 3.0, 3) = 1.00
 
 // Bug 5: Five-argument tail recursion (similar to String.__compareBytes)
 def compare5(a: Int64, i: Int64, b: Int64, j: Int64, count: Int64) : Bool =
@@ -93,14 +93,14 @@ def compare5(a: Int64, i: Int64, b: Int64, j: Int64, count: Int64) : Bool =
     else if a != b then false
     else compare5(a, i + 1, b, j + 1, count - 1)
 
-compare5(42, 0, 42, 0, 3) = stdout="true\n"
+compare5(42, 0, 42, 0, 3) = true
 
 def compare5b(a: Int64, i: Int64, b: Int64, j: Int64, count: Int64) : Bool =
     if count <= 0 then true
     else if a != b then false
     else compare5b(a, i + 1, b, j + 1, count - 1)
 
-compare5b(42, 0, 99, 0, 3) = stdout="false\n"
+compare5b(42, 0, 99, 0, 3) = false
 
 // Bug 6: Many arguments (tests register spilling in tail calls)
 def sum6(a: Int64, b: Int64, c: Int64, d: Int64, e: Int64, f: Int64, n: Int64) : Int64 =
@@ -123,7 +123,7 @@ def strCompare(s1: String, s2: String, n: Int64) : Bool =
     else if Stdlib.String.length(s1) != Stdlib.String.length(s2) then false
     else strCompare(s1, s2, n - 1)
 
-strCompare("hello", "hello", 3) = stdout="true\n"
+strCompare("hello", "hello", 3) = true
 
 // Bug 9: Nested function calls before tail call
 def nestedCalls(a: Int64, b: Int64, n: Int64) : Int64 =
@@ -156,7 +156,7 @@ def compareBytesLike(s1: String, i: Int64, s2: String, j: Int64, count: Int64) :
         if b1 != b2 then false
         else compareBytesLike(s1, i + 1, s2, j + 1, count - 1)
 
-compareBytesLike("hello", 0, "hello", 0, 5) = stdout="true\n"
+compareBytesLike("hello", 0, "hello", 0, 5) = true
 
 def compareBytesLikeFail(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool =
     if count <= 0 then true
@@ -166,7 +166,7 @@ def compareBytesLikeFail(s1: String, i: Int64, s2: String, j: Int64, count: Int6
         if b1 != b2 then false
         else compareBytesLikeFail(s1, i + 1, s2, j + 1, count - 1)
 
-compareBytesLikeFail("hello", 0, "world", 0, 5) = stdout="false\n"
+compareBytesLikeFail("hello", 0, "world", 0, 5) = false
 
 // Bug 13: Cross-function tail call (A tail-calls B, B tail-calls itself)
 // This mimics startsWith calling __compareBytes
@@ -184,7 +184,7 @@ def myStartsWith2(s: String, prefix: String) : Bool =
     if prefixLen > sLen then false
     else myCompare(s, 0, prefix, 0, prefixLen)
 
-myStartsWith2("hello world", "hello") = stdout="true\n"
+myStartsWith2("hello world", "hello") = true
 
 def myCompare2(s1: String, i: Int64, s2: String, j: Int64, count: Int64) : Bool =
     if count <= 0 then true
@@ -200,7 +200,7 @@ def myStartsWith2Fail(s: String, prefix: String) : Bool =
     if prefixLen > sLen then false
     else myCompare2(s, 0, prefix, 0, prefixLen)
 
-myStartsWith2Fail("hello world", "world") = stdout="false\n"
+myStartsWith2Fail("hello world", "world") = false
 
 // ============================================================================
 // Float Parameter Self-Recursion Tests
@@ -215,14 +215,14 @@ def sumFloats(n: Int64, acc: Float) : Float =
     if n <= 0 then acc
     else sumFloats(n - 1, acc + 1.0)
 
-sumFloats(10, 0.0) = stdout="10.00\n"
+sumFloats(10, 0.0) = 10.00
 
 // Larger iteration count to verify loop works correctly
 def sumFloats100(n: Int64, acc: Float) : Float =
     if n <= 0 then acc
     else sumFloats100(n - 1, acc + 1.0)
 
-sumFloats100(100, 0.0) = stdout="100.00\n"
+sumFloats100(100, 0.0) = 100.00
 
 // All float parameters (2 floats + int counter)
 // Tests FPhi for both x and y parameters
@@ -230,30 +230,30 @@ def floatLoop(x: Float, y: Float, n: Int64) : Float =
     if n <= 0 then x + y
     else floatLoop(y, x, n - 1)
 
-floatLoop(1.0, 2.0, 0) = stdout="3.00\n"
+floatLoop(1.0, 2.0, 0) = 3.00
 
 def floatLoop1(x: Float, y: Float, n: Int64) : Float =
     if n <= 0 then x + y
     else floatLoop1(y, x, n - 1)
 
-floatLoop1(1.0, 2.0, 1) = stdout="3.00\n"
+floatLoop1(1.0, 2.0, 1) = 3.00
 
 def floatLoop2(x: Float, y: Float, n: Int64) : Float =
     if n <= 0 then x + y
     else floatLoop2(y, x, n - 1)
 
-floatLoop2(1.0, 2.0, 2) = stdout="3.00\n"
+floatLoop2(1.0, 2.0, 2) = 3.00
 
 // Float with arithmetic in loop
 def floatArithmetic(x: Float, acc: Float, n: Int64) : Float =
     if n <= 0 then acc
     else floatArithmetic(x, acc + x, n - 1)
 
-floatArithmetic(2.5, 0.0, 4) = stdout="10.00\n"
+floatArithmetic(2.5, 0.0, 4) = 10.00
 
 // Mixed: two floats, one being accumulated
 def floatAccum(a: Float, b: Float, n: Int64) : Float =
     if n <= 0 then a
     else floatAccum(a + b, b, n - 1)
 
-floatAccum(0.0, 1.5, 4) = stdout="6.00\n"
+floatAccum(0.0, 1.5, 4) = 6.00

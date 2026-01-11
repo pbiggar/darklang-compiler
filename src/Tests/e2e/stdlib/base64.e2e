@@ -6,26 +6,26 @@
 // ===================================================================
 
 // Empty bytes
-Base64.encode(Bytes.create(0)) = stdout="\n"
+Base64.encode(Bytes.create(0)) = ""
 
 // Single byte
-Base64.encode(Bytes.fromList([0])) = stdout="AA==\n"
-Base64.encode(Bytes.fromList([255])) = stdout="/w==\n"
+Base64.encode(Bytes.fromList([0])) = "AA=="
+Base64.encode(Bytes.fromList([255])) = "/w=="
 
 // Two bytes
-Base64.encode(Bytes.fromList([0, 0])) = stdout="AAA=\n"
+Base64.encode(Bytes.fromList([0, 0])) = "AAA="
 
 // Three bytes (no padding needed)
-Base64.encode(Bytes.fromList([0, 0, 0])) = stdout="AAAA\n"
+Base64.encode(Bytes.fromList([0, 0, 0])) = "AAAA"
 
 // "Hello" = [72, 101, 108, 108, 111]
-Base64.encode(Bytes.fromList([72, 101, 108, 108, 111])) = stdout="SGVsbG8=\n"
+Base64.encode(Bytes.fromList([72, 101, 108, 108, 111])) = "SGVsbG8="
 
 // "Hi" = [72, 105]
-Base64.encode(Bytes.fromList([72, 105])) = stdout="SGk=\n"
+Base64.encode(Bytes.fromList([72, 105])) = "SGk="
 
 // "ABC" = [65, 66, 67]
-Base64.encode(Bytes.fromList([65, 66, 67])) = stdout="QUJD\n"
+Base64.encode(Bytes.fromList([65, 66, 67])) = "QUJD"
 
 // ===================================================================
 // Base64.urlEncode - URL-safe encoding
@@ -33,32 +33,32 @@ Base64.encode(Bytes.fromList([65, 66, 67])) = stdout="QUJD\n"
 
 // Test that + and / are replaced with - and _
 // Bytes that would produce + in standard encoding
-Base64.urlEncode(Bytes.fromList([251])) = stdout="-w==\n"
+Base64.urlEncode(Bytes.fromList([251])) = -w==
 
 // ===================================================================
 // Base64.decode - Decode base64 to bytes
 // ===================================================================
 
 // Empty string
-Result.isOk<Bytes, String>(Base64.decode("")) = stdout="true\n"
+Result.isOk<Bytes, String>(Base64.decode("")) = true
 
 // Single padded value
-match Base64.decode("AA==") with | Ok(b) -> Bytes.length(b) | Error(_) -> -1 = stdout="1\n"
+match Base64.decode("AA==") with | Ok(b) -> Bytes.length(b) | Error(_) -> -1 = 1
 match Base64.decode("AA==") with | Ok(b) -> Bytes.get(b, 0) | Error(_) -> -1 = 0
 
 // Two bytes
-match Base64.decode("AAA=") with | Ok(b) -> Bytes.length(b) | Error(_) -> -1 = stdout="2\n"
+match Base64.decode("AAA=") with | Ok(b) -> Bytes.length(b) | Error(_) -> -1 = 2
 
 // Three bytes
-match Base64.decode("AAAA") with | Ok(b) -> Bytes.length(b) | Error(_) -> -1 = stdout="3\n"
+match Base64.decode("AAAA") with | Ok(b) -> Bytes.length(b) | Error(_) -> -1 = 3
 
 // "SGVsbG8=" -> "Hello"
-match Base64.decode("SGVsbG8=") with | Ok(b) -> Bytes.length(b) | Error(_) -> -1 = stdout="5\n"
+match Base64.decode("SGVsbG8=") with | Ok(b) -> Bytes.length(b) | Error(_) -> -1 = 5
 match Base64.decode("SGVsbG8=") with | Ok(b) -> Bytes.get(b, 0) | Error(_) -> -1 = 72
 match Base64.decode("SGVsbG8=") with | Ok(b) -> Bytes.get(b, 4) | Error(_) -> -1 = 111
 
 // Invalid base64 - wrong length
-Result.isError<Bytes, String>(Base64.decode("ABC")) = stdout="true\n"
+Result.isError<Bytes, String>(Base64.decode("ABC")) = true
 
 // ===================================================================
 // Roundtrip tests

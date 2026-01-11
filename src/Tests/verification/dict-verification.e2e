@@ -170,7 +170,7 @@ let d = remove(set(set(emptyDict(), 1, 10), 2, 20), 1) in Stdlib.Dict.size(d) = 
 // ===================================================================
 
 // Remove then get returns None
-Stdlib.Option.isNone(get(remove(set(emptyDict(), 1, 100), 1), 1)) = stdout="true\n"
+Stdlib.Option.isNone(get(remove(set(emptyDict(), 1, 100), 1), 1)) = true
 
 // Remove non-existent key, original still there
 getOrDefault(remove(set(emptyDict(), 1, 100), 999), 1, -1) = 100
@@ -194,13 +194,13 @@ getOrDefault(set(emptyDict(), 9223372036854775807, 42), 9223372036854775807, -1)
 // ===================================================================
 
 // Sum values of 10-entry dict
-let d = buildDict(10, emptyDict()) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + v) = stdout="550\n" disable_opt_tco=true
+let d = buildDict(10, emptyDict()) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + v) = 550 disable_opt_tco=true
 
 // Sum keys of 10-entry dict
-let d = buildDict(10, emptyDict()) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + k) = stdout="55\n" disable_opt_tco=true
+let d = buildDict(10, emptyDict()) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + k) = 55 disable_opt_tco=true
 
 // Count entries via fold
-let d = buildDict(50, emptyDict()) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + 1) = stdout="50\n" disable_opt_tco=true
+let d = buildDict(50, emptyDict()) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + 1) = 50 disable_opt_tco=true
 
 // ===================================================================
 // Contains Tests at Scale
@@ -217,5 +217,5 @@ def checkContains(n: Int64, d: Dict<Int64, Int64>, count: Int64): Int64 =
 checkContains(100, buildDict(100, emptyDict()), 0) = 100
 
 // Non-inserted keys not contained
-Stdlib.Dict.contains(buildDict(100, emptyDict()), 101) = stdout="false\n"
-Stdlib.Dict.contains(buildDict(100, emptyDict()), 999) = stdout="false\n"
+Stdlib.Dict.contains(buildDict(100, emptyDict()), 101) = false
+Stdlib.Dict.contains(buildDict(100, emptyDict()), 999) = false

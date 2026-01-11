@@ -8,7 +8,7 @@
 def identity<t>(x: t) : t = x identity(42) = 42
 
 // Identity with bool
-def id<t>(x: t) : t = x id(true) = stdout="true\n"
+def id<t>(x: t) : t = x id(true) = true
 
 // Identity with different int value
 def ident<t>(x: t) : t = x ident(100) = 100
@@ -27,7 +27,7 @@ def myid<t>(x: t) : t = x myid(40) + myid(2) = 42
 // Generic function that uses its parameter
 def return_it<t>(value: t) : t = value return_it(42) = 42
 
-def ret<t>(v: t) : t = v ret(false) = stdout="false\n"
+def ret<t>(v: t) : t = v ret(false) = false
 
 // =====================================================
 // Generic with Operations on Result
@@ -55,7 +55,7 @@ def l<t>(x: t) : t = x let a = l(10) in let b = l(32) in a + b = 42
 def inf_id<t>(x: t) : t = x inf_id(42) = 42
 
 // Bool inference
-def inf_bool<t>(x: t) : t = x inf_bool(true) = stdout="true\n"
+def inf_bool<t>(x: t) : t = x inf_bool(true) = true
 
 // Inference with different int value
 def inf_int2<t>(x: t) : t = x inf_int2(100) = 100
@@ -83,26 +83,26 @@ def inf_cond<t>(x: t) : t = x if inf_cond(true) then 42 else 0 = 42
 def first<a, b>(a: a, b: b) : a = a first(42, true) = 42
 
 // Two type parameters - return second
-def second<a, b>(a: a, b: b) : b = b second(42, true) = stdout="true\n"
+def second<a, b>(a: a, b: b) : b = b second(42, true) = true
 
 // Three type parameters
 def pick1<a, b, c>(a: a, b: b, c: c) : a = a pick1(42, false, 99) = 42
 
-def pick2<a, b, c>(a: a, b: b, c: c) : b = b pick2(99, true, 99) = stdout="true\n"
+def pick2<a, b, c>(a: a, b: b, c: c) : b = b pick2(99, true, 99) = true
 
 def pick3<a, b, c>(a: a, b: b, c: c) : c = c pick3(99, false, 42) = 42
 
 // Type inference with multiple type parameters
 def fst<a, b>(a: a, b: b) : a = a fst(10, true) = 10
 
-def snd<a, b>(a: a, b: b) : b = b snd(10, false) = stdout="false\n"
+def snd<a, b>(a: a, b: b) : b = b snd(10, false) = false
 
 // Inference with three parameters
 def get1<a, b, c>(a: a, b: b, c: c) : a = a get1(42, true, false) = 42
 
-def get2<a, b, c>(a: a, b: b, c: c) : b = b get2(99, true, false) = stdout="true\n"
+def get2<a, b, c>(a: a, b: b, c: c) : b = b get2(99, true, false) = true
 
-def get3<a, b, c>(a: a, b: b, c: c) : c = c get3(99, true, false) = stdout="false\n"
+def get3<a, b, c>(a: a, b: b, c: c) : c = c get3(99, true, false) = false
 
 // Multiple params with same type
 def both_int<a, b>(a: a, b: b) : a = a both_int(42, 99) = 42

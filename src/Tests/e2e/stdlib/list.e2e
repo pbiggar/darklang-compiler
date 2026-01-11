@@ -12,7 +12,7 @@
 // List.singleton - Create a single-element list
 // ===================================================================
 
-List.length(List.singleton(42)) = stdout="1\n"
+List.length(List.singleton(42)) = 1
 match List.singleton(5) with | [x] -> x | _ -> 0 = 5
 
 // ===================================================================
@@ -20,10 +20,10 @@ match List.singleton(5) with | [x] -> x | _ -> 0 = 5
 // ===================================================================
 
 // Test basic spread syntax
-let rest = [3, 4, 5] in List.length([1, 2, ...rest]) = stdout="5\n"
+let rest = [3, 4, 5] in List.length([1, 2, ...rest]) = 5
 
 // Test spread with empty list (need type annotation via function call)
-List.length<Int64>([1, ...[]]) = stdout="1\n"
+List.length<Int64>([1, ...[]]) = 1
 
 // Test spread with single element head
 let tail = [2, 3] in match [1, ...tail] with | [a, b, c] -> a + b + c | _ -> 0 = 6
@@ -33,13 +33,13 @@ let tail = [2, 3] in match [1, ...tail] with | [a, b, c] -> a + b + c | _ -> 0 =
 // ===================================================================
 
 match List.push([2, 3], 1) with | [a, b, c] -> a | _ -> 0 = 1
-List.length(List.push([1, 2], 0)) = stdout="3\n"
+List.length(List.push([1, 2], 0)) = 3
 
 // ===================================================================
 // List.append - Concatenate two lists
 // ===================================================================
 
-List.length(List.append([1, 2, 3], [4, 5, 6])) = stdout="6\n"
+List.length(List.append([1, 2, 3], [4, 5, 6])) = 6
 match List.append([1, 2], [3, 4]) with | [a, b, c, d] -> a + b + c + d | _ -> 0 = 10
 
 // ===================================================================
@@ -60,13 +60,13 @@ match List.pushBack([1, 2], 3) with | [a, b, c] -> c | _ -> 0 = 3
 // ===================================================================
 
 match List.map([1, 2, 3], (x: Int64) => x + 1) with | [a, b, c] -> a + b + c | _ -> 0 = 9
-List.length(List.map([1, 2, 3, 4], (x: Int64) => x * 2)) = stdout="4\n"
+List.length(List.map([1, 2, 3, 4], (x: Int64) => x * 2)) = 4
 
 // ===================================================================
 // List.filter - Keep elements that match predicate
 // ===================================================================
 
-List.length(List.filter([1, 2, 3, 4, 5], (x: Int64) => x > 2)) = stdout="3\n"
+List.length(List.filter([1, 2, 3, 4, 5], (x: Int64) => x > 2)) = 3
 
 // ===================================================================
 // List.fold - Reduce list with accumulator
@@ -79,33 +79,33 @@ List.fold([1, 2, 3, 4], 1, (acc: Int64, x: Int64) => acc * x) = 24
 // List.drop - Drop first n elements
 // ===================================================================
 
-List.length(List.drop([1, 2, 3, 4, 5], 2)) = stdout="3\n"
-List.length(List.drop([1, 2, 3], 0)) = stdout="3\n"
-List.length(List.drop([1, 2, 3], 10)) = stdout="0\n"
+List.length(List.drop([1, 2, 3, 4, 5], 2)) = 3
+List.length(List.drop([1, 2, 3], 0)) = 3
+List.length(List.drop([1, 2, 3], 10)) = 0
 
 // ===================================================================
 // List.take - Take first n elements
 // ===================================================================
 
-List.length(List.take([1, 2, 3, 4, 5], 3)) = stdout="3\n"
-List.length(List.take([1, 2, 3], 0)) = stdout="0\n"
-List.length(List.take([1, 2], 10)) = stdout="2\n"
+List.length(List.take([1, 2, 3, 4, 5], 3)) = 3
+List.length(List.take([1, 2, 3], 0)) = 0
+List.length(List.take([1, 2], 10)) = 2
 
 // ===================================================================
 // List.head - Get first element or None
 // ===================================================================
 
 Option.withDefault(List.head([1, 2, 3]), 0) = 1
-Option.isNone<Int64>(List.head<Int64>([])) = stdout="true\n"
+Option.isNone<Int64>(List.head<Int64>([])) = true
 
 // ===================================================================
 // List.tail - Get rest of list (all but first element) or None
 // ===================================================================
 
 // NOTE: Needs type params because empty list default doesn't constrain type
-List.length(Option.withDefault<List<Int64>>(List.tail([1, 2, 3]), [])) = stdout="2\n"
-Option.isNone<List<Int64>>(List.tail<Int64>([])) = stdout="true\n"
-match List.tail([1, 2, 3]) with | Some(t) -> List.length(t) | None -> 0 = stdout="2\n"
+List.length(Option.withDefault<List<Int64>>(List.tail([1, 2, 3]), [])) = 2
+Option.isNone<List<Int64>>(List.tail<Int64>([])) = true
+match List.tail([1, 2, 3]) with | Some(t) -> List.length(t) | None -> 0 = 2
 
 // ===================================================================
 // List.getAt - Get element at index
@@ -113,7 +113,7 @@ match List.tail([1, 2, 3]) with | Some(t) -> List.length(t) | None -> 0 = stdout
 
 Option.withDefault(List.getAt([10, 20, 30], 0), 0) = 10
 Option.withDefault(List.getAt([10, 20, 30], 2), 0) = 30
-Option.isNone<Int64>(List.getAt<Int64>([1, 2, 3], 10)) = stdout="true\n"
+Option.isNone<Int64>(List.getAt<Int64>([1, 2, 3], 10)) = true
 
 // Regression test: List.getAt<Float> should correctly extract Float from Option
 // NOTE: Float list storage works (FpToGp converts Float bits to GP for RawSet),
@@ -126,23 +126,23 @@ Option.isNone<Int64>(List.getAt<Int64>([1, 2, 3], 10)) = stdout="true\n"
 // ===================================================================
 
 Option.withDefault(List.findFirst([1, 2, 3, 4], (x: Int64) => x > 2), 0) = 3
-Option.isNone<Int64>(List.findFirst<Int64>([1, 2, 3], (x: Int64) => x > 10)) = stdout="true\n"
+Option.isNone<Int64>(List.findFirst<Int64>([1, 2, 3], (x: Int64) => x > 10)) = true
 
 // ===================================================================
 // List.forAll - Check if all elements satisfy predicate
 // ===================================================================
 
-List.forAll([1, 2, 3], (x: Int64) => x > 0) = stdout="true\n"
-List.forAll([1, 2, 3], (x: Int64) => x > 2) = stdout="false\n"
-List.forAll<Int64>([], (x: Int64) => x > 0) = stdout="true\n"
+List.forAll([1, 2, 3], (x: Int64) => x > 0) = true
+List.forAll([1, 2, 3], (x: Int64) => x > 2) = false
+List.forAll<Int64>([], (x: Int64) => x > 0) = true
 
 // ===================================================================
 // List.exists - Check if any element satisfies predicate
 // ===================================================================
 
-List.exists([1, 2, 3], (x: Int64) => x > 2) = stdout="true\n"
-List.exists([1, 2, 3], (x: Int64) => x > 10) = stdout="false\n"
-List.exists<Int64>([], (x: Int64) => x > 0) = stdout="false\n"
+List.exists([1, 2, 3], (x: Int64) => x > 2) = true
+List.exists([1, 2, 3], (x: Int64) => x > 10) = false
+List.exists<Int64>([], (x: Int64) => x > 0) = false
 
 // ===================================================================
 // List.last - Get last element or None
@@ -150,32 +150,32 @@ List.exists<Int64>([], (x: Int64) => x > 0) = stdout="false\n"
 
 Option.withDefault(List.last([1, 2, 3]), 0) = 3
 Option.withDefault(List.last([42]), 0) = 42
-Option.isNone<Int64>(List.last<Int64>([])) = stdout="true\n"
+Option.isNone<Int64>(List.last<Int64>([])) = true
 
 // ===================================================================
 // List.dropLast - Remove last element
 // ===================================================================
 
-List.length(List.dropLast([1, 2, 3, 4, 5])) = stdout="4\n"
-List.length(List.dropLast([1])) = stdout="0\n"
-List.length(List.dropLast<Int64>([])) = stdout="0\n"
+List.length(List.dropLast([1, 2, 3, 4, 5])) = 4
+List.length(List.dropLast([1])) = 0
+List.length(List.dropLast<Int64>([])) = 0
 match List.dropLast([1, 2, 3]) with | [a, b] -> a + b | _ -> 0 = 3
 
 // ===================================================================
 // List.range - Generate list of integers
 // ===================================================================
 
-List.length<Int64>(List.range(0, 5)) = stdout="5\n"
-List.length<Int64>(List.range(0, 0)) = stdout="0\n"
-List.length<Int64>(List.range(5, 3)) = stdout="0\n"
+List.length<Int64>(List.range(0, 5)) = 5
+List.length<Int64>(List.range(0, 0)) = 0
+List.length<Int64>(List.range(5, 3)) = 0
 match List.range(1, 4) with | [a, b, c] -> a + b + c | _ -> 0 = 6
 
 // ===================================================================
 // List.repeat - Repeat value n times
 // ===================================================================
 
-List.length(List.repeat(42, 5)) = stdout="5\n"
-List.length(List.repeat(1, 0)) = stdout="0\n"
+List.length(List.repeat(42, 5)) = 5
+List.length(List.repeat(1, 0)) = 0
 match List.repeat(7, 3) with | [a, b, c] -> a + b + c | _ -> 0 = 21
 
 // ===================================================================
@@ -183,7 +183,7 @@ match List.repeat(7, 3) with | [a, b, c] -> a + b + c | _ -> 0 = 21
 // ===================================================================
 
 Option.withDefault(List.getAt(List.setAt([10, 20, 30], 1, 99), 1), 0) = 99
-List.length(List.setAt([1, 2, 3], 0, 100)) = stdout="3\n"
+List.length(List.setAt([1, 2, 3], 0, 100)) = 3
 
 // NOTE: Tail call optimization bug corrupts lists - see benchmarks.e2e
 // Lists built by tail-recursive functions (like List.repeat) get corrupted
@@ -196,21 +196,21 @@ List.length(List.setAt([1, 2, 3], 0, 100)) = stdout="3\n"
 
 // Sum of index + value for [10, 20, 30] = (0+10) + (1+20) + (2+30) = 63
 List.fold(List.indexedMap([10, 20, 30], (i: Int64, x: Int64) => i + x), 0, (acc: Int64, x: Int64) => acc + x) = 63
-List.length(List.indexedMap([1, 2, 3, 4], (i: Int64, x: Int64) => x)) = stdout="4\n"
+List.length(List.indexedMap([1, 2, 3, 4], (i: Int64, x: Int64) => x)) = 4
 
 // ===================================================================
 // List.partition - Split list by predicate
 // ===================================================================
 
-match List.partition([1, 2, 3, 4, 5], (x: Int64) => x > 2) with | (trues, falses) -> List.length(trues) | _ -> 0 = stdout="3\n"
-match List.partition([1, 2, 3, 4, 5], (x: Int64) => x > 2) with | (trues, falses) -> List.length(falses) | _ -> 0 = stdout="2\n"
+match List.partition([1, 2, 3, 4, 5], (x: Int64) => x > 2) with | (trues, falses) -> List.length(trues) | _ -> 0 = 3
+match List.partition([1, 2, 3, 4, 5], (x: Int64) => x > 2) with | (trues, falses) -> List.length(falses) | _ -> 0 = 2
 
 // ===================================================================
 // List.all - Check if all satisfy predicate (alias for forAll)
 // ===================================================================
 
-List.all([1, 2, 3], (x: Int64) => x > 0) = stdout="true\n"
-List.all([1, 2, 3], (x: Int64) => x > 2) = stdout="false\n"
+List.all([1, 2, 3], (x: Int64) => x > 0) = true
+List.all([1, 2, 3], (x: Int64) => x > 2) = false
 
 // ===================================================================
 // NOTE: Functions disabled due to compiler bugs

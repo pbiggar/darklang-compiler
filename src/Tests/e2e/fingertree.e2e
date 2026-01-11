@@ -11,7 +11,7 @@
 
 // Empty tree
 Stdlib.FingerTree.length(Stdlib.FingerTree.empty<Int64>()) = 0
-Stdlib.FingerTree.isEmpty(Stdlib.FingerTree.empty<Int64>()) = stdout="true\n"
+Stdlib.FingerTree.isEmpty(Stdlib.FingerTree.empty<Int64>()) = true
 
 // Singleton
 Stdlib.FingerTree.length(Stdlib.FingerTree.singleton(42)) = 1
@@ -55,10 +55,10 @@ let t = Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.
 let t = Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.singleton(10), 20), 30) in Stdlib.Option.withDefault(Stdlib.FingerTree.getAt(t, 2), -1) = 30
 
 // getAt out of bounds - positive
-let t = Stdlib.FingerTree.singleton(42) in Stdlib.Option.isNone(Stdlib.FingerTree.getAt(t, 1)) = stdout="true\n"
+let t = Stdlib.FingerTree.singleton(42) in Stdlib.Option.isNone(Stdlib.FingerTree.getAt(t, 1)) = true
 
 // getAt out of bounds - negative
-let t = Stdlib.FingerTree.singleton(42) in Stdlib.Option.isNone(Stdlib.FingerTree.getAt(t, -1)) = stdout="true\n"
+let t = Stdlib.FingerTree.singleton(42) in Stdlib.Option.isNone(Stdlib.FingerTree.getAt(t, -1)) = true
 
 // ===================================================================
 // setAt - Indexed update
@@ -78,7 +78,7 @@ let t1 = Stdlib.FingerTree.pushBack(Stdlib.FingerTree.singleton(10), 20) in let 
 // ===================================================================
 
 // head on empty
-let t = Stdlib.FingerTree.empty<Int64>() in Stdlib.Option.isNone(Stdlib.FingerTree.head(t)) = stdout="true\n"
+let t = Stdlib.FingerTree.empty<Int64>() in Stdlib.Option.isNone(Stdlib.FingerTree.head(t)) = true
 
 // head on 5 elements
 let t = Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.pushBack(Stdlib.FingerTree.empty<Int64>(), 1), 2), 3), 4), 5) in Stdlib.Option.withDefault(Stdlib.FingerTree.head(t), -1) = 1

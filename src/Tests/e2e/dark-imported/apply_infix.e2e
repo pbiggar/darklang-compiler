@@ -10,7 +10,7 @@
 
 // NOTE: Int64 suffix not needed (Int64 is default)
 5 + 3 = 8
-"xx" ++ "yy" = stdout="xxyy\n"
+"xx" ++ "yy" = xxyy
 (5 + (3)) = 8
 
 // Int64.add (converted from Dark: add_v0 5 3 -> add(5, 3))
@@ -90,9 +90,9 @@ Int64.add(5, 3) = 8
 // String concatenation
 // ===================================================================
 
-"hello" ++ " " ++ "world" = stdout="hello world\n"
-"" ++ "test" = stdout="test\n"
-"test" ++ "" = stdout="test\n"
+"hello" ++ " " ++ "world" = hello world
+"" ++ "test" = test
+"test" ++ "" = test
 
 // ===================================================================
 // Operator Precedence
@@ -123,46 +123,46 @@ Int64.add(5, 3) = 8
 // ===================================================================
 
 // Equality
-5 == 5 = stdout="true\n"
-5 == 6 = stdout="false\n"
-0 == 0 = stdout="true\n"
+5 == 5 = true
+5 == 6 = false
+0 == 0 = true
 
 // Inequality
-5 != 6 = stdout="true\n"
-5 != 5 = stdout="false\n"
+5 != 6 = true
+5 != 5 = false
 
 // Less than
-3 < 5 = stdout="true\n"
-5 < 3 = stdout="false\n"
-5 < 5 = stdout="false\n"
+3 < 5 = true
+5 < 3 = false
+5 < 5 = false
 
 // Greater than
-5 > 3 = stdout="true\n"
-3 > 5 = stdout="false\n"
-5 > 5 = stdout="false\n"
+5 > 3 = true
+3 > 5 = false
+5 > 5 = false
 
 // Less than or equal
-3 <= 5 = stdout="true\n"
-5 <= 5 = stdout="true\n"
-6 <= 5 = stdout="false\n"
+3 <= 5 = true
+5 <= 5 = true
+6 <= 5 = false
 
 // Greater than or equal
-5 >= 3 = stdout="true\n"
-5 >= 5 = stdout="true\n"
-4 >= 5 = stdout="false\n"
+5 >= 3 = true
+5 >= 5 = true
+4 >= 5 = false
 
 // ===================================================================
 // Chained Comparisons (via boolean operators)
 // ===================================================================
 
 // Range check
-let x = 5 in x > 0 && x < 10 = stdout="true\n"
-let x = 15 in x > 0 && x < 10 = stdout="false\n"
+let x = 5 in x > 0 && x < 10 = true
+let x = 15 in x > 0 && x < 10 = false
 
 // Either end
-let x = 5 in x < 3 || x > 7 = stdout="false\n"
-let x = 1 in x < 3 || x > 7 = stdout="true\n"
-let x = 10 in x < 3 || x > 7 = stdout="true\n"
+let x = 5 in x < 3 || x > 7 = false
+let x = 1 in x < 3 || x > 7 = true
+let x = 10 in x < 3 || x > 7 = true
 
 // ===================================================================
 // Operators with Variables
@@ -256,13 +256,13 @@ let x = 10 in -x = -10
 // Self operations
 let x = 5 in x - x = 0
 let x = 10 in x / x = 1
-let x = 7 in x == x = stdout="true\n"
-let x = 7 in x != x = stdout="false\n"
+let x = 7 in x == x = true
+let x = 7 in x != x = false
 
 // Commutativity
-3 + 5 == 5 + 3 = stdout="true\n"
-3 * 5 == 5 * 3 = stdout="true\n"
+3 + 5 == 5 + 3 = true
+3 * 5 == 5 * 3 = true
 
 // Non-commutativity
-10 - 3 == 3 - 10 = stdout="false\n"
-10 / 2 == 2 / 10 = stdout="false\n"
+10 - 3 == 3 - 10 = false
+10 / 2 == 2 / 10 = false

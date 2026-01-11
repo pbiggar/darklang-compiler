@@ -13,7 +13,7 @@
 // Multiple float parameters (stress D0-D7)
 def float4(a: Float, b: Float, c: Float, d: Float) : Float = a + b + c + d
 
-float4(1.0, 2.0, 3.0, 4.0) = stdout="10.00\n"
+float4(1.0, 2.0, 3.0, 4.0) = 10.00
 
 // 6 float params (tests D0-D5)
 def float6(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float) : Float = a + b + c + d + e + f

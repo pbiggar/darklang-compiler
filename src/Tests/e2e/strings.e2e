@@ -3,141 +3,141 @@
 // Tests for string literal parsing, type checking, and printing
 
 // Basic string literal printing
-"hello" = stdout="hello\n"
-"world" = stdout="world\n"
-"test" = stdout="test\n"
+"hello" = hello
+"world" = world
+"test" = test
 
 // Empty string (just newline output)
-"" = stdout="\n"
+"" = ""
 
 // String with spaces
-"hello world" = stdout="hello world\n"
-"a b c" = stdout="a b c\n"
+"hello world" = hello world
+"a b c" = a b c
 
 // Single characters
-"a" = stdout="a\n"
-"Z" = stdout="Z\n"
-"0" = stdout="0\n"
+"a" = a
+"Z" = "Z"
+"0" = 0
 
 // Escape sequences - newline
-"hello\nworld" = stdout="hello\nworld\n"
+"hello\nworld" = "hello\nworld"
 
 // Escape sequences - tab
-"a\tb" = stdout="a\tb\n"
+"a\tb" = "a\tb"
 
 // Escape sequences - quote
-"say \"hi\"" = stdout="say \"hi\"\n"
+"say \"hi\"" = "say \"hi\""
 
 // Escape sequences - backslash
-"a\\b" = stdout="a\\b\n"
+"a\\b" = "a\\b"
 
 // Multiple newlines
-"a\nb\nc" = stdout="a\nb\nc\n"
+"a\nb\nc" = "a\nb\nc"
 
 // =============================================================================
 // String Concatenation Tests (++ operator)
 // =============================================================================
 
 // Basic concatenation
-"hello" ++ " world" = stdout="hello world\n"
-"a" ++ "b" = stdout="ab\n"
-"foo" ++ "bar" = stdout="foobar\n"
+"hello" ++ " world" = hello world
+"a" ++ "b" = ab
+"foo" ++ "bar" = foobar
 
 // Empty string concatenation
-"" ++ "test" = stdout="test\n"
-"test" ++ "" = stdout="test\n"
-"" ++ "" = stdout="\n"
+"" ++ "test" = test
+"test" ++ "" = test
+"" ++ "" = ""
 
 // Chained concatenation (left associative)
-"a" ++ "b" ++ "c" = stdout="abc\n"
-"hello" ++ " " ++ "world" = stdout="hello world\n"
+"a" ++ "b" ++ "c" = abc
+"hello" ++ " " ++ "world" = hello world
 
 // Variables with concatenation
-let x = "hello" in x ++ " world" = stdout="hello world\n"
-let x = "a" in let y = "b" in x ++ y = stdout="ab\n"
+let x = "hello" in x ++ " world" = hello world
+let x = "a" in let y = "b" in x ++ y = ab
 
 // Chained concatenation with multiple variables (regression test for known bug)
-let x = "one" in let y = "two" in x ++ " and " ++ y = stdout="one and two\n"
-let a = "hello" in let b = "world" in let c = "!" in a ++ " " ++ b ++ c = stdout="hello world!\n"
+let x = "one" in let y = "two" in x ++ " and " ++ y = one and two
+let a = "hello" in let b = "world" in let c = "!" in a ++ " " ++ b ++ c = hello world!
 
 // Concatenation in let binding
-let result = "foo" ++ "bar" in result = stdout="foobar\n"
+let result = "foo" ++ "bar" in result = foobar
 
 // Longer strings
-"this is a" ++ " longer test" = stdout="this is a longer test\n"
+"this is a" ++ " longer test" = this is a longer test
 
 // Single character concatenation
-"a" ++ "b" ++ "c" ++ "d" = stdout="abcd\n"
+"a" ++ "b" ++ "c" ++ "d" = abcd
 
 // =============================================================================
 // Int64.toString Tests
 // =============================================================================
 
 // Single digit conversion
-Stdlib.Int64.digitToString(0) = stdout="0\n"
-Stdlib.Int64.digitToString(5) = stdout="5\n"
-Stdlib.Int64.digitToString(9) = stdout="9\n"
+Stdlib.Int64.digitToString(0) = 0
+Stdlib.Int64.digitToString(5) = 5
+Stdlib.Int64.digitToString(9) = 9
 
 // Basic integer to string
-Stdlib.Int64.toString(0) = stdout="0\n"
-Stdlib.Int64.toString(1) = stdout="1\n"
-Stdlib.Int64.toString(9) = stdout="9\n"
-Stdlib.Int64.toString(10) = stdout="10\n"
-Stdlib.Int64.toString(42) = stdout="42\n"
-Stdlib.Int64.toString(100) = stdout="100\n"
-Stdlib.Int64.toString(999) = stdout="999\n"
-Stdlib.Int64.toString(1234) = stdout="1234\n"
-Stdlib.Int64.toString(12345) = stdout="12345\n"
+Stdlib.Int64.toString(0) = 0
+Stdlib.Int64.toString(1) = 1
+Stdlib.Int64.toString(9) = 9
+Stdlib.Int64.toString(10) = 10
+Stdlib.Int64.toString(42) = 42
+Stdlib.Int64.toString(100) = 100
+Stdlib.Int64.toString(999) = 999
+Stdlib.Int64.toString(1234) = 1234
+Stdlib.Int64.toString(12345) = 12345
 
 // Negative numbers
-Stdlib.Int64.toString(-1) = stdout="-1\n"
-Stdlib.Int64.toString(-42) = stdout="-42\n"
-Stdlib.Int64.toString(-100) = stdout="-100\n"
-Stdlib.Int64.toString(-12345) = stdout="-12345\n"
+Stdlib.Int64.toString(-1) = -1
+Stdlib.Int64.toString(-42) = -42
+Stdlib.Int64.toString(-100) = -100
+Stdlib.Int64.toString(-12345) = -12345
 
 // Large numbers
-Stdlib.Int64.toString(1000000) = stdout="1000000\n"
-Stdlib.Int64.toString(2147483647) = stdout="2147483647\n"
+Stdlib.Int64.toString(1000000) = 1000000
+Stdlib.Int64.toString(2147483647) = 2147483647
 
 // Concatenation with toString
-"Value: " ++ Stdlib.Int64.toString(42) = stdout="Value: 42\n"
-"Answer is " ++ Stdlib.Int64.toString(42) ++ "!" = stdout="Answer is 42!\n"
+"Value: " ++ Stdlib.Int64.toString(42) = "Value: 42"
+"Answer is " ++ Stdlib.Int64.toString(42) ++ "!" = "Answer is 42!"
 
 // =============================================================================
 // Bool.toString Tests
 // =============================================================================
 
-Stdlib.Bool.toString(true) = stdout="true\n"
-Stdlib.Bool.toString(false) = stdout="false\n"
-"The answer is " ++ Stdlib.Bool.toString(true) = stdout="The answer is true\n"
-"Flag: " ++ Stdlib.Bool.toString(1 > 0) = stdout="Flag: true\n"
+Stdlib.Bool.toString(true) = true
+Stdlib.Bool.toString(false) = false
+"The answer is " ++ Stdlib.Bool.toString(true) = "The answer is true"
+"Flag: " ++ Stdlib.Bool.toString(1 > 0) = "Flag: true"
 
 // =============================================================================
 // String Interpolation Tests
 // =============================================================================
 
 // Basic interpolation with string variable
-let name = "Alice" in $"Hello {name}" = stdout="Hello Alice\n"
+let name = "Alice" in $"Hello {name}" = "Hello Alice"
 
 // Just interpolation (no literal parts)
-let name = "Dave" in $"{name}" = stdout="Dave\n"
+let name = "Dave" in $"{name}" = "Dave"
 
 // Escape sequences in interpolated strings
-$"Hello\nWorld" = stdout="Hello\nWorld\n"
-$"Tab\there" = stdout="Tab\there\n"
+$"Hello\nWorld" = "Hello\nWorld"
+$"Tab\there" = "Tab\there"
 
 // No interpolation (just like regular string)
-$"plain string" = stdout="plain string\n"
+$"plain string" = plain string
 
 // Empty interpolated string
-$"" = stdout="\n"
+$"" = ""
 
 // Interpolation with string literals
-$"{"hello"}" = stdout="hello\n"
-$"Say: {"hi"}" = stdout="Say: hi\n"
+$"{"hello"}" = hello
+$"Say: {"hi"}" = "Say: hi"
 
 // Expression with operators (string concat inside interpolation)
-$"{"a" ++ "b"}" = stdout="ab\n"
+$"{"a" ++ "b"}" = ab
 
 // NOTE: Multiple interpolations like $"{x} and {y}" trigger a pre-existing bug
 // in chained string concatenation code generation - to be fixed separately
@@ -167,46 +167,46 @@ Stdlib.String.getByteAt("0", 0) = 48
 Stdlib.String.getByteAt("9", 0) = 57
 
 // Helper functions for character type checks
-Stdlib.String.__isLowercase(97) = stdout="true\n"
-Stdlib.String.__isLowercase(122) = stdout="true\n"
-Stdlib.String.__isLowercase(65) = stdout="false\n"
-Stdlib.String.__isUppercase(65) = stdout="true\n"
-Stdlib.String.__isUppercase(90) = stdout="true\n"
-Stdlib.String.__isUppercase(97) = stdout="false\n"
+Stdlib.String.__isLowercase(97) = true
+Stdlib.String.__isLowercase(122) = true
+Stdlib.String.__isLowercase(65) = false
+Stdlib.String.__isUppercase(65) = true
+Stdlib.String.__isUppercase(90) = true
+Stdlib.String.__isUppercase(97) = false
 
 // =============================================================================
 // Stdlib.String.startsWith Tests
 // =============================================================================
 
 // Basic startsWith
-Stdlib.String.startsWith("hello world", "hello") = stdout="true\n"
-Stdlib.String.startsWith("hello world", "world") = stdout="false\n"
-Stdlib.String.startsWith("abc", "a") = stdout="true\n"
-Stdlib.String.startsWith("abc", "ab") = stdout="true\n"
-Stdlib.String.startsWith("abc", "abc") = stdout="true\n"
-Stdlib.String.startsWith("abc", "abcd") = stdout="false\n"
+Stdlib.String.startsWith("hello world", "hello") = true
+Stdlib.String.startsWith("hello world", "world") = false
+Stdlib.String.startsWith("abc", "a") = true
+Stdlib.String.startsWith("abc", "ab") = true
+Stdlib.String.startsWith("abc", "abc") = true
+Stdlib.String.startsWith("abc", "abcd") = false
 
 // Empty string cases
-Stdlib.String.startsWith("hello", "") = stdout="true\n"
-Stdlib.String.startsWith("", "") = stdout="true\n"
-Stdlib.String.startsWith("", "a") = stdout="false\n"
+Stdlib.String.startsWith("hello", "") = true
+Stdlib.String.startsWith("", "") = true
+Stdlib.String.startsWith("", "a") = false
 
 // =============================================================================
 // Stdlib.String.endsWith Tests
 // =============================================================================
 
 // Basic endsWith
-Stdlib.String.endsWith("hello world", "world") = stdout="true\n"
-Stdlib.String.endsWith("hello world", "hello") = stdout="false\n"
-Stdlib.String.endsWith("abc", "c") = stdout="true\n"
-Stdlib.String.endsWith("abc", "bc") = stdout="true\n"
-Stdlib.String.endsWith("abc", "abc") = stdout="true\n"
-Stdlib.String.endsWith("abc", "xabc") = stdout="false\n"
+Stdlib.String.endsWith("hello world", "world") = true
+Stdlib.String.endsWith("hello world", "hello") = false
+Stdlib.String.endsWith("abc", "c") = true
+Stdlib.String.endsWith("abc", "bc") = true
+Stdlib.String.endsWith("abc", "abc") = true
+Stdlib.String.endsWith("abc", "xabc") = false
 
 // Empty string cases
-Stdlib.String.endsWith("hello", "") = stdout="true\n"
-Stdlib.String.endsWith("", "") = stdout="true\n"
-Stdlib.String.endsWith("", "a") = stdout="false\n"
+Stdlib.String.endsWith("hello", "") = true
+Stdlib.String.endsWith("", "") = true
+Stdlib.String.endsWith("", "a") = false
 
 // =============================================================================
 // Stdlib.String.indexOf Tests
@@ -231,53 +231,53 @@ Stdlib.String.indexOf("", "") = 0
 // =============================================================================
 
 // Basic contains
-Stdlib.String.contains("hello world", "hello") = stdout="true\n"
-Stdlib.String.contains("hello world", "world") = stdout="true\n"
-Stdlib.String.contains("hello world", "o w") = stdout="true\n"
-Stdlib.String.contains("hello world", "xyz") = stdout="false\n"
+Stdlib.String.contains("hello world", "hello") = true
+Stdlib.String.contains("hello world", "world") = true
+Stdlib.String.contains("hello world", "o w") = true
+Stdlib.String.contains("hello world", "xyz") = false
 
 // Empty string cases
-Stdlib.String.contains("hello", "") = stdout="true\n"
-Stdlib.String.contains("", "") = stdout="true\n"
-Stdlib.String.contains("", "a") = stdout="false\n"
+Stdlib.String.contains("hello", "") = true
+Stdlib.String.contains("", "") = true
+Stdlib.String.contains("", "a") = false
 
 // =============================================================================
 // Stdlib.String.slice Tests
 // =============================================================================
 
 // Basic slice
-Stdlib.String.slice("hello world", 0, 5) = stdout="hello\n"
-Stdlib.String.slice("hello world", 6, 5) = stdout="world\n"
-Stdlib.String.slice("hello world", 0, 11) = stdout="hello world\n"
+Stdlib.String.slice("hello world", 0, 5) = hello
+Stdlib.String.slice("hello world", 6, 5) = world
+Stdlib.String.slice("hello world", 0, 11) = hello world
 
 // Slice from middle
-Stdlib.String.slice("abcdef", 2, 3) = stdout="cde\n"
+Stdlib.String.slice("abcdef", 2, 3) = cde
 
 // Empty result
-Stdlib.String.slice("hello", 0, 0) = stdout="\n"
-Stdlib.String.slice("hello", 5, 0) = stdout="\n"
+Stdlib.String.slice("hello", 0, 0) = ""
+Stdlib.String.slice("hello", 5, 0) = ""
 
 // Clamping behavior
-Stdlib.String.slice("hello", 0, 100) = stdout="hello\n"
-Stdlib.String.slice("hello", 10, 5) = stdout="\n"
+Stdlib.String.slice("hello", 0, 100) = hello
+Stdlib.String.slice("hello", 10, 5) = ""
 
 // =============================================================================
 // Stdlib.String.take and drop Tests
 // =============================================================================
 
 // take
-Stdlib.String.take("hello world", 5) = stdout="hello\n"
-Stdlib.String.take("hello", 0) = stdout="\n"
-Stdlib.String.take("hello", 100) = stdout="hello\n"
+Stdlib.String.take("hello world", 5) = hello
+Stdlib.String.take("hello", 0) = ""
+Stdlib.String.take("hello", 100) = hello
 
 // drop
-Stdlib.String.drop("hello world", 6) = stdout="world\n"
-Stdlib.String.drop("hello", 0) = stdout="hello\n"
-Stdlib.String.drop("hello", 100) = stdout="\n"
+Stdlib.String.drop("hello world", 6) = world
+Stdlib.String.drop("hello", 0) = hello
+Stdlib.String.drop("hello", 100) = ""
 
 // =============================================================================
 // Stdlib.String.substring Tests
 // =============================================================================
 
-Stdlib.String.substring("hello world", 0, 5) = stdout="hello\n"
-Stdlib.String.substring("hello world", 6, 11) = stdout="world\n"
+Stdlib.String.substring("hello world", 0, 5) = hello
+Stdlib.String.substring("hello world", 6, 11) = world

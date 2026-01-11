@@ -10,7 +10,7 @@
 // Char literals, Unit type, and full Stdlib support
 // ===================================================================
 
-let stringValue = "test" in stringValue = stdout="test\n"
+let stringValue = "test" in stringValue = test
 let intValue = 5 in intValue = 5
 
 // let uint64Value = 5UL
@@ -34,11 +34,11 @@ let intValue = 5 in intValue = 5
 // let uint8Value = 5uy
 // uint8Value = 5uy
 
-let floatValue = 5.5 in floatValue = stdout="5.50\n"
+let floatValue = 5.5 in floatValue = 5.50
 
-let boolValue = true in boolValue = stdout="true\n"
+let boolValue = true in boolValue = true
 
-let tupleValue = (1, 2, 3) in tupleValue = stdout="(1, 2, 3)\n"
+let tupleValue = (1, 2, 3) in tupleValue = (1, 2, 3)
 
 // let charValue = 'c'
 // charValue = 'c'

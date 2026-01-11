@@ -130,8 +130,61 @@ let private isExpectationStart (rest: string) : bool =
     let trimmed = rest.TrimStart()
     if trimmed.Length = 0 then false
     elif Char.IsDigit(trimmed.[0]) || trimmed.[0] = '-' then true
+    elif trimmed.[0] = '"' || trimmed.[0] = '(' || trimmed.[0] = '[' then true
+    elif Char.IsLower(trimmed.[0]) then true
     elif trimmed.StartsWith("exit") || trimmed.StartsWith("stdout") || trimmed.StartsWith("stderr") || trimmed.StartsWith("no_free_list") || trimmed.StartsWith("error") || trimmed.StartsWith("disable_opt_") then true
     else false
+
+let private isExpectationCandidate (rest: string) : bool =
+    let trimmed = rest.TrimStart()
+    if not (isExpectationStart trimmed) then
+        false
+    elif trimmed.StartsWith("\"")
+         || trimmed.StartsWith("error")
+         || trimmed.StartsWith("stdout")
+         || trimmed.StartsWith("stderr")
+         || trimmed.StartsWith("exit")
+         || trimmed.StartsWith("no_free_list")
+         || trimmed.StartsWith("disable_opt_") then
+        true
+    else
+        let lowered = trimmed.ToLower()
+        let hasKeyword =
+            lowered.StartsWith("let ") || lowered.Contains(" let ")
+            || lowered.StartsWith("if ") || lowered.Contains(" if ")
+            || lowered.StartsWith("match ") || lowered.Contains(" match ")
+            || lowered.StartsWith("then ") || lowered.Contains(" then ")
+            || lowered.StartsWith("else ") || lowered.Contains(" else ")
+            || lowered.StartsWith("type ") || lowered.Contains(" type ")
+            || lowered.StartsWith("def ") || lowered.Contains(" def ")
+            || lowered.Contains(" in ")
+        not hasKeyword
+
+let private isAttributeKey (key: string) : bool =
+    match key with
+    | "exit"
+    | "stdout"
+    | "stderr"
+    | "no_free_list"
+    | "disable_opt_freelist"
+    | "disable_opt_anf"
+    | "disable_opt_inline"
+    | "disable_opt_tco"
+    | "disable_opt_mir"
+    | "disable_opt_lir"
+    | "disable_opt_dce" -> true
+    | _ -> false
+
+let private parseSimpleStdout (valueText: string) : Result<string, string> =
+    let trimmed = valueText.Trim()
+    if trimmed.Length = 0 then
+        Error "Expected stdout value"
+    elif trimmed.StartsWith("\"") then
+        match parseStringLiteral trimmed with
+        | Ok s -> Ok $"{s}\n"
+        | Error e -> Error e
+    else
+        Ok $"{trimmed}\n"
 
 /// Check if line has ) followed by = <expectation> (for multi-line expression closing)
 let private hasClosingParenTest (s: string) : bool =
@@ -141,7 +194,7 @@ let private hasClosingParenTest (s: string) : bool =
             let rest = s.Substring(i + 1).TrimStart()
             if rest.StartsWith("=") then
                 let afterEq = rest.Substring(1)
-                isExpectationStart afterEq
+                isExpectationCandidate afterEq
             else
                 findPattern (i + 1)
         else
@@ -149,13 +202,13 @@ let private hasClosingParenTest (s: string) : bool =
     findPattern 0
 
 /// Find the = that separates source from expectations
-/// Returns Some index if this looks like a test line, None otherwise
-let private findSeparatorIndex (s: string) : int option =
-    let rec findLast (i: int) (inQuotes: bool) (lastEqualsIdx: int option) : int option =
+/// Returns Some index if this looks like a test line, along with how many matches were seen
+let private findSeparatorIndexAndCount (s: string) : int option * int =
+    let rec findLast (i: int) (inQuotes: bool) (lastEqualsIdx: int option) (count: int) : int option * int =
         if i >= s.Length then
-            lastEqualsIdx
+            (lastEqualsIdx, count)
         elif s.[i] = '"' then
-            findLast (i + 1) (not inQuotes) lastEqualsIdx
+            findLast (i + 1) (not inQuotes) lastEqualsIdx count
         elif s.[i] = '=' && not inQuotes then
             // Only consider this = as a separator if preceded by whitespace or )
             // This distinguishes "source = expectations" from "exit=139"
@@ -163,19 +216,51 @@ let private findSeparatorIndex (s: string) : int option =
             if hasPrecedingSpace then
                 // Check if this = is followed by an expectation
                 let rest = s.Substring(i + 1)
-                if isExpectationStart rest then
-                    findLast (i + 1) inQuotes (Some i)
+                if isExpectationCandidate rest then
+                    findLast (i + 1) inQuotes (Some i) (count + 1)
                 else
-                    findLast (i + 1) inQuotes lastEqualsIdx
+                    findLast (i + 1) inQuotes lastEqualsIdx count
             else
-                findLast (i + 1) inQuotes lastEqualsIdx
+                findLast (i + 1) inQuotes lastEqualsIdx count
         else
-            findLast (i + 1) inQuotes lastEqualsIdx
-    findLast 0 false None
+            findLast (i + 1) inQuotes lastEqualsIdx count
+    findLast 0 false None 0
+
+let private countPotentialSeparators (s: string) : int =
+    let rec countSeparators (i: int) (inQuotes: bool) (count: int) : int =
+        if i >= s.Length then
+            count
+        elif s.[i] = '"' then
+            countSeparators (i + 1) (not inQuotes) count
+        elif s.[i] = '=' && not inQuotes then
+            let hasPrecedingSpace = i > 0 && (Char.IsWhiteSpace(s.[i - 1]) || s.[i - 1] = ')')
+            let isDoubleEq =
+                (i + 1 < s.Length && s.[i + 1] = '=')
+                || (i > 0 && s.[i - 1] = '=')
+            if hasPrecedingSpace && not isDoubleEq then
+                countSeparators (i + 1) inQuotes (count + 1)
+            else
+                countSeparators (i + 1) inQuotes count
+        else
+            countSeparators (i + 1) inQuotes count
+    countSeparators 0 false 0
+
+let private findSeparatorIndex (s: string) : int option =
+    let (idx, _) = findSeparatorIndexAndCount s
+    idx
 
 /// Check if a line (with comment removed) looks like a test line
 let private isTestLine (lineWithoutComment: string) : bool =
-    findSeparatorIndex lineWithoutComment |> Option.isSome
+    let trimmed = lineWithoutComment.TrimStart()
+    let startsWithDefinition =
+        trimmed.StartsWith("def ")
+        || trimmed.StartsWith("type ")
+        || trimmed.StartsWith("let ")
+    let (idxOpt, count) = findSeparatorIndexAndCount lineWithoutComment
+    match idxOpt with
+    | None -> false
+    | Some _ when startsWithDefinition && countPotentialSeparators lineWithoutComment <= 1 -> false
+    | Some _ -> true
 
 /// Parse a single test line with optional preamble to prepend
 /// Supports two formats:
@@ -200,7 +285,7 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
         let source = testExpr
         let expectationsStr = lineWithoutComment.Substring(equalsIdx + 1).Trim()
 
-        // Parse expectations - either old format (bare number), new format (attributes), or error
+        // Parse expectations - supports simple stdout, attributes, or compiler errors
         // Returns: (exitCode, stdout, stderr, optFlags, expectError, errorMessage)
         let parseExpectations (exp: string) : Result<int * string option * string option * OptFlags * bool * string option, string> =
             let trimmed = exp.Trim()
@@ -216,52 +301,8 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                 match parseStringLiteral msgPart with
                 | Ok msg -> Ok (1, None, None, defaultOptFlags, true, Some msg)
                 | Error e -> Error $"Invalid error message: {e}"
-            // Check if old format (starts with digit or negative sign followed by digit)
-            elif trimmed.Length > 0 && Char.IsDigit(trimmed.[0]) then
-                // Old format: bare exit code (possibly followed by attributes - which is an error)
-                let spaceIdx = trimmed.IndexOf(' ')
-                let exitCodeStr =
-                    if spaceIdx >= 0 then trimmed.Substring(0, spaceIdx)
-                    else trimmed
-
-                match Int64.TryParse(exitCodeStr) with
-                | true, value ->
-                    // Check if there are attributes after the value
-                    let remaining =
-                        if spaceIdx >= 0 then trimmed.Substring(spaceIdx + 1).Trim()
-                        else ""
-
-                    if remaining.Length = 0 then
-                        // Bare number format: expect stdout with exit=0
-                        // e.g., "42 = 42" means stdout="42\n", exit=0
-                        // The binary returns the value as exit code, but CompilerLibrary reports exit=0
-                        Ok (0, Some $"{value}\n", None, defaultOptFlags, false, None)
-                    else
-                        // Mixed format error
-                        Error "Cannot mix bare number with attributes. Use explicit attributes instead."
-                | false, _ ->
-                    Error $"Invalid value: {exitCodeStr}"
-            elif trimmed.Length > 1 && trimmed.[0] = '-' && Char.IsDigit(trimmed.[1]) then
-                // Negative number
-                let spaceIdx = trimmed.IndexOf(' ')
-                let exitCodeStr =
-                    if spaceIdx >= 0 then trimmed.Substring(0, spaceIdx)
-                    else trimmed
-
-                match Int64.TryParse(exitCodeStr) with
-                | true, value ->
-                    let remaining =
-                        if spaceIdx >= 0 then trimmed.Substring(spaceIdx + 1).Trim()
-                        else ""
-
-                    if remaining.Length = 0 then
-                        Ok (0, Some $"{value}\n", None, defaultOptFlags, false, None)
-                    else
-                        Error "Cannot mix bare number with attributes. Use explicit attributes instead."
-                | false, _ ->
-                    Error $"Invalid value: {exitCodeStr}"
             else
-                // New format: parse attributes
+                // New format: parse optional stdout plus attributes
                 let mutable exitCode = 0  // default
                 let mutable stdout = None
                 let mutable stderr = None
@@ -279,10 +320,33 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                         None
 
                 // Split by spaces, respecting quoted strings with escape sequences
-                let attrs = splitBySpacesRespectingQuotes trimmed |> Array.ofList
+                let tokens = splitBySpacesRespectingQuotes trimmed
+                let attrStartIndex =
+                    tokens
+                    |> List.tryFindIndex (fun token ->
+                        match parseAttribute token with
+                        | Ok (key, _) -> isAttributeKey key
+                        | Error _ -> false)
 
-                for attr in attrs do
-                    let attrTrimmed = attr.Trim()
+                let leadingTokens, attrTokens =
+                    match attrStartIndex with
+                    | None -> (tokens, [])
+                    | Some idx -> (tokens |> List.take idx, tokens |> List.skip idx)
+
+                let leadingStdoutResult =
+                    if leadingTokens.Length = 0 then
+                        Ok None
+                    else
+                        let leadingText = String.concat " " leadingTokens
+                        parseSimpleStdout leadingText |> Result.map Some
+
+                let mutable leadingStdout = None
+                match leadingStdoutResult with
+                | Ok value -> leadingStdout <- value
+                | Error e -> errors <- e :: errors
+
+                for token in attrTokens do
+                    let attrTrimmed = token.Trim()
                     if attrTrimmed.Length > 0 then
                         match parseAttribute attrTrimmed with
                         | Ok (key, value) ->
@@ -337,7 +401,17 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                 if errors.Length > 0 then
                     Error (String.concat "; " (List.rev errors))
                 else
-                    Ok (exitCode, stdout, stderr, optFlags, expectError, None)
+                    let combinedStdout =
+                        match leadingStdout, stdout with
+                        | Some _, Some _ ->
+                            Error "Cannot combine bare stdout with stdout= attribute. Use one or the other."
+                        | Some value, None -> Ok (Some value)
+                        | None, Some value -> Ok (Some value)
+                        | None, None -> Ok None
+
+                    match combinedStdout with
+                    | Ok finalStdout -> Ok (exitCode, finalStdout, stderr, optFlags, expectError, None)
+                    | Error e -> Error e
 
         match parseExpectations expectationsStr with
         | Ok (exitCode, stdout, stderr, optFlags, expectError, errorMessage) ->
@@ -376,7 +450,7 @@ let private parseMultilineTest (fullText: string) (startLineNumber: int) (filePa
             let rest = fullText.Substring(i + 1).TrimStart()
             if rest.StartsWith("=") then
                 let afterEq = rest.Substring(1)
-                if isExpectationStart afterEq then
+                if isExpectationCandidate afterEq then
                     findClosingParen (i + 1) inQuotes (Some i)
                 else
                     findClosingParen (i + 1) inQuotes lastMatch
@@ -471,7 +545,7 @@ let parseE2ETestFile (path: string) : Result<E2ETest list, string> =
                         pendingExprLines <- [line]
                         pendingStartLine <- lineNumber
                         inMultilineExpr <- true
-                    elif isTestLine lineWithoutComment then
+                    elif isTopLevel && isTestLine lineWithoutComment then
                         // This is a single-line test - parse it with accumulated preamble
                         let preamble = String.concat "\n" (List.rev preambleLines)
                         match parseTestLineWithPreamble trimmedLine lineNumber path preamble functionLineMap with

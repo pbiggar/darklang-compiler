@@ -11,7 +11,7 @@ Tuple2.first((1, 2)) = 1
 Tuple2.first((42, 0)) = 42
 // NOTE: Mixed-type tuples with String have codegen issue (HeapStore)
 // Tuple2.first(("hello", 5)) = stdout="hello\n"
-Tuple2.first((true, false)) = stdout="true\n"
+Tuple2.first((true, false)) = true
 
 // ===================================================================
 // Tuple2.second - Returns the second value of a pair
@@ -21,7 +21,7 @@ Tuple2.second((1, 2)) = 2
 Tuple2.second((0, 42)) = 42
 // NOTE: Mixed-type tuples with String have codegen issue (HeapStore)
 // Tuple2.second((5, "world")) = stdout="world\n"
-Tuple2.second((false, true)) = stdout="true\n"
+Tuple2.second((false, true)) = true
 
 // ===================================================================
 // Tuple2.create - Constructs a pair from two values

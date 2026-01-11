@@ -11,16 +11,16 @@
 // ===================================================================
 
 // Unresolved type variables are defaulted to Int64 during monomorphization
-Result.isOk(Result.Ok(5)) = stdout="true\n"
-Result.isOk(Result.Error(99)) = stdout="false\n"
+Result.isOk(Result.Ok(5)) = true
+Result.isOk(Result.Error(99)) = false
 
 // ===================================================================
 // Result.isError - Returns true if the result is Error
 // ===================================================================
 
 // Unresolved type variables are defaulted to Int64 during monomorphization
-Result.isError(Result.Ok(5)) = stdout="false\n"
-Result.isError(Result.Error(99)) = stdout="true\n"
+Result.isError(Result.Ok(5)) = false
+Result.isError(Result.Error(99)) = true
 
 // ===================================================================
 // Result.withDefault - Returns the value or a default
@@ -36,7 +36,7 @@ Result.withDefault(Result.Error(99), 42) = 42
 
 // Unresolved type variables are defaulted to Int64 during monomorphization
 Result.withDefault(Result.map(Result.Ok(5), (x: Int64) => x + 1), 0) = 6
-Result.isError(Result.map(Result.Error(99), (x: Int64) => x + 1)) = stdout="true\n"
+Result.isError(Result.map(Result.Error(99), (x: Int64) => x + 1)) = true
 
 // ===================================================================
 // Result.mapError - Apply a function to the Error value
@@ -52,17 +52,17 @@ Result.isError(Result.map(Result.Error(99), (x: Int64) => x + 1)) = stdout="true
 
 // Unresolved type variables are defaulted to Int64 during monomorphization
 Result.withDefault(Result.andThen(Result.Ok(5), (x: Int64) => Result.Ok(x * 2)), 0) = 10
-Result.isError(Result.andThen(Result.Error(99), (x: Int64) => Result.Ok(x * 2))) = stdout="true\n"
+Result.isError(Result.andThen(Result.Error(99), (x: Int64) => Result.Ok(x * 2))) = true
 // When lambda returns Error, unresolved ok type is defaulted to Int64
-Result.isError(Result.andThen(Result.Ok(5), (x: Int64) => Result.Error(99))) = stdout="true\n"
+Result.isError(Result.andThen(Result.Ok(5), (x: Int64) => Result.Error(99))) = true
 
 // ===================================================================
 // Pipe operator with Result functions
 // ===================================================================
 
 // Unresolved type variables are defaulted to Int64 during monomorphization
-Result.Ok(42) |> Result.isOk() = stdout="true\n"
-Result.Error(99) |> Result.isError() = stdout="true\n"
+Result.Ok(42) |> Result.isOk() = true
+Result.Error(99) |> Result.isError() = true
 Result.Ok(10) |> Result.map((x: Int64) => x * 2) |> Result.withDefault(0) = 20
 
 // ===================================================================

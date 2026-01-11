@@ -8,10 +8,10 @@
 // Basic OR operations
 // ===================================================================
 
-(true || true) = stdout="true\n"
-(true || false) = stdout="true\n"
-(false || true) = stdout="true\n"
-(false || false) = stdout="false\n"
+(true || true) = true
+(true || false) = true
+(false || true) = true
+(false || false) = false
 
 // ===================================================================
 // Short-circuit and type error tests
@@ -30,7 +30,7 @@
 // Pipe operator with OR
 // ===================================================================
 
-(true |> (||) true) = stdout="true\n"
-(true |> (||) false) = stdout="true\n"
-(false |> (||) true) = stdout="true\n"
-(false |> (||) false) = stdout="false\n"
+(true |> (||) true) = true
+(true |> (||) false) = true
+(false |> (||) true) = true
+(false |> (||) false) = false

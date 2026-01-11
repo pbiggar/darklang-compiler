@@ -19,13 +19,13 @@ def getOrDefaultStr(d: Dict<String, Int64>, k: String, default: Int64): Int64 = 
 emptyInt() = 0
 
 // Get from empty dict returns None
-isNoneInt(getInt(emptyInt(), 42)) = stdout="true\n"
+isNoneInt(getInt(emptyInt(), 42)) = true
 
 // Set and get single value
 getOrDefault(setInt(emptyInt(), 1, 100), 1, -1) = 100
 
 // Get non-existent key from non-empty dict returns None
-isNoneInt(getInt(setInt(emptyInt(), 1, 100), 2)) = stdout="true\n"
+isNoneInt(getInt(setInt(emptyInt(), 1, 100), 2)) = true
 
 // Set multiple values
 let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 2, 200) in getOrDefault(d2, 1, -1) = 100
@@ -47,36 +47,36 @@ let d1 = setInt(emptyInt(), 0, 1000) in let d2 = setInt(d1, 64, 2000) in getOrDe
 // ========== Dict.remove tests ==========
 
 // Remove from single-entry dict
-let d1 = setInt(emptyInt(), 1, 100) in let d2 = removeInt(d1, 1) in isNoneInt(getInt(d2, 1)) = stdout="true\n"
+let d1 = setInt(emptyInt(), 1, 100) in let d2 = removeInt(d1, 1) in isNoneInt(getInt(d2, 1)) = true
 
 // Remove non-existent key (dict unchanged)
 let d1 = setInt(emptyInt(), 1, 100) in let d2 = removeInt(d1, 999) in getOrDefault(d2, 1, -1) = 100
 
 // Remove one key, other keys remain
 let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 2, 200) in let d3 = setInt(d2, 3, 300) in let d4 = removeInt(d3, 2) in getOrDefault(d4, 1, -1) = 100
-let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 2, 200) in let d3 = setInt(d2, 3, 300) in let d4 = removeInt(d3, 2) in isNoneInt(getInt(d4, 2)) = stdout="true\n"
+let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 2, 200) in let d3 = setInt(d2, 3, 300) in let d4 = removeInt(d3, 2) in isNoneInt(getInt(d4, 2)) = true
 let d1 = setInt(emptyInt(), 1, 100) in let d2 = setInt(d1, 2, 200) in let d3 = setInt(d2, 3, 300) in let d4 = removeInt(d3, 2) in getOrDefault(d4, 3, -1) = 300
 
 // Immutability: original dict unchanged after remove
 let d1 = setInt(emptyInt(), 1, 100) in let d2 = removeInt(d1, 1) in getOrDefault(d1, 1, -1) = 100
 
 // Remove all keys one by one
-let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = removeInt(d2, 1) in let d4 = removeInt(d3, 2) in isNoneInt(getInt(d4, 1)) = stdout="true\n"
-let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = removeInt(d2, 1) in let d4 = removeInt(d3, 2) in isNoneInt(getInt(d4, 2)) = stdout="true\n"
+let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = removeInt(d2, 1) in let d4 = removeInt(d3, 2) in isNoneInt(getInt(d4, 1)) = true
+let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(d1, 2, 20) in let d3 = removeInt(d2, 1) in let d4 = removeInt(d3, 2) in isNoneInt(getInt(d4, 2)) = true
 
 // Remove from empty dict (no-op)
-isNoneInt(getInt(removeInt(emptyInt(), 1), 1)) = stdout="true\n"
+isNoneInt(getInt(removeInt(emptyInt(), 1), 1)) = true
 
 // ========== String-keyed Dict tests ==========
 
 // Get from empty dict with string key
-isNoneInt(getStr(emptyStr(), "hello")) = stdout="true\n"
+isNoneInt(getStr(emptyStr(), "hello")) = true
 
 // Set and get single string key
 getOrDefaultStr(setStr(emptyStr(), "hello", 100), "hello", -1) = 100
 
 // Get non-existent string key from non-empty dict
-isNoneInt(getStr(setStr(emptyStr(), "hello", 100), "world")) = stdout="true\n"
+isNoneInt(getStr(setStr(emptyStr(), "hello", 100), "world")) = true
 
 // Set multiple string keys
 let d1 = setStr(emptyStr(), "one", 1) in let d2 = setStr(d1, "two", 2) in getOrDefaultStr(d2, "one", -1) = 1
@@ -93,14 +93,14 @@ let d1 = setStr(emptyStr(), "a", 10) in let d2 = setStr(d1, "b", 20) in let d3 =
 // ========== String Dict remove tests ==========
 
 // Remove from single-entry dict
-let d1 = setStr(emptyStr(), "key", 100) in let d2 = removeStr(d1, "key") in isNoneInt(getStr(d2, "key")) = stdout="true\n"
+let d1 = setStr(emptyStr(), "key", 100) in let d2 = removeStr(d1, "key") in isNoneInt(getStr(d2, "key")) = true
 
 // Remove non-existent key (dict unchanged)
 let d1 = setStr(emptyStr(), "key", 100) in let d2 = removeStr(d1, "other") in getOrDefaultStr(d2, "key", -1) = 100
 
 // Remove one key, other keys remain
 let d1 = setStr(emptyStr(), "a", 100) in let d2 = setStr(d1, "b", 200) in let d3 = setStr(d2, "c", 300) in let d4 = removeStr(d3, "b") in getOrDefaultStr(d4, "a", -1) = 100
-let d1 = setStr(emptyStr(), "a", 100) in let d2 = setStr(d1, "b", 200) in let d3 = setStr(d2, "c", 300) in let d4 = removeStr(d3, "b") in isNoneInt(getStr(d4, "b")) = stdout="true\n"
+let d1 = setStr(emptyStr(), "a", 100) in let d2 = setStr(d1, "b", 200) in let d3 = setStr(d2, "c", 300) in let d4 = removeStr(d3, "b") in isNoneInt(getStr(d4, "b")) = true
 let d1 = setStr(emptyStr(), "a", 100) in let d2 = setStr(d1, "b", 200) in let d3 = setStr(d2, "c", 300) in let d4 = removeStr(d3, "b") in getOrDefaultStr(d4, "c", -1) = 300
 
 // Immutability: original dict unchanged after remove
@@ -116,18 +116,18 @@ let d1 = setStr(emptyStr(), "ab", 1) in let d2 = setStr(d1, "abc", 2) in getOrDe
 // ========== Dict utility functions ==========
 
 // isEmpty tests
-Stdlib.Dict.isEmpty(emptyInt()) = stdout="true\n"
-Stdlib.Dict.isEmpty(setInt(emptyInt(), 1, 100)) = stdout="false\n"
+Stdlib.Dict.isEmpty(emptyInt()) = true
+Stdlib.Dict.isEmpty(setInt(emptyInt(), 1, 100)) = false
 
 // contains tests (int-keyed)
-Stdlib.Dict.contains(emptyInt(), 1) = stdout="false\n"
-Stdlib.Dict.contains(setInt(emptyInt(), 1, 100), 1) = stdout="true\n"
-Stdlib.Dict.contains(setInt(emptyInt(), 1, 100), 2) = stdout="false\n"
+Stdlib.Dict.contains(emptyInt(), 1) = false
+Stdlib.Dict.contains(setInt(emptyInt(), 1, 100), 1) = true
+Stdlib.Dict.contains(setInt(emptyInt(), 1, 100), 2) = false
 
 // contains tests (string-keyed)
-Stdlib.Dict.contains(emptyStr(), "hello") = stdout="false\n"
-Stdlib.Dict.contains(setStr(emptyStr(), "hello", 100), "hello") = stdout="true\n"
-Stdlib.Dict.contains(setStr(emptyStr(), "hello", 100), "world") = stdout="false\n"
+Stdlib.Dict.contains(emptyStr(), "hello") = false
+Stdlib.Dict.contains(setStr(emptyStr(), "hello", 100), "hello") = true
+Stdlib.Dict.contains(setStr(emptyStr(), "hello", 100), "world") = false
 
 // size tests
 Stdlib.Dict.size(emptyInt()) = 0
@@ -177,10 +177,10 @@ let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.List.length(Stdlib.Di
 // Note: fold uses closures with TCO which still has a bug
 
 // fold to sum values
-let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + v) = stdout="30\n" disable_opt_tco=true
+let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + v) = 30 disable_opt_tco=true
 
 // fold to sum keys
-let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + k) = stdout="3\n" disable_opt_tco=true
+let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.fold(d, 0, (acc: Int64, k: Int64, v: Int64) => acc + k) = 3 disable_opt_tco=true
 
 // fold on empty dict
 Stdlib.Dict.fold(emptyInt(), 100, (acc: Int64, k: Int64, v: Int64) => acc + v) = 100
@@ -194,27 +194,27 @@ let d = setInt(emptyInt(), 1, 10) in let d2 = Stdlib.Dict.map(d, (k: Int64, v: I
 let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.size(Stdlib.Dict.map(d, (k: Int64, v: Int64) => v + k)) = 2
 
 // map on empty dict
-Stdlib.Dict.isEmpty(Stdlib.Dict.map(emptyInt(), (k: Int64, v: Int64) => v * 2)) = stdout="true\n"
+Stdlib.Dict.isEmpty(Stdlib.Dict.map(emptyInt(), (k: Int64, v: Int64) => v * 2)) = true
 
 // ========== Dict.filter tests ==========
 // Note: filter uses closures with TCO which still has a bug
 
 // filter to keep values > 15
-let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.size(Stdlib.Dict.filter(d, (k: Int64, v: Int64) => v > 15)) = stdout="1\n" disable_opt_tco=true
+let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.size(Stdlib.Dict.filter(d, (k: Int64, v: Int64) => v > 15)) = 1 disable_opt_tco=true
 
 // filter on empty dict
-Stdlib.Dict.isEmpty(Stdlib.Dict.filter(emptyInt(), (k: Int64, v: Int64) => v > 0)) = stdout="true\n"
+Stdlib.Dict.isEmpty(Stdlib.Dict.filter(emptyInt(), (k: Int64, v: Int64) => v > 0)) = true
 
 // filter to keep all
-let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.size(Stdlib.Dict.filter(d, (k: Int64, v: Int64) => true)) = stdout="2\n" disable_opt_tco=true
+let d = setInt(setInt(emptyInt(), 1, 10), 2, 20) in Stdlib.Dict.size(Stdlib.Dict.filter(d, (k: Int64, v: Int64) => true)) = 2 disable_opt_tco=true
 
 // filter to keep none
-Stdlib.Dict.isEmpty(Stdlib.Dict.filter(setInt(emptyInt(), 1, 10), (k: Int64, v: Int64) => false)) = stdout="true\n"
+Stdlib.Dict.isEmpty(Stdlib.Dict.filter(setInt(emptyInt(), 1, 10), (k: Int64, v: Int64) => false)) = true
 
 // ========== Dict.merge tests ==========
 
 // merge empty dicts
-Stdlib.Dict.isEmpty(Stdlib.Dict.merge(emptyInt(), emptyInt())) = stdout="true\n"
+Stdlib.Dict.isEmpty(Stdlib.Dict.merge(emptyInt(), emptyInt())) = true
 
 // merge into empty
 Stdlib.Dict.size(Stdlib.Dict.merge(emptyInt(), setInt(emptyInt(), 1, 10))) = 1
@@ -228,7 +228,7 @@ let d1 = setInt(emptyInt(), 1, 10) in let d2 = setInt(emptyInt(), 2, 20) in Stdl
 // ========== Dict.fromList tests ==========
 
 // fromList empty
-Stdlib.Dict.isEmpty(Stdlib.Dict.fromList([])) = stdout="true\n"
+Stdlib.Dict.isEmpty(Stdlib.Dict.fromList([])) = true
 
 // fromList single
 Stdlib.Dict.size(Stdlib.Dict.fromList([(1, 100)])) = 1
@@ -238,7 +238,7 @@ Stdlib.Dict.size(Stdlib.Dict.fromList([(1, 10), (2, 20), (3, 30)])) = 3
 
 // fromList get value
 // Note: TCO has a bug with recursive Dict operations
-getOrDefault(Stdlib.Dict.fromList([(1, 42), (2, 99)]), 1, -1) = stdout="42\n" disable_opt_tco=true
+getOrDefault(Stdlib.Dict.fromList([(1, 42), (2, 99)]), 1, -1) = 42 disable_opt_tco=true
 
 // ========== Dict.getOrDefault tests ==========
 
@@ -279,7 +279,7 @@ Stdlib.Dict.size(setBool(setBool(emptyBool(), true, 1), false, 0)) = 2
 Stdlib.Option.withDefault(getBool(setBool(emptyBool(), true, 42), true), -1) = 42
 
 // Bool keys - get false from true-keyed dict returns None
-isNoneInt(getBool(setBool(emptyBool(), true, 42), false)) = stdout="true\n"
+isNoneInt(getBool(setBool(emptyBool(), true, 42), false)) = true
 
 // ========== Dict with List values ==========
 // Tests to cover Dict<Int64, List<Int64>> monomorphizations
@@ -289,13 +289,13 @@ def setListDict(d: Dict<Int64, List<Int64>>, k: Int64, v: List<Int64>): Dict<Int
 def getListDict(d: Dict<Int64, List<Int64>>, k: Int64): Stdlib.Option.Option<List<Int64>> = Stdlib.Dict.get(d, k)
 
 // Set and get list value
-Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 1, [10, 20, 30]), 1), []) = stdout="[10, 20, 30]\n"
+Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 1, [10, 20, 30]), 1), []) = [10, 20, 30]
 
 // Multiple list entries
-let d = setListDict(emptyListDict(), 1, [1, 2]) in let d = setListDict(d, 2, [3, 4, 5]) in Stdlib.Option.withDefault<List<Int64>>(getListDict(d, 2), []) = stdout="[3, 4, 5]\n"
+let d = setListDict(emptyListDict(), 1, [1, 2]) in let d = setListDict(d, 2, [3, 4, 5]) in Stdlib.Option.withDefault<List<Int64>>(getListDict(d, 2), []) = [3, 4, 5]
 
 // Empty list as value
-Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 42, []), 42), [-1]) = stdout="[]\n"
+Stdlib.Option.withDefault<List<Int64>>(getListDict(setListDict(emptyListDict(), 42, []), 42), [-1]) = []
 
 // fromList with list values - use Stdlib.Dict.size with specific type
 let d = Stdlib.Dict.fromList([(1, [10]), (2, [20, 30])]) in Stdlib.Dict.size(d) = 2

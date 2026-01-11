@@ -13,13 +13,13 @@
 // ===================================================================
 
 // Simple tuple
-let t = (1, 2) in t.0 + t.1 = stdout="3\n"
+let t = (1, 2) in t.0 + t.1 = 3
 
 // Tuple destructuring
-let (a, b) = (10, 20) in a + b = stdout="30\n"
+let (a, b) = (10, 20) in a + b = 30
 
 // Multiple tuples
-let t1 = (1, 2) in let t2 = (3, 4) in t1.0 + t2.1 = stdout="5\n"
+let t1 = (1, 2) in let t2 = (3, 4) in t1.0 + t2.1 = 5
 
 // ===================================================================
 // Tests for correct RefCountDec placement
@@ -27,20 +27,20 @@ let t1 = (1, 2) in let t2 = (3, 4) in t1.0 + t2.1 = stdout="5\n"
 // ===================================================================
 
 // Tuple used then destructured - Dec happens after use
-let t = (1, 2) in let (a, b) = t in a + b = stdout="3\n"
+let t = (1, 2) in let (a, b) = t in a + b = 3
 
 // Tuple aliased - alias is borrowed, original gets Dec
-let outer = (1, 2) in let inner = outer in inner.0 + inner.1 = stdout="3\n"
+let outer = (1, 2) in let inner = outer in inner.0 + inner.1 = 3
 
 // ===================================================================
 // Memory reuse tests - free list reclaims and reuses memory
 // ===================================================================
 
 // Allocate two tuples of same size - second reuses freed memory
-let t1 = (1, 2) in let _ = t1.0 in let t2 = (3, 4) in t2.0 + t2.1 = stdout="7\n"
+let t1 = (1, 2) in let _ = t1.0 in let t2 = (3, 4) in t2.0 + t2.1 = 7
 
 // Allocate many tuples - tests free list under pressure
-let a = (1, 1) in let b = (2, 2) in let c = (3, 3) in let d = (4, 4) in a.0 + b.0 + c.0 + d.0 = stdout="10\n"
+let a = (1, 1) in let b = (2, 2) in let c = (3, 3) in let d = (4, 4) in a.0 + b.0 + c.0 + d.0 = 10
 
 // ===================================================================
 // Function calls with heap values
@@ -60,36 +60,36 @@ def add1(x: Int64) : Int64 = x + 1 let a = add1(1) in let b = add1(10) in a + b 
 // ===================================================================
 
 // Basic record
-type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 20 } in p.x + p.y = stdout="30\n"
+type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 20 } in p.x + p.y = 30
 
 // Record with aliasing
-type Point = { x: Int64, y: Int64 } let p = Point { x = 5, y = 7 } in let q = p in q.x + q.y = stdout="12\n"
+type Point = { x: Int64, y: Int64 } let p = Point { x = 5, y = 7 } in let q = p in q.x + q.y = 12
 
 // ===================================================================
 // Nested heap values
 // ===================================================================
 
 // Tuple containing tuples - outer tuple owns nested refs
-let outer = ((1, 2), (3, 4)) in let (a, b) = outer in a.0 + b.1 = stdout="5\n"
+let outer = ((1, 2), (3, 4)) in let (a, b) = outer in a.0 + b.1 = 5
 
 // Deeply nested tuple access (must use intermediate let bindings)
-let t = ((10, 20), (30, 40)) in let a = t.0 in let b = t.1 in a.0 + b.1 = stdout="50\n"
+let t = ((10, 20), (30, 40)) in let a = t.0 in let b = t.1 in a.0 + b.1 = 50
 
 // ===================================================================
 // Lists (also heap-allocated)
 // ===================================================================
 
 // Simple list operations
-match [1, 2, 3] with | [x, _, _] -> x | _ -> 0 = stdout="1\n"
+match [1, 2, 3] with | [x, _, _] -> x | _ -> 0 = 1
 
 // List with element extraction
-match [10, 20, 30] with | [x, y, z] -> x | _ -> 0 = stdout="10\n"
+match [10, 20, 30] with | [x, y, z] -> x | _ -> 0 = 10
 
 // Empty list
-match [] with | [] -> 42 | _ -> 0 = stdout="42\n"
+match [] with | [] -> 42 | _ -> 0 = 42
 
 // List allocation then match
-let xs = [1, 2] in match xs with | [a, b] -> a + b | _ -> 0 = stdout="3\n"
+let xs = [1, 2] in match xs with | [a, b] -> a + b | _ -> 0 = 3
 
 // ===================================================================
 // Memory reuse stress test

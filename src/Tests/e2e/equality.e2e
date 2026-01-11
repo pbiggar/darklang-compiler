@@ -10,48 +10,48 @@
 // ===================================================================
 // Integer Equality
 // ===================================================================
-1 == 1 = stdout="true\n"
-1 == 2 = stdout="false\n"
-5 == 5 = stdout="true\n"
-0 == 0 = stdout="true\n"
+1 == 1 = true
+1 == 2 = false
+5 == 5 = true
+0 == 0 = true
 
-1 != 2 = stdout="true\n"
-1 != 1 = stdout="false\n"
+1 != 2 = true
+1 != 1 = false
 
 // ===================================================================
 // Boolean Equality
 // ===================================================================
-true == true = stdout="true\n"
-true == false = stdout="false\n"
-false == false = stdout="true\n"
-false == true = stdout="false\n"
+true == true = true
+true == false = false
+false == false = true
+false == true = false
 
-true != false = stdout="true\n"
-true != true = stdout="false\n"
+true != false = true
+true != true = false
 
 // ===================================================================
 // Tuple Equality
 // ===================================================================
 
 // Two-element tuples
-(1, 2) == (1, 2) = stdout="true\n"
-(1, 2) == (1, 3) = stdout="false\n"
-(1, 2) == (2, 2) = stdout="false\n"
-(1, 2) != (1, 3) = stdout="true\n"
-(1, 2) != (1, 2) = stdout="false\n"
+(1, 2) == (1, 2) = true
+(1, 2) == (1, 3) = false
+(1, 2) == (2, 2) = false
+(1, 2) != (1, 3) = true
+(1, 2) != (1, 2) = false
 
 // Three-element tuples
-(1, 2, 3) == (1, 2, 3) = stdout="true\n"
-(1, 2, 3) == (1, 2, 4) = stdout="false\n"
-(1, 2, 3) != (1, 2, 4) = stdout="true\n"
+(1, 2, 3) == (1, 2, 3) = true
+(1, 2, 3) == (1, 2, 4) = false
+(1, 2, 3) != (1, 2, 4) = true
 
 // Tuples with booleans
-(true, false) == (true, false) = stdout="true\n"
-(true, false) == (false, true) = stdout="false\n"
+(true, false) == (true, false) = true
+(true, false) == (false, true) = false
 
 // Tuples in variables
-let a = (1, 2) in let b = (1, 2) in a == b = stdout="true\n"
-let a = (1, 2) in let b = (1, 3) in a == b = stdout="false\n"
+let a = (1, 2) in let b = (1, 2) in a == b = true
+let a = (1, 2) in let b = (1, 3) in a == b = false
 
 // Tuple equality in conditionals
 if (1, 2) == (1, 2) then 1 else 0 = 1
@@ -62,23 +62,23 @@ if (1, 2) == (1, 3) then 1 else 0 = 0
 // ===================================================================
 
 // Same records are equal
-type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 2 } = stdout="true\n"
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 2 } = true
 
 // Different field values are not equal
-type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 3 } = stdout="false\n"
-type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 2, y = 2 } = stdout="false\n"
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 1, y = 3 } = false
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } == Point { x = 2, y = 2 } = false
 
 // Inequality
-type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 3, y = 4 } = stdout="true\n"
-type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 1, y = 2 } = stdout="false\n"
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 3, y = 4 } = true
+type Point = { x: Int64, y: Int64 } Point { x = 1, y = 2 } != Point { x = 1, y = 2 } = false
 
 // Records in variables
-type Point = { x: Int64, y: Int64 } let a = Point { x = 1, y = 2 } in let b = Point { x = 1, y = 2 } in a == b = stdout="true\n"
-type Point = { x: Int64, y: Int64 } let a = Point { x = 1, y = 2 } in let b = Point { x = 1, y = 3 } in a == b = stdout="false\n"
+type Point = { x: Int64, y: Int64 } let a = Point { x = 1, y = 2 } in let b = Point { x = 1, y = 2 } in a == b = true
+type Point = { x: Int64, y: Int64 } let a = Point { x = 1, y = 2 } in let b = Point { x = 1, y = 3 } in a == b = false
 
 // Three-field records
-type Vec3 = { x: Int64, y: Int64, z: Int64 } Vec3 { x = 1, y = 2, z = 3 } == Vec3 { x = 1, y = 2, z = 3 } = stdout="true\n"
-type Vec3 = { x: Int64, y: Int64, z: Int64 } Vec3 { x = 1, y = 2, z = 3 } == Vec3 { x = 1, y = 2, z = 4 } = stdout="false\n"
+type Vec3 = { x: Int64, y: Int64, z: Int64 } Vec3 { x = 1, y = 2, z = 3 } == Vec3 { x = 1, y = 2, z = 3 } = true
+type Vec3 = { x: Int64, y: Int64, z: Int64 } Vec3 { x = 1, y = 2, z = 3 } == Vec3 { x = 1, y = 2, z = 4 } = false
 
 // Record equality in conditionals
 type Point = { x: Int64, y: Int64 } if Point { x = 1, y = 2 } == Point { x = 1, y = 2 } then 1 else 0 = 1
@@ -87,15 +87,15 @@ type Point = { x: Int64, y: Int64 } if Point { x = 1, y = 2 } == Point { x = 1, 
 // ===================================================================
 // Enum Equality (simple - no payload)
 // ===================================================================
-type Color = Red | Green | Blue Red == Red = stdout="true\n"
-type Color = Red | Green | Blue Red == Blue = stdout="false\n"
-type Color = Red | Green | Blue Green == Green = stdout="true\n"
-type Color = Red | Green | Blue Red != Blue = stdout="true\n"
-type Color = Red | Green | Blue Red != Red = stdout="false\n"
+type Color = Red | Green | Blue Red == Red = true
+type Color = Red | Green | Blue Red == Blue = false
+type Color = Red | Green | Blue Green == Green = true
+type Color = Red | Green | Blue Red != Blue = true
+type Color = Red | Green | Blue Red != Red = false
 
 // Enum in variables
-type Color = Red | Green | Blue let a = Red in let b = Red in a == b = stdout="true\n"
-type Color = Red | Green | Blue let a = Red in let b = Blue in a == b = stdout="false\n"
+type Color = Red | Green | Blue let a = Red in let b = Red in a == b = true
+type Color = Red | Green | Blue let a = Red in let b = Blue in a == b = false
 
 // Enum in conditionals
 type Color = Red | Green | Blue if Red == Red then 1 else 0 = 1
@@ -106,10 +106,10 @@ type Color = Red | Green | Blue if Red == Blue then 1 else 0 = 0
 // ===================================================================
 
 // Tuple of tuples
-((1, 2), (3, 4)) == ((1, 2), (3, 4)) = stdout="true\n"
-((1, 2), (3, 4)) == ((1, 2), (3, 5)) = stdout="false\n"
+((1, 2), (3, 4)) == ((1, 2), (3, 4)) = true
+((1, 2), (3, 4)) == ((1, 2), (3, 5)) = false
 
 // Record with tuple field
-type PointPair = { p1: (Int64, Int64), p2: (Int64, Int64) } PointPair { p1 = (1, 2), p2 = (3, 4) } == PointPair { p1 = (1, 2), p2 = (3, 4) } = stdout="true\n"
-type PointPair = { p1: (Int64, Int64), p2: (Int64, Int64) } PointPair { p1 = (1, 2), p2 = (3, 4) } == PointPair { p1 = (1, 2), p2 = (3, 5) } = stdout="false\n"
+type PointPair = { p1: (Int64, Int64), p2: (Int64, Int64) } PointPair { p1 = (1, 2), p2 = (3, 4) } == PointPair { p1 = (1, 2), p2 = (3, 4) } = true
+type PointPair = { p1: (Int64, Int64), p2: (Int64, Int64) } PointPair { p1 = (1, 2), p2 = (3, 4) } == PointPair { p1 = (1, 2), p2 = (3, 5) } = false
 

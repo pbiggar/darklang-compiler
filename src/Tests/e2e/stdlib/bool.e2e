@@ -7,52 +7,52 @@
 // Bool.not - Returns the inverse of a boolean
 // ===================================================================
 
-Bool.not(true) = stdout="false\n"
-Bool.not(false) = stdout="true\n"
+Bool.not(true) = false
+Bool.not(false) = true
 
 // With variable
-let b = true in Bool.not(b) = stdout="false\n"
-let b = false in Bool.not(b) = stdout="true\n"
+let b = true in Bool.not(b) = false
+let b = false in Bool.not(b) = true
 
 // Double not
-Bool.not(Bool.not(true)) = stdout="true\n"
-Bool.not(Bool.not(false)) = stdout="false\n"
+Bool.not(Bool.not(true)) = true
+Bool.not(Bool.not(false)) = false
 
 // ===================================================================
 // Bool.and - Returns true if both a and b are true
 // ===================================================================
 
-Bool.and(true, true) = stdout="true\n"
-Bool.and(true, false) = stdout="false\n"
-Bool.and(false, true) = stdout="false\n"
-Bool.and(false, false) = stdout="false\n"
+Bool.and(true, true) = true
+Bool.and(true, false) = false
+Bool.and(false, true) = false
+Bool.and(false, false) = false
 
 // With expressions
-Bool.and(8 >= 5, 6 <= 8) = stdout="true\n"
-Bool.and(1 > 5, 2 < 8) = stdout="false\n"
+Bool.and(8 >= 5, 6 <= 8) = true
+Bool.and(1 > 5, 2 < 8) = false
 
 // ===================================================================
 // Bool.or - Returns true if either a or b is true
 // ===================================================================
 
-Bool.or(true, true) = stdout="true\n"
-Bool.or(true, false) = stdout="true\n"
-Bool.or(false, true) = stdout="true\n"
-Bool.or(false, false) = stdout="false\n"
+Bool.or(true, true) = true
+Bool.or(true, false) = true
+Bool.or(false, true) = true
+Bool.or(false, false) = false
 
 // ===================================================================
 // Bool.xor - Returns true if exactly one of a and b is true
 // ===================================================================
 
-Bool.xor(true, true) = stdout="false\n"
-Bool.xor(true, false) = stdout="true\n"
-Bool.xor(false, true) = stdout="true\n"
-Bool.xor(false, false) = stdout="false\n"
+Bool.xor(true, true) = false
+Bool.xor(true, false) = true
+Bool.xor(false, true) = true
+Bool.xor(false, false) = false
 
 // ===================================================================
 // Bool.toString - Convert bool to string
 // Already tested in strings.e2e, but including here for completeness
 // ===================================================================
 
-Bool.toString(true) = stdout="true\n"
-Bool.toString(false) = stdout="false\n"
+Bool.toString(true) = true
+Bool.toString(false) = false

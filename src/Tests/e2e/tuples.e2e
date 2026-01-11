@@ -4,40 +4,40 @@
 // Note: Currently tuples cannot be directly printed, so we access elements
 
 // 2-element tuple - first element
-let t = (1, 2) in t.0 = stdout="1\n"
+let t = (1, 2) in t.0 = 1
 
 // 2-element tuple - second element
-let t = (1, 2) in t.1 = stdout="2\n"
+let t = (1, 2) in t.1 = 2
 
 // 3-element tuple - all elements
-let t = (10, 20, 30) in t.0 = stdout="10\n"
-let t = (10, 20, 30) in t.1 = stdout="20\n"
-let t = (10, 20, 30) in t.2 = stdout="30\n"
+let t = (10, 20, 30) in t.0 = 10
+let t = (10, 20, 30) in t.1 = 20
+let t = (10, 20, 30) in t.2 = 30
 
 // Tuple with negative numbers
-let t = (-1, -2) in t.0 = stdout="-1\n"
-let t = (-1, -2) in t.1 = stdout="-2\n"
+let t = (-1, -2) in t.0 = -1
+let t = (-1, -2) in t.1 = -2
 
 // Tuple with zero
-let t = (0, 1) in t.0 = stdout="0\n"
-let t = (0, 1) in t.1 = stdout="1\n"
+let t = (0, 1) in t.0 = 0
+let t = (0, 1) in t.1 = 1
 
 // Nested tuple access (single level)
-let t = (100, 200) in t.0 + t.1 = stdout="300\n"
+let t = (100, 200) in t.0 + t.1 = 300
 
 // Tuple with boolean values
-let t = (true, false) in t.0 = stdout="true\n"
-let t = (true, false) in t.1 = stdout="false\n"
+let t = (true, false) in t.0 = true
+let t = (true, false) in t.1 = false
 
 // Tuple elements in arithmetic
-let t = (5, 3) in t.0 - t.1 = stdout="2\n"
-let t = (5, 3) in t.0 * t.1 = stdout="15\n"
+let t = (5, 3) in t.0 - t.1 = 2
+let t = (5, 3) in t.0 * t.1 = 15
 
 // Multiple tuples
-let a = (1, 2) in let b = (3, 4) in a.0 + b.1 = stdout="5\n"
+let a = (1, 2) in let b = (3, 4) in a.0 + b.1 = 5
 
 // Large tuple (4 elements)
-let t = (1, 2, 3, 4) in t.0 + t.1 + t.2 + t.3 = stdout="10\n"
+let t = (1, 2, 3, 4) in t.0 + t.1 + t.2 + t.3 = 10
 
 
 // ===================================================================
@@ -45,119 +45,119 @@ let t = (1, 2, 3, 4) in t.0 + t.1 + t.2 + t.3 = stdout="10\n"
 // ===================================================================
 
 // Basic tuple destructuring - 2 elements
-let (a, b) = (1, 2) in a = stdout="1\n"
-let (a, b) = (1, 2) in b = stdout="2\n"
-let (a, b) = (10, 20) in a + b = stdout="30\n"
+let (a, b) = (1, 2) in a = 1
+let (a, b) = (1, 2) in b = 2
+let (a, b) = (10, 20) in a + b = 30
 
 // 3-element tuple destructuring
-let (a, b, c) = (1, 2, 3) in a = stdout="1\n"
-let (a, b, c) = (1, 2, 3) in b = stdout="2\n"
-let (a, b, c) = (1, 2, 3) in c = stdout="3\n"
-let (a, b, c) = (10, 20, 30) in a + b + c = stdout="60\n"
+let (a, b, c) = (1, 2, 3) in a = 1
+let (a, b, c) = (1, 2, 3) in b = 2
+let (a, b, c) = (1, 2, 3) in c = 3
+let (a, b, c) = (10, 20, 30) in a + b + c = 60
 
 // 4-element tuple destructuring
-let (a, b, c, d) = (1, 2, 3, 4) in a + b + c + d = stdout="10\n"
+let (a, b, c, d) = (1, 2, 3, 4) in a + b + c + d = 10
 
 // Tuple destructuring with expressions
-let (x, y) = (3 + 4, 5 * 2) in x = stdout="7\n"
-let (x, y) = (3 + 4, 5 * 2) in y = stdout="10\n"
-let (x, y) = (3 + 4, 5 * 2) in x + y = stdout="17\n"
+let (x, y) = (3 + 4, 5 * 2) in x = 7
+let (x, y) = (3 + 4, 5 * 2) in y = 10
+let (x, y) = (3 + 4, 5 * 2) in x + y = 17
 
 // Nested let with tuple destructuring
-let (a, b) = (1, 2) in let (c, d) = (3, 4) in a + b + c + d = stdout="10\n"
+let (a, b) = (1, 2) in let (c, d) = (3, 4) in a + b + c + d = 10
 
 // Tuple from variable
-let t = (5, 10) in let (a, b) = t in a * b = stdout="50\n"
+let t = (5, 10) in let (a, b) = t in a * b = 50
 
 // Wildcard in tuple pattern
-let (a, _) = (42, 99) in a = stdout="42\n"
-let (_, b) = (99, 42) in b = stdout="42\n"
-let (a, _, c) = (1, 2, 3) in a + c = stdout="4\n"
+let (a, _) = (42, 99) in a = 42
+let (_, b) = (99, 42) in b = 42
+let (a, _, c) = (1, 2, 3) in a + c = 4
 
 // Tuple destructuring with negative numbers
-let (a, b) = (-5, 10) in a + b = stdout="5\n"
+let (a, b) = (-5, 10) in a + b = 5
 
 // Complex expression using destructured values
-let (x, y) = (6, 4) in x * y - x + y = stdout="22\n"
+let (x, y) = (6, 4) in x * y - x + y = 22
 
 // ===================================================================
 // Tuple Printing
 // ===================================================================
 
 // Basic tuple printing
-(1, 2) = stdout="(1, 2)\n"
-(42, 99) = stdout="(42, 99)\n"
-(0, 0) = stdout="(0, 0)\n"
+(1, 2) = (1, 2)
+(42, 99) = (42, 99)
+(0, 0) = (0, 0)
 
 // 3-element tuple printing
-(1, 2, 3) = stdout="(1, 2, 3)\n"
-(10, 20, 30) = stdout="(10, 20, 30)\n"
+(1, 2, 3) = (1, 2, 3)
+(10, 20, 30) = (10, 20, 30)
 
 // Tuple with negative numbers
-(-1, -2) = stdout="(-1, -2)\n"
-(5, -10) = stdout="(5, -10)\n"
+(-1, -2) = (-1, -2)
+(5, -10) = (5, -10)
 
 // Tuple with computed values
-let x = 5 in (x, x + 1) = stdout="(5, 6)\n"
-(3 + 4, 5 * 2) = stdout="(7, 10)\n"
+let x = 5 in (x, x + 1) = (5, 6)
+(3 + 4, 5 * 2) = (7, 10)
 
 // ===================================================================
 // String Extraction from Tuples
 // ===================================================================
 
 // Extract string from first position
-match ("hello", 5) with | (a, _) -> a = stdout="hello\n"
+match ("hello", 5) with | (a, _) -> a = hello
 
 // Extract string from second position
-match (5, "world") with | (_, b) -> b = stdout="world\n"
+match (5, "world") with | (_, b) -> b = world
 
 // Extract string using let-pattern
-let (s, _) = ("test", 42) in s = stdout="test\n"
-let (_, s) = (42, "test") in s = stdout="test\n"
+let (s, _) = ("test", 42) in s = test
+let (_, s) = (42, "test") in s = test
 
 // Extract string alongside other values
-let (a, s, b) = (1, "middle", 2) in s = stdout="middle\n"
+let (a, s, b) = (1, "middle", 2) in s = middle
 
 // ===================================================================
 // Tuples with Floats (GpToFp/FpToGp conversion tests)
 // ===================================================================
 
 // Float in first position
-(3.14, 42).0 = stdout="3.14\n"
-(3.14, 42).1 = stdout="42\n"
+(3.14, 42).0 = 3.14
+(3.14, 42).1 = 42
 
 // Float in second position
-(42, 3.14).0 = stdout="42\n"
-(42, 3.14).1 = stdout="3.14\n"
+(42, 3.14).0 = 42
+(42, 3.14).1 = 3.14
 
 // All floats
-(1.0, 2.0).0 + (1.0, 2.0).1 = stdout="3.00\n"
+(1.0, 2.0).0 + (1.0, 2.0).1 = 3.00
 
 // Mixed float/int/bool
-(1.5, true, 42).0 = stdout="1.50\n"
-(1.5, true, 42).1 = stdout="true\n"
-(1.5, true, 42).2 = stdout="42\n"
+(1.5, true, 42).0 = 1.50
+(1.5, true, 42).1 = true
+(1.5, true, 42).2 = 42
 
 // Float in last position of 3-tuple
-(10, 20, 3.14).2 = stdout="3.14\n"
+(10, 20, 3.14).2 = 3.14
 
 // Float tuple destructuring
-let (a, b) = (1.5, 2.5) in a + b = stdout="4.00\n"
+let (a, b) = (1.5, 2.5) in a + b = 4.00
 
 // Mixed destructuring with float
-let (x, y, z) = (1.0, 42, 2.0) in x + z = stdout="3.00\n"
+let (x, y, z) = (1.0, 42, 2.0) in x + z = 3.00
 
 // Float tuple in let binding
-let t = (3.14, 2.71) in t.0 = stdout="3.14\n"
-let t = (3.14, 2.71) in t.1 = stdout="2.71\n"
+let t = (3.14, 2.71) in t.0 = 3.14
+let t = (3.14, 2.71) in t.1 = 2.71
 
 // Float tuple with arithmetic on access
-let t = (1.5, 2.5) in t.0 * t.1 = stdout="3.75\n"
+let t = (1.5, 2.5) in t.0 * t.1 = 3.75
 
 // Nested tuple with float
-let t = ((1.0, 2.0), 3) in t.1 = stdout="3\n"
+let t = ((1.0, 2.0), 3) in t.1 = 3
 
 // Float tuple printing
-(1.0, 2.0) = stdout="(1.00, 2.00)\n"
-(3.14, 42) = stdout="(3.14, 42)\n"
-(42, 3.14) = stdout="(42, 3.14)\n"
+(1.0, 2.0) = (1.00, 2.00)
+(3.14, 42) = (3.14, 42)
+(42, 3.14) = (42, 3.14)

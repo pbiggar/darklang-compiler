@@ -9,13 +9,13 @@
 // ===================================================================
 
 // Basic string interpolation
-$"test {"1"}" = stdout="test 1\n"
+$"test {"1"}" = test 1
 
 // Variable interpolation
-let one = "1" in $"test {one}" = stdout="test 1\n"
+let one = "1" in $"test {one}" = test 1
 
 // Multiple variable interpolation
-let name = "Alice" in let age = "25" in $"Name: {name}, Age: {age} years old." = stdout="Name: Alice, Age: 25 years old.\n"
+let name = "Alice" in let age = "25" in $"Name: {name}, Age: {age} years old." = "Name: Alice, Age: 25 years old."
 
 // ===================================================================
 // String interpolation type errors

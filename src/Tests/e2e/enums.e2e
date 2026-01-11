@@ -1,34 +1,34 @@
 // Enum (simple sum type) tests for Phase 7 Milestone 3
 
 // Basic enum type - first variant (tag 0)
-type Color = Red | Green | Blue Red = stdout="Red\n"
+type Color = Red | Green | Blue Red = "Red"
 
 // Second variant (tag 1)
-type Color = Red | Green | Blue Green = stdout="Green\n"
+type Color = Red | Green | Blue Green = "Green"
 
 // Third variant (tag 2)
-type Color = Red | Green | Blue Blue = stdout="Blue\n"
+type Color = Red | Green | Blue Blue = "Blue"
 
 // Enum with two variants
-type Bool2 = False2 | True2 False2 = stdout="False2\n"
+type Bool2 = False2 | True2 False2 = "False2"
 
-type Bool2 = False2 | True2 True2 = stdout="True2\n"
+type Bool2 = False2 | True2 True2 = "True2"
 
 // Single variant enum
-type Unit2 = Unit2 Unit2 = stdout="Unit2\n"
+type Unit2 = Unit2 Unit2 = "Unit2"
 
 // Enum in let binding
-type Color = Red | Green | Blue let c = Red in c = stdout="Red\n"
+type Color = Red | Green | Blue let c = Red in c = "Red"
 
-type Color = Red | Green | Blue let c = Blue in c = stdout="Blue\n"
+type Color = Red | Green | Blue let c = Blue in c = "Blue"
 
 // Multiple enums in nested let
-type Color = Red | Green | Blue let a = Red in let b = Green in let c = Blue in c = stdout="Blue\n"
+type Color = Red | Green | Blue let a = Red in let b = Green in let c = Blue in c = "Blue"
 
 // Enum with four variants
-type Direction = North | East | South | West North = stdout="North\n"
+type Direction = North | East | South | West North = "North"
 
-type Direction = North | East | South | West South = stdout="South\n"
+type Direction = North | East | South | West South = "South"
 
-type Direction = North | East | South | West West = stdout="West\n"
+type Direction = North | East | South | West West = "West"
 

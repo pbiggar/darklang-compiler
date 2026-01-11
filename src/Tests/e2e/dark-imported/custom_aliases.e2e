@@ -27,11 +27,11 @@ AliasedPoint { x = 3 * 2, y = 4 + 1 }.x = 6
 AliasedPoint { x = 3 * 2, y = 4 + 1 }.y = 5
 
 // Aliased records are structurally equal to base type
-PointBase { x = 5, y = 6 } == AliasedPoint { x = 5, y = 6 } = stdout="true\n"
-AliasedPoint { x = 5, y = 6 } == PointBase { x = 5, y = 6 } = stdout="true\n"
+PointBase { x = 5, y = 6 } == AliasedPoint { x = 5, y = 6 } = true
+AliasedPoint { x = 5, y = 6 } == PointBase { x = 5, y = 6 } = true
 
 // Multiple aliases to same type
-Alias1 { x = 1, y = 2 } == Alias2 { x = 1, y = 2 } = stdout="true\n"
+Alias1 { x = 1, y = 2 } == Alias2 { x = 1, y = 2 } = true
 
 // Record update through alias
 let p = AliasedPoint { x = 1, y = 2 } in { p with x = 100 }.x = 100
@@ -46,8 +46,8 @@ def addVecs(a: Vec, b: Vec): Vec =
 def makeVec(x: Int64, y: Int64): Vec =
     Vec { x = x, y = y }
 
-addVecs(Vec { x = 1, y = 2 }, Vec { x = 3, y = 4 }) = stdout="Vec { x = 4, y = 6 }\n"
-makeVec(10, 20) = stdout="Vec { x = 10, y = 20 }\n"
+addVecs(Vec { x = 1, y = 2 }, Vec { x = 3, y = 4 }) = "Vec { x = 4, y = 6 }"
+makeVec(10, 20) = "Vec { x = 10, y = 20 }"
 
 // ===================================================================
 // Simple alias
@@ -87,7 +87,7 @@ type UserRole = Admin | User | Guest
 type AdminRole = UserRole
 type GuestRole = UserRole
 
-(GuestRole.Guest == AdminRole.Guest) = stdout="true\n"
+(GuestRole.Guest == AdminRole.Guest) = true
 
 // ===================================================================
 // Generic type aliases (aliasing generic types like List<Int64>)

@@ -55,13 +55,13 @@ let base = 20 in let bonus = base * 2 in ((x: Int64) => x + bonus)(2) = 42
 // =====================================================
 
 // Lambda returning bool
-((x: Int64) => x > 0)(5) = stdout="true\n"
+((x: Int64) => x > 0)(5) = true
 
 // Lambda with comparison
-((x: Int64, y: Int64) => x == y)(42, 42) = stdout="true\n"
+((x: Int64, y: Int64) => x == y)(42, 42) = true
 
 // Lambda with captured comparison
-let threshold = 10 in ((x: Int64) => x >= threshold)(42) = stdout="true\n"
+let threshold = 10 in ((x: Int64) => x >= threshold)(42) = true
 
 // =====================================================
 // Lambda in Expression Context
@@ -134,7 +134,7 @@ let inc = (x: Int64) => x + 1 in let dec = (x: Int64) => x - 1 in inc(20) + dec(
 let a = 5 in let b = 10 in let sum = (x: Int64) => a + b + x in sum(27) = 42
 
 // Stored lambda returning bool
-let isPositive = (x: Int64) => x > 0 in isPositive(42) = stdout="true\n"
+let isPositive = (x: Int64) => x > 0 in isPositive(42) = true
 
 // Lambda used in conditional after storage
 let check = (x: Int64) => x > 0 in if check(5) then 42 else 0 = 42
@@ -150,36 +150,36 @@ let sq = (x: Int64) => x * x in sq(6) + 6 = 42
 // =====================================================
 
 // Capture float in arithmetic
-let f = 3.14 in ((x: Float) => f + x)(1.0) = stdout="4.14\n"
+let f = 3.14 in ((x: Float) => f + x)(1.0) = 4.14
 
 // Capture multiple floats
-let a = 1.5 in let b = 2.5 in ((x: Float) => a + b + x)(1.0) = stdout="5.00\n"
+let a = 1.5 in let b = 2.5 in ((x: Float) => a + b + x)(1.0) = 5.00
 
 // Capture float, use in multiplication
-let scale = 2.0 in ((x: Float) => x * scale)(3.5) = stdout="7.00\n"
+let scale = 2.0 in ((x: Float) => x * scale)(3.5) = 7.00
 
 // =====================================================
 // Closures Capturing String Values
 // =====================================================
 
 // Capture string for concatenation
-let prefix = "Hello" in ((s: String) => prefix ++ " " ++ s)("World") = stdout="Hello World\n"
+let prefix = "Hello" in ((s: String) => prefix ++ " " ++ s)("World") = "Hello World"
 
 // Capture multiple strings
-let a = "one" in let b = "two" in ((x: String) => a ++ " " ++ b ++ " " ++ x)("three") = stdout="one two three\n"
+let a = "one" in let b = "two" in ((x: String) => a ++ " " ++ b ++ " " ++ x)("three") = one two three
 
 // =====================================================
 // Closures Capturing Tuples
 // =====================================================
 
 // Capture tuple, access elements
-let t = (10, 20) in ((x: Int64) => t.0 + t.1 + x)(5) = stdout="35\n"
+let t = (10, 20) in ((x: Int64) => t.0 + t.1 + x)(5) = 35
 
 // Capture 3-tuple
-let t = (1, 2, 3) in ((x: Int64) => t.0 + t.1 + t.2 + x)(4) = stdout="10\n"
+let t = (1, 2, 3) in ((x: Int64) => t.0 + t.1 + t.2 + x)(4) = 10
 
 // Capture tuple, use in arithmetic
-let pair = (5, 3) in ((x: Int64) => (pair.0 - pair.1) * x)(7) = stdout="14\n"
+let pair = (5, 3) in ((x: Int64) => (pair.0 - pair.1) * x)(7) = 14
 
 // =====================================================
 // Closures Capturing Records
@@ -187,11 +187,11 @@ let pair = (5, 3) in ((x: Int64) => (pair.0 - pair.1) * x)(7) = stdout="14\n"
 
 // Capture record, access field
 type Point = { x: Int64, y: Int64 }
-let p = Point { x = 3, y = 4 } in ((n: Int64) => p.x + p.y + n)(3) = stdout="10\n"
+let p = Point { x = 3, y = 4 } in ((n: Int64) => p.x + p.y + n)(3) = 10
 
 // Capture record, use both fields
 type Vec = { dx: Int64, dy: Int64 }
-let v = Vec { dx = 5, dy = 10 } in ((scale: Int64) => v.dx * scale + v.dy)(2) = stdout="20\n"
+let v = Vec { dx = 5, dy = 10 } in ((scale: Int64) => v.dx * scale + v.dy)(2) = 20
 
 // =====================================================
 // Closures Capturing Sum Types
@@ -199,31 +199,31 @@ let v = Vec { dx = 5, dy = 10 } in ((scale: Int64) => v.dx * scale + v.dy)(2) = 
 
 // Capture Option-like value
 type Opt = None2 | Some2 of Int64
-let opt = Some2(42) in ((x: Int64) => match opt with | Some2(v) -> v + x | None2 -> 0)(8) = stdout="50\n"
-let opt = None2 in ((x: Int64) => match opt with | Some2(v) -> v + x | None2 -> x)(8) = stdout="8\n"
+let opt = Some2(42) in ((x: Int64) => match opt with | Some2(v) -> v + x | None2 -> 0)(8) = 50
+let opt = None2 in ((x: Int64) => match opt with | Some2(v) -> v + x | None2 -> x)(8) = 8
 
 // =====================================================
 // Many Captures (Testing Capture Slot Limits)
 // =====================================================
 
 // 5 captures
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in ((x: Int64) => a + b + c + d + e + x)(5) = stdout="20\n"
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in ((x: Int64) => a + b + c + d + e + x)(5) = 20
 
 // 6 captures
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in ((x: Int64) => a + b + c + d + e + f + x)(4) = stdout="25\n"
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in ((x: Int64) => a + b + c + d + e + f + x)(4) = 25
 
 // 7 captures
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in ((x: Int64) => a + b + c + d + e + f + g + x)(8) = stdout="36\n"
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in ((x: Int64) => a + b + c + d + e + f + g + x)(8) = 36
 
 // 8 captures
-let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in ((x: Int64) => a + b + c + d + e + f + g + h + x)(1) = stdout="37\n"
+let a = 1 in let b = 2 in let c = 3 in let d = 4 in let e = 5 in let f = 6 in let g = 7 in let h = 8 in ((x: Int64) => a + b + c + d + e + f + g + h + x)(1) = 37
 
 // =====================================================
 // Mixed Type Captures
 // =====================================================
 
 // Capture int and float
-let i = 10 in let f = 2.5 in ((x: Int64) => Stdlib.Int64.toFloat(i + x) + f)(5) = stdout="17.50\n"
+let i = 10 in let f = 2.5 in ((x: Int64) => Stdlib.Int64.toFloat(i + x) + f)(5) = 17.50
 
 // Capture bool and int
-let flag = true in let n = 42 in ((x: Int64) => if flag then n + x else 0)(8) = stdout="50\n"
+let flag = true in let n = 42 in ((x: Int64) => if flag then n + x else 0)(8) = 50

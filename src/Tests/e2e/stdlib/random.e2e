@@ -7,7 +7,7 @@
 // ===================================================================
 
 // Random.int64 returns an Int64 (type check via addition succeeds if it's an Int64)
-(let x = Random.int64() in Int64.add(x, 0) == x) = stdout="true\n"
+(let x = Random.int64() in Int64.add(x, 0) == x) = true
 
 // Multiple calls return different values (probabilistic, but extremely unlikely to fail)
-(Random.int64() != Random.int64()) = stdout="true\n"
+(Random.int64() != Random.int64()) = true

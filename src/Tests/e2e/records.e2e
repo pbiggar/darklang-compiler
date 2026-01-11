@@ -1,27 +1,27 @@
 // Record tests for Phase 7 Milestone 2
 
 // Basic record type definition and access
-type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 20 } in p.x = stdout="10\n"
+type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 20 } in p.x = 10
 
-type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 20 } in p.y = stdout="20\n"
+type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 20 } in p.y = 20
 
 // Record with arithmetic on fields
-type Point = { x: Int64, y: Int64 } let p = Point { x = 5, y = 3 } in p.x + p.y = stdout="8\n"
+type Point = { x: Int64, y: Int64 } let p = Point { x = 5, y = 3 } in p.x + p.y = 8
 
 // Record with three fields
-type Vec3 = { x: Int64, y: Int64, z: Int64 } let v = Vec3 { x = 1, y = 2, z = 3 } in v.x + v.y + v.z = stdout="6\n"
+type Vec3 = { x: Int64, y: Int64, z: Int64 } let v = Vec3 { x = 1, y = 2, z = 3 } in v.x + v.y + v.z = 6
 
 // Nested let with record
-type Point = { x: Int64, y: Int64 } let a = Point { x = 100, y = 200 } in let b = a.x in b = stdout="100\n"
+type Point = { x: Int64, y: Int64 } let a = Point { x = 100, y = 200 } in let b = a.x in b = 100
 
 // Multiple records
-type Point = { x: Int64, y: Int64 } let a = Point { x = 1, y = 2 } in let b = Point { x = 3, y = 4 } in a.x + b.y = stdout="5\n"
+type Point = { x: Int64, y: Int64 } let a = Point { x = 1, y = 2 } in let b = Point { x = 3, y = 4 } in a.x + b.y = 5
 
 // Record with negative values
-type Point = { x: Int64, y: Int64 } let p = Point { x = -5, y = 10 } in p.x + p.y = stdout="5\n"
+type Point = { x: Int64, y: Int64 } let p = Point { x = -5, y = 10 } in p.x + p.y = 5
 
 // Record with zero
-type Point = { x: Int64, y: Int64 } let p = Point { x = 0, y = 42 } in p.y = stdout="42\n"
+type Point = { x: Int64, y: Int64 } let p = Point { x = 0, y = 42 } in p.y = 42
 
 // ===================================================================
 // Records with String Fields
@@ -29,13 +29,13 @@ type Point = { x: Int64, y: Int64 } let p = Point { x = 0, y = 42 } in p.y = std
 
 // Record with string field
 type Person = { name: String, age: Int64 }
-let p = Person { name = "Alice", age = 30 } in p.name = stdout="Alice\n"
-let p = Person { name = "Bob", age = 25 } in p.age = stdout="25\n"
+let p = Person { name = "Alice", age = 30 } in p.name = "Alice"
+let p = Person { name = "Bob", age = 25 } in p.age = 25
 
 // Record with only string fields
 type Names = { first: String, last: String }
-let n = Names { first = "John", last = "Doe" } in n.first = stdout="John\n"
-let n = Names { first = "John", last = "Doe" } in n.last = stdout="Doe\n"
+let n = Names { first = "John", last = "Doe" } in n.first = "John"
+let n = Names { first = "John", last = "Doe" } in n.last = "Doe"
 
 // ===================================================================
 // Records with Float Fields
@@ -43,14 +43,14 @@ let n = Names { first = "John", last = "Doe" } in n.last = stdout="Doe\n"
 
 // Record with float field
 type Circle = { radius: Float, x: Int64, y: Int64 }
-let c = Circle { radius = 3.14, x = 0, y = 0 } in c.radius = stdout="3.14\n"
-let c = Circle { radius = 2.5, x = 10, y = 20 } in c.x = stdout="10\n"
+let c = Circle { radius = 3.14, x = 0, y = 0 } in c.radius = 3.14
+let c = Circle { radius = 2.5, x = 10, y = 20 } in c.x = 10
 
 // Record with all float fields
 type Vec2f = { x: Float, y: Float }
-let v = Vec2f { x = 1.5, y = 2.5 } in v.x = stdout="1.50\n"
-let v = Vec2f { x = 1.5, y = 2.5 } in v.y = stdout="2.50\n"
-let v = Vec2f { x = 1.5, y = 2.5 } in v.x + v.y = stdout="4.00\n"
+let v = Vec2f { x = 1.5, y = 2.5 } in v.x = 1.50
+let v = Vec2f { x = 1.5, y = 2.5 } in v.y = 2.50
+let v = Vec2f { x = 1.5, y = 2.5 } in v.x + v.y = 4.00
 
 // ===================================================================
 // Records with Bool Fields
@@ -58,9 +58,9 @@ let v = Vec2f { x = 1.5, y = 2.5 } in v.x + v.y = stdout="4.00\n"
 
 // Record with bool field
 type Config = { enabled: Bool, value: Int64 }
-let c = Config { enabled = true, value = 42 } in c.enabled = stdout="true\n"
-let c = Config { enabled = false, value = 0 } in c.enabled = stdout="false\n"
-let c = Config { enabled = true, value = 42 } in c.value = stdout="42\n"
+let c = Config { enabled = true, value = 42 } in c.enabled = true
+let c = Config { enabled = false, value = 0 } in c.enabled = false
+let c = Config { enabled = true, value = 42 } in c.value = 42
 
 // ===================================================================
 // Records with Many Fields
@@ -68,12 +68,12 @@ let c = Config { enabled = true, value = 42 } in c.value = stdout="42\n"
 
 // Record with 5 fields
 type BigRecord = { a: Int64, b: Int64, c: Int64, d: Int64, e: Int64 }
-let r = BigRecord { a = 1, b = 2, c = 3, d = 4, e = 5 } in r.a + r.b + r.c + r.d + r.e = stdout="15\n"
-let r = BigRecord { a = 10, b = 20, c = 30, d = 40, e = 50 } in r.e = stdout="50\n"
+let r = BigRecord { a = 1, b = 2, c = 3, d = 4, e = 5 } in r.a + r.b + r.c + r.d + r.e = 15
+let r = BigRecord { a = 10, b = 20, c = 30, d = 40, e = 50 } in r.e = 50
 
 // Record with 6 fields
 type SixFields = { f1: Int64, f2: Int64, f3: Int64, f4: Int64, f5: Int64, f6: Int64 }
-let r = SixFields { f1 = 1, f2 = 2, f3 = 3, f4 = 4, f5 = 5, f6 = 6 } in r.f6 = stdout="6\n"
+let r = SixFields { f1 = 1, f2 = 2, f3 = 3, f4 = 4, f5 = 5, f6 = 6 } in r.f6 = 6
 
 // ===================================================================
 // Mixed Type Records
@@ -81,12 +81,12 @@ let r = SixFields { f1 = 1, f2 = 2, f3 = 3, f4 = 4, f5 = 5, f6 = 6 } in r.f6 = s
 
 // Record with string, int, bool
 type User = { name: String, age: Int64, active: Bool }
-let u = User { name = "Alice", age = 30, active = true } in u.name = stdout="Alice\n"
-let u = User { name = "Alice", age = 30, active = true } in u.age = stdout="30\n"
-let u = User { name = "Alice", age = 30, active = true } in u.active = stdout="true\n"
+let u = User { name = "Alice", age = 30, active = true } in u.name = "Alice"
+let u = User { name = "Alice", age = 30, active = true } in u.age = 30
+let u = User { name = "Alice", age = 30, active = true } in u.active = true
 
 // Record with float and string (using 19.75 which is exactly representable in binary)
 type Product = { name: String, price: Float }
-let p = Product { name = "Widget", price = 19.75 } in p.name = stdout="Widget\n"
-let p = Product { name = "Widget", price = 19.75 } in p.price = stdout="19.75\n"
+let p = Product { name = "Widget", price = 19.75 } in p.name = "Widget"
+let p = Product { name = "Widget", price = 19.75 } in p.price = 19.75
 
