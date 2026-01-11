@@ -26,7 +26,6 @@ fi
 TEST_EXE="$(find_test_exe "$SCRIPT_DIR" "")" || exit 1
 
 echo "Running verification tests..."
-echo "(ENABLE_VERIFICATION_TESTS is set)"
 echo ""
 
-ENABLE_VERIFICATION_TESTS=true run_tests "$TEST_EXE" "$@"
+run_tests "$TEST_EXE" --verification "$@"

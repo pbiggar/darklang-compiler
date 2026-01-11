@@ -195,8 +195,6 @@ let main args =
 
     // Check for --verification flag (enable verification/stress tests)
     let verificationEnabled = hasVerificationArg args
-    if verificationEnabled then
-        Environment.SetEnvironmentVariable("ENABLE_VERIFICATION_TESTS", "true")
 
     println $"{Colors.bold}{Colors.cyan}🧪 Running DSL-based Tests{Colors.reset}"
     match filter with
@@ -244,8 +242,7 @@ let main args =
 
     let stdlibWarmupPlan = decideStdlibWarmupPlan shouldCompileStdlib
 
-    let enableVerification =
-        verificationEnabled || Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS") = "true"
+    let enableVerification = verificationEnabled
     let hasUnitTests =
         unitTestNames |> Array.exists (matchesFilter filter)
     let hasE2EOrVerification =
@@ -749,7 +746,7 @@ let main args =
         { Name = "Test Runner Scheduling Tests"; Tests = TestRunnerSchedulingTests.tests }
         { Name = "Compiler Library Tests"; Tests = CompilerLibraryTests.tests }
         { Name = "Stdlib Test Harness Tests"; Tests = StdlibTestHarnessTests.tests }
-        { Name = "Compiler Caching Tests"; Tests = wrapStdlibTests "Compiler Caching Tests" CompilerCachingTests.tests }
+        { Name = "Compiler Caching Tests"; Tests = wrapStdlibTests "Compiler Caching Tests" (CompilerCachingTests.tests verificationEnabled) }
         { Name = "Preamble Precompile Tests"; Tests = wrapStdlibTests "Preamble Precompile Tests" PreamblePrecompileTests.tests }
         { Name = "IR Symbol Tests"; Tests = IRSymbolTests.tests }
         { Name = "IR Printer Tests"; Tests = IRPrinterTests.tests }

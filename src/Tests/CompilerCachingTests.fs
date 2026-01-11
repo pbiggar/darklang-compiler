@@ -11,9 +11,6 @@ open StdlibTestHarness
 /// Test result type
 type TestResult = Result<unit, string>
 
-let private isVerificationEnabled () : bool =
-    System.Environment.GetEnvironmentVariable("ENABLE_VERIFICATION_TESTS") = "true"
-
 let private tryGetCompiledLazy
     (stdlib: StdlibResult)
     (key: CompiledFunctionKey)
@@ -164,22 +161,22 @@ let private runSpecializationCacheParallelDedup () : TestResult =
             Error "Expected specialization cache to return the same instance across threads"
 
 /// Test that specialization caching only runs once per function when called in parallel
-let testSpecializationCacheParallelDedup () : TestResult =
-    if isVerificationEnabled () then
+let testSpecializationCacheParallelDedup (verificationEnabled: bool) : TestResult =
+    if verificationEnabled then
         runSpecializationCacheParallelDedup ()
     else
         Ok ()
 
-let tests : (string * (StdlibResult -> TestResult)) list = [
+let tests (verificationEnabled: bool) : (string * (StdlibResult -> TestResult)) list = [
     ("stdlib compile mode", testStdlibCompileModeIsParallel)
     ("specialized function caching", testSpecializedFunctionCaching)
     ("preamble function caching", testPreambleFunctionCachedOnce)
     ("compiled function cache is lazy", fun _ -> testCompiledFunctionCacheIsLazy ())
-    ("specialization cache parallel dedup", fun _ -> testSpecializationCacheParallelDedup ())
+    ("specialization cache parallel dedup", fun _ -> testSpecializationCacheParallelDedup verificationEnabled)
 ]
 
 let testsWithStdlib (sharedStdlib: StdlibResult) : (string * (unit -> TestResult)) list =
-    tests |> List.map (fun (name, test) -> (name, fun () -> test sharedStdlib))
+    tests false |> List.map (fun (name, test) -> (name, fun () -> test sharedStdlib))
 
 /// Run all compiler caching unit tests
 let runAllWithStdlib (sharedStdlib: StdlibResult) : TestResult =

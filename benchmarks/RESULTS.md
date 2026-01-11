@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-01-10 22:52:19
-**Commit:** `b1882490` - Factor CLI compiler option helpers
+**Last Updated:** 2026-01-11 09:45:40
+**Commit:** `5e264f1d` - Uncomment some tests
 
 | Benchmark     |           Dark (3.89x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

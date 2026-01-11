@@ -1,7 +1,7 @@
 // FingerTree Verification Tests - Extensive correctness tests for FingerTree implementation
 //
 // These tests are NOT run by default. Run with:
-//   ENABLE_VERIFICATION_TESTS=true ./run-tests --filter=verification
+//   ./run-tests --verification --filter=verification
 // Or use: ./run-verification-tests
 //
 // Note: Known bug - 4+ chained tail operations + headUnsafe returns garbage

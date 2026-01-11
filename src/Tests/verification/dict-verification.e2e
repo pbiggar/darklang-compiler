@@ -1,7 +1,7 @@
 // Dict Verification Tests - Extensive correctness tests for HAMT Dict implementation
 //
 // These tests are NOT run by default. Run with:
-//   ENABLE_VERIFICATION_TESTS=true ./run-tests --filter=verification
+//   ./run-tests --verification --filter=verification
 // Or use: ./run-verification-tests
 //
 // Note: Some tests may fail due to known bugs (TCO, FingerTree deep chain bug)
