@@ -1,6 +1,6 @@
 # Darklang Compiler
 
-A compiler for Darklang written in pure functional F# that targets ARM64 (macOS and Linux).
+A compiler for Darklang written in pure functional F# that targets ARM64 (macOS and Linux) and x86_64 (Linux). The compiler auto-detects the host CPU and emits the correct native code.
 
 ## Quick Start
 

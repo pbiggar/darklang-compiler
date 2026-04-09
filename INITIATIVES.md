@@ -1,10 +1,13 @@
 # Initiatives
 
-## Active: x86_64 backend (branch: `x64`)
+## Active: x86_64 reference counting and memory reclamation
 
-Goal: reach ARM64 test parity (4486/4530 E2E tests) then merge to main.
+Goal: fix the last failing test (memReclaimBurn) by implementing reference
+counting on x86_64. This is owned here rather than waiting for the ARM64
+ARC unification work — the ARM64 contributor won't be back for a while.
 
-Current: **4529/4530 (99.98%)**. Already exceeds ARM64 baseline (4486). **1 failure remains.**
+The x86_64 backend is merged/merging with 4,529/4,530 tests passing (99.98%).
+The infrastructure (RC helpers, free list reuse) is implemented but disabled.
 
 Recently fixed:
 - **Leak check + string refcounting (1 test)** — Implemented leak counter via data label
@@ -126,10 +129,37 @@ Three shell scripts in `scripts/`:
 - **`disasm-func.sh`** — Disassemble a function from a compiled binary.
   Usage: `./scripts/disasm-func.sh /path/to/bin [hex_addr]`
 
+### Plan: x86_64 ARC implementation
+
+Phase 1: Fix the 37-test regression when enabling list RC
+- Enable A+B+C together (ownership inc, list RefCountDec, leak counter inc)
+- Triage the ~34 non-tco failures (crypto crashes, others)
+- Root cause: likely stack/return address corruption during RC helper calls
+- Debug with `scripts/debug-x86-crash.sh` on a crashing crypto test
+
+Phase 2: Generic RefCountDec (non-list types)
+- Currently causes 220 failures when enabled
+- Root cause: payloadSize vs sizeBytes mismatch in free list indexing
+- Verify refcount field offset for all heap object types
+- Ensure all heap objects have refcount initialized to 1
+
+Phase 3: Unify memory management across types
+- Strings, dicts, bytes, closures all need consistent RC
+- Port ARM64 RC codegen patterns (6_CodeGen.fs lines 3198+) to x86_64
+- Ensure free list reuse works for all size classes
+
 ### Approach
 
 TDD — pick a failing E2E test, write the smallest fix, run full suite.
 See CLAUDE.md for x86_64 architecture decisions and known patterns.
+
+## Next up
+
+- x86_64 encoding test coverage: 36 untested instruction types
+  (MOV_load, MOV_store, all SSE2/float, IDIV, SETcc, shifts by CL, etc.)
+- Determine: what % of PT.fs capabilities are handled?
+- Run compiler against existing package repo
+- Additional architectures (arm32?)
 
 ## Long term
 
