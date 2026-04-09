@@ -135,6 +135,13 @@ generate_pdf "src/Tests/compiler-passes/X86_64BinaryTests.fs" "11-tests-Binary.p
     "X86_64BinaryTests.fs - ELF Binary Generation Tests" \
     "Tests that the generated ELF binaries are valid and executable."
 
+# 12. PR description
+if [ -f "PR_DESCRIPTION.md" ]; then
+    generate_pdf "PR_DESCRIPTION.md" "00-PR-Description.pdf" \
+        "x86_64 Backend — Pull Request Description" \
+        ""
+fi
+
 echo ""
 echo "Done! PDFs in $OUTDIR/:"
 ls -la "$OUTDIR"/*.pdf 2>/dev/null | awk '{print "  " $NF " (" $5 " bytes)"}'
