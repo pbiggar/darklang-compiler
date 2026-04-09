@@ -24,15 +24,21 @@ RUN apt-get update && apt-get install -y \
     # OCaml tools for benchmarking
     ocaml \
     opam \
+    # ARM64 userspace emulation for running compiled binaries on non-ARM64 hosts
+    qemu-user-static \
+    # PDF generation for code review printouts
+    enscript \
+    ghostscript \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Codex CLI + Claude Code
 RUN npm install -g @openai/codex @anthropic-ai/claude-code
 
-# Create a fixed non-root user and the writable state directories it owns.
+# Repurpose the base image's ubuntu user (UID/GID 1000) as 'dark'.
+# UID 1000 matches the default host user on Linux; macOS bind-mounts are permissive.
 RUN mkdir -p /workspace && \
-    if ! getent group dark > /dev/null; then groupadd dark; fi && \
-    if ! id -u dark > /dev/null 2>&1; then useradd -m -g dark -s /bin/bash dark; fi && \
+    usermod -l dark -d /home/dark -m ubuntu && \
+    groupmod -n dark ubuntu && \
     echo "dark ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     mkdir -p /home/dark/.nuget/packages /home/dark/.codex /home/dark/.claude && \
     chown -R dark:dark /home/dark /workspace

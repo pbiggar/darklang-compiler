@@ -1,0 +1,27 @@
+{
+  "name": "Dark Compiler",
+  "build": {
+    "dockerfile": "../Dockerfile"
+  },
+  "remoteUser": "dark",
+  "containerEnv": {
+    "DOTNET_ROOT": "/usr/share/dotnet",
+    "DOTNET_MULTILEVEL_LOOKUP": "0",
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+    "DOTNET_NOLOGO": "1"
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "mounts": [
+    "source=dark-compiler-nuget,target=/home/dark/.nuget/packages,type=volume"
+  ],
+  "postCreateCommand": "dotnet restore",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Ionide.Ionide-fsharp",
+        "ms-dotnettools.csdevkit"
+      ]
+    }
+  }
+}

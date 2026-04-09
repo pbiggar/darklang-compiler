@@ -41,6 +41,7 @@ let ET_EXEC = 2us  // Executable file
 
 /// Machine architecture
 let EM_AARCH64 = 183us  // ARM 64-bit
+let EM_X86_64 = 62us    // AMD x86-64
 
 /// Program header type
 let PT_LOAD = 1u  // Loadable segment
