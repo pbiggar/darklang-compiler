@@ -225,6 +225,10 @@ let main args =
         { Name = "Pass Test Runner Tests"; Tests = PassTestRunnerTests.tests }
         { Name = "Progress Bar Tests"; Tests = ProgressBarTests.tests }
         { Name = "Encoding Tests"; Tests = EncodingTests.tests }
+        { Name = "x86-64 Encoding Tests"; Tests = X86_64EncodingTests.tests }
+        { Name = "x86-64 Binary Tests"; Tests = X86_64BinaryTests.tests }
+        { Name = "x86-64 Resolve Tests"; Tests = X86_64ResolveTests.tests }
+        { Name = "x86-64 CodeGen Tests"; Tests = X86_64CodeGenTests.tests }
         { Name = "Binary Tests"; Tests = BinaryTests.tests }
         { Name = "Type Checking Tests"; Tests = TypeCheckingTests.tests }
         { Name = "Parallel Move Tests"; Tests = ParallelMoveTests.tests }

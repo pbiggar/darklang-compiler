@@ -491,8 +491,8 @@ Stdlib.Float.toInt(floatMultiChainPhi(10.0, false) * 100000000000.0) = 451554545
 // Nested conditionals with float computations - deep phi nesting
 def floatNestedCondPhi(x: Float, a: Bool, b: Bool) : Float = let v = x * 5.0 in if a then let p = v + 1.0 in let q = p * 1.1 in if b then let r = q + 2.0 in r else let s = q - 2.0 in s else let t = v - 1.0 in let u = t * 0.9 in if b then let w = u + 3.0 in w else let z = u - 3.0 in z
 Stdlib.Float.toInt(floatNestedCondPhi(2.0, true, true) * 10.0) = 141
-Stdlib.Float.toInt(floatNestedCondPhi(2.0, true, false) * 10.0) = 141
-Stdlib.Float.toInt(floatNestedCondPhi(2.0, false, true) * 100000000000.0) = 509999999999
+Stdlib.Float.toInt(floatNestedCondPhi(2.0, true, false) * 10.0) = 101
+Stdlib.Float.toInt(floatNestedCondPhi(2.0, false, true) * 100000000000.0) = 1110000000000
 Stdlib.Float.toInt(floatNestedCondPhi(2.0, false, false) * 100000000000.0) = 509999999999
 
 // =====================================================

@@ -439,7 +439,8 @@ let testLoopPhiCoalesced () : TestResult =
         UsedCalleeSaved = []
     }
 
-    let allocated = RegisterAllocation.allocateRegisters func
+    let arch = match PlatformTypes.detectArch () with Ok a -> a | Error _ -> PlatformTypes.ARM64
+    let allocated = RegisterAllocation.allocateRegisters arch func
     withBlock labelBack allocated.CFG (fun backBlock ->
         if countMoves backBlock = 0 then
             Ok ()
