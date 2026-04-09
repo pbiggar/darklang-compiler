@@ -3,10 +3,11 @@
 ## Quick Overview
 
 - **Language**: Pure functional F# (no mutable state, no exceptions)
-- **Target**: ARM64 native binaries (macOS Mach-O, Linux ELF)
+- **Target**: ARM64 native binaries (macOS Mach-O, Linux ELF), x86_64 Linux ELF (branch: `x64`)
 - **Pipeline**: 8 passes from source to executable (see `docs/compiler-passes.md`)
 - **testing**: Run `./run-tests` to run tests. Tests are very fast, don't use filters, just run the whole test suite.
 - **Scripting**: Use `python3` for scripts (not `python`).
+- **x86_64 notes**: See `CLAUDE.md` for x86_64 backend architecture and known patterns.
 
 ## Architecture Overview
 
