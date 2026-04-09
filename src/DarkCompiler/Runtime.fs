@@ -83,11 +83,11 @@ let generatePrintInt64 () : ARM64.Instr list =
         ARM64.ADD_imm (ARM64.X2, ARM64.SP, 32us)  // 23: End of buffer
         ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1)  // 24: length = end - start
         ARM64.MOVZ (ARM64.X0, 1us, 0)  // 25: stdout = 1
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)  // 26: write syscall (X16 macOS, X8 Linux)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)  // 26: write syscall (X16 macOS, X8 Linux)
         ARM64.SVC syscalls.SvcImmediate  // 27: call write (platform-specific)
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32us)  // 28: Deallocate stack
         ARM64.MOVZ (ARM64.X0, 0us, 0)  // 29: exit code = 0
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Exit, 0)  // 30: exit syscall (X16 macOS, X8 Linux)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Exit, 0)  // 30: exit syscall (X16 macOS, X8 Linux)
         ARM64.SVC syscalls.SvcImmediate  // 31: call exit (platform-specific)
 
         // Instruction 32-35: print_zero - Special case for value 0
@@ -147,7 +147,7 @@ let generatePrintBool () : ARM64.Instr list =
         // Write and exit
         ARM64.MOV_reg (ARM64.X1, ARM64.SP)  // buffer
         ARM64.MOVZ (ARM64.X0, 1us, 0)  // stdout
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
         ARM64.B (16)  // Jump to cleanup_and_exit (+16 instructions)
 
@@ -170,13 +170,13 @@ let generatePrintBool () : ARM64.Instr list =
         // Write
         ARM64.MOV_reg (ARM64.X1, ARM64.SP)  // buffer
         ARM64.MOVZ (ARM64.X0, 1us, 0)  // stdout
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
 
         // cleanup_and_exit:
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)  // Deallocate stack
         ARM64.MOVZ (ARM64.X0, 0us, 0)  // exit code = 0
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Exit, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Exit, 0)
         ARM64.SVC syscalls.SvcImmediate
     ]
 
@@ -214,7 +214,7 @@ let generatePrintString (stringLen: int) : ARM64.Instr list =
         ARM64.MOVZ (ARM64.X2, uint16 stringLen, 0)  // X2 = length
 
         // Call write syscall
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
 
         // Now print newline: allocate 1 byte on stack
@@ -226,7 +226,7 @@ let generatePrintString (stringLen: int) : ARM64.Instr list =
         ARM64.MOVZ (ARM64.X0, 1us, 0)  // stdout
         ARM64.MOV_reg (ARM64.X1, ARM64.SP)  // buffer = SP
         ARM64.MOVZ (ARM64.X2, 1us, 0)  // length = 1
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
 
         // Cleanup stack
@@ -234,7 +234,7 @@ let generatePrintString (stringLen: int) : ARM64.Instr list =
 
         // Exit with code 0
         ARM64.MOVZ (ARM64.X0, 0us, 0)
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Exit, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Exit, 0)
         ARM64.SVC syscalls.SvcImmediate
     ]
 
@@ -321,7 +321,7 @@ let generatePrintFloat () : ARM64.Instr list =
         // Save X6 to stack at [SP+40] before syscalls (syscalls may clobber X0-X7)
         ARM64.STR (ARM64.X6, ARM64.SP, 40s)
         ARM64.MOVZ (ARM64.X0, 1us, 0)  // stdout = 1
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
 
         // print_decimal_point - Print '.'
@@ -330,7 +330,7 @@ let generatePrintFloat () : ARM64.Instr list =
         ARM64.MOVZ (ARM64.X0, 1us, 0)  // stdout
         ARM64.MOV_reg (ARM64.X1, ARM64.SP)  // buffer = SP
         ARM64.MOVZ (ARM64.X2, 1us, 0)  // length = 1
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
 
         // === Extract and print fractional part (1 or 2 decimal digits) ===
@@ -369,7 +369,7 @@ let generatePrintFloat () : ARM64.Instr list =
         ARM64.SUBS_imm (ARM64.X5, ARM64.X5, 48us)  // Set flags if ones digit was '0'
         ARM64.CSET (ARM64.X2, ARM64.NE)  // X2 = 1 when ones digit != 0
         ARM64.ADD_imm (ARM64.X2, ARM64.X2, 1us)  // length = 1 or 2
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
 
         // print_newline_and_exit
@@ -378,13 +378,13 @@ let generatePrintFloat () : ARM64.Instr list =
         ARM64.MOVZ (ARM64.X0, 1us, 0)
         ARM64.MOV_reg (ARM64.X1, ARM64.SP)
         ARM64.MOVZ (ARM64.X2, 1us, 0)
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
 
         // Cleanup and exit
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, 48us)  // Deallocate stack
         ARM64.MOVZ (ARM64.X0, 0us, 0)  // exit code = 0
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Exit, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Exit, 0)
         ARM64.SVC syscalls.SvcImmediate
 
         // print_zero_int - Integer part is zero, just store '0' (instruction 75)
@@ -403,7 +403,7 @@ let generateExit () : ARM64.Instr list =
     let syscalls = Platform.getSyscallNumbers os
     [
         ARM64.MOVZ (ARM64.X0, 0us, 0)  // exit code = 0
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Exit, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Exit, 0)
         ARM64.SVC syscalls.SvcImmediate
     ]
 
@@ -458,7 +458,7 @@ let generatePrintInt64NoExit () : ARM64.Instr list =
         ARM64.ADD_imm (ARM64.X2, ARM64.SP, 32us)
         ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1)
         ARM64.MOVZ (ARM64.X0, 1us, 0)
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32us)  // Deallocate stack
         ARM64.B (8)  // Skip past print_zero (4) and handle_negative (3) + 1 to exit runtime (8 instructions)
@@ -526,7 +526,7 @@ let generatePrintInt64ToStderrNoExit () : ARM64.Instr list =
         ARM64.ADD_imm (ARM64.X2, ARM64.SP, 32us)
         ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1)
         ARM64.MOVZ (ARM64.X0, 2us, 0)
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32us)  // Deallocate stack
         ARM64.B (8)  // Skip past print_zero (4) and handle_negative (3) + 1 to exit runtime (8 instructions)
@@ -574,7 +574,7 @@ let generatePrintBoolNoExit () : ARM64.Instr list =
         // Write and cleanup (no exit)
         ARM64.MOV_reg (ARM64.X1, ARM64.SP)
         ARM64.MOVZ (ARM64.X0, 1us, 0)
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
         ARM64.B (18)  // Jump to cleanup (+18 instructions to skip false branch)
 
@@ -596,7 +596,7 @@ let generatePrintBoolNoExit () : ARM64.Instr list =
         // Write
         ARM64.MOV_reg (ARM64.X1, ARM64.SP)
         ARM64.MOVZ (ARM64.X0, 1us, 0)
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
 
         // cleanup (no exit):
@@ -650,7 +650,7 @@ let generatePrintInt64NoNewline () : ARM64.Instr list =
         ARM64.ADD_imm (ARM64.X2, ARM64.SP, 31us)  // End of buffer area
         ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1)
         ARM64.MOVZ (ARM64.X0, 1us, 0)
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32us)  // Deallocate stack
         ARM64.B (8)  // Skip past print_zero (4) and handle_negative (3) + 1 to exit
@@ -696,7 +696,7 @@ let generatePrintBoolNoNewline () : ARM64.Instr list =
         // Write and cleanup
         ARM64.MOV_reg (ARM64.X1, ARM64.SP)
         ARM64.MOVZ (ARM64.X0, 1us, 0)
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
         ARM64.B (16)  // Jump to cleanup at index 31: 31 - 15 = 16
 
@@ -716,7 +716,7 @@ let generatePrintBoolNoNewline () : ARM64.Instr list =
         // Write
         ARM64.MOV_reg (ARM64.X1, ARM64.SP)
         ARM64.MOVZ (ARM64.X0, 1us, 0)
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
 
         // cleanup:
@@ -782,7 +782,7 @@ let generatePrintFloatNoNewline () : ARM64.Instr list =
         ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1)
         ARM64.STR (ARM64.X6, ARM64.SP, 40s)
         ARM64.MOVZ (ARM64.X0, 1us, 0)
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
 
         // print_decimal_point
@@ -791,7 +791,7 @@ let generatePrintFloatNoNewline () : ARM64.Instr list =
         ARM64.MOVZ (ARM64.X0, 1us, 0)
         ARM64.MOV_reg (ARM64.X1, ARM64.SP)
         ARM64.MOVZ (ARM64.X2, 1us, 0)
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
 
         // Extract and print fractional part (1 or 2 decimal digits)
@@ -824,7 +824,7 @@ let generatePrintFloatNoNewline () : ARM64.Instr list =
         ARM64.SUBS_imm (ARM64.X5, ARM64.X5, 48us)
         ARM64.CSET (ARM64.X2, ARM64.NE)
         ARM64.ADD_imm (ARM64.X2, ARM64.X2, 1us)
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
 
         // Cleanup (no newline, no exit)
@@ -852,7 +852,7 @@ let generatePrintStringNoNewline () : ARM64.Instr list =
         ARM64.MOVZ (ARM64.X0, 1us, 0)        // fd = stdout
         ARM64.MOV_reg (ARM64.X1, ARM64.X9)   // buffer = X9
         ARM64.MOV_reg (ARM64.X2, ARM64.X10)  // length = X10
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
     ]
 
@@ -890,7 +890,7 @@ let generatePrintChars (chars: byte list) : ARM64.Instr list =
         ARM64.MOV_reg (ARM64.X1, ARM64.SP)          // buffer
         ARM64.MOVZ (ARM64.X2, uint16 len, 0)        // length
         ARM64.MOVZ (ARM64.X0, 1us, 0)               // stdout = 1
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
         // Deallocate stack
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 stackSize)
@@ -918,7 +918,7 @@ let generatePrintCharsToStderr (chars: byte list) : ARM64.Instr list =
         ARM64.MOV_reg (ARM64.X1, ARM64.SP)
         ARM64.MOVZ (ARM64.X2, uint16 len, 0)
         ARM64.MOVZ (ARM64.X0, 2us, 0)
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, uint16 stackSize)
     ]
@@ -940,7 +940,7 @@ let generatePrintBytes () : ARM64.Instr list =
         ARM64.MOVZ (ARM64.X0, 1us, 0)
         ARM64.MOV_reg (ARM64.X1, ARM64.SP)
         ARM64.MOVZ (ARM64.X2, 1us, 0)
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
         // Load length from [X19] into X0
@@ -969,7 +969,7 @@ let generatePrintBytes () : ARM64.Instr list =
         ARM64.MOVZ (ARM64.X0, 1us, 0)
         ARM64.MOV_reg (ARM64.X1, ARM64.SP)
         ARM64.MOVZ (ARM64.X2, 8us, 0)
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
     ]
@@ -989,7 +989,7 @@ let generateWriteSyscall () : ARM64.Instr list =
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
     let syscalls = Platform.getSyscallNumbers os
     [
-        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Write, 0)
+        ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
     ]
 
@@ -1054,7 +1054,7 @@ let generateFileExists (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr l
             // X0 = path (SP), X1 = mode (F_OK = 0)
             ARM64.MOV_reg (ARM64.X0, ARM64.SP)
             ARM64.MOVZ (ARM64.X1, 0us, 0)       // F_OK = 0
-            ARM64.MOVZ (ARM64.X16, syscalls.Access, 0)  // access syscall
+            ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Access, 0)  // access syscall
             ARM64.SVC syscalls.SvcImmediate
 
             // If X0 == 0, file exists; else doesn't
@@ -1116,7 +1116,7 @@ let generateFileExists (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr l
             ARM64.MOV_reg (ARM64.X1, ARM64.SP)  // path
             ARM64.MOVZ (ARM64.X2, 0us, 0)       // F_OK = 0
             ARM64.MOVZ (ARM64.X3, 0us, 0)       // flags = 0
-            ARM64.MOVZ (ARM64.X8, syscalls.Access, 0)  // faccessat syscall
+            ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Access, 0)  // faccessat syscall
             ARM64.SVC syscalls.SvcImmediate
 
             // If X0 == 0, file exists; else doesn't
@@ -1192,7 +1192,7 @@ let generateFileDelete (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr l
             // Call unlink(path)
             // X0 = path (SP)
             ARM64.MOV_reg (ARM64.X0, ARM64.SP)
-            ARM64.MOVZ (ARM64.X16, syscalls.Unlink, 0)  // unlink syscall
+            ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Unlink, 0)  // unlink syscall
             ARM64.SVC syscalls.SvcImmediate
 
             // Save syscall result in X21
@@ -1294,7 +1294,7 @@ let generateFileDelete (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr l
             ARM64.NEG (ARM64.X0, ARM64.X0)      // X0 = -100 (AT_FDCWD)
             ARM64.MOV_reg (ARM64.X1, ARM64.SP)  // path
             ARM64.MOVZ (ARM64.X2, 0us, 0)       // flags = 0
-            ARM64.MOVZ (ARM64.X8, syscalls.Unlink, 0)  // unlinkat syscall
+            ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Unlink, 0)  // unlinkat syscall
             ARM64.SVC syscalls.SvcImmediate
 
             // Save syscall result in X21
@@ -1408,7 +1408,7 @@ let generateFileSetExecutable (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.
             // X0 = path (SP), X1 = mode (0755 = 493 in decimal)
             ARM64.MOV_reg (ARM64.X0, ARM64.SP)
             ARM64.MOVZ (ARM64.X1, 493us, 0)   // 0755 = 493
-            ARM64.MOVZ (ARM64.X16, syscalls.Chmod, 0)
+            ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Chmod, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Save syscall result in X21
@@ -1507,7 +1507,7 @@ let generateFileSetExecutable (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.
             ARM64.MOV_reg (ARM64.X1, ARM64.SP)
             ARM64.MOVZ (ARM64.X2, 493us, 0)   // 0755 = 493
             ARM64.MOVZ (ARM64.X3, 0us, 0)
-            ARM64.MOVZ (ARM64.X8, syscalls.Chmod, 0)
+            ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Chmod, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Save syscall result in X21
@@ -1658,7 +1658,7 @@ let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr
             // X3 = mode (not used for O_RDONLY)
             ARM64.MOVZ (ARM64.X3, 0us, 0)
             // syscall
-            ARM64.MOVZ (ARM64.X8, syscalls.Open, 0)
+            ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Open, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Check if open failed (fd < 0 means X0 has sign bit set)
@@ -1669,7 +1669,7 @@ let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr
             // fstat(fd, statbuf) - X0 = fd, X1 = statbuf
             ARM64.MOV_reg (ARM64.X0, ARM64.X21)
             ARM64.MOV_reg (ARM64.X1, ARM64.SP)  // stat buffer at SP
-            ARM64.MOVZ (ARM64.X8, syscalls.Fstat, 0)
+            ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Fstat, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Get file size from stat buffer (st_size is at offset 48 on Linux ARM64)
@@ -1691,7 +1691,7 @@ let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr
             ARM64.MOV_reg (ARM64.X0, ARM64.X21)  // fd
             ARM64.ADD_imm (ARM64.X1, ARM64.X24, 8us)  // buf = string data area
             ARM64.MOV_reg (ARM64.X2, ARM64.X22)  // count = file size
-            ARM64.MOVZ (ARM64.X8, syscalls.Read, 0)
+            ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Read, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Store refcount = 1 at [X24 + 8 + size]
@@ -1702,7 +1702,7 @@ let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr
 
             // close(fd)
             ARM64.MOV_reg (ARM64.X0, ARM64.X21)
-            ARM64.MOVZ (ARM64.X8, syscalls.Close, 0)
+            ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Close, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Allocate Result: [tag:8][payload:8][refcount:8] = 24 bytes
@@ -1859,7 +1859,7 @@ let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr
             // open(path, O_RDONLY)
             ARM64.ADD_imm (ARM64.X0, ARM64.SP, 144us)
             ARM64.MOVZ (ARM64.X1, 0us, 0)  // O_RDONLY
-            ARM64.MOVZ (ARM64.X16, syscalls.Open, 0)
+            ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Open, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             ARM64.MOV_reg (ARM64.X21, ARM64.X0)
@@ -1868,7 +1868,7 @@ let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr
             // fstat(fd, statbuf)
             ARM64.MOV_reg (ARM64.X0, ARM64.X21)
             ARM64.MOV_reg (ARM64.X1, ARM64.SP)
-            ARM64.MOVZ (ARM64.X16, syscalls.Fstat, 0)
+            ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Fstat, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // st_size at offset 96 on macOS
@@ -1886,7 +1886,7 @@ let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr
             ARM64.MOV_reg (ARM64.X0, ARM64.X21)
             ARM64.ADD_imm (ARM64.X1, ARM64.X24, 8us)
             ARM64.MOV_reg (ARM64.X2, ARM64.X22)
-            ARM64.MOVZ (ARM64.X16, syscalls.Read, 0)
+            ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Read, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             ARM64.ADD_imm (ARM64.X25, ARM64.X24, 8us)
@@ -1896,7 +1896,7 @@ let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr
 
             // close
             ARM64.MOV_reg (ARM64.X0, ARM64.X21)
-            ARM64.MOVZ (ARM64.X16, syscalls.Close, 0)
+            ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Close, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Allocate Result
@@ -2059,7 +2059,7 @@ let generateFileWriteText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (contentReg:
             ARM64.MOV_reg (ARM64.X1, ARM64.SP)  // path
             ARM64.MOVZ (ARM64.X2, flags, 0)  // flags
             ARM64.MOVZ (ARM64.X3, 420us, 0)  // mode 0644
-            ARM64.MOVZ (ARM64.X8, syscalls.Open, 0)
+            ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Open, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Check if open failed
@@ -2070,12 +2070,12 @@ let generateFileWriteText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (contentReg:
             ARM64.MOV_reg (ARM64.X0, ARM64.X21)  // fd
             ARM64.ADD_imm (ARM64.X1, ARM64.X22, 8us)  // buf = content data
             ARM64.LDR (ARM64.X2, ARM64.X22, 0s)  // count = content length
-            ARM64.MOVZ (ARM64.X8, syscalls.Write, 0)
+            ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Write, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // close(fd)
             ARM64.MOV_reg (ARM64.X0, ARM64.X21)
-            ARM64.MOVZ (ARM64.X8, syscalls.Close, 0)
+            ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Close, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Allocate Ok Result: [tag=0][payload=0][refcount=1]
@@ -2199,7 +2199,7 @@ let generateFileWriteText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (contentReg:
             ARM64.MOV_reg (ARM64.X0, ARM64.SP)
             ARM64.MOVZ (ARM64.X1, flags, 0)
             ARM64.MOVZ (ARM64.X2, 420us, 0)  // mode 0644
-            ARM64.MOVZ (ARM64.X16, syscalls.Open, 0)
+            ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Open, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             ARM64.MOV_reg (ARM64.X21, ARM64.X0)
@@ -2209,12 +2209,12 @@ let generateFileWriteText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (contentReg:
             ARM64.MOV_reg (ARM64.X0, ARM64.X21)
             ARM64.ADD_imm (ARM64.X1, ARM64.X22, 8us)
             ARM64.LDR (ARM64.X2, ARM64.X22, 0s)
-            ARM64.MOVZ (ARM64.X16, syscalls.Write, 0)
+            ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Write, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // close(fd)
             ARM64.MOV_reg (ARM64.X0, ARM64.X21)
-            ARM64.MOVZ (ARM64.X16, syscalls.Close, 0)
+            ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Close, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Allocate Ok Result
@@ -2310,7 +2310,7 @@ let generateRandomInt64 (destReg: ARM64.Reg) : ARM64.Instr list =
             // X0 = buffer pointer (SP), X1 = length (8)
             ARM64.MOV_reg (ARM64.X0, ARM64.SP)
             ARM64.MOVZ (ARM64.X1, 8us, 0)
-            ARM64.MOVZ (ARM64.X16, syscalls.Getrandom, 0)
+            ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Getrandom, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Load 8 bytes from buffer into X0
@@ -2339,7 +2339,7 @@ let generateRandomInt64 (destReg: ARM64.Reg) : ARM64.Instr list =
             ARM64.MOV_reg (ARM64.X0, ARM64.SP)
             ARM64.MOVZ (ARM64.X1, 8us, 0)
             ARM64.MOVZ (ARM64.X2, 0us, 0)
-            ARM64.MOVZ (ARM64.X8, syscalls.Getrandom, 0)
+            ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Getrandom, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Load 8 bytes from buffer into X0
@@ -2380,7 +2380,7 @@ let generateDateNow (destReg: ARM64.Reg) : ARM64.Instr list =
             // X0 = timeval pointer (SP), X1 = timezone (NULL)
             ARM64.MOV_reg (ARM64.X0, ARM64.SP)
             ARM64.MOVZ (ARM64.X1, 0us, 0)  // NULL timezone
-            ARM64.MOVZ (ARM64.X16, syscalls.Gettimeofday, 0)
+            ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Gettimeofday, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Load tv_sec (first 8 bytes of timeval) into X0
@@ -2408,7 +2408,7 @@ let generateDateNow (destReg: ARM64.Reg) : ARM64.Instr list =
             // X0 = clock_id (0 = CLOCK_REALTIME), X1 = timespec pointer (SP)
             ARM64.MOVZ (ARM64.X0, 0us, 0)  // CLOCK_REALTIME = 0
             ARM64.MOV_reg (ARM64.X1, ARM64.SP)
-            ARM64.MOVZ (ARM64.X8, syscalls.Gettimeofday, 0)
+            ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Gettimeofday, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Load tv_sec (first 8 bytes of timespec) into X0
@@ -2486,7 +2486,7 @@ let generateFileWriteFromPtr (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (ptrReg: 
             ARM64.MOV_reg (ARM64.X1, ARM64.SP)  // path
             ARM64.MOVZ (ARM64.X2, writeFlags, 0)  // flags
             ARM64.MOVZ (ARM64.X3, 420us, 0)  // mode 0644
-            ARM64.MOVZ (ARM64.X8, syscalls.Open, 0)
+            ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Open, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Check if open failed
@@ -2497,12 +2497,12 @@ let generateFileWriteFromPtr (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (ptrReg: 
             ARM64.MOV_reg (ARM64.X0, ARM64.X22)  // fd
             ARM64.MOV_reg (ARM64.X1, ARM64.X20)  // buf = data pointer
             ARM64.MOV_reg (ARM64.X2, ARM64.X21)  // count = length
-            ARM64.MOVZ (ARM64.X8, syscalls.Write, 0)
+            ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Write, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // close(fd)
             ARM64.MOV_reg (ARM64.X0, ARM64.X22)
-            ARM64.MOVZ (ARM64.X8, syscalls.Close, 0)
+            ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Close, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Success: result = 1
@@ -2560,7 +2560,7 @@ let generateFileWriteFromPtr (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (ptrReg: 
             ARM64.MOV_reg (ARM64.X0, ARM64.SP)  // path
             ARM64.MOVZ (ARM64.X1, writeFlags, 0)  // flags
             ARM64.MOVZ (ARM64.X2, 420us, 0)  // mode 0644
-            ARM64.MOVZ (ARM64.X16, syscalls.Open, 0)
+            ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Open, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Check if open failed
@@ -2571,12 +2571,12 @@ let generateFileWriteFromPtr (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (ptrReg: 
             ARM64.MOV_reg (ARM64.X0, ARM64.X22)  // fd
             ARM64.MOV_reg (ARM64.X1, ARM64.X20)  // buf = data pointer
             ARM64.MOV_reg (ARM64.X2, ARM64.X21)  // count = length
-            ARM64.MOVZ (ARM64.X16, syscalls.Write, 0)
+            ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Write, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // close(fd)
             ARM64.MOV_reg (ARM64.X0, ARM64.X22)
-            ARM64.MOVZ (ARM64.X16, syscalls.Close, 0)
+            ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Close, 0)
             ARM64.SVC syscalls.SvcImmediate
 
             // Success: result = 1
@@ -2655,7 +2655,7 @@ let generateCoverageFlush (coverageExprCount: int) : ARM64.Instr list =
                 ARM64.MOV_reg (ARM64.X1, ARM64.SP)  // path
                 ARM64.MOVZ (ARM64.X2, writeFlags, 0)  // flags
                 ARM64.MOVZ (ARM64.X3, 420us, 0)  // mode 0644
-                ARM64.MOVZ (ARM64.X8, syscalls.Open, 0)
+                ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Open, 0)
                 ARM64.SVC syscalls.SvcImmediate
 
                 // Check if open failed (X0 < 0)
@@ -2675,12 +2675,12 @@ let generateCoverageFlush (coverageExprCount: int) : ARM64.Instr list =
                 [ARM64.MOVZ (ARM64.X2, uint16 (byteCount &&& 0xFFFF), 0)
                  ARM64.MOVK (ARM64.X2, uint16 ((byteCount >>> 16) &&& 0xFFFF), 16)]) @
             [
-                ARM64.MOVZ (ARM64.X8, syscalls.Write, 0)
+                ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Write, 0)
                 ARM64.SVC syscalls.SvcImmediate
 
                 // close(fd)
                 ARM64.MOV_reg (ARM64.X0, ARM64.X11)
-                ARM64.MOVZ (ARM64.X8, syscalls.Close, 0)
+                ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Close, 0)
                 ARM64.SVC syscalls.SvcImmediate
 
                 // Cleanup stack
@@ -2716,7 +2716,7 @@ let generateCoverageFlush (coverageExprCount: int) : ARM64.Instr list =
                 ARM64.MOV_reg (ARM64.X0, ARM64.SP)  // path
                 ARM64.MOVZ (ARM64.X1, writeFlags, 0)  // flags
                 ARM64.MOVZ (ARM64.X2, 420us, 0)  // mode 0644
-                ARM64.MOVZ (ARM64.X16, syscalls.Open, 0)
+                ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Open, 0)
                 ARM64.SVC syscalls.SvcImmediate
 
                 // Check if open failed (X0 < 0)
@@ -2735,12 +2735,12 @@ let generateCoverageFlush (coverageExprCount: int) : ARM64.Instr list =
                 [ARM64.MOVZ (ARM64.X2, uint16 (byteCount &&& 0xFFFF), 0)
                  ARM64.MOVK (ARM64.X2, uint16 ((byteCount >>> 16) &&& 0xFFFF), 16)]) @
             [
-                ARM64.MOVZ (ARM64.X16, syscalls.Write, 0)
+                ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Write, 0)
                 ARM64.SVC syscalls.SvcImmediate
 
                 // close(fd)
                 ARM64.MOV_reg (ARM64.X0, ARM64.X11)
-                ARM64.MOVZ (ARM64.X16, syscalls.Close, 0)
+                ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Close, 0)
                 ARM64.SVC syscalls.SvcImmediate
 
                 // Cleanup stack
