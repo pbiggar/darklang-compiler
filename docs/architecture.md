@@ -9,20 +9,24 @@
 ## IR Pipeline
 
 ```
-Source -> AST -> ANF -> MIR -> LIR -> ARM64 -> Binary
+Source -> AST -> ANF -> MIR -> LIR -> ISA -> Binary
 ```
+
+Passes 1-5 (Parser, TypeCheck, ANF, MIR, LIR, register allocation) are
+architecture-independent. Passes 6-8 (CodeGen, encoding, binary output)
+live under `passes/arm64/` or `passes/x64/` depending on the target.
 
 ### Why Multiple IRs?
 
 Each IR is designed to make specific transformations easier:
 
-| IR | Purpose | Key Transformations |
-|----|---------|---------------------|
-| **AST** | Close to source syntax | Type checking, error messages with source locations |
-| **ANF** | Explicit evaluation order | Monomorphization, lambda lifting, ref counting |
-| **MIR** | Control flow graph | SSA construction, optimizations, platform-independent |
-| **LIR** | ARM64-specific | Register constraints, instruction selection |
-| **ARM64** | Machine instructions | Encoding, branch offset calculation |
+| IR  | Purpose                | Key Transformations                                       |
+|-----|------------------------|-----------------------------------------------------------|
+| AST | Close to source syntax | Type checking, error messages with source locations      |
+| ANF | Explicit eval order    | Monomorphization, lambda lifting, ref counting            |
+| MIR | Control flow graph     | SSA construction, optimizations, target-independent       |
+| LIR | Close to machine code  | Register constraints, instruction selection               |
+| ISA | Architecture-specific  | Encoding, branch offset calculation (ARM64 or x86-64)     |
 
 ### AST (Abstract Syntax Tree)
 
@@ -50,9 +54,9 @@ Each IR is designed to make specific transformations easier:
 
 ### LIR (Low-level IR)
 
-- ARM64-specific instruction selection
+- Close to machine instructions but still target-independent
 - Virtual registers (unlimited)
-- Calling convention handling
+- Calling convention handling (via `Platform.Arch`)
 - Types defined in `LIR.fs`
 
 ## Memory Management
@@ -77,11 +81,15 @@ Why ref counting?
 
 ## Platform Support
 
-- ARM64 only (macOS and Linux)
-- Direct binary generation:
-  - `8_Binary_Generation_MachO.fs` for macOS
-  - `8_Binary_Generation_ELF.fs` for Linux
-- No external assembler or linker required
+- ARM64 (macOS and Linux) and x86_64 (Linux).
+- Direct binary generation — no external assembler or linker:
+  - `passes/arm64/8_Binary_Generation_MachO.fs` — ARM64 macOS
+  - `passes/arm64/8_Binary_Generation_ELF.fs`   — ARM64 Linux
+  - `passes/x64/8_Binary_Generation_ELF.fs`     — x86_64 Linux
+- Backend selected at runtime via `Platform.detectArch ()`.
+- Adding a new architecture: add a case to `Platform.Arch`, create
+  `passes/<arch>/{6_CodeGen,7_Encoding,7_Resolve,8_Binary_Generation_*}.fs`,
+  and wire it into `CompilerLibrary.generateBinary`.
 
 ## Compiler Library API
 
@@ -103,12 +111,12 @@ remains as a historical record of the removed cache design.
 
 Each pass must maintain certain properties:
 
-| Pass | Input Invariant | Output Guarantee |
-|------|-----------------|------------------|
-| Parser | Valid source string | Well-formed AST |
-| TypeChecker | Well-formed AST | Type-consistent AST |
-| AST->ANF | Typed AST | All expressions named, lambdas lifted |
-| ANF->MIR | Named expressions | Valid CFG with basic blocks |
-| MIR->LIR | Valid CFG | ARM64-compatible instructions |
-| RegAlloc | Virtual registers | Physical registers assigned |
-| CodeGen | Physical registers | Valid ARM64 instruction sequence |
+| Pass        | Input Invariant     | Output Guarantee                         |
+|-------------|---------------------|------------------------------------------|
+| Parser      | Valid source string | Well-formed AST                          |
+| TypeChecker | Well-formed AST     | Type-consistent AST                      |
+| AST->ANF    | Typed AST           | All expressions named, lambdas lifted    |
+| ANF->MIR    | Named expressions   | Valid CFG with basic blocks              |
+| MIR->LIR    | Valid CFG           | Target-compatible LIR instructions       |
+| RegAlloc    | Virtual registers   | Physical registers assigned              |
+| CodeGen     | Physical registers  | Valid ISA instruction sequence           |
