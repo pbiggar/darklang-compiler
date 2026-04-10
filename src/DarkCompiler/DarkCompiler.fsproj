@@ -55,7 +55,6 @@
     <Compile Include="ARM64.fs" />
     <Compile Include="X86_64.fs" />
     <Compile Include="ARM64Symbolic.fs" />
-    <Compile Include="ArchConfig.fs" />
     <Compile Include="Runtime.fs" />
 
     <!-- Passes 6-8: ARM64 backend -->
