@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# run-in-container — run a command in the compiler devcontainer, or
+# directly if we're already inside it.
+#
+# Usage:
+#   scripts/run-in-container <cmd> [args...]
+#
+# Example:
+#   scripts/run-in-container dotnet build --verbosity quiet
+#   scripts/run-in-container ./run-tests --quiet
+#
+# Detection:
+#   - Already in the container? Just exec the command.
+#   - On the host? docker exec into the running container.
+#   - No container running? Print a hint and exit 1.
+#
+# The container is assumed to have the repo bind-mounted at /workspace.
+
+set -euo pipefail
+
+# If we're already inside a container, just run the command.
+if [ -f /.dockerenv ] || grep -q '/docker/' /proc/1/cgroup 2>/dev/null; then
+  exec "$@"
+fi
+
+# Find the running devcontainer. Prefer a container whose workdir is /workspace.
+CONTAINER="${DARK_CONTAINER:-}"
+if [ -z "$CONTAINER" ]; then
+  # Try: any running container with /workspace mounted to this repo.
+  REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+  CONTAINER=$(docker ps --format '{{.Names}}\t{{.Mounts}}' 2>/dev/null \
+    | awk -F'\t' -v repo="$REPO_ROOT" '$2 ~ repo { print $1; exit }')
+fi
+# Fallback: any running container (best-effort for single-container dev setups).
+if [ -z "$CONTAINER" ]; then
+  CONTAINER=$(docker ps --format '{{.Names}}' 2>/dev/null | head -1)
+fi
+
+if [ -z "$CONTAINER" ]; then
+  echo "run-in-container: no running devcontainer found." >&2
+  echo "  Start one with: docker compose up -d" >&2
+  exit 1
+fi
+
+exec docker exec -w /workspace "$CONTAINER" "$@"

@@ -1,22 +1,25 @@
 #!/bin/bash
-# debug-stack.sh - Diagnose callee-saved register corruption in compiled Dark programs
+# debug-stack.sh — Diagnose callee-saved register corruption in compiled Dark programs.
 #
-# Usage: ./scripts/debug-stack.sh "expression" [function_name]
-# Example: ./scripts/debug-stack.sh 'iter([1,2,3,4,5,6,7,8,9], 2)' tail_i64
+# Usage: scripts/x64/debug-stack.sh "expression" [function_addr_hex]
+# Example: scripts/x64/debug-stack.sh 'iter([1,2,3,4,5,6,7,8,9], 2)' 40283a
 #
 # What it does:
-# 1. Compiles the expression to a binary
-# 2. Finds all function entry points (push rbp)
-# 3. Sets GDB watchpoints on callee-saved register save locations
-# 4. Reports which function corrupts the saved registers
+#  1. Compiles the expression to a binary.
+#  2. Finds all function entry points (push rbp).
+#  3. Sets GDB watchpoints on the callee-saved register save locations.
+#  4. Reports which function corrupts the saved registers.
 #
-# Requires: docker exec access to compiler-dev container, gdb, objdump
+# Requires gdb and objdump — run via scripts/run-in-container (auto-detects
+# the devcontainer if invoked from the host).
 
 set -e
 
-DEXEC="docker exec -w /workspace/darklang-compiler compiler-dev"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUN="$HERE/../run-in-container"
+
 EXPR="$1"
-WATCH_FUNC="${2:-}"  # Optional: specific function address to watch
+WATCH_FUNC="${2:-}"
 
 if [ -z "$EXPR" ]; then
     echo "Usage: $0 'dark-expression-or-file' [function_addr_hex]"
@@ -25,27 +28,24 @@ fi
 
 BINPATH="/tmp/debug_stack_test"
 
-# Check if input is a file or expression
 if [ -f "$EXPR" ]; then
     echo "=== Compiling file: $EXPR ==="
-    $DEXEC ./dark "$EXPR" -o "$BINPATH" 2>&1 | tail -1
+    "$RUN" ./dark "$EXPR" -o "$BINPATH" 2>&1 | tail -1
 else
     echo "=== Compiling expression ==="
-    $DEXEC ./dark -e "$EXPR" -o "$BINPATH" 2>&1 | tail -1
+    "$RUN" ./dark -e "$EXPR" -o "$BINPATH" 2>&1 | tail -1
 fi
 
 echo ""
 echo "=== Finding function entry points ==="
-# Find all push rbp instructions (function entries)
-docker exec compiler-dev objdump -D -M intel -b binary -m i386:x86-64 --adjust-vma=0x400000 "$BINPATH" 2>&1 | \
+"$RUN" objdump -D -M intel -b binary -m i386:x86-64 --adjust-vma=0x400000 "$BINPATH" 2>&1 | \
     grep "push.*rbp$" | awk '{print $1}' | sed 's/://' | while read addr; do
     echo "  Function at 0x$addr"
 done
 
 echo ""
 echo "=== Running with GDB crash analysis ==="
-# Run and get crash info
-docker exec compiler-dev gdb -batch \
+"$RUN" gdb -batch \
     -ex 'run' \
     -ex 'printf "CRASH at RIP=%p\n", $rip' \
     -ex 'printf "Registers: RAX=%p RBX=%p R12=%p R13=%p R14=%p R15=%p\n", $rax, $rbx, $r12, $r13, $r14, $r15' \
@@ -56,15 +56,13 @@ docker exec compiler-dev gdb -batch \
 
 echo ""
 echo "=== Checking for callee-saved register corruption ==="
-# If a specific function is given, watch its saved registers
 if [ -n "$WATCH_FUNC" ]; then
     echo "Watching function at 0x$WATCH_FUNC for callee-saved corruption..."
 
-    # The function entry has:
-    # push rbp; mov rbp,rsp; push rbx; push r12; push r13; sub rsp, N
-    # After prologue, [RBP-8]=RBX, [RBP-16]=R12, [RBP-24]=R13
+    # Entry prologue: push rbp; mov rbp,rsp; push rbx; push r12; push r13
+    # After prologue: [RBP-8]=RBX, [RBP-16]=R12, [RBP-24]=R13
 
-    docker exec compiler-dev gdb -batch \
+    "$RUN" gdb -batch \
         -ex "break *0x${WATCH_FUNC}" \
         -ex 'run' \
         -ex 'finish' \

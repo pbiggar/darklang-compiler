@@ -13,7 +13,8 @@
 
 set -e
 
-DEXEC="docker exec -w /workspace/darklang-compiler compiler-dev"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUN="$HERE/run-in-container"
 EXPR="$1"
 FUNC="${2:-}"
 
@@ -26,9 +27,9 @@ TMPFILE="/tmp/lir_dump_$$.txt"
 
 # Compile and dump LIR
 if [ -f "$EXPR" ]; then
-    $DEXEC ./dark --dump-lir "$EXPR" -o /dev/null 2>&1 > "$TMPFILE" || true
+    "$RUN" ./dark --dump-lir "$EXPR" -o /dev/null 2>&1 > "$TMPFILE" || true
 else
-    $DEXEC ./dark --dump-lir -e "$EXPR" -o /dev/null 2>&1 > "$TMPFILE" || true
+    "$RUN" ./dark --dump-lir -e "$EXPR" -o /dev/null 2>&1 > "$TMPFILE" || true
 fi
 
 if [ -z "$FUNC" ]; then

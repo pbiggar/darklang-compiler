@@ -1,29 +1,28 @@
 #!/bin/bash
-# debug-x86-crash.sh — Diagnose x86_64 codegen crashes in compiled Dark programs
+# debug-crash.sh — Diagnose codegen crashes in compiled Dark programs.
 #
 # Usage:
-#   ./scripts/debug-x86-crash.sh "dark expression"
-#   ./scripts/debug-x86-crash.sh path/to/file.dark
-#   ./scripts/debug-x86-crash.sh "expression" --watch-func ADDR  # watch callee-saved regs
-#   ./scripts/debug-x86-crash.sh "expression" --trace-calls       # trace function calls
+#   scripts/x64/debug-crash.sh "dark expression"
+#   scripts/x64/debug-crash.sh path/to/file.dark
+#   scripts/x64/debug-crash.sh "expression" --watch-func ADDR  # watch callee-saved regs
+#   scripts/x64/debug-crash.sh "expression" --trace-calls       # list entry points + valgrind
 #
 # What it does:
-#   1. Compiles the expression/file to a binary
-#   2. Runs it — if it crashes, shows crash info
-#   3. With --watch-func: sets hardware watchpoints on saved callee-saved regs
-#   4. With --trace-calls: counts calls to each address
-#
-# Requires: docker exec access to compiler-dev container
+#   1. Compiles the expression/file to a binary.
+#   2. Runs it — if it crashes, shows crash info.
+#   3. With --watch-func: sets hardware watchpoints on saved callee-saved regs.
+#   4. With --trace-calls: enumerates function entries and runs valgrind.
 
 set -e
 
-DEXEC="docker exec -w /workspace/darklang-compiler compiler-dev"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUN="$HERE/../run-in-container"
+
 BIN="/tmp/debug_crash_test"
 MODE="crash"
 WATCH_ADDR=""
-
-# Parse args
 EXPR=""
+
 while [ $# -gt 0 ]; do
     case "$1" in
         --watch-func) WATCH_ADDR="$2"; MODE="watch"; shift 2 ;;
@@ -33,23 +32,22 @@ while [ $# -gt 0 ]; do
 done
 
 if [ -z "$EXPR" ]; then
-    echo "Usage: $0 'dark-expression' [--watch-func ADDR] [--trace-calls]"
+    echo "Usage: $0 'dark-expression-or-file' [--watch-func ADDR] [--trace-calls]"
     exit 1
 fi
 
-# Compile
 echo "=== Compiling ==="
 if [ -f "$EXPR" ]; then
-    $DEXEC ./dark "$EXPR" -o "$BIN" 2>&1 | tail -1
+    "$RUN" ./dark "$EXPR" -o "$BIN" 2>&1 | tail -1
 else
-    $DEXEC ./dark -e "$EXPR" -o "$BIN" 2>&1 | tail -1
+    "$RUN" ./dark -e "$EXPR" -o "$BIN" 2>&1 | tail -1
 fi
 
 case "$MODE" in
     crash)
         echo ""
         echo "=== Running with crash analysis ==="
-        docker exec compiler-dev gdb -batch \
+        "$RUN" gdb -batch \
             -ex 'run' \
             -ex 'printf "\n=== CRASH INFO ===\n"' \
             -ex 'printf "RIP=%p (crash instruction)\n", $rip' \
@@ -72,8 +70,7 @@ case "$MODE" in
         echo ""
         echo "=== Watching callee-saved regs at function 0x$WATCH_ADDR ==="
         echo "Setting watchpoints on [RBP-8] (RBX), [RBP-16] (R12), [RBP-24] (R13)"
-        # Use ignore to skip first N invocations if needed
-        docker exec compiler-dev gdb -batch \
+        "$RUN" gdb -batch \
             -ex "break *0x${WATCH_ADDR}" \
             -ex 'run' \
             -ex 'printf "Function entered: RBP=%p\n", $rbp' \
@@ -95,14 +92,14 @@ case "$MODE" in
     trace)
         echo ""
         echo "=== Finding function entry points ==="
-        docker exec compiler-dev objdump -D -M intel -b binary -m i386:x86-64 \
+        "$RUN" objdump -D -M intel -b binary -m i386:x86-64 \
             --adjust-vma=0x400000 "$BIN" 2>&1 | \
             awk '/push.*rbp$/ {addr=$1; getline; if (/mov.*rbp,.*rsp/) print "func @ " addr}' | \
             head -40
 
         echo ""
         echo "=== Valgrind check ==="
-        docker exec compiler-dev valgrind --tool=memcheck "$BIN" 2>&1 | \
+        "$RUN" valgrind --tool=memcheck "$BIN" 2>&1 | \
             grep -E "Invalid|ERROR SUMMARY|Address"
         ;;
 esac
