@@ -1,0 +1,42 @@
+version: 2.1
+
+# CI for the Dark compiler.
+#
+# The devcontainer image in Dockerfile is the source of truth for the
+# toolchain (dotnet 10, qemu, etc). CI builds that image and runs the
+# full test suite inside it, so CI and local dev match exactly.
+
+jobs:
+  build-and-test:
+    machine:
+      image: ubuntu-2404:current
+    resource_class: large
+    steps:
+      - checkout
+      - run:
+          name: Build devcontainer image
+          command: docker build -t dark-compiler-ci .
+      - run:
+          name: Start container
+          command: |
+            docker run -d --name dark-ci \
+              -v "$PWD":/workspace \
+              -w /workspace \
+              dark-compiler-ci \
+              tail -f /dev/null
+      - run:
+          name: Restore packages
+          command: docker exec dark-ci dotnet restore
+      - run:
+          name: Build (debug)
+          command: docker exec dark-ci dotnet build --verbosity quiet
+      - run:
+          name: Run test suite
+          command: docker exec dark-ci ./run-tests
+          no_output_timeout: 15m
+
+workflows:
+  version: 2
+  ci:
+    jobs:
+      - build-and-test

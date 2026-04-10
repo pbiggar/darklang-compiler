@@ -1,11 +1,9 @@
-// 8_Binary_Generation_ELF_X86_64.fs - x86-64 ELF Binary Generation (Pass 8)
+// 8_Binary_Generation_ELF.fs - ELF Binary Generation (Pass 8, x64 backend)
 //
-// Generates a complete ELF executable from x86-64 machine code for Linux.
-// Reuses the ELF types and serialization from Binary_Generation_ELF.
-//
-// Key differences from ARM64 variant:
-// - Machine type: EM_X86_64 instead of EM_AARCH64
-// - Machine code is byte array (variable-length instructions) not uint32 list
+// Generates a complete ELF64 executable from x86-64 machine code for Linux.
+// Uses the shared Elf64Header / Elf64ProgramHeader types from Binary_ELF.fs.
+// Machine code is passed as a byte array because x86-64 has variable-length
+// instructions (1-15 bytes each).
 
 module Binary_Generation_ELF_X86_64
 

@@ -1,18 +1,19 @@
-// 6_CodeGen_X86_64.fs - x86-64 Code Generation (Pass 6)
+// 6_CodeGen.fs - Code Generation (Pass 6, x64 backend)
 //
 // Transforms LIR into x86-64 instructions.
 //
 // Maps LIR physical registers to x86-64 registers:
 //   X0→RAX, X1→RDI, X2→RSI, X3→RCX, X4→R8, X5→R9,
-//   X6→R10, X7→RDX, X8-X17→R11(scratch),
-//   X19→RBX, X20→R12, X21→R13, X22→R14(heap), X23→R15(freelist)
+//   X6→R10, X7→RDX, X8-X17→R11 (shared scratch),
+//   X19→RBX, X20→R12, X21→R13, X22→R14 (heap), X23→R15 (freelist).
 //
-// Key x86_64 differences from ARM64:
-// - CISC: most instructions modify destination in-place (dest = dest OP src)
-// - Division uses fixed registers (RDX:RAX)
-// - SYSCALL instruction instead of SVC; syscall number in RAX
-// - No link register; CALL pushes return address on stack
-// - 6 integer arg registers (vs ARM64's 8)
+// Key traits of the x86-64 instruction set:
+//   - CISC: most instructions modify destination in-place (dest = dest OP src),
+//     so three-operand LIR ops need MOV + OP sequences or operand swaps.
+//   - Integer division uses the fixed (RDX:RAX) register pair.
+//   - SYSCALL with syscall number in RAX.
+//   - No link register; CALL pushes return address on the stack.
+//   - 6 integer argument registers (System V AMD64 ABI).
 
 module CodeGen_X86_64
 
@@ -90,10 +91,10 @@ let private loadImm64 (dest: X86_64.Reg) (value: int64) : X86_64.Instr list =
 /// Scratch register for temporaries in codegen
 let private scratch = X86_64.R11
 
-/// Heap bump pointer register (not in LIR — codegen-internal, like ARM64's X28)
+/// Heap bump pointer register (codegen-internal, reserved; not allocatable).
 let private heapPtr = X86_64.R14
 
-/// Free list base register (not in LIR — codegen-internal, like ARM64's X27)
+/// Free list base register (codegen-internal, reserved; not allocatable).
 let private freeListBase = X86_64.R15
 
 /// Size of free list heads area (32 size classes × 8 bytes = 256 bytes)
@@ -1027,11 +1028,11 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                         setup @ [X86_64.IMUL_reg (destReg, rightReg)])))
 
     | LIR.Sdiv (dest, left, right) ->
-        // x86_64 IDIV: RDX:RAX / src → RAX=quotient, RDX=remainder
-        // IDIV clobbers both RAX and RDX. Save/restore RDX using the
-        // red zone (below RSP) to avoid changing RSP.
-        // Special case: INT64_MIN / -1 causes #DE (SIGFPE) on x86_64.
-        // ARM64 SDIV returns INT64_MIN (wraps), so we match that behavior.
+        // IDIV: RDX:RAX / src → RAX=quotient, RDX=remainder.
+        // Clobbers both RAX and RDX. Save/restore RDX using the red zone
+        // (below RSP) to avoid changing RSP.
+        // Special case: INT64_MIN / -1 traps with #DE (SIGFPE). LIR.Sdiv
+        // is defined to wrap to INT64_MIN, so detect the case and bypass.
         resolveReg dest
         |> Result.bind (fun destReg ->
             resolveReg left
@@ -1353,8 +1354,7 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
 
     | LIR.SaveRegs (intRegs, floatRegs) ->
         // Save caller-saved registers that are live across a call.
-        // Use PUSH for each register (simpler than ARM64's fixed-layout STP).
-        // Layout: push in order, so first pushed is deepest on stack.
+        // PUSH each in order — first pushed is deepest on the stack.
         if List.isEmpty intRegs && List.isEmpty floatRegs then
             Ok []
         else
@@ -1705,7 +1705,7 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
         let resolveF (freg: LIR.FReg) : Result<X86_64.FReg, string> =
             match freg with
             | LIR.FPhysical fp -> Ok (lirFRegToX86 fp)
-            | LIR.FVirtual 2000 -> Ok X86_64.XMM15  // Parallel move temp (like ARM64's D16)
+            | LIR.FVirtual 2000 -> Ok X86_64.XMM15  // Reserved parallel-move temp
             | LIR.FVirtual id -> Error $"Unresolved virtual float register f{id} in x86-64 codegen"
         resolveF dest
         |> Result.bind (fun d ->
@@ -2380,10 +2380,11 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 resolveReg value |> Result.map (fun v ->
                     // Ownership increment: when storing a tagged list pointer into a node,
                     // increment the stored value's refcount (the parent now owns that edge).
-                    // ARM64 does this in 6_CodeGen.fs (RawSet handler). Without this, RefCountDec
-                    // for child nodes will free them even though the parent still references them.
-                    // NOTE: Currently disabled because it causes 37 test regressions.
-                    // Root cause: unclear — crypto tests SIGSEGV, tco-refcounting leak counter mismatch.
+                    // Without this, RefCountDec for child nodes will free them even though
+                    // the parent still references them.
+                    // NOTE: Currently disabled — enabling it causes 37 test regressions
+                    // (crypto SIGSEGVs, tco-refcounting leak counter mismatch). See
+                    // docs/x64-refcounting.md.
                     let ownershipInc : X86_64.Instr list =
                         ignore valueType
                         []
