@@ -25,6 +25,9 @@ jobs:
               dark-compiler-ci \
               tail -f /dev/null
       - run:
+          name: Fix workspace ownership
+          command: docker exec -u root dark-ci chown -R dark:dark /workspace
+      - run:
           name: Restore packages
           command: docker exec dark-ci dotnet restore
       - run:
