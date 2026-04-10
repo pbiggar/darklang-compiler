@@ -3,11 +3,10 @@
 ## Quick Overview
 
 - **Language**: Pure functional F# (no mutable state, no exceptions)
-- **Target**: ARM64 native binaries (macOS Mach-O, Linux ELF), x86_64 Linux ELF (branch: `x64`)
+- **Target**: native binaries (macOS Mach-O, Linux ELF)
 - **Pipeline**: 8 passes from source to executable (see `docs/compiler-passes.md`)
 - **testing**: Run `./run-tests` to run tests. Tests are very fast, don't use filters, just run the whole test suite.
 - **Scripting**: Use `python3` for scripts (not `python`).
-- **x86_64 notes**: See `CLAUDE.md` for x86_64 backend architecture and known patterns.
 
 ## Architecture Overview
 
@@ -110,6 +109,24 @@ Focus near-exclusively on end-to-end language tests in `src/Tests/e2e/`. If writ
 ```
 
 Common filter patterns: tuple, record, list, string, float, closure, match, adt, generic, stdlib
+
+## Devcontainer
+
+Build and test commands require .NET 10, which lives in the Docker devcontainer.
+Run commands via `docker exec` when working from the host. The container name
+varies — look it up with `docker ps`.
+
+```bash
+CONTAINER=$(docker ps --format "{{.Names}}" | head -1)
+docker exec -w /workspace $CONTAINER ./run-tests
+docker exec -w /workspace $CONTAINER ./dark -r -e "2 + 3"
+docker exec -w /workspace $CONTAINER dotnet build --verbosity quiet
+```
+
+If the container isn't running: `docker compose up -d` in the repo root.
+
+**Do not install tooling on the host.** If something is needed persistently,
+add it to the Dockerfile.
 
 ## Best Practices
 

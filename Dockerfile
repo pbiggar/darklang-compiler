@@ -24,11 +24,8 @@ RUN apt-get update && apt-get install -y \
     # OCaml tools for benchmarking
     ocaml \
     opam \
-    # ARM64 userspace emulation for running compiled binaries on non-ARM64 hosts
+    # Emulation for running compiled binaries on non-native hosts
     qemu-user-static \
-    # PDF generation for code review printouts
-    enscript \
-    ghostscript \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Codex CLI + Claude Code
