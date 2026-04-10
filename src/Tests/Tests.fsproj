@@ -41,11 +41,9 @@
     <!-- Compiler driver tests -->
     <Compile Include="compiler-driver/CliFlagTests.fs" />
 
-    <!-- Compiler pass tests -->
+    <!-- Compiler pass tests (shared) -->
     <Compile Include="compiler-passes/IRSymbolTests.fs" />
     <Compile Include="compiler-passes/IRPrinterTests.fs" />
-    <Compile Include="compiler-passes/EncodingTests.fs" />
-    <Compile Include="compiler-passes/BinaryTests.fs" />
     <Compile Include="compiler-passes/TypeCheckingTests.fs" />
     <Compile Include="compiler-passes/ParallelMoveTests.fs" />
     <Compile Include="compiler-passes/SSALivenessTests.fs" />
@@ -58,6 +56,16 @@
     <Compile Include="compiler-passes/LambdaLiftingTests.fs" />
     <Compile Include="compiler-passes/SyntaxInteropTests.fs" />
     <Compile Include="compiler-passes/SyntaxRoundtripCorpusTests.fs" />
+
+    <!-- ARM64 backend tests -->
+    <Compile Include="compiler-passes/ARM64EncodingTests.fs" />
+    <Compile Include="compiler-passes/ARM64BinaryTests.fs" />
+
+    <!-- x64 backend tests -->
+    <Compile Include="compiler-passes/X86_64EncodingTests.fs" />
+    <Compile Include="compiler-passes/X86_64BinaryTests.fs" />
+    <Compile Include="compiler-passes/X86_64ResolveTests.fs" />
+    <Compile Include="compiler-passes/X86_64CodeGenTests.fs" />
 
     <!-- Optimization tests -->
     <Compile Include="optimizations/MIROptimizeTests.fs" />

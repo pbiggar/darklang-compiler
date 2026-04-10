@@ -292,7 +292,8 @@ let private compileMirToLir
 let private allocateRegistersForFunctions
     (functions: LIR.Function list)
     : LIR.Function list =
-    functions |> List.map RegisterAllocation.allocateRegisters
+    let arch = match Platform.detectArch () with Ok a -> a | Error _ -> Platform.ARM64
+    functions |> List.map (RegisterAllocation.allocateRegisters arch)
 
 /// Run MIR+LIR passes (including register allocation) from ANF functions
 let private lowerToAllocatedLir
@@ -534,56 +535,117 @@ let private generateBinary
     (allocatedProgram: LIR.Program)
     : Result<byte array, string> =
 
-    if verbosity >= 1 then println codegenLabel
-    let codegenStart = sw.Elapsed.TotalMilliseconds
-    let coverageExprCount = if options.EnableCoverage then LIR.countCoverageHits allocatedProgram else 0
-    let codegenOptions : CodeGen.CodeGenOptions = {
-        DisableFreeList = options.DisableFreeList
-        EnableCoverage = options.EnableCoverage
-        CoverageExprCount = coverageExprCount
-        EnableLeakCheck = options.EnableLeakCheck
-    }
-    let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
-    match codegenResult with
-    | Error err -> Error $"Code generation error: {err}"
-    | Ok arm64Instructions ->
-        let codegenElapsed = sw.Elapsed.TotalMilliseconds - codegenStart
-        recordPassTiming passTimingRecorder "Code Generation" codegenElapsed
-        if verbosity >= 2 then
-            let t = System.Math.Round(codegenElapsed, 1)
-            println $"        {t}ms"
+    match Platform.detectArch () with
+    | Error err -> Error $"Architecture detection error: {err}"
+    | Ok Platform.X86_64 ->
+        // x86-64 backend
+        if verbosity >= 1 then println codegenLabel
+        let codegenStart = sw.Elapsed.TotalMilliseconds
+        let codegenResult = CodeGen_X86_64.translateProgram allocatedProgram options.EnableLeakCheck
+        match codegenResult with
+        | Error err -> Error $"x86-64 code generation error: {err}"
+        | Ok x86Instructions ->
+            let codegenElapsed = sw.Elapsed.TotalMilliseconds - codegenStart
+            recordPassTiming passTimingRecorder "Code Generation" codegenElapsed
+            if verbosity >= 2 then
+                let t = System.Math.Round(codegenElapsed, 1)
+                println $"        {t}ms"
 
-        if dumpAsm && verbosity >= 3 then
-            println "=== ARM64 Assembly Instructions ==="
-            for (i, instr) in List.indexed arm64Instructions do
-                println $"  {i}: {instr}"
-            println ""
+            if dumpAsm && verbosity >= 3 then
+                println "=== x86-64 Assembly Instructions ==="
+                for (i, instr) in List.indexed x86Instructions do
+                    println $"  {i}: {instr}"
+                println ""
 
-        match Platform.detectOS () with
-        | Error err -> Error $"Platform detection error: {err}"
-        | Ok os ->
-            let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
-            if verbosity >= 1 then println (emitLabel.Replace("{format}", formatName))
+            if verbosity >= 1 then println (emitLabel.Replace("{format}", "ELF"))
             let emitStart = sw.Elapsed.TotalMilliseconds
-            let emitResult = ARM64_Emit.emitBinary arm64Instructions os options.EnableLeakCheck
-            match emitResult with
-            | Error err -> Error $"ARM64 emit error: {err}"
-            | Ok emit ->
+            match X86_64_Resolve.resolveAndEncode x86Instructions with
+            | Error err -> Error $"x86-64 resolve error: {err}"
+            | Ok resolveResult ->
+                // Patch data labels (e.g., leak counter) if there are deferred fixups
+                let patchedResult =
+                    if List.isEmpty resolveResult.DeferredFixups then
+                        Ok resolveResult
+                    else
+                        let elfHeaderSize = 64
+                        let programHeaderSize = 56
+                        let codeFileOffset = elfHeaderSize + programHeaderSize
+                        let codeSize = resolveResult.MachineCode.Length
+                        let alignedDataStart = (codeFileOffset + codeSize + 7) &&& (~~~7)
+                        // Leak counter is at start of data section (no float/string pools on x86_64)
+                        let leakCounterFileOffset = alignedDataStart
+                        let dataLabels = Map.ofList [("_leak_count", leakCounterFileOffset)]
+                        X86_64_Resolve.patchDataLabels resolveResult dataLabels codeFileOffset
+                match patchedResult with
+                | Error err -> Error $"x86-64 data label error: {err}"
+                | Ok resolveResult ->
+                let entryOffset =
+                    match Map.tryFind "_start" resolveResult.LabelPositions with
+                    | Some offset -> offset
+                    | None -> 0
+                let binary =
+                    Binary_Generation_ELF_X86_64.createExecutableWithPools
+                        resolveResult.MachineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool
+                        options.EnableLeakCheck entryOffset
                 let emitElapsed = sw.Elapsed.TotalMilliseconds - emitStart
-                recordPassTiming passTimingRecorder "ARM64 Emit" emitElapsed
+                recordPassTiming passTimingRecorder "x86-64 Emit" emitElapsed
                 if verbosity >= 2 then
                     let t = System.Math.Round(emitElapsed, 1)
                     println $"        {t}ms"
+                Ok binary
 
-                if dumpMachineCode && verbosity >= 3 then
-                    println "=== Machine Code (hex) ==="
-                    for i in 0 .. 4 .. (emit.MachineCode.Length - 1) do
-                        if i + 3 < emit.MachineCode.Length then
-                            let bytes = sprintf "%02x %02x %02x %02x" emit.MachineCode.[i] emit.MachineCode.[i+1] emit.MachineCode.[i+2] emit.MachineCode.[i+3]
-                            println $"  {i:X4}: {bytes}"
-                    println $"Total: {emit.MachineCode.Length} bytes\n"
+    | Ok Platform.ARM64 ->
+        // ARM64 backend (original)
+        if verbosity >= 1 then println codegenLabel
+        let codegenStart = sw.Elapsed.TotalMilliseconds
+        let coverageExprCount = if options.EnableCoverage then LIR.countCoverageHits allocatedProgram else 0
+        let codegenOptions : CodeGen.CodeGenOptions = {
+            DisableFreeList = options.DisableFreeList
+            EnableCoverage = options.EnableCoverage
+            CoverageExprCount = coverageExprCount
+            EnableLeakCheck = options.EnableLeakCheck
+        }
+        let codegenResult = CodeGen.generateARM64WithOptions codegenOptions allocatedProgram
+        match codegenResult with
+        | Error err -> Error $"Code generation error: {err}"
+        | Ok arm64Instructions ->
+            let codegenElapsed = sw.Elapsed.TotalMilliseconds - codegenStart
+            recordPassTiming passTimingRecorder "Code Generation" codegenElapsed
+            if verbosity >= 2 then
+                let t = System.Math.Round(codegenElapsed, 1)
+                println $"        {t}ms"
 
-                Ok emit.Binary
+            if dumpAsm && verbosity >= 3 then
+                println "=== ARM64 Assembly Instructions ==="
+                for (i, instr) in List.indexed arm64Instructions do
+                    println $"  {i}: {instr}"
+                println ""
+
+            match Platform.detectOS () with
+            | Error err -> Error $"Platform detection error: {err}"
+            | Ok os ->
+                let formatName = match os with | Platform.MacOS -> "Mach-O" | Platform.Linux -> "ELF"
+                if verbosity >= 1 then println (emitLabel.Replace("{format}", formatName))
+                let emitStart = sw.Elapsed.TotalMilliseconds
+                let emitResult = ARM64_Emit.emitBinary arm64Instructions os options.EnableLeakCheck
+                match emitResult with
+                | Error err -> Error $"ARM64 emit error: {err}"
+                | Ok emit ->
+                    let emitElapsed = sw.Elapsed.TotalMilliseconds - emitStart
+                    recordPassTiming passTimingRecorder "ARM64 Emit" emitElapsed
+                    if verbosity >= 2 then
+                        let t = System.Math.Round(emitElapsed, 1)
+                        println $"        {t}ms"
+
+                    if dumpMachineCode && verbosity >= 3 then
+                        println "=== Machine Code (hex) ==="
+                        for i in 0 .. 4 .. (emit.MachineCode.Length - 1) do
+                            if i + 3 < emit.MachineCode.Length then
+                                let bytes = sprintf "%02x %02x %02x %02x" emit.MachineCode.[i] emit.MachineCode.[i+1] emit.MachineCode.[i+2] emit.MachineCode.[i+3]
+                                println $"  {i:X4}: {bytes}"
+                        println $"Total: {emit.MachineCode.Length} bytes\n"
+
+                    Ok emit.Binary
 
 
 let private buildBaseFuncNames

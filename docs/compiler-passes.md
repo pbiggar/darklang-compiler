@@ -4,119 +4,30 @@ The Dark compiler transforms source code through a series of passes, each with a
 
 ## Pipeline Overview
 
-```
-Source Code
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 1: Parser (1_Parser.fs)        │
-│ Source → AST                        │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 1.5: Type Checking             │
-│ (1.5_TypeChecking.fs)               │
-│ AST → Typed AST                     │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 2: AST to ANF (2_AST_to_ANF.fs)│
-│ AST → A-Normal Form                 │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 2.3: ANF Optimizations         │
-│ (2.3_ANF_Optimize.fs)               │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 2.4: ANF Inlining              │
-│ (2.4_ANF_Inlining.fs)               │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 2.5: Ref Count Insertion       │
-│ (2.5_RefCountInsertion.fs)          │
-│ ANF → ANF with memory ops           │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 2.6: Print Insertion           │
-│ (2.6_PrintInsertion.fs)             │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 2.7: Tail Call Optimization    │
-│ (2.7_TailCallDetection.fs)          │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 3: ANF to MIR (3_ANF_to_MIR.fs)│
-│ ANF → Control Flow Graph            │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 3.1: SSA Construction          │
-│ (3.1_SSA_Construction.fs)           │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 3.5: MIR Optimizations         │
-│ (3.5_MIR_Optimize.fs)               │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 4: MIR to LIR (4_MIR_to_LIR.fs)│
-│ MIR → Low-level IR (virtual regs)   │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 4.5: LIR Peephole              │
-│ (4.5_LIR_Peephole.fs)               │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 5: Register Allocation         │
-│ (5_RegisterAllocation.fs)           │
-│ LIR (virtual) → LIR (physical)      │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 5.5: Function Tree Shaking     │
-│ (5.5_FunctionTreeShaking.fs)        │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 6: Code Generation             │
-│ (6_CodeGen.fs)                      │
-│ LIR → ARM64 Instructions            │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ Pass 7: ARM64 Emit                  │
-│ (7_ARM64_Emit.fs)                   │
-│ ARM64 → Machine Code → Executable   │
-└─────────────────────────────────────┘
-    │
-    ▼
-Executable Binary
-```
+| #    | Pass                    | File                                                        | Transform                                     |
+|------|-------------------------|-------------------------------------------------------------|-----------------------------------------------|
+| 1    | Parser                  | `passes/1_Parser.fs`                                        | Source → AST                                  |
+| 1.5  | Type checking           | `passes/1.5_TypeChecking.fs`                                | AST → Typed AST                               |
+| 2    | AST → ANF               | `passes/2_AST_to_ANF.fs`                                    | AST → ANF                                     |
+| 2.3  | ANF optimizations       | `passes/2.3_ANF_Optimize.fs`                                | ANF → ANF                                     |
+| 2.4  | ANF inlining            | `passes/2.4_ANF_Inlining.fs`                                | ANF → ANF                                     |
+| 2.5  | Ref count insertion     | `passes/2.5_RefCountInsertion.fs`                           | ANF + memory ops                              |
+| 2.6  | Print insertion         | `passes/2.6_PrintInsertion.fs`                              | ANF → ANF                                     |
+| 2.7  | Tail call detection     | `passes/2.7_TailCallDetection.fs`                           | ANF → ANF                                     |
+| 3    | ANF → MIR               | `passes/3_ANF_to_MIR.fs`                                    | ANF → CFG                                     |
+| 3.1  | SSA construction        | `passes/3.1_SSA_Construction.fs`                            | MIR → SSA-form MIR                            |
+| 3.5  | MIR optimizations       | `passes/3.5_MIR_Optimize.fs`                                | MIR → MIR                                     |
+| 4    | MIR → LIR               | `passes/4_MIR_to_LIR.fs`                                    | MIR → LIR (virtual regs)                      |
+| 4.5  | LIR peephole            | `passes/4.5_LIR_Peephole.fs`                                | LIR → LIR                                     |
+| 5    | Register allocation     | `passes/5_RegisterAllocation.fs`                            | LIR (virtual) → LIR (physical)                |
+| 5.5  | Function tree shaking   | `passes/5.5_FunctionTreeShaking.fs`                         | LIR → pruned LIR                              |
+| 6    | Code generation         | `passes/{arm64,x64}/6_CodeGen.fs`                           | LIR → ISA instructions                        |
+| 7    | Encode & resolve        | `passes/{arm64,x64}/7_Encoding.fs` + `7_Resolve.fs`         | ISA → machine code bytes                      |
+| 8    | Binary generation       | `passes/{arm64,x64}/8_Binary_Generation_*.fs`               | Bytes → Mach-O or ELF executable              |
+
+Passes 1–5 are shared across targets. Passes 6–8 live under
+`passes/arm64/` or `passes/x64/` and are selected by `Platform.detectArch ()`
+at runtime via `CompilerLibrary.generateBinary`.
 
 ---
 
@@ -329,27 +240,29 @@ Output: block0:
 
 ## Pass 4: MIR to LIR (`4_MIR_to_LIR.fs`)
 
-**Input**: MIR (platform-independent)
-**Output**: LIR (ARM64-specific, virtual registers)
+**Input**: MIR (target-independent)
+**Output**: LIR (virtual registers, target-neutral instruction shapes)
 
 ### Responsibilities
-- **Instruction selection**: Choose ARM64 instructions for MIR operations
-- **Address constraints**: Handle ARM64 immediate value limits
-- **Calling convention**: Set up function calls per ARM64 ABI
-- **Symbolic constants**: Keep string/float constants by value until late pool resolution
+- **Instruction selection**: Lower MIR operations into LIR primitives
+  that both backends can consume.
+- **Calling convention**: Set up function calls via `Platform.Arch`-aware
+  argument placement.
+- **Symbolic constants**: Keep string/float constants by value until late
+  pool resolution.
 
 ### Key Algorithms
-- **Pattern matching**: Each MIR operation maps to ARM64 sequence
-- **Immediate splitting**: Large constants may need multiple instructions
+- **Pattern matching**: Each MIR operation maps to an LIR sequence.
+- **Immediate splitting**: Large constants may need multiple instructions.
 
 ### Example Transformation
 ```
 Input (MIR):  Add(v1, v2, v3)      // v1 = v2 + v3
-Output (LIR): ADD(V1, V2, V3)      // ARM64 ADD instruction
+Output (LIR): Add(V1, V2, V3)      // three-operand LIR add
 ```
 
 Implementation detail: LIR keeps string/float constants by value and defers
-pool construction until ARM64 emission. This avoids per-function pool remapping
+pool construction until ISA emission. This avoids per-function pool remapping
 when mixing stdlib, preamble, and user functions.
 
 ---
@@ -380,10 +293,19 @@ when mixing stdlib, preamble, and user functions.
 - **Linear scan**: Efficient allocation using sorted live intervals
 - **Spill code generation**: Load/store for spilled values
 
-### Register Classes
-- **Caller-saved (preferred)**: X1-X10, X14-X15
-- **Callee-saved**: X19-X26 (used under high pressure)
-- **Reserved**: X0 (return), X11-X13 (spill temps), X27-X28 (memory), X29-X30 (ABI)
+### Register Classes (LIR-level abstraction)
+
+The LIR uses abstract `PhysReg` identifiers X0-X30; each backend maps
+them to actual hardware registers in `passes/{arch}/6_CodeGen.fs`.
+
+- **Caller-saved (preferred)**: X1-X7
+- **Callee-saved**: X19-X26 on ARM64, X19-X21 on x86_64 (fewer because
+  X22/X23 are reserved for the heap pointer and free list on x86_64).
+- **Reserved**: X0 (return), X8-X10 (scratch), X27-X28 (runtime state),
+  X29-X30 (ABI).
+
+On x86_64 the LIR PhysRegs X8-X17 all collapse onto R11 (shared scratch);
+the allocator is aware of this via `isX86_64 arch` checks.
 
 ---
 
@@ -398,48 +320,58 @@ when mixing stdlib, preamble, and user functions.
 
 ---
 
-## Pass 6: Code Generation (`6_CodeGen.fs`)
+## Pass 6: Code Generation (`passes/{arm64,x64}/6_CodeGen.fs`)
 
 **Input**: LIR with physical registers
-**Output**: ARM64Symbolic instruction list
+**Output**: Target-specific symbolic instruction list
 
 ### Responsibilities
-- **Final instruction generation**: Convert LIR to ARM64Symbolic types
-- **Prologue/epilogue**: Function entry/exit code
-- **Stack frame setup**: Allocate space for spills and locals
-
-### Key Outputs
-- ARM64 instruction sequence per function
-- Entry point setup (main function handling)
+- **Final instruction selection**: Convert LIR to the target ISA
+  (ARM64Symbolic for arm64, `X86_64.Instr` for x64).
+- **Prologue/epilogue**: Function entry/exit code.
+- **Stack frame setup**: Allocate space for spills and locals.
+- **Two-operand conflict handling (x64 only)**: Swap operands or use
+  XMM15/R11 temps when dest == right for commutative/non-commutative ops.
 
 ---
 
-## Pass 7: ARM64 Emit (`7_ARM64_Emit.fs`)
+## Passes 7 and 8: Encode and Emit
 
-**Input**: ARM64Symbolic instruction list
+**Input**: Target-specific symbolic instruction list
 **Output**: Executable file (Mach-O or ELF)
 
 ### Responsibilities
-- **Literal pool resolution**: Resolve symbolic data labels into literal pools
-- **Instruction encoding**: Convert to binary per ARM64 spec
-- **Binary generation**: Emit Mach-O (macOS) or ELF (Linux)
+- **Literal pool resolution** (arm64): resolve symbolic data labels into
+  literal pools. x64 uses RIP-relative addressing instead, and has no
+  literal pools.
+- **Label resolution**: fix up branch offsets to real byte distances.
+- **Instruction encoding**: convert symbolic instructions to bytes per
+  the ISA spec (fixed 32-bit on arm64, variable 1–15 bytes on x64).
+- **Binary generation**: emit Mach-O (macOS arm64) or ELF (Linux arm64
+  and x64).
 
-### Internals
-Uses `7_ARM64_Resolve.fs` to convert ARM64Symbolic instructions into concrete ARM64 instructions
-and literal pools, `7_ARM64_Encoding.fs` for encoding, and `8_Binary_Generation_*.fs` for binary layout.
+### Per-backend files
+
+| Backend | Encoding                               | Resolve                               | Binary                                                             |
+|---------|----------------------------------------|---------------------------------------|--------------------------------------------------------------------|
+| arm64   | `passes/arm64/7_Encoding.fs`           | `passes/arm64/7_Resolve.fs`           | `passes/arm64/8_Binary_Generation_{MachO,ELF}.fs` via `7_Emit.fs` |
+| x64     | `passes/x64/7_Encoding.fs`             | `passes/x64/7_Resolve.fs`             | `passes/x64/8_Binary_Generation_ELF.fs`                            |
 
 ---
 
 ## Data Structure Files
 
-| File | Purpose |
-|------|---------|
-| `AST.fs` | Abstract Syntax Tree types |
-| `ANF.fs` | A-Normal Form types |
-| `MIR.fs` | Mid-level IR types |
-| `LIR.fs` | Low-level IR types |
-| `ARM64.fs` | ARM64 instruction types |
-| `ARM64Symbolic.fs` | Symbolic ARM64 instruction types |
+| File               | Purpose                               |
+|--------------------|---------------------------------------|
+| `AST.fs`           | Abstract Syntax Tree types            |
+| `ANF.fs`           | A-Normal Form types                   |
+| `MIR.fs`           | Mid-level IR types                    |
+| `LIR.fs`           | Low-level IR types                    |
+| `Platform.fs`      | OS/Arch DUs and per-target syscall tables |
+| `ARM64.fs`         | ARM64 instruction and register types  |
+| `ARM64Symbolic.fs` | Symbolic ARM64 instructions (pre-encoding) |
+| `X86_64.fs`        | x86_64 instruction and register types |
+| `Binary_ELF.fs`    | Shared ELF header/segment types       |
 
 ---
 

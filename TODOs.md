@@ -1,0 +1,35 @@
+# TODOs
+
+- [ ] CircleCI setup — build, test on every push
+- [ ] x86_64 reference counting — 1 test failure remaining (memReclaimBurn). RC infrastructure is built but disabled. See [docs/x64-refcounting.md](docs/x64-refcounting.md).
+- [ ] AI-agent doc audit: review AGENTS.md / README / docs vs. the actual code and dev setup. Specific gaps to close:
+  - Write `docs/adding-a-backend.md` (scattered across PR description, architecture.md, and x64-refcounting.md today)
+  - Write `docs/features/x64-codegen.md` to mirror the existing arm64-codegen.md
+  - Audit `docs/features/*.md` for stale ARM64-only references (binary-generation.md, register-allocation.md especially)
+  - Verify `docs/adding-features.md` covers per-arch pass changes
+  - Refresh the AGENTS.md benchmarks section (drop "ignore quicksort error"; point at `benchmarks/README.md`)
+- [ ] Write `docs/worktrees.md` if the worktree workflow becomes more elaborate.
+- [ ] x86_64 encoding test coverage — 36 of 47 instruction types untested at byte level
+- [ ] `AST.FuncRef` — what's the plan for this? Looks dead but idk. Added in 6945c98 for higher-order functions, but the current pipeline routes them through `replaceFuncRefsWithWrappers` (`2_AST_to_ANF.fs:2615`) which rewrites `AST.Var name` → `AST.Closure (wrapperName, [])`. I can't find anywhere `AST.FuncRef` is actually constructed, yet it's pattern-matched in ~15 sites across 2_AST_to_ANF.fs, 1.5_TypeChecking.fs, ASTPrettyPrinter.fs, IRPrinter.fs, 2.5_RefCountInsertion.fs, 3_ANF_to_MIR.fs, ANFDeadCodeElimination.fs, both parsers (validation only), and E2ETestRunner.fs. Was this left in for a future pass, or is it just leftover from the original design? If dead, removing it would delete ~60-80 lines. (Note: `ANF.FuncRef` is a different type and is still live — constructed in `2.6_PrintInsertion.fs:50`.)
+- [ ] Run compiler against existing package repo
+- [ ] Additional architectures (arm32?)
+- [ ] int64 assumptions
+- [ ] add values
+- [ ] mutmut testing
+- [ ] matching darklang language
+- [ ] increasing code coverage
+- [ ] completing benchmarks
+- [ ] expanding to support full language
+- [ ] support full darklang stdlib
+- [ ] Json stdlib module (parsing/serialization)
+- [ ] support full darklang test suite
+- [ ] reimplement darklang compiler in Darklang
+- [ ] reimplement test suite in Darklang
+- [ ] complete Unicode string support
+- [ ] add optimizations
+- [ ] remove crashes
+- [ ] end-to-end SSA
+- [ ] SSA-based HIR (sub ANF?)
+- [ ] SCCP-based HIR, MIR, and LIR optimizations
+- [ ] remove non-functional idioms
+- [ ] unify memory management (RawPtr, heap primitives, reference counting)

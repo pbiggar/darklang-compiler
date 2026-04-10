@@ -24,15 +24,18 @@ RUN apt-get update && apt-get install -y \
     # OCaml tools for benchmarking
     ocaml \
     opam \
+    # Emulation for running compiled binaries on non-native hosts
+    qemu-user-static \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Codex CLI + Claude Code
 RUN npm install -g @openai/codex @anthropic-ai/claude-code
 
-# Create a fixed non-root user and the writable state directories it owns.
+# Repurpose the base image's ubuntu user (UID/GID 1000) as 'dark'.
+# UID 1000 matches the default host user on Linux; macOS bind-mounts are permissive.
 RUN mkdir -p /workspace && \
-    if ! getent group dark > /dev/null; then groupadd dark; fi && \
-    if ! id -u dark > /dev/null 2>&1; then useradd -m -g dark -s /bin/bash dark; fi && \
+    usermod -l dark -d /home/dark -m ubuntu && \
+    groupmod -n dark ubuntu && \
     echo "dark ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     mkdir -p /home/dark/.nuget/packages /home/dark/.codex /home/dark/.claude && \
     chown -R dark:dark /home/dark /workspace
@@ -46,12 +49,16 @@ ENV DOTNET_ROOT="/usr/share/dotnet"
 ENV DOTNET_CLI_HOME="/home/dark"
 ENV DOTNET_MULTILEVEL_LOOKUP="0"
 
-# Add .NET, Rust and local bin to PATH
-ENV PATH="${DOTNET_ROOT}:/home/dark/.local/bin:/home/dark/.cargo/bin:${PATH}"
+# Add .NET, Rust, dotnet tools and local bin to PATH
+ENV PATH="${DOTNET_ROOT}:/home/dark/.dotnet/tools:/home/dark/.local/bin:/home/dark/.cargo/bin:${PATH}"
 
 # Pre-download workload advertising manifests so first-run commands don't fail workload verification.
 # Needs elevated privileges because the SDK is installed system-wide under /usr/share/dotnet.
 RUN sudo dotnet workload update --advertising-manifests-only --ignore-failed-sources
+
+# Coverage tooling for ./run-coverage
+RUN dotnet tool install -g coverlet.console && \
+    dotnet tool install -g dotnet-reportgenerator-globaltool
 
 # Install Rust for benchmarking
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y

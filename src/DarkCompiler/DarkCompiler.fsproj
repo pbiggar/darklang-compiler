@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -8,16 +8,22 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Base utilities -->
     <Compile Include="Crash.fs" />
     <Compile Include="Output.fs" />
+    <Compile Include="Platform.fs" />
     <Compile Include="AST.fs" />
     <Compile Include="ASTPrettyPrinter.fs" />
     <Compile Include="Stdlib.fs" />
     <Compile Include="ResultList.fs" />
     <Compile Include="Bitset.fs" />
+
+    <!-- Pass 1: Parsing and type checking -->
     <Compile Include="passes/1_Parser.fs" />
     <Compile Include="passes/1_InterpreterParser.fs" />
     <Compile Include="passes/1.5_TypeChecking.fs" />
+
+    <!-- Pass 2: AST -> ANF -->
     <Compile Include="ANF.fs" />
     <Compile Include="passes/ANFDeadCodeElimination.fs" />
     <Compile Include="passes/2_AST_to_ANF.fs" />
@@ -26,30 +32,54 @@
     <Compile Include="passes/2.5_RefCountInsertion.fs" />
     <Compile Include="passes/2.6_PrintInsertion.fs" />
     <Compile Include="passes/2.7_TailCallDetection.fs" />
+
+    <!-- Pass 3: ANF -> MIR -->
     <Compile Include="MIR.fs" />
     <Compile Include="LiteralPool.fs" />
     <Compile Include="passes/3_ANF_to_MIR.fs" />
     <Compile Include="passes/3.1_SSA_Construction.fs" />
     <Compile Include="passes/3.5_MIR_Optimize.fs" />
+
+    <!-- Pass 4: MIR -> LIR -->
     <Compile Include="LIR.fs" />
     <Compile Include="ParallelMoves.fs" />
     <Compile Include="passes/4_MIR_to_LIR.fs" />
     <Compile Include="passes/4.5_LIR_Peephole.fs" />
     <Compile Include="passes/DeadCodeElimination.fs" />
     <Compile Include="passes/5.5_FunctionTreeShaking.fs" />
+
+    <!-- Pass 5: Register allocation -->
     <Compile Include="passes/5_RegisterAllocation.fs" />
+
+    <!-- Architecture support: ISA types, calling conventions, runtime -->
     <Compile Include="ARM64.fs" />
+    <Compile Include="X86_64.fs" />
     <Compile Include="ARM64Symbolic.fs" />
-    <Compile Include="Platform.fs" />
     <Compile Include="Runtime.fs" />
-    <Compile Include="passes/6_CodeGen.fs" />
-    <Compile Include="passes/7_ARM64_Resolve.fs" />
-    <Compile Include="passes/7_ARM64_Encoding.fs" />
+
+    <!-- Passes 6-8: ARM64 backend -->
+    <Compile Include="passes/arm64/6_CodeGen.fs" />
+    <Compile Include="passes/arm64/7_Resolve.fs" />
+    <Compile Include="passes/arm64/7_Encoding.fs" />
+
+    <!-- Passes 6-7: x64 backend -->
+    <Compile Include="passes/x64/6_CodeGen.fs" />
+    <Compile Include="passes/x64/7_Encoding.fs" />
+    <Compile Include="passes/x64/7_Resolve.fs" />
+
+    <!-- Shared binary output helpers -->
     <Compile Include="Binary.fs" />
     <Compile Include="Binary_ELF.fs" />
-    <Compile Include="passes/8_Binary_Generation_MachO.fs" />
-    <Compile Include="passes/8_Binary_Generation_ELF.fs" />
-    <Compile Include="passes/7_ARM64_Emit.fs" />
+
+    <!-- Pass 8: ARM64 binary generation -->
+    <Compile Include="passes/arm64/8_Binary_Generation_MachO.fs" />
+    <Compile Include="passes/arm64/8_Binary_Generation_ELF.fs" />
+    <Compile Include="passes/arm64/7_Emit.fs" />
+
+    <!-- Pass 8: x64 binary generation -->
+    <Compile Include="passes/x64/8_Binary_Generation_ELF.fs" />
+
+    <!-- Top-level driver -->
     <Compile Include="IRPrinter.fs" />
     <Compile Include="CompilerLibrary.fs" />
     <Compile Include="Program.fs" />

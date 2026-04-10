@@ -1,23 +1,24 @@
-# Quick benchmark baseline - instruction counts
-# Generated: 2026-01-18T01:01:05+00:00
-# Compiler: 938f0d8
-ackermann=3695812
-binary_trees=250898
-collatz=590647
-edigits=7363111
-factorial=44603
-fannkuch=819161
-fasta=3381569
-fib=525458
-leibniz=1300160
-mandelbrot=1582185
-matmul=66878
-merkletrees=2569311
-nqueen=1494435
-nsieve=983990
-pisum=130504
-primes=245242
-quicksort=3014730
-spectral_norm=147
-sum_to_n=700366
-tak=1781112
+# Quick benchmark baseline - instruction counts (cachegrind)
+# Machine: major (x86_64)
+# Generated: 2026-04-08
+# Compiler: 3433aa6 (x64 branch)
+ackermann=3095259
+binary_trees=250899
+collatz=640614
+edigits=7390968
+factorial=48158
+fannkuch=832065
+fasta=3250265
+fib=547360
+leibniz=1800168
+mandelbrot=1712261
+matmul=55102
+merkletrees=2201076
+nqueen=1645807
+nsieve=253041
+pisum=140458
+primes=321381
+quicksort=962575
+spectral_norm=155
+sum_to_n=800358
+tak=1542577

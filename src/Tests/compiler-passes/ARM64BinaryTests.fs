@@ -1,11 +1,6 @@
-// BinaryTests.fs - Unit tests for binary generation utilities
-//
-// Tests utility functions and integration for Mach-O binary generation.
-//
-// Note: These tests are for Mach-O format specifically
-// NOTE: All tests now return Result<> instead of using failwith
+// ARM64BinaryTests.fs - Unit tests for ARM64 Mach-O binary generation.
 
-module BinaryTests
+module ARM64BinaryTests
 
 open Binary
 open Binary_Generation_MachO
