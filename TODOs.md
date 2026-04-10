@@ -1,5 +1,6 @@
 # TODOs
 
+- [ ] CircleCI setup — build, test on every push
 - [ ] x86_64 reference counting — 1 test failure remaining (memReclaimBurn). RC infrastructure is built but disabled. See [docs/x64-refcounting.md](docs/x64-refcounting.md).
 - [ ] x86_64 encoding test coverage — 36 of 47 instruction types untested at byte level
 - [ ] Run compiler against existing package repo

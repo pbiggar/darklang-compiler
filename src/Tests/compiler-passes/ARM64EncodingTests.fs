@@ -1,11 +1,9 @@
-// EncodingTests.fs - Unit tests for ARM64 encoding utilities
+// ARM64EncodingTests.fs - Unit tests for ARM64 encoding utilities
 //
 // Tests utility functions like encodeReg that are used by the
 // ARM64 instruction encoder.
-//
-// NOTE: All tests now return Result<> instead of using failwith
 
-module EncodingTests
+module ARM64EncodingTests
 
 open ARM64
 open ARM64_Encoding

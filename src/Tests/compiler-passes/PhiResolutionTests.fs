@@ -439,8 +439,9 @@ let testLoopPhiCoalesced () : TestResult =
         UsedCalleeSaved = []
     }
 
-    let arch = match Platform.detectArch () with Ok a -> a | Error _ -> Platform.ARM64
-    let allocated = RegisterAllocation.allocateRegisters arch func
+    // Phi coalescing is arch-independent; hardcode ARM64 for the full
+    // register set in the test setup.
+    let allocated = RegisterAllocation.allocateRegisters Platform.ARM64 func
     withBlock labelBack allocated.CFG (fun backBlock ->
         if countMoves backBlock = 0 then
             Ok ()
