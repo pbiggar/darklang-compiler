@@ -150,3 +150,23 @@ type Instr =
 
 /// Machine code (32-bit instruction)
 type MachineCode = uint32
+
+/// ARM64-specific syscall invocation details (layered on top of Platform.SyscallNumbers).
+/// Platform.fs intentionally has no ARM64 dependency, so these are defined here.
+type SyscallConfig = {
+    Numbers: Platform.SyscallNumbers
+    SvcImmediate: uint16   // SVC instruction immediate value
+    SyscallRegister: Reg   // Register to hold syscall number (X16 macOS, X8 Linux)
+}
+
+/// Build the ARM64-specific syscall config for the given OS.
+let syscallConfigFor (os: Platform.OS) : SyscallConfig =
+    match os with
+    | Platform.MacOS ->
+        { Numbers = Platform.syscallNumbersFor Platform.MacOS Platform.ARM64
+          SvcImmediate = 0x80us
+          SyscallRegister = X16 }
+    | Platform.Linux ->
+        { Numbers = Platform.syscallNumbersFor Platform.Linux Platform.ARM64
+          SvcImmediate = 0us
+          SyscallRegister = X8 }

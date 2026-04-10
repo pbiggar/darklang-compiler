@@ -292,7 +292,7 @@ let private compileMirToLir
 let private allocateRegistersForFunctions
     (functions: LIR.Function list)
     : LIR.Function list =
-    let arch = match PlatformTypes.detectArch () with Ok a -> a | Error _ -> PlatformTypes.ARM64
+    let arch = match Platform.detectArch () with Ok a -> a | Error _ -> Platform.ARM64
     functions |> List.map (RegisterAllocation.allocateRegisters arch)
 
 /// Run MIR+LIR passes (including register allocation) from ANF functions

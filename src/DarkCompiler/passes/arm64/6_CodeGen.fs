@@ -77,7 +77,7 @@ let private generateHeapOverflowTrapBody () : ARM64Symbolic.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error msg -> Crash.crash $"Platform detection failed: {msg}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     let messageBytes = System.Text.Encoding.UTF8.GetBytes(heapOutOfMemoryMessage) |> Array.toList
     runtimeInstrs (Runtime.generatePrintCharsToStderr messageBytes)
     @ [
@@ -828,7 +828,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
             match Platform.detectOS () with
             | Ok platform -> platform
             | Error msg -> Crash.crash $"Platform detection failed: {msg}"
-        let syscalls = Platform.getSyscallNumbers os
+        let syscalls = ARM64.syscallConfigFor os
 
         // Generate element print code based on type (uses X0 for value)
         let elemPrintCode =
@@ -1416,7 +1416,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 match Platform.detectOS () with
                 | Ok platform -> platform
                 | Error msg -> Crash.crash $"Platform detection failed: {msg}"
-            let syscalls = Platform.getSyscallNumbers os
+            let syscalls = ARM64.syscallConfigFor os
 
             // Check if any variant has a payload
             let hasAnyPayload = variants |> List.exists (fun (_, _, payload) -> Option.isSome payload)
@@ -1546,7 +1546,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 match Platform.detectOS () with
                 | Ok platform -> platform
                 | Error msg -> Crash.crash $"Platform detection failed: {msg}"
-            let syscalls = Platform.getSyscallNumbers os
+            let syscalls = ARM64.syscallConfigFor os
 
             // Helper: generate code to print a string literal
             let printLiteral (s: string) =
@@ -2161,7 +2161,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
             match Platform.detectOS () with
             | Ok platform -> platform
             | Error msg -> Crash.crash $"Platform detection failed: {msg}"
-        let syscalls = Platform.getSyscallNumbers os
+        let syscalls = ARM64.syscallConfigFor os
         let messageBytes =
             System.Text.Encoding.UTF8.GetBytes(message)
             |> Array.toList
@@ -3524,7 +3524,7 @@ let generateHeapInit () : ARM64Symbolic.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error msg -> Crash.crash $"Platform detection failed: {msg}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     let mmapFlags =
         match os with
         | Platform.MacOS -> 0x1002us  // MAP_PRIVATE | MAP_ANON

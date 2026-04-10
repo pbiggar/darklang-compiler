@@ -39,7 +39,7 @@ let generatePrintInt64 () : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     [
         // Allocate 32 bytes on stack for buffer (plenty for 64-bit number + sign + newline)
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
@@ -122,7 +122,7 @@ let generatePrintBool () : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     [
         // Allocate 16 bytes on stack for buffer (16-byte aligned)
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
@@ -202,7 +202,7 @@ let generatePrintString (stringLen: int) : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     [
         // String layout: [length:8][data:N] - skip length prefix
         // X0 points to string start (length field), data is at X0+8
@@ -262,7 +262,7 @@ let generatePrintFloat () : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     [
         // Allocate 48 bytes on stack for buffer (room for sign, digits, decimal, digits, newline)
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 48us)
@@ -400,7 +400,7 @@ let generateExit () : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     [
         ARM64.MOVZ (ARM64.X0, 0us, 0)  // exit code = 0
         ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Exit, 0)
@@ -414,7 +414,7 @@ let generatePrintInt64NoExit () : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     [
         // Allocate 32 bytes on stack for buffer
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
@@ -482,7 +482,7 @@ let generatePrintInt64ToStderrNoExit () : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     [
         // Allocate 32 bytes on stack for buffer
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
@@ -550,7 +550,7 @@ let generatePrintBoolNoExit () : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     [
         // Allocate 16 bytes on stack for buffer
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
@@ -610,7 +610,7 @@ let generatePrintInt64NoNewline () : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     [
         // Allocate 32 bytes on stack for buffer
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
@@ -674,7 +674,7 @@ let generatePrintBoolNoNewline () : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     [
         // Allocate 16 bytes on stack for buffer
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
@@ -731,7 +731,7 @@ let generatePrintFloatNoNewline () : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     [
         // Allocate 48 bytes on stack for buffer
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 48us)
@@ -846,7 +846,7 @@ let generatePrintStringNoNewline () : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     [
         // Write string to stdout
         ARM64.MOVZ (ARM64.X0, 1us, 0)        // fd = stdout
@@ -872,7 +872,7 @@ let generatePrintChars (chars: byte list) : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     let len = List.length chars
     // Stack allocation must be 16-byte aligned
     let stackSize = max 16 ((len + 15) / 16 * 16)
@@ -903,7 +903,7 @@ let generatePrintCharsToStderr (chars: byte list) : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     let len = List.length chars
     let stackSize = max 16 ((len + 15) / 16 * 16)
     [
@@ -931,7 +931,7 @@ let generatePrintBytes () : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     // Print "<"
     [
         ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
@@ -987,7 +987,7 @@ let generateWriteSyscall () : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
     [
         ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
@@ -1007,7 +1007,7 @@ let generateFileExists (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr l
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
 
     // We need to null-terminate the string for the syscall
     // Stack layout: [saved regs:16][path:256]
@@ -1149,7 +1149,7 @@ let generateFileDelete (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr l
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
 
     match os with
     | Platform.MacOS ->
@@ -1365,7 +1365,7 @@ let generateFileSetExecutable (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
 
     match os with
     | Platform.MacOS ->
@@ -1588,7 +1588,7 @@ let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
 
     // For now, implement a simplified version that:
     // - Opens the file
@@ -1992,7 +1992,7 @@ let generateFileWriteText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (contentReg:
         match Platform.detectOS () with
         | Ok os -> os
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
 
     // Open flags:
     // Write: O_WRONLY | O_CREAT | O_TRUNC
@@ -2296,7 +2296,7 @@ let generateRandomInt64 (destReg: ARM64.Reg) : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
 
     match os with
     | Platform.MacOS ->
@@ -2366,7 +2366,7 @@ let generateDateNow (destReg: ARM64.Reg) : ARM64.Instr list =
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
 
     match os with
     | Platform.MacOS ->
@@ -2436,7 +2436,7 @@ let generateFileWriteFromPtr (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (ptrReg: 
         match Platform.detectOS () with
         | Ok platform -> platform
         | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-    let syscalls = Platform.getSyscallNumbers os
+    let syscalls = ARM64.syscallConfigFor os
 
     // O_WRONLY | O_CREAT | O_TRUNC
     let writeFlags =
@@ -2609,7 +2609,7 @@ let generateCoverageFlush (coverageExprCount: int) : ARM64.Instr list =
             match Platform.detectOS () with
             | Ok platform -> platform
             | Error err -> Crash.crash $"Runtime: Platform detection failed: {err}"
-        let syscalls = Platform.getSyscallNumbers os
+        let syscalls = ARM64.syscallConfigFor os
 
         // O_WRONLY | O_CREAT | O_TRUNC
         let writeFlags =

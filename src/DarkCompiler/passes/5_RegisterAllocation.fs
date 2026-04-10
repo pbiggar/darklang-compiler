@@ -994,13 +994,13 @@ let callerSavedRegs = [
 /// These must be saved/restored in function prologue/epilogue
 /// Note: X27 reserved for free list base (ARM64) / unused (x86_64)
 /// On x86_64, X22→R14 and X23→R15 are reserved for heap/free list pointers
-let calleeSavedRegsFor (arch: PlatformTypes.Arch) =
+let calleeSavedRegsFor (arch: Platform.Arch) =
     match arch with
-    | PlatformTypes.X86_64 ->
+    | Platform.X86_64 ->
         // x86_64: X22 (R14) = heap ptr, X23 (R15) = free list — not allocatable
         // X24-X26 have no x86_64 equivalents
         [LIR.X19; LIR.X20; LIR.X21]
-    | PlatformTypes.ARM64 ->
+    | Platform.ARM64 ->
         // ARM64: X27/X28 reserved, X19-X26 allocatable
         [LIR.X19; LIR.X20; LIR.X21; LIR.X22; LIR.X23
          LIR.X24; LIR.X25; LIR.X26]
@@ -1021,7 +1021,7 @@ let hasNonTailCalls (blocks: LIR.BasicBlock array) : bool =
 /// Get the optimal register allocation order based on calling pattern
 /// - Functions with non-tail calls: prefer callee-saved (save once in prologue/epilogue)
 /// - Leaf functions / tail-call-only: prefer caller-saved (no prologue/epilogue overhead)
-let getAllocatableRegs (arch: PlatformTypes.Arch) (blocks: LIR.BasicBlock array) : LIR.PhysReg list =
+let getAllocatableRegs (arch: Platform.Arch) (blocks: LIR.BasicBlock array) : LIR.PhysReg list =
     let calleeSaved = calleeSavedRegsFor arch
     if hasNonTailCalls blocks then
         calleeSaved @ callerSavedRegs
@@ -2128,15 +2128,15 @@ let loadSpilled (allocation: AllocationResult) (reg: LIR.Reg) (tempReg: LIR.Phys
 /// the first load when the second executes. On x86_64, the second operand of binary
 /// ops uses applyToOperandNoLoad to keep it as a StackSlot, and the codegen handles
 /// loading it into R11 after the first operand has been moved to the destination.
-let private isX86_64 (arch: PlatformTypes.Arch) =
-    match arch with PlatformTypes.X86_64 -> true | PlatformTypes.ARM64 -> false
+let private isX86_64 (arch: Platform.Arch) =
+    match arch with Platform.X86_64 -> true | Platform.ARM64 -> false
 
 /// On x86_64, when loading two spilled Reg-typed operands, the first must go to a
 /// register that won't be clobbered by the second load (into X12=R11). This function
 /// picks a safe register by checking what physical register the right operand uses.
 /// If both left and right are spilled to stack, loads left into dest register
 /// (unless dest conflicts with right's allocated register).
-let private loadSpilledPair (arch: PlatformTypes.Arch) (mapping: AllocationResult) (left: LIR.Reg) (right: LIR.Reg) (destReg: LIR.Reg)
+let private loadSpilledPair (arch: Platform.Arch) (mapping: AllocationResult) (left: LIR.Reg) (right: LIR.Reg) (destReg: LIR.Reg)
     : (LIR.Reg * LIR.Instr list) * (LIR.Reg * LIR.Instr list) =
     if not (isX86_64 arch) then
         (loadSpilled mapping left LIR.X12, loadSpilled mapping right LIR.X13)
@@ -2174,7 +2174,7 @@ let private loadSpilledPair (arch: PlatformTypes.Arch) (mapping: AllocationResul
             (loadSpilled mapping left LIR.X12, loadSpilled mapping right LIR.X12)
 
 /// Apply allocation to an instruction
-let applyToInstr (arch: PlatformTypes.Arch) (mapping: AllocationResult) (instr: LIR.Instr) : LIR.Instr list =
+let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.Instr) : LIR.Instr list =
     match instr with
     | LIR.Phi _ ->
         // Phi nodes are handled specially by resolvePhiNodes after allocation.
@@ -3067,7 +3067,7 @@ let applyToTerminator (mapping: AllocationResult) (term: LIR.Terminator)
 
 /// Apply allocation to a basic block with liveness-aware SaveRegs/RestoreRegs population
 let applyToBlockWithLiveness
-    (arch: PlatformTypes.Arch)
+    (arch: Platform.Arch)
     (mapping: AllocationResult)
     (floatAllocation: FAllocationResult)
     (liveOut: BitSet)
@@ -3128,7 +3128,7 @@ let applyToBlockWithLiveness
 
 /// Apply allocation to CFG with liveness info
 let applyToCFGWithLiveness
-    (arch: PlatformTypes.Arch)
+    (arch: Platform.Arch)
     (blocks: LIR.BasicBlock array)
     (mapping: AllocationResult)
     (floatAllocation: FAllocationResult)
@@ -3501,7 +3501,7 @@ let private timePhase
         (result, appendTiming phase elapsedMs timings)
 
 let private allocateRegistersInternal
-    (arch: PlatformTypes.Arch)
+    (arch: Platform.Arch)
     (swOpt: System.Diagnostics.Stopwatch option)
     (func: LIR.Function)
     : LIR.Function * RegisterAllocationTiming list =
@@ -3779,12 +3779,12 @@ let private allocateRegistersInternal
     (allocatedFunc, timings)
 
 /// Allocate registers for a function
-let allocateRegisters (arch: PlatformTypes.Arch) (func: LIR.Function) : LIR.Function =
+let allocateRegisters (arch: Platform.Arch) (func: LIR.Function) : LIR.Function =
     allocateRegistersInternal arch None func |> fst
 
 /// Allocate registers for a function and collect phase timings
 let allocateRegistersWithTiming
-    (arch: PlatformTypes.Arch)
+    (arch: Platform.Arch)
     (func: LIR.Function)
     : LIR.Function * RegisterAllocationTiming list =
     let sw = System.Diagnostics.Stopwatch.StartNew()

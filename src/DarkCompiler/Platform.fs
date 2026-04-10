@@ -1,7 +1,7 @@
 // Platform.fs - Platform Detection and Configuration
 //
-// Detects the current operating system and CPU architecture, and provides
-// platform-specific constants for binary generation and syscalls.
+// Defines OS and CPU architecture types, detection helpers, and
+// per-(OS, Arch) syscall number tables.
 //
 // Supports:
 // - macOS ARM64 (Mach-O binaries, BSD syscalls)
@@ -9,6 +9,8 @@
 // - Linux x86_64 (ELF binaries, Linux syscalls)
 
 module Platform
+
+open System.Runtime.InteropServices
 
 /// Supported target platforms
 type OS =
@@ -22,46 +24,36 @@ type Arch =
 
 /// Get the current operating system
 let detectOS () : Result<OS, string> =
-    if System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX) then
-        Ok MacOS
-    elif System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux) then
-        Ok Linux
-    else
-        Error "Unsupported operating system. Only macOS and Linux are supported."
+    if RuntimeInformation.IsOSPlatform(OSPlatform.OSX) then Ok MacOS
+    elif RuntimeInformation.IsOSPlatform(OSPlatform.Linux) then Ok Linux
+    else Error "Unsupported operating system. Only macOS and Linux are supported."
 
 /// Get the current CPU architecture
 let detectArch () : Result<Arch, string> =
-    match System.Runtime.InteropServices.RuntimeInformation.OSArchitecture with
-    | System.Runtime.InteropServices.Architecture.Arm64 -> Ok ARM64
-    | System.Runtime.InteropServices.Architecture.X64 -> Ok X86_64
+    match RuntimeInformation.OSArchitecture with
+    | Architecture.Arm64 -> Ok ARM64
+    | Architecture.X64 -> Ok X86_64
     | arch -> Error $"Unsupported architecture: {arch}. Only ARM64 and x86_64 are supported."
 
-/// OS-specific syscall numbers (independent of CPU architecture).
+/// Syscall numbers for a specific (OS, Arch) pair.
 /// On Linux, ARM64 and x86_64 use different numbering schemes.
 type SyscallNumbers = {
     Write: uint16
     Exit: uint16
-    Mmap: uint16
-    Open: uint16
-    Read: uint16
-    Close: uint16
-    Fstat: uint16
-    Access: uint16
-    Unlink: uint16
-    Chmod: uint16
-    Getrandom: uint16
-    Gettimeofday: uint16
+    Mmap: uint16  // Memory map syscall for heap allocation
+    // File I/O syscalls
+    Open: uint16      // Open file (or openat on Linux with AT_FDCWD)
+    Read: uint16      // Read from file descriptor
+    Close: uint16     // Close file descriptor
+    Fstat: uint16     // Get file status (for file size)
+    Access: uint16    // Check file accessibility (for exists)
+    Unlink: uint16    // Delete file (or unlinkat on Linux with AT_FDCWD)
+    Chmod: uint16     // Change file mode (or fchmodat on Linux with AT_FDCWD)
+    Getrandom: uint16 // Get random bytes (getentropy on macOS, getrandom on Linux)
+    Gettimeofday: uint16 // Get current time (gettimeofday on macOS, clock_gettime on Linux)
 }
 
-/// ARM64-specific syscall invocation details (layered on top of SyscallNumbers)
-type ARM64SyscallConfig = {
-    Numbers: SyscallNumbers
-    SvcImmediate: uint16         // SVC instruction immediate value
-    SyscallRegister: ARM64.Reg   // Register to hold syscall number (X16 macOS, X8 Linux)
-}
-
-/// Get syscall numbers for macOS ARM64
-let private macOSSyscallNumbers : SyscallNumbers = {
+let macOSARM64SyscallNumbers : SyscallNumbers = {
     Write = 4us
     Exit = 1us
     Mmap = 197us
@@ -76,8 +68,7 @@ let private macOSSyscallNumbers : SyscallNumbers = {
     Gettimeofday = 116us
 }
 
-/// Get syscall numbers for Linux ARM64
-let private linuxARM64SyscallNumbers : SyscallNumbers = {
+let linuxARM64SyscallNumbers : SyscallNumbers = {
     Write = 64us
     Exit = 93us
     Mmap = 222us
@@ -92,7 +83,6 @@ let private linuxARM64SyscallNumbers : SyscallNumbers = {
     Gettimeofday = 113us
 }
 
-/// Get syscall numbers for Linux x86_64
 let linuxX86_64SyscallNumbers : SyscallNumbers = {
     Write = 1us
     Exit = 60us
@@ -108,23 +98,13 @@ let linuxX86_64SyscallNumbers : SyscallNumbers = {
     Gettimeofday = 228us  // clock_gettime
 }
 
-/// Get ARM64 syscall configuration for the given OS.
-/// Used by the ARM64 runtime code generator.
-let getARM64SyscallConfig (os: OS) : ARM64SyscallConfig =
-    match os with
-    | MacOS ->
-        { Numbers = macOSSyscallNumbers
-          SvcImmediate = 0x80us
-          SyscallRegister = ARM64.X16 }
-    | Linux ->
-        { Numbers = linuxARM64SyscallNumbers
-          SvcImmediate = 0us
-          SyscallRegister = ARM64.X8 }
-
-/// Get syscall numbers for the given OS (legacy API, returns ARM64 config for compatibility).
-/// New code should use getARM64SyscallConfig or linuxX86_64SyscallNumbers directly.
-let getSyscallNumbers (os: OS) : ARM64SyscallConfig =
-    getARM64SyscallConfig os
+/// Get syscall numbers for the given (OS, Arch) pair.
+let syscallNumbersFor (os: OS) (arch: Arch) : SyscallNumbers =
+    match os, arch with
+    | MacOS, ARM64  -> macOSARM64SyscallNumbers
+    | Linux, ARM64  -> linuxARM64SyscallNumbers
+    | Linux, X86_64 -> linuxX86_64SyscallNumbers
+    | MacOS, X86_64 -> Crash.crash "macOS x86_64 is not supported"
 
 /// Check if code signing is required for this platform
 let requiresCodeSigning (os: OS) : bool =
