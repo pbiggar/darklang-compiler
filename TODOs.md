@@ -2,6 +2,13 @@
 
 - [ ] CircleCI setup — build, test on every push
 - [ ] x86_64 reference counting — 1 test failure remaining (memReclaimBurn). RC infrastructure is built but disabled. See [docs/x64-refcounting.md](docs/x64-refcounting.md).
+- [ ] AI-agent doc audit: review AGENTS.md / README / docs vs. the actual code and dev setup. Specific gaps to close:
+  - Write `docs/adding-a-backend.md` (scattered across PR description, architecture.md, and x64-refcounting.md today)
+  - Write `docs/features/x64-codegen.md` to mirror the existing arm64-codegen.md
+  - Audit `docs/features/*.md` for stale ARM64-only references (binary-generation.md, register-allocation.md especially)
+  - Verify `docs/adding-features.md` covers per-arch pass changes
+  - Refresh the AGENTS.md benchmarks section (drop "ignore quicksort error"; point at `benchmarks/README.md`)
+- [ ] Write `docs/worktrees.md` if the worktree workflow becomes more elaborate.
 - [ ] x86_64 encoding test coverage — 36 of 47 instruction types untested at byte level
 - [ ] Run compiler against existing package repo
 - [ ] Additional architectures (arm32?)

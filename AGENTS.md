@@ -11,11 +11,16 @@
 ## Architecture Overview
 
 ```
-Source -> Parser -> TypeChecker -> ANF -> MIR -> LIR -> RegAlloc -> CodeGen -> Binary
+Source -> AST -> ANF -> MIR -> LIR -> RegAlloc -> CodeGen -> Encode -> Binary
 ```
 
-Each pass has its own numbered file (e.g., `1_Parser.fs`, `2_AST_to_ANF.fs`).
-See `docs/compiler-passes.md` for detailed pass documentation.
+Passes 1-5 are shared across targets and live under `passes/` with a
+numbered prefix (e.g., `1_Parser.fs`). Passes 6-8 are per-architecture
+and live under `passes/arm64/` or `passes/x64/`. The backend is
+selected at runtime by `Platform.detectArch ()`.
+
+See `docs/architecture.md` for the design rationale and
+`docs/compiler-passes.md` for per-pass details.
 
 ## F# Conventions
 
@@ -112,18 +117,20 @@ Common filter patterns: tuple, record, list, string, float, closure, match, adt,
 
 ## Devcontainer
 
-Build and test commands require .NET 10, which lives in the Docker devcontainer.
-Run commands via `docker exec` when working from the host. The container name
-varies — look it up with `docker ps`.
+Build and test commands require .NET 10, which lives in the Docker
+devcontainer. Use `scripts/run-in-container` — it auto-detects whether
+you're inside the container or on the host and dispatches correctly:
 
 ```bash
-CONTAINER=$(docker ps --format "{{.Names}}" | head -1)
-docker exec -w /workspace $CONTAINER ./run-tests
-docker exec -w /workspace $CONTAINER ./dark -r -e "2 + 3"
-docker exec -w /workspace $CONTAINER dotnet build --verbosity quiet
+scripts/run-in-container ./run-tests
+scripts/run-in-container ./dark -r -e "2 + 3"
+scripts/run-in-container dotnet build --verbosity quiet
 ```
 
 If the container isn't running: `docker compose up -d` in the repo root.
+
+See `docs/docker.md` for devcontainer details, worktree setup, and
+Codex/Claude integration.
 
 **Do not install tooling on the host.** If something is needed persistently,
 add it to the Dockerfile.
@@ -153,11 +160,14 @@ add it to the Dockerfile.
 
 | Need to...                           | Read...                                         |
 | ------------------------------------ | ----------------------------------------------- |
+| Get started with the CLI             | `docs/quick-start.md`                           |
+| Work in the devcontainer             | `docs/docker.md`                                |
 | Understand compiler passes           | `docs/compiler-passes.md`                       |
-| Add a new feature                    | `docs/adding-features.md`                       |
 | Understand architecture decisions    | `docs/architecture.md`                          |
+| Add a new feature                    | `docs/adding-features.md`                       |
 | Handle errors properly               | `docs/result-patterns.md`                       |
 | See design rationale                 | `docs/design-decisions.md`                      |
+| Understand x64 refcounting status    | `docs/x64-refcounting.md`                       |
 | Understand generics/monomorphization | `docs/features/generics.md`                     |
 | Understand memory management         | `docs/features/reference-counting.md`           |
 | Understand tail call optimization    | `docs/features/tail-call-optimization.md`       |
@@ -177,14 +187,19 @@ add it to the Dockerfile.
 
 ## Key Files
 
-| File                                          | Purpose                          |
-| --------------------------------------------- | -------------------------------- |
-| `src/DarkCompiler/CompilerLibrary.fs`         | Main compilation orchestration   |
-| `src/DarkCompiler/passes/1_Parser.fs`         | Lexing and parsing               |
-| `src/DarkCompiler/passes/1.5_TypeChecking.fs` | Type validation                  |
-| `src/DarkCompiler/passes/2_AST_to_ANF.fs`     | ANF conversion, monomorphization |
-| `src/DarkCompiler/Runtime.fs`                 | Runtime support, builtins        |
-| `src/DarkCompiler/Stdlib.fs`                  | Standard library definitions     |
+| File                                                | Purpose                              |
+| ---------------------------------------------------- | ------------------------------------ |
+| `src/DarkCompiler/CompilerLibrary.fs`                | Main compilation orchestration       |
+| `src/DarkCompiler/Platform.fs`                       | OS/Arch detection + syscall tables   |
+| `src/DarkCompiler/passes/1_Parser.fs`                | Lexing and parsing                   |
+| `src/DarkCompiler/passes/1.5_TypeChecking.fs`        | Type validation                      |
+| `src/DarkCompiler/passes/2_AST_to_ANF.fs`            | ANF conversion, monomorphization     |
+| `src/DarkCompiler/passes/5_RegisterAllocation.fs`    | Register allocation (arch-aware)     |
+| `src/DarkCompiler/passes/arm64/6_CodeGen.fs`         | LIR → ARM64 instruction selection    |
+| `src/DarkCompiler/passes/x64/6_CodeGen.fs`           | LIR → x86_64 instruction selection   |
+| `src/DarkCompiler/ARM64.fs`, `X86_64.fs`             | ISA instruction + register types     |
+| `src/DarkCompiler/Runtime.fs`                        | Runtime support, builtins            |
+| `src/DarkCompiler/Stdlib.fs`                         | Standard library definitions         |
 
 ## Git Workflow
 
