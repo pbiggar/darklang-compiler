@@ -49,12 +49,16 @@ ENV DOTNET_ROOT="/usr/share/dotnet"
 ENV DOTNET_CLI_HOME="/home/dark"
 ENV DOTNET_MULTILEVEL_LOOKUP="0"
 
-# Add .NET, Rust and local bin to PATH
-ENV PATH="${DOTNET_ROOT}:/home/dark/.local/bin:/home/dark/.cargo/bin:${PATH}"
+# Add .NET, Rust, dotnet tools and local bin to PATH
+ENV PATH="${DOTNET_ROOT}:/home/dark/.dotnet/tools:/home/dark/.local/bin:/home/dark/.cargo/bin:${PATH}"
 
 # Pre-download workload advertising manifests so first-run commands don't fail workload verification.
 # Needs elevated privileges because the SDK is installed system-wide under /usr/share/dotnet.
 RUN sudo dotnet workload update --advertising-manifests-only --ignore-failed-sources
+
+# Coverage tooling for ./run-coverage
+RUN dotnet tool install -g coverlet.console && \
+    dotnet tool install -g dotnet-reportgenerator-globaltool
 
 # Install Rust for benchmarking
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
