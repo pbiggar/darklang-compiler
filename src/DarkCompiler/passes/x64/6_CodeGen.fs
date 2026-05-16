@@ -563,6 +563,7 @@ let private genRefCountIncGeneric (addrReg: X86_64.Reg) (payloadSize: int) : X86
 let private listRefCountDecHelperLabel = "__dark_list_rc_dec_helper"
 
 let private listRefCountDecTuple2HelperLabel = "__dark_list_rc_dec_tuple2_helper"
+let private listRefCountDecListHelperLabel = "__dark_list_rc_dec_list_helper"
 
 /// Generate the TaggedList RefCountDec helper function.
 /// Called via CALL with the tagged list pointer in RAX.
@@ -584,6 +585,7 @@ let private generateListRefCountDecHelperWith
     (helperLabel: string)
     (enableLeakCheck: bool)
     (leafGenericPayloadSize: int option)
+    (releaseLeafListPayload: bool)
     : X86_64.Instr list =
     let label name = $"__dark_list_rc_dec_{name}"
 
@@ -652,9 +654,12 @@ let private generateListRefCountDecHelperWith
     let freeNode = label "free_node"
 
     let releaseLeafPayload =
-        match leafGenericPayloadSize with
-        | None -> []
-        | Some payloadSize ->
+        match leafGenericPayloadSize, releaseLeafListPayload with
+        | None, false -> []
+        | None, true ->
+            [X86_64.MOV_load (X86_64.R8, X86_64.RDI, 0)]
+            @ addChild "leaf_payload_list"
+        | Some payloadSize, _ ->
             [X86_64.MOV_load (X86_64.R8, X86_64.RDI, 0)
              X86_64.TEST_reg (X86_64.R8, X86_64.R8)
              X86_64.Jcc (X86_64.EQ, leafPayloadDone)
@@ -843,10 +848,13 @@ let private generateListRefCountDecHelperWith
        X86_64.RET]
 
 let private generateListRefCountDecHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecHelperLabel enableLeakCheck None
+    generateListRefCountDecHelperWith listRefCountDecHelperLabel enableLeakCheck None false
 
 let private generateListRefCountDecTuple2Helper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2HelperLabel enableLeakCheck (Some 16)
+    generateListRefCountDecHelperWith listRefCountDecTuple2HelperLabel enableLeakCheck (Some 16) false
+
+let private generateListRefCountDecListHelper (enableLeakCheck: bool) : X86_64.Instr list =
+    generateListRefCountDecHelperWith listRefCountDecListHelperLabel enableLeakCheck None true
 
 // ============================================================================
 // TaggedList RefCountInc Helper (increment root node refcount only)
@@ -1931,6 +1939,8 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 // TaggedList RefCountDec: calls the recursive FingerTree DFS helper.
                 let helperLabel =
                     match sourceType with
+                    | Some (AST.TList (AST.TList _)) ->
+                        listRefCountDecListHelperLabel
                     | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 ->
                         listRefCountDecTuple2HelperLabel
                     | _ ->
@@ -3106,6 +3116,7 @@ let translateProgram (LIR.Program functions) (enableLeakCheck: bool) : Result<X8
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         match sourceType with
                         | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 -> false
+                        | Some (AST.TList (AST.TList _)) -> false
                         | _ -> true
                     | _ -> false)))
 
@@ -3118,6 +3129,16 @@ let translateProgram (LIR.Program functions) (enableLeakCheck: bool) : Result<X8
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
                         List.length fields = 2
+                    | _ -> false)))
+
+    let needsListRcDecListHelper =
+        functions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TList _))) -> true
                     | _ -> false)))
 
     let needsListRcIncHelper =
@@ -3142,4 +3163,7 @@ let translateProgram (LIR.Program functions) (enableLeakCheck: bool) : Result<X8
         let listDecTuple2Helper =
             if needsListRcDecTuple2Helper then generateListRefCountDecTuple2Helper enableLeakCheck
             else []
-        allInstrs @ listIncHelper @ listDecHelper @ listDecTuple2Helper @ genOomHandler ())
+        let listDecListHelper =
+            if needsListRcDecListHelper then generateListRefCountDecListHelper enableLeakCheck
+            else []
+        allInstrs @ listIncHelper @ listDecHelper @ listDecTuple2Helper @ listDecListHelper @ genOomHandler ())

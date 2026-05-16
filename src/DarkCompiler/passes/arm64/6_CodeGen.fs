@@ -54,6 +54,7 @@ let private heapOverflowLabelPrefix = "__heap_oom_"
 let private listRefCountIncHelperLabel = "__dark_list_refcount_inc_helper"
 let private listRefCountDecHelperLabel = "__dark_list_refcount_dec_helper"
 let private listRefCountDecTuple2HelperLabel = "__dark_list_refcount_dec_tuple2_helper"
+let private listRefCountDecListHelperLabel = "__dark_list_refcount_dec_list_helper"
 
 let private dataLabel (name: string) : ARM64Symbolic.LabelRef =
     ARM64Symbolic.DataLabel (ARM64Symbolic.Named name)
@@ -175,6 +176,7 @@ let private generateListRefCountDecHelperWith
     (helperLabel: string)
     (ctx: CodeGenContext)
     (leafGenericPayloadSize: int option)
+    (releaseLeafListPayload: bool)
     : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_list_rc_dec_{name}"
     let leakDec =
@@ -235,9 +237,14 @@ let private generateListRefCountDecHelperWith
     let freeNode = label "free_node"
 
     let releaseLeafPayload =
-        match leafGenericPayloadSize with
-        | None -> []
-        | Some payloadSize ->
+        match leafGenericPayloadSize, releaseLeafListPayload with
+        | None, false -> []
+        | None, true ->
+            [
+                ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 0s)
+            ]
+            @ addChild "leaf_payload_list"
+        | Some payloadSize, _ ->
             [
                 ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 0s)
                 ARM64Symbolic.CBZ (ARM64Symbolic.X8, leafPayloadDone)
@@ -444,10 +451,13 @@ let private generateListRefCountDecHelperWith
     ]
 
 let private generateListRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecHelperLabel ctx None
+    generateListRefCountDecHelperWith listRefCountDecHelperLabel ctx None false
 
 let private generateListRefCountDecTuple2Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2HelperLabel ctx (Some 16)
+    generateListRefCountDecHelperWith listRefCountDecTuple2HelperLabel ctx (Some 16) false
+
+let private generateListRefCountDecListHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith listRefCountDecListHelperLabel ctx None true
 
 let generateLeakCounterInc (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     if ctx.Options.EnableLeakCheck then
@@ -2578,6 +2588,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
             | LIR.TaggedList ->
                 let helperLabel =
                     match sourceType with
+                    | Some (AST.TList (AST.TList _)) ->
+                        listRefCountDecListHelperLabel
                     | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 ->
                         listRefCountDecTuple2HelperLabel
                     | _ ->
@@ -3837,6 +3849,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         match sourceType with
                         | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 -> false
+                        | Some (AST.TList (AST.TList _)) -> false
                         | _ -> true
                     | _ -> false)))
 
@@ -3849,6 +3862,16 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
                         List.length fields = 2
+                    | _ -> false)))
+
+    let needsListRcDecListHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TList _))) -> true
                     | _ -> false)))
 
     let needsListRcIncHelper =
@@ -3869,6 +3892,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
             @ (if needsListRcDecHelper then generateListRefCountDecHelper ctx else [])
             @ (if needsListRcDecTuple2Helper then generateListRefCountDecTuple2Helper ctx else [])
+            @ (if needsListRcDecListHelper then generateListRefCountDecListHelper ctx else [])
         (allFunctionInstrs @ listRcHelpers) |> peepholeOptimize)
 
 /// Convert LIR program to ARM64 instructions (uses default options)
