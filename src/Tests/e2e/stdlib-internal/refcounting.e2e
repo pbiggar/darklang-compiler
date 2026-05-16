@@ -36,3 +36,4 @@ let t = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 
 
 // Capturing closure roots are fixed-block allocations and are reclaimed.
 let base = 10 in let f = (x: Int64) => x + base in f(5) = stdout="15\n" stderr=""
+let s = "a" ++ "b" in let f = (x: Int64) => Stdlib.String.length(s) + x in 0 = stdout="0\n" stderr="" // closure releases dynamic string capture
