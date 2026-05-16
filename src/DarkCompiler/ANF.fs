@@ -286,7 +286,19 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
             FixedBlock (List.length fields * 8, fieldShapes)
         | None ->
             Crash.crash $"rcShapeOfType: Record type '{name}' not found in typeReg"
-    | _ ->
+    | AST.TSum _ ->
+        BoxedSum 16
+    | AST.TList elemType ->
+        TaggedListShape (rcShapeOfType typeReg elemType)
+    | AST.TDict (keyType, valueType) ->
+        DictRoot (rcShapeOfType typeReg keyType, rcShapeOfType typeReg valueType)
+    | AST.TString ->
+        DynamicString
+    | AST.TBytes ->
+        DynamicBytes
+    | AST.TFunction _ ->
+        ClosureShape []
+    | AST.TRawPtr ->
         RawUnmanaged
 
 /// Determine reference-count dispatch kind for a heap type

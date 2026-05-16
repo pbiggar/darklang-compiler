@@ -63,10 +63,26 @@ let testRcShapeClassifiesTuplesAndRecordsAsFixedBlocks () : TestResult =
     let recordShape = rcShapeOfType typeReg (AST.TRecord ("Pair", []))
 
     match tupleShape, recordShape with
-    | FixedBlock (24, [Immediate; RawUnmanaged; Immediate]), FixedBlock (16, [Immediate; RawUnmanaged]) ->
+    | FixedBlock (24, [Immediate; DynamicString; Immediate]), FixedBlock (16, [Immediate; DynamicString]) ->
         Ok ()
     | _ ->
         Error $"Unexpected fixed-block shapes. tuple={tupleShape}; record={recordShape}"
+
+let testRcShapeClassifiesRemainingRuntimeShapes () : TestResult =
+    let samples = [
+        (AST.TString, DynamicString)
+        (AST.TBytes, DynamicBytes)
+        (AST.TRawPtr, RawUnmanaged)
+        (AST.TFunction ([AST.TInt64], AST.TString), ClosureShape [])
+        (AST.TSum ("Option", [AST.TString]), BoxedSum 16)
+        (AST.TList AST.TString, TaggedListShape DynamicString)
+        (AST.TDict (AST.TString, AST.TList AST.TInt64), DictRoot (DynamicString, TaggedListShape Immediate))
+    ]
+
+    match samples |> List.tryFind (fun (typ, expected) -> rcShapeOfType Map.empty typ <> expected) with
+    | None -> Ok ()
+    | Some (typ, expected) ->
+        Error $"Expected {typ} to classify as {expected}, got {rcShapeOfType Map.empty typ}"
 
 let testInferCallReturnsFunctionReturnType () : TestResult =
     let ctx : TypeContext = {
@@ -269,6 +285,7 @@ let tests = [
     ("RcShape supports structural construction and equality", testRcShapeConstructionAndEquality)
     ("RcShape classifies primitives as immediate", testRcShapeClassifiesPrimitivesAsImmediate)
     ("RcShape classifies tuples and records as fixed blocks", testRcShapeClassifiesTuplesAndRecordsAsFixedBlocks)
+    ("RcShape classifies remaining runtime shapes", testRcShapeClassifiesRemainingRuntimeShapes)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
