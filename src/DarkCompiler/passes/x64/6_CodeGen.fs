@@ -1880,8 +1880,12 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
         |> Result.map (fun addrReg ->
             match kind with
             | LIR.TaggedList ->
-                // No-op until RefCountDec is enabled (see notes there).
-                []
+                let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI]
+                let saves = saveRegs |> List.map X86_64.PUSH
+                let restores = saveRegs |> List.rev |> List.map X86_64.POP
+                saves
+                @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL listRefCountIncHelperLabel]
+                @ restores
             | LIR.GenericHeap ->
                 genRefCountIncGeneric addrReg payloadSize)
 
