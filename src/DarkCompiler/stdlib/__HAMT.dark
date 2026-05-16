@@ -46,11 +46,12 @@ def Stdlib.__HAMT.__clearTag<k, v>(dict: Dict<k, v>) : RawPtr =
 def Stdlib.__HAMT.__setTag<k, v>(ptr: RawPtr, tag: Int64) : Dict<k, v> =
     __rawptr_to_dict<k, v>(ptr, tag)
 
-// Allocate a leaf node: [key:8][value:8] = 16 bytes
+// Allocate a leaf node: [key:8][value:8][refcount:8] = 24 bytes
 def Stdlib.__HAMT.__allocLeaf<k, v>(key: k, value: v) : Dict<k, v> =
-    let ptr = __raw_alloc(16) in
+    let ptr = __raw_alloc(24) in
     let _ = __raw_set<k>(ptr, 0, key) in
     let _ = __raw_set<v>(ptr, 8, value) in
+    let _ = __raw_set<Int64>(ptr, 16, 1) in
     Stdlib.__HAMT.__setTag<k, v>(ptr, 2)
 
 // Allocate an internal node: [bitmap:8][children...] = 8 + 8*numChildren bytes
@@ -738,4 +739,3 @@ def Stdlib.__HAMT.__fromListHelper<k, v>(pairs: List<(k, v)>, acc: Dict<k, v>) :
 // =============================================================================
 // Dict.getOrDefault - Get value with fallback
 // =============================================================================
-
