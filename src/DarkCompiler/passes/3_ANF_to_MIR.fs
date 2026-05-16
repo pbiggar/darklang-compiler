@@ -184,8 +184,8 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.TupleGet (tuple, _) -> maxTempIdInAtom tuple
     | ANF.StringConcat (left, right) ->
         max (maxTempIdInAtom left) (maxTempIdInAtom right)
-    | ANF.RefCountInc (atom, _, _) -> maxTempIdInAtom atom
-    | ANF.RefCountDec (atom, _, _) -> maxTempIdInAtom atom
+    | ANF.RefCountInc (atom, _, _, _) -> maxTempIdInAtom atom
+    | ANF.RefCountDec (atom, _, _, _) -> maxTempIdInAtom atom
     | ANF.Print (atom, _) -> maxTempIdInAtom atom
     | ANF.RuntimeError _ -> -1
     | ANF.ClosureAlloc (_, captures) ->
@@ -635,10 +635,10 @@ let rec collectSelfTailCallCleanup
     match expr with
     | ANF.Return (ANF.Var tid) when tid = callTempId ->
         Ok []
-    | ANF.Let (_, ANF.RefCountDec (ANF.Var tid, payloadSize, kind), rest) ->
+    | ANF.Let (_, ANF.RefCountDec (ANF.Var tid, payloadSize, kind, sourceType), rest) ->
         collectSelfTailCallCleanup builder callTempId rest
-        |> Result.map (fun instrs -> MIR.RefCountDec (tempToVReg tid, payloadSize, rcKindToMIR kind) :: instrs)
-    | ANF.Let (_, ANF.RefCountDec (_, _, _), _) ->
+        |> Result.map (fun instrs -> MIR.RefCountDec (tempToVReg tid, payloadSize, rcKindToMIR kind, sourceType) :: instrs)
+    | ANF.Let (_, ANF.RefCountDec (_, _, _, _), _) ->
         Error "Internal error: RefCountDec in self-tailcall cleanup on non-variable"
     | ANF.Let (_, ANF.RefCountDecString strAtom, rest) ->
         atomToOperand builder strAtom
@@ -664,7 +664,7 @@ let refCountIncForOverlappingArgs
         cleanupInstrs
         |> List.choose (fun instr ->
             match instr with
-            | MIR.RefCountDec (vreg, payloadSize, kind) -> Some (vreg, (payloadSize, kind))
+            | MIR.RefCountDec (vreg, payloadSize, kind, sourceType) -> Some (vreg, (payloadSize, kind, sourceType))
             | _ -> None)
         |> Map.ofList
 
@@ -700,8 +700,8 @@ let refCountIncForOverlappingArgs
             | MIR.Register vreg ->
                 match findCleanupTargetAlias vreg Set.empty with
                 | Some targetVReg when not (Set.contains targetVReg seen) ->
-                    let (payloadSize, kind) = Map.find targetVReg decInfos
-                    (Set.add targetVReg seen, MIR.RefCountInc (targetVReg, payloadSize, kind) :: incsRev)
+                    let (payloadSize, kind, sourceType) = Map.find targetVReg decInfos
+                    (Set.add targetVReg seen, MIR.RefCountInc (targetVReg, payloadSize, kind, sourceType) :: incsRev)
                 | _ ->
                     (seen, incsRev)
             | _ ->
@@ -1091,15 +1091,15 @@ let rec convertExpr
                 | ANF.IfValue _ ->
                     // This case is handled above; reaching here indicates a bug
                     Error "Internal error: IfValue should have been handled in outer match"
-                | ANF.RefCountInc (atom, payloadSize, kind) ->
+                | ANF.RefCountInc (atom, payloadSize, kind, sourceType) ->
                     match atom with
                     | ANF.Var tid ->
-                        Ok [MIR.RefCountInc (tempToVReg tid, payloadSize, rcKindToMIR kind)]
+                        Ok [MIR.RefCountInc (tempToVReg tid, payloadSize, rcKindToMIR kind, sourceType)]
                     | _ -> Error "Internal error: RefCountInc on non-variable"
-                | ANF.RefCountDec (atom, payloadSize, kind) ->
+                | ANF.RefCountDec (atom, payloadSize, kind, sourceType) ->
                     match atom with
                     | ANF.Var tid ->
-                        Ok [MIR.RefCountDec (tempToVReg tid, payloadSize, rcKindToMIR kind)]
+                        Ok [MIR.RefCountDec (tempToVReg tid, payloadSize, rcKindToMIR kind, sourceType)]
                     | _ -> Error "Internal error: RefCountDec on non-variable"
                 | ANF.Print (atom, valueType) ->
                     atomToOperand builder atom
@@ -1736,15 +1736,15 @@ and convertExprToOperand
                 | ANF.IfValue _ ->
                     // This case is handled above; reaching here indicates a bug
                     Error "Internal error: IfValue should have been handled in outer match"
-                | ANF.RefCountInc (atom, payloadSize, kind) ->
+                | ANF.RefCountInc (atom, payloadSize, kind, sourceType) ->
                     match atom with
                     | ANF.Var tid ->
-                        Ok [MIR.RefCountInc (tempToVReg tid, payloadSize, rcKindToMIR kind)]
+                        Ok [MIR.RefCountInc (tempToVReg tid, payloadSize, rcKindToMIR kind, sourceType)]
                     | _ -> Error "Internal error: RefCountInc on non-variable"
-                | ANF.RefCountDec (atom, payloadSize, kind) ->
+                | ANF.RefCountDec (atom, payloadSize, kind, sourceType) ->
                     match atom with
                     | ANF.Var tid ->
-                        Ok [MIR.RefCountDec (tempToVReg tid, payloadSize, rcKindToMIR kind)]
+                        Ok [MIR.RefCountDec (tempToVReg tid, payloadSize, rcKindToMIR kind, sourceType)]
                     | _ -> Error "Internal error: RefCountDec on non-variable"
                 | ANF.Print (atom, valueType) ->
                     atomToOperand builder atom

@@ -135,8 +135,8 @@ type Instr =
     | HeapAlloc of dest:Reg * sizeBytes:int
     | HeapStore of addr:Reg * offset:int * src:Operand * valueType:AST.Type option
     | HeapLoad of dest:Reg * addr:Reg * offset:int
-    | RefCountInc of addr:Reg * payloadSize:int * kind:RcKind
-    | RefCountDec of addr:Reg * payloadSize:int * kind:RcKind
+    | RefCountInc of addr:Reg * payloadSize:int * kind:RcKind * sourceType:AST.Type option
+    | RefCountDec of addr:Reg * payloadSize:int * kind:RcKind * sourceType:AST.Type option
     | StringConcat of dest:Reg * left:Operand * right:Operand
     | PrintHeapString of Reg
     | LoadFuncAddr of dest:Reg * funcName:string

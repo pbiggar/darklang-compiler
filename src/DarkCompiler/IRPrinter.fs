@@ -85,9 +85,9 @@ let private prettyPrintANFCExpr = function
         $"({elemsStr})"
     | ANF.TupleGet (tupleAtom, index) ->
         $"{prettyPrintANFAtom tupleAtom}.{index}"
-    | ANF.RefCountInc (atom, payloadSize, kind) ->
+    | ANF.RefCountInc (atom, payloadSize, kind, _) ->
         $"rc_inc({prettyPrintANFAtom atom}, size={payloadSize}, kind={prettyPrintANFRcKind kind})"
-    | ANF.RefCountDec (atom, payloadSize, kind) ->
+    | ANF.RefCountDec (atom, payloadSize, kind, _) ->
         $"rc_dec({prettyPrintANFAtom atom}, size={payloadSize}, kind={prettyPrintANFRcKind kind})"
     | ANF.StringConcat (left, right) ->
         $"{prettyPrintANFAtom left} ++ {prettyPrintANFAtom right}"
@@ -282,9 +282,9 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
         appendTypeSuffix valueType baseText
     | MIR.StringConcat (dest, left, right) ->
         $"{prettyPrintMIRVReg dest} <- StringConcat({prettyPrintMIROperand left}, {prettyPrintMIROperand right})"
-    | MIR.RefCountInc (addr, payloadSize, kind) ->
+    | MIR.RefCountInc (addr, payloadSize, kind, _) ->
         $"RefCountInc({prettyPrintMIRVReg addr}, size={payloadSize}, kind={prettyPrintMIRRcKind kind})"
-    | MIR.RefCountDec (addr, payloadSize, kind) ->
+    | MIR.RefCountDec (addr, payloadSize, kind, _) ->
         $"RefCountDec({prettyPrintMIRVReg addr}, size={payloadSize}, kind={prettyPrintMIRRcKind kind})"
     | MIR.Print (src, valueType) ->
         $"Print({prettyPrintMIROperand src}, type={valueType})"
@@ -604,9 +604,9 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"HeapStore({prettyPrintLIRReg addr}, {offset}, {prettyPrintLIROperand src})"
     | LIR.HeapLoad (dest, addr, offset) ->
         $"{prettyPrintLIRReg dest} <- HeapLoad({prettyPrintLIRReg addr}, {offset})"
-    | LIR.RefCountInc (addr, payloadSize, kind) ->
+    | LIR.RefCountInc (addr, payloadSize, kind, _) ->
         $"RefCountInc({prettyPrintLIRReg addr}, {payloadSize}, {prettyPrintLIRRcKind kind})"
-    | LIR.RefCountDec (addr, payloadSize, kind) ->
+    | LIR.RefCountDec (addr, payloadSize, kind, _) ->
         $"RefCountDec({prettyPrintLIRReg addr}, {payloadSize}, {prettyPrintLIRRcKind kind})"
     | LIR.StringConcat (dest, left, right) ->
         $"{prettyPrintLIRReg dest} <- StringConcat({prettyPrintLIROperand left}, {prettyPrintLIROperand right})"

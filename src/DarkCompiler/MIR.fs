@@ -88,8 +88,8 @@ type Instr =
     // String operations
     | StringConcat of dest:VReg * left:Operand * right:Operand  // Concatenate strings
     // Reference counting operations
-    | RefCountInc of addr:VReg * payloadSize:int * kind:RcKind   // Increment ref count at [addr + payloadSize]
-    | RefCountDec of addr:VReg * payloadSize:int * kind:RcKind   // Decrement ref count, free if zero
+    | RefCountInc of addr:VReg * payloadSize:int * kind:RcKind * sourceType:AST.Type option   // Increment ref count at [addr + payloadSize]
+    | RefCountDec of addr:VReg * payloadSize:int * kind:RcKind * sourceType:AST.Type option   // Decrement ref count, free if zero
     // Output operations (for main expression result printing)
     | Print of src:Operand * valueType:AST.Type    // Print value with type-appropriate formatting
     | RuntimeError of message:string               // Print runtime error to stderr and exit with code 1

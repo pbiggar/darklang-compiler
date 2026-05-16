@@ -2456,7 +2456,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
             |> Result.map (fun addrReg ->
                 [ARM64Symbolic.LDR (destReg, addrReg, int16 offset)]))
 
-    | LIR.RefCountInc (addr, payloadSize, kind) ->
+    | LIR.RefCountInc (addr, payloadSize, kind, _) ->
         // Generic RC increment for heap values.
         // RcKind controls list-helper dispatch explicitly (no payload-size heuristics).
         lirRegToARM64Reg addr
@@ -2491,7 +2491,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     ARM64Symbolic.CBZ_offset (addrReg, 4)
                 ] @ tupleIncPath)
 
-    | LIR.RefCountDec (addr, payloadSize, kind) ->
+    | LIR.RefCountDec (addr, payloadSize, kind, _) ->
         // Decrement ref count at [addr + payloadSize]
         // Skip if addr is null (e.g., empty list = 0)
         // When ref count hits 0, add block to free list for memory reuse
@@ -3791,7 +3791,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             |> Map.exists (fun _ block ->
                 block.Instrs
                 |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList) -> true
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, _) -> true
                     | _ -> false)))
 
     let needsListRcIncHelper =
@@ -3801,7 +3801,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             |> Map.exists (fun _ block ->
                 block.Instrs
                 |> List.exists (function
-                    | LIR.RefCountInc (_, _, LIR.TaggedList) -> true
+                    | LIR.RefCountInc (_, _, LIR.TaggedList, _) -> true
                     | LIR.RawSet (_, _, _, Some (AST.TList _)) -> true
                     | _ -> false)))
 

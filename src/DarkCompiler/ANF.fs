@@ -152,8 +152,8 @@ type CExpr =
     // String operations (heap-allocating)
     | StringConcat of left:Atom * right:Atom    // Concatenate strings: s1 ++ s2
     // Reference counting operations
-    | RefCountInc of Atom * payloadSize:int * kind:RcKind    // Increment ref count of heap value
-    | RefCountDec of Atom * payloadSize:int * kind:RcKind    // Decrement ref count, free if zero
+    | RefCountInc of Atom * payloadSize:int * kind:RcKind * sourceType:AST.Type option    // Increment ref count of heap value
+    | RefCountDec of Atom * payloadSize:int * kind:RcKind * sourceType:AST.Type option    // Decrement ref count, free if zero
     // Output operations (for main expression result)
     | Print of Atom * AST.Type                 // Print value with type-appropriate formatting
     | RuntimeError of message:string           // Print runtime error to stderr and exit with code 1

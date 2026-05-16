@@ -364,8 +364,8 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
             | _ -> None
         | _ -> None
     | StringConcat (_, _) -> Some AST.TString  // String concatenation returns a string
-    | RefCountInc (_, _, _) -> Some AST.TUnit
-    | RefCountDec (_, _, _) -> Some AST.TUnit
+    | RefCountInc (_, _, _, _) -> Some AST.TUnit
+    | RefCountDec (_, _, _, _) -> Some AST.TUnit
     | Print (_, valueType) -> Some valueType  // Print returns the type it prints
     | FileReadText _ -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TString; AST.TString]))  // Result<String, String>
     | FileExists _ -> Some AST.TBool  // Bool
@@ -455,11 +455,11 @@ let private needsAutomaticDec (typ: AST.Type) : bool =
     | AST.TBytes -> true
     | _ -> isRcManagedHeapType typ
 
-let private rcInfoForType (ctx: TypeContext) (typ: AST.Type) : int * RcKind =
-    (payloadSize typ ctx.TypeReg, rcKind typ)
+let private rcInfoForType (ctx: TypeContext) (typ: AST.Type) : int * RcKind * AST.Type option =
+    (payloadSize typ ctx.TypeReg, rcKind typ, Some typ)
 /// Insert RefCountInc for returned parameters at a Return node
 let insertParamIncsAtReturn
-    (paramIncs: (TempId * int * RcKind) list)
+    (paramIncs: (TempId * int * RcKind * AST.Type option) list)
     (returned: Set<TempId>)
     (expr: AExpr)
     (varGen: VarGen)
@@ -467,11 +467,11 @@ let insertParamIncsAtReturn
     : AExpr * VarGen * Map<TempId, AST.Type> =
     let active =
         paramIncs
-        |> List.filter (fun (tempId, _, _) -> Set.contains tempId returned)
+        |> List.filter (fun (tempId, _, _, _) -> Set.contains tempId returned)
     List.foldBack
-        (fun (tempId, size, kind) (accExpr, accVarGen, accTypes) ->
+        (fun (tempId, size, kind, sourceType) (accExpr, accVarGen, accTypes) ->
             let (dummyId, varGen') = freshVar accVarGen
-            let incExpr = RefCountInc (Var tempId, size, kind)
+            let incExpr = RefCountInc (Var tempId, size, kind, sourceType)
             let accExpr' = Let (dummyId, incExpr, accExpr)
             (accExpr', varGen', Map.add dummyId AST.TUnit accTypes))
         active
@@ -494,8 +494,8 @@ let insertReturnDecs
                 | AST.TString -> RefCountDecString (Var tempId)
                 | AST.TBytes -> RefCountDecBytes (Var tempId)
                 | _ ->
-                    let (size, kind) = rcInfoForType ctx typ
-                    RefCountDec (Var tempId, size, kind)
+                    let (size, kind, sourceType) = rcInfoForType ctx typ
+                    RefCountDec (Var tempId, size, kind, sourceType)
             let accExpr' = Let (dummyId, decExpr, accExpr)
             (accExpr', varGen', Map.add dummyId AST.TUnit accTypes))
         (expr, varGen, types)
@@ -505,8 +505,8 @@ let insertReturnDecs
 type LetFrame = {
     TempId: TempId
     CExpr: CExpr
-    TupleIncTargets: (TempId * int * RcKind) list
-    ReturnInc: (int * RcKind) option
+    TupleIncTargets: (TempId * int * RcKind * AST.Type option) list
+    ReturnInc: (int * RcKind * AST.Type option) option
 }
 
 /// Apply a single Let frame around an expression (uses current varGen/types)
@@ -516,9 +516,9 @@ let applyLetFrame
     : AExpr * VarGen * Map<TempId, AST.Type> =
     let (incBindingsRev, varGen1) =
         frame.TupleIncTargets
-        |> List.fold (fun (acc, vg) (tid, size, kind) ->
+        |> List.fold (fun (acc, vg) (tid, size, kind, sourceType) ->
             let (dummyId, vg') = freshVar vg
-            ((dummyId, RefCountInc (Var tid, size, kind)) :: acc, vg')) ([], varGen)
+            ((dummyId, RefCountInc (Var tid, size, kind, sourceType)) :: acc, vg')) ([], varGen)
     let incBindings = List.rev incBindingsRev
 
     let typesWithIncs =
@@ -527,9 +527,9 @@ let applyLetFrame
 
     let (returnIncBinding, varGen2, typesWithReturnInc) =
         match frame.ReturnInc with
-        | Some (size, kind) ->
+        | Some (size, kind, sourceType) ->
             let (incId, vg) = freshVar varGen1
-            let incExpr = RefCountInc (Var frame.TempId, size, kind)
+            let incExpr = RefCountInc (Var frame.TempId, size, kind, sourceType)
             ([(incId, incExpr)], vg, Map.add incId AST.TUnit typesWithIncs)
         | None ->
             ([], varGen1, typesWithIncs)
@@ -573,9 +573,9 @@ let rec private collectMovableTailDecPrefix
     (expr: AExpr)
     : (TempId * CExpr) list * AExpr =
     match expr with
-    | Let (tmpId, RefCountDec (Var tid, size, kind), rest) when not (Set.contains tid tailArgTemps) ->
+    | Let (tmpId, RefCountDec (Var tid, size, kind, sourceType), rest) when not (Set.contains tid tailArgTemps) ->
         let (bindings, remaining) = collectMovableTailDecPrefix tailArgTemps rest
-        ((tmpId, RefCountDec (Var tid, size, kind)) :: bindings, remaining)
+        ((tmpId, RefCountDec (Var tid, size, kind, sourceType)) :: bindings, remaining)
     | Let (tmpId, RefCountDecString atom, rest) ->
         let overlaps =
             match atom with
@@ -628,7 +628,7 @@ let rec insertRCWithAnalysis
     (expr: ReturnAnnotatedExpr)
     (varGen: VarGen)
     (returnDecs: (TempId * AST.Type) list)
-    (paramIncs: (TempId * int * RcKind) list)
+    (paramIncs: (TempId * int * RcKind * AST.Type option) list)
     (types: Map<TempId, AST.Type>)
     (typeCache: CExprTypeCache)
     : AExpr * VarGen * Map<TempId, AST.Type> * CExprTypeCache =
@@ -830,8 +830,8 @@ let rec insertRCWithAnalysis
                         | Var tid ->
                             match tryGetType ctx tid with
                             | Some t when isRcManagedHeapType t ->
-                                let (size, kind) = rcInfoForType ctx t
-                                (tid, size, kind) :: acc
+                                let (size, kind, sourceType) = rcInfoForType ctx t
+                                (tid, size, kind, sourceType) :: acc
                             | _ -> acc
                         | _ -> acc
                     ) []
@@ -839,7 +839,7 @@ let rec insertRCWithAnalysis
                 | _ -> []
 
             let returnInc =
-                let rcInfoFromAtom (atom: Atom) : (int * RcKind) option =
+                let rcInfoFromAtom (atom: Atom) : (int * RcKind * AST.Type option) option =
                     match atom with
                     | Var tid ->
                         match tryGetType ctx tid with
@@ -929,8 +929,8 @@ let private insertRCInFunctionInternal
         |> List.fold (fun acc param ->
             match param.Type with
             | _ when isRcManagedHeapType param.Type ->
-                let (size, kind) = rcInfoForType ctxWithParams param.Type
-                (param.Id, size, kind) :: acc
+                let (size, kind, sourceType) = rcInfoForType ctxWithParams param.Type
+                (param.Id, size, kind, sourceType) :: acc
             | _ -> acc
         ) []
     let paramIncs = List.rev paramIncsRev

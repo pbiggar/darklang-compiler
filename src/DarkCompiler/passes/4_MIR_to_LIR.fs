@@ -890,13 +890,13 @@ let selectInstr
             let lirDest = vregToLIRReg dest
             Ok ([LIR.HeapLoad (lirDest, lirAddr, offset)], state)
 
-    | MIR.RefCountInc (addr, payloadSize, kind) ->
+    | MIR.RefCountInc (addr, payloadSize, kind, sourceType) ->
         let lirAddr = vregToLIRReg addr
-        Ok ([LIR.RefCountInc (lirAddr, payloadSize, (match kind with | MIR.GenericHeap -> LIR.GenericHeap | MIR.TaggedList -> LIR.TaggedList))], state)
+        Ok ([LIR.RefCountInc (lirAddr, payloadSize, (match kind with | MIR.GenericHeap -> LIR.GenericHeap | MIR.TaggedList -> LIR.TaggedList), sourceType)], state)
 
-    | MIR.RefCountDec (addr, payloadSize, kind) ->
+    | MIR.RefCountDec (addr, payloadSize, kind, sourceType) ->
         let lirAddr = vregToLIRReg addr
-        Ok ([LIR.RefCountDec (lirAddr, payloadSize, (match kind with | MIR.GenericHeap -> LIR.GenericHeap | MIR.TaggedList -> LIR.TaggedList))], state)
+        Ok ([LIR.RefCountDec (lirAddr, payloadSize, (match kind with | MIR.GenericHeap -> LIR.GenericHeap | MIR.TaggedList -> LIR.TaggedList), sourceType)], state)
 
     | MIR.Print (src, valueType) ->
         // Generate appropriate print instruction based on type
@@ -1453,8 +1453,8 @@ let vregIdsFromInstr (instr: MIR.Instr) : int list =
     | MIR.HeapStore (addr, _, src, _) -> vregId addr :: vregIdsFromOperand src
     | MIR.HeapLoad (dest, addr, _, _) -> [vregId dest; vregId addr]
     | MIR.StringConcat (dest, left, right) -> vregId dest :: (vregIdsFromOperand left @ vregIdsFromOperand right)
-    | MIR.RefCountInc (addr, _, _) -> [vregId addr]
-    | MIR.RefCountDec (addr, _, _) -> [vregId addr]
+    | MIR.RefCountInc (addr, _, _, _) -> [vregId addr]
+    | MIR.RefCountDec (addr, _, _, _) -> [vregId addr]
     | MIR.Print (src, _) -> vregIdsFromOperand src
     | MIR.RuntimeError _ -> []
     | MIR.FileReadText (dest, path) -> vregId dest :: vregIdsFromOperand path

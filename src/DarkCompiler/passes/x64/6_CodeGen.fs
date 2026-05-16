@@ -1875,7 +1875,7 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
             |> Result.map (fun destReg -> [X86_64.MOVQ_to_gp (destReg, lirFRegToX86 sp)])
         | _ -> Error "FloatToBits with virtual FP register"
 
-    | LIR.RefCountInc (addr, payloadSize, kind) ->
+    | LIR.RefCountInc (addr, payloadSize, kind, _) ->
         resolveReg addr
         |> Result.map (fun addrReg ->
             match kind with
@@ -1889,7 +1889,7 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
             | LIR.GenericHeap ->
                 genRefCountIncGeneric addrReg payloadSize)
 
-    | LIR.RefCountDec (addr, payloadSize, kind) ->
+    | LIR.RefCountDec (addr, payloadSize, kind, _) ->
         resolveReg addr
         |> Result.map (fun addrReg ->
             match kind with
@@ -3063,7 +3063,7 @@ let translateProgram (LIR.Program functions) (enableLeakCheck: bool) : Result<X8
             |> Map.exists (fun _ block ->
                 block.Instrs
                 |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList) -> true
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, _) -> true
                     | _ -> false)))
 
     let needsListRcIncHelper =
@@ -3073,7 +3073,7 @@ let translateProgram (LIR.Program functions) (enableLeakCheck: bool) : Result<X8
             |> Map.exists (fun _ block ->
                 block.Instrs
                 |> List.exists (function
-                    | LIR.RefCountInc (_, _, LIR.TaggedList) -> true
+                    | LIR.RefCountInc (_, _, LIR.TaggedList, _) -> true
                     | LIR.RawSet (_, _, _, Some (AST.TList _)) -> true
                     | _ -> false)))
 

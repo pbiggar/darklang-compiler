@@ -157,8 +157,8 @@ let getInstrUses (instr: Instr) : Set<VReg> =
     | HeapStore (addr, _, src, _) -> Set.add addr (fromOperand src)
     | HeapLoad (_, addr, _, _) -> Set.singleton addr
     | StringConcat (_, left, right) -> Set.union (fromOperand left) (fromOperand right)
-    | RefCountInc (addr, _, _) -> Set.singleton addr
-    | RefCountDec (addr, _, _) -> Set.singleton addr
+    | RefCountInc (addr, _, _, _) -> Set.singleton addr
+    | RefCountDec (addr, _, _, _) -> Set.singleton addr
     | Print (src, _) -> fromOperand src
     | FileReadText (_, path) -> fromOperand path
     | FileExists (_, path) -> fromOperand path
@@ -714,12 +714,12 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
         let addr' = match p (Register addr) with Register v -> v | _ -> addr
         HeapLoad (dest, addr', offset, vt)
     | StringConcat (dest, left, right) -> StringConcat (dest, p left, p right)
-    | RefCountInc (addr, size, kind) ->
+    | RefCountInc (addr, size, kind, sourceType) ->
         let addr' = match p (Register addr) with Register v -> v | _ -> addr
-        RefCountInc (addr', size, kind)
-    | RefCountDec (addr, size, kind) ->
+        RefCountInc (addr', size, kind, sourceType)
+    | RefCountDec (addr, size, kind, sourceType) ->
         let addr' = match p (Register addr) with Register v -> v | _ -> addr
-        RefCountDec (addr', size, kind)
+        RefCountDec (addr', size, kind, sourceType)
     | Print (src, vt) -> Print (p src, vt)
     | FileReadText (dest, path) -> FileReadText (dest, p path)
     | FileExists (dest, path) -> FileExists (dest, p path)

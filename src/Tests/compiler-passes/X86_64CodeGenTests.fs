@@ -297,7 +297,7 @@ let testGenericRefCountInc () : Result<unit, string> =
         makeSimpleProgram
             [
                 LIR.HeapAlloc (LIR.Physical LIR.X2, 16)
-                LIR.RefCountInc (LIR.Physical LIR.X2, 16, LIR.GenericHeap)
+                LIR.RefCountInc (LIR.Physical LIR.X2, 16, LIR.GenericHeap, None)
                 LIR.HeapLoad (LIR.Physical LIR.X1, LIR.Physical LIR.X2, 16)
                 LIR.Exit
             ]
@@ -315,7 +315,7 @@ let testGenericRefCountDecTuple2 () : Result<unit, string> =
         makeSimpleProgram
             [
                 LIR.HeapAlloc (LIR.Physical LIR.X2, 16)
-                LIR.RefCountDec (LIR.Physical LIR.X2, 16, LIR.GenericHeap)
+                LIR.RefCountDec (LIR.Physical LIR.X2, 16, LIR.GenericHeap, None)
             ]
             LIR.Ret
 
@@ -331,9 +331,9 @@ let testGenericRefCountDecFixedSizes () : Result<unit, string> =
         makeSimpleProgram
             [
                 LIR.HeapAlloc (LIR.Physical LIR.X2, 8)
-                LIR.RefCountDec (LIR.Physical LIR.X2, 8, LIR.GenericHeap)
+                LIR.RefCountDec (LIR.Physical LIR.X2, 8, LIR.GenericHeap, None)
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 24)
-                LIR.RefCountDec (LIR.Physical LIR.X3, 24, LIR.GenericHeap)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 24, LIR.GenericHeap, None)
             ]
             LIR.Ret
 
