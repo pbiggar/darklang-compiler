@@ -2403,15 +2403,20 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
             resolveReg byteOffset |> Result.bind (fun o ->
                 resolveReg value |> Result.map (fun v ->
                     // Ownership increment: when storing a tagged list pointer into a node,
-                    // increment the stored value's refcount (the parent now owns that edge).
-                    // Without this, RefCountDec for child nodes will free them even though
-                    // the parent still references them.
-                    // NOTE: Currently disabled — enabling it causes 37 test regressions
-                    // (crypto SIGSEGVs, tco-refcounting leak counter mismatch). See
-                    // docs/x64-refcounting.md.
+                    // increment the stored value's refcount because the parent now owns
+                    // that edge. Keep this deliberately narrow until other stored heap
+                    // shapes have shape-driven retain/release metadata.
                     let ownershipInc : X86_64.Instr list =
-                        ignore valueType
-                        []
+                        match valueType with
+                        | Some (AST.TList _) ->
+                            let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI]
+                            let saves = saveRegs |> List.map X86_64.PUSH
+                            let restores = saveRegs |> List.rev |> List.map X86_64.POP
+                            saves
+                            @ [X86_64.MOV_reg (X86_64.RAX, v); X86_64.CALL listRefCountIncHelperLabel]
+                            @ restores
+                        | _ ->
+                            []
 
                     let storeInstrs =
                         if v = scratch || o = scratch then
