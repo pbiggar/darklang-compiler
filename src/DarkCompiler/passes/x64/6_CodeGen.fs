@@ -1942,7 +1942,7 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                     match sourceType with
                     | Some (AST.TList (AST.TList _)) ->
                         listRefCountDecListHelperLabel
-                    | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 && List.contains AST.TString fields ->
+                    | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64]) ->
                         listRefCountDecTuple2HelperLabel
                     | _ ->
                         listRefCountDecHelperLabel
@@ -3117,7 +3117,7 @@ let translateProgram (LIR.Program functions) (enableLeakCheck: bool) : Result<X8
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         match sourceType with
-                        | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 && List.contains AST.TString fields -> false
+                        | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64]) -> false
                         | Some (AST.TList (AST.TList _)) -> false
                         | _ -> true
                     | _ -> false)))
@@ -3130,7 +3130,7 @@ let translateProgram (LIR.Program functions) (enableLeakCheck: bool) : Result<X8
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
-                        List.length fields = 2 && List.contains AST.TString fields
+                        List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64])
                     | _ -> false)))
 
     let needsListRcDecListHelper =

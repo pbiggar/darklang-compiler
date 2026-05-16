@@ -2830,7 +2830,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     match sourceType with
                     | Some (AST.TList (AST.TList _)) ->
                         listRefCountDecListHelperLabel
-                    | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 && List.contains AST.TString fields ->
+                    | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64]) ->
                         listRefCountDecTuple2HelperLabel
                     | _ ->
                         listRefCountDecHelperLabel
@@ -4124,7 +4124,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         match sourceType with
-                        | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 && List.contains AST.TString fields -> false
+                        | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64]) -> false
                         | Some (AST.TList (AST.TList _)) -> false
                         | _ -> true
                     | _ -> false)))
@@ -4137,7 +4137,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
-                        List.length fields = 2 && List.contains AST.TString fields
+                        List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64])
                     | _ -> false)))
 
     let needsListRcDecListHelper =
