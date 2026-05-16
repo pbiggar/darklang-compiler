@@ -109,6 +109,24 @@ type RcKind =
     | GenericHeap
     | TaggedList
 
+/// Runtime representation shape used to decide ownership behavior.
+///
+/// This is deliberately more specific than source-level heap-ness: values with
+/// the same source type category can have different runtime ownership rules
+/// depending on whether they are immediate, static, fixed-size, dynamically
+/// sized, tagged, or unmanaged.
+type RcShape =
+    | Immediate
+    | FixedBlock of payloadSize:int * fieldShapes:RcShape list
+    | BoxedSum of payloadSize:int
+    | TaggedListShape of elementShape:RcShape
+    | DictRoot of keyShape:RcShape * valueShape:RcShape
+    | DynamicString
+    | DynamicBytes
+    | ClosureShape of captureShapes:RcShape list
+    | StaticString
+    | RawUnmanaged
+
 /// Function return ownership convention
 type ReturnOwnership =
     | OwnedReturn

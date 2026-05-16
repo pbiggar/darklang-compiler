@@ -10,6 +10,25 @@ open RefCountInsertion
 
 type TestResult = Result<unit, string>
 
+let testRcShapeConstructionAndEquality () : TestResult =
+    let tupleShape =
+        FixedBlock (
+            16,
+            [
+                Immediate
+                DynamicString
+            ]
+        )
+
+    let dictShape = DictRoot (DynamicString, TaggedListShape Immediate)
+    let closureShape = ClosureShape [tupleShape; dictShape]
+    let expected = ClosureShape [FixedBlock (16, [Immediate; DynamicString]); DictRoot (DynamicString, TaggedListShape Immediate)]
+
+    if closureShape = expected then
+        Ok ()
+    else
+        Error $"Expected RcShape equality to use structural representation, got: {closureShape}"
+
 let testInferCallReturnsFunctionReturnType () : TestResult =
     let ctx : TypeContext = {
         TypeReg = Map.empty
@@ -208,6 +227,7 @@ let testBorrowedCallStillGetsAutoDecUnderConservativePolicy () : TestResult =
         Error "BorrowedCall should be treated as owned result under conservative policy and get automatic RefCountDec"
 
 let tests = [
+    ("RcShape supports structural construction and equality", testRcShapeConstructionAndEquality)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
