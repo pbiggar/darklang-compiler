@@ -7,6 +7,9 @@
 // Newline constant (nullary function)
 def Stdlib.String.newline() : String = "\n"
 
+def Stdlib.String.__alignedDataSize(size: Int64) : Int64 =
+    ((size + 7) / 8) * 8
+
 // Append two strings
 def Stdlib.String.append(s1: String, s2: String) : String = s1 ++ s2
 
@@ -98,7 +101,7 @@ def Stdlib.String.__copyBytesToPtr(src: String, srcStart: Int64, dest: RawPtr, d
         Stdlib.String.__copyBytesToPtr(src, srcStart + 1, dest, destStart + 1, count - 1)
 
 // Extract substring from start index to end index (exclusive)
-// String format: [length:8 bytes][data:N bytes][refcount:8 bytes]
+// String format: [length:8 bytes][data:N bytes][padding to 8][refcount:8 bytes]
 def Stdlib.String.slice(s: String, start: Int64, end_: Int64) : String =
     let sLen = Stdlib.String.length(s) in
     // Clamp start to valid range
@@ -109,15 +112,17 @@ def Stdlib.String.slice(s: String, start: Int64, end_: Int64) : String =
     if actualLen == 0 then
         ""
     else
-        // Allocate: 8 (length) + actualLen (data) + 8 (refcount) = 16 + actualLen
-        let totalSize = 16 + actualLen in
+        // Allocate: 8 (length) + actualLen (data) + padding + 8 (refcount)
+        let dataSize = Stdlib.String.__alignedDataSize(actualLen) in
+        let refcountOffset = 8 + dataSize in
+        let totalSize = 16 + dataSize in
         let ptr = __raw_alloc(totalSize) in
         // Write length at offset 0
         let _ = __raw_set<Int64>(ptr, 0, actualLen) in
         // Copy bytes from source (offset 8 + actualStart) to dest (offset 8)
         let _ = Stdlib.String.__copyBytesToPtr(s, actualStart, ptr, 8, actualLen) in
-        // Write refcount = 1 at offset (8 + actualLen)
-        let _ = __raw_set<Int64>(ptr, 8 + actualLen, 1) in
+        // Write refcount = 1 at aligned dynamic-buffer offset
+        let _ = __raw_set<Int64>(ptr, refcountOffset, 1) in
         // Convert raw pointer to string
         __int64_to_string(__rawptr_to_int64(ptr))
 
@@ -245,21 +250,23 @@ def Stdlib.String.__encodeCodepointsAt(ptr: RawPtr, offset: Int64, cps: List<Int
         Stdlib.String.__encodeCodepointsAt(ptr, newOffset, rest)
 
 // Build a string from a list of Unicode codepoints
-// String format: [length:8 bytes][data:N bytes][refcount:8 bytes]
+// String format: [length:8 bytes][data:N bytes][padding to 8][refcount:8 bytes]
 def Stdlib.String.fromCodepoints(cps: List<Int64>) : String =
     let byteLen = Stdlib.String.__totalUtf8Len(cps) in
     if byteLen == 0 then
         ""
     else
-        // Allocate: 8 (length) + byteLen (data) + 8 (refcount)
-        let totalSize = 16 + byteLen in
+        // Allocate: 8 (length) + byteLen (data) + padding + 8 (refcount)
+        let dataSize = Stdlib.String.__alignedDataSize(byteLen) in
+        let refcountOffset = 8 + dataSize in
+        let totalSize = 16 + dataSize in
         let ptr = __raw_alloc(totalSize) in
         // Write length at offset 0
         let _ = __raw_set<Int64>(ptr, 0, byteLen) in
         // Encode codepoints starting at offset 8
         let _ = Stdlib.String.__encodeCodepointsAt(ptr, 8, cps) in
-        // Write refcount = 1 at end
-        let _ = __raw_set<Int64>(ptr, 8 + byteLen, 1) in
+        // Write refcount = 1 at aligned dynamic-buffer offset
+        let _ = __raw_set<Int64>(ptr, refcountOffset, 1) in
         __int64_to_string(__rawptr_to_int64(ptr))
 
 // =============================================================================

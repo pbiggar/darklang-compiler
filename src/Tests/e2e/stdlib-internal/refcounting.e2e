@@ -10,6 +10,8 @@ let s = "a" ++ "b" in let _ = __refcount_inc_string(s) in 0 = stdout="0\n" stder
 
 // Dynamic strings are counted and decref'd at scope exit.
 let s = "a" ++ "b" in 0 = stdout="0\n" stderr="" // string concat reclaimed
+let src = "a" ++ "bc" in let s = Stdlib.String.slice(src, 0, 1) in 0 = stdout="0\n" stderr="" // unaligned string slice reclaimed
+let s = Stdlib.String.fromCodepoints([97]) in 0 = stdout="0\n" stderr="" // unaligned string builder reclaimed
 
 // Dynamic bytes use the same length-aligned refcount slot as dynamic strings.
 let b = Bytes.create(4) in 0 = stdout="0\n" stderr=""
