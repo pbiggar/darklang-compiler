@@ -20,9 +20,8 @@ let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2) in 0 = stdout="
 // Tagged list construction is counted but not fully reclaimed on x64.
 let xs = [1, 2, 3] in 0 = stdout="0\n" stderr="leaks: 4\n" // current list leak
 
-// x64 generic fixed-block allocation is currently a leak-check false negative:
-// the tuple allocation should be counted and reclaimed, but today reports clean.
-let t = (1, 2) in 0 = stdout="0\n" stderr="" // current tuple false negative
+// Fixed-block tuple root allocation is reclaimed on the active backend.
+let t = (1, 2) in t.0 = stdout="1\n" stderr="" // tuple root reclaimed
 
 // Closure allocation is also a current leak-check false negative.
 let f = (x: Int64) => x + 1 in 0 = stdout="0\n" stderr="" // current closure false negative

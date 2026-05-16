@@ -1618,6 +1618,7 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                  X86_64.Jcc (X86_64.LE, okLabel)])
             @ genOomJump ()
             @ [X86_64.Label okLabel]
+            @ genLeakCounterInc ctx
             @ freeListPost)
 
     | LIR.HeapStore (addr, offset, src, _) ->

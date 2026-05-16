@@ -4,17 +4,32 @@
 
 module X86_64CodeGenTests
 
-/// Build and run a LIR program, returning exit code and stdout
-let private runLIRProgramFull (program: LIR.Program) : Result<int * string, string> =
-    match CodeGen_X86_64.translateProgram program false with
+/// Build and run a LIR program, returning exit code, stdout, and stderr.
+let private runLIRProgramFullWithOptions (program: LIR.Program) (enableLeakCheck: bool) : Result<int * string * string, string> =
+    match CodeGen_X86_64.translateProgram program enableLeakCheck with
     | Error e -> Error $"Codegen error: {e}"
     | Ok instrs ->
         match X86_64_Resolve.resolveAndEncode instrs with
         | Error e -> Error $"Resolve error: {e}"
-        | Ok resolveResult ->
+        | Ok unresolvedResult ->
+            let patchedResult =
+                if List.isEmpty unresolvedResult.DeferredFixups then
+                    Ok unresolvedResult
+                else
+                    let elfHeaderSize = 64
+                    let programHeaderSize = 56
+                    let codeFileOffset = elfHeaderSize + programHeaderSize
+                    let codeSize = unresolvedResult.MachineCode.Length
+                    let alignedDataStart = (codeFileOffset + codeSize + 7) &&& (~~~7)
+                    let dataLabels = Map.ofList [("_leak_count", alignedDataStart)]
+                    X86_64_Resolve.patchDataLabels unresolvedResult dataLabels codeFileOffset
+
+            match patchedResult with
+            | Error e -> Error $"Data label error: {e}"
+            | Ok resolveResult ->
             let binary =
                 Binary_Generation_ELF_X86_64.createExecutableWithPools
-                    resolveResult.MachineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false 0
+                    resolveResult.MachineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool enableLeakCheck 0
             let tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.Guid.NewGuid().ToString("N"))
             try
                 do
@@ -32,12 +47,18 @@ let private runLIRProgramFull (program: LIR.Program) : Result<int * string, stri
                 psi.RedirectStandardError <- true
                 use proc = System.Diagnostics.Process.Start(psi)
                 let stdout = proc.StandardOutput.ReadToEnd()
+                let stderr = proc.StandardError.ReadToEnd()
                 proc.WaitForExit(10000) |> ignore
-                Ok (proc.ExitCode, stdout)
+                Ok (proc.ExitCode, stdout, stderr)
             with ex -> Error $"Execution failed: {ex.Message}"
             |> fun result ->
                 try System.IO.File.Delete(tempPath) with _ -> ()
                 result
+
+/// Build and run a LIR program, returning exit code and stdout.
+let private runLIRProgramFull (program: LIR.Program) : Result<int * string, string> =
+    runLIRProgramFullWithOptions program false
+    |> Result.map (fun (exitCode, stdout, _) -> exitCode, stdout)
 
 /// Build and run a LIR program, returning the exit code
 let private runLIRProgram (program: LIR.Program) : Result<int, string> =
@@ -254,6 +275,22 @@ let testHeapAllocInitializesRefcount () : Result<unit, string> =
         if exitCode = 1 then Ok ()
         else Error $"Expected initialized refcount exit code 1, got {exitCode}"
 
+/// Test: fixed-block bump allocation increments x64 leak accounting.
+let testHeapAllocIncrementsLeakCounter () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X2, 16)
+                LIR.HeapLoad (LIR.Physical LIR.X1, LIR.Physical LIR.X2, 0)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "leaks: 1" then Ok ()
+        else Error $"Expected leak checker to report one x64 fixed-block allocation, got stderr '{stderr.Trim()}'"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -264,4 +301,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR PrintInt64 negative", testPrintInt64Negative)
     ("LIR PrintInt64 zero", testPrintInt64Zero)
     ("LIR HeapAlloc initializes refcount", testHeapAllocInitializesRefcount)
+    ("LIR HeapAlloc increments leak counter", testHeapAllocIncrementsLeakCounter)
 ]
