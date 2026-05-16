@@ -64,18 +64,19 @@ def Stdlib.__HAMT.__allocInternal(bitmap: Int64, numChildren: Int64) : RawPtr =
 // =============================================================================
 // Collision Node Functions (Tag 3)
 // =============================================================================
-// Collision node layout: [count:8][key1:8][val1:8][key2:8][val2:8]...
+// Collision node layout: [count:8][key1:8][val1:8][key2:8][val2:8]...[refcount:8]
 // Used when multiple keys have identical hash values through all levels
 
 // Allocate a collision node with 2 initial entries
 def Stdlib.__HAMT.__allocCollision<k, v>(key1: k, val1: v, key2: k, val2: v) : Dict<k, v> =
-    // 8 bytes for count + 2 * 16 bytes for entries = 40 bytes
-    let ptr = __raw_alloc(40) in
+    // 8 bytes for count + 2 * 16 bytes for entries + refcount = 48 bytes
+    let ptr = __raw_alloc(48) in
     let _ = __raw_set<Int64>(ptr, 0, 2) in  // count = 2
     let _ = __raw_set<k>(ptr, 8, key1) in
     let _ = __raw_set<v>(ptr, 16, val1) in
     let _ = __raw_set<k>(ptr, 24, key2) in
     let _ = __raw_set<v>(ptr, 32, val2) in
+    let _ = __raw_set<Int64>(ptr, 40, 1) in
     Stdlib.__HAMT.__setTag<k, v>(ptr, 3)
 
 // Get count from collision node
@@ -139,21 +140,23 @@ def Stdlib.__HAMT.__setInCollision<k, v>(ptr: RawPtr, key: k, value: v) : Dict<k
     let idx = Stdlib.__HAMT.__findInCollision<k, v>(ptr, key, count, 0) in
     if idx >= 0 then
         // Key exists - create new collision node with updated value
-        let newPtr = __raw_alloc(8 + (count * 16)) in
+        let newPtr = __raw_alloc(16 + (count * 16)) in
         let _ = __raw_set<Int64>(newPtr, 0, count) in
         let _ = Stdlib.__HAMT.__copyAllCollision<k, v>(ptr, newPtr, count, 0) in
+        let _ = __raw_set<Int64>(newPtr, 8 + (count * 16), 1) in
         let updateOffset = 8 + (idx * 16) + 8 in
         let _ = __raw_set<v>(newPtr, updateOffset, value) in
         Stdlib.__HAMT.__setTag<k, v>(newPtr, 3)
     else
         // Key doesn't exist - create new collision node with added entry
         let newCount = count + 1 in
-        let newPtr = __raw_alloc(8 + (newCount * 16)) in
+        let newPtr = __raw_alloc(16 + (newCount * 16)) in
         let _ = __raw_set<Int64>(newPtr, 0, newCount) in
         let _ = Stdlib.__HAMT.__copyAllCollision<k, v>(ptr, newPtr, count, 0) in
         let newOffset = 8 + (count * 16) in
         let _ = __raw_set<k>(newPtr, newOffset, key) in
         let _ = __raw_set<v>(newPtr, newOffset + 8, value) in
+        let _ = __raw_set<Int64>(newPtr, 8 + (newCount * 16), 1) in
         Stdlib.__HAMT.__setTag<k, v>(newPtr, 3)
 
 // Remove entry from collision node
@@ -172,9 +175,10 @@ def Stdlib.__HAMT.__removeFromCollision<k, v>(ptr: RawPtr, key: k) : Dict<k, v> 
     else
         // Remove entry - create smaller collision node
         let newCount = count - 1 in
-        let newPtr = __raw_alloc(8 + (newCount * 16)) in
+        let newPtr = __raw_alloc(16 + (newCount * 16)) in
         let _ = __raw_set<Int64>(newPtr, 0, newCount) in
         let _ = Stdlib.__HAMT.__copyCollisionExcept<k, v>(ptr, newPtr, count, idx, 0, 0) in
+        let _ = __raw_set<Int64>(newPtr, 8 + (newCount * 16), 1) in
         Stdlib.__HAMT.__setTag<k, v>(newPtr, 3)
 
 // Check if key exists in collision node
