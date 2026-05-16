@@ -1882,9 +1882,8 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
             | LIR.TaggedList ->
                 // No-op until RefCountDec is enabled (see notes there).
                 []
-            | _ ->
-                // Generic refcount inc — no-op for now (needs more testing)
-                [])
+            | LIR.GenericHeap ->
+                genRefCountIncGeneric addrReg payloadSize)
 
     | LIR.RefCountDec (addr, payloadSize, kind) ->
         resolveReg addr

@@ -291,6 +291,24 @@ let testHeapAllocIncrementsLeakCounter () : Result<unit, string> =
         if stderr.Trim() = "leaks: 1" then Ok ()
         else Error $"Expected leak checker to report one x64 fixed-block allocation, got stderr '{stderr.Trim()}'"
 
+/// Test: generic fixed-block RefCountInc increments the trailing refcount.
+let testGenericRefCountInc () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X2, 16)
+                LIR.RefCountInc (LIR.Physical LIR.X2, 16, LIR.GenericHeap)
+                LIR.HeapLoad (LIR.Physical LIR.X1, LIR.Physical LIR.X2, 16)
+                LIR.Exit
+            ]
+            LIR.Ret
+
+    match runLIRProgram program with
+    | Error e -> Error e
+    | Ok exitCode ->
+        if exitCode = 2 then Ok ()
+        else Error $"Expected RefCountInc to raise refcount exit code to 2, got {exitCode}"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -302,4 +320,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR PrintInt64 zero", testPrintInt64Zero)
     ("LIR HeapAlloc initializes refcount", testHeapAllocInitializesRefcount)
     ("LIR HeapAlloc increments leak counter", testHeapAllocIncrementsLeakCounter)
+    ("LIR generic RefCountInc increments refcount", testGenericRefCountInc)
 ]
