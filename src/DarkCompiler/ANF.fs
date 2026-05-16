@@ -179,9 +179,11 @@ type CExpr =
     | RawGetByte of ptr:Atom * byteOffset:Atom  // Read 1 byte at offset, returns Int64 (zero-extended)
     | RawSet of ptr:Atom * byteOffset:Atom * value:Atom * valueType:AST.Type option  // Write 8 bytes at offset, valueType for float
     | RawSetByte of ptr:Atom * byteOffset:Atom * value:Atom  // Write 1 byte at offset
-    // String reference counting (at dynamic offset)
+    // Dynamic buffer reference counting (at offset computed from length)
     | RefCountIncString of Atom               // Increment string ref count
     | RefCountDecString of Atom               // Decrement string ref count, free if zero
+    | RefCountIncBytes of Atom                // Increment bytes ref count
+    | RefCountDecBytes of Atom                // Decrement bytes ref count, free if zero
     // Random intrinsics
     | RandomInt64                             // Get 8 random bytes as Int64
     // Date intrinsics

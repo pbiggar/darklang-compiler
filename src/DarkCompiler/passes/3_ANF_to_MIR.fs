@@ -215,6 +215,8 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.FloatToBits atom -> maxTempIdInAtom atom
     | ANF.RefCountIncString str -> maxTempIdInAtom str
     | ANF.RefCountDecString str -> maxTempIdInAtom str
+    | ANF.RefCountIncBytes bytes -> maxTempIdInAtom bytes
+    | ANF.RefCountDecBytes bytes -> maxTempIdInAtom bytes
     | ANF.RandomInt64 -> -1  // No atoms, so no TempIds
     | ANF.DateNow -> -1      // No atoms, so no TempIds
     | ANF.FloatToString atom -> maxTempIdInAtom atom
@@ -604,6 +606,8 @@ let cexprDescription (cexpr: ANF.CExpr) : string =
     | ANF.RawSetByte _ -> "RawSetByte"
     | ANF.RefCountIncString _ -> "RefCountIncString"
     | ANF.RefCountDecString _ -> "RefCountDecString"
+    | ANF.RefCountIncBytes _ -> "RefCountIncBytes"
+    | ANF.RefCountDecBytes _ -> "RefCountDecBytes"
     | ANF.RandomInt64 -> "RandomInt64"
     | ANF.DateNow -> "DateNow"
     | ANF.FloatToString _ -> "FloatToString"
@@ -641,6 +645,11 @@ let rec collectSelfTailCallCleanup
         |> Result.bind (fun strOp ->
             collectSelfTailCallCleanup builder callTempId rest
             |> Result.map (fun instrs -> MIR.RefCountDecString strOp :: instrs))
+    | ANF.Let (_, ANF.RefCountDecBytes bytesAtom, rest) ->
+        atomToOperand builder bytesAtom
+        |> Result.bind (fun bytesOp ->
+            collectSelfTailCallCleanup builder callTempId rest
+            |> Result.map (fun instrs -> MIR.RefCountDecBytes bytesOp :: instrs))
     | _ ->
         Error $"Internal error: unexpected expression after self tailcall in {builder.FuncName}"
 
@@ -1198,6 +1207,12 @@ let rec convertExpr
                 | ANF.RefCountDecString strAtom ->
                     atomToOperand builder strAtom
                     |> Result.map (fun strOp -> [MIR.RefCountDecString strOp])
+                | ANF.RefCountIncBytes bytesAtom ->
+                    atomToOperand builder bytesAtom
+                    |> Result.map (fun bytesOp -> [MIR.RefCountIncBytes bytesOp])
+                | ANF.RefCountDecBytes bytesAtom ->
+                    atomToOperand builder bytesAtom
+                    |> Result.map (fun bytesOp -> [MIR.RefCountDecBytes bytesOp])
                 | ANF.RandomInt64 ->
                     Ok [MIR.RandomInt64 destReg]
                 | ANF.DateNow ->
@@ -1837,6 +1852,12 @@ and convertExprToOperand
                 | ANF.RefCountDecString strAtom ->
                     atomToOperand builder strAtom
                     |> Result.map (fun strOp -> [MIR.RefCountDecString strOp])
+                | ANF.RefCountIncBytes bytesAtom ->
+                    atomToOperand builder bytesAtom
+                    |> Result.map (fun bytesOp -> [MIR.RefCountIncBytes bytesOp])
+                | ANF.RefCountDecBytes bytesAtom ->
+                    atomToOperand builder bytesAtom
+                    |> Result.map (fun bytesOp -> [MIR.RefCountDecBytes bytesOp])
                 | ANF.RandomInt64 ->
                     Ok [MIR.RandomInt64 destReg]
                 | ANF.DateNow ->

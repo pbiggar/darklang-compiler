@@ -4,8 +4,11 @@
 
 // Stdlib.Bytes - Byte array operations
 // =============================================================================
-// Memory layout: [length:8 bytes][data:N bytes][refcount:8 bytes]
+// Memory layout: [length:8 bytes][data:N bytes][padding to 8][refcount:8 bytes]
 // Same layout as String for consistency
+
+def Stdlib.Bytes.__alignedDataSize(size: Int64) : Int64 =
+    ((size + 7) / 8) * 8
 
 // Get the length of a byte array
 def Stdlib.Bytes.length(b: Bytes) : Int64 =
@@ -23,8 +26,10 @@ def Stdlib.Bytes.set(b: Bytes, index: Int64, value: Int64) : Bytes =
     if index < 0 || index >= len then
         b  // Out of bounds, return unchanged
     else
-        // Allocate: 8 (length) + len (data) + 8 (refcount)
-        let totalSize = 16 + len in
+        // Allocate: 8 (length) + len (data) + padding + 8 (refcount)
+        let dataSize = Stdlib.Bytes.__alignedDataSize(len) in
+        let refcountOffset = 8 + dataSize in
+        let totalSize = 16 + dataSize in
         let ptr = __raw_alloc(totalSize) in
         // Write length at offset 0
         let _ = __raw_set<Int64>(ptr, 0, len) in
@@ -34,7 +39,7 @@ def Stdlib.Bytes.set(b: Bytes, index: Int64, value: Int64) : Bytes =
         // Update the byte at index
         let _ = __raw_set_byte(ptr, 8 + index, value) in
         // Write refcount = 1 at end
-        let _ = __raw_set<Int64>(ptr, 8 + len, 1) in
+        let _ = __raw_set<Int64>(ptr, refcountOffset, 1) in
         __int64_to_bytes(__rawptr_to_int64(ptr))
 
 // Internal: Copy loop with 2 pointers sharing same offset
@@ -56,13 +61,15 @@ def Stdlib.Bytes.create(size: Int64) : Bytes =
         let _ = __raw_set<Int64>(ptr, 8, 1) in  // refcount = 1
         __int64_to_bytes(__rawptr_to_int64(ptr))
     else
-        // Allocate: 8 (length) + size (data) + 8 (refcount)
-        let totalSize = 16 + size in
+        // Allocate: 8 (length) + size (data) + padding + 8 (refcount)
+        let dataSize = Stdlib.Bytes.__alignedDataSize(size) in
+        let refcountOffset = 8 + dataSize in
+        let totalSize = 16 + dataSize in
         let ptr = __raw_alloc(totalSize) in
         // Write length at offset 0
         let _ = __raw_set<Int64>(ptr, 0, size) in
         // Write refcount = 1 at end
-        let _ = __raw_set<Int64>(ptr, 8 + size, 1) in
+        let _ = __raw_set<Int64>(ptr, refcountOffset, 1) in
         __int64_to_bytes(__rawptr_to_int64(ptr))
 
 // Create bytes from a list of Int64 values (each 0-255)
@@ -71,12 +78,14 @@ def Stdlib.Bytes.fromList(list: List<Int64>) : Bytes =
     if len == 0 then
         Stdlib.Bytes.create(0)
     else
-        let totalSize = 16 + len in
+        let dataSize = Stdlib.Bytes.__alignedDataSize(len) in
+        let refcountOffset = 8 + dataSize in
+        let totalSize = 16 + dataSize in
         let ptr = __raw_alloc(totalSize) in
         let _ = __raw_set<Int64>(ptr, 0, len) in
         // Use a helper with fewer args
         let _ = Stdlib.Bytes.__writeListHelper(ptr, list, 8) in
-        let _ = __raw_set<Int64>(ptr, 8 + len, 1) in
+        let _ = __raw_set<Int64>(ptr, refcountOffset, 1) in
         __int64_to_bytes(__rawptr_to_int64(ptr))
 
 // Helper: write list of bytes starting at offset

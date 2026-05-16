@@ -212,6 +212,8 @@ let hasSideEffects (cexpr: CExpr) : bool =
     | FloatToBits _ -> false // Pure conversion
     | RefCountIncString _ -> true   // Mutates refcount
     | RefCountDecString _ -> true   // Mutates refcount
+    | RefCountIncBytes _ -> true    // Mutates refcount
+    | RefCountDecBytes _ -> true    // Mutates refcount
     | RandomInt64 -> true   // Reads from OS random source
     | DateNow -> true       // Reads current time (syscall)
     | FloatToString _ -> false  // Pure conversion (but allocates - maybe should be true?)
@@ -271,6 +273,8 @@ let collectCExprUses (cexpr: CExpr) : Set<TempId> =
     | FloatToBits atom -> collectAtomUses atom
     | RefCountIncString str -> collectAtomUses str
     | RefCountDecString str -> collectAtomUses str
+    | RefCountIncBytes bytes -> collectAtomUses bytes
+    | RefCountDecBytes bytes -> collectAtomUses bytes
     | RandomInt64 -> Set.empty  // No atoms
     | DateNow -> Set.empty      // No atoms
     | FloatToString atom -> collectAtomUses atom
@@ -326,6 +330,8 @@ let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | FloatToBits atom -> FloatToBits (s atom)
     | RefCountIncString str -> RefCountIncString (s str)
     | RefCountDecString str -> RefCountDecString (s str)
+    | RefCountIncBytes bytes -> RefCountIncBytes (s bytes)
+    | RefCountDecBytes bytes -> RefCountDecBytes (s bytes)
     | RandomInt64 -> RandomInt64
     | DateNow -> DateNow
     | FloatToString atom -> FloatToString (s atom)

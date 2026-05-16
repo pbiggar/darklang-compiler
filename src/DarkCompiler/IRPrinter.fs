@@ -141,6 +141,10 @@ let private prettyPrintANFCExpr = function
         $"RefCountIncString({prettyPrintANFAtom str})"
     | ANF.RefCountDecString str ->
         $"RefCountDecString({prettyPrintANFAtom str})"
+    | ANF.RefCountIncBytes bytes ->
+        $"RefCountIncBytes({prettyPrintANFAtom bytes})"
+    | ANF.RefCountDecBytes bytes ->
+        $"RefCountDecBytes({prettyPrintANFAtom bytes})"
     | ANF.RandomInt64 ->
         "RandomInt64()"
     | ANF.DateNow ->
@@ -330,6 +334,10 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
         $"RefCountIncString({prettyPrintMIROperand str})"
     | MIR.RefCountDecString str ->
         $"RefCountDecString({prettyPrintMIROperand str})"
+    | MIR.RefCountIncBytes bytes ->
+        $"RefCountIncBytes({prettyPrintMIROperand bytes})"
+    | MIR.RefCountDecBytes bytes ->
+        $"RefCountDecBytes({prettyPrintMIROperand bytes})"
     | MIR.RandomInt64 dest ->
         $"{prettyPrintMIRVReg dest} <- RandomInt64()"
     | MIR.DateNow dest ->
@@ -639,6 +647,10 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"RefCountIncString({prettyPrintLIROperand str})"
     | LIR.RefCountDecString str ->
         $"RefCountDecString({prettyPrintLIROperand str})"
+    | LIR.RefCountIncBytes bytes ->
+        $"RefCountIncBytes({prettyPrintLIROperand bytes})"
+    | LIR.RefCountDecBytes bytes ->
+        $"RefCountDecBytes({prettyPrintLIROperand bytes})"
     | LIR.RandomInt64 dest ->
         $"{prettyPrintLIRReg dest} <- RandomInt64()"
     | LIR.DateNow dest ->

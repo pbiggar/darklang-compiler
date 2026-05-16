@@ -77,6 +77,8 @@ let hasSideEffects (instr: Instr) : bool =
     | FloatToBits _ -> false  // Pure conversion
     | RefCountIncString _ -> true   // Mutates refcount
     | RefCountDecString _ -> true   // Mutates refcount
+    | RefCountIncBytes _ -> true    // Mutates refcount
+    | RefCountDecBytes _ -> true    // Mutates refcount
     | RandomInt64 _ -> true  // Syscall
     | DateNow _ -> true      // Syscall
     | FloatToString _ -> false  // Pure conversion (allocates but no visible side effect)
@@ -125,6 +127,8 @@ let getInstrDest (instr: Instr) : VReg option =
     | RawSetByte _ -> None
     | RefCountIncString _ -> None
     | RefCountDecString _ -> None
+    | RefCountIncBytes _ -> None
+    | RefCountDecBytes _ -> None
     | RandomInt64 dest -> Some dest
     | DateNow dest -> Some dest
     | FloatToString (dest, _) -> Some dest
@@ -178,6 +182,8 @@ let getInstrUses (instr: Instr) : Set<VReg> =
     | FloatToBits (_, src) -> fromOperand src
     | RefCountIncString str -> fromOperand str
     | RefCountDecString str -> fromOperand str
+    | RefCountIncBytes bytes -> fromOperand bytes
+    | RefCountDecBytes bytes -> fromOperand bytes
     | RandomInt64 _ -> Set.empty  // No operand uses
     | DateNow _ -> Set.empty      // No operand uses
     | FloatToString (_, value) -> fromOperand value
@@ -739,6 +745,8 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | FloatToBits (dest, src) -> FloatToBits (dest, p src)
     | RefCountIncString str -> RefCountIncString (p str)
     | RefCountDecString str -> RefCountDecString (p str)
+    | RefCountIncBytes bytes -> RefCountIncBytes (p bytes)
+    | RefCountDecBytes bytes -> RefCountDecBytes (p bytes)
     | RandomInt64 dest -> RandomInt64 dest
     | DateNow dest -> DateNow dest
     | FloatToString (dest, value) -> FloatToString (dest, p value)

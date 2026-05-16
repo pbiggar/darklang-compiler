@@ -11,8 +11,8 @@ let s = "a" ++ "b" in let _ = __refcount_inc_string(s) in 0 = stdout="0\n" stder
 // Dynamic strings are counted and decref'd at scope exit.
 let s = "a" ++ "b" in 0 = stdout="0\n" stderr="" // string concat reclaimed
 
-// Dynamic bytes are counted but are not yet first-class refcounted values.
-let b = Bytes.create(4) in 0 = stdout="0\n" stderr="leaks: 1\n" // current bytes leak
+// Dynamic bytes use the same length-aligned refcount slot as dynamic strings.
+let b = Bytes.create(4) in 0 = stdout="0\n" stderr=""
 
 // HAMT/dict allocation uses raw unmanaged nodes today.
 let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2) in 0 = stdout="0\n" stderr="leaks: 1\n" // current dict leak

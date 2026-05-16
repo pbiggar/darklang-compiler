@@ -381,9 +381,11 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | RawGetByte _ -> Some AST.TInt64  // Returns 1-byte value (zero-extended)
     | RawSet _ -> Some AST.TUnit  // Returns unit
     | RawSetByte _ -> Some AST.TUnit  // Returns unit
-    // String refcount intrinsics
+    // Dynamic buffer refcount intrinsics
     | RefCountIncString _ -> Some AST.TUnit  // Returns unit
     | RefCountDecString _ -> Some AST.TUnit  // Returns unit
+    | RefCountIncBytes _ -> Some AST.TUnit   // Returns unit
+    | RefCountDecBytes _ -> Some AST.TUnit   // Returns unit
     | RuntimeError _ -> Some AST.TUnit
 
 /// Return analysis annotation for AExpr nodes
@@ -450,6 +452,7 @@ let private isRcManagedHeapType (typ: AST.Type) : bool =
 let private needsAutomaticDec (typ: AST.Type) : bool =
     match typ with
     | AST.TString -> true
+    | AST.TBytes -> true
     | _ -> isRcManagedHeapType typ
 
 let private rcInfoForType (ctx: TypeContext) (typ: AST.Type) : int * RcKind =
@@ -489,6 +492,7 @@ let insertReturnDecs
             let decExpr =
                 match typ with
                 | AST.TString -> RefCountDecString (Var tempId)
+                | AST.TBytes -> RefCountDecBytes (Var tempId)
                 | _ ->
                     let (size, kind) = rcInfoForType ctx typ
                     RefCountDec (Var tempId, size, kind)
@@ -582,6 +586,16 @@ let rec private collectMovableTailDecPrefix
         else
             let (bindings, remaining) = collectMovableTailDecPrefix tailArgTemps rest
             ((tmpId, RefCountDecString atom) :: bindings, remaining)
+    | Let (tmpId, RefCountDecBytes atom, rest) ->
+        let overlaps =
+            match atom with
+            | Var tid -> Set.contains tid tailArgTemps
+            | _ -> false
+        if overlaps then
+            ([], expr)
+        else
+            let (bindings, remaining) = collectMovableTailDecPrefix tailArgTemps rest
+            ((tmpId, RefCountDecBytes atom) :: bindings, remaining)
     | _ ->
         ([], expr)
 

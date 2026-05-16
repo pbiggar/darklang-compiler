@@ -3260,7 +3260,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ARM64Symbolic.STRB_reg (valueReg, tempReg)           // [temp] = value (byte)
                     ])))
 
-    | LIR.RefCountIncString str ->
+    | LIR.RefCountIncString str
+    | LIR.RefCountIncBytes str ->
         // Increment refcount for a heap string
         // Heap string layout: [length:8][data:N][padding:P][refcount:8] where P aligns to 8
         // Literal strings have refcount = INT64_MAX as sentinel (don't modify read-only memory)
@@ -3294,9 +3295,10 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)        // X15++
                     ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)             // store back
                 ])
-        | _ -> Error "RefCountIncString requires StringSymbol or Reg operand"
+        | _ -> Error "dynamic buffer RefCountInc requires StringSymbol or Reg operand"
 
-    | LIR.RefCountDecString str ->
+    | LIR.RefCountDecString str
+    | LIR.RefCountDecBytes str ->
         // Decrement refcount for a heap string
         // Heap string layout: [length:8][data:N][padding:P][refcount:8] where P aligns to 8
         // Literal strings have refcount = INT64_MAX as sentinel (don't modify read-only memory)
@@ -3343,7 +3345,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     ARM64Symbolic.CMP_reg (ARM64Symbolic.X15, ARM64Symbolic.X13)             // Compare with sentinel
                     ARM64Symbolic.B_cond (ARM64Symbolic.EQ, bcondOffset)             // If literal string, skip to end
                 ] @ refcountUpdate)
-        | _ -> Error "RefCountDecString requires StringSymbol or Reg operand"
+        | _ -> Error "dynamic buffer RefCountDec requires StringSymbol or Reg operand"
 
     | LIR.RandomInt64 dest ->
         // Generate random 8 bytes as Int64

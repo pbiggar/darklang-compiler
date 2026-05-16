@@ -31,6 +31,7 @@ let isRefCountDec (cexpr: CExpr) : bool =
     match cexpr with
     | RefCountDec _ -> true
     | RefCountDecString _ -> true
+    | RefCountDecBytes _ -> true
     | _ -> false
 
 /// Check if an expression eventually returns a specific TempId
@@ -129,6 +130,16 @@ let rec private collectMovableDecPrefix
         else
             let (bindings, remaining) = collectMovableDecPrefix aliasRoots tailArgTemps rest
             ((tmpId, RefCountDecString atom) :: bindings, remaining)
+    | Let (tmpId, RefCountDecBytes atom, rest) ->
+        let overlaps =
+            match atom with
+            | Var tid -> Set.contains (canonicalTempId aliasRoots tid) tailArgTemps
+            | _ -> false
+        if overlaps then
+            ([], expr)
+        else
+            let (bindings, remaining) = collectMovableDecPrefix aliasRoots tailArgTemps rest
+            ((tmpId, RefCountDecBytes atom) :: bindings, remaining)
     | _ ->
         ([], expr)
 

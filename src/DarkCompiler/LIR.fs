@@ -155,6 +155,8 @@ type Instr =
     | RawSetByte of ptr:Reg * byteOffset:Reg * value:Reg
     | RefCountIncString of str:Operand
     | RefCountDecString of str:Operand
+    | RefCountIncBytes of bytes:Operand
+    | RefCountDecBytes of bytes:Operand
     | RandomInt64 of dest:Reg
     | DateNow of dest:Reg
     | FloatToString of dest:Reg * value:FReg

@@ -1907,7 +1907,8 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 else
                     [])
 
-    | LIR.RefCountIncString str ->
+    | LIR.RefCountIncString str
+    | LIR.RefCountIncBytes str ->
         match str with
         | LIR.StringSymbol _ -> Ok []  // Literal string - no refcount
         | LIR.Reg reg ->
@@ -1938,9 +1939,10 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                    X86_64.POP X86_64.RDX
                    X86_64.POP X86_64.RCX
                    X86_64.Label skipLabel])
-        | _ -> Error "RefCountIncString requires StringSymbol or Reg operand"
+        | _ -> Error "dynamic buffer RefCountInc requires StringSymbol or Reg operand"
 
-    | LIR.RefCountDecString str ->
+    | LIR.RefCountDecString str
+    | LIR.RefCountDecBytes str ->
         match str with
         | LIR.StringSymbol _ -> Ok []  // Literal string - no refcount
         | LIR.Reg reg ->
@@ -1974,7 +1976,7 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                    X86_64.POP X86_64.RDX
                    X86_64.POP X86_64.RCX
                    X86_64.Label skipLabel])
-        | _ -> Error "RefCountDecString requires StringSymbol or Reg operand"
+        | _ -> Error "dynamic buffer RefCountDec requires StringSymbol or Reg operand"
 
     | LIR.StringConcat (dest, left, right) ->
         // String concat: dest = left ++ right

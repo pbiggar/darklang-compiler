@@ -115,9 +115,11 @@ type Instr =
     | RawGetByte of dest:VReg * ptr:Operand * byteOffset:Operand  // Read 1 byte at offset (zero-extended)
     | RawSet of ptr:Operand * byteOffset:Operand * value:Operand * valueType:AST.Type option  // Write 8 bytes at offset, valueType for float
     | RawSetByte of ptr:Operand * byteOffset:Operand * value:Operand  // Write 1 byte at offset
-    // String reference counting (at dynamic offset)
+    // Dynamic buffer reference counting (at offset computed from length)
     | RefCountIncString of str:Operand             // Increment string ref count (at [str + 8 + len])
     | RefCountDecString of str:Operand             // Decrement string ref count, free if zero
+    | RefCountIncBytes of bytes:Operand            // Increment bytes ref count (at [bytes + 8 + len])
+    | RefCountDecBytes of bytes:Operand            // Decrement bytes ref count, free if zero
     // Random intrinsics
     | RandomInt64 of dest:VReg                     // Get 8 random bytes as Int64
     // Date intrinsics

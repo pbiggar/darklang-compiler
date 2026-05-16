@@ -1313,6 +1313,13 @@ let selectInstr
     | MIR.RefCountDecString str ->
         let lirStr = convertOperand str
         Ok ([LIR.RefCountDecString lirStr], state)
+    | MIR.RefCountIncBytes bytes ->
+        let lirBytes = convertOperand bytes
+        Ok ([LIR.RefCountIncBytes lirBytes], state)
+
+    | MIR.RefCountDecBytes bytes ->
+        let lirBytes = convertOperand bytes
+        Ok ([LIR.RefCountDecBytes lirBytes], state)
 
     | MIR.RandomInt64 dest ->
         let lirDest = vregToLIRReg dest
@@ -1474,6 +1481,8 @@ let vregIdsFromInstr (instr: MIR.Instr) : int list =
         vregIdsFromOperand ptr @ vregIdsFromOperand byteOffset @ vregIdsFromOperand value
     | MIR.RefCountIncString str -> vregIdsFromOperand str
     | MIR.RefCountDecString str -> vregIdsFromOperand str
+    | MIR.RefCountIncBytes bytes -> vregIdsFromOperand bytes
+    | MIR.RefCountDecBytes bytes -> vregIdsFromOperand bytes
     | MIR.RandomInt64 dest -> [vregId dest]
     | MIR.DateNow dest -> [vregId dest]
     | MIR.FloatToString (dest, value) -> vregId dest :: vregIdsFromOperand value
