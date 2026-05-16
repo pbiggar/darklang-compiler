@@ -564,6 +564,8 @@ let private listRefCountDecHelperLabel = "__dark_list_rc_dec_helper"
 
 let private listRefCountDecTuple2HelperLabel = "__dark_list_rc_dec_tuple2_helper"
 let private listRefCountDecListHelperLabel = "__dark_list_rc_dec_list_helper"
+let private dictRefCountIncHelperLabel = "__dark_dict_rc_inc_helper"
+let private dictRefCountDecHelperLabel = "__dark_dict_rc_dec_helper"
 
 /// Generate the TaggedList RefCountDec helper function.
 /// Called via CALL with the tagged list pointer in RAX.
@@ -915,6 +917,232 @@ let private generateListRefCountIncHelper () : X86_64.Instr list =
      X86_64.MOV_store (X86_64.RDI, 0, X86_64.RDX)  // store incremented
      X86_64.Label helperRet
      X86_64.RET]
+
+let private generateDictRefCountIncHelper () : X86_64.Instr list =
+    let label name = $"__dark_dict_rc_inc_{name}"
+    let helperRet = label "ret"
+    let internalTag = label "internal"
+    let leafTag = label "leaf"
+    let collisionTag = label "collision"
+    let popcountLoop = label "popcount_loop"
+    let popcountDone = label "popcount_done"
+    let haveOffset = label "have_offset"
+
+    [X86_64.Label dictRefCountIncHelperLabel
+     // RAX = tagged HAMT root. Tags: 1 internal, 2 leaf, 3 collision.
+     X86_64.TEST_reg (X86_64.RAX, X86_64.RAX)
+     X86_64.Jcc (X86_64.EQ, helperRet)
+     X86_64.MOV_reg (X86_64.RCX, X86_64.RAX)
+     X86_64.AND_imm (X86_64.RCX, 3)
+     X86_64.TEST_reg (X86_64.RCX, X86_64.RCX)
+     X86_64.Jcc (X86_64.EQ, helperRet)
+     X86_64.CMP_imm (X86_64.RCX, 3)
+     X86_64.Jcc (X86_64.GT, helperRet)
+     X86_64.MOV_reg (X86_64.RDI, X86_64.RAX)
+     X86_64.AND_imm (X86_64.RDI, -8)
+     X86_64.CMP_reg (X86_64.RDI, freeListBase)
+     X86_64.Jcc (X86_64.B, helperRet)
+     X86_64.CMP_reg (X86_64.RDI, heapPtr)
+     X86_64.Jcc (X86_64.AE, helperRet)
+
+     X86_64.CMP_imm (X86_64.RCX, 1)
+     X86_64.Jcc (X86_64.EQ, internalTag)
+     X86_64.CMP_imm (X86_64.RCX, 2)
+     X86_64.Jcc (X86_64.EQ, leafTag)
+     X86_64.JMP collisionTag
+
+     X86_64.Label leafTag
+     X86_64.MOV_imm32 (X86_64.RSI, 16)
+     X86_64.JMP haveOffset
+
+     X86_64.Label collisionTag
+     X86_64.MOV_load (X86_64.RSI, X86_64.RDI, 0)
+     X86_64.SHL_imm (X86_64.RSI, 4)
+     X86_64.ADD_imm (X86_64.RSI, 8)
+     X86_64.JMP haveOffset
+
+     X86_64.Label internalTag
+     X86_64.MOV_load (X86_64.R8, X86_64.RDI, 0)
+     X86_64.XOR_reg (X86_64.RSI, X86_64.RSI)
+     X86_64.Label popcountLoop
+     X86_64.TEST_reg (X86_64.R8, X86_64.R8)
+     X86_64.Jcc (X86_64.EQ, popcountDone)
+     X86_64.MOV_reg (X86_64.R9, X86_64.R8)
+     X86_64.SUB_imm (X86_64.R9, 1)
+     X86_64.AND_reg (X86_64.R8, X86_64.R9)
+     X86_64.ADD_imm (X86_64.RSI, 1)
+     X86_64.JMP popcountLoop
+     X86_64.Label popcountDone
+     X86_64.SHL_imm (X86_64.RSI, 3)
+     X86_64.ADD_imm (X86_64.RSI, 8)
+
+     X86_64.Label haveOffset
+     X86_64.MOV_reg (X86_64.R8, X86_64.RDI)
+     X86_64.ADD_reg (X86_64.R8, X86_64.RSI)
+     X86_64.MOV_load (X86_64.R9, X86_64.R8, 0)
+     X86_64.ADD_imm (X86_64.R9, 1)
+     X86_64.MOV_store (X86_64.R8, 0, X86_64.R9)
+
+     X86_64.Label helperRet
+     X86_64.RET]
+
+let private generateDictRefCountDecHelper (enableLeakCheck: bool) : X86_64.Instr list =
+    let label name = $"__dark_dict_rc_dec_{name}"
+    let helperRet = label "ret"
+    let loopCheck = label "loop_check"
+    let popOrRet = label "pop_or_ret"
+    let internalTag = label "internal"
+    let leafTag = label "leaf"
+    let collisionTag = label "collision"
+    let popcountLoop = label "popcount_loop"
+    let popcountDone = label "popcount_done"
+    let haveOffset = label "have_offset"
+    let collectInternal = label "collect_internal"
+    let collectLoop = label "collect_loop"
+    let freeNode = label "free_node"
+    let skipFreeList = label "skip_freelist"
+
+    let leakDec =
+        if enableLeakCheck then
+            [X86_64.PUSH scratch
+             X86_64.PUSH X86_64.RCX
+             X86_64.LEA_rip (scratch, "_leak_count")
+             X86_64.MOV_load (X86_64.RCX, scratch, 0)
+             X86_64.SUB_imm (X86_64.RCX, 1)
+             X86_64.MOV_store (scratch, 0, X86_64.RCX)
+             X86_64.POP X86_64.RCX
+             X86_64.POP scratch]
+        else
+            []
+
+    let addChild (suffix: string) : X86_64.Instr list =
+        let doneLabel = label $"child_done_{suffix}"
+        let pushLabel = label $"child_push_{suffix}"
+        [X86_64.TEST_reg (X86_64.R10, X86_64.R10)
+         X86_64.Jcc (X86_64.EQ, doneLabel)
+         X86_64.MOV_reg (X86_64.R11, X86_64.R10)
+         X86_64.AND_imm (X86_64.R11, 3)
+         X86_64.TEST_reg (X86_64.R11, X86_64.R11)
+         X86_64.Jcc (X86_64.EQ, doneLabel)
+         X86_64.CMP_imm (X86_64.R11, 3)
+         X86_64.Jcc (X86_64.GT, doneLabel)
+         X86_64.MOV_reg (X86_64.R11, X86_64.R10)
+         X86_64.AND_imm (X86_64.R11, -8)
+         X86_64.CMP_reg (X86_64.R11, freeListBase)
+         X86_64.Jcc (X86_64.B, doneLabel)
+         X86_64.CMP_reg (X86_64.R11, heapPtr)
+         X86_64.Jcc (X86_64.AE, doneLabel)
+         X86_64.TEST_reg (X86_64.RAX, X86_64.RAX)
+         X86_64.Jcc (X86_64.NE, pushLabel)
+         X86_64.MOV_reg (X86_64.RAX, X86_64.R10)
+         X86_64.JMP doneLabel
+         X86_64.Label pushLabel
+         X86_64.PUSH X86_64.R10
+         X86_64.ADD_imm (X86_64.RCX, 1)
+         X86_64.Label doneLabel]
+
+    [X86_64.Label dictRefCountDecHelperLabel
+     X86_64.XOR_reg (X86_64.RCX, X86_64.RCX)
+     X86_64.JMP loopCheck
+
+     X86_64.Label loopCheck
+     X86_64.TEST_reg (X86_64.RAX, X86_64.RAX)
+     X86_64.Jcc (X86_64.EQ, popOrRet)
+     X86_64.MOV_reg (X86_64.RDX, X86_64.RAX)
+     X86_64.AND_imm (X86_64.RDX, 3)
+     X86_64.TEST_reg (X86_64.RDX, X86_64.RDX)
+     X86_64.Jcc (X86_64.EQ, popOrRet)
+     X86_64.CMP_imm (X86_64.RDX, 3)
+     X86_64.Jcc (X86_64.GT, popOrRet)
+     X86_64.MOV_reg (X86_64.RDI, X86_64.RAX)
+     X86_64.AND_imm (X86_64.RDI, -8)
+     X86_64.CMP_reg (X86_64.RDI, freeListBase)
+     X86_64.Jcc (X86_64.B, popOrRet)
+     X86_64.CMP_reg (X86_64.RDI, heapPtr)
+     X86_64.Jcc (X86_64.AE, popOrRet)
+
+     X86_64.CMP_imm (X86_64.RDX, 1)
+     X86_64.Jcc (X86_64.EQ, internalTag)
+     X86_64.CMP_imm (X86_64.RDX, 2)
+     X86_64.Jcc (X86_64.EQ, leafTag)
+     X86_64.JMP collisionTag
+
+     X86_64.Label leafTag
+     X86_64.MOV_imm32 (X86_64.RSI, 16)
+     X86_64.XOR_reg (X86_64.R8, X86_64.R8)
+     X86_64.JMP haveOffset
+
+     X86_64.Label collisionTag
+     X86_64.MOV_load (X86_64.RSI, X86_64.RDI, 0)
+     X86_64.SHL_imm (X86_64.RSI, 4)
+     X86_64.ADD_imm (X86_64.RSI, 8)
+     X86_64.XOR_reg (X86_64.R8, X86_64.R8)
+     X86_64.JMP haveOffset
+
+     X86_64.Label internalTag
+     X86_64.MOV_load (X86_64.R9, X86_64.RDI, 0)
+     X86_64.XOR_reg (X86_64.R8, X86_64.R8)
+     X86_64.Label popcountLoop
+     X86_64.TEST_reg (X86_64.R9, X86_64.R9)
+     X86_64.Jcc (X86_64.EQ, popcountDone)
+     X86_64.MOV_reg (X86_64.R10, X86_64.R9)
+     X86_64.SUB_imm (X86_64.R10, 1)
+     X86_64.AND_reg (X86_64.R9, X86_64.R10)
+     X86_64.ADD_imm (X86_64.R8, 1)
+     X86_64.JMP popcountLoop
+     X86_64.Label popcountDone
+     X86_64.MOV_reg (X86_64.RSI, X86_64.R8)
+     X86_64.SHL_imm (X86_64.RSI, 3)
+     X86_64.ADD_imm (X86_64.RSI, 8)
+
+     X86_64.Label haveOffset
+     X86_64.MOV_reg (X86_64.R9, X86_64.RDI)
+     X86_64.ADD_reg (X86_64.R9, X86_64.RSI)
+     X86_64.MOV_load (X86_64.R10, X86_64.R9, 0)
+     X86_64.SUB_imm (X86_64.R10, 1)
+     X86_64.MOV_store (X86_64.R9, 0, X86_64.R10)
+     X86_64.TEST_reg (X86_64.R10, X86_64.R10)
+     X86_64.Jcc (X86_64.NE, popOrRet)
+     X86_64.CMP_imm (X86_64.RDX, 1)
+     X86_64.Jcc (X86_64.EQ, collectInternal)
+     X86_64.JMP freeNode
+
+     X86_64.Label collectInternal
+     X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)
+     X86_64.XOR_reg (X86_64.R9, X86_64.R9)
+     X86_64.Label collectLoop
+     X86_64.CMP_reg (X86_64.R9, X86_64.R8)
+     X86_64.Jcc (X86_64.GE, freeNode)
+     X86_64.MOV_reg (X86_64.R10, X86_64.R9)
+     X86_64.SHL_imm (X86_64.R10, 3)
+     X86_64.ADD_imm (X86_64.R10, 8)
+     X86_64.ADD_reg (X86_64.R10, X86_64.RDI)
+     X86_64.MOV_load (X86_64.R10, X86_64.R10, 0)]
+    @ addChild "internal"
+    @ [X86_64.ADD_imm (X86_64.R9, 1)
+       X86_64.JMP collectLoop
+
+       X86_64.Label freeNode
+       X86_64.CMP_imm (X86_64.RSI, freeListSize)
+       X86_64.Jcc (X86_64.GE, skipFreeList)
+       X86_64.MOV_reg (X86_64.R9, freeListBase)
+       X86_64.ADD_reg (X86_64.R9, X86_64.RSI)
+       X86_64.MOV_load (X86_64.R10, X86_64.R9, 0)
+       X86_64.MOV_store (X86_64.RDI, 0, X86_64.R10)
+       X86_64.MOV_store (X86_64.R9, 0, X86_64.RDI)
+       X86_64.Label skipFreeList]
+    @ leakDec
+    @ [X86_64.JMP loopCheck
+
+       X86_64.Label popOrRet
+       X86_64.TEST_reg (X86_64.RCX, X86_64.RCX)
+       X86_64.Jcc (X86_64.EQ, helperRet)
+       X86_64.POP X86_64.RAX
+       X86_64.SUB_imm (X86_64.RCX, 1)
+       X86_64.JMP loopCheck
+
+       X86_64.Label helperRet
+       X86_64.RET]
 
 /// Adjust a stack slot offset to account for callee-saved registers pushed after RBP.
 /// LIR stack slots are byte offsets from FP (e.g., -8, -16), but callee-saved pushes
@@ -1928,8 +2156,14 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 saves
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL listRefCountIncHelperLabel]
                 @ restores
-            | LIR.GenericHeap
             | LIR.DictHeap ->
+                let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9]
+                let saves = saveRegs |> List.map X86_64.PUSH
+                let restores = saveRegs |> List.rev |> List.map X86_64.POP
+                saves
+                @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL dictRefCountIncHelperLabel]
+                @ restores
+            | LIR.GenericHeap ->
                 genRefCountIncGeneric addrReg payloadSize)
 
     | LIR.RefCountDec (addr, payloadSize, kind, sourceType) ->
@@ -1952,8 +2186,14 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 saves
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL helperLabel]
                 @ restores
-            | LIR.GenericHeap
             | LIR.DictHeap ->
+                let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; scratch]
+                let saves = saveRegs |> List.map X86_64.PUSH
+                let restores = saveRegs |> List.rev |> List.map X86_64.POP
+                saves
+                @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL dictRefCountDecHelperLabel]
+                @ restores
+            | LIR.GenericHeap ->
                 genRefCountDecGeneric ctx addrReg payloadSize)
 
     | LIR.RefCountIncString str
@@ -2459,6 +2699,13 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                             let restores = saveRegs |> List.rev |> List.map X86_64.POP
                             saves
                             @ [X86_64.MOV_reg (X86_64.RAX, v); X86_64.CALL listRefCountIncHelperLabel]
+                            @ restores
+                        | Some (AST.TDict _) ->
+                            let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9]
+                            let saves = saveRegs |> List.map X86_64.PUSH
+                            let restores = saveRegs |> List.rev |> List.map X86_64.POP
+                            saves
+                            @ [X86_64.MOV_reg (X86_64.RAX, v); X86_64.CALL dictRefCountIncHelperLabel]
                             @ restores
                         | _ ->
                             []
@@ -3154,6 +3401,27 @@ let translateProgram (LIR.Program functions) (enableLeakCheck: bool) : Result<X8
                     | LIR.RawSet (_, _, _, Some (AST.TList _)) -> true
                     | _ -> false)))
 
+    let needsDictRcIncHelper =
+        functions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountInc (_, _, LIR.DictHeap, _) -> true
+                    | LIR.RawSet (_, _, _, Some (AST.TDict _)) -> true
+                    | _ -> false)))
+
+    let needsDictRcDecHelper =
+        functions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.DictHeap, _) -> true
+                    | _ -> false)))
+
     translateFuncs [] functions
     |> Result.map (fun allInstrs ->
         let listIncHelper =
@@ -3168,4 +3436,10 @@ let translateProgram (LIR.Program functions) (enableLeakCheck: bool) : Result<X8
         let listDecListHelper =
             if needsListRcDecListHelper then generateListRefCountDecListHelper enableLeakCheck
             else []
-        allInstrs @ listIncHelper @ listDecHelper @ listDecTuple2Helper @ listDecListHelper @ genOomHandler ())
+        let dictIncHelper =
+            if needsDictRcIncHelper then generateDictRefCountIncHelper ()
+            else []
+        let dictDecHelper =
+            if needsDictRcDecHelper then generateDictRefCountDecHelper enableLeakCheck
+            else []
+        allInstrs @ listIncHelper @ listDecHelper @ listDecTuple2Helper @ listDecListHelper @ dictIncHelper @ dictDecHelper @ genOomHandler ())
