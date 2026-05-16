@@ -309,6 +309,22 @@ let testGenericRefCountInc () : Result<unit, string> =
         if exitCode = 2 then Ok ()
         else Error $"Expected RefCountInc to raise refcount exit code to 2, got {exitCode}"
 
+/// Test: generic fixed-block RefCountDec reclaims 16-byte payload blocks.
+let testGenericRefCountDecTuple2 () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X2, 16)
+                LIR.RefCountDec (LIR.Physical LIR.X2, 16, LIR.GenericHeap)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected tuple2-sized RefCountDec to balance leak counter, got stderr '{stderr.Trim()}'"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -321,4 +337,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR HeapAlloc initializes refcount", testHeapAllocInitializesRefcount)
     ("LIR HeapAlloc increments leak counter", testHeapAllocIncrementsLeakCounter)
     ("LIR generic RefCountInc increments refcount", testGenericRefCountInc)
+    ("LIR generic RefCountDec reclaims tuple2", testGenericRefCountDecTuple2)
 ]
