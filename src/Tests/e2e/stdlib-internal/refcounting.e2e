@@ -8,8 +8,8 @@ let s = "a" ++ "b" in let _ = __refcount_inc_string(s) in 0 = stdout="0\n" stder
 // These tests intentionally record today's behavior so each shape can be
 // re-enabled to expect stderr="" as the refcounting implementation reaches it.
 
-// Dynamic strings are counted but not automatically decref'd at scope exit.
-let s = "a" ++ "b" in 0 = stdout="0\n" stderr="leaks: 1\n" // current string leak
+// Dynamic strings are counted and decref'd at scope exit.
+let s = "a" ++ "b" in 0 = stdout="0\n" stderr="" // string concat reclaimed
 
 // Dynamic bytes are counted but are not yet first-class refcounted values.
 let b = Bytes.create(4) in 0 = stdout="0\n" stderr="leaks: 1\n" // current bytes leak

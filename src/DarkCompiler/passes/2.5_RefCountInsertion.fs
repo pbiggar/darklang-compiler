@@ -447,6 +447,11 @@ let private isRcManagedHeapType (typ: AST.Type) : bool =
     | AST.TDict _ -> false
     | _ -> isHeapType typ
 
+let private needsAutomaticDec (typ: AST.Type) : bool =
+    match typ with
+    | AST.TString -> true
+    | _ -> isRcManagedHeapType typ
+
 let private rcInfoForType (ctx: TypeContext) (typ: AST.Type) : int * RcKind =
     (payloadSize typ ctx.TypeReg, rcKind typ)
 /// Insert RefCountInc for returned parameters at a Return node
@@ -471,16 +476,22 @@ let insertParamIncsAtReturn
 
 /// Insert RefCountDec operations before a Return using the current dec stack
 let insertReturnDecs
-    (returnDecs: (TempId * int * RcKind) list)
+    (ctx: TypeContext)
+    (returnDecs: (TempId * AST.Type) list)
     (expr: AExpr)
     (varGen: VarGen)
     (types: Map<TempId, AST.Type>)
     : AExpr * VarGen * Map<TempId, AST.Type> =
     let decsInOrder = List.rev returnDecs
     List.fold
-        (fun (accExpr, accVarGen, accTypes) (tempId, size, kind) ->
+        (fun (accExpr, accVarGen, accTypes) (tempId, typ) ->
             let (dummyId, varGen') = freshVar accVarGen
-            let decExpr = RefCountDec (Var tempId, size, kind)
+            let decExpr =
+                match typ with
+                | AST.TString -> RefCountDecString (Var tempId)
+                | _ ->
+                    let (size, kind) = rcInfoForType ctx typ
+                    RefCountDec (Var tempId, size, kind)
             let accExpr' = Let (dummyId, decExpr, accExpr)
             (accExpr', varGen', Map.add dummyId AST.TUnit accTypes))
         (expr, varGen, types)
@@ -602,7 +613,7 @@ let rec insertRCWithAnalysis
     (currentFuncName: string option)
     (expr: ReturnAnnotatedExpr)
     (varGen: VarGen)
-    (returnDecs: (TempId * int * RcKind) list)
+    (returnDecs: (TempId * AST.Type) list)
     (paramIncs: (TempId * int * RcKind) list)
     (types: Map<TempId, AST.Type>)
     (typeCache: CExprTypeCache)
@@ -612,7 +623,7 @@ let rec insertRCWithAnalysis
         (ctx: TypeContext)
         (expr: ReturnAnnotatedExpr)
         (varGen: VarGen)
-        (returnDecs: (TempId * int * RcKind) list)
+        (returnDecs: (TempId * AST.Type) list)
         (frames: LetFrame list)
         (types: Map<TempId, AST.Type>)
         (typeCache: CExprTypeCache)
@@ -622,7 +633,7 @@ let rec insertRCWithAnalysis
             let baseExpr = Return atom
             let (withParamIncs, varGen1, types1) =
                 insertParamIncsAtReturn paramIncs returned baseExpr varGen types
-            let (withDecs, varGen2, types2) = insertReturnDecs returnDecs withParamIncs varGen1 types1
+            let (withDecs, varGen2, types2) = insertReturnDecs ctx returnDecs withParamIncs varGen1 types1
             let (finalExpr, finalVarGen, finalTypes) = applyLetFrames frames (withDecs, varGen2, types2)
             (finalExpr, finalVarGen, finalTypes, typeCache)
 
@@ -787,13 +798,12 @@ let rec insertRCWithAnalysis
                            | _ -> false
                     | None ->
                         false
-                if isRcManagedHeapType inferredType
+                if needsAutomaticDec inferredType
                    && not (Set.contains tempId bodyReturned)
                    && not (isBorrowingExpr cexpr)
                    && not skipReturnDecForPushBackHelpers
                    && not consumedByImmediateI64Push then
-                    let (size, kind) = rcInfoForType ctx inferredType
-                    (tempId, size, kind) :: returnDecs
+                    (tempId, inferredType) :: returnDecs
                 else
                     returnDecs
 
