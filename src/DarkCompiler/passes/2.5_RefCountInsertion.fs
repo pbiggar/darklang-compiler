@@ -444,10 +444,7 @@ let isBorrowingExpr (cexpr: CExpr) : bool =
     | _ -> false
 
 let private isRcManagedHeapType (typ: AST.Type) : bool =
-    // Dict values are tagged pointers; generic RefCountInc/Dec expect raw pointers.
-    match typ with
-    | AST.TDict _ -> false
-    | _ -> isHeapType typ
+    isHeapType typ
 
 let private needsAutomaticDec (typ: AST.Type) : bool =
     match typ with

@@ -16,11 +16,11 @@ let s = Stdlib.String.fromCodepoints([97]) in 0 = stdout="0\n" stderr="" // unal
 // Dynamic bytes use the same length-aligned refcount slot as dynamic strings.
 let b = Bytes.create(4) in 0 = stdout="0\n" stderr=""
 
-// HAMT/dict allocation uses raw unmanaged nodes today.
-let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2) in 0 = stdout="0\n" stderr="leaks: 1\n" // current dict leak
-let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2) in let d2 = Stdlib.Dict.set(d, 1, 3) in 0 = stdout="0\n" stderr="leaks: 2\n" // current dict overwrite leak
-let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2) in let d2 = Stdlib.Dict.remove(d, 1) in 0 = stdout="0\n" stderr="leaks: 1\n" // current dict remove leak
-let d = Stdlib.Dict.fromList<Int64, Int64>([(1, 2), (3, 4)]) in 0 = stdout="0\n" stderr="leaks: 6\n" // current dict fromList leak
+// HAMT/dict roots use typed refcounting and reclaim raw nodes when the root dies.
+let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2) in 0 = stdout="0\n" stderr="" // dict singleton reclaimed
+let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2) in let d2 = Stdlib.Dict.set(d, 1, 3) in 0 = stdout="0\n" stderr="" // dict overwrite reclaimed
+let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2) in let d2 = Stdlib.Dict.remove(d, 1) in 0 = stdout="0\n" stderr="" // dict remove reclaimed
+let d = Stdlib.Dict.fromList<Int64, Int64>([(1, 2), (3, 4)]) in 0 = stdout="0\n" stderr="leaks: 2\n" // dict nodes reclaimed; input primitive tuple list still leaks
 
 // Tagged list construction is reclaimed even when the list is unused.
 let xs = [1, 2, 3] in 0 = stdout="0\n" stderr=""
