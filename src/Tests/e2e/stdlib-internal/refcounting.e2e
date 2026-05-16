@@ -24,6 +24,7 @@ let d = Stdlib.Dict.fromList<Int64, Int64>([(1, 2), (3, 4)]) in 0 = stdout="0\n"
 
 // Tagged list construction is reclaimed even when the list is unused.
 let xs = [1, 2, 3] in 0 = stdout="0\n" stderr=""
+let base = 1 in let f = (x: Int64) => x + base in let xs = [f] in 0 = stdout="0\n" stderr="" // list of closures uses tagged-list RC
 
 // Fixed-block tuple root allocation is reclaimed on the active backend.
 let t = (1, 2) in t.0 = stdout="1\n" stderr="" // tuple root reclaimed

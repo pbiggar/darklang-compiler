@@ -306,7 +306,6 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
 /// Determine reference-count dispatch kind for a heap type
 let rcKind (t: AST.Type) : RcKind =
     match t with
-    | AST.TList (AST.TFunction _) -> GenericHeap
     | AST.TList _ -> TaggedList
     | _ -> GenericHeap
 
