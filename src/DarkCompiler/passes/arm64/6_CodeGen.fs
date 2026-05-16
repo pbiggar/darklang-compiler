@@ -55,6 +55,8 @@ let private listRefCountIncHelperLabel = "__dark_list_refcount_inc_helper"
 let private listRefCountDecHelperLabel = "__dark_list_refcount_dec_helper"
 let private listRefCountDecTuple2HelperLabel = "__dark_list_refcount_dec_tuple2_helper"
 let private listRefCountDecListHelperLabel = "__dark_list_refcount_dec_list_helper"
+let private dictRefCountIncHelperLabel = "__dark_dict_refcount_inc_helper"
+let private dictRefCountDecHelperLabel = "__dark_dict_refcount_dec_helper"
 
 let private dataLabel (name: string) : ARM64Symbolic.LabelRef =
     ARM64Symbolic.DataLabel (ARM64Symbolic.Named name)
@@ -458,6 +460,224 @@ let private generateListRefCountDecTuple2Helper (ctx: CodeGenContext) : ARM64Sym
 
 let private generateListRefCountDecListHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     generateListRefCountDecHelperWith listRefCountDecListHelperLabel ctx None true
+
+let private generateDictRefCountIncHelper () : ARM64Symbolic.Instr list =
+    let label (name: string) : string = $"__dark_dict_rc_inc_{name}"
+    let internalTag = label "internal"
+    let leafTag = label "leaf"
+    let collisionTag = label "collision"
+    let popcountLoop = label "popcount_loop"
+    let popcountDone = label "popcount_done"
+    let haveOffset = label "have_offset"
+    let helperRet = label "ret"
+
+    [
+        ARM64Symbolic.Label dictRefCountIncHelperLabel
+        // X0 = tagged HAMT root. Tags: 1 internal, 2 leaf, 3 collision.
+        ARM64Symbolic.CBZ (ARM64Symbolic.X0, helperRet)
+        ARM64Symbolic.AND_imm (ARM64Symbolic.X1, ARM64Symbolic.X0, 3UL)
+        ARM64Symbolic.CBZ (ARM64Symbolic.X1, helperRet)
+        ARM64Symbolic.CMP_imm (ARM64Symbolic.X1, 3us)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.GT, helperRet)
+        ARM64Symbolic.LSR_imm (ARM64Symbolic.X2, ARM64Symbolic.X0, 3)
+        ARM64Symbolic.LSL_imm (ARM64Symbolic.X2, ARM64Symbolic.X2, 3)
+        ARM64Symbolic.CMP_reg (ARM64Symbolic.X2, ARM64Symbolic.X27)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, helperRet)
+        ARM64Symbolic.CMP_reg (ARM64Symbolic.X2, ARM64Symbolic.X28)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, helperRet)
+
+        ARM64Symbolic.CMP_imm (ARM64Symbolic.X1, 1us)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, internalTag)
+        ARM64Symbolic.CMP_imm (ARM64Symbolic.X1, 2us)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, leafTag)
+        ARM64Symbolic.B_label collisionTag
+
+        ARM64Symbolic.Label leafTag
+        ARM64Symbolic.MOVZ (ARM64Symbolic.X3, 16us, 0)
+        ARM64Symbolic.B_label haveOffset
+
+        ARM64Symbolic.Label collisionTag
+        ARM64Symbolic.LDR (ARM64Symbolic.X3, ARM64Symbolic.X2, 0s)
+        ARM64Symbolic.LSL_imm (ARM64Symbolic.X3, ARM64Symbolic.X3, 4)
+        ARM64Symbolic.ADD_imm (ARM64Symbolic.X3, ARM64Symbolic.X3, 8us)
+        ARM64Symbolic.B_label haveOffset
+
+        ARM64Symbolic.Label internalTag
+        ARM64Symbolic.LDR (ARM64Symbolic.X4, ARM64Symbolic.X2, 0s) // bitmap
+        ARM64Symbolic.MOVZ (ARM64Symbolic.X3, 0us, 0)              // child count
+        ARM64Symbolic.Label popcountLoop
+        ARM64Symbolic.CBZ (ARM64Symbolic.X4, popcountDone)
+        ARM64Symbolic.SUB_imm (ARM64Symbolic.X5, ARM64Symbolic.X4, 1us)
+        ARM64Symbolic.AND_reg (ARM64Symbolic.X4, ARM64Symbolic.X4, ARM64Symbolic.X5)
+        ARM64Symbolic.ADD_imm (ARM64Symbolic.X3, ARM64Symbolic.X3, 1us)
+        ARM64Symbolic.B_label popcountLoop
+        ARM64Symbolic.Label popcountDone
+        ARM64Symbolic.LSL_imm (ARM64Symbolic.X3, ARM64Symbolic.X3, 3)
+        ARM64Symbolic.ADD_imm (ARM64Symbolic.X3, ARM64Symbolic.X3, 8us)
+
+        ARM64Symbolic.Label haveOffset
+        ARM64Symbolic.ADD_reg (ARM64Symbolic.X4, ARM64Symbolic.X2, ARM64Symbolic.X3)
+        ARM64Symbolic.LDR (ARM64Symbolic.X5, ARM64Symbolic.X4, 0s)
+        ARM64Symbolic.ADD_imm (ARM64Symbolic.X5, ARM64Symbolic.X5, 1us)
+        ARM64Symbolic.STR (ARM64Symbolic.X5, ARM64Symbolic.X4, 0s)
+
+        ARM64Symbolic.Label helperRet
+        ARM64Symbolic.RET
+    ]
+
+let private generateDictRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    let label (name: string) : string = $"__dark_dict_rc_dec_{name}"
+    let leakDec =
+        if ctx.Options.EnableLeakCheck then
+            let labelRef = dataLabel leakCounterLabel
+            [
+                ARM64Symbolic.ADRP (ARM64Symbolic.X17, labelRef)
+                ARM64Symbolic.ADD_label (ARM64Symbolic.X17, ARM64Symbolic.X17, labelRef)
+                ARM64Symbolic.LDR (ARM64Symbolic.X16, ARM64Symbolic.X17, 0s)
+                ARM64Symbolic.SUB_imm (ARM64Symbolic.X16, ARM64Symbolic.X16, 1us)
+                ARM64Symbolic.STR (ARM64Symbolic.X16, ARM64Symbolic.X17, 0s)
+            ]
+        else
+            []
+
+    let addChild (suffix: string) : ARM64Symbolic.Instr list =
+        let doneLabel = label $"child_done_{suffix}"
+        let pushLabel = label $"child_push_{suffix}"
+        [
+            ARM64Symbolic.CBZ (ARM64Symbolic.X8, doneLabel)
+            ARM64Symbolic.AND_imm (ARM64Symbolic.X9, ARM64Symbolic.X8, 3UL)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X9, doneLabel)
+            ARM64Symbolic.CMP_imm (ARM64Symbolic.X9, 3us)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.GT, doneLabel)
+            ARM64Symbolic.LSR_imm (ARM64Symbolic.X10, ARM64Symbolic.X8, 3)
+            ARM64Symbolic.LSL_imm (ARM64Symbolic.X10, ARM64Symbolic.X10, 3)
+            ARM64Symbolic.CMP_reg (ARM64Symbolic.X10, ARM64Symbolic.X27)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, doneLabel)
+            ARM64Symbolic.CMP_reg (ARM64Symbolic.X10, ARM64Symbolic.X28)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, doneLabel)
+            ARM64Symbolic.CBNZ (ARM64Symbolic.X0, pushLabel)
+            ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X8)
+            ARM64Symbolic.B_label doneLabel
+            ARM64Symbolic.Label pushLabel
+            ARM64Symbolic.SUB_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 16us)
+            ARM64Symbolic.STR (ARM64Symbolic.X8, ARM64Symbolic.SP, 0s)
+            ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X1, 1us)
+            ARM64Symbolic.Label doneLabel
+        ]
+
+    let loopCheck = label "loop_check"
+    let popOrRet = label "pop_or_ret"
+    let helperRet = label "ret"
+    let internalTag = label "internal"
+    let leafTag = label "leaf"
+    let collisionTag = label "collision"
+    let popcountLoop = label "popcount_loop"
+    let popcountDone = label "popcount_done"
+    let haveOffset = label "have_offset"
+    let collectInternal = label "collect_internal"
+    let collectLoop = label "collect_loop"
+    let freeNode = label "free_node"
+    let skipFreeList = label "skip_freelist"
+
+    [
+        ARM64Symbolic.Label dictRefCountDecHelperLabel
+        // X0 = current tagged HAMT root, X1 = pending work stack count.
+        ARM64Symbolic.MOVZ (ARM64Symbolic.X1, 0us, 0)
+        ARM64Symbolic.B_label loopCheck
+
+        ARM64Symbolic.Label loopCheck
+        ARM64Symbolic.CBZ (ARM64Symbolic.X0, popOrRet)
+        ARM64Symbolic.AND_imm (ARM64Symbolic.X2, ARM64Symbolic.X0, 3UL)
+        ARM64Symbolic.CBZ (ARM64Symbolic.X2, popOrRet)
+        ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 3us)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.GT, popOrRet)
+        ARM64Symbolic.LSR_imm (ARM64Symbolic.X3, ARM64Symbolic.X0, 3)
+        ARM64Symbolic.LSL_imm (ARM64Symbolic.X3, ARM64Symbolic.X3, 3)
+        ARM64Symbolic.CMP_reg (ARM64Symbolic.X3, ARM64Symbolic.X27)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, popOrRet)
+        ARM64Symbolic.CMP_reg (ARM64Symbolic.X3, ARM64Symbolic.X28)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, popOrRet)
+
+        ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 1us)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, internalTag)
+        ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 2us)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, leafTag)
+        ARM64Symbolic.B_label collisionTag
+
+        ARM64Symbolic.Label leafTag
+        ARM64Symbolic.MOVZ (ARM64Symbolic.X4, 16us, 0)
+        ARM64Symbolic.MOVZ (ARM64Symbolic.X5, 0us, 0)
+        ARM64Symbolic.B_label haveOffset
+
+        ARM64Symbolic.Label collisionTag
+        ARM64Symbolic.LDR (ARM64Symbolic.X4, ARM64Symbolic.X3, 0s)
+        ARM64Symbolic.LSL_imm (ARM64Symbolic.X4, ARM64Symbolic.X4, 4)
+        ARM64Symbolic.ADD_imm (ARM64Symbolic.X4, ARM64Symbolic.X4, 8us)
+        ARM64Symbolic.MOVZ (ARM64Symbolic.X5, 0us, 0)
+        ARM64Symbolic.B_label haveOffset
+
+        ARM64Symbolic.Label internalTag
+        ARM64Symbolic.LDR (ARM64Symbolic.X6, ARM64Symbolic.X3, 0s) // bitmap
+        ARM64Symbolic.MOVZ (ARM64Symbolic.X5, 0us, 0)              // child count
+        ARM64Symbolic.Label popcountLoop
+        ARM64Symbolic.CBZ (ARM64Symbolic.X6, popcountDone)
+        ARM64Symbolic.SUB_imm (ARM64Symbolic.X7, ARM64Symbolic.X6, 1us)
+        ARM64Symbolic.AND_reg (ARM64Symbolic.X6, ARM64Symbolic.X6, ARM64Symbolic.X7)
+        ARM64Symbolic.ADD_imm (ARM64Symbolic.X5, ARM64Symbolic.X5, 1us)
+        ARM64Symbolic.B_label popcountLoop
+        ARM64Symbolic.Label popcountDone
+        ARM64Symbolic.LSL_imm (ARM64Symbolic.X4, ARM64Symbolic.X5, 3)
+        ARM64Symbolic.ADD_imm (ARM64Symbolic.X4, ARM64Symbolic.X4, 8us)
+
+        ARM64Symbolic.Label haveOffset
+        ARM64Symbolic.ADD_reg (ARM64Symbolic.X6, ARM64Symbolic.X3, ARM64Symbolic.X4)
+        ARM64Symbolic.LDR (ARM64Symbolic.X7, ARM64Symbolic.X6, 0s)
+        ARM64Symbolic.SUB_imm (ARM64Symbolic.X7, ARM64Symbolic.X7, 1us)
+        ARM64Symbolic.STR (ARM64Symbolic.X7, ARM64Symbolic.X6, 0s)
+        ARM64Symbolic.CBNZ (ARM64Symbolic.X7, popOrRet)
+        ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 1us)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, collectInternal)
+        ARM64Symbolic.B_label freeNode
+
+        ARM64Symbolic.Label collectInternal
+        ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
+        ARM64Symbolic.MOVZ (ARM64Symbolic.X6, 0us, 0)
+        ARM64Symbolic.Label collectLoop
+        ARM64Symbolic.CMP_reg (ARM64Symbolic.X6, ARM64Symbolic.X5)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, freeNode)
+        ARM64Symbolic.LSL_imm (ARM64Symbolic.X7, ARM64Symbolic.X6, 3)
+        ARM64Symbolic.ADD_imm (ARM64Symbolic.X7, ARM64Symbolic.X7, 8us)
+        ARM64Symbolic.ADD_reg (ARM64Symbolic.X7, ARM64Symbolic.X3, ARM64Symbolic.X7)
+        ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X7, 0s)
+    ]
+    @ addChild "internal"
+    @ [
+        ARM64Symbolic.ADD_imm (ARM64Symbolic.X6, ARM64Symbolic.X6, 1us)
+        ARM64Symbolic.B_label collectLoop
+
+        ARM64Symbolic.Label freeNode
+        ARM64Symbolic.CMP_imm (ARM64Symbolic.X4, 256us)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, skipFreeList)
+        ARM64Symbolic.ADD_reg (ARM64Symbolic.X6, ARM64Symbolic.X27, ARM64Symbolic.X4)
+        ARM64Symbolic.LDR (ARM64Symbolic.X7, ARM64Symbolic.X6, 0s)
+        ARM64Symbolic.STR (ARM64Symbolic.X7, ARM64Symbolic.X3, 0s)
+        ARM64Symbolic.STR (ARM64Symbolic.X3, ARM64Symbolic.X6, 0s)
+        ARM64Symbolic.Label skipFreeList
+    ]
+    @ leakDec
+    @ [
+        ARM64Symbolic.B_label loopCheck
+
+        ARM64Symbolic.Label popOrRet
+        ARM64Symbolic.CBZ (ARM64Symbolic.X1, helperRet)
+        ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.SP, 0s)
+        ARM64Symbolic.ADD_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 16us)
+        ARM64Symbolic.SUB_imm (ARM64Symbolic.X1, ARM64Symbolic.X1, 1us)
+        ARM64Symbolic.B_label loopCheck
+
+        ARM64Symbolic.Label helperRet
+        ARM64Symbolic.RET
+    ]
 
 let generateLeakCounterInc (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     if ctx.Options.EnableLeakCheck then
@@ -2533,8 +2753,27 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     ARM64Symbolic.CBZ_offset (addrReg, listCallLen + 1)
                 ]
                 @ listIncCall
-            | LIR.GenericHeap
             | LIR.DictHeap ->
+                let dictIncCall = [
+                    ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -80s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                    ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, addrReg)
+                    ARM64Symbolic.BL dictRefCountIncHelperLabel
+                    ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                    ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                    ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                    ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                    ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 80s)
+                ]
+                [
+                    ARM64Symbolic.CBZ_offset (addrReg, List.length dictIncCall + 1)
+                ]
+                @ dictIncCall
+            | LIR.GenericHeap
+                ->
                 [
                     ARM64Symbolic.CBZ_offset (addrReg, 4)
                 ] @ tupleIncPath)
@@ -2614,8 +2853,29 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     ARM64Symbolic.CBZ_offset (addrReg, listCallLen + 1)
                 ]
                 @ listDecCall
-            | LIR.GenericHeap
             | LIR.DictHeap ->
+                let dictDecCall = [
+                    ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+                    ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, addrReg)
+                    ARM64Symbolic.BL dictRefCountDecHelperLabel
+                    ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+                    ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                    ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                    ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                    ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                    ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 96s)
+                ]
+                [
+                    ARM64Symbolic.CBZ_offset (addrReg, List.length dictDecCall + 1)
+                ]
+                @ dictDecCall
+            | LIR.GenericHeap
+                ->
                 let cbzOffset = List.length tupleDecPath + 1
                 [
                     ARM64Symbolic.CBZ_offset (addrReg, cbzOffset)
@@ -3277,10 +3537,24 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                                 ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
                                 ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 64s)
                             ]
+                        | Some (AST.TDict _) ->
+                            [
+                                ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -80s)
+                                ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                                ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                                ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                                ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                                ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, valueReg)
+                                ARM64Symbolic.BL dictRefCountIncHelperLabel
+                                ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                                ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                                ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                                ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                                ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 80s)
+                            ]
                         | Some typ ->
                             let isRcManagedHeapType =
                                 match typ with
-                                | AST.TDict _ -> false
                                 | _ -> ANF.isHeapType typ
                             if isRcManagedHeapType then
                                 let rcOffsetOpt =
@@ -3887,6 +4161,27 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RawSet (_, _, _, Some (AST.TList _)) -> true
                     | _ -> false)))
 
+    let needsDictRcIncHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountInc (_, _, LIR.DictHeap, _) -> true
+                    | LIR.RawSet (_, _, _, Some (AST.TDict _)) -> true
+                    | _ -> false)))
+
+    let needsDictRcDecHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.DictHeap, _) -> true
+                    | _ -> false)))
+
     ResultList.mapResults (convertFunction ctx) sortedFunctions
     |> Result.map (fun instrLists ->
         let allFunctionInstrs = instrLists |> List.concat
@@ -3895,7 +4190,10 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             @ (if needsListRcDecHelper then generateListRefCountDecHelper ctx else [])
             @ (if needsListRcDecTuple2Helper then generateListRefCountDecTuple2Helper ctx else [])
             @ (if needsListRcDecListHelper then generateListRefCountDecListHelper ctx else [])
-        (allFunctionInstrs @ listRcHelpers) |> peepholeOptimize)
+        let dictRcHelpers =
+            (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
+            @ (if needsDictRcDecHelper then generateDictRefCountDecHelper ctx else [])
+        (allFunctionInstrs @ listRcHelpers @ dictRcHelpers) |> peepholeOptimize)
 
 /// Convert LIR program to ARM64 instructions (uses default options)
 let generateARM64 (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
