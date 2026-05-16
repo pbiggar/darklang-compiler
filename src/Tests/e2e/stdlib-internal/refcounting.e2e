@@ -3,3 +3,26 @@
 
 // Leak check detects refcount leaks for heap strings
 let s = "a" ++ "b" in let _ = __refcount_inc_string(s) in 0 = stdout="0\n" stderr="leaks: 1\n" // leak_check
+
+// Current leak-accounting baseline for memory-managed runtime shapes.
+// These tests intentionally record today's behavior so each shape can be
+// re-enabled to expect stderr="" as the refcounting implementation reaches it.
+
+// Dynamic strings are counted but not automatically decref'd at scope exit.
+let s = "a" ++ "b" in 0 = stdout="0\n" stderr="leaks: 1\n" // current string leak
+
+// Dynamic bytes are counted but are not yet first-class refcounted values.
+let b = Bytes.create(4) in 0 = stdout="0\n" stderr="leaks: 1\n" // current bytes leak
+
+// HAMT/dict allocation uses raw unmanaged nodes today.
+let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2) in 0 = stdout="0\n" stderr="leaks: 1\n" // current dict leak
+
+// Tagged list construction is counted but not fully reclaimed on x64.
+let xs = [1, 2, 3] in 0 = stdout="0\n" stderr="leaks: 4\n" // current list leak
+
+// x64 generic fixed-block allocation is currently a leak-check false negative:
+// the tuple allocation should be counted and reclaimed, but today reports clean.
+let t = (1, 2) in 0 = stdout="0\n" stderr="" // current tuple false negative
+
+// Closure allocation is also a current leak-check false negative.
+let f = (x: Int64) => x + 1 in 0 = stdout="0\n" stderr="" // current closure false negative
