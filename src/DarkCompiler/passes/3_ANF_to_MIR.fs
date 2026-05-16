@@ -514,6 +514,7 @@ let private rcKindToMIR (kind: ANF.RcKind) : MIR.RcKind =
     match kind with
     | ANF.GenericHeap -> MIR.GenericHeap
     | ANF.TaggedList -> MIR.TaggedList
+    | ANF.DictHeap -> MIR.DictHeap
 
 /// Get the type of an ANF Atom (for generating type-specific instructions)
 let atomType (builder: CFGBuilder) (atom: ANF.Atom) : AST.Type =

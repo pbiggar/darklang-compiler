@@ -1928,7 +1928,8 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 saves
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL listRefCountIncHelperLabel]
                 @ restores
-            | LIR.GenericHeap ->
+            | LIR.GenericHeap
+            | LIR.DictHeap ->
                 genRefCountIncGeneric addrReg payloadSize)
 
     | LIR.RefCountDec (addr, payloadSize, kind, sourceType) ->
@@ -1951,7 +1952,8 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 saves
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL helperLabel]
                 @ restores
-            | LIR.GenericHeap ->
+            | LIR.GenericHeap
+            | LIR.DictHeap ->
                 genRefCountDecGeneric ctx addrReg payloadSize)
 
     | LIR.RefCountIncString str

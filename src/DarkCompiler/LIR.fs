@@ -57,6 +57,7 @@ type Condition =
 type RcKind =
     | GenericHeap
     | TaggedList
+    | DictHeap
 
 /// Basic block label (wrapper type for type safety)
 type Label = Label of string

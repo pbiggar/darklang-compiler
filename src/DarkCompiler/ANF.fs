@@ -108,6 +108,7 @@ type UnaryOp =
 type RcKind =
     | GenericHeap
     | TaggedList
+    | DictHeap
 
 /// Runtime representation shape used to decide ownership behavior.
 ///
@@ -306,6 +307,7 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
 /// Determine reference-count dispatch kind for a heap type
 let rcKind (t: AST.Type) : RcKind =
     match t with
+    | AST.TDict _ -> DictHeap
     | AST.TList (AST.TFunction _) -> GenericHeap
     | AST.TList _ -> TaggedList
     | _ -> GenericHeap

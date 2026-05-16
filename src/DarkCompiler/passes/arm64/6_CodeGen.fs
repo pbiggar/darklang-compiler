@@ -2533,7 +2533,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     ARM64Symbolic.CBZ_offset (addrReg, listCallLen + 1)
                 ]
                 @ listIncCall
-            | LIR.GenericHeap ->
+            | LIR.GenericHeap
+            | LIR.DictHeap ->
                 [
                     ARM64Symbolic.CBZ_offset (addrReg, 4)
                 ] @ tupleIncPath)
@@ -2613,7 +2614,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     ARM64Symbolic.CBZ_offset (addrReg, listCallLen + 1)
                 ]
                 @ listDecCall
-            | LIR.GenericHeap ->
+            | LIR.GenericHeap
+            | LIR.DictHeap ->
                 let cbzOffset = List.length tupleDecPath + 1
                 [
                     ARM64Symbolic.CBZ_offset (addrReg, cbzOffset)

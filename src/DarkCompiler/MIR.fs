@@ -65,6 +65,7 @@ type UnaryOp =
 type RcKind =
     | GenericHeap
     | TaggedList
+    | DictHeap
 
 /// Basic block label (defined early for use in Phi nodes)
 type Label = Label of string
