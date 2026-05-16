@@ -23,5 +23,5 @@ let xs = [1, 2, 3] in 0 = stdout="0\n" stderr=""
 // Fixed-block tuple root allocation is reclaimed on the active backend.
 let t = (1, 2) in t.0 = stdout="1\n" stderr="" // tuple root reclaimed
 
-// Closure allocation is also a current leak-check false negative.
-let f = (x: Int64) => x + 1 in 0 = stdout="0\n" stderr="" // current closure false negative
+// Capturing closure roots are fixed-block allocations and are reclaimed.
+let base = 10 in let f = (x: Int64) => x + base in f(5) = stdout="15\n" stderr=""
