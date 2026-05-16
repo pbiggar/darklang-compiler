@@ -1895,16 +1895,12 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
             match kind with
             | LIR.TaggedList ->
                 // TaggedList RefCountDec: calls the recursive FingerTree DFS helper.
-                // NOTE: Currently disabled. When enabled, this frees nodes whose refcounts
-                // reach 0. But this REQUIRES the RawSet ownership increment (above) to be
-                // active, otherwise child nodes are freed while still referenced by parents.
-                // Enable both together once the 37-test regression is fixed.
-                []
-                // When ready to enable:
-                // let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; scratch]
-                // let saves = saveRegs |> List.map X86_64.PUSH
-                // let restores = saveRegs |> List.rev |> List.map X86_64.POP
-                // saves @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL listRefCountDecHelperLabel] @ restores
+                let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; scratch]
+                let saves = saveRegs |> List.map X86_64.PUSH
+                let restores = saveRegs |> List.rev |> List.map X86_64.POP
+                saves
+                @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL listRefCountDecHelperLabel]
+                @ restores
             | LIR.GenericHeap ->
                 if payloadSize >= 0 && payloadSize < freeListSize then
                     genRefCountDecGeneric ctx addrReg payloadSize
