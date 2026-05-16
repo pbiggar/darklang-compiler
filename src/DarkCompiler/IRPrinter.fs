@@ -282,10 +282,12 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
         appendTypeSuffix valueType baseText
     | MIR.StringConcat (dest, left, right) ->
         $"{prettyPrintMIRVReg dest} <- StringConcat({prettyPrintMIROperand left}, {prettyPrintMIROperand right})"
-    | MIR.RefCountInc (addr, payloadSize, kind, _) ->
-        $"RefCountInc({prettyPrintMIRVReg addr}, size={payloadSize}, kind={prettyPrintMIRRcKind kind})"
-    | MIR.RefCountDec (addr, payloadSize, kind, _) ->
-        $"RefCountDec({prettyPrintMIRVReg addr}, size={payloadSize}, kind={prettyPrintMIRRcKind kind})"
+    | MIR.RefCountInc (addr, payloadSize, kind, sourceType) ->
+        let typeSuffix = sourceType |> Option.map (fun t -> $", type={t}") |> Option.defaultValue ""
+        $"RefCountInc({prettyPrintMIRVReg addr}, size={payloadSize}, kind={prettyPrintMIRRcKind kind}{typeSuffix})"
+    | MIR.RefCountDec (addr, payloadSize, kind, sourceType) ->
+        let typeSuffix = sourceType |> Option.map (fun t -> $", type={t}") |> Option.defaultValue ""
+        $"RefCountDec({prettyPrintMIRVReg addr}, size={payloadSize}, kind={prettyPrintMIRRcKind kind}{typeSuffix})"
     | MIR.Print (src, valueType) ->
         $"Print({prettyPrintMIROperand src}, type={valueType})"
     | MIR.RuntimeError message ->
@@ -604,10 +606,12 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"HeapStore({prettyPrintLIRReg addr}, {offset}, {prettyPrintLIROperand src})"
     | LIR.HeapLoad (dest, addr, offset) ->
         $"{prettyPrintLIRReg dest} <- HeapLoad({prettyPrintLIRReg addr}, {offset})"
-    | LIR.RefCountInc (addr, payloadSize, kind, _) ->
-        $"RefCountInc({prettyPrintLIRReg addr}, {payloadSize}, {prettyPrintLIRRcKind kind})"
-    | LIR.RefCountDec (addr, payloadSize, kind, _) ->
-        $"RefCountDec({prettyPrintLIRReg addr}, {payloadSize}, {prettyPrintLIRRcKind kind})"
+    | LIR.RefCountInc (addr, payloadSize, kind, sourceType) ->
+        let typeSuffix = sourceType |> Option.map (fun t -> $", type={t}") |> Option.defaultValue ""
+        $"RefCountInc({prettyPrintLIRReg addr}, {payloadSize}, {prettyPrintLIRRcKind kind}{typeSuffix})"
+    | LIR.RefCountDec (addr, payloadSize, kind, sourceType) ->
+        let typeSuffix = sourceType |> Option.map (fun t -> $", type={t}") |> Option.defaultValue ""
+        $"RefCountDec({prettyPrintLIRReg addr}, {payloadSize}, {prettyPrintLIRRcKind kind}{typeSuffix})"
     | LIR.StringConcat (dest, left, right) ->
         $"{prettyPrintLIRReg dest} <- StringConcat({prettyPrintLIROperand left}, {prettyPrintLIROperand right})"
     | LIR.PrintHeapString reg ->

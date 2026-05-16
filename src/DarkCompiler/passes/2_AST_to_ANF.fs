@@ -4421,12 +4421,9 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             | _ ->
                 (vg, bindings)
 
-        let listNode = AST.TList (AST.TVar "a")
-        let listNodeType = Some listNode
-
         // Tag a raw pointer as a list value without routing through Stdlib wrappers.
         // Keep a typed binding so RC/type inference still treats the result as List<a>.
-        let tagRawPtrAsList (tag: int64) (ptrVar: ANF.TempId) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let tagRawPtrAsList (listNode: AST.Type) (tag: int64) (ptrVar: ANF.TempId) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let (taggedRawVar, vg1) = ANF.freshVar vg
             let tagExpr = ANF.Prim (ANF.BitOr, ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 tag))
             let (taggedVar, vg2) = ANF.freshVar vg1
@@ -4443,21 +4440,25 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             let setRcExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 1L), None)
             let (vg4, bindings4) =
                 addLeafInc elemAtom elemType vg3 (bindings @ [(ptrVar, allocExpr); (setVar, setExpr); (setRcVar, setRcExpr)])
-            tagRawPtrAsList 5L ptrVar vg4 bindings4
+            let leafListType =
+                match elemType with
+                | AST.TFunction _ -> AST.TList (AST.TVar "a")
+                | _ -> AST.TList elemType
+            tagRawPtrAsList leafListType 5L ptrVar vg4 bindings4
 
         // Helper to create a SINGLE node containing a TreeNode
-        let allocSingle (nodeAtom: ANF.Atom) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let allocSingle (listNode: AST.Type) (nodeAtom: ANF.Atom) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let (ptrVar, vg1) = ANF.freshVar vg
             let (setVar, vg2) = ANF.freshVar vg1
             let (setRcVar, vg3) = ANF.freshVar vg2
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 16L))
-            let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom, listNodeType)
+            let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom, Some listNode)
             let setRcExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 1L), None)
             let bindings1 = bindings @ [(ptrVar, allocExpr); (setVar, setExpr); (setRcVar, setRcExpr)]
-            tagRawPtrAsList 1L ptrVar vg3 bindings1
+            tagRawPtrAsList listNode 1L ptrVar vg3 bindings1
 
         // Helper to create a DEEP node
-        let allocDeep (measure: int) (prefixNodes: ANF.Atom list) (middle: ANF.Atom) (suffixNodes: ANF.Atom list) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let allocDeep (listNode: AST.Type) (measure: int) (prefixNodes: ANF.Atom list) (middle: ANF.Atom) (suffixNodes: ANF.Atom list) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let prefixCount = List.length prefixNodes
             let suffixCount = List.length suffixNodes
             let (ptrVar, vg1) = ANF.freshVar vg
@@ -4477,12 +4478,12 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 match nodes with
                 | [] -> (vg, bindings)
                 | n :: rest ->
-                    let (vg', bindings') = setAt offset n listNodeType vg bindings
+                    let (vg', bindings') = setAt offset n (Some listNode) vg bindings
                     setPrefix rest (offset + 8) vg' bindings'
             let (vg4, bindings4) = setPrefix prefixNodes 16 vg3 bindings3
 
             // Set middle at offset 48 (type-uniform: another FingerTree of nodes)
-            let (vg5, bindings5) = setAt 48 middle listNodeType vg4 bindings4
+            let (vg5, bindings5) = setAt 48 middle (Some listNode) vg4 bindings4
 
             // Set suffix count at offset 56
             let (vg6, bindings6) = setAt 56 (ANF.IntLiteral (ANF.Int64 (int64 suffixCount))) None vg5 bindings5
@@ -4494,7 +4495,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             let (vg8, bindings8) = setAt 96 (ANF.IntLiteral (ANF.Int64 1L)) None vg7 bindings7
 
             // Tag with DEEP (2)
-            tagRawPtrAsList 2L ptrVar vg8 bindings8
+            tagRawPtrAsList listNode 2L ptrVar vg8 bindings8
 
         // Build FingerTree nodes for middle spines without using pushBack.
         let emptyTree = ANF.IntLiteral (ANF.Int64 0L)
@@ -4503,13 +4504,13 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         let nodeMeasure (_node: ANF.Atom, measure: int) = measure
 
         // Helper to create a NODE2 (tag 3): [child0:8][child1:8][measure:8]
-        let allocNode2 (left: ANF.Atom * int) (right: ANF.Atom * int) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let allocNode2 (listNode: AST.Type) (left: ANF.Atom * int) (right: ANF.Atom * int) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let (ptrVar, vg1) = ANF.freshVar vg
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 32L))
             let (set0Var, vg2) = ANF.freshVar vg1
-            let set0Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom left, listNodeType)
+            let set0Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom left, Some listNode)
             let (set1Var, vg3) = ANF.freshVar vg2
-            let set1Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), nodeAtom right, listNodeType)
+            let set1Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), nodeAtom right, Some listNode)
             let measure = nodeMeasure left + nodeMeasure right
             let (set2Var, vg4) = ANF.freshVar vg3
             let set2Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), ANF.IntLiteral (ANF.Int64 (int64 measure)), None)
@@ -4518,19 +4519,19 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             let bindings1 =
                 bindings
                 @ [(ptrVar, allocExpr); (set0Var, set0Expr); (set1Var, set1Expr); (set2Var, set2Expr); (setRcVar, setRcExpr)]
-            let (taggedNode, bindings2, vg6) = tagRawPtrAsList 3L ptrVar vg5 bindings1
+            let (taggedNode, bindings2, vg6) = tagRawPtrAsList listNode 3L ptrVar vg5 bindings1
             ((taggedNode, measure), bindings2, vg6)
 
         // Helper to create a NODE3 (tag 4): [child0:8][child1:8][child2:8][measure:8]
-        let allocNode3 (first: ANF.Atom * int) (second: ANF.Atom * int) (third: ANF.Atom * int) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let allocNode3 (listNode: AST.Type) (first: ANF.Atom * int) (second: ANF.Atom * int) (third: ANF.Atom * int) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let (ptrVar, vg1) = ANF.freshVar vg
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 40L))
             let (set0Var, vg2) = ANF.freshVar vg1
-            let set0Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom first, listNodeType)
+            let set0Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom first, Some listNode)
             let (set1Var, vg3) = ANF.freshVar vg2
-            let set1Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), nodeAtom second, listNodeType)
+            let set1Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), nodeAtom second, Some listNode)
             let (set2Var, vg4) = ANF.freshVar vg3
-            let set2Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), nodeAtom third, listNodeType)
+            let set2Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), nodeAtom third, Some listNode)
             let measure = nodeMeasure first + nodeMeasure second + nodeMeasure third
             let (set3Var, vg5) = ANF.freshVar vg4
             let set3Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 24L), ANF.IntLiteral (ANF.Int64 (int64 measure)), None)
@@ -4539,7 +4540,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             let bindings1 =
                 bindings
                 @ [(ptrVar, allocExpr); (set0Var, set0Expr); (set1Var, set1Expr); (set2Var, set2Expr); (set3Var, set3Expr); (setRcVar, setRcExpr)]
-            let (taggedNode, bindings2, vg7) = tagRawPtrAsList 4L ptrVar vg6 bindings1
+            let (taggedNode, bindings2, vg7) = tagRawPtrAsList listNode 4L ptrVar vg6 bindings1
             ((taggedNode, measure), bindings2, vg7)
 
         let splitAt count nodes =
@@ -4564,7 +4565,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | _ ->
                     Ok (2 :: List.replicate ((nodeCount - 2) / 3) 3)
 
-        let rec buildGroupedNodes sizes nodes vg bindings acc =
+        let rec buildGroupedNodes listNode sizes nodes vg bindings acc =
             match sizes with
             | [] -> Ok (List.rev acc, bindings, vg)
             | size :: rest ->
@@ -4572,26 +4573,26 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 |> Result.bind (fun (group, remaining) ->
                     match size, group with
                     | 2, [a; b] ->
-                        let (nodeInfo, bindings1, vg1) = allocNode2 a b vg bindings
-                        buildGroupedNodes rest remaining vg1 bindings1 (nodeInfo :: acc)
+                        let (nodeInfo, bindings1, vg1) = allocNode2 listNode a b vg bindings
+                        buildGroupedNodes listNode rest remaining vg1 bindings1 (nodeInfo :: acc)
                     | 3, [a; b; c] ->
-                        let (nodeInfo, bindings1, vg1) = allocNode3 a b c vg bindings
-                        buildGroupedNodes rest remaining vg1 bindings1 (nodeInfo :: acc)
+                        let (nodeInfo, bindings1, vg1) = allocNode3 listNode a b c vg bindings
+                        buildGroupedNodes listNode rest remaining vg1 bindings1 (nodeInfo :: acc)
                     | _ ->
                         Error $"List literal: unexpected group size {size}")
 
-        let rec buildTree (nodes: (ANF.Atom * int) list) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let rec buildTree (listNode: AST.Type) (nodes: (ANF.Atom * int) list) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let nodeCount = List.length nodes
             match nodes with
             | [] -> Ok (emptyTree, bindings, vg)
             | [single] ->
-                let (resultAtom, resultBindings, vg1) = allocSingle (nodeAtom single) vg bindings
+                let (resultAtom, resultBindings, vg1) = allocSingle listNode (nodeAtom single) vg bindings
                 Ok (resultAtom, resultBindings, vg1)
             | first :: rest when nodeCount <= 5 ->
                 let totalMeasure = nodes |> List.sumBy nodeMeasure
                 let prefixNodes = [nodeAtom first]
                 let suffixNodes = rest |> List.map nodeAtom
-                let (resultAtom, resultBindings, vg1) = allocDeep totalMeasure prefixNodes emptyTree suffixNodes vg bindings
+                let (resultAtom, resultBindings, vg1) = allocDeep listNode totalMeasure prefixNodes emptyTree suffixNodes vg bindings
                 Ok (resultAtom, resultBindings, vg1)
             | _ ->
                 splitAt 2 nodes
@@ -4602,15 +4603,15 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     |> Result.bind (fun (middleNodes, suffixNodes) ->
                         groupSizes (List.length middleNodes)
                         |> Result.bind (fun sizes ->
-                            buildGroupedNodes sizes middleNodes vg bindings []
+                            buildGroupedNodes listNode sizes middleNodes vg bindings []
                             |> Result.bind (fun (groupedMiddle, bindings1, vg1) ->
-                                buildTree groupedMiddle vg1 bindings1
+                                buildTree listNode groupedMiddle vg1 bindings1
                                 |> Result.map (fun (middleTree, bindings2, vg2) ->
                                     let totalMeasure = nodes |> List.sumBy nodeMeasure
                                     let prefixAtoms = prefixNodes |> List.map nodeAtom
                                     let suffixAtoms = suffixNodes |> List.map nodeAtom
                                     let (resultAtom, resultBindings, vg3) =
-                                        allocDeep totalMeasure prefixAtoms middleTree suffixAtoms vg2 bindings2
+                                        allocDeep listNode totalMeasure prefixAtoms middleTree suffixAtoms vg2 bindings2
                                     (resultAtom, resultBindings, vg3))))))
 
         if List.isEmpty elements then
@@ -4647,11 +4648,22 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 let (leafAtoms, leafBindings, varGen2) = createLeaves elemAtoms varGen1 elemBindings []
                 let leafNodes = leafAtoms |> List.map (fun atom -> (atom, 1))
 
-                buildTree leafNodes varGen2 leafBindings
+                let listType =
+                    match elemAtoms with
+                    | (_, AST.TFunction _) :: _ -> AST.TList (AST.TVar "a")
+                    | (_, elemType) :: _ -> AST.TList elemType
+                    | [] -> AST.TList (AST.TVar "a")
+                buildTree listType leafNodes varGen2 leafBindings
                 |> Result.map (fun (resultAtom, resultBindings, varGen3) ->
-                    let finalExpr = ANF.Return resultAtom
+                    let (typedResultVar, varGen4) = ANF.freshVar varGen3
+                    let finalExpr =
+                        ANF.Let (
+                            typedResultVar,
+                            ANF.TypedAtom (resultAtom, listType),
+                            ANF.Return (ANF.Var typedResultVar)
+                        )
                     let exprWithBindings = wrapBindings resultBindings finalExpr
-                    (exprWithBindings, varGen3)))
+                    (exprWithBindings, varGen4)))
 
     | AST.ListCons (headElements, tail) ->
         // Compile list cons: [a, b, ...tail] prepends elements to tail
@@ -8141,7 +8153,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
 
         // Tag a raw pointer as a list value without routing through Stdlib wrappers.
         // Keep a typed binding so RC/type inference still treats the result as List<a>.
-        let tagRawPtrAsList (tag: int64) (ptrVar: ANF.TempId) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let tagRawPtrAsList (listNode: AST.Type) (tag: int64) (ptrVar: ANF.TempId) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let (taggedRawVar, vg1) = ANF.freshVar vg
             let tagExpr = ANF.Prim (ANF.BitOr, ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 tag))
             let (taggedVar, vg2) = ANF.freshVar vg1
@@ -8158,21 +8170,25 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             let setRcExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 1L), None)
             let (vg4, bindings4) =
                 addLeafInc elemAtom elemType vg3 (bindings @ [(ptrVar, allocExpr); (setVar, setExpr); (setRcVar, setRcExpr)])
-            tagRawPtrAsList 5L ptrVar vg4 bindings4
+            let leafListType =
+                match elemType with
+                | AST.TFunction _ -> AST.TList (AST.TVar "a")
+                | _ -> AST.TList elemType
+            tagRawPtrAsList leafListType 5L ptrVar vg4 bindings4
 
         // Helper to create a SINGLE node containing a TreeNode
-        let allocSingle (nodeAtom: ANF.Atom) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let allocSingle (listNode: AST.Type) (nodeAtom: ANF.Atom) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let (ptrVar, vg1) = ANF.freshVar vg
             let (setVar, vg2) = ANF.freshVar vg1
             let (setRcVar, vg3) = ANF.freshVar vg2
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 16L))
-            let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom, listNodeType)
+            let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom, Some listNode)
             let setRcExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 1L), None)
             let bindings1 = bindings @ [(ptrVar, allocExpr); (setVar, setExpr); (setRcVar, setRcExpr)]
-            tagRawPtrAsList 1L ptrVar vg3 bindings1
+            tagRawPtrAsList listNode 1L ptrVar vg3 bindings1
 
         // Helper to create a DEEP node
-        let allocDeep (measure: int) (prefixNodes: ANF.Atom list) (middle: ANF.Atom) (suffixNodes: ANF.Atom list) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let allocDeep (listNode: AST.Type) (measure: int) (prefixNodes: ANF.Atom list) (middle: ANF.Atom) (suffixNodes: ANF.Atom list) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let prefixCount = List.length prefixNodes
             let suffixCount = List.length suffixNodes
             let (ptrVar, vg1) = ANF.freshVar vg
@@ -8192,12 +8208,12 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                 match nodes with
                 | [] -> (vg, bindings)
                 | n :: rest ->
-                    let (vg', bindings') = setAt offset n listNodeType vg bindings
+                    let (vg', bindings') = setAt offset n (Some listNode) vg bindings
                     setPrefix rest (offset + 8) vg' bindings'
             let (vg4, bindings4) = setPrefix prefixNodes 16 vg3 bindings3
 
             // Set middle at offset 48 (type-uniform: another FingerTree of nodes)
-            let (vg5, bindings5) = setAt 48 middle listNodeType vg4 bindings4
+            let (vg5, bindings5) = setAt 48 middle (Some listNode) vg4 bindings4
 
             // Set suffix count at offset 56
             let (vg6, bindings6) = setAt 56 (ANF.IntLiteral (ANF.Int64 (int64 suffixCount))) None vg5 bindings5
@@ -8209,7 +8225,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             let (vg8, bindings8) = setAt 96 (ANF.IntLiteral (ANF.Int64 1L)) None vg7 bindings7
 
             // Tag with DEEP (2)
-            tagRawPtrAsList 2L ptrVar vg8 bindings8
+            tagRawPtrAsList listNode 2L ptrVar vg8 bindings8
 
         // Build FingerTree nodes for middle spines without using pushBack.
         let emptyTree = ANF.IntLiteral (ANF.Int64 0L)
@@ -8218,13 +8234,13 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         let nodeMeasure (_node: ANF.Atom, measure: int) = measure
 
         // Helper to create a NODE2 (tag 3): [child0:8][child1:8][measure:8]
-        let allocNode2 (left: ANF.Atom * int) (right: ANF.Atom * int) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let allocNode2 (listNode: AST.Type) (left: ANF.Atom * int) (right: ANF.Atom * int) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let (ptrVar, vg1) = ANF.freshVar vg
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 32L))
             let (set0Var, vg2) = ANF.freshVar vg1
-            let set0Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom left, listNodeType)
+            let set0Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom left, Some listNode)
             let (set1Var, vg3) = ANF.freshVar vg2
-            let set1Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), nodeAtom right, listNodeType)
+            let set1Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), nodeAtom right, Some listNode)
             let measure = nodeMeasure left + nodeMeasure right
             let (set2Var, vg4) = ANF.freshVar vg3
             let set2Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), ANF.IntLiteral (ANF.Int64 (int64 measure)), None)
@@ -8233,19 +8249,19 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             let bindings1 =
                 bindings
                 @ [(ptrVar, allocExpr); (set0Var, set0Expr); (set1Var, set1Expr); (set2Var, set2Expr); (setRcVar, setRcExpr)]
-            let (taggedNode, bindings2, vg6) = tagRawPtrAsList 3L ptrVar vg5 bindings1
+            let (taggedNode, bindings2, vg6) = tagRawPtrAsList listNode 3L ptrVar vg5 bindings1
             ((taggedNode, measure), bindings2, vg6)
 
         // Helper to create a NODE3 (tag 4): [child0:8][child1:8][child2:8][measure:8]
-        let allocNode3 (first: ANF.Atom * int) (second: ANF.Atom * int) (third: ANF.Atom * int) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let allocNode3 (listNode: AST.Type) (first: ANF.Atom * int) (second: ANF.Atom * int) (third: ANF.Atom * int) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let (ptrVar, vg1) = ANF.freshVar vg
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 40L))
             let (set0Var, vg2) = ANF.freshVar vg1
-            let set0Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom first, listNodeType)
+            let set0Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom first, Some listNode)
             let (set1Var, vg3) = ANF.freshVar vg2
-            let set1Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), nodeAtom second, listNodeType)
+            let set1Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), nodeAtom second, Some listNode)
             let (set2Var, vg4) = ANF.freshVar vg3
-            let set2Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), nodeAtom third, listNodeType)
+            let set2Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), nodeAtom third, Some listNode)
             let measure = nodeMeasure first + nodeMeasure second + nodeMeasure third
             let (set3Var, vg5) = ANF.freshVar vg4
             let set3Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 24L), ANF.IntLiteral (ANF.Int64 (int64 measure)), None)
@@ -8254,7 +8270,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             let bindings1 =
                 bindings
                 @ [(ptrVar, allocExpr); (set0Var, set0Expr); (set1Var, set1Expr); (set2Var, set2Expr); (set3Var, set3Expr); (setRcVar, setRcExpr)]
-            let (taggedNode, bindings2, vg7) = tagRawPtrAsList 4L ptrVar vg6 bindings1
+            let (taggedNode, bindings2, vg7) = tagRawPtrAsList listNode 4L ptrVar vg6 bindings1
             ((taggedNode, measure), bindings2, vg7)
 
         let splitAt count nodes =
@@ -8279,7 +8295,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                 | _ ->
                     Ok (2 :: List.replicate ((nodeCount - 2) / 3) 3)
 
-        let rec buildGroupedNodes sizes nodes vg bindings acc =
+        let rec buildGroupedNodes listNode sizes nodes vg bindings acc =
             match sizes with
             | [] -> Ok (List.rev acc, bindings, vg)
             | size :: rest ->
@@ -8287,26 +8303,26 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                 |> Result.bind (fun (group, remaining) ->
                     match size, group with
                     | 2, [a; b] ->
-                        let (nodeInfo, bindings1, vg1) = allocNode2 a b vg bindings
-                        buildGroupedNodes rest remaining vg1 bindings1 (nodeInfo :: acc)
+                        let (nodeInfo, bindings1, vg1) = allocNode2 listNode a b vg bindings
+                        buildGroupedNodes listNode rest remaining vg1 bindings1 (nodeInfo :: acc)
                     | 3, [a; b; c] ->
-                        let (nodeInfo, bindings1, vg1) = allocNode3 a b c vg bindings
-                        buildGroupedNodes rest remaining vg1 bindings1 (nodeInfo :: acc)
+                        let (nodeInfo, bindings1, vg1) = allocNode3 listNode a b c vg bindings
+                        buildGroupedNodes listNode rest remaining vg1 bindings1 (nodeInfo :: acc)
                     | _ ->
                         Error $"List literal: unexpected group size {size}")
 
-        let rec buildTree (nodes: (ANF.Atom * int) list) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let rec buildTree (listNode: AST.Type) (nodes: (ANF.Atom * int) list) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let nodeCount = List.length nodes
             match nodes with
             | [] -> Ok (emptyTree, bindings, vg)
             | [single] ->
-                let (resultAtom, resultBindings, vg1) = allocSingle (nodeAtom single) vg bindings
+                let (resultAtom, resultBindings, vg1) = allocSingle listNode (nodeAtom single) vg bindings
                 Ok (resultAtom, resultBindings, vg1)
             | first :: rest when nodeCount <= 5 ->
                 let totalMeasure = nodes |> List.sumBy nodeMeasure
                 let prefixNodes = [nodeAtom first]
                 let suffixNodes = rest |> List.map nodeAtom
-                let (resultAtom, resultBindings, vg1) = allocDeep totalMeasure prefixNodes emptyTree suffixNodes vg bindings
+                let (resultAtom, resultBindings, vg1) = allocDeep listNode totalMeasure prefixNodes emptyTree suffixNodes vg bindings
                 Ok (resultAtom, resultBindings, vg1)
             | _ ->
                 splitAt 2 nodes
@@ -8317,15 +8333,15 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                     |> Result.bind (fun (middleNodes, suffixNodes) ->
                         groupSizes (List.length middleNodes)
                         |> Result.bind (fun sizes ->
-                            buildGroupedNodes sizes middleNodes vg bindings []
+                            buildGroupedNodes listNode sizes middleNodes vg bindings []
                             |> Result.bind (fun (groupedMiddle, bindings1, vg1) ->
-                                buildTree groupedMiddle vg1 bindings1
+                                buildTree listNode groupedMiddle vg1 bindings1
                                 |> Result.map (fun (middleTree, bindings2, vg2) ->
                                     let totalMeasure = nodes |> List.sumBy nodeMeasure
                                     let prefixAtoms = prefixNodes |> List.map nodeAtom
                                     let suffixAtoms = suffixNodes |> List.map nodeAtom
                                     let (resultAtom, resultBindings, vg3) =
-                                        allocDeep totalMeasure prefixAtoms middleTree suffixAtoms vg2 bindings2
+                                        allocDeep listNode totalMeasure prefixAtoms middleTree suffixAtoms vg2 bindings2
                                     (resultAtom, resultBindings, vg3))))))
 
         if List.isEmpty elements then
@@ -8361,8 +8377,13 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
 
                 let (leafAtoms, leafBindings, varGen2) = createLeaves elemAtoms varGen1 elemBindings []
                 let leafNodes = leafAtoms |> List.map (fun atom -> (atom, 1))
+                let listType =
+                    match elemAtoms with
+                    | (_, AST.TFunction _) :: _ -> AST.TList (AST.TVar "a")
+                    | (_, elemType) :: _ -> AST.TList elemType
+                    | [] -> AST.TList (AST.TVar "a")
 
-                buildTree leafNodes varGen2 leafBindings)
+                buildTree listType leafNodes varGen2 leafBindings)
 
     | AST.ListCons (headElements, tail) ->
         // Compile list cons in atom position: [a, b, ...tail] prepends elements to tail

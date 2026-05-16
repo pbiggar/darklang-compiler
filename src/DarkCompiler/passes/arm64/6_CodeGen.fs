@@ -53,6 +53,7 @@ let private heapMmapSizeMovzImm16 = 0x2000us  // 512MB == 0x20000000
 let private heapOverflowLabelPrefix = "__heap_oom_"
 let private listRefCountIncHelperLabel = "__dark_list_refcount_inc_helper"
 let private listRefCountDecHelperLabel = "__dark_list_refcount_dec_helper"
+let private listRefCountDecTuple2HelperLabel = "__dark_list_refcount_dec_tuple2_helper"
 
 let private dataLabel (name: string) : ARM64Symbolic.LabelRef =
     ARM64Symbolic.DataLabel (ARM64Symbolic.Named name)
@@ -170,7 +171,11 @@ let private generateListRefCountIncHelper () : ARM64Symbolic.Instr list =
         ARM64Symbolic.RET
     ]
 
-let private generateListRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+let private generateListRefCountDecHelperWith
+    (helperLabel: string)
+    (ctx: CodeGenContext)
+    (leafGenericPayloadSize: int option)
+    : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_list_rc_dec_{name}"
     let leakDec =
         if ctx.Options.EnableLeakCheck then
@@ -224,12 +229,36 @@ let private generateListRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.
     let collectNode2 = label "collect_node2"
     let collectNode3 = label "collect_node3"
     let collectLeaf = label "collect_leaf"
+    let leafPayloadDone = label "leaf_payload_done"
     let afterPrefix = label "after_prefix"
     let afterSuffix = label "after_suffix"
     let freeNode = label "free_node"
 
+    let releaseLeafPayload =
+        match leafGenericPayloadSize with
+        | None -> []
+        | Some payloadSize ->
+            [
+                ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 0s)
+                ARM64Symbolic.CBZ (ARM64Symbolic.X8, leafPayloadDone)
+                ARM64Symbolic.LDR (ARM64Symbolic.X9, ARM64Symbolic.X8, int16 payloadSize)
+                ARM64Symbolic.SUB_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 1us)
+                ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.X8, int16 payloadSize)
+                ARM64Symbolic.CBNZ (ARM64Symbolic.X9, leafPayloadDone)
+            ]
+            @ (if payloadSize >= 0 && payloadSize < 256 then
+                [
+                    ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.X27, int16 payloadSize)
+                    ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.X8, 0s)
+                    ARM64Symbolic.STR (ARM64Symbolic.X8, ARM64Symbolic.X27, int16 payloadSize)
+                ]
+               else
+                [])
+            @ leakDec
+            @ [ARM64Symbolic.Label leafPayloadDone]
+
     [
-        ARM64Symbolic.Label listRefCountDecHelperLabel
+        ARM64Symbolic.Label helperLabel
         // X0 = current tagged list pointer to process, X1 = number of pending stack entries.
         ARM64Symbolic.MOVZ (ARM64Symbolic.X1, 0us, 0)
         ARM64Symbolic.B_label loopCheck
@@ -389,7 +418,9 @@ let private generateListRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.
 
         ARM64Symbolic.Label collectLeaf
         ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
-
+    ]
+    @ releaseLeafPayload
+    @ [
         ARM64Symbolic.Label freeNode
         // Recycle node memory by payload size class.
         ARM64Symbolic.ADD_reg (ARM64Symbolic.X5, ARM64Symbolic.X27, ARM64Symbolic.X4)
@@ -411,6 +442,12 @@ let private generateListRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.
         ARM64Symbolic.Label helperRet
         ARM64Symbolic.RET
     ]
+
+let private generateListRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith listRefCountDecHelperLabel ctx None
+
+let private generateListRefCountDecTuple2Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith listRefCountDecTuple2HelperLabel ctx (Some 16)
 
 let generateLeakCounterInc (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     if ctx.Options.EnableLeakCheck then
@@ -2491,7 +2528,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     ARM64Symbolic.CBZ_offset (addrReg, 4)
                 ] @ tupleIncPath)
 
-    | LIR.RefCountDec (addr, payloadSize, kind, _) ->
+    | LIR.RefCountDec (addr, payloadSize, kind, sourceType) ->
         // Decrement ref count at [addr + payloadSize]
         // Skip if addr is null (e.g., empty list = 0)
         // When ref count hits 0, add block to free list for memory reuse
@@ -2539,6 +2576,12 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
 
             match kind with
             | LIR.TaggedList ->
+                let helperLabel =
+                    match sourceType with
+                    | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 ->
+                        listRefCountDecTuple2HelperLabel
+                    | _ ->
+                        listRefCountDecHelperLabel
                 let listDecCall = [
                     ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -80s)
                     ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -2546,7 +2589,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
                     ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
                     ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, addrReg)
-                    ARM64Symbolic.BL listRefCountDecHelperLabel
+                    ARM64Symbolic.BL helperLabel
                     ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
                     ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
                     ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
@@ -3791,7 +3834,21 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             |> Map.exists (fun _ block ->
                 block.Instrs
                 |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, _) -> true
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
+                        match sourceType with
+                        | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 -> false
+                        | _ -> true
+                    | _ -> false)))
+
+    let needsListRcDecTuple2Helper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
+                        List.length fields = 2
                     | _ -> false)))
 
     let needsListRcIncHelper =
@@ -3811,6 +3868,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         let listRcHelpers =
             (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
             @ (if needsListRcDecHelper then generateListRefCountDecHelper ctx else [])
+            @ (if needsListRcDecTuple2Helper then generateListRefCountDecTuple2Helper ctx else [])
         (allFunctionInstrs @ listRcHelpers) |> peepholeOptimize)
 
 /// Convert LIR program to ARM64 instructions (uses default options)
