@@ -250,6 +250,45 @@ let payloadSize (t: AST.Type) (typeReg: Map<string, (string * AST.Type) list>) :
     | AST.TDict _ -> 8  // Root pointer only (HAMT structure is variable-sized raw memory)
     | _ -> 0  // Non-heap types
 
+/// Classify a source type into its current runtime RC representation shape.
+///
+/// The classifier is intentionally pure and side-effect free. Early migration
+/// commits use it only in tests/adapters; ownership insertion remains on the
+/// legacy helpers until each runtime shape has matching retain/release support.
+let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type) : RcShape =
+    match t with
+    | AST.TInt8
+    | AST.TInt16
+    | AST.TInt32
+    | AST.TInt64
+    | AST.TInt128
+    | AST.TUInt8
+    | AST.TUInt16
+    | AST.TUInt32
+    | AST.TUInt64
+    | AST.TUInt128
+    | AST.TBool
+    | AST.TFloat64
+    | AST.TChar
+    | AST.TUnit
+    | AST.TRuntimeError
+    | AST.TVar _ ->
+        Immediate
+    | AST.TTuple elemTypes ->
+        let fieldShapes = elemTypes |> List.map (rcShapeOfType typeReg)
+        FixedBlock (List.length elemTypes * 8, fieldShapes)
+    | AST.TRecord (name, _) ->
+        match Map.tryFind name typeReg with
+        | Some fields ->
+            let fieldShapes =
+                fields
+                |> List.map (fun (_, fieldType) -> rcShapeOfType typeReg fieldType)
+            FixedBlock (List.length fields * 8, fieldShapes)
+        | None ->
+            Crash.crash $"rcShapeOfType: Record type '{name}' not found in typeReg"
+    | _ ->
+        RawUnmanaged
+
 /// Determine reference-count dispatch kind for a heap type
 let rcKind (t: AST.Type) : RcKind =
     match t with
