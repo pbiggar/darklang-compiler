@@ -30,6 +30,7 @@ let xs = [[1, 2], [3, 4]] in 0 = stdout="0\n" stderr="leaks: 6\n" // current nes
 
 // Fixed-block tuple root allocation is reclaimed on the active backend.
 let t = (1, 2) in t.0 = stdout="1\n" stderr="" // tuple root reclaimed
+let s = "a" ++ "b" in let t = (s, 1) in 0 = stdout="0\n" stderr="" // tuple releases dynamic string field
 let t = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32) in t.0 = stdout="1\n" stderr="" // large tuple root reclaimed without free-list overflow
 
 // Capturing closure roots are fixed-block allocations and are reclaimed.
