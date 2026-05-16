@@ -172,7 +172,12 @@ let foldUnaryOp (op: UnaryOp) (src: Atom) : CExpr option =
 let hasSideEffects (cexpr: CExpr) : bool =
     match cexpr with
     | Atom _ -> false
-    | TypedAtom _ -> false
+    | TypedAtom (_, typ) ->
+        // Some internal lowerings materialize ownership only after tagging a
+        // raw pointer with its heap type. Dropping that marker before RC
+        // insertion can orphan the allocation even though the cast itself is
+        // computationally pure.
+        isHeapType typ
     | Prim _ -> false
     | UnaryPrim _ -> false
     | IfValue _ -> false
