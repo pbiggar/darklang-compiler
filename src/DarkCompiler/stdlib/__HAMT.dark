@@ -54,10 +54,11 @@ def Stdlib.__HAMT.__allocLeaf<k, v>(key: k, value: v) : Dict<k, v> =
     let _ = __raw_set<Int64>(ptr, 16, 1) in
     Stdlib.__HAMT.__setTag<k, v>(ptr, 2)
 
-// Allocate an internal node: [bitmap:8][children...] = 8 + 8*numChildren bytes
+// Allocate an internal node: [bitmap:8][children...][refcount:8]
 def Stdlib.__HAMT.__allocInternal(bitmap: Int64, numChildren: Int64) : RawPtr =
-    let ptr = __raw_alloc(8 + (numChildren * 8)) in
+    let ptr = __raw_alloc(16 + (numChildren * 8)) in
     let _ = __raw_set<Int64>(ptr, 0, bitmap) in
+    let _ = __raw_set<Int64>(ptr, 8 + (numChildren * 8), 1) in
     ptr
 
 // =============================================================================
