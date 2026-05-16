@@ -2,61 +2,38 @@
 
 ## Status
 
-4,529/4,530 tests pass. The sole failure is `memReclaimBurn` — requires
-heap memory reclamation via reference counting.
+The x64 fixed-block and tagged-list root RC paths are enabled. The known
+remaining memory work is recursive payload release for fixed blocks/lists and
+dict/HAMT reclamation.
 
-The infrastructure (RC helpers, free list reuse) is implemented but disabled.
-Enabling it currently causes 37 test regressions.
-
-## Infrastructure (implemented, safe, 0 regressions when disabled)
+## Infrastructure
 
 1. **RawAlloc free list reuse** — Before bump-allocating, checks the free
-   list for a matching size class. No-op when free list is empty.
+   list for a matching size class. Leak accounting increments only for bump
+   allocations.
 
 2. **TaggedList RefCountDec helper** — `generateListRefCountDecHelper` in
    `passes/x64/6_CodeGen.fs`. Full iterative DFS using PUSH/POP as work
-   stack. Handles all 5 tag types (SINGLE, DEEP, NODE2, NODE3, LEAF).
+   stack. Handles all 5 tag types (SINGLE, DEEP, NODE2, NODE3, LEAF). Wired
+   through `LIR.RefCountDec(_, _, TaggedList)`.
 
 3. **TaggedList RefCountInc helper** — `generateListRefCountIncHelper`.
-   Increments root node refcount only (no recursion).
+   Increments root node refcount only (no recursion). Wired through
+   `LIR.RefCountInc(_, _, TaggedList)`.
 
-## What needs to happen (the hard part)
+4. **RawSet list edge retains** — `RawSet(ptr, offset, value, Some(TList _))`
+   retains the stored tagged-list pointer because the parent node now owns that
+   edge.
 
-All three must be enabled TOGETHER. Enabling any subset causes failures:
+## Enabled x64 List Work
 
-**A. RawSet ownership increment** — When `RawSet(ptr, offset, value,
-Some(TList _))` stores a tagged list pointer into a FingerTree node, the
-stored value's refcount must be incremented. ARM64 does this in
-`passes/arm64/6_CodeGen.fs` lines 3198-3212. x86_64 code is written but
-disabled (search for "ownershipInc").
+The list work had to be enabled as a group:
 
-**B. TaggedList RefCountDec wiring** — The `LIR.RefCountDec(_, _, TaggedList)`
-handler must save 9 caller-saved registers, MOV addrReg to RAX, CALL the
-helper, then restore. Code is written but commented out.
+- `RawAlloc` leak accounting for bump allocations
+- `RawSet` ownership increment for list edges
+- `TaggedList` root retain/release wiring
 
-**C. RawAlloc genLeakCounterInc** — Add `genLeakCounterInc ctx` to the
-RawAlloc bump allocation path (NOT the free list path). Without this, the
-Dec helper's `leakDec` underflows the leak counter.
-
-## 37-test regression when A+B enabled
-
-- **3 tco-refcounting tests**: leak counter underflow (fixed by enabling C)
-- **~10 crypto tests**: SIGSEGV — `Crypto.sha256`, `Crypto.sha384`, etc.
-  crash. Likely cause: stdlib functions used by crypto internally create
-  lists, and the ownership increment or Dec corrupts something.
-- **~24 other tests**: not fully characterized
-
-### Debugging clues
-
-- With ownership inc disabled but Dec enabled: 225 failures (children freed prematurely)
-- With ownership inc enabled and Dec enabled: 37 failures
-- Crypto crash RIP shows garbled instructions — stack or return address corruption
-- `Bytes.create(0)` doesn't obviously involve lists, yet crypto tests crash.
-  Check if stdlib functions (e.g., `Bytes.toList`, hex conversion) create lists.
-
-### Key discovery
-
-The LIR for `[1]` shows:
+The LIR for `[1]` illustrates why edge retains are necessary:
 ```
 RefCountInc(X20, 24, list)    // SINGLE: 1→2
 RefCountDec(X20, 24, list)    // SINGLE: 2→1
@@ -75,9 +52,9 @@ Causes 220 failures when enabled. Root causes:
 
 ## Plan
 
-Phase 1: Fix 37-test regression (enable A+B+C, triage crypto crashes)
-Phase 2: Generic RefCountDec (fix payload/size mismatch, verify all types)
-Phase 3: Unify memory management (strings, dicts, bytes, closures)
+Phase 1: Recursive child release for fixed blocks and list leaf payloads.
+Phase 2: Dict/HAMT retain/release.
+Phase 3: Replace remaining legacy ownership checks with `RcShape`.
 
 ## Diagnostic tools
 
