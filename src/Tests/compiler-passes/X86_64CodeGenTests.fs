@@ -325,6 +325,24 @@ let testGenericRefCountDecTuple2 () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected tuple2-sized RefCountDec to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: generic fixed-block RefCountDec handles other fixed payload sizes.
+let testGenericRefCountDecFixedSizes () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X2, 8)
+                LIR.RefCountDec (LIR.Physical LIR.X2, 8, LIR.GenericHeap)
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 24)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 24, LIR.GenericHeap)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected generic fixed-size RefCountDec to balance leak counter, got stderr '{stderr.Trim()}'"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -338,4 +356,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR HeapAlloc increments leak counter", testHeapAllocIncrementsLeakCounter)
     ("LIR generic RefCountInc increments refcount", testGenericRefCountInc)
     ("LIR generic RefCountDec reclaims tuple2", testGenericRefCountDecTuple2)
+    ("LIR generic RefCountDec reclaims fixed sizes", testGenericRefCountDecFixedSizes)
 ]

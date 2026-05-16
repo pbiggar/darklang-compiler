@@ -1902,7 +1902,7 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 // let restores = saveRegs |> List.rev |> List.map X86_64.POP
                 // saves @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL listRefCountDecHelperLabel] @ restores
             | LIR.GenericHeap ->
-                if payloadSize = 16 then
+                if payloadSize >= 0 && payloadSize < freeListSize then
                     genRefCountDecGeneric ctx addrReg payloadSize
                 else
                     [])
