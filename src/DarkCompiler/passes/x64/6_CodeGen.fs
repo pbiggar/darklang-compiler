@@ -1564,29 +1564,45 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
         let okLabel = freshLabel "heap_ok"
         resolveReg dest
         |> Result.map (fun destReg ->
+            let totalSize = ((sizeBytes + 8) + 7) &&& (~~~7)
+            let storeInitialRefcount =
+                if destReg = X86_64.RCX then
+                    [X86_64.PUSH scratch
+                     X86_64.MOV_imm32 (scratch, 1)
+                     X86_64.MOV_store (destReg, sizeBytes, scratch)
+                     X86_64.POP scratch]
+                else
+                    [X86_64.PUSH X86_64.RCX
+                     X86_64.MOV_imm32 (X86_64.RCX, 1)
+                     X86_64.MOV_store (destReg, sizeBytes, X86_64.RCX)
+                     X86_64.POP X86_64.RCX]
             // Check free list for this size class (if valid)
             let freeListAlloc =
                 if sizeBytes >= 0 && sizeBytes < freeListSize then
                     let bumpLabel = freshLabel "heap_bump"
                     let freeListDoneLabel = freshLabel "heap_fl_done"
-                    [X86_64.PUSH X86_64.RCX
-                     X86_64.MOV_load (X86_64.RCX, freeListBase, sizeBytes)
-                     X86_64.TEST_reg (X86_64.RCX, X86_64.RCX)
-                     X86_64.Jcc (X86_64.EQ, bumpLabel)
-                     // Free list hit: dest = block, update head to next
-                     X86_64.MOV_reg (destReg, X86_64.RCX)
-                     X86_64.MOV_load (X86_64.RCX, X86_64.RCX, 0)     // next ptr
-                     X86_64.MOV_store (freeListBase, sizeBytes, X86_64.RCX)
-                     X86_64.POP X86_64.RCX
-                     X86_64.JMP freeListDoneLabel
-                     X86_64.Label bumpLabel
-                     X86_64.POP X86_64.RCX], [X86_64.Label freeListDoneLabel]
+                    let freeListPre =
+                        [X86_64.PUSH X86_64.RCX
+                         X86_64.MOV_load (X86_64.RCX, freeListBase, sizeBytes)
+                         X86_64.TEST_reg (X86_64.RCX, X86_64.RCX)
+                         X86_64.Jcc (X86_64.EQ, bumpLabel)
+                         // Free list hit: dest = block, update head to next
+                         X86_64.MOV_reg (destReg, X86_64.RCX)
+                         X86_64.MOV_load (X86_64.RCX, X86_64.RCX, 0)     // next ptr
+                         X86_64.MOV_store (freeListBase, sizeBytes, X86_64.RCX)
+                         X86_64.POP X86_64.RCX]
+                        @ storeInitialRefcount
+                        @ [X86_64.JMP freeListDoneLabel
+                           X86_64.Label bumpLabel
+                           X86_64.POP X86_64.RCX]
+                    freeListPre, [X86_64.Label freeListDoneLabel]
                 else [], []
             let (freeListPre, freeListPost) = freeListAlloc
             freeListPre
             // Bump allocator path
             @ [X86_64.MOV_reg (destReg, heapPtr)
-               X86_64.ADD_imm (heapPtr, int32 sizeBytes)]
+               X86_64.ADD_imm (heapPtr, int32 totalSize)]
+            @ storeInitialRefcount
             // Bounds check
             @ (if destReg = scratch then
                 [X86_64.PUSH X86_64.RAX

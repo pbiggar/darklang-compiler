@@ -237,6 +237,23 @@ let testPrintInt64Zero () : Result<unit, string> =
         elif stdout.Trim() <> "0" then Error $"Expected stdout '0', got '{stdout.Trim()}'"
         else Ok ()
 
+/// Test: HeapAlloc initializes the trailing fixed-block refcount.
+let testHeapAllocInitializesRefcount () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X2, 16)
+                LIR.HeapLoad (LIR.Physical LIR.X1, LIR.Physical LIR.X2, 16)
+                LIR.Exit
+            ]
+            LIR.Ret
+
+    match runLIRProgram program with
+    | Error e -> Error e
+    | Ok exitCode ->
+        if exitCode = 1 then Ok ()
+        else Error $"Expected initialized refcount exit code 1, got {exitCode}"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -246,4 +263,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR PrintInt64", testPrintInt64)
     ("LIR PrintInt64 negative", testPrintInt64Negative)
     ("LIR PrintInt64 zero", testPrintInt64Zero)
+    ("LIR HeapAlloc initializes refcount", testHeapAllocInitializesRefcount)
 ]
