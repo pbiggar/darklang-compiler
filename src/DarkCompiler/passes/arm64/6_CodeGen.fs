@@ -2516,16 +2516,26 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
         |> Result.map (fun addrReg ->
             let leakDec = generateLeakCounterDec ctx
             let tupleDecPath =
-                let cbnzOffset = if List.isEmpty leakDec then 4 else 9
+                let releaseInstrs =
+                    (if payloadSize >= 0 && payloadSize < 256 then
+                        [
+                            ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X27, int16 payloadSize)
+                            ARM64Symbolic.STR (ARM64Symbolic.X14, addrReg, 0s)
+                            ARM64Symbolic.STR (addrReg, ARM64Symbolic.X27, int16 payloadSize)
+                        ]
+                     else
+                        [])
+                    @ leakDec
                 [
                     ARM64Symbolic.LDR (ARM64Symbolic.X15, addrReg, int16 payloadSize)
                     ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
                     ARM64Symbolic.STR (ARM64Symbolic.X15, addrReg, int16 payloadSize)
-                    ARM64Symbolic.CBNZ_offset (ARM64Symbolic.X15, cbnzOffset)
-                    ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X27, int16 payloadSize)
-                    ARM64Symbolic.STR (ARM64Symbolic.X14, addrReg, 0s)
-                    ARM64Symbolic.STR (addrReg, ARM64Symbolic.X27, int16 payloadSize)
-                ] @ leakDec
+                ]
+                @ (if List.isEmpty releaseInstrs then
+                    []
+                   else
+                    [ARM64Symbolic.CBNZ_offset (ARM64Symbolic.X15, List.length releaseInstrs + 1)]
+                    @ releaseInstrs)
 
             match kind with
             | LIR.TaggedList ->
@@ -2549,7 +2559,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 ]
                 @ listDecCall
             | LIR.GenericHeap ->
-                let cbzOffset = if List.isEmpty leakDec then 8 else 13
+                let cbzOffset = List.length tupleDecPath + 1
                 [
                     ARM64Symbolic.CBZ_offset (addrReg, cbzOffset)
                 ] @ tupleDecPath)

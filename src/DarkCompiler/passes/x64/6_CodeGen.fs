@@ -1902,10 +1902,7 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL listRefCountDecHelperLabel]
                 @ restores
             | LIR.GenericHeap ->
-                if payloadSize >= 0 && payloadSize < freeListSize then
-                    genRefCountDecGeneric ctx addrReg payloadSize
-                else
-                    [])
+                genRefCountDecGeneric ctx addrReg payloadSize)
 
     | LIR.RefCountIncString str
     | LIR.RefCountIncBytes str ->
