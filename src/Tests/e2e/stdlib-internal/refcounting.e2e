@@ -30,6 +30,7 @@ def dictStringValue(): Dict<Int64, String> = Stdlib.Dict.set(Stdlib.Dict.empty<I
 let xs = [1, 2, 3] in 0 = stdout="0\n" stderr=""
 let base = 1 in let f = (x: Int64) => x + base in let xs = [f] in 0 = stdout="0\n" stderr="" // list of closures current safe baseline
 let xs = ["a" ++ "b"] in 0 = stdout="0\n" stderr="" // list releases dynamic string payload
+def listBytes(): List<Bytes> = [Bytes.create(4)] let xs = listBytes() in 0 = stdout="0\n" stderr="" // returned list releases dynamic bytes payloads
 let xs = [("a" ++ "b", 1)] in 0 = stdout="0\n" stderr="" // list releases tuple payload root
 let xs = [[1, 2], [3, 4]] in 0 = stdout="0\n" stderr="" // list releases nested list payloads
 type ListRecord = { id: Int64 } def listRecord(): List<ListRecord> = [ListRecord { id = 1 }] let xs = listRecord() in 0 = stdout="0\n" stderr="" // returned list releases record payload roots
