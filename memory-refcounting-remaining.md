@@ -58,11 +58,12 @@ tagged-list tuple3 string/list/dict payload release, plus tagged-list boxed sum
 tuple3 string/list/dict payload release, plus direct x64 closure tuple
 string/list/dict capture release, plus direct x64 closure record
 string/list/dict capture release, plus direct x64 closure sum tuple
-string/list/dict capture release, plus x64 generic fixed-block list/dict/closure
-field release preserving a live `RAX` value across cleanup, plus x64
-materialized string literals using the immutable refcount sentinel:
+string/list/dict capture release, plus direct x64 closure sum record
+string/list/dict capture release, plus x64 generic fixed-block
+list/dict/closure field release preserving a live `RAX` value across cleanup,
+plus x64 materialized string literals using the immutable refcount sentinel:
 
-- `scripts/run-in-container ./run-tests`: `4651 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4652 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -777,6 +778,7 @@ commits enabled:
 - direct closure tuple string/list/dict capture release
 - direct closure record string/list/dict capture release
 - direct closure sum tuple string/list/dict capture release
+- direct closure sum record string/list/dict capture release
 - direct closure release with multiple managed captures
 - generic fixed-block list/dict/closure field release preserves a live `RAX`
   value across cleanup
@@ -798,8 +800,8 @@ Likely gaps:
   string/bytes/nested fixed blocks
 - closure capture recursive release coverage beyond the current direct
   dynamic-buffer, managed-root, tuple-string-list-dict,
-  record-string-list-dict, sum-tuple-string-list-dict, and fixed-block capture
-  probes
+  record-string-list-dict, sum-tuple-string-list-dict,
+  sum-record-string-list-dict, and fixed-block capture probes
 - list payload helper variants beyond the currently covered tuple2, exhaustive
   tuple3 dynamic-buffer combinations, one mixed tuple3 string/list/dict shape,
   record1, exhaustive record3
