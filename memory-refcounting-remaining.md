@@ -73,12 +73,12 @@ retention, plus returned borrowed sum bytes, dict, and closure payload projectio
 retention, plus returned borrowed sum list, tuple, and record payload
 projection retention, plus returned borrowed nested sum payload projection
 retention, plus returned branch-selected borrowed bytes, list, dict, closure,
-and tuple projection retention, plus sum record payload release, plus mixed sum
+tuple, and record projection retention, plus sum record payload release, plus mixed sum
 no-payload and payload variant release, plus record-contained sum payload
 release, plus dict-contained sum value payload release, plus pure enum sum
 no-heap-ownership coverage:
 
-- `scripts/run-in-container ./run-tests`: `4685 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4686 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -951,7 +951,7 @@ dynamic strings, branch-selected string projections, and one sum payload project
 containing a dynamic string, bytes, list, dict, closure, tuple, record, or
 nested sum payload.
 Branch-selected borrowed returns are now covered for strings, bytes, lists,
-dicts, closures, and tuples.
+dicts, closures, tuples, and records.
 
 ### Remaining Gaps
 
@@ -962,7 +962,7 @@ More projected shapes still need the same confidence:
 - deeper nested projections through `RawGet` or typed aliases beyond the
   covered tuple and record projection paths
 - branch-selected borrowed values beyond the covered string, bytes, list, dict,
-  closure, and tuple projection cases
+  closure, tuple, and record projection cases
 - x64 backend parity for each retained projection family
 
 ### Remaining Tasks
