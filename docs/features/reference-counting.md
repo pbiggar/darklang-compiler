@@ -13,13 +13,13 @@ The compiler currently has these managed or partially managed runtime shapes:
 
 | Shape | Representation | Current ownership behavior |
 |---|---|---|
-| Fixed blocks | `[payload fields][refcount:8]` | Generic root retain/release; ARM64 releases many managed fields recursively |
-| Boxed sums | fixed block with tag/payload | Root RC; selected payload release paths are implemented |
-| Tagged lists | FingerTree nodes allocated through raw memory | Root and node RC helpers; selected leaf payload helpers |
+| Fixed blocks | `[payload fields][refcount:8]` | Generic root retain/release; managed field release for many tuple, record, sum, and closure-capture shapes |
+| Boxed sums | fixed block with tag/payload | Root RC; payload release for strings, bytes, lists, dicts, closures, tuples, records, and selected nested sums |
+| Tagged lists | FingerTree nodes allocated through raw memory | Root and node RC helpers; selected leaf payload helpers for dynamic buffers, fixed blocks, lists, dicts, and closures |
 | Dicts | tagged HAMT root with raw HAMT nodes | Dict root RC helpers; raw HAMT lifecycle still needs a complete sharing story |
 | Dynamic strings | `[length:8][data][padding][refcount:8]` | Scoped RC, field retain/release, borrowed projection retain, literal sentinel skip |
-| Dynamic bytes | `[length:8][data][padding][refcount:8]` | Scoped RC and initial container coverage; parity with strings is still in progress |
-| Closures | `[func_ptr][captures...][refcount:8]` | Closure root RC and selected recursive capture release |
+| Dynamic bytes | `[length:8][data][padding][refcount:8]` | Scoped RC, constructor/transform coverage, container retains/releases, and initial parity with strings |
+| Closures | `[func_ptr][captures...][refcount:8]` | Closure root RC and recursive capture release for the covered capture shapes |
 | Raw pointers | raw addresses | Unmanaged; `RawFree` policy remains deferred |
 
 Primitive scalars are immediate and do not participate in RC.
@@ -65,6 +65,9 @@ x64 has active root RC support and focused unit coverage for:
 - tagged-list root and recursive node release
 - dict root helpers
 - dynamic string decrement after `StringConcat`
+- literal string sentinel behavior
+- recursive release for covered fixed-block, list, boxed-sum, and closure
+  capture shapes
 
 x64 still trails ARM64 for recursive payload release. See
 [`../x64-refcounting.md`](../x64-refcounting.md).
@@ -89,7 +92,7 @@ of relying only on leak-check silence.
 The major remaining work is:
 
 - replace legacy heap classification with shape-driven ownership planning
-- complete bytes coverage to match strings
+- complete deeper bytes coverage and constructor/layout audits
 - generalize fixed-block recursive release
 - generalize tagged-list payload release without helper explosion
 - define dict/HAMT structural sharing and raw-node lifecycle semantics

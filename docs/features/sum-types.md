@@ -146,11 +146,18 @@ LDR X1, [X0, #8]    ; Load payload from offset 8
 
 Sum type values with payloads are heap-allocated and reference-counted:
 
-- Increment when assigning to new variable
-- Decrement when value goes out of scope
-- Free when refcount reaches zero
+- payload constructors allocate a boxed fixed block with a trailing refcount
+- owned boxed sums are released at scope exit unless returned
+- variants without payloads are immediate tag integers and do not allocate
+- destructors release covered managed payload shapes recursively, including
+  dynamic strings and bytes, lists, dict roots, closures, tuples, records, and
+  selected nested sums
+- borrowed payload projections returned from a function are retained before the
+  parent sum is cleaned up
 
-Variants without payloads are just integers (no allocation).
+`RcShape` still conservatively classifies sums in some paths. Pure enum
+classification and broader recursive payload planning remain part of the
+remaining refcounting work.
 
 ## Implementation Files
 

@@ -68,13 +68,16 @@ Current ARM64 leaf payload coverage includes:
 - nested lists
 - dict roots
 - closure roots
-- tuple payloads
-- one-field and two-field records
-- a narrow three-field record shape with string, list, and dict fields
-- a narrow boxed sum carrying a string
+- tuple payloads, including selected higher-arity managed-field shapes
+- one-field, two-field, nested, and selected three-field records
+- boxed sums carrying dynamic buffers, lists, dicts, closures, tuples, records,
+  and selected nested sums
 
-x64 has root/node reclamation plus tuple2 and nested-list payload helpers, but
-does not yet match all ARM64 payload variants.
+x64 has root/node reclamation plus focused helper coverage for dynamic buffers,
+tuples, records, boxed sums, lists, dicts, and closures. It still has less
+end-to-end coverage than ARM64 and should be checked against
+[`docs/x64-refcounting.md`](../x64-refcounting.md) before assuming parity for a
+new shape.
 
 ## Remaining Work
 
@@ -83,12 +86,14 @@ shape-driven payload release plan. Remaining gaps include:
 
 - three-element tuples with managed fields
 - additional multi-field record shapes
-- sum payloads beyond currently covered string payloads
+- sum payloads beyond currently covered dynamic-buffer, root, tuple, and record
+  payload shapes
 - bytes/list/dict/closure combinations nested more deeply
 - x64 parity for ARM64 helper variants
 - avoiding unbounded helper growth as new shapes are covered
 
-See `memory-refcounting-remaining.md` for the current task breakdown.
+See [`memory-refcounting-remaining.md`](../../memory-refcounting-remaining.md)
+for the current task breakdown.
 
 ## Implementation Files
 
@@ -100,4 +105,3 @@ See `memory-refcounting-remaining.md` for the current task breakdown.
 | `src/DarkCompiler/passes/arm64/6_CodeGen.fs` | ARM64 list helpers |
 | `src/DarkCompiler/passes/x64/6_CodeGen.fs` | x64 list helpers |
 | `src/DarkCompiler/stdlib/List.dark` | stdlib list functions |
-

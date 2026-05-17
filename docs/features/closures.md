@@ -25,9 +25,10 @@ in f(5)  // Returns 15
 At runtime, a closure is a heap-allocated tuple containing:
 1. A pointer to the lifted function
 2. The captured values (in order they appear)
+3. A trailing refcount slot
 
 ```
-Closure memory layout: [func_ptr, cap1, cap2, ...]
+Closure memory layout: [func_ptr, cap1, cap2, ..., refcount]
 ```
 
 ## Lambda Lifting Algorithm
@@ -103,6 +104,22 @@ From `6_CodeGen.fs`:
 1. **ClosureAlloc**: Allocates tuple on heap, stores function address and captures
 2. **ClosureCall**: Loads function pointer from closure[0], passes closure as hidden first arg
 3. **ClosureTailCall**: Same as ClosureCall but uses BR instead of BLR (no return)
+
+## Reference Counting
+
+Closures are compiler-managed heap values:
+
+- closure allocation initializes the trailing refcount
+- owned closure roots are released at scope exit unless returned
+- closures captured inside lists, records, tuples, and sums are retained and
+  released by the covered container helpers
+- closure destructors release covered managed capture shapes recursively,
+  including dynamic strings and bytes, lists, dict roots, closures, tuples,
+  records, sums, and mixed managed captures
+
+The remaining work is to distinguish static function references from heap
+closures in the ownership shape model and to keep x64 recursive capture release
+in parity with ARM64.
 
 ## Supported Features
 

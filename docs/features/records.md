@@ -135,12 +135,21 @@ Each nested record is a separate heap allocation.
 
 Records are heap-allocated and reference-counted:
 
-- Construction increments refcount to 1
-- Assignment to variable increments refcount
-- Going out of scope decrements refcount
-- Free when refcount reaches zero
+- construction initializes the trailing refcount to 1
+- owned record temporaries are released at scope exit unless returned
+- borrowed record projections returned from a function are retained before
+  parent cleanup
+- destructors release many managed field shapes recursively, including dynamic
+  strings and bytes, lists, dict roots, closures, nested fixed blocks, and
+  selected sum payloads
+- literal strings stored in record fields use sentinel refcounts and are skipped
+  by dynamic-buffer release
 
 Record updates create new records (immutable semantics).
+
+The implementation is still moving toward a single shape-driven release plan.
+See [`memory-refcounting-remaining.md`](../../memory-refcounting-remaining.md)
+for the current remaining coverage and backend parity work.
 
 ## Implementation Files
 
