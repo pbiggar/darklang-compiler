@@ -14,13 +14,15 @@ changes need in order to avoid re-opening completed problems.
 Status date: 2026-05-17.
 
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
-release and tuple-only nested fixed-block field release.
+release, tuple-only nested fixed-block field release, and record-registry-based
+record field release.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
-field coverage and tuple-only nested fixed-block release:
+field coverage, tuple-only nested fixed-block release, and record string field
+release:
 
 - `scripts/run-in-container dotnet build --verbosity quiet`: passed
-- `scripts/run-in-container ./run-tests`: `4595 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4596 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -690,6 +692,7 @@ commits enabled:
 - generic fixed-block tuple field release for dynamic strings
 - generic fixed-block tuple field release for dynamic bytes
 - tuple-only nested fixed-block field release
+- record-registry-based fixed-block record string field release
 
 However, x64 is still not as well covered as ARM64 in the memory tests run in
 this environment, and docs still say recursive fixed-block/list payload release
@@ -702,8 +705,9 @@ match ARM64 for every recursive payload shape?"
 
 Likely gaps:
 
-- fixed-block field release for records, dicts, closures, sum payloads, nested
-  record/sum fixed blocks, and all non-tuple layouts
+- fixed-block field release for dicts, closures, sum payloads, nested sum fixed
+  blocks, and untested record field combinations beyond string/bytes/nested
+  fixed blocks
 - closure capture recursive release
 - list payload helper variants beyond tuple2/list
 - dict helper key/value recursion parity

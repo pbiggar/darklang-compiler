@@ -390,6 +390,7 @@ type private FuncCtx = {
     StackSize: int
     UsedCalleeSaved: LIR.PhysReg list
     EnableLeakCheck: bool
+    RecordRegistry: LIR.RecordRegistry
 }
 
 // ============================================================================
@@ -537,15 +538,24 @@ let private genDynamicBufferFieldRelease (ctx: FuncCtx) (fieldOffset: int) : X86
        X86_64.Label literalLabel
        X86_64.Label doneLabel]
 
-let private fixedBlockPayloadSize (fieldType: AST.Type) : int option =
+let private fixedBlockPayloadSize (recordRegistry: LIR.RecordRegistry) (fieldType: AST.Type) : int option =
     match fieldType with
     | AST.TTuple fields -> Some (List.length fields * 8)
+    | AST.TRecord (name, _) ->
+        recordRegistry
+        |> Map.tryFind name
+        |> Option.map (fun fields -> List.length fields * 8)
     | _ -> None
 
 let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type option) : X86_64.Instr list =
     let fieldTypes =
         match sourceType with
         | Some (AST.TTuple fields) -> fields
+        | Some (AST.TRecord (name, _)) ->
+            ctx.RecordRegistry
+            |> Map.tryFind name
+            |> Option.map (List.map snd)
+            |> Option.defaultValue []
         | _ -> []
 
     fieldTypes
@@ -553,12 +563,13 @@ let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type 
         match fieldType with
         | AST.TString
         | AST.TBytes -> genDynamicBufferFieldRelease ctx (index * 8)
-        | AST.TTuple _ -> genFixedBlockFieldRelease ctx (index * 8) fieldType
+        | AST.TTuple _
+        | AST.TRecord _ -> genFixedBlockFieldRelease ctx (index * 8) fieldType
         | _ -> [])
     |> List.concat
 
 and private genFixedBlockFieldRelease (ctx: FuncCtx) (fieldOffset: int) (fieldType: AST.Type) : X86_64.Instr list =
-    match fixedBlockPayloadSize fieldType with
+    match fixedBlockPayloadSize ctx.RecordRegistry fieldType with
     | None ->
         []
     | Some childPayloadSize ->
@@ -3350,7 +3361,7 @@ let private translateBlock (ctx: FuncCtx) (epilogueLabel: string) (block: LIR.Ba
             labelInstr @ bodyInstrs @ termInstrs)
 
 /// Translate a LIR function to x86-64 instructions
-let translateFunction (enableLeakCheck: bool) (func: LIR.Function) : Result<X86_64.Instr list, string> =
+let translateFunction (enableLeakCheck: bool) (recordRegistry: LIR.RecordRegistry) (func: LIR.Function) : Result<X86_64.Instr list, string> =
     let epilogueLabel = "_epilogue_" + func.Name
     let prologue = genPrologue func.StackSize func.UsedCalleeSaved
 
@@ -3372,7 +3383,12 @@ let translateFunction (enableLeakCheck: bool) (func: LIR.Function) : Result<X86_
         match remaining with
         | [] -> Ok (List.rev acc |> List.concat)
         | block :: rest ->
-            let ctx : FuncCtx = { StackSize = func.StackSize; UsedCalleeSaved = func.UsedCalleeSaved; EnableLeakCheck = enableLeakCheck }
+            let ctx : FuncCtx = {
+                StackSize = func.StackSize
+                UsedCalleeSaved = func.UsedCalleeSaved
+                EnableLeakCheck = enableLeakCheck
+                RecordRegistry = recordRegistry
+            }
             match translateBlock ctx epilogueLabel block with
             | Error e -> Error e
             | Ok instrs -> translateBlocks (instrs :: acc) rest
@@ -3403,12 +3419,12 @@ let translateFunction (enableLeakCheck: bool) (func: LIR.Function) : Result<X86_
         Ok (funcLabel @ prologue @ heapInit @ blockInstrs @ epilogue)
 
 /// Translate a complete LIR program to x86-64 instructions
-let translateProgram (LIR.Program (functions, _)) (enableLeakCheck: bool) : Result<X86_64.Instr list, string> =
+let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck: bool) : Result<X86_64.Instr list, string> =
     let rec translateFuncs acc remaining =
         match remaining with
         | [] -> Ok (List.rev acc |> List.concat)
         | func :: rest ->
-            match translateFunction enableLeakCheck func with
+            match translateFunction enableLeakCheck recordRegistry func with
             | Error e -> Error e
             | Ok instrs -> translateFuncs (instrs :: acc) rest
 

@@ -74,7 +74,7 @@ let private runLIRProgram (program: LIR.Program) : Result<int, string> =
             X86_64BinaryTests.runElfBinary binary
 
 /// Create a minimal LIR function with a single basic block
-let private makeSimpleProgram (instrs: LIR.Instr list) (term: LIR.Terminator) : LIR.Program =
+let private makeSimpleProgramWithRecords (instrs: LIR.Instr list) (term: LIR.Terminator) (records: LIR.RecordRegistry) : LIR.Program =
     let entryLabel = LIR.Label "_start_entry"
     let bodyLabel = LIR.Label "_start_body"
     let entryBlock : LIR.BasicBlock = {
@@ -97,7 +97,10 @@ let private makeSimpleProgram (instrs: LIR.Instr list) (term: LIR.Terminator) : 
         StackSize = 0
         UsedCalleeSaved = []
     }
-    LIR.Program ([func], Map.empty)
+    LIR.Program ([func], records)
+
+let private makeSimpleProgram (instrs: LIR.Instr list) (term: LIR.Terminator) : LIR.Program =
+    makeSimpleProgramWithRecords instrs term Map.empty
 
 /// Test: MOV immediate + exit
 let testMovAndExit () : Result<unit, string> =
@@ -415,6 +418,27 @@ let testGenericRefCountDecNestedStringTupleField () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected nested tuple field release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 generic fixed-block RefCountDec releases a record string field.
+let testGenericRefCountDecRecordStringField () : Result<unit, string> =
+    let recordType = AST.TRecord ("X64RcRecord", [])
+    let records = Map.ofList [("X64RcRecord", [("value", AST.TString)])]
+    let program =
+        makeSimpleProgramWithRecords
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "a", LIR.StringSymbol "b")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some recordType)
+            ]
+            LIR.Ret
+            records
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected record string field release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -433,4 +457,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec releases string field", testGenericRefCountDecStringField)
     ("LIR generic RefCountDec releases bytes field", testGenericRefCountDecBytesField)
     ("LIR generic RefCountDec releases nested string tuple field", testGenericRefCountDecNestedStringTupleField)
+    ("LIR generic RefCountDec releases record string field", testGenericRefCountDecRecordStringField)
 ]
