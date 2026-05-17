@@ -23,10 +23,12 @@ string field release, and tagged-list one-field record dynamic string field
 release, tagged-list boxed sum dynamic string payload release, tagged-list
 boxed sum list payload release, tagged-list boxed sum dict payload release,
 tagged-list boxed sum closure payload release, tagged-list boxed sum tuple
-dynamic string payload release, tagged-list boxed sum record dynamic string
-payload release, tagged-list boxed sum record3 dynamic string/bytes payload
-release for all non-empty dynamic-buffer field combinations, tagged-list nested
-boxed sum dynamic string payload release, and direct x64 closure dynamic
+dynamic string payload release, tagged-list boxed sum tuple3 dynamic
+string/bytes payload release for all non-empty dynamic-buffer field
+combinations, tagged-list boxed sum record dynamic string payload release,
+tagged-list boxed sum record3 dynamic string/bytes payload release for all
+non-empty dynamic-buffer field combinations, tagged-list nested boxed sum
+dynamic string payload release, and direct x64 closure dynamic
 string/bytes/list/dict/closure/tuple/record/sum capture release, including a
 multiple-managed-capture closure probe.
 
@@ -38,12 +40,12 @@ closure/dict/dynamic-string leaf payload release, plus direct x64 closure
 dynamic string/bytes/list/dict/closure/tuple/record/sum capture release,
 including multiple managed captures in the same closure, and x64 tagged-list
 tuple3 and record3 dynamic-buffer payload release, plus tagged-list boxed sum
-list, dict, closure, tuple dynamic string, and record dynamic string payload
-release, plus tagged-list boxed sum record3 dynamic string/bytes payload
-release for all non-empty dynamic-buffer field combinations, plus tagged-list
-nested boxed sum dynamic string payload release:
+list, dict, closure, tuple dynamic string, tuple3 dynamic string/bytes, and
+record dynamic string payload release, plus tagged-list boxed sum record3
+dynamic string/bytes payload release for all non-empty dynamic-buffer field
+combinations, plus tagged-list nested boxed sum dynamic string payload release:
 
-- `scripts/run-in-container ./run-tests`: `4632 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4633 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -735,6 +737,8 @@ commits enabled:
 - tagged-list boxed sum dict payload release
 - tagged-list boxed sum closure payload release
 - tagged-list boxed sum tuple2 dynamic string/bytes payload release for all
+  non-empty dynamic-buffer field combinations
+- tagged-list boxed sum tuple3 dynamic string/bytes payload release for all
   non-empty dynamic-buffer field combinations
 - tagged-list boxed sum record dynamic string payload release
 - tagged-list boxed sum record3 dynamic string/bytes payload release for all
