@@ -1401,11 +1401,36 @@ let private closurePayloadSizesFromAllocs (functions: LIR.Function list) : Map<s
                     None)))
     |> Map.ofList
 
-let private generateClosureRefCountDecHelper (enableLeakCheck: bool) (closurePayloadSizes: Map<string, int>) : X86_64.Instr list =
+let private closureCaptureTypesFromParams (functions: LIR.Function list) : Map<string, AST.Type list> =
+    functions
+    |> List.choose (fun func ->
+        match func.TypedParams with
+        | { Type = AST.TTuple (_funcPtrType :: captures) } :: _ ->
+            Some (func.Name, captures)
+        | _ ->
+            None)
+    |> Map.ofList
+
+let private closurePayloadSizesFromParams (functions: LIR.Function list) : Map<string, int> =
+    functions
+    |> List.choose (fun func ->
+        match func.TypedParams with
+        | { Type = AST.TTuple fields } :: _ ->
+            Some (func.Name, List.length fields * 8)
+        | _ ->
+            None)
+    |> Map.ofList
+
+let private generateClosureRefCountDecHelper
+    (enableLeakCheck: bool)
+    (closurePayloadSizes: Map<string, int>)
+    (closureCaptureTypes: Map<string, AST.Type list>)
+    : X86_64.Instr list =
     let label name = $"__dark_closure_rc_dec_{name}"
     let helperRet = label "ret"
     let payloadReady = label "payload_ready"
     let skipFreeList = label "skip_freelist"
+    let capturesReleased = label "captures_released"
 
     let leakDec =
         if enableLeakCheck then
@@ -1434,6 +1459,51 @@ let private generateClosureRefCountDecHelper (enableLeakCheck: bool) (closurePay
              X86_64.Label nextCase])
         |> List.concat
 
+    let releaseDynamicBufferCapture (fieldOffset: int) (suffix: string) : X86_64.Instr list =
+        let doneLabel = label $"capture_dynamic_done_{suffix}"
+        [X86_64.MOV_load (X86_64.R9, X86_64.RAX, fieldOffset)
+         X86_64.TEST_reg (X86_64.R9, X86_64.R9)
+         X86_64.Jcc (X86_64.EQ, doneLabel)
+         X86_64.MOV_load (X86_64.R10, X86_64.R9, 0)
+         X86_64.ADD_imm (X86_64.R10, 7)
+         X86_64.AND_imm (X86_64.R10, -8)
+         X86_64.ADD_imm (X86_64.R10, 8)
+         X86_64.ADD_reg (X86_64.R10, X86_64.R9)
+         X86_64.MOV_load (X86_64.RDX, X86_64.R10, 0)]
+        @ loadImm64 scratch 0x7FFFFFFFFFFFFFFFL
+        @ [X86_64.CMP_reg (X86_64.RDX, scratch)
+           X86_64.Jcc (X86_64.EQ, doneLabel)
+           X86_64.SUB_imm (X86_64.RDX, 1)
+           X86_64.MOV_store (X86_64.R10, 0, X86_64.RDX)
+           X86_64.TEST_reg (X86_64.RDX, X86_64.RDX)
+           X86_64.Jcc (X86_64.NE, doneLabel)]
+        @ leakDec
+        @ [X86_64.Label doneLabel]
+
+    let releaseCaptureCases =
+        closureCaptureTypes
+        |> Map.toList
+        |> List.mapi (fun index (funcName, captureTypes) ->
+            let nextCase = label $"captures_next_{index}"
+            let releases =
+                captureTypes
+                |> List.mapi (fun captureIndex captureType ->
+                    let fieldOffset = (captureIndex + 1) * 8
+                    match captureType with
+                    | AST.TString
+                    | AST.TBytes ->
+                        releaseDynamicBufferCapture fieldOffset $"{index}_{captureIndex}"
+                    | _ ->
+                        [])
+                |> List.concat
+            [X86_64.LEA_rip (X86_64.R9, funcName)
+             X86_64.CMP_reg (X86_64.R8, X86_64.R9)
+             X86_64.Jcc (X86_64.NE, nextCase)]
+            @ releases
+            @ [X86_64.JMP capturesReleased
+               X86_64.Label nextCase])
+        |> List.concat
+
     [X86_64.Label closureRefCountDecHelperLabel
      X86_64.TEST_reg (X86_64.RAX, X86_64.RAX)
      X86_64.Jcc (X86_64.EQ, helperRet)
@@ -1448,6 +1518,9 @@ let private generateClosureRefCountDecHelper (enableLeakCheck: bool) (closurePay
        X86_64.MOV_store (X86_64.RDI, 0, X86_64.RDX)
        X86_64.TEST_reg (X86_64.RDX, X86_64.RDX)
        X86_64.Jcc (X86_64.NE, helperRet)
+       X86_64.MOV_load (X86_64.R8, X86_64.RAX, 0)]
+    @ releaseCaptureCases
+    @ [X86_64.Label capturesReleased
        X86_64.CMP_imm (X86_64.RCX, freeListSize)
        X86_64.Jcc (X86_64.GE, skipFreeList)
        X86_64.MOV_reg (X86_64.RDI, freeListBase)
@@ -3986,7 +4059,12 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                         typeContainsClosure sourceType
                     | _ -> false)))
 
-    let closurePayloadSizes = closurePayloadSizesFromAllocs functions
+    let closurePayloadSizes =
+        Map.fold
+            (fun acc funcName payloadSize -> Map.add funcName payloadSize acc)
+            (closurePayloadSizesFromAllocs functions)
+            (closurePayloadSizesFromParams functions)
+    let closureCaptureTypes = closureCaptureTypesFromParams functions
 
     translateFuncs [] functions
     |> Result.map (fun allInstrs ->
@@ -4033,6 +4111,6 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
             if needsDictRcDecHelper || needsListRcDecDictHelper then generateDictRefCountDecHelper enableLeakCheck
             else []
         let closureDecHelper =
-            if needsClosureRcDecHelper || needsListRcDecClosureHelper then generateClosureRefCountDecHelper enableLeakCheck closurePayloadSizes
+            if needsClosureRcDecHelper || needsListRcDecClosureHelper then generateClosureRefCountDecHelper enableLeakCheck closurePayloadSizes closureCaptureTypes
             else []
         allInstrs @ listIncHelper @ listDecHelper @ listDecTuple2Helper @ listDecTuple2DynamicFirstHelper @ listDecTuple2DynamicSecondHelper @ listDecTuple2DynamicBothHelper @ listDecRecord1DynamicHelper @ listDecSumDynamicHelper @ listDecListHelper @ listDecClosureHelper @ listDecDictHelper @ listDecDynamicBufferHelper @ dictIncHelper @ dictDecHelper @ closureDecHelper @ genOomHandler ())

@@ -20,15 +20,17 @@ boxed sum list payload release, zero-capture closure field release, tagged-list
 closure leaf payload release, tagged-list dict leaf payload release, and
 tagged-list dynamic string leaf payload release, and tagged-list tuple dynamic
 string field release, and tagged-list one-field record dynamic string field
-release, and tagged-list boxed sum dynamic string payload release.
+release, tagged-list boxed sum dynamic string payload release, and direct x64
+closure dynamic string/bytes capture release.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
 sum string payload release, dict root field release, and zero-capture closure
 field release, including boxed sum list payload and tagged-list
-closure/dict/dynamic-string leaf payload release:
+closure/dict/dynamic-string leaf payload release, plus direct x64 closure
+dynamic string/bytes capture release:
 
-- `scripts/run-in-container ./run-tests`: `4608 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4609 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -712,6 +714,7 @@ commits enabled:
 - tagged-list tuple dynamic string field release
 - tagged-list one-field record dynamic string field release
 - tagged-list boxed sum dynamic string payload release
+- direct closure dynamic string/bytes capture release
 
 However, x64 is still not as well covered as ARM64 in the memory tests run in
 this environment, and docs still say recursive fixed-block/list payload release
@@ -727,7 +730,7 @@ Likely gaps:
 - fixed-block field release for boxed sum payloads beyond the current
   string/list cases, multi-capture closure payloads, and untested record field
   combinations beyond string/bytes/nested fixed blocks
-- closure capture recursive release
+- closure capture recursive release beyond direct dynamic-buffer captures
 - list payload helper variants beyond tuple2 dynamic-buffer/record1
   dynamic-buffer/sum dynamic-buffer/list/closure/dict/string
 - dict helper key/value recursion parity
@@ -741,7 +744,8 @@ Likely gaps:
    currently covered by `stdlib-internal/refcounting.e2e`.
 2. Update `docs/x64-refcounting.md` with the actual current state.
 3. Port ARM64 fixed-block field release semantics to x64.
-4. Port ARM64 closure capture release semantics to x64.
+4. Port ARM64 closure capture release semantics beyond direct dynamic buffers
+   to x64.
 5. Port any missing list helper variants to x64.
 6. Confirm x64 literal string layout has an immutable sentinel or otherwise
    never sends static strings through dynamic RC.
@@ -754,7 +758,7 @@ Likely gaps:
 2. Add x64-specific expected-pass leak probes for lists.
 3. Add x64-specific expected-pass leak probes for dicts.
 4. Port fixed-block dict/closure releases to x64.
-5. Port closure capture recursive releases to x64.
+5. Port closure capture recursive releases beyond direct dynamic buffers to x64.
 6. Update x64 docs after tests pass.
 
 ## 8. Deferred: Define Raw Memory Policy
