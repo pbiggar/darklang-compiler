@@ -66,6 +66,7 @@ type RcKind =
     | GenericHeap
     | TaggedList
     | DictHeap
+    | ClosureHeap
 
 /// Basic block label (defined early for use in Phi nodes)
 type Label = Label of string

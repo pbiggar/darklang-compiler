@@ -109,6 +109,7 @@ type RcKind =
     | GenericHeap
     | TaggedList
     | DictHeap
+    | ClosureHeap
 
 /// Runtime representation shape used to decide ownership behavior.
 ///
@@ -251,6 +252,7 @@ let payloadSize (t: AST.Type) (typeReg: Map<string, (string * AST.Type) list>) :
     | AST.TList _ -> 24  // [tag, head, tail] - same size for all element types
     | AST.TSum _ -> 16  // [tag, payload]
     | AST.TDict _ -> 8  // Root pointer only (HAMT structure is variable-sized raw memory)
+    | AST.TFunction _ -> 0  // Closure helper resolves payload size from the function pointer
     | _ -> 0  // Non-heap types
 
 /// Classify a source type into its current runtime RC representation shape.
@@ -308,6 +310,7 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
 let rcKind (t: AST.Type) : RcKind =
     match t with
     | AST.TDict _ -> DictHeap
+    | AST.TFunction _ -> ClosureHeap
     | AST.TList (AST.TFunction _) -> GenericHeap
     | AST.TList _ -> TaggedList
     | _ -> GenericHeap

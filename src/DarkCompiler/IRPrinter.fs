@@ -49,6 +49,7 @@ let private prettyPrintANFRcKind = function
     | ANF.GenericHeap -> "generic"
     | ANF.TaggedList -> "list"
     | ANF.DictHeap -> "dict"
+    | ANF.ClosureHeap -> "closure"
 
 /// Append a type suffix when available
 let private appendANFTypeSuffix (typOpt: AST.Type option) (value: string) : string =
@@ -228,6 +229,7 @@ let private prettyPrintMIRRcKind = function
     | MIR.GenericHeap -> "generic"
     | MIR.TaggedList -> "list"
     | MIR.DictHeap -> "dict"
+    | MIR.ClosureHeap -> "closure"
 
 /// Pretty-print MIR virtual register
 let private prettyPrintMIRVReg (MIR.VReg n) : string =
@@ -443,6 +445,7 @@ let private prettyPrintLIRRcKind = function
     | LIR.GenericHeap -> "generic"
     | LIR.TaggedList -> "list"
     | LIR.DictHeap -> "dict"
+    | LIR.ClosureHeap -> "closure"
 
 /// Pretty-print LIR instruction
 let private prettyPrintLIRInstr (instr: LIR.Instr) : string =

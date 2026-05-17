@@ -49,5 +49,6 @@ type RcBox = RcNone | RcString of String | RcList of List<Int64> let b = RcStrin
 type RcBox2 = RcNone2 | RcString2 of String | RcList2 of List<Int64> let b = RcList2([1, 2]) in 0 = stdout="0\n" stderr="" // sum releases list payload
 
 // Capturing closure roots are fixed-block allocations and are reclaimed.
+def makeAddClosure(): (Int64) -> Int64 = (x: Int64) => x + 1 let f = makeAddClosure() in 0 = stdout="0\n" stderr="" // returned closure root reclaimed
 let base = 10 in let f = (x: Int64) => x + base in f(5) = stdout="15\n" stderr=""
 let s = "a" ++ "b" in let f = (x: Int64) => Stdlib.String.length(s) + x in 0 = stdout="0\n" stderr="" // closure releases dynamic string capture

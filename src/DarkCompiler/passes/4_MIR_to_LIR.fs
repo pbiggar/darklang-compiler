@@ -892,11 +892,11 @@ let selectInstr
 
     | MIR.RefCountInc (addr, payloadSize, kind, sourceType) ->
         let lirAddr = vregToLIRReg addr
-        Ok ([LIR.RefCountInc (lirAddr, payloadSize, (match kind with | MIR.GenericHeap -> LIR.GenericHeap | MIR.TaggedList -> LIR.TaggedList | MIR.DictHeap -> LIR.DictHeap), sourceType)], state)
+        Ok ([LIR.RefCountInc (lirAddr, payloadSize, (match kind with | MIR.GenericHeap -> LIR.GenericHeap | MIR.TaggedList -> LIR.TaggedList | MIR.DictHeap -> LIR.DictHeap | MIR.ClosureHeap -> LIR.ClosureHeap), sourceType)], state)
 
     | MIR.RefCountDec (addr, payloadSize, kind, sourceType) ->
         let lirAddr = vregToLIRReg addr
-        Ok ([LIR.RefCountDec (lirAddr, payloadSize, (match kind with | MIR.GenericHeap -> LIR.GenericHeap | MIR.TaggedList -> LIR.TaggedList | MIR.DictHeap -> LIR.DictHeap), sourceType)], state)
+        Ok ([LIR.RefCountDec (lirAddr, payloadSize, (match kind with | MIR.GenericHeap -> LIR.GenericHeap | MIR.TaggedList -> LIR.TaggedList | MIR.DictHeap -> LIR.DictHeap | MIR.ClosureHeap -> LIR.ClosureHeap), sourceType)], state)
 
     | MIR.Print (src, valueType) ->
         // Generate appropriate print instruction based on type

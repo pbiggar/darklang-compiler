@@ -58,6 +58,7 @@ type RcKind =
     | GenericHeap
     | TaggedList
     | DictHeap
+    | ClosureHeap
 
 /// Basic block label (wrapper type for type safety)
 type Label = Label of string

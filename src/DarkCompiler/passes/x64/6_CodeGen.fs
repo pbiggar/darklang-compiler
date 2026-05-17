@@ -2163,6 +2163,8 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 saves
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL dictRefCountIncHelperLabel]
                 @ restores
+            | LIR.ClosureHeap ->
+                genRefCountIncGeneric addrReg payloadSize
             | LIR.GenericHeap ->
                 genRefCountIncGeneric addrReg payloadSize)
 
@@ -2193,6 +2195,8 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 saves
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL dictRefCountDecHelperLabel]
                 @ restores
+            | LIR.ClosureHeap ->
+                genRefCountDecGeneric ctx addrReg payloadSize
             | LIR.GenericHeap ->
                 genRefCountDecGeneric ctx addrReg payloadSize)
 

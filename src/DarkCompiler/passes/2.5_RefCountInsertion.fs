@@ -452,6 +452,12 @@ let private needsAutomaticDec (typ: AST.Type) : bool =
     | AST.TBytes -> true
     | _ -> isRcManagedHeapType typ
 
+let private bindingNeedsAutomaticDec (cexpr: CExpr) (typ: AST.Type) : bool =
+    needsAutomaticDec typ
+    || match typ, cexpr with
+       | AST.TFunction _, Call (funcName, _) when not (funcName.StartsWith("Stdlib.")) -> true
+       | _ -> false
+
 let private rcInfoForType (ctx: TypeContext) (typ: AST.Type) : int * RcKind * AST.Type option =
     (payloadSize typ ctx.TypeReg, rcKind typ, Some typ)
 
@@ -837,7 +843,7 @@ let rec insertRCWithAnalysis
                     | _ ->
                         false
 
-                if needsAutomaticDec inferredType
+                if bindingNeedsAutomaticDec cexpr inferredType
                    && not (Set.contains tempId bodyReturned)
                    && not (isBorrowingExpr cexpr)
                    && not skipReturnDecForPushBackHelpers

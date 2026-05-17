@@ -64,6 +64,8 @@ let private listRefCountDecRecord1HelperLabel = "__dark_list_refcount_dec_record
 let private listRefCountDecRecord2HelperLabel = "__dark_list_refcount_dec_record2_helper"
 let private dictRefCountIncHelperLabel = "__dark_dict_refcount_inc_helper"
 let private dictRefCountDecHelperLabel = "__dark_dict_refcount_dec_helper"
+let private closureRefCountIncHelperLabel = "__dark_closure_refcount_inc_helper"
+let private closureRefCountDecHelperLabel = "__dark_closure_refcount_dec_helper"
 
 let private dataLabel (name: string) : ARM64Symbolic.LabelRef =
     ARM64Symbolic.DataLabel (ARM64Symbolic.Named name)
@@ -560,6 +562,95 @@ let private closurePayloadSizesFromAllocs (functions: LIR.Function list) : Map<s
                 | _ ->
                     None)))
     |> Map.ofList
+
+let private generateClosurePayloadSizeResolver
+    (ctx: CodeGenContext)
+    (label: string -> string)
+    (readyLabel: string)
+    : ARM64Symbolic.Instr list =
+    let cases =
+        ctx.ClosurePayloadSizes
+        |> Map.toList
+        |> List.filter (fun (_, payloadSize) -> payloadSize <> 8)
+        |> List.mapi (fun index (funcName, payloadSize) ->
+            let nextLabel = label $"payload_next_{index}"
+            [
+                ARM64Symbolic.ADR (ARM64Symbolic.X11, codeLabel funcName)
+                ARM64Symbolic.CMP_reg (ARM64Symbolic.X9, ARM64Symbolic.X11)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, nextLabel)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X10, uint16 payloadSize, 0)
+                ARM64Symbolic.B_label readyLabel
+                ARM64Symbolic.Label nextLabel
+            ])
+        |> List.concat
+
+    [
+        ARM64Symbolic.LDR (ARM64Symbolic.X9, ARM64Symbolic.X0, 0s)
+        ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 8us, 0)
+    ]
+    @ cases
+
+let private generateClosureRefCountIncHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    let label (name: string) : string = $"__dark_closure_rc_inc_{name}"
+    let ready = label "payload_ready"
+    let helperRet = label "ret"
+    [
+        ARM64Symbolic.Label closureRefCountIncHelperLabel
+        ARM64Symbolic.CBZ (ARM64Symbolic.X0, helperRet)
+    ]
+    @ generateClosurePayloadSizeResolver ctx label ready
+    @ [
+        ARM64Symbolic.Label ready
+        ARM64Symbolic.ADD_reg (ARM64Symbolic.X12, ARM64Symbolic.X0, ARM64Symbolic.X10)
+        ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
+        ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+        ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
+        ARM64Symbolic.Label helperRet
+        ARM64Symbolic.RET
+    ]
+
+let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    let label (name: string) : string = $"__dark_closure_rc_dec_{name}"
+    let ready = label "payload_ready"
+    let helperRet = label "ret"
+    let skipFreelist = label "skip_freelist"
+    let leakDec =
+        if ctx.Options.EnableLeakCheck then
+            let labelRef = dataLabel leakCounterLabel
+            [
+                ARM64Symbolic.ADRP (ARM64Symbolic.X17, labelRef)
+                ARM64Symbolic.ADD_label (ARM64Symbolic.X17, ARM64Symbolic.X17, labelRef)
+                ARM64Symbolic.LDR (ARM64Symbolic.X16, ARM64Symbolic.X17, 0s)
+                ARM64Symbolic.SUB_imm (ARM64Symbolic.X16, ARM64Symbolic.X16, 1us)
+                ARM64Symbolic.STR (ARM64Symbolic.X16, ARM64Symbolic.X17, 0s)
+            ]
+        else
+            []
+    [
+        ARM64Symbolic.Label closureRefCountDecHelperLabel
+        ARM64Symbolic.CBZ (ARM64Symbolic.X0, helperRet)
+    ]
+    @ generateClosurePayloadSizeResolver ctx label ready
+    @ [
+        ARM64Symbolic.Label ready
+        ARM64Symbolic.ADD_reg (ARM64Symbolic.X12, ARM64Symbolic.X0, ARM64Symbolic.X10)
+        ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
+        ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+        ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
+        ARM64Symbolic.CBNZ (ARM64Symbolic.X15, helperRet)
+        ARM64Symbolic.CMP_imm (ARM64Symbolic.X10, 256us)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, skipFreelist)
+        ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X27, ARM64Symbolic.X10)
+        ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X13, 0s)
+        ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.X0, 0s)
+        ARM64Symbolic.STR (ARM64Symbolic.X0, ARM64Symbolic.X13, 0s)
+        ARM64Symbolic.Label skipFreelist
+    ]
+    @ leakDec
+    @ [
+        ARM64Symbolic.Label helperRet
+        ARM64Symbolic.RET
+    ]
 
 let private recordListPayloadSize (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : int option =
     match sourceType with
@@ -2886,6 +2977,27 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     ARM64Symbolic.CBZ_offset (addrReg, List.length dictIncCall + 1)
                 ]
                 @ dictIncCall
+            | LIR.ClosureHeap ->
+                let closureIncCall = [
+                    ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+                    ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, addrReg)
+                    ARM64Symbolic.BL closureRefCountIncHelperLabel
+                    ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+                    ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                    ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                    ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                    ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                    ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 96s)
+                ]
+                [
+                    ARM64Symbolic.CBZ_offset (addrReg, List.length closureIncCall + 1)
+                ]
+                @ closureIncCall
             | LIR.GenericHeap
                 ->
                 [
@@ -2996,6 +3108,27 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     ARM64Symbolic.CBZ_offset (addrReg, List.length dictDecCall + 1)
                 ]
                 @ dictDecCall
+            | LIR.ClosureHeap ->
+                let closureDecCall = [
+                    ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                    ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+                    ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, addrReg)
+                    ARM64Symbolic.BL closureRefCountDecHelperLabel
+                    ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+                    ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                    ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                    ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                    ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                    ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 96s)
+                ]
+                [
+                    ARM64Symbolic.CBZ_offset (addrReg, List.length closureDecCall + 1)
+                ]
+                @ closureDecCall
             | LIR.GenericHeap
                 ->
                 let cbzOffset = List.length tupleDecPath + 1
@@ -4368,6 +4501,26 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TDict _))) -> true
                     | _ -> false)))
 
+    let needsClosureRcIncHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountInc (_, _, LIR.ClosureHeap, _) -> true
+                    | _ -> false)))
+
+    let needsClosureRcDecHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.ClosureHeap, _) -> true
+                    | _ -> false)))
+
     ResultList.mapResults (convertFunction ctx) sortedFunctions
     |> Result.map (fun instrLists ->
         let allFunctionInstrs = instrLists |> List.concat
@@ -4383,7 +4536,10 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         let dictRcHelpers =
             (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
             @ (if needsDictRcDecHelper then generateDictRefCountDecHelper ctx else [])
-        (allFunctionInstrs @ listRcHelpers @ dictRcHelpers) |> peepholeOptimize)
+        let closureRcHelpers =
+            (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
+            @ (if needsClosureRcDecHelper then generateClosureRefCountDecHelper ctx else [])
+        (allFunctionInstrs @ listRcHelpers @ dictRcHelpers @ closureRcHelpers) |> peepholeOptimize)
 
 /// Convert LIR program to ARM64 instructions (uses default options)
 let generateARM64 (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
