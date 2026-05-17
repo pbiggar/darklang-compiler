@@ -46,7 +46,8 @@ dynamic-string retains for returned borrowed parameters, scoped
 `Float.toString` results, branch-selected literal strings, list display string
 generation for int/string/bool/float lists, and the ARM64 `FloatToString`
 runtime helper's aligned refcount slot, plus multiple dynamic bytes list
-payloads and repeated immutable bytes updates.
+payloads and repeated immutable bytes updates, and `RcShape` retain/release
+operation helper coverage.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -88,9 +89,10 @@ no-payload and payload variant release, plus record-contained sum payload
 release, plus dict-contained sum value payload release, plus pure enum sum
 no-heap-ownership coverage, plus scoped `Float.toString`, branch-selected
 literal string, list display string reclamation, multiple dynamic bytes list
-payloads, and repeated immutable bytes update reclamation:
+payloads, repeated immutable bytes update reclamation, and `RcShape`
+retain/release operation helper tests:
 
-- `scripts/run-in-container ./run-tests`: `4703 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4704 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -160,6 +162,11 @@ rather than retaining an additional reference. It deliberately preserves the
 previous non-crashing classification for generated record names whose field
 metadata is not present in the current `TypeReg`; fixed root operations still
 require concrete payload metadata before they are emitted.
+
+`ANF.fs` now also exposes `RcOperation`, `rcShapeRetainOperation`, and
+`rcShapeReleaseOperation`. These helpers combine dynamic-buffer operations with
+fixed-size root payload/kind dispatch, but most production code still consumes
+the older lower-level helper combination directly.
 
 `RcShape` is still not the sole source of truth for ownership decisions. Several
 active code paths still use legacy helpers such as `ANF.isHeapType`,
@@ -436,11 +443,10 @@ Concrete examples:
 
 1. Extend the small ownership API over `RcShape`.
 
-   Initial operations exist for owned scope release, root dispatch kind, and
-   root payload size. Remaining suggested shape operations:
+   Initial operations exist for owned scope release, root dispatch kind, root
+   payload size, and retain/release operations. Remaining suggested shape
+   operations:
 
-   - `retainOperation : RcShape -> RetainOp option`
-   - `releaseOperation : RcShape -> ReleaseOp option`
    - `fieldReleasePlan : RcShape -> FieldReleasePlan list`
    - `containerPayloadPlan : RcShape -> PayloadReleasePlan`
    - `isRootManaged : RcShape -> bool`

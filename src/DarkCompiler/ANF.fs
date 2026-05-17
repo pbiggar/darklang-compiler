@@ -129,6 +129,12 @@ type RcShape =
     | StaticString
     | RawUnmanaged
 
+/// Root-level retain/release operation selected from a runtime shape.
+type RcOperation =
+    | FixedSizeRoot of payloadSize:int * kind:RcKind
+    | DynamicStringBuffer
+    | DynamicBytesBuffer
+
 /// Function return ownership convention
 type ReturnOwnership =
     | OwnedReturn
@@ -362,6 +368,27 @@ let rcShapePayloadSize (shape: RcShape) : int option =
     | DynamicBytes
     | StaticString
     | RawUnmanaged ->
+        None
+
+/// Retain operation for an owned or borrowed value of the given shape.
+let rcShapeRetainOperation (shape: RcShape) : RcOperation option =
+    match shape with
+    | DynamicString ->
+        Some DynamicStringBuffer
+    | DynamicBytes ->
+        Some DynamicBytesBuffer
+    | _ ->
+        match rcShapePayloadSize shape, rcShapeRootKind shape with
+        | Some payloadSize, Some kind ->
+            Some (FixedSizeRoot (payloadSize, kind))
+        | _ ->
+            None
+
+/// Release operation for an owned value of the given shape.
+let rcShapeReleaseOperation (shape: RcShape) : RcOperation option =
+    if rcShapeNeedsOwnedScopeRelease shape then
+        rcShapeRetainOperation shape
+    else
         None
 
 /// Determine reference-count dispatch kind for a heap type

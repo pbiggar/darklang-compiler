@@ -131,6 +131,31 @@ let testRcShapeOwnershipHelpersSelectRootDispatch () : TestResult =
     | Some (shape, expected) ->
         Error $"Expected shape {shape} to use root kind {expected}, got {rcShapeRootKind shape}"
 
+let testRcShapeOwnershipHelpersSelectRetainReleaseOperations () : TestResult =
+    let samples = [
+        (FixedBlock (16, [DynamicString]), Some (FixedSizeRoot (16, GenericHeap)))
+        (BoxedSum 16, Some (FixedSizeRoot (16, GenericHeap)))
+        (TaggedListShape DynamicString, Some (FixedSizeRoot (24, TaggedList)))
+        (TaggedListShape (ClosureShape []), Some (FixedSizeRoot (24, GenericHeap)))
+        (DictRoot (Immediate, DynamicString), Some (FixedSizeRoot (8, DictHeap)))
+        (ClosureShape [DynamicString], Some (FixedSizeRoot (0, ClosureHeap)))
+        (DynamicString, Some DynamicStringBuffer)
+        (DynamicBytes, Some DynamicBytesBuffer)
+        (Immediate, None)
+        (StaticString, None)
+        (RawUnmanaged, None)
+    ]
+
+    match samples |> List.tryFind (fun (shape, expected) -> rcShapeRetainOperation shape <> expected) with
+    | Some (shape, expected) ->
+        Error $"Expected shape {shape} to use retain operation {expected}, got {rcShapeRetainOperation shape}"
+    | None ->
+        match samples |> List.tryFind (fun (shape, expected) -> rcShapeReleaseOperation shape <> expected) with
+        | Some (shape, expected) ->
+            Error $"Expected shape {shape} to use release operation {expected}, got {rcShapeReleaseOperation shape}"
+        | None ->
+            Ok ()
+
 let testInferCallReturnsFunctionReturnType () : TestResult =
     let ctx : TypeContext = {
         TypeReg = Map.empty
@@ -335,6 +360,7 @@ let tests = [
     ("RcShape classifies remaining runtime shapes", testRcShapeClassifiesRemainingRuntimeShapes)
     ("RcShape ownership helpers classify managed roots", testRcShapeOwnershipHelpersClassifyManagedRoots)
     ("RcShape ownership helpers select root dispatch", testRcShapeOwnershipHelpersSelectRootDispatch)
+    ("RcShape ownership helpers select retain/release operations", testRcShapeOwnershipHelpersSelectRetainReleaseOperations)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
