@@ -696,6 +696,8 @@ commits enabled:
 - boxed sum string payload release
 - nested boxed sum string field release
 - dict root field release
+- zero-capture closure allocation plus explicit closure `RefCountDec` leak
+  accounting
 
 However, x64 is still not as well covered as ARM64 in the memory tests run in
 this environment, and docs still say recursive fixed-block/list payload release

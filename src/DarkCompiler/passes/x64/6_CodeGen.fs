@@ -2614,7 +2614,7 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                         [X86_64.MOV_load (scratch, X86_64.RBP, int32 adjOff)
                          X86_64.MOV_store (destReg, int32 offset, scratch)]
                     | _ -> [])
-            Ok (alloc @ storeRC @ storeFunc @ storeCaptures))
+            Ok (alloc @ storeRC @ storeFunc @ storeCaptures @ genLeakCounterInc ctx))
 
     | LIR.ClosureCall (dest, closure, _args) ->
         // The closure register contains the function pointer

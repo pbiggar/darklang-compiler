@@ -36,6 +36,8 @@ x64 probes cover the full ARM64 memory matrix.
 - generic fixed-block boxed sum string payload release
 - generic fixed-block nested boxed sum field release for dynamic string payloads
 - generic fixed-block dict root field release
+- zero-capture closure allocation plus explicit closure `RefCountDec` leak
+  accounting
 
 The x64 tests run generated x64 ELF binaries directly on x64 hosts and through
 `qemu-x86_64-static` on non-x64 hosts.
