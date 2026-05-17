@@ -41,6 +41,9 @@ x64 probes cover the full ARM64 memory matrix.
   accounting
 - generic fixed-block zero-capture closure field release
 - tagged-list closure leaf payload release
+- tagged-list dict leaf payload release
+- tagged-list dynamic string leaf payload release
+- tagged-list tuple2 dynamic-buffer field release
 
 The x64 tests run generated x64 ELF binaries directly on x64 hosts and through
 `qemu-x86_64-static` on non-x64 hosts.
@@ -61,6 +64,7 @@ The generic list helper reclaims list nodes. Specialized helpers currently
 exist for:
 
 - tuple2 leaf payload roots
+- tuple2 leaf payload dynamic string/bytes fields when their offsets are known
 - nested list leaf payload roots
 - closure leaf payload roots
 - dict leaf payload roots
@@ -104,7 +108,7 @@ The main x64 gaps are:
 - broader record field coverage beyond the current string/bytes/nested
   fixed-block release paths
 - closure capture recursive release for all managed capture shapes
-- list helper variants for dict, closure, record, bytes, and sum payloads
+- list helper variants for record, higher-arity tuple, and sum payloads
 - dict/HAMT key and value recursive retain/release coverage
 - helper register preservation for values live across cleanup
 - documentation and tests that distinguish leak-counter balance from allocator
