@@ -1319,6 +1319,52 @@ let testTaggedListRefCountDecSumTupleStringPayload () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list sum tuple payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases boxed sum tuple2 dynamic combinations.
+let testTaggedListRefCountDecSumTuple2DynamicPayloadCombinations () : Result<unit, string> =
+    let runCase (name: string, tupleType: AST.Type, setup: LIR.Instr list, stores: LIR.Instr list) : Result<unit, string> =
+        let sumType = AST.TSum ($"X64ListRcSumTuple{name}", [tupleType])
+        let program =
+            makeSimpleProgram
+                (setup
+                 @ [LIR.HeapAlloc (LIR.Physical LIR.X4, 16)]
+                 @ stores
+                 @ [LIR.HeapAlloc (LIR.Physical LIR.X5, 16)
+                    LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Imm 0L, None)
+                    LIR.HeapStore (LIR.Physical LIR.X5, 8, LIR.Reg (LIR.Physical LIR.X4), Some tupleType)
+                    LIR.HeapAlloc (LIR.Physical LIR.X6, 8)
+                    LIR.HeapStore (LIR.Physical LIR.X6, 0, LIR.Reg (LIR.Physical LIR.X5), Some sumType)
+                    LIR.Mov (LIR.Physical LIR.X7, LIR.Imm 5L)
+                    LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
+                    LIR.RefCountDec (LIR.Physical LIR.X7, 0, LIR.TaggedList, Some (AST.TList sumType))])
+                LIR.Ret
+
+        match runLIRProgramFullWithOptions program true with
+        | Error e -> Error e
+        | Ok (_, _, stderr) ->
+            if stderr.Trim() = "" then Ok ()
+            else Error $"Expected list sum tuple2 {name} payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
+    let rec runCases (cases: (string * AST.Type * LIR.Instr list * LIR.Instr list) list) : Result<unit, string> =
+        match cases with
+        | [] -> Ok ()
+        | case :: rest ->
+            match runCase case with
+            | Ok () -> runCases rest
+            | Error e -> Error e
+
+    runCases
+        [ ("second",
+           AST.TTuple [AST.TInt64; AST.TString],
+           [LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "leftSecond", LIR.StringSymbol "rightSecond")],
+           [LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 7L, None)
+            LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TString)])
+          ("both",
+           AST.TTuple [AST.TString; AST.TBytes],
+           [LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "leftBoth0", LIR.StringSymbol "rightBoth0")
+            LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "leftBoth1", LIR.StringSymbol "rightBoth1")],
+           [LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+            LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)]) ]
+
 /// Test: x64 tagged-list RefCountDec releases boxed sum leaf record payloads.
 let testTaggedListRefCountDecSumRecordStringPayload () : Result<unit, string> =
     let recordType = AST.TRecord ("X64ListRcSumRecordString", [])
@@ -1426,6 +1472,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases sum dict payload", testTaggedListRefCountDecSumDictPayload)
     ("LIR tagged list RefCountDec releases sum closure payload", testTaggedListRefCountDecSumClosurePayload)
     ("LIR tagged list RefCountDec releases sum tuple string payload", testTaggedListRefCountDecSumTupleStringPayload)
+    ("LIR tagged list RefCountDec releases sum tuple2 dynamic payload combinations", testTaggedListRefCountDecSumTuple2DynamicPayloadCombinations)
     ("LIR tagged list RefCountDec releases sum record string payload", testTaggedListRefCountDecSumRecordStringPayload)
     ("LIR tagged list RefCountDec releases nested sum string payload", testTaggedListRefCountDecNestedSumStringPayload)
 ]
