@@ -563,6 +563,27 @@ let testGenericRefCountDecClosureField () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected closure field release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases closure leaf payloads.
+let testTaggedListRefCountDecClosurePayload () : Result<unit, string> =
+    let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
+    let program =
+        makeSimpleProgram
+            [
+                LIR.ClosureAlloc (LIR.Physical LIR.X2, "_start", [])
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
+                LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X4, LIR.Physical LIR.X3, LIR.Physical LIR.X4)
+                LIR.RefCountDec (LIR.Physical LIR.X4, 0, LIR.TaggedList, Some (AST.TList closureType))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected list closure payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -588,4 +609,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec releases dict field", testGenericRefCountDecDictField)
     ("LIR closure alloc RefCountDec balances leak counter", testClosureAllocRefCountDecBalancesLeakCounter)
     ("LIR generic RefCountDec releases closure field", testGenericRefCountDecClosureField)
+    ("LIR tagged list RefCountDec releases closure payload", testTaggedListRefCountDecClosurePayload)
 ]

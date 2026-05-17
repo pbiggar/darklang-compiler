@@ -40,6 +40,7 @@ x64 probes cover the full ARM64 memory matrix.
 - zero-capture closure allocation plus explicit closure `RefCountDec` leak
   accounting
 - generic fixed-block zero-capture closure field release
+- tagged-list closure leaf payload release
 
 The x64 tests run generated x64 ELF binaries directly on x64 hosts and through
 `qemu-x86_64-static` on non-x64 hosts.
@@ -61,9 +62,10 @@ exist for:
 
 - tuple2 leaf payload roots
 - nested list leaf payload roots
+- closure leaf payload roots
 
-This is narrower than ARM64, which also has helper variants for dict, closure,
-record, and selected sum/list payload shapes.
+This is narrower than ARM64, which also has helper variants for dict, record,
+and selected sum/list payload shapes.
 
 ## Dicts
 
