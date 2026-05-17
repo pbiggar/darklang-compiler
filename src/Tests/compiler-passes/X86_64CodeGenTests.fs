@@ -464,6 +464,38 @@ let testGenericRefCountDecNestedStringTupleField () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected nested tuple field release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 generic fixed-block RefCountDec releases tuple fields with multiple nested managed values.
+let testGenericRefCountDecTupleStringListDictFields () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let dictType = AST.TDict (AST.TInt64, AST.TInt64)
+    let tupleType = AST.TTuple [AST.TString; listType; dictType]
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X4, LIR.Physical LIR.X3, LIR.Physical LIR.X4)
+                LIR.HeapAlloc (LIR.Physical LIR.X5, 16)
+                LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X5, 8, LIR.Imm 2L, None)
+                LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
+                LIR.HeapAlloc (LIR.Physical LIR.X19, 24)
+                LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X4), Some listType)
+                LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X6), Some dictType)
+                LIR.RefCountDec (LIR.Physical LIR.X19, 24, LIR.GenericHeap, Some tupleType)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected tuple string/list/dict field release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 generic fixed-block RefCountDec releases a record string field.
 let testGenericRefCountDecRecordStringField () : Result<unit, string> =
     let recordType = AST.TRecord ("X64RcRecord", [])
@@ -532,6 +564,42 @@ let testGenericRefCountDecRecordClosureField () : Result<unit, string> =
     | Ok (_, _, stderr) ->
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected record closure field release to balance leak counter, got stderr '{stderr.Trim()}'"
+
+/// Test: x64 generic fixed-block RefCountDec releases record fields with multiple nested managed values.
+let testGenericRefCountDecRecordStringListDictFields () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let dictType = AST.TDict (AST.TInt64, AST.TInt64)
+    let recordType = AST.TRecord ("X64RcRecordStringListDict", [])
+    let records =
+        Map.ofList
+            [("X64RcRecordStringListDict", [("name", AST.TString); ("items", listType); ("lookup", dictType)])]
+    let program =
+        makeSimpleProgramWithRecords
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X4, LIR.Physical LIR.X3, LIR.Physical LIR.X4)
+                LIR.HeapAlloc (LIR.Physical LIR.X5, 16)
+                LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X5, 8, LIR.Imm 2L, None)
+                LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
+                LIR.HeapAlloc (LIR.Physical LIR.X19, 24)
+                LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X4), Some listType)
+                LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X6), Some dictType)
+                LIR.RefCountDec (LIR.Physical LIR.X19, 24, LIR.GenericHeap, Some recordType)
+            ]
+            LIR.Ret
+            records
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected record string/list/dict field release to balance leak counter, got stderr '{stderr.Trim()}'"
 
 /// Test: x64 generic fixed-block RefCountDec releases a boxed sum string payload.
 let testGenericRefCountDecSumStringPayload () : Result<unit, string> =
@@ -2301,9 +2369,11 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec skips literal string field release", testGenericRefCountDecLiteralStringFieldSkipsRelease)
     ("LIR generic RefCountDec releases bytes field", testGenericRefCountDecBytesField)
     ("LIR generic RefCountDec releases nested string tuple field", testGenericRefCountDecNestedStringTupleField)
+    ("LIR generic RefCountDec releases tuple string/list/dict fields", testGenericRefCountDecTupleStringListDictFields)
     ("LIR generic RefCountDec releases record string field", testGenericRefCountDecRecordStringField)
     ("LIR generic RefCountDec releases record dict field", testGenericRefCountDecRecordDictField)
     ("LIR generic RefCountDec releases record closure field", testGenericRefCountDecRecordClosureField)
+    ("LIR generic RefCountDec releases record string/list/dict fields", testGenericRefCountDecRecordStringListDictFields)
     ("LIR generic RefCountDec releases sum string payload", testGenericRefCountDecSumStringPayload)
     ("LIR generic RefCountDec releases sum bytes payload", testGenericRefCountDecSumBytesPayload)
     ("LIR generic RefCountDec releases nested sum string field", testGenericRefCountDecNestedSumStringField)

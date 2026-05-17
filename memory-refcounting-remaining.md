@@ -63,9 +63,10 @@ string/list/dict capture release, plus x64 generic fixed-block
 list/dict/closure field release preserving a live `RAX` value across cleanup,
 plus x64 materialized string literals using the immutable refcount sentinel,
 plus x64 generic fixed-block boxed sum tuple and record string/list/dict
-payload release:
+payload release, plus x64 generic fixed-block tuple and record
+string/list/dict field release:
 
-- `scripts/run-in-container ./run-tests`: `4654 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4656 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -784,6 +785,8 @@ commits enabled:
 - direct closure release with multiple managed captures
 - generic fixed-block list/dict/closure field release preserves a live `RAX`
   value across cleanup
+- generic fixed-block tuple string/list/dict field release
+- generic fixed-block record string/list/dict field release
 - generic fixed-block boxed sum tuple string/list/dict payload release
 - generic fixed-block boxed sum record string/list/dict payload release
 
@@ -801,7 +804,8 @@ Likely gaps:
 - fixed-block field release for boxed sum payloads beyond the current
   string/list/dict/closure/tuple-string/tuple3-string-list-dict/
   record-string/record3-string-list-dict/nested-sum-string cases, and
-  untested record field combinations beyond string/bytes/nested fixed blocks
+  untested record field combinations beyond string/list/dict/bytes/nested
+  fixed blocks
 - closure capture recursive release coverage beyond the current direct
   dynamic-buffer, managed-root, tuple-string-list-dict,
   record-string-list-dict, sum-tuple-string-list-dict,

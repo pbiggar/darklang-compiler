@@ -36,9 +36,11 @@ x64 probes cover the full ARM64 memory matrix.
   immutable refcount sentinel
 - generic fixed-block dynamic bytes field release
 - generic fixed-block nested tuple field release for dynamic string payloads
+- generic fixed-block tuple string/list/dict field release
 - generic fixed-block record string field release
 - generic fixed-block record dict root field release
 - generic fixed-block record closure root field release
+- generic fixed-block record string/list/dict field release
 - generic fixed-block boxed sum string payload release
 - generic fixed-block boxed sum bytes payload release
 - generic fixed-block nested boxed sum field release for dynamic string payloads
@@ -158,7 +160,7 @@ The main x64 gaps are:
   nested sum dynamic-buffer payload paths; closure payloads beyond
   direct dynamic-buffer and direct list/dict/closure/fixed-block captures
 - broader record field coverage beyond the current string/bytes/nested
-  fixed-block release paths
+  fixed-block/string-list-dict release paths
 - closure capture recursive release coverage beyond the current direct dynamic,
   root, tuple-string-list-dict, record-string-list-dict,
   sum-tuple-string-list-dict, sum-record-string-list-dict, and fixed-block
