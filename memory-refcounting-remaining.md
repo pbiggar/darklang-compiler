@@ -30,6 +30,7 @@ combinations, tagged-list boxed sum record dynamic string payload release,
 tagged-list boxed sum record3 dynamic string/bytes payload release for all
 non-empty dynamic-buffer field combinations, tagged-list nested boxed sum
 dynamic string payload release, tagged-list three-field record
+string/bytes/list/dict payload release, tagged-list boxed sum record3
 string/list/dict payload release, and direct x64 closure dynamic
 string/bytes/list/dict/closure/tuple/record/sum capture release, including a
 multiple-managed-capture closure probe.
@@ -47,9 +48,10 @@ list, dict, closure, tuple dynamic string, tuple3 dynamic string/bytes, and
 record dynamic string payload release, plus tagged-list boxed sum record3
 dynamic string/bytes payload release for all non-empty dynamic-buffer field
 combinations, plus tagged-list nested boxed sum dynamic string payload release,
-plus tagged-list three-field record string/bytes/list/dict payload release:
+plus tagged-list three-field record string/bytes/list/dict payload release,
+plus tagged-list boxed sum record3 string/list/dict payload release:
 
-- `scripts/run-in-container ./run-tests`: `4640 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4641 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -753,6 +755,7 @@ commits enabled:
 - tagged-list boxed sum record dynamic string payload release
 - tagged-list boxed sum record3 dynamic string/bytes payload release for all
   non-empty dynamic-buffer field combinations
+- tagged-list boxed sum record3 string/list/dict payload release
 - tagged-list nested boxed sum dynamic string payload release
 - direct closure dynamic string/bytes/list/dict/closure/tuple/record/sum
   capture release
@@ -770,15 +773,16 @@ match ARM64 for every recursive payload shape?"
 Likely gaps:
 
 - fixed-block field release for boxed sum payloads beyond the current
-  string/list/dict/closure/tuple-string/record-string/nested-sum-string cases,
-  and untested record field combinations beyond string/bytes/nested fixed
-  blocks
+  string/list/dict/closure/tuple-string/record-string/record3-string-list-dict/
+  nested-sum-string cases, and untested record field combinations beyond
+  string/bytes/nested fixed blocks
 - closure capture recursive release coverage beyond the current direct
   dynamic-buffer, managed-root, and fixed-block capture probes
 - list payload helper variants beyond the currently covered tuple2, exhaustive
   tuple3 dynamic-buffer combinations, record1, exhaustive record3
-  dynamic-buffer combinations, one mixed record3 string/bytes/list/dict shape, sum
-  dynamic-buffer, sum-list/sum-dict, sum-closure, list/closure/dict/string
+  dynamic-buffer combinations, one mixed record3 string/bytes/list/dict shape,
+  sum dynamic-buffer, sum-list/sum-dict, sum-closure, sum-record3-string-list-dict,
+  list/closure/dict/string
 - dict helper key/value recursion parity
 - dynamic string/bytes literal sentinel and aligned layout parity
 - register preservation around helper calls and inline releases

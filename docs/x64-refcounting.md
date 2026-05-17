@@ -71,6 +71,7 @@ x64 probes cover the full ARM64 memory matrix.
   dynamic field combinations
 - tagged-list boxed sum record dynamic-buffer payload release, covering
   one-field records and all non-empty three-field dynamic-buffer combinations
+- tagged-list boxed sum record3 string/list/dict payload release
 - tagged-list nested boxed sum dynamic-buffer payload release
 
 The x64 tests run generated x64 ELF binaries directly on x64 hosts and through
