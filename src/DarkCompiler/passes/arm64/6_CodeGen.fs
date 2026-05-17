@@ -642,7 +642,62 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
         | _ ->
             None
 
-    let releaseFixedCapture (fieldOffset: int) (payloadSize: int) (doneLabel: string) : ARM64Symbolic.Instr list =
+    let releaseFixedChildField
+        (fieldOffset: int)
+        (fieldType: AST.Type)
+        (doneLabel: string)
+        : ARM64Symbolic.Instr list =
+        match fixedBlockPayloadSize fieldType with
+        | None ->
+            []
+        | Some payloadSize ->
+            let childDone = label $"{doneLabel}_child_{fieldOffset}_done"
+            let childSkipFreelist = label $"{doneLabel}_child_{fieldOffset}_skip_freelist"
+            [
+                ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X8, int16 fieldOffset)
+                ARM64Symbolic.CBZ (ARM64Symbolic.X12, childDone)
+                ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, int16 payloadSize)
+                ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+                ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X12, int16 payloadSize)
+                ARM64Symbolic.CBNZ (ARM64Symbolic.X15, childDone)
+            ]
+            @ (if payloadSize >= 0 && payloadSize < 256 then
+                [
+                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X27, uint16 payloadSize)
+                    ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X13, 0s)
+                    ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.X12, 0s)
+                    ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X13, 0s)
+                ]
+               else
+                [ARM64Symbolic.B_label childSkipFreelist])
+            @ [
+                ARM64Symbolic.Label childSkipFreelist
+            ]
+            @ leakDec
+            @ [ARM64Symbolic.Label childDone]
+
+    let fixedBlockFieldReleases
+        (captureType: AST.Type)
+        (doneLabel: string)
+        : ARM64Symbolic.Instr list =
+        let fieldTypes =
+            match captureType with
+            | AST.TTuple fields ->
+                fields
+            | AST.TRecord (name, _) ->
+                ctx.RecordRegistry
+                |> Map.tryFind name
+                |> Option.map (List.map snd)
+                |> Option.defaultValue []
+            | _ ->
+                []
+
+        fieldTypes
+        |> List.mapi (fun index fieldType ->
+            releaseFixedChildField (index * 8) fieldType doneLabel)
+        |> List.concat
+
+    let releaseFixedCapture (fieldOffset: int) (captureType: AST.Type) (payloadSize: int) (doneLabel: string) : ARM64Symbolic.Instr list =
         let captureDone = label $"{doneLabel}_field_{fieldOffset}_done"
         let captureSkipFreelist = label $"{doneLabel}_field_{fieldOffset}_skip_freelist"
         [
@@ -653,6 +708,7 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
             ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X8, int16 payloadSize)
             ARM64Symbolic.CBNZ (ARM64Symbolic.X15, captureDone)
         ]
+        @ fixedBlockFieldReleases captureType doneLabel
         @ (if payloadSize >= 0 && payloadSize < 256 then
             [
                 ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X27, uint16 payloadSize)
@@ -680,7 +736,7 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
                     let fieldOffset = (captureIndex + 1) * 8
                     fixedBlockPayloadSize captureType
                     |> Option.map (fun payloadSize ->
-                        releaseFixedCapture fieldOffset payloadSize $"captures_{index}_{captureIndex}")
+                        releaseFixedCapture fieldOffset captureType payloadSize $"captures_{index}_{captureIndex}")
                     |> Option.defaultValue [])
                 |> List.concat
             [
