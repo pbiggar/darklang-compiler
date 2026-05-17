@@ -472,6 +472,26 @@ let testGenericRefCountDecSumStringPayload () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected boxed sum string payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 generic fixed-block RefCountDec releases a boxed sum bytes payload.
+let testGenericRefCountDecSumBytesPayload () : Result<unit, string> =
+    let sumType = AST.TSum ("X64RcSumBytes", [AST.TBytes])
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "a", LIR.StringSymbol "b")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 16)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 0L, None)
+                LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBytes)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.GenericHeap, Some sumType)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected boxed sum bytes payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 generic fixed-block RefCountDec releases nested boxed sum fields.
 let testGenericRefCountDecNestedSumStringField () : Result<unit, string> =
     let sumType = AST.TSum ("X64RcSum", [AST.TString])
@@ -516,6 +536,31 @@ let testGenericRefCountDecSumListPayload () : Result<unit, string> =
     | Ok (_, _, stderr) ->
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected boxed sum list payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
+/// Test: x64 generic fixed-block RefCountDec releases boxed sum dict payloads.
+let testGenericRefCountDecSumDictPayload () : Result<unit, string> =
+    let dictType = AST.TDict (AST.TInt64, AST.TInt64)
+    let sumType = AST.TSum ("DictPayloadSum", [dictType])
+    let program =
+        makeSimpleProgram
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X2, 16)
+                LIR.HeapStore (LIR.Physical LIR.X2, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X2, 8, LIR.Imm 2L, None)
+                LIR.Mov (LIR.Physical LIR.X3, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X3, LIR.Physical LIR.X2, LIR.Physical LIR.X3)
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 16)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some dictType)
+                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.GenericHeap, Some sumType)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected boxed sum dict payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
 /// Test: x64 generic fixed-block RefCountDec releases dict root fields.
 let testGenericRefCountDecDictField () : Result<unit, string> =
@@ -575,6 +620,27 @@ let testGenericRefCountDecClosureField () : Result<unit, string> =
     | Ok (_, _, stderr) ->
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected closure field release to balance leak counter, got stderr '{stderr.Trim()}'"
+
+/// Test: x64 generic fixed-block RefCountDec releases boxed sum closure payloads.
+let testGenericRefCountDecSumClosurePayload () : Result<unit, string> =
+    let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
+    let sumType = AST.TSum ("ClosurePayloadSum", [closureType])
+    let program =
+        makeSimpleProgram
+            [
+                LIR.ClosureAlloc (LIR.Physical LIR.X2, "_start", [])
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 16)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.GenericHeap, Some sumType)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected boxed sum closure payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
 /// Test: x64 closure RefCountDec releases dynamic string captures.
 let testClosureRefCountDecStringCapture () : Result<unit, string> =
@@ -1626,11 +1692,14 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec releases nested string tuple field", testGenericRefCountDecNestedStringTupleField)
     ("LIR generic RefCountDec releases record string field", testGenericRefCountDecRecordStringField)
     ("LIR generic RefCountDec releases sum string payload", testGenericRefCountDecSumStringPayload)
+    ("LIR generic RefCountDec releases sum bytes payload", testGenericRefCountDecSumBytesPayload)
     ("LIR generic RefCountDec releases nested sum string field", testGenericRefCountDecNestedSumStringField)
     ("LIR generic RefCountDec releases sum list payload", testGenericRefCountDecSumListPayload)
+    ("LIR generic RefCountDec releases sum dict payload", testGenericRefCountDecSumDictPayload)
     ("LIR generic RefCountDec releases dict field", testGenericRefCountDecDictField)
     ("LIR closure alloc RefCountDec balances leak counter", testClosureAllocRefCountDecBalancesLeakCounter)
     ("LIR generic RefCountDec releases closure field", testGenericRefCountDecClosureField)
+    ("LIR generic RefCountDec releases sum closure payload", testGenericRefCountDecSumClosurePayload)
     ("LIR closure RefCountDec releases string capture", testClosureRefCountDecStringCapture)
     ("LIR closure RefCountDec releases bytes capture", testClosureRefCountDecBytesCapture)
     ("LIR closure RefCountDec releases list capture", testClosureRefCountDecListCapture)
