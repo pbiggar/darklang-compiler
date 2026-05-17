@@ -73,7 +73,7 @@ retention, plus returned borrowed sum bytes, dict, and closure payload projectio
 retention, plus returned branch-selected borrowed bytes, list, dict, and
 closure projection retention:
 
-- `scripts/run-in-container ./run-tests`: `4672 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4673 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -998,6 +998,7 @@ Current tests cover:
 - sum releases list payload
 - sum releases bytes payload
 - sum releases dict payload
+- sum releases closure payload
 
 ### Remaining Gaps
 
@@ -1005,7 +1006,6 @@ The compiler still needs precise handling for:
 
 - pure enum sums that can be immediate
 - mixed sums with payload and no-payload variants
-- sum payloads containing closures
 - nested fixed-block payloads
 - lists/dicts/records containing sums
 - x64 parity
