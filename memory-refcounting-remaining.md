@@ -16,9 +16,10 @@ Status date: 2026-05-17.
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
 release, tuple-only nested fixed-block field release, record-registry-based
 record field release, boxed sum string/bytes/list/dict/closure payload release,
-dict root field release, zero-capture closure field release, tagged-list closure
-leaf payload release, tagged-list dict leaf payload release, and tagged-list
-dynamic string leaf payload release, and tagged-list tuple dynamic
+dict root field release, record dict/closure root field release, zero-capture
+closure field release, tagged-list closure leaf payload release, tagged-list
+dict leaf payload release, and tagged-list dynamic string leaf payload release,
+and tagged-list tuple dynamic
 string field release, and tagged-list one-field record dynamic string field
 release, tagged-list boxed sum dynamic string payload release, tagged-list
 boxed sum list payload release, tagged-list boxed sum dict payload release,
@@ -35,7 +36,8 @@ multiple-managed-capture closure probe.
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
 sum string/bytes/list/dict/closure payload release, dict root field release,
-and zero-capture closure field release, including tagged-list
+record dict/closure root field release, and zero-capture closure field release,
+including tagged-list
 closure/dict/dynamic-string leaf payload release, plus direct x64 closure
 dynamic string/bytes/list/dict/closure/tuple/record/sum capture release,
 including multiple managed captures in the same closure, and x64 tagged-list
@@ -45,7 +47,7 @@ record dynamic string payload release, plus tagged-list boxed sum record3
 dynamic string/bytes payload release for all non-empty dynamic-buffer field
 combinations, plus tagged-list nested boxed sum dynamic string payload release:
 
-- `scripts/run-in-container ./run-tests`: `4636 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4638 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -716,6 +718,8 @@ commits enabled:
 - generic fixed-block tuple field release for dynamic bytes
 - tuple-only nested fixed-block field release
 - record-registry-based fixed-block record string field release
+- record-registry-based fixed-block record dict root field release
+- record-registry-based fixed-block record closure root field release
 - boxed sum string payload release
 - boxed sum bytes payload release
 - nested boxed sum string field release

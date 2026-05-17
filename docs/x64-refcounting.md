@@ -33,6 +33,8 @@ x64 probes cover the full ARM64 memory matrix.
 - generic fixed-block dynamic bytes field release
 - generic fixed-block nested tuple field release for dynamic string payloads
 - generic fixed-block record string field release
+- generic fixed-block record dict root field release
+- generic fixed-block record closure root field release
 - generic fixed-block boxed sum string payload release
 - generic fixed-block boxed sum bytes payload release
 - generic fixed-block nested boxed sum field release for dynamic string payloads
