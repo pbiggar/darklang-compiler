@@ -961,6 +961,73 @@ let testTaggedListRefCountDecTuple3MiddleDynamicPayload () : Result<unit, string
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list tuple3 middle dynamic payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases every tuple3 dynamic field combination.
+let testTaggedListRefCountDecTuple3DynamicPayloadCombinations () : Result<unit, string> =
+    let dynamicRegForIndex (index: int) : LIR.PhysReg =
+        match index with
+        | 0 -> LIR.X2
+        | 1 -> LIR.X3
+        | 2 -> LIR.X4
+        | _ -> Crash.crash $"Unexpected tuple3 field index {index}"
+
+    let isDynamicField (fieldType: AST.Type) : bool =
+        match fieldType with
+        | AST.TString
+        | AST.TBytes -> true
+        | _ -> false
+
+    let runCase (name: string, fields: AST.Type list) : Result<unit, string> =
+        let tupleType = AST.TTuple fields
+        let dynamicAllocs =
+            fields
+            |> List.mapi (fun index fieldType ->
+                if isDynamicField fieldType then
+                    let reg = dynamicRegForIndex index
+                    Some (LIR.StringConcat (LIR.Physical reg, LIR.StringSymbol $"left{name}{index}", LIR.StringSymbol $"right{name}{index}"))
+                else
+                    None)
+            |> List.choose id
+        let fieldStores =
+            fields
+            |> List.mapi (fun index fieldType ->
+                let offset = index * 8
+                if isDynamicField fieldType then
+                    LIR.HeapStore (LIR.Physical LIR.X5, offset, LIR.Reg (LIR.Physical (dynamicRegForIndex index)), Some fieldType)
+                else
+                    LIR.HeapStore (LIR.Physical LIR.X5, offset, LIR.Imm (int64 (index + 1)), None))
+        let program =
+            makeSimpleProgram
+                (dynamicAllocs
+                 @ [LIR.HeapAlloc (LIR.Physical LIR.X5, 24)]
+                 @ fieldStores
+                 @ [LIR.HeapAlloc (LIR.Physical LIR.X6, 8)
+                    LIR.HeapStore (LIR.Physical LIR.X6, 0, LIR.Reg (LIR.Physical LIR.X5), Some tupleType)
+                    LIR.Mov (LIR.Physical LIR.X7, LIR.Imm 5L)
+                    LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
+                    LIR.RefCountDec (LIR.Physical LIR.X7, 0, LIR.TaggedList, Some (AST.TList tupleType))])
+                LIR.Ret
+
+        match runLIRProgramFullWithOptions program true with
+        | Error e -> Error e
+        | Ok (_, _, stderr) ->
+            if stderr.Trim() = "" then Ok ()
+            else Error $"Expected list tuple3 {name} dynamic payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
+    let rec runCases (cases: (string * AST.Type list) list) : Result<unit, string> =
+        match cases with
+        | [] -> Ok ()
+        | case :: rest ->
+            match runCase case with
+            | Ok () -> runCases rest
+            | Error e -> Error e
+
+    runCases
+        [ ("first", [AST.TString; AST.TInt64; AST.TInt64])
+          ("third", [AST.TInt64; AST.TInt64; AST.TString])
+          ("first-second", [AST.TString; AST.TBytes; AST.TInt64])
+          ("second-third", [AST.TInt64; AST.TString; AST.TBytes])
+          ("all", [AST.TString; AST.TBytes; AST.TString]) ]
+
 /// Test: x64 tagged-list RefCountDec releases fields inside record leaf payloads.
 let testTaggedListRefCountDecRecordStringPayload () : Result<unit, string> =
     let recordType = AST.TRecord ("X64ListRcRecord", [])
@@ -1276,6 +1343,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases tuple string payload", testTaggedListRefCountDecTupleStringPayload)
     ("LIR tagged list RefCountDec releases tuple3 dynamic payload", testTaggedListRefCountDecTuple3DynamicPayload)
     ("LIR tagged list RefCountDec releases tuple3 middle dynamic payload", testTaggedListRefCountDecTuple3MiddleDynamicPayload)
+    ("LIR tagged list RefCountDec releases tuple3 dynamic payload combinations", testTaggedListRefCountDecTuple3DynamicPayloadCombinations)
     ("LIR tagged list RefCountDec releases record string payload", testTaggedListRefCountDecRecordStringPayload)
     ("LIR tagged list RefCountDec releases record3 dynamic payload", testTaggedListRefCountDecRecord3DynamicPayload)
     ("LIR tagged list RefCountDec releases record3 middle dynamic payload", testTaggedListRefCountDecRecord3MiddleDynamicPayload)
