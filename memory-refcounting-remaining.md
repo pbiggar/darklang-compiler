@@ -34,7 +34,8 @@ string/bytes/list/dict payload release, tagged-list boxed sum record3
 string/list/dict payload release, tagged-list tuple3 string/list/dict payload
 release, tagged-list boxed sum tuple3 string/list/dict payload release, and
 direct x64 closure dynamic
-string/bytes/list/dict/closure/tuple/record/sum capture release, including a
+string/bytes/list/dict/closure/tuple/tuple-string-list-dict/record/sum capture
+release, including a
 multiple-managed-capture closure probe.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
@@ -53,9 +54,10 @@ combinations, plus tagged-list nested boxed sum dynamic string payload release,
 plus tagged-list three-field record string/bytes/list/dict payload release,
 plus tagged-list boxed sum record3 string/list/dict payload release, plus
 tagged-list tuple3 string/list/dict payload release, plus tagged-list boxed sum
-tuple3 string/list/dict payload release:
+tuple3 string/list/dict payload release, plus direct x64 closure tuple
+string/list/dict capture release:
 
-- `scripts/run-in-container ./run-tests`: `4643 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4644 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -765,6 +767,7 @@ commits enabled:
 - tagged-list nested boxed sum dynamic string payload release
 - direct closure dynamic string/bytes/list/dict/closure/tuple/record/sum
   capture release
+- direct closure tuple string/list/dict capture release
 - direct closure release with multiple managed captures
 
 However, x64 is still not as well covered as ARM64 in the memory tests run in
@@ -783,7 +786,8 @@ Likely gaps:
   nested-sum-string cases, and untested record field combinations beyond
   string/bytes/nested fixed blocks
 - closure capture recursive release coverage beyond the current direct
-  dynamic-buffer, managed-root, and fixed-block capture probes
+  dynamic-buffer, managed-root, tuple-string-list-dict, and fixed-block capture
+  probes
 - list payload helper variants beyond the currently covered tuple2, exhaustive
   tuple3 dynamic-buffer combinations, one mixed tuple3 string/list/dict shape,
   record1, exhaustive record3
