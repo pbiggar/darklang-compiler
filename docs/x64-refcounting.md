@@ -56,6 +56,7 @@ x64 probes cover the full ARM64 memory matrix.
 - tagged-list three-field record dynamic-buffer field release for first/third
   dynamic fields
 - tagged-list boxed sum dynamic-buffer payload release
+- tagged-list boxed sum list payload release
 
 The x64 tests run generated x64 ELF binaries directly on x64 hosts and through
 `qemu-x86_64-static` on non-x64 hosts.
@@ -125,7 +126,7 @@ The main x64 gaps are:
 - closure capture recursive release coverage beyond the current direct dynamic,
   root, and fixed-block capture probes
 - list helper variants for broader multi-field record and higher-arity tuple
-  shapes, and non-dynamic-buffer sum payloads
+  shapes, and non-dynamic-buffer sum payloads beyond the current list payload
 - dict/HAMT key and value recursive retain/release coverage
 - helper register preservation for values live across cleanup
 - documentation and tests that distinguish leak-counter balance from allocator
