@@ -16,16 +16,16 @@ Status date: 2026-05-17.
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
 release, tuple-only nested fixed-block field release, record-registry-based
 record field release, boxed sum string payload release, dict root field release,
-boxed sum list payload release, zero-capture closure field release, and
-tagged-list closure leaf payload release.
+boxed sum list payload release, zero-capture closure field release, tagged-list
+closure leaf payload release, and tagged-list dict leaf payload release.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
 sum string payload release, dict root field release, and zero-capture closure
-field release, including boxed sum list payload and tagged-list closure leaf
-payload release:
+field release, including boxed sum list payload and tagged-list closure/dict
+leaf payload release:
 
-- `scripts/run-in-container ./run-tests`: `4603 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4604 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -704,6 +704,7 @@ commits enabled:
   accounting
 - generic fixed-block zero-capture closure field release
 - tagged-list closure leaf payload release
+- tagged-list dict leaf payload release
 
 However, x64 is still not as well covered as ARM64 in the memory tests run in
 this environment, and docs still say recursive fixed-block/list payload release
@@ -720,7 +721,7 @@ Likely gaps:
   string/list cases, multi-capture closure payloads, and untested record field
   combinations beyond string/bytes/nested fixed blocks
 - closure capture recursive release
-- list payload helper variants beyond tuple2/list/closure
+- list payload helper variants beyond tuple2/list/closure/dict
 - dict helper key/value recursion parity
 - dynamic string/bytes literal sentinel and aligned layout parity
 - register preservation around helper calls and inline releases

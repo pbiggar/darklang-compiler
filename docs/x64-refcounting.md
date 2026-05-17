@@ -63,9 +63,10 @@ exist for:
 - tuple2 leaf payload roots
 - nested list leaf payload roots
 - closure leaf payload roots
+- dict leaf payload roots
 
-This is narrower than ARM64, which also has helper variants for dict, record,
-and selected sum/list payload shapes.
+This is narrower than ARM64, which also has helper variants for record and
+selected sum/list payload shapes.
 
 ## Dicts
 

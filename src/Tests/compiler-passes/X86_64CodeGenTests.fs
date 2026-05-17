@@ -584,6 +584,31 @@ let testTaggedListRefCountDecClosurePayload () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list closure payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases dict leaf payloads.
+let testTaggedListRefCountDecDictPayload () : Result<unit, string> =
+    let dictType = AST.TDict (AST.TInt64, AST.TInt64)
+    let program =
+        makeSimpleProgram
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X2, 16)
+                LIR.HeapStore (LIR.Physical LIR.X2, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X2, 8, LIR.Imm 2L, None)
+                LIR.Mov (LIR.Physical LIR.X3, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X3, LIR.Physical LIR.X2, LIR.Physical LIR.X3)
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some dictType)
+                LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
+                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (AST.TList dictType))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected list dict payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -610,4 +635,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR closure alloc RefCountDec balances leak counter", testClosureAllocRefCountDecBalancesLeakCounter)
     ("LIR generic RefCountDec releases closure field", testGenericRefCountDecClosureField)
     ("LIR tagged list RefCountDec releases closure payload", testTaggedListRefCountDecClosurePayload)
+    ("LIR tagged list RefCountDec releases dict payload", testTaggedListRefCountDecDictPayload)
 ]
