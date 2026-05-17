@@ -45,7 +45,8 @@ sentinel literal-pool entries for `Mov`, `ArgMoves`, and `TailArgMoves`,
 dynamic-string retains for returned borrowed parameters, scoped
 `Float.toString` results, branch-selected literal strings, list display string
 generation for int/string/bool/float lists, and the ARM64 `FloatToString`
-runtime helper's aligned refcount slot.
+runtime helper's aligned refcount slot, plus multiple dynamic bytes list
+payloads and repeated immutable bytes updates.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -86,9 +87,10 @@ tuple, and record projection retention, plus sum record payload release, plus mi
 no-payload and payload variant release, plus record-contained sum payload
 release, plus dict-contained sum value payload release, plus pure enum sum
 no-heap-ownership coverage, plus scoped `Float.toString`, branch-selected
-literal string, and list display string reclamation:
+literal string, list display string reclamation, multiple dynamic bytes list
+payloads, and repeated immutable bytes update reclamation:
 
-- `scripts/run-in-container ./run-tests`: `4701 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4703 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -212,14 +214,21 @@ in `src/DarkCompiler/stdlib/Bytes.dark`.
 Covered by current tests:
 
 - `Bytes.create(4)` reclaimed
+- zero-length `Bytes.create(0)` reclaimed
+- `Bytes.set` results reclaimed, including repeated immutable updates
+- `Bytes.fromList` results reclaimed
+- `Bytes.toList` releases both the result list and source bytes
+- closure captures of dynamic bytes are released
 - returned list releases dynamic bytes payloads
+- list literals with multiple dynamic bytes payloads are released
 - tuple and record dynamic bytes fields retain the byte buffer while both the
   original binding and fixed block are live
 - returned record dynamic bytes fields remain usable after function cleanup
 - returned borrowed bytes projections remain usable after parent cleanup
 
 Remaining bytes work is parity with strings beyond the first fixed-block cases:
-sum payloads, closure captures, constructors/transforms, and backend parity.
+deeper nested payloads, dict key/value eligibility, constructor/transform
+audits, and backend parity.
 
 ### Dict Roots Have Typed RC
 
@@ -485,10 +494,12 @@ Current tests prove:
 - a directly scoped `Bytes.create(4)` is reclaimed
 - zero-length `Bytes.create(0)` is reclaimed
 - `Bytes.set` results are reclaimed
+- repeated immutable `Bytes.set` results are reclaimed
 - `Bytes.fromList` results are reclaimed
 - `Bytes.toList` releases both the result list and source bytes
 - closures release captured dynamic bytes
 - returned list payloads of `Bytes` are released
+- list literals with multiple dynamic `Bytes` payloads are released
 - tuple and record fields retain dynamic bytes while both owners are live
 - returned record bytes fields remain usable and release cleanly
 - returned borrowed bytes field projections remain usable after the parent is
@@ -499,10 +510,9 @@ Current tests prove:
 Bytes coverage is much thinner than string coverage. Missing or under-proven
 cases include:
 
-- bytes payloads in sums
-- list of bytes beyond the single returned-list case
 - dict keys/values of bytes, if bytes are allowed as dict keys/values
-- repeated immutable bytes updates in a scope
+- broader nested bytes combinations, especially bytes inside records/tuples
+  nested under list or sum payloads
 
 ### Risks
 
@@ -526,7 +536,7 @@ from either:
 ### Suggested Commit Breakdown
 
 1. Cover sum bytes payloads.
-2. Cover list and repeated-update bytes cases.
+2. Cover nested bytes combinations.
 3. Audit bytes constructor and transform layout.
 
 ## 3. Finish Dynamic String Edge Coverage And Reuse Semantics
@@ -1332,8 +1342,7 @@ appropriate.
 - record with `Bytes` field
 - returned record with `Bytes` field
 - returned record using `Bytes.length(r.field)`
-- sum carrying `Bytes`
-- list of multiple `Bytes`
+- nested bytes combinations under list or sum payloads
 
 ### Strings
 

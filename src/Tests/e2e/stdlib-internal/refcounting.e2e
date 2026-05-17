@@ -41,9 +41,11 @@ def listClosure(): List<(Int64) -> Int64> = let base = 1 in let f = (x: Int64) =
 let xs = ["a" ++ "b"] in 0 = stdout="0\n" stderr="" // list releases dynamic string payload
 let s = "a" ++ "b" in let xs = [s] in 0 = stdout="0\n" stderr="" // list retains dynamic string variable payload
 def listBytes(): List<Bytes> = [Bytes.create(4)] let xs = listBytes() in 0 = stdout="0\n" stderr="" // returned list releases dynamic bytes payloads
+let xs = [Bytes.create(4), Bytes.create(8)] in 0 = stdout="0\n" stderr="" // list releases multiple dynamic bytes payloads
 let b = Bytes.create(4) in let xs = [b] in 0 = stdout="0\n" stderr="" // list retains dynamic bytes variable payload
 let b = Bytes.create(0) in 0 = stdout="0\n" stderr="" // zero-length dynamic bytes reclaimed
 let b = Bytes.set(Bytes.create(4), 0, 42) in 0 = stdout="0\n" stderr="" // bytes set result reclaimed
+let b0 = Bytes.create(4) in let b1 = Bytes.set(b0, 0, 42) in let b2 = Bytes.set(b1, 1, 43) in 0 = stdout="0\n" stderr="" // repeated bytes set results reclaimed
 let b = Bytes.fromList([1, 2, 3, 4]) in 0 = stdout="0\n" stderr="" // bytes fromList result reclaimed
 let xs = Bytes.toList(Bytes.fromList([1, 2, 3, 4])) in 0 = stdout="0\n" stderr="" // bytes toList result and source reclaimed
 let b = Bytes.create(4) in let f = (x: Int64) => Bytes.length(b) + x in 0 = stdout="0\n" stderr="" // closure releases dynamic bytes capture
