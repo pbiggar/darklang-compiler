@@ -52,6 +52,7 @@ x64 probes cover the full ARM64 memory matrix.
 - tagged-list tuple2 dynamic-buffer field release
 - tagged-list tuple3 dynamic-buffer field release for first/third dynamic
   fields
+- tagged-list tuple3 dynamic-buffer field release for middle dynamic fields
 - tagged-list one-field record dynamic-buffer field release
 - tagged-list three-field record dynamic-buffer field release for first/third
   dynamic fields
