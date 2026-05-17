@@ -19,7 +19,8 @@ record field release, boxed sum string payload release, dict root field release,
 boxed sum list payload release, zero-capture closure field release, tagged-list
 closure leaf payload release, tagged-list dict leaf payload release, and
 tagged-list dynamic string leaf payload release, and tagged-list tuple dynamic
-string field release.
+string field release, and tagged-list one-field record dynamic string field
+release.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -27,7 +28,7 @@ sum string payload release, dict root field release, and zero-capture closure
 field release, including boxed sum list payload and tagged-list
 closure/dict/dynamic-string leaf payload release:
 
-- `scripts/run-in-container ./run-tests`: `4606 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4607 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -709,6 +710,7 @@ commits enabled:
 - tagged-list dict leaf payload release
 - tagged-list dynamic string leaf payload release
 - tagged-list tuple dynamic string field release
+- tagged-list one-field record dynamic string field release
 
 However, x64 is still not as well covered as ARM64 in the memory tests run in
 this environment, and docs still say recursive fixed-block/list payload release
@@ -725,7 +727,7 @@ Likely gaps:
   string/list cases, multi-capture closure payloads, and untested record field
   combinations beyond string/bytes/nested fixed blocks
 - closure capture recursive release
-- list payload helper variants beyond tuple2 dynamic-buffer/list/closure/dict/string
+- list payload helper variants beyond tuple2 dynamic-buffer/record1 dynamic-buffer/list/closure/dict/string
 - dict helper key/value recursion parity
 - dynamic string/bytes literal sentinel and aligned layout parity
 - register preservation around helper calls and inline releases

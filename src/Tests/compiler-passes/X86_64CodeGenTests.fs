@@ -653,6 +653,31 @@ let testTaggedListRefCountDecTupleStringPayload () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list tuple string payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases fields inside record leaf payloads.
+let testTaggedListRefCountDecRecordStringPayload () : Result<unit, string> =
+    let recordType = AST.TRecord ("X64ListRcRecord", [])
+    let records = Map.ofList [("X64ListRcRecord", [("value", AST.TString)])]
+    let program =
+        makeSimpleProgramWithRecords
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some recordType)
+                LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
+                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (AST.TList recordType))
+            ]
+            LIR.Ret
+            records
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected list record string payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -682,4 +707,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases dict payload", testTaggedListRefCountDecDictPayload)
     ("LIR tagged list RefCountDec releases string payload", testTaggedListRefCountDecStringPayload)
     ("LIR tagged list RefCountDec releases tuple string payload", testTaggedListRefCountDecTupleStringPayload)
+    ("LIR tagged list RefCountDec releases record string payload", testTaggedListRefCountDecRecordStringPayload)
 ]
