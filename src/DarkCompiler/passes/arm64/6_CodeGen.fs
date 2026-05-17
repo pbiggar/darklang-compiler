@@ -42,6 +42,7 @@ type CodeGenContext = {
     Options: CodeGenOptions
     RecordRegistry: LIR.RecordRegistry
     ClosurePayloadSizes: Map<string, int>
+    ClosureCaptureTypes: Map<string, AST.Type list>
     FunctionName: string
     // Function context for tail call epilogue generation
     StackSize: int
@@ -614,6 +615,7 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
     let ready = label "payload_ready"
     let helperRet = label "ret"
     let skipFreelist = label "skip_freelist"
+    let capturesReleased = label "captures_released"
     let leakDec =
         if ctx.Options.EnableLeakCheck then
             let labelRef = dataLabel leakCounterLabel
@@ -626,6 +628,74 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
             ]
         else
             []
+
+    let fixedBlockPayloadSize (typ: AST.Type) : int option =
+        match typ with
+        | AST.TTuple fields ->
+            Some (List.length fields * 8)
+        | AST.TRecord (name, _) ->
+            ctx.RecordRegistry
+            |> Map.tryFind name
+            |> Option.map (fun fields -> List.length fields * 8)
+        | AST.TSum _ ->
+            Some 16
+        | _ ->
+            None
+
+    let releaseFixedCapture (fieldOffset: int) (payloadSize: int) (doneLabel: string) : ARM64Symbolic.Instr list =
+        let captureDone = label $"{doneLabel}_field_{fieldOffset}_done"
+        let captureSkipFreelist = label $"{doneLabel}_field_{fieldOffset}_skip_freelist"
+        [
+            ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X0, int16 fieldOffset)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X8, captureDone)
+            ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X8, int16 payloadSize)
+            ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+            ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X8, int16 payloadSize)
+            ARM64Symbolic.CBNZ (ARM64Symbolic.X15, captureDone)
+        ]
+        @ (if payloadSize >= 0 && payloadSize < 256 then
+            [
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X27, uint16 payloadSize)
+                ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X13, 0s)
+                ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.X8, 0s)
+                ARM64Symbolic.STR (ARM64Symbolic.X8, ARM64Symbolic.X13, 0s)
+            ]
+           else
+            [ARM64Symbolic.B_label captureSkipFreelist])
+        @ [
+            ARM64Symbolic.Label captureSkipFreelist
+        ]
+        @ leakDec
+        @ [ARM64Symbolic.Label captureDone]
+
+    let releaseCaptureCases =
+        ctx.ClosureCaptureTypes
+        |> Map.toList
+        |> List.mapi (fun index (funcName, captureTypes) ->
+            let nextCase = label $"captures_next_{index}"
+            let releaseLabel = label $"captures_release_{index}"
+            let releaseInstrs =
+                captureTypes
+                |> List.mapi (fun captureIndex captureType ->
+                    let fieldOffset = (captureIndex + 1) * 8
+                    fixedBlockPayloadSize captureType
+                    |> Option.map (fun payloadSize ->
+                        releaseFixedCapture fieldOffset payloadSize $"captures_{index}_{captureIndex}")
+                    |> Option.defaultValue [])
+                |> List.concat
+            [
+                ARM64Symbolic.ADR (ARM64Symbolic.X11, codeLabel funcName)
+                ARM64Symbolic.CMP_reg (ARM64Symbolic.X9, ARM64Symbolic.X11)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, nextCase)
+                ARM64Symbolic.Label releaseLabel
+            ]
+            @ releaseInstrs
+            @ [
+                ARM64Symbolic.B_label capturesReleased
+                ARM64Symbolic.Label nextCase
+            ])
+        |> List.concat
+
     [
         ARM64Symbolic.Label closureRefCountDecHelperLabel
         ARM64Symbolic.CBZ (ARM64Symbolic.X0, helperRet)
@@ -638,6 +708,10 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
         ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
         ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
         ARM64Symbolic.CBNZ (ARM64Symbolic.X15, helperRet)
+    ]
+    @ releaseCaptureCases
+    @ [
+        ARM64Symbolic.Label capturesReleased
         ARM64Symbolic.CMP_imm (ARM64Symbolic.X10, 256us)
         ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, skipFreelist)
         ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X27, ARM64Symbolic.X10)
@@ -4366,6 +4440,15 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             (fun acc funcName payloadSize -> Map.add funcName payloadSize acc)
             closurePayloadSizesFromParams
             (closurePayloadSizesFromAllocs functions)
+    let closureCaptureTypes =
+        functions
+        |> List.choose (fun func ->
+            match func.TypedParams with
+            | { Type = AST.TTuple (_funcPtrType :: captures) } :: _ ->
+                Some (func.Name, captures)
+            | _ ->
+                None)
+        |> Map.ofList
 
     // Create code generation context with options
     // StackSize and UsedCalleeSaved are set per-function in convertFunction
@@ -4373,6 +4456,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         Options = options
         RecordRegistry = recordRegistry
         ClosurePayloadSizes = closurePayloadSizes
+        ClosureCaptureTypes = closureCaptureTypes
         FunctionName = ""
         StackSize = 0
         UsedCalleeSaved = []

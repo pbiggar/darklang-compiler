@@ -877,6 +877,19 @@ let rec insertRCWithAnalysis
                         | _ -> acc
                     ) []
                     |> List.rev
+                | ClosureAlloc (_, captures) ->
+                    captures
+                    |> List.fold (fun acc atom ->
+                        match atom with
+                        | Var tid ->
+                            match tryGetType ctx tid with
+                            | Some t when isRcManagedHeapType t ->
+                                let (size, kind, sourceType) = rcInfoForType ctx t
+                                (tid, size, kind, sourceType) :: acc
+                            | _ -> acc
+                        | _ -> acc
+                    ) []
+                    |> List.rev
                 | _ -> []
 
             let returnInc =
