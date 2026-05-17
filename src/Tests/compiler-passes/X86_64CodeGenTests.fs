@@ -439,6 +439,26 @@ let testGenericRefCountDecRecordStringField () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected record string field release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 generic fixed-block RefCountDec releases a boxed sum string payload.
+let testGenericRefCountDecSumStringPayload () : Result<unit, string> =
+    let sumType = AST.TSum ("X64RcSum", [AST.TString])
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "a", LIR.StringSymbol "b")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 16)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 0L, None)
+                LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.GenericHeap, Some sumType)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected boxed sum string payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -458,4 +478,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec releases bytes field", testGenericRefCountDecBytesField)
     ("LIR generic RefCountDec releases nested string tuple field", testGenericRefCountDecNestedStringTupleField)
     ("LIR generic RefCountDec releases record string field", testGenericRefCountDecRecordStringField)
+    ("LIR generic RefCountDec releases sum string payload", testGenericRefCountDecSumStringPayload)
 ]

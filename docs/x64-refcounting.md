@@ -33,6 +33,7 @@ x64 probes cover the full ARM64 memory matrix.
 - generic fixed-block dynamic bytes field release
 - generic fixed-block nested tuple field release for dynamic string payloads
 - generic fixed-block record string field release
+- generic fixed-block boxed sum string payload release
 
 The x64 tests run generated x64 ELF binaries directly on x64 hosts and through
 `qemu-x86_64-static` on non-x64 hosts.
@@ -88,8 +89,8 @@ buffer reuse is still a broader memory-policy question, shared with ARM64.
 
 The main x64 gaps are:
 
-- fixed-block field release for dicts, closures, sums, and nested sum fixed
-  blocks
+- fixed-block field release for dicts, closures, nested sum fixed blocks, and
+  boxed sum payloads beyond the current string payload path
 - broader record field coverage beyond the current string/bytes/nested
   fixed-block release paths
 - closure capture recursive release for all managed capture shapes

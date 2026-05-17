@@ -556,6 +556,7 @@ let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type 
             |> Map.tryFind name
             |> Option.map (List.map snd)
             |> Option.defaultValue []
+        | Some (AST.TSum (_, [payloadType])) -> [AST.TInt64; payloadType]
         | _ -> []
 
     fieldTypes
