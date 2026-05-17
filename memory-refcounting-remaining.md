@@ -32,7 +32,8 @@ non-empty dynamic-buffer field combinations, tagged-list nested boxed sum
 dynamic string payload release, tagged-list three-field record
 string/bytes/list/dict payload release, tagged-list boxed sum record3
 string/list/dict payload release, tagged-list tuple3 string/list/dict payload
-release, and direct x64 closure dynamic
+release, tagged-list boxed sum tuple3 string/list/dict payload release, and
+direct x64 closure dynamic
 string/bytes/list/dict/closure/tuple/record/sum capture release, including a
 multiple-managed-capture closure probe.
 
@@ -51,9 +52,10 @@ dynamic string/bytes payload release for all non-empty dynamic-buffer field
 combinations, plus tagged-list nested boxed sum dynamic string payload release,
 plus tagged-list three-field record string/bytes/list/dict payload release,
 plus tagged-list boxed sum record3 string/list/dict payload release, plus
-tagged-list tuple3 string/list/dict payload release:
+tagged-list tuple3 string/list/dict payload release, plus tagged-list boxed sum
+tuple3 string/list/dict payload release:
 
-- `scripts/run-in-container ./run-tests`: `4642 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4643 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -755,6 +757,7 @@ commits enabled:
   non-empty dynamic-buffer field combinations
 - tagged-list boxed sum tuple3 dynamic string/bytes payload release for all
   non-empty dynamic-buffer field combinations
+- tagged-list boxed sum tuple3 string/list/dict payload release
 - tagged-list boxed sum record dynamic string payload release
 - tagged-list boxed sum record3 dynamic string/bytes payload release for all
   non-empty dynamic-buffer field combinations
@@ -785,7 +788,8 @@ Likely gaps:
   tuple3 dynamic-buffer combinations, one mixed tuple3 string/list/dict shape,
   record1, exhaustive record3
   dynamic-buffer combinations, one mixed record3 string/bytes/list/dict shape,
-  sum dynamic-buffer, sum-list/sum-dict, sum-closure, sum-record3-string-list-dict,
+  sum dynamic-buffer, sum-list/sum-dict, sum-closure, one mixed
+  sum-tuple3-string-list-dict shape, sum-record3-string-list-dict,
   list/closure/dict/string
 - dict helper key/value recursion parity
 - dynamic string/bytes literal sentinel and aligned layout parity
