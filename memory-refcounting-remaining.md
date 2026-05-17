@@ -24,8 +24,9 @@ release, tagged-list boxed sum dynamic string payload release, tagged-list
 boxed sum list payload release, tagged-list boxed sum dict payload release,
 tagged-list boxed sum closure payload release, tagged-list boxed sum tuple
 dynamic string payload release, tagged-list boxed sum record dynamic string
-payload release, tagged-list nested boxed sum dynamic string payload release,
-and direct x64 closure dynamic
+payload release, tagged-list boxed sum record3 middle dynamic string payload
+release, tagged-list nested boxed sum dynamic string payload release, and direct
+x64 closure dynamic
 string/bytes/list/dict/closure/tuple/record/sum capture release, including a
 multiple-managed-capture closure probe.
 
@@ -38,9 +39,10 @@ dynamic string/bytes/list/dict/closure/tuple/record/sum capture release,
 including multiple managed captures in the same closure, and x64 tagged-list
 tuple3 and record3 dynamic-buffer payload release, plus tagged-list boxed sum
 list, dict, closure, tuple dynamic string, and record dynamic string payload
+release, plus tagged-list boxed sum record3 middle dynamic string payload
 release, plus tagged-list nested boxed sum dynamic string payload release:
 
-- `scripts/run-in-container ./run-tests`: `4630 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4631 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -734,6 +736,7 @@ commits enabled:
 - tagged-list boxed sum tuple2 dynamic string/bytes payload release for all
   non-empty dynamic-buffer field combinations
 - tagged-list boxed sum record dynamic string payload release
+- tagged-list boxed sum record3 middle dynamic string payload release
 - tagged-list nested boxed sum dynamic string payload release
 - direct closure dynamic string/bytes/list/dict/closure/tuple/record/sum
   capture release

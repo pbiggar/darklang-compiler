@@ -1394,6 +1394,39 @@ let testTaggedListRefCountDecSumRecordStringPayload () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list sum record payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases boxed sum record3 middle dynamic payloads.
+let testTaggedListRefCountDecSumRecord3MiddleDynamicPayload () : Result<unit, string> =
+    let recordType = AST.TRecord ("X64ListRcSumRecord3Middle", [])
+    let records =
+        Map.ofList
+            [("X64ListRcSumRecord3Middle", [("count", AST.TInt64); ("name", AST.TString); ("size", AST.TInt64)])]
+    let sumType = AST.TSum ("X64ListRcSumRecord3MiddleWrapper", [recordType])
+    let program =
+        makeSimpleProgramWithRecords
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 24)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X3, 16, LIR.Imm 3L, None)
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 16)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 0L, None)
+                LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some recordType)
+                LIR.HeapAlloc (LIR.Physical LIR.X5, 8)
+                LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some sumType)
+                LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList sumType))
+            ]
+            LIR.Ret
+            records
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected list sum record3 middle payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 tagged-list RefCountDec releases nested boxed sum leaf payloads.
 let testTaggedListRefCountDecNestedSumStringPayload () : Result<unit, string> =
     let innerSumType = AST.TSum ("X64ListRcNestedInnerSum", [AST.TString])
@@ -1474,5 +1507,6 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases sum tuple string payload", testTaggedListRefCountDecSumTupleStringPayload)
     ("LIR tagged list RefCountDec releases sum tuple2 dynamic payload combinations", testTaggedListRefCountDecSumTuple2DynamicPayloadCombinations)
     ("LIR tagged list RefCountDec releases sum record string payload", testTaggedListRefCountDecSumRecordStringPayload)
+    ("LIR tagged list RefCountDec releases sum record3 middle dynamic payload", testTaggedListRefCountDecSumRecord3MiddleDynamicPayload)
     ("LIR tagged list RefCountDec releases nested sum string payload", testTaggedListRefCountDecNestedSumStringPayload)
 ]
