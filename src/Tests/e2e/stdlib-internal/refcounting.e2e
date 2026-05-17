@@ -87,6 +87,7 @@ type RcBoxClosure = RcClosureNone | RcClosureValue of (Int64) -> Int64 let base 
 type RcBoxTuple = RcTupleNone | RcTupleValue of (String, Int64) let b = RcTupleValue(("a" ++ "b", 1)) in 0 = stdout="0\n" stderr="" // sum releases tuple payload fields
 type RcBoxRecordPayload = { rcBoxRecordPayloadField: String } type RcBoxRecord = RcRecordNone | RcRecordValue of RcBoxRecordPayload let b = RcRecordValue(RcBoxRecordPayload { rcBoxRecordPayloadField = "a" ++ "b" }) in 0 = stdout="0\n" stderr="" // sum releases record payload fields
 type RcMixedPayload = RcMixedEmpty | RcMixedString of String let b = RcMixedEmpty in 0 = stdout="0\n" stderr="" // mixed sum releases no-payload variant
+type RcPureEnum = RcPureLeft | RcPureRight let b = RcPureLeft in 0 = stdout="0\n" stderr="" // pure enum sum is reclaimed without heap ownership
 type RcRecordSumPayload = RcRecordSumNone | RcRecordSumString of String type RcRecordWithSum = { rcRecordSumField: RcRecordSumPayload } let r = RcRecordWithSum { rcRecordSumField = RcRecordSumString("a" ++ "b") } in 0 = stdout="0\n" stderr="" // record releases sum field payload
 
 // Capturing closure roots are fixed-block allocations and are reclaimed.

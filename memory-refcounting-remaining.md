@@ -73,9 +73,10 @@ retention, plus returned borrowed sum bytes, dict, and closure payload projectio
 retention, plus returned branch-selected borrowed bytes, list, dict, and
 closure projection retention, plus sum record payload release, plus mixed
 sum no-payload variant release, plus record-contained sum payload release,
-plus dict-contained sum value payload release:
+plus dict-contained sum value payload release, plus pure enum sum
+no-heap-ownership coverage:
 
-- `scripts/run-in-container ./run-tests`: `4678 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4679 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -1005,6 +1006,7 @@ Current tests cover:
 - sum releases tuple payload containing dynamic string field
 - sum releases record payload containing dynamic string field
 - mixed sum releases no-payload variant
+- pure enum sum is reclaimed without heap ownership
 - record releases sum field payload
 - returned dict releases sum value payload fields
 
@@ -1012,7 +1014,8 @@ Current tests cover:
 
 The compiler still needs precise handling for:
 
-- pure enum sums that can be immediate
+- `RcShape`-level pure enum classification is still conservative even though
+  direct runtime leak coverage exists for a pure no-payload enum binding
 - mixed sums with payload and no-payload variants beyond direct payload and
   no-payload cleanup smoke coverage
 - deeper fixed-block payload recursion beyond direct tuple/record payloads
@@ -1023,7 +1026,7 @@ The compiler still needs precise handling for:
 
 1. Teach `rcShapeOfType` or a companion classifier to distinguish pure enum
    sums from boxed sums using variant metadata.
-2. Add tests for pure enum allocation/leak behavior.
+2. Extend pure enum allocation/leak coverage if sum representation changes.
 3. Add recursive payload release plans for boxed sums.
 4. Cover sum payload matrix:
 
@@ -1041,8 +1044,10 @@ The compiler still needs precise handling for:
 
 ### Suggested Commit Breakdown
 
-1. Classify pure enum sums as immediate.
-2. Add pure enum leak-check coverage.
+1. Classify pure enum sums as immediate in `RcShape` once variant metadata is
+   available.
+2. Extend pure enum leak-check coverage beyond the direct no-payload binding if
+   representation changes.
 3. Add boxed sum bytes/dict/closure payload coverage.
 4. Generalize boxed sum payload release through shape plans.
 
