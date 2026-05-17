@@ -65,9 +65,10 @@ nested fixed-block, list, dict, and closure field release preserving a live
 plus x64 materialized string literals using the immutable refcount sentinel,
 plus x64 generic fixed-block boxed sum tuple and record string/list/dict
 payload release, plus x64 generic fixed-block tuple and record
-string/list/dict field release:
+string/list/dict field release, plus returned borrowed sum string payload
+projection retention:
 
-- `scripts/run-in-container ./run-tests`: `4659 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4660 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -934,14 +935,14 @@ RC insertion treats several expressions as borrowing:
 
 Recent projection work extended returned borrowed value retention beyond
 generic heap shapes. Covered projections now include strings, bytes, lists,
-dict roots, closure roots, and one nested fixed-block tuple containing a
-dynamic string.
+dict roots, closure roots, one nested fixed-block tuple containing a dynamic
+string, and one sum payload projection containing a dynamic string.
 
 ### Remaining Gaps
 
 More projected shapes still need the same confidence:
 
-- sum payloads
+- broader sum payload shapes beyond the covered string payload projection
 - deeper nested projections through `RawGet` or typed aliases
 - branch-selected borrowed values
 - x64 backend parity for each retained projection family
@@ -950,7 +951,7 @@ More projected shapes still need the same confidence:
 
 1. Add tests that return/use borrowed projections after parent cleanup for:
 
-   - sum payloads
+   - broader sum payload shapes
    - deeper nested tuple/record fields
    - branch-selected borrowed values
 
@@ -964,7 +965,7 @@ More projected shapes still need the same confidence:
 
 ### Suggested Commit Breakdown
 
-1. Add borrowed-return sum payload projection coverage.
+1. Add broader borrowed-return sum payload projection coverage.
 2. Add deeper borrowed-return tuple/record projection coverage.
 3. Convert return-retain logic to `RcShape`.
 4. Add backend register-preservation regression tests.

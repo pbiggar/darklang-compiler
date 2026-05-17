@@ -35,7 +35,8 @@ Important current rules:
 - owned temporaries are released at scope exit unless returned or otherwise
   retained
 - local aliases and projections are treated as borrowed
-- returned borrowed managed values are retained before cleanup
+- returned borrowed managed values, including container fields and covered sum
+  payload projections, are retained before cleanup
 - RC operations are side-effecting and are preserved by optimization passes
 - cleanup is preserved before tail calls
 
@@ -99,4 +100,3 @@ The major remaining work is:
 
 The detailed task breakdown lives in
 [`memory-refcounting-remaining.md`](../../memory-refcounting-remaining.md).
-
