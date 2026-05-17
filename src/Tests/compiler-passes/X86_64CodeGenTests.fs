@@ -633,6 +633,32 @@ let testGenericRefCountDecDictField () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected dict field release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 generic fixed-block RefCountDec preserves live RAX across nested list field release.
+let testGenericRefCountDecPreservesLiveRaxAcrossListFieldRelease () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let program =
+        makeSimpleProgram
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X2, 8)
+                LIR.HeapStore (LIR.Physical LIR.X2, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X3, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X3, LIR.Physical LIR.X2, LIR.Physical LIR.X3)
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some listType)
+                LIR.Mov (LIR.Physical LIR.X0, LIR.Imm 123L)
+                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some (AST.TTuple [listType]))
+                LIR.PrintInt64 (LIR.Physical LIR.X0)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, stdout, stderr) ->
+        let output = stdout.Trim()
+        let leaks = stderr.Trim()
+        if output = "123" && leaks = "" then Ok ()
+        else Error $"Expected live RAX value 123 and no leaks, got stdout '{output}' and stderr '{leaks}'"
+
 /// Test: x64 closure allocation and explicit release balance leak accounting.
 let testClosureAllocRefCountDecBalancesLeakCounter () : Result<unit, string> =
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
@@ -2075,6 +2101,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec releases sum list payload", testGenericRefCountDecSumListPayload)
     ("LIR generic RefCountDec releases sum dict payload", testGenericRefCountDecSumDictPayload)
     ("LIR generic RefCountDec releases dict field", testGenericRefCountDecDictField)
+    ("LIR generic RefCountDec preserves live RAX across list field release", testGenericRefCountDecPreservesLiveRaxAcrossListFieldRelease)
     ("LIR closure alloc RefCountDec balances leak counter", testClosureAllocRefCountDecBalancesLeakCounter)
     ("LIR generic RefCountDec releases closure field", testGenericRefCountDecClosureField)
     ("LIR generic RefCountDec releases sum closure payload", testGenericRefCountDecSumClosurePayload)
