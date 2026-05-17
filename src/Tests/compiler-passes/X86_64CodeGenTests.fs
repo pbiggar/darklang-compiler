@@ -791,6 +791,35 @@ let testClosureRefCountDecSumStringCapture () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected closure sum capture release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 closure RefCountDec releases multiple managed captures.
+let testClosureRefCountDecMultipleCaptures () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let closureTupleType = AST.TTuple [AST.TInt64; AST.TString; listType]
+    let capturedFunc =
+        makeEmptyFunction
+            "x64_multi_capture_fn"
+            [{ Reg = LIR.Physical LIR.X0; Type = closureTupleType }]
+    let main =
+        match makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X4, LIR.Physical LIR.X3, LIR.Physical LIR.X4)
+                LIR.ClosureAlloc (LIR.Physical LIR.X5, "x64_multi_capture_fn", [LIR.Reg (LIR.Physical LIR.X2); LIR.Reg (LIR.Physical LIR.X4)])
+                LIR.RefCountDec (LIR.Physical LIR.X5, 24, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+            ]
+            LIR.Ret with
+        | LIR.Program ([func], records) -> LIR.Program ([func; capturedFunc], records)
+        | other -> other
+
+    match runLIRProgramFullWithOptions main true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected closure multi-capture release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 tagged-list RefCountDec releases closure leaf payloads.
 let testTaggedListRefCountDecClosurePayload () : Result<unit, string> =
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
@@ -963,6 +992,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR closure RefCountDec releases tuple string capture", testClosureRefCountDecTupleStringCapture)
     ("LIR closure RefCountDec releases record string capture", testClosureRefCountDecRecordStringCapture)
     ("LIR closure RefCountDec releases sum string capture", testClosureRefCountDecSumStringCapture)
+    ("LIR closure RefCountDec releases multiple captures", testClosureRefCountDecMultipleCaptures)
     ("LIR tagged list RefCountDec releases closure payload", testTaggedListRefCountDecClosurePayload)
     ("LIR tagged list RefCountDec releases dict payload", testTaggedListRefCountDecDictPayload)
     ("LIR tagged list RefCountDec releases string payload", testTaggedListRefCountDecStringPayload)

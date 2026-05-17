@@ -45,6 +45,7 @@ x64 probes cover the full ARM64 memory matrix.
   `RefCountDec`
 - direct closure tuple/record/sum fixed-block capture release on closure
   `RefCountDec`, including dynamic string fields
+- direct closure release with multiple managed captures
 - tagged-list closure leaf payload release
 - tagged-list dict leaf payload release
 - tagged-list dynamic string leaf payload release

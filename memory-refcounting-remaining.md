@@ -22,16 +22,17 @@ tagged-list dynamic string leaf payload release, and tagged-list tuple dynamic
 string field release, and tagged-list one-field record dynamic string field
 release, tagged-list boxed sum dynamic string payload release, and direct x64
 closure dynamic string/bytes/list/dict/closure/tuple/record/sum capture
-release.
+release, including a multiple-managed-capture closure probe.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
 sum string payload release, dict root field release, and zero-capture closure
 field release, including boxed sum list payload and tagged-list
 closure/dict/dynamic-string leaf payload release, plus direct x64 closure
-dynamic string/bytes/list/dict/closure/tuple/record/sum capture release:
+dynamic string/bytes/list/dict/closure/tuple/record/sum capture release,
+including multiple managed captures in the same closure:
 
-- `scripts/run-in-container ./run-tests`: `4616 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4617 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -717,6 +718,7 @@ commits enabled:
 - tagged-list boxed sum dynamic string payload release
 - direct closure dynamic string/bytes/list/dict/closure/tuple/record/sum
   capture release
+- direct closure release with multiple managed captures
 
 However, x64 is still not as well covered as ARM64 in the memory tests run in
 this environment, and docs still say recursive fixed-block/list payload release
@@ -730,8 +732,8 @@ match ARM64 for every recursive payload shape?"
 Likely gaps:
 
 - fixed-block field release for boxed sum payloads beyond the current
-  string/list cases, multi-capture closure payloads, and untested record field
-  combinations beyond string/bytes/nested fixed blocks
+  string/list cases, and untested record field combinations beyond
+  string/bytes/nested fixed blocks
 - closure capture recursive release coverage beyond the current direct
   dynamic-buffer, managed-root, and fixed-block capture probes
 - list payload helper variants beyond tuple2 dynamic-buffer/record1
