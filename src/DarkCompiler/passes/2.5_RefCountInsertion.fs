@@ -493,25 +493,37 @@ let private bindingNeedsAutomaticDec (ctx: TypeContext) (cexpr: CExpr) (typ: AST
        | AST.TFunction _, Call (funcName, _) when not (funcName.StartsWith("Stdlib.")) -> true
        | _ -> false
 
-let private rcInfoForType (ctx: TypeContext) (typ: AST.Type) : int * RcKind * AST.Type option =
-    let shape = rcShapeForType ctx typ
-    match rcShapePayloadSize shape, rcShapeRootKind shape with
-    | Some size, Some kind ->
-        (size, kind, Some typ)
-    | _ ->
-        Crash.crash $"rcInfoForType: type '{typ}' does not have a fixed-size RC root"
-
 type private ReturnDec = TempId * AST.Type * RcKind option
 
 let private retainExprForType (ctx: TypeContext) (tempId: TempId) (typ: AST.Type) : CExpr =
-    match typ with
-    | AST.TString ->
+    let shape = rcShapeForType ctx typ
+    match rcShapeRetainOperation shape with
+    | Some DynamicStringBuffer ->
         RefCountIncString (Var tempId)
-    | AST.TBytes ->
+    | Some DynamicBytesBuffer ->
         RefCountIncBytes (Var tempId)
-    | _ ->
-        let (size, kind, sourceType) = rcInfoForType ctx typ
-        RefCountInc (Var tempId, size, kind, sourceType)
+    | Some (FixedSizeRoot (size, kind)) ->
+        RefCountInc (Var tempId, size, kind, Some typ)
+    | None ->
+        Crash.crash $"retainExprForType: type '{typ}' does not have an RC retain operation"
+
+let private releaseExprForType
+    (ctx: TypeContext)
+    (tempId: TempId)
+    (typ: AST.Type)
+    (kindOverride: RcKind option)
+    : CExpr =
+    let shape = rcShapeForType ctx typ
+    match rcShapeReleaseOperation shape with
+    | Some DynamicStringBuffer ->
+        RefCountDecString (Var tempId)
+    | Some DynamicBytesBuffer ->
+        RefCountDecBytes (Var tempId)
+    | Some (FixedSizeRoot (size, defaultKind)) ->
+        let kind = kindOverride |> Option.defaultValue defaultKind
+        RefCountDec (Var tempId, size, kind, Some typ)
+    | None ->
+        Crash.crash $"releaseExprForType: type '{typ}' does not have an RC release operation"
 
 let private needsRetainForBorrowedValue (ctx: TypeContext) (typ: AST.Type) : bool =
     (match tryRcShapeForType ctx typ with
@@ -564,14 +576,7 @@ let insertReturnDecs
     List.fold
         (fun (accExpr, accVarGen, accTypes) (tempId, typ, kindOverride) ->
             let (dummyId, varGen') = freshVar accVarGen
-            let decExpr =
-                match typ with
-                | AST.TString -> RefCountDecString (Var tempId)
-                | AST.TBytes -> RefCountDecBytes (Var tempId)
-                | _ ->
-                    let (size, defaultKind, sourceType) = rcInfoForType ctx typ
-                    let kind = kindOverride |> Option.defaultValue defaultKind
-                    RefCountDec (Var tempId, size, kind, sourceType)
+            let decExpr = releaseExprForType ctx tempId typ kindOverride
             let accExpr' = Let (dummyId, decExpr, accExpr)
             (accExpr', varGen', Map.add dummyId AST.TUnit accTypes))
         (expr, varGen, types)

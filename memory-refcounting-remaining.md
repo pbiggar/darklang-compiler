@@ -47,7 +47,7 @@ dynamic-string retains for returned borrowed parameters, scoped
 generation for int/string/bool/float lists, and the ARM64 `FloatToString`
 runtime helper's aligned refcount slot, plus multiple dynamic bytes list
 payloads and repeated immutable bytes updates, and `RcShape` retain/release
-operation helper coverage.
+operation helper coverage and RC insertion retain/release emission.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -90,7 +90,7 @@ release, plus dict-contained sum value payload release, plus pure enum sum
 no-heap-ownership coverage, plus scoped `Float.toString`, branch-selected
 literal string, list display string reclamation, multiple dynamic bytes list
 payloads, repeated immutable bytes update reclamation, and `RcShape`
-retain/release operation helper tests:
+retain/release operation helper tests plus RC insertion use of those helpers:
 
 - `scripts/run-in-container ./run-tests`: `4704 passed, 2 failed`
 - The remaining failures were the known float baseline:
@@ -165,8 +165,9 @@ require concrete payload metadata before they are emitted.
 
 `ANF.fs` now also exposes `RcOperation`, `rcShapeRetainOperation`, and
 `rcShapeReleaseOperation`. These helpers combine dynamic-buffer operations with
-fixed-size root payload/kind dispatch, but most production code still consumes
-the older lower-level helper combination directly.
+fixed-size root payload/kind dispatch. `2.5_RefCountInsertion.fs` uses them
+when emitting retain/release expressions; other production paths still consume
+older lower-level helper combinations directly.
 
 `RcShape` is still not the sole source of truth for ownership decisions. Several
 active code paths still use legacy helpers such as `ANF.isHeapType`,
@@ -453,9 +454,10 @@ Concrete examples:
    - `isRecursiveReleaseNeeded : RcShape -> bool`
 
 2. Finish replacing `isRcManagedHeapType` and `needsAutomaticDec` in
-   `2.5_RefCountInsertion.fs` with shape-based decisions. The current adapter
-   is shape-driven where possible but still has a metadata-gap fallback for
-   generated record names.
+   `2.5_RefCountInsertion.fs` with shape-operation decisions. Retain/release
+   emission now uses `rcShapeRetainOperation` and `rcShapeReleaseOperation`,
+   but the current adapter still has a metadata-gap fallback for generated
+   record names and some classification checks still use legacy names.
 
 3. Replace backend dispatch based on `payloadSize` and partial `sourceType`
    pattern matching with a serialized release plan.
