@@ -16,14 +16,14 @@ Status date: 2026-05-17.
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
 release, tuple-only nested fixed-block field release, record-registry-based
 record field release, boxed sum string payload release, dict root field release,
-and zero-capture closure field release.
+boxed sum list payload release, and zero-capture closure field release.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
 sum string payload release, dict root field release, and zero-capture closure
-field release:
+field release, including boxed sum list payload release:
 
-- `scripts/run-in-container ./run-tests`: `4601 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4602 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -696,6 +696,7 @@ commits enabled:
 - record-registry-based fixed-block record string field release
 - boxed sum string payload release
 - nested boxed sum string field release
+- boxed sum list payload release
 - dict root field release
 - zero-capture closure allocation plus explicit closure `RefCountDec` leak
   accounting
@@ -712,9 +713,9 @@ match ARM64 for every recursive payload shape?"
 
 Likely gaps:
 
-- fixed-block field release for boxed sum payloads beyond the current string
-  case, multi-capture closure payloads, and untested record field combinations
-  beyond string/bytes/nested fixed blocks
+- fixed-block field release for boxed sum payloads beyond the current
+  string/list cases, multi-capture closure payloads, and untested record field
+  combinations beyond string/bytes/nested fixed blocks
 - closure capture recursive release
 - list payload helper variants beyond tuple2/list
 - dict helper key/value recursion parity

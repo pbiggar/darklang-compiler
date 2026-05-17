@@ -35,6 +35,7 @@ x64 probes cover the full ARM64 memory matrix.
 - generic fixed-block record string field release
 - generic fixed-block boxed sum string payload release
 - generic fixed-block nested boxed sum field release for dynamic string payloads
+- generic fixed-block boxed sum list payload release
 - generic fixed-block dict root field release
 - zero-capture closure allocation plus explicit closure `RefCountDec` leak
   accounting
@@ -95,7 +96,7 @@ buffer reuse is still a broader memory-policy question, shared with ARM64.
 The main x64 gaps are:
 
 - fixed-block field release for boxed sum payloads beyond the current string
-  payload path and closure payloads beyond zero-capture roots
+  and list payload paths, and closure payloads beyond zero-capture roots
 - broader record field coverage beyond the current string/bytes/nested
   fixed-block release paths
 - closure capture recursive release for all managed capture shapes

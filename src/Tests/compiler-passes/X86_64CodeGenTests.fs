@@ -481,6 +481,29 @@ let testGenericRefCountDecNestedSumStringField () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected nested boxed sum field release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 generic fixed-block RefCountDec releases boxed sum list payloads.
+let testGenericRefCountDecSumListPayload () : Result<unit, string> =
+    let sumType = AST.TSum ("ListPayloadSum", [AST.TList AST.TInt64])
+    let program =
+        makeSimpleProgram
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X2, 8)
+                LIR.HeapStore (LIR.Physical LIR.X2, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X3, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X3, LIR.Physical LIR.X2, LIR.Physical LIR.X3)
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 16)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some (AST.TList AST.TInt64))
+                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.GenericHeap, Some sumType)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected boxed sum list payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 generic fixed-block RefCountDec releases dict root fields.
 let testGenericRefCountDecDictField () : Result<unit, string> =
     let dictType = AST.TDict (AST.TInt64, AST.TInt64)
@@ -561,6 +584,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec releases record string field", testGenericRefCountDecRecordStringField)
     ("LIR generic RefCountDec releases sum string payload", testGenericRefCountDecSumStringPayload)
     ("LIR generic RefCountDec releases nested sum string field", testGenericRefCountDecNestedSumStringField)
+    ("LIR generic RefCountDec releases sum list payload", testGenericRefCountDecSumListPayload)
     ("LIR generic RefCountDec releases dict field", testGenericRefCountDecDictField)
     ("LIR closure alloc RefCountDec balances leak counter", testClosureAllocRefCountDecBalancesLeakCounter)
     ("LIR generic RefCountDec releases closure field", testGenericRefCountDecClosureField)

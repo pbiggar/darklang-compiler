@@ -568,6 +568,21 @@ let private genClosureFieldRelease (fieldOffset: int) : X86_64.Instr list =
      X86_64.CALL closureRefCountDecHelperLabel
      X86_64.POP X86_64.RDX]
 
+let private listDecHelperForType (fieldType: AST.Type) : string =
+    match fieldType with
+    | AST.TList (AST.TList _) ->
+        listRefCountDecListHelperLabel
+    | AST.TList (AST.TTuple fields) when List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64]) ->
+        listRefCountDecTuple2HelperLabel
+    | _ ->
+        listRefCountDecHelperLabel
+
+let private genListFieldRelease (fieldOffset: int) (fieldType: AST.Type) : X86_64.Instr list =
+    [X86_64.PUSH X86_64.RDX
+     X86_64.MOV_load (X86_64.RAX, X86_64.RDX, fieldOffset)
+     X86_64.CALL (listDecHelperForType fieldType)
+     X86_64.POP X86_64.RDX]
+
 let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type option) : X86_64.Instr list =
     let fieldTypes =
         match sourceType with
@@ -587,6 +602,7 @@ let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type 
         | AST.TBytes -> genDynamicBufferFieldRelease ctx (index * 8)
         | AST.TDict _ -> genDictFieldRelease (index * 8)
         | AST.TFunction _ -> genClosureFieldRelease (index * 8)
+        | AST.TList _ -> genListFieldRelease (index * 8) fieldType
         | AST.TTuple _
         | AST.TRecord _
         | AST.TSum _ -> genFixedBlockFieldRelease ctx (index * 8) fieldType
@@ -3547,6 +3563,29 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
             |> Option.defaultValue false
         | _ -> false
 
+    let rec typeContainsListMatching (matcher: AST.Type -> bool) (fieldType: AST.Type) : bool =
+        match fieldType with
+        | AST.TList _ as listType -> matcher listType
+        | AST.TTuple fields -> fields |> List.exists (typeContainsListMatching matcher)
+        | AST.TSum (_, payloadTypes) -> payloadTypes |> List.exists (typeContainsListMatching matcher)
+        | AST.TRecord (name, _) ->
+            recordRegistry
+            |> Map.tryFind name
+            |> Option.map (List.exists (fun (_, fieldType) -> typeContainsListMatching matcher fieldType))
+            |> Option.defaultValue false
+        | _ -> false
+
+    let isTuple2List (fieldType: AST.Type) : bool =
+        match fieldType with
+        | AST.TList (AST.TTuple fields) ->
+            List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64])
+        | _ -> false
+
+    let isNestedList (fieldType: AST.Type) : bool =
+        match fieldType with
+        | AST.TList (AST.TList _) -> true
+        | _ -> false
+
     // Check if any function uses TaggedList RefCountDec or RefCountInc
     let needsListRcDecHelper =
         functions
@@ -3560,6 +3599,8 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                         | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64]) -> false
                         | Some (AST.TList (AST.TList _)) -> false
                         | _ -> true
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
+                        typeContainsListMatching (fun _ -> true) sourceType
                     | _ -> false)))
 
     let needsListRcDecTuple2Helper =
@@ -3571,6 +3612,8 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
                         List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64])
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
+                        typeContainsListMatching isTuple2List sourceType
                     | _ -> false)))
 
     let needsListRcDecListHelper =
@@ -3581,6 +3624,8 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TList _))) -> true
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
+                        typeContainsListMatching isNestedList sourceType
                     | _ -> false)))
 
     let needsListRcIncHelper =
