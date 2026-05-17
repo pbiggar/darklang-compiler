@@ -910,6 +910,32 @@ let testTaggedListRefCountDecTupleStringPayload () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list tuple string payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases higher-arity tuple leaf payloads.
+let testTaggedListRefCountDecTuple3DynamicPayload () : Result<unit, string> =
+    let tupleType = AST.TTuple [AST.TString; AST.TInt64; AST.TBytes]
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "bytes", LIR.StringSymbol "payload")
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 24)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Imm 42L, None)
+                LIR.HeapStore (LIR.Physical LIR.X4, 16, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapAlloc (LIR.Physical LIR.X5, 8)
+                LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some tupleType)
+                LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList tupleType))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected list tuple3 dynamic payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 tagged-list RefCountDec releases fields inside record leaf payloads.
 let testTaggedListRefCountDecRecordStringPayload () : Result<unit, string> =
     let recordType = AST.TRecord ("X64ListRcRecord", [])
@@ -997,6 +1023,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases dict payload", testTaggedListRefCountDecDictPayload)
     ("LIR tagged list RefCountDec releases string payload", testTaggedListRefCountDecStringPayload)
     ("LIR tagged list RefCountDec releases tuple string payload", testTaggedListRefCountDecTupleStringPayload)
+    ("LIR tagged list RefCountDec releases tuple3 dynamic payload", testTaggedListRefCountDecTuple3DynamicPayload)
     ("LIR tagged list RefCountDec releases record string payload", testTaggedListRefCountDecRecordStringPayload)
     ("LIR tagged list RefCountDec releases sum string payload", testTaggedListRefCountDecSumStringPayload)
 ]

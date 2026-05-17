@@ -50,6 +50,8 @@ x64 probes cover the full ARM64 memory matrix.
 - tagged-list dict leaf payload release
 - tagged-list dynamic string leaf payload release
 - tagged-list tuple2 dynamic-buffer field release
+- tagged-list tuple3 dynamic-buffer field release for first/third dynamic
+  fields
 - tagged-list one-field record dynamic-buffer field release
 - tagged-list boxed sum dynamic-buffer payload release
 
@@ -120,8 +122,8 @@ The main x64 gaps are:
   fixed-block release paths
 - closure capture recursive release coverage beyond the current direct dynamic,
   root, and fixed-block capture probes
-- list helper variants for multi-field record, higher-arity tuple, and
-  non-dynamic-buffer sum payloads
+- list helper variants for multi-field record, broader higher-arity tuple
+  shapes, and non-dynamic-buffer sum payloads
 - dict/HAMT key and value recursive retain/release coverage
 - helper register preservation for values live across cleanup
 - documentation and tests that distinguish leak-counter balance from allocator
