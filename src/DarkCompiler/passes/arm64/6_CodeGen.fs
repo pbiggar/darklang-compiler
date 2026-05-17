@@ -3575,7 +3575,12 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                             releaseDictField fieldOffset
                         | AST.TFunction _ ->
                             releaseClosureField fieldOffset
-                        | AST.TTuple fields when List.contains AST.TString fields ->
+                        | AST.TTuple fields when
+                            List.contains AST.TString fields
+                            || fields
+                               |> List.exists (function
+                                   | AST.TTuple nestedFields -> List.contains AST.TString nestedFields
+                                   | _ -> false) ->
                             releaseFixedBlockField fieldOffset fieldType
                         | _ ->
                             [])

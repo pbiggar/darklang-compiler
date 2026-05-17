@@ -66,9 +66,10 @@ plus x64 materialized string literals using the immutable refcount sentinel,
 plus x64 generic fixed-block boxed sum tuple and record string/list/dict
 payload release, plus x64 generic fixed-block tuple and record
 string/list/dict field release, plus returned borrowed sum string payload
-projection retention:
+projection retention, plus ARM64 returned borrowed deep nested tuple string
+projection cleanup:
 
-- `scripts/run-in-container ./run-tests`: `4660 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4661 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -935,15 +936,16 @@ RC insertion treats several expressions as borrowing:
 
 Recent projection work extended returned borrowed value retention beyond
 generic heap shapes. Covered projections now include strings, bytes, lists,
-dict roots, closure roots, one nested fixed-block tuple containing a dynamic
-string, and one sum payload projection containing a dynamic string.
+dict roots, closure roots, nested fixed-block tuples containing dynamic
+strings, and one sum payload projection containing a dynamic string.
 
 ### Remaining Gaps
 
 More projected shapes still need the same confidence:
 
 - broader sum payload shapes beyond the covered string payload projection
-- deeper nested projections through `RawGet` or typed aliases
+- deeper nested projections through `RawGet` or typed aliases beyond the
+  covered tuple projection path
 - branch-selected borrowed values
 - x64 backend parity for each retained projection family
 
@@ -952,7 +954,7 @@ More projected shapes still need the same confidence:
 1. Add tests that return/use borrowed projections after parent cleanup for:
 
    - broader sum payload shapes
-   - deeper nested tuple/record fields
+   - deeper nested tuple/record fields beyond the covered tuple projection path
    - branch-selected borrowed values
 
 2. Make borrowed-return retention shape-driven.
