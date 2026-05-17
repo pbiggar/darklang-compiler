@@ -24,7 +24,8 @@ release, tagged-list boxed sum dynamic string payload release, tagged-list
 boxed sum list payload release, tagged-list boxed sum dict payload release,
 tagged-list boxed sum closure payload release, tagged-list boxed sum tuple
 dynamic string payload release, tagged-list boxed sum record dynamic string
-payload release, and direct x64 closure dynamic
+payload release, tagged-list nested boxed sum dynamic string payload release,
+and direct x64 closure dynamic
 string/bytes/list/dict/closure/tuple/record/sum capture release, including a
 multiple-managed-capture closure probe.
 
@@ -37,9 +38,9 @@ dynamic string/bytes/list/dict/closure/tuple/record/sum capture release,
 including multiple managed captures in the same closure, and x64 tagged-list
 tuple3 and record3 dynamic-buffer payload release, plus tagged-list boxed sum
 list, dict, closure, tuple dynamic string, and record dynamic string payload
-release:
+release, plus tagged-list nested boxed sum dynamic string payload release:
 
-- `scripts/run-in-container ./run-tests`: `4624 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4625 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -730,6 +731,7 @@ commits enabled:
 - tagged-list boxed sum closure payload release
 - tagged-list boxed sum tuple dynamic string payload release
 - tagged-list boxed sum record dynamic string payload release
+- tagged-list nested boxed sum dynamic string payload release
 - direct closure dynamic string/bytes/list/dict/closure/tuple/record/sum
   capture release
 - direct closure release with multiple managed captures
@@ -746,8 +748,9 @@ match ARM64 for every recursive payload shape?"
 Likely gaps:
 
 - fixed-block field release for boxed sum payloads beyond the current
-  string/list/dict/closure/tuple-string/record-string cases, and untested
-  record field combinations beyond string/bytes/nested fixed blocks
+  string/list/dict/closure/tuple-string/record-string/nested-sum-string cases,
+  and untested record field combinations beyond string/bytes/nested fixed
+  blocks
 - closure capture recursive release coverage beyond the current direct
   dynamic-buffer, managed-root, and fixed-block capture probes
 - list payload helper variants beyond tuple2/tuple3 and record1/record3

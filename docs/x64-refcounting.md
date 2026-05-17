@@ -61,6 +61,7 @@ x64 probes cover the full ARM64 memory matrix.
 - tagged-list boxed sum closure payload release
 - tagged-list boxed sum tuple dynamic-buffer payload release
 - tagged-list boxed sum record dynamic-buffer payload release
+- tagged-list nested boxed sum dynamic-buffer payload release
 
 The x64 tests run generated x64 ELF binaries directly on x64 hosts and through
 `qemu-x86_64-static` on non-x64 hosts.
@@ -124,8 +125,8 @@ The main x64 gaps are:
 
 - fixed-block field release for boxed sum payloads beyond the current string,
   list, dict, closure, tuple dynamic-buffer, and record dynamic-buffer payload
-  paths, and closure payloads beyond direct dynamic-buffer and direct
-  list/dict/closure/fixed-block captures
+  paths, plus nested sum dynamic-buffer payload paths; closure payloads beyond
+  direct dynamic-buffer and direct list/dict/closure/fixed-block captures
 - broader record field coverage beyond the current string/bytes/nested
   fixed-block release paths
 - closure capture recursive release coverage beyond the current direct dynamic,

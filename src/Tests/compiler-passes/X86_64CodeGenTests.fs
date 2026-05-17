@@ -1154,6 +1154,34 @@ let testTaggedListRefCountDecSumRecordStringPayload () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list sum record payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases nested boxed sum leaf payloads.
+let testTaggedListRefCountDecNestedSumStringPayload () : Result<unit, string> =
+    let innerSumType = AST.TSum ("X64ListRcNestedInnerSum", [AST.TString])
+    let outerSumType = AST.TSum ("X64ListRcNestedOuterSum", [innerSumType])
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 16)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 0L, None)
+                LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 16)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 0L, None)
+                LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some innerSumType)
+                LIR.HeapAlloc (LIR.Physical LIR.X5, 8)
+                LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some outerSumType)
+                LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList outerSumType))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected list nested sum payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -1201,4 +1229,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases sum closure payload", testTaggedListRefCountDecSumClosurePayload)
     ("LIR tagged list RefCountDec releases sum tuple string payload", testTaggedListRefCountDecSumTupleStringPayload)
     ("LIR tagged list RefCountDec releases sum record string payload", testTaggedListRefCountDecSumRecordStringPayload)
+    ("LIR tagged list RefCountDec releases nested sum string payload", testTaggedListRefCountDecNestedSumStringPayload)
 ]
