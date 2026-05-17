@@ -961,6 +961,36 @@ let testTaggedListRefCountDecRecordStringPayload () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list record string payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases higher-field record leaf payloads.
+let testTaggedListRefCountDecRecord3DynamicPayload () : Result<unit, string> =
+    let recordType = AST.TRecord ("X64ListRcRecord3", [])
+    let records =
+        Map.ofList
+            [("X64ListRcRecord3", [("name", AST.TString); ("count", AST.TInt64); ("data", AST.TBytes)])]
+    let program =
+        makeSimpleProgramWithRecords
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "bytes", LIR.StringSymbol "payload")
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 24)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Imm 42L, None)
+                LIR.HeapStore (LIR.Physical LIR.X4, 16, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapAlloc (LIR.Physical LIR.X5, 8)
+                LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some recordType)
+                LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList recordType))
+            ]
+            LIR.Ret
+            records
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected list record3 dynamic payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 tagged-list RefCountDec releases boxed sum leaf payload fields.
 let testTaggedListRefCountDecSumStringPayload () : Result<unit, string> =
     let sumType = AST.TSum ("X64ListRcSum", [AST.TString])
@@ -1025,5 +1055,6 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases tuple string payload", testTaggedListRefCountDecTupleStringPayload)
     ("LIR tagged list RefCountDec releases tuple3 dynamic payload", testTaggedListRefCountDecTuple3DynamicPayload)
     ("LIR tagged list RefCountDec releases record string payload", testTaggedListRefCountDecRecordStringPayload)
+    ("LIR tagged list RefCountDec releases record3 dynamic payload", testTaggedListRefCountDecRecord3DynamicPayload)
     ("LIR tagged list RefCountDec releases sum string payload", testTaggedListRefCountDecSumStringPayload)
 ]

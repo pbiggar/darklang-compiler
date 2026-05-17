@@ -31,9 +31,9 @@ field release, including boxed sum list payload and tagged-list
 closure/dict/dynamic-string leaf payload release, plus direct x64 closure
 dynamic string/bytes/list/dict/closure/tuple/record/sum capture release,
 including multiple managed captures in the same closure, and x64 tagged-list
-tuple3 dynamic-buffer payload release:
+tuple3 and record3 dynamic-buffer payload release:
 
-- `scripts/run-in-container ./run-tests`: `4618 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4619 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -717,6 +717,7 @@ commits enabled:
 - tagged-list tuple dynamic string field release
 - tagged-list tuple3 dynamic string/bytes field release
 - tagged-list one-field record dynamic string field release
+- tagged-list three-field record dynamic string/bytes field release
 - tagged-list boxed sum dynamic string payload release
 - direct closure dynamic string/bytes/list/dict/closure/tuple/record/sum
   capture release
@@ -738,9 +739,8 @@ Likely gaps:
   string/bytes/nested fixed blocks
 - closure capture recursive release coverage beyond the current direct
   dynamic-buffer, managed-root, and fixed-block capture probes
-- list payload helper variants beyond tuple2 and the current tuple3
-  dynamic-buffer shapes, record1 dynamic-buffer, sum dynamic-buffer,
-  list/closure/dict/string
+- list payload helper variants beyond tuple2/tuple3 and record1/record3
+  dynamic-buffer shapes, sum dynamic-buffer, list/closure/dict/string
 - dict helper key/value recursion parity
 - dynamic string/bytes literal sentinel and aligned layout parity
 - register preservation around helper calls and inline releases
