@@ -30,7 +30,7 @@ field release, including boxed sum list payload and tagged-list
 closure/dict/dynamic-string leaf payload release, plus direct x64 closure
 dynamic string/bytes capture release:
 
-- `scripts/run-in-container ./run-tests`: `4609 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4610 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`

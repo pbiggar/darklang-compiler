@@ -600,6 +600,30 @@ let testClosureRefCountDecStringCapture () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected closure string capture release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 closure RefCountDec releases dynamic bytes captures.
+let testClosureRefCountDecBytesCapture () : Result<unit, string> =
+    let closureTupleType = AST.TTuple [AST.TInt64; AST.TBytes]
+    let capturedFunc =
+        makeEmptyFunction
+            "x64_bytes_capture_fn"
+            [{ Reg = LIR.Physical LIR.X0; Type = closureTupleType }]
+    let main =
+        match makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.ClosureAlloc (LIR.Physical LIR.X3, "x64_bytes_capture_fn", [LIR.Reg (LIR.Physical LIR.X2)])
+                LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+            ]
+            LIR.Ret with
+        | LIR.Program ([func], records) -> LIR.Program ([func; capturedFunc], records)
+        | other -> other
+
+    match runLIRProgramFullWithOptions main true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected closure bytes capture release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 tagged-list RefCountDec releases closure leaf payloads.
 let testTaggedListRefCountDecClosurePayload () : Result<unit, string> =
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
@@ -765,6 +789,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR closure alloc RefCountDec balances leak counter", testClosureAllocRefCountDecBalancesLeakCounter)
     ("LIR generic RefCountDec releases closure field", testGenericRefCountDecClosureField)
     ("LIR closure RefCountDec releases string capture", testClosureRefCountDecStringCapture)
+    ("LIR closure RefCountDec releases bytes capture", testClosureRefCountDecBytesCapture)
     ("LIR tagged list RefCountDec releases closure payload", testTaggedListRefCountDecClosurePayload)
     ("LIR tagged list RefCountDec releases dict payload", testTaggedListRefCountDecDictPayload)
     ("LIR tagged list RefCountDec releases string payload", testTaggedListRefCountDecStringPayload)
