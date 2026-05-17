@@ -1112,6 +1112,79 @@ let testTaggedListRefCountDecRecord3MiddleDynamicPayload () : Result<unit, strin
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list record3 middle dynamic payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases every record3 dynamic field combination.
+let testTaggedListRefCountDecRecord3DynamicPayloadCombinations () : Result<unit, string> =
+    let dynamicRegForIndex (index: int) : LIR.PhysReg =
+        match index with
+        | 0 -> LIR.X2
+        | 1 -> LIR.X3
+        | 2 -> LIR.X4
+        | _ -> Crash.crash $"Unexpected record3 field index {index}"
+
+    let isDynamicField (fieldType: AST.Type) : bool =
+        match fieldType with
+        | AST.TString
+        | AST.TBytes -> true
+        | _ -> false
+
+    let runCase (name: string, fields: AST.Type list) : Result<unit, string> =
+        let recordName = $"X64ListRcRecord3{name}"
+        let recordType = AST.TRecord (recordName, [])
+        let records =
+            fields
+            |> List.mapi (fun index fieldType -> ($"field{index}", fieldType))
+            |> fun recordFields -> Map.ofList [(recordName, recordFields)]
+        let dynamicAllocs =
+            fields
+            |> List.mapi (fun index fieldType ->
+                if isDynamicField fieldType then
+                    let reg = dynamicRegForIndex index
+                    Some (LIR.StringConcat (LIR.Physical reg, LIR.StringSymbol $"left{name}{index}", LIR.StringSymbol $"right{name}{index}"))
+                else
+                    None)
+            |> List.choose id
+        let fieldStores =
+            fields
+            |> List.mapi (fun index fieldType ->
+                let offset = index * 8
+                if isDynamicField fieldType then
+                    LIR.HeapStore (LIR.Physical LIR.X5, offset, LIR.Reg (LIR.Physical (dynamicRegForIndex index)), Some fieldType)
+                else
+                    LIR.HeapStore (LIR.Physical LIR.X5, offset, LIR.Imm (int64 (index + 1)), None))
+        let program =
+            makeSimpleProgramWithRecords
+                (dynamicAllocs
+                 @ [LIR.HeapAlloc (LIR.Physical LIR.X5, 24)]
+                 @ fieldStores
+                 @ [LIR.HeapAlloc (LIR.Physical LIR.X6, 8)
+                    LIR.HeapStore (LIR.Physical LIR.X6, 0, LIR.Reg (LIR.Physical LIR.X5), Some recordType)
+                    LIR.Mov (LIR.Physical LIR.X7, LIR.Imm 5L)
+                    LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
+                    LIR.RefCountDec (LIR.Physical LIR.X7, 0, LIR.TaggedList, Some (AST.TList recordType))])
+                LIR.Ret
+                records
+
+        match runLIRProgramFullWithOptions program true with
+        | Error e -> Error e
+        | Ok (_, _, stderr) ->
+            if stderr.Trim() = "" then Ok ()
+            else Error $"Expected list record3 {name} dynamic payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
+    let rec runCases (cases: (string * AST.Type list) list) : Result<unit, string> =
+        match cases with
+        | [] -> Ok ()
+        | case :: rest ->
+            match runCase case with
+            | Ok () -> runCases rest
+            | Error e -> Error e
+
+    runCases
+        [ ("First", [AST.TString; AST.TInt64; AST.TInt64])
+          ("Third", [AST.TInt64; AST.TInt64; AST.TString])
+          ("FirstSecond", [AST.TString; AST.TBytes; AST.TInt64])
+          ("SecondThird", [AST.TInt64; AST.TString; AST.TBytes])
+          ("All", [AST.TString; AST.TBytes; AST.TString]) ]
+
 /// Test: x64 tagged-list RefCountDec releases boxed sum leaf payload fields.
 let testTaggedListRefCountDecSumStringPayload () : Result<unit, string> =
     let sumType = AST.TSum ("X64ListRcSum", [AST.TString])
@@ -1347,6 +1420,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases record string payload", testTaggedListRefCountDecRecordStringPayload)
     ("LIR tagged list RefCountDec releases record3 dynamic payload", testTaggedListRefCountDecRecord3DynamicPayload)
     ("LIR tagged list RefCountDec releases record3 middle dynamic payload", testTaggedListRefCountDecRecord3MiddleDynamicPayload)
+    ("LIR tagged list RefCountDec releases record3 dynamic payload combinations", testTaggedListRefCountDecRecord3DynamicPayloadCombinations)
     ("LIR tagged list RefCountDec releases sum string payload", testTaggedListRefCountDecSumStringPayload)
     ("LIR tagged list RefCountDec releases sum list payload", testTaggedListRefCountDecSumListPayload)
     ("LIR tagged list RefCountDec releases sum dict payload", testTaggedListRefCountDecSumDictPayload)
