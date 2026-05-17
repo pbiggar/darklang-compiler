@@ -541,6 +541,7 @@ let private genDynamicBufferFieldRelease (ctx: FuncCtx) (fieldOffset: int) : X86
 let private fixedBlockPayloadSize (recordRegistry: LIR.RecordRegistry) (fieldType: AST.Type) : int option =
     match fieldType with
     | AST.TTuple fields -> Some (List.length fields * 8)
+    | AST.TSum _ -> Some 16
     | AST.TRecord (name, _) ->
         recordRegistry
         |> Map.tryFind name
@@ -565,7 +566,8 @@ let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type 
         | AST.TString
         | AST.TBytes -> genDynamicBufferFieldRelease ctx (index * 8)
         | AST.TTuple _
-        | AST.TRecord _ -> genFixedBlockFieldRelease ctx (index * 8) fieldType
+        | AST.TRecord _
+        | AST.TSum _ -> genFixedBlockFieldRelease ctx (index * 8) fieldType
         | _ -> [])
     |> List.concat
 
