@@ -71,9 +71,9 @@ and record string projection cleanup, plus returned branch-selected borrowed
 string projection
 retention, plus returned borrowed sum bytes, dict, and closure payload projection
 retention, plus returned branch-selected borrowed bytes, list, dict, and
-closure projection retention:
+closure projection retention, plus sum record payload release:
 
-- `scripts/run-in-container ./run-tests`: `4674 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4675 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -1000,6 +1000,7 @@ Current tests cover:
 - sum releases dict payload
 - sum releases closure payload
 - sum releases tuple payload containing dynamic string field
+- sum releases record payload containing dynamic string field
 
 ### Remaining Gaps
 
@@ -1007,7 +1008,7 @@ The compiler still needs precise handling for:
 
 - pure enum sums that can be immediate
 - mixed sums with payload and no-payload variants
-- nested fixed-block record payloads and deeper fixed-block payload recursion
+- deeper fixed-block payload recursion beyond direct tuple/record payloads
 - lists/dicts/records containing sums
 - x64 parity
 
