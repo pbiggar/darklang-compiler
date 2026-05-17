@@ -88,6 +88,13 @@ let private runtimeInstrs (instrs: ARM64.Instr list) : ARM64Symbolic.Instr list 
 let private utf8Len (value: string) : int =
     System.Text.Encoding.UTF8.GetByteCount value
 
+let private loadStringLiteralPointer (destReg: ARM64Symbolic.Reg) (value: string) : ARM64Symbolic.Instr list =
+    let labelRef = stringDataLabel value
+    [
+        ARM64Symbolic.ADRP (destReg, labelRef)
+        ARM64Symbolic.ADD_label (destReg, destReg, labelRef)
+    ]
+
 let private generateHeapOverflowTrapBody () : ARM64Symbolic.Instr list =
     let os =
         match Platform.detectOS () with
@@ -1257,6 +1264,16 @@ let generateLeakCounterDec (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     else
         []
 
+let generateLeakCounterIncIfResultError (ctx: CodeGenContext) (resultReg: ARM64Symbolic.Reg) : ARM64Symbolic.Instr list =
+    let leakInc = generateLeakCounterInc ctx
+    if List.isEmpty leakInc then
+        []
+    else
+        [
+            ARM64Symbolic.LDR (ARM64Symbolic.X15, resultReg, 0s)
+            ARM64Symbolic.CBZ_offset (ARM64Symbolic.X15, List.length leakInc + 1)
+        ] @ leakInc
+
 let generateLeakCheckReport (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     if ctx.Options.EnableLeakCheck then
         let prefix = Runtime.generatePrintCharsToStderr [byte 'l'; byte 'e'; byte 'a'; byte 'k'; byte 's'; byte ':'; byte ' '] |> runtimeInstrs
@@ -1851,11 +1868,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 // Load from stack slot into destination register
                 loadStackSlot destReg offset
             | LIR.StringSymbol value ->
-                let labelRef = stringDataLabel value
-                Ok ([
-                    ARM64Symbolic.ADRP (destReg, labelRef)
-                    ARM64Symbolic.ADD_label (destReg, destReg, labelRef)
-                ])
+                Ok (loadStringLiteralPointer destReg value)
             | LIR.FloatSymbol _ ->
                 Error "Cannot MOV float reference - use FLoad instruction"
             | LIR.FuncAddr funcName ->
@@ -2695,11 +2708,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
             | LIR.StackSlot offset ->
                 loadStackSlot destARM64 offset
             | LIR.StringSymbol value ->
-                let labelRef = stringDataLabel value
-                Ok ([
-                    ARM64Symbolic.ADRP (destARM64, labelRef)
-                    ARM64Symbolic.ADD_label (destARM64, destARM64, labelRef)
-                ])
+                Ok (loadStringLiteralPointer destARM64 value)
             | LIR.FuncAddr funcName ->
                 Ok [ARM64Symbolic.ADR (destARM64, codeLabel funcName)]
             | LIR.FloatImm _ | LIR.FloatSymbol _ ->
@@ -2749,11 +2758,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
             | LIR.FuncAddr funcName ->
                 Ok [ARM64Symbolic.ADR (destARM64, codeLabel funcName)]
             | LIR.StringSymbol value ->
-                let labelRef = stringDataLabel value
-                Ok ([
-                    ARM64Symbolic.ADRP (destARM64, labelRef)
-                    ARM64Symbolic.ADD_label (destARM64, destARM64, labelRef)
-                ])
+                Ok (loadStringLiteralPointer destARM64 value)
             | LIR.FloatImm _ | LIR.FloatSymbol _ ->
                 Error "Float in TailArgMoves not yet supported"
 
@@ -3769,40 +3774,19 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 // Already a heap string pointer
                 lirRegToARM64Reg pathReg
                 |> Result.map (fun pathARM64 ->
-                    runtimeInstrs (Runtime.generateFileReadText destReg pathARM64))
+                    runtimeInstrs (Runtime.generateFileReadText destReg pathARM64)
+                    @ generateLeakCounterInc ctx)
             | LIR.StringSymbol value ->
-                // Literal string - convert to heap format first (same as FileExists)
-                // Literal format: [length:8][data:N] - skip length to copy data
-                let len = utf8Len value
-                let labelRef = stringDataLabel value
-                let totalSize = ((len + 16) + 7) &&& (~~~7)
-                Ok ([
-                    ARM64Symbolic.MOV_reg (ARM64Symbolic.X15, ARM64Symbolic.X28)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, uint16 totalSize)
-                    ARM64Symbolic.ADRP (ARM64Symbolic.X9, labelRef)
-                    ARM64Symbolic.ADD_label (ARM64Symbolic.X9, ARM64Symbolic.X9, labelRef)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 8us)  // Skip 8-byte length prefix
-                ] @ loadImmediate ARM64Symbolic.X10 (int64 len) @ [
-                    ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.X15, 0s)
-                    ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
-                ] @ loadImmediate ARM64Symbolic.X11 (int64 len) @ [
-                    ARM64Symbolic.CMP_reg (ARM64Symbolic.X0, ARM64Symbolic.X11)
-                    ARM64Symbolic.B_cond (ARM64Symbolic.GE, 7)
-                    ARM64Symbolic.LDRB (ARM64Symbolic.X12, ARM64Symbolic.X9, ARM64Symbolic.X0)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X15, 8us)
-                    ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X0)
-                    ARM64Symbolic.STRB_reg (ARM64Symbolic.X12, ARM64Symbolic.X13)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, 1us)
-                    ARM64Symbolic.B (-7)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X15, 8us)
-                    ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X10)
-                    ARM64Symbolic.MOVZ (ARM64Symbolic.X12, 1us, 0)
-                    ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X13, 0s)
-                ] @ generateLeakCounterInc ctx @ runtimeInstrs (Runtime.generateFileReadText destReg ARM64Symbolic.X15))
+                Ok (
+                    loadStringLiteralPointer ARM64Symbolic.X15 value
+                    @ runtimeInstrs (Runtime.generateFileReadText destReg ARM64Symbolic.X15)
+                    @ generateLeakCounterInc ctx)
             | LIR.StackSlot offset ->
                 loadStackSlot ARM64Symbolic.X15 offset
                 |> Result.map (fun loadInstrs ->
-                    loadInstrs @ runtimeInstrs (Runtime.generateFileReadText destReg ARM64Symbolic.X15))
+                    loadInstrs
+                    @ runtimeInstrs (Runtime.generateFileReadText destReg ARM64Symbolic.X15)
+                    @ generateLeakCounterInc ctx)
             | _ -> Error "FileReadText requires string operand")
 
     | LIR.FileExists (dest, path) ->
@@ -3818,47 +3802,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 |> Result.map (fun pathARM64 ->
                     runtimeInstrs (Runtime.generateFileExists destReg pathARM64))
             | LIR.StringSymbol value ->
-                // Literal string - convert to heap format first, then call FileExists
-                // Literal format: [length:8][data:N] - skip length to copy data
-                // Heap format: [length:8][data:N][refcount:8]
-                let len = utf8Len value
-                let labelRef = stringDataLabel value
-                let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
-                // Use X15 as temp to hold heap string pointer
-                Ok ([
-                    // Allocate heap space for converted string
-                    ARM64Symbolic.MOV_reg (ARM64Symbolic.X15, ARM64Symbolic.X28)  // X15 = heap pointer
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, uint16 totalSize)  // bump allocator
-                    // Load literal string data address into X9 (skip 8-byte length prefix)
-                    ARM64Symbolic.ADRP (ARM64Symbolic.X9, labelRef)
-                    ARM64Symbolic.ADD_label (ARM64Symbolic.X9, ARM64Symbolic.X9, labelRef)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 8us)  // Skip length prefix
-                    // Store length at [X15]
-                ] @ loadImmediate ARM64Symbolic.X10 (int64 len) @ [
-                    ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.X15, 0s)  // [X15] = length
-                    // Copy bytes from literal string to heap
-                    ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)  // X0 = loop counter
-                ] @ loadImmediate ARM64Symbolic.X11 (int64 len) @ [
-                    // Copy loop
-                    ARM64Symbolic.CMP_reg (ARM64Symbolic.X0, ARM64Symbolic.X11)
-                    ARM64Symbolic.B_cond (ARM64Symbolic.GE, 7)  // Exit if counter >= len
-                    ARM64Symbolic.LDRB (ARM64Symbolic.X12, ARM64Symbolic.X9, ARM64Symbolic.X0)  // X12 = literal[X0]
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X15, 8us)  // X13 = X15 + 8
-                    ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X0)  // X13 = X15 + 8 + X0
-                    ARM64Symbolic.STRB_reg (ARM64Symbolic.X12, ARM64Symbolic.X13)  // [X13] = byte
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, 1us)  // X0++
-                    ARM64Symbolic.B (-7)  // Loop back
-                    // Store refcount = 1 at [X15 + 8 + aligned(len)]
-                    // aligned(x) = ((x + 7) >> 3) << 3
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X10, 7us)        // X13 = len + 7
-                    ARM64Symbolic.MOVZ (ARM64Symbolic.X12, 3us, 0)                   // X12 = 3
-                    ARM64Symbolic.LSR_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X12)  // X13 = (len + 7) >> 3
-                    ARM64Symbolic.LSL_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X12)  // X13 = aligned(len)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X12, ARM64Symbolic.X15, 8us)        // X12 = X15 + 8
-                    ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X12, ARM64Symbolic.X13)  // X13 = X15 + 8 + aligned(len)
-                    ARM64Symbolic.MOVZ (ARM64Symbolic.X12, 1us, 0)
-                    ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X13, 0s)  // [X13] = 1
-                ] @ generateLeakCounterInc ctx @ runtimeInstrs (Runtime.generateFileExists destReg ARM64Symbolic.X15))
+                Ok (loadStringLiteralPointer ARM64Symbolic.X15 value @ runtimeInstrs (Runtime.generateFileExists destReg ARM64Symbolic.X15))
             | LIR.StackSlot offset ->
                 // Load heap string from stack slot
                 loadStackSlot ARM64Symbolic.X15 offset
@@ -3877,40 +3821,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 | LIR.Reg reg ->
                     lirRegToARM64Reg reg |> Result.map (fun r -> ([], r))
                 | LIR.StringSymbol value ->
-                    // Literal string - convert to heap format
-                    // Literal format: [length:8][data:N] - skip length to copy data
-                    let len = utf8Len value
-                    let labelRef = stringDataLabel value
-                    let totalSize = ((len + 16) + 7) &&& (~~~7)
-                    Ok ([
-                        ARM64Symbolic.MOV_reg (tempReg, ARM64Symbolic.X28)
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, uint16 totalSize)
-                        ARM64Symbolic.ADRP (ARM64Symbolic.X9, labelRef)
-                        ARM64Symbolic.ADD_label (ARM64Symbolic.X9, ARM64Symbolic.X9, labelRef)
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 8us)  // Skip 8-byte length prefix
-                    ] @ loadImmediate ARM64Symbolic.X10 (int64 len) @ [
-                        ARM64Symbolic.STR (ARM64Symbolic.X10, tempReg, 0s)
-                        ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
-                    ] @ loadImmediate ARM64Symbolic.X11 (int64 len) @ [
-                        ARM64Symbolic.CMP_reg (ARM64Symbolic.X0, ARM64Symbolic.X11)
-                        ARM64Symbolic.B_cond (ARM64Symbolic.GE, 7)
-                        ARM64Symbolic.LDRB (ARM64Symbolic.X12, ARM64Symbolic.X9, ARM64Symbolic.X0)
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, tempReg, 8us)
-                        ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X0)
-                        ARM64Symbolic.STRB_reg (ARM64Symbolic.X12, ARM64Symbolic.X13)
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, 1us)
-                        ARM64Symbolic.B (-7)  // Jump back to CMP
-                        // Store refcount = 1 at [tempReg + 8 + aligned(len)]
-                        // aligned(x) = ((x + 7) >> 3) << 3
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X10, 7us)        // X13 = len + 7
-                        ARM64Symbolic.MOVZ (ARM64Symbolic.X12, 3us, 0)                   // X12 = 3
-                        ARM64Symbolic.LSR_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X12)  // X13 = (len + 7) >> 3
-                        ARM64Symbolic.LSL_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X12)  // X13 = aligned(len)
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X12, tempReg, 8us)          // X12 = tempReg + 8
-                        ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X12, ARM64Symbolic.X13)  // X13 = tempReg + 8 + aligned(len)
-                        ARM64Symbolic.MOVZ (ARM64Symbolic.X12, 1us, 0)
-                        ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X13, 0s)
-                    ] @ generateLeakCounterInc ctx, tempReg)
+                    Ok (loadStringLiteralPointer tempReg value, tempReg)
                 | LIR.StackSlot offset ->
                     loadStackSlot tempReg offset |> Result.map (fun instrs -> (instrs, tempReg))
                 | _ -> Error "FileWriteText requires string operands"
@@ -3919,7 +3830,10 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
             |> Result.bind (fun (pathInstrs, pathReg) ->
                 getOperandReg content ARM64Symbolic.X14
                 |> Result.map (fun (contentInstrs, contentReg) ->
-                    pathInstrs @ contentInstrs @ runtimeInstrs (Runtime.generateFileWriteText destReg pathReg contentReg false))))
+                    pathInstrs
+                    @ contentInstrs
+                    @ runtimeInstrs (Runtime.generateFileWriteText destReg pathReg contentReg false)
+                    @ generateLeakCounterIncIfResultError ctx destReg)))
 
     | LIR.FileAppendText (dest, path, content) ->
         // File append: appends content string to file at path
@@ -3927,44 +3841,12 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
         lirRegToARM64Reg dest
         |> Result.bind (fun destReg ->
             // Same helper as FileWriteText
-            // Pool format: [length:8][data:N] - skip length to copy data
             let getOperandReg operand tempReg =
                 match operand with
                 | LIR.Reg reg ->
                     lirRegToARM64Reg reg |> Result.map (fun r -> ([], r))
                 | LIR.StringSymbol value ->
-                    let len = utf8Len value
-                    let labelRef = stringDataLabel value
-                    let totalSize = ((len + 16) + 7) &&& (~~~7)
-                    Ok ([
-                        ARM64Symbolic.MOV_reg (tempReg, ARM64Symbolic.X28)
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, uint16 totalSize)
-                        ARM64Symbolic.ADRP (ARM64Symbolic.X9, labelRef)
-                        ARM64Symbolic.ADD_label (ARM64Symbolic.X9, ARM64Symbolic.X9, labelRef)
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 8us)  // Skip 8-byte length prefix
-                    ] @ loadImmediate ARM64Symbolic.X10 (int64 len) @ [
-                        ARM64Symbolic.STR (ARM64Symbolic.X10, tempReg, 0s)
-                        ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
-                    ] @ loadImmediate ARM64Symbolic.X11 (int64 len) @ [
-                        ARM64Symbolic.CMP_reg (ARM64Symbolic.X0, ARM64Symbolic.X11)
-                        ARM64Symbolic.B_cond (ARM64Symbolic.GE, 7)
-                        ARM64Symbolic.LDRB (ARM64Symbolic.X12, ARM64Symbolic.X9, ARM64Symbolic.X0)
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, tempReg, 8us)
-                        ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X0)
-                        ARM64Symbolic.STRB_reg (ARM64Symbolic.X12, ARM64Symbolic.X13)
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, 1us)
-                        ARM64Symbolic.B (-7)  // Jump back to CMP
-                        // Store refcount = 1 at [tempReg + 8 + aligned(len)]
-                        // aligned(x) = ((x + 7) >> 3) << 3
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X10, 7us)        // X13 = len + 7
-                        ARM64Symbolic.MOVZ (ARM64Symbolic.X12, 3us, 0)                   // X12 = 3
-                        ARM64Symbolic.LSR_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X12)  // X13 = (len + 7) >> 3
-                        ARM64Symbolic.LSL_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X12)  // X13 = aligned(len)
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X12, tempReg, 8us)          // X12 = tempReg + 8
-                        ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X12, ARM64Symbolic.X13)  // X13 = tempReg + 8 + aligned(len)
-                        ARM64Symbolic.MOVZ (ARM64Symbolic.X12, 1us, 0)
-                        ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X13, 0s)
-                    ] @ generateLeakCounterInc ctx, tempReg)
+                    Ok (loadStringLiteralPointer tempReg value, tempReg)
                 | LIR.StackSlot offset ->
                     loadStackSlot tempReg offset |> Result.map (fun instrs -> (instrs, tempReg))
                 | _ -> Error "FileAppendText requires string operands"
@@ -3973,7 +3855,10 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
             |> Result.bind (fun (pathInstrs, pathReg) ->
                 getOperandReg content ARM64Symbolic.X14
                 |> Result.map (fun (contentInstrs, contentReg) ->
-                    pathInstrs @ contentInstrs @ runtimeInstrs (Runtime.generateFileWriteText destReg pathReg contentReg true))))
+                    pathInstrs
+                    @ contentInstrs
+                    @ runtimeInstrs (Runtime.generateFileWriteText destReg pathReg contentReg true)
+                    @ generateLeakCounterIncIfResultError ctx destReg)))
 
     | LIR.FileDelete (dest, path) ->
         // File delete: deletes file at path
@@ -3986,54 +3871,20 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 // Already a heap string pointer
                 lirRegToARM64Reg pathReg
                 |> Result.map (fun pathARM64 ->
-                    runtimeInstrs (Runtime.generateFileDelete destReg pathARM64))
+                    runtimeInstrs (Runtime.generateFileDelete destReg pathARM64)
+                    @ generateLeakCounterIncIfResultError ctx destReg)
             | LIR.StringSymbol value ->
-                // Literal string - convert to heap format first, then call FileDelete
-                // Literal format: [length:8][data:N] - skip length to copy data
-                // Heap format: [length:8][data:N][refcount:8]
-                let len = utf8Len value
-                let labelRef = stringDataLabel value
-                let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
-                // Use X15 as temp to hold heap string pointer
-                Ok ([
-                    // Allocate heap space for converted string
-                    ARM64Symbolic.MOV_reg (ARM64Symbolic.X15, ARM64Symbolic.X28)  // X15 = heap pointer
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, uint16 totalSize)  // bump allocator
-                    // Load literal string data address into X9 (skip 8-byte length prefix)
-                    ARM64Symbolic.ADRP (ARM64Symbolic.X9, labelRef)
-                    ARM64Symbolic.ADD_label (ARM64Symbolic.X9, ARM64Symbolic.X9, labelRef)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 8us)  // Skip length prefix
-                    // Store length at [X15]
-                ] @ loadImmediate ARM64Symbolic.X10 (int64 len) @ [
-                    ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.X15, 0s)  // [X15] = length
-                    // Copy bytes from literal string to heap
-                    ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)  // X0 = loop counter
-                ] @ loadImmediate ARM64Symbolic.X11 (int64 len) @ [
-                    // Copy loop
-                    ARM64Symbolic.CMP_reg (ARM64Symbolic.X0, ARM64Symbolic.X11)
-                    ARM64Symbolic.B_cond (ARM64Symbolic.GE, 7)  // Exit if counter >= len
-                    ARM64Symbolic.LDRB (ARM64Symbolic.X12, ARM64Symbolic.X9, ARM64Symbolic.X0)  // X12 = literal[X0]
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X15, 8us)  // X13 = X15 + 8
-                    ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X0)  // X13 = X15 + 8 + X0
-                    ARM64Symbolic.STRB_reg (ARM64Symbolic.X12, ARM64Symbolic.X13)  // [X13] = byte
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, 1us)  // X0++
-                    ARM64Symbolic.B (-7)  // Loop back
-                    // Store refcount = 1 at [X15 + 8 + aligned(len)]
-                    // aligned(x) = ((x + 7) >> 3) << 3
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X10, 7us)        // X13 = len + 7
-                    ARM64Symbolic.MOVZ (ARM64Symbolic.X12, 3us, 0)                   // X12 = 3
-                    ARM64Symbolic.LSR_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X12)  // X13 = (len + 7) >> 3
-                    ARM64Symbolic.LSL_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X12)  // X13 = aligned(len)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X12, ARM64Symbolic.X15, 8us)        // X12 = X15 + 8
-                    ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X12, ARM64Symbolic.X13)  // X13 = X15 + 8 + aligned(len)
-                    ARM64Symbolic.MOVZ (ARM64Symbolic.X12, 1us, 0)
-                    ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X13, 0s)  // [X13] = 1
-                ] @ generateLeakCounterInc ctx @ runtimeInstrs (Runtime.generateFileDelete destReg ARM64Symbolic.X15))
+                Ok (
+                    loadStringLiteralPointer ARM64Symbolic.X15 value
+                    @ runtimeInstrs (Runtime.generateFileDelete destReg ARM64Symbolic.X15)
+                    @ generateLeakCounterIncIfResultError ctx destReg)
             | LIR.StackSlot offset ->
                 // Load heap string from stack slot
                 loadStackSlot ARM64Symbolic.X15 offset
                 |> Result.map (fun loadInstrs ->
-                    loadInstrs @ runtimeInstrs (Runtime.generateFileDelete destReg ARM64Symbolic.X15))
+                    loadInstrs
+                    @ runtimeInstrs (Runtime.generateFileDelete destReg ARM64Symbolic.X15)
+                    @ generateLeakCounterIncIfResultError ctx destReg)
             | _ -> Error "FileDelete requires string operand")
 
     | LIR.FileSetExecutable (dest, path) ->
@@ -4047,40 +3898,19 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 // Already a heap string pointer
                 lirRegToARM64Reg pathReg
                 |> Result.map (fun pathARM64 ->
-                    runtimeInstrs (Runtime.generateFileSetExecutable destReg pathARM64))
+                    runtimeInstrs (Runtime.generateFileSetExecutable destReg pathARM64)
+                    @ generateLeakCounterIncIfResultError ctx destReg)
             | LIR.StringSymbol value ->
-                // Literal string - convert to heap format first
-                // Literal format: [length:8][data:N] - skip length to copy data
-                let len = utf8Len value
-                let labelRef = stringDataLabel value
-                let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
-                Ok ([
-                    ARM64Symbolic.MOV_reg (ARM64Symbolic.X15, ARM64Symbolic.X28)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, uint16 totalSize)
-                    ARM64Symbolic.ADRP (ARM64Symbolic.X9, labelRef)
-                    ARM64Symbolic.ADD_label (ARM64Symbolic.X9, ARM64Symbolic.X9, labelRef)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 8us)  // Skip 8-byte length prefix
-                ] @ loadImmediate ARM64Symbolic.X10 (int64 len) @ [
-                    ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.X15, 0s)
-                    ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
-                ] @ loadImmediate ARM64Symbolic.X11 (int64 len) @ [
-                    ARM64Symbolic.CMP_reg (ARM64Symbolic.X0, ARM64Symbolic.X11)
-                    ARM64Symbolic.B_cond (ARM64Symbolic.GE, 7)
-                    ARM64Symbolic.LDRB (ARM64Symbolic.X12, ARM64Symbolic.X9, ARM64Symbolic.X0)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X15, 8us)
-                    ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X0)
-                    ARM64Symbolic.STRB_reg (ARM64Symbolic.X12, ARM64Symbolic.X13)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, 1us)
-                    ARM64Symbolic.B (-7)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X15, 8us)
-                    ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X10)
-                    ARM64Symbolic.MOVZ (ARM64Symbolic.X12, 1us, 0)
-                    ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X13, 0s)
-                ] @ generateLeakCounterInc ctx @ runtimeInstrs (Runtime.generateFileSetExecutable destReg ARM64Symbolic.X15))
+                Ok (
+                    loadStringLiteralPointer ARM64Symbolic.X15 value
+                    @ runtimeInstrs (Runtime.generateFileSetExecutable destReg ARM64Symbolic.X15)
+                    @ generateLeakCounterIncIfResultError ctx destReg)
             | LIR.StackSlot offset ->
                 loadStackSlot ARM64Symbolic.X15 offset
                 |> Result.map (fun loadInstrs ->
-                    loadInstrs @ runtimeInstrs (Runtime.generateFileSetExecutable destReg ARM64Symbolic.X15))
+                    loadInstrs
+                    @ runtimeInstrs (Runtime.generateFileSetExecutable destReg ARM64Symbolic.X15)
+                    @ generateLeakCounterIncIfResultError ctx destReg)
             | _ -> Error "FileSetExecutable requires string operand")
 
     | LIR.FileWriteFromPtr (dest, path, ptr, length) ->
@@ -4097,40 +3927,19 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         // Already a heap string pointer
                         lirRegToARM64Reg pathReg
                         |> Result.map (fun pathARM64 ->
-                            runtimeInstrs (Runtime.generateFileWriteFromPtr destReg pathARM64 ptrARM64 lengthARM64))
+                            runtimeInstrs (Runtime.generateFileWriteFromPtr destReg pathARM64 ptrARM64 lengthARM64)
+                            @ generateLeakCounterIncIfResultError ctx destReg)
                     | LIR.StringSymbol value ->
-                        // Literal string - convert to heap format first
-                        // Literal format: [length:8][data:N] - skip length to copy data
-                        let len = utf8Len value
-                        let labelRef = stringDataLabel value
-                        let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
-                        Ok ([
-                            ARM64Symbolic.MOV_reg (ARM64Symbolic.X15, ARM64Symbolic.X28)
-                            ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, uint16 totalSize)
-                            ARM64Symbolic.ADRP (ARM64Symbolic.X9, labelRef)
-                            ARM64Symbolic.ADD_label (ARM64Symbolic.X9, ARM64Symbolic.X9, labelRef)
-                            ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 8us)  // Skip 8-byte length prefix
-                        ] @ loadImmediate ARM64Symbolic.X10 (int64 len) @ [
-                            ARM64Symbolic.STR (ARM64Symbolic.X10, ARM64Symbolic.X15, 0s)
-                            ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
-                        ] @ loadImmediate ARM64Symbolic.X11 (int64 len) @ [
-                            ARM64Symbolic.CMP_reg (ARM64Symbolic.X0, ARM64Symbolic.X11)
-                            ARM64Symbolic.B_cond (ARM64Symbolic.GE, 7)
-                            ARM64Symbolic.LDRB (ARM64Symbolic.X12, ARM64Symbolic.X9, ARM64Symbolic.X0)
-                            ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X15, 8us)
-                            ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X0)
-                            ARM64Symbolic.STRB_reg (ARM64Symbolic.X12, ARM64Symbolic.X13)
-                            ARM64Symbolic.ADD_imm (ARM64Symbolic.X0, ARM64Symbolic.X0, 1us)
-                            ARM64Symbolic.B (-7)
-                            ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X15, 8us)
-                            ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X10)
-                            ARM64Symbolic.MOVZ (ARM64Symbolic.X12, 1us, 0)
-                            ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X13, 0s)
-                        ] @ generateLeakCounterInc ctx @ runtimeInstrs (Runtime.generateFileWriteFromPtr destReg ARM64Symbolic.X15 ptrARM64 lengthARM64))
+                        Ok (
+                            loadStringLiteralPointer ARM64Symbolic.X15 value
+                            @ runtimeInstrs (Runtime.generateFileWriteFromPtr destReg ARM64Symbolic.X15 ptrARM64 lengthARM64)
+                            @ generateLeakCounterIncIfResultError ctx destReg)
                     | LIR.StackSlot offset ->
                         loadStackSlot ARM64Symbolic.X15 offset
                         |> Result.map (fun loadInstrs ->
-                            loadInstrs @ runtimeInstrs (Runtime.generateFileWriteFromPtr destReg ARM64Symbolic.X15 ptrARM64 lengthARM64))
+                            loadInstrs
+                            @ runtimeInstrs (Runtime.generateFileWriteFromPtr destReg ARM64Symbolic.X15 ptrARM64 lengthARM64)
+                            @ generateLeakCounterIncIfResultError ctx destReg)
                     | _ -> Error "FileWriteFromPtr requires string path operand")))
 
     | LIR.RawAlloc (dest, numBytes) ->
