@@ -4456,15 +4456,30 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
         // Increment refcount for heap elements stored in leaves
         let addLeafInc (elemAtom: ANF.Atom) (elemType: AST.Type) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+            let retainExprForElement () : ANF.CExpr option =
+                match elemType with
+                | AST.TFunction _ ->
+                    None
+                | _ ->
+                    match ANF.rcShapeOfType typeReg elemType with
+                    | ANF.DynamicString
+                    | ANF.DynamicBytes ->
+                        None
+                    | shape ->
+                        match ANF.rcShapePayloadSize shape, ANF.rcShapeRootKind shape with
+                        | Some size, Some kind ->
+                            Some (ANF.RefCountInc (elemAtom, size, kind, Some elemType))
+                        | _ ->
+                            None
+
             match elemAtom with
-            | ANF.Var _ when (match elemType with | AST.TFunction _ -> true | _ -> false) ->
-                (vg, bindings)
-            | ANF.Var _ when ANF.isHeapType elemType ->
-                let size = ANF.payloadSize elemType typeReg
-                let kind = ANF.rcKind elemType
-                let (incVar, vg1) = ANF.freshVar vg
-                let incExpr = ANF.RefCountInc (elemAtom, size, kind, Some elemType)
-                (vg1, bindings @ [(incVar, incExpr)])
+            | ANF.Var _ ->
+                match retainExprForElement () with
+                | Some incExpr ->
+                    let (incVar, vg1) = ANF.freshVar vg
+                    (vg1, bindings @ [(incVar, incExpr)])
+                | None ->
+                    (vg, bindings)
             | _ ->
                 (vg, bindings)
 
@@ -8187,15 +8202,30 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
 
         // Increment refcount for heap elements stored in leaves
         let addLeafInc (elemAtom: ANF.Atom) (elemType: AST.Type) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+            let retainExprForElement () : ANF.CExpr option =
+                match elemType with
+                | AST.TFunction _ ->
+                    None
+                | _ ->
+                    match ANF.rcShapeOfType typeReg elemType with
+                    | ANF.DynamicString
+                    | ANF.DynamicBytes ->
+                        None
+                    | shape ->
+                        match ANF.rcShapePayloadSize shape, ANF.rcShapeRootKind shape with
+                        | Some size, Some kind ->
+                            Some (ANF.RefCountInc (elemAtom, size, kind, Some elemType))
+                        | _ ->
+                            None
+
             match elemAtom with
-            | ANF.Var _ when (match elemType with | AST.TFunction _ -> true | _ -> false) ->
-                (vg, bindings)
-            | ANF.Var _ when ANF.isHeapType elemType ->
-                let size = ANF.payloadSize elemType typeReg
-                let kind = ANF.rcKind elemType
-                let (incVar, vg1) = ANF.freshVar vg
-                let incExpr = ANF.RefCountInc (elemAtom, size, kind, Some elemType)
-                (vg1, bindings @ [(incVar, incExpr)])
+            | ANF.Var _ ->
+                match retainExprForElement () with
+                | Some incExpr ->
+                    let (incVar, vg1) = ANF.freshVar vg
+                    (vg1, bindings @ [(incVar, incExpr)])
+                | None ->
+                    (vg, bindings)
             | _ ->
                 (vg, bindings)
 

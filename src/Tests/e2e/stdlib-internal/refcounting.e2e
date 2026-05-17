@@ -33,7 +33,9 @@ let xs = [1, 2, 3] in 0 = stdout="0\n" stderr=""
 let base = 1 in let f = (x: Int64) => x + base in let xs = [f] in 0 = stdout="0\n" stderr="" // list of closures current safe baseline
 def listClosure(): List<(Int64) -> Int64> = let base = 1 in let f = (x: Int64) => x + base in [f] let xs = listClosure() in 0 = stdout="0\n" stderr="" // returned list releases closure payload roots
 let xs = ["a" ++ "b"] in 0 = stdout="0\n" stderr="" // list releases dynamic string payload
+let s = "a" ++ "b" in let xs = [s] in 0 = stdout="0\n" stderr="" // list retains dynamic string variable payload
 def listBytes(): List<Bytes> = [Bytes.create(4)] let xs = listBytes() in 0 = stdout="0\n" stderr="" // returned list releases dynamic bytes payloads
+let b = Bytes.create(4) in let xs = [b] in 0 = stdout="0\n" stderr="" // list retains dynamic bytes variable payload
 let xs = [("a" ++ "b", 1)] in 0 = stdout="0\n" stderr="" // list releases tuple payload root
 let xs = [[1, 2], [3, 4]] in 0 = stdout="0\n" stderr="" // list releases nested list payloads
 def listDict(): List<Dict<Int64, Int64>> = [Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2)] let xs = listDict() in 0 = stdout="0\n" stderr="" // returned list releases dict payload roots

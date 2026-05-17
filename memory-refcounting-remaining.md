@@ -20,7 +20,8 @@ dict root field release, record dict/closure root field release, zero-capture
 closure field release, tagged-list closure leaf payload release, tagged-list
 dict leaf payload release, and tagged-list dynamic string leaf payload release,
 shape ownership helper coverage, initial RC insertion scope/retain/root-dispatch
-decisions using `RcShape` where full metadata is available,
+decisions using `RcShape` where full metadata is available, list literal
+fixed/tagged-root element retain decisions using `RcShape`,
 and tagged-list tuple dynamic
 string field release, and tagged-list one-field record dynamic string field
 release, tagged-list boxed sum dynamic string payload release, tagged-list
@@ -80,7 +81,7 @@ no-payload and payload variant release, plus record-contained sum payload
 release, plus dict-contained sum value payload release, plus pure enum sum
 no-heap-ownership coverage:
 
-- `scripts/run-in-container ./run-tests`: `4688 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4690 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -143,9 +144,13 @@ now exposes the first small ownership helpers:
 
 `2.5_RefCountInsertion.fs` uses those helpers for automatic scope release,
 borrowed-retain checks, and root dispatch where full type metadata is available.
-It deliberately preserves the previous non-crashing classification for generated
-record names whose field metadata is not present in the current `TypeReg`; fixed
-root operations still require concrete payload metadata before they are emitted.
+`2_AST_to_ANF.fs` also uses these helpers for list literal fixed/tagged-root
+element retains, while preserving the existing dynamic string/bytes list-leaf
+ownership contract: list leaves consume those freshly owned dynamic buffers
+rather than retaining an additional reference. It deliberately preserves the
+previous non-crashing classification for generated record names whose field
+metadata is not present in the current `TypeReg`; fixed root operations still
+require concrete payload metadata before they are emitted.
 
 `RcShape` is still not the sole source of truth for ownership decisions. Several
 active code paths still use legacy helpers such as `ANF.isHeapType`,
@@ -414,19 +419,10 @@ Concrete examples:
    is shape-driven where possible but still has a metadata-gap fallback for
    generated record names.
 
-3. Replace direct uses of `ANF.isHeapType` in list literal lowering.
-
-   Current references:
-
-   - `src/DarkCompiler/passes/2_AST_to_ANF.fs`
-
-   These list-construction retains should be driven by the element shape, not
-   source-level heap-ness.
-
-4. Replace backend dispatch based on `payloadSize` and partial `sourceType`
+3. Replace backend dispatch based on `payloadSize` and partial `sourceType`
    pattern matching with a serialized release plan.
 
-5. Add tests that prove the classifier controls behavior:
+4. Add tests that prove the classifier controls behavior:
 
    - pure enum values are not heap-released
    - boxed sums are heap-released
@@ -442,8 +438,7 @@ Concrete examples:
 2. Extend the ownership helpers around `RcShape` without changing codegen.
 3. Finish converting RC insertion for strings and bytes to use the planner.
 4. Finish converting RC insertion for fixed blocks and lists to use the planner.
-5. Convert list literal element-retain logic to use the planner.
-6. Convert backend fixed-block field release selection to consume a plan.
+5. Convert backend fixed-block field release selection to consume a plan.
 
 ## 2. Complete Bytes Ownership To Match Strings
 
