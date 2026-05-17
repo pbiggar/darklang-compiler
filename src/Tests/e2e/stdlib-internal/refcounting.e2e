@@ -85,6 +85,7 @@ type RcBoxDict = RcDictNone | RcDictValue of Dict<Int64, Int64> let d = Stdlib.D
 type RcBoxClosure = RcClosureNone | RcClosureValue of (Int64) -> Int64 let base = 2 in let b = RcClosureValue((x: Int64) => x + base) in 0 = stdout="0\n" stderr="" // sum releases closure payload
 type RcBoxTuple = RcTupleNone | RcTupleValue of (String, Int64) let b = RcTupleValue(("a" ++ "b", 1)) in 0 = stdout="0\n" stderr="" // sum releases tuple payload fields
 type RcBoxRecordPayload = { rcBoxRecordPayloadField: String } type RcBoxRecord = RcRecordNone | RcRecordValue of RcBoxRecordPayload let b = RcRecordValue(RcBoxRecordPayload { rcBoxRecordPayloadField = "a" ++ "b" }) in 0 = stdout="0\n" stderr="" // sum releases record payload fields
+type RcMixedPayload = RcMixedEmpty | RcMixedString of String let b = RcMixedEmpty in 0 = stdout="0\n" stderr="" // mixed sum releases no-payload variant
 
 // Capturing closure roots are fixed-block allocations and are reclaimed.
 def makeAddClosure(): (Int64) -> Int64 = (x: Int64) => x + 1 let f = makeAddClosure() in 0 = stdout="0\n" stderr="" // returned closure root reclaimed
