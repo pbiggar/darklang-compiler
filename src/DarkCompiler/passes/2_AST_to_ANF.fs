@@ -4848,6 +4848,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                         | _ -> t
                                     substitute payloadTypeTemplate
                                 | _ -> payloadTypeTemplate
+                                |> canonicalizeBareSumTypeRefs variantLookup
+
                             let typedPayloadExpr = ANF.TypedAtom (ANF.Var payloadVar, payloadType)
                             extractAndCompileBody innerPattern body (ANF.Var typedPayloadVar) payloadType currentEnv vg2
                             |> Result.map (fun (innerExpr, vg3) ->
@@ -5576,6 +5578,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                         let subst = List.zip typeParams typeArgs |> Map.ofList
                                         substituteType subst payloadTypeTemplate
                                     | _ -> payloadTypeTemplate
+                                    |> canonicalizeBareSumTypeRefs variantLookup
+
                                 Ok (Some payloadType)
                             | Some (_, _, _, None) ->
                                 Ok None
@@ -6238,6 +6242,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                                     let subst = List.zip typeParams typeArgs |> Map.ofList
                                     substituteType subst payloadTypeTemplate
                                 | _ -> payloadTypeTemplate
+                                |> canonicalizeBareSumTypeRefs variantLookup
+
                             Ok (Some payloadType)
                         | Some (_, _, _, None) ->
                             Ok None

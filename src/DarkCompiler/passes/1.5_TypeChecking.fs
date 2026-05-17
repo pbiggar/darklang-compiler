@@ -1856,6 +1856,7 @@ let rec checkExprWithParamNames
 
         checkExpr value env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg valueExpectedType
         |> Result.bind (fun (valueType, value') ->
+            let valueType = canonicalizeBareSumTypeRefs variantLookup valueType
             let env' = Map.add name valueType env
             checkExpr body env' typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg expectedType
             |> Result.map (fun (bodyType, body') -> (bodyType, Let (name, value', body'))))
@@ -1873,6 +1874,8 @@ let rec checkExprWithParamNames
             // Variable reference: look up in environment
             match tryLookupWithFallback name env with
             | Some (varType, resolvedName) ->
+                let varType = canonicalizeBareSumTypeRefs variantLookup varType
+
                 match expectedType with
                 | Some expected ->
                     // Legacy upstream compatibility: a nullary function used in a
@@ -3173,10 +3176,14 @@ let rec checkExprWithParamNames
             | Some payloadType, Some payloadExpr ->
                 // Variant with payload - check payload type
                 // For generic types, infer type variables from the payload
+                let payloadType = canonicalizeBareSumTypeRefs variantLookup payloadType
+
                 if List.isEmpty typeParams then
                     // Non-generic type - check payload has exact type
                     checkExpr payloadExpr env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some payloadType)
                     |> Result.bind (fun (actualPayloadType, payloadExpr') ->
+                        let actualPayloadType = canonicalizeBareSumTypeRefs variantLookup actualPayloadType
+
                         // Use typesCompatible to allow type variables to match concrete types
                         if not (typesCompatible payloadType actualPayloadType) then
                             Error (TypeMismatch (payloadType, actualPayloadType, $"payload of {variantName}"))
@@ -3194,13 +3201,19 @@ let rec checkExprWithParamNames
                     // First, check the payload expression without expected type
                     checkExpr payloadExpr env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
                     |> Result.bind (fun (actualPayloadType, payloadExpr') ->
+                        let actualPayloadType = canonicalizeBareSumTypeRefs variantLookup actualPayloadType
+
                         // Try to unify payloadType (may contain TVar) with actualPayloadType
                         match unifyTypes payloadType actualPayloadType with
                         | Error msg ->
                             Error (GenericError $"Type mismatch in {variantName} payload: {msg}")
                         | Ok subst ->
                             // Apply substitution to verify all type vars are resolved
-                            let concretePayloadType = applySubst subst payloadType
+                            let concretePayloadType =
+                                payloadType
+                                |> applySubst subst
+                                |> canonicalizeBareSumTypeRefs variantLookup
+
                             // Use typesCompatible to allow type variables to match concrete types
                             if not (typesCompatible concretePayloadType actualPayloadType) then
                                 Error (TypeMismatch (concretePayloadType, actualPayloadType, $"payload of {variantName}"))
@@ -3326,7 +3339,11 @@ let rec checkExprWithParamNames
                             Ok []
                         | Some innerPattern, Some pType ->
                             // Apply substitution to get concrete payload type
-                            let concretePayloadType = applySubst subst pType
+                            let concretePayloadType =
+                                pType
+                                |> applySubst subst
+                                |> canonicalizeBareSumTypeRefs variantLookup
+
                             extractPatternBindings innerPattern concretePayloadType allowNoMatchForKnownListLengthMismatch
                         | Some _, None ->
                             // Pattern supplied payload for a nullary variant.
