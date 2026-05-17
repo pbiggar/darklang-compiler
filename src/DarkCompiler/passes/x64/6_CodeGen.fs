@@ -510,37 +510,76 @@ let private genLeakCheckReport () : X86_64.Instr list =
 // Reference Counting Helpers
 // ============================================================================
 
+let private genDynamicBufferFieldRelease (ctx: FuncCtx) (fieldOffset: int) : X86_64.Instr list =
+    let doneLabel = freshLabel "rc_dec_field_done"
+    let literalLabel = freshLabel "rc_dec_field_lit"
+    let noFreeLabel = freshLabel "rc_dec_field_nofree"
+    let leakDec = genLeakCounterDec ctx
+    [X86_64.MOV_load (X86_64.R8, X86_64.RDX, fieldOffset)
+     X86_64.TEST_reg (X86_64.R8, X86_64.R8)
+     X86_64.Jcc (X86_64.EQ, doneLabel)
+     X86_64.MOV_load (X86_64.R9, X86_64.R8, 0)
+     X86_64.ADD_imm (X86_64.R9, 7)
+     X86_64.AND_imm (X86_64.R9, -8)
+     X86_64.ADD_imm (X86_64.R9, 8)
+     X86_64.MOV_reg (X86_64.R10, X86_64.R8)
+     X86_64.ADD_reg (X86_64.R10, X86_64.R9)
+     X86_64.MOV_load (X86_64.R9, X86_64.R10, 0)]
+    @ loadImm64 scratch 0x7FFFFFFFFFFFFFFFL
+    @ [X86_64.CMP_reg (X86_64.R9, scratch)
+       X86_64.Jcc (X86_64.EQ, literalLabel)
+       X86_64.SUB_imm (X86_64.R9, 1)
+       X86_64.MOV_store (X86_64.R10, 0, X86_64.R9)
+       X86_64.TEST_reg (X86_64.R9, X86_64.R9)
+       X86_64.Jcc (X86_64.NE, noFreeLabel)]
+    @ leakDec
+    @ [X86_64.Label noFreeLabel
+       X86_64.Label literalLabel
+       X86_64.Label doneLabel]
+
+let private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type option) : X86_64.Instr list =
+    let fieldTypes =
+        match sourceType with
+        | Some (AST.TTuple fields) -> fields
+        | _ -> []
+
+    fieldTypes
+    |> List.mapi (fun index fieldType ->
+        match fieldType with
+        | AST.TString -> genDynamicBufferFieldRelease ctx (index * 8)
+        | _ -> [])
+    |> List.concat
+
 /// Generic RefCountDec: decrement refcount at [addr + payloadSize].
-/// If zero, free block to free list and optionally decrement leak counter.
-/// Uses PUSH/POP to preserve both RCX and RDX as temps, keeping addr safe.
-let private genRefCountDecGeneric (ctx: FuncCtx) (addrReg: X86_64.Reg) (payloadSize: int) : X86_64.Instr list =
+/// If zero, release known fields, free block to free list, and update leak accounting.
+/// Uses saved scratch registers for recursive fixed-block payload release.
+let private genRefCountDecGeneric (ctx: FuncCtx) (addrReg: X86_64.Reg) (payloadSize: int) (sourceType: AST.Type option) : X86_64.Instr list =
     let skipLabel = freshLabel "rc_dec_skip"
     let noFreeLabel = freshLabel "rc_dec_nofree"
     let leakDec = genLeakCounterDec ctx
-    // Use RDX as temp for addr (saved/restored), RCX as temp for refcount
-    // This avoids conflicts when addrReg is RCX or R11
+    let fieldReleases = genFixedBlockFieldReleases ctx sourceType
+    let saveRegs = [X86_64.RDX; X86_64.RCX; X86_64.R8; X86_64.R9; X86_64.R10; scratch]
+    let saves = saveRegs |> List.map X86_64.PUSH
+    let restores = saveRegs |> List.rev |> List.map X86_64.POP
     [X86_64.TEST_reg (addrReg, addrReg)
-     X86_64.Jcc (X86_64.EQ, skipLabel)
-     X86_64.PUSH X86_64.RDX
-     X86_64.PUSH X86_64.RCX
-     X86_64.MOV_reg (X86_64.RDX, addrReg)            // RDX = addr (safe copy)
-     // Load refcount, decrement, store back
-     X86_64.MOV_load (X86_64.RCX, X86_64.RDX, payloadSize)
-     X86_64.SUB_imm (X86_64.RCX, 1)
-     X86_64.MOV_store (X86_64.RDX, payloadSize, X86_64.RCX)
-     X86_64.TEST_reg (X86_64.RCX, X86_64.RCX)
-     X86_64.Jcc (X86_64.NE, noFreeLabel)]
-    // Refcount hit zero — free to free list (only for valid payload sizes)
+     X86_64.Jcc (X86_64.EQ, skipLabel)]
+    @ saves
+    @ [X86_64.MOV_reg (X86_64.RDX, addrReg)
+       X86_64.MOV_load (X86_64.RCX, X86_64.RDX, payloadSize)
+       X86_64.SUB_imm (X86_64.RCX, 1)
+       X86_64.MOV_store (X86_64.RDX, payloadSize, X86_64.RCX)
+       X86_64.TEST_reg (X86_64.RCX, X86_64.RCX)
+       X86_64.Jcc (X86_64.NE, noFreeLabel)]
+    @ fieldReleases
     @ (if payloadSize >= 0 && payloadSize < freeListSize then
         [X86_64.MOV_load (X86_64.RCX, freeListBase, payloadSize)
          X86_64.MOV_store (X86_64.RDX, 0, X86_64.RCX)
          X86_64.MOV_store (freeListBase, payloadSize, X86_64.RDX)]
        else [])
     @ leakDec
-    @ [X86_64.Label noFreeLabel
-       X86_64.POP X86_64.RCX
-       X86_64.POP X86_64.RDX
-       X86_64.Label skipLabel]
+    @ [X86_64.Label noFreeLabel]
+    @ restores
+    @ [X86_64.Label skipLabel]
 
 /// Generic RefCountInc: increment refcount at [addr + payloadSize].
 let private genRefCountIncGeneric (addrReg: X86_64.Reg) (payloadSize: int) : X86_64.Instr list =
@@ -2196,9 +2235,9 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL dictRefCountDecHelperLabel]
                 @ restores
             | LIR.ClosureHeap ->
-                genRefCountDecGeneric ctx addrReg payloadSize
+                genRefCountDecGeneric ctx addrReg payloadSize sourceType
             | LIR.GenericHeap ->
-                genRefCountDecGeneric ctx addrReg payloadSize)
+                genRefCountDecGeneric ctx addrReg payloadSize sourceType)
 
     | LIR.RefCountIncString str
     | LIR.RefCountIncBytes str ->
