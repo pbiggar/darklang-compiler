@@ -13,12 +13,12 @@ changes need in order to avoid re-opening completed problems.
 
 Status date: 2026-05-17.
 
-Current head reviewed: includes `Cover borrowed projection ownership`.
+Current head reviewed: includes `Cover fixed-block field ownership`.
 
-Last full-suite verification after the borrowed-projection ownership work:
+Last full-suite verification after the fixed-block field ownership coverage:
 
 - `scripts/run-in-container dotnet build --verbosity quiet`: passed
-- `scripts/run-in-container ./run-tests`: `4584 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4588 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -201,6 +201,10 @@ Covered by current tests:
 - returned record releases list field
 - returned tuple releases list field
 - returned record releases closure field
+- record releases dict field
+- tuple releases closure field
+- record releases nested tuple fields containing string, bytes, list, and dict
+- record releases sum payload field
 - sum releases dynamic string payload
 - sum releases list payload
 - returned closure root reclaimed
@@ -209,9 +213,9 @@ Covered by current tests:
 - returned closure releases fixed-block capture fields
 - returned closure releases nested fixed-block capture fields
 
-Remaining fixed-block work is generalization, x64 parity, dict fields, closure
-fields, sum payload recursion beyond covered cases, and removing remaining
-legacy ownership shortcuts.
+Remaining fixed-block work is generalization beyond the covered ARM64 shapes,
+x64 parity, deeper sum payload recursion, and removing remaining legacy
+ownership shortcuts.
 
 ## Current Architecture Constraints
 
@@ -1017,30 +1021,7 @@ Examples of stale statements likely present:
 This sequence excludes a full raw-allocation redesign until later. Each unit is
 small enough to test independently.
 
-### Step 1: Fixed-Block Dict/Closure/Nested Field Matrix
-
-Goal:
-
-- Prove fixed-block recursive field release across all managed field families.
-
-Tests first:
-
-- record with dict field
-- tuple with closure field
-- record with nested tuple field containing string/bytes/list/dict
-- record with sum payload field
-
-Implementation:
-
-- Generalize ARM64 fixed-block field release selection.
-- Prepare the shape plan so x64 can share semantics.
-
-Done when:
-
-- all new fixed-block field tests pass without leaks
-- broad stdlib tests remain at the known baseline
-
-### Step 2: Higher-Arity List Payloads
+### Step 1: Higher-Arity List Payloads
 
 Goal:
 
@@ -1061,7 +1042,7 @@ Done when:
 
 - no leak-check failures for new shapes
 
-### Step 3: x64 Parity Audit
+### Step 2: x64 Parity Audit
 
 Goal:
 
@@ -1083,7 +1064,7 @@ Done when:
 - x64 docs match code
 - x64 targeted memory tests pass or are explicitly accounted for
 
-### Step 4: Documentation Reconciliation
+### Step 3: Documentation Reconciliation
 
 Goal:
 
