@@ -23,6 +23,8 @@ let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2) in let d2 = Std
 let d = Stdlib.Dict.fromList<Int64, Int64>([(1, 2), (3, 4)]) in 0 = stdout="0\n" stderr="" // dict fromList and input tuple list reclaimed
 let d = Stdlib.Dict.set(Stdlib.Dict.empty<String, Int64>(), "a" ++ "b", 1) in 0 = stdout="0\n" stderr="" // dict releases dynamic string keys
 let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, String>(), 1, "a" ++ "b") in 0 = stdout="0\n" stderr="" // dict releases dynamic string values
+def dictStringKey(): Dict<String, Int64> = Stdlib.Dict.set(Stdlib.Dict.empty<String, Int64>(), "a" ++ "b", 1) let d = dictStringKey() in 0 = stdout="0\n" stderr="" // returned dict owns and releases dynamic string keys
+def dictStringValue(): Dict<Int64, String> = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, String>(), 1, "a" ++ "b") let d = dictStringValue() in 0 = stdout="0\n" stderr="" // returned dict owns and releases dynamic string values
 
 // Tagged list construction is reclaimed even when the list is unused.
 let xs = [1, 2, 3] in 0 = stdout="0\n" stderr=""
