@@ -1043,6 +1043,35 @@ let testTaggedListRefCountDecSumListPayload () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list sum list payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases boxed sum leaf dict payloads.
+let testTaggedListRefCountDecSumDictPayload () : Result<unit, string> =
+    let dictType = AST.TDict (AST.TInt64, AST.TInt64)
+    let sumType = AST.TSum ("X64ListRcSumDict", [dictType])
+    let program =
+        makeSimpleProgram
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X2, 16)
+                LIR.HeapStore (LIR.Physical LIR.X2, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X2, 8, LIR.Imm 2L, None)
+                LIR.Mov (LIR.Physical LIR.X3, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X3, LIR.Physical LIR.X2, LIR.Physical LIR.X3)
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 16)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 0L, None)
+                LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some dictType)
+                LIR.HeapAlloc (LIR.Physical LIR.X5, 8)
+                LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some sumType)
+                LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList sumType))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected list sum dict payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -1086,4 +1115,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases record3 dynamic payload", testTaggedListRefCountDecRecord3DynamicPayload)
     ("LIR tagged list RefCountDec releases sum string payload", testTaggedListRefCountDecSumStringPayload)
     ("LIR tagged list RefCountDec releases sum list payload", testTaggedListRefCountDecSumListPayload)
+    ("LIR tagged list RefCountDec releases sum dict payload", testTaggedListRefCountDecSumDictPayload)
 ]
