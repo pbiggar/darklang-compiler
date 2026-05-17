@@ -33,6 +33,7 @@ let xs = ["a" ++ "b"] in 0 = stdout="0\n" stderr="" // list releases dynamic str
 let xs = [("a" ++ "b", 1)] in 0 = stdout="0\n" stderr="" // list releases tuple payload root
 let xs = [[1, 2], [3, 4]] in 0 = stdout="0\n" stderr="" // list releases nested list payloads
 type ListRecord = { id: Int64 } def listRecord(): List<ListRecord> = [ListRecord { id = 1 }] let xs = listRecord() in 0 = stdout="0\n" stderr="" // returned list releases record payload roots
+type ListRecord2 = { id2: Int64, count2: Int64 } def listRecord2(): List<ListRecord2> = [ListRecord2 { id2 = 1, count2 = 2 }] let xs = listRecord2() in 0 = stdout="0\n" stderr="" // returned list releases two-field record payload roots
 
 // Fixed-block tuple root allocation is reclaimed on the active backend.
 let t = (1, 2) in t.0 = stdout="1\n" stderr="" // tuple root reclaimed
