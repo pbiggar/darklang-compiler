@@ -64,6 +64,7 @@ exist for:
 - nested list leaf payload roots
 - closure leaf payload roots
 - dict leaf payload roots
+- dynamic string leaf payload roots
 
 This is narrower than ARM64, which also has helper variants for record and
 selected sum/list payload shapes.

@@ -543,6 +543,7 @@ let private listRefCountDecTuple2HelperLabel = "__dark_list_rc_dec_tuple2_helper
 let private listRefCountDecListHelperLabel = "__dark_list_rc_dec_list_helper"
 let private listRefCountDecClosureHelperLabel = "__dark_list_rc_dec_closure_helper"
 let private listRefCountDecDictHelperLabel = "__dark_list_rc_dec_dict_helper"
+let private listRefCountDecDynamicBufferHelperLabel = "__dark_list_rc_dec_dynamic_buffer_helper"
 let private dictRefCountIncHelperLabel = "__dark_dict_rc_inc_helper"
 let private dictRefCountDecHelperLabel = "__dark_dict_rc_dec_helper"
 let private closureRefCountDecHelperLabel = "__dark_closure_rc_dec_helper"
@@ -578,6 +579,9 @@ let private listDecHelperForType (fieldType: AST.Type) : string =
         listRefCountDecClosureHelperLabel
     | AST.TList (AST.TDict _) ->
         listRefCountDecDictHelperLabel
+    | AST.TList AST.TString
+    | AST.TList AST.TBytes ->
+        listRefCountDecDynamicBufferHelperLabel
     | AST.TList (AST.TTuple fields) when List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64]) ->
         listRefCountDecTuple2HelperLabel
     | _ ->
@@ -677,6 +681,7 @@ type private ListLeafPayloadRelease =
     | ListLeafPayload
     | ClosureLeafPayload
     | DictLeafPayload
+    | DynamicBufferLeafPayload
 
 /// Generate the TaggedList RefCountDec helper function.
 /// Called via CALL with the tagged list pointer in RAX.
@@ -791,6 +796,26 @@ let private generateListRefCountDecHelperWith
              X86_64.POP X86_64.RSI
              X86_64.POP X86_64.RDI
              X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)]
+        | DynamicBufferLeafPayload ->
+            [X86_64.MOV_load (X86_64.R8, X86_64.RDI, 0)
+             X86_64.TEST_reg (X86_64.R8, X86_64.R8)
+             X86_64.Jcc (X86_64.EQ, leafPayloadDone)
+             X86_64.MOV_load (X86_64.R9, X86_64.R8, 0)
+             X86_64.ADD_imm (X86_64.R9, 7)
+             X86_64.AND_imm (X86_64.R9, -8)
+             X86_64.ADD_imm (X86_64.R9, 8)
+             X86_64.MOV_reg (X86_64.R10, X86_64.R8)
+             X86_64.ADD_reg (X86_64.R10, X86_64.R9)
+             X86_64.MOV_load (X86_64.R9, X86_64.R10, 0)]
+            @ loadImm64 scratch 0x7FFFFFFFFFFFFFFFL
+            @ [X86_64.CMP_reg (X86_64.R9, scratch)
+               X86_64.Jcc (X86_64.EQ, leafPayloadDone)
+               X86_64.SUB_imm (X86_64.R9, 1)
+               X86_64.MOV_store (X86_64.R10, 0, X86_64.R9)
+               X86_64.TEST_reg (X86_64.R9, X86_64.R9)
+               X86_64.Jcc (X86_64.NE, leafPayloadDone)]
+            @ leakDec
+            @ [X86_64.Label leafPayloadDone]
         | FixedBlockLeafPayload payloadSize ->
             [X86_64.MOV_load (X86_64.R8, X86_64.RDI, 0)
              X86_64.TEST_reg (X86_64.R8, X86_64.R8)
@@ -993,6 +1018,9 @@ let private generateListRefCountDecClosureHelper (enableLeakCheck: bool) : X86_6
 
 let private generateListRefCountDecDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
     generateListRefCountDecHelperWith listRefCountDecDictHelperLabel enableLeakCheck DictLeafPayload
+
+let private generateListRefCountDecDynamicBufferHelper (enableLeakCheck: bool) : X86_64.Instr list =
+    generateListRefCountDecHelperWith listRefCountDecDynamicBufferHelperLabel enableLeakCheck DynamicBufferLeafPayload
 
 // ============================================================================
 // TaggedList RefCountInc Helper (increment root node refcount only)
@@ -2391,6 +2419,9 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                         listRefCountDecClosureHelperLabel
                     | Some (AST.TList (AST.TDict _)) ->
                         listRefCountDecDictHelperLabel
+                    | Some (AST.TList AST.TString)
+                    | Some (AST.TList AST.TBytes) ->
+                        listRefCountDecDynamicBufferHelperLabel
                     | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64]) ->
                         listRefCountDecTuple2HelperLabel
                     | _ ->
@@ -3638,6 +3669,12 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
         | AST.TList (AST.TDict _) -> true
         | _ -> false
 
+    let isDynamicBufferList (fieldType: AST.Type) : bool =
+        match fieldType with
+        | AST.TList AST.TString
+        | AST.TList AST.TBytes -> true
+        | _ -> false
+
     // Check if any function uses TaggedList RefCountDec or RefCountInc
     let needsListRcDecHelper =
         functions
@@ -3652,6 +3689,8 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                         | Some (AST.TList (AST.TList _)) -> false
                         | Some (AST.TList (AST.TFunction _)) -> false
                         | Some (AST.TList (AST.TDict _)) -> false
+                        | Some (AST.TList AST.TString)
+                        | Some (AST.TList AST.TBytes) -> false
                         | _ -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
                         typeContainsListMatching (fun _ -> true) sourceType
@@ -3704,6 +3743,19 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TDict _))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
                         typeContainsListMatching isDictList sourceType
+                    | _ -> false)))
+
+    let needsListRcDecDynamicBufferHelper =
+        functions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList AST.TString))
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList AST.TBytes)) -> true
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
+                        typeContainsListMatching isDynamicBufferList sourceType
                     | _ -> false)))
 
     let needsListRcIncHelper =
@@ -3774,6 +3826,9 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
         let listDecDictHelper =
             if needsListRcDecDictHelper then generateListRefCountDecDictHelper enableLeakCheck
             else []
+        let listDecDynamicBufferHelper =
+            if needsListRcDecDynamicBufferHelper then generateListRefCountDecDynamicBufferHelper enableLeakCheck
+            else []
         let dictIncHelper =
             if needsDictRcIncHelper then generateDictRefCountIncHelper ()
             else []
@@ -3783,4 +3838,4 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
         let closureDecHelper =
             if needsClosureRcDecHelper || needsListRcDecClosureHelper then generateClosureRefCountDecHelper enableLeakCheck closurePayloadSizes
             else []
-        allInstrs @ listIncHelper @ listDecHelper @ listDecTuple2Helper @ listDecListHelper @ listDecClosureHelper @ listDecDictHelper @ dictIncHelper @ dictDecHelper @ closureDecHelper @ genOomHandler ())
+        allInstrs @ listIncHelper @ listDecHelper @ listDecTuple2Helper @ listDecListHelper @ listDecClosureHelper @ listDecDictHelper @ listDecDynamicBufferHelper @ dictIncHelper @ dictDecHelper @ closureDecHelper @ genOomHandler ())
