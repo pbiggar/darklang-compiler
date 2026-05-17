@@ -1377,6 +1377,10 @@ let rec checkExprWithParamNames
             innerAliasReg
             innerExpectedType
 
+    let expectedType =
+        expectedType
+        |> Option.map (canonicalizeBareSumTypeRefs variantLookup)
+
     match expr with
     | UnitLiteral ->
         // Unit literal is always TUnit
@@ -2539,12 +2543,22 @@ let rec checkExprWithParamNames
                     )
                 else
                 // 3. Build substitution from type params to type args
+                    let typeArgs =
+                        typeArgs
+                        |> List.map (canonicalizeBareSumTypeRefs variantLookup)
+
                     buildSubstitution typeParams typeArgs
                     |> Result.mapError GenericError
                     |> Result.bind (fun subst ->
                         // 4. Apply substitution to get concrete types
-                        let concreteParamTypes = List.map (applySubst subst) paramTypes
-                        let concreteReturnType = applySubst subst returnType
+                        let concreteParamTypes =
+                            paramTypes
+                            |> List.map (applySubst subst)
+                            |> List.map (canonicalizeBareSumTypeRefs variantLookup)
+                        let concreteReturnType =
+                            returnType
+                            |> applySubst subst
+                            |> canonicalizeBareSumTypeRefs variantLookup
 
                         // 5. Check argument count - allow partial application
                         let numParams = List.length concreteParamTypes
@@ -2689,12 +2703,22 @@ let rec checkExprWithParamNames
                     )
                 else
                 // Build substitution from type params to type args
+                    let typeArgs =
+                        typeArgs
+                        |> List.map (canonicalizeBareSumTypeRefs variantLookup)
+
                     buildSubstitution typeParams typeArgs
                     |> Result.mapError GenericError
                     |> Result.bind (fun subst ->
                         // Apply substitution to get concrete types
-                        let concreteParamTypes = List.map (applySubst subst) paramTypes
-                        let concreteReturnType = applySubst subst returnType
+                        let concreteParamTypes =
+                            paramTypes
+                            |> List.map (applySubst subst)
+                            |> List.map (canonicalizeBareSumTypeRefs variantLookup)
+                        let concreteReturnType =
+                            returnType
+                            |> applySubst subst
+                            |> canonicalizeBareSumTypeRefs variantLookup
 
                         // Check argument count - allow partial application
                         let numParams = List.length concreteParamTypes
@@ -4600,9 +4624,22 @@ let checkFunctionDef
     (moduleRegistry: ModuleRegistry)
     (aliasReg: AliasRegistry)
     : Result<FunctionDef, TypeError> =
+    let canonicalParams =
+        funcDef.Params
+        |> NonEmptyList.map (fun (name, typ) ->
+            (name, canonicalizeBareSumTypeRefs variantLookup typ))
+
+    let canonicalReturnType =
+        canonicalizeBareSumTypeRefs variantLookup funcDef.ReturnType
+
+    let canonicalFuncDef =
+        { funcDef with
+            Params = canonicalParams
+            ReturnType = canonicalReturnType }
+
     // Build environment with parameters
     let paramEnv =
-        funcDef.Params
+        canonicalParams
         |> NonEmptyList.toList
         |> List.fold (fun e (name, ty) -> Map.add name ty e) env
 
@@ -4618,7 +4655,7 @@ let checkFunctionDef
             warningSettings
             moduleRegistry
             aliasReg
-            (Some funcDef.ReturnType)
+            (Some canonicalReturnType)
 
     let bodyCheckWithLegacyInterpreterErrors =
         if genericFuncReg.RequireExplicitTypeArgsForBareCalls then
@@ -4626,14 +4663,14 @@ let checkFunctionDef
             |> Result.mapError (fun err ->
                 match err with
                 | TypeMismatch (expectedType, actualType, _) when
-                    typesCompatibleWithAliases aliasReg expectedType funcDef.ReturnType
+                    typesCompatibleWithAliases aliasReg expectedType canonicalReturnType
                     && not (isRuntimeErrorType actualType) ->
                     let actualValue =
                         match tryFormatLiteralValue funcDef.Body with
                         | Some value -> value
                         | None -> typeToString actualType
                     GenericError
-                        $"{funcDef.Name}'s return value expects {typeToString funcDef.ReturnType}, but got {typeToString actualType} ({actualValue})"
+                        $"{funcDef.Name}'s return value expects {typeToString canonicalReturnType}, but got {typeToString actualType} ({actualValue})"
                 | _ ->
                     err)
         else
@@ -4641,7 +4678,7 @@ let checkFunctionDef
 
     bodyCheckWithLegacyInterpreterErrors
     |> Result.bind (fun (bodyType, body') ->
-        let resolvedReturnType = resolveType aliasReg funcDef.ReturnType
+        let resolvedReturnType = resolveType aliasReg canonicalReturnType
         let resolvedBodyType = resolveType aliasReg bodyType
         let allowGenericReturnSpecialization =
             containsTVar resolvedReturnType
@@ -4649,9 +4686,9 @@ let checkFunctionDef
             && typesCompatibleWithAliases aliasReg resolvedReturnType resolvedBodyType
 
         if resolvedReturnType = resolvedBodyType || allowGenericReturnSpecialization then
-            Ok { funcDef with Body = body' }
+            Ok { canonicalFuncDef with Body = body' }
         else
-            Error (TypeMismatch (funcDef.ReturnType, bodyType, $"function {funcDef.Name} body")))
+            Error (TypeMismatch (canonicalReturnType, bodyType, $"function {funcDef.Name} body")))
 
 /// Internal: Type-check a program and return the type checking environment
 /// This is the core implementation used by checkProgram, checkProgramWithEnv, and checkProgramWithBaseEnv

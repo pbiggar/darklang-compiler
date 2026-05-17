@@ -72,9 +72,10 @@ string projection
 retention, plus returned borrowed sum bytes, dict, and closure payload projection
 retention, plus returned branch-selected borrowed bytes, list, dict, and
 closure projection retention, plus sum record payload release, plus mixed
-sum no-payload variant release, plus record-contained sum payload release:
+sum no-payload variant release, plus record-contained sum payload release,
+plus dict-contained sum value payload release:
 
-- `scripts/run-in-container ./run-tests`: `4677 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4678 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -202,6 +203,7 @@ Covered by current tests:
 - dict dynamic string keys and values reclaimed
 - returned dict dynamic string keys and values reclaimed
 - returned list releases dict payload roots
+- returned dict releases sum value payload fields
 
 Remaining dict work is mostly deeper raw HAMT lifecycle and shape-driven
 coverage, not initial root retention/release.
@@ -1004,6 +1006,7 @@ Current tests cover:
 - sum releases record payload containing dynamic string field
 - mixed sum releases no-payload variant
 - record releases sum field payload
+- returned dict releases sum value payload fields
 
 ### Remaining Gaps
 
@@ -1013,7 +1016,7 @@ The compiler still needs precise handling for:
 - mixed sums with payload and no-payload variants beyond direct payload and
   no-payload cleanup smoke coverage
 - deeper fixed-block payload recursion beyond direct tuple/record payloads
-- lists/dicts containing sums, plus broader record-contained sum shapes
+- broader list/dict/record-contained sum shapes beyond the direct covered cases
 - x64 parity
 
 ### Remaining Tasks
