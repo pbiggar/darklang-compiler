@@ -3342,6 +3342,60 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ARM64Symbolic.LDP_post (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 32s)
                     ]
 
+                let releaseFixedBlockField (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
+                    let fieldPayloadSize =
+                        match fieldType with
+                        | AST.TTuple fields ->
+                            Some (List.length fields * 8)
+                        | AST.TRecord (name, _) ->
+                            ctx.RecordRegistry
+                            |> Map.tryFind name
+                            |> Option.map (fun fields -> List.length fields * 8)
+                        | _ ->
+                            None
+
+                    match fieldPayloadSize with
+                    | None ->
+                        []
+                    | Some childPayloadSize ->
+                        let childLeakDec = generateLeakCounterDec ctx
+                        let freeChild =
+                            (if childPayloadSize >= 0 && childPayloadSize < 256 then
+                                [
+                                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X27, uint16 childPayloadSize)
+                                    ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X13, 0s)
+                                    ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.X12, 0s)
+                                    ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X13, 0s)
+                                ]
+                             else
+                                [])
+                            @ childLeakDec
+
+                        let afterDec =
+                            if List.isEmpty freeChild then
+                                []
+                            else
+                                [ARM64Symbolic.CBNZ_offset (ARM64Symbolic.X15, List.length freeChild + 1)]
+                                @ freeChild
+                        let body =
+                            [
+                                ARM64Symbolic.LDR (ARM64Symbolic.X12, addrReg, int16 fieldOffset)
+                                ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, 3 + List.length afterDec + 1)
+                                ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, int16 childPayloadSize)
+                                ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+                                ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X12, int16 childPayloadSize)
+                            ] @ afterDec
+
+                        [
+                            ARM64Symbolic.STP_pre (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, -32s)
+                            ARM64Symbolic.STP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 16s)
+                        ]
+                        @ body
+                        @ [
+                            ARM64Symbolic.LDP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 16s)
+                            ARM64Symbolic.LDP_post (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 32s)
+                        ]
+
                 let fixedBlockFieldReleaseInstrs =
                     fixedBlockFieldTypes ctx.RecordRegistry sourceType
                     |> List.mapi (fun index fieldType ->
@@ -3356,6 +3410,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                             releaseDictField fieldOffset
                         | AST.TFunction _ ->
                             releaseClosureField fieldOffset
+                        | AST.TTuple fields when List.contains AST.TString fields ->
+                            releaseFixedBlockField fieldOffset fieldType
                         | _ ->
                             [])
                     |> List.concat

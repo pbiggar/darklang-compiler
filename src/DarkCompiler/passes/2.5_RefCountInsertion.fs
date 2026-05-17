@@ -271,17 +271,16 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
             | Some (AST.TFunction (_, retType)) -> Some retType
             | _ -> None
         | _ -> None
-    | ClosureAlloc (_, captures) ->
-        // Closure is a tuple-like structure: (func_ptr, cap1, cap2, ...)
-        // Return a tuple type for ref counting purposes
-        let captureTypes = captures |> List.map (inferAtomType ctx)
-        let concreteTypes =
-            captureTypes
-            |> List.map (function
-                | Some typ -> typ
-                | None ->
-                    Crash.crash "RefCountInsertion: could not infer closure capture types")
-        Some (AST.TTuple (AST.TInt64 :: concreteTypes))
+    | ClosureAlloc (funcName, _) ->
+        // Closure payload size is resolved by the backend from the function
+        // pointer, so ownership insertion must preserve the source function type
+        // instead of treating the closure as an ordinary fixed block.
+        match Map.tryFind funcName ctx.FuncReg with
+        | Some (AST.TFunction _ as funcType) -> Some funcType
+        | Some otherType ->
+            Crash.crash $"RefCountInsertion: ClosureAlloc target '{funcName}' has non-function type {otherType}"
+        | None ->
+            Crash.crash $"RefCountInsertion: ClosureAlloc target '{funcName}' not found in function registry"
     | ClosureCall (closureAtom, _) ->
         // Try to find the closure's function name and look up return type
         match tryGetClosureFunc ctx closureAtom with
@@ -455,6 +454,7 @@ let private needsAutomaticDec (typ: AST.Type) : bool =
 let private bindingNeedsAutomaticDec (cexpr: CExpr) (typ: AST.Type) : bool =
     needsAutomaticDec typ
     || match typ, cexpr with
+       | AST.TFunction _, ClosureAlloc _ -> true
        | AST.TFunction _, Call (funcName, _) when not (funcName.StartsWith("Stdlib.")) -> true
        | _ -> false
 
@@ -475,6 +475,9 @@ let private retainExprForType (ctx: TypeContext) (tempId: TempId) (typ: AST.Type
 
 let private needsRetainForBorrowedValue (typ: AST.Type) : bool =
     typ = AST.TString || typ = AST.TBytes || isRcManagedHeapType typ
+    || match typ with
+       | AST.TFunction _ -> true
+       | _ -> false
 
 let rec private isStoredByRawSet (tempId: TempId) (bodyInfo: ReturnAnnotatedExpr) : bool =
     match bodyInfo with

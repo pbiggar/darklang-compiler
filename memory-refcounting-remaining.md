@@ -13,12 +13,12 @@ changes need in order to avoid re-opening completed problems.
 
 Status date: 2026-05-17.
 
-Current head reviewed: includes `Refcount bytes fields in fixed blocks`.
+Current head reviewed: includes `Cover borrowed projection ownership`.
 
-Last full-suite verification after `c31123b`:
+Last full-suite verification after the borrowed-projection ownership work:
 
 - `scripts/run-in-container dotnet build --verbosity quiet`: passed
-- `scripts/run-in-container ./run-tests`: `4576 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4584 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -121,10 +121,10 @@ Covered by current tests:
 - tuple and record dynamic bytes fields retain the byte buffer while both the
   original binding and fixed block are live
 - returned record dynamic bytes fields remain usable after function cleanup
+- returned borrowed bytes projections remain usable after parent cleanup
 
 Remaining bytes work is parity with strings beyond the first fixed-block cases:
-sum payloads, closure captures, borrowed projection matrices,
-constructors/transforms, and backend parity.
+sum payloads, closure captures, constructors/transforms, and backend parity.
 
 ### Dict Roots Have Typed RC
 
@@ -383,6 +383,8 @@ Current tests prove:
 - returned list payloads of `Bytes` are released
 - tuple and record fields retain dynamic bytes while both owners are live
 - returned record bytes fields remain usable and release cleanly
+- returned borrowed bytes field projections remain usable after the parent is
+  released
 
 ### Remaining Gaps
 
@@ -391,7 +393,6 @@ cases include:
 
 - bytes payloads in sums
 - bytes captured by closures
-- returned borrowed bytes projected out of a fixed block
 - list of bytes beyond the single returned-list case
 - dict keys/values of bytes, if bytes are allowed as dict keys/values
 - `Bytes.set`
@@ -422,10 +423,9 @@ from either:
 
 ### Suggested Commit Breakdown
 
-1. Cover returned borrowed bytes field projection.
-2. Cover sum bytes payloads.
-3. Cover closure bytes captures.
-4. Cover `Bytes.set`, `Bytes.fromList`, and zero-length bytes.
+1. Cover sum bytes payloads.
+2. Cover closure bytes captures.
+3. Cover `Bytes.set`, `Bytes.fromList`, and zero-length bytes.
 
 ## 3. Finish Dynamic String Edge Coverage And Reuse Semantics
 
@@ -795,32 +795,27 @@ RC insertion treats several expressions as borrowing:
 - `Atom(Var _)`
 - `TypedAtom(Var _, _)`
 
-Recent string work extended returned borrowed value retention to `TString`, not
-only generic heap shapes. That fixed cases where a projected string remained
-live across cleanup and printing.
+Recent projection work extended returned borrowed value retention beyond
+generic heap shapes. Covered projections now include strings, bytes, lists,
+dict roots, closure roots, and one nested fixed-block tuple containing a
+dynamic string.
 
 ### Remaining Gaps
 
-More projected shapes need the same confidence:
+More projected shapes still need the same confidence:
 
-- `Bytes`
-- closures
-- dict roots
-- list roots
 - sum payloads
-- nested projections through `RawGet` or typed aliases
+- deeper nested projections through `RawGet` or typed aliases
 - branch-selected borrowed values
+- x64 backend parity for each retained projection family
 
 ### Remaining Tasks
 
 1. Add tests that return/use borrowed projections after parent cleanup for:
 
-   - bytes fields
-   - dict fields
-   - closure fields
-   - list fields
    - sum payloads
-   - nested tuple/record fields
+   - deeper nested tuple/record fields
+   - branch-selected borrowed values
 
 2. Make borrowed-return retention shape-driven.
 3. Ensure print insertion and cleanup ordering is safe for every retained
@@ -830,8 +825,8 @@ More projected shapes need the same confidence:
 
 ### Suggested Commit Breakdown
 
-1. Add borrowed-return bytes projection coverage.
-2. Add borrowed-return dict/list/closure projection coverage.
+1. Add borrowed-return sum payload projection coverage.
+2. Add deeper borrowed-return tuple/record projection coverage.
 3. Convert return-retain logic to `RcShape`.
 4. Add backend register-preservation regression tests.
 
@@ -1022,32 +1017,7 @@ Examples of stale statements likely present:
 This sequence excludes a full raw-allocation redesign until later. Each unit is
 small enough to test independently.
 
-### Step 1: Borrowed Projection Retain Matrix
-
-Goal:
-
-- Make returned borrowed value retention shape-driven and prove it for more than
-  strings.
-
-Tests first:
-
-- returned projected bytes field
-- returned projected list field
-- returned projected dict field
-- returned projected closure field
-- returned projected nested fixed-block field
-
-Implementation:
-
-- Convert return-retain logic in `2.5_RefCountInsertion.fs` to an ownership
-  planner over `RcShape`.
-
-Done when:
-
-- use-after-return tests pass without leaks
-- no new broad regressions
-
-### Step 2: Fixed-Block Dict/Closure/Nested Field Matrix
+### Step 1: Fixed-Block Dict/Closure/Nested Field Matrix
 
 Goal:
 
@@ -1067,31 +1037,31 @@ Implementation:
 
 Done when:
 
-- no leak-check failures for new shapes
+- all new fixed-block field tests pass without leaks
+- broad stdlib tests remain at the known baseline
 
-### Step 3: Higher-Arity List Payloads
+### Step 2: Higher-Arity List Payloads
 
 Goal:
 
-- Stop relying on one-field/two-field record and tuple2 special cases.
+- Remove confidence gaps caused by one-field and two-field special casing.
 
 Tests first:
 
-- list of three-field records with heap fields
-- list of three-element tuples with heap fields
-- list of sums with heap payloads
+- list of 3-field records carrying strings/lists/dicts
+- list of nested records
+- list of sums carrying managed payloads
 
 Implementation:
 
-- Introduce a payload release plan for list leaf elements.
-- Keep helper count manageable.
+- Introduce a single shape-planned list payload release helper or a small
+  generated helper family.
 
 Done when:
 
-- new tests pass on active backend
-- helper dispatch is not keyed only by small arity special cases
+- no leak-check failures for new shapes
 
-### Step 4: x64 Parity Audit
+### Step 3: x64 Parity Audit
 
 Goal:
 
@@ -1113,7 +1083,7 @@ Done when:
 - x64 docs match code
 - x64 targeted memory tests pass or are explicitly accounted for
 
-### Step 5: Documentation Reconciliation
+### Step 4: Documentation Reconciliation
 
 Goal:
 
