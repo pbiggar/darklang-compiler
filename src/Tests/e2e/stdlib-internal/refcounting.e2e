@@ -81,6 +81,7 @@ type ProjectSumClosurePayload = ProjectSumClosureEmpty | ProjectSumClosureValue 
 type RcBox = RcNone | RcString of String | RcList of List<Int64> let b = RcString("a" ++ "b") in 0 = stdout="0\n" stderr="" // sum releases dynamic string payload
 type RcBox2 = RcNone2 | RcString2 of String | RcList2 of List<Int64> let b = RcList2([1, 2]) in 0 = stdout="0\n" stderr="" // sum releases list payload
 type RcBoxBytes = RcBytesNone | RcBytesValue of Bytes let b = RcBytesValue(Bytes.create(4)) in 0 = stdout="0\n" stderr="" // sum releases bytes payload
+type RcBoxDict = RcDictNone | RcDictValue of Dict<Int64, Int64> let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2) in let b = RcDictValue(d) in 0 = stdout="0\n" stderr="" // sum releases dict payload
 
 // Capturing closure roots are fixed-block allocations and are reclaimed.
 def makeAddClosure(): (Int64) -> Int64 = (x: Int64) => x + 1 let f = makeAddClosure() in 0 = stdout="0\n" stderr="" // returned closure root reclaimed
