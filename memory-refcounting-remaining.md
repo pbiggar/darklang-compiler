@@ -70,14 +70,14 @@ projection retention, plus ARM64 returned borrowed deep nested tuple string
 and record string projection cleanup, plus returned branch-selected borrowed
 string projection
 retention, plus returned borrowed sum bytes, dict, and closure payload projection
-retention, plus returned borrowed sum tuple and record payload projection
-retention, plus returned branch-selected borrowed bytes, list, dict, and
-closure projection retention, plus sum record payload release, plus mixed sum
-no-payload and payload variant release, plus record-contained sum payload
+retention, plus returned borrowed sum list, tuple, and record payload
+projection retention, plus returned branch-selected borrowed bytes, list, dict,
+and closure projection retention, plus sum record payload release, plus mixed
+sum no-payload and payload variant release, plus record-contained sum payload
 release, plus dict-contained sum value payload release, plus pure enum sum
 no-heap-ownership coverage:
 
-- `scripts/run-in-container ./run-tests`: `4682 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4683 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -947,7 +947,8 @@ Recent projection work extended returned borrowed value retention beyond
 generic heap shapes. Covered projections now include strings, bytes, lists,
 dict roots, closure roots, nested fixed-block tuples and records containing
 dynamic strings, branch-selected string projections, and one sum payload projection
-containing a dynamic string, bytes, dict, closure, tuple, or record payload.
+containing a dynamic string, bytes, list, dict, closure, tuple, or record
+payload.
 Branch-selected borrowed returns are now covered for strings, bytes, lists,
 dicts, and closures.
 
@@ -955,8 +956,8 @@ dicts, and closures.
 
 More projected shapes still need the same confidence:
 
-- broader sum payload shapes beyond the covered string, bytes, dict, closure,
-  tuple, and record payload projections
+- broader sum payload shapes beyond the covered string, bytes, list, dict,
+  closure, tuple, and record payload projections
 - deeper nested projections through `RawGet` or typed aliases beyond the
   covered tuple and record projection paths
 - branch-selected borrowed values beyond the covered string, bytes, list, dict,
