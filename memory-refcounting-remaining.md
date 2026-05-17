@@ -13,12 +13,12 @@ changes need in order to avoid re-opening completed problems.
 
 Status date: 2026-05-17.
 
-Current head reviewed: includes `Cover fixed-block field ownership`.
+Current head reviewed: includes `Cover higher-arity list payloads`.
 
-Last full-suite verification after the fixed-block field ownership coverage:
+Last full-suite verification after the higher-arity list payload coverage:
 
 - `scripts/run-in-container dotnet build --verbosity quiet`: passed
-- `scripts/run-in-container ./run-tests`: `4588 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4591 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -176,6 +176,10 @@ Covered by current tests:
 - returned list of dicts reclaimed
 - returned list of single-field records reclaimed
 - returned list of two-field records reclaimed
+- returned list of three-field records with string, list, and dict fields
+  reclaimed
+- returned list of nested records reclaimed
+- returned list of sums carrying string payloads reclaimed
 
 Remaining list work is generalized payload release, broad arity coverage,
 backend parity for every helper variant, and replacing ad hoc specializations
@@ -560,17 +564,20 @@ The implementation is still specialized and partial:
 The list helper ecosystem has grown from root-only retain/release to multiple
 payload-specialized helpers. Current tests cover primitive lists, dynamic
 strings, dynamic bytes, nested lists, dicts, closures, tuple payloads, and
-one/two-field records.
+one/two-field records. The current ARM64 coverage also includes a narrow
+three-field record helper for records shaped as `String`, `List<Int64>`, and
+`Dict<Int64, Int64>`, plus a narrow boxed-sum string payload helper.
 
 ### Remaining Gaps
 
 The list release path is still organized around special helper variants rather
 than a general element release plan. That leaves holes:
 
-- records with more than two fields
+- records with more than two fields outside the currently covered
+  `String/List<Int64>/Dict<Int64, Int64>` shape
 - tuples with more than two fields
 - records/tuples with mixed heap fields beyond currently specialized cases
-- sums in list payloads
+- sums in list payloads beyond the currently covered string payload shape
 - bytes in list payloads beyond one returned-list case
 - dict/list/closure combinations nested more than one level deep
 - x64 helper parity for all ARM64 helper variants
@@ -581,9 +588,9 @@ than a general element release plan. That leaves holes:
 1. Define a shape-driven list leaf payload release plan.
 2. Add tests for:
 
-   - list of three-field records with heap fields
+   - list of additional three-field records with heap fields
    - list of three-element tuples with heap fields
-   - list of sums carrying string/list/dict payloads
+   - list of sums carrying list/dict/bytes payloads
    - list of records carrying bytes
    - nested list of record/list/dict combinations
 
@@ -594,8 +601,8 @@ than a general element release plan. That leaves holes:
 ### Suggested Commit Breakdown
 
 1. Add coverage for higher-arity tuple/list payloads.
-2. Add coverage for higher-field record/list payloads.
-3. Add coverage for sum payloads in lists.
+2. Add coverage for additional higher-field record/list payloads.
+3. Add coverage for additional sum payloads in lists.
 4. Introduce a generic payload release plan.
 5. Convert ARM64 list helpers to the plan.
 6. Convert x64 list helpers to the plan.
@@ -1021,28 +1028,7 @@ Examples of stale statements likely present:
 This sequence excludes a full raw-allocation redesign until later. Each unit is
 small enough to test independently.
 
-### Step 1: Higher-Arity List Payloads
-
-Goal:
-
-- Remove confidence gaps caused by one-field and two-field special casing.
-
-Tests first:
-
-- list of 3-field records carrying strings/lists/dicts
-- list of nested records
-- list of sums carrying managed payloads
-
-Implementation:
-
-- Introduce a single shape-planned list payload release helper or a small
-  generated helper family.
-
-Done when:
-
-- no leak-check failures for new shapes
-
-### Step 2: x64 Parity Audit
+### Step 1: x64 Parity Audit
 
 Goal:
 
@@ -1064,7 +1050,7 @@ Done when:
 - x64 docs match code
 - x64 targeted memory tests pass or are explicitly accounted for
 
-### Step 3: Documentation Reconciliation
+### Step 2: Documentation Reconciliation
 
 Goal:
 

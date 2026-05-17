@@ -63,6 +63,8 @@ let private listRefCountDecDictHelperLabel = "__dark_list_refcount_dec_dict_help
 let private listRefCountDecClosureHelperLabel = "__dark_list_refcount_dec_closure_helper"
 let private listRefCountDecRecord1HelperLabel = "__dark_list_refcount_dec_record1_helper"
 let private listRefCountDecRecord2HelperLabel = "__dark_list_refcount_dec_record2_helper"
+let private listRefCountDecRecord3ManagedHelperLabel = "__dark_list_refcount_dec_record3_managed_helper"
+let private listRefCountDecSumStringHelperLabel = "__dark_list_refcount_dec_sum_string_helper"
 let private dictRefCountIncHelperLabel = "__dark_dict_refcount_inc_helper"
 let private dictRefCountDecHelperLabel = "__dark_dict_refcount_dec_helper"
 let private closureRefCountIncHelperLabel = "__dark_closure_refcount_inc_helper"
@@ -191,6 +193,7 @@ let private generateListRefCountDecHelperWith
     (releaseLeafListPayload: bool)
     (releaseLeafDictPayload: bool)
     (releaseLeafClosurePayload: bool)
+    (managedLeafFieldTypes: AST.Type list)
     : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_list_rc_dec_{name}"
     let leakDec =
@@ -293,6 +296,114 @@ let private generateListRefCountDecHelperWith
         @ leakDec
         @ [ARM64Symbolic.Label leafPayloadDone]
 
+    let releaseDynamicBufferLeafField (fieldOffset: int) : ARM64Symbolic.Instr list =
+        let fieldDone = label $"leaf_dynamic_field_{fieldOffset}_done"
+        let refcountUpdate =
+            if List.isEmpty leakDec then
+                [
+                    ARM64Symbolic.SUB_imm (ARM64Symbolic.X14, ARM64Symbolic.X14, 1us)
+                    ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.X13, 0s)
+                ]
+            else
+                [
+                    ARM64Symbolic.SUB_imm (ARM64Symbolic.X14, ARM64Symbolic.X14, 1us)
+                    ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.X13, 0s)
+                    ARM64Symbolic.CBNZ (ARM64Symbolic.X14, fieldDone)
+                ] @ leakDec
+        [
+            ARM64Symbolic.LDR (ARM64Symbolic.X11, ARM64Symbolic.X3, 0s)
+            ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X11, int16 fieldOffset)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X12, fieldDone)
+            ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X12, 0s)
+            ARM64Symbolic.ADD_imm (ARM64Symbolic.X14, ARM64Symbolic.X14, 7us)
+            ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 3us, 0)
+            ARM64Symbolic.LSR_reg (ARM64Symbolic.X14, ARM64Symbolic.X14, ARM64Symbolic.X13)
+            ARM64Symbolic.LSL_reg (ARM64Symbolic.X14, ARM64Symbolic.X14, ARM64Symbolic.X13)
+            ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X12, 8us)
+            ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X14)
+            ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X13, 0s)
+            ARM64Symbolic.MOVZ (ARM64Symbolic.X15, 0xFFFFus, 0)
+            ARM64Symbolic.MOVK (ARM64Symbolic.X15, 0xFFFFus, 16)
+            ARM64Symbolic.MOVK (ARM64Symbolic.X15, 0xFFFFus, 32)
+            ARM64Symbolic.MOVK (ARM64Symbolic.X15, 0x7FFFus, 48)
+            ARM64Symbolic.CMP_reg (ARM64Symbolic.X14, ARM64Symbolic.X15)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, fieldDone)
+        ]
+        @ refcountUpdate
+        @ [ARM64Symbolic.Label fieldDone]
+
+    let releaseListLeafField (fieldOffset: int) : ARM64Symbolic.Instr list =
+        let fieldDone = label $"leaf_list_field_{fieldOffset}_done"
+        let callInstrs = [
+            ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
+            ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+            ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+            ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+            ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 80s)
+            ARM64Symbolic.STR (ARM64Symbolic.X29, ARM64Symbolic.SP, 88s)
+            ARM64Symbolic.MOV_reg (ARM64Symbolic.X29, ARM64Symbolic.SP)
+            ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X8)
+            ARM64Symbolic.BL listRefCountDecHelperLabel
+            ARM64Symbolic.ADD_imm (ARM64Symbolic.SP, ARM64Symbolic.X29, 0us)
+            ARM64Symbolic.LDR (ARM64Symbolic.X29, ARM64Symbolic.SP, 88s)
+            ARM64Symbolic.LDR (ARM64Symbolic.X30, ARM64Symbolic.SP, 80s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 96s)
+        ]
+        [
+            ARM64Symbolic.LDR (ARM64Symbolic.X11, ARM64Symbolic.X3, 0s)
+            ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X11, int16 fieldOffset)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X8, fieldDone)
+        ]
+        @ callInstrs
+        @ [ARM64Symbolic.Label fieldDone]
+
+    let releaseDictLeafField (fieldOffset: int) : ARM64Symbolic.Instr list =
+        let fieldDone = label $"leaf_dict_field_{fieldOffset}_done"
+        let callInstrs = [
+            ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
+            ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+            ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+            ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+            ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 80s)
+            ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X8)
+            ARM64Symbolic.BL dictRefCountDecHelperLabel
+            ARM64Symbolic.LDR (ARM64Symbolic.X30, ARM64Symbolic.SP, 80s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 96s)
+        ]
+        [
+            ARM64Symbolic.LDR (ARM64Symbolic.X11, ARM64Symbolic.X3, 0s)
+            ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X11, int16 fieldOffset)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X8, fieldDone)
+        ]
+        @ callInstrs
+        @ [ARM64Symbolic.Label fieldDone]
+
+    let releaseManagedLeafFields =
+        managedLeafFieldTypes
+        |> List.mapi (fun index fieldType ->
+            let fieldOffset = index * 8
+            match fieldType with
+            | AST.TString
+            | AST.TBytes ->
+                releaseDynamicBufferLeafField fieldOffset
+            | AST.TList _ ->
+                releaseListLeafField fieldOffset
+            | AST.TDict _ ->
+                releaseDictLeafField fieldOffset
+            | _ ->
+                [])
+        |> List.concat
+
     let releaseLeafPayload =
         match leafGenericPayloadSize, releaseLeafListPayload, releaseLeafDictPayload, releaseLeafClosurePayload with
         | None, false, false, false -> []
@@ -327,11 +438,25 @@ let private generateListRefCountDecHelperWith
             [
                 ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 0s)
                 ARM64Symbolic.CBZ (ARM64Symbolic.X8, leafPayloadDone)
+                // Specialized fixed-block helpers can encounter primitive leaves from nested lists.
+                // Only aligned managed-heap payload pointers have trailing refcounts to decrement.
+                ARM64Symbolic.AND_imm (ARM64Symbolic.X9, ARM64Symbolic.X8, 7UL)
+                ARM64Symbolic.CBNZ (ARM64Symbolic.X9, leafPayloadDone)
+                ARM64Symbolic.CMP_reg (ARM64Symbolic.X8, ARM64Symbolic.X27)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, leafPayloadDone)
+                ARM64Symbolic.CMP_reg (ARM64Symbolic.X8, ARM64Symbolic.X28)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.GT, leafPayloadDone)
                 ARM64Symbolic.LDR (ARM64Symbolic.X9, ARM64Symbolic.X8, int16 payloadSize)
                 ARM64Symbolic.SUB_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 1us)
                 ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.X8, int16 payloadSize)
                 ARM64Symbolic.CBNZ (ARM64Symbolic.X9, leafPayloadDone)
             ]
+            @ releaseManagedLeafFields
+            @ (if List.isEmpty releaseManagedLeafFields then
+                []
+               else
+                // Field release may use X8 for nested payloads; reload the leaf payload before freeing it.
+                [ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 0s)])
             @ (if payloadSize >= 0 && payloadSize < 256 then
                 [
                     ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.X27, int16 payloadSize)
@@ -530,25 +655,45 @@ let private generateListRefCountDecHelperWith
     ]
 
 let private generateListRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecHelperLabel ctx None false false false
+    generateListRefCountDecHelperWith listRefCountDecHelperLabel ctx None false false false []
 
 let private generateListRefCountDecTuple2Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2HelperLabel ctx (Some 16) false false false
+    generateListRefCountDecHelperWith listRefCountDecTuple2HelperLabel ctx (Some 16) false false false []
 
 let private generateListRefCountDecListHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecListHelperLabel ctx None true false false
+    generateListRefCountDecHelperWith listRefCountDecListHelperLabel ctx None true false false []
 
 let private generateListRefCountDecDictHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecDictHelperLabel ctx None false true false
+    generateListRefCountDecHelperWith listRefCountDecDictHelperLabel ctx None false true false []
 
 let private generateListRefCountDecClosureHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecClosureHelperLabel ctx None false false true
+    generateListRefCountDecHelperWith listRefCountDecClosureHelperLabel ctx None false false true []
 
 let private generateListRefCountDecRecord1Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord1HelperLabel ctx (Some 8) false false false
+    generateListRefCountDecHelperWith listRefCountDecRecord1HelperLabel ctx (Some 8) false false false []
 
 let private generateListRefCountDecRecord2Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord2HelperLabel ctx (Some 16) false false false
+    generateListRefCountDecHelperWith listRefCountDecRecord2HelperLabel ctx (Some 16) false false false []
+
+let private generateListRefCountDecRecord3ManagedHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith
+        listRefCountDecRecord3ManagedHelperLabel
+        ctx
+        (Some 24)
+        false
+        false
+        false
+        [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ]
+
+let private generateListRefCountDecSumStringHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith
+        listRefCountDecSumStringHelperLabel
+        ctx
+        (Some 16)
+        false
+        false
+        false
+        [ AST.TInt64; AST.TString ]
 
 let private closurePayloadSizesFromAllocs (functions: LIR.Function list) : Map<string, int> =
     functions
@@ -835,6 +980,22 @@ let private isSingleFieldRecordList (recordRegistry: LIR.RecordRegistry) (source
 
 let private isTwoFieldRecordList (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : bool =
     recordListPayloadSize recordRegistry sourceType = Some 16
+
+let private isManagedThreeFieldRecordList (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : bool =
+    match sourceType with
+    | Some (AST.TList (AST.TRecord (name, _))) ->
+        recordRegistry
+        |> Map.tryFind name
+        |> Option.map (fun fields ->
+            (fields |> List.map snd) = [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ])
+        |> Option.defaultValue false
+    | _ ->
+        false
+
+let private isStringPayloadSumList (sourceType: AST.Type option) : bool =
+    match sourceType with
+    | Some (AST.TList (AST.TSum (_, [AST.TString]))) -> true
+    | _ -> false
 
 let private fixedBlockFieldTypes (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : AST.Type list =
     match sourceType with
@@ -3229,7 +3390,11 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         match Map.tryFind name ctx.RecordRegistry with
                         | Some fields when List.length fields = 1 -> listRefCountDecRecord1HelperLabel
                         | Some fields when List.length fields = 2 -> listRefCountDecRecord2HelperLabel
+                        | Some fields when (fields |> List.map snd) = [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] ->
+                            listRefCountDecRecord3ManagedHelperLabel
                         | _ -> listRefCountDecHelperLabel
+                    | AST.TList (AST.TSum (_, [AST.TString])) ->
+                        listRefCountDecSumStringHelperLabel
                     | _ ->
                         listRefCountDecHelperLabel
 
@@ -3455,6 +3620,10 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         listRefCountDecRecord1HelperLabel
                     | _ when isTwoFieldRecordList ctx.RecordRegistry sourceType ->
                         listRefCountDecRecord2HelperLabel
+                    | _ when isManagedThreeFieldRecordList ctx.RecordRegistry sourceType ->
+                        listRefCountDecRecord3ManagedHelperLabel
+                    | _ when isStringPayloadSumList sourceType ->
+                        listRefCountDecSumStringHelperLabel
                     | _ ->
                         listRefCountDecHelperLabel
                 let listDecCall = [
@@ -4799,6 +4968,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         | Some (AST.TList (AST.TList _)) -> false
                         | Some (AST.TList (AST.TDict _)) -> false
                         | Some (AST.TList (AST.TFunction _)) -> false
+                        | _ when isManagedThreeFieldRecordList ctx.RecordRegistry sourceType -> false
+                        | _ when isStringPayloadSumList sourceType -> false
                         | _ when isSingleFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ when isTwoFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ -> true
@@ -4905,6 +5076,43 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                             sourceType
                     | _ -> false)))
 
+    let needsListRcDecRecord3ManagedHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
+                        isManagedThreeFieldRecordList ctx.RecordRegistry sourceType
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField
+                            (function
+                             | AST.TList (AST.TRecord _) as listType ->
+                                 isManagedThreeFieldRecordList ctx.RecordRegistry (Some listType)
+                             | _ -> false)
+                            ctx.RecordRegistry
+                            sourceType
+                    | _ -> false)))
+
+    let needsListRcDecSumStringHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
+                        isStringPayloadSumList sourceType
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField
+                            (function
+                             | AST.TList (AST.TSum (_, [AST.TString])) -> true
+                             | _ -> false)
+                            ctx.RecordRegistry
+                            sourceType
+                    | _ -> false)))
+
     let needsListRcIncHelper =
         sortedFunctions
         |> List.exists (fun func ->
@@ -4967,16 +5175,18 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         let allFunctionInstrs = instrLists |> List.concat
         let listRcHelpers =
             (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
-            @ (if needsListRcDecHelper then generateListRefCountDecHelper ctx else [])
+            @ (if needsListRcDecHelper || needsListRcDecRecord3ManagedHelper then generateListRefCountDecHelper ctx else [])
             @ (if needsListRcDecTuple2Helper then generateListRefCountDecTuple2Helper ctx else [])
             @ (if needsListRcDecListHelper then generateListRefCountDecListHelper ctx else [])
             @ (if needsListRcDecDictHelper then generateListRefCountDecDictHelper ctx else [])
             @ (if needsListRcDecClosureHelper then generateListRefCountDecClosureHelper ctx else [])
             @ (if needsListRcDecRecord1Helper then generateListRefCountDecRecord1Helper ctx else [])
             @ (if needsListRcDecRecord2Helper then generateListRefCountDecRecord2Helper ctx else [])
+            @ (if needsListRcDecRecord3ManagedHelper then generateListRefCountDecRecord3ManagedHelper ctx else [])
+            @ (if needsListRcDecSumStringHelper then generateListRefCountDecSumStringHelper ctx else [])
         let dictRcHelpers =
             (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
-            @ (if needsDictRcDecHelper then generateDictRefCountDecHelper ctx else [])
+            @ (if needsDictRcDecHelper || needsListRcDecRecord3ManagedHelper then generateDictRefCountDecHelper ctx else [])
         let closureRcHelpers =
             (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
             @ (if needsClosureRcDecHelper then generateClosureRefCountDecHelper ctx else [])
