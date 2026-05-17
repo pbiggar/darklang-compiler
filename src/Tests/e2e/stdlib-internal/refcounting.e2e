@@ -33,6 +33,7 @@ let xs = ["a" ++ "b"] in 0 = stdout="0\n" stderr="" // list releases dynamic str
 def listBytes(): List<Bytes> = [Bytes.create(4)] let xs = listBytes() in 0 = stdout="0\n" stderr="" // returned list releases dynamic bytes payloads
 let xs = [("a" ++ "b", 1)] in 0 = stdout="0\n" stderr="" // list releases tuple payload root
 let xs = [[1, 2], [3, 4]] in 0 = stdout="0\n" stderr="" // list releases nested list payloads
+def listDict(): List<Dict<Int64, Int64>> = [Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2)] let xs = listDict() in 0 = stdout="0\n" stderr="" // returned list releases dict payload roots
 type ListRecord = { id: Int64 } def listRecord(): List<ListRecord> = [ListRecord { id = 1 }] let xs = listRecord() in 0 = stdout="0\n" stderr="" // returned list releases record payload roots
 type ListRecord2 = { id2: Int64, count2: Int64 } def listRecord2(): List<ListRecord2> = [ListRecord2 { id2 = 1, count2 = 2 }] let xs = listRecord2() in 0 = stdout="0\n" stderr="" // returned list releases two-field record payload roots
 
