@@ -72,11 +72,11 @@ string projection
 retention, plus returned borrowed sum bytes, dict, and closure payload projection
 retention, plus returned branch-selected borrowed bytes, list, dict, and
 closure projection retention, plus sum record payload release, plus mixed
-sum no-payload variant release, plus record-contained sum payload release,
-plus dict-contained sum value payload release, plus pure enum sum
+sum no-payload and payload variant release, plus record-contained sum payload
+release, plus dict-contained sum value payload release, plus pure enum sum
 no-heap-ownership coverage:
 
-- `scripts/run-in-container ./run-tests`: `4679 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4680 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -1006,6 +1006,7 @@ Current tests cover:
 - sum releases tuple payload containing dynamic string field
 - sum releases record payload containing dynamic string field
 - mixed sum releases no-payload variant
+- mixed sum releases payload variant
 - pure enum sum is reclaimed without heap ownership
 - record releases sum field payload
 - returned dict releases sum value payload fields
@@ -1016,8 +1017,7 @@ The compiler still needs precise handling for:
 
 - `RcShape`-level pure enum classification is still conservative even though
   direct runtime leak coverage exists for a pure no-payload enum binding
-- mixed sums with payload and no-payload variants beyond direct payload and
-  no-payload cleanup smoke coverage
+- mixed sums beyond direct payload and no-payload cleanup smoke coverage
 - deeper fixed-block payload recursion beyond direct tuple/record payloads
 - broader list/dict/record-contained sum shapes beyond the direct covered cases
 - x64 parity
