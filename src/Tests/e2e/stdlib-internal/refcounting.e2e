@@ -15,6 +15,7 @@ let s = Stdlib.String.fromCodepoints([97]) in 0 = stdout="0\n" stderr="" // unal
 
 // Dynamic bytes use the same length-aligned refcount slot as dynamic strings.
 let b = Bytes.create(4) in 0 = stdout="0\n" stderr=""
+def __bytesRefcount(b: Bytes): Int64 = let len = Bytes.length(b) in let dataSize = ((len + 7) / 8) * 8 in __raw_get<Int64>(__int64_to_rawptr(__bytes_to_int64(b)), 8 + dataSize)
 
 // HAMT/dict roots use typed refcounting and reclaim raw nodes when the root dies.
 let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2) in 0 = stdout="0\n" stderr="" // dict singleton reclaimed
@@ -41,13 +42,16 @@ type ListRecord2 = { id2: Int64, count2: Int64 } def listRecord2(): List<ListRec
 // Fixed-block tuple root allocation is reclaimed on the active backend.
 let t = (1, 2) in t.0 = stdout="1\n" stderr="" // tuple root reclaimed
 let s = "a" ++ "b" in let t = (s, 1) in 0 = stdout="0\n" stderr="" // tuple releases dynamic string field
+let b = Bytes.create(4) in let t = (b, 1) in __bytesRefcount(t.0) = stdout="2\n" stderr="" // tuple retains dynamic bytes field
 let t = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32) in t.0 = stdout="1\n" stderr="" // large tuple root reclaimed without free-list overflow
 
 // Fixed-block records and sums release heap payload fields.
 type RcRecord = { name: String, xs: List<Int64> } let r = RcRecord { name = "a" ++ "b", xs = [1, 2] } in 0 = stdout="0\n" stderr="" // record releases string and list fields
+type RcBytesRecord = { bytesField: Bytes } let b = Bytes.create(4) in let r = RcBytesRecord { bytesField = b } in __bytesRefcount(r.bytesField) = stdout="2\n" stderr="" // record retains dynamic bytes field
 type ReturnedRecordString = { returnedName: String } def returnedRecordString(): ReturnedRecordString = let s = "a" ++ "b" in ReturnedRecordString { returnedName = s } let r = returnedRecordString() in 0 = stdout="0\n" stderr="" // returned record releases dynamic string field
 type ReturnedRecordStringUse = { returnedNameUse: String } def returnedRecordStringUse(): ReturnedRecordStringUse = let s = "a" ++ "b" in ReturnedRecordStringUse { returnedNameUse = s } let r = returnedRecordStringUse() in Stdlib.String.length(r.returnedNameUse) = stdout="2\n" stderr="" // returned record keeps dynamic string field alive
 type LiteralRecordString = { literalName: String } let r = LiteralRecordString { literalName = "literal" } in 0 = stdout="0\n" stderr="" // record skips static literal string field
+type ReturnedRecordBytesUse = { returnedBytesUse: Bytes } def returnedRecordBytesUse(): ReturnedRecordBytesUse = let b = Bytes.create(4) in ReturnedRecordBytesUse { returnedBytesUse = b } let r = returnedRecordBytesUse() in Bytes.length(r.returnedBytesUse) = stdout="4\n" stderr="" // returned record exposes usable dynamic bytes field
 type ReturnedRecordList = { returnedXs: List<Int64> } def returnedRecordList(): ReturnedRecordList = ReturnedRecordList { returnedXs = [1, 2] } let r = returnedRecordList() in 0 = stdout="0\n" stderr="" // returned record releases list field
 def returnedTupleList(): (List<Int64>, Int64) = ([1, 2], 3) let t = returnedTupleList() in 0 = stdout="0\n" stderr="" // returned tuple releases list field
 type ReturnedRecordClosure = { returnedFn: (Int64) -> Int64 } def returnedRecordClosure(): ReturnedRecordClosure = let base = 1 in ReturnedRecordClosure { returnedFn = (x: Int64) => x + base } let r = returnedRecordClosure() in 0 = stdout="0\n" stderr="" // returned record releases closure field

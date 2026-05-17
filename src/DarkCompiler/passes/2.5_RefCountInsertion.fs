@@ -467,9 +467,14 @@ let private retainExprForType (ctx: TypeContext) (tempId: TempId) (typ: AST.Type
     match typ with
     | AST.TString ->
         RefCountIncString (Var tempId)
+    | AST.TBytes ->
+        RefCountIncBytes (Var tempId)
     | _ ->
         let (size, kind, sourceType) = rcInfoForType ctx typ
         RefCountInc (Var tempId, size, kind, sourceType)
+
+let private needsRetainForBorrowedValue (typ: AST.Type) : bool =
+    typ = AST.TString || typ = AST.TBytes || isRcManagedHeapType typ
 
 let rec private isStoredByRawSet (tempId: TempId) (bodyInfo: ReturnAnnotatedExpr) : bool =
     match bodyInfo with
@@ -880,7 +885,7 @@ let rec insertRCWithAnalysis
                         match atom with
                         | Var tid ->
                             match tryGetType ctx tid with
-                            | Some t when t = AST.TString || isRcManagedHeapType t ->
+                            | Some t when needsRetainForBorrowedValue t ->
                                 (tid, t) :: acc
                             | _ -> acc
                         | _ -> acc
@@ -892,7 +897,7 @@ let rec insertRCWithAnalysis
                         match atom with
                         | Var tid ->
                             match tryGetType ctx tid with
-                            | Some t when t = AST.TString || isRcManagedHeapType t ->
+                            | Some t when needsRetainForBorrowedValue t ->
                                 (tid, t) :: acc
                             | _ -> acc
                         | _ -> acc
@@ -905,7 +910,7 @@ let rec insertRCWithAnalysis
                     match atom with
                     | Var tid ->
                         match tryGetType ctx tid with
-                        | Some t when t = AST.TString || isRcManagedHeapType t -> Some t
+                        | Some t when needsRetainForBorrowedValue t -> Some t
                         | _ -> None
                     | _ -> None
 
@@ -920,7 +925,7 @@ let rec insertRCWithAnalysis
                 | Atom (Var sourceId)
                 | TypedAtom (Var sourceId, _) ->
                     // Returning a pure alias of an already-returned owned value should not inc again.
-                    if (inferredType = AST.TString || isRcManagedHeapType inferredType)
+                    if needsRetainForBorrowedValue inferredType
                        && Set.contains tempId bodyReturned
                        && isBorrowingExpr cexpr then
                         if Set.contains sourceId bodyReturned then
@@ -930,7 +935,7 @@ let rec insertRCWithAnalysis
                     else
                         None
                 | _ ->
-                    if (inferredType = AST.TString || isRcManagedHeapType inferredType)
+                    if needsRetainForBorrowedValue inferredType
                        && Set.contains tempId bodyReturned
                        && isBorrowingExpr cexpr then
                         Some inferredType

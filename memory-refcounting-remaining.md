@@ -13,7 +13,7 @@ changes need in order to avoid re-opening completed problems.
 
 Status date: 2026-05-17.
 
-Current head reviewed: `c31123b Refcount string fields in fixed blocks`.
+Current head reviewed: includes `Refcount bytes fields in fixed blocks`.
 
 Last full-suite verification after `c31123b`:
 
@@ -118,9 +118,13 @@ Covered by current tests:
 
 - `Bytes.create(4)` reclaimed
 - returned list releases dynamic bytes payloads
+- tuple and record dynamic bytes fields retain the byte buffer while both the
+  original binding and fixed block are live
+- returned record dynamic bytes fields remain usable after function cleanup
 
-Remaining bytes work is parity with strings: container fields, returned aliases,
-all constructors/transforms, and backend parity.
+Remaining bytes work is parity with strings beyond the first fixed-block cases:
+sum payloads, closure captures, borrowed projection matrices,
+constructors/transforms, and backend parity.
 
 ### Dict Roots Have Typed RC
 
@@ -205,7 +209,7 @@ Covered by current tests:
 - returned closure releases fixed-block capture fields
 - returned closure releases nested fixed-block capture fields
 
-Remaining fixed-block work is generalization, x64 parity, bytes fields, dict
+Remaining fixed-block work is generalization, x64 parity, dict fields, closure
 fields, sum payload recursion beyond covered cases, and removing remaining
 legacy ownership shortcuts.
 
@@ -377,17 +381,16 @@ Current tests prove:
 
 - a directly scoped `Bytes.create(4)` is reclaimed
 - returned list payloads of `Bytes` are released
+- tuple and record fields retain dynamic bytes while both owners are live
+- returned record bytes fields remain usable and release cleanly
 
 ### Remaining Gaps
 
 Bytes coverage is much thinner than string coverage. Missing or under-proven
 cases include:
 
-- bytes fields in tuples
-- bytes fields in records
 - bytes payloads in sums
 - bytes captured by closures
-- returned record/tuple bytes fields
 - returned borrowed bytes projected out of a fixed block
 - list of bytes beyond the single returned-list case
 - dict keys/values of bytes, if bytes are allowed as dict keys/values
@@ -411,21 +414,18 @@ from either:
 ### Remaining Tasks
 
 1. Add failing-then-passing e2e leak-check tests for the missing cases above.
-2. Extend fixed-block field release for `TBytes` on ARM64.
-3. Extend closure fixed-block capture release for `TBytes` on ARM64.
-4. Add equivalent x64 support if missing.
-5. Audit bytes constructors and transforms for aligned refcount layout.
-6. Decide whether zero-refcount bytes blocks should only balance leak counters
+2. Extend closure fixed-block capture release for `TBytes` on ARM64.
+3. Add equivalent x64 support if missing.
+4. Audit bytes constructors and transforms for aligned refcount layout.
+5. Decide whether zero-refcount bytes blocks should only balance leak counters
    or also be reusable.
 
 ### Suggested Commit Breakdown
 
-1. Cover tuple/record bytes fields.
-2. Release bytes fields in fixed blocks.
-3. Cover returned borrowed bytes field use.
-4. Cover sum bytes payloads.
-5. Cover closure bytes captures.
-6. Cover `Bytes.set`, `Bytes.fromList`, and zero-length bytes.
+1. Cover returned borrowed bytes field projection.
+2. Cover sum bytes payloads.
+3. Cover closure bytes captures.
+4. Cover `Bytes.set`, `Bytes.fromList`, and zero-length bytes.
 
 ## 3. Finish Dynamic String Edge Coverage And Reuse Semantics
 
@@ -1022,34 +1022,7 @@ Examples of stale statements likely present:
 This sequence excludes a full raw-allocation redesign until later. Each unit is
 small enough to test independently.
 
-### Step 1: Bytes Fields In Fixed Blocks
-
-Goal:
-
-- Give bytes the same fixed-block ownership treatment strings now have.
-
-Tests first:
-
-- tuple with dynamic bytes field
-- record with dynamic bytes field
-- returned record with bytes field
-- returned record bytes field use after return
-- literal/static equivalent if any exists for bytes, or document that bytes has
-  no static literal form
-
-Implementation:
-
-- Add bytes field retain if missing.
-- Add bytes field release in ARM64 fixed-block destructor.
-- Add closure capture bytes field release.
-- Add x64 parity if the active backend path supports it.
-
-Done when:
-
-- full suite remains at baseline
-- new bytes tests have `stderr=""`
-
-### Step 2: Borrowed Projection Retain Matrix
+### Step 1: Borrowed Projection Retain Matrix
 
 Goal:
 
@@ -1074,7 +1047,7 @@ Done when:
 - use-after-return tests pass without leaks
 - no new broad regressions
 
-### Step 3: Fixed-Block Dict/Closure/Nested Field Matrix
+### Step 2: Fixed-Block Dict/Closure/Nested Field Matrix
 
 Goal:
 
@@ -1096,7 +1069,7 @@ Done when:
 
 - no leak-check failures for new shapes
 
-### Step 4: Higher-Arity List Payloads
+### Step 3: Higher-Arity List Payloads
 
 Goal:
 
@@ -1118,7 +1091,7 @@ Done when:
 - new tests pass on active backend
 - helper dispatch is not keyed only by small arity special cases
 
-### Step 5: x64 Parity Audit
+### Step 4: x64 Parity Audit
 
 Goal:
 
@@ -1140,7 +1113,7 @@ Done when:
 - x64 docs match code
 - x64 targeted memory tests pass or are explicitly accounted for
 
-### Step 6: Documentation Reconciliation
+### Step 5: Documentation Reconciliation
 
 Goal:
 

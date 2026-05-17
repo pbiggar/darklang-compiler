@@ -676,8 +676,8 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
             @ leakDec
             @ [ARM64Symbolic.Label childDone]
 
-    let releaseStringChildField (fieldOffset: int) (doneLabel: string) : ARM64Symbolic.Instr list =
-        let stringDone = label $"{doneLabel}_string_{fieldOffset}_done"
+    let releaseDynamicBufferChildField (fieldOffset: int) (doneLabel: string) : ARM64Symbolic.Instr list =
+        let bufferDone = label $"{doneLabel}_dynamic_buffer_{fieldOffset}_done"
         let refcountUpdate =
             if List.isEmpty leakDec then
                 [
@@ -688,11 +688,11 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
                 [
                     ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
                     ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
-                    ARM64Symbolic.CBNZ (ARM64Symbolic.X15, stringDone)
+                    ARM64Symbolic.CBNZ (ARM64Symbolic.X15, bufferDone)
                 ] @ leakDec
         [
             ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X8, int16 fieldOffset)
-            ARM64Symbolic.CBZ (ARM64Symbolic.X12, stringDone)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X12, bufferDone)
             ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
             ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 7us)
             ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 3us, 0)
@@ -706,10 +706,10 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
             ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 32)
             ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0x7FFFus, 48)
             ARM64Symbolic.CMP_reg (ARM64Symbolic.X15, ARM64Symbolic.X13)
-            ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, stringDone)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, bufferDone)
         ]
         @ refcountUpdate
-        @ [ARM64Symbolic.Label stringDone]
+        @ [ARM64Symbolic.Label bufferDone]
 
     let fixedBlockFieldReleases
         (captureType: AST.Type)
@@ -730,8 +730,9 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
         fieldTypes
         |> List.mapi (fun index fieldType ->
             match fieldType with
-            | AST.TString ->
-                releaseStringChildField (index * 8) doneLabel
+            | AST.TString
+            | AST.TBytes ->
+                releaseDynamicBufferChildField (index * 8) doneLabel
             | _ ->
                 releaseFixedChildField (index * 8) fieldType doneLabel)
         |> List.concat
@@ -3297,10 +3298,10 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
                     ] @ callInstrs
 
-                let releaseStringField (fieldOffset: int) : ARM64Symbolic.Instr list =
-                    let stringLeakDec = generateLeakCounterDec ctx
+                let releaseDynamicBufferField (fieldOffset: int) : ARM64Symbolic.Instr list =
+                    let bufferLeakDec = generateLeakCounterDec ctx
                     let refcountUpdate =
-                        if List.isEmpty stringLeakDec then
+                        if List.isEmpty bufferLeakDec then
                             [
                                 ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
                                 ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
@@ -3310,7 +3311,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                                 ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
                                 ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
                                 ARM64Symbolic.CBNZ_offset (ARM64Symbolic.X15, 6)
-                            ] @ stringLeakDec
+                            ] @ bufferLeakDec
                     let bcondOffset = List.length refcountUpdate + 1
                     let body =
                         [
@@ -3346,8 +3347,9 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     |> List.mapi (fun index fieldType ->
                         let fieldOffset = index * 8
                         match fieldType with
-                        | AST.TString ->
-                            releaseStringField fieldOffset
+                        | AST.TString
+                        | AST.TBytes ->
+                            releaseDynamicBufferField fieldOffset
                         | AST.TList _ ->
                             releaseListField fieldOffset fieldType
                         | AST.TDict _ ->
