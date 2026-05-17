@@ -401,6 +401,37 @@ type FunctionRegistry = Map<string, AST.Type>
 /// For simple record aliases: "Vec" -> ([], TRecord "Point")
 type AliasRegistry = Map<string, string list * AST.Type>
 
+let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: AST.Type) : AST.Type =
+    let sumTypeNames =
+        variantLookup
+        |> Map.toList
+        |> List.map (fun (_, (typeName, _, _, _)) -> typeName)
+        |> Set.ofList
+
+    let rec canonicalize typ =
+        match typ with
+        | AST.TRecord (name, []) when Set.contains name sumTypeNames ->
+            AST.TSum (name, [])
+        | AST.TRecord (name, typeArgs) ->
+            AST.TRecord (name, List.map canonicalize typeArgs)
+        | AST.TSum (name, typeArgs) ->
+            AST.TSum (name, List.map canonicalize typeArgs)
+        | AST.TFunction (paramTypes, returnType) ->
+            AST.TFunction (List.map canonicalize paramTypes, canonicalize returnType)
+        | AST.TTuple elemTypes ->
+            AST.TTuple (List.map canonicalize elemTypes)
+        | AST.TList elemType ->
+            AST.TList (canonicalize elemType)
+        | AST.TDict (keyType, valueType) ->
+            AST.TDict (canonicalize keyType, canonicalize valueType)
+        | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128
+        | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
+        | AST.TBool | AST.TFloat64 | AST.TString | AST.TBytes | AST.TChar
+        | AST.TUnit | AST.TRawPtr | AST.TRuntimeError ->
+            typ
+
+    canonicalize typ
+
 /// Resolve a type name through the alias registry
 /// If the name is an alias for a record type, returns the resolved record name
 /// Otherwise returns the original name
@@ -1847,6 +1878,11 @@ let rec simpleInferType
             | None ->
                 Some (AST.TRecord (typeName, []))
             | Some expectedFields ->
+                let expectedFields =
+                    expectedFields
+                    |> List.map (fun (fieldName, fieldType) ->
+                        (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
+
                 let fieldMap = Map.ofList fields
                 let typeParams = inferRecordTypeParamsFromFields expectedFields
                 let rec inferBindings remaining acc =
@@ -1859,6 +1895,8 @@ let rec simpleInferType
                             match simpleInferType fieldExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup with
                             | None -> inferBindings rest acc
                             | Some actualFieldType ->
+                                let actualFieldType =
+                                    canonicalizeBareSumTypeRefs variantLookup actualFieldType
                                 match matchTypePattern expectedFieldType actualFieldType with
                                 | Ok newBindings -> inferBindings rest (acc @ newBindings)
                                 | Error _ -> inferBindings rest acc
@@ -3094,6 +3132,11 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
             | None ->
                 Error $"Unknown record type: {typeName}"
             | Some expectedFields ->
+                let expectedFields =
+                    expectedFields
+                    |> List.map (fun (fieldName, fieldType) ->
+                        (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
+
                 let fieldMap = Map.ofList fields
                 let typeParams = inferRecordTypeParamsFromFields expectedFields
 
@@ -3111,6 +3154,8 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                         | Some fieldExpr ->
                             inferType fieldExpr typeEnv typeReg variantLookup funcReg moduleRegistry
                             |> Result.bind (fun actualFieldType ->
+                                let actualFieldType =
+                                    canonicalizeBareSumTypeRefs variantLookup actualFieldType
                                 matchTypePattern expectedFieldType actualFieldType
                                 |> Result.bind (fun newBindings ->
                                     inferBindings rest (accBindings @ newBindings)))

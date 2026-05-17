@@ -679,6 +679,36 @@ let rec resolveType (aliasReg: AliasRegistry) (typ: Type) : Type =
     | TBool | TFloat64 | TString | TBytes | TChar | TUnit | TRuntimeError | TRawPtr ->
         typ  // Primitive types and type variables are unchanged
 
+let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: Type) : Type =
+    let sumTypeNames =
+        variantLookup
+        |> Map.toList
+        |> List.map (fun (_, (typeName, _, _, _)) -> typeName)
+        |> Set.ofList
+
+    let rec canonicalize typ =
+        match typ with
+        | TRecord (name, []) when Set.contains name sumTypeNames ->
+            TSum (name, [])
+        | TRecord (name, typeArgs) ->
+            TRecord (name, List.map canonicalize typeArgs)
+        | TSum (name, typeArgs) ->
+            TSum (name, List.map canonicalize typeArgs)
+        | TFunction (paramTypes, returnType) ->
+            TFunction (List.map canonicalize paramTypes, canonicalize returnType)
+        | TTuple elemTypes ->
+            TTuple (List.map canonicalize elemTypes)
+        | TList elemType ->
+            TList (canonicalize elemType)
+        | TDict (keyType, valueType) ->
+            TDict (canonicalize keyType, canonicalize valueType)
+        | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128
+        | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
+        | TBool | TFloat64 | TString | TBytes | TChar | TUnit | TRuntimeError | TRawPtr ->
+            typ
+
+    canonicalize typ
+
 /// Compare two types for equality, resolving type aliases first
 /// This allows "Vec" and "Point" to be considered equal when Vec aliases Point
 let typesEqual (aliasReg: AliasRegistry) (t1: Type) (t2: Type) : bool =
@@ -2882,6 +2912,11 @@ let rec checkExprWithParamNames
             | None ->
                 Error (GenericError $"Unknown record type: {typeName}")
             | Some expectedFields ->
+                let expectedFields =
+                    expectedFields
+                    |> List.map (fun (fieldName, fieldType) ->
+                        (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
+
                 // Check that all fields are present and have correct types
                 let fieldMap = Map.ofList fields
 
@@ -2994,6 +3029,11 @@ let rec checkExprWithParamNames
                 | None ->
                     Error (GenericError $"Unknown record type: {typeName}")
                 | Some expectedFields ->
+                    let expectedFields =
+                        expectedFields
+                        |> List.map (fun (fieldName, fieldType) ->
+                            (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
+
                     let subst =
                         match buildRecordFieldSubstitution expectedFields typeArgs with
                         | Ok s -> s
@@ -3047,6 +3087,11 @@ let rec checkExprWithParamNames
                 | None ->
                     Error (GenericError $"Unknown record type: {typeName}")
                 | Some fields ->
+                    let fields =
+                        fields
+                        |> List.map (fun (fieldName, fieldType) ->
+                            (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
+
                     match List.tryFind (fun (name, _) -> name = fieldName) fields with
                     | None ->
                         Error (GenericError $"Record type {typeName} has no field '{fieldName}'")

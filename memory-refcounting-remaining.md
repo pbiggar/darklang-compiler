@@ -72,9 +72,9 @@ string projection
 retention, plus returned borrowed sum bytes, dict, and closure payload projection
 retention, plus returned branch-selected borrowed bytes, list, dict, and
 closure projection retention, plus sum record payload release, plus mixed
-sum no-payload variant release:
+sum no-payload variant release, plus record-contained sum payload release:
 
-- `scripts/run-in-container ./run-tests`: `4676 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4677 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -1003,6 +1003,7 @@ Current tests cover:
 - sum releases tuple payload containing dynamic string field
 - sum releases record payload containing dynamic string field
 - mixed sum releases no-payload variant
+- record releases sum field payload
 
 ### Remaining Gaps
 
@@ -1012,7 +1013,7 @@ The compiler still needs precise handling for:
 - mixed sums with payload and no-payload variants beyond direct payload and
   no-payload cleanup smoke coverage
 - deeper fixed-block payload recursion beyond direct tuple/record payloads
-- lists/dicts/records containing sums
+- lists/dicts containing sums, plus broader record-contained sum shapes
 - x64 parity
 
 ### Remaining Tasks
