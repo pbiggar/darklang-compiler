@@ -308,7 +308,6 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
 let rcKind (t: AST.Type) : RcKind =
     match t with
     | AST.TDict _ -> DictHeap
-    | AST.TList (AST.TFunction _) -> GenericHeap
     | AST.TList _ -> TaggedList
     | _ -> GenericHeap
 
