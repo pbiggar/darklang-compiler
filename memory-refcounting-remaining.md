@@ -31,7 +31,8 @@ tagged-list boxed sum record3 dynamic string/bytes payload release for all
 non-empty dynamic-buffer field combinations, tagged-list nested boxed sum
 dynamic string payload release, tagged-list three-field record
 string/bytes/list/dict payload release, tagged-list boxed sum record3
-string/list/dict payload release, and direct x64 closure dynamic
+string/list/dict payload release, tagged-list tuple3 string/list/dict payload
+release, and direct x64 closure dynamic
 string/bytes/list/dict/closure/tuple/record/sum capture release, including a
 multiple-managed-capture closure probe.
 
@@ -49,9 +50,10 @@ record dynamic string payload release, plus tagged-list boxed sum record3
 dynamic string/bytes payload release for all non-empty dynamic-buffer field
 combinations, plus tagged-list nested boxed sum dynamic string payload release,
 plus tagged-list three-field record string/bytes/list/dict payload release,
-plus tagged-list boxed sum record3 string/list/dict payload release:
+plus tagged-list boxed sum record3 string/list/dict payload release, plus
+tagged-list tuple3 string/list/dict payload release:
 
-- `scripts/run-in-container ./run-tests`: `4641 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4642 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -740,6 +742,7 @@ commits enabled:
 - tagged-list tuple dynamic string field release
 - tagged-list tuple3 dynamic string/bytes field release for all non-empty
   dynamic-buffer field combinations
+- tagged-list tuple3 string/list/dict payload release
 - tagged-list one-field record dynamic string field release
 - tagged-list three-field record dynamic string/bytes field release for all
   non-empty dynamic-buffer field combinations
@@ -779,7 +782,8 @@ Likely gaps:
 - closure capture recursive release coverage beyond the current direct
   dynamic-buffer, managed-root, and fixed-block capture probes
 - list payload helper variants beyond the currently covered tuple2, exhaustive
-  tuple3 dynamic-buffer combinations, record1, exhaustive record3
+  tuple3 dynamic-buffer combinations, one mixed tuple3 string/list/dict shape,
+  record1, exhaustive record3
   dynamic-buffer combinations, one mixed record3 string/bytes/list/dict shape,
   sum dynamic-buffer, sum-list/sum-dict, sum-closure, sum-record3-string-list-dict,
   list/closure/dict/string
