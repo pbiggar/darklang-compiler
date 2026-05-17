@@ -796,6 +796,22 @@ let private isSingleFieldRecordList (recordRegistry: LIR.RecordRegistry) (source
 let private isTwoFieldRecordList (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : bool =
     recordListPayloadSize recordRegistry sourceType = Some 16
 
+let private fixedBlockFieldTypes (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : AST.Type list =
+    match sourceType with
+    | Some (AST.TTuple fields) ->
+        fields
+    | Some (AST.TRecord (name, _)) ->
+        recordRegistry
+        |> Map.tryFind name
+        |> Option.map (List.map snd)
+        |> Option.defaultValue []
+    | _ ->
+        []
+
+let private fixedBlockHasField (predicate: AST.Type -> bool) (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : bool =
+    fixedBlockFieldTypes recordRegistry sourceType
+    |> List.exists predicate
+
 let private generateDictRefCountIncHelper () : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_dict_rc_inc_{name}"
     let internalTag = label "internal"
@@ -3159,7 +3175,107 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
         |> Result.map (fun addrReg ->
             let leakDec = generateLeakCounterDec ctx
             let tupleDecPath =
+                let listHelperLabelForField (fieldType: AST.Type) : string =
+                    match fieldType with
+                    | AST.TList (AST.TList _) ->
+                        listRefCountDecListHelperLabel
+                    | AST.TList (AST.TDict _) ->
+                        listRefCountDecDictHelperLabel
+                    | AST.TList (AST.TFunction _) when not (ctx.FunctionName.StartsWith("Stdlib.")) ->
+                        listRefCountDecClosureHelperLabel
+                    | AST.TList (AST.TTuple fields) when List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64]) ->
+                        listRefCountDecTuple2HelperLabel
+                    | AST.TList (AST.TRecord (name, _)) ->
+                        match Map.tryFind name ctx.RecordRegistry with
+                        | Some fields when List.length fields = 1 -> listRefCountDecRecord1HelperLabel
+                        | Some fields when List.length fields = 2 -> listRefCountDecRecord2HelperLabel
+                        | _ -> listRefCountDecHelperLabel
+                    | _ ->
+                        listRefCountDecHelperLabel
+
+                let releaseListField (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
+                    let helperLabel = listHelperLabelForField fieldType
+                    let callInstrs = [
+                        ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -80s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                        ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X12)
+                        ARM64Symbolic.BL helperLabel
+                        ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                        ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                        ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                        ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                        ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 80s)
+                    ]
+                    [
+                        ARM64Symbolic.LDR (ARM64Symbolic.X12, addrReg, int16 fieldOffset)
+                        ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
+                    ] @ callInstrs
+
+                let releaseDictField (fieldOffset: int) : ARM64Symbolic.Instr list =
+                    let callInstrs = [
+                        ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+                        ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X12)
+                        ARM64Symbolic.BL dictRefCountDecHelperLabel
+                        ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+                        ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                        ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                        ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                        ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                        ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 96s)
+                    ]
+                    [
+                        ARM64Symbolic.LDR (ARM64Symbolic.X12, addrReg, int16 fieldOffset)
+                        ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
+                    ] @ callInstrs
+
+                let releaseClosureField (fieldOffset: int) : ARM64Symbolic.Instr list =
+                    let callInstrs = [
+                        ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+                        ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X12)
+                        ARM64Symbolic.BL closureRefCountDecHelperLabel
+                        ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+                        ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                        ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                        ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                        ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                        ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 96s)
+                    ]
+                    [
+                        ARM64Symbolic.LDR (ARM64Symbolic.X12, addrReg, int16 fieldOffset)
+                        ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
+                    ] @ callInstrs
+
+                let fixedBlockFieldReleaseInstrs =
+                    fixedBlockFieldTypes ctx.RecordRegistry sourceType
+                    |> List.mapi (fun index fieldType ->
+                        let fieldOffset = index * 8
+                        match fieldType with
+                        | AST.TList _ ->
+                            releaseListField fieldOffset fieldType
+                        | AST.TDict _ ->
+                            releaseDictField fieldOffset
+                        | AST.TFunction _ ->
+                            releaseClosureField fieldOffset
+                        | _ ->
+                            [])
+                    |> List.concat
+
                 let releaseInstrs =
+                    fixedBlockFieldReleaseInstrs
+                    @
                     (if payloadSize >= 0 && payloadSize < 256 then
                         [
                             ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X27, int16 payloadSize)
@@ -4543,6 +4659,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         | _ when isSingleFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ when isTwoFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ -> true
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField (function | AST.TList _ -> true | _ -> false) ctx.RecordRegistry sourceType
                     | _ -> false)))
 
     let needsListRcDecTuple2Helper =
@@ -4554,6 +4672,14 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
                         List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64])
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField
+                            (function
+                             | AST.TList (AST.TTuple fields) ->
+                                 List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64])
+                             | _ -> false)
+                            ctx.RecordRegistry
+                            sourceType
                     | _ -> false)))
 
     let needsListRcDecListHelper =
@@ -4564,6 +4690,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TList _))) -> true
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField (function | AST.TList (AST.TList _) -> true | _ -> false) ctx.RecordRegistry sourceType
                     | _ -> false)))
 
     let needsListRcDecDictHelper =
@@ -4574,6 +4702,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TDict _))) -> true
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField (function | AST.TList (AST.TDict _) -> true | _ -> false) ctx.RecordRegistry sourceType
                     | _ -> false)))
 
     let needsListRcDecClosureHelper =
@@ -4584,6 +4714,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TFunction _))) -> true
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField (function | AST.TList (AST.TFunction _) -> true | _ -> false) ctx.RecordRegistry sourceType
                     | _ -> false)))
 
     let needsListRcDecRecord1Helper =
@@ -4595,6 +4727,17 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isSingleFieldRecordList ctx.RecordRegistry sourceType
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField
+                            (function
+                             | AST.TList (AST.TRecord (name, _)) ->
+                                 ctx.RecordRegistry
+                                 |> Map.tryFind name
+                                 |> Option.map (fun fields -> List.length fields = 1)
+                                 |> Option.defaultValue false
+                             | _ -> false)
+                            ctx.RecordRegistry
+                            sourceType
                     | _ -> false)))
 
     let needsListRcDecRecord2Helper =
@@ -4606,6 +4749,17 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isTwoFieldRecordList ctx.RecordRegistry sourceType
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField
+                            (function
+                             | AST.TList (AST.TRecord (name, _)) ->
+                                 ctx.RecordRegistry
+                                 |> Map.tryFind name
+                                 |> Option.map (fun fields -> List.length fields = 2)
+                                 |> Option.defaultValue false
+                             | _ -> false)
+                            ctx.RecordRegistry
+                            sourceType
                     | _ -> false)))
 
     let needsListRcIncHelper =
@@ -4639,6 +4793,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.DictHeap, _) -> true
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TDict _))) -> true
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField (function | AST.TDict _ -> true | _ -> false) ctx.RecordRegistry sourceType
                     | _ -> false)))
 
     let needsClosureRcIncHelper =
@@ -4659,6 +4815,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.ClosureHeap, _) -> true
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField (function | AST.TFunction _ -> true | _ -> false) ctx.RecordRegistry sourceType
                     | _ -> false)))
 
     ResultList.mapResults (convertFunction ctx) sortedFunctions

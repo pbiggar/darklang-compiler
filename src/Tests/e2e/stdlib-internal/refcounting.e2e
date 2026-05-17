@@ -45,6 +45,7 @@ let t = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 
 
 // Fixed-block records and sums release heap payload fields.
 type RcRecord = { name: String, xs: List<Int64> } let r = RcRecord { name = "a" ++ "b", xs = [1, 2] } in 0 = stdout="0\n" stderr="" // record releases string and list fields
+type ReturnedRecordList = { returnedXs: List<Int64> } def returnedRecordList(): ReturnedRecordList = ReturnedRecordList { returnedXs = [1, 2] } let r = returnedRecordList() in 0 = stdout="0\n" stderr="" // returned record releases list field
 type RcBox = RcNone | RcString of String | RcList of List<Int64> let b = RcString("a" ++ "b") in 0 = stdout="0\n" stderr="" // sum releases dynamic string payload
 type RcBox2 = RcNone2 | RcString2 of String | RcList2 of List<Int64> let b = RcList2([1, 2]) in 0 = stdout="0\n" stderr="" // sum releases list payload
 
