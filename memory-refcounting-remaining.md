@@ -67,12 +67,13 @@ plus x64 generic fixed-block boxed sum tuple and record string/list/dict
 payload release, plus x64 generic fixed-block tuple and record
 string/list/dict field release, plus returned borrowed sum string payload
 projection retention, plus ARM64 returned borrowed deep nested tuple string
-projection cleanup, plus returned branch-selected borrowed string projection
+and record string projection cleanup, plus returned branch-selected borrowed
+string projection
 retention, plus returned borrowed sum bytes, dict, and closure payload projection
 retention, plus returned branch-selected borrowed bytes, list, dict, and
 closure projection retention:
 
-- `scripts/run-in-container ./run-tests`: `4669 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4670 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -939,8 +940,8 @@ RC insertion treats several expressions as borrowing:
 
 Recent projection work extended returned borrowed value retention beyond
 generic heap shapes. Covered projections now include strings, bytes, lists,
-dict roots, closure roots, nested fixed-block tuples containing dynamic
-strings, branch-selected string projections, and one sum payload projection
+dict roots, closure roots, nested fixed-block tuples and records containing
+dynamic strings, branch-selected string projections, and one sum payload projection
 containing a dynamic string, bytes, dict, or closure payload.
 Branch-selected borrowed returns are now covered for strings, bytes, lists,
 dicts, and closures.
@@ -952,7 +953,7 @@ More projected shapes still need the same confidence:
 - broader sum payload shapes beyond the covered string, bytes, dict, and closure
   payload projections
 - deeper nested projections through `RawGet` or typed aliases beyond the
-  covered tuple projection path
+  covered tuple and record projection paths
 - branch-selected borrowed values beyond the covered string, bytes, list, dict,
   and closure projection cases
 - x64 backend parity for each retained projection family
