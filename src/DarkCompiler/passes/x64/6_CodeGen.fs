@@ -1423,6 +1423,7 @@ let private closurePayloadSizesFromParams (functions: LIR.Function list) : Map<s
 
 let private generateClosureRefCountDecHelper
     (enableLeakCheck: bool)
+    (recordRegistry: LIR.RecordRegistry)
     (closurePayloadSizes: Map<string, int>)
     (closureCaptureTypes: Map<string, AST.Type list>)
     : X86_64.Instr list =
@@ -1480,6 +1481,20 @@ let private generateClosureRefCountDecHelper
         @ leakDec
         @ [X86_64.Label doneLabel]
 
+    let releaseHeapRootCapture (fieldOffset: int) (helperLabel: string) (suffix: string) : X86_64.Instr list =
+        let doneLabel = label $"capture_root_done_{suffix}"
+        let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; scratch]
+        let saves = saveRegs |> List.map X86_64.PUSH
+        let restores = saveRegs |> List.rev |> List.map X86_64.POP
+        [X86_64.MOV_load (X86_64.R9, X86_64.RAX, fieldOffset)
+         X86_64.TEST_reg (X86_64.R9, X86_64.R9)
+         X86_64.Jcc (X86_64.EQ, doneLabel)]
+        @ saves
+        @ [X86_64.MOV_reg (X86_64.RAX, X86_64.R9)
+           X86_64.CALL helperLabel]
+        @ restores
+        @ [X86_64.Label doneLabel]
+
     let releaseCaptureCases =
         closureCaptureTypes
         |> Map.toList
@@ -1493,6 +1508,12 @@ let private generateClosureRefCountDecHelper
                     | AST.TString
                     | AST.TBytes ->
                         releaseDynamicBufferCapture fieldOffset $"{index}_{captureIndex}"
+                    | AST.TList _ ->
+                        releaseHeapRootCapture fieldOffset (listDecHelperForType recordRegistry captureType) $"{index}_{captureIndex}_list"
+                    | AST.TDict _ ->
+                        releaseHeapRootCapture fieldOffset dictRefCountDecHelperLabel $"{index}_{captureIndex}_dict"
+                    | AST.TFunction _ ->
+                        releaseHeapRootCapture fieldOffset closureRefCountDecHelperLabel $"{index}_{captureIndex}_closure"
                     | _ ->
                         [])
                 |> List.concat
@@ -3804,6 +3825,12 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
             |> Option.defaultValue false
         | _ -> false
 
+    let closureCaptureTypes = closureCaptureTypesFromParams functions
+
+    let closureCapturesContain (predicate: AST.Type -> bool) : bool =
+        closureCaptureTypes
+        |> Map.exists (fun _ captureTypes -> captureTypes |> List.exists predicate)
+
     let isTuple2List (fieldType: AST.Type) : bool =
         match fieldType with
         | AST.TList (AST.TTuple fields) ->
@@ -3884,7 +3911,8 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                         | _ -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
                         typeContainsListMatching (fun _ -> true) sourceType
-                    | _ -> false)))
+                    | _ -> false))
+            || closureCapturesContain (typeContainsListMatching (fun _ -> true)))
 
     let needsListRcDecTuple2Helper =
         functions
@@ -3897,7 +3925,8 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                         fields = [AST.TInt64; AST.TInt64]
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
                         typeContainsListMatching isTuple2List sourceType
-                    | _ -> false)))
+                    | _ -> false))
+            || closureCapturesContain (typeContainsListMatching isTuple2List))
 
     let needsListRcDecTuple2DynamicFirstHelper =
         functions
@@ -3910,7 +3939,8 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                         tuple2DynamicBufferOffsets fields = [0]
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
                         typeContainsListMatching isTuple2DynamicFirstList sourceType
-                    | _ -> false)))
+                    | _ -> false))
+            || closureCapturesContain (typeContainsListMatching isTuple2DynamicFirstList))
 
     let needsListRcDecTuple2DynamicSecondHelper =
         functions
@@ -3923,7 +3953,8 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                         tuple2DynamicBufferOffsets fields = [8]
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
                         typeContainsListMatching isTuple2DynamicSecondList sourceType
-                    | _ -> false)))
+                    | _ -> false))
+            || closureCapturesContain (typeContainsListMatching isTuple2DynamicSecondList))
 
     let needsListRcDecTuple2DynamicBothHelper =
         functions
@@ -3936,7 +3967,8 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                         tuple2DynamicBufferOffsets fields = [0; 8]
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
                         typeContainsListMatching isTuple2DynamicBothList sourceType
-                    | _ -> false)))
+                    | _ -> false))
+            || closureCapturesContain (typeContainsListMatching isTuple2DynamicBothList))
 
     let needsListRcDecRecord1DynamicHelper =
         functions
@@ -3949,7 +3981,8 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                         recordListHelperForType recordRegistry name = listRefCountDecRecord1DynamicHelperLabel
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
                         typeContainsListMatching isRecord1DynamicList sourceType
-                    | _ -> false)))
+                    | _ -> false))
+            || closureCapturesContain (typeContainsListMatching isRecord1DynamicList))
 
     let needsListRcDecSumDynamicHelper =
         functions
@@ -3962,7 +3995,8 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                         isDynamicBufferType payloadType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
                         typeContainsListMatching isSumDynamicList sourceType
-                    | _ -> false)))
+                    | _ -> false))
+            || closureCapturesContain (typeContainsListMatching isSumDynamicList))
 
     let needsListRcDecListHelper =
         functions
@@ -3974,7 +4008,8 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TList _))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
                         typeContainsListMatching isNestedList sourceType
-                    | _ -> false)))
+                    | _ -> false))
+            || closureCapturesContain (typeContainsListMatching isNestedList))
 
     let needsListRcDecClosureHelper =
         functions
@@ -3986,7 +4021,8 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TFunction _))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
                         typeContainsListMatching isClosureList sourceType
-                    | _ -> false)))
+                    | _ -> false))
+            || closureCapturesContain (typeContainsListMatching isClosureList))
 
     let needsListRcDecDictHelper =
         functions
@@ -3998,7 +4034,8 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TDict _))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
                         typeContainsListMatching isDictList sourceType
-                    | _ -> false)))
+                    | _ -> false))
+            || closureCapturesContain (typeContainsListMatching isDictList))
 
     let needsListRcDecDynamicBufferHelper =
         functions
@@ -4011,7 +4048,8 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList AST.TBytes)) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
                         typeContainsListMatching isDynamicBufferList sourceType
-                    | _ -> false)))
+                    | _ -> false))
+            || closureCapturesContain (typeContainsListMatching isDynamicBufferList))
 
     let needsListRcIncHelper =
         functions
@@ -4036,16 +4074,17 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                     | _ -> false)))
 
     let needsDictRcDecHelper =
-        functions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.DictHeap, _) -> true
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsDict sourceType
-                    | _ -> false)))
+        (functions
+         |> List.exists (fun func ->
+             func.CFG.Blocks
+             |> Map.exists (fun _ block ->
+                 block.Instrs
+                 |> List.exists (function
+                     | LIR.RefCountDec (_, _, LIR.DictHeap, _) -> true
+                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
+                         typeContainsDict sourceType
+                     | _ -> false))))
+        || closureCapturesContain typeContainsDict
 
     let needsClosureRcDecHelper =
         functions
@@ -4064,8 +4103,6 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
             (fun acc funcName payloadSize -> Map.add funcName payloadSize acc)
             (closurePayloadSizesFromAllocs functions)
             (closurePayloadSizesFromParams functions)
-    let closureCaptureTypes = closureCaptureTypesFromParams functions
-
     translateFuncs [] functions
     |> Result.map (fun allInstrs ->
         let listIncHelper =
@@ -4111,6 +4148,6 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
             if needsDictRcDecHelper || needsListRcDecDictHelper then generateDictRefCountDecHelper enableLeakCheck
             else []
         let closureDecHelper =
-            if needsClosureRcDecHelper || needsListRcDecClosureHelper then generateClosureRefCountDecHelper enableLeakCheck closurePayloadSizes closureCaptureTypes
+            if needsClosureRcDecHelper || needsListRcDecClosureHelper then generateClosureRefCountDecHelper enableLeakCheck recordRegistry closurePayloadSizes closureCaptureTypes
             else []
         allInstrs @ listIncHelper @ listDecHelper @ listDecTuple2Helper @ listDecTuple2DynamicFirstHelper @ listDecTuple2DynamicSecondHelper @ listDecTuple2DynamicBothHelper @ listDecRecord1DynamicHelper @ listDecSumDynamicHelper @ listDecListHelper @ listDecClosureHelper @ listDecDictHelper @ listDecDynamicBufferHelper @ dictIncHelper @ dictDecHelper @ closureDecHelper @ genOomHandler ())
