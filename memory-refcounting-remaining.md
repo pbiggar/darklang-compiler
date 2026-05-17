@@ -13,13 +13,14 @@ changes need in order to avoid re-opening completed problems.
 
 Status date: 2026-05-17.
 
-Current head reviewed: includes x64 fixed-block dynamic string field release.
+Current head reviewed: includes x64 fixed-block dynamic string/bytes field
+release.
 
-Last full-suite verification after the x64 fixed-block dynamic string field
-coverage:
+Last full-suite verification after the x64 fixed-block dynamic string/bytes
+field coverage:
 
 - `scripts/run-in-container dotnet build --verbosity quiet`: passed
-- `scripts/run-in-container ./run-tests`: `4593 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4594 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -687,6 +688,7 @@ commits enabled:
 - dict refcount helpers
 - dynamic string decref after `StringConcat`
 - generic fixed-block tuple field release for dynamic strings
+- generic fixed-block tuple field release for dynamic bytes
 
 However, x64 is still not as well covered as ARM64 in the memory tests run in
 this environment, and docs still say recursive fixed-block/list payload release
@@ -699,8 +701,8 @@ match ARM64 for every recursive payload shape?"
 
 Likely gaps:
 
-- fixed-block field release for bytes, records, dicts, closures, nested fixed
-  blocks, and all non-tuple layouts
+- fixed-block field release for records, dicts, closures, nested fixed blocks,
+  and all non-tuple layouts
 - closure capture recursive release
 - list payload helper variants beyond tuple2/list
 - dict helper key/value recursion parity
@@ -726,7 +728,7 @@ Likely gaps:
 1. Add x64-specific expected-pass leak probes for fixed blocks.
 2. Add x64-specific expected-pass leak probes for lists.
 3. Add x64-specific expected-pass leak probes for dicts.
-4. Port fixed-block bytes coverage plus dict/closure releases to x64.
+4. Port fixed-block dict/closure releases to x64.
 5. Port closure capture recursive releases to x64.
 6. Update x64 docs after tests pass.
 

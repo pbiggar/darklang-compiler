@@ -546,7 +546,8 @@ let private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type opti
     fieldTypes
     |> List.mapi (fun index fieldType ->
         match fieldType with
-        | AST.TString -> genDynamicBufferFieldRelease ctx (index * 8)
+        | AST.TString
+        | AST.TBytes -> genDynamicBufferFieldRelease ctx (index * 8)
         | _ -> [])
     |> List.concat
 

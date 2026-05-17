@@ -8,8 +8,8 @@ operations:
 - fixed-block allocation initializes trailing refcounts
 - fixed-block allocation participates in leak accounting
 - generic fixed-block `RefCountInc` and `RefCountDec` are enabled
-- generic tuple fixed-block `RefCountDec` releases dynamic string fields before
-  freeing the enclosing block
+- generic tuple fixed-block `RefCountDec` releases dynamic string/bytes fields
+  before freeing the enclosing block
 - tagged-list root `RefCountInc` and recursive node `RefCountDec` are enabled
 - tagged-list edge ownership is retained by typed `RawSet`
 - dict root `RefCountInc` and `RefCountDec` helpers are enabled
@@ -30,6 +30,7 @@ x64 probes cover the full ARM64 memory matrix.
 - generic fixed-block refcount decrement for 8-, 16-, and 24-byte payloads
 - dynamic string decrement after `StringConcat`
 - generic fixed-block dynamic string field release
+- generic fixed-block dynamic bytes field release
 
 The x64 tests run generated x64 ELF binaries directly on x64 hosts and through
 `qemu-x86_64-static` on non-x64 hosts.
@@ -85,8 +86,8 @@ buffer reuse is still a broader memory-policy question, shared with ARM64.
 
 The main x64 gaps are:
 
-- fixed-block field release for bytes, records, dicts, closures, sums, and
-  nested fixed blocks
+- fixed-block field release for records, dicts, closures, sums, and nested
+  fixed blocks
 - closure capture recursive release for all managed capture shapes
 - list helper variants for dict, closure, record, bytes, and sum payloads
 - dict/HAMT key and value recursive retain/release coverage

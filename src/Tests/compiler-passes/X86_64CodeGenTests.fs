@@ -377,6 +377,24 @@ let testGenericRefCountDecStringField () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected fixed-block string field release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 generic fixed-block RefCountDec releases a dynamic bytes field.
+let testGenericRefCountDecBytesField () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "a", LIR.StringSymbol "b")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBytes)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (AST.TTuple [AST.TBytes]))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected fixed-block bytes field release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -393,4 +411,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec reclaims fixed sizes", testGenericRefCountDecFixedSizes)
     ("LIR dynamic string RefCountDec reclaims concat", testDynamicStringRefCountDec)
     ("LIR generic RefCountDec releases string field", testGenericRefCountDecStringField)
+    ("LIR generic RefCountDec releases bytes field", testGenericRefCountDecBytesField)
 ]
