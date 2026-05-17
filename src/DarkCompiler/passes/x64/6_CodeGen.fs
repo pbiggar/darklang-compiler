@@ -543,6 +543,7 @@ let private listRefCountDecTuple2HelperLabel = "__dark_list_rc_dec_tuple2_helper
 let private listRefCountDecListHelperLabel = "__dark_list_rc_dec_list_helper"
 let private dictRefCountIncHelperLabel = "__dark_dict_rc_inc_helper"
 let private dictRefCountDecHelperLabel = "__dark_dict_rc_dec_helper"
+let private closureRefCountDecHelperLabel = "__dark_closure_rc_dec_helper"
 
 let private fixedBlockPayloadSize (recordRegistry: LIR.RecordRegistry) (fieldType: AST.Type) : int option =
     match fieldType with
@@ -559,6 +560,12 @@ let private genDictFieldRelease (fieldOffset: int) : X86_64.Instr list =
      X86_64.MOV_load (X86_64.R8, X86_64.RDX, fieldOffset)
      X86_64.MOV_reg (X86_64.RAX, X86_64.R8)
      X86_64.CALL dictRefCountDecHelperLabel
+     X86_64.POP X86_64.RDX]
+
+let private genClosureFieldRelease (fieldOffset: int) : X86_64.Instr list =
+    [X86_64.PUSH X86_64.RDX
+     X86_64.MOV_load (X86_64.RAX, X86_64.RDX, fieldOffset)
+     X86_64.CALL closureRefCountDecHelperLabel
      X86_64.POP X86_64.RDX]
 
 let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type option) : X86_64.Instr list =
@@ -579,6 +586,7 @@ let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type 
         | AST.TString
         | AST.TBytes -> genDynamicBufferFieldRelease ctx (index * 8)
         | AST.TDict _ -> genDictFieldRelease (index * 8)
+        | AST.TFunction _ -> genClosureFieldRelease (index * 8)
         | AST.TTuple _
         | AST.TRecord _
         | AST.TSum _ -> genFixedBlockFieldRelease ctx (index * 8) fieldType
@@ -1216,6 +1224,79 @@ let private generateDictRefCountDecHelper (enableLeakCheck: bool) : X86_64.Instr
        X86_64.JMP loopCheck
 
        X86_64.Label helperRet
+       X86_64.RET]
+
+let private closurePayloadSizesFromAllocs (functions: LIR.Function list) : Map<string, int> =
+    functions
+    |> List.collect (fun func ->
+        func.CFG.Blocks
+        |> Map.toList
+        |> List.collect (fun (_, block) ->
+            block.Instrs
+            |> List.choose (function
+                | LIR.ClosureAlloc (_, funcName, captures) ->
+                    Some (funcName, (List.length captures + 1) * 8)
+                | _ ->
+                    None)))
+    |> Map.ofList
+
+let private generateClosureRefCountDecHelper (enableLeakCheck: bool) (closurePayloadSizes: Map<string, int>) : X86_64.Instr list =
+    let label name = $"__dark_closure_rc_dec_{name}"
+    let helperRet = label "ret"
+    let payloadReady = label "payload_ready"
+    let skipFreeList = label "skip_freelist"
+
+    let leakDec =
+        if enableLeakCheck then
+            [X86_64.PUSH scratch
+             X86_64.PUSH X86_64.RCX
+             X86_64.LEA_rip (scratch, "_leak_count")
+             X86_64.MOV_load (X86_64.RCX, scratch, 0)
+             X86_64.SUB_imm (X86_64.RCX, 1)
+             X86_64.MOV_store (scratch, 0, X86_64.RCX)
+             X86_64.POP X86_64.RCX
+             X86_64.POP scratch]
+        else
+            []
+
+    let payloadCases =
+        closurePayloadSizes
+        |> Map.toList
+        |> List.filter (fun (_, payloadSize) -> payloadSize <> 8)
+        |> List.mapi (fun index (funcName, payloadSize) ->
+            let nextCase = label $"payload_next_{index}"
+            [X86_64.LEA_rip (X86_64.R10, funcName)
+             X86_64.CMP_reg (X86_64.RDX, X86_64.R10)
+             X86_64.Jcc (X86_64.NE, nextCase)
+             X86_64.MOV_imm32 (X86_64.RCX, int32 payloadSize)
+             X86_64.JMP payloadReady
+             X86_64.Label nextCase])
+        |> List.concat
+
+    [X86_64.Label closureRefCountDecHelperLabel
+     X86_64.TEST_reg (X86_64.RAX, X86_64.RAX)
+     X86_64.Jcc (X86_64.EQ, helperRet)
+     X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 0)
+     X86_64.MOV_imm32 (X86_64.RCX, 8)]
+    @ payloadCases
+    @ [X86_64.Label payloadReady
+       X86_64.MOV_reg (X86_64.RDI, X86_64.RAX)
+       X86_64.ADD_reg (X86_64.RDI, X86_64.RCX)
+       X86_64.MOV_load (X86_64.RDX, X86_64.RDI, 0)
+       X86_64.SUB_imm (X86_64.RDX, 1)
+       X86_64.MOV_store (X86_64.RDI, 0, X86_64.RDX)
+       X86_64.TEST_reg (X86_64.RDX, X86_64.RDX)
+       X86_64.Jcc (X86_64.NE, helperRet)
+       X86_64.CMP_imm (X86_64.RCX, freeListSize)
+       X86_64.Jcc (X86_64.GE, skipFreeList)
+       X86_64.MOV_reg (X86_64.RDI, freeListBase)
+       X86_64.ADD_reg (X86_64.RDI, X86_64.RCX)
+       X86_64.MOV_load (X86_64.RDX, X86_64.RDI, 0)
+       X86_64.MOV_store (X86_64.RAX, 0, X86_64.RDX)
+       X86_64.MOV_store (X86_64.RDI, 0, X86_64.RAX)
+       X86_64.Label skipFreeList]
+    @ leakDec
+    @ [X86_64.Label helperRet
        X86_64.RET]
 
 /// Adjust a stack slot offset to account for callee-saved registers pushed after RBP.
@@ -2270,7 +2351,12 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL dictRefCountDecHelperLabel]
                 @ restores
             | LIR.ClosureHeap ->
-                genRefCountDecGeneric ctx addrReg payloadSize sourceType
+                let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.R10; scratch]
+                let saves = saveRegs |> List.map X86_64.PUSH
+                let restores = saveRegs |> List.rev |> List.map X86_64.POP
+                saves
+                @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL closureRefCountDecHelperLabel]
+                @ restores
             | LIR.GenericHeap ->
                 genRefCountDecGeneric ctx addrReg payloadSize sourceType)
 
@@ -3449,6 +3535,18 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
             |> Option.defaultValue false
         | _ -> false
 
+    let rec typeContainsClosure (fieldType: AST.Type) : bool =
+        match fieldType with
+        | AST.TFunction _ -> true
+        | AST.TTuple fields -> fields |> List.exists typeContainsClosure
+        | AST.TSum (_, payloadTypes) -> payloadTypes |> List.exists typeContainsClosure
+        | AST.TRecord (name, _) ->
+            recordRegistry
+            |> Map.tryFind name
+            |> Option.map (List.exists (fun (_, fieldType) -> typeContainsClosure fieldType))
+            |> Option.defaultValue false
+        | _ -> false
+
     // Check if any function uses TaggedList RefCountDec or RefCountInc
     let needsListRcDecHelper =
         functions
@@ -3519,6 +3617,20 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                         typeContainsDict sourceType
                     | _ -> false)))
 
+    let needsClosureRcDecHelper =
+        functions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.ClosureHeap, _) -> true
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
+                        typeContainsClosure sourceType
+                    | _ -> false)))
+
+    let closurePayloadSizes = closurePayloadSizesFromAllocs functions
+
     translateFuncs [] functions
     |> Result.map (fun allInstrs ->
         let listIncHelper =
@@ -3539,4 +3651,7 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
         let dictDecHelper =
             if needsDictRcDecHelper then generateDictRefCountDecHelper enableLeakCheck
             else []
-        allInstrs @ listIncHelper @ listDecHelper @ listDecTuple2Helper @ listDecListHelper @ dictIncHelper @ dictDecHelper @ genOomHandler ())
+        let closureDecHelper =
+            if needsClosureRcDecHelper then generateClosureRefCountDecHelper enableLeakCheck closurePayloadSizes
+            else []
+        allInstrs @ listIncHelper @ listDecHelper @ listDecTuple2Helper @ listDecListHelper @ dictIncHelper @ dictDecHelper @ closureDecHelper @ genOomHandler ())

@@ -38,6 +38,7 @@ x64 probes cover the full ARM64 memory matrix.
 - generic fixed-block dict root field release
 - zero-capture closure allocation plus explicit closure `RefCountDec` leak
   accounting
+- generic fixed-block zero-capture closure field release
 
 The x64 tests run generated x64 ELF binaries directly on x64 hosts and through
 `qemu-x86_64-static` on non-x64 hosts.
@@ -93,8 +94,8 @@ buffer reuse is still a broader memory-policy question, shared with ARM64.
 
 The main x64 gaps are:
 
-- fixed-block field release for closures and boxed sum payloads beyond the
-  current string payload path
+- fixed-block field release for boxed sum payloads beyond the current string
+  payload path and closure payloads beyond zero-capture roots
 - broader record field coverage beyond the current string/bytes/nested
   fixed-block release paths
 - closure capture recursive release for all managed capture shapes

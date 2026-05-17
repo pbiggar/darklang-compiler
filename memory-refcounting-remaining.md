@@ -14,15 +14,16 @@ changes need in order to avoid re-opening completed problems.
 Status date: 2026-05-17.
 
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
-release, tuple-only nested fixed-block field release, and record-registry-based
-record field release.
+release, tuple-only nested fixed-block field release, record-registry-based
+record field release, boxed sum string payload release, dict root field release,
+and zero-capture closure field release.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
-field coverage, tuple-only nested fixed-block release, and record string field
-release:
+field coverage, nested fixed-block release, record string field release, boxed
+sum string payload release, dict root field release, and zero-capture closure
+field release:
 
-- `scripts/run-in-container dotnet build --verbosity quiet`: passed
-- `scripts/run-in-container ./run-tests`: `4596 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4601 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -698,6 +699,7 @@ commits enabled:
 - dict root field release
 - zero-capture closure allocation plus explicit closure `RefCountDec` leak
   accounting
+- generic fixed-block zero-capture closure field release
 
 However, x64 is still not as well covered as ARM64 in the memory tests run in
 this environment, and docs still say recursive fixed-block/list payload release
@@ -710,9 +712,9 @@ match ARM64 for every recursive payload shape?"
 
 Likely gaps:
 
-- fixed-block field release for closures, boxed sum payloads beyond the current
-  string case, and untested record field combinations beyond
-  string/bytes/nested fixed blocks
+- fixed-block field release for boxed sum payloads beyond the current string
+  case, multi-capture closure payloads, and untested record field combinations
+  beyond string/bytes/nested fixed blocks
 - closure capture recursive release
 - list payload helper variants beyond tuple2/list
 - dict helper key/value recursion parity

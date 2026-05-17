@@ -521,6 +521,25 @@ let testClosureAllocRefCountDecBalancesLeakCounter () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected closure allocation and release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 generic fixed-block RefCountDec releases closure root fields.
+let testGenericRefCountDecClosureField () : Result<unit, string> =
+    let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
+    let program =
+        makeSimpleProgram
+            [
+                LIR.ClosureAlloc (LIR.Physical LIR.X2, "_start", [])
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (AST.TTuple [closureType]))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected closure field release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -544,4 +563,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec releases nested sum string field", testGenericRefCountDecNestedSumStringField)
     ("LIR generic RefCountDec releases dict field", testGenericRefCountDecDictField)
     ("LIR closure alloc RefCountDec balances leak counter", testClosureAllocRefCountDecBalancesLeakCounter)
+    ("LIR generic RefCountDec releases closure field", testGenericRefCountDecClosureField)
 ]
