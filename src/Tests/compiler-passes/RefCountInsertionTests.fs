@@ -84,6 +84,53 @@ let testRcShapeClassifiesRemainingRuntimeShapes () : TestResult =
     | Some (typ, expected) ->
         Error $"Expected {typ} to classify as {expected}, got {rcShapeOfType Map.empty typ}"
 
+let testRcShapeOwnershipHelpersClassifyManagedRoots () : TestResult =
+    let managedShapes = [
+        DynamicString
+        DynamicBytes
+        FixedBlock (16, [Immediate; DynamicString])
+        BoxedSum 16
+        TaggedListShape DynamicString
+        DictRoot (DynamicString, Immediate)
+        ClosureShape [DynamicString]
+    ]
+
+    let unmanagedShapes = [
+        Immediate
+        StaticString
+        RawUnmanaged
+    ]
+
+    match managedShapes |> List.tryFind (fun shape -> not (rcShapeNeedsOwnedScopeRelease shape)) with
+    | Some shape ->
+        Error $"Expected managed shape {shape} to need owned scope release"
+    | None ->
+        match unmanagedShapes |> List.tryFind rcShapeNeedsOwnedScopeRelease with
+        | Some shape ->
+            Error $"Expected unmanaged shape {shape} to skip owned scope release"
+        | None ->
+            Ok ()
+
+let testRcShapeOwnershipHelpersSelectRootDispatch () : TestResult =
+    let samples = [
+        (FixedBlock (16, [DynamicString]), Some GenericHeap)
+        (BoxedSum 16, Some GenericHeap)
+        (TaggedListShape DynamicString, Some TaggedList)
+        (TaggedListShape (ClosureShape []), Some GenericHeap)
+        (DictRoot (Immediate, DynamicString), Some DictHeap)
+        (ClosureShape [DynamicString], Some ClosureHeap)
+        (Immediate, None)
+        (DynamicString, None)
+        (DynamicBytes, None)
+        (RawUnmanaged, None)
+    ]
+
+    match samples |> List.tryFind (fun (shape, expected) -> rcShapeRootKind shape <> expected) with
+    | None ->
+        Ok ()
+    | Some (shape, expected) ->
+        Error $"Expected shape {shape} to use root kind {expected}, got {rcShapeRootKind shape}"
+
 let testInferCallReturnsFunctionReturnType () : TestResult =
     let ctx : TypeContext = {
         TypeReg = Map.empty
@@ -286,6 +333,8 @@ let tests = [
     ("RcShape classifies primitives as immediate", testRcShapeClassifiesPrimitivesAsImmediate)
     ("RcShape classifies tuples and records as fixed blocks", testRcShapeClassifiesTuplesAndRecordsAsFixedBlocks)
     ("RcShape classifies remaining runtime shapes", testRcShapeClassifiesRemainingRuntimeShapes)
+    ("RcShape ownership helpers classify managed roots", testRcShapeOwnershipHelpersClassifyManagedRoots)
+    ("RcShape ownership helpers select root dispatch", testRcShapeOwnershipHelpersSelectRootDispatch)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)

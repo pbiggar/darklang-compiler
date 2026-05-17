@@ -442,24 +442,64 @@ let isBorrowingExpr (cexpr: CExpr) : bool =
     | TypedAtom (Var _, _) -> true // TypedAtom wrapping a variable - also borrowed
     | _ -> false
 
-let private isRcManagedHeapType (typ: AST.Type) : bool =
-    isHeapType typ
+let private rcShapeForType (ctx: TypeContext) (typ: AST.Type) : RcShape =
+    rcShapeOfType ctx.TypeReg typ
 
-let private needsAutomaticDec (typ: AST.Type) : bool =
+let rec private canClassifyRcShape (ctx: TypeContext) (typ: AST.Type) : bool =
     match typ with
-    | AST.TString -> true
-    | AST.TBytes -> true
-    | _ -> isRcManagedHeapType typ
+    | AST.TTuple elemTypes ->
+        elemTypes |> List.forall (canClassifyRcShape ctx)
+    | AST.TRecord (name, _) ->
+        match Map.tryFind name ctx.TypeReg with
+        | Some fields ->
+            fields |> List.forall (fun (_, fieldType) -> canClassifyRcShape ctx fieldType)
+        | None ->
+            false
+    | AST.TList elemType ->
+        canClassifyRcShape ctx elemType
+    | AST.TDict (keyType, valueType) ->
+        canClassifyRcShape ctx keyType && canClassifyRcShape ctx valueType
+    | _ ->
+        true
 
-let private bindingNeedsAutomaticDec (cexpr: CExpr) (typ: AST.Type) : bool =
-    needsAutomaticDec typ
+let private tryRcShapeForType (ctx: TypeContext) (typ: AST.Type) : RcShape option =
+    if canClassifyRcShape ctx typ then
+        Some (rcShapeForType ctx typ)
+    else
+        None
+
+let private isRcManagedHeapType (ctx: TypeContext) (typ: AST.Type) : bool =
+    match tryRcShapeForType ctx typ |> Option.bind rcShapeRootKind with
+    | Some ClosureHeap ->
+        false
+    | Some _ ->
+        true
+    | None ->
+        isHeapType typ
+
+let private needsAutomaticDec (ctx: TypeContext) (typ: AST.Type) : bool =
+    match tryRcShapeForType ctx typ with
+    | Some (ClosureShape _) ->
+        false
+    | Some shape ->
+        rcShapeNeedsOwnedScopeRelease shape
+    | None ->
+        isHeapType typ
+
+let private bindingNeedsAutomaticDec (ctx: TypeContext) (cexpr: CExpr) (typ: AST.Type) : bool =
+    needsAutomaticDec ctx typ
     || match typ, cexpr with
        | AST.TFunction _, ClosureAlloc _ -> true
        | AST.TFunction _, Call (funcName, _) when not (funcName.StartsWith("Stdlib.")) -> true
        | _ -> false
 
 let private rcInfoForType (ctx: TypeContext) (typ: AST.Type) : int * RcKind * AST.Type option =
-    (payloadSize typ ctx.TypeReg, rcKind typ, Some typ)
+    let shape = rcShapeForType ctx typ
+    match rcShapePayloadSize shape, rcShapeRootKind shape with
+    | Some size, Some kind ->
+        (size, kind, Some typ)
+    | _ ->
+        Crash.crash $"rcInfoForType: type '{typ}' does not have a fixed-size RC root"
 
 type private ReturnDec = TempId * AST.Type * RcKind option
 
@@ -473,8 +513,10 @@ let private retainExprForType (ctx: TypeContext) (tempId: TempId) (typ: AST.Type
         let (size, kind, sourceType) = rcInfoForType ctx typ
         RefCountInc (Var tempId, size, kind, sourceType)
 
-let private needsRetainForBorrowedValue (typ: AST.Type) : bool =
-    typ = AST.TString || typ = AST.TBytes || isRcManagedHeapType typ
+let private needsRetainForBorrowedValue (ctx: TypeContext) (typ: AST.Type) : bool =
+    (match tryRcShapeForType ctx typ with
+     | Some shape -> rcShapeNeedsOwnedScopeRelease shape
+     | None -> isHeapType typ)
     || match typ with
        | AST.TFunction _ -> true
        | _ -> false
@@ -733,7 +775,7 @@ let rec insertRCWithAnalysis
                 | RLet (nextAliasTemp, Atom (Var sourceId), nextNextBody, _) when sourceId = aliasedTemp ->
                     inferAliasedVarTypeFromUse nextAliasTemp nextNextBody
                 | RLet (nextAliasTemp, TypedAtom (Var sourceId, aliasType), nextNextBody, _) when sourceId = aliasedTemp ->
-                    if isRcManagedHeapType aliasType then
+                    if isRcManagedHeapType ctx aliasType then
                         Some aliasType
                     else
                         inferAliasedVarTypeFromUse nextAliasTemp nextNextBody
@@ -757,7 +799,7 @@ let rec insertRCWithAnalysis
                             None
 
                     match aliasTypeFromBody with
-                    | Some inferredAliasType when isRcManagedHeapType inferredAliasType && not (isRcManagedHeapType t) ->
+                    | Some inferredAliasType when isRcManagedHeapType ctx inferredAliasType && not (isRcManagedHeapType ctx t) ->
                         inferredAliasType
                     | _ ->
                         t
@@ -816,7 +858,7 @@ let rec insertRCWithAnalysis
             let returnDecs' =
                 let secondParamNeedsOwnershipTransfer (funcName: string) : bool =
                     let isOwnershipTransferredParamType (typ: AST.Type) : bool =
-                        isRcManagedHeapType typ
+                        isRcManagedHeapType ctx typ
                         || match typ with
                            | AST.TFunction _ -> true
                            | _ -> false
@@ -861,7 +903,7 @@ let rec insertRCWithAnalysis
                     | _ ->
                         false
 
-                if bindingNeedsAutomaticDec cexpr inferredType
+                if bindingNeedsAutomaticDec ctx cexpr inferredType
                    && not (Set.contains tempId bodyReturned)
                    && not (isBorrowingExpr cexpr)
                    && not skipReturnDecForPushBackHelpers
@@ -888,7 +930,7 @@ let rec insertRCWithAnalysis
                         match atom with
                         | Var tid ->
                             match tryGetType ctx tid with
-                            | Some t when needsRetainForBorrowedValue t ->
+                            | Some t when needsRetainForBorrowedValue ctx t ->
                                 (tid, t) :: acc
                             | _ -> acc
                         | _ -> acc
@@ -900,7 +942,7 @@ let rec insertRCWithAnalysis
                         match atom with
                         | Var tid ->
                             match tryGetType ctx tid with
-                            | Some t when needsRetainForBorrowedValue t ->
+                            | Some t when needsRetainForBorrowedValue ctx t ->
                                 (tid, t) :: acc
                             | _ -> acc
                         | _ -> acc
@@ -913,7 +955,7 @@ let rec insertRCWithAnalysis
                     match atom with
                     | Var tid ->
                         match tryGetType ctx tid with
-                        | Some t when needsRetainForBorrowedValue t -> Some t
+                        | Some t when needsRetainForBorrowedValue ctx t -> Some t
                         | _ -> None
                     | _ -> None
 
@@ -928,7 +970,7 @@ let rec insertRCWithAnalysis
                 | Atom (Var sourceId)
                 | TypedAtom (Var sourceId, _) ->
                     // Returning a pure alias of an already-returned owned value should not inc again.
-                    if needsRetainForBorrowedValue inferredType
+                    if needsRetainForBorrowedValue ctx inferredType
                        && Set.contains tempId bodyReturned
                        && isBorrowingExpr cexpr then
                         if Set.contains sourceId bodyReturned then
@@ -938,7 +980,7 @@ let rec insertRCWithAnalysis
                     else
                         None
                 | _ ->
-                    if needsRetainForBorrowedValue inferredType
+                    if needsRetainForBorrowedValue ctx inferredType
                        && Set.contains tempId bodyReturned
                        && isBorrowingExpr cexpr then
                         Some inferredType
@@ -998,7 +1040,7 @@ let private insertRCInFunctionInternal
         func.TypedParams
         |> List.fold (fun acc param ->
             match param.Type with
-            | _ when isRcManagedHeapType param.Type ->
+            | _ when isRcManagedHeapType ctx param.Type ->
                 let (size, kind, sourceType) = rcInfoForType ctxWithParams param.Type
                 (param.Id, size, kind, sourceType) :: acc
             | _ -> acc

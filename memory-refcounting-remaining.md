@@ -19,6 +19,8 @@ record field release, boxed sum string/bytes/list/dict/closure payload release,
 dict root field release, record dict/closure root field release, zero-capture
 closure field release, tagged-list closure leaf payload release, tagged-list
 dict leaf payload release, and tagged-list dynamic string leaf payload release,
+shape ownership helper coverage, initial RC insertion scope/retain/root-dispatch
+decisions using `RcShape` where full metadata is available,
 and tagged-list tuple dynamic
 string field release, and tagged-list one-field record dynamic string field
 release, tagged-list boxed sum dynamic string payload release, tagged-list
@@ -78,7 +80,7 @@ no-payload and payload variant release, plus record-contained sum payload
 release, plus dict-contained sum value payload release, plus pure enum sum
 no-heap-ownership coverage:
 
-- `scripts/run-in-container ./run-tests`: `4686 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4688 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -132,10 +134,22 @@ type RcShape =
     | RawUnmanaged
 ```
 
-`rcShapeOfType` classifies source types into this shape model. It is still not
-the sole source of truth for ownership decisions. Several active code paths
-still use legacy helpers such as `ANF.isHeapType`, `payloadSize`, `rcKind`, and
-local type predicates.
+`rcShapeOfType` classifies source types into this shape model. `ANF.fs` also
+now exposes the first small ownership helpers:
+
+- `rcShapeNeedsOwnedScopeRelease`
+- `rcShapeRootKind`
+- `rcShapePayloadSize`
+
+`2.5_RefCountInsertion.fs` uses those helpers for automatic scope release,
+borrowed-retain checks, and root dispatch where full type metadata is available.
+It deliberately preserves the previous non-crashing classification for generated
+record names whose field metadata is not present in the current `TypeReg`; fixed
+root operations still require concrete payload metadata before they are emitted.
+
+`RcShape` is still not the sole source of truth for ownership decisions. Several
+active code paths still use legacy helpers such as `ANF.isHeapType`,
+`payloadSize`, `rcKind`, and local type predicates.
 
 Remaining work is therefore migration and enforcement, not initial creation.
 
@@ -383,11 +397,11 @@ Concrete examples:
 
 ### Remaining Tasks
 
-1. Add a small ownership API over `RcShape`.
+1. Extend the small ownership API over `RcShape`.
 
-   Suggested shape operations:
+   Initial operations exist for owned scope release, root dispatch kind, and
+   root payload size. Remaining suggested shape operations:
 
-   - `needsOwnedScopeRelease : RcShape -> bool`
    - `retainOperation : RcShape -> RetainOp option`
    - `releaseOperation : RcShape -> ReleaseOp option`
    - `fieldReleasePlan : RcShape -> FieldReleasePlan list`
@@ -395,8 +409,10 @@ Concrete examples:
    - `isRootManaged : RcShape -> bool`
    - `isRecursiveReleaseNeeded : RcShape -> bool`
 
-2. Replace `isRcManagedHeapType` and `needsAutomaticDec` in
-   `2.5_RefCountInsertion.fs` with shape-based decisions.
+2. Finish replacing `isRcManagedHeapType` and `needsAutomaticDec` in
+   `2.5_RefCountInsertion.fs` with shape-based decisions. The current adapter
+   is shape-driven where possible but still has a metadata-gap fallback for
+   generated record names.
 
 3. Replace direct uses of `ANF.isHeapType` in list literal lowering.
 
@@ -423,9 +439,9 @@ Concrete examples:
 
 1. Add pure tests for `rcShapeOfType` behavior that currently lacks direct
    coverage.
-2. Add an ownership-planning module around `RcShape` without changing codegen.
-3. Convert RC insertion for strings and bytes to use the planner.
-4. Convert RC insertion for fixed blocks and lists to use the planner.
+2. Extend the ownership helpers around `RcShape` without changing codegen.
+3. Finish converting RC insertion for strings and bytes to use the planner.
+4. Finish converting RC insertion for fixed blocks and lists to use the planner.
 5. Convert list literal element-retain logic to use the planner.
 6. Convert backend fixed-block field release selection to consume a plan.
 

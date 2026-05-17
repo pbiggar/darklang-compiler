@@ -306,6 +306,64 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
     | AST.TRawPtr ->
         RawUnmanaged
 
+/// True when a runtime shape can own managed memory that must be released when
+/// an owning binding leaves scope.
+let rcShapeNeedsOwnedScopeRelease (shape: RcShape) : bool =
+    match shape with
+    | Immediate
+    | StaticString
+    | RawUnmanaged ->
+        false
+    | DynamicString
+    | DynamicBytes
+    | FixedBlock _
+    | BoxedSum _
+    | TaggedListShape _
+    | DictRoot _
+    | ClosureShape _ ->
+        true
+
+/// Dispatch kind for fixed-size/tagged RC roots. Dynamic buffers use their own
+/// string/bytes operations, so they intentionally do not have a root kind here.
+let rcShapeRootKind (shape: RcShape) : RcKind option =
+    match shape with
+    | FixedBlock _
+    | BoxedSum _ ->
+        Some GenericHeap
+    | TaggedListShape (ClosureShape _) ->
+        Some GenericHeap
+    | TaggedListShape _ ->
+        Some TaggedList
+    | DictRoot _ ->
+        Some DictHeap
+    | ClosureShape _ ->
+        Some ClosureHeap
+    | Immediate
+    | DynamicString
+    | DynamicBytes
+    | StaticString
+    | RawUnmanaged ->
+        None
+
+/// Payload size for fixed-size/tagged RC roots.
+let rcShapePayloadSize (shape: RcShape) : int option =
+    match shape with
+    | FixedBlock (payloadSize, _)
+    | BoxedSum payloadSize ->
+        Some payloadSize
+    | TaggedListShape _ ->
+        Some 24
+    | DictRoot _ ->
+        Some 8
+    | ClosureShape _ ->
+        Some 0
+    | Immediate
+    | DynamicString
+    | DynamicBytes
+    | StaticString
+    | RawUnmanaged ->
+        None
+
 /// Determine reference-count dispatch kind for a heap type
 let rcKind (t: AST.Type) : RcKind =
     match t with
