@@ -549,6 +549,7 @@ let private listRefCountDecRecord3DynamicFirstThirdHelperLabel = "__dark_list_rc
 let private listRefCountDecSumDynamicHelperLabel = "__dark_list_rc_dec_sum_dynamic_helper"
 let private listRefCountDecSumListHelperLabel = "__dark_list_rc_dec_sum_list_helper"
 let private listRefCountDecSumDictHelperLabel = "__dark_list_rc_dec_sum_dict_helper"
+let private listRefCountDecSumClosureHelperLabel = "__dark_list_rc_dec_sum_closure_helper"
 let private listRefCountDecListHelperLabel = "__dark_list_rc_dec_list_helper"
 let private listRefCountDecClosureHelperLabel = "__dark_list_rc_dec_closure_helper"
 let private listRefCountDecDictHelperLabel = "__dark_list_rc_dec_dict_helper"
@@ -640,6 +641,8 @@ let private listDecHelperForType (recordRegistry: LIR.RecordRegistry) (fieldType
         listRefCountDecSumListHelperLabel
     | AST.TList (AST.TSum (_, [AST.TDict _])) ->
         listRefCountDecSumDictHelperLabel
+    | AST.TList (AST.TSum (_, [AST.TFunction _])) ->
+        listRefCountDecSumClosureHelperLabel
     | _ ->
         listRefCountDecHelperLabel
 
@@ -736,6 +739,7 @@ type private ListLeafPayloadRelease =
     | FixedBlockLeafPayload of payloadSize: int * dynamicBufferOffsets: int list
     | FixedBlockListFieldPayload of payloadSize: int * listFieldOffset: int
     | FixedBlockDictFieldPayload of payloadSize: int * dictFieldOffset: int
+    | FixedBlockClosureFieldPayload of payloadSize: int * closureFieldOffset: int
     | ListLeafPayload
     | ClosureLeafPayload
     | DictLeafPayload
@@ -966,6 +970,37 @@ let private generateListRefCountDecHelperWith
                else [])
             @ leakDec
             @ [X86_64.Label leafPayloadDone]
+        | FixedBlockClosureFieldPayload (payloadSize, closureFieldOffset) ->
+            [X86_64.MOV_load (X86_64.R11, X86_64.RDI, 0)
+             X86_64.TEST_reg (X86_64.R11, X86_64.R11)
+             X86_64.Jcc (X86_64.EQ, leafPayloadDone)
+             X86_64.CMP_reg (X86_64.R11, freeListBase)
+             X86_64.Jcc (X86_64.B, leafPayloadDone)
+             X86_64.CMP_reg (X86_64.R11, heapPtr)
+             X86_64.Jcc (X86_64.AE, leafPayloadDone)
+             X86_64.MOV_load (X86_64.R9, X86_64.R11, payloadSize)
+             X86_64.SUB_imm (X86_64.R9, 1)
+             X86_64.MOV_store (X86_64.R11, payloadSize, X86_64.R9)
+             X86_64.TEST_reg (X86_64.R9, X86_64.R9)
+             X86_64.Jcc (X86_64.NE, leafPayloadDone)
+             X86_64.PUSH X86_64.RDI
+             X86_64.PUSH X86_64.RSI
+             X86_64.PUSH X86_64.RCX
+             X86_64.PUSH X86_64.R11
+             X86_64.MOV_load (X86_64.RAX, X86_64.R11, closureFieldOffset)
+             X86_64.CALL closureRefCountDecHelperLabel
+             X86_64.POP X86_64.R11
+             X86_64.POP X86_64.RCX
+             X86_64.POP X86_64.RSI
+             X86_64.POP X86_64.RDI
+             X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)]
+            @ (if payloadSize >= 0 && payloadSize < freeListSize then
+                [X86_64.MOV_load (X86_64.R10, freeListBase, payloadSize)
+                 X86_64.MOV_store (X86_64.R11, 0, X86_64.R10)
+                 X86_64.MOV_store (freeListBase, payloadSize, X86_64.R11)]
+               else [])
+            @ leakDec
+            @ [X86_64.Label leafPayloadDone]
 
     [X86_64.Label helperLabel
      // RAX = tagged list pointer, init pending count
@@ -1170,6 +1205,9 @@ let private generateListRefCountDecSumListHelper (enableLeakCheck: bool) : X86_6
 
 let private generateListRefCountDecSumDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
     generateListRefCountDecHelperWith listRefCountDecSumDictHelperLabel enableLeakCheck (FixedBlockDictFieldPayload (16, 8))
+
+let private generateListRefCountDecSumClosureHelper (enableLeakCheck: bool) : X86_64.Instr list =
+    generateListRefCountDecHelperWith listRefCountDecSumClosureHelperLabel enableLeakCheck (FixedBlockClosureFieldPayload (16, 8))
 
 let private generateListRefCountDecListHelper (enableLeakCheck: bool) : X86_64.Instr list =
     generateListRefCountDecHelperWith listRefCountDecListHelperLabel enableLeakCheck ListLeafPayload
@@ -2708,6 +2746,8 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                         listRefCountDecSumListHelperLabel
                     | Some (AST.TList (AST.TSum (_, [AST.TDict _]))) ->
                         listRefCountDecSumDictHelperLabel
+                    | Some (AST.TList (AST.TSum (_, [AST.TFunction _]))) ->
+                        listRefCountDecSumClosureHelperLabel
                     | _ ->
                         listRefCountDecHelperLabel
                 let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; scratch]
@@ -3996,6 +4036,11 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
         | AST.TList (AST.TSum (_, [AST.TDict _])) -> true
         | _ -> false
 
+    let isSumClosureList (fieldType: AST.Type) : bool =
+        match fieldType with
+        | AST.TList (AST.TSum (_, [AST.TFunction _])) -> true
+        | _ -> false
+
     let isNestedList (fieldType: AST.Type) : bool =
         match fieldType with
         | AST.TList (AST.TList _) -> true
@@ -4034,6 +4079,7 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                         | Some (AST.TList (AST.TSum (_, [payloadType]))) when isDynamicBufferType payloadType -> false
                         | Some (AST.TList (AST.TSum (_, [AST.TList _]))) -> false
                         | Some (AST.TList (AST.TSum (_, [AST.TDict _]))) -> false
+                        | Some (AST.TList (AST.TSum (_, [AST.TFunction _]))) -> false
                         | Some (AST.TList (AST.TList _)) -> false
                         | Some (AST.TList (AST.TFunction _)) -> false
                         | Some (AST.TList (AST.TDict _)) -> false
@@ -4183,6 +4229,19 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                     | _ -> false))
             || closureCapturesContain (typeContainsListMatching isSumDictList))
 
+    let needsListRcDecSumClosureHelper =
+        functions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TSum (_, [AST.TFunction _])))) -> true
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
+                        typeContainsListMatching isSumClosureList sourceType
+                    | _ -> false))
+            || closureCapturesContain (typeContainsListMatching isSumClosureList))
+
     let needsListRcDecListHelper =
         functions
         |> List.exists (fun func ->
@@ -4326,6 +4385,9 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
         let listDecSumDictHelper =
             if needsListRcDecSumDictHelper then generateListRefCountDecSumDictHelper enableLeakCheck
             else []
+        let listDecSumClosureHelper =
+            if needsListRcDecSumClosureHelper then generateListRefCountDecSumClosureHelper enableLeakCheck
+            else []
         let listDecListHelper =
             if needsListRcDecListHelper then generateListRefCountDecListHelper enableLeakCheck
             else []
@@ -4345,6 +4407,6 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
             if needsDictRcDecHelper || needsListRcDecDictHelper || needsListRcDecSumDictHelper then generateDictRefCountDecHelper enableLeakCheck
             else []
         let closureDecHelper =
-            if needsClosureRcDecHelper || needsListRcDecClosureHelper then generateClosureRefCountDecHelper enableLeakCheck recordRegistry closurePayloadSizes closureCaptureTypes
+            if needsClosureRcDecHelper || needsListRcDecClosureHelper || needsListRcDecSumClosureHelper then generateClosureRefCountDecHelper enableLeakCheck recordRegistry closurePayloadSizes closureCaptureTypes
             else []
-        allInstrs @ listIncHelper @ listDecHelper @ listDecTuple2Helper @ listDecTuple2DynamicFirstHelper @ listDecTuple2DynamicSecondHelper @ listDecTuple2DynamicBothHelper @ listDecTuple3DynamicFirstThirdHelper @ listDecRecord1DynamicHelper @ listDecRecord3DynamicFirstThirdHelper @ listDecSumDynamicHelper @ listDecSumListHelper @ listDecSumDictHelper @ listDecListHelper @ listDecClosureHelper @ listDecDictHelper @ listDecDynamicBufferHelper @ dictIncHelper @ dictDecHelper @ closureDecHelper @ genOomHandler ())
+        allInstrs @ listIncHelper @ listDecHelper @ listDecTuple2Helper @ listDecTuple2DynamicFirstHelper @ listDecTuple2DynamicSecondHelper @ listDecTuple2DynamicBothHelper @ listDecTuple3DynamicFirstThirdHelper @ listDecRecord1DynamicHelper @ listDecRecord3DynamicFirstThirdHelper @ listDecSumDynamicHelper @ listDecSumListHelper @ listDecSumDictHelper @ listDecSumClosureHelper @ listDecListHelper @ listDecClosureHelper @ listDecDictHelper @ listDecDynamicBufferHelper @ dictIncHelper @ dictDecHelper @ closureDecHelper @ genOomHandler ())
