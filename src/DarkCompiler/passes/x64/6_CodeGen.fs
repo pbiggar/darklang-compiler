@@ -538,6 +538,12 @@ let private genDynamicBufferFieldRelease (ctx: FuncCtx) (fieldOffset: int) : X86
        X86_64.Label literalLabel
        X86_64.Label doneLabel]
 
+let private listRefCountDecHelperLabel = "__dark_list_rc_dec_helper"
+let private listRefCountDecTuple2HelperLabel = "__dark_list_rc_dec_tuple2_helper"
+let private listRefCountDecListHelperLabel = "__dark_list_rc_dec_list_helper"
+let private dictRefCountIncHelperLabel = "__dark_dict_rc_inc_helper"
+let private dictRefCountDecHelperLabel = "__dark_dict_rc_dec_helper"
+
 let private fixedBlockPayloadSize (recordRegistry: LIR.RecordRegistry) (fieldType: AST.Type) : int option =
     match fieldType with
     | AST.TTuple fields -> Some (List.length fields * 8)
@@ -547,6 +553,13 @@ let private fixedBlockPayloadSize (recordRegistry: LIR.RecordRegistry) (fieldTyp
         |> Map.tryFind name
         |> Option.map (fun fields -> List.length fields * 8)
     | _ -> None
+
+let private genDictFieldRelease (fieldOffset: int) : X86_64.Instr list =
+    [X86_64.PUSH X86_64.RDX
+     X86_64.MOV_load (X86_64.R8, X86_64.RDX, fieldOffset)
+     X86_64.MOV_reg (X86_64.RAX, X86_64.R8)
+     X86_64.CALL dictRefCountDecHelperLabel
+     X86_64.POP X86_64.RDX]
 
 let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type option) : X86_64.Instr list =
     let fieldTypes =
@@ -565,6 +578,7 @@ let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type 
         match fieldType with
         | AST.TString
         | AST.TBytes -> genDynamicBufferFieldRelease ctx (index * 8)
+        | AST.TDict _ -> genDictFieldRelease (index * 8)
         | AST.TTuple _
         | AST.TRecord _
         | AST.TSum _ -> genFixedBlockFieldRelease ctx (index * 8) fieldType
@@ -626,14 +640,6 @@ let private genRefCountIncGeneric (addrReg: X86_64.Reg) (payloadSize: int) : X86
 // ============================================================================
 // TaggedList RefCountDec Helper (FingerTree recursive DFS)
 // ============================================================================
-
-/// Label for the shared list refcount dec helper function
-let private listRefCountDecHelperLabel = "__dark_list_rc_dec_helper"
-
-let private listRefCountDecTuple2HelperLabel = "__dark_list_rc_dec_tuple2_helper"
-let private listRefCountDecListHelperLabel = "__dark_list_rc_dec_list_helper"
-let private dictRefCountIncHelperLabel = "__dark_dict_rc_inc_helper"
-let private dictRefCountDecHelperLabel = "__dark_dict_rc_dec_helper"
 
 /// Generate the TaggedList RefCountDec helper function.
 /// Called via CALL with the tagged list pointer in RAX.
@@ -3431,6 +3437,18 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
             | Error e -> Error e
             | Ok instrs -> translateFuncs (instrs :: acc) rest
 
+    let rec typeContainsDict (fieldType: AST.Type) : bool =
+        match fieldType with
+        | AST.TDict _ -> true
+        | AST.TTuple fields -> fields |> List.exists typeContainsDict
+        | AST.TSum (_, payloadTypes) -> payloadTypes |> List.exists typeContainsDict
+        | AST.TRecord (name, _) ->
+            recordRegistry
+            |> Map.tryFind name
+            |> Option.map (List.exists (fun (_, fieldType) -> typeContainsDict fieldType))
+            |> Option.defaultValue false
+        | _ -> false
+
     // Check if any function uses TaggedList RefCountDec or RefCountInc
     let needsListRcDecHelper =
         functions
@@ -3497,6 +3515,8 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.DictHeap, _) -> true
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
+                        typeContainsDict sourceType
                     | _ -> false)))
 
     translateFuncs [] functions

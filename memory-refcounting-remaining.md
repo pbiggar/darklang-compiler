@@ -695,6 +695,7 @@ commits enabled:
 - record-registry-based fixed-block record string field release
 - boxed sum string payload release
 - nested boxed sum string field release
+- dict root field release
 
 However, x64 is still not as well covered as ARM64 in the memory tests run in
 this environment, and docs still say recursive fixed-block/list payload release
@@ -707,8 +708,8 @@ match ARM64 for every recursive payload shape?"
 
 Likely gaps:
 
-- fixed-block field release for dicts, closures, boxed sum payloads beyond the
-  current string case, and untested record field combinations beyond
+- fixed-block field release for closures, boxed sum payloads beyond the current
+  string case, and untested record field combinations beyond
   string/bytes/nested fixed blocks
 - closure capture recursive release
 - list payload helper variants beyond tuple2/list
