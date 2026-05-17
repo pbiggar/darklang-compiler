@@ -17,8 +17,9 @@ offset 8 + aligned(len):  refcount, Int64
 the same dynamic-buffer convention used by `Bytes`.
 
 Literal-pool strings are immutable. Backends skip ordinary dynamic-buffer RC for
-literal operands; ARM64 literal pool entries also carry a sentinel refcount slot
-so accidental dynamic RC does not reclaim them.
+literal operands. ARM64 literal pool entries and x64 materialized string
+literals carry a sentinel refcount slot so accidental dynamic RC does not
+reclaim them.
 
 ## Operations
 
@@ -80,4 +81,3 @@ See `memory-refcounting-remaining.md` for the current task breakdown.
 | `src/DarkCompiler/passes/arm64/6_CodeGen.fs` | ARM64 string allocation and RC |
 | `src/DarkCompiler/passes/x64/6_CodeGen.fs` | x64 string allocation and RC |
 | `src/DarkCompiler/stdlib/String.dark` | stdlib string functions |
-

@@ -125,7 +125,8 @@ let private emitStringByteCopy (destReg: X86_64.Reg) (strBytes: byte array) : X8
             @ [X86_64.MOV_store (destReg, int32 offset, scratch)])
 
 /// Allocate a heap string from a literal value: [length:8][data:N][padding][refcount:8].
-/// Bump-allocates from heapPtr, stores length, copies bytes, sets refcount=1.
+/// Bump-allocates from heapPtr, stores length, copies bytes, and sets the
+/// refcount sentinel so dynamic RC operations treat it as immutable literal data.
 /// Returns instructions that leave destReg pointing to the new string.
 let private emitStringLiteral (destReg: X86_64.Reg) (value: string) : X86_64.Instr list =
     let strBytes = System.Text.Encoding.UTF8.GetBytes(value)
@@ -135,7 +136,7 @@ let private emitStringLiteral (destReg: X86_64.Reg) (value: string) : X86_64.Ins
     let storeLen = loadImm64 scratch (int64 len) @ [X86_64.MOV_store (destReg, 0, scratch)]
     let copyBytes = emitStringByteCopy destReg strBytes
     let rcOffset = 8 + ((len + 7) &&& (~~~7))
-    let storeRefCount = loadImm64 scratch 1L @ [X86_64.MOV_store (destReg, int32 rcOffset, scratch)]
+    let storeRefCount = loadImm64 scratch 0x7FFFFFFFFFFFFFFFL @ [X86_64.MOV_store (destReg, int32 rcOffset, scratch)]
     alloc @ storeLen @ copyBytes @ storeRefCount
 
 /// Allocate a heap string without refcount (for file-op path buffers).
@@ -2877,7 +2878,7 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                         loadImm64 X86_64.RCX v @ [X86_64.MOV_store (scratch, int32 off, X86_64.RCX)])
                 let storeRC =
                     let rcOff = 8 + ((len + 7) &&& (~~~7))
-                    loadImm64 X86_64.RCX 1L @ [X86_64.MOV_store (scratch, int32 rcOff, X86_64.RCX)]
+                    loadImm64 X86_64.RCX 0x7FFFFFFFFFFFFFFFL @ [X86_64.MOV_store (scratch, int32 rcOff, X86_64.RCX)]
                 if addrReg = scratch || addrReg = X86_64.RCX then
                     // String alloc clobbers R11 (scratch) and init clobbers RCX.
                     // Push addr before alloc, pop into RCX after string is built.

@@ -29,7 +29,11 @@ x64 probes cover the full ARM64 memory matrix.
 - generic fixed-block refcount increment
 - generic fixed-block refcount decrement for 8-, 16-, and 24-byte payloads
 - dynamic string decrement after `StringConcat`
+- materialized string literal `RefCountDec` skips release through the immutable
+  refcount sentinel
 - generic fixed-block dynamic string field release
+- generic fixed-block literal string field release skips release through the
+  immutable refcount sentinel
 - generic fixed-block dynamic bytes field release
 - generic fixed-block nested tuple field release for dynamic string payloads
 - generic fixed-block record string field release

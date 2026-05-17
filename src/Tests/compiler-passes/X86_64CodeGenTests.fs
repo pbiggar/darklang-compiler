@@ -375,6 +375,22 @@ let testDynamicStringRefCountDec () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected dynamic string RefCountDec to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 materialized string literals use a sentinel refcount and are not released as dynamic buffers.
+let testMaterializedStringLiteralRefCountDecSkipsRelease () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [
+                LIR.Mov (LIR.Physical LIR.X2, LIR.StringSymbol "literal")
+                LIR.RefCountDecString (LIR.Reg (LIR.Physical LIR.X2))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected materialized literal RefCountDec to skip leak accounting, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 generic fixed-block RefCountDec releases a dynamic string field.
 let testGenericRefCountDecStringField () : Result<unit, string> =
     let program =
@@ -392,6 +408,23 @@ let testGenericRefCountDecStringField () : Result<unit, string> =
     | Ok (_, _, stderr) ->
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected fixed-block string field release to balance leak counter, got stderr '{stderr.Trim()}'"
+
+/// Test: x64 generic fixed-block RefCountDec skips materialized literal string fields.
+let testGenericRefCountDecLiteralStringFieldSkipsRelease () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X2, 8)
+                LIR.HeapStore (LIR.Physical LIR.X2, 0, LIR.StringSymbol "literal", Some AST.TString)
+                LIR.RefCountDec (LIR.Physical LIR.X2, 8, LIR.GenericHeap, Some (AST.TTuple [AST.TString]))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected literal string field release to skip leak accounting, got stderr '{stderr.Trim()}'"
 
 /// Test: x64 generic fixed-block RefCountDec releases a dynamic bytes field.
 let testGenericRefCountDecBytesField () : Result<unit, string> =
@@ -2139,7 +2172,9 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec reclaims tuple2", testGenericRefCountDecTuple2)
     ("LIR generic RefCountDec reclaims fixed sizes", testGenericRefCountDecFixedSizes)
     ("LIR dynamic string RefCountDec reclaims concat", testDynamicStringRefCountDec)
+    ("LIR materialized string literal RefCountDec skips release", testMaterializedStringLiteralRefCountDecSkipsRelease)
     ("LIR generic RefCountDec releases string field", testGenericRefCountDecStringField)
+    ("LIR generic RefCountDec skips literal string field release", testGenericRefCountDecLiteralStringFieldSkipsRelease)
     ("LIR generic RefCountDec releases bytes field", testGenericRefCountDecBytesField)
     ("LIR generic RefCountDec releases nested string tuple field", testGenericRefCountDecNestedStringTupleField)
     ("LIR generic RefCountDec releases record string field", testGenericRefCountDecRecordStringField)

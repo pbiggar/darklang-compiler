@@ -59,9 +59,10 @@ tuple3 string/list/dict payload release, plus direct x64 closure tuple
 string/list/dict capture release, plus direct x64 closure record
 string/list/dict capture release, plus direct x64 closure sum tuple
 string/list/dict capture release, plus x64 generic fixed-block list/dict/closure
-field release preserving a live `RAX` value across cleanup:
+field release preserving a live `RAX` value across cleanup, plus x64
+materialized string literals using the immutable refcount sentinel:
 
-- `scripts/run-in-container ./run-tests`: `4649 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4651 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -489,6 +490,8 @@ String ownership is now substantially better than in the original findings:
 - fixed-block string fields are released
 - returned borrowed strings are retained
 - literal string pool entries have sentinel refcounts
+- x64 materialized string literals now use the same sentinel behavior, including
+  when stored in fixed-block fields
 - string layout is aligned in stdlib builders and literal pools
 
 ### Remaining Gaps
@@ -805,7 +808,8 @@ Likely gaps:
   sum-tuple3-string-list-dict shape, sum-record3-string-list-dict,
   list/closure/dict/string
 - dict helper key/value recursion parity
-- dynamic string/bytes literal sentinel and aligned layout parity
+- dynamic bytes literal sentinel/aligned layout parity if a separate bytes
+  literal materialization path is introduced
 - register preservation around helper calls and inline releases beyond the
   covered x64 generic fixed-block list/dict/closure field release cases
 - free-list indexing consistency for payload sizes and raw sizes
@@ -819,8 +823,9 @@ Likely gaps:
 4. Port ARM64 closure capture release semantics beyond the current direct
    dynamic-buffer, managed-root, and fixed-block probes to x64.
 5. Port any missing list helper variants to x64.
-6. Confirm x64 literal string layout has an immutable sentinel or otherwise
-   never sends static strings through dynamic RC.
+6. Confirm dynamic bytes literal layout if bytes gains a separate literal
+   materialization path. x64 materialized string literals now carry the
+   immutable sentinel and skip dynamic RC.
 7. Continue auditing helper register preservation using focused tests that
    return values live across cleanup. The x64 generic fixed-block
    list/dict/closure field release paths now preserve live `RAX`; broader
