@@ -1386,24 +1386,27 @@ let computeStringLabels (codeFileOffset: int) (codeSize: int) (floatPoolSize: in
         let floatStart = (codeFileOffset + codeSize + 7) &&& (~~~7)
         let startOffset = floatStart + floatPoolSize
 
-        // Each string has format: [length:8][data:N][null:1]
+        // Each string has format: [length:8][data:N][padding:P][refcount:8]
         sortedStrings
         |> List.fold (fun (offset, labelMap) (idx, (_str, len)) ->
             let label = "str_" + string idx  // Match label format in CodeGen
             let newMap = Map.add label offset labelMap
-            (offset + 8 + len + 1, newMap))  // 8 for length + data + 1 for null
+            let alignedLen = ((len + 7) / 8) * 8
+            (offset + 8 + alignedLen + 8, newMap))
             (startOffset, Map.empty)
         |> snd
 
 /// Compute the size of the string pool in bytes
-/// Each string has format: [length:8][data:N][null:1]
+/// Each string has format: [length:8][data:N][padding:P][refcount:8]
 let getStringPoolSize (stringPool: LiteralPool.StringPool) : int =
     if stringPool.Strings.IsEmpty then 0
     else
         stringPool.Strings
         |> Map.toList
         |> List.sumBy (fun (_, (str, _)) ->
-            8 + System.Text.Encoding.UTF8.GetBytes(str).Length + 1)  // 8 for length + data + 1 for null
+            let len = System.Text.Encoding.UTF8.GetBytes(str).Length
+            let alignedLen = ((len + 7) / 8) * 8
+            8 + alignedLen + 8)
 
 /// Compute the platform-specific code file offset for encoding
 let private computeCodeFileOffset

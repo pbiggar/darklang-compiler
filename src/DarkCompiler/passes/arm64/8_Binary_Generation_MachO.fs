@@ -284,18 +284,21 @@ let createStringData (stringPool: LiteralPool.StringPool) : byte array * Map<str
             |> Map.toList
             |> List.sortBy fst
 
-        // Build string bytes and track offsets using fold
-        // Each string has format: [length:8][data:N][null:1]
-        let nullByte = [|0uy|]
+        // Build string bytes and track offsets using fold.
+        // Each string has format: [length:8][data:N][padding:P][refcount:8].
+        // Literal strings use INT64_MAX in the refcount slot so shared string RC code can skip them.
         let (segmentsRev, labelMap, _finalOffset) =
             sortedStrings
             |> List.fold (fun (segments, labels, offset) (idx, (str, len)) ->
                 let label = "str_" + string idx  // Match label format in CodeGen
                 let lenBytes = uint64ToBytes (uint64 len)  // 8-byte length
                 let strBytes = System.Text.Encoding.UTF8.GetBytes(str)
-                let segment = Array.concat [| lenBytes; strBytes; nullByte |]
+                let alignedLen = ((len + 7) / 8) * 8
+                let padding = Array.zeroCreate (alignedLen - len)
+                let sentinel = System.BitConverter.GetBytes(System.Int64.MaxValue)
+                let segment = Array.concat [| lenBytes; strBytes; padding; sentinel |]
                 let newLabels = Map.add label offset labels
-                let newOffset = offset + 8 + len + 1  // 8 for length + data + 1 for null
+                let newOffset = offset + 8 + alignedLen + 8
                 (segment :: segments, newLabels, newOffset))
                 ([], Map.empty, 0)
 

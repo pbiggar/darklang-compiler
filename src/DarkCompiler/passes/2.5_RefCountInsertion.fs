@@ -463,6 +463,14 @@ let private rcInfoForType (ctx: TypeContext) (typ: AST.Type) : int * RcKind * AS
 
 type private ReturnDec = TempId * AST.Type * RcKind option
 
+let private retainExprForType (ctx: TypeContext) (tempId: TempId) (typ: AST.Type) : CExpr =
+    match typ with
+    | AST.TString ->
+        RefCountIncString (Var tempId)
+    | _ ->
+        let (size, kind, sourceType) = rcInfoForType ctx typ
+        RefCountInc (Var tempId, size, kind, sourceType)
+
 let rec private isStoredByRawSet (tempId: TempId) (bodyInfo: ReturnAnnotatedExpr) : bool =
     match bodyInfo with
     | RReturn _ -> false
@@ -522,20 +530,21 @@ let insertReturnDecs
 type LetFrame = {
     TempId: TempId
     CExpr: CExpr
-    TupleIncTargets: (TempId * int * RcKind * AST.Type option) list
-    ReturnInc: (int * RcKind * AST.Type option) option
+    TupleIncTargets: (TempId * AST.Type) list
+    ReturnInc: AST.Type option
 }
 
 /// Apply a single Let frame around an expression (uses current varGen/types)
 let applyLetFrame
+    (ctx: TypeContext)
     (frame: LetFrame)
     (expr: AExpr, varGen: VarGen, types: Map<TempId, AST.Type>)
     : AExpr * VarGen * Map<TempId, AST.Type> =
     let (incBindingsRev, varGen1) =
         frame.TupleIncTargets
-        |> List.fold (fun (acc, vg) (tid, size, kind, sourceType) ->
+        |> List.fold (fun (acc, vg) (tid, typ) ->
             let (dummyId, vg') = freshVar vg
-            ((dummyId, RefCountInc (Var tid, size, kind, sourceType)) :: acc, vg')) ([], varGen)
+            ((dummyId, retainExprForType ctx tid typ) :: acc, vg')) ([], varGen)
     let incBindings = List.rev incBindingsRev
 
     let typesWithIncs =
@@ -544,9 +553,9 @@ let applyLetFrame
 
     let (returnIncBinding, varGen2, typesWithReturnInc) =
         match frame.ReturnInc with
-        | Some (size, kind, sourceType) ->
+        | Some typ ->
             let (incId, vg) = freshVar varGen1
-            let incExpr = RefCountInc (Var frame.TempId, size, kind, sourceType)
+            let incExpr = retainExprForType ctx frame.TempId typ
             ([(incId, incExpr)], vg, Map.add incId AST.TUnit typesWithIncs)
         | None ->
             ([], varGen1, typesWithIncs)
@@ -558,6 +567,7 @@ let applyLetFrame
 
 /// Apply a stack of Let frames (innermost-first)
 let applyLetFrames
+    (ctx: TypeContext)
     (frames: LetFrame list)
     (expr: AExpr, varGen: VarGen, types: Map<TempId, AST.Type>)
     : AExpr * VarGen * Map<TempId, AST.Type> =
@@ -565,7 +575,7 @@ let applyLetFrames
         ((accExpr, accVarGen, accTypes): AExpr * VarGen * Map<TempId, AST.Type>)
         (frame: LetFrame)
         : AExpr * VarGen * Map<TempId, AST.Type> =
-        applyLetFrame frame (accExpr, accVarGen, accTypes)
+        applyLetFrame ctx frame (accExpr, accVarGen, accTypes)
     List.fold folder (expr, varGen, types) frames
 
 let private tailCallArgTempIds (cexpr: CExpr) : Set<TempId> =
@@ -665,7 +675,7 @@ let rec insertRCWithAnalysis
             let (withParamIncs, varGen1, types1) =
                 insertParamIncsAtReturn paramIncs returned baseExpr varGen types
             let (withDecs, varGen2, types2) = insertReturnDecs ctx returnDecs withParamIncs varGen1 types1
-            let (finalExpr, finalVarGen, finalTypes) = applyLetFrames frames (withDecs, varGen2, types2)
+            let (finalExpr, finalVarGen, finalTypes) = applyLetFrames ctx frames (withDecs, varGen2, types2)
             (finalExpr, finalVarGen, finalTypes, typeCache)
 
         | RIf (cond, thenBranch, elseBranch, _) ->
@@ -674,7 +684,7 @@ let rec insertRCWithAnalysis
             let (elseBranch', varGen2, types2, typeCache2) =
                 insertRCWithAnalysis ctx currentFuncName elseBranch varGen1 returnDecs paramIncs types1 typeCache1
             let (finalExpr, finalVarGen, finalTypes) =
-                applyLetFrames frames (If (cond, thenBranch', elseBranch'), varGen2, types2)
+                applyLetFrames ctx frames (If (cond, thenBranch', elseBranch'), varGen2, types2)
             (finalExpr, finalVarGen, finalTypes, typeCache2)
 
         | RLet (tempId, cexpr, bodyInfo, _) ->
@@ -870,9 +880,8 @@ let rec insertRCWithAnalysis
                         match atom with
                         | Var tid ->
                             match tryGetType ctx tid with
-                            | Some t when isRcManagedHeapType t ->
-                                let (size, kind, sourceType) = rcInfoForType ctx t
-                                (tid, size, kind, sourceType) :: acc
+                            | Some t when t = AST.TString || isRcManagedHeapType t ->
+                                (tid, t) :: acc
                             | _ -> acc
                         | _ -> acc
                     ) []
@@ -883,9 +892,8 @@ let rec insertRCWithAnalysis
                         match atom with
                         | Var tid ->
                             match tryGetType ctx tid with
-                            | Some t when isRcManagedHeapType t ->
-                                let (size, kind, sourceType) = rcInfoForType ctx t
-                                (tid, size, kind, sourceType) :: acc
+                            | Some t when t = AST.TString || isRcManagedHeapType t ->
+                                (tid, t) :: acc
                             | _ -> acc
                         | _ -> acc
                     ) []
@@ -893,11 +901,11 @@ let rec insertRCWithAnalysis
                 | _ -> []
 
             let returnInc =
-                let rcInfoFromAtom (atom: Atom) : (int * RcKind * AST.Type option) option =
+                let retainedTypeFromAtom (atom: Atom) : AST.Type option =
                     match atom with
                     | Var tid ->
                         match tryGetType ctx tid with
-                        | Some t when isRcManagedHeapType t -> Some (rcInfoForType ctx t)
+                        | Some t when t = AST.TString || isRcManagedHeapType t -> Some t
                         | _ -> None
                     | _ -> None
 
@@ -905,27 +913,27 @@ let rec insertRCWithAnalysis
                 | IfValue (_, thenAtom, elseAtom) ->
                     // IfValue selects one of two existing heap values.
                     // Materialize ownership on the selected temp before source temps are decref'd.
-                    match rcInfoFromAtom thenAtom, rcInfoFromAtom elseAtom with
+                    match retainedTypeFromAtom thenAtom, retainedTypeFromAtom elseAtom with
                     | Some info, _ -> Some info
                     | None, Some info -> Some info
                     | None, None -> None
                 | Atom (Var sourceId)
                 | TypedAtom (Var sourceId, _) ->
                     // Returning a pure alias of an already-returned owned value should not inc again.
-                    if isRcManagedHeapType inferredType
+                    if (inferredType = AST.TString || isRcManagedHeapType inferredType)
                        && Set.contains tempId bodyReturned
                        && isBorrowingExpr cexpr then
                         if Set.contains sourceId bodyReturned then
                             None
                         else
-                            Some (rcInfoForType ctx inferredType)
+                            Some inferredType
                     else
                         None
                 | _ ->
-                    if isRcManagedHeapType inferredType
+                    if (inferredType = AST.TString || isRcManagedHeapType inferredType)
                        && Set.contains tempId bodyReturned
                        && isBorrowingExpr cexpr then
-                        Some (rcInfoForType ctx inferredType)
+                        Some inferredType
                     else
                         None
 

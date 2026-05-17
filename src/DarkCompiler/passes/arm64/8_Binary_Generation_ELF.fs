@@ -122,8 +122,8 @@ let createFloatData (floatPool: LiteralPool.FloatPool) : byte array =
         |> Array.concat
 
 /// Create string data bytes from string pool
-/// Format: [length:8 bytes][data:N bytes][null:1 byte] for each string
-/// This matches the pooled string layout used by the runtime
+/// Format: [length:8 bytes][data:N bytes][padding:P][refcount:8 bytes] for each string.
+/// Literal strings use INT64_MAX in the refcount slot so shared string RC code can skip them.
 let createStringData (stringPool: LiteralPool.StringPool) : byte array =
     if stringPool.Strings.IsEmpty then
         [||]
@@ -135,7 +135,10 @@ let createStringData (stringPool: LiteralPool.StringPool) : byte array =
         |> List.map (fun (_idx, (str, len)) ->
             let lenBytes = uint64ToBytes (uint64 len)  // 8-byte length
             let strBytes = System.Text.Encoding.UTF8.GetBytes(str)
-            Array.concat [| lenBytes; strBytes; [|0uy|] |])  // length + data + null
+            let alignedLen = ((len + 7) / 8) * 8
+            let padding = Array.zeroCreate (alignedLen - len)
+            let sentinel = System.BitConverter.GetBytes(System.Int64.MaxValue)
+            Array.concat [| lenBytes; strBytes; padding; sentinel |])
         |> Array.ofList
         |> Array.concat
 

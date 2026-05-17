@@ -676,6 +676,41 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
             @ leakDec
             @ [ARM64Symbolic.Label childDone]
 
+    let releaseStringChildField (fieldOffset: int) (doneLabel: string) : ARM64Symbolic.Instr list =
+        let stringDone = label $"{doneLabel}_string_{fieldOffset}_done"
+        let refcountUpdate =
+            if List.isEmpty leakDec then
+                [
+                    ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+                    ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+                ]
+            else
+                [
+                    ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+                    ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+                    ARM64Symbolic.CBNZ (ARM64Symbolic.X15, stringDone)
+                ] @ leakDec
+        [
+            ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X8, int16 fieldOffset)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X12, stringDone)
+            ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
+            ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 7us)
+            ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 3us, 0)
+            ARM64Symbolic.LSR_reg (ARM64Symbolic.X15, ARM64Symbolic.X15, ARM64Symbolic.X13)
+            ARM64Symbolic.LSL_reg (ARM64Symbolic.X15, ARM64Symbolic.X15, ARM64Symbolic.X13)
+            ARM64Symbolic.ADD_imm (ARM64Symbolic.X14, ARM64Symbolic.X12, 8us)
+            ARM64Symbolic.ADD_reg (ARM64Symbolic.X14, ARM64Symbolic.X14, ARM64Symbolic.X15)
+            ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+            ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 0xFFFFus, 0)
+            ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 16)
+            ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 32)
+            ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0x7FFFus, 48)
+            ARM64Symbolic.CMP_reg (ARM64Symbolic.X15, ARM64Symbolic.X13)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, stringDone)
+        ]
+        @ refcountUpdate
+        @ [ARM64Symbolic.Label stringDone]
+
     let fixedBlockFieldReleases
         (captureType: AST.Type)
         (doneLabel: string)
@@ -694,7 +729,11 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
 
         fieldTypes
         |> List.mapi (fun index fieldType ->
-            releaseFixedChildField (index * 8) fieldType doneLabel)
+            match fieldType with
+            | AST.TString ->
+                releaseStringChildField (index * 8) doneLabel
+            | _ ->
+                releaseFixedChildField (index * 8) fieldType doneLabel)
         |> List.concat
 
     let releaseFixedCapture (fieldOffset: int) (captureType: AST.Type) (payloadSize: int) (doneLabel: string) : ARM64Symbolic.Instr list =
@@ -3258,11 +3297,57 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
                     ] @ callInstrs
 
+                let releaseStringField (fieldOffset: int) : ARM64Symbolic.Instr list =
+                    let stringLeakDec = generateLeakCounterDec ctx
+                    let refcountUpdate =
+                        if List.isEmpty stringLeakDec then
+                            [
+                                ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+                                ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+                            ]
+                        else
+                            [
+                                ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+                                ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+                                ARM64Symbolic.CBNZ_offset (ARM64Symbolic.X15, 6)
+                            ] @ stringLeakDec
+                    let bcondOffset = List.length refcountUpdate + 1
+                    let body =
+                        [
+                            ARM64Symbolic.LDR (ARM64Symbolic.X12, addrReg, int16 fieldOffset)
+                            ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, 15 + List.length refcountUpdate)
+                            ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
+                            ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 7us)
+                            ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 3us, 0)
+                            ARM64Symbolic.LSR_reg (ARM64Symbolic.X15, ARM64Symbolic.X15, ARM64Symbolic.X13)
+                            ARM64Symbolic.LSL_reg (ARM64Symbolic.X15, ARM64Symbolic.X15, ARM64Symbolic.X13)
+                            ARM64Symbolic.ADD_imm (ARM64Symbolic.X14, ARM64Symbolic.X12, 8us)
+                            ARM64Symbolic.ADD_reg (ARM64Symbolic.X14, ARM64Symbolic.X14, ARM64Symbolic.X15)
+                            ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+                            ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 0xFFFFus, 0)
+                            ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 16)
+                            ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 32)
+                            ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0x7FFFus, 48)
+                            ARM64Symbolic.CMP_reg (ARM64Symbolic.X15, ARM64Symbolic.X13)
+                            ARM64Symbolic.B_cond (ARM64Symbolic.EQ, bcondOffset)
+                        ] @ refcountUpdate
+                    [
+                        ARM64Symbolic.STP_pre (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, -32s)
+                        ARM64Symbolic.STP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 16s)
+                    ]
+                    @ body
+                    @ [
+                        ARM64Symbolic.LDP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 16s)
+                        ARM64Symbolic.LDP_post (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 32s)
+                    ]
+
                 let fixedBlockFieldReleaseInstrs =
                     fixedBlockFieldTypes ctx.RecordRegistry sourceType
                     |> List.mapi (fun index fieldType ->
                         let fieldOffset = index * 8
                         match fieldType with
+                        | AST.TString ->
+                            releaseStringField fieldOffset
                         | AST.TList _ ->
                             releaseListField fieldOffset fieldType
                         | AST.TDict _ ->
