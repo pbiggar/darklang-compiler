@@ -81,7 +81,7 @@ no-payload and payload variant release, plus record-contained sum payload
 release, plus dict-contained sum value payload release, plus pure enum sum
 no-heap-ownership coverage:
 
-- `scripts/run-in-container ./run-tests`: `4690 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4695 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -460,6 +460,11 @@ ARM64 and x64 lower bytes RC through the same dynamic-buffer logic as strings.
 Current tests prove:
 
 - a directly scoped `Bytes.create(4)` is reclaimed
+- zero-length `Bytes.create(0)` is reclaimed
+- `Bytes.set` results are reclaimed
+- `Bytes.fromList` results are reclaimed
+- `Bytes.toList` releases both the result list and source bytes
+- closures release captured dynamic bytes
 - returned list payloads of `Bytes` are released
 - tuple and record fields retain dynamic bytes while both owners are live
 - returned record bytes fields remain usable and release cleanly
@@ -472,13 +477,8 @@ Bytes coverage is much thinner than string coverage. Missing or under-proven
 cases include:
 
 - bytes payloads in sums
-- bytes captured by closures
 - list of bytes beyond the single returned-list case
 - dict keys/values of bytes, if bytes are allowed as dict keys/values
-- `Bytes.set`
-- `Bytes.fromList`
-- `Bytes.toList`
-- zero-length bytes from `Bytes.create(0)`
 - repeated immutable bytes updates in a scope
 
 ### Risks
@@ -495,17 +495,16 @@ from either:
 ### Remaining Tasks
 
 1. Add failing-then-passing e2e leak-check tests for the missing cases above.
-2. Extend closure fixed-block capture release for `TBytes` on ARM64.
-3. Add equivalent x64 support if missing.
-4. Audit bytes constructors and transforms for aligned refcount layout.
-5. Decide whether zero-refcount bytes blocks should only balance leak counters
+2. Add equivalent x64 support if missing.
+3. Audit bytes constructors and transforms for aligned refcount layout.
+4. Decide whether zero-refcount bytes blocks should only balance leak counters
    or also be reusable.
 
 ### Suggested Commit Breakdown
 
 1. Cover sum bytes payloads.
-2. Cover closure bytes captures.
-3. Cover `Bytes.set`, `Bytes.fromList`, and zero-length bytes.
+2. Cover list and repeated-update bytes cases.
+3. Audit bytes constructor and transform layout.
 
 ## 3. Finish Dynamic String Edge Coverage And Reuse Semantics
 
@@ -1294,15 +1293,11 @@ appropriate.
 
 ### Bytes
 
-- `let b = Bytes.create(0) in 0`
-- `let b = Bytes.fromList([1, 2, 3]) in 0`
-- `let b = Bytes.set(Bytes.create(4), 1, 255) in 0`
 - `let t = (Bytes.create(4), 1) in 0`
 - record with `Bytes` field
 - returned record with `Bytes` field
 - returned record using `Bytes.length(r.field)`
 - sum carrying `Bytes`
-- closure capturing `Bytes`
 - list of multiple `Bytes`
 
 ### Strings
