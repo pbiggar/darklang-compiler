@@ -68,9 +68,10 @@ payload release, plus x64 generic fixed-block tuple and record
 string/list/dict field release, plus returned borrowed sum string payload
 projection retention, plus ARM64 returned borrowed deep nested tuple string
 projection cleanup, plus returned branch-selected borrowed string projection
-retention, plus returned borrowed sum bytes payload projection retention:
+retention, plus returned borrowed sum bytes and dict payload projection
+retention:
 
-- `scripts/run-in-container ./run-tests`: `4663 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4664 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -939,13 +940,13 @@ Recent projection work extended returned borrowed value retention beyond
 generic heap shapes. Covered projections now include strings, bytes, lists,
 dict roots, closure roots, nested fixed-block tuples containing dynamic
 strings, branch-selected string projections, and one sum payload projection
-containing a dynamic string or bytes payload.
+containing a dynamic string, bytes, or dict payload.
 
 ### Remaining Gaps
 
 More projected shapes still need the same confidence:
 
-- broader sum payload shapes beyond the covered string and bytes payload
+- broader sum payload shapes beyond the covered string, bytes, and dict payload
   projections
 - deeper nested projections through `RawGet` or typed aliases beyond the
   covered tuple projection path
