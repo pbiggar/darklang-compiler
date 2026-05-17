@@ -40,7 +40,7 @@ tuple3 and record3 dynamic-buffer payload release, plus tagged-list boxed sum
 list, dict, closure, tuple dynamic string, and record dynamic string payload
 release, plus tagged-list nested boxed sum dynamic string payload release:
 
-- `scripts/run-in-container ./run-tests`: `4626 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4627 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -725,7 +725,8 @@ commits enabled:
 - tagged-list tuple3 dynamic string/bytes field release, including middle-field
   dynamic-buffer payloads
 - tagged-list one-field record dynamic string field release
-- tagged-list three-field record dynamic string/bytes field release
+- tagged-list three-field record dynamic string/bytes field release, including
+  middle-field dynamic-buffer payloads
 - tagged-list boxed sum dynamic string payload release
 - tagged-list boxed sum list payload release
 - tagged-list boxed sum dict payload release
@@ -755,8 +756,8 @@ Likely gaps:
 - closure capture recursive release coverage beyond the current direct
   dynamic-buffer, managed-root, and fixed-block capture probes
 - list payload helper variants beyond the currently covered tuple2, tuple3
-  first/third, tuple3 middle, record1, and record3 first/third dynamic-buffer
-  shapes, sum dynamic-buffer, sum-list/sum-dict, sum-closure,
+  first/third, tuple3 middle, record1, record3 first/third, and record3 middle
+  dynamic-buffer shapes, sum dynamic-buffer, sum-list/sum-dict, sum-closure,
   list/closure/dict/string
 - dict helper key/value recursion parity
 - dynamic string/bytes literal sentinel and aligned layout parity
