@@ -643,6 +643,82 @@ let testGenericRefCountDecSumDictPayload () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected boxed sum dict payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 generic fixed-block RefCountDec releases boxed sum tuple payloads with nested managed fields.
+let testGenericRefCountDecSumTupleStringListDictPayload () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let dictType = AST.TDict (AST.TInt64, AST.TInt64)
+    let tupleType = AST.TTuple [AST.TString; listType; dictType]
+    let sumType = AST.TSum ("X64GenericSumTupleStringListDict", [tupleType])
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X4, LIR.Physical LIR.X3, LIR.Physical LIR.X4)
+                LIR.HeapAlloc (LIR.Physical LIR.X5, 16)
+                LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X5, 8, LIR.Imm 2L, None)
+                LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
+                LIR.HeapAlloc (LIR.Physical LIR.X19, 24)
+                LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X4), Some listType)
+                LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X6), Some dictType)
+                LIR.HeapAlloc (LIR.Physical LIR.X20, 16)
+                LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Imm 0L, None)
+                LIR.HeapStore (LIR.Physical LIR.X20, 8, LIR.Reg (LIR.Physical LIR.X19), Some tupleType)
+                LIR.RefCountDec (LIR.Physical LIR.X20, 16, LIR.GenericHeap, Some sumType)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected boxed sum tuple string/list/dict payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
+/// Test: x64 generic fixed-block RefCountDec releases boxed sum record payloads with nested managed fields.
+let testGenericRefCountDecSumRecordStringListDictPayload () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let dictType = AST.TDict (AST.TInt64, AST.TInt64)
+    let recordType = AST.TRecord ("X64GenericSumRecordStringListDictPayload", [])
+    let records =
+        Map.ofList
+            [("X64GenericSumRecordStringListDictPayload", [("name", AST.TString); ("items", listType); ("lookup", dictType)])]
+    let sumType = AST.TSum ("X64GenericSumRecordStringListDict", [recordType])
+    let program =
+        makeSimpleProgramWithRecords
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X4, LIR.Physical LIR.X3, LIR.Physical LIR.X4)
+                LIR.HeapAlloc (LIR.Physical LIR.X5, 16)
+                LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X5, 8, LIR.Imm 2L, None)
+                LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
+                LIR.HeapAlloc (LIR.Physical LIR.X19, 24)
+                LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X4), Some listType)
+                LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X6), Some dictType)
+                LIR.HeapAlloc (LIR.Physical LIR.X20, 16)
+                LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Imm 0L, None)
+                LIR.HeapStore (LIR.Physical LIR.X20, 8, LIR.Reg (LIR.Physical LIR.X19), Some recordType)
+                LIR.RefCountDec (LIR.Physical LIR.X20, 16, LIR.GenericHeap, Some sumType)
+            ]
+            LIR.Ret
+            records
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected boxed sum record string/list/dict payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 generic fixed-block RefCountDec releases dict root fields.
 let testGenericRefCountDecDictField () : Result<unit, string> =
     let dictType = AST.TDict (AST.TInt64, AST.TInt64)
@@ -2233,6 +2309,8 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec releases nested sum string field", testGenericRefCountDecNestedSumStringField)
     ("LIR generic RefCountDec releases sum list payload", testGenericRefCountDecSumListPayload)
     ("LIR generic RefCountDec releases sum dict payload", testGenericRefCountDecSumDictPayload)
+    ("LIR generic RefCountDec releases sum tuple string/list/dict payload", testGenericRefCountDecSumTupleStringListDictPayload)
+    ("LIR generic RefCountDec releases sum record string/list/dict payload", testGenericRefCountDecSumRecordStringListDictPayload)
     ("LIR generic RefCountDec releases dict field", testGenericRefCountDecDictField)
     ("LIR generic RefCountDec preserves live RAX across list field release", testGenericRefCountDecPreservesLiveRaxAcrossListFieldRelease)
     ("LIR generic RefCountDec preserves live RAX across dict field release", testGenericRefCountDecPreservesLiveRaxAcrossDictFieldRelease)

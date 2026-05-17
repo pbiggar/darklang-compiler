@@ -45,6 +45,8 @@ x64 probes cover the full ARM64 memory matrix.
 - generic fixed-block boxed sum list payload release
 - generic fixed-block boxed sum dict payload release
 - generic fixed-block boxed sum closure payload release
+- generic fixed-block boxed sum tuple string/list/dict payload release
+- generic fixed-block boxed sum record string/list/dict payload release
 - generic fixed-block dict root field release
 - generic fixed-block list/dict/closure field release preserving live `RAX`
   across cleanup
@@ -151,8 +153,9 @@ buffer reuse is still a broader memory-policy question, shared with ARM64.
 The main x64 gaps are:
 
 - fixed-block field release for boxed sum payloads beyond the current string,
-  list, dict, closure, tuple dynamic-buffer, and record dynamic-buffer payload
-  paths, plus nested sum dynamic-buffer payload paths; closure payloads beyond
+  list, dict, closure, tuple dynamic-buffer, tuple string/list/dict,
+  record dynamic-buffer, and record string/list/dict payload paths, plus
+  nested sum dynamic-buffer payload paths; closure payloads beyond
   direct dynamic-buffer and direct list/dict/closure/fixed-block captures
 - broader record field coverage beyond the current string/bytes/nested
   fixed-block release paths

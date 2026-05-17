@@ -61,9 +61,11 @@ string/list/dict capture release, plus direct x64 closure sum tuple
 string/list/dict capture release, plus direct x64 closure sum record
 string/list/dict capture release, plus x64 generic fixed-block
 list/dict/closure field release preserving a live `RAX` value across cleanup,
-plus x64 materialized string literals using the immutable refcount sentinel:
+plus x64 materialized string literals using the immutable refcount sentinel,
+plus x64 generic fixed-block boxed sum tuple and record string/list/dict
+payload release:
 
-- `scripts/run-in-container ./run-tests`: `4652 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4654 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -782,6 +784,8 @@ commits enabled:
 - direct closure release with multiple managed captures
 - generic fixed-block list/dict/closure field release preserves a live `RAX`
   value across cleanup
+- generic fixed-block boxed sum tuple string/list/dict payload release
+- generic fixed-block boxed sum record string/list/dict payload release
 
 However, x64 is still not as well covered as ARM64 in the memory tests run in
 this environment, and docs still say recursive fixed-block/list payload release
@@ -795,9 +799,9 @@ match ARM64 for every recursive payload shape?"
 Likely gaps:
 
 - fixed-block field release for boxed sum payloads beyond the current
-  string/list/dict/closure/tuple-string/record-string/record3-string-list-dict/
-  nested-sum-string cases, and untested record field combinations beyond
-  string/bytes/nested fixed blocks
+  string/list/dict/closure/tuple-string/tuple3-string-list-dict/
+  record-string/record3-string-list-dict/nested-sum-string cases, and
+  untested record field combinations beyond string/bytes/nested fixed blocks
 - closure capture recursive release coverage beyond the current direct
   dynamic-buffer, managed-root, tuple-string-list-dict,
   record-string-list-dict, sum-tuple-string-list-dict,
