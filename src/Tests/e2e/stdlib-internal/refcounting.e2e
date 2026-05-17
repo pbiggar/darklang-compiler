@@ -80,6 +80,7 @@ type ProjectSumDictPayload = ProjectSumDictEmpty | ProjectSumDictValue of Dict<I
 type ProjectSumClosurePayload = ProjectSumClosureEmpty | ProjectSumClosureValue of (Int64) -> Int64 def projectSumClosure(): (Int64) -> Int64 = let base = 2 in let b = ProjectSumClosureValue((x: Int64) => x + base) in match b with | ProjectSumClosureValue(f) -> f | ProjectSumClosureEmpty -> ((x: Int64) => x) let f = projectSumClosure() in f(3) = stdout="5\n" stderr="" // returned borrowed sum closure payload projection stays alive
 type RcBox = RcNone | RcString of String | RcList of List<Int64> let b = RcString("a" ++ "b") in 0 = stdout="0\n" stderr="" // sum releases dynamic string payload
 type RcBox2 = RcNone2 | RcString2 of String | RcList2 of List<Int64> let b = RcList2([1, 2]) in 0 = stdout="0\n" stderr="" // sum releases list payload
+type RcBoxBytes = RcBytesNone | RcBytesValue of Bytes let b = RcBytesValue(Bytes.create(4)) in 0 = stdout="0\n" stderr="" // sum releases bytes payload
 
 // Capturing closure roots are fixed-block allocations and are reclaimed.
 def makeAddClosure(): (Int64) -> Int64 = (x: Int64) => x + 1 let f = makeAddClosure() in 0 = stdout="0\n" stderr="" // returned closure root reclaimed
