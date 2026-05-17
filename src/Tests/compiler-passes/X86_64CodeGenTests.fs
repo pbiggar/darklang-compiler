@@ -886,6 +886,76 @@ let testGenericRefCountDecPreservesLiveRaxAcrossClosureFieldRelease () : Result<
         if output = "789" && leaks = "" then Ok ()
         else Error $"Expected live RAX value 789 and no leaks, got stdout '{output}' and stderr '{leaks}'"
 
+/// Test: x64 generic fixed-block RefCountDec preserves live RAX across dynamic string field release.
+let testGenericRefCountDecPreservesLiveRaxAcrossStringFieldRelease () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.Mov (LIR.Physical LIR.X0, LIR.Imm 321L)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (AST.TTuple [AST.TString]))
+                LIR.PrintInt64 (LIR.Physical LIR.X0)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, stdout, stderr) ->
+        let output = stdout.Trim()
+        let leaks = stderr.Trim()
+        if output = "321" && leaks = "" then Ok ()
+        else Error $"Expected live RAX value 321 and no leaks, got stdout '{output}' and stderr '{leaks}'"
+
+/// Test: x64 generic fixed-block RefCountDec preserves live RAX across dynamic bytes field release.
+let testGenericRefCountDecPreservesLiveRaxAcrossBytesFieldRelease () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBytes)
+                LIR.Mov (LIR.Physical LIR.X0, LIR.Imm 654L)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (AST.TTuple [AST.TBytes]))
+                LIR.PrintInt64 (LIR.Physical LIR.X0)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, stdout, stderr) ->
+        let output = stdout.Trim()
+        let leaks = stderr.Trim()
+        if output = "654" && leaks = "" then Ok ()
+        else Error $"Expected live RAX value 654 and no leaks, got stdout '{output}' and stderr '{leaks}'"
+
+/// Test: x64 generic fixed-block RefCountDec preserves live RAX across nested fixed-block field release.
+let testGenericRefCountDecPreservesLiveRaxAcrossNestedFixedBlockRelease () : Result<unit, string> =
+    let childType = AST.TTuple [AST.TString]
+    let parentType = AST.TTuple [childType]
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some childType)
+                LIR.Mov (LIR.Physical LIR.X0, LIR.Imm 987L)
+                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some parentType)
+                LIR.PrintInt64 (LIR.Physical LIR.X0)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, stdout, stderr) ->
+        let output = stdout.Trim()
+        let leaks = stderr.Trim()
+        if output = "987" && leaks = "" then Ok ()
+        else Error $"Expected live RAX value 987 and no leaks, got stdout '{output}' and stderr '{leaks}'"
+
 /// Test: x64 closure allocation and explicit release balance leak accounting.
 let testClosureAllocRefCountDecBalancesLeakCounter () : Result<unit, string> =
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
@@ -2385,6 +2455,9 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec preserves live RAX across list field release", testGenericRefCountDecPreservesLiveRaxAcrossListFieldRelease)
     ("LIR generic RefCountDec preserves live RAX across dict field release", testGenericRefCountDecPreservesLiveRaxAcrossDictFieldRelease)
     ("LIR generic RefCountDec preserves live RAX across closure field release", testGenericRefCountDecPreservesLiveRaxAcrossClosureFieldRelease)
+    ("LIR generic RefCountDec preserves live RAX across string field release", testGenericRefCountDecPreservesLiveRaxAcrossStringFieldRelease)
+    ("LIR generic RefCountDec preserves live RAX across bytes field release", testGenericRefCountDecPreservesLiveRaxAcrossBytesFieldRelease)
+    ("LIR generic RefCountDec preserves live RAX across nested fixed-block release", testGenericRefCountDecPreservesLiveRaxAcrossNestedFixedBlockRelease)
     ("LIR closure alloc RefCountDec balances leak counter", testClosureAllocRefCountDecBalancesLeakCounter)
     ("LIR generic RefCountDec releases closure field", testGenericRefCountDecClosureField)
     ("LIR generic RefCountDec releases sum closure payload", testGenericRefCountDecSumClosurePayload)

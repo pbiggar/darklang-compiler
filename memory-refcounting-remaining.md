@@ -59,14 +59,15 @@ tuple3 string/list/dict payload release, plus direct x64 closure tuple
 string/list/dict capture release, plus direct x64 closure record
 string/list/dict capture release, plus direct x64 closure sum tuple
 string/list/dict capture release, plus direct x64 closure sum record
-string/list/dict capture release, plus x64 generic fixed-block
-list/dict/closure field release preserving a live `RAX` value across cleanup,
+string/list/dict capture release, plus x64 generic fixed-block dynamic-buffer,
+nested fixed-block, list, dict, and closure field release preserving a live
+`RAX` value across cleanup,
 plus x64 materialized string literals using the immutable refcount sentinel,
 plus x64 generic fixed-block boxed sum tuple and record string/list/dict
 payload release, plus x64 generic fixed-block tuple and record
 string/list/dict field release:
 
-- `scripts/run-in-container ./run-tests`: `4656 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4659 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -783,8 +784,8 @@ commits enabled:
 - direct closure sum tuple string/list/dict capture release
 - direct closure sum record string/list/dict capture release
 - direct closure release with multiple managed captures
-- generic fixed-block list/dict/closure field release preserves a live `RAX`
-  value across cleanup
+- generic fixed-block dynamic-buffer, nested fixed-block, list, dict, and
+  closure field release preserves a live `RAX` value across cleanup
 - generic fixed-block tuple string/list/dict field release
 - generic fixed-block record string/list/dict field release
 - generic fixed-block boxed sum tuple string/list/dict payload release
@@ -821,7 +822,8 @@ Likely gaps:
 - dynamic bytes literal sentinel/aligned layout parity if a separate bytes
   literal materialization path is introduced
 - register preservation around helper calls and inline releases beyond the
-  covered x64 generic fixed-block list/dict/closure field release cases
+  covered x64 generic fixed-block dynamic-buffer, nested fixed-block, list,
+  dict, and closure field release cases
 - free-list indexing consistency for payload sizes and raw sizes
 
 ### Remaining Tasks
@@ -838,8 +840,8 @@ Likely gaps:
    immutable sentinel and skip dynamic RC.
 7. Continue auditing helper register preservation using focused tests that
    return values live across cleanup. The x64 generic fixed-block
-   list/dict/closure field release paths now preserve live `RAX`; broader
-   helper/backend combinations remain.
+   dynamic-buffer, nested fixed-block, list, dict, and closure field release
+   paths now preserve live `RAX`; broader helper/backend combinations remain.
 
 ### Suggested Commit Breakdown
 
@@ -956,9 +958,9 @@ More projected shapes still need the same confidence:
 3. Ensure print insertion and cleanup ordering is safe for every retained
    borrowed value.
 4. Audit helper register preservation for values live across cleanup on both
-   backends. The x64 generic fixed-block list/dict/closure field cleanup paths
-   have coverage for live `RAX`; other helpers and live registers remain to be
-   proved.
+   backends. The x64 generic fixed-block dynamic-buffer, nested fixed-block,
+   list, dict, and closure field cleanup paths have coverage for live `RAX`;
+   other helpers and live registers remain to be proved.
 
 ### Suggested Commit Breakdown
 

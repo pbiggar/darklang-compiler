@@ -50,8 +50,8 @@ x64 probes cover the full ARM64 memory matrix.
 - generic fixed-block boxed sum tuple string/list/dict payload release
 - generic fixed-block boxed sum record string/list/dict payload release
 - generic fixed-block dict root field release
-- generic fixed-block list/dict/closure field release preserving live `RAX`
-  across cleanup
+- generic fixed-block dynamic-buffer, nested fixed-block, list, dict, and
+  closure field release preserving live `RAX` across cleanup
 - zero-capture closure allocation plus explicit closure `RefCountDec` leak
   accounting
 - generic fixed-block zero-capture closure field release
@@ -169,7 +169,8 @@ The main x64 gaps are:
   shapes, and non-dynamic-buffer sum payloads beyond the current list payload
 - dict/HAMT key and value recursive retain/release coverage
 - helper register preservation for values live across cleanup beyond the
-  covered generic fixed-block list/dict/closure field `RAX` cases
+  covered generic fixed-block dynamic-buffer, nested fixed-block, list, dict,
+  and closure field `RAX` cases
 - documentation and tests that distinguish leak-counter balance from allocator
   reuse
 
