@@ -342,7 +342,7 @@ let private lowerToAllocatedLir
                 |> Result.bind (fun lirProgram ->
                     if verbosity >= 1 then println "  [5/7] Register Allocation..."
                     let allocStart = sw.Elapsed.TotalMilliseconds
-                    let (LIR.Program lirFuncs) = lirProgram
+                    let (LIR.Program (lirFuncs, _)) = lirProgram
                     let allocatedFuncs = allocateRegistersForFunctions lirFuncs
                     let allocElapsed = sw.Elapsed.TotalMilliseconds - allocStart
                     recordPassTiming passTimingRecorder "Register Allocation" allocElapsed
@@ -1436,7 +1436,7 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
 
                                     // Combine reachable stdlib functions with user functions
                                     let allFuncs = reachableStdlib @ finalUserFuncs
-                                    let allocatedProgram = LIR.Program allFuncs
+                                    let allocatedProgram = LIR.Program (allFuncs, userRegistries.TypeReg)
                                     if shouldDumpIR plan.Verbosity plan.Options.DumpLIR then
                                         printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
 

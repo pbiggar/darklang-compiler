@@ -40,6 +40,7 @@ let defaultOptions : CodeGenOptions = {
 /// Code generation context (passed through to instruction conversion)
 type CodeGenContext = {
     Options: CodeGenOptions
+    RecordRegistry: LIR.RecordRegistry
     // Function context for tail call epilogue generation
     StackSize: int
     UsedCalleeSaved: LIR.PhysReg list
@@ -55,6 +56,7 @@ let private listRefCountIncHelperLabel = "__dark_list_refcount_inc_helper"
 let private listRefCountDecHelperLabel = "__dark_list_refcount_dec_helper"
 let private listRefCountDecTuple2HelperLabel = "__dark_list_refcount_dec_tuple2_helper"
 let private listRefCountDecListHelperLabel = "__dark_list_refcount_dec_list_helper"
+let private listRefCountDecRecord1HelperLabel = "__dark_list_refcount_dec_record1_helper"
 let private dictRefCountIncHelperLabel = "__dark_dict_refcount_inc_helper"
 let private dictRefCountDecHelperLabel = "__dark_dict_refcount_dec_helper"
 
@@ -460,6 +462,17 @@ let private generateListRefCountDecTuple2Helper (ctx: CodeGenContext) : ARM64Sym
 
 let private generateListRefCountDecListHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     generateListRefCountDecHelperWith listRefCountDecListHelperLabel ctx None true
+
+let private generateListRefCountDecRecord1Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith listRefCountDecRecord1HelperLabel ctx (Some 8) false
+
+let private isSingleFieldRecordList (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : bool =
+    match sourceType with
+    | Some (AST.TList (AST.TRecord (name, _))) ->
+        match Map.tryFind name recordRegistry with
+        | Some [_] -> true
+        | _ -> false
+    | _ -> false
 
 let private generateDictRefCountIncHelper () : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_dict_rc_inc_{name}"
@@ -2832,6 +2845,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         listRefCountDecListHelperLabel
                     | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64]) ->
                         listRefCountDecTuple2HelperLabel
+                    | _ when isSingleFieldRecordList ctx.RecordRegistry sourceType ->
+                        listRefCountDecRecord1HelperLabel
                     | _ ->
                         listRefCountDecHelperLabel
                 let listDecCall = [
@@ -4096,12 +4111,13 @@ let peepholeOptimize (instrs: ARM64Symbolic.Instr list) : ARM64Symbolic.Instr li
 
 /// Convert LIR program to ARM64 instructions with options
 let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
-    let (LIR.Program functions) = program
+    let (LIR.Program (functions, recordRegistry)) = program
 
     // Create code generation context with options
     // StackSize and UsedCalleeSaved are set per-function in convertFunction
     let ctx = {
         Options = options
+        RecordRegistry = recordRegistry
         StackSize = 0
         UsedCalleeSaved = []
         HeapOverflowLabel = ""
@@ -4126,6 +4142,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         match sourceType with
                         | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64]) -> false
                         | Some (AST.TList (AST.TList _)) -> false
+                        | _ when isSingleFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ -> true
                     | _ -> false)))
 
@@ -4148,6 +4165,17 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TList _))) -> true
+                    | _ -> false)))
+
+    let needsListRcDecRecord1Helper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
+                        isSingleFieldRecordList ctx.RecordRegistry sourceType
                     | _ -> false)))
 
     let needsListRcIncHelper =
@@ -4190,6 +4218,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             @ (if needsListRcDecHelper then generateListRefCountDecHelper ctx else [])
             @ (if needsListRcDecTuple2Helper then generateListRefCountDecTuple2Helper ctx else [])
             @ (if needsListRcDecListHelper then generateListRefCountDecListHelper ctx else [])
+            @ (if needsListRcDecRecord1Helper then generateListRefCountDecRecord1Helper ctx else [])
         let dictRcHelpers =
             (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
             @ (if needsDictRcDecHelper then generateDictRefCountDecHelper ctx else [])

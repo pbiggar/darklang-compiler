@@ -195,11 +195,14 @@ type Function = {
     UsedCalleeSaved: PhysReg list
 }
 
+/// Record definitions needed by late, type-specialized runtime helpers.
+type RecordRegistry = Map<string, (string * AST.Type) list>
+
 /// LIR program (symbolic literals, no pools)
-type Program = Program of functions:Function list
+type Program = Program of functions:Function list * records:RecordRegistry
 
 /// Count the number of CoverageHit instructions in a program
-let countCoverageHits (Program functions) : int =
+let countCoverageHits (Program (functions, _)) : int =
     functions
     |> List.collect (fun f ->
         f.CFG.Blocks

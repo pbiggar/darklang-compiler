@@ -3345,7 +3345,7 @@ let translateFunction (enableLeakCheck: bool) (func: LIR.Function) : Result<X86_
         Ok (funcLabel @ prologue @ heapInit @ blockInstrs @ epilogue)
 
 /// Translate a complete LIR program to x86-64 instructions
-let translateProgram (LIR.Program functions) (enableLeakCheck: bool) : Result<X86_64.Instr list, string> =
+let translateProgram (LIR.Program (functions, _)) (enableLeakCheck: bool) : Result<X86_64.Instr list, string> =
     let rec translateFuncs acc remaining =
         match remaining with
         | [] -> Ok (List.rev acc |> List.concat)

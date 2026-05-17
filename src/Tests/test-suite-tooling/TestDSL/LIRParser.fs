@@ -254,4 +254,4 @@ let parseLIR (text: string) : Result<LIR.Program, string> =
             StackSize = 0
             UsedCalleeSaved = []
         }
-        Ok (Program [func])
+        Ok (Program ([func], Map.empty))

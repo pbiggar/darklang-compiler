@@ -1728,4 +1728,8 @@ let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
     match mapResults convertFunc mirFuncs with
     | Error err -> Error err
     | Ok lirFuncs ->
-        Ok (LIR.Program lirFuncs)
+        let lirRecordRegistry =
+            recordRegistry
+            |> Map.map (fun _ fields ->
+                fields |> List.map (fun field -> (field.Name, field.Type)))
+        Ok (LIR.Program (lirFuncs, lirRecordRegistry))

@@ -28,7 +28,7 @@ let testMirToLirSymbolicOperands () : TestResult =
     let program = MIR.Program ([func], Map.empty, Map.empty)
     match MIR_to_LIR.toLIR program with
     | Error err -> Error $"MIR→LIR failed: {err}"
-    | Ok (LIR.Program funcs) ->
+    | Ok (LIR.Program (funcs, _)) ->
         match funcs with
         | [lirFunc] ->
             let hasSymbolic =

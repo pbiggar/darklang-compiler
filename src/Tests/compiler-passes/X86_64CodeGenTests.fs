@@ -97,7 +97,7 @@ let private makeSimpleProgram (instrs: LIR.Instr list) (term: LIR.Terminator) : 
         StackSize = 0
         UsedCalleeSaved = []
     }
-    LIR.Program [func]
+    LIR.Program ([func], Map.empty)
 
 /// Test: MOV immediate + exit
 let testMovAndExit () : Result<unit, string> =
@@ -212,7 +212,7 @@ let testBranch () : Result<unit, string> =
         StackSize = 0
         UsedCalleeSaved = []
     }
-    let program = LIR.Program [func]
+    let program = LIR.Program ([func], Map.empty)
     match runLIRProgram program with
     | Error e -> Error e
     | Ok exitCode ->
