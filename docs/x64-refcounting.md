@@ -60,7 +60,7 @@ x64 probes cover the full ARM64 memory matrix.
 - tagged-list one-field record dynamic-buffer field release
 - tagged-list three-field record dynamic-buffer field release for all non-empty
   dynamic field combinations
-- tagged-list three-field record string/list/dict payload release
+- tagged-list three-field record string/bytes/list/dict payload release
 - tagged-list boxed sum dynamic-buffer payload release
 - tagged-list boxed sum list payload release
 - tagged-list boxed sum dict payload release
