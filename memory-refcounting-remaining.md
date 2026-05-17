@@ -14,13 +14,13 @@ changes need in order to avoid re-opening completed problems.
 Status date: 2026-05-17.
 
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
-release.
+release and tuple-only nested fixed-block field release.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
-field coverage:
+field coverage and tuple-only nested fixed-block release:
 
 - `scripts/run-in-container dotnet build --verbosity quiet`: passed
-- `scripts/run-in-container ./run-tests`: `4594 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4595 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -689,6 +689,7 @@ commits enabled:
 - dynamic string decref after `StringConcat`
 - generic fixed-block tuple field release for dynamic strings
 - generic fixed-block tuple field release for dynamic bytes
+- tuple-only nested fixed-block field release
 
 However, x64 is still not as well covered as ARM64 in the memory tests run in
 this environment, and docs still say recursive fixed-block/list payload release
@@ -701,8 +702,8 @@ match ARM64 for every recursive payload shape?"
 
 Likely gaps:
 
-- fixed-block field release for records, dicts, closures, nested fixed blocks,
-  and all non-tuple layouts
+- fixed-block field release for records, dicts, closures, sum payloads, nested
+  record/sum fixed blocks, and all non-tuple layouts
 - closure capture recursive release
 - list payload helper variants beyond tuple2/list
 - dict helper key/value recursion parity

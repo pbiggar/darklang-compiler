@@ -395,6 +395,26 @@ let testGenericRefCountDecBytesField () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected fixed-block bytes field release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 generic fixed-block RefCountDec releases nested tuple fields.
+let testGenericRefCountDecNestedStringTupleField () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "a", LIR.StringSymbol "b")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some (AST.TTuple [AST.TString]))
+                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some (AST.TTuple [AST.TTuple [AST.TString]]))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected nested tuple field release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -412,4 +432,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR dynamic string RefCountDec reclaims concat", testDynamicStringRefCountDec)
     ("LIR generic RefCountDec releases string field", testGenericRefCountDecStringField)
     ("LIR generic RefCountDec releases bytes field", testGenericRefCountDecBytesField)
+    ("LIR generic RefCountDec releases nested string tuple field", testGenericRefCountDecNestedStringTupleField)
 ]

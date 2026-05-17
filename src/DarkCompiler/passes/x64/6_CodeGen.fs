@@ -537,7 +537,12 @@ let private genDynamicBufferFieldRelease (ctx: FuncCtx) (fieldOffset: int) : X86
        X86_64.Label literalLabel
        X86_64.Label doneLabel]
 
-let private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type option) : X86_64.Instr list =
+let private fixedBlockPayloadSize (fieldType: AST.Type) : int option =
+    match fieldType with
+    | AST.TTuple fields -> Some (List.length fields * 8)
+    | _ -> None
+
+let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type option) : X86_64.Instr list =
     let fieldTypes =
         match sourceType with
         | Some (AST.TTuple fields) -> fields
@@ -548,13 +553,22 @@ let private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type opti
         match fieldType with
         | AST.TString
         | AST.TBytes -> genDynamicBufferFieldRelease ctx (index * 8)
+        | AST.TTuple _ -> genFixedBlockFieldRelease ctx (index * 8) fieldType
         | _ -> [])
     |> List.concat
+
+and private genFixedBlockFieldRelease (ctx: FuncCtx) (fieldOffset: int) (fieldType: AST.Type) : X86_64.Instr list =
+    match fixedBlockPayloadSize fieldType with
+    | None ->
+        []
+    | Some childPayloadSize ->
+        [X86_64.MOV_load (X86_64.R8, X86_64.RDX, fieldOffset)]
+        @ genRefCountDecGeneric ctx X86_64.R8 childPayloadSize (Some fieldType)
 
 /// Generic RefCountDec: decrement refcount at [addr + payloadSize].
 /// If zero, release known fields, free block to free list, and update leak accounting.
 /// Uses saved scratch registers for recursive fixed-block payload release.
-let private genRefCountDecGeneric (ctx: FuncCtx) (addrReg: X86_64.Reg) (payloadSize: int) (sourceType: AST.Type option) : X86_64.Instr list =
+and private genRefCountDecGeneric (ctx: FuncCtx) (addrReg: X86_64.Reg) (payloadSize: int) (sourceType: AST.Type option) : X86_64.Instr list =
     let skipLabel = freshLabel "rc_dec_skip"
     let noFreeLabel = freshLabel "rc_dec_nofree"
     let leakDec = genLeakCounterDec ctx
