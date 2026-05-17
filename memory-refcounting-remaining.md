@@ -13,12 +13,12 @@ changes need in order to avoid re-opening completed problems.
 
 Status date: 2026-05-17.
 
-Current head reviewed: includes `Cover higher-arity list payloads`.
+Current head reviewed: includes `Cover x64 dynamic string RC`.
 
-Last full-suite verification after the higher-arity list payload coverage:
+Last full-suite verification after the x64 dynamic string RC coverage:
 
 - `scripts/run-in-container dotnet build --verbosity quiet`: passed
-- `scripts/run-in-container ./run-tests`: `4591 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4592 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -684,6 +684,7 @@ commits enabled:
 - tagged-list reclamation
 - list edge retains
 - dict refcount helpers
+- dynamic string decref after `StringConcat`
 
 However, x64 is still not as well covered as ARM64 in the memory tests run in
 this environment, and docs still say recursive fixed-block/list payload release

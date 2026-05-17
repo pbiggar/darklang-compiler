@@ -343,6 +343,22 @@ let testGenericRefCountDecFixedSizes () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected generic fixed-size RefCountDec to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 dynamic string RefCountDec balances StringConcat allocation.
+let testDynamicStringRefCountDec () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "a", LIR.StringSymbol "b")
+                LIR.RefCountDecString (LIR.Reg (LIR.Physical LIR.X2))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected dynamic string RefCountDec to balance leak counter, got stderr '{stderr.Trim()}'"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -357,4 +373,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountInc increments refcount", testGenericRefCountInc)
     ("LIR generic RefCountDec reclaims tuple2", testGenericRefCountDecTuple2)
     ("LIR generic RefCountDec reclaims fixed sizes", testGenericRefCountDecFixedSizes)
+    ("LIR dynamic string RefCountDec reclaims concat", testDynamicStringRefCountDec)
 ]

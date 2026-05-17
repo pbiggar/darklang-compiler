@@ -2,63 +2,104 @@
 
 ## Status
 
-The x64 fixed-block and tagged-list root RC paths are enabled. The known
-remaining memory work is recursive payload release for fixed blocks/lists and
-dict/HAMT reclamation.
+The x64 backend has active reference-counting support for the core root
+operations:
 
-## Infrastructure
+- fixed-block allocation initializes trailing refcounts
+- fixed-block allocation participates in leak accounting
+- generic fixed-block `RefCountInc` and `RefCountDec` are enabled
+- tagged-list root `RefCountInc` and recursive node `RefCountDec` are enabled
+- tagged-list edge ownership is retained by typed `RawSet`
+- dict root `RefCountInc` and `RefCountDec` helpers are enabled
+- dynamic string and bytes RC lower through the dynamic-buffer path
 
-1. **RawAlloc free list reuse** — Before bump-allocating, checks the free
-   list for a matching size class. Leak accounting increments only for bump
-   allocations.
+The remaining x64 work is parity for recursive payload release. ARM64 has more
+specialized container and fixed-block destructors today, so x64 should be
+treated as partially implemented for nested managed payloads until targeted
+x64 probes cover the full ARM64 memory matrix.
 
-2. **TaggedList RefCountDec helper** — `generateListRefCountDecHelper` in
-   `passes/x64/6_CodeGen.fs`. Full iterative DFS using PUSH/POP as work
-   stack. Handles all 5 tag types (SINGLE, DEEP, NODE2, NODE3, LEAF). Wired
-   through `LIR.RefCountDec(_, _, TaggedList)`.
+## Covered By Tests
 
-3. **TaggedList RefCountInc helper** — `generateListRefCountIncHelper`.
-   Increments root node refcount only (no recursion). Wired through
-   `LIR.RefCountInc(_, _, TaggedList)`.
+`src/Tests/compiler-passes/X86_64CodeGenTests.fs` directly covers:
 
-4. **RawSet list edge retains** — `RawSet(ptr, offset, value, Some(TList _))`
-   retains the stored tagged-list pointer because the parent node now owns that
-   edge.
+- fixed-block refcount initialization
+- fixed-block leak accounting on allocation
+- generic fixed-block refcount increment
+- generic fixed-block refcount decrement for 8-, 16-, and 24-byte payloads
+- dynamic string decrement after `StringConcat`
 
-## Enabled x64 List Work
+The x64 tests run generated x64 ELF binaries directly on x64 hosts and through
+`qemu-x86_64-static` on non-x64 hosts.
 
-The list work had to be enabled as a group:
+## Tagged Lists
 
-- `RawAlloc` leak accounting for bump allocations
-- `RawSet` ownership increment for list edges
-- `TaggedList` root retain/release wiring
+`generateListRefCountDecHelper` in `passes/x64/6_CodeGen.fs` performs an
+iterative DFS over FingerTree nodes using the process stack as a work stack. It
+handles all five list tags:
 
-The LIR for `[1]` illustrates why edge retains are necessary:
+- `SINGLE`
+- `DEEP`
+- `NODE2`
+- `NODE3`
+- `LEAF`
+
+The generic list helper reclaims list nodes. Specialized helpers currently
+exist for:
+
+- tuple2 leaf payload roots
+- nested list leaf payload roots
+
+This is narrower than ARM64, which also has helper variants for dict, closure,
+record, and selected sum/list payload shapes.
+
+## Dicts
+
+x64 has dict root increment and decrement helpers. These helpers operate on the
+tagged HAMT root and raw HAMT nodes, but recursive key/value shape coverage is
+not yet proven to the same depth as ARM64.
+
+The next dict parity work should add architecture-targeted tests for:
+
+- persistent sharing across update/remove
+- string keys and values
+- list, record, tuple, closure, bytes, and nested dict values
+
+## Dynamic Buffers
+
+String and bytes `RefCountInc`/`RefCountDec` use the dynamic-buffer layout:
+
+```text
+[length:8][data:N][padding to 8][refcount:8]
 ```
-RefCountInc(X20, 24, list)    // SINGLE: 1→2
-RefCountDec(X20, 24, list)    // SINGLE: 2→1
-RefCountDec(X21, 24, list)    // LEAF: 1→0 (WITHOUT ownership inc) or 2→1 (WITH)
-Call(toDisplayString, X20)
-```
-Without ownership inc, LEAF is freed before `toDisplayString` reads it.
-With ownership inc, LEAF survives. Confirms ownership inc is necessary.
 
-## Generic RefCountDec (non-list types)
+Literal strings are skipped by dynamic-buffer RC. Heap strings produced by
+`StringConcat` are now covered by an x64 leak-check unit test.
 
-Causes 220 failures when enabled. Root causes:
-- `payloadSize` vs `sizeBytes` mismatch in free list indexing
-- Some heap objects may not have refcount initialized to 1
-- Refcount field offset may not match actual struct layout for all types
+Dynamic-buffer zero-refcount paths balance leak accounting. Variable-size
+buffer reuse is still a broader memory-policy question, shared with ARM64.
 
-## Plan
+## Remaining Parity Work
 
-Phase 1: Recursive child release for fixed blocks and list leaf payloads.
-Phase 2: Dict/HAMT retain/release.
-Phase 3: Replace remaining legacy ownership checks with `RcShape`.
+The main x64 gaps are:
 
-## Diagnostic tools
+- fixed-block field release for strings, bytes, dicts, closures, sums, and
+  nested fixed blocks
+- closure capture recursive release for all managed capture shapes
+- list helper variants for dict, closure, record, bytes, and sum payloads
+- dict/HAMT key and value recursive retain/release coverage
+- helper register preservation for values live across cleanup
+- documentation and tests that distinguish leak-counter balance from allocator
+  reuse
 
-- `scripts/debug-x86-crash.sh` — GDB crash analysis, callee-saved watchpoints
-- `scripts/dump-lir-func.sh` — dump pre/post-regalloc LIR for a function
-- `scripts/disasm-func.sh` — disassemble a function from compiled binary
-- `scripts/debug-stack.sh` — diagnose callee-saved register corruption
+## Recommended Next Steps
+
+1. Add x64 unit probes for each currently covered ARM64 fixed-block field
+   release shape.
+2. Port the ARM64 fixed-block field release plan to x64.
+3. Add x64 unit probes for list payload variants beyond tuple2 and nested
+   lists.
+4. Port the ARM64 list payload release helpers or, preferably, a shared
+   shape-driven release plan.
+5. Add x64 dict key/value shape matrix tests.
+6. Update this file after each parity slice lands.
+
