@@ -678,6 +678,30 @@ let testTaggedListRefCountDecRecordStringPayload () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list record string payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases boxed sum leaf payload fields.
+let testTaggedListRefCountDecSumStringPayload () : Result<unit, string> =
+    let sumType = AST.TSum ("X64ListRcSum", [AST.TString])
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 16)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 0L, None)
+                LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some sumType)
+                LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
+                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (AST.TList sumType))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected list sum string payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
@@ -708,4 +732,5 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases string payload", testTaggedListRefCountDecStringPayload)
     ("LIR tagged list RefCountDec releases tuple string payload", testTaggedListRefCountDecTupleStringPayload)
     ("LIR tagged list RefCountDec releases record string payload", testTaggedListRefCountDecRecordStringPayload)
+    ("LIR tagged list RefCountDec releases sum string payload", testTaggedListRefCountDecSumStringPayload)
 ]

@@ -544,6 +544,7 @@ let private listRefCountDecTuple2DynamicFirstHelperLabel = "__dark_list_rc_dec_t
 let private listRefCountDecTuple2DynamicSecondHelperLabel = "__dark_list_rc_dec_tuple2_dynamic_second_helper"
 let private listRefCountDecTuple2DynamicBothHelperLabel = "__dark_list_rc_dec_tuple2_dynamic_both_helper"
 let private listRefCountDecRecord1DynamicHelperLabel = "__dark_list_rc_dec_record1_dynamic_helper"
+let private listRefCountDecSumDynamicHelperLabel = "__dark_list_rc_dec_sum_dynamic_helper"
 let private listRefCountDecListHelperLabel = "__dark_list_rc_dec_list_helper"
 let private listRefCountDecClosureHelperLabel = "__dark_list_rc_dec_closure_helper"
 let private listRefCountDecDictHelperLabel = "__dark_list_rc_dec_dict_helper"
@@ -622,6 +623,8 @@ let private listDecHelperForType (recordRegistry: LIR.RecordRegistry) (fieldType
         tuple2ListHelperForFields fields
     | AST.TList (AST.TRecord (name, _)) ->
         recordListHelperForType recordRegistry name
+    | AST.TList (AST.TSum (_, [payloadType])) when isDynamicBufferType payloadType ->
+        listRefCountDecSumDynamicHelperLabel
     | _ ->
         listRefCountDecHelperLabel
 
@@ -1082,6 +1085,9 @@ let private generateListRefCountDecTuple2DynamicBothHelper (enableLeakCheck: boo
 
 let private generateListRefCountDecRecord1DynamicHelper (enableLeakCheck: bool) : X86_64.Instr list =
     generateListRefCountDecHelperWith listRefCountDecRecord1DynamicHelperLabel enableLeakCheck (FixedBlockLeafPayload (8, [0]))
+
+let private generateListRefCountDecSumDynamicHelper (enableLeakCheck: bool) : X86_64.Instr list =
+    generateListRefCountDecHelperWith listRefCountDecSumDynamicHelperLabel enableLeakCheck (FixedBlockLeafPayload (16, [8]))
 
 let private generateListRefCountDecListHelper (enableLeakCheck: bool) : X86_64.Instr list =
     generateListRefCountDecHelperWith listRefCountDecListHelperLabel enableLeakCheck ListLeafPayload
@@ -2499,6 +2505,8 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                         tuple2ListHelperForFields fields
                     | Some (AST.TList (AST.TRecord (name, _))) ->
                         recordListHelperForType ctx.RecordRegistry name
+                    | Some (AST.TList (AST.TSum (_, [payloadType]))) when isDynamicBufferType payloadType ->
+                        listRefCountDecSumDynamicHelperLabel
                     | _ ->
                         listRefCountDecHelperLabel
                 let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; scratch]
@@ -3753,6 +3761,12 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
             recordListHelperForType recordRegistry name = listRefCountDecRecord1DynamicHelperLabel
         | _ -> false
 
+    let isSumDynamicList (fieldType: AST.Type) : bool =
+        match fieldType with
+        | AST.TList (AST.TSum (_, [payloadType])) ->
+            isDynamicBufferType payloadType
+        | _ -> false
+
     let isNestedList (fieldType: AST.Type) : bool =
         match fieldType with
         | AST.TList (AST.TList _) -> true
@@ -3788,6 +3802,7 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                             List.length fields = 2 && tuple2ListHelperForFields fields <> listRefCountDecHelperLabel -> false
                         | Some (AST.TList (AST.TRecord (name, _))) when
                             recordListHelperForType recordRegistry name <> listRefCountDecHelperLabel -> false
+                        | Some (AST.TList (AST.TSum (_, [payloadType]))) when isDynamicBufferType payloadType -> false
                         | Some (AST.TList (AST.TList _)) -> false
                         | Some (AST.TList (AST.TFunction _)) -> false
                         | Some (AST.TList (AST.TDict _)) -> false
@@ -3861,6 +3876,19 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
                         recordListHelperForType recordRegistry name = listRefCountDecRecord1DynamicHelperLabel
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
                         typeContainsListMatching isRecord1DynamicList sourceType
+                    | _ -> false)))
+
+    let needsListRcDecSumDynamicHelper =
+        functions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TSum (_, [payloadType])))) ->
+                        isDynamicBufferType payloadType
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
+                        typeContainsListMatching isSumDynamicList sourceType
                     | _ -> false)))
 
     let needsListRcDecListHelper =
@@ -3983,6 +4011,9 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
         let listDecRecord1DynamicHelper =
             if needsListRcDecRecord1DynamicHelper then generateListRefCountDecRecord1DynamicHelper enableLeakCheck
             else []
+        let listDecSumDynamicHelper =
+            if needsListRcDecSumDynamicHelper then generateListRefCountDecSumDynamicHelper enableLeakCheck
+            else []
         let listDecListHelper =
             if needsListRcDecListHelper then generateListRefCountDecListHelper enableLeakCheck
             else []
@@ -4004,4 +4035,4 @@ let translateProgram (LIR.Program (functions, recordRegistry)) (enableLeakCheck:
         let closureDecHelper =
             if needsClosureRcDecHelper || needsListRcDecClosureHelper then generateClosureRefCountDecHelper enableLeakCheck closurePayloadSizes
             else []
-        allInstrs @ listIncHelper @ listDecHelper @ listDecTuple2Helper @ listDecTuple2DynamicFirstHelper @ listDecTuple2DynamicSecondHelper @ listDecTuple2DynamicBothHelper @ listDecRecord1DynamicHelper @ listDecListHelper @ listDecClosureHelper @ listDecDictHelper @ listDecDynamicBufferHelper @ dictIncHelper @ dictDecHelper @ closureDecHelper @ genOomHandler ())
+        allInstrs @ listIncHelper @ listDecHelper @ listDecTuple2Helper @ listDecTuple2DynamicFirstHelper @ listDecTuple2DynamicSecondHelper @ listDecTuple2DynamicBothHelper @ listDecRecord1DynamicHelper @ listDecSumDynamicHelper @ listDecListHelper @ listDecClosureHelper @ listDecDictHelper @ listDecDynamicBufferHelper @ dictIncHelper @ dictDecHelper @ closureDecHelper @ genOomHandler ())
