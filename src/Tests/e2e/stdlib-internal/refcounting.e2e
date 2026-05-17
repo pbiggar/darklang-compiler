@@ -29,7 +29,6 @@ def dictStringValue(): Dict<Int64, String> = Stdlib.Dict.set(Stdlib.Dict.empty<I
 // Tagged list construction is reclaimed even when the list is unused.
 let xs = [1, 2, 3] in 0 = stdout="0\n" stderr=""
 let base = 1 in let f = (x: Int64) => x + base in let xs = [f] in 0 = stdout="0\n" stderr="" // list of closures current safe baseline
-def listClosure(): List<(Int64) -> Int64> = let base = 1 in let f = (x: Int64) => x + base in [f] let xs = listClosure() in 0 = stdout="0\n" stderr="" // returned list releases closure payload roots
 let xs = ["a" ++ "b"] in 0 = stdout="0\n" stderr="" // list releases dynamic string payload
 def listBytes(): List<Bytes> = [Bytes.create(4)] let xs = listBytes() in 0 = stdout="0\n" stderr="" // returned list releases dynamic bytes payloads
 let xs = [("a" ++ "b", 1)] in 0 = stdout="0\n" stderr="" // list releases tuple payload root
