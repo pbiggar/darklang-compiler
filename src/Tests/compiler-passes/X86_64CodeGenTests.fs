@@ -659,6 +659,56 @@ let testGenericRefCountDecPreservesLiveRaxAcrossListFieldRelease () : Result<uni
         if output = "123" && leaks = "" then Ok ()
         else Error $"Expected live RAX value 123 and no leaks, got stdout '{output}' and stderr '{leaks}'"
 
+/// Test: x64 generic fixed-block RefCountDec preserves live RAX across nested dict field release.
+let testGenericRefCountDecPreservesLiveRaxAcrossDictFieldRelease () : Result<unit, string> =
+    let dictType = AST.TDict (AST.TInt64, AST.TInt64)
+    let program =
+        makeSimpleProgram
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X2, 16)
+                LIR.HeapStore (LIR.Physical LIR.X2, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X2, 8, LIR.Imm 2L, None)
+                LIR.Mov (LIR.Physical LIR.X3, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X3, LIR.Physical LIR.X2, LIR.Physical LIR.X3)
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some dictType)
+                LIR.Mov (LIR.Physical LIR.X0, LIR.Imm 456L)
+                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some (AST.TTuple [dictType]))
+                LIR.PrintInt64 (LIR.Physical LIR.X0)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, stdout, stderr) ->
+        let output = stdout.Trim()
+        let leaks = stderr.Trim()
+        if output = "456" && leaks = "" then Ok ()
+        else Error $"Expected live RAX value 456 and no leaks, got stdout '{output}' and stderr '{leaks}'"
+
+/// Test: x64 generic fixed-block RefCountDec preserves live RAX across nested closure field release.
+let testGenericRefCountDecPreservesLiveRaxAcrossClosureFieldRelease () : Result<unit, string> =
+    let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
+    let program =
+        makeSimpleProgram
+            [
+                LIR.ClosureAlloc (LIR.Physical LIR.X2, "_start", [])
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
+                LIR.Mov (LIR.Physical LIR.X0, LIR.Imm 789L)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (AST.TTuple [closureType]))
+                LIR.PrintInt64 (LIR.Physical LIR.X0)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, stdout, stderr) ->
+        let output = stdout.Trim()
+        let leaks = stderr.Trim()
+        if output = "789" && leaks = "" then Ok ()
+        else Error $"Expected live RAX value 789 and no leaks, got stdout '{output}' and stderr '{leaks}'"
+
 /// Test: x64 closure allocation and explicit release balance leak accounting.
 let testClosureAllocRefCountDecBalancesLeakCounter () : Result<unit, string> =
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
@@ -2102,6 +2152,8 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec releases sum dict payload", testGenericRefCountDecSumDictPayload)
     ("LIR generic RefCountDec releases dict field", testGenericRefCountDecDictField)
     ("LIR generic RefCountDec preserves live RAX across list field release", testGenericRefCountDecPreservesLiveRaxAcrossListFieldRelease)
+    ("LIR generic RefCountDec preserves live RAX across dict field release", testGenericRefCountDecPreservesLiveRaxAcrossDictFieldRelease)
+    ("LIR generic RefCountDec preserves live RAX across closure field release", testGenericRefCountDecPreservesLiveRaxAcrossClosureFieldRelease)
     ("LIR closure alloc RefCountDec balances leak counter", testClosureAllocRefCountDecBalancesLeakCounter)
     ("LIR generic RefCountDec releases closure field", testGenericRefCountDecClosureField)
     ("LIR generic RefCountDec releases sum closure payload", testGenericRefCountDecSumClosurePayload)

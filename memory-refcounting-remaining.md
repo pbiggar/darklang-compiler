@@ -58,10 +58,10 @@ tagged-list tuple3 string/list/dict payload release, plus tagged-list boxed sum
 tuple3 string/list/dict payload release, plus direct x64 closure tuple
 string/list/dict capture release, plus direct x64 closure record
 string/list/dict capture release, plus direct x64 closure sum tuple
-string/list/dict capture release, plus x64 generic fixed-block list field
-release preserving a live `RAX` value across cleanup:
+string/list/dict capture release, plus x64 generic fixed-block list/dict/closure
+field release preserving a live `RAX` value across cleanup:
 
-- `scripts/run-in-container ./run-tests`: `4647 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4649 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -775,8 +775,8 @@ commits enabled:
 - direct closure record string/list/dict capture release
 - direct closure sum tuple string/list/dict capture release
 - direct closure release with multiple managed captures
-- generic fixed-block list field release preserves a live `RAX` value across
-  cleanup
+- generic fixed-block list/dict/closure field release preserves a live `RAX`
+  value across cleanup
 
 However, x64 is still not as well covered as ARM64 in the memory tests run in
 this environment, and docs still say recursive fixed-block/list payload release
@@ -807,7 +807,7 @@ Likely gaps:
 - dict helper key/value recursion parity
 - dynamic string/bytes literal sentinel and aligned layout parity
 - register preservation around helper calls and inline releases beyond the
-  covered x64 generic fixed-block list-field release case
+  covered x64 generic fixed-block list/dict/closure field release cases
 - free-list indexing consistency for payload sizes and raw sizes
 
 ### Remaining Tasks
@@ -822,9 +822,9 @@ Likely gaps:
 6. Confirm x64 literal string layout has an immutable sentinel or otherwise
    never sends static strings through dynamic RC.
 7. Continue auditing helper register preservation using focused tests that
-   return values live across cleanup. The x64 generic fixed-block list-field
-   release path now preserves live `RAX`; broader helper/backend combinations
-   remain.
+   return values live across cleanup. The x64 generic fixed-block
+   list/dict/closure field release paths now preserve live `RAX`; broader
+   helper/backend combinations remain.
 
 ### Suggested Commit Breakdown
 
@@ -941,8 +941,9 @@ More projected shapes still need the same confidence:
 3. Ensure print insertion and cleanup ordering is safe for every retained
    borrowed value.
 4. Audit helper register preservation for values live across cleanup on both
-   backends. The x64 generic fixed-block list-field cleanup path has coverage
-   for live `RAX`; other helpers and live registers remain to be proved.
+   backends. The x64 generic fixed-block list/dict/closure field cleanup paths
+   have coverage for live `RAX`; other helpers and live registers remain to be
+   proved.
 
 ### Suggested Commit Breakdown
 
