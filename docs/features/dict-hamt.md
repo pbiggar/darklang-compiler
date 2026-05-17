@@ -159,6 +159,27 @@ __raw_set<T>(ptr: RawPtr, offset: Int64, value: T) : Unit
 
 These bypass the normal heap allocator for precise control.
 
+## Reference Counting
+
+`Dict<K, V>` roots are compiler-managed values. Backends provide dict
+refcount helpers for retaining and releasing tagged HAMT roots, and typed
+`RawSet` sites retain dict edges stored inside other managed structures.
+
+Current leak-check coverage includes common root lifetimes such as singleton
+dicts, overwrite, remove, `fromList`, string keys and values, returned dicts,
+and lists containing dict payloads.
+
+The raw HAMT nodes are still an active memory-model area. They are allocated
+with `RawAlloc`, and the project still needs a complete documented story for:
+
+- persistent structural sharing across updates/removes
+- recursive key and value retain/release for every managed shape
+- whether raw HAMT nodes become reusable or only balance leak accounting
+- x64 parity with ARM64 helper behavior
+
+See `memory-refcounting-remaining.md` for the current dict/HAMT remaining
+work.
+
 ## Tag Encoding
 
 Tags are encoded in the pointer:
