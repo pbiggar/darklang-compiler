@@ -2877,10 +2877,12 @@ let generateFloatToString (destReg: ARM64.Reg) (valueReg: ARM64.FReg) : ARM64.In
         // Store length at [X19]
         ARM64.STR (ARM64.X21, ARM64.X19, 0s)
 
-        // Initialize refcount to 1 at [X19 + 8 + length]
-        ARM64.ADD_reg (ARM64.X3, ARM64.X19, ARM64.X21)  // X3 = X19 + length
+        // Initialize refcount to 1 at [X19 + 8 + aligned(length)]
+        ARM64.ADD_imm (ARM64.X3, ARM64.X21, 7us)
+        ARM64.AND_imm (ARM64.X3, ARM64.X3, 0xFFFFFFFFFFFFFFF8UL)
+        ARM64.ADD_reg (ARM64.X3, ARM64.X19, ARM64.X3)
         ARM64.MOVZ (ARM64.X4, 1us, 0)  // X4 = 1
-        ARM64.STR (ARM64.X4, ARM64.X3, 8s)  // Store refcount at [X19 + 8 + length]
+        ARM64.STR (ARM64.X4, ARM64.X3, 8s)
 
         // Copy string from stack buffer to heap
         // X1 = source (stack buffer start), X19+8 = dest, X21 = length

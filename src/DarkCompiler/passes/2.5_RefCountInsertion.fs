@@ -533,7 +533,8 @@ let rec private isStoredByRawSet (tempId: TempId) (bodyInfo: ReturnAnnotatedExpr
 
 /// Insert RefCountInc for returned parameters at a Return node
 let insertParamIncsAtReturn
-    (paramIncs: (TempId * int * RcKind * AST.Type option) list)
+    (ctx: TypeContext)
+    (paramIncs: (TempId * AST.Type) list)
     (returned: Set<TempId>)
     (expr: AExpr)
     (varGen: VarGen)
@@ -541,11 +542,11 @@ let insertParamIncsAtReturn
     : AExpr * VarGen * Map<TempId, AST.Type> =
     let active =
         paramIncs
-        |> List.filter (fun (tempId, _, _, _) -> Set.contains tempId returned)
+        |> List.filter (fun (tempId, _) -> Set.contains tempId returned)
     List.foldBack
-        (fun (tempId, size, kind, sourceType) (accExpr, accVarGen, accTypes) ->
+        (fun (tempId, typ) (accExpr, accVarGen, accTypes) ->
             let (dummyId, varGen') = freshVar accVarGen
-            let incExpr = RefCountInc (Var tempId, size, kind, sourceType)
+            let incExpr = retainExprForType ctx tempId typ
             let accExpr' = Let (dummyId, incExpr, accExpr)
             (accExpr', varGen', Map.add dummyId AST.TUnit accTypes))
         active
@@ -705,7 +706,7 @@ let rec insertRCWithAnalysis
     (expr: ReturnAnnotatedExpr)
     (varGen: VarGen)
     (returnDecs: ReturnDec list)
-    (paramIncs: (TempId * int * RcKind * AST.Type option) list)
+    (paramIncs: (TempId * AST.Type) list)
     (types: Map<TempId, AST.Type>)
     (typeCache: CExprTypeCache)
     : AExpr * VarGen * Map<TempId, AST.Type> * CExprTypeCache =
@@ -723,7 +724,7 @@ let rec insertRCWithAnalysis
         | RReturn (atom, returned) ->
             let baseExpr = Return atom
             let (withParamIncs, varGen1, types1) =
-                insertParamIncsAtReturn paramIncs returned baseExpr varGen types
+                insertParamIncsAtReturn ctx paramIncs returned baseExpr varGen types
             let (withDecs, varGen2, types2) = insertReturnDecs ctx returnDecs withParamIncs varGen1 types1
             let (finalExpr, finalVarGen, finalTypes) = applyLetFrames ctx frames (withDecs, varGen2, types2)
             (finalExpr, finalVarGen, finalTypes, typeCache)
@@ -1039,11 +1040,10 @@ let private insertRCInFunctionInternal
     let paramIncsRev =
         func.TypedParams
         |> List.fold (fun acc param ->
-            match param.Type with
-            | _ when isRcManagedHeapType ctx param.Type ->
-                let (size, kind, sourceType) = rcInfoForType ctxWithParams param.Type
-                (param.Id, size, kind, sourceType) :: acc
-            | _ -> acc
+            if needsRetainForBorrowedValue ctxWithParams param.Type then
+                (param.Id, param.Type) :: acc
+            else
+                acc
         ) []
     let paramIncs = List.rev paramIncsRev
 

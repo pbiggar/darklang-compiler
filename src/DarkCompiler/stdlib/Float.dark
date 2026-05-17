@@ -204,20 +204,19 @@ def Stdlib.Float.toString(f: Float) : String =
         let strippedFrac = Stdlib.Float.__stripZeros(fracStr, 1) in
         signStr ++ intStr ++ "." ++ strippedFrac
 
-// Helper to build string list from Float list
-def Stdlib.List.__floatsToStrings(list: List<Float>, acc: List<String>) : List<String> =
-    if Stdlib.__FingerTree.isEmpty<Float>(list) then acc
+def Stdlib.List.__floatsDisplayItems(list: List<Float>, first: Bool) : String =
+    if Stdlib.__FingerTree.isEmpty<Float>(list) then ""
     else
         match Stdlib.__FingerTree.head<Float>(list) with
-        | None -> acc
+        | None -> ""
         | Some(h) ->
-            let s = Stdlib.Float.toString(h) in
-            let newAcc = Stdlib.__FingerTree.pushBack<String>(acc, s) in
-            Stdlib.List.__floatsToStrings(Stdlib.__FingerTree.tail<Float>(list), newAcc)
+            let item = Stdlib.Float.toString(h) in
+            let tail = Stdlib.__FingerTree.tail<Float>(list) in
+            let rest = Stdlib.List.__floatsDisplayItems(tail, false) in
+            if first then item ++ rest else ", " ++ item ++ rest
 
 def Stdlib.List.toDisplayString_f64(list: List<Float>) : String =
-    let strs = Stdlib.List.__floatsToStrings(list, Stdlib.__FingerTree.empty<String>()) in
-    "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
+    "[" ++ Stdlib.List.__floatsDisplayItems(list, true) ++ "]"
 
 def Stdlib.List.zip<a, b>(list1: List<a>, list2: List<b>) : List<(a, b)> =
     match (list1, list2) with

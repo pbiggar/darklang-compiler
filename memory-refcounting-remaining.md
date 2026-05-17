@@ -40,7 +40,12 @@ direct x64 closure dynamic
 string/bytes/list/dict/closure/tuple/tuple-string-list-dict/record/
 record-string-list-dict/sum/sum-tuple-string-list-dict capture release,
 including a
-multiple-managed-capture closure probe.
+multiple-managed-capture closure probe, ARM64 string literal materialization via
+sentinel literal-pool entries for `Mov`, `ArgMoves`, and `TailArgMoves`,
+dynamic-string retains for returned borrowed parameters, scoped
+`Float.toString` results, branch-selected literal strings, list display string
+generation for int/string/bool/float lists, and the ARM64 `FloatToString`
+runtime helper's aligned refcount slot.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -66,6 +71,7 @@ string/list/dict capture release, plus x64 generic fixed-block dynamic-buffer,
 nested fixed-block, list, dict, and closure field release preserving a live
 `RAX` value across cleanup,
 plus x64 materialized string literals using the immutable refcount sentinel,
+plus ARM64 materialized string literals using the immutable refcount sentinel,
 plus x64 generic fixed-block boxed sum tuple and record string/list/dict
 payload release, plus x64 generic fixed-block tuple and record
 string/list/dict field release, plus returned borrowed sum string payload
@@ -79,9 +85,10 @@ retention, plus returned branch-selected borrowed bytes, list, dict, closure,
 tuple, and record projection retention, plus sum record payload release, plus mixed sum
 no-payload and payload variant release, plus record-contained sum payload
 release, plus dict-contained sum value payload release, plus pure enum sum
-no-heap-ownership coverage:
+no-heap-ownership coverage, plus scoped `Float.toString`, branch-selected
+literal string, and list display string reclamation:
 
-- `scripts/run-in-container ./run-tests`: `4695 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4701 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -169,12 +176,21 @@ Recent commits added:
 - string field releases when fixed blocks die
 - returned borrowed string retains, so a string projected from a container
   remains alive through cleanup and printing
+- returned borrowed string parameter retains use the dynamic string retain path
+  rather than the fixed-block path
+- ARM64 `Mov`, `ArgMoves`, and `TailArgMoves` materialize literal strings as
+  direct pointers to sentinel-refcount literal-pool entries
+- the ARM64 `FloatToString` runtime helper stores its refcount at
+  `8 + aligned(length)`, matching the dynamic string layout
 
 Covered by `src/Tests/e2e/stdlib-internal/refcounting.e2e`:
 
 - string concat reclaimed
 - string slice reclaimed, including unaligned data length
 - string from codepoints reclaimed
+- scoped `Stdlib.Float.toString` result reclaimed
+- branch-selected literal string reclaimed
+- list display string generation for int, string, bool, and float lists
 - tuple string field release
 - record string field release
 - returned record string field release
@@ -264,6 +280,13 @@ Covered by current tests:
 Remaining list work is generalized payload release, broad arity coverage,
 backend parity for every helper variant, and replacing ad hoc specializations
 with shape-driven traversal.
+
+During the float-display string work, a non-memory lowering bug was observed:
+`List<Float>` cons patterns using `...tail` lowered the tail operation through
+the `tail_i64` specialization. `Stdlib.List.toDisplayString_f64` avoids that
+path by using `Stdlib.__FingerTree.head<Float>` and
+`Stdlib.__FingerTree.tail<Float>` directly. Future list work should fix this
+typed list-pattern lowering issue rather than copying the workaround.
 
 ### Fixed Blocks And Closures Have Important ARM64 Coverage
 
@@ -519,14 +542,24 @@ String ownership is now substantially better than in the original findings:
 - literal string pool entries have sentinel refcounts
 - x64 materialized string literals now use the same sentinel behavior, including
   when stored in fixed-block fields
+- ARM64 materialized string literals now use the same sentinel behavior for
+  ordinary moves, argument moves, and tail-call argument moves
 - string layout is aligned in stdlib builders and literal pools
+- the ARM64 `FloatToString` runtime helper writes its trailing refcount at the
+  aligned dynamic-string offset
+- list display strings for int, string, bool, and float lists are covered by
+  leak-check tests; float list display now builds the display string directly
+  instead of first building a temporary `List<String>`
 
 ### Remaining Gaps
 
 Still under-proven or not fully implemented:
 
-- strings produced by `FloatToString`
-- strings produced by display/toString paths
+- direct intrinsic coverage for `FloatToString`; the ARM64 helper has been
+  patched, but current user-level `Stdlib.Float.toString` does not exercise
+  that backend intrinsic directly
+- display/toString paths beyond the covered list display and
+  `Stdlib.Float.toString` cases
 - strings produced by file I/O helpers
 - error strings produced in backend runtime paths
 - strings inside result payloads for all file operations
@@ -549,27 +582,29 @@ Known string-producing operations include:
 - `StringConcat`
 - `Stdlib.String.slice`
 - `Stdlib.String.fromCodepoints`
-- `FloatToString`
+- `FloatToString` backend intrinsic path
 - file read error/result strings
-- display strings for lists, records, sums, bytes, and floats
+- display strings for records, sums, bytes, and display paths not covered by
+  the current list-display tests
 - runtime error message strings
 
 ### Remaining Tasks
 
-1. Add leak-check tests for `Float.toString` or any path that uses
-   `FloatToString`.
-2. Add leak-check tests for display paths that allocate strings.
+1. Add direct leak-check coverage for the backend `FloatToString` intrinsic if
+   or when it is exposed through source-level code generation.
+2. Add leak-check tests for remaining display paths that allocate strings,
+   especially records, sums, bytes, and nested display values.
 3. Add file I/O result leak-check tests with string success and error payloads.
-4. Audit backend runtime helpers so every heap string initializes refcount at
-   `8 + aligned(length)`.
+4. Audit remaining backend runtime helpers so every heap string initializes
+   refcount at `8 + aligned(length)`.
 5. Separate "leak counter balanced" from "memory is reusable" in docs/tests.
 6. Design variable-size reuse for strings, or explicitly document that raw
    bump allocations for dynamic strings are not yet reused.
 
 ### Suggested Commit Breakdown
 
-1. Cover `FloatToString` dynamic string reclamation.
-2. Cover display-generated dynamic strings.
+1. Cover direct backend-intrinsic `FloatToString` dynamic string reclamation.
+2. Cover remaining display-generated dynamic strings.
 3. Cover file-read success strings.
 4. Cover file-operation error strings.
 5. Audit and patch any unaligned runtime string builders.
@@ -1302,10 +1337,10 @@ appropriate.
 
 ### Strings
 
-- `Float.toString` scoped and returned
+- direct backend-intrinsic `FloatToString`, if it becomes source-reachable
 - file-read success string scoped
 - file-operation error string scoped
-- display string generation for list/record/sum/bytes
+- display string generation for record/sum/bytes and nested display values
 - nested record/list/dict string combinations
 
 ### Fixed Blocks

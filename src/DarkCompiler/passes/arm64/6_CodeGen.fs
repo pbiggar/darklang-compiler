@@ -1851,58 +1851,11 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 // Load from stack slot into destination register
                 loadStackSlot destReg offset
             | LIR.StringSymbol value ->
-                // Convert literal string to heap string format when storing in variable
-                // This ensures all string variables have consistent heap layout:
-                // [length:8][data:N][refcount:8]
-                //
-                // Algorithm:
-                // 1. Get literal string address and length
-                // 2. Allocate heap: length + 16 bytes
-                // 3. Store length at [heap]
-                // 4. Copy bytes from pool to [heap+8]
-                // 5. Store refcount=1 at [heap+8+aligned(length)]
-                // 6. dest = heap address
-                //
-                // IMPORTANT: Use X13 for loop counter, not X0!
-                // If destReg is X0, using X0 as loop counter would clobber the result.
-                let len = utf8Len value
                 let labelRef = stringDataLabel value
-                let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
                 Ok ([
-                        // Load literal string address into X9
-                        // Literal format: [length:8][data:N] - skip length prefix to get data address
-                        ARM64Symbolic.ADRP (ARM64Symbolic.X9, labelRef)
-                        ARM64Symbolic.ADD_label (ARM64Symbolic.X9, ARM64Symbolic.X9, labelRef)
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 8us)  // X9 = data address (skip 8-byte length)
-                        // Allocate heap space (bump allocator)
-                        ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X28)  // dest = current heap pointer
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, uint16 totalSize)  // bump pointer
-                        // Store length
-                    ] @ loadImmediate ARM64Symbolic.X10 (int64 len) @ [
-                        ARM64Symbolic.STR (ARM64Symbolic.X10, destReg, 0s)  // [dest] = length
-                        // Copy bytes: loop counter in X13 (NOT X0 - it might be destReg!)
-                        ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 0us, 0)  // X13 = 0
-                    ] @ loadImmediate ARM64Symbolic.X11 (int64 len) @ [
-                        // Loop start (if X13 >= len, done)
-                        ARM64Symbolic.CMP_reg (ARM64Symbolic.X13, ARM64Symbolic.X11)
-                        ARM64Symbolic.B_cond (ARM64Symbolic.GE, 7)  // Skip 7 instructions to exit loop (to after B)
-                        ARM64Symbolic.LDRB (ARM64Symbolic.X15, ARM64Symbolic.X9, ARM64Symbolic.X13)  // X15 = pool[X13]
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X12, destReg, 8us)  // X12 = dest + 8
-                        ARM64Symbolic.ADD_reg (ARM64Symbolic.X12, ARM64Symbolic.X12, ARM64Symbolic.X13)  // X12 = dest + 8 + X13
-                        ARM64Symbolic.STRB_reg (ARM64Symbolic.X15, ARM64Symbolic.X12)  // [X12] = byte
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X13, 1us)  // X13++
-                        ARM64Symbolic.B (-7)  // Loop back to CMP
-                        // Store refcount at aligned offset
-                        // aligned(x) = ((x + 7) >> 3) << 3
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X12, ARM64Symbolic.X10, 7us)        // X12 = len + 7
-                        ARM64Symbolic.MOVZ (ARM64Symbolic.X15, 3us, 0)                   // X15 = 3
-                        ARM64Symbolic.LSR_reg (ARM64Symbolic.X12, ARM64Symbolic.X12, ARM64Symbolic.X15)  // X12 = (len + 7) >> 3
-                        ARM64Symbolic.LSL_reg (ARM64Symbolic.X12, ARM64Symbolic.X12, ARM64Symbolic.X15)  // X12 = aligned(len)
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, destReg, 8us)          // X15 = dest + 8
-                        ARM64Symbolic.ADD_reg (ARM64Symbolic.X12, ARM64Symbolic.X15, ARM64Symbolic.X12)  // X12 = dest + 8 + aligned(len)
-                        ARM64Symbolic.MOVZ (ARM64Symbolic.X15, 1us, 0)
-                        ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)  // [X12] = 1
-                    ] @ generateLeakCounterInc ctx)
+                    ARM64Symbolic.ADRP (destReg, labelRef)
+                    ARM64Symbolic.ADD_label (destReg, destReg, labelRef)
+                ])
             | LIR.FloatSymbol _ ->
                 Error "Cannot MOV float reference - use FLoad instruction"
             | LIR.FuncAddr funcName ->
@@ -2742,46 +2695,11 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
             | LIR.StackSlot offset ->
                 loadStackSlot destARM64 offset
             | LIR.StringSymbol value ->
-                // Convert literal string to heap format for function arguments
-                // Functions expect heap strings: [length:8][data:N][refcount:8]
-                // Literal data uses [length:8][data:N] - skip length to copy data
-                let len = utf8Len value
                 let labelRef = stringDataLabel value
-                let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
                 Ok ([
-                    // Load literal string data address into X9 (skip 8-byte length prefix)
-                    ARM64Symbolic.ADRP (ARM64Symbolic.X9, labelRef)
-                    ARM64Symbolic.ADD_label (ARM64Symbolic.X9, ARM64Symbolic.X9, labelRef)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 8us)  // Skip length prefix
-                    // Allocate heap space (bump allocator)
-                    ARM64Symbolic.MOV_reg (destARM64, ARM64Symbolic.X28)  // dest = current heap pointer
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, uint16 totalSize)  // bump pointer
-                    // Store length
-                ] @ loadImmediate ARM64Symbolic.X10 (int64 len) @ [
-                    ARM64Symbolic.STR (ARM64Symbolic.X10, destARM64, 0s)  // [dest] = length
-                    // Copy bytes: loop counter in X13 (NOT X0-X7 - those are arg registers!)
-                    ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 0us, 0)  // X13 = 0
-                ] @ loadImmediate ARM64Symbolic.X11 (int64 len) @ [
-                    // Loop start (if X13 >= len, done)
-                    ARM64Symbolic.CMP_reg (ARM64Symbolic.X13, ARM64Symbolic.X11)
-                    ARM64Symbolic.B_cond (ARM64Symbolic.GE, 7)  // Skip 7 instructions to exit loop
-                    ARM64Symbolic.LDRB (ARM64Symbolic.X15, ARM64Symbolic.X9, ARM64Symbolic.X13)  // X15 = literal[X13]
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X12, destARM64, 8us)  // X12 = dest + 8
-                    ARM64Symbolic.ADD_reg (ARM64Symbolic.X12, ARM64Symbolic.X12, ARM64Symbolic.X13)  // X12 = dest + 8 + X13
-                    ARM64Symbolic.STRB_reg (ARM64Symbolic.X15, ARM64Symbolic.X12)  // [X12] = byte
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X13, 1us)  // X13++
-                    ARM64Symbolic.B (-7)  // Loop back to CMP
-                    // Store refcount at aligned offset
-                    // aligned(x) = ((x + 7) >> 3) << 3
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X12, ARM64Symbolic.X10, 7us)        // X12 = len + 7
-                    ARM64Symbolic.MOVZ (ARM64Symbolic.X15, 3us, 0)                   // X15 = 3
-                    ARM64Symbolic.LSR_reg (ARM64Symbolic.X12, ARM64Symbolic.X12, ARM64Symbolic.X15)  // X12 = (len + 7) >> 3
-                    ARM64Symbolic.LSL_reg (ARM64Symbolic.X12, ARM64Symbolic.X12, ARM64Symbolic.X15)  // X12 = aligned(len)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, destARM64, 8us)        // X15 = dest + 8
-                    ARM64Symbolic.ADD_reg (ARM64Symbolic.X12, ARM64Symbolic.X15, ARM64Symbolic.X12)  // X12 = dest + 8 + aligned(len)
-                    ARM64Symbolic.MOVZ (ARM64Symbolic.X15, 1us, 0)
-                    ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)  // [X12] = 1
-                ] @ generateLeakCounterInc ctx)
+                    ARM64Symbolic.ADRP (destARM64, labelRef)
+                    ARM64Symbolic.ADD_label (destARM64, destARM64, labelRef)
+                ])
             | LIR.FuncAddr funcName ->
                 Ok [ARM64Symbolic.ADR (destARM64, codeLabel funcName)]
             | LIR.FloatImm _ | LIR.FloatSymbol _ ->
@@ -2831,41 +2749,11 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
             | LIR.FuncAddr funcName ->
                 Ok [ARM64Symbolic.ADR (destARM64, codeLabel funcName)]
             | LIR.StringSymbol value ->
-                // Convert literal string to heap format for tail call arguments
-                // Same pattern as ArgMoves - functions expect heap strings
-                // Literal data uses: [length:8][data:N] - skip length to copy data
-                let len = utf8Len value
                 let labelRef = stringDataLabel value
-                let totalSize = ((len + 16) + 7) &&& (~~~7)  // 8-byte aligned
                 Ok ([
-                    // Load literal string data address into X9 (skip 8-byte length prefix)
-                    ARM64Symbolic.ADRP (ARM64Symbolic.X9, labelRef)
-                    ARM64Symbolic.ADD_label (ARM64Symbolic.X9, ARM64Symbolic.X9, labelRef)
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 8us)  // Skip length prefix
-                    // Allocate heap space (bump allocator)
-                    ARM64Symbolic.MOV_reg (destARM64, ARM64Symbolic.X28)  // dest = current heap pointer
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, uint16 totalSize)  // bump pointer
-                    // Store length
-                ] @ loadImmediate ARM64Symbolic.X10 (int64 len) @ [
-                    ARM64Symbolic.STR (ARM64Symbolic.X10, destARM64, 0s)  // [dest] = length
-                    // Copy bytes: loop counter in X13
-                    ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 0us, 0)  // X13 = 0
-                ] @ loadImmediate ARM64Symbolic.X11 (int64 len) @ [
-                    // Loop start (if X13 >= len, done)
-                    ARM64Symbolic.CMP_reg (ARM64Symbolic.X13, ARM64Symbolic.X11)
-                    ARM64Symbolic.B_cond (ARM64Symbolic.GE, 7)  // Skip 7 instructions to exit loop
-                    ARM64Symbolic.LDRB (ARM64Symbolic.X15, ARM64Symbolic.X9, ARM64Symbolic.X13)  // X15 = literal[X13]
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X12, destARM64, 8us)  // X12 = dest + 8
-                    ARM64Symbolic.ADD_reg (ARM64Symbolic.X12, ARM64Symbolic.X12, ARM64Symbolic.X13)  // X12 = dest + 8 + X13
-                    ARM64Symbolic.STRB_reg (ARM64Symbolic.X15, ARM64Symbolic.X12)  // [X12] = byte
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X13, 1us)  // X13++
-                    ARM64Symbolic.B (-7)  // Loop back to CMP
-                    // Store refcount
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X12, destARM64, 8us)
-                    ARM64Symbolic.ADD_reg (ARM64Symbolic.X12, ARM64Symbolic.X12, ARM64Symbolic.X10)  // X12 = dest + 8 + len
-                    ARM64Symbolic.MOVZ (ARM64Symbolic.X15, 1us, 0)
-                    ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)  // [X12] = 1
-                ] @ generateLeakCounterInc ctx)
+                    ARM64Symbolic.ADRP (destARM64, labelRef)
+                    ARM64Symbolic.ADD_label (destARM64, destARM64, labelRef)
+                ])
             | LIR.FloatImm _ | LIR.FloatSymbol _ ->
                 Error "Float in TailArgMoves not yet supported"
 
