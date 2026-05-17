@@ -43,6 +43,8 @@ x64 probes cover the full ARM64 memory matrix.
 - direct closure dynamic string/bytes capture release on closure `RefCountDec`
 - direct closure list/dict/closure root capture release on closure
   `RefCountDec`
+- direct closure tuple/record/sum fixed-block capture release on closure
+  `RefCountDec`, including dynamic string fields
 - tagged-list closure leaf payload release
 - tagged-list dict leaf payload release
 - tagged-list dynamic string leaf payload release
@@ -112,11 +114,11 @@ The main x64 gaps are:
 
 - fixed-block field release for boxed sum payloads beyond the current string
   and list payload paths, and closure payloads beyond direct dynamic-buffer and
-  direct list/dict/closure root captures
+  direct list/dict/closure/fixed-block captures
 - broader record field coverage beyond the current string/bytes/nested
   fixed-block release paths
-- closure capture recursive release for managed shapes beyond direct dynamic
-  string/bytes and list/dict/closure root captures
+- closure capture recursive release coverage beyond the current direct dynamic,
+  root, and fixed-block capture probes
 - list helper variants for multi-field record, higher-arity tuple, and
   non-dynamic-buffer sum payloads
 - dict/HAMT key and value recursive retain/release coverage

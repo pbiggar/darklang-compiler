@@ -706,6 +706,91 @@ let testClosureRefCountDecClosureCapture () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected closure capture release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 closure RefCountDec releases captured fixed blocks and their fields.
+let testClosureRefCountDecTupleStringCapture () : Result<unit, string> =
+    let tupleType = AST.TTuple [AST.TString; AST.TInt64]
+    let closureTupleType = AST.TTuple [AST.TInt64; tupleType]
+    let capturedFunc =
+        makeEmptyFunction
+            "x64_tuple_capture_fn"
+            [{ Reg = LIR.Physical LIR.X0; Type = closureTupleType }]
+    let main =
+        match makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 16)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Imm 7L, None)
+                LIR.ClosureAlloc (LIR.Physical LIR.X4, "x64_tuple_capture_fn", [LIR.Reg (LIR.Physical LIR.X3)])
+                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+            ]
+            LIR.Ret with
+        | LIR.Program ([func], records) -> LIR.Program ([func; capturedFunc], records)
+        | other -> other
+
+    match runLIRProgramFullWithOptions main true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected closure tuple capture release to balance leak counter, got stderr '{stderr.Trim()}'"
+
+/// Test: x64 closure RefCountDec releases captured record fields.
+let testClosureRefCountDecRecordStringCapture () : Result<unit, string> =
+    let recordType = AST.TRecord ("X64ClosureCaptureRecord", [])
+    let records = Map.ofList [("X64ClosureCaptureRecord", [("value", AST.TString)])]
+    let closureTupleType = AST.TTuple [AST.TInt64; recordType]
+    let capturedFunc =
+        makeEmptyFunction
+            "x64_record_capture_fn"
+            [{ Reg = LIR.Physical LIR.X0; Type = closureTupleType }]
+    let main =
+        match makeSimpleProgramWithRecords
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.ClosureAlloc (LIR.Physical LIR.X4, "x64_record_capture_fn", [LIR.Reg (LIR.Physical LIR.X3)])
+                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+            ]
+            LIR.Ret
+            records with
+        | LIR.Program ([func], programRecords) -> LIR.Program ([func; capturedFunc], programRecords)
+        | other -> other
+
+    match runLIRProgramFullWithOptions main true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected closure record capture release to balance leak counter, got stderr '{stderr.Trim()}'"
+
+/// Test: x64 closure RefCountDec releases captured boxed sum payloads.
+let testClosureRefCountDecSumStringCapture () : Result<unit, string> =
+    let sumType = AST.TSum ("X64ClosureCaptureSum", [AST.TString])
+    let closureTupleType = AST.TTuple [AST.TInt64; sumType]
+    let capturedFunc =
+        makeEmptyFunction
+            "x64_sum_capture_fn"
+            [{ Reg = LIR.Physical LIR.X0; Type = closureTupleType }]
+    let main =
+        match makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 16)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 0L, None)
+                LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.ClosureAlloc (LIR.Physical LIR.X4, "x64_sum_capture_fn", [LIR.Reg (LIR.Physical LIR.X3)])
+                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+            ]
+            LIR.Ret with
+        | LIR.Program ([func], records) -> LIR.Program ([func; capturedFunc], records)
+        | other -> other
+
+    match runLIRProgramFullWithOptions main true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected closure sum capture release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 tagged-list RefCountDec releases closure leaf payloads.
 let testTaggedListRefCountDecClosurePayload () : Result<unit, string> =
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
@@ -875,6 +960,9 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR closure RefCountDec releases list capture", testClosureRefCountDecListCapture)
     ("LIR closure RefCountDec releases dict capture", testClosureRefCountDecDictCapture)
     ("LIR closure RefCountDec releases closure capture", testClosureRefCountDecClosureCapture)
+    ("LIR closure RefCountDec releases tuple string capture", testClosureRefCountDecTupleStringCapture)
+    ("LIR closure RefCountDec releases record string capture", testClosureRefCountDecRecordStringCapture)
+    ("LIR closure RefCountDec releases sum string capture", testClosureRefCountDecSumStringCapture)
     ("LIR tagged list RefCountDec releases closure payload", testTaggedListRefCountDecClosurePayload)
     ("LIR tagged list RefCountDec releases dict payload", testTaggedListRefCountDecDictPayload)
     ("LIR tagged list RefCountDec releases string payload", testTaggedListRefCountDecStringPayload)

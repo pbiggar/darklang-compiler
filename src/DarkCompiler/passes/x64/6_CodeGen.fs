@@ -1446,6 +1446,13 @@ let private generateClosureRefCountDecHelper
         else
             []
 
+    let helperCtx : FuncCtx = {
+        StackSize = 0
+        UsedCalleeSaved = []
+        EnableLeakCheck = enableLeakCheck
+        RecordRegistry = recordRegistry
+    }
+
     let payloadCases =
         closurePayloadSizes
         |> Map.toList
@@ -1495,6 +1502,16 @@ let private generateClosureRefCountDecHelper
         @ restores
         @ [X86_64.Label doneLabel]
 
+    let releaseFixedBlockCapture (fieldOffset: int) (captureType: AST.Type) : X86_64.Instr list =
+        match fixedBlockPayloadSize recordRegistry captureType with
+        | None ->
+            []
+        | Some payloadSize ->
+            [X86_64.MOV_load (X86_64.R9, X86_64.RAX, fieldOffset)
+             X86_64.PUSH X86_64.RAX]
+            @ genRefCountDecGeneric helperCtx X86_64.R9 payloadSize (Some captureType)
+            @ [X86_64.POP X86_64.RAX]
+
     let releaseCaptureCases =
         closureCaptureTypes
         |> Map.toList
@@ -1514,6 +1531,10 @@ let private generateClosureRefCountDecHelper
                         releaseHeapRootCapture fieldOffset dictRefCountDecHelperLabel $"{index}_{captureIndex}_dict"
                     | AST.TFunction _ ->
                         releaseHeapRootCapture fieldOffset closureRefCountDecHelperLabel $"{index}_{captureIndex}_closure"
+                    | AST.TTuple _
+                    | AST.TRecord _
+                    | AST.TSum _ ->
+                        releaseFixedBlockCapture fieldOffset captureType
                     | _ ->
                         [])
                 |> List.concat
