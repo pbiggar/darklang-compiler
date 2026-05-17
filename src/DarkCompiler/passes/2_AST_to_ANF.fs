@@ -4440,10 +4440,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             let setRcExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 1L), None)
             let (vg4, bindings4) =
                 addLeafInc elemAtom elemType vg3 (bindings @ [(ptrVar, allocExpr); (setVar, setExpr); (setRcVar, setRcExpr)])
-            let leafListType =
-                match elemType with
-                | AST.TFunction _ -> AST.TList (AST.TVar "a")
-                | _ -> AST.TList elemType
+            let leafListType = AST.TList elemType
             tagRawPtrAsList leafListType 5L ptrVar vg4 bindings4
 
         // Helper to create a SINGLE node containing a TreeNode
@@ -4650,7 +4647,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
 
                 let listType =
                     match elemAtoms with
-                    | (_, AST.TFunction _) :: _ -> AST.TList (AST.TVar "a")
                     | (_, elemType) :: _ -> AST.TList elemType
                     | [] -> AST.TList (AST.TVar "a")
                 buildTree listType leafNodes varGen2 leafBindings
@@ -8170,10 +8166,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             let setRcExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 1L), None)
             let (vg4, bindings4) =
                 addLeafInc elemAtom elemType vg3 (bindings @ [(ptrVar, allocExpr); (setVar, setExpr); (setRcVar, setRcExpr)])
-            let leafListType =
-                match elemType with
-                | AST.TFunction _ -> AST.TList (AST.TVar "a")
-                | _ -> AST.TList elemType
+            let leafListType = AST.TList elemType
             tagRawPtrAsList leafListType 5L ptrVar vg4 bindings4
 
         // Helper to create a SINGLE node containing a TreeNode
@@ -8379,7 +8372,6 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                 let leafNodes = leafAtoms |> List.map (fun atom -> (atom, 1))
                 let listType =
                     match elemAtoms with
-                    | (_, AST.TFunction _) :: _ -> AST.TList (AST.TVar "a")
                     | (_, elemType) :: _ -> AST.TList elemType
                     | [] -> AST.TList (AST.TVar "a")
 

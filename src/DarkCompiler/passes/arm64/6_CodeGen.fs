@@ -41,6 +41,8 @@ let defaultOptions : CodeGenOptions = {
 type CodeGenContext = {
     Options: CodeGenOptions
     RecordRegistry: LIR.RecordRegistry
+    ClosurePayloadSizes: Map<string, int>
+    FunctionName: string
     // Function context for tail call epilogue generation
     StackSize: int
     UsedCalleeSaved: LIR.PhysReg list
@@ -57,6 +59,7 @@ let private listRefCountDecHelperLabel = "__dark_list_refcount_dec_helper"
 let private listRefCountDecTuple2HelperLabel = "__dark_list_refcount_dec_tuple2_helper"
 let private listRefCountDecListHelperLabel = "__dark_list_refcount_dec_list_helper"
 let private listRefCountDecDictHelperLabel = "__dark_list_refcount_dec_dict_helper"
+let private listRefCountDecClosureHelperLabel = "__dark_list_refcount_dec_closure_helper"
 let private listRefCountDecRecord1HelperLabel = "__dark_list_refcount_dec_record1_helper"
 let private listRefCountDecRecord2HelperLabel = "__dark_list_refcount_dec_record2_helper"
 let private dictRefCountIncHelperLabel = "__dark_dict_refcount_inc_helper"
@@ -184,6 +187,7 @@ let private generateListRefCountDecHelperWith
     (leafGenericPayloadSize: int option)
     (releaseLeafListPayload: bool)
     (releaseLeafDictPayload: bool)
+    (releaseLeafClosurePayload: bool)
     : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_list_rc_dec_{name}"
     let leakDec =
@@ -243,15 +247,58 @@ let private generateListRefCountDecHelperWith
     let afterSuffix = label "after_suffix"
     let freeNode = label "free_node"
 
+    let releaseClosurePayload =
+        let closurePayloadSizeReady = label "closure_payload_size_ready"
+        let closureSkipFreelist = label "closure_skip_freelist"
+        let closureCases =
+            ctx.ClosurePayloadSizes
+            |> Map.toList
+            |> List.filter (fun (_, payloadSize) -> payloadSize <> 8)
+            |> List.mapi (fun index (funcName, payloadSize) ->
+                let nextLabel = label $"closure_payload_next_{index}"
+                [
+                    ARM64Symbolic.ADR (ARM64Symbolic.X11, codeLabel funcName)
+                    ARM64Symbolic.CMP_reg (ARM64Symbolic.X9, ARM64Symbolic.X11)
+                    ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, nextLabel)
+                    ARM64Symbolic.MOVZ (ARM64Symbolic.X10, uint16 payloadSize, 0)
+                    ARM64Symbolic.B_label closurePayloadSizeReady
+                    ARM64Symbolic.Label nextLabel
+                ])
+            |> List.concat
+        [
+            ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 0s)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X8, leafPayloadDone)
+            ARM64Symbolic.LDR (ARM64Symbolic.X9, ARM64Symbolic.X8, 0s)
+            ARM64Symbolic.MOVZ (ARM64Symbolic.X10, 8us, 0)
+        ]
+        @ closureCases
+        @ [
+            ARM64Symbolic.Label closurePayloadSizeReady
+            ARM64Symbolic.ADD_reg (ARM64Symbolic.X11, ARM64Symbolic.X8, ARM64Symbolic.X10)
+            ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X11, 0s)
+            ARM64Symbolic.SUB_imm (ARM64Symbolic.X12, ARM64Symbolic.X12, 1us)
+            ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X11, 0s)
+            ARM64Symbolic.CBNZ (ARM64Symbolic.X12, leafPayloadDone)
+            ARM64Symbolic.CMP_imm (ARM64Symbolic.X10, 256us)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, closureSkipFreelist)
+            ARM64Symbolic.ADD_reg (ARM64Symbolic.X11, ARM64Symbolic.X27, ARM64Symbolic.X10)
+            ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X11, 0s)
+            ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X8, 0s)
+            ARM64Symbolic.STR (ARM64Symbolic.X8, ARM64Symbolic.X11, 0s)
+            ARM64Symbolic.Label closureSkipFreelist
+        ]
+        @ leakDec
+        @ [ARM64Symbolic.Label leafPayloadDone]
+
     let releaseLeafPayload =
-        match leafGenericPayloadSize, releaseLeafListPayload, releaseLeafDictPayload with
-        | None, false, false -> []
-        | None, true, _ ->
+        match leafGenericPayloadSize, releaseLeafListPayload, releaseLeafDictPayload, releaseLeafClosurePayload with
+        | None, false, false, false -> []
+        | None, true, _, _ ->
             [
                 ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 0s)
             ]
             @ addChild "leaf_payload_list"
-        | None, false, true ->
+        | None, false, true, _ ->
             [
                 ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 0s)
                 ARM64Symbolic.CBZ (ARM64Symbolic.X8, leafPayloadDone)
@@ -271,7 +318,9 @@ let private generateListRefCountDecHelperWith
                 ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 96s)
                 ARM64Symbolic.Label leafPayloadDone
             ]
-        | Some payloadSize, _, _ ->
+        | None, false, false, true ->
+            releaseClosurePayload
+        | Some payloadSize, _, _, _ ->
             [
                 ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 0s)
                 ARM64Symbolic.CBZ (ARM64Symbolic.X8, leafPayloadDone)
@@ -478,22 +527,39 @@ let private generateListRefCountDecHelperWith
     ]
 
 let private generateListRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecHelperLabel ctx None false false
+    generateListRefCountDecHelperWith listRefCountDecHelperLabel ctx None false false false
 
 let private generateListRefCountDecTuple2Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2HelperLabel ctx (Some 16) false false
+    generateListRefCountDecHelperWith listRefCountDecTuple2HelperLabel ctx (Some 16) false false false
 
 let private generateListRefCountDecListHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecListHelperLabel ctx None true false
+    generateListRefCountDecHelperWith listRefCountDecListHelperLabel ctx None true false false
 
 let private generateListRefCountDecDictHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecDictHelperLabel ctx None false true
+    generateListRefCountDecHelperWith listRefCountDecDictHelperLabel ctx None false true false
+
+let private generateListRefCountDecClosureHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith listRefCountDecClosureHelperLabel ctx None false false true
 
 let private generateListRefCountDecRecord1Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord1HelperLabel ctx (Some 8) false false
+    generateListRefCountDecHelperWith listRefCountDecRecord1HelperLabel ctx (Some 8) false false false
 
 let private generateListRefCountDecRecord2Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord2HelperLabel ctx (Some 16) false false
+    generateListRefCountDecHelperWith listRefCountDecRecord2HelperLabel ctx (Some 16) false false false
+
+let private closurePayloadSizesFromAllocs (functions: LIR.Function list) : Map<string, int> =
+    functions
+    |> List.collect (fun func ->
+        func.CFG.Blocks
+        |> Map.toList
+        |> List.collect (fun (_, block) ->
+            block.Instrs
+            |> List.choose (function
+                | LIR.ClosureAlloc (_, funcName, captures) ->
+                    Some (funcName, (List.length captures + 1) * 8)
+                | _ ->
+                    None)))
+    |> Map.ofList
 
 let private recordListPayloadSize (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : int option =
     match sourceType with
@@ -2880,6 +2946,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         listRefCountDecListHelperLabel
                     | Some (AST.TList (AST.TDict _)) ->
                         listRefCountDecDictHelperLabel
+                    | Some (AST.TList (AST.TFunction _)) when not (ctx.FunctionName.StartsWith("Stdlib.")) ->
+                        listRefCountDecClosureHelperLabel
                     | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64]) ->
                         listRefCountDecTuple2HelperLabel
                     | _ when isSingleFieldRecordList ctx.RecordRegistry sourceType ->
@@ -3972,6 +4040,7 @@ let convertFunction (ctx: CodeGenContext) (func: LIR.Function) : Result<ARM64Sym
     // Create function-specific context with stack info for tail call epilogue generation
     let funcCtx = {
         ctx with
+            FunctionName = func.Name
             StackSize = func.StackSize
             UsedCalleeSaved = func.UsedCalleeSaved
             HeapOverflowLabel = overflowLabel
@@ -4151,12 +4220,27 @@ let peepholeOptimize (instrs: ARM64Symbolic.Instr list) : ARM64Symbolic.Instr li
 /// Convert LIR program to ARM64 instructions with options
 let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
     let (LIR.Program (functions, recordRegistry)) = program
+    let closurePayloadSizesFromParams =
+        functions
+        |> List.choose (fun func ->
+            match func.TypedParams with
+            | { Type = AST.TTuple fields } :: _ ->
+                Some (func.Name, List.length fields * 8)
+            | _ -> None)
+        |> Map.ofList
+    let closurePayloadSizes =
+        Map.fold
+            (fun acc funcName payloadSize -> Map.add funcName payloadSize acc)
+            closurePayloadSizesFromParams
+            (closurePayloadSizesFromAllocs functions)
 
     // Create code generation context with options
     // StackSize and UsedCalleeSaved are set per-function in convertFunction
     let ctx = {
         Options = options
         RecordRegistry = recordRegistry
+        ClosurePayloadSizes = closurePayloadSizes
+        FunctionName = ""
         StackSize = 0
         UsedCalleeSaved = []
         HeapOverflowLabel = ""
@@ -4182,6 +4266,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64]) -> false
                         | Some (AST.TList (AST.TList _)) -> false
                         | Some (AST.TList (AST.TDict _)) -> false
+                        | Some (AST.TList (AST.TFunction _)) -> false
                         | _ when isSingleFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ when isTwoFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ -> true
@@ -4216,6 +4301,16 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TDict _))) -> true
+                    | _ -> false)))
+
+    let needsListRcDecClosureHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TFunction _))) -> true
                     | _ -> false)))
 
     let needsListRcDecRecord1Helper =
@@ -4282,6 +4377,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             @ (if needsListRcDecTuple2Helper then generateListRefCountDecTuple2Helper ctx else [])
             @ (if needsListRcDecListHelper then generateListRefCountDecListHelper ctx else [])
             @ (if needsListRcDecDictHelper then generateListRefCountDecDictHelper ctx else [])
+            @ (if needsListRcDecClosureHelper then generateListRefCountDecClosureHelper ctx else [])
             @ (if needsListRcDecRecord1Helper then generateListRefCountDecRecord1Helper ctx else [])
             @ (if needsListRcDecRecord2Helper then generateListRefCountDecRecord2Helper ctx else [])
         let dictRcHelpers =

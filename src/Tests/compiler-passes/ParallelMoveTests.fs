@@ -22,6 +22,8 @@ let convertTailArgMoves (moves: (LIR.PhysReg * LIR.Operand) list) : Result<ARM64
     let ctx : CodeGen.CodeGenContext = {
         Options = CodeGen.defaultOptions
         RecordRegistry = Map.empty
+        ClosurePayloadSizes = Map.empty
+        FunctionName = "test"
         StackSize = 0
         UsedCalleeSaved = []
         HeapOverflowLabel = "__heap_oom_test"
@@ -33,6 +35,8 @@ let convertRawAlloc (dest: LIR.PhysReg) (numBytes: LIR.PhysReg) : Result<ARM64Sy
     let ctx : CodeGen.CodeGenContext = {
         Options = CodeGen.defaultOptions
         RecordRegistry = Map.empty
+        ClosurePayloadSizes = Map.empty
+        FunctionName = "test"
         StackSize = 0
         UsedCalleeSaved = []
         HeapOverflowLabel = "__heap_oom_test"

@@ -454,6 +454,19 @@ let private needsAutomaticDec (typ: AST.Type) : bool =
 
 let private rcInfoForType (ctx: TypeContext) (typ: AST.Type) : int * RcKind * AST.Type option =
     (payloadSize typ ctx.TypeReg, rcKind typ, Some typ)
+
+type private ReturnDec = TempId * AST.Type * RcKind option
+
+let rec private isStoredByRawSet (tempId: TempId) (bodyInfo: ReturnAnnotatedExpr) : bool =
+    match bodyInfo with
+    | RReturn _ -> false
+    | RLet (_, RawSet (_, _, Var valueTemp, _), next, _) when valueTemp = tempId ->
+        true
+    | RLet (_, _, next, _) ->
+        isStoredByRawSet tempId next
+    | RIf (_, thenInfo, elseInfo, _) ->
+        isStoredByRawSet tempId thenInfo || isStoredByRawSet tempId elseInfo
+
 /// Insert RefCountInc for returned parameters at a Return node
 let insertParamIncsAtReturn
     (paramIncs: (TempId * int * RcKind * AST.Type option) list)
@@ -477,21 +490,22 @@ let insertParamIncsAtReturn
 /// Insert RefCountDec operations before a Return using the current dec stack
 let insertReturnDecs
     (ctx: TypeContext)
-    (returnDecs: (TempId * AST.Type) list)
+    (returnDecs: ReturnDec list)
     (expr: AExpr)
     (varGen: VarGen)
     (types: Map<TempId, AST.Type>)
     : AExpr * VarGen * Map<TempId, AST.Type> =
     let decsInOrder = List.rev returnDecs
     List.fold
-        (fun (accExpr, accVarGen, accTypes) (tempId, typ) ->
+        (fun (accExpr, accVarGen, accTypes) (tempId, typ, kindOverride) ->
             let (dummyId, varGen') = freshVar accVarGen
             let decExpr =
                 match typ with
                 | AST.TString -> RefCountDecString (Var tempId)
                 | AST.TBytes -> RefCountDecBytes (Var tempId)
                 | _ ->
-                    let (size, kind, sourceType) = rcInfoForType ctx typ
+                    let (size, defaultKind, sourceType) = rcInfoForType ctx typ
+                    let kind = kindOverride |> Option.defaultValue defaultKind
                     RefCountDec (Var tempId, size, kind, sourceType)
             let accExpr' = Let (dummyId, decExpr, accExpr)
             (accExpr', varGen', Map.add dummyId AST.TUnit accTypes))
@@ -624,7 +638,7 @@ let rec insertRCWithAnalysis
     (currentFuncName: string option)
     (expr: ReturnAnnotatedExpr)
     (varGen: VarGen)
-    (returnDecs: (TempId * AST.Type) list)
+    (returnDecs: ReturnDec list)
     (paramIncs: (TempId * int * RcKind * AST.Type option) list)
     (types: Map<TempId, AST.Type>)
     (typeCache: CExprTypeCache)
@@ -634,7 +648,7 @@ let rec insertRCWithAnalysis
         (ctx: TypeContext)
         (expr: ReturnAnnotatedExpr)
         (varGen: VarGen)
-        (returnDecs: (TempId * AST.Type) list)
+        (returnDecs: ReturnDec list)
         (frames: LetFrame list)
         (types: Map<TempId, AST.Type>)
         (typeCache: CExprTypeCache)
@@ -809,12 +823,36 @@ let rec insertRCWithAnalysis
                            | _ -> false
                     | None ->
                         false
+                let closureOwnershipTransferredToRawStorage =
+                    match cexpr with
+                    | ClosureAlloc _ -> isStoredByRawSet tempId bodyInfo
+                    | _ -> false
+                let functionListProducedByStdlibMap =
+                    match cexpr, inferredType with
+                    | Call (funcName, _), AST.TList (AST.TFunction _) ->
+                        funcName = "Stdlib.List.map"
+                        || funcName.StartsWith("Stdlib.List.map_")
+                        || funcName = "Stdlib.List.__mapHelper"
+                        || funcName.StartsWith("Stdlib.List.__mapHelper_")
+                    | _ ->
+                        false
+
                 if needsAutomaticDec inferredType
                    && not (Set.contains tempId bodyReturned)
                    && not (isBorrowingExpr cexpr)
                    && not skipReturnDecForPushBackHelpers
-                   && not consumedByImmediateI64Push then
-                    (tempId, inferredType) :: returnDecs
+                   && not consumedByImmediateI64Push
+                   && not closureOwnershipTransferredToRawStorage
+                   && not functionListProducedByStdlibMap then
+                    let kindOverride =
+                        match inferredType, currentFuncName with
+                        | AST.TList (AST.TFunction _), Some funcName when funcName.StartsWith("Stdlib.") ->
+                            None
+                        | AST.TList (AST.TFunction _), _ ->
+                            Some TaggedList
+                        | _ ->
+                            None
+                    (tempId, inferredType, kindOverride) :: returnDecs
                 else
                     returnDecs
 
