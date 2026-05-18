@@ -1339,7 +1339,8 @@ let private isStringBytesListDictRecordList (recordRegistry: LIR.RecordRegistry)
 
 let private isClosureStringListDictFieldShape (fieldTypes: AST.Type list) : bool =
     match fieldTypes with
-    | [ AST.TFunction _; AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] -> true
+    | [ AST.TFunction _; dynamicBuffer; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] ->
+        isDynamicBufferType dynamicBuffer
     | _ -> false
 
 let private isClosureStringListDictRecordList (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : bool =
