@@ -57,9 +57,9 @@ values, dict lookup `Option<String>` payload reclamation, dict string-to-string
 key/value reclamation, persistent int-to-bytes dict values with old and new
 roots live, dict record values with nested string fields, E2E suite-level
 stdlib specialization carrying test/preamble record type registries, ARM64
-fixed-block `Option` payload release for tuple/record values, and `RcShape`
-retain/release operation helper coverage and RC insertion retain/release
-emission.
+fixed-block `Option` payload release for tuple/record values, ARM64 dict
+leaf-value release for `List` values, and `RcShape` retain/release operation
+helper coverage and RC insertion retain/release emission.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -107,11 +107,12 @@ update/remove/overwrite sharing with old roots still live, persistent
 multi-branch dict sharing from a common base, dict lookup `Option<String>`
 payload reclamation, dict string-to-string key/value reclamation, persistent
 dict int-to-bytes values with old and new roots live, dict record values with
-nested string fields, and `RcShape` retain/release operation helper tests plus
-RC insertion use of those helpers, plus file read success/error, unaligned file
-read, file write success/error, and file append error reclamation:
+nested string fields, dict list values with leaf payload release, and `RcShape`
+retain/release operation helper tests plus RC insertion use of those helpers,
+plus file read success/error, unaligned file read, file write success/error,
+and file append error reclamation:
 
-- `scripts/run-in-container ./run-tests`: `4720 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4721 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -272,6 +273,8 @@ Covered by current tests:
   suite-level stdlib specialization to include test/preamble record type
   registries when a generic stdlib specialization mentions a user-defined
   record type
+- dict values of `List<Int64>` release the leaf payload root when the dict root
+  dies
 
 Remaining bytes work is parity with strings beyond the first fixed-block cases:
 deeper nested payloads, broader dict structural-sharing cases,
@@ -301,6 +304,7 @@ Covered by current tests:
 - dict string-to-string key/value lookup reclaimed
 - dict int-to-bytes values stay live across old and new roots
 - dict int-to-record values release nested string fields after lookup
+- dict int-to-list values release leaf payload roots
 
 Remaining dict work is mostly deeper raw HAMT lifecycle and shape-driven
 coverage, not initial root retention/release.
@@ -826,19 +830,19 @@ managed, but the raw node lifecycle needs a clear correctness story:
 - whether x64 and ARM64 dict helpers are semantically equivalent
 
 Recent failing probes showed that scope-only dict values of
-`List<Int64>`, `(String, List<Int64>)`, `(Int64) -> Int64`, and nested
-`Dict<Int64, String>` still leak. The immediate cause is that
+`(String, List<Int64>)`, `(Int64) -> Int64`, and nested `Dict<Int64, String>`
+still leak. The immediate cause is that
 `__dark_dict_rc_dec_helper` can balance HAMT raw nodes, but it is not typed and
 therefore cannot recursively release arbitrary typed key/value payloads stored
-in leaf or collision nodes. Future fixes should add typed dict release helpers
-or a serialized shape-plan path for dict leaf payload release. This is separate
-from the later raw-allocation policy decision.
+in leaf or collision nodes. A narrow ARM64 helper now handles leaf `List`
+values; future fixes should add typed dict release helpers or a serialized
+shape-plan path for the remaining leaf and collision payload shapes. This is
+separate from the later raw-allocation policy decision.
 
 ### Remaining Tasks
 
 1. Add key/value shape matrix tests:
 
-   - dict of int to list
    - dict of int to tuple
    - dict of int to closure
    - dict of string to dict
@@ -1446,7 +1450,6 @@ appropriate.
 
 - keep old root and new root live after update
 - keep old root and removed root live after remove
-- dict int to list
 - dict int to tuple
 - dict int to closure
 - dict int to dict

@@ -67,6 +67,7 @@ let private listRefCountDecRecord3ManagedHelperLabel = "__dark_list_refcount_dec
 let private listRefCountDecSumStringHelperLabel = "__dark_list_refcount_dec_sum_string_helper"
 let private dictRefCountIncHelperLabel = "__dark_dict_refcount_inc_helper"
 let private dictRefCountDecHelperLabel = "__dark_dict_refcount_dec_helper"
+let private dictRefCountDecListValueHelperLabel = "__dark_dict_refcount_dec_list_value_helper"
 let private closureRefCountIncHelperLabel = "__dark_closure_refcount_inc_helper"
 let private closureRefCountDecHelperLabel = "__dark_closure_refcount_dec_helper"
 
@@ -1084,7 +1085,11 @@ let private generateDictRefCountIncHelper () : ARM64Symbolic.Instr list =
         ARM64Symbolic.RET
     ]
 
-let private generateDictRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+let private generateDictRefCountDecHelper
+    (helperLabel: string)
+    (releaseLeafListValue: bool)
+    (ctx: CodeGenContext)
+    : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_dict_rc_dec_{name}"
     let leakDec =
         if ctx.Options.EnableLeakCheck then
@@ -1137,9 +1142,36 @@ let private generateDictRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.
     let collectLoop = label "collect_loop"
     let freeNode = label "free_node"
     let skipFreeList = label "skip_freelist"
+    let skipLeafListValueRelease = label "skip_leaf_list_value_release"
+
+    let releaseLeafListValueInstrs =
+        if releaseLeafListValue then
+            [
+                ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 2us)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, skipLeafListValueRelease)
+                ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -112s)
+                ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+                ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 96s)
+                ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.X3, 8s)
+                ARM64Symbolic.BL listRefCountDecHelperLabel
+                ARM64Symbolic.LDR (ARM64Symbolic.X30, ARM64Symbolic.SP, 96s)
+                ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+                ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 112s)
+                ARM64Symbolic.Label skipLeafListValueRelease
+            ]
+        else
+            []
 
     [
-        ARM64Symbolic.Label dictRefCountDecHelperLabel
+        ARM64Symbolic.Label helperLabel
         // X0 = current tagged HAMT root, X1 = pending work stack count.
         ARM64Symbolic.MOVZ (ARM64Symbolic.X1, 0us, 0)
         ARM64Symbolic.B_label loopCheck
@@ -1194,6 +1226,9 @@ let private generateDictRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.
         ARM64Symbolic.SUB_imm (ARM64Symbolic.X7, ARM64Symbolic.X7, 1us)
         ARM64Symbolic.STR (ARM64Symbolic.X7, ARM64Symbolic.X6, 0s)
         ARM64Symbolic.CBNZ (ARM64Symbolic.X7, popOrRet)
+    ]
+    @ releaseLeafListValueInstrs
+    @ [
         ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 1us)
         ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, collectInternal)
         ARM64Symbolic.B_label freeNode
@@ -3645,6 +3680,12 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 ]
                 @ listDecCall
             | LIR.DictHeap ->
+                let helperLabel =
+                    match sourceType with
+                    | Some (AST.TDict (_, AST.TList _)) ->
+                        dictRefCountDecListValueHelperLabel
+                    | _ ->
+                        dictRefCountDecHelperLabel
                 let dictDecCall = [
                     ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
                     ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -3653,7 +3694,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
                     ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
                     ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, addrReg)
-                    ARM64Symbolic.BL dictRefCountDecHelperLabel
+                    ARM64Symbolic.BL helperLabel
                     ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
                     ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
                     ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
@@ -4950,10 +4991,23 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             |> Map.exists (fun _ block ->
                 block.Instrs
                 |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.DictHeap, _) -> true
+                    | LIR.RefCountDec (_, _, LIR.DictHeap, sourceType) ->
+                        match sourceType with
+                        | Some (AST.TDict (_, AST.TList _)) -> false
+                        | _ -> true
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TDict _))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
                         fixedBlockHasField (function | AST.TDict _ -> true | _ -> false) ctx.RecordRegistry sourceType
+                    | _ -> false)))
+
+    let needsDictRcDecListValueHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.DictHeap, Some (AST.TDict (_, AST.TList _))) -> true
                     | _ -> false)))
 
     let needsClosureRcIncHelper =
@@ -4994,7 +5048,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             @ (if needsListRcDecSumStringHelper then generateListRefCountDecSumStringHelper ctx else [])
         let dictRcHelpers =
             (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
-            @ (if needsDictRcDecHelper || needsListRcDecRecord3ManagedHelper then generateDictRefCountDecHelper ctx else [])
+            @ (if needsDictRcDecHelper || needsListRcDecRecord3ManagedHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false ctx else [])
+            @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel true ctx else [])
         let closureRcHelpers =
             (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
             @ (if needsClosureRcDecHelper then generateClosureRefCountDecHelper ctx else [])
