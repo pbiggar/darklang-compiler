@@ -135,13 +135,13 @@ tagged-list closure payload capture release for a dynamic string capture, and `R
 retain/release operation helper tests plus RC insertion use of those helpers,
 plus direct concrete non-generic sum payload release in tagged lists for
 `Bytes`, `List`, `Dict`, and closure variants through variant metadata, plus
-tagged-list tuple bytes/list field release, plus file read
+tagged-list tuple bytes/list/dict field release, plus file read
 success/error, unaligned file read, file write success/error, and file append
 error reclamation:
 
-- `scripts/run-in-container ./run-tests --filter=refcounting`: `165 passed`
+- `scripts/run-in-container ./run-tests --filter=refcounting`: `166 passed`
 - Previous full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4750 passed, 2 failed`
+  `4751 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -378,6 +378,7 @@ Covered by current tests:
 - list of tuple payloads reclaimed
 - list of tuple payloads with dynamic bytes fields reclaimed
 - list of tuple payloads with list fields reclaimed
+- list of tuple payloads with dict fields reclaimed
 - list of three-field tuple payloads with string, list, and dict fields
   reclaimed on ARM64
 - nested list payloads reclaimed
