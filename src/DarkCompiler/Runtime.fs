@@ -1168,14 +1168,26 @@ let generateFileDelete (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr l
         [
             // Save callee-saved registers we'll use
             ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16s)
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
+            ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32s)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
 
-            // Allocate stack space for path (256 bytes, 16-byte aligned)
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 256us)
+            // Allocate stack space for path (256) plus caller-saved registers (64).
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 255us)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 65us)
 
             // X19 = heap string base (pathReg), X20 = dest pointer for later
             ARM64.MOV_reg (ARM64.X19, pathReg)
             ARM64.MOV_reg (ARM64.X20, destReg)
+
+            // Preserve live caller-saved registers across the chmod syscall.
+            ARM64.STR (ARM64.X1, ARM64.SP, 256s)
+            ARM64.STR (ARM64.X2, ARM64.SP, 264s)
+            ARM64.STR (ARM64.X3, ARM64.SP, 272s)
+            ARM64.STR (ARM64.X4, ARM64.SP, 280s)
+            ARM64.STR (ARM64.X5, ARM64.SP, 288s)
+            ARM64.STR (ARM64.X6, ARM64.SP, 296s)
+            ARM64.STR (ARM64.X7, ARM64.SP, 304s)
+            ARM64.STR (ARM64.X8, ARM64.SP, 312s)
 
             // X2 = string length from [X19]
             ARM64.LDR (ARM64.X2, ARM64.X19, 0s)
@@ -1462,7 +1474,7 @@ let generateFileSetExecutable (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.
 
             // Check if chmod succeeded (X21 == 0)
             ARM64.CMP_imm (ARM64.X21, 0us)
-            ARM64.B_cond (ARM64.NE, 6)
+            ARM64.B_cond (ARM64.NE, 7)
 
             // Success path: Result = Ok(())
             ARM64.MOVZ (ARM64.X1, 0us, 0)
@@ -1470,7 +1482,7 @@ let generateFileSetExecutable (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.
             ARM64.STR (ARM64.X1, ARM64.X0, 8s)
             ARM64.MOVZ (ARM64.X1, 1us, 0)
             ARM64.STR (ARM64.X1, ARM64.X0, 16s)
-            ARM64.B (26)
+            ARM64.B (27)
 
             // Error path: Result = Error("Error")
             ARM64.MOV_reg (ARM64.X2, ARM64.X28)
@@ -1501,23 +1513,44 @@ let generateFileSetExecutable (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.
             ARM64.STR (ARM64.X1, ARM64.X0, 16s)
 
             // Cleanup
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 256us)
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
-            ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 0s)
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
+            ARM64.LDR (ARM64.X1, ARM64.SP, 256s)
+            ARM64.LDR (ARM64.X2, ARM64.SP, 264s)
+            ARM64.LDR (ARM64.X3, ARM64.SP, 272s)
+            ARM64.LDR (ARM64.X4, ARM64.SP, 280s)
+            ARM64.LDR (ARM64.X5, ARM64.SP, 288s)
+            ARM64.LDR (ARM64.X6, ARM64.SP, 296s)
+            ARM64.LDR (ARM64.X7, ARM64.SP, 304s)
+            ARM64.LDR (ARM64.X8, ARM64.SP, 312s)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 255us)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 65us)
+            ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 0s)
+            ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 16s)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32us)
             ARM64.MOV_reg (destReg, ARM64.X0)
         ]
     | Platform.Linux ->
         [
             // Save callee-saved registers we'll use
             ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16s)
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16us)
+            ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32s)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32us)
 
-            // Allocate stack space for path (256 bytes)
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 256us)
+            // Allocate stack space for path (256) plus caller-saved registers (64).
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 255us)
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 65us)
 
             // X19 = heap string base (pathReg)
             ARM64.MOV_reg (ARM64.X19, pathReg)
+
+            // Preserve live caller-saved registers across the chmod syscall.
+            ARM64.STR (ARM64.X1, ARM64.SP, 256s)
+            ARM64.STR (ARM64.X2, ARM64.SP, 264s)
+            ARM64.STR (ARM64.X3, ARM64.SP, 272s)
+            ARM64.STR (ARM64.X4, ARM64.SP, 280s)
+            ARM64.STR (ARM64.X5, ARM64.SP, 288s)
+            ARM64.STR (ARM64.X6, ARM64.SP, 296s)
+            ARM64.STR (ARM64.X7, ARM64.SP, 304s)
+            ARM64.STR (ARM64.X8, ARM64.SP, 312s)
 
             // X2 = string length from [X19]
             ARM64.LDR (ARM64.X2, ARM64.X19, 0s)
@@ -1561,7 +1594,7 @@ let generateFileSetExecutable (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.
 
             // Check if chmod succeeded (X21 == 0)
             ARM64.CMP_imm (ARM64.X21, 0us)
-            ARM64.B_cond (ARM64.NE, 6)
+            ARM64.B_cond (ARM64.NE, 7)
 
             // Success path: Result = Ok(())
             ARM64.MOVZ (ARM64.X1, 0us, 0)
@@ -1569,7 +1602,7 @@ let generateFileSetExecutable (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.
             ARM64.STR (ARM64.X1, ARM64.X0, 8s)
             ARM64.MOVZ (ARM64.X1, 1us, 0)
             ARM64.STR (ARM64.X1, ARM64.X0, 16s)
-            ARM64.B (26)
+            ARM64.B (27)
 
             // Error path: Result = Error("Error")
             ARM64.MOV_reg (ARM64.X2, ARM64.X28)
@@ -1600,10 +1633,19 @@ let generateFileSetExecutable (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.
             ARM64.STR (ARM64.X1, ARM64.X0, 16s)
 
             // Cleanup
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 256us)
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
-            ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 0s)
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16us)
+            ARM64.LDR (ARM64.X1, ARM64.SP, 256s)
+            ARM64.LDR (ARM64.X2, ARM64.SP, 264s)
+            ARM64.LDR (ARM64.X3, ARM64.SP, 272s)
+            ARM64.LDR (ARM64.X4, ARM64.SP, 280s)
+            ARM64.LDR (ARM64.X5, ARM64.SP, 288s)
+            ARM64.LDR (ARM64.X6, ARM64.SP, 296s)
+            ARM64.LDR (ARM64.X7, ARM64.SP, 304s)
+            ARM64.LDR (ARM64.X8, ARM64.SP, 312s)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 255us)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 65us)
+            ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 0s)
+            ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 16s)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32us)
             ARM64.MOV_reg (destReg, ARM64.X0)
         ]
 

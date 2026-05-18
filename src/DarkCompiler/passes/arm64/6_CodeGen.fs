@@ -4269,17 +4269,20 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 lirRegToARM64Reg pathReg
                 |> Result.map (fun pathARM64 ->
                     runtimeInstrs (Runtime.generateFileSetExecutable destReg pathARM64)
+                    @ generateLeakCounterInc ctx
                     @ generateLeakCounterIncIfResultError ctx destReg)
             | LIR.StringSymbol value ->
                 Ok (
                     loadStringLiteralPointer ARM64Symbolic.X15 value
                     @ runtimeInstrs (Runtime.generateFileSetExecutable destReg ARM64Symbolic.X15)
+                    @ generateLeakCounterInc ctx
                     @ generateLeakCounterIncIfResultError ctx destReg)
             | LIR.StackSlot offset ->
                 loadStackSlot ARM64Symbolic.X15 offset
                 |> Result.map (fun loadInstrs ->
                     loadInstrs
                     @ runtimeInstrs (Runtime.generateFileSetExecutable destReg ARM64Symbolic.X15)
+                    @ generateLeakCounterInc ctx
                     @ generateLeakCounterIncIfResultError ctx destReg)
             | _ -> Error "FileSetExecutable requires string operand")
 

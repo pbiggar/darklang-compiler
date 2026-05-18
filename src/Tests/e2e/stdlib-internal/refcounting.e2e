@@ -27,6 +27,8 @@ let result = Stdlib.File.writeText("/nonexistent/dark/refcounting/write.txt", "t
 let result = Stdlib.File.appendText("/nonexistent/dark/refcounting/append.txt", "test") in 0 = stdout="0\n" stderr="" // file append error result string reclaimed
 let _ = Stdlib.File.writeText("/tmp/dark_refcount_delete_success.txt", "abcde") in let result = Stdlib.File.delete("/tmp/dark_refcount_delete_success.txt") in 0 = stdout="0\n" stderr="" // file delete success result root reclaimed
 let result = Stdlib.File.delete("/nonexistent/dark/refcounting/delete.txt") in 0 = stdout="0\n" stderr="" // file delete error result string reclaimed
+let _ = Stdlib.File.writeText("/tmp/dark_refcount_set_executable_success.txt", "abcde") in let result = Stdlib.File.setExecutable("/tmp/dark_refcount_set_executable_success.txt") in 0 = stdout="0\n" stderr="" // file setExecutable success result root reclaimed
+let result = Stdlib.File.setExecutable("/nonexistent/dark/refcounting/set-executable.txt") in 0 = stdout="0\n" stderr="" // file setExecutable error result string reclaimed
 
 // Dynamic bytes use the same length-aligned refcount slot as dynamic strings.
 let b = Bytes.create(4) in 0 = stdout="0\n" stderr=""
