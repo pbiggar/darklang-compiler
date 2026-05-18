@@ -2262,22 +2262,33 @@ let private isClosurePayloadSumList (variantRegistry: LIR.VariantRegistry) (sour
              | AST.TFunction _ -> true
              | _ -> false)
 
-let private isTuple4StringBytesListDictPayload (payloadType: AST.Type) : bool =
+let private isTuple4StringBytesListDictPayload (recordRegistry: LIR.RecordRegistry) (payloadType: AST.Type) : bool =
     match payloadType with
     | AST.TTuple [ AST.TString; AST.TBytes; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] ->
         true
+    | AST.TRecord (name, _) ->
+        recordRegistry
+        |> Map.tryFind name
+        |> Option.map (fun fields ->
+            match fields |> List.map snd with
+            | [ AST.TString; AST.TBytes; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] ->
+                true
+            | _ ->
+                false)
+        |> Option.defaultValue false
     | _ ->
         false
 
 let private isTuple4StringBytesListDictPayloadSumList
+    (recordRegistry: LIR.RecordRegistry)
     (variantRegistry: LIR.VariantRegistry)
     (sourceType: AST.Type option)
     : bool =
     match sourceType with
-    | Some (AST.TList (AST.TSum (_, [ payloadType ]))) when isTuple4StringBytesListDictPayload payloadType ->
+    | Some (AST.TList (AST.TSum (_, [ payloadType ]))) when isTuple4StringBytesListDictPayload recordRegistry payloadType ->
         true
     | _ ->
-        sumPayloadsAllMatch variantRegistry sourceType isTuple4StringBytesListDictPayload
+        sumPayloadsAllMatch variantRegistry sourceType (isTuple4StringBytesListDictPayload recordRegistry)
 
 let private fixedBlockFieldTypes (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : AST.Type list =
     match sourceType with
@@ -4773,7 +4784,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         listRefCountDecSumListHelperLabel
                     | AST.TList (AST.TSum (_, [AST.TDict _])) ->
                         listRefCountDecSumDictHelperLabel
-                    | AST.TList (AST.TSum _) when isTuple4StringBytesListDictPayloadSumList ctx.VariantRegistry (Some fieldType) ->
+                    | AST.TList (AST.TSum _) when isTuple4StringBytesListDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry (Some fieldType) ->
                         listRefCountDecSumTuple4StringBytesListDictHelperLabel
                     | _ ->
                         listRefCountDecHelperLabel
@@ -5181,7 +5192,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         listRefCountDecSumDictHelperLabel
                     | _ when isClosurePayloadSumList ctx.VariantRegistry sourceType ->
                         listRefCountDecSumClosureHelperLabel
-                    | _ when isTuple4StringBytesListDictPayloadSumList ctx.VariantRegistry sourceType ->
+                    | _ when isTuple4StringBytesListDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType ->
                         listRefCountDecSumTuple4StringBytesListDictHelperLabel
                     | _ ->
                         listRefCountDecHelperLabel
@@ -6390,7 +6401,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         | _ when isListPayloadSumList ctx.VariantRegistry sourceType -> false
                         | _ when isDictPayloadSumList ctx.VariantRegistry sourceType -> false
                         | _ when isClosurePayloadSumList ctx.VariantRegistry sourceType -> false
-                        | _ when isTuple4StringBytesListDictPayloadSumList ctx.VariantRegistry sourceType -> false
+                        | _ when isTuple4StringBytesListDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType -> false
                         | _ when isSingleFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ when isTwoFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ -> true
@@ -7122,12 +7133,12 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isTuple4StringBytesListDictPayloadSumList ctx.VariantRegistry sourceType
+                        isTuple4StringBytesListDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
                         fixedBlockHasField
                             (function
                              | AST.TList (AST.TSum _) as listType ->
-                                 isTuple4StringBytesListDictPayloadSumList ctx.VariantRegistry (Some listType)
+                                 isTuple4StringBytesListDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry (Some listType)
                              | _ -> false)
                             ctx.RecordRegistry
                             sourceType
