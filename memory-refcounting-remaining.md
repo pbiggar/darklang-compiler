@@ -52,7 +52,8 @@ runtime helper's aligned refcount slot, ARM64 file intrinsic literal operands
 using sentinel literal-pool entries, file read success/error result string
 payload leak accounting, unaligned file read string refcount layout, file write
 success root accounting, file write/append error string payload leak
-accounting, plus multiple dynamic bytes list payloads, repeated immutable
+accounting, file delete success/error result leak accounting, plus multiple
+dynamic bytes list payloads, repeated immutable
 bytes updates, dynamic bytes dict keys/values including overwrite, persistent
 dict update/remove/overwrite old-root sharing with managed string values,
 persistent multi-branch dict sharing from a common base with managed string
@@ -249,6 +250,7 @@ Covered by `src/Tests/e2e/stdlib-internal/refcounting.e2e`:
 - unaligned file read result strings reclaimed
 - file write success result roots reclaimed
 - file write and append error result strings reclaimed
+- file delete success result roots and error result strings reclaimed
 - tuple string field release
 - record string field release
 - returned record string field release
@@ -700,7 +702,7 @@ Known string-producing operations include:
 - `Stdlib.String.fromCodepoints`
 - `FloatToString` backend intrinsic path
 - remaining file operation success/error strings not yet covered by leak tests
-  after fixing delete/setExecutable error semantics
+  after fixing setExecutable error semantics
 - display strings for records, sums, bytes, and display paths not covered by
   the current list-display tests
 - runtime error message strings
@@ -712,7 +714,7 @@ Known string-producing operations include:
 2. Add leak-check tests for remaining display paths that allocate strings,
    especially records, sums, bytes, and nested display values.
 3. Add leak-check tests for remaining file-operation string result payloads
-   after fixing delete/setExecutable error behavior; append error is now
+   after fixing setExecutable error behavior; append and delete errors are now
    covered.
 4. Audit remaining backend runtime helpers so every heap string initializes
    refcount at `8 + aligned(length)`.

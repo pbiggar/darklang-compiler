@@ -4239,11 +4239,13 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 lirRegToARM64Reg pathReg
                 |> Result.map (fun pathARM64 ->
                     runtimeInstrs (Runtime.generateFileDelete destReg pathARM64)
+                    @ generateLeakCounterInc ctx
                     @ generateLeakCounterIncIfResultError ctx destReg)
             | LIR.StringSymbol value ->
                 Ok (
                     loadStringLiteralPointer ARM64Symbolic.X15 value
                     @ runtimeInstrs (Runtime.generateFileDelete destReg ARM64Symbolic.X15)
+                    @ generateLeakCounterInc ctx
                     @ generateLeakCounterIncIfResultError ctx destReg)
             | LIR.StackSlot offset ->
                 // Load heap string from stack slot
@@ -4251,6 +4253,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 |> Result.map (fun loadInstrs ->
                     loadInstrs
                     @ runtimeInstrs (Runtime.generateFileDelete destReg ARM64Symbolic.X15)
+                    @ generateLeakCounterInc ctx
                     @ generateLeakCounterIncIfResultError ctx destReg)
             | _ -> Error "FileDelete requires string operand")
 
