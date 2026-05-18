@@ -74,7 +74,8 @@ covered, direct ARM64 tagged-list concrete non-generic sum payload release for
 metadata, and `RcShape`
 retain/release operation helper coverage and RC insertion retain/release
 emission, plus ARM64 tagged-list tuple3 and record3 closure/list/dict payload
-release.
+release, plus ARM64 tagged-list tuple4 and record4 string/bytes/list/dict
+payload release.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -141,11 +142,12 @@ bytes/list/dict field release, ARM64 returned `Option<String>`/`Option<Bytes>`
 payload release for values projected through `Dict.keys` and `List.head`, plus file read
 success/error, unaligned file read, file write success/error, file append
 error reclamation, and ARM64 tagged-list tuple3 and record3 closure/list/dict
-payload release:
+payload release, plus ARM64 tagged-list tuple4 and record4
+string/bytes/list/dict payload release:
 
-- `scripts/run-in-container ./run-tests --filter=refcounting`: `173 passed`
+- `scripts/run-in-container ./run-tests --filter=refcounting`: `175 passed`
 - Previous full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4758 passed, 2 failed`
+  `4760 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
