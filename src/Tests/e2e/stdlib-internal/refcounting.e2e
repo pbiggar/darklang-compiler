@@ -94,6 +94,7 @@ type ListSumDictPayload<t> = ListSumDictEmpty | ListSumDictValue of t def listSu
 type ConcreteListSumBytes = ConcreteListSumBytesEmpty | ConcreteListSumBytesValue of Bytes let xs = [ConcreteListSumBytesValue(Bytes.create(4))] in 0 = stdout="0\n" stderr="" // list releases concrete sum bytes payload fields
 type ConcreteListSumList = ConcreteListSumListEmpty | ConcreteListSumListValue of List<Int64> let xs = [ConcreteListSumListValue([1, 2])] in 0 = stdout="0\n" stderr="" // list releases concrete sum list payload fields
 type ConcreteListSumDict = ConcreteListSumDictEmpty | ConcreteListSumDictValue of Dict<Int64, Int64> let xs = [ConcreteListSumDictValue(Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2))] in 0 = stdout="0\n" stderr="" // list releases concrete sum dict payload fields
+type ConcreteListSumClosure = ConcreteListSumClosureEmpty | ConcreteListSumClosureValue of (Int64) -> Int64 let base = 2 in let xs = [ConcreteListSumClosureValue((x: Int64) => x + base)] in 0 = stdout="0\n" stderr="" // list releases concrete sum closure payload fields
 
 // Fixed-block tuple root allocation is reclaimed on the active backend.
 let t = (1, 2) in t.0 = stdout="1\n" stderr="" // tuple root reclaimed

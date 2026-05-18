@@ -71,6 +71,7 @@ let private listRefCountDecSumStringHelperLabel = "__dark_list_refcount_dec_sum_
 let private listRefCountDecSumBytesHelperLabel = "__dark_list_refcount_dec_sum_bytes_helper"
 let private listRefCountDecSumListHelperLabel = "__dark_list_refcount_dec_sum_list_helper"
 let private listRefCountDecSumDictHelperLabel = "__dark_list_refcount_dec_sum_dict_helper"
+let private listRefCountDecSumClosureHelperLabel = "__dark_list_refcount_dec_sum_closure_helper"
 let private dictRefCountIncHelperLabel = "__dark_dict_refcount_inc_helper"
 let private dictRefCountDecHelperLabel = "__dark_dict_refcount_dec_helper"
 let private dictRefCountDecListValueHelperLabel = "__dark_dict_refcount_dec_list_value_helper"
@@ -417,6 +418,32 @@ let private generateListRefCountDecHelperWith
         @ callInstrs
         @ [ARM64Symbolic.Label fieldDone]
 
+    let releaseClosureLeafField (fieldOffset: int) : ARM64Symbolic.Instr list =
+        let fieldDone = label $"leaf_closure_field_{fieldOffset}_done"
+        let callInstrs = [
+            ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
+            ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+            ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+            ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+            ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 80s)
+            ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X8)
+            ARM64Symbolic.BL closureRefCountDecHelperLabel
+            ARM64Symbolic.LDR (ARM64Symbolic.X30, ARM64Symbolic.SP, 80s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 96s)
+        ]
+        [
+            ARM64Symbolic.LDR (ARM64Symbolic.X11, ARM64Symbolic.X3, 0s)
+            ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X11, int16 fieldOffset)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X8, fieldDone)
+        ]
+        @ callInstrs
+        @ [ARM64Symbolic.Label fieldDone]
+
     let releaseManagedLeafFields =
         managedLeafFieldTypes
         |> List.mapi (fun index fieldType ->
@@ -429,6 +456,8 @@ let private generateListRefCountDecHelperWith
                 releaseListLeafField fieldOffset fieldType
             | AST.TDict _ ->
                 releaseDictLeafField fieldOffset
+            | AST.TFunction _ ->
+                releaseClosureLeafField fieldOffset
             | _ ->
                 [])
         |> List.concat
@@ -773,6 +802,16 @@ let private generateListRefCountDecSumDictHelper (ctx: CodeGenContext) : ARM64Sy
         false
         false
         [ AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ]
+
+let private generateListRefCountDecSumClosureHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith
+        listRefCountDecSumClosureHelperLabel
+        ctx
+        (Some 16)
+        false
+        false
+        false
+        [ AST.TInt64; AST.TFunction ([AST.TInt64], AST.TInt64) ]
 
 let private closurePayloadSizesFromAllocs (functions: LIR.Function list) : Map<string, int> =
     functions
@@ -1168,6 +1207,17 @@ let private isDictPayloadSumList (variantRegistry: LIR.VariantRegistry) (sourceT
             sourceType
             (function
              | AST.TDict _ -> true
+             | _ -> false)
+
+let private isClosurePayloadSumList (variantRegistry: LIR.VariantRegistry) (sourceType: AST.Type option) : bool =
+    match sourceType with
+    | Some (AST.TList (AST.TSum (_, [AST.TFunction _]))) -> true
+    | _ ->
+        sumPayloadsAllMatch
+            variantRegistry
+            sourceType
+            (function
+             | AST.TFunction _ -> true
              | _ -> false)
 
 let private fixedBlockFieldTypes (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : AST.Type list =
@@ -3953,6 +4003,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         listRefCountDecSumListHelperLabel
                     | _ when isDictPayloadSumList ctx.VariantRegistry sourceType ->
                         listRefCountDecSumDictHelperLabel
+                    | _ when isClosurePayloadSumList ctx.VariantRegistry sourceType ->
+                        listRefCountDecSumClosureHelperLabel
                     | _ ->
                         listRefCountDecHelperLabel
                 let listDecCall = [
@@ -5132,6 +5184,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         | _ when isBytesPayloadSumList ctx.VariantRegistry sourceType -> false
                         | _ when isListPayloadSumList ctx.VariantRegistry sourceType -> false
                         | _ when isDictPayloadSumList ctx.VariantRegistry sourceType -> false
+                        | _ when isClosurePayloadSumList ctx.VariantRegistry sourceType -> false
                         | _ when isSingleFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ when isTwoFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ -> true
@@ -5370,6 +5423,25 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                             sourceType
                     | _ -> false)))
 
+    let needsListRcDecSumClosureHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
+                        isClosurePayloadSumList ctx.VariantRegistry sourceType
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField
+                            (function
+                             | AST.TList (AST.TSum _) as listType ->
+                                 isClosurePayloadSumList ctx.VariantRegistry (Some listType)
+                             | _ -> false)
+                            ctx.RecordRegistry
+                            sourceType
+                    | _ -> false)))
+
     let needsListRcIncHelper =
         sortedFunctions
         |> List.exists (fun func ->
@@ -5469,6 +5541,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.ClosureHeap, _) -> true
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
+                        isClosurePayloadSumList ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
                         fixedBlockHasField (function | AST.TFunction _ -> true | _ -> false) ctx.RecordRegistry sourceType
                     | _ -> false)))
@@ -5492,6 +5566,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             @ (if needsListRcDecSumBytesHelper then generateListRefCountDecSumBytesHelper ctx else [])
             @ (if needsListRcDecSumListHelper then generateListRefCountDecSumListHelper ctx else [])
             @ (if needsListRcDecSumDictHelper then generateListRefCountDecSumDictHelper ctx else [])
+            @ (if needsListRcDecSumClosureHelper then generateListRefCountDecSumClosureHelper ctx else [])
         let dictRcHelpers =
             (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
             @ (if needsDictRcDecHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper || needsListRcDecRecordListDictHelper || needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false false ctx else [])
