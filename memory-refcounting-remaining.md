@@ -138,9 +138,9 @@ plus direct concrete non-generic sum payload release in tagged lists for
 success/error, unaligned file read, file write success/error, and file append
 error reclamation:
 
-- `scripts/run-in-container ./run-tests --filter=refcounting`: `160 passed`
+- `scripts/run-in-container ./run-tests --filter=refcounting`: `161 passed`
 - Previous full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4745 passed, 2 failed`
+  `4746 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -421,6 +421,7 @@ Covered by current tests:
 - large tuple root reclaimed without free-list overflow
 - tuple releases dynamic string field
 - record releases string and list fields
+- record releases a closure field alongside string/list heap fields
 - returned record releases list field
 - returned tuple releases list field
 - returned record releases closure field
@@ -1490,7 +1491,6 @@ appropriate.
 ### Fixed Blocks
 
 - record with dict field
-- record with closure field and other heap fields
 - tuple with nested record field
 - tuple with sum payload field
 - record with bytes/list/dict/string mixed fields
