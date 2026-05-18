@@ -68,6 +68,9 @@ let private listRefCountDecTuple2ListBothHelperLabel = "__dark_list_refcount_dec
 let private listRefCountDecTuple2Dict0HelperLabel = "__dark_list_refcount_dec_tuple2_dict0_helper"
 let private listRefCountDecTuple2Dict1HelperLabel = "__dark_list_refcount_dec_tuple2_dict1_helper"
 let private listRefCountDecTuple2DictBothHelperLabel = "__dark_list_refcount_dec_tuple2_dict_both_helper"
+let private listRefCountDecTuple2Closure0HelperLabel = "__dark_list_refcount_dec_tuple2_closure0_helper"
+let private listRefCountDecTuple2Closure1HelperLabel = "__dark_list_refcount_dec_tuple2_closure1_helper"
+let private listRefCountDecTuple2ClosureBothHelperLabel = "__dark_list_refcount_dec_tuple2_closure_both_helper"
 let private listRefCountDecTuple3ManagedHelperLabel = "__dark_list_refcount_dec_tuple3_managed_helper"
 let private listRefCountDecListHelperLabel = "__dark_list_refcount_dec_list_helper"
 let private listRefCountDecDictHelperLabel = "__dark_list_refcount_dec_dict_helper"
@@ -799,6 +802,36 @@ let private generateListRefCountDecTuple2DictBothHelper (ctx: CodeGenContext) : 
         false
         [ AST.TDict (AST.TInt64, AST.TInt64); AST.TDict (AST.TInt64, AST.TInt64) ]
 
+let private generateListRefCountDecTuple2Closure0Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith
+        listRefCountDecTuple2Closure0HelperLabel
+        ctx
+        (Some 16)
+        false
+        false
+        false
+        [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TInt64 ]
+
+let private generateListRefCountDecTuple2Closure1Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith
+        listRefCountDecTuple2Closure1HelperLabel
+        ctx
+        (Some 16)
+        false
+        false
+        false
+        [ AST.TInt64; AST.TFunction ([ AST.TInt64 ], AST.TInt64) ]
+
+let private generateListRefCountDecTuple2ClosureBothHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith
+        listRefCountDecTuple2ClosureBothHelperLabel
+        ctx
+        (Some 16)
+        false
+        false
+        false
+        [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TFunction ([ AST.TInt64 ], AST.TInt64) ]
+
 let private generateListRefCountDecTuple3ManagedHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     generateListRefCountDecHelperWith
         listRefCountDecTuple3ManagedHelperLabel
@@ -1318,6 +1351,28 @@ let private tuple2DictHelperLabel (fields: AST.Type list) : string option =
     | Some (false, false)
     | None -> None
 
+let private isFunctionType (typ: AST.Type) : bool =
+    match typ with
+    | AST.TFunction _ -> true
+    | _ -> false
+
+let private tuple2ClosureFieldPattern (fields: AST.Type list) : (bool * bool) option =
+    match fields with
+    | [ first; second ] ->
+        match isFunctionType first, isFunctionType second with
+        | false, false -> None
+        | pattern -> Some pattern
+    | _ ->
+        None
+
+let private tuple2ClosureHelperLabel (fields: AST.Type list) : string option =
+    match tuple2ClosureFieldPattern fields with
+    | Some (true, true) -> Some listRefCountDecTuple2ClosureBothHelperLabel
+    | Some (true, false) -> Some listRefCountDecTuple2Closure0HelperLabel
+    | Some (false, true) -> Some listRefCountDecTuple2Closure1HelperLabel
+    | Some (false, false)
+    | None -> None
+
 let private isTuple2DynamicList (sourceType: AST.Type option) : bool =
     match sourceType with
     | Some (AST.TList (AST.TTuple fields)) ->
@@ -1336,6 +1391,13 @@ let private isTuple2DictList (sourceType: AST.Type option) : bool =
     match sourceType with
     | Some (AST.TList (AST.TTuple fields)) ->
         tuple2DictFieldPattern fields |> Option.isSome
+    | _ ->
+        false
+
+let private isTuple2ClosureList (sourceType: AST.Type option) : bool =
+    match sourceType with
+    | Some (AST.TList (AST.TTuple fields)) ->
+        tuple2ClosureFieldPattern fields |> Option.isSome
     | _ ->
         false
 
@@ -3847,12 +3909,13 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     | AST.TList (AST.TTuple [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ]) ->
                         listRefCountDecTuple3ManagedHelperLabel
                     | AST.TList (AST.TTuple fields) ->
-                        match tuple2DynamicHelperLabel fields, tuple2ListHelperLabel fields, tuple2DictHelperLabel fields with
-                        | Some helperLabel, _, _ -> helperLabel
-                        | None, Some helperLabel, _ -> helperLabel
-                        | None, None, Some helperLabel -> helperLabel
-                        | None, None, None when fields = [AST.TInt64; AST.TInt64] -> listRefCountDecTuple2HelperLabel
-                        | None, None, None -> listRefCountDecHelperLabel
+                        match tuple2DynamicHelperLabel fields, tuple2ListHelperLabel fields, tuple2DictHelperLabel fields, tuple2ClosureHelperLabel fields with
+                        | Some helperLabel, _, _, _ -> helperLabel
+                        | None, Some helperLabel, _, _ -> helperLabel
+                        | None, None, Some helperLabel, _ -> helperLabel
+                        | None, None, None, Some helperLabel -> helperLabel
+                        | None, None, None, None when fields = [AST.TInt64; AST.TInt64] -> listRefCountDecTuple2HelperLabel
+                        | None, None, None, None -> listRefCountDecHelperLabel
                     | AST.TList (AST.TRecord (name, _)) ->
                         match Map.tryFind name ctx.RecordRegistry with
                         | Some fields when isSingleListDictFieldShape fields ->
@@ -4200,12 +4263,13 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     | _ when isManagedThreeFieldTupleList sourceType ->
                         listRefCountDecTuple3ManagedHelperLabel
                     | Some (AST.TList (AST.TTuple fields)) ->
-                        match tuple2DynamicHelperLabel fields, tuple2ListHelperLabel fields, tuple2DictHelperLabel fields with
-                        | Some helperLabel, _, _ -> helperLabel
-                        | None, Some helperLabel, _ -> helperLabel
-                        | None, None, Some helperLabel -> helperLabel
-                        | None, None, None when fields = [AST.TInt64; AST.TInt64] -> listRefCountDecTuple2HelperLabel
-                        | None, None, None -> listRefCountDecHelperLabel
+                        match tuple2DynamicHelperLabel fields, tuple2ListHelperLabel fields, tuple2DictHelperLabel fields, tuple2ClosureHelperLabel fields with
+                        | Some helperLabel, _, _, _ -> helperLabel
+                        | None, Some helperLabel, _, _ -> helperLabel
+                        | None, None, Some helperLabel, _ -> helperLabel
+                        | None, None, None, Some helperLabel -> helperLabel
+                        | None, None, None, None when fields = [AST.TInt64; AST.TInt64] -> listRefCountDecTuple2HelperLabel
+                        | None, None, None, None -> listRefCountDecHelperLabel
                     | _ when isRecordListDictList ctx.RecordRegistry sourceType ->
                         listRefCountDecRecordListDictHelperLabel
                     | _ when isSingleFieldRecordList ctx.RecordRegistry sourceType ->
@@ -5396,6 +5460,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         | Some (AST.TList (AST.TTuple fields)) when tuple2DynamicFieldPattern fields |> Option.isSome -> false
                         | Some (AST.TList (AST.TTuple fields)) when tuple2ListFieldPattern fields |> Option.isSome -> false
                         | Some (AST.TList (AST.TTuple fields)) when tuple2DictFieldPattern fields |> Option.isSome -> false
+                        | Some (AST.TList (AST.TTuple fields)) when tuple2ClosureFieldPattern fields |> Option.isSome -> false
                         | Some (AST.TList (AST.TTuple fields)) when fields = [AST.TInt64; AST.TInt64] -> false
                         | Some (AST.TList (AST.TList _)) -> false
                         | Some (AST.TList (AST.TDict _)) -> false
@@ -5485,6 +5550,25 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                             (function
                              | AST.TList (AST.TTuple fields) ->
                                  tuple2DictFieldPattern fields |> Option.isSome
+                             | _ -> false)
+                            ctx.RecordRegistry
+                            sourceType
+                    | _ -> false)))
+
+    let needsListRcDecTuple2ClosureHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
+                        isTuple2ClosureList sourceType
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField
+                            (function
+                             | AST.TList (AST.TTuple fields) ->
+                                 tuple2ClosureFieldPattern fields |> Option.isSome
                              | _ -> false)
                             ctx.RecordRegistry
                             sourceType
@@ -5823,6 +5907,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TFunction _))) -> true
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isClosurePayloadSumList ctx.VariantRegistry sourceType
+                        || isTuple2ClosureList sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
                         fixedBlockHasField (function | AST.TFunction _ -> true | _ -> false) ctx.RecordRegistry sourceType
                     | _ -> false)))
@@ -5843,6 +5928,9 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             @ (if needsListRcDecTuple2DictHelper then generateListRefCountDecTuple2Dict0Helper ctx else [])
             @ (if needsListRcDecTuple2DictHelper then generateListRefCountDecTuple2Dict1Helper ctx else [])
             @ (if needsListRcDecTuple2DictHelper then generateListRefCountDecTuple2DictBothHelper ctx else [])
+            @ (if needsListRcDecTuple2ClosureHelper then generateListRefCountDecTuple2Closure0Helper ctx else [])
+            @ (if needsListRcDecTuple2ClosureHelper then generateListRefCountDecTuple2Closure1Helper ctx else [])
+            @ (if needsListRcDecTuple2ClosureHelper then generateListRefCountDecTuple2ClosureBothHelper ctx else [])
             @ (if needsListRcDecTuple3ManagedHelper then generateListRefCountDecTuple3ManagedHelper ctx else [])
             @ (if needsListRcDecListHelper then generateListRefCountDecListHelper ctx else [])
             @ (if needsListRcDecDictHelper || needsListRcDecRecordListDictHelper then generateListRefCountDecDictHelper ctx else [])

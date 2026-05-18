@@ -82,6 +82,7 @@ let xs = [("a" ++ "b", 1)] in 0 = stdout="0\n" stderr="" // list releases tuple 
 let xs = [(Bytes.create(4), 1)] in 0 = stdout="0\n" stderr="" // list releases tuple bytes payload field
 let xs = [([1, 2], 1)] in 0 = stdout="0\n" stderr="" // list releases tuple list payload field
 let xs = [(Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2), 1)] in 0 = stdout="0\n" stderr="" // list releases tuple dict payload field
+let base = 1 in let xs = [((x: Int64) => x + base, 1)] in 0 = stdout="0\n" stderr="" // list releases tuple closure payload field
 let xs = [("a" ++ "b", [1, 2], Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2))] in 0 = stdout="0\n" stderr="" // list releases three-field tuple payload fields
 let xs = [[1, 2], [3, 4]] in 0 = stdout="0\n" stderr="" // list releases nested list payloads
 def listDict(): List<Dict<Int64, Int64>> = [Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2)] let xs = listDict() in 0 = stdout="0\n" stderr="" // returned list releases dict payload roots
