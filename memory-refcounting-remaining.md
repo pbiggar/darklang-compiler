@@ -244,6 +244,7 @@ Covered by `src/Tests/e2e/stdlib-internal/refcounting.e2e`:
 - scoped `Stdlib.Float.toString` result reclaimed
 - branch-selected literal string reclaimed
 - list display string generation for int, string, bool, and float lists
+- `Crypto.bytesToHex` display string generation and source bytes reclaimed
 - file read success and error result strings reclaimed
 - unaligned file read result strings reclaimed
 - file write success result roots reclaimed
@@ -660,6 +661,8 @@ String ownership is now substantially better than in the original findings:
 - list display strings for int, string, bool, and float lists are covered by
   leak-check tests; float list display now builds the display string directly
   instead of first building a temporary `List<String>`
+- `Crypto.bytesToHex` is covered as a dynamic display-string allocator over a
+  bytes source
 
 ### Remaining Gaps
 
