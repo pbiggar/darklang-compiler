@@ -78,6 +78,7 @@ release, plus ARM64 tagged-list tuple3 string/bytes/list payload release, plus
 ARM64 tagged-list tuple3 string/bytes/dict payload release, plus
 ARM64 tagged-list tuple3 string/bytes/closure payload release, plus
 ARM64 tagged-list tuple3 string/bytes/nested-record payload release, plus
+ARM64 tagged-list tuple3 string/bytes/nested-record-dict payload release, plus
 ARM64 tagged-list tuple4 and record4 string/bytes/list/dict payload release,
 plus ARM64 tagged-list tuple4 and record4
 closure/dynamic-buffer/list/dict payload release, plus ARM64 tagged-list
@@ -159,6 +160,7 @@ payload release, plus ARM64 tagged-list tuple3 string/bytes/list payload
 release, plus ARM64 tagged-list tuple3 string/bytes/dict payload release, plus
 ARM64 tagged-list tuple3 string/bytes/closure payload release, plus
 ARM64 tagged-list tuple3 string/bytes/nested-record payload release, plus
+ARM64 tagged-list tuple3 string/bytes/nested-record-dict payload release, plus
 ARM64 tagged-list tuple4 and record4
 string/bytes/list/dict payload release, plus ARM64 tagged-list tuple4 and
 record4 closure/dynamic-buffer/list/dict payload release, plus ARM64
@@ -171,9 +173,9 @@ release, plus ARM64 tagged-list tuple4 nested record dict/dynamic-buffer
 payload release, plus ARM64 tagged-list tuple4 nested record
 closure/dynamic-buffer payload release:
 
-- `scripts/run-in-container ./run-tests --filter=refcounting`: `190 passed`
+- `scripts/run-in-container ./run-tests --filter=refcounting`: `191 passed`
 - Previous full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4775 passed, 2 failed`
+  `4776 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
