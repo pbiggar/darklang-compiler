@@ -65,6 +65,7 @@ let private listRefCountDecRecord1HelperLabel = "__dark_list_refcount_dec_record
 let private listRefCountDecRecord2HelperLabel = "__dark_list_refcount_dec_record2_helper"
 let private listRefCountDecRecord3ManagedHelperLabel = "__dark_list_refcount_dec_record3_managed_helper"
 let private listRefCountDecSumStringHelperLabel = "__dark_list_refcount_dec_sum_string_helper"
+let private listRefCountDecSumBytesHelperLabel = "__dark_list_refcount_dec_sum_bytes_helper"
 let private dictRefCountIncHelperLabel = "__dark_dict_refcount_inc_helper"
 let private dictRefCountDecHelperLabel = "__dark_dict_refcount_dec_helper"
 let private dictRefCountDecListValueHelperLabel = "__dark_dict_refcount_dec_list_value_helper"
@@ -705,6 +706,16 @@ let private generateListRefCountDecSumStringHelper (ctx: CodeGenContext) : ARM64
         false
         [ AST.TInt64; AST.TString ]
 
+let private generateListRefCountDecSumBytesHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith
+        listRefCountDecSumBytesHelperLabel
+        ctx
+        (Some 16)
+        false
+        false
+        false
+        [ AST.TInt64; AST.TBytes ]
+
 let private closurePayloadSizesFromAllocs (functions: LIR.Function list) : Map<string, int> =
     functions
     |> List.collect (fun func ->
@@ -1005,6 +1016,11 @@ let private isManagedThreeFieldRecordList (recordRegistry: LIR.RecordRegistry) (
 let private isStringPayloadSumList (sourceType: AST.Type option) : bool =
     match sourceType with
     | Some (AST.TList (AST.TSum (_, [AST.TString]))) -> true
+    | _ -> false
+
+let private isBytesPayloadSumList (sourceType: AST.Type option) : bool =
+    match sourceType with
+    | Some (AST.TList (AST.TSum (_, [AST.TBytes]))) -> true
     | _ -> false
 
 let private fixedBlockFieldTypes (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : AST.Type list =
@@ -3415,6 +3431,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         | _ -> listRefCountDecHelperLabel
                     | AST.TList (AST.TSum (_, [AST.TString])) ->
                         listRefCountDecSumStringHelperLabel
+                    | AST.TList (AST.TSum (_, [AST.TBytes])) ->
+                        listRefCountDecSumBytesHelperLabel
                     | _ ->
                         listRefCountDecHelperLabel
 
@@ -3750,6 +3768,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         listRefCountDecRecord3ManagedHelperLabel
                     | _ when isStringPayloadSumList sourceType ->
                         listRefCountDecSumStringHelperLabel
+                    | _ when isBytesPayloadSumList sourceType ->
+                        listRefCountDecSumBytesHelperLabel
                     | _ ->
                         listRefCountDecHelperLabel
                 let listDecCall = [
@@ -4915,6 +4935,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         | Some (AST.TList (AST.TFunction _)) -> false
                         | _ when isManagedThreeFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ when isStringPayloadSumList sourceType -> false
+                        | _ when isBytesPayloadSumList sourceType -> false
                         | _ when isSingleFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ when isTwoFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ -> true
@@ -5058,6 +5079,24 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                             sourceType
                     | _ -> false)))
 
+    let needsListRcDecSumBytesHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
+                        isBytesPayloadSumList sourceType
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField
+                            (function
+                             | AST.TList (AST.TSum (_, [AST.TBytes])) -> true
+                             | _ -> false)
+                            ctx.RecordRegistry
+                            sourceType
+                    | _ -> false)))
+
     let needsListRcIncHelper =
         sortedFunctions
         |> List.exists (fun func ->
@@ -5164,6 +5203,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             @ (if needsListRcDecRecord2Helper then generateListRefCountDecRecord2Helper ctx else [])
             @ (if needsListRcDecRecord3ManagedHelper then generateListRefCountDecRecord3ManagedHelper ctx else [])
             @ (if needsListRcDecSumStringHelper then generateListRefCountDecSumStringHelper ctx else [])
+            @ (if needsListRcDecSumBytesHelper then generateListRefCountDecSumBytesHelper ctx else [])
         let dictRcHelpers =
             (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
             @ (if needsDictRcDecHelper || needsListRcDecRecord3ManagedHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false ctx else [])
