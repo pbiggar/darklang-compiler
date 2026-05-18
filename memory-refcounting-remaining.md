@@ -51,9 +51,11 @@ payload leak accounting, unaligned file read string refcount layout, file write
 success root accounting, file write/append error string payload leak
 accounting, plus multiple dynamic bytes list payloads, repeated immutable
 bytes updates, dynamic bytes dict keys/values including overwrite, persistent
-dict update/remove old-root sharing with managed string values, dict lookup
-`Option<String>` payload reclamation, and `RcShape` retain/release operation
-helper coverage and RC insertion retain/release emission.
+dict update/remove/overwrite old-root sharing with managed string values,
+persistent multi-branch dict sharing from a common base with managed string
+values, dict lookup `Option<String>` payload reclamation, and `RcShape`
+retain/release operation helper coverage and RC insertion retain/release
+emission.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -96,13 +98,14 @@ release, plus dict-contained sum value payload release, plus pure enum sum
 no-heap-ownership coverage, plus scoped `Float.toString`, branch-selected
 literal string, list display string reclamation, multiple dynamic bytes list
 payloads, repeated immutable bytes update reclamation, dynamic bytes dict
-key/value reclamation including overwrite, persistent dict update/remove
-sharing with old roots still live, dict lookup `Option<String>` payload
-reclamation, and `RcShape` retain/release operation helper tests plus RC
-insertion use of those helpers, plus file read success/error, unaligned file
-read, file write success/error, and file append error reclamation:
+key/value reclamation including overwrite, persistent dict
+update/remove/overwrite sharing with old roots still live, persistent
+multi-branch dict sharing from a common base, dict lookup `Option<String>`
+payload reclamation, and `RcShape` retain/release operation helper tests plus
+RC insertion use of those helpers, plus file read success/error, unaligned
+file read, file write success/error, and file append error reclamation:
 
-- `scripts/run-in-container ./run-tests`: `4715 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4717 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -541,6 +544,10 @@ Current tests prove:
   releases replaced dynamic payloads
 - persistent dict update/remove keep old and new roots live with managed string
   values
+- persistent dict overwrite keeps old and new roots live with managed string
+  values
+- multiple persistent dict branches derived from the same base keep the base and
+  both derived roots live with managed string values
 - `Dict.getOrDefault` over `String` values reclaims its lookup `Option`
   payload
 
@@ -787,6 +794,9 @@ dict programs balance leak accounting:
 - string values
 - returned dicts with string keys/values
 - list payloads containing dicts
+- update/remove/overwrite cases where old and new roots remain live with
+  managed string values
+- multiple derived branches from one base root with managed string values
 
 ### Remaining Gaps
 
@@ -802,12 +812,7 @@ managed, but the raw node lifecycle needs a clear correctness story:
 
 ### Remaining Tasks
 
-1. Add remaining targeted tests for persistent sharing:
-
-   - overwrite while both old and new roots remain live
-   - branch sharing across multiple updates
-
-2. Add key/value shape matrix tests:
+1. Add key/value shape matrix tests:
 
    - dict of string to string
    - dict of int to list
@@ -817,20 +822,19 @@ managed, but the raw node lifecycle needs a clear correctness story:
    - dict of int to bytes with old and new roots both live
    - dict of string to dict
 
-3. Audit `Stdlib.__HAMT` raw node allocations and helper-generated releases.
-4. Define whether HAMT raw nodes are refcounted, copied, or uniquely owned.
-5. If structural sharing is real, add node-level retain/release or prove copies
+2. Audit `Stdlib.__HAMT` raw node allocations and helper-generated releases.
+3. Define whether HAMT raw nodes are refcounted, copied, or uniquely owned.
+4. If structural sharing is real, add node-level retain/release or prove copies
    break sharing safely.
-6. Port any missing semantics to x64.
+5. Port any missing semantics to x64.
 
 ### Suggested Commit Breakdown
 
-1. Add persistent-sharing tests for dict update/remove.
-2. Add dict value shape matrix tests for ARM64.
-3. Fix any key/value recursive retain gaps.
-4. Fix any key/value recursive release gaps.
-5. Add x64 parity tests or architecture-specific probes.
-6. Document HAMT node ownership explicitly.
+1. Add dict value shape matrix tests for ARM64.
+2. Fix any key/value recursive retain gaps.
+3. Fix any key/value recursive release gaps.
+4. Add x64 parity tests or architecture-specific probes.
+5. Document HAMT node ownership explicitly.
 
 ## 7. Resolve x64 Backend Parity
 
