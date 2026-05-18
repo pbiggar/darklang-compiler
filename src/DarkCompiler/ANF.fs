@@ -329,6 +329,46 @@ let rcShapeNeedsOwnedScopeRelease (shape: RcShape) : bool =
     | ClosureShape _ ->
         true
 
+/// True when a shape is managed through a fixed-size or tagged RC root rather
+/// than a dynamic-buffer helper or an unmanaged representation.
+let rcShapeIsRootManaged (shape: RcShape) : bool =
+    match shape with
+    | FixedBlock _
+    | BoxedSum _
+    | TaggedListShape _
+    | DictRoot _
+    | ClosureShape _ ->
+        true
+    | Immediate
+    | DynamicString
+    | DynamicBytes
+    | StaticString
+    | RawUnmanaged ->
+        false
+
+/// True when releasing a value of this shape can require walking owned payload
+/// fields, captures, list leaves, or dict leaf entries in addition to releasing
+/// the root allocation itself.
+let rec rcShapeNeedsRecursiveRelease (shape: RcShape) : bool =
+    match shape with
+    | FixedBlock (_, fieldShapes) ->
+        fieldShapes |> List.exists rcShapeNeedsOwnedScopeRelease
+    | BoxedSum _ ->
+        true
+    | TaggedListShape elementShape ->
+        rcShapeNeedsOwnedScopeRelease elementShape
+    | DictRoot (keyShape, valueShape) ->
+        rcShapeNeedsOwnedScopeRelease keyShape
+        || rcShapeNeedsOwnedScopeRelease valueShape
+    | ClosureShape captureShapes ->
+        captureShapes |> List.exists rcShapeNeedsOwnedScopeRelease
+    | Immediate
+    | DynamicString
+    | DynamicBytes
+    | StaticString
+    | RawUnmanaged ->
+        false
+
 /// Dispatch kind for fixed-size/tagged RC roots. Dynamic buffers use their own
 /// string/bytes operations, so they intentionally do not have a root kind here.
 let rcShapeRootKind (shape: RcShape) : RcKind option =

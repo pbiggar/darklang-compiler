@@ -201,6 +201,10 @@ require concrete payload metadata before they are emitted.
 fixed-size root payload/kind dispatch. `2.5_RefCountInsertion.fs` uses them
 when emitting retain/release expressions; other production paths still consume
 older lower-level helper combinations directly.
+`ANF.fs` also exposes `rcShapeIsRootManaged` and
+`rcShapeNeedsRecursiveRelease` as early planner predicates for separating
+root-managed values from dynamic buffers and for identifying shapes whose
+release can require nested payload/capture/leaf traversal.
 
 `RcShape` is still not the sole source of truth for ownership decisions. Several
 active code paths still use legacy helpers such as `ANF.isHeapType`,
@@ -526,8 +530,8 @@ Concrete examples:
 
    - `fieldReleasePlan : RcShape -> FieldReleasePlan list`
    - `containerPayloadPlan : RcShape -> PayloadReleasePlan`
-   - `isRootManaged : RcShape -> bool`
-   - `isRecursiveReleaseNeeded : RcShape -> bool`
+   - root-management classification
+   - recursive-release classification
 
 2. Finish replacing `isRcManagedHeapType` and `needsAutomaticDec` in
    `2.5_RefCountInsertion.fs` with shape-operation decisions. Retain/release

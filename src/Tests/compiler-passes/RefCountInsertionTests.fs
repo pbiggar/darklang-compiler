@@ -156,6 +156,64 @@ let testRcShapeOwnershipHelpersSelectRetainReleaseOperations () : TestResult =
         | None ->
             Ok ()
 
+let testRcShapeOwnershipHelpersClassifyRootManagement () : TestResult =
+    let managedRootShapes = [
+        FixedBlock (16, [Immediate; DynamicString])
+        BoxedSum 16
+        TaggedListShape DynamicString
+        DictRoot (DynamicString, TaggedListShape Immediate)
+        ClosureShape [DynamicString]
+    ]
+
+    let nonRootShapes = [
+        Immediate
+        DynamicString
+        DynamicBytes
+        StaticString
+        RawUnmanaged
+    ]
+
+    match managedRootShapes |> List.tryFind (fun shape -> not (rcShapeIsRootManaged shape)) with
+    | Some shape ->
+        Error $"Expected shape {shape} to be a managed RC root"
+    | None ->
+        match nonRootShapes |> List.tryFind rcShapeIsRootManaged with
+        | Some shape ->
+            Error $"Expected shape {shape} not to be a managed RC root"
+        | None ->
+            Ok ()
+
+let testRcShapeOwnershipHelpersClassifyRecursiveRelease () : TestResult =
+    let recursiveShapes = [
+        FixedBlock (16, [Immediate; DynamicString])
+        BoxedSum 16
+        TaggedListShape (FixedBlock (8, [DynamicString]))
+        DictRoot (DynamicString, TaggedListShape Immediate)
+        ClosureShape [DynamicString]
+    ]
+
+    let nonRecursiveShapes = [
+        Immediate
+        DynamicString
+        DynamicBytes
+        StaticString
+        RawUnmanaged
+        FixedBlock (8, [Immediate])
+        TaggedListShape Immediate
+        DictRoot (Immediate, Immediate)
+        ClosureShape []
+    ]
+
+    match recursiveShapes |> List.tryFind (fun shape -> not (rcShapeNeedsRecursiveRelease shape)) with
+    | Some shape ->
+        Error $"Expected shape {shape} to need recursive release"
+    | None ->
+        match nonRecursiveShapes |> List.tryFind rcShapeNeedsRecursiveRelease with
+        | Some shape ->
+            Error $"Expected shape {shape} not to need recursive release"
+        | None ->
+            Ok ()
+
 let testInferCallReturnsFunctionReturnType () : TestResult =
     let ctx : TypeContext = {
         TypeReg = Map.empty
@@ -361,6 +419,8 @@ let tests = [
     ("RcShape ownership helpers classify managed roots", testRcShapeOwnershipHelpersClassifyManagedRoots)
     ("RcShape ownership helpers select root dispatch", testRcShapeOwnershipHelpersSelectRootDispatch)
     ("RcShape ownership helpers select retain/release operations", testRcShapeOwnershipHelpersSelectRetainReleaseOperations)
+    ("RcShape ownership helpers classify managed RC roots", testRcShapeOwnershipHelpersClassifyRootManagement)
+    ("RcShape ownership helpers classify recursive release", testRcShapeOwnershipHelpersClassifyRecursiveRelease)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
