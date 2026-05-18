@@ -453,6 +453,8 @@ let buildReturnTypeReg
 let tryGetIntrinsicReturnType (funcName: string) : AST.Type option =
     if funcName.StartsWith("__raw_get_") then Some AST.TInt64
     elif funcName.StartsWith("__raw_set_") then Some AST.TUnit
+    elif funcName.StartsWith("__hash_") then Some AST.TInt64
+    elif funcName.StartsWith("__key_eq_") then Some AST.TBool
     elif funcName.StartsWith("__empty_dict_") then Some AST.TInt64
     elif funcName.StartsWith("__dict_is_null_") then Some AST.TBool
     elif funcName.StartsWith("__dict_get_tag_") then Some AST.TInt64

@@ -49,9 +49,10 @@ runtime helper's aligned refcount slot, ARM64 file intrinsic literal operands
 using sentinel literal-pool entries, file read success/error result string
 payload leak accounting, unaligned file read string refcount layout, file write
 success root accounting, file write/append error string payload leak
-accounting, plus multiple dynamic bytes list payloads and repeated immutable
-bytes updates, and `RcShape` retain/release operation helper coverage and RC
-insertion retain/release emission.
+accounting, plus multiple dynamic bytes list payloads, repeated immutable
+bytes updates, dynamic bytes dict keys/values including overwrite, and
+`RcShape` retain/release operation helper coverage and RC insertion
+retain/release emission.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -93,12 +94,13 @@ no-payload and payload variant release, plus record-contained sum payload
 release, plus dict-contained sum value payload release, plus pure enum sum
 no-heap-ownership coverage, plus scoped `Float.toString`, branch-selected
 literal string, list display string reclamation, multiple dynamic bytes list
-payloads, repeated immutable bytes update reclamation, and `RcShape`
-retain/release operation helper tests plus RC insertion use of those helpers,
-plus file read success/error, unaligned file read, file write success/error,
-and file append error reclamation:
+payloads, repeated immutable bytes update reclamation, dynamic bytes dict
+key/value reclamation including overwrite, and `RcShape` retain/release
+operation helper tests plus RC insertion use of those helpers, plus file read
+success/error, unaligned file read, file write success/error, and file append
+error reclamation:
 
-- `scripts/run-in-container ./run-tests`: `4710 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4713 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -249,10 +251,12 @@ Covered by current tests:
   original binding and fixed block are live
 - returned record dynamic bytes fields remain usable after function cleanup
 - returned borrowed bytes projections remain usable after parent cleanup
+- dict roots release dynamic bytes keys and values
+- dict overwrite with equal dynamic bytes keys releases replaced dynamic payloads
 
 Remaining bytes work is parity with strings beyond the first fixed-block cases:
-deeper nested payloads, dict key/value eligibility, constructor/transform
-audits, and backend parity.
+deeper nested payloads, broader dict structural-sharing cases,
+constructor/transform audits, and backend parity.
 
 ### Dict Roots Have Typed RC
 
@@ -528,15 +532,19 @@ Current tests prove:
 - returned record bytes fields remain usable and release cleanly
 - returned borrowed bytes field projections remain usable after the parent is
   released
+- dict roots release scoped dynamic bytes keys and values
+- dict overwrite with equal dynamic bytes keys uses byte-wise hash/equality and
+  releases replaced dynamic payloads
 
 ### Remaining Gaps
 
 Bytes coverage is much thinner than string coverage. Missing or under-proven
 cases include:
 
-- dict keys/values of bytes, if bytes are allowed as dict keys/values
 - broader nested bytes combinations, especially bytes inside records/tuples
   nested under list or sum payloads
+- persistent dict sharing cases involving bytes keys/values when old and new
+  roots are both live
 
 ### Risks
 
@@ -800,7 +808,7 @@ managed, but the raw node lifecycle needs a clear correctness story:
    - dict of int to record
    - dict of int to tuple
    - dict of int to closure
-   - dict of int to bytes
+   - dict of int to bytes with old and new roots both live
    - dict of string to dict
 
 3. Audit `Stdlib.__HAMT` raw node allocations and helper-generated releases.
@@ -1374,6 +1382,7 @@ appropriate.
 - returned record with `Bytes` field
 - returned record using `Bytes.length(r.field)`
 - nested bytes combinations under list or sum payloads
+- persistent dict sharing cases with bytes keys/values
 
 ### Strings
 
@@ -1405,7 +1414,7 @@ appropriate.
 - keep old root and new root live after update
 - keep old root and removed root live after remove
 - dict string to string
-- dict int to bytes
+- dict int to bytes with old and new roots both live
 - dict int to list
 - dict int to record
 - dict int to tuple

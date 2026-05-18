@@ -23,15 +23,49 @@ def __string_hash_loop(s: String, idx: Int64, len: Int64, acc: Int64) : Int64 =
 def __string_eq(s1: String, s2: String) : Bool =
     Stdlib.String.equals(s1, s2)
 
+// FNV-1a hash over raw byte arrays
+def __bytes_hash(value: Bytes) : Int64 =
+    let len = Stdlib.Bytes.length(value) in
+    __bytes_hash_loop(value, 0, len, __hash_offset())
+
+def __bytes_hash_loop(value: Bytes, idx: Int64, len: Int64, acc: Int64) : Int64 =
+    if idx >= len then
+        acc
+    else
+        let byte = Stdlib.Bytes.get(value, idx) in
+        let next = (acc ^ byte) * __hash_prime() in
+        __bytes_hash_loop(value, idx + 1, len, next)
+
+def __bytes_eq(left: Bytes, right: Bytes) : Bool =
+    let leftLen = Stdlib.Bytes.length(left) in
+    let rightLen = Stdlib.Bytes.length(right) in
+    if leftLen != rightLen then
+        false
+    else
+        __bytes_eq_loop(left, right, 0, leftLen)
+
+def __bytes_eq_loop(left: Bytes, right: Bytes, idx: Int64, len: Int64) : Bool =
+    if idx >= len then
+        true
+    else
+        let leftByte = Stdlib.Bytes.get(left, idx) in
+        let rightByte = Stdlib.Bytes.get(right, idx) in
+        if leftByte != rightByte then
+            false
+        else
+            __bytes_eq_loop(left, right, idx + 1, len)
+
 // Hash specializations (monomorphized by compiler)
 def __hash_i64(value: Int64) : Int64 = value
 def __hash_bool(value: Bool) : Int64 = if value then 1 else 0
 def __hash_str(value: String) : Int64 = __string_hash(value)
+def __hash_bytes(value: Bytes) : Int64 = __bytes_hash(value)
 
 // Key equality specializations (monomorphized by compiler)
 def __key_eq_i64(left: Int64, right: Int64) : Bool = left == right
 def __key_eq_bool(left: Bool, right: Bool) : Bool = left == right
 def __key_eq_str(left: String, right: String) : Bool = __string_eq(left, right)
+def __key_eq_bytes(left: Bytes, right: Bytes) : Bool = __bytes_eq(left, right)
 
 // Unresolved generic __hash/__key_eq calls are handled in compiler lowering by
 // emitting explicit runtime errors before codegen; no unknown fallback stubs live here.
