@@ -78,6 +78,7 @@ type ListRecord3 = { listRecordName3: String, listRecordXs3: List<Int64>, listRe
 type NestedListInner = { nestedListInnerName: String } type NestedListOuter = { nestedListOuterInner: NestedListInner } def nestedListRecord(): List<NestedListOuter> = [NestedListOuter { nestedListOuterInner = NestedListInner { nestedListInnerName = "a" ++ "b" } }] let xs = nestedListRecord() in 0 = stdout="0\n" stderr="" // returned list releases nested record payload fields
 type ListSumPayload<t> = ListSumEmpty | ListSumString of t def listSumPayload(): List<ListSumPayload<String>> = [ListSumString("a" ++ "b")] let xs = listSumPayload() in 0 = stdout="0\n" stderr="" // returned list releases sum payload fields
 type ListSumBytesPayload<t> = ListSumBytesEmpty | ListSumBytesValue of t def listSumBytesPayload(): List<ListSumBytesPayload<Bytes>> = [ListSumBytesValue(Bytes.create(4))] let xs = listSumBytesPayload() in 0 = stdout="0\n" stderr="" // returned list releases sum bytes payload fields
+type ListSumListPayload<t> = ListSumListEmpty | ListSumListValue of t def listSumListPayload(): List<ListSumListPayload<List<Int64>>> = [ListSumListValue([1, 2])] let xs = listSumListPayload() in 0 = stdout="0\n" stderr="" // returned list releases sum list payload fields
 
 // Fixed-block tuple root allocation is reclaimed on the active backend.
 let t = (1, 2) in t.0 = stdout="1\n" stderr="" // tuple root reclaimed
