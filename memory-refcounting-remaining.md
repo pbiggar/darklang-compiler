@@ -125,7 +125,7 @@ retain/release operation helper tests plus RC insertion use of those helpers,
 plus file read success/error, unaligned file read, file write success/error,
 and file append error reclamation:
 
-- `scripts/run-in-container ./run-tests`: `4728 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4729 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -358,6 +358,7 @@ Covered by current tests:
 - returned list of dicts reclaimed
 - returned list of single-field records reclaimed
 - returned list of two-field records reclaimed
+- returned list of records carrying bytes fields reclaimed
 - returned list of three-field records with string, list, and dict fields
   reclaimed
 - returned list of nested records reclaimed
@@ -813,7 +814,6 @@ than a general element release plan. That leaves holes:
      string/list/dict shape
    - concrete non-generic sum payloads whose payload type is only available
      through variant metadata
-   - list of records carrying bytes
    - nested list of record/list/dict combinations
 
 3. Replace per-shape list helper dispatch with a plan or a small set of
@@ -1469,7 +1469,8 @@ appropriate.
 ### Lists
 
 - list of three-element tuples with heap fields beyond string/list/dict
-- list of three-field records with heap fields
+- list of three-field records with heap fields beyond the currently covered
+  string/list/dict shape
 - concrete non-generic sum payloads
 - nested list of record containing list/dict
 - list of closures capturing heap values
