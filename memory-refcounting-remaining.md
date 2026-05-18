@@ -136,13 +136,14 @@ retain/release operation helper tests plus RC insertion use of those helpers,
 plus direct concrete non-generic sum payload release in tagged lists for
 `Bytes`, `List`, `Dict`, and closure variants through variant metadata, plus
 tagged-list tuple bytes/list/dict/closure field release, tagged-list tuple3
-bytes/list/dict field release, plus file read
+bytes/list/dict field release, ARM64 returned `Option<String>`/`Option<Bytes>`
+payload release for values projected through `Dict.keys` and `List.head`, plus file read
 success/error, unaligned file read, file write success/error, and file append
 error reclamation:
 
-- `scripts/run-in-container ./run-tests --filter=refcounting`: `169 passed`
+- `scripts/run-in-container ./run-tests --filter=refcounting`: `171 passed`
 - Previous full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4754 passed, 2 failed`
+  `4756 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -305,6 +306,8 @@ Covered by current tests:
 - dict update/remove keep old and new roots live with managed string values
 - dict lookup `Option<String>` payloads are reclaimed on the dict path
 - dict string-to-string lookup retains and releases both dynamic keys and values
+- dict keys returned through `Dict.keys` and projected with `List.head` reclaim
+  returned `Option<String>`/`Option<Bytes>` payloads
 - persistent dict values of `Bytes` remain live across old and new roots
 - dict record values release nested string fields after lookup; this required
   suite-level stdlib specialization to include test/preamble record type

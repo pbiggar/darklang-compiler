@@ -4191,13 +4191,14 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         | _ ->
                             []
 
-                    match sourceType with
-                    | Some (AST.TSum ("Stdlib.Option.Option", [ valueType ])) when
-                        ctx.FunctionName.StartsWith("Stdlib.Dict.")
-                        || (match valueType with
+                    let optionPayloadNeedsRelease (valueType: AST.Type) : bool =
+                        let callerOwnsOptionPayload =
+                            ctx.FunctionName.StartsWith("Stdlib.Dict.")
+                            || not (ctx.FunctionName.StartsWith("Stdlib."))
+                        let managedPayload =
+                            match valueType with
                             | AST.TString
-                            | AST.TBytes ->
-                                false
+                            | AST.TBytes
                             | AST.TList _
                             | AST.TDict _
                             | AST.TFunction _
@@ -4205,7 +4206,11 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                             | AST.TRecord _ ->
                                 true
                             | _ ->
-                                false) ->
+                                false
+                        callerOwnsOptionPayload && managedPayload
+
+                    match sourceType with
+                    | Some (AST.TSum ("Stdlib.Option.Option", [ valueType ])) when optionPayloadNeedsRelease valueType ->
                         let valueRelease = releasePayloadForType valueType
                         if List.isEmpty valueRelease then
                             []
