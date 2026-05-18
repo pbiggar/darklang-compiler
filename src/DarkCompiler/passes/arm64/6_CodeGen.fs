@@ -1279,15 +1279,16 @@ let private isRecordListDictList (recordRegistry: LIR.RecordRegistry) (sourceTyp
     | _ ->
         false
 
-let private isManagedThreeFieldTupleList (sourceType: AST.Type option) : bool =
-    match sourceType with
-    | Some (AST.TList (AST.TTuple [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ])) -> true
-    | _ -> false
-
 let private isDynamicBufferType (typ: AST.Type) : bool =
     match typ with
     | AST.TString
     | AST.TBytes -> true
+    | _ -> false
+
+let private isManagedThreeFieldTupleList (sourceType: AST.Type option) : bool =
+    match sourceType with
+    | Some (AST.TList (AST.TTuple [ first; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ])) ->
+        isDynamicBufferType first
     | _ -> false
 
 let private tuple2DynamicFieldPattern (fields: AST.Type list) : (bool * bool) option =
@@ -3906,7 +3907,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         listRefCountDecDictHelperLabel
                     | AST.TList (AST.TFunction _) when not (ctx.FunctionName.StartsWith("Stdlib.")) ->
                         listRefCountDecClosureHelperLabel
-                    | AST.TList (AST.TTuple [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ]) ->
+                    | AST.TList (AST.TTuple _) when isManagedThreeFieldTupleList (Some fieldType) ->
                         listRefCountDecTuple3ManagedHelperLabel
                     | AST.TList (AST.TTuple fields) ->
                         match tuple2DynamicHelperLabel fields, tuple2ListHelperLabel fields, tuple2DictHelperLabel fields, tuple2ClosureHelperLabel fields with
@@ -5586,7 +5587,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
                         fixedBlockHasField
                             (function
-                             | AST.TList (AST.TTuple [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ]) -> true
+                             | AST.TList (AST.TTuple _) as listType ->
+                                 isManagedThreeFieldTupleList (Some listType)
                              | _ -> false)
                             ctx.RecordRegistry
                             sourceType
