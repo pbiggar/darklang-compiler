@@ -64,7 +64,10 @@ stdlib specialization carrying test/preamble record type registries, ARM64
 fixed-block `Option` payload release for tuple/record values, ARM64 dict
 leaf-value release for `List` values, dict closure value coverage,
 ARM64 dict leaf-value release for nested dict values, ARM64 dict fixed-block
-leaf-value release for tuple values containing string/list fields, and `RcShape`
+leaf-value release for tuple values containing string/list fields, ARM64 dict
+fixed-block leaf-value release for tuple3 values containing string/list/dict
+fields, isolated ARM64 dict helper-local labels so multiple typed dict release
+helpers can coexist safely, and `RcShape`
 retain/release operation helper coverage and RC insertion retain/release
 emission.
 
@@ -121,7 +124,8 @@ persistent
 dict int-to-bytes values with old and new roots live, dict record values with
 nested string fields, dict list values with leaf payload release, dict closure
 value reclamation, nested dict value leaf payload release, dict tuple value
-nested string/list field reclamation, and `RcShape`
+nested string/list field reclamation, dict tuple3 value nested string/list/dict
+field reclamation, and `RcShape`
 retain/release operation helper tests plus RC insertion use of those helpers,
 plus file read success/error, unaligned file read, file write success/error,
 and file append error reclamation:
@@ -876,9 +880,11 @@ cause is that `__dark_dict_rc_dec_helper` can balance HAMT raw nodes, but it is
 not typed and therefore cannot recursively release arbitrary typed key/value
 payloads stored in leaf or collision nodes. Narrow ARM64 helpers now handle
 leaf `List` values, closure values, nested dict values, and tuple values of
-`(String, List<Int64>)`; future fixes should add typed dict release helpers or
-a serialized shape-plan path for the remaining leaf and collision payload
-shapes. This is separate from the later raw-allocation policy decision.
+`(String, List<Int64>)`, and tuple values of
+`(String, List<Int64>, Dict<Int64, Int64>)`; future fixes should add typed dict
+release helpers or a serialized shape-plan path for the remaining leaf and
+collision payload shapes. This is separate from the later raw-allocation policy
+decision.
 
 ### Remaining Tasks
 

@@ -75,6 +75,7 @@ let private dictRefCountDecHelperLabel = "__dark_dict_refcount_dec_helper"
 let private dictRefCountDecListValueHelperLabel = "__dark_dict_refcount_dec_list_value_helper"
 let private dictRefCountDecDictValueHelperLabel = "__dark_dict_refcount_dec_dict_value_helper"
 let private dictRefCountDecTupleStringListValueHelperLabel = "__dark_dict_refcount_dec_tuple_string_list_value_helper"
+let private dictRefCountDecTupleStringListDictValueHelperLabel = "__dark_dict_refcount_dec_tuple_string_list_dict_value_helper"
 let private closureRefCountIncHelperLabel = "__dark_closure_refcount_inc_helper"
 let private closureRefCountDecHelperLabel = "__dark_closure_refcount_dec_helper"
 
@@ -1194,9 +1195,10 @@ let private generateDictRefCountDecHelper
     (releaseLeafListValue: bool)
     (releaseLeafDictValue: bool)
     (releaseLeafTupleStringListValue: bool)
+    (releaseLeafTupleStringListDictValue: bool)
     (ctx: CodeGenContext)
     : ARM64Symbolic.Instr list =
-    let label (name: string) : string = $"__dark_dict_rc_dec_{name}"
+    let label (name: string) : string = $"{helperLabel}_{name}"
     let leakDec =
         if ctx.Options.EnableLeakCheck then
             let labelRef = dataLabel leakCounterLabel
@@ -1289,7 +1291,11 @@ let private generateDictRefCountDecHelper
             []
 
     let releaseLeafTupleStringListValueInstrs =
-        if releaseLeafTupleStringListValue then
+        if releaseLeafTupleStringListValue || releaseLeafTupleStringListDictValue then
+            let tupleRefcountOffset =
+                if releaseLeafTupleStringListDictValue then 24s else 16s
+            let tuplePayloadSize =
+                if releaseLeafTupleStringListDictValue then 24us else 16us
             let bufferLeakDec = leakDec
             let bufferRefcountUpdate =
                 if List.isEmpty bufferLeakDec then
@@ -1315,10 +1321,11 @@ let private generateDictRefCountDecHelper
                 ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
                 ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 96s)
                 ARM64Symbolic.LDR (ARM64Symbolic.X11, ARM64Symbolic.X3, 8s)
+                ARM64Symbolic.STR (ARM64Symbolic.X11, ARM64Symbolic.SP, 104s)
                 ARM64Symbolic.CBZ (ARM64Symbolic.X11, tupleStringListValueDone)
-                ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X11, 16s)
+                ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X11, tupleRefcountOffset)
                 ARM64Symbolic.SUB_imm (ARM64Symbolic.X12, ARM64Symbolic.X12, 1us)
-                ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X11, 16s)
+                ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X11, tupleRefcountOffset)
                 ARM64Symbolic.CBNZ (ARM64Symbolic.X12, tupleStringListValueDone)
 
                 ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X11, 0s)
@@ -1340,9 +1347,21 @@ let private generateDictRefCountDecHelper
             ]
             @ bufferRefcountUpdate
             @ [
+                ARM64Symbolic.LDR (ARM64Symbolic.X11, ARM64Symbolic.SP, 104s)
                 ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.X11, 8s)
                 ARM64Symbolic.BL listRefCountDecHelperLabel
-                ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X27, 16us)
+            ]
+            @ (if releaseLeafTupleStringListDictValue then
+                   [
+                       ARM64Symbolic.LDR (ARM64Symbolic.X11, ARM64Symbolic.SP, 104s)
+                       ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.X11, 16s)
+                       ARM64Symbolic.BL dictRefCountDecHelperLabel
+                   ]
+               else
+                   [])
+            @ [
+                ARM64Symbolic.LDR (ARM64Symbolic.X11, ARM64Symbolic.SP, 104s)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X27, tuplePayloadSize)
                 ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X13, 0s)
                 ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.X11, 0s)
                 ARM64Symbolic.STR (ARM64Symbolic.X11, ARM64Symbolic.X13, 0s)
@@ -3904,6 +3923,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         dictRefCountDecDictValueHelperLabel
                     | Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _ ])) ->
                         dictRefCountDecTupleStringListValueHelperLabel
+                    | Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _; AST.TDict _ ])) ->
+                        dictRefCountDecTupleStringListDictValueHelperLabel
                     | _ ->
                         dictRefCountDecHelperLabel
                 let dictDecCall = [
@@ -5317,7 +5338,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         match sourceType with
                         | Some (AST.TDict (_, AST.TList _))
                         | Some (AST.TDict (_, AST.TDict _))
-                        | Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _ ])) -> false
+                        | Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _ ]))
+                        | Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _; AST.TDict _ ])) -> false
                         | _ -> true
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TDict _))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
@@ -5352,6 +5374,16 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.DictHeap, Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _ ]))) -> true
+                    | _ -> false)))
+
+    let needsDictRcDecTupleStringListDictValueHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.DictHeap, Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _; AST.TDict _ ]))) -> true
                     | _ -> false)))
 
     let needsClosureRcIncHelper =
@@ -5397,10 +5429,11 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             @ (if needsListRcDecSumDictHelper then generateListRefCountDecSumDictHelper ctx else [])
         let dictRcHelpers =
             (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
-            @ (if needsDictRcDecHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper || needsListRcDecRecordListDictHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false ctx else [])
-            @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel true false false ctx else [])
-            @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false true false ctx else [])
-            @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false true ctx else [])
+            @ (if needsDictRcDecHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper || needsListRcDecRecordListDictHelper || needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false false ctx else [])
+            @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel true false false false ctx else [])
+            @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false true false false ctx else [])
+            @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false true false ctx else [])
+            @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false true ctx else [])
         let closureRcHelpers =
             (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
             @ (if needsClosureRcDecHelper then generateClosureRefCountDecHelper ctx else [])
