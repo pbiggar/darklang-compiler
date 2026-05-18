@@ -342,7 +342,7 @@ let private lowerToAllocatedLir
                 |> Result.bind (fun lirProgram ->
                     if verbosity >= 1 then println "  [5/7] Register Allocation..."
                     let allocStart = sw.Elapsed.TotalMilliseconds
-                    let (LIR.Program (lirFuncs, _)) = lirProgram
+                    let (LIR.Program (lirFuncs, _, _)) = lirProgram
                     let allocatedFuncs = allocateRegistersForFunctions lirFuncs
                     let allocElapsed = sw.Elapsed.TotalMilliseconds - allocStart
                     recordPassTiming passTimingRecorder "Register Allocation" allocElapsed
@@ -1442,7 +1442,31 @@ let private compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
 
                                     // Combine reachable stdlib functions with user functions
                                     let allFuncs = reachableStdlib @ finalUserFuncs
-                                    let allocatedProgram = LIR.Program (allFuncs, userRegistries.TypeReg)
+                                    let lirVariantRegistry : LIR.VariantRegistry =
+                                        let combinedVariantLookup =
+                                            Map.fold
+                                                (fun acc variantName variantInfo -> Map.add variantName variantInfo acc)
+                                                plan.Stdlib.Context.Registries.VariantLookup
+                                                userRegistries.VariantLookup
+                                        combinedVariantLookup
+                                        |> Map.toList
+                                        |> List.groupBy (fun (_, (typeName, _, _, _)) -> typeName)
+                                        |> List.map (fun (typeName, variants) ->
+                                            let typeParams =
+                                                variants
+                                                |> List.tryHead
+                                                |> Option.map (fun (_, (_, typeParams, _, _)) -> typeParams)
+                                                |> Option.defaultValue []
+                                            let lirVariants =
+                                                variants
+                                                |> List.map (fun (variantName, (_, _, tag, payload)) ->
+                                                    ({ Name = variantName
+                                                       Tag = tag
+                                                       Payload = payload } : LIR.VariantInfo))
+                                                |> List.sortBy (fun variant -> variant.Tag)
+                                            (typeName, { LIR.TypeParams = typeParams; LIR.Variants = lirVariants }))
+                                        |> Map.ofList
+                                    let allocatedProgram = LIR.Program (allFuncs, lirVariantRegistry, userRegistries.TypeReg)
                                     if shouldDumpIR plan.Verbosity plan.Options.DumpLIR then
                                         printLIRProgram "=== LIR (After Register Allocation) ===" allocatedProgram
 

@@ -40,6 +40,7 @@ let defaultOptions : CodeGenOptions = {
 /// Code generation context (passed through to instruction conversion)
 type CodeGenContext = {
     Options: CodeGenOptions
+    VariantRegistry: LIR.VariantRegistry
     RecordRegistry: LIR.RecordRegistry
     ClosurePayloadSizes: Map<string, int>
     ClosureCaptureTypes: Map<string, AST.Type list>
@@ -1090,25 +1091,84 @@ let private isManagedThreeFieldTupleList (sourceType: AST.Type option) : bool =
     | Some (AST.TList (AST.TTuple [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ])) -> true
     | _ -> false
 
-let private isStringPayloadSumList (sourceType: AST.Type option) : bool =
+let private applyTypeSubst (typeParams: string list) (typeArgs: AST.Type list) (typ: AST.Type) : AST.Type =
+    let subst =
+        if List.length typeParams = List.length typeArgs then
+            List.zip typeParams typeArgs |> Map.ofList
+        else
+            Crash.crash $"CodeGen: sum type argument mismatch for payload substitution: params={typeParams.Length}, args={typeArgs.Length}"
+    let rec substitute t =
+        match t with
+        | AST.TVar name ->
+            match Map.tryFind name subst with
+            | Some concrete -> concrete
+            | None -> t
+        | AST.TFunction (paramTypes, retType) ->
+            AST.TFunction (List.map substitute paramTypes, substitute retType)
+        | AST.TTuple elemTypes ->
+            AST.TTuple (List.map substitute elemTypes)
+        | AST.TRecord (name, args) ->
+            AST.TRecord (name, List.map substitute args)
+        | AST.TList elemType ->
+            AST.TList (substitute elemType)
+        | AST.TDict (keyType, valueType) ->
+            AST.TDict (substitute keyType, substitute valueType)
+        | AST.TSum (name, args) ->
+            AST.TSum (name, List.map substitute args)
+        | _ ->
+            t
+    substitute typ
+
+let private sumPayloadsForList (variantRegistry: LIR.VariantRegistry) (sourceType: AST.Type option) : AST.Type list =
+    match sourceType with
+    | Some (AST.TList (AST.TSum (typeName, typeArgs))) ->
+        variantRegistry
+        |> Map.tryFind typeName
+        |> Option.map (fun typeVariants ->
+            typeVariants.Variants
+            |> List.choose (fun variant ->
+                variant.Payload
+                |> Option.map (applyTypeSubst typeVariants.TypeParams typeArgs)))
+        |> Option.defaultValue []
+    | _ ->
+        []
+
+let private sumPayloadsAllMatch (variantRegistry: LIR.VariantRegistry) (sourceType: AST.Type option) (predicate: AST.Type -> bool) : bool =
+    match sumPayloadsForList variantRegistry sourceType with
+    | [] -> false
+    | payloads -> payloads |> List.forall predicate
+
+let private isStringPayloadSumList (variantRegistry: LIR.VariantRegistry) (sourceType: AST.Type option) : bool =
     match sourceType with
     | Some (AST.TList (AST.TSum (_, [AST.TString]))) -> true
-    | _ -> false
+    | _ -> sumPayloadsAllMatch variantRegistry sourceType (fun payload -> payload = AST.TString)
 
-let private isBytesPayloadSumList (sourceType: AST.Type option) : bool =
+let private isBytesPayloadSumList (variantRegistry: LIR.VariantRegistry) (sourceType: AST.Type option) : bool =
     match sourceType with
     | Some (AST.TList (AST.TSum (_, [AST.TBytes]))) -> true
-    | _ -> false
+    | _ -> sumPayloadsAllMatch variantRegistry sourceType (fun payload -> payload = AST.TBytes)
 
-let private isListPayloadSumList (sourceType: AST.Type option) : bool =
+let private isListPayloadSumList (variantRegistry: LIR.VariantRegistry) (sourceType: AST.Type option) : bool =
     match sourceType with
     | Some (AST.TList (AST.TSum (_, [AST.TList _]))) -> true
-    | _ -> false
+    | _ ->
+        sumPayloadsAllMatch
+            variantRegistry
+            sourceType
+            (function
+             | AST.TList _ -> true
+             | _ -> false)
 
-let private isDictPayloadSumList (sourceType: AST.Type option) : bool =
+let private isDictPayloadSumList (variantRegistry: LIR.VariantRegistry) (sourceType: AST.Type option) : bool =
     match sourceType with
     | Some (AST.TList (AST.TSum (_, [AST.TDict _]))) -> true
-    | _ -> false
+    | _ ->
+        sumPayloadsAllMatch
+            variantRegistry
+            sourceType
+            (function
+             | AST.TDict _ -> true
+             | _ -> false)
 
 let private fixedBlockFieldTypes (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : AST.Type list =
     match sourceType with
@@ -3885,13 +3945,13 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         listRefCountDecRecord2HelperLabel
                     | _ when isManagedThreeFieldRecordList ctx.RecordRegistry sourceType ->
                         listRefCountDecRecord3ManagedHelperLabel
-                    | _ when isStringPayloadSumList sourceType ->
+                    | _ when isStringPayloadSumList ctx.VariantRegistry sourceType ->
                         listRefCountDecSumStringHelperLabel
-                    | _ when isBytesPayloadSumList sourceType ->
+                    | _ when isBytesPayloadSumList ctx.VariantRegistry sourceType ->
                         listRefCountDecSumBytesHelperLabel
-                    | _ when isListPayloadSumList sourceType ->
+                    | _ when isListPayloadSumList ctx.VariantRegistry sourceType ->
                         listRefCountDecSumListHelperLabel
-                    | _ when isDictPayloadSumList sourceType ->
+                    | _ when isDictPayloadSumList ctx.VariantRegistry sourceType ->
                         listRefCountDecSumDictHelperLabel
                     | _ ->
                         listRefCountDecHelperLabel
@@ -5006,7 +5066,7 @@ let peepholeOptimize (instrs: ARM64Symbolic.Instr list) : ARM64Symbolic.Instr li
 
 /// Convert LIR program to ARM64 instructions with options
 let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : Result<ARM64Symbolic.Instr list, string> =
-    let (LIR.Program (functions, recordRegistry)) = program
+    let (LIR.Program (functions, variantRegistry, recordRegistry)) = program
     let closurePayloadSizesFromParams =
         functions
         |> List.choose (fun func ->
@@ -5034,6 +5094,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
     // StackSize and UsedCalleeSaved are set per-function in convertFunction
     let ctx = {
         Options = options
+        VariantRegistry = variantRegistry
         RecordRegistry = recordRegistry
         ClosurePayloadSizes = closurePayloadSizes
         ClosureCaptureTypes = closureCaptureTypes
@@ -5067,10 +5128,10 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         | Some (AST.TList (AST.TFunction _)) -> false
                         | _ when isRecordListDictList ctx.RecordRegistry sourceType -> false
                         | _ when isManagedThreeFieldRecordList ctx.RecordRegistry sourceType -> false
-                        | _ when isStringPayloadSumList sourceType -> false
-                        | _ when isBytesPayloadSumList sourceType -> false
-                        | _ when isListPayloadSumList sourceType -> false
-                        | _ when isDictPayloadSumList sourceType -> false
+                        | _ when isStringPayloadSumList ctx.VariantRegistry sourceType -> false
+                        | _ when isBytesPayloadSumList ctx.VariantRegistry sourceType -> false
+                        | _ when isListPayloadSumList ctx.VariantRegistry sourceType -> false
+                        | _ when isDictPayloadSumList ctx.VariantRegistry sourceType -> false
                         | _ when isSingleFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ when isTwoFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ -> true
@@ -5241,11 +5302,12 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringPayloadSumList sourceType
+                        isStringPayloadSumList ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
                         fixedBlockHasField
                             (function
-                             | AST.TList (AST.TSum (_, [AST.TString])) -> true
+                             | AST.TList (AST.TSum _) as listType ->
+                                 isStringPayloadSumList ctx.VariantRegistry (Some listType)
                              | _ -> false)
                             ctx.RecordRegistry
                             sourceType
@@ -5259,11 +5321,12 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isBytesPayloadSumList sourceType
+                        isBytesPayloadSumList ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
                         fixedBlockHasField
                             (function
-                             | AST.TList (AST.TSum (_, [AST.TBytes])) -> true
+                             | AST.TList (AST.TSum _) as listType ->
+                                 isBytesPayloadSumList ctx.VariantRegistry (Some listType)
                              | _ -> false)
                             ctx.RecordRegistry
                             sourceType
@@ -5277,11 +5340,12 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isListPayloadSumList sourceType
+                        isListPayloadSumList ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
                         fixedBlockHasField
                             (function
-                             | AST.TList (AST.TSum (_, [AST.TList _])) -> true
+                             | AST.TList (AST.TSum _) as listType ->
+                                 isListPayloadSumList ctx.VariantRegistry (Some listType)
                              | _ -> false)
                             ctx.RecordRegistry
                             sourceType
@@ -5295,11 +5359,12 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isDictPayloadSumList sourceType
+                        isDictPayloadSumList ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
                         fixedBlockHasField
                             (function
-                             | AST.TList (AST.TSum (_, [AST.TDict _])) -> true
+                             | AST.TList (AST.TSum _) as listType ->
+                                 isDictPayloadSumList ctx.VariantRegistry (Some listType)
                              | _ -> false)
                             ctx.RecordRegistry
                             sourceType

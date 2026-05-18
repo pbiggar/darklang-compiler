@@ -11,7 +11,7 @@ changes need in order to avoid re-opening completed problems.
 
 # Refcounting Remaining Work
 
-Status date: 2026-05-17.
+Status date: 2026-05-18.
 
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
 release, tuple-only nested fixed-block field release, record-registry-based
@@ -69,7 +69,9 @@ fixed-block leaf-value release for tuple3 values containing string/list/dict
 fields, isolated ARM64 dict helper-local labels so multiple typed dict release
 helpers can coexist safely, dict record values with nested string/list/dict
 fields covered, dynamic string keys paired with tuple3 string/list/dict values
-covered, and `RcShape`
+covered, direct ARM64 tagged-list concrete non-generic sum payload release for
+`Bytes`, `List`, and `Dict` payload variants through LIR-carried variant
+metadata, and `RcShape`
 retain/release operation helper coverage and RC insertion retain/release
 emission.
 
@@ -130,10 +132,14 @@ nested string/list field reclamation, dict tuple3 value nested string/list/dict
 field reclamation, dict record value nested string/list/dict field coverage,
 dynamic string key plus tuple3 string/list/dict value coverage, and `RcShape`
 retain/release operation helper tests plus RC insertion use of those helpers,
-plus file read success/error, unaligned file read, file write success/error,
-and file append error reclamation:
+plus direct concrete non-generic sum payload release in tagged lists for
+`Bytes`, `List`, and `Dict` variants through variant metadata, plus file read
+success/error, unaligned file read, file write success/error, and file append
+error reclamation:
 
-- `scripts/run-in-container ./run-tests`: `4729 passed, 2 failed`
+- `scripts/run-in-container ./run-tests --filter=refcounting`: `158 passed`
+- Previous full-suite baseline: `scripts/run-in-container ./run-tests`:
+  `4743 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -804,6 +810,9 @@ strings, dynamic bytes, nested lists, dicts, closures, tuple payloads, and
 one/two-field records. The current ARM64 coverage also includes narrow helpers
 for records shaped as `String`, `List<Int64>`, and `Dict<Int64, Int64>`, records
 shaped as `List<Dict<Int64, Int64>>`, plus boxed-sum payload helpers.
+LIR now carries sum variant metadata from MIR into codegen, so ARM64 direct
+tagged-list release can distinguish concrete non-generic sum payloads whose
+source type appears as `TSum(name, [])` at the list site.
 
 ### Remaining Gaps
 
@@ -814,8 +823,8 @@ than a general element release plan. That leaves holes:
   `String/List<Int64>/Dict<Int64, Int64>` shape
 - tuples with more than two fields
 - records/tuples with mixed heap fields beyond currently specialized cases
-- sums in list payloads beyond the currently covered string payload shape
-- bytes in list payloads beyond one returned-list case
+- additional sum payload shapes in lists beyond currently covered dynamic
+  buffers, list roots, and dict roots
 - dict/list/closure combinations nested more than one level deep outside the
   currently covered `List<Record { List<Dict<Int64, Int64>> }>` shape
 - x64 helper parity for all ARM64 helper variants
@@ -829,8 +838,6 @@ than a general element release plan. That leaves holes:
    - list of additional three-field records with heap fields
    - list of three-element tuples with heap fields beyond the currently covered
      string/list/dict shape
-   - concrete non-generic sum payloads whose payload type is only available
-     through variant metadata
    - nested list of record/list/dict combinations
 
 3. Replace per-shape list helper dispatch with a plan or a small set of
@@ -1490,7 +1497,6 @@ appropriate.
 - list of three-element tuples with heap fields beyond string/list/dict
 - list of three-field records with heap fields beyond the currently covered
   string/list/dict shape
-- concrete non-generic sum payloads
 - nested list of record containing list/dict
 - list of closures capturing heap values
 

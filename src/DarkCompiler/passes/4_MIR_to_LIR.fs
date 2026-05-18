@@ -1728,8 +1728,19 @@ let toLIR (program: MIR.Program) : Result<LIR.Program, string> =
     match mapResults convertFunc mirFuncs with
     | Error err -> Error err
     | Ok lirFuncs ->
+        let lirVariantRegistry : LIR.VariantRegistry =
+            variantRegistry
+            |> Map.map (fun _ typeVariants ->
+                let lirVariants : LIR.VariantInfo list =
+                    typeVariants.Variants
+                    |> List.map (fun variant ->
+                        { Name = variant.Name
+                          Tag = variant.Tag
+                          Payload = variant.Payload })
+                { LIR.TypeParams = typeVariants.TypeParams
+                  LIR.Variants = lirVariants })
         let lirRecordRegistry =
             recordRegistry
             |> Map.map (fun _ fields ->
                 fields |> List.map (fun field -> (field.Name, field.Type)))
-        Ok (LIR.Program (lirFuncs, lirRecordRegistry))
+        Ok (LIR.Program (lirFuncs, lirVariantRegistry, lirRecordRegistry))

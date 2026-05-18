@@ -97,7 +97,7 @@ let private makeSimpleProgramWithRecords (instrs: LIR.Instr list) (term: LIR.Ter
         StackSize = 0
         UsedCalleeSaved = []
     }
-    LIR.Program ([func], records)
+    LIR.Program ([func], Map.empty, records)
 
 let private makeSimpleProgram (instrs: LIR.Instr list) (term: LIR.Terminator) : LIR.Program =
     makeSimpleProgramWithRecords instrs term Map.empty
@@ -228,7 +228,7 @@ let testBranch () : Result<unit, string> =
         StackSize = 0
         UsedCalleeSaved = []
     }
-    let program = LIR.Program ([func], Map.empty)
+    let program = LIR.Program ([func], Map.empty, Map.empty)
     match runLIRProgram program with
     | Error e -> Error e
     | Ok exitCode ->
@@ -1028,7 +1028,7 @@ let testClosureRefCountDecStringCapture () : Result<unit, string> =
                 LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
             ]
             LIR.Ret with
-        | LIR.Program ([func], records) -> LIR.Program ([func; capturedFunc], records)
+        | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
         | other -> other
 
     match runLIRProgramFullWithOptions main true with
@@ -1052,7 +1052,7 @@ let testClosureRefCountDecBytesCapture () : Result<unit, string> =
                 LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
             ]
             LIR.Ret with
-        | LIR.Program ([func], records) -> LIR.Program ([func; capturedFunc], records)
+        | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
         | other -> other
 
     match runLIRProgramFullWithOptions main true with
@@ -1080,7 +1080,7 @@ let testClosureRefCountDecListCapture () : Result<unit, string> =
                 LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
             ]
             LIR.Ret with
-        | LIR.Program ([func], records) -> LIR.Program ([func; capturedFunc], records)
+        | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
         | other -> other
 
     match runLIRProgramFullWithOptions main true with
@@ -1109,7 +1109,7 @@ let testClosureRefCountDecDictCapture () : Result<unit, string> =
                 LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
             ]
             LIR.Ret with
-        | LIR.Program ([func], records) -> LIR.Program ([func; capturedFunc], records)
+        | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
         | other -> other
 
     match runLIRProgramFullWithOptions main true with
@@ -1134,7 +1134,7 @@ let testClosureRefCountDecClosureCapture () : Result<unit, string> =
                 LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.ClosureHeap, Some closureType)
             ]
             LIR.Ret with
-        | LIR.Program ([func], records) -> LIR.Program ([func; capturedFunc], records)
+        | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
         | other -> other
 
     match runLIRProgramFullWithOptions main true with
@@ -1162,7 +1162,7 @@ let testClosureRefCountDecTupleStringCapture () : Result<unit, string> =
                 LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
             ]
             LIR.Ret with
-        | LIR.Program ([func], records) -> LIR.Program ([func; capturedFunc], records)
+        | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
         | other -> other
 
     match runLIRProgramFullWithOptions main true with
@@ -1202,7 +1202,7 @@ let testClosureRefCountDecTupleStringListDictCapture () : Result<unit, string> =
                 LIR.RefCountDec (LIR.Physical LIR.X20, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
             ]
             LIR.Ret with
-        | LIR.Program ([func], records) -> LIR.Program ([func; capturedFunc], records)
+        | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
         | other -> other
 
     match runLIRProgramFullWithOptions main true with
@@ -1231,7 +1231,7 @@ let testClosureRefCountDecRecordStringCapture () : Result<unit, string> =
             ]
             LIR.Ret
             records with
-        | LIR.Program ([func], programRecords) -> LIR.Program ([func; capturedFunc], programRecords)
+        | LIR.Program ([func], variants, programRecords) -> LIR.Program ([func; capturedFunc], variants, programRecords)
         | other -> other
 
     match runLIRProgramFullWithOptions main true with
@@ -1275,7 +1275,7 @@ let testClosureRefCountDecRecordStringListDictCapture () : Result<unit, string> 
             ]
             LIR.Ret
             records with
-        | LIR.Program ([func], programRecords) -> LIR.Program ([func; capturedFunc], programRecords)
+        | LIR.Program ([func], variants, programRecords) -> LIR.Program ([func; capturedFunc], variants, programRecords)
         | other -> other
 
     match runLIRProgramFullWithOptions main true with
@@ -1303,7 +1303,7 @@ let testClosureRefCountDecSumStringCapture () : Result<unit, string> =
                 LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
             ]
             LIR.Ret with
-        | LIR.Program ([func], records) -> LIR.Program ([func; capturedFunc], records)
+        | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
         | other -> other
 
     match runLIRProgramFullWithOptions main true with
@@ -1347,7 +1347,7 @@ let testClosureRefCountDecSumTupleStringListDictCapture () : Result<unit, string
                 LIR.RefCountDec (LIR.Physical LIR.X21, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
             ]
             LIR.Ret with
-        | LIR.Program ([func], records) -> LIR.Program ([func; capturedFunc], records)
+        | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
         | other -> other
 
     match runLIRProgramFullWithOptions main true with
@@ -1395,7 +1395,7 @@ let testClosureRefCountDecSumRecordStringListDictCapture () : Result<unit, strin
             ]
             LIR.Ret
             records with
-        | LIR.Program ([func], programRecords) -> LIR.Program ([func; capturedFunc], programRecords)
+        | LIR.Program ([func], variants, programRecords) -> LIR.Program ([func; capturedFunc], variants, programRecords)
         | other -> other
 
     match runLIRProgramFullWithOptions main true with
@@ -1424,7 +1424,7 @@ let testClosureRefCountDecMultipleCaptures () : Result<unit, string> =
                 LIR.RefCountDec (LIR.Physical LIR.X5, 24, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
             ]
             LIR.Ret with
-        | LIR.Program ([func], records) -> LIR.Program ([func; capturedFunc], records)
+        | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
         | other -> other
 
     match runLIRProgramFullWithOptions main true with

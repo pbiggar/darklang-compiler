@@ -40,9 +40,9 @@ let prettyPrintLIR (program: LIR.Program) : string =
 
 /// Rename all functions in an LIR program
 let renameLIRFunctions (name: string) (program: LIR.Program) : LIR.Program =
-    let (LIR.Program (functions, records)) = program
+    let (LIR.Program (functions, variants, records)) = program
     let renamed = functions |> List.map (fun func -> { func with Name = name })
-    LIR.Program (renamed, records)
+    LIR.Program (renamed, variants, records)
 
 /// Pretty-print ANF program with shared formatter
 let prettyPrintANF (program: ANF.Program) : string =

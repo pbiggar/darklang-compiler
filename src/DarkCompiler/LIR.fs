@@ -199,11 +199,27 @@ type Function = {
 /// Record definitions needed by late, type-specialized runtime helpers.
 type RecordRegistry = Map<string, (string * AST.Type) list>
 
+/// Info about a single sum variant needed by late, type-specialized runtime helpers.
+type VariantInfo = {
+    Name: string
+    Tag: int
+    Payload: AST.Type option
+}
+
+/// All variants for a sum type, with type parameters.
+type TypeVariants = {
+    TypeParams: string list
+    Variants: VariantInfo list
+}
+
+/// Sum definitions needed by late, type-specialized runtime helpers.
+type VariantRegistry = Map<string, TypeVariants>
+
 /// LIR program (symbolic literals, no pools)
-type Program = Program of functions:Function list * records:RecordRegistry
+type Program = Program of functions:Function list * variants:VariantRegistry * records:RecordRegistry
 
 /// Count the number of CoverageHit instructions in a program
-let countCoverageHits (Program (functions, _)) : int =
+let countCoverageHits (Program (functions, _, _)) : int =
     functions
     |> List.collect (fun f ->
         f.CFG.Blocks

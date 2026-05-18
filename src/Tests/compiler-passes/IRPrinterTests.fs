@@ -72,7 +72,7 @@ let testFormatLIR () : TestResult =
         StackSize = 0
         UsedCalleeSaved = []
     }
-    let program = LIR.Program ([func], Map.empty)
+    let program = LIR.Program ([func], Map.empty, Map.empty)
     let expected =
         [
             "lir_print:"

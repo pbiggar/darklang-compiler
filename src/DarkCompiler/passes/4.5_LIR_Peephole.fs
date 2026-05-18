@@ -646,6 +646,6 @@ let optimizeFunction (func: Function) : Function =
 
 /// Optimize a program
 let optimizeProgram (program: Program) : Program =
-    let (Program (functions, records)) = program
+    let (Program (functions, variants, records)) = program
     let functions' = functions |> List.map optimizeFunction
-    Program (functions', records)
+    Program (functions', variants, records)

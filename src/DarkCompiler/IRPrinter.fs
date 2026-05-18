@@ -683,7 +683,7 @@ let private prettyPrintLIRTerminator (term: LIR.Terminator) : string =
     | LIR.Jump label -> $"Jump({label})"
 
 /// Format symbolic LIR program with CFG structure
-let formatLIR (LIR.Program (functions, _)) : string =
+let formatLIR (LIR.Program (functions, _, _)) : string =
     let prettyPrintCalleeSaved (regs: LIR.PhysReg list) : string =
         regs
         |> List.map prettyPrintLIRPhysReg
