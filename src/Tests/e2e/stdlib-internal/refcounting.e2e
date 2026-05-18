@@ -52,6 +52,7 @@ type DictRecordValue = { dictRecordName: String } let d = Stdlib.Dict.set(Stdlib
 let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, List<Int64>>(), 1, [1, 2]) in 0 = stdout="0\n" stderr="" // dict list values release leaf payload roots
 let base = 1 in let f = (x: Int64) => x + base in let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, (Int64) -> Int64>(), 1, f) in 0 = stdout="0\n" stderr="" // dict closure values release leaf payload roots
 let inner = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, String>(), 1, "a" ++ "b") in let d = Stdlib.Dict.set(Stdlib.Dict.empty<String, Dict<Int64, String>>(), "k" ++ "1", inner) in 0 = stdout="0\n" stderr="" // dict nested dict values release leaf payload roots
+let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, (String, List<Int64>)>(), 1, ("a" ++ "b", [1, 2])) in 0 = stdout="0\n" stderr="" // dict tuple values release nested leaf payload fields
 
 // Tagged list construction is reclaimed even when the list is unused.
 let xs = [1, 2, 3] in 0 = stdout="0\n" stderr=""

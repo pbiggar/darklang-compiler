@@ -58,8 +58,9 @@ key/value reclamation, persistent int-to-bytes dict values with old and new
 roots live, dict record values with nested string fields, E2E suite-level
 stdlib specialization carrying test/preamble record type registries, ARM64
 fixed-block `Option` payload release for tuple/record values, ARM64 dict
-leaf-value release for `List` values, dict closure value coverage, and
-ARM64 dict leaf-value release for nested dict values, and `RcShape`
+leaf-value release for `List` values, dict closure value coverage,
+ARM64 dict leaf-value release for nested dict values, ARM64 dict fixed-block
+leaf-value release for tuple values containing string/list fields, and `RcShape`
 retain/release operation helper coverage and RC insertion retain/release
 emission.
 
@@ -110,12 +111,13 @@ multi-branch dict sharing from a common base, dict lookup `Option<String>`
 payload reclamation, dict string-to-string key/value reclamation, persistent
 dict int-to-bytes values with old and new roots live, dict record values with
 nested string fields, dict list values with leaf payload release, dict closure
-value reclamation, nested dict value leaf payload release, and `RcShape`
+value reclamation, nested dict value leaf payload release, dict tuple value
+nested string/list field reclamation, and `RcShape`
 retain/release operation helper tests plus RC insertion use of those helpers,
 plus file read success/error, unaligned file read, file write success/error,
 and file append error reclamation:
 
-- `scripts/run-in-container ./run-tests`: `4723 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4724 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -281,6 +283,8 @@ Covered by current tests:
 - dict values of closures are reclaimed when the dict root dies
 - dict values of nested dicts release the leaf payload root when the outer dict
   root dies
+- dict values of `(String, List<Int64>)` release nested string/list fields when
+  the tuple leaf payload root dies
 
 Remaining bytes work is parity with strings beyond the first fixed-block cases:
 deeper nested payloads, broader dict structural-sharing cases,
@@ -313,6 +317,7 @@ Covered by current tests:
 - dict int-to-list values release leaf payload roots
 - dict int-to-closure values are reclaimed
 - dict string-to-dict values release leaf payload roots
+- dict int-to-tuple values release nested string/list payload fields
 
 Remaining dict work is mostly deeper raw HAMT lifecycle and shape-driven
 coverage, not initial root retention/release.
@@ -837,22 +842,20 @@ managed, but the raw node lifecycle needs a clear correctness story:
 - whether raw HAMT nodes become reusable or only leak-counter balanced
 - whether x64 and ARM64 dict helpers are semantically equivalent
 
-Recent failing probes showed that scope-only dict values of
-`(String, List<Int64>)` still leaks. The immediate cause is that
-`__dark_dict_rc_dec_helper` can balance HAMT raw nodes, but it is not typed and
-therefore cannot recursively release arbitrary typed key/value payloads stored
-in leaf or collision nodes. A narrow ARM64 helper now handles leaf `List`
-values; future fixes should add typed dict release helpers or a serialized
-shape-plan path for the remaining leaf and collision payload shapes. This is
-separate from the later raw-allocation policy decision.
+Recent probes showed that scope-only dict leaf values can leak when their
+payload shape is not one of the current ARM64 typed helper cases. The immediate
+cause is that `__dark_dict_rc_dec_helper` can balance HAMT raw nodes, but it is
+not typed and therefore cannot recursively release arbitrary typed key/value
+payloads stored in leaf or collision nodes. Narrow ARM64 helpers now handle
+leaf `List` values, closure values, nested dict values, and tuple values of
+`(String, List<Int64>)`; future fixes should add typed dict release helpers or
+a serialized shape-plan path for the remaining leaf and collision payload
+shapes. This is separate from the later raw-allocation policy decision.
 
 ### Remaining Tasks
 
 1. Add key/value shape matrix tests:
 
-   - dict of int to tuple
-   - dict of int to closure
-   - dict of string to dict
    - collision/leaf cases where managed keys and values both require recursive
      release
 
@@ -1457,7 +1460,6 @@ appropriate.
 
 - keep old root and new root live after update
 - keep old root and removed root live after remove
-- dict int to tuple
 - dict key/value leaf and collision release where both sides have managed
   payloads
 
