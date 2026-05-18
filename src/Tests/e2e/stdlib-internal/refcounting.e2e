@@ -50,6 +50,7 @@ let d = Stdlib.Dict.set(Stdlib.Dict.empty<String, String>(), "a" ++ "b", "c" ++ 
 let d1 = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Bytes>(), 1, Bytes.create(4)) in let d2 = Stdlib.Dict.set(d1, 2, Bytes.create(8)) in Bytes.length(Stdlib.Dict.getOrDefault<Int64, Bytes>(d1, 1, Bytes.create(0))) + Bytes.length(Stdlib.Dict.getOrDefault<Int64, Bytes>(d2, 2, Bytes.create(0))) = stdout="12\n" stderr="" // dict bytes values stay live across old and new roots
 type DictRecordValue = { dictRecordName: String } let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, DictRecordValue>(), 1, DictRecordValue { dictRecordName = "a" ++ "b" }) in Stdlib.String.length(Stdlib.Dict.getOrDefault<Int64, DictRecordValue>(d, 1, DictRecordValue { dictRecordName = "" }).dictRecordName) = stdout="2\n" stderr="" // dict record values release nested string fields
 let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, List<Int64>>(), 1, [1, 2]) in 0 = stdout="0\n" stderr="" // dict list values release leaf payload roots
+let base = 1 in let f = (x: Int64) => x + base in let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, (Int64) -> Int64>(), 1, f) in 0 = stdout="0\n" stderr="" // dict closure values release leaf payload roots
 
 // Tagged list construction is reclaimed even when the list is unused.
 let xs = [1, 2, 3] in 0 = stdout="0\n" stderr=""
