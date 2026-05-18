@@ -66,6 +66,7 @@ type DictRecordManagedValue = { dictRecordManagedName: String, dictRecordManaged
 let xs = [1, 2, 3] in 0 = stdout="0\n" stderr=""
 let base = 1 in let f = (x: Int64) => x + base in let xs = [f] in 0 = stdout="0\n" stderr="" // list of closures current safe baseline
 def listClosure(): List<(Int64) -> Int64> = let base = 1 in let f = (x: Int64) => x + base in [f] let xs = listClosure() in 0 = stdout="0\n" stderr="" // returned list releases closure payload roots
+def listClosureCapturesString(): List<(Int64) -> String> = let captured = String.append("he", "ap") in let f = (x: Int64) => captured in [f] let xs = listClosureCapturesString() in 0 = stdout="0\n" stderr="" // returned list releases closure payload captures
 let xs = ["a" ++ "b"] in 0 = stdout="0\n" stderr="" // list releases dynamic string payload
 let s = "a" ++ "b" in let xs = [s] in 0 = stdout="0\n" stderr="" // list retains dynamic string variable payload
 def listBytes(): List<Bytes> = [Bytes.create(4)] let xs = listBytes() in 0 = stdout="0\n" stderr="" // returned list releases dynamic bytes payloads

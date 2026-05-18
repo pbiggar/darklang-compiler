@@ -130,16 +130,17 @@ nested string fields, dict list values with leaf payload release, dict closure
 value reclamation, nested dict value leaf payload release, dict tuple value
 nested string/list field reclamation, dict tuple3 value nested string/list/dict
 field reclamation, dict record value nested string/list/dict field coverage,
-dynamic string key plus tuple3 string/list/dict value coverage, and `RcShape`
+dynamic string key plus tuple3 string/list/dict value coverage, direct
+tagged-list closure payload capture release for a dynamic string capture, and `RcShape`
 retain/release operation helper tests plus RC insertion use of those helpers,
 plus direct concrete non-generic sum payload release in tagged lists for
 `Bytes`, `List`, `Dict`, and closure variants through variant metadata, plus file read
 success/error, unaligned file read, file write success/error, and file append
 error reclamation:
 
-- `scripts/run-in-container ./run-tests --filter=refcounting`: `159 passed`
+- `scripts/run-in-container ./run-tests --filter=refcounting`: `160 passed`
 - Previous full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4744 passed, 2 failed`
+  `4745 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -363,6 +364,7 @@ Recent commits added:
 - dict payload release from list leaves
 - closure payload release from list literals
 - returned list closure payload roots
+- returned list closure dynamic string captures
 - returned list bytes payloads
 
 Covered by current tests:
@@ -1500,7 +1502,6 @@ appropriate.
 - list of three-field records with heap fields beyond the currently covered
   string/list/dict shape
 - nested list of record containing list/dict
-- list of closures capturing heap values
 
 ### Dicts
 
