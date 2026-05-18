@@ -95,7 +95,8 @@ tagged-list tuple4 nested record list/dynamic-buffer payload release, plus
 ARM64 tagged-list tuple4 nested record dict/dynamic-buffer payload release,
 plus ARM64 tagged-list tuple4 nested record closure/dynamic-buffer payload
 release, plus ARM64 tagged-list concrete boxed-sum tuple4 and record4
-string/bytes/list/dict payload release.
+string/bytes/list/dict payload release, plus ARM64 tagged-list concrete
+boxed-sum tuple4 nested tuple payload release.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -183,11 +184,12 @@ plus ARM64 tagged-list tuple4 nested record list/dynamic-buffer payload
 release, plus ARM64 tagged-list tuple4 nested record dict/dynamic-buffer
 payload release, plus ARM64 tagged-list tuple4 nested record
 closure/dynamic-buffer payload release, plus ARM64 tagged-list concrete
-boxed-sum tuple4 and record4 string/bytes/list/dict payload release:
+boxed-sum tuple4 and record4 string/bytes/list/dict payload release, plus
+ARM64 tagged-list concrete boxed-sum tuple4 nested tuple payload release:
 
-- `scripts/run-in-container ./run-tests --filter=refcounting`: `198 passed`
+- `scripts/run-in-container ./run-tests --filter=refcounting`: `199 passed`
 - Previous full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4783 passed, 2 failed`
+  `4784 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
