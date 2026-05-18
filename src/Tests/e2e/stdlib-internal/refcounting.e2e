@@ -89,6 +89,7 @@ let base = 1 in let xs = [((x: Int64) => x + base, [1, 2], Stdlib.Dict.set(Stdli
 let xs = [(Bytes.create(4), [1, 2], Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2))] in 0 = stdout="0\n" stderr="" // list releases three-field tuple bytes/list/dict payload fields
 let xs = [("a" ++ "b", [1, 2], Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2))] in 0 = stdout="0\n" stderr="" // list releases three-field tuple payload fields
 let xs = [("a" ++ "b", Bytes.create(4), [1, 2])] in 0 = stdout="0\n" stderr="" // list releases three-field tuple string/bytes/list payload fields
+let xs = [("a" ++ "b", Bytes.create(4), Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2))] in 0 = stdout="0\n" stderr="" // list releases three-field tuple string/bytes/dict payload fields
 let xs = [("a" ++ "b", Bytes.create(4), [1, 2], Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2))] in 0 = stdout="0\n" stderr="" // list releases four-field tuple string/bytes/list/dict payload fields
 let base = 1 in let xs = [((x: Int64) => x + base, "a" ++ "b", [1, 2], Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2))] in 0 = stdout="0\n" stderr="" // list releases four-field tuple closure/string/list/dict payload fields
 let base = 1 in let xs = [((x: Int64) => x + base, Bytes.create(4), [1, 2], Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2))] in 0 = stdout="0\n" stderr="" // list releases four-field tuple closure/bytes/list/dict payload fields
