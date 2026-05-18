@@ -68,7 +68,8 @@ leaf-value release for tuple values containing string/list fields, ARM64 dict
 fixed-block leaf-value release for tuple3 values containing string/list/dict
 fields, isolated ARM64 dict helper-local labels so multiple typed dict release
 helpers can coexist safely, dict record values with nested string/list/dict
-fields covered, and `RcShape`
+fields covered, dynamic string keys paired with tuple3 string/list/dict values
+covered, and `RcShape`
 retain/release operation helper coverage and RC insertion retain/release
 emission.
 
@@ -127,7 +128,7 @@ nested string fields, dict list values with leaf payload release, dict closure
 value reclamation, nested dict value leaf payload release, dict tuple value
 nested string/list field reclamation, dict tuple3 value nested string/list/dict
 field reclamation, dict record value nested string/list/dict field coverage,
-and `RcShape`
+dynamic string key plus tuple3 string/list/dict value coverage, and `RcShape`
 retain/release operation helper tests plus RC insertion use of those helpers,
 plus file read success/error, unaligned file read, file write success/error,
 and file append error reclamation:
