@@ -1253,13 +1253,23 @@ let private isSingleFieldRecordList (recordRegistry: LIR.RecordRegistry) (source
 let private isTwoFieldRecordList (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : bool =
     recordListPayloadSize recordRegistry sourceType = Some 16
 
+let private isDynamicBufferType (typ: AST.Type) : bool =
+    match typ with
+    | AST.TString
+    | AST.TBytes -> true
+    | _ -> false
+
 let private isManagedThreeFieldRecordList (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : bool =
     match sourceType with
     | Some (AST.TList (AST.TRecord (name, _))) ->
         recordRegistry
         |> Map.tryFind name
         |> Option.map (fun fields ->
-            (fields |> List.map snd) = [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ])
+            match fields |> List.map snd with
+            | [ first; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] ->
+                isDynamicBufferType first
+            | _ ->
+                false)
         |> Option.defaultValue false
     | _ ->
         false
@@ -1278,12 +1288,6 @@ let private isRecordListDictList (recordRegistry: LIR.RecordRegistry) (sourceTyp
         |> Option.defaultValue false
     | _ ->
         false
-
-let private isDynamicBufferType (typ: AST.Type) : bool =
-    match typ with
-    | AST.TString
-    | AST.TBytes -> true
-    | _ -> false
 
 let private isManagedThreeFieldTupleList (sourceType: AST.Type option) : bool =
     match sourceType with
@@ -3923,7 +3927,13 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                             listRefCountDecRecordListDictHelperLabel
                         | Some fields when List.length fields = 1 -> listRefCountDecRecord1HelperLabel
                         | Some fields when List.length fields = 2 -> listRefCountDecRecord2HelperLabel
-                        | Some fields when (fields |> List.map snd) = [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] ->
+                        | Some fields when
+                            match fields |> List.map snd with
+                            | [ first; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] ->
+                                isDynamicBufferType first
+                            | _ ->
+                                false
+                            ->
                             listRefCountDecRecord3ManagedHelperLabel
                         | _ -> listRefCountDecHelperLabel
                     | AST.TList (AST.TSum (_, [AST.TString])) ->

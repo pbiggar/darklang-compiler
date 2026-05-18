@@ -140,9 +140,9 @@ bytes/list/dict field release, plus file read
 success/error, unaligned file read, file write success/error, and file append
 error reclamation:
 
-- `scripts/run-in-container ./run-tests --filter=refcounting`: `168 passed`
+- `scripts/run-in-container ./run-tests --filter=refcounting`: `169 passed`
 - Previous full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4753 passed, 2 failed`
+  `4754 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -390,6 +390,8 @@ Covered by current tests:
 - returned list of single-field records reclaimed
 - returned list of two-field records reclaimed
 - returned list of records carrying bytes fields reclaimed
+- returned list of three-field records with bytes, list, and dict fields
+  reclaimed on ARM64
 - returned list of three-field records with string, list, and dict fields
   reclaimed
 - returned list of nested records reclaimed
@@ -1508,7 +1510,7 @@ appropriate.
 
 - list of three-element tuples with heap fields beyond string/list/dict
 - list of three-field records with heap fields beyond the currently covered
-  string/list/dict shape
+  string/bytes/list/dict shapes
 - nested list of record containing list/dict
 
 ### Dicts
