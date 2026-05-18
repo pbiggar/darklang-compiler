@@ -1136,6 +1136,7 @@ let buildStdlib () : Result<StdlibResult, string> =
 let buildStdlibSpecializations
     (stdlib: StdlibResult)
     (specs: Set<AST_to_ANF.SpecKey>)
+    (externalTypeReg: AST_to_ANF.TypeRegistry)
     (passTimingRecorder: PassTimingRecorder option)
     : Result<StdlibResult, string> =
     if Set.isEmpty specs then
@@ -1175,6 +1176,11 @@ let buildStdlibSpecializations
                         stdlib.Context.Registries
                         typeDefs
                         newSpecializedFuncs
+                let registries = {
+                    registries with
+                        TypeReg =
+                            Map.fold (fun acc k v -> Map.add k v acc) registries.TypeReg externalTypeReg
+                }
                 let localReturnTypes = extractReturnTypes localRegistries.FuncReg
 
                 let replacedFunctionsResult =

@@ -3291,7 +3291,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     | _ ->
                         listRefCountDecHelperLabel
 
-                let releaseListField (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
+                let releaseListFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
                     let helperLabel = listHelperLabelForField fieldType
                     let callInstrs = [
                         ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -80s)
@@ -3308,11 +3308,14 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 80s)
                     ]
                     [
-                        ARM64Symbolic.LDR (ARM64Symbolic.X12, addrReg, int16 fieldOffset)
+                        ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
                         ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
                     ] @ callInstrs
 
-                let releaseDictField (fieldOffset: int) : ARM64Symbolic.Instr list =
+                let releaseListField (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
+                    releaseListFieldFrom addrReg fieldOffset fieldType
+
+                let releaseDictFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) : ARM64Symbolic.Instr list =
                     let callInstrs = [
                         ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
                         ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -3330,11 +3333,14 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 96s)
                     ]
                     [
-                        ARM64Symbolic.LDR (ARM64Symbolic.X12, addrReg, int16 fieldOffset)
+                        ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
                         ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
                     ] @ callInstrs
 
-                let releaseClosureField (fieldOffset: int) : ARM64Symbolic.Instr list =
+                let releaseDictField (fieldOffset: int) : ARM64Symbolic.Instr list =
+                    releaseDictFieldFrom addrReg fieldOffset
+
+                let releaseClosureFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) : ARM64Symbolic.Instr list =
                     let callInstrs = [
                         ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
                         ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -3352,11 +3358,14 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 96s)
                     ]
                     [
-                        ARM64Symbolic.LDR (ARM64Symbolic.X12, addrReg, int16 fieldOffset)
+                        ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
                         ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
                     ] @ callInstrs
 
-                let releaseDynamicBufferField (fieldOffset: int) : ARM64Symbolic.Instr list =
+                let releaseClosureField (fieldOffset: int) : ARM64Symbolic.Instr list =
+                    releaseClosureFieldFrom addrReg fieldOffset
+
+                let releaseDynamicBufferFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) : ARM64Symbolic.Instr list =
                     let bufferLeakDec = generateLeakCounterDec ctx
                     let refcountUpdate =
                         if List.isEmpty bufferLeakDec then
@@ -3373,7 +3382,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     let bcondOffset = List.length refcountUpdate + 1
                     let body =
                         [
-                            ARM64Symbolic.LDR (ARM64Symbolic.X12, addrReg, int16 fieldOffset)
+                            ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
                             ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, 15 + List.length refcountUpdate)
                             ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
                             ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 7us)
@@ -3400,6 +3409,9 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ARM64Symbolic.LDP_post (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 32s)
                     ]
 
+                let releaseDynamicBufferField (fieldOffset: int) : ARM64Symbolic.Instr list =
+                    releaseDynamicBufferFieldFrom addrReg fieldOffset
+
                 let releaseFixedBlockField (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
                     let fieldPayloadSize =
                         match fieldType with
@@ -3416,8 +3428,32 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     | None ->
                         []
                     | Some childPayloadSize ->
+                        let childFieldReleaseInstrs =
+                            fixedBlockFieldTypes ctx.RecordRegistry (Some fieldType)
+                            |> List.mapi (fun index childFieldType ->
+                                let childFieldOffset = index * 8
+                                match childFieldType with
+                                | AST.TString
+                                | AST.TBytes ->
+                                    releaseDynamicBufferFieldFrom ARM64Symbolic.X11 childFieldOffset
+                                | AST.TList _ ->
+                                    releaseListFieldFrom ARM64Symbolic.X11 childFieldOffset childFieldType
+                                | AST.TDict _ ->
+                                    releaseDictFieldFrom ARM64Symbolic.X11 childFieldOffset
+                                | AST.TFunction _ ->
+                                    releaseClosureFieldFrom ARM64Symbolic.X11 childFieldOffset
+                                | _ ->
+                                    [])
+                            |> List.concat
                         let childLeakDec = generateLeakCounterDec ctx
                         let freeChild =
+                            (if List.isEmpty childFieldReleaseInstrs then
+                                []
+                             else
+                                [ ARM64Symbolic.MOV_reg (ARM64Symbolic.X11, ARM64Symbolic.X12) ]
+                                @ childFieldReleaseInstrs
+                                @ [ ARM64Symbolic.MOV_reg (ARM64Symbolic.X12, ARM64Symbolic.X11) ])
+                            @
                             (if childPayloadSize >= 0 && childPayloadSize < 256 then
                                 [
                                     ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X27, uint16 childPayloadSize)
@@ -3491,11 +3527,27 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                             releaseDictField 8
                         | AST.TFunction _ ->
                             releaseClosureField 8
+                        | AST.TTuple _
+                        | AST.TRecord _ ->
+                            releaseFixedBlockField 8 payloadType
                         | _ ->
                             []
 
                     match sourceType with
-                    | Some (AST.TSum ("Stdlib.Option.Option", [ valueType ])) when ctx.FunctionName.StartsWith("Stdlib.Dict.") ->
+                    | Some (AST.TSum ("Stdlib.Option.Option", [ valueType ])) when
+                        ctx.FunctionName.StartsWith("Stdlib.Dict.")
+                        || (match valueType with
+                            | AST.TString
+                            | AST.TBytes ->
+                                false
+                            | AST.TList _
+                            | AST.TDict _
+                            | AST.TFunction _
+                            | AST.TTuple _
+                            | AST.TRecord _ ->
+                                true
+                            | _ ->
+                                false) ->
                         let valueRelease = releasePayloadForType valueType
                         if List.isEmpty valueRelease then
                             []
