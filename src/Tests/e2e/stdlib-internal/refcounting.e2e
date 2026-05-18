@@ -19,8 +19,11 @@ let s = Stdlib.List.toDisplayString_str(["a" ++ "b"]) in 0 = stdout="0\n" stderr
 let s = Stdlib.List.toDisplayString_bool([true, false]) in 0 = stdout="0\n" stderr="" // bool list display string reclaimed
 let s = Stdlib.List.toDisplayString_f64([1.25, 2.0]) in 0 = stdout="0\n" stderr="" // float list display string reclaimed
 let result = Stdlib.File.readText("/etc/hosts") in 0 = stdout="0\n" stderr="" // file read success result string reclaimed
+let _ = Stdlib.File.writeText("/tmp/dark_refcount_unaligned_read.txt", "abcde") in let result = Stdlib.File.readText("/tmp/dark_refcount_unaligned_read.txt") in 0 = stdout="0\n" stderr="" // unaligned file read result string reclaimed
 let result = Stdlib.File.readText("/nonexistent/dark/refcounting/read.txt") in 0 = stdout="0\n" stderr="" // file read error result string reclaimed
+let result = Stdlib.File.writeText("/tmp/dark_refcount_write_success.txt", "abcde") in 0 = stdout="0\n" stderr="" // file write success result root reclaimed
 let result = Stdlib.File.writeText("/nonexistent/dark/refcounting/write.txt", "test") in 0 = stdout="0\n" stderr="" // file write error result string reclaimed
+let result = Stdlib.File.appendText("/nonexistent/dark/refcounting/append.txt", "test") in 0 = stdout="0\n" stderr="" // file append error result string reclaimed
 
 // Dynamic bytes use the same length-aligned refcount slot as dynamic strings.
 let b = Bytes.create(4) in 0 = stdout="0\n" stderr=""

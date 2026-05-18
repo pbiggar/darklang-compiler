@@ -1664,7 +1664,7 @@ let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr
             // Check if open failed (fd < 0 means X0 has sign bit set)
             // X21 = fd
             ARM64.MOV_reg (ARM64.X21, ARM64.X0)
-            ARM64.TBNZ (ARM64.X0, 63, 31)  // If negative, branch to error path (+31 instructions)
+            ARM64.TBNZ (ARM64.X0, 63, 35)  // If negative, branch to error path (+35 instructions)
 
             // fstat(fd, statbuf) - X0 = fd, X1 = statbuf
             ARM64.MOV_reg (ARM64.X0, ARM64.X21)
@@ -1694,9 +1694,13 @@ let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr
             ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Read, 0)
             ARM64.SVC syscalls.SvcImmediate
 
-            // Store refcount = 1 at [X24 + 8 + size]
-            ARM64.ADD_imm (ARM64.X25, ARM64.X24, 8us)
-            ARM64.ADD_reg (ARM64.X25, ARM64.X25, ARM64.X22)
+            // Store refcount = 1 at [X24 + 8 + aligned(size)]
+            ARM64.ADD_imm (ARM64.X25, ARM64.X22, 7us)
+            ARM64.MOVZ (ARM64.X0, 3us, 0)
+            ARM64.LSR_reg (ARM64.X25, ARM64.X25, ARM64.X0)
+            ARM64.LSL_reg (ARM64.X25, ARM64.X25, ARM64.X0)
+            ARM64.ADD_imm (ARM64.X25, ARM64.X25, 8us)
+            ARM64.ADD_reg (ARM64.X25, ARM64.X24, ARM64.X25)
             ARM64.MOVZ (ARM64.X0, 1us, 0)
             ARM64.STR (ARM64.X0, ARM64.X25, 0s)
 
@@ -1760,9 +1764,9 @@ let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr
             ARM64.ADD_imm (ARM64.X1, ARM64.X24, 12us)
             ARM64.STRB_reg (ARM64.X0, ARM64.X1)
 
-            // Store refcount = 1 at [X24 + 8 + 5] = [X24 + 13]
+            // Store refcount = 1 at [X24 + 8 + aligned(5)] = [X24 + 16]
             ARM64.MOVZ (ARM64.X0, 1us, 0)
-            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 13us)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 16us)
             ARM64.STR (ARM64.X0, ARM64.X1, 0s)
 
             // Allocate Error Result
@@ -1863,7 +1867,7 @@ let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr
             ARM64.SVC syscalls.SvcImmediate
 
             ARM64.MOV_reg (ARM64.X21, ARM64.X0)
-            ARM64.TBNZ (ARM64.X0, 63, 31)  // If negative, branch to error path
+            ARM64.TBNZ (ARM64.X0, 63, 35)  // If negative, branch to error path
 
             // fstat(fd, statbuf)
             ARM64.MOV_reg (ARM64.X0, ARM64.X21)
@@ -1889,8 +1893,12 @@ let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr
             ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Read, 0)
             ARM64.SVC syscalls.SvcImmediate
 
-            ARM64.ADD_imm (ARM64.X25, ARM64.X24, 8us)
-            ARM64.ADD_reg (ARM64.X25, ARM64.X25, ARM64.X22)
+            ARM64.ADD_imm (ARM64.X25, ARM64.X22, 7us)
+            ARM64.MOVZ (ARM64.X0, 3us, 0)
+            ARM64.LSR_reg (ARM64.X25, ARM64.X25, ARM64.X0)
+            ARM64.LSL_reg (ARM64.X25, ARM64.X25, ARM64.X0)
+            ARM64.ADD_imm (ARM64.X25, ARM64.X25, 8us)
+            ARM64.ADD_reg (ARM64.X25, ARM64.X24, ARM64.X25)
             ARM64.MOVZ (ARM64.X0, 1us, 0)
             ARM64.STR (ARM64.X0, ARM64.X25, 0s)
 
@@ -1940,7 +1948,7 @@ let generateFileReadText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) : ARM64.Instr
             ARM64.STRB_reg (ARM64.X0, ARM64.X1)
 
             ARM64.MOVZ (ARM64.X0, 1us, 0)
-            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 13us)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 16us)
             ARM64.STR (ARM64.X0, ARM64.X1, 0s)
 
             ARM64.MOV_reg (ARM64.X25, ARM64.X28)
@@ -2113,7 +2121,7 @@ let generateFileWriteText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (contentReg:
             ARM64.STRB_reg (ARM64.X0, ARM64.X1)
 
             ARM64.MOVZ (ARM64.X0, 1us, 0)
-            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 13us)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 16us)
             ARM64.STR (ARM64.X0, ARM64.X1, 0s)  // refcount
 
             // Allocate Error Result
@@ -2251,7 +2259,7 @@ let generateFileWriteText (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (contentReg:
             ARM64.STRB_reg (ARM64.X0, ARM64.X1)
 
             ARM64.MOVZ (ARM64.X0, 1us, 0)
-            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 13us)
+            ARM64.ADD_imm (ARM64.X1, ARM64.X24, 16us)
             ARM64.STR (ARM64.X0, ARM64.X1, 0s)
 
             ARM64.MOV_reg (ARM64.X23, ARM64.X28)

@@ -47,10 +47,11 @@ dynamic-string retains for returned borrowed parameters, scoped
 generation for int/string/bool/float lists, and the ARM64 `FloatToString`
 runtime helper's aligned refcount slot, ARM64 file intrinsic literal operands
 using sentinel literal-pool entries, file read success/error result string
-payload leak accounting, file write error string payload leak accounting, plus
-multiple dynamic bytes list payloads and repeated immutable bytes updates, and
-`RcShape` retain/release operation helper coverage and RC insertion
-retain/release emission.
+payload leak accounting, unaligned file read string refcount layout, file write
+success root accounting, file write/append error string payload leak
+accounting, plus multiple dynamic bytes list payloads and repeated immutable
+bytes updates, and `RcShape` retain/release operation helper coverage and RC
+insertion retain/release emission.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -94,9 +95,10 @@ no-heap-ownership coverage, plus scoped `Float.toString`, branch-selected
 literal string, list display string reclamation, multiple dynamic bytes list
 payloads, repeated immutable bytes update reclamation, and `RcShape`
 retain/release operation helper tests plus RC insertion use of those helpers,
-plus file read success/error and file write error string payload reclamation:
+plus file read success/error, unaligned file read, file write success/error,
+and file append error reclamation:
 
-- `scripts/run-in-container ./run-tests`: `4707 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4710 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -198,8 +200,10 @@ Recent commits added:
   to sentinel-refcount literal-pool entries instead of temporary heap copies
 - the ARM64 `FloatToString` runtime helper stores its refcount at
   `8 + aligned(length)`, matching the dynamic string layout
-- ARM64 file read and file write error string payloads are accounted as owned
-  dynamic strings so result cleanup balances leak checking
+- ARM64 file read result roots and string payloads are accounted separately,
+  including unaligned file sizes
+- ARM64 file write and append result roots are accounted, and their error
+  string payloads are accounted when the runtime returns an error
 
 Covered by `src/Tests/e2e/stdlib-internal/refcounting.e2e`:
 
@@ -210,7 +214,9 @@ Covered by `src/Tests/e2e/stdlib-internal/refcounting.e2e`:
 - branch-selected literal string reclaimed
 - list display string generation for int, string, bool, and float lists
 - file read success and error result strings reclaimed
-- file write error result strings reclaimed
+- unaligned file read result strings reclaimed
+- file write success result roots reclaimed
+- file write and append error result strings reclaimed
 - tuple string field release
 - record string field release
 - returned record string field release
@@ -589,7 +595,11 @@ Still under-proven or not fully implemented:
 - display/toString paths beyond the covered list display and
   `Stdlib.Float.toString` cases
 - success and error strings for file operations beyond the currently covered
-  read success, read error, and write error cases
+  read success, read error, unaligned read, write success/error, and append
+  error cases
+- `Stdlib.File.delete` and `Stdlib.File.setExecutable` currently return `Ok`
+  for nonexistent paths on the active backend, so their error string ownership
+  cannot be validly probed until that semantic bug is fixed
 - strings inside deeply nested fixed blocks beyond currently covered examples
 - strings inside dict/list combinations beyond current string key/value and
   list payload tests
@@ -611,6 +621,7 @@ Known string-producing operations include:
 - `Stdlib.String.fromCodepoints`
 - `FloatToString` backend intrinsic path
 - remaining file operation success/error strings not yet covered by leak tests
+  after fixing delete/setExecutable error semantics
 - display strings for records, sums, bytes, and display paths not covered by
   the current list-display tests
 - runtime error message strings
@@ -622,7 +633,8 @@ Known string-producing operations include:
 2. Add leak-check tests for remaining display paths that allocate strings,
    especially records, sums, bytes, and nested display values.
 3. Add leak-check tests for remaining file-operation string result payloads
-   such as append, delete, set-executable, and pointer-write paths.
+   after fixing delete/setExecutable error behavior; append error is now
+   covered.
 4. Audit remaining backend runtime helpers so every heap string initializes
    refcount at `8 + aligned(length)`.
 5. Separate "leak counter balanced" from "memory is reusable" in docs/tests.
@@ -633,8 +645,9 @@ Known string-producing operations include:
 
 1. Cover direct backend-intrinsic `FloatToString` dynamic string reclamation.
 2. Cover remaining display-generated dynamic strings.
-3. Cover remaining file-operation success/error strings.
-4. Audit and patch file-operation runtime string refcount alignment.
+3. Cover remaining file-operation success/error strings after delete and
+   setExecutable report missing-path errors correctly.
+4. Continue auditing file-operation runtime string refcount alignment.
 5. Audit and patch any unaligned runtime string builders.
 6. Add a dedicated design note for variable-size dynamic-buffer reuse.
 
@@ -1366,7 +1379,7 @@ appropriate.
 
 - direct backend-intrinsic `FloatToString`, if it becomes source-reachable
 - remaining file-operation success/error string payloads beyond covered read
-  success, read error, and write error cases
+  success/error, unaligned read, write success/error, and append error cases
 - display string generation for record/sum/bytes and nested display values
 - nested record/list/dict string combinations
 

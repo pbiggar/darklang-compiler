@@ -3479,8 +3479,48 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                             [])
                     |> List.concat
 
+                let releaseSumPayloadInstrs =
+                    let releasePayloadForType (payloadType: AST.Type) : ARM64Symbolic.Instr list =
+                        match payloadType with
+                        | AST.TString
+                        | AST.TBytes ->
+                            releaseDynamicBufferField 8
+                        | AST.TList _ ->
+                            releaseListField 8 payloadType
+                        | AST.TDict _ ->
+                            releaseDictField 8
+                        | AST.TFunction _ ->
+                            releaseClosureField 8
+                        | _ ->
+                            []
+
+                    match sourceType with
+                    | Some (AST.TSum ("Stdlib.Result.Result", [ okType; errType ])) ->
+                        let okRelease = releasePayloadForType okType
+                        let errRelease = releasePayloadForType errType
+                        match List.isEmpty okRelease, List.isEmpty errRelease with
+                        | true, true ->
+                            []
+                        | false, false when okType = errType ->
+                            okRelease
+                        | true, false ->
+                            [
+                                ARM64Symbolic.LDR (ARM64Symbolic.X12, addrReg, 0s)
+                                ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length errRelease + 1)
+                            ] @ errRelease
+                        | false, true ->
+                            [
+                                ARM64Symbolic.LDR (ARM64Symbolic.X12, addrReg, 0s)
+                                ARM64Symbolic.CBNZ_offset (ARM64Symbolic.X12, List.length okRelease + 1)
+                            ] @ okRelease
+                        | false, false ->
+                            []
+                    | _ ->
+                        []
+
                 let releaseInstrs =
                     fixedBlockFieldReleaseInstrs
+                    @ releaseSumPayloadInstrs
                     @
                     (if payloadSize >= 0 && payloadSize < 256 then
                         [
@@ -3775,17 +3815,20 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 lirRegToARM64Reg pathReg
                 |> Result.map (fun pathARM64 ->
                     runtimeInstrs (Runtime.generateFileReadText destReg pathARM64)
+                    @ generateLeakCounterInc ctx
                     @ generateLeakCounterInc ctx)
             | LIR.StringSymbol value ->
                 Ok (
                     loadStringLiteralPointer ARM64Symbolic.X15 value
                     @ runtimeInstrs (Runtime.generateFileReadText destReg ARM64Symbolic.X15)
+                    @ generateLeakCounterInc ctx
                     @ generateLeakCounterInc ctx)
             | LIR.StackSlot offset ->
                 loadStackSlot ARM64Symbolic.X15 offset
                 |> Result.map (fun loadInstrs ->
                     loadInstrs
                     @ runtimeInstrs (Runtime.generateFileReadText destReg ARM64Symbolic.X15)
+                    @ generateLeakCounterInc ctx
                     @ generateLeakCounterInc ctx)
             | _ -> Error "FileReadText requires string operand")
 
@@ -3833,6 +3876,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     pathInstrs
                     @ contentInstrs
                     @ runtimeInstrs (Runtime.generateFileWriteText destReg pathReg contentReg false)
+                    @ generateLeakCounterInc ctx
                     @ generateLeakCounterIncIfResultError ctx destReg)))
 
     | LIR.FileAppendText (dest, path, content) ->
@@ -3858,6 +3902,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     pathInstrs
                     @ contentInstrs
                     @ runtimeInstrs (Runtime.generateFileWriteText destReg pathReg contentReg true)
+                    @ generateLeakCounterInc ctx
                     @ generateLeakCounterIncIfResultError ctx destReg)))
 
     | LIR.FileDelete (dest, path) ->
