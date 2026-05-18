@@ -78,6 +78,7 @@ let private listRefCountDecClosureStringListDictHelperLabel = "__dark_list_refco
 let private listRefCountDecStringBytesTupleListHelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_list_helper"
 let private listRefCountDecStringBytesTupleManagedListHelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_managed_list_helper"
 let private listRefCountDecStringBytesTupleManagedDictHelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_managed_dict_helper"
+let private listRefCountDecStringBytesTupleManagedClosureHelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_managed_closure_helper"
 let private listRefCountDecListHelperLabel = "__dark_list_refcount_dec_list_helper"
 let private listRefCountDecDictHelperLabel = "__dark_list_refcount_dec_dict_helper"
 let private listRefCountDecClosureHelperLabel = "__dark_list_refcount_dec_closure_helper"
@@ -1064,6 +1065,21 @@ let private generateListRefCountDecStringBytesTupleManagedDictHelper (ctx: CodeG
         false
         [ AST.TString; AST.TBytes; AST.TTuple [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ]; AST.TList AST.TInt64 ]
 
+let private generateListRefCountDecStringBytesTupleManagedClosureHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith
+        listRefCountDecStringBytesTupleManagedClosureHelperLabel
+        ctx
+        (Some 32)
+        false
+        false
+        false
+        [
+            AST.TString
+            AST.TBytes
+            AST.TTuple [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TString ]
+            AST.TList AST.TInt64
+        ]
+
 let private generateListRefCountDecListHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     generateListRefCountDecHelperWith listRefCountDecListHelperLabel ctx None true false false []
 
@@ -1560,6 +1576,12 @@ let private isStringBytesTupleManagedDictFieldShape (fieldTypes: AST.Type list) 
         isDynamicBufferType dynamicBuffer
     | _ -> false
 
+let private isStringBytesTupleManagedClosureFieldShape (fieldTypes: AST.Type list) : bool =
+    match fieldTypes with
+    | [ AST.TString; AST.TBytes; AST.TTuple [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); dynamicBuffer ]; AST.TList AST.TInt64 ] ->
+        isDynamicBufferType dynamicBuffer
+    | _ -> false
+
 let private isSingleListDictFieldShape (fields: (string * AST.Type) list) : bool =
     match fields |> List.map snd with
     | [ AST.TList (AST.TDict _) ] -> true
@@ -1615,6 +1637,12 @@ let private isStringBytesTupleManagedDictTupleList (sourceType: AST.Type option)
     match sourceType with
     | Some (AST.TList (AST.TTuple fieldTypes)) ->
         isStringBytesTupleManagedDictFieldShape fieldTypes
+    | _ -> false
+
+let private isStringBytesTupleManagedClosureTupleList (sourceType: AST.Type option) : bool =
+    match sourceType with
+    | Some (AST.TList (AST.TTuple fieldTypes)) ->
+        isStringBytesTupleManagedClosureFieldShape fieldTypes
     | _ -> false
 
 let private tuple2DynamicFieldPattern (fields: AST.Type list) : (bool * bool) option =
@@ -4233,6 +4261,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         listRefCountDecDictHelperLabel
                     | AST.TList (AST.TFunction _) when not (ctx.FunctionName.StartsWith("Stdlib.")) ->
                         listRefCountDecClosureHelperLabel
+                    | AST.TList (AST.TTuple _) when isStringBytesTupleManagedClosureTupleList (Some fieldType) ->
+                        listRefCountDecStringBytesTupleManagedClosureHelperLabel
                     | AST.TList (AST.TTuple _) when isStringBytesTupleManagedDictTupleList (Some fieldType) ->
                         listRefCountDecStringBytesTupleManagedDictHelperLabel
                     | AST.TList (AST.TTuple _) when isStringBytesTupleManagedListTupleList (Some fieldType) ->
@@ -4616,6 +4646,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         listRefCountDecDictHelperLabel
                     | Some (AST.TList (AST.TFunction _)) when not (ctx.FunctionName.StartsWith("Stdlib.")) ->
                         listRefCountDecClosureHelperLabel
+                    | _ when isStringBytesTupleManagedClosureTupleList sourceType ->
+                        listRefCountDecStringBytesTupleManagedClosureHelperLabel
                     | _ when isStringBytesTupleManagedDictTupleList sourceType ->
                         listRefCountDecStringBytesTupleManagedDictHelperLabel
                     | _ when isStringBytesTupleManagedListTupleList sourceType ->
@@ -5830,6 +5862,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         match sourceType with
+                        | _ when isStringBytesTupleManagedClosureTupleList sourceType -> false
                         | _ when isStringBytesTupleManagedDictTupleList sourceType -> false
                         | _ when isStringBytesTupleManagedListTupleList sourceType -> false
                         | _ when isStringBytesTupleListTupleList sourceType -> false
@@ -6094,6 +6127,25 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                             (function
                              | AST.TList (AST.TTuple _) as listType ->
                                  isStringBytesTupleManagedDictTupleList (Some listType)
+                             | _ -> false)
+                            ctx.RecordRegistry
+                            sourceType
+                    | _ -> false)))
+
+    let needsListRcDecStringBytesTupleManagedClosureHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
+                        isStringBytesTupleManagedClosureTupleList sourceType
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField
+                            (function
+                             | AST.TList (AST.TTuple _) as listType ->
+                                 isStringBytesTupleManagedClosureTupleList (Some listType)
                              | _ -> false)
                             ctx.RecordRegistry
                             sourceType
@@ -6428,7 +6480,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         let allFunctionInstrs = instrLists |> List.concat
         let listRcHelpers =
             (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
-            @ (if needsListRcDecHelper || needsListRcDecStringBytesTupleManagedDictHelper || needsListRcDecStringBytesTupleManagedListHelper || needsListRcDecStringBytesTupleListHelper || needsListRcDecClosureStringListDictHelper || needsListRcDecStringBytesListDictHelper || needsListRcDecClosureListDictHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper then generateListRefCountDecHelper ctx else [])
+            @ (if needsListRcDecHelper || needsListRcDecStringBytesTupleManagedClosureHelper || needsListRcDecStringBytesTupleManagedDictHelper || needsListRcDecStringBytesTupleManagedListHelper || needsListRcDecStringBytesTupleListHelper || needsListRcDecClosureStringListDictHelper || needsListRcDecStringBytesListDictHelper || needsListRcDecClosureListDictHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper then generateListRefCountDecHelper ctx else [])
             @ (if needsListRcDecTuple2Helper then generateListRefCountDecTuple2Helper ctx else [])
             @ (if needsListRcDecTuple2DynamicHelper then generateListRefCountDecTuple2Dynamic0Helper ctx else [])
             @ (if needsListRcDecTuple2DynamicHelper then generateListRefCountDecTuple2Dynamic1Helper ctx else [])
@@ -6449,6 +6501,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             @ (if needsListRcDecStringBytesTupleListHelper then generateListRefCountDecStringBytesTupleListHelper ctx else [])
             @ (if needsListRcDecStringBytesTupleManagedListHelper then generateListRefCountDecStringBytesTupleManagedListHelper ctx else [])
             @ (if needsListRcDecStringBytesTupleManagedDictHelper then generateListRefCountDecStringBytesTupleManagedDictHelper ctx else [])
+            @ (if needsListRcDecStringBytesTupleManagedClosureHelper then generateListRefCountDecStringBytesTupleManagedClosureHelper ctx else [])
             @ (if needsListRcDecListHelper then generateListRefCountDecListHelper ctx else [])
             @ (if needsListRcDecDictHelper || needsListRcDecRecordListDictHelper then generateListRefCountDecDictHelper ctx else [])
             @ (if needsListRcDecClosureHelper then generateListRefCountDecClosureHelper ctx else [])
