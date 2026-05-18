@@ -332,18 +332,16 @@ def Stdlib.__HAMT.__expandLeaf<k, v>(key1: k, key1Hash: Int64, val1: v, key2: k,
             Stdlib.__HAMT.__setTag<k, v>(newNode, 1)
     else
         // Different chunks - create internal node with both leaves
-        let leaf1 = Stdlib.__HAMT.__allocLeaf<k, v>(key1, val1) in
-        let leaf2 = Stdlib.__HAMT.__allocLeaf<k, v>(key2, val2) in
         let bitmap = Stdlib.__HAMT.__setBit(Stdlib.__HAMT.__setBit(0, chunk1), chunk2) in
         let newNode = Stdlib.__HAMT.__allocInternal(bitmap, 2) in
         // Store children in order of their chunks
         if chunk1 < chunk2 then
-            let _ = __raw_set<Dict<k, v>>(newNode, 8, leaf1) in
-            let _ = __raw_set<Dict<k, v>>(newNode, 16, leaf2) in
+            let _ = __raw_set<Dict<k, v>>(newNode, 8, Stdlib.__HAMT.__allocLeaf<k, v>(key1, val1)) in
+            let _ = __raw_set<Dict<k, v>>(newNode, 16, Stdlib.__HAMT.__allocLeaf<k, v>(key2, val2)) in
             Stdlib.__HAMT.__setTag<k, v>(newNode, 1)
         else
-            let _ = __raw_set<Dict<k, v>>(newNode, 8, leaf2) in
-            let _ = __raw_set<Dict<k, v>>(newNode, 16, leaf1) in
+            let _ = __raw_set<Dict<k, v>>(newNode, 8, Stdlib.__HAMT.__allocLeaf<k, v>(key2, val2)) in
+            let _ = __raw_set<Dict<k, v>>(newNode, 16, Stdlib.__HAMT.__allocLeaf<k, v>(key1, val1)) in
             Stdlib.__HAMT.__setTag<k, v>(newNode, 1)
 
 // Copy internal node with one child updated

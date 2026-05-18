@@ -772,6 +772,8 @@ let rec insertRCWithAnalysis
                         None
 
                 match nextBody with
+                | RLet (_, RawSet (_, _, Var valueTemp, Some valueType), _, _) when valueTemp = aliasedTemp ->
+                    Some valueType
                 | RLet (_, Call (funcName, args), _, _) ->
                     inferFromCall funcName args
                 | RLet (_, BorrowedCall (funcName, args), _, _) ->

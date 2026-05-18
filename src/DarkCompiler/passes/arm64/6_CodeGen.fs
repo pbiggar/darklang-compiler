@@ -3495,6 +3495,15 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                             []
 
                     match sourceType with
+                    | Some (AST.TSum ("Stdlib.Option.Option", [ valueType ])) when ctx.FunctionName.StartsWith("Stdlib.Dict.") ->
+                        let valueRelease = releasePayloadForType valueType
+                        if List.isEmpty valueRelease then
+                            []
+                        else
+                            [
+                                ARM64Symbolic.LDR (ARM64Symbolic.X12, addrReg, 0s)
+                                ARM64Symbolic.CBNZ_offset (ARM64Symbolic.X12, List.length valueRelease + 1)
+                            ] @ valueRelease
                     | Some (AST.TSum ("Stdlib.Result.Result", [ okType; errType ])) ->
                         let okRelease = releasePayloadForType okType
                         let errRelease = releasePayloadForType errType

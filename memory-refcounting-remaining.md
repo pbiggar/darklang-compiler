@@ -50,9 +50,10 @@ using sentinel literal-pool entries, file read success/error result string
 payload leak accounting, unaligned file read string refcount layout, file write
 success root accounting, file write/append error string payload leak
 accounting, plus multiple dynamic bytes list payloads, repeated immutable
-bytes updates, dynamic bytes dict keys/values including overwrite, and
-`RcShape` retain/release operation helper coverage and RC insertion
-retain/release emission.
+bytes updates, dynamic bytes dict keys/values including overwrite, persistent
+dict update/remove old-root sharing with managed string values, dict lookup
+`Option<String>` payload reclamation, and `RcShape` retain/release operation
+helper coverage and RC insertion retain/release emission.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -95,12 +96,13 @@ release, plus dict-contained sum value payload release, plus pure enum sum
 no-heap-ownership coverage, plus scoped `Float.toString`, branch-selected
 literal string, list display string reclamation, multiple dynamic bytes list
 payloads, repeated immutable bytes update reclamation, dynamic bytes dict
-key/value reclamation including overwrite, and `RcShape` retain/release
-operation helper tests plus RC insertion use of those helpers, plus file read
-success/error, unaligned file read, file write success/error, and file append
-error reclamation:
+key/value reclamation including overwrite, persistent dict update/remove
+sharing with old roots still live, dict lookup `Option<String>` payload
+reclamation, and `RcShape` retain/release operation helper tests plus RC
+insertion use of those helpers, plus file read success/error, unaligned file
+read, file write success/error, and file append error reclamation:
 
-- `scripts/run-in-container ./run-tests`: `4713 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4715 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -253,6 +255,8 @@ Covered by current tests:
 - returned borrowed bytes projections remain usable after parent cleanup
 - dict roots release dynamic bytes keys and values
 - dict overwrite with equal dynamic bytes keys releases replaced dynamic payloads
+- dict update/remove keep old and new roots live with managed string values
+- dict lookup `Option<String>` payloads are reclaimed on the dict path
 
 Remaining bytes work is parity with strings beyond the first fixed-block cases:
 deeper nested payloads, broader dict structural-sharing cases,
@@ -535,6 +539,10 @@ Current tests prove:
 - dict roots release scoped dynamic bytes keys and values
 - dict overwrite with equal dynamic bytes keys uses byte-wise hash/equality and
   releases replaced dynamic payloads
+- persistent dict update/remove keep old and new roots live with managed string
+  values
+- `Dict.getOrDefault` over `String` values reclaims its lookup `Option`
+  payload
 
 ### Remaining Gaps
 
@@ -794,11 +802,9 @@ managed, but the raw node lifecycle needs a clear correctness story:
 
 ### Remaining Tasks
 
-1. Add targeted tests for persistent sharing:
+1. Add remaining targeted tests for persistent sharing:
 
-   - create `d1`, derive `d2`, keep both alive, then use both
    - overwrite while both old and new roots remain live
-   - remove while old root remains live
    - branch sharing across multiple updates
 
 2. Add key/value shape matrix tests:
