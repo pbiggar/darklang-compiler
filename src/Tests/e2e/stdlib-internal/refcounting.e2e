@@ -79,6 +79,7 @@ let b = Bytes.fromList([1, 2, 3, 4]) in 0 = stdout="0\n" stderr="" // bytes from
 let xs = Bytes.toList(Bytes.fromList([1, 2, 3, 4])) in 0 = stdout="0\n" stderr="" // bytes toList result and source reclaimed
 let b = Bytes.create(4) in let f = (x: Int64) => Bytes.length(b) + x in 0 = stdout="0\n" stderr="" // closure releases dynamic bytes capture
 let xs = [("a" ++ "b", 1)] in 0 = stdout="0\n" stderr="" // list releases tuple payload root
+let xs = [(Bytes.create(4), 1)] in 0 = stdout="0\n" stderr="" // list releases tuple bytes payload field
 let xs = [("a" ++ "b", [1, 2], Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2))] in 0 = stdout="0\n" stderr="" // list releases three-field tuple payload fields
 let xs = [[1, 2], [3, 4]] in 0 = stdout="0\n" stderr="" // list releases nested list payloads
 def listDict(): List<Dict<Int64, Int64>> = [Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2)] let xs = listDict() in 0 = stdout="0\n" stderr="" // returned list releases dict payload roots

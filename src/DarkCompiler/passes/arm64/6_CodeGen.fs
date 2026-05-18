@@ -59,6 +59,9 @@ let private heapOverflowLabelPrefix = "__heap_oom_"
 let private listRefCountIncHelperLabel = "__dark_list_refcount_inc_helper"
 let private listRefCountDecHelperLabel = "__dark_list_refcount_dec_helper"
 let private listRefCountDecTuple2HelperLabel = "__dark_list_refcount_dec_tuple2_helper"
+let private listRefCountDecTuple2Dynamic0HelperLabel = "__dark_list_refcount_dec_tuple2_dynamic0_helper"
+let private listRefCountDecTuple2Dynamic1HelperLabel = "__dark_list_refcount_dec_tuple2_dynamic1_helper"
+let private listRefCountDecTuple2DynamicBothHelperLabel = "__dark_list_refcount_dec_tuple2_dynamic_both_helper"
 let private listRefCountDecTuple3ManagedHelperLabel = "__dark_list_refcount_dec_tuple3_managed_helper"
 let private listRefCountDecListHelperLabel = "__dark_list_refcount_dec_list_helper"
 let private listRefCountDecDictHelperLabel = "__dark_list_refcount_dec_dict_helper"
@@ -310,6 +313,10 @@ let private generateListRefCountDecHelperWith
             ARM64Symbolic.LDR (ARM64Symbolic.X11, ARM64Symbolic.X3, 0s)
             ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X11, int16 fieldOffset)
             ARM64Symbolic.CBZ (ARM64Symbolic.X12, fieldDone)
+            ARM64Symbolic.CMP_reg (ARM64Symbolic.X12, ARM64Symbolic.X27)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, fieldDone)
+            ARM64Symbolic.CMP_reg (ARM64Symbolic.X12, ARM64Symbolic.X28)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.GT, fieldDone)
             ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X12, 0s)
             ARM64Symbolic.ADD_imm (ARM64Symbolic.X14, ARM64Symbolic.X14, 7us)
             ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 3us, 0)
@@ -695,6 +702,36 @@ let private generateListRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.
 
 let private generateListRefCountDecTuple2Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     generateListRefCountDecHelperWith listRefCountDecTuple2HelperLabel ctx (Some 16) false false false []
+
+let private generateListRefCountDecTuple2Dynamic0Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith
+        listRefCountDecTuple2Dynamic0HelperLabel
+        ctx
+        (Some 16)
+        false
+        false
+        false
+        [ AST.TString; AST.TInt64 ]
+
+let private generateListRefCountDecTuple2Dynamic1Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith
+        listRefCountDecTuple2Dynamic1HelperLabel
+        ctx
+        (Some 16)
+        false
+        false
+        false
+        [ AST.TInt64; AST.TString ]
+
+let private generateListRefCountDecTuple2DynamicBothHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith
+        listRefCountDecTuple2DynamicBothHelperLabel
+        ctx
+        (Some 16)
+        false
+        false
+        false
+        [ AST.TString; AST.TString ]
 
 let private generateListRefCountDecTuple3ManagedHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     generateListRefCountDecHelperWith
@@ -1147,6 +1184,36 @@ let private isManagedThreeFieldTupleList (sourceType: AST.Type option) : bool =
     match sourceType with
     | Some (AST.TList (AST.TTuple [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ])) -> true
     | _ -> false
+
+let private isDynamicBufferType (typ: AST.Type) : bool =
+    match typ with
+    | AST.TString
+    | AST.TBytes -> true
+    | _ -> false
+
+let private tuple2DynamicFieldPattern (fields: AST.Type list) : (bool * bool) option =
+    match fields with
+    | [ first; second ] ->
+        match isDynamicBufferType first, isDynamicBufferType second with
+        | false, false -> None
+        | pattern -> Some pattern
+    | _ ->
+        None
+
+let private tuple2DynamicHelperLabel (fields: AST.Type list) : string option =
+    match tuple2DynamicFieldPattern fields with
+    | Some (true, true) -> Some listRefCountDecTuple2DynamicBothHelperLabel
+    | Some (true, false) -> Some listRefCountDecTuple2Dynamic0HelperLabel
+    | Some (false, true) -> Some listRefCountDecTuple2Dynamic1HelperLabel
+    | Some (false, false)
+    | None -> None
+
+let private isTuple2DynamicList (sourceType: AST.Type option) : bool =
+    match sourceType with
+    | Some (AST.TList (AST.TTuple fields)) ->
+        tuple2DynamicFieldPattern fields |> Option.isSome
+    | _ ->
+        false
 
 let private applyTypeSubst (typeParams: string list) (typeArgs: AST.Type list) (typ: AST.Type) : AST.Type =
     let subst =
@@ -3655,8 +3722,11 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         listRefCountDecClosureHelperLabel
                     | AST.TList (AST.TTuple [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ]) ->
                         listRefCountDecTuple3ManagedHelperLabel
-                    | AST.TList (AST.TTuple fields) when List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64]) ->
-                        listRefCountDecTuple2HelperLabel
+                    | AST.TList (AST.TTuple fields) ->
+                        match tuple2DynamicHelperLabel fields with
+                        | Some helperLabel -> helperLabel
+                        | None when fields = [AST.TInt64; AST.TInt64] -> listRefCountDecTuple2HelperLabel
+                        | None -> listRefCountDecHelperLabel
                     | AST.TList (AST.TRecord (name, _)) ->
                         match Map.tryFind name ctx.RecordRegistry with
                         | Some fields when isSingleListDictFieldShape fields ->
@@ -4003,8 +4073,11 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         listRefCountDecClosureHelperLabel
                     | _ when isManagedThreeFieldTupleList sourceType ->
                         listRefCountDecTuple3ManagedHelperLabel
-                    | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64]) ->
-                        listRefCountDecTuple2HelperLabel
+                    | Some (AST.TList (AST.TTuple fields)) ->
+                        match tuple2DynamicHelperLabel fields with
+                        | Some helperLabel -> helperLabel
+                        | None when fields = [AST.TInt64; AST.TInt64] -> listRefCountDecTuple2HelperLabel
+                        | None -> listRefCountDecHelperLabel
                     | _ when isRecordListDictList ctx.RecordRegistry sourceType ->
                         listRefCountDecRecordListDictHelperLabel
                     | _ when isSingleFieldRecordList ctx.RecordRegistry sourceType ->
@@ -5192,7 +5265,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         match sourceType with
                         | _ when isManagedThreeFieldTupleList sourceType -> false
-                        | Some (AST.TList (AST.TTuple fields)) when List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64]) -> false
+                        | Some (AST.TList (AST.TTuple fields)) when tuple2DynamicFieldPattern fields |> Option.isSome -> false
+                        | Some (AST.TList (AST.TTuple fields)) when fields = [AST.TInt64; AST.TInt64] -> false
                         | Some (AST.TList (AST.TList _)) -> false
                         | Some (AST.TList (AST.TDict _)) -> false
                         | Some (AST.TList (AST.TFunction _)) -> false
@@ -5218,12 +5292,31 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
-                        List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64])
+                        fields = [AST.TInt64; AST.TInt64]
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
                         fixedBlockHasField
                             (function
                              | AST.TList (AST.TTuple fields) ->
-                                 List.length fields = 2 && (List.contains AST.TString fields || fields = [AST.TInt64; AST.TInt64])
+                                 fields = [AST.TInt64; AST.TInt64]
+                             | _ -> false)
+                            ctx.RecordRegistry
+                            sourceType
+                    | _ -> false)))
+
+    let needsListRcDecTuple2DynamicHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
+                        isTuple2DynamicList sourceType
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField
+                            (function
+                             | AST.TList (AST.TTuple fields) ->
+                                 tuple2DynamicFieldPattern fields |> Option.isSome
                              | _ -> false)
                             ctx.RecordRegistry
                             sourceType
@@ -5573,6 +5666,9 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
             @ (if needsListRcDecHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper then generateListRefCountDecHelper ctx else [])
             @ (if needsListRcDecTuple2Helper then generateListRefCountDecTuple2Helper ctx else [])
+            @ (if needsListRcDecTuple2DynamicHelper then generateListRefCountDecTuple2Dynamic0Helper ctx else [])
+            @ (if needsListRcDecTuple2DynamicHelper then generateListRefCountDecTuple2Dynamic1Helper ctx else [])
+            @ (if needsListRcDecTuple2DynamicHelper then generateListRefCountDecTuple2DynamicBothHelper ctx else [])
             @ (if needsListRcDecTuple3ManagedHelper then generateListRefCountDecTuple3ManagedHelper ctx else [])
             @ (if needsListRcDecListHelper then generateListRefCountDecListHelper ctx else [])
             @ (if needsListRcDecDictHelper || needsListRcDecRecordListDictHelper then generateListRefCountDecDictHelper ctx else [])

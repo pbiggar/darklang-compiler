@@ -134,13 +134,14 @@ dynamic string key plus tuple3 string/list/dict value coverage, direct
 tagged-list closure payload capture release for a dynamic string capture, and `RcShape`
 retain/release operation helper tests plus RC insertion use of those helpers,
 plus direct concrete non-generic sum payload release in tagged lists for
-`Bytes`, `List`, `Dict`, and closure variants through variant metadata, plus file read
+`Bytes`, `List`, `Dict`, and closure variants through variant metadata, plus
+tagged-list tuple bytes field release, plus file read
 success/error, unaligned file read, file write success/error, and file append
 error reclamation:
 
-- `scripts/run-in-container ./run-tests --filter=refcounting`: `163 passed`
+- `scripts/run-in-container ./run-tests --filter=refcounting`: `164 passed`
 - Previous full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4748 passed, 2 failed`
+  `4749 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -375,6 +376,7 @@ Covered by current tests:
 - list of dynamic strings reclaimed
 - returned list of dynamic bytes reclaimed
 - list of tuple payloads reclaimed
+- list of tuple payloads with dynamic bytes fields reclaimed
 - list of three-field tuple payloads with string, list, and dict fields
   reclaimed on ARM64
 - nested list payloads reclaimed
