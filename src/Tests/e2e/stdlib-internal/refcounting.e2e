@@ -92,6 +92,7 @@ let xs = [("a" ++ "b", Bytes.create(4), [1, 2], Stdlib.Dict.set(Stdlib.Dict.empt
 let base = 1 in let xs = [((x: Int64) => x + base, "a" ++ "b", [1, 2], Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2))] in 0 = stdout="0\n" stderr="" // list releases four-field tuple closure/string/list/dict payload fields
 let base = 1 in let xs = [((x: Int64) => x + base, Bytes.create(4), [1, 2], Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2))] in 0 = stdout="0\n" stderr="" // list releases four-field tuple closure/bytes/list/dict payload fields
 let xs = [("a" ++ "b", Bytes.create(4), (1, "c" ++ "d"), [1, 2])] in 0 = stdout="0\n" stderr="" // list releases four-field tuple with nested tuple dynamic payload fields
+let xs = [("a" ++ "b", Bytes.create(4), ([1, 2], "c" ++ "d"), [3, 4])] in 0 = stdout="0\n" stderr="" // list releases four-field tuple with nested tuple list payload fields
 let xs = [[1, 2], [3, 4]] in 0 = stdout="0\n" stderr="" // list releases nested list payloads
 def listDict(): List<Dict<Int64, Int64>> = [Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2)] let xs = listDict() in 0 = stdout="0\n" stderr="" // returned list releases dict payload roots
 type ListRecord = { id: Int64 } def listRecord(): List<ListRecord> = [ListRecord { id = 1 }] let xs = listRecord() in 0 = stdout="0\n" stderr="" // returned list releases record payload roots
