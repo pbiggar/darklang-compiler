@@ -37,7 +37,8 @@ non-empty dynamic-buffer field combinations, tagged-list nested boxed sum
 dynamic string payload release, tagged-list three-field record
 string/bytes/list/dict payload release, tagged-list boxed sum record3
 string/list/dict payload release, tagged-list tuple3 string/list/dict payload
-release, tagged-list boxed sum tuple3 string/list/dict payload release, and
+release on ARM64, tagged-list boxed sum tuple3 string/list/dict payload
+release, and
 direct x64 closure dynamic
 string/bytes/list/dict/closure/tuple/tuple-string-list-dict/record/
 record-string-list-dict/sum/sum-tuple-string-list-dict capture release,
@@ -83,8 +84,8 @@ dynamic string/bytes payload release for all non-empty dynamic-buffer field
 combinations, plus tagged-list nested boxed sum dynamic string payload release,
 plus tagged-list three-field record string/bytes/list/dict payload release,
 plus tagged-list boxed sum record3 string/list/dict payload release, plus
-tagged-list tuple3 string/list/dict payload release, plus tagged-list boxed sum
-tuple3 string/list/dict payload release, plus direct x64 closure tuple
+tagged-list tuple3 string/list/dict payload release on ARM64, plus
+tagged-list boxed sum tuple3 string/list/dict payload release, plus direct x64 closure tuple
 string/list/dict capture release, plus direct x64 closure record
 string/list/dict capture release, plus direct x64 closure sum tuple
 string/list/dict capture release, plus direct x64 closure sum record
@@ -114,7 +115,8 @@ update/remove/overwrite sharing with old roots still live, persistent
 multi-branch dict sharing from a common base, dict lookup `Option<String>`
 payload reclamation, dict string-to-string key/value reclamation, tagged-list
 boxed sum bytes payload release, tagged-list boxed sum list/dict payload
-release, persistent
+release, tagged-list tuple3 string/list/dict payload release on ARM64,
+persistent
 dict int-to-bytes values with old and new roots live, dict record values with
 nested string fields, dict list values with leaf payload release, dict closure
 value reclamation, nested dict value leaf payload release, dict tuple value
@@ -123,7 +125,7 @@ retain/release operation helper tests plus RC insertion use of those helpers,
 plus file read success/error, unaligned file read, file write success/error,
 and file append error reclamation:
 
-- `scripts/run-in-container ./run-tests`: `4727 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4728 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -350,6 +352,8 @@ Covered by current tests:
 - list of dynamic strings reclaimed
 - returned list of dynamic bytes reclaimed
 - list of tuple payloads reclaimed
+- list of three-field tuple payloads with string, list, and dict fields
+  reclaimed on ARM64
 - nested list payloads reclaimed
 - returned list of dicts reclaimed
 - returned list of single-field records reclaimed
@@ -805,7 +809,8 @@ than a general element release plan. That leaves holes:
 2. Add tests for:
 
    - list of additional three-field records with heap fields
-   - list of three-element tuples with heap fields
+   - list of three-element tuples with heap fields beyond the currently covered
+     string/list/dict shape
    - concrete non-generic sum payloads whose payload type is only available
      through variant metadata
    - list of records carrying bytes
@@ -1463,7 +1468,7 @@ appropriate.
 
 ### Lists
 
-- list of three-element tuples with heap fields
+- list of three-element tuples with heap fields beyond string/list/dict
 - list of three-field records with heap fields
 - concrete non-generic sum payloads
 - nested list of record containing list/dict
