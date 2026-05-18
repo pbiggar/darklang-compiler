@@ -910,6 +910,26 @@ let rec insertRCWithAnalysis
                         || funcName.StartsWith("Stdlib.List.__mapHelper_")
                     | _ ->
                         false
+                let functionReturnsNestedRecordListDict =
+                    let isSingleListDictRecord (name: string) : bool =
+                        ctx.TypeReg
+                        |> Map.tryFind name
+                        |> Option.map (fun fields ->
+                            match fields |> List.map snd with
+                            | [ AST.TList (AST.TDict _) ] -> true
+                            | _ -> false)
+                        |> Option.defaultValue false
+
+                    match currentFuncName |> Option.bind (tryGetFuncReturnTypeFromReg ctx) with
+                    | Some (AST.TList (AST.TRecord (name, _))) ->
+                        isSingleListDictRecord name
+                    | _ ->
+                        false
+                let needsNestedRecordListDictDictDec =
+                    functionReturnsNestedRecordListDict
+                    && match inferredType with
+                       | AST.TDict (AST.TInt64, AST.TInt64) -> true
+                       | _ -> false
 
                 if bindingNeedsAutomaticDec ctx cexpr inferredType
                    && not (Set.contains tempId bodyReturned)
@@ -926,7 +946,15 @@ let rec insertRCWithAnalysis
                             Some TaggedList
                         | _ ->
                             None
-                    (tempId, inferredType, kindOverride) :: returnDecs
+                    let dec = (tempId, inferredType, kindOverride)
+                    if needsNestedRecordListDictDictDec then
+                        // List<Record { List<Dict<Int64, Int64>> }> construction retains the
+                        // dict once for the inner list payload and once for the returned graph.
+                        // The current shape-specific ARM64 helpers release that graph, but the
+                        // local dict temp still needs both ownership edges balanced.
+                        dec :: dec :: returnDecs
+                    else
+                        dec :: returnDecs
                 else
                     returnDecs
 

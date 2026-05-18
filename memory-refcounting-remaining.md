@@ -785,9 +785,9 @@ The implementation is still specialized and partial:
 The list helper ecosystem has grown from root-only retain/release to multiple
 payload-specialized helpers. Current tests cover primitive lists, dynamic
 strings, dynamic bytes, nested lists, dicts, closures, tuple payloads, and
-one/two-field records. The current ARM64 coverage also includes a narrow
-three-field record helper for records shaped as `String`, `List<Int64>`, and
-`Dict<Int64, Int64>`, plus a narrow boxed-sum string payload helper.
+one/two-field records. The current ARM64 coverage also includes narrow helpers
+for records shaped as `String`, `List<Int64>`, and `Dict<Int64, Int64>`, records
+shaped as `List<Dict<Int64, Int64>>`, plus boxed-sum payload helpers.
 
 ### Remaining Gaps
 
@@ -800,7 +800,8 @@ than a general element release plan. That leaves holes:
 - records/tuples with mixed heap fields beyond currently specialized cases
 - sums in list payloads beyond the currently covered string payload shape
 - bytes in list payloads beyond one returned-list case
-- dict/list/closure combinations nested more than one level deep
+- dict/list/closure combinations nested more than one level deep outside the
+  currently covered `List<Record { List<Dict<Int64, Int64>> }>` shape
 - x64 helper parity for all ARM64 helper variants
 - avoiding helper explosion as more shapes are added
 
