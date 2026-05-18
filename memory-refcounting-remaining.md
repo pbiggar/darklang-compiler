@@ -30,8 +30,8 @@ tagged-list boxed sum closure payload release, tagged-list boxed sum tuple
 dynamic string payload release, tagged-list boxed sum tuple3 dynamic
 string/bytes payload release for all non-empty dynamic-buffer field
 combinations, tagged-list boxed sum bytes payload release, tagged-list boxed
-sum list payload release through generic sum payload metadata, tagged-list
-boxed sum record dynamic string payload release,
+sum list/dict payload release through generic sum payload metadata,
+tagged-list boxed sum record dynamic string payload release,
 tagged-list boxed sum record3 dynamic string/bytes payload release for all
 non-empty dynamic-buffer field combinations, tagged-list nested boxed sum
 dynamic string payload release, tagged-list three-field record
@@ -75,8 +75,9 @@ closure/dict/dynamic-string leaf payload release, plus direct x64 closure
 dynamic string/bytes/list/dict/closure/tuple/record/sum capture release,
 including multiple managed captures in the same closure, and x64 tagged-list
 tuple3 and record3 dynamic-buffer payload release, plus tagged-list boxed sum
-list, dict, closure, bytes, generic sum-list payloads, tuple dynamic string,
-tuple3 dynamic string/bytes, and record dynamic string payload release, plus
+list, dict, closure, bytes, generic sum-list and sum-dict payloads, tuple
+dynamic string, tuple3 dynamic string/bytes, and record dynamic string payload
+release, plus
 tagged-list boxed sum record3
 dynamic string/bytes payload release for all non-empty dynamic-buffer field
 combinations, plus tagged-list nested boxed sum dynamic string payload release,
@@ -112,8 +113,8 @@ key/value reclamation including overwrite, persistent dict
 update/remove/overwrite sharing with old roots still live, persistent
 multi-branch dict sharing from a common base, dict lookup `Option<String>`
 payload reclamation, dict string-to-string key/value reclamation, tagged-list
-boxed sum bytes payload release, tagged-list boxed sum list payload release,
-persistent
+boxed sum bytes payload release, tagged-list boxed sum list/dict payload
+release, persistent
 dict int-to-bytes values with old and new roots live, dict record values with
 nested string fields, dict list values with leaf payload release, dict closure
 value reclamation, nested dict value leaf payload release, dict tuple value
@@ -122,7 +123,7 @@ retain/release operation helper tests plus RC insertion use of those helpers,
 plus file read success/error, unaligned file read, file write success/error,
 and file append error reclamation:
 
-- `scripts/run-in-container ./run-tests`: `4726 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4727 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -360,6 +361,8 @@ Covered by current tests:
 - returned list of sums carrying bytes payloads reclaimed when the payload type
   is carried as a generic type argument
 - returned list of sums carrying list payloads reclaimed when the payload type
+  is carried as a generic type argument
+- returned list of sums carrying dict payloads reclaimed when the payload type
   is carried as a generic type argument
 
 Remaining list work is generalized payload release, broad arity coverage,
@@ -803,7 +806,6 @@ than a general element release plan. That leaves holes:
 
    - list of additional three-field records with heap fields
    - list of three-element tuples with heap fields
-   - list of sums carrying dict payloads
    - concrete non-generic sum payloads whose payload type is only available
      through variant metadata
    - list of records carrying bytes
@@ -1463,7 +1465,6 @@ appropriate.
 
 - list of three-element tuples with heap fields
 - list of three-field records with heap fields
-- list of sums carrying dicts
 - concrete non-generic sum payloads
 - nested list of record containing list/dict
 - list of closures capturing heap values
