@@ -59,8 +59,9 @@ roots live, dict record values with nested string fields, E2E suite-level
 stdlib specialization carrying test/preamble record type registries, ARM64
 fixed-block `Option` payload release for tuple/record values, ARM64 dict
 leaf-value release for `List` values, dict closure value coverage, and
-`RcShape` retain/release operation helper coverage and RC insertion
-retain/release emission.
+ARM64 dict leaf-value release for nested dict values, and `RcShape`
+retain/release operation helper coverage and RC insertion retain/release
+emission.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -109,11 +110,12 @@ multi-branch dict sharing from a common base, dict lookup `Option<String>`
 payload reclamation, dict string-to-string key/value reclamation, persistent
 dict int-to-bytes values with old and new roots live, dict record values with
 nested string fields, dict list values with leaf payload release, dict closure
-value reclamation, and `RcShape` retain/release operation helper tests plus RC
-insertion use of those helpers, plus file read success/error, unaligned file
-read, file write success/error, and file append error reclamation:
+value reclamation, nested dict value leaf payload release, and `RcShape`
+retain/release operation helper tests plus RC insertion use of those helpers,
+plus file read success/error, unaligned file read, file write success/error,
+and file append error reclamation:
 
-- `scripts/run-in-container ./run-tests`: `4722 passed, 2 failed`
+- `scripts/run-in-container ./run-tests`: `4723 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -277,6 +279,8 @@ Covered by current tests:
 - dict values of `List<Int64>` release the leaf payload root when the dict root
   dies
 - dict values of closures are reclaimed when the dict root dies
+- dict values of nested dicts release the leaf payload root when the outer dict
+  root dies
 
 Remaining bytes work is parity with strings beyond the first fixed-block cases:
 deeper nested payloads, broader dict structural-sharing cases,
@@ -308,6 +312,7 @@ Covered by current tests:
 - dict int-to-record values release nested string fields after lookup
 - dict int-to-list values release leaf payload roots
 - dict int-to-closure values are reclaimed
+- dict string-to-dict values release leaf payload roots
 
 Remaining dict work is mostly deeper raw HAMT lifecycle and shape-driven
 coverage, not initial root retention/release.
@@ -833,8 +838,7 @@ managed, but the raw node lifecycle needs a clear correctness story:
 - whether x64 and ARM64 dict helpers are semantically equivalent
 
 Recent failing probes showed that scope-only dict values of
-`(String, List<Int64>)` and nested `Dict<Int64, String>` still leak. The
-immediate cause is that
+`(String, List<Int64>)` still leaks. The immediate cause is that
 `__dark_dict_rc_dec_helper` can balance HAMT raw nodes, but it is not typed and
 therefore cannot recursively release arbitrary typed key/value payloads stored
 in leaf or collision nodes. A narrow ARM64 helper now handles leaf `List`
@@ -1454,7 +1458,6 @@ appropriate.
 - keep old root and new root live after update
 - keep old root and removed root live after remove
 - dict int to tuple
-- dict int to dict
 - dict key/value leaf and collision release where both sides have managed
   payloads
 
