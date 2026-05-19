@@ -77,6 +77,7 @@ x64 probes cover the full ARM64 memory matrix.
   field combinations
 - tagged-list tuple3 string/list/dict payload release
 - tagged-list tuple4 string/bytes/list/dict payload release
+- tagged-list tuple2 payload release with a nested tuple dynamic string field
 - tagged-list one-field record dynamic-buffer field release
 - tagged-list three-field record dynamic-buffer field release for all non-empty
   dynamic field combinations
@@ -121,6 +122,7 @@ exist for:
 - tuple3 leaf payload dynamic string/bytes field combinations
 - tuple3 leaf payloads with string/list/dict fields
 - tuple4 leaf payloads with string/bytes/list/dict fields
+- tuple2 leaf payloads with a nested tuple dynamic string field
 - one-field record leaf payload roots with dynamic string/bytes fields
 - three-field record leaf payload dynamic string/bytes field combinations
 - three-field record leaf payloads with string/bytes/list/dict fields
@@ -138,9 +140,10 @@ exist for:
 - dict leaf payload roots
 - dynamic string leaf payload roots
 
-This is still narrower than ARM64 for deeper nested tuple/record payloads, but
-the common dynamic-buffer, list, dict, closure, tuple3, tuple4, record3,
-record4, and boxed-sum list payload families now have targeted x64 probes.
+This is still narrower than ARM64 for broader nested tuple/record payloads, but
+the common dynamic-buffer, list, dict, closure, tuple3, tuple4, nested-tuple,
+record3, record4, and boxed-sum list payload families now have targeted x64
+probes.
 
 ## Dicts
 
