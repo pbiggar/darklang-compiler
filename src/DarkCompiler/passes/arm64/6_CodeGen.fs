@@ -106,6 +106,7 @@ let private listRefCountDecSumDictHelperLabel = "__dark_list_refcount_dec_sum_di
 let private listRefCountDecSumClosureHelperLabel = "__dark_list_refcount_dec_sum_closure_helper"
 let private listRefCountDecSumTuple4StringBytesListDictHelperLabel = "__dark_list_refcount_dec_sum_tuple4_string_bytes_list_dict_helper"
 let private listRefCountDecSumTuple4NestedTupleHelperLabel = "__dark_list_refcount_dec_sum_tuple4_nested_tuple_helper"
+let private listRefCountDecSumTuple4NestedDictHelperLabel = "__dark_list_refcount_dec_sum_tuple4_nested_dict_helper"
 let private dictRefCountIncHelperLabel = "__dark_dict_refcount_inc_helper"
 let private dictRefCountDecHelperLabel = "__dark_dict_refcount_dec_helper"
 let private dictRefCountDecListValueHelperLabel = "__dark_dict_refcount_dec_list_value_helper"
@@ -1351,6 +1352,24 @@ let private generateListRefCountDecSumTuple4NestedTupleHelper (ctx: CodeGenConte
             ]
         ]
 
+let private generateListRefCountDecSumTuple4NestedDictHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
+    generateListRefCountDecHelperWith
+        listRefCountDecSumTuple4NestedDictHelperLabel
+        ctx
+        (Some 16)
+        false
+        false
+        false
+        [
+            AST.TInt64
+            AST.TTuple [
+                AST.TString
+                AST.TBytes
+                AST.TTuple [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ]
+                AST.TList AST.TInt64
+            ]
+        ]
+
 let private closurePayloadSizesFromAllocs (functions: LIR.Function list) : Map<string, int> =
     functions
     |> List.collect (fun func ->
@@ -2326,6 +2345,23 @@ let private isListStringFixedBlockPayload (recordRegistry: LIR.RecordRegistry) (
     | _ ->
         false
 
+let private isDictStringFixedBlockPayload (recordRegistry: LIR.RecordRegistry) (payloadType: AST.Type) : bool =
+    match payloadType with
+    | AST.TTuple [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ] ->
+        true
+    | AST.TRecord (name, _) ->
+        recordRegistry
+        |> Map.tryFind name
+        |> Option.map (fun fields ->
+            match fields |> List.map snd with
+            | [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ] ->
+                true
+            | _ ->
+                false)
+        |> Option.defaultValue false
+    | _ ->
+        false
+
 let private isTuple4NestedTuplePayload (recordRegistry: LIR.RecordRegistry) (payloadType: AST.Type) : bool =
     match payloadType with
     | AST.TTuple [
@@ -2334,6 +2370,18 @@ let private isTuple4NestedTuplePayload (recordRegistry: LIR.RecordRegistry) (pay
         nestedPayload
         AST.TList AST.TInt64
       ] when isListStringFixedBlockPayload recordRegistry nestedPayload ->
+        true
+    | _ ->
+        false
+
+let private isTuple4NestedDictPayload (recordRegistry: LIR.RecordRegistry) (payloadType: AST.Type) : bool =
+    match payloadType with
+    | AST.TTuple [
+        AST.TString
+        AST.TBytes
+        nestedPayload
+        AST.TList AST.TInt64
+      ] when isDictStringFixedBlockPayload recordRegistry nestedPayload ->
         true
     | _ ->
         false
@@ -2348,6 +2396,17 @@ let private isTuple4NestedTuplePayloadSumList
         true
     | _ ->
         sumPayloadsAllMatch variantRegistry sourceType (isTuple4NestedTuplePayload recordRegistry)
+
+let private isTuple4NestedDictPayloadSumList
+    (recordRegistry: LIR.RecordRegistry)
+    (variantRegistry: LIR.VariantRegistry)
+    (sourceType: AST.Type option)
+    : bool =
+    match sourceType with
+    | Some (AST.TList (AST.TSum (_, [ payloadType ]))) when isTuple4NestedDictPayload recordRegistry payloadType ->
+        true
+    | _ ->
+        sumPayloadsAllMatch variantRegistry sourceType (isTuple4NestedDictPayload recordRegistry)
 
 let private fixedBlockFieldTypes (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : AST.Type list =
     match sourceType with
@@ -4847,6 +4906,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         listRefCountDecSumTuple4StringBytesListDictHelperLabel
                     | AST.TList (AST.TSum _) when isTuple4NestedTuplePayloadSumList ctx.RecordRegistry ctx.VariantRegistry (Some fieldType) ->
                         listRefCountDecSumTuple4NestedTupleHelperLabel
+                    | AST.TList (AST.TSum _) when isTuple4NestedDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry (Some fieldType) ->
+                        listRefCountDecSumTuple4NestedDictHelperLabel
                     | _ ->
                         listRefCountDecHelperLabel
 
@@ -5257,6 +5318,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         listRefCountDecSumTuple4StringBytesListDictHelperLabel
                     | _ when isTuple4NestedTuplePayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType ->
                         listRefCountDecSumTuple4NestedTupleHelperLabel
+                    | _ when isTuple4NestedDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType ->
+                        listRefCountDecSumTuple4NestedDictHelperLabel
                     | _ ->
                         listRefCountDecHelperLabel
                 let listDecCall = [
@@ -6466,6 +6529,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         | _ when isClosurePayloadSumList ctx.VariantRegistry sourceType -> false
                         | _ when isTuple4StringBytesListDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType -> false
                         | _ when isTuple4NestedTuplePayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType -> false
+                        | _ when isTuple4NestedDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType -> false
                         | _ when isSingleFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ when isTwoFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ -> true
@@ -7227,6 +7291,25 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                             sourceType
                     | _ -> false)))
 
+    let needsListRcDecSumTuple4NestedDictHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
+                        isTuple4NestedDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                        fixedBlockHasField
+                            (function
+                             | AST.TList (AST.TSum _) as listType ->
+                                 isTuple4NestedDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry (Some listType)
+                             | _ -> false)
+                            ctx.RecordRegistry
+                            sourceType
+                    | _ -> false)))
+
     let needsListRcIncHelper =
         sortedFunctions
         |> List.exists (fun func ->
@@ -7343,7 +7426,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         let allFunctionInstrs = instrLists |> List.concat
         let listRcHelpers =
             (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
-            @ (if needsListRcDecHelper || needsListRcDecStringBytesRecordManagedClosureHelper || needsListRcDecStringBytesRecordManagedDictHelper || needsListRcDecStringBytesRecordManagedListHelper || needsListRcDecStringBytesTupleManagedClosureHelper || needsListRcDecStringBytesTupleManagedDictHelper || needsListRcDecStringBytesTupleManagedListHelper || needsListRcDecStringBytesTupleManaged3ListHelper || needsListRcDecStringBytesTupleManaged3DictHelper || needsListRcDecStringBytesTupleManaged3ClosureHelper || needsListRcDecStringBytesTupleDynamic3Helper || needsListRcDecStringBytesTupleListHelper || needsListRcDecClosureStringListDictHelper || needsListRcDecStringBytesListHelper || needsListRcDecStringBytesDictHelper || needsListRcDecStringBytesClosureHelper || needsListRcDecStringBytesRecordManagedHelper || needsListRcDecStringBytesRecordManagedDict3Helper || needsListRcDecStringBytesRecordManagedClosure3Helper || needsListRcDecStringBytesListDictHelper || needsListRcDecClosureListDictHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper || needsListRcDecSumTuple4StringBytesListDictHelper || needsListRcDecSumTuple4NestedTupleHelper then generateListRefCountDecHelper ctx else [])
+            @ (if needsListRcDecHelper || needsListRcDecStringBytesRecordManagedClosureHelper || needsListRcDecStringBytesRecordManagedDictHelper || needsListRcDecStringBytesRecordManagedListHelper || needsListRcDecStringBytesTupleManagedClosureHelper || needsListRcDecStringBytesTupleManagedDictHelper || needsListRcDecStringBytesTupleManagedListHelper || needsListRcDecStringBytesTupleManaged3ListHelper || needsListRcDecStringBytesTupleManaged3DictHelper || needsListRcDecStringBytesTupleManaged3ClosureHelper || needsListRcDecStringBytesTupleDynamic3Helper || needsListRcDecStringBytesTupleListHelper || needsListRcDecClosureStringListDictHelper || needsListRcDecStringBytesListHelper || needsListRcDecStringBytesDictHelper || needsListRcDecStringBytesClosureHelper || needsListRcDecStringBytesRecordManagedHelper || needsListRcDecStringBytesRecordManagedDict3Helper || needsListRcDecStringBytesRecordManagedClosure3Helper || needsListRcDecStringBytesListDictHelper || needsListRcDecClosureListDictHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper || needsListRcDecSumTuple4StringBytesListDictHelper || needsListRcDecSumTuple4NestedTupleHelper || needsListRcDecSumTuple4NestedDictHelper then generateListRefCountDecHelper ctx else [])
             @ (if needsListRcDecTuple2Helper then generateListRefCountDecTuple2Helper ctx else [])
             @ (if needsListRcDecTuple2DynamicHelper then generateListRefCountDecTuple2Dynamic0Helper ctx else [])
             @ (if needsListRcDecTuple2DynamicHelper then generateListRefCountDecTuple2Dynamic1Helper ctx else [])
@@ -7392,9 +7475,10 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             @ (if needsListRcDecSumClosureHelper then generateListRefCountDecSumClosureHelper ctx else [])
             @ (if needsListRcDecSumTuple4StringBytesListDictHelper then generateListRefCountDecSumTuple4StringBytesListDictHelper ctx else [])
             @ (if needsListRcDecSumTuple4NestedTupleHelper then generateListRefCountDecSumTuple4NestedTupleHelper ctx else [])
+            @ (if needsListRcDecSumTuple4NestedDictHelper then generateListRefCountDecSumTuple4NestedDictHelper ctx else [])
         let dictRcHelpers =
             (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
-            @ (if needsDictRcDecHelper || needsListRcDecClosureStringListDictHelper || needsListRcDecStringBytesListDictHelper || needsListRcDecClosureListDictHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper || needsListRcDecRecordListDictHelper || needsListRcDecTuple2DictHelper || needsDictRcDecTupleStringListDictValueHelper || needsListRcDecSumTuple4StringBytesListDictHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false false ctx else [])
+            @ (if needsDictRcDecHelper || needsListRcDecClosureStringListDictHelper || needsListRcDecStringBytesListDictHelper || needsListRcDecClosureListDictHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper || needsListRcDecRecordListDictHelper || needsListRcDecTuple2DictHelper || needsDictRcDecTupleStringListDictValueHelper || needsListRcDecSumTuple4StringBytesListDictHelper || needsListRcDecSumTuple4NestedDictHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false false ctx else [])
             @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel true false false false ctx else [])
             @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false true false false ctx else [])
             @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false true false ctx else [])
