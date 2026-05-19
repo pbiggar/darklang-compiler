@@ -105,7 +105,8 @@ payload release, plus x64 tagged-list record4 string/bytes/list/dict payload
 release, plus x64 tagged-list tuple4 string/bytes/list/dict payload release,
 plus x64 tagged-list boxed-sum tuple4 string/bytes/list/dict payload release,
 plus x64 tagged-list boxed-sum record4 string/bytes/list/dict payload release,
-plus x64 tagged-list tuple2 nested tuple dynamic string payload release.
+plus x64 tagged-list tuple2 nested tuple dynamic string/bytes payload release
+for all non-empty dynamic-buffer field combinations.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -204,12 +205,13 @@ string/bytes/list/dict payload release, plus x64 tagged-list tuple4
 string/bytes/list/dict payload release, plus x64 tagged-list boxed-sum tuple4
 string/bytes/list/dict payload release, plus x64 tagged-list boxed-sum record4
 string/bytes/list/dict payload release, plus x64 tagged-list tuple2 nested
-tuple dynamic string payload release:
+tuple dynamic string/bytes payload release for all non-empty dynamic-buffer
+field combinations:
 
 - `scripts/run-in-container ./run-tests --filter=refcounting`: `205 passed`
-- `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `86 passed`
+- `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `87 passed`
 - Previous full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4795 passed, 2 failed`
+  `4796 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`

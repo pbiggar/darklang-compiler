@@ -1920,6 +1920,50 @@ let testTaggedListRefCountDecTuple2NestedTupleStringPayload () : Result<unit, st
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list tuple2 nested tuple string payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases nested tuple dynamic payloads at later offsets.
+let testTaggedListRefCountDecTuple2NestedTupleDynamicPayloadCombinations () : Result<unit, string> =
+    let runCase (name: string, nestedTupleType: AST.Type, setup: LIR.Instr list, nestedStores: LIR.Instr list) : Result<unit, string> =
+        let tupleType = AST.TTuple [AST.TInt64; nestedTupleType]
+        let program =
+            makeSimpleProgram
+                (setup
+                 @ [LIR.HeapAlloc (LIR.Physical LIR.X4, 16)]
+                 @ nestedStores
+                 @ [LIR.HeapAlloc (LIR.Physical LIR.X5, 16)
+                    LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Imm 42L, None)
+                    LIR.HeapStore (LIR.Physical LIR.X5, 8, LIR.Reg (LIR.Physical LIR.X4), Some nestedTupleType)
+                    LIR.HeapAlloc (LIR.Physical LIR.X6, 8)
+                    LIR.HeapStore (LIR.Physical LIR.X6, 0, LIR.Reg (LIR.Physical LIR.X5), Some tupleType)
+                    LIR.Mov (LIR.Physical LIR.X7, LIR.Imm 5L)
+                    LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
+                    LIR.RefCountDec (LIR.Physical LIR.X7, 0, LIR.TaggedList, Some (AST.TList tupleType))])
+                LIR.Ret
+
+        match runLIRProgramFullWithOptions program true with
+        | Error e -> Error e
+        | Ok (_, _, stderr) ->
+            if stderr.Trim() = "" then Ok ()
+            else Error $"Expected list tuple2 nested tuple {name} dynamic payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
+    let rec runCases (cases: (string * AST.Type * LIR.Instr list * LIR.Instr list) list) : Result<unit, string> =
+        match cases with
+        | [] -> Ok ()
+        | case :: rest ->
+            match runCase case with
+            | Ok () -> runCases rest
+            | Error e -> Error e
+
+    runCases
+        [ ("Second", AST.TTuple [AST.TInt64; AST.TString],
+           [LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")],
+           [LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 7L, None)
+            LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)])
+          ("Both", AST.TTuple [AST.TString; AST.TBytes],
+           [LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+            LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "bytes", LIR.StringSymbol "payload")],
+           [LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+            LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)]) ]
+
 /// Test: x64 tagged-list RefCountDec releases record3 middle dynamic leaf payloads.
 let testTaggedListRefCountDecRecord3MiddleDynamicPayload () : Result<unit, string> =
     let recordType = AST.TRecord ("X64ListRcRecord3Middle", [])
@@ -2685,6 +2729,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases record4 string/bytes/list/dict payload", testTaggedListRefCountDecRecord4StringBytesListDictPayload)
     ("LIR tagged list RefCountDec releases tuple4 string/bytes/list/dict payload", testTaggedListRefCountDecTuple4StringBytesListDictPayload)
     ("LIR tagged list RefCountDec releases tuple2 nested tuple string payload", testTaggedListRefCountDecTuple2NestedTupleStringPayload)
+    ("LIR tagged list RefCountDec releases tuple2 nested tuple dynamic combinations", testTaggedListRefCountDecTuple2NestedTupleDynamicPayloadCombinations)
     ("LIR tagged list RefCountDec releases record3 middle dynamic payload", testTaggedListRefCountDecRecord3MiddleDynamicPayload)
     ("LIR tagged list RefCountDec releases record3 dynamic payload combinations", testTaggedListRefCountDecRecord3DynamicPayloadCombinations)
     ("LIR tagged list RefCountDec releases sum string payload", testTaggedListRefCountDecSumStringPayload)
