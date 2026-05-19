@@ -2319,6 +2319,17 @@ let private isClosurePayloadSumList (variantRegistry: LIR.VariantRegistry) (sour
              | AST.TFunction _ -> true
              | _ -> false)
 
+let private fixedPayloadFieldTypes (recordRegistry: LIR.RecordRegistry) (payloadType: AST.Type) : AST.Type list option =
+    match payloadType with
+    | AST.TTuple fields ->
+        Some fields
+    | AST.TRecord (name, _) ->
+        recordRegistry
+        |> Map.tryFind name
+        |> Option.map (List.map snd)
+    | _ ->
+        None
+
 let private isTuple4StringBytesListDictPayload (recordRegistry: LIR.RecordRegistry) (payloadType: AST.Type) : bool =
     match payloadType with
     | AST.TTuple [ AST.TString; AST.TBytes; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] ->
@@ -2399,8 +2410,8 @@ let private isClosureStringFixedBlockPayload (recordRegistry: LIR.RecordRegistry
         false
 
 let private isTuple4NestedTuplePayload (recordRegistry: LIR.RecordRegistry) (payloadType: AST.Type) : bool =
-    match payloadType with
-    | AST.TTuple [
+    match fixedPayloadFieldTypes recordRegistry payloadType with
+    | Some [
         AST.TString
         AST.TBytes
         nestedPayload
@@ -2411,8 +2422,8 @@ let private isTuple4NestedTuplePayload (recordRegistry: LIR.RecordRegistry) (pay
         false
 
 let private isTuple4NestedDictPayload (recordRegistry: LIR.RecordRegistry) (payloadType: AST.Type) : bool =
-    match payloadType with
-    | AST.TTuple [
+    match fixedPayloadFieldTypes recordRegistry payloadType with
+    | Some [
         AST.TString
         AST.TBytes
         nestedPayload
@@ -2423,8 +2434,8 @@ let private isTuple4NestedDictPayload (recordRegistry: LIR.RecordRegistry) (payl
         false
 
 let private isTuple4NestedClosurePayload (recordRegistry: LIR.RecordRegistry) (payloadType: AST.Type) : bool =
-    match payloadType with
-    | AST.TTuple [
+    match fixedPayloadFieldTypes recordRegistry payloadType with
+    | Some [
         AST.TString
         AST.TBytes
         nestedPayload
