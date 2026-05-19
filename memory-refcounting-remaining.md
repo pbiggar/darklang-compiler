@@ -1085,7 +1085,8 @@ Likely gaps:
 
 - fixed-block field release for boxed sum payloads beyond the current
   string/list/dict/closure/tuple-string/tuple3-string-list-dict/
-  record-string/record3-string-list-dict/nested-sum-string cases, and
+  tuple4-string-bytes-list-dict/record-string/record3-string-list-dict/
+  record4-string-bytes-list-dict/nested-sum-string cases, and
   untested record field combinations beyond string/list/dict/bytes/nested
   fixed blocks
 - closure capture recursive release coverage beyond the current direct
@@ -1094,10 +1095,11 @@ Likely gaps:
   sum-record-string-list-dict, and fixed-block capture probes
 - list payload helper variants beyond the currently covered tuple2, exhaustive
   tuple3 dynamic-buffer combinations, one mixed tuple3 string/list/dict shape,
-  record1, exhaustive record3
-  dynamic-buffer combinations, one mixed record3 string/bytes/list/dict shape,
-  sum dynamic-buffer, sum-list/sum-dict, sum-closure, one mixed
-  sum-tuple3-string-list-dict shape, sum-record3-string-list-dict,
+  one mixed tuple4 string/bytes/list/dict shape, record1, exhaustive record3
+  dynamic-buffer combinations, mixed record3 and record4
+  string/bytes/list/dict shapes, sum dynamic-buffer, sum-list/sum-dict,
+  sum-closure, mixed sum-tuple3/sum-tuple4 string/list/dict variants,
+  sum-record3/sum-record4 string/list/dict variants,
   list/closure/dict/string
 - dict helper key/value recursion parity
 - dynamic bytes literal sentinel/aligned layout parity if a separate bytes

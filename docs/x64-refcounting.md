@@ -76,10 +76,12 @@ x64 probes cover the full ARM64 memory matrix.
 - tagged-list tuple3 dynamic-buffer field release for all non-empty dynamic
   field combinations
 - tagged-list tuple3 string/list/dict payload release
+- tagged-list tuple4 string/bytes/list/dict payload release
 - tagged-list one-field record dynamic-buffer field release
 - tagged-list three-field record dynamic-buffer field release for all non-empty
   dynamic field combinations
 - tagged-list three-field record string/bytes/list/dict payload release
+- tagged-list four-field record string/bytes/list/dict payload release
 - tagged-list boxed sum dynamic-buffer payload release
 - tagged-list boxed sum list payload release
 - tagged-list boxed sum dict payload release
@@ -89,9 +91,11 @@ x64 probes cover the full ARM64 memory matrix.
 - tagged-list boxed sum tuple3 dynamic-buffer payload release for all non-empty
   dynamic field combinations
 - tagged-list boxed sum tuple3 string/list/dict payload release
+- tagged-list boxed sum tuple4 string/bytes/list/dict payload release
 - tagged-list boxed sum record dynamic-buffer payload release, covering
   one-field records and all non-empty three-field dynamic-buffer combinations
 - tagged-list boxed sum record3 string/list/dict payload release
+- tagged-list boxed sum record4 string/bytes/list/dict payload release
 - tagged-list nested boxed sum dynamic-buffer payload release
 
 The x64 tests run generated x64 ELF binaries directly on x64 hosts and through
@@ -114,15 +118,29 @@ exist for:
 
 - tuple2 leaf payload roots
 - tuple2 leaf payload dynamic string/bytes fields when their offsets are known
+- tuple3 leaf payload dynamic string/bytes field combinations
+- tuple3 leaf payloads with string/list/dict fields
+- tuple4 leaf payloads with string/bytes/list/dict fields
 - one-field record leaf payload roots with dynamic string/bytes fields
+- three-field record leaf payload dynamic string/bytes field combinations
+- three-field record leaf payloads with string/bytes/list/dict fields
+- four-field record leaf payloads with string/bytes/list/dict fields
 - boxed sum leaf payload roots with dynamic string/bytes payload fields
+- boxed sum tuple2 and tuple3 dynamic string/bytes field combinations
+- boxed sum tuple3 leaf payloads with string/list/dict fields
+- boxed sum tuple4 leaf payloads with string/bytes/list/dict fields
+- boxed sum record leaf payloads covering one-field dynamic string/bytes,
+  three-field dynamic string/bytes combinations, record3 string/list/dict, and
+  record4 string/bytes/list/dict shapes
+- nested boxed sum dynamic string/bytes payload fields
 - nested list leaf payload roots
 - closure leaf payload roots
 - dict leaf payload roots
 - dynamic string leaf payload roots
 
-This is narrower than ARM64, which also has helper variants for record and
-selected sum/list payload shapes.
+This is still narrower than ARM64 for deeper nested tuple/record payloads, but
+the common dynamic-buffer, list, dict, closure, tuple3, tuple4, record3,
+record4, and boxed-sum list payload families now have targeted x64 probes.
 
 ## Dicts
 
@@ -156,17 +174,19 @@ The main x64 gaps are:
 
 - fixed-block field release for boxed sum payloads beyond the current string,
   list, dict, closure, tuple dynamic-buffer, tuple string/list/dict,
-  record dynamic-buffer, and record string/list/dict payload paths, plus
+  tuple4 string/bytes/list/dict, record dynamic-buffer, record
+  string/list/dict, and record4 string/bytes/list/dict payload paths, plus
   nested sum dynamic-buffer payload paths; closure payloads beyond
   direct dynamic-buffer and direct list/dict/closure/fixed-block captures
 - broader record field coverage beyond the current string/bytes/nested
-  fixed-block/string-list-dict release paths
+  fixed-block/string-list-dict/string-bytes-list-dict release paths
 - closure capture recursive release coverage beyond the current direct dynamic,
   root, tuple-string-list-dict, record-string-list-dict,
   sum-tuple-string-list-dict, sum-record-string-list-dict, and fixed-block
   capture probes
-- list helper variants for broader multi-field record and higher-arity tuple
-  shapes, and non-dynamic-buffer sum payloads beyond the current list payload
+- list helper variants for deeper nested tuple/record payloads, broader
+  multi-field records and higher-arity tuples, and non-dynamic-buffer sum
+  payloads beyond the current list/dict/closure and fixed-block mixed shapes
 - dict/HAMT key and value recursive retain/release coverage
 - helper register preservation for values live across cleanup beyond the
   covered generic fixed-block dynamic-buffer, nested fixed-block, list, dict,
@@ -179,8 +199,8 @@ The main x64 gaps are:
 1. Add x64 unit probes for each currently covered ARM64 fixed-block field
    release shape.
 2. Port the ARM64 fixed-block field release plan to x64.
-3. Add x64 unit probes for list payload variants beyond tuple2 and nested
-   lists.
+3. Add x64 unit probes for list payload variants beyond the currently covered
+   tuple3/tuple4 and record3/record4 mixed managed shapes.
 4. Port the ARM64 list payload release helpers or, preferably, a shared
    shape-driven release plan.
 5. Add x64 dict key/value shape matrix tests.
