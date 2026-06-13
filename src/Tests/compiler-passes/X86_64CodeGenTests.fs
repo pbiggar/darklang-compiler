@@ -2042,6 +2042,34 @@ let testTaggedListRefCountDecTuple2NestedTupleListDictPayload () : Result<unit, 
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list tuple2 nested tuple list/dict payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases nested tuple closure payloads.
+let testTaggedListRefCountDecTuple2NestedTupleClosurePayload () : Result<unit, string> =
+    let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
+    let nestedTupleType = AST.TTuple [closureType]
+    let tupleType = AST.TTuple [AST.TInt64; nestedTupleType]
+    let program =
+        makeSimpleProgram
+            [
+                LIR.ClosureAlloc (LIR.Physical LIR.X2, "_start", [])
+                LIR.HeapAlloc (LIR.Physical LIR.X19, 8)
+                LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
+                LIR.HeapAlloc (LIR.Physical LIR.X20, 16)
+                LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Imm 7L, None)
+                LIR.HeapStore (LIR.Physical LIR.X20, 8, LIR.Reg (LIR.Physical LIR.X19), Some nestedTupleType)
+                LIR.HeapAlloc (LIR.Physical LIR.X21, 8)
+                LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some tupleType)
+                LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X1, LIR.Physical LIR.X21, LIR.Physical LIR.X1)
+                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (AST.TList tupleType))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected list tuple2 nested tuple closure payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 tagged-list RefCountDec releases nested tuple string/bytes/list/dict payloads.
 let testTaggedListRefCountDecTuple2NestedTupleStringBytesListDictPayload () : Result<unit, string> =
     let listType = AST.TList AST.TInt64
@@ -2852,6 +2880,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases tuple2 nested tuple dynamic combinations", testTaggedListRefCountDecTuple2NestedTupleDynamicPayloadCombinations)
     ("LIR tagged list RefCountDec releases tuple2 nested tuple string/list/dict payload", testTaggedListRefCountDecTuple2NestedTupleStringListDictPayload)
     ("LIR tagged list RefCountDec releases tuple2 nested tuple list/dict payload", testTaggedListRefCountDecTuple2NestedTupleListDictPayload)
+    ("LIR tagged list RefCountDec releases tuple2 nested tuple closure payload", testTaggedListRefCountDecTuple2NestedTupleClosurePayload)
     ("LIR tagged list RefCountDec releases tuple2 nested tuple string/bytes/list/dict payload", testTaggedListRefCountDecTuple2NestedTupleStringBytesListDictPayload)
     ("LIR tagged list RefCountDec releases record3 middle dynamic payload", testTaggedListRefCountDecRecord3MiddleDynamicPayload)
     ("LIR tagged list RefCountDec releases record3 dynamic payload combinations", testTaggedListRefCountDecRecord3DynamicPayloadCombinations)
