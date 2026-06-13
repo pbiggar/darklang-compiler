@@ -76,6 +76,7 @@ x64 probes cover the full ARM64 memory matrix.
 - tagged-list tuple3 dynamic-buffer field release for all non-empty dynamic
   field combinations
 - tagged-list tuple3 string/list/dict payload release
+- tagged-list tuple3 closure/list/dict payload release
 - tagged-list tuple4 string/bytes/list/dict payload release
 - tagged-list tuple2 payload release with nested tuple dynamic string/bytes
   field combinations
@@ -128,6 +129,7 @@ exist for:
 - tuple2 leaf payload dynamic string/bytes fields when their offsets are known
 - tuple3 leaf payload dynamic string/bytes field combinations
 - tuple3 leaf payloads with string/list/dict fields
+- tuple3 leaf payloads with closure/list/dict fields
 - tuple4 leaf payloads with string/bytes/list/dict fields
 - tuple2 leaf payloads with nested tuple dynamic string/bytes field
   combinations
@@ -202,8 +204,9 @@ The main x64 gaps are:
   capture probes
 - list helper variants for deeper nested tuple/record payloads beyond the
   covered tuple2 nested tuple dynamic-buffer, list/dict, dict, closure,
-  string/list/dict, and string/bytes/list/dict shapes, broader multi-field
-  records and higher-arity tuples, and non-dynamic-buffer sum payloads beyond the current
+  string/list/dict, and string/bytes/list/dict shapes, covered tuple3
+  closure/list/dict and string/list/dict shapes, broader multi-field records
+  and higher-arity tuples, and non-dynamic-buffer sum payloads beyond the current
   list/dict/closure and fixed-block mixed shapes
 - dict/HAMT key and value recursive retain/release coverage
 - helper register preservation for values live across cleanup beyond the

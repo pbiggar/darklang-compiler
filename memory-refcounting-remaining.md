@@ -111,7 +111,8 @@ tuple2 nested tuple list/dict payload release, plus x64 tagged-list tuple2
 nested tuple dict payload release, plus x64 tagged-list tuple2 nested tuple
 closure payload release, plus x64 tagged-list tuple2 nested tuple
 string/list/dict payload release, plus x64 tagged-list tuple2 nested tuple
-string/bytes/list/dict payload release.
+string/bytes/list/dict payload release, plus x64 tagged-list tuple3
+closure/list/dict payload release.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -215,12 +216,13 @@ field combinations, plus x64 tagged-list tuple2 nested tuple string/list/dict
 payload release, plus x64 tagged-list tuple2 nested tuple list/dict payload
 release, plus x64 tagged-list tuple2 nested tuple dict payload release, plus
 x64 tagged-list tuple2 nested tuple closure payload release, plus x64
-tagged-list tuple2 nested tuple string/bytes/list/dict payload release:
+tagged-list tuple2 nested tuple string/bytes/list/dict payload release, plus
+x64 tagged-list tuple3 closure/list/dict payload release:
 
 - `scripts/run-in-container ./run-tests --filter=refcounting`: `205 passed`
-- `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `92 passed`
+- `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `93 passed`
 - Full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4801 passed, 2 failed`
+  `4802 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -1053,6 +1055,7 @@ commits enabled:
 - tagged-list tuple3 dynamic string/bytes field release for all non-empty
   dynamic-buffer field combinations
 - tagged-list tuple3 string/list/dict payload release
+- tagged-list tuple3 closure/list/dict payload release
 - tagged-list one-field record dynamic string field release
 - tagged-list three-field record dynamic string/bytes field release for all
   non-empty dynamic-buffer field combinations
@@ -1107,7 +1110,8 @@ Likely gaps:
   record-string-list-dict, sum-tuple-string-list-dict,
   sum-record-string-list-dict, and fixed-block capture probes
 - list payload helper variants beyond the currently covered tuple2, exhaustive
-  tuple3 dynamic-buffer combinations, one mixed tuple3 string/list/dict shape,
+  tuple3 dynamic-buffer combinations, mixed tuple3 string/list/dict and
+  closure/list/dict shapes,
   one mixed tuple4 string/bytes/list/dict shape, record1, exhaustive record3
   dynamic-buffer combinations, mixed record3 and record4
   string/bytes/list/dict shapes, sum dynamic-buffer, sum-list/sum-dict,
