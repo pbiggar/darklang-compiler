@@ -78,6 +78,7 @@ x64 probes cover the full ARM64 memory matrix.
 - tagged-list tuple3 string/list/dict payload release
 - tagged-list tuple3 closure/list/dict payload release
 - tagged-list tuple4 string/bytes/list/dict payload release
+- tagged-list tuple4 closure/bytes/list/dict payload release
 - tagged-list tuple2 payload release with nested tuple dynamic string/bytes
   field combinations
 - tagged-list tuple2 payload release with nested tuple list/dict fields
@@ -132,6 +133,7 @@ exist for:
 - tuple3 leaf payloads with string/list/dict fields
 - tuple3 leaf payloads with closure/list/dict fields
 - tuple4 leaf payloads with string/bytes/list/dict fields
+- tuple4 leaf payloads with closure/bytes/list/dict fields
 - tuple2 leaf payloads with nested tuple dynamic string/bytes field
   combinations
 - tuple2 leaf payloads with nested tuple list/dict fields

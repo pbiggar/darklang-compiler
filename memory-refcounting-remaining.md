@@ -113,7 +113,8 @@ closure payload release, plus x64 tagged-list tuple2 nested tuple
 string/list/dict payload release, plus x64 tagged-list tuple2 nested tuple
 string/bytes/list/dict payload release, plus x64 tagged-list tuple3
 closure/list/dict payload release, plus x64 tagged-list record3
-closure/list/dict payload release.
+closure/list/dict payload release, plus x64 tagged-list tuple4
+closure/bytes/list/dict payload release.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -219,12 +220,13 @@ release, plus x64 tagged-list tuple2 nested tuple dict payload release, plus
 x64 tagged-list tuple2 nested tuple closure payload release, plus x64
 tagged-list tuple2 nested tuple string/bytes/list/dict payload release, plus
 x64 tagged-list tuple3 closure/list/dict payload release, plus x64
-tagged-list record3 closure/list/dict payload release:
+tagged-list record3 closure/list/dict payload release, plus x64 tagged-list
+tuple4 closure/bytes/list/dict payload release:
 
 - `scripts/run-in-container ./run-tests --filter=refcounting`: `205 passed`
-- `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `94 passed`
+- `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `95 passed`
 - Full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4803 passed, 2 failed`
+  `4804 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -1058,6 +1060,7 @@ commits enabled:
   dynamic-buffer field combinations
 - tagged-list tuple3 string/list/dict payload release
 - tagged-list tuple3 closure/list/dict payload release
+- tagged-list tuple4 closure/bytes/list/dict payload release
 - tagged-list one-field record dynamic string field release
 - tagged-list three-field record dynamic string/bytes field release for all
   non-empty dynamic-buffer field combinations
