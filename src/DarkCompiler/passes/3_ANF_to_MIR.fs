@@ -357,7 +357,8 @@ let rec getReturnTypeAndMaxTempId
                 else
                     match Map.tryFind (ANF.TempId id) typeMap with
                     | Some t -> t
-                    | None -> AST.TInt64
+                    | None ->
+                        Crash.crash $"maxTempAndReturnType: unknown return type for TempId {id}"
             | ANF.FuncRef _ -> AST.TInt64
         (maxId, retType)
     | ANF.Let (ANF.TempId destId, cexpr, rest) ->
@@ -535,8 +536,8 @@ let atomType (builder: CFGBuilder) (atom: ANF.Atom) : AST.Type =
                 match tryFindTypeById builder id with
                 | Some t -> t
                 | None ->
-                    // TypeMap is populated by RefCountInsertion pass with fallback to TInt64.
-                    // If we reach here, a pass after RefCountInsertion created a TempId without tracking.
+                    // TypeMap is populated by RefCountInsertion. If we reach
+                    // here, a later pass created a TempId without tracking it.
                     Crash.crash $"atomType: unknown type for TempId {id} - TempId created after RefCountInsertion?"
         result
     | ANF.FuncRef _ -> AST.TInt64  // Function addresses are pointer-sized
