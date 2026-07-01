@@ -615,6 +615,39 @@ let private dictRefCountIncHelperLabel = "__dark_dict_rc_inc_helper"
 let private dictRefCountDecHelperLabel = "__dark_dict_rc_dec_helper"
 let private closureRefCountDecHelperLabel = "__dark_closure_rc_dec_helper"
 
+type private RawSetRootRetainTarget =
+    | RawSetListRootRetain
+    | RawSetDictRootRetain
+
+let private rawSetRootRetainTarget
+    (recordRegistry: LIR.RecordRegistry)
+    (valueType: AST.Type option)
+    : RawSetRootRetainTarget option =
+    let shapeOfKnownType (typ: AST.Type) : ANF.RcShape option =
+        match typ with
+        | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
+            None
+        | _ ->
+            Some (ANF.rcShapeOfType recordRegistry typ)
+
+    valueType
+    |> Option.bind (fun typ ->
+        shapeOfKnownType typ
+        |> Option.bind (function
+            | ANF.TaggedListShape _ ->
+                Some RawSetListRootRetain
+            | ANF.DictRoot _ ->
+                Some RawSetDictRootRetain
+            | ANF.Immediate
+            | ANF.FixedBlock _
+            | ANF.BoxedSum _
+            | ANF.DynamicString
+            | ANF.DynamicBytes
+            | ANF.ClosureShape _
+            | ANF.StaticString
+            | ANF.RawUnmanaged ->
+                None))
+
 let private fixedBlockPayloadSize (recordRegistry: LIR.RecordRegistry) (fieldType: AST.Type) : int option =
     match fieldType with
     | AST.TTuple fields -> Some (List.length fields * 8)
@@ -4254,20 +4287,19 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
         resolveReg ptr |> Result.bind (fun p ->
             resolveReg byteOffset |> Result.bind (fun o ->
                 resolveReg value |> Result.map (fun v ->
-                    // Ownership increment: when storing a tagged list pointer into a node,
-                    // increment the stored value's refcount because the parent now owns
-                    // that edge. Keep this deliberately narrow until other stored heap
-                    // shapes have shape-driven retain/release metadata.
+                    // Ownership increment for raw runtime nodes. Dynamic buffers are
+                    // intentionally omitted here: list leaves currently consume those
+                    // freshly owned values instead of retaining an extra reference.
                     let ownershipInc : X86_64.Instr list =
-                        match valueType with
-                        | Some (AST.TList _) ->
+                        match rawSetRootRetainTarget ctx.RecordRegistry valueType with
+                        | Some RawSetListRootRetain ->
                             let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI]
                             let saves = saveRegs |> List.map X86_64.PUSH
                             let restores = saveRegs |> List.rev |> List.map X86_64.POP
                             saves
                             @ [X86_64.MOV_reg (X86_64.RAX, v); X86_64.CALL listRefCountIncHelperLabel]
                             @ restores
-                        | Some (AST.TDict _) ->
+                        | Some RawSetDictRootRetain ->
                             let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9]
                             let saves = saveRegs |> List.map X86_64.PUSH
                             let restores = saveRegs |> List.rev |> List.map X86_64.POP
@@ -6144,7 +6176,10 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountInc (_, _, LIR.TaggedList, _) -> true
-                    | LIR.RawSet (_, _, _, Some (AST.TList _)) -> true
+                    | LIR.RawSet (_, _, _, valueType) ->
+                        match rawSetRootRetainTarget recordRegistry valueType with
+                        | Some RawSetListRootRetain -> true
+                        | _ -> false
                     | _ -> false)))
 
     let needsDictRcIncHelper =
@@ -6155,7 +6190,10 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountInc (_, _, LIR.DictHeap, _) -> true
-                    | LIR.RawSet (_, _, _, Some (AST.TDict _)) -> true
+                    | LIR.RawSet (_, _, _, valueType) ->
+                        match rawSetRootRetainTarget recordRegistry valueType with
+                        | Some RawSetDictRootRetain -> true
+                        | _ -> false
                     | _ -> false)))
 
     let needsDictRcDecHelper =

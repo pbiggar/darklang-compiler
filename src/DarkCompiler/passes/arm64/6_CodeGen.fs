@@ -118,6 +118,46 @@ let private dictRefCountDecSumStringValueHelperLabel = "__dark_dict_refcount_dec
 let private closureRefCountIncHelperLabel = "__dark_closure_refcount_inc_helper"
 let private closureRefCountDecHelperLabel = "__dark_closure_refcount_dec_helper"
 
+type private RawSetRootRetainTarget =
+    | RawSetListRootRetain
+    | RawSetDictRootRetain
+    | RawSetGenericRootRetain of payloadSize:int
+
+let private rawSetRootRetainTarget
+    (recordRegistry: LIR.RecordRegistry)
+    (valueType: AST.Type option)
+    : RawSetRootRetainTarget option =
+    let shapeOfKnownType (typ: AST.Type) : ANF.RcShape option =
+        match typ with
+        | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
+            None
+        | _ ->
+            Some (ANF.rcShapeOfType recordRegistry typ)
+
+    valueType
+    |> Option.bind (fun typ ->
+        shapeOfKnownType typ
+        |> Option.bind (function
+            | ANF.TaggedListShape _ ->
+                Some RawSetListRootRetain
+            | ANF.DictRoot _ ->
+                Some RawSetDictRootRetain
+            | ANF.FixedBlock (payloadSize, _) ->
+                match typ with
+                | AST.TTuple _ -> Some (RawSetGenericRootRetain payloadSize)
+                | _ -> None
+            | ANF.BoxedSum payloadSize ->
+                match typ with
+                | AST.TSum _ -> Some (RawSetGenericRootRetain payloadSize)
+                | _ -> None
+            | ANF.ClosureShape _
+            | ANF.Immediate
+            | ANF.DynamicString
+            | ANF.DynamicBytes
+            | ANF.StaticString
+            | ANF.RawUnmanaged ->
+                None))
+
 let private dataLabel (name: string) : ARM64Symbolic.LabelRef =
     ARM64Symbolic.DataLabel (ARM64Symbolic.Named name)
 
@@ -6035,8 +6075,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     ]
 
                     let ownershipInc =
-                        match valueType with
-                        | Some (AST.TList _) ->
+                        match rawSetRootRetainTarget ctx.RecordRegistry valueType with
+                        | Some RawSetListRootRetain ->
                             [
                                 ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -64s)
                                 ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -6049,7 +6089,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                                 ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
                                 ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 64s)
                             ]
-                        | Some (AST.TDict _) ->
+                        | Some RawSetDictRootRetain ->
                             [
                                 ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -80s)
                                 ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -6064,32 +6104,15 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                                 ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
                                 ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 80s)
                             ]
-                        | Some typ ->
-                            let isRcManagedHeapType =
-                                match typ with
-                                | _ -> ANF.isHeapType typ
-                            if isRcManagedHeapType then
-                                let rcOffsetOpt =
-                                    match typ with
-                                    | AST.TTuple elemTypes -> Some (int16 (List.length elemTypes * 8))
-                                    | AST.TSum _ -> Some 16s
-                                    | AST.TList _ -> Some 24s
-                                    | AST.TDict _ -> Some 8s
-                                    | _ -> None
-                                match rcOffsetOpt with
-                                | Some rcOffset ->
-                                    let rcReg =
-                                        if valueReg = ARM64Symbolic.X15 then ARM64Symbolic.X14 else ARM64Symbolic.X15
-                                    [
-                                        ARM64Symbolic.CBZ_offset (valueReg, 4)
-                                        ARM64Symbolic.LDR (rcReg, valueReg, rcOffset)
-                                        ARM64Symbolic.ADD_imm (rcReg, rcReg, 1us)
-                                        ARM64Symbolic.STR (rcReg, valueReg, rcOffset)
-                                    ]
-                                | None ->
-                                    []
-                            else
-                                []
+                        | Some (RawSetGenericRootRetain payloadSize) ->
+                            let rcReg =
+                                if valueReg = ARM64Symbolic.X15 then ARM64Symbolic.X14 else ARM64Symbolic.X15
+                            [
+                                ARM64Symbolic.CBZ_offset (valueReg, 4)
+                                ARM64Symbolic.LDR (rcReg, valueReg, int16 payloadSize)
+                                ARM64Symbolic.ADD_imm (rcReg, rcReg, 1us)
+                                ARM64Symbolic.STR (rcReg, valueReg, int16 payloadSize)
+                            ]
                         | _ -> []
 
                     storeValue @ ownershipInc)))
@@ -7514,7 +7537,10 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountInc (_, _, LIR.TaggedList, _) -> true
-                    | LIR.RawSet (_, _, _, Some (AST.TList _)) -> true
+                    | LIR.RawSet (_, _, _, valueType) ->
+                        match rawSetRootRetainTarget ctx.RecordRegistry valueType with
+                        | Some RawSetListRootRetain -> true
+                        | _ -> false
                     | _ -> false)))
 
     let needsDictRcIncHelper =
@@ -7525,7 +7551,10 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountInc (_, _, LIR.DictHeap, _) -> true
-                    | LIR.RawSet (_, _, _, Some (AST.TDict _)) -> true
+                    | LIR.RawSet (_, _, _, valueType) ->
+                        match rawSetRootRetainTarget ctx.RecordRegistry valueType with
+                        | Some RawSetDictRootRetain -> true
+                        | _ -> false
                     | _ -> false)))
 
     let needsDictRcDecHelper =
