@@ -2647,6 +2647,17 @@ let private releasePlanIsFixedBlockWithFieldReleases
     | _ ->
         false
 
+let private releasePlanIsFixedBlockRootWithPayloadSize
+    (payloadSize: int)
+    (releasePlan: ANF.RcReleasePlan)
+    : bool =
+    match releasePlan with
+    | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (planPayloadSize, _))
+        when planPayloadSize = payloadSize ->
+        true
+    | _ ->
+        false
+
 let private releasePlanIsBoxedSumWithPayloadRelease
     (payloadPredicate: ANF.RcReleasePlan -> bool)
     (releasePlan: ANF.RcReleasePlan)
@@ -2734,6 +2745,24 @@ let private releasePlanIsTuple4NestedClosurePayload (releasePlan: ANF.RcReleaseP
             8, releasePlanIsDynamicBufferOperation ANF.DynamicBytesBuffer
             16, nestedPayload
             24, releasePlanIsRootKind ANF.TaggedList
+        ]
+
+let private releasePlanIsSingleListDictFieldPayload (releasePlan: ANF.RcReleasePlan) : bool =
+    releasePlan
+    |> releasePlanIsFixedBlockWithFieldReleases
+        8
+        [
+            0, releasePlanIsTaggedListWithElementRelease (releasePlanIsRootKind ANF.DictHeap)
+        ]
+
+let private releasePlanIsThreeManagedFieldPayload (releasePlan: ANF.RcReleasePlan) : bool =
+    releasePlan
+    |> releasePlanIsFixedBlockWithFieldReleases
+        24
+        [
+            0, releasePlanIsDynamicBufferOperation ANF.DynamicStringBuffer
+            8, releasePlanIsRootKind ANF.TaggedList
+            16, releasePlanIsRootKind ANF.DictHeap
         ]
 
 let private releasePlanIsTaggedListWithTuple2ElementFieldRelease
@@ -7479,14 +7508,9 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isSingleFieldRecordList ctx.RecordRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TRecord (name, _)) ->
-                                 ctx.RecordRegistry
-                                 |> Map.tryFind name
-                                 |> Option.map (fun fields -> List.length fields = 1)
-                                 |> Option.defaultValue false
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithElementRelease
+                                (releasePlanIsFixedBlockRootWithPayloadSize 8))
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
@@ -7501,14 +7525,9 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isTwoFieldRecordList ctx.RecordRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TRecord (name, _)) ->
-                                 ctx.RecordRegistry
-                                 |> Map.tryFind name
-                                 |> Option.map (fun fields -> List.length fields = 2)
-                                 |> Option.defaultValue false
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithElementRelease
+                                (releasePlanIsFixedBlockRootWithPayloadSize 16))
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
@@ -7523,11 +7542,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isRecordListDictList ctx.RecordRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TRecord _) as listType ->
-                                 isRecordListDictList ctx.RecordRegistry (Some listType)
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithElementRelease releasePlanIsSingleListDictFieldPayload)
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
@@ -7542,11 +7558,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isManagedThreeFieldRecordList ctx.RecordRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TRecord _) as listType ->
-                                 isManagedThreeFieldRecordList ctx.RecordRegistry (Some listType)
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithElementRelease releasePlanIsThreeManagedFieldPayload)
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
