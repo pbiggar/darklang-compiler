@@ -228,14 +228,13 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                 | Some (AST.TList elemType) ->
                     Some (AST.TSum ("Stdlib.Option.Option", [elemType]))
                 | _ -> None
-        | name, [listAtom] when name.StartsWith("Stdlib.List.tail") ->
-            match tryGetFuncReturnTypeFromReg ctx funcName with
-            | Some retType -> Some retType
-            | None ->
-                match inferAtomType ctx listAtom with
-                | Some (AST.TList elemType) ->
-                    Some (AST.TSum ("Stdlib.Option.Option", [AST.TList elemType]))
-                | _ -> None
+        | name, [listAtom] when name.StartsWith("Stdlib.List.tail") || name.StartsWith("Stdlib.__FingerTree.tail") ->
+            match inferAtomType ctx listAtom with
+            | Some (AST.TList elemType) when name.StartsWith("Stdlib.List.tail") ->
+                Some (AST.TSum ("Stdlib.Option.Option", [AST.TList elemType]))
+            | Some (AST.TList elemType) ->
+                Some (AST.TList elemType)
+            | _ -> tryGetFuncReturnTypeFromReg ctx funcName
         | name, [tupleAtom] when name.StartsWith("Stdlib.Tuple2.first") ->
             match tryGetFuncReturnTypeFromReg ctx funcName with
             | Some retType -> Some retType

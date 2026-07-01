@@ -4498,9 +4498,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 | _ ->
                     let canonicalElemType = canonicalizeBareSumTypeRefs variantLookup elemType
                     match ANF.rcShapeOfTypeWithSums typeReg sumShapeReg canonicalElemType with
-                    | ANF.DynamicString
+                    | ANF.DynamicString ->
+                        Some (ANF.RefCountIncString elemAtom)
                     | ANF.DynamicBytes ->
-                        None
+                        Some (ANF.RefCountIncBytes elemAtom)
                     | shape ->
                         match ANF.rcShapePayloadSize shape, ANF.rcShapeRootKind shape with
                         | Some size, Some kind ->
@@ -8252,9 +8253,10 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                 | _ ->
                     let canonicalElemType = canonicalizeBareSumTypeRefs variantLookup elemType
                     match ANF.rcShapeOfTypeWithSums typeReg sumShapeReg canonicalElemType with
-                    | ANF.DynamicString
+                    | ANF.DynamicString ->
+                        Some (ANF.RefCountIncString elemAtom)
                     | ANF.DynamicBytes ->
-                        None
+                        Some (ANF.RefCountIncBytes elemAtom)
                     | shape ->
                         match ANF.rcShapePayloadSize shape, ANF.rcShapeRootKind shape with
                         | Some size, Some kind ->

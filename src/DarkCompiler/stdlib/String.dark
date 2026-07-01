@@ -393,7 +393,7 @@ def Stdlib.String.repeat(s: String, n: Int64) : String =
 def Stdlib.String.join(strs: List<String>, sep: String) : String =
     match strs with
     | [] -> ""
-    | [only] -> only
+    | [only] -> only ++ ""
     | [first, ...rest] -> first ++ sep ++ Stdlib.String.join(rest, sep)
 
 // Check if byte is ASCII whitespace (space, tab, newline, carriage return)
@@ -439,10 +439,10 @@ def Stdlib.String.split(s: String, delim: String) : List<String> =
 
 def Stdlib.String.__splitIntoBytes(s: String, idx: Int64, acc: List<String>) : List<String> =
     if idx >= Stdlib.String.length(s) then
-        Stdlib.List.reverse<String>(acc)
+        acc
     else
         let byte = Stdlib.String.substring(s, idx, idx + 1) in
-        Stdlib.String.__splitIntoBytes(s, idx + 1, [byte, ...acc])
+        Stdlib.String.__splitIntoBytes(s, idx + 1, Stdlib.List.pushBack<String>(acc, byte))
 
 def Stdlib.String.__splitHelper(s: String, delim: String, start: Int64, acc: List<String>) : List<String> =
     let sLen = Stdlib.String.length(s) in
@@ -453,11 +453,11 @@ def Stdlib.String.__splitHelper(s: String, delim: String, start: Int64, acc: Lis
         match Stdlib.String.__findFrom(s, delim, start) with
         | None ->
             // No more delimiters - add rest of string
-            Stdlib.List.reverse<String>([Stdlib.String.drop(s, start), ...acc])
+            Stdlib.List.pushBack<String>(acc, Stdlib.String.drop(s, start))
         | Some(idx) ->
             // Found delimiter - add segment and continue
             let segment = Stdlib.String.substring(s, start, idx) in
-            Stdlib.String.__splitHelper(s, delim, idx + delimLen, [segment, ...acc])
+            Stdlib.String.__splitHelper(s, delim, idx + delimLen, Stdlib.List.pushBack<String>(acc, segment))
 
 // Replace all occurrences of old with new
 // Empty old string inserts new at every position (including boundaries)
@@ -466,7 +466,8 @@ def Stdlib.String.replace(s: String, old: String, new: String) : String =
         // Insert new at every position: before each char and after last
         Stdlib.String.__replaceEmpty(s, new, 0, new)
     else
-        Stdlib.String.join(Stdlib.String.split(s, old), new)
+        let parts = Stdlib.String.split(s, old) in
+        Stdlib.String.join(parts, new)
 
 def Stdlib.String.__replaceEmpty(s: String, new: String, idx: Int64, acc: String) : String =
     if idx >= Stdlib.String.length(s) then

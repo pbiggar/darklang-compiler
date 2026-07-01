@@ -302,9 +302,22 @@ def Stdlib.List.__stringsToStrings(list: List<String>, acc: List<String>) : List
             let newAcc = Stdlib.__FingerTree.pushBack<String>(acc, quoted) in
             Stdlib.List.__stringsToStrings(Stdlib.__FingerTree.tail<String>(list), newAcc)
 
+def Stdlib.List.__quoteStringForDisplay(s: String) : String =
+    "\"" ++ s ++ "\""
+
+def Stdlib.List.__stringsDisplayItems(list: List<String>, first: Bool) : String =
+    match list with
+    | [] -> ""
+    | [h] ->
+        let item = Stdlib.List.__quoteStringForDisplay(h) in
+        if first then item else ", " ++ item
+    | [h, ...t] ->
+        let item = Stdlib.List.__quoteStringForDisplay(h) in
+        let rest = Stdlib.List.__stringsDisplayItems(t, false) in
+        if first then item ++ rest else ", " ++ item ++ rest
+
 def Stdlib.List.toDisplayString_str(list: List<String>) : String =
-    let strs = Stdlib.List.__stringsToStrings(list, Stdlib.__FingerTree.empty<String>()) in
-    "[" ++ Stdlib.String.join(strs, ", ") ++ "]"
+    "[" ++ Stdlib.List.__stringsDisplayItems(list, true) ++ "]"
 
 // Helper to build string list from Bool list
 def Stdlib.List.__boolsToStrings(list: List<Bool>, acc: List<String>) : List<String> =
