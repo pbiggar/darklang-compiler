@@ -113,6 +113,7 @@ let private listRefCountDecStringBytesRecordManagedDictHelperLabel = "__dark_lis
 let private listRefCountDecStringBytesRecordManagedClosureHelperLabel = "__dark_list_refcount_dec_string_bytes_record_managed_closure_helper"
 let private listRefCountDecListHelperLabel = "__dark_list_refcount_dec_list_helper"
 let private listRefCountDecDictHelperLabel = "__dark_list_refcount_dec_dict_helper"
+let private listRefCountDecDictListHelperLabel = "__dark_list_refcount_dec_dict_list_helper"
 let private listRefCountDecClosureHelperLabel = "__dark_list_refcount_dec_closure_helper"
 let private listRefCountDecRecord1HelperLabel = "__dark_list_refcount_dec_record1_helper"
 let private listRefCountDecRecord1DynamicHelperLabel = "__dark_list_refcount_dec_record1_dynamic_helper"
@@ -755,6 +756,11 @@ let private generateListRefCountDecHelperWith
             ]
             @ addChild "leaf_payload_list"
         | None, false, false, true, _ ->
+            let helperLabel =
+                if helperLabel = listRefCountDecDictListHelperLabel then
+                    dictRefCountDecListValueHelperLabel
+                else
+                    dictRefCountDecHelperLabel
             [
                 ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 0s)
                 ARM64Symbolic.CBZ (ARM64Symbolic.X8, leafPayloadDone)
@@ -765,7 +771,7 @@ let private generateListRefCountDecHelperWith
                 ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
                 ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 80s)
                 ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X8)
-                ARM64Symbolic.BL dictRefCountDecHelperLabel
+                ARM64Symbolic.BL helperLabel
                 ARM64Symbolic.LDR (ARM64Symbolic.X30, ARM64Symbolic.SP, 80s)
                 ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
                 ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
@@ -1282,6 +1288,12 @@ let private listRefCountDecHelperSpecs : ListRefCountDecHelperSpec list =
       ReleaseLeafClosurePayload = false
       ManagedLeafFieldTypes = [] }
     { Label = listRefCountDecDictHelperLabel
+      LeafGenericPayloadSize = None
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = true
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [] }
+    { Label = listRefCountDecDictListHelperLabel
       LeafGenericPayloadSize = None
       ReleaseLeafListPayload = false
       ReleaseLeafDictPayload = true
@@ -1833,6 +1845,13 @@ let private releasePlanIsDynamicBufferRelease (releasePlan: ANF.RcReleasePlan) :
     | _ ->
         false
 
+let private releasePlanIsDictWithListValue (releasePlan: ANF.RcReleasePlan) : bool =
+    match releasePlan with
+    | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, ANF.RootRelease (_, ANF.TaggedList, _))) ->
+        true
+    | _ ->
+        false
+
 let private releasePlanIsDynamicBufferOperation
     (operation: ANF.RcOperation)
     (releasePlan: ANF.RcReleasePlan)
@@ -2231,6 +2250,8 @@ let private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : strin
             listRefCountDecHelperLabel
         | ANF.RootRelease (_, ANF.TaggedList, _) ->
             listRefCountDecListHelperLabel
+        | ANF.RootRelease (_, ANF.DictHeap, _) when releasePlanIsDictWithListValue elementRelease ->
+            listRefCountDecDictListHelperLabel
         | ANF.RootRelease (_, ANF.DictHeap, _) ->
             listRefCountDecDictHelperLabel
         | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
@@ -6242,13 +6263,16 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             Set.empty
 
     let listDecHelperDictDependencyLabels (helperLabel: string) : Set<string> =
-        listRefCountDecHelperSpecs
-        |> List.tryFind (fun spec -> spec.Label = helperLabel)
-        |> Option.map (fun spec ->
-            spec.ManagedLeafFieldTypes
-            |> List.map dictDecHelperLabelsForDictType
-            |> unionLabelSets)
-        |> Option.defaultValue Set.empty
+        if helperLabel = listRefCountDecDictListHelperLabel then
+            Set.singleton dictRefCountDecListValueHelperLabel
+        else
+            listRefCountDecHelperSpecs
+            |> List.tryFind (fun spec -> spec.Label = helperLabel)
+            |> Option.map (fun spec ->
+                spec.ManagedLeafFieldTypes
+                |> List.map dictDecHelperLabelsForDictType
+                |> unionLabelSets)
+            |> Option.defaultValue Set.empty
 
     let rec expandListDecHelperDependencies (selectedLabels: Set<string>) (pendingLabels: string list) : Set<string> =
         match pendingLabels with

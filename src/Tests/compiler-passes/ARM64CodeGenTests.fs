@@ -176,6 +176,11 @@ let testListTuple4ClosureBytesListDictListValueUsesTypedDictHelper () : TestResu
         ])
         "List of tuple(closure, bytes, list, dict<int, list<int>>)"
 
+let testListDictListValueUsesTypedDictHelper () : TestResult =
+    assertListElementUsesTypedDictListHelper
+        (AST.TDict (AST.TInt64, AST.TList AST.TInt64))
+        "List of dict<int, list<int>>"
+
 let tests : (string * (unit -> TestResult)) list = [
     ("RawSet pure enum skips generic retain", testRawSetPureEnumDoesNotEmitGenericRetain)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
@@ -184,4 +189,5 @@ let tests : (string * (unit -> TestResult)) list = [
     ("List tuple4 string/bytes/list/dict-list uses typed dict helper", testListTuple4StringBytesListDictListValueUsesTypedDictHelper)
     ("List tuple4 closure/string/list/dict-list uses typed dict helper", testListTuple4ClosureStringListDictListValueUsesTypedDictHelper)
     ("List tuple4 closure/bytes/list/dict-list uses typed dict helper", testListTuple4ClosureBytesListDictListValueUsesTypedDictHelper)
+    ("List dict-list uses typed dict helper", testListDictListValueUsesTypedDictHelper)
 ]
