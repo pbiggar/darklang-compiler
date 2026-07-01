@@ -261,6 +261,25 @@ let testListSumTuple4DictListValueUsesTypedDictHelper () : TestResult =
         (AST.TTuple [ AST.TString; AST.TBytes; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TList AST.TInt64) ])
         "sum tuple4 string bytes list dict-list"
 
+let testListSumTuple3ClosureDictListValueUsesTypedDictHelper () : TestResult =
+    assertListSumPayloadUsesTypedDictListHelper
+        (AST.TTuple [
+            AST.TFunction ([ AST.TInt64 ], AST.TInt64)
+            AST.TList AST.TInt64
+            AST.TDict (AST.TInt64, AST.TList AST.TInt64)
+        ])
+        "sum tuple3 closure list dict-list"
+
+let testListSumTuple4ClosureDictListValueUsesTypedDictHelper () : TestResult =
+    assertListSumPayloadUsesTypedDictListHelper
+        (AST.TTuple [
+            AST.TFunction ([ AST.TInt64 ], AST.TInt64)
+            AST.TBytes
+            AST.TList AST.TInt64
+            AST.TDict (AST.TInt64, AST.TList AST.TInt64)
+        ])
+        "sum tuple4 closure bytes list dict-list"
+
 let testDictDictListValueUsesTypedDictHelper () : TestResult =
     let dictType = AST.TDict (AST.TInt64, AST.TDict (AST.TInt64, AST.TList AST.TInt64))
     let program =
@@ -302,5 +321,7 @@ let tests : (string * (unit -> TestResult)) list = [
     ("List nested tuple dict-list uses typed dict helper", testListNestedTupleDictListValueUsesTypedDictHelper)
     ("List sum tuple3 dict-list uses typed dict helper", testListSumTuple3DictListValueUsesTypedDictHelper)
     ("List sum tuple4 dict-list uses typed dict helper", testListSumTuple4DictListValueUsesTypedDictHelper)
+    ("List sum tuple3 closure dict-list uses typed dict helper", testListSumTuple3ClosureDictListValueUsesTypedDictHelper)
+    ("List sum tuple4 closure dict-list uses typed dict helper", testListSumTuple4ClosureDictListValueUsesTypedDictHelper)
     ("Dict dict-list uses typed dict helper", testDictDictListValueUsesTypedDictHelper)
 ]
