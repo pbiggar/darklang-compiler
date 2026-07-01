@@ -108,6 +108,27 @@ let testLegacyRcClassifiersUseRcShape () : TestResult =
         AST.TSum ("Enum", [])
     ]
 
+    let metadataFreeHeapSamples = [
+        AST.TString
+        AST.TBytes
+        AST.TFunction ([AST.TInt64], AST.TString)
+        AST.TRecord ("MetadataFreeRecord", [])
+        AST.TTuple [AST.TString; AST.TRecord ("MetadataFreeRecord", [])]
+        AST.TList (AST.TRecord ("MetadataFreeRecord", []))
+        AST.TList AST.TInt64
+        AST.TDict (AST.TInt64, AST.TString)
+        AST.TDict (AST.TString, AST.TRecord ("MetadataFreeRecord", []))
+        AST.TSum ("Payload", [AST.TString])
+        AST.TSum ("Payload", [AST.TRecord ("MetadataFreeRecord", [])])
+    ]
+
+    let metadataFreeNonHeapSamples = [
+        AST.TInt64
+        AST.TBool
+        AST.TRawPtr
+        AST.TSum ("Enum", [])
+    ]
+
     let payloadSamples = [
         AST.TString, 0
         AST.TBytes, 0
@@ -132,19 +153,27 @@ let testLegacyRcClassifiersUseRcShape () : TestResult =
     | Some typ ->
         Error $"Expected legacy heap classifier to treat {typ} as managed through RcShape"
     | None ->
-        match nonHeapSamples |> List.tryFind (isHeapTypeWithRegistry typeReg) with
+        match metadataFreeHeapSamples |> List.tryFind (fun typ -> not (isHeapType typ)) with
         | Some typ ->
-            Error $"Expected legacy heap classifier to treat {typ} as unmanaged through RcShape"
+            Error $"Expected metadata-free legacy heap classifier to treat {typ} as managed through RcShape"
         | None ->
-            match payloadSamples |> List.tryFind (fun (typ, expected) -> payloadSize typ typeReg <> expected) with
-            | Some (typ, expected) ->
-                Error $"Expected payloadSize for {typ} to be {expected}, got {payloadSize typ typeReg}"
+            match nonHeapSamples |> List.tryFind (isHeapTypeWithRegistry typeReg) with
+            | Some typ ->
+                Error $"Expected legacy heap classifier to treat {typ} as unmanaged through RcShape"
             | None ->
-                match kindSamples |> List.tryFind (fun (typ, expected) -> rcKindWithRegistry typeReg typ <> expected) with
-                | Some (typ, expected) ->
-                    Error $"Expected rcKind for {typ} to be {expected}, got {rcKindWithRegistry typeReg typ}"
+                match metadataFreeNonHeapSamples |> List.tryFind isHeapType with
+                | Some typ ->
+                    Error $"Expected metadata-free legacy heap classifier to treat {typ} as unmanaged through RcShape"
                 | None ->
-                    Ok ()
+                    match payloadSamples |> List.tryFind (fun (typ, expected) -> payloadSize typ typeReg <> expected) with
+                    | Some (typ, expected) ->
+                        Error $"Expected payloadSize for {typ} to be {expected}, got {payloadSize typ typeReg}"
+                    | None ->
+                        match kindSamples |> List.tryFind (fun (typ, expected) -> rcKindWithRegistry typeReg typ <> expected) with
+                        | Some (typ, expected) ->
+                            Error $"Expected rcKind for {typ} to be {expected}, got {rcKindWithRegistry typeReg typ}"
+                        | None ->
+                            Ok ()
 
 let testRcShapeClassifiesSumsWithVariantMetadata () : TestResult =
     let typeReg =

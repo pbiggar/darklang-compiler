@@ -673,37 +673,54 @@ let isHeapTypeWithRegistry (typeReg: Map<string, (string * AST.Type) list>) (t: 
 
 /// Compatibility heap classifier for contexts that do not have record metadata.
 let isHeapType (t: AST.Type) : bool =
-    match t with
-    | AST.TTuple _
-    | AST.TRecord _
-    | AST.TList _
-    | AST.TDict _
-    | AST.TString
-    | AST.TBytes
-    | AST.TFunction _ ->
-        true
-    | AST.TSum (_, []) ->
-        false
-    | AST.TSum _ ->
-        true
-    | AST.TInt8
-    | AST.TInt16
-    | AST.TInt32
-    | AST.TInt64
-    | AST.TInt128
-    | AST.TUInt8
-    | AST.TUInt16
-    | AST.TUInt32
-    | AST.TUInt64
-    | AST.TUInt128
-    | AST.TBool
-    | AST.TFloat64
-    | AST.TChar
-    | AST.TUnit
-    | AST.TRawPtr
-    | AST.TRuntimeError
-    | AST.TVar _ ->
-        false
+    let rec containsRecord (typ: AST.Type) : bool =
+        match typ with
+        | AST.TRecord _ ->
+            true
+        | AST.TTuple fields ->
+            fields |> List.exists containsRecord
+        | AST.TList elementType ->
+            containsRecord elementType
+        | AST.TDict (keyType, valueType) ->
+            containsRecord keyType || containsRecord valueType
+        | AST.TSum (_, typeArgs) ->
+            typeArgs |> List.exists containsRecord
+        | AST.TFunction (paramTypes, returnType) ->
+            (paramTypes |> List.exists containsRecord) || containsRecord returnType
+        | AST.TInt8
+        | AST.TInt16
+        | AST.TInt32
+        | AST.TInt64
+        | AST.TInt128
+        | AST.TUInt8
+        | AST.TUInt16
+        | AST.TUInt32
+        | AST.TUInt64
+        | AST.TUInt128
+        | AST.TBool
+        | AST.TFloat64
+        | AST.TString
+        | AST.TBytes
+        | AST.TChar
+        | AST.TUnit
+        | AST.TRawPtr
+        | AST.TRuntimeError
+        | AST.TVar _ ->
+            false
+
+    if containsRecord t then
+        match t with
+        | AST.TTuple _
+        | AST.TRecord _
+        | AST.TList _
+        | AST.TDict _
+        | AST.TFunction _
+        | AST.TSum _ ->
+            true
+        | _ ->
+            false
+    else
+        t |> rcShapeOfType Map.empty |> rcShapeNeedsOwnedScopeRelease
 
 /// Compatibility payload-size classifier backed by RcShape.
 let payloadSize (t: AST.Type) (typeReg: Map<string, (string * AST.Type) list>) : int =
