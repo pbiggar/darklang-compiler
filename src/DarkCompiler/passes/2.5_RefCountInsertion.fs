@@ -283,11 +283,11 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         | None ->
             Crash.crash $"RefCountInsertion: ClosureAlloc target '{funcName}' not found in function registry"
     | ClosureCall (closureAtom, _) ->
-        // Try to find the closure's function name and look up return type
+        // Prefer the concrete closure target when available; otherwise use
+        // the closure value's function type carried by the ANF type registry.
         match tryGetClosureFunc ctx closureAtom with
         | Some funcName -> Map.tryFind funcName ctx.FuncReg
         | None ->
-            // Fallback: infer from closure's type (TFunction)
             match closureAtom with
             | Var tid ->
                 match tryGetType ctx tid with

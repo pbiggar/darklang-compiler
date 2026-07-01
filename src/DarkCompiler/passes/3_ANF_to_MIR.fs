@@ -551,6 +551,27 @@ let binOpType (builder: CFGBuilder) (leftAtom: ANF.Atom) (rightAtom: ANF.Atom) :
     | AST.TFloat64, _ | _, AST.TFloat64 -> AST.TFloat64
     | _ -> leftType
 
+/// Resolve the result type for a closure call.
+/// A closure temp may still have its concrete allocation target in ClosureFuncs;
+/// higher-order values passed through parameters or containers are resolved from
+/// the already-required ANF result temp type.
+let private closureCallReturnType (builder: CFGBuilder) (resultTempId: ANF.TempId) (closure: ANF.Atom) : AST.Type =
+    let resultTempType () =
+        match tryFindType builder resultTempId with
+        | Some (AST.TFunction (_, retType)) -> retType
+        | Some t -> t
+        | None -> Crash.crash $"ClosureCall: Return type not found for {resultTempId}"
+
+    match closure with
+    | ANF.Var closureId ->
+        match Map.tryFind closureId builder.ClosureFuncs with
+        | Some funcName ->
+            match Map.tryFind funcName builder.ReturnTypeReg with
+            | Some t -> t
+            | None -> resultTempType ()
+        | None -> resultTempType ()
+    | _ -> resultTempType ()
+
 /// Get the type of an MIR operand (for generating type-specific instructions)
 let operandType (builder: CFGBuilder) (operand: MIR.Operand) : AST.Type =
     match operand with
@@ -979,21 +1000,7 @@ let rec convertExpr
                 | ANF.ClosureCall (closure, args) ->
                     // Call through closure: extract func_ptr, call with (closure, args...)
                     let argTypes = args |> List.map (atomType builder)
-                    let returnType =
-                        let fallback () =
-                            match tryFindType builder tempId with
-                            | Some (AST.TFunction (_, retType)) -> retType
-                            | Some t -> t
-                            | None -> Crash.crash $"ClosureCall: Return type not found for {tempId}"
-                        match closure with
-                        | ANF.Var closureId ->
-                            match Map.tryFind closureId builder.ClosureFuncs with
-                            | Some funcName ->
-                                match Map.tryFind funcName builder.ReturnTypeReg with
-                                | Some t -> t
-                                | None -> fallback ()
-                            | None -> fallback ()
-                        | _ -> fallback ()
+                    let returnType = closureCallReturnType builder tempId closure
                     destType := returnType
                     atomToOperand builder closure
                     |> Result.bind (fun closureOp ->
@@ -1624,21 +1631,7 @@ and convertExprToOperand
                 | ANF.ClosureCall (closure, args) ->
                     // Call through closure: extract func_ptr, call with (closure, args...)
                     let argTypes = args |> List.map (atomType builder)
-                    let returnType =
-                        let fallback () =
-                            match tryFindType builder tempId with
-                            | Some (AST.TFunction (_, retType)) -> retType
-                            | Some t -> t
-                            | None -> Crash.crash $"ClosureCall: Return type not found for {tempId}"
-                        match closure with
-                        | ANF.Var closureId ->
-                            match Map.tryFind closureId builder.ClosureFuncs with
-                            | Some funcName ->
-                                match Map.tryFind funcName builder.ReturnTypeReg with
-                                | Some t -> t
-                                | None -> fallback ()
-                            | None -> fallback ()
-                        | _ -> fallback ()
+                    let returnType = closureCallReturnType builder tempId closure
                     destType := returnType
                     atomToOperand builder closure
                     |> Result.bind (fun closureOp ->
