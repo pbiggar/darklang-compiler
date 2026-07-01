@@ -326,9 +326,11 @@ borrowed-retain checks, and root dispatch where full type metadata is available.
 element retains, while preserving the existing dynamic string/bytes list-leaf
 ownership contract: list leaves consume those freshly owned dynamic buffers
 rather than retaining an additional reference. It deliberately preserves the
-previous non-crashing classification for generated record names whose field
-metadata is not present in the current `TypeReg`; fixed root operations still
-require concrete payload metadata before they are emitted.
+previous non-crashing classification for record-like names whose field metadata
+is not present in the current `TypeReg`; probing a stricter
+`needsAutomaticDec` path exposed both generated type-variable placeholders such
+as `k$0` and monomorphized payload records such as `DictSumPayload`. Fixed root
+operations still require concrete payload metadata before they are emitted.
 
 `BoxedSumPayloadRelease` now carries field releases when `rcReleasePlanOfType`
 has source-type payload metadata. Shape-only `BoxedSum` classification remains
@@ -705,8 +707,8 @@ Concrete examples:
    emission now uses `rcShapeRetainOperation` and `rcShapeReleaseOperation`,
    and the legacy fixed-root compatibility predicate now uses
    `rcShapeStorageClass`, but the current adapter still has a metadata-gap
-   fallback for generated record names and some classification checks still use
-   legacy names.
+   fallback for record-like names missing from `TypeReg` and some
+   classification checks still use legacy names.
 
 3. Replace backend dispatch based on `payloadSize` and partial `sourceType`
    pattern matching with `RcReleasePlan`.

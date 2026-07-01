@@ -613,6 +613,43 @@ let testBorrowedCallStillGetsAutoDecUnderConservativePolicy () : TestResult =
     else
         Error "BorrowedCall should be treated as owned result under conservative policy and get automatic RefCountDec"
 
+let testPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        FuncReg = Map.empty
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let enumTemp = TempId 0
+    let resultTemp = TempId 1
+    let enumType = AST.TSum ("Color", [])
+    let func : Function = {
+        Name = "pureEnumBinding"
+        TypedParams = []
+        ReturnType = AST.TInt64
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                enumTemp,
+                TypedAtom (IntLiteral (Int64 0L), enumType),
+                Let (
+                    resultTemp,
+                    Atom (IntLiteral (Int64 1L)),
+                    Return (Var resultTemp)
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountDecForTemp enumTemp transformed.Body then
+        Error "Pure enum binding should classify as immediate and must not get automatic RefCountDec"
+    else
+        Ok ()
+
 let tests = [
     ("RcShape supports structural construction and equality", testRcShapeConstructionAndEquality)
     ("RcShape classifies primitives as immediate", testRcShapeClassifiesPrimitivesAsImmediate)
@@ -635,4 +672,5 @@ let tests = [
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
     ("borrowed call still gets auto-dec under conservative policy", testBorrowedCallStillGetsAutoDecUnderConservativePolicy)
+    ("pure enum binding does not get automatic dec", testPureEnumBindingDoesNotGetAutomaticDec)
 ]
