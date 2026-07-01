@@ -114,6 +114,7 @@ string/list/dict payload release, plus x64 tagged-list tuple2 nested tuple
 string/bytes/list/dict payload release, plus x64 tagged-list tuple3
 closure/list/dict payload release, plus x64 tagged-list record3
 closure/list/dict payload release, plus x64 tagged-list tuple4
+closure/bytes/list/dict payload release, plus x64 tagged-list record4
 closure/bytes/list/dict payload release.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
@@ -221,12 +222,13 @@ x64 tagged-list tuple2 nested tuple closure payload release, plus x64
 tagged-list tuple2 nested tuple string/bytes/list/dict payload release, plus
 x64 tagged-list tuple3 closure/list/dict payload release, plus x64
 tagged-list record3 closure/list/dict payload release, plus x64 tagged-list
-tuple4 closure/bytes/list/dict payload release:
+tuple4 closure/bytes/list/dict payload release, plus x64 tagged-list record4
+closure/bytes/list/dict payload release:
 
 - `scripts/run-in-container ./run-tests --filter=refcounting`: `205 passed`
-- `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `95 passed`
+- `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `96 passed`
 - Full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4804 passed, 2 failed`
+  `4805 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -1066,6 +1068,7 @@ commits enabled:
   non-empty dynamic-buffer field combinations
 - tagged-list three-field record string/bytes/list/dict payload release
 - tagged-list three-field record closure/list/dict payload release
+- tagged-list four-field record closure/bytes/list/dict payload release
 - tagged-list boxed sum dynamic string payload release
 - tagged-list boxed sum list payload release
 - tagged-list boxed sum dict payload release
@@ -1118,9 +1121,11 @@ Likely gaps:
 - list payload helper variants beyond the currently covered tuple2, exhaustive
   tuple3 dynamic-buffer combinations, mixed tuple3 string/list/dict and
   closure/list/dict shapes,
-  one mixed tuple4 string/bytes/list/dict shape, record1, exhaustive record3
+  mixed tuple4 string/bytes/list/dict and closure/bytes/list/dict shapes,
+  record1, exhaustive record3
   dynamic-buffer combinations, mixed record3 string/bytes/list/dict and
-  closure/list/dict shapes, mixed record4 string/bytes/list/dict shapes, sum dynamic-buffer, sum-list/sum-dict,
+  closure/list/dict shapes, mixed record4 string/bytes/list/dict and
+  closure/bytes/list/dict shapes, sum dynamic-buffer, sum-list/sum-dict,
   sum-closure, mixed sum-tuple3/sum-tuple4 string/list/dict variants,
   sum-record3/sum-record4 string/list/dict variants,
   list/closure/dict/string
