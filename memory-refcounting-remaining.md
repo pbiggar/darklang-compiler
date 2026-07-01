@@ -766,10 +766,17 @@ Current tests prove:
 ### Remaining Gaps
 
 Bytes ownership coverage is now close to string coverage for managed
-refcounting behavior. The remaining gaps are lower-level:
+refcounting behavior. The stdlib bytes layout audit found:
 
-- auditing every bytes constructor/transform for the aligned
-  `[length][data][padding][refcount]` layout
+- `Bytes.create`, `Bytes.set`, and `Bytes.fromList` all compute
+  `dataSize = ((length + 7) / 8) * 8`, allocate `16 + dataSize`, and write the
+  refcount at `8 + dataSize`
+- zero-length bytes allocate 16 bytes and write the refcount at offset 8
+- crypto and base64 bytes-producing paths build results through
+  `Bytes.fromList`, so they share the aligned layout
+
+The remaining gap is lower-level:
+
 - deciding whether zero-refcount bytes blocks only balance leak counters or can
   enter a reusable variable-size free path
 
@@ -786,17 +793,12 @@ from either:
 
 ### Remaining Tasks
 
-1. Audit bytes constructors and transforms for aligned refcount layout.
-2. Add targeted leak-check tests only if the audit finds an uncovered path.
-3. Decide whether zero-refcount bytes blocks should only balance leak counters
+1. Decide whether zero-refcount bytes blocks should only balance leak counters
    or also be reusable.
 
 ### Suggested Commit Breakdown
 
-1. Inspect each stdlib bytes-producing function and document whether it writes
-   the trailing refcount at the aligned offset.
-2. Add one failing-then-passing test for any uncovered constructor/transform.
-3. Defer variable-size bytes reuse to the raw/dynamic-buffer policy work.
+1. Defer variable-size bytes reuse to the raw/dynamic-buffer policy work.
 
 ## 3. Finish Dynamic String Edge Coverage And Reuse Semantics
 
