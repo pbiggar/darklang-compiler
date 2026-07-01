@@ -623,6 +623,7 @@ let private listRefCountDecDictHelperLabel = "__dark_list_rc_dec_dict_helper"
 let private listRefCountDecDynamicBufferHelperLabel = "__dark_list_rc_dec_dynamic_buffer_helper"
 let private dictRefCountIncHelperLabel = "__dark_dict_rc_inc_helper"
 let private dictRefCountDecHelperLabel = "__dark_dict_rc_dec_helper"
+let private dictRefCountDecListValueHelperLabel = "__dark_dict_rc_dec_list_value_helper"
 let private closureRefCountDecHelperLabel = "__dark_closure_rc_dec_helper"
 
 type private RawSetRootRetainTarget =
@@ -1068,6 +1069,13 @@ let private listDecHelperForType
     match tryRcReleasePlanOfType recordRegistry sumShapeRegistry fieldType with
     | Some releasePlan -> listDecHelperForReleasePlan releasePlan
     | None -> Crash.crash $"listDecHelperForType: missing RC metadata for list element type {fieldType}"
+
+let private dictDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
+    match releasePlan with
+    | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, ANF.RootRelease (_, ANF.TaggedList, _))) ->
+        dictRefCountDecListValueHelperLabel
+    | _ ->
+        dictRefCountDecHelperLabel
 
 let private genListFieldRelease (fieldOffset: int) (fieldReleasePlan: ANF.RcReleasePlan) : X86_64.Instr list =
     [X86_64.PUSH X86_64.RDX
@@ -2460,8 +2468,12 @@ let private generateDictRefCountIncHelper () : X86_64.Instr list =
      X86_64.Label helperRet
      X86_64.RET]
 
-let private generateDictRefCountDecHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    let label name = $"__dark_dict_rc_dec_{name}"
+let private generateDictRefCountDecHelper
+    (helperLabel: string)
+    (releaseLeafListValue: bool)
+    (enableLeakCheck: bool)
+    : X86_64.Instr list =
+    let label name = $"{helperLabel}_{name}"
     let helperRet = label "ret"
     let loopCheck = label "loop_check"
     let popOrRet = label "pop_or_ret"
@@ -2475,6 +2487,7 @@ let private generateDictRefCountDecHelper (enableLeakCheck: bool) : X86_64.Instr
     let collectLoop = label "collect_loop"
     let freeNode = label "free_node"
     let skipFreeList = label "skip_freelist"
+    let skipLeafListValueRelease = label "skip_leaf_list_value_release"
 
     let leakDec =
         if enableLeakCheck then
@@ -2515,7 +2528,22 @@ let private generateDictRefCountDecHelper (enableLeakCheck: bool) : X86_64.Instr
          X86_64.ADD_imm (X86_64.RCX, 1)
          X86_64.Label doneLabel]
 
-    [X86_64.Label dictRefCountDecHelperLabel
+    let releaseLeafListValueInstrs =
+        if releaseLeafListValue then
+            let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; X86_64.R11; scratch]
+            let saves = saveRegs |> List.map X86_64.PUSH
+            let restores = saveRegs |> List.rev |> List.map X86_64.POP
+            [X86_64.CMP_imm (X86_64.RDX, 2)
+             X86_64.Jcc (X86_64.NE, skipLeafListValueRelease)]
+            @ saves
+            @ [X86_64.MOV_load (X86_64.RAX, X86_64.RDI, 8)
+               X86_64.CALL listRefCountDecHelperLabel]
+            @ restores
+            @ [X86_64.Label skipLeafListValueRelease]
+        else
+            []
+
+    [X86_64.Label helperLabel
      X86_64.XOR_reg (X86_64.RCX, X86_64.RCX)
      X86_64.JMP loopCheck
 
@@ -2595,9 +2623,9 @@ let private generateDictRefCountDecHelper (enableLeakCheck: bool) : X86_64.Instr
     @ addChild "internal"
     @ [X86_64.ADD_imm (X86_64.R9, 1)
        X86_64.JMP collectLoop
-
-       X86_64.Label freeNode
-       X86_64.CMP_imm (X86_64.RSI, freeListSize)
+       X86_64.Label freeNode]
+    @ releaseLeafListValueInstrs
+    @ [X86_64.CMP_imm (X86_64.RSI, freeListSize)
        X86_64.Jcc (X86_64.GE, skipFreeList)
        X86_64.MOV_reg (X86_64.R9, freeListBase)
        X86_64.ADD_reg (X86_64.R9, X86_64.RSI)
@@ -3849,12 +3877,15 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL helperLabel]
                 @ restores
             | LIR.DictHeap ->
-                let _releasePlan = requiredRcMetadataReleasePlan "DictHeap RefCountDec" metadata
+                let helperLabel =
+                    metadata
+                    |> requiredRcMetadataReleasePlan "DictHeap RefCountDec"
+                    |> dictDecHelperForReleasePlan
                 let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; scratch]
                 let saves = saveRegs |> List.map X86_64.PUSH
                 let restores = saveRegs |> List.rev |> List.map X86_64.POP
                 saves
-                @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL dictRefCountDecHelperLabel]
+                @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL helperLabel]
                 @ restores
             | LIR.ClosureHeap ->
                 let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.R10; scratch]
@@ -5173,11 +5204,51 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
 
         Set.union labelsFromFunctions labelsFromClosureCaptures
 
+    let neededDictDecHelperLabels =
+        let labelsFromFunctions =
+            functions
+            |> List.map (fun func ->
+                func.CFG.Blocks
+                |> Map.toList
+                |> List.map (fun (_, block) ->
+                    block.Instrs
+                    |> List.map (function
+                        | LIR.RefCountDec (_, _, LIR.DictHeap, metadata) ->
+                            metadata
+                            |> requiredRcMetadataReleasePlan "DictHeap RefCountDec helper selection"
+                            |> dictDecHelperForReleasePlan
+                            |> Set.singleton
+                        | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
+                            metadata
+                            |> rcMetadataReleasePlan
+                            |> Option.filter (rcReleasePlanContains (releasePlanIsRootKind ANF.DictHeap))
+                            |> Option.map (fun _ -> Set.singleton dictRefCountDecHelperLabel)
+                            |> Option.defaultValue Set.empty
+                        | _ ->
+                            Set.empty)
+                    |> unionLabelSets)
+                |> unionLabelSets)
+            |> unionLabelSets
+
+        if closureCapturesContainRootKindRelease ANF.DictHeap then
+            Set.add dictRefCountDecHelperLabel labelsFromFunctions
+        else
+            labelsFromFunctions
+
+    let typedDictDecHelpersNeedListDecHelper =
+        if Set.contains dictRefCountDecListValueHelperLabel neededDictDecHelperLabels then
+            Set.singleton listRefCountDecHelperLabel
+        else
+            Set.empty
+
+    let selectedListDecHelperLabels =
+        Set.union neededListDecHelperLabels typedDictDecHelpersNeedListDecHelper
+
     let selectedListHelpersNeedDictDecHelper =
-        selectedListRefCountDecHelpersNeedDictDecHelper neededListDecHelperLabels
+        selectedListRefCountDecHelpersNeedDictDecHelper selectedListDecHelperLabels
 
     let selectedListHelpersNeedClosureDecHelper =
-        selectedListRefCountDecHelpersNeedClosureDecHelper neededListDecHelperLabels
+        selectedListRefCountDecHelpersNeedClosureDecHelper selectedListDecHelperLabels
 
     let needsListRcIncHelper =
         functions
@@ -5208,19 +5279,10 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                     | _ -> false)))
 
     let needsDictRcDecHelper =
-        (functions
-         |> List.exists (fun func ->
-             func.CFG.Blocks
-             |> Map.exists (fun _ block ->
-                 block.Instrs
-                 |> List.exists (function
-                     | LIR.RefCountDec (_, _, LIR.DictHeap, _) -> true
-                     | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
-                         metadata
-                         |> rcMetadataReleasePlan
-                         |> Option.exists (rcReleasePlanContains (releasePlanIsRootKind ANF.DictHeap))
-                     | _ -> false))))
-        || closureCapturesContainRootKindRelease ANF.DictHeap
+        Set.contains dictRefCountDecHelperLabel neededDictDecHelperLabels
+
+    let needsDictRcDecListValueHelper =
+        Set.contains dictRefCountDecListValueHelperLabel neededDictDecHelperLabels
 
     let needsClosureRcDecHelper =
         functions
@@ -5247,14 +5309,17 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
             if needsListRcIncHelper then generateListRefCountIncHelper ()
             else []
         let listDecHelpers =
-            generateNeededListRefCountDecHelpers neededListDecHelperLabels enableLeakCheck
+            generateNeededListRefCountDecHelpers selectedListDecHelperLabels enableLeakCheck
         let dictIncHelper =
             if needsDictRcIncHelper then generateDictRefCountIncHelper ()
             else []
         let dictDecHelper =
-            if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper then generateDictRefCountDecHelper enableLeakCheck
+            if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false enableLeakCheck
+            else []
+        let dictDecListValueHelper =
+            if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel true enableLeakCheck
             else []
         let closureDecHelper =
             if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper enableLeakCheck recordRegistry sumShapeRegistry closurePayloadSizes closureCaptureTypes
             else []
-        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ dictDecHelper @ closureDecHelper @ genOomHandler ())
+        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ dictDecHelper @ dictDecListValueHelper @ closureDecHelper @ genOomHandler ())
