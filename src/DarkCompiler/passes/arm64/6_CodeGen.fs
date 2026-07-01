@@ -2604,6 +2604,27 @@ let private releasePlanIsTaggedListWithElementRelease
     | _ ->
         false
 
+let private releasePlanIsDynamicBufferRelease (releasePlan: ANF.RcReleasePlan) : bool =
+    match releasePlan with
+    | ANF.DynamicBufferRelease _ ->
+        true
+    | _ ->
+        false
+
+let private releasePlanIsTaggedListWithTuple2ElementFieldRelease
+    (fieldPredicate: ANF.RcReleasePlan -> bool)
+    (releasePlan: ANF.RcReleasePlan)
+    : bool =
+    releasePlan
+    |> releasePlanIsTaggedListWithElementRelease (function
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (16, fieldReleases)) ->
+            fieldReleases
+            |> List.exists (function
+                | ANF.FieldRelease (_, fieldRelease) ->
+                    fieldPredicate fieldRelease)
+        | _ ->
+            false)
+
 let private generateDictRefCountIncHelper () : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_dict_rc_inc_{name}"
     let internalTag = label "internal"
@@ -6816,11 +6837,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isTuple2DynamicList sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple fields) ->
-                                 tuple2DynamicFieldPattern fields |> Option.isSome
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithTuple2ElementFieldRelease releasePlanIsDynamicBufferRelease)
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
@@ -6835,11 +6853,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isTuple2ListList sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple fields) ->
-                                 tuple2ListFieldPattern fields |> Option.isSome
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithTuple2ElementFieldRelease (releasePlanIsRootKind ANF.TaggedList))
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
@@ -6854,11 +6869,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isTuple2DictList sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple fields) ->
-                                 tuple2DictFieldPattern fields |> Option.isSome
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithTuple2ElementFieldRelease (releasePlanIsRootKind ANF.DictHeap))
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
@@ -6873,11 +6885,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isTuple2ClosureList sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple fields) ->
-                                 tuple2ClosureFieldPattern fields |> Option.isSome
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithTuple2ElementFieldRelease (releasePlanIsRootKind ANF.ClosureHeap))
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
