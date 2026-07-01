@@ -316,6 +316,34 @@ let testRcShapeOwnershipHelpersClassifyRecursiveRelease () : TestResult =
         | None ->
             Ok ()
 
+let testRcShapeReleasePlanClassifiesFieldCleanup () : TestResult =
+    let samples = [
+        (Immediate, NoReleasePlan)
+        (StaticString, NoReleasePlan)
+        (RawUnmanaged, NoReleasePlan)
+        (DynamicString, DynamicBufferRelease DynamicStringBuffer)
+        (DynamicBytes, DynamicBufferRelease DynamicBytesBuffer)
+        (TaggedListShape DynamicString, RootRelease (24, TaggedList, TaggedListPayloadRelease (DynamicBufferRelease DynamicStringBuffer)))
+        (DictRoot (DynamicString, FixedBlock (8, [DynamicBytes])),
+            RootRelease (
+                8,
+                DictHeap,
+                DictPayloadRelease (
+                    DynamicBufferRelease DynamicStringBuffer,
+                    RootRelease (8, GenericHeap, FixedBlockPayloadRelease (8, [FieldRelease (0, DynamicBufferRelease DynamicBytesBuffer)])))))
+        (FixedBlock (16, [Immediate; DynamicString]),
+            RootRelease (16, GenericHeap, FixedBlockPayloadRelease (16, [FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)])))
+        (ClosureShape [DynamicString],
+            RootRelease (0, ClosureHeap, ClosurePayloadRelease [FieldRelease (0, DynamicBufferRelease DynamicStringBuffer)]))
+        (BoxedSum 16, RootRelease (16, GenericHeap, BoxedSumPayloadRelease 16))
+    ]
+
+    match samples |> List.tryFind (fun (shape, expected) -> rcShapeReleasePlan shape <> expected) with
+    | None ->
+        Ok ()
+    | Some (shape, expected) ->
+        Error $"Expected shape {shape} to use release plan {expected}, got {rcShapeReleasePlan shape}"
+
 let testInferCallReturnsFunctionReturnType () : TestResult =
     let ctx : TypeContext = {
         TypeReg = Map.empty
@@ -527,6 +555,7 @@ let tests = [
     ("RcShape ownership helpers classify managed RC roots", testRcShapeOwnershipHelpersClassifyRootManagement)
     ("RcShape ownership helpers classify ownership-transfer roots", testRcShapeOwnershipHelpersClassifyOwnershipTransferRoots)
     ("RcShape ownership helpers classify recursive release", testRcShapeOwnershipHelpersClassifyRecursiveRelease)
+    ("RcShape release plan classifies field cleanup", testRcShapeReleasePlanClassifiesFieldCleanup)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)

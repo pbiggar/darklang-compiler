@@ -248,7 +248,7 @@ predicate:
 - `scripts/run-in-container ./run-tests --filter=refcounting`: `205 passed`
 - `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `104 passed`
 - Full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4817 passed, 2 failed`
+  `4818 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -303,11 +303,17 @@ type RcShape =
 ```
 
 `rcShapeOfType` classifies source types into this shape model. `ANF.fs` also
-now exposes the first small ownership helpers:
+now exposes the first small ownership helpers and release-plan model:
 
 - `rcShapeNeedsOwnedScopeRelease`
 - `rcShapeRootKind`
 - `rcShapePayloadSize`
+- `rcShapeStorageClass`
+- `rcShapeNeedsBorrowedRetain`
+- `rcShapeIsOwnershipTransferRoot`
+- `rcShapeNeedsAutomaticBindingDec`
+- `rcShapeReleasePlan`
+- `RcReleasePlan`, `RcPayloadReleasePlan`, and `RcFieldRelease`
 
 `2.5_RefCountInsertion.fs` uses those helpers for automatic scope release,
 borrowed-retain checks, and root dispatch where full type metadata is available.
@@ -676,12 +682,10 @@ Concrete examples:
    Initial operations exist for owned scope release, root dispatch kind, root
    payload size, storage classification, retain/release operations,
    borrowed-retain classification, automatic binding-decref classification,
-   and ownership-transfer root classification. Remaining suggested shape
-   operations:
-
-   - `fieldReleasePlan : RcShape -> FieldReleasePlan list`
-   - `containerPayloadPlan : RcShape -> PayloadReleasePlan`
-   - recursive-release classification
+   ownership-transfer root classification, and a recursive `RcReleasePlan`.
+   The remaining work here is consumption: backend release paths still need to
+   use the shared plan instead of reconstructing field cleanup from local
+   source-type matches.
 
 2. Finish replacing `isRcManagedHeapType` and `needsAutomaticDec` in
    `2.5_RefCountInsertion.fs` with shape-operation decisions. Retain/release
@@ -692,7 +696,7 @@ Concrete examples:
    legacy names.
 
 3. Replace backend dispatch based on `payloadSize` and partial `sourceType`
-   pattern matching with a serialized release plan.
+   pattern matching with `RcReleasePlan`.
 
 4. Add tests that prove the classifier controls behavior:
 
@@ -710,7 +714,7 @@ Concrete examples:
 2. Extend the ownership helpers around `RcShape` without changing codegen.
 3. Finish converting RC insertion for strings and bytes to use the planner.
 4. Finish converting RC insertion for fixed blocks and lists to use the planner.
-5. Convert backend fixed-block field release selection to consume a plan.
+5. Convert backend fixed-block field release selection to consume `RcReleasePlan`.
 
 ## 2. Complete Bytes Ownership To Match Strings
 
@@ -921,8 +925,7 @@ The implementation is still specialized and partial:
 2. Add returned-value variants for each test shape.
 3. Add use-after-return variants where a borrowed child is returned and must be
    retained before cleanup.
-4. Move field release selection from ad hoc backend matches to a shared release
-   plan.
+4. Move field release selection from ad hoc backend matches to `RcReleasePlan`.
 5. Implement the same release plan on x64.
 
 ### Suggested Commit Breakdown

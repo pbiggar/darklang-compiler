@@ -141,6 +141,26 @@ type RcStorageClass =
     | ManagedDynamicBuffer of operation:RcOperation
     | ManagedRcRoot of payloadSize:int * kind:RcKind
 
+/// Structured release plan selected from a runtime shape.
+///
+/// Backends can consume this instead of rediscovering nested ownership by
+/// pattern matching on source types. RootRelease describes the refcounted root;
+/// the nested payload plan describes extra work that must happen only when the
+/// root refcount reaches zero.
+type RcReleasePlan =
+    | NoReleasePlan
+    | DynamicBufferRelease of operation:RcOperation
+    | RootRelease of payloadSize:int * kind:RcKind * payload:RcPayloadReleasePlan
+and RcPayloadReleasePlan =
+    | NoPayloadRelease
+    | FixedBlockPayloadRelease of payloadSize:int * fieldReleases:RcFieldRelease list
+    | BoxedSumPayloadRelease of payloadSize:int
+    | TaggedListPayloadRelease of elementRelease:RcReleasePlan
+    | DictPayloadRelease of keyRelease:RcReleasePlan * valueRelease:RcReleasePlan
+    | ClosurePayloadRelease of captureReleases:RcFieldRelease list
+and RcFieldRelease =
+    | FieldRelease of offset:int * release:RcReleasePlan
+
 /// Function return ownership convention
 type ReturnOwnership =
     | OwnedReturn
@@ -472,6 +492,45 @@ let rcShapeNeedsAutomaticBindingDec (shape: RcShape) : bool =
         false
     | _ ->
         rcShapeNeedsOwnedScopeRelease shape
+
+/// Release plan for a value with the given runtime shape.
+let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
+    let fieldReleasePlans (fieldShapes: RcShape list) : RcFieldRelease list =
+        fieldShapes
+        |> List.mapi (fun index fieldShape -> (index * 8, rcShapeReleasePlan fieldShape))
+        |> List.choose (fun (offset, releasePlan) ->
+            match releasePlan with
+            | NoReleasePlan ->
+                None
+            | _ ->
+                Some (FieldRelease (offset, releasePlan)))
+
+    let rootPayloadPlan (rootShape: RcShape) : RcPayloadReleasePlan =
+        match rootShape with
+        | FixedBlock (payloadSize, fieldShapes) ->
+            FixedBlockPayloadRelease (payloadSize, fieldReleasePlans fieldShapes)
+        | BoxedSum payloadSize ->
+            BoxedSumPayloadRelease payloadSize
+        | TaggedListShape elementShape ->
+            TaggedListPayloadRelease (rcShapeReleasePlan elementShape)
+        | DictRoot (keyShape, valueShape) ->
+            DictPayloadRelease (rcShapeReleasePlan keyShape, rcShapeReleasePlan valueShape)
+        | ClosureShape captureShapes ->
+            ClosurePayloadRelease (fieldReleasePlans captureShapes)
+        | Immediate
+        | DynamicString
+        | DynamicBytes
+        | StaticString
+        | RawUnmanaged ->
+            NoPayloadRelease
+
+    match rcShapeStorageClass shape with
+    | UnmanagedStorage ->
+        NoReleasePlan
+    | ManagedDynamicBuffer operation ->
+        DynamicBufferRelease operation
+    | ManagedRcRoot (payloadSize, kind) ->
+        RootRelease (payloadSize, kind, rootPayloadPlan shape)
 
 /// Determine reference-count dispatch kind for a heap type
 let rcKind (t: AST.Type) : RcKind =
