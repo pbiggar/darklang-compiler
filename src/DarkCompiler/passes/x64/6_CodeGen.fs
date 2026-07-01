@@ -667,6 +667,57 @@ let private fixedBlockPayloadSize (recordRegistry: LIR.RecordRegistry) (fieldTyp
         | ANF.RawUnmanaged ->
             None
 
+let private tryRcReleasePlanOfType (recordRegistry: LIR.RecordRegistry) (typ: AST.Type) : ANF.RcReleasePlan option =
+    match typ with
+    | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
+        None
+    | _ ->
+        Some (ANF.rcReleasePlanOfType recordRegistry typ)
+
+let private releasePlanIsRootKind (kind: ANF.RcKind) (releasePlan: ANF.RcReleasePlan) : bool =
+    match releasePlan with
+    | ANF.RootRelease (_, planKind, _) when planKind = kind ->
+        true
+    | _ ->
+        false
+
+let private releasePlanIsTaggedListWithElementRelease
+    (elementPredicate: ANF.RcReleasePlan -> bool)
+    (releasePlan: ANF.RcReleasePlan)
+    : bool =
+    match releasePlan with
+    | ANF.RootRelease (_, ANF.TaggedList, ANF.TaggedListPayloadRelease elementRelease) ->
+        elementPredicate elementRelease
+    | _ ->
+        false
+
+let rec private rcReleasePlanContains
+    (predicate: ANF.RcReleasePlan -> bool)
+    (releasePlan: ANF.RcReleasePlan)
+    : bool =
+    if predicate releasePlan then
+        true
+    else
+        match releasePlan with
+        | ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+        | ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, fieldReleases))
+        | ANF.RootRelease (_, _, ANF.ClosurePayloadRelease fieldReleases) ->
+            fieldReleases
+            |> List.exists (function
+                | ANF.FieldRelease (_, fieldRelease) ->
+                    rcReleasePlanContains predicate fieldRelease)
+        | _ ->
+            false
+
+let private typeReleasePlanContains
+    (predicate: ANF.RcReleasePlan -> bool)
+    (recordRegistry: LIR.RecordRegistry)
+    (typ: AST.Type)
+    : bool =
+    typ
+    |> tryRcReleasePlanOfType recordRegistry
+    |> Option.exists (rcReleasePlanContains predicate)
+
 let private genDictFieldRelease (fieldOffset: int) : X86_64.Instr list =
     [X86_64.PUSH X86_64.RDX
      X86_64.MOV_load (X86_64.R8, X86_64.RDX, fieldOffset)
@@ -5327,6 +5378,26 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
         | AST.TList AST.TBytes -> true
         | _ -> false
 
+    let typeContainsNestedListElementRelease
+        (elementKind: ANF.RcKind)
+        (fallbackMatcher: AST.Type -> bool)
+        (sourceType: AST.Type)
+        : bool =
+        let releasePlanMatches =
+            releasePlanIsTaggedListWithElementRelease (releasePlanIsRootKind elementKind)
+
+        typeReleasePlanContains releasePlanMatches recordRegistry sourceType
+        || typeContainsListMatching fallbackMatcher sourceType
+
+    let closureCapturesContainNestedListElementRelease
+        (elementKind: ANF.RcKind)
+        (fallbackMatcher: AST.Type -> bool)
+        : bool =
+        closureCaptureTypes
+        |> Map.exists (fun _ captureTypes ->
+            captureTypes
+            |> List.exists (typeContainsNestedListElementRelease elementKind fallbackMatcher))
+
     // Check if any function uses TaggedList RefCountDec or RefCountInc
     let needsListRcDecHelper =
         functions
@@ -6133,9 +6204,9 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TList _))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isNestedList sourceType
+                        typeContainsNestedListElementRelease ANF.TaggedList isNestedList sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isNestedList))
+            || closureCapturesContainNestedListElementRelease ANF.TaggedList isNestedList)
 
     let needsListRcDecClosureHelper =
         functions
@@ -6146,9 +6217,9 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TFunction _))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isClosureList sourceType
+                        typeContainsNestedListElementRelease ANF.ClosureHeap isClosureList sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isClosureList))
+            || closureCapturesContainNestedListElementRelease ANF.ClosureHeap isClosureList)
 
     let needsListRcDecDictHelper =
         functions
@@ -6159,9 +6230,9 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TDict _))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isDictList sourceType
+                        typeContainsNestedListElementRelease ANF.DictHeap isDictList sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isDictList))
+            || closureCapturesContainNestedListElementRelease ANF.DictHeap isDictList)
 
     let needsListRcDecDynamicBufferHelper =
         functions
