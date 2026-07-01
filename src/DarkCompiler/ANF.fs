@@ -463,6 +463,16 @@ let rcShapeReleaseOperation (shape: RcShape) : RcOperation option =
 let rcShapeNeedsBorrowedRetain (shape: RcShape) : bool =
     rcShapeRetainOperation shape |> Option.isSome
 
+/// True when a normal owning binding of this shape should receive an automatic
+/// decrement from RC insertion. Closure roots are handled by closure-producing
+/// expressions so aliases of function-typed values do not double-release.
+let rcShapeNeedsAutomaticBindingDec (shape: RcShape) : bool =
+    match shape with
+    | ClosureShape _ ->
+        false
+    | _ ->
+        rcShapeNeedsOwnedScopeRelease shape
+
 /// Determine reference-count dispatch kind for a heap type
 let rcKind (t: AST.Type) : RcKind =
     match t with

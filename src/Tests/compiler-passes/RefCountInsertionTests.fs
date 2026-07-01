@@ -111,6 +111,33 @@ let testRcShapeOwnershipHelpersClassifyManagedRoots () : TestResult =
         | None ->
             Ok ()
 
+let testRcShapeOwnershipHelpersClassifyAutomaticBindingDecs () : TestResult =
+    let automaticDecShapes = [
+        DynamicString
+        DynamicBytes
+        FixedBlock (16, [Immediate; DynamicString])
+        BoxedSum 16
+        TaggedListShape DynamicString
+        DictRoot (DynamicString, Immediate)
+    ]
+
+    let skippedShapes = [
+        Immediate
+        StaticString
+        RawUnmanaged
+        ClosureShape [DynamicString]
+    ]
+
+    match automaticDecShapes |> List.tryFind (fun shape -> not (rcShapeNeedsAutomaticBindingDec shape)) with
+    | Some shape ->
+        Error $"Expected shape {shape} to need automatic binding dec"
+    | None ->
+        match skippedShapes |> List.tryFind rcShapeNeedsAutomaticBindingDec with
+        | Some shape ->
+            Error $"Expected shape {shape} to skip automatic binding dec"
+        | None ->
+            Ok ()
+
 let testRcShapeOwnershipHelpersClassifyBorrowedRetains () : TestResult =
     let retainedShapes = [
         DynamicString
@@ -492,6 +519,7 @@ let tests = [
     ("RcShape classifies tuples and records as fixed blocks", testRcShapeClassifiesTuplesAndRecordsAsFixedBlocks)
     ("RcShape classifies remaining runtime shapes", testRcShapeClassifiesRemainingRuntimeShapes)
     ("RcShape ownership helpers classify managed roots", testRcShapeOwnershipHelpersClassifyManagedRoots)
+    ("RcShape ownership helpers classify automatic binding decs", testRcShapeOwnershipHelpersClassifyAutomaticBindingDecs)
     ("RcShape ownership helpers classify borrowed retains", testRcShapeOwnershipHelpersClassifyBorrowedRetains)
     ("RcShape ownership helpers select root dispatch", testRcShapeOwnershipHelpersSelectRootDispatch)
     ("RcShape ownership helpers select retain/release operations", testRcShapeOwnershipHelpersSelectRetainReleaseOperations)

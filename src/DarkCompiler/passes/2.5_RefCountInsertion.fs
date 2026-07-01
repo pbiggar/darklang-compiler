@@ -482,10 +482,8 @@ let private isRcManagedHeapType (ctx: TypeContext) (typ: AST.Type) : bool =
 
 let private needsAutomaticDec (ctx: TypeContext) (typ: AST.Type) : bool =
     match tryRcShapeForType ctx typ with
-    | Some (ClosureShape _) ->
-        false
     | Some shape ->
-        rcShapeNeedsOwnedScopeRelease shape
+        rcShapeNeedsAutomaticBindingDec shape
     | None ->
         isHeapType typ
 
