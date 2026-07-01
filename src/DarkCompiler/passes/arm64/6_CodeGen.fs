@@ -2611,6 +2611,131 @@ let private releasePlanIsDynamicBufferRelease (releasePlan: ANF.RcReleasePlan) :
     | _ ->
         false
 
+let private releasePlanIsDynamicBufferOperation
+    (operation: ANF.RcOperation)
+    (releasePlan: ANF.RcReleasePlan)
+    : bool =
+    match releasePlan with
+    | ANF.DynamicBufferRelease planOperation when planOperation = operation ->
+        true
+    | _ ->
+        false
+
+let private releasePlanFieldHasRelease
+    (fieldOffset: int)
+    (predicate: ANF.RcReleasePlan -> bool)
+    (fieldReleases: ANF.RcFieldRelease list)
+    : bool =
+    fieldReleases
+    |> List.exists (function
+        | ANF.FieldRelease (offset, releasePlan) when offset = fieldOffset ->
+            predicate releasePlan
+        | _ ->
+            false)
+
+let private releasePlanIsFixedBlockWithFieldReleases
+    (payloadSize: int)
+    (expectedFieldReleases: (int * (ANF.RcReleasePlan -> bool)) list)
+    (releasePlan: ANF.RcReleasePlan)
+    : bool =
+    match releasePlan with
+    | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (planPayloadSize, fieldReleases))
+        when planPayloadSize = payloadSize ->
+        expectedFieldReleases
+        |> List.forall (fun (fieldOffset, predicate) ->
+            releasePlanFieldHasRelease fieldOffset predicate fieldReleases)
+    | _ ->
+        false
+
+let private releasePlanIsBoxedSumWithPayloadRelease
+    (payloadPredicate: ANF.RcReleasePlan -> bool)
+    (releasePlan: ANF.RcReleasePlan)
+    : bool =
+    match releasePlan with
+    | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
+        fieldReleases
+        |> List.exists (function
+            | ANF.FieldRelease (_, payloadRelease) ->
+                payloadPredicate payloadRelease)
+    | _ ->
+        false
+
+let private releasePlanIsTaggedListWithSumPayloadRelease
+    (payloadPredicate: ANF.RcReleasePlan -> bool)
+    (releasePlan: ANF.RcReleasePlan)
+    : bool =
+    releasePlanIsTaggedListWithElementRelease
+        (releasePlanIsBoxedSumWithPayloadRelease payloadPredicate)
+        releasePlan
+
+let private releasePlanIsTuple4StringBytesListDictPayload (releasePlan: ANF.RcReleasePlan) : bool =
+    releasePlan
+    |> releasePlanIsFixedBlockWithFieldReleases
+        32
+        [
+            0, releasePlanIsDynamicBufferOperation ANF.DynamicStringBuffer
+            8, releasePlanIsDynamicBufferOperation ANF.DynamicBytesBuffer
+            16, releasePlanIsRootKind ANF.TaggedList
+            24, releasePlanIsRootKind ANF.DictHeap
+        ]
+
+let private releasePlanIsTuple4NestedTuplePayload (releasePlan: ANF.RcReleasePlan) : bool =
+    let nestedPayload =
+        releasePlanIsFixedBlockWithFieldReleases
+            16
+            [
+                0, releasePlanIsRootKind ANF.TaggedList
+                8, releasePlanIsDynamicBufferOperation ANF.DynamicStringBuffer
+            ]
+
+    releasePlan
+    |> releasePlanIsFixedBlockWithFieldReleases
+        32
+        [
+            0, releasePlanIsDynamicBufferOperation ANF.DynamicStringBuffer
+            8, releasePlanIsDynamicBufferOperation ANF.DynamicBytesBuffer
+            16, nestedPayload
+            24, releasePlanIsRootKind ANF.TaggedList
+        ]
+
+let private releasePlanIsTuple4NestedDictPayload (releasePlan: ANF.RcReleasePlan) : bool =
+    let nestedPayload =
+        releasePlanIsFixedBlockWithFieldReleases
+            16
+            [
+                0, releasePlanIsRootKind ANF.DictHeap
+                8, releasePlanIsDynamicBufferOperation ANF.DynamicStringBuffer
+            ]
+
+    releasePlan
+    |> releasePlanIsFixedBlockWithFieldReleases
+        32
+        [
+            0, releasePlanIsDynamicBufferOperation ANF.DynamicStringBuffer
+            8, releasePlanIsDynamicBufferOperation ANF.DynamicBytesBuffer
+            16, nestedPayload
+            24, releasePlanIsRootKind ANF.TaggedList
+        ]
+
+let private releasePlanIsTuple4NestedClosurePayload (releasePlan: ANF.RcReleasePlan) : bool =
+    let nestedPayload =
+        releasePlanIsFixedBlockWithFieldReleases
+            16
+            [
+                0, releasePlanIsRootKind ANF.ClosureHeap
+                8, releasePlanIsDynamicBufferOperation ANF.DynamicStringBuffer
+            ]
+
+    releasePlan
+    |> releasePlanIsFixedBlockWithFieldReleases
+        32
+        [
+            0, releasePlanIsDynamicBufferOperation ANF.DynamicStringBuffer
+            8, releasePlanIsDynamicBufferOperation ANF.DynamicBytesBuffer
+            16, nestedPayload
+            24, releasePlanIsRootKind ANF.TaggedList
+        ]
+
 let private releasePlanIsTaggedListWithTuple2ElementFieldRelease
     (fieldPredicate: ANF.RcReleasePlan -> bool)
     (releasePlan: ANF.RcReleasePlan)
@@ -7436,11 +7561,9 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isStringPayloadSumList ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TSum _) as listType ->
-                                 isStringPayloadSumList ctx.VariantRegistry (Some listType)
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithSumPayloadRelease
+                                (releasePlanIsDynamicBufferOperation ANF.DynamicStringBuffer))
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
@@ -7455,11 +7578,9 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isBytesPayloadSumList ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TSum _) as listType ->
-                                 isBytesPayloadSumList ctx.VariantRegistry (Some listType)
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithSumPayloadRelease
+                                (releasePlanIsDynamicBufferOperation ANF.DynamicBytesBuffer))
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
@@ -7474,11 +7595,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isListPayloadSumList ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TSum _) as listType ->
-                                 isListPayloadSumList ctx.VariantRegistry (Some listType)
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithSumPayloadRelease (releasePlanIsRootKind ANF.TaggedList))
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
@@ -7493,11 +7611,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isDictPayloadSumList ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TSum _) as listType ->
-                                 isDictPayloadSumList ctx.VariantRegistry (Some listType)
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithSumPayloadRelease (releasePlanIsRootKind ANF.DictHeap))
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
@@ -7512,11 +7627,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isClosurePayloadSumList ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TSum _) as listType ->
-                                 isClosurePayloadSumList ctx.VariantRegistry (Some listType)
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithSumPayloadRelease (releasePlanIsRootKind ANF.ClosureHeap))
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
@@ -7531,11 +7643,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isTuple4StringBytesListDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TSum _) as listType ->
-                                 isTuple4StringBytesListDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry (Some listType)
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithSumPayloadRelease releasePlanIsTuple4StringBytesListDictPayload)
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
@@ -7550,11 +7659,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isTuple4NestedTuplePayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TSum _) as listType ->
-                                 isTuple4NestedTuplePayloadSumList ctx.RecordRegistry ctx.VariantRegistry (Some listType)
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithSumPayloadRelease releasePlanIsTuple4NestedTuplePayload)
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
@@ -7569,11 +7675,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isTuple4NestedDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TSum _) as listType ->
-                                 isTuple4NestedDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry (Some listType)
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithSumPayloadRelease releasePlanIsTuple4NestedDictPayload)
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
@@ -7588,11 +7691,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                         isTuple4NestedClosurePayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TSum _) as listType ->
-                                 isTuple4NestedClosurePayloadSumList ctx.RecordRegistry ctx.VariantRegistry (Some listType)
-                             | _ -> false)
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithSumPayloadRelease releasePlanIsTuple4NestedClosurePayload)
                             ctx.RecordRegistry
                             sourceType
                     | _ -> false)))
