@@ -5110,23 +5110,7 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
             | Error e -> Error e
             | Ok instrs -> translateFuncs (instrs :: acc) rest
 
-    let rec typeContainsListMatching (matcher: AST.Type -> bool) (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList _ as listType -> matcher listType
-        | AST.TTuple fields -> fields |> List.exists (typeContainsListMatching matcher)
-        | AST.TSum (_, payloadTypes) -> payloadTypes |> List.exists (typeContainsListMatching matcher)
-        | AST.TRecord (name, _) ->
-            recordRegistry
-            |> Map.tryFind name
-            |> Option.map (List.exists (fun (_, fieldType) -> typeContainsListMatching matcher fieldType))
-            |> Option.defaultValue false
-        | _ -> false
-
     let closureCaptureTypes = closureCaptureTypesFromParams functions
-
-    let closureCapturesContain (predicate: AST.Type -> bool) : bool =
-        closureCaptureTypes
-        |> Map.exists (fun _ captureTypes -> captureTypes |> List.exists predicate)
 
     let typeContainsRootKindRelease (kind: ANF.RcKind) (sourceType: AST.Type) : bool =
         typeReleasePlanContains (releasePlanIsRootKind kind) recordRegistry sourceType
@@ -5140,114 +5124,6 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
         closureCaptureTypes
         |> Map.exists (fun _ captureTypes ->
             captureTypes |> List.exists (typeReleasePlanContains predicate recordRegistry))
-
-    let isTuple2List (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TTuple fields) ->
-            fields = [AST.TInt64; AST.TInt64]
-        | _ -> false
-
-    let isTuple2DynamicFirstList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TTuple fields) ->
-            tuple2DynamicBufferOffsets fields = [0]
-        | _ -> false
-
-    let isTuple2DynamicSecondList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TTuple fields) ->
-            tuple2DynamicBufferOffsets fields = [8]
-        | _ -> false
-
-    let isTuple2DynamicBothList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TTuple fields) ->
-            tuple2DynamicBufferOffsets fields = [0; 8]
-        | _ -> false
-
-    let isSumDynamicList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TSum (_, [payloadType])) ->
-            isDynamicBufferType payloadType
-        | _ -> false
-
-    let isSumListList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TSum (_, [AST.TList _])) -> true
-        | _ -> false
-
-    let isSumDictList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TSum (_, [AST.TDict _])) -> true
-        | _ -> false
-
-    let isSumClosureList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TSum (_, [AST.TFunction _])) -> true
-        | _ -> false
-
-    let isSumTuple2DynamicFirstList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TSum (_, [AST.TTuple fields])) ->
-            tuple2DynamicBufferOffsets fields = [0]
-        | _ -> false
-
-    let isSumTuple2DynamicSecondList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TSum (_, [AST.TTuple fields])) ->
-            tuple2DynamicBufferOffsets fields = [8]
-        | _ -> false
-
-    let isSumTuple2DynamicBothList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TSum (_, [AST.TTuple fields])) ->
-            tuple2DynamicBufferOffsets fields = [0; 8]
-        | _ -> false
-
-    let isSumTuple3DynamicListForHelper (expectedHelperLabel: string) (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TSum (_, [AST.TTuple fields])) ->
-            sumTuple3ListHelperForFields fields = Some expectedHelperLabel
-        | _ -> false
-
-    let isSumRecord1DynamicList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TSum (_, [AST.TRecord (name, _)])) ->
-            recordListHelperForType recordRegistry name = listRefCountDecRecord1DynamicHelperLabel
-        | _ -> false
-
-    let isSumRecord3DynamicListForHelper (expectedHelperLabel: string) (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TSum (_, [AST.TRecord (name, _)])) ->
-            sumRecord3ListHelperForRecord recordRegistry name = Some expectedHelperLabel
-        | _ -> false
-
-    let isNestedSumDynamicList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TSum (_, [AST.TSum (_, [payloadType])])) ->
-            isDynamicBufferType payloadType
-        | _ -> false
-
-    let isNestedList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TList _) -> true
-        | _ -> false
-
-    let isClosureList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TFunction _) -> true
-        | _ -> false
-
-    let isDictList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TDict _) -> true
-        | _ -> false
-
-    let isDynamicBufferList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList AST.TString
-        | AST.TList AST.TBytes -> true
-        | _ -> false
 
     let typeContainsNestedListElementRelease
         (elementKind: ANF.RcKind)
@@ -6170,6 +6046,10 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
             || closureCapturesContainSumListPayloadRelease matchesPlan)
 
     let needsListRcDecSumTuple2DynamicFirstHelper =
+        let matchesPlan =
+            releasePlanIsTaggedListWithSumPayloadRelease
+                (releasePlanIsFixedBlockWithDynamicBufferOffsets 16 [0])
+
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -6179,11 +6059,15 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TSum (_, [AST.TTuple fields])))) ->
                         tuple2DynamicBufferOffsets fields = [0]
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isSumTuple2DynamicFirstList sourceType
+                        typeReleasePlanContains matchesPlan recordRegistry sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isSumTuple2DynamicFirstList))
+            || closureCapturesContainReleasePlan matchesPlan)
 
     let needsListRcDecSumTuple2DynamicSecondHelper =
+        let matchesPlan =
+            releasePlanIsTaggedListWithSumPayloadRelease
+                (releasePlanIsFixedBlockWithDynamicBufferOffsets 16 [8])
+
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -6193,11 +6077,15 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TSum (_, [AST.TTuple fields])))) ->
                         tuple2DynamicBufferOffsets fields = [8]
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isSumTuple2DynamicSecondList sourceType
+                        typeReleasePlanContains matchesPlan recordRegistry sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isSumTuple2DynamicSecondList))
+            || closureCapturesContainReleasePlan matchesPlan)
 
     let needsListRcDecSumTuple2DynamicBothHelper =
+        let matchesPlan =
+            releasePlanIsTaggedListWithSumPayloadRelease
+                (releasePlanIsFixedBlockWithDynamicBufferOffsets 16 [0; 8])
+
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -6207,12 +6095,17 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TSum (_, [AST.TTuple fields])))) ->
                         tuple2DynamicBufferOffsets fields = [0; 8]
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isSumTuple2DynamicBothList sourceType
+                        typeReleasePlanContains matchesPlan recordRegistry sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isSumTuple2DynamicBothList))
+            || closureCapturesContainReleasePlan matchesPlan)
 
-    let needsListRcDecSumTuple3DynamicHelper (helperLabel: string) =
-        let matchesHelper = isSumTuple3DynamicListForHelper helperLabel
+    let needsListRcDecSumTupleDynamicHelper
+        (helperLabel: string)
+        (payloadPredicate: ANF.RcReleasePlan -> bool)
+        =
+        let matchesPlan =
+            releasePlanIsTaggedListWithSumPayloadRelease payloadPredicate
+
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -6222,41 +6115,85 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TSum (_, [AST.TTuple fields])))) ->
                         sumTuple3ListHelperForFields fields = Some helperLabel
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching matchesHelper sourceType
+                        typeReleasePlanContains matchesPlan recordRegistry sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching matchesHelper))
+            || closureCapturesContainReleasePlan matchesPlan)
 
     let needsListRcDecSumTuple3DynamicFirstHelper =
-        needsListRcDecSumTuple3DynamicHelper listRefCountDecSumTuple3DynamicFirstHelperLabel
+        needsListRcDecSumTupleDynamicHelper
+            listRefCountDecSumTuple3DynamicFirstHelperLabel
+            (releasePlanIsFixedBlockWithDynamicBufferOffsets 24 [0])
 
     let needsListRcDecSumTuple3DynamicThirdHelper =
-        needsListRcDecSumTuple3DynamicHelper listRefCountDecSumTuple3DynamicThirdHelperLabel
+        needsListRcDecSumTupleDynamicHelper
+            listRefCountDecSumTuple3DynamicThirdHelperLabel
+            (releasePlanIsFixedBlockWithDynamicBufferOffsets 24 [16])
 
     let needsListRcDecSumTuple3DynamicFirstSecondHelper =
-        needsListRcDecSumTuple3DynamicHelper listRefCountDecSumTuple3DynamicFirstSecondHelperLabel
+        needsListRcDecSumTupleDynamicHelper
+            listRefCountDecSumTuple3DynamicFirstSecondHelperLabel
+            (releasePlanIsFixedBlockWithDynamicBufferOffsets 24 [0; 8])
 
     let needsListRcDecSumTuple3DynamicSecondThirdHelper =
-        needsListRcDecSumTuple3DynamicHelper listRefCountDecSumTuple3DynamicSecondThirdHelperLabel
+        needsListRcDecSumTupleDynamicHelper
+            listRefCountDecSumTuple3DynamicSecondThirdHelperLabel
+            (releasePlanIsFixedBlockWithDynamicBufferOffsets 24 [8; 16])
 
     let needsListRcDecSumTuple3DynamicFirstThirdHelper =
-        needsListRcDecSumTuple3DynamicHelper listRefCountDecSumTuple3DynamicFirstThirdHelperLabel
+        needsListRcDecSumTupleDynamicHelper
+            listRefCountDecSumTuple3DynamicFirstThirdHelperLabel
+            (releasePlanIsFixedBlockWithDynamicBufferOffsets 24 [0; 16])
 
     let needsListRcDecSumTuple3DynamicSecondHelper =
-        needsListRcDecSumTuple3DynamicHelper listRefCountDecSumTuple3DynamicSecondHelperLabel
+        needsListRcDecSumTupleDynamicHelper
+            listRefCountDecSumTuple3DynamicSecondHelperLabel
+            (releasePlanIsFixedBlockWithDynamicBufferOffsets 24 [8])
 
     let needsListRcDecSumTuple3DynamicAllHelper =
-        needsListRcDecSumTuple3DynamicHelper listRefCountDecSumTuple3DynamicAllHelperLabel
+        needsListRcDecSumTupleDynamicHelper
+            listRefCountDecSumTuple3DynamicAllHelperLabel
+            (releasePlanIsFixedBlockWithDynamicBufferOffsets 24 [0; 8; 16])
 
     let needsListRcDecSumTuple3DynamicListDictHelper =
-        needsListRcDecSumTuple3DynamicHelper listRefCountDecSumTuple3DynamicListDictHelperLabel
+        needsListRcDecSumTupleDynamicHelper
+            listRefCountDecSumTuple3DynamicListDictHelperLabel
+            (releasePlanIsFixedBlockWithExactFieldReleases
+                24
+                [
+                    0, releasePlanIsDynamicBufferRelease
+                    8, releasePlanIsRootKind ANF.TaggedList
+                    16, releasePlanIsRootKind ANF.DictHeap
+                ])
 
     let needsListRcDecSumTuple4DynamicListDictHelper =
-        needsListRcDecSumTuple3DynamicHelper listRefCountDecSumTuple4DynamicListDictHelperLabel
+        needsListRcDecSumTupleDynamicHelper
+            listRefCountDecSumTuple4DynamicListDictHelperLabel
+            (releasePlanIsFixedBlockWithExactFieldReleases
+                32
+                [
+                    0, releasePlanIsDynamicBufferRelease
+                    8, releasePlanIsDynamicBufferRelease
+                    16, releasePlanIsRootKind ANF.TaggedList
+                    24, releasePlanIsRootKind ANF.DictHeap
+                ])
 
     let needsListRcDecSumTuple4ClosureDynamicListDictHelper =
-        needsListRcDecSumTuple3DynamicHelper listRefCountDecSumTuple4ClosureDynamicListDictHelperLabel
+        needsListRcDecSumTupleDynamicHelper
+            listRefCountDecSumTuple4ClosureDynamicListDictHelperLabel
+            (releasePlanIsFixedBlockWithExactFieldReleases
+                32
+                [
+                    0, releasePlanIsRootKind ANF.ClosureHeap
+                    8, releasePlanIsDynamicBufferRelease
+                    16, releasePlanIsRootKind ANF.TaggedList
+                    24, releasePlanIsRootKind ANF.DictHeap
+                ])
 
     let needsListRcDecSumRecord1DynamicHelper =
+        let matchesPlan =
+            releasePlanIsTaggedListWithSumPayloadRelease
+                (releasePlanIsFixedBlockWithDynamicBufferOffsets 8 [0])
+
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -6266,12 +6203,17 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TSum (_, [AST.TRecord (name, _)]))) ) ->
                         recordListHelperForType recordRegistry name = listRefCountDecRecord1DynamicHelperLabel
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isSumRecord1DynamicList sourceType
+                        typeReleasePlanContains matchesPlan recordRegistry sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isSumRecord1DynamicList))
+            || closureCapturesContainReleasePlan matchesPlan)
 
-    let needsListRcDecSumRecord3DynamicHelper (helperLabel: string) =
-        let matchesHelper = isSumRecord3DynamicListForHelper helperLabel
+    let needsListRcDecSumRecordDynamicHelper
+        (helperLabel: string)
+        (payloadPredicate: ANF.RcReleasePlan -> bool)
+        =
+        let matchesPlan =
+            releasePlanIsTaggedListWithSumPayloadRelease payloadPredicate
+
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -6281,39 +6223,79 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TSum (_, [AST.TRecord (name, _)]))) ) ->
                         sumRecord3ListHelperForRecord recordRegistry name = Some helperLabel
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching matchesHelper sourceType
+                        typeReleasePlanContains matchesPlan recordRegistry sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching matchesHelper))
+            || closureCapturesContainReleasePlan matchesPlan)
 
     let needsListRcDecSumRecord3DynamicFirstHelper =
-        needsListRcDecSumRecord3DynamicHelper listRefCountDecSumRecord3DynamicFirstHelperLabel
+        needsListRcDecSumRecordDynamicHelper
+            listRefCountDecSumRecord3DynamicFirstHelperLabel
+            (releasePlanIsFixedBlockWithDynamicBufferOffsets 24 [0])
 
     let needsListRcDecSumRecord3DynamicThirdHelper =
-        needsListRcDecSumRecord3DynamicHelper listRefCountDecSumRecord3DynamicThirdHelperLabel
+        needsListRcDecSumRecordDynamicHelper
+            listRefCountDecSumRecord3DynamicThirdHelperLabel
+            (releasePlanIsFixedBlockWithDynamicBufferOffsets 24 [16])
 
     let needsListRcDecSumRecord3DynamicFirstSecondHelper =
-        needsListRcDecSumRecord3DynamicHelper listRefCountDecSumRecord3DynamicFirstSecondHelperLabel
+        needsListRcDecSumRecordDynamicHelper
+            listRefCountDecSumRecord3DynamicFirstSecondHelperLabel
+            (releasePlanIsFixedBlockWithDynamicBufferOffsets 24 [0; 8])
 
     let needsListRcDecSumRecord3DynamicSecondThirdHelper =
-        needsListRcDecSumRecord3DynamicHelper listRefCountDecSumRecord3DynamicSecondThirdHelperLabel
+        needsListRcDecSumRecordDynamicHelper
+            listRefCountDecSumRecord3DynamicSecondThirdHelperLabel
+            (releasePlanIsFixedBlockWithDynamicBufferOffsets 24 [8; 16])
 
     let needsListRcDecSumRecord3DynamicFirstThirdHelper =
-        needsListRcDecSumRecord3DynamicHelper listRefCountDecSumRecord3DynamicFirstThirdHelperLabel
+        needsListRcDecSumRecordDynamicHelper
+            listRefCountDecSumRecord3DynamicFirstThirdHelperLabel
+            (releasePlanIsFixedBlockWithDynamicBufferOffsets 24 [0; 16])
 
     let needsListRcDecSumRecord3DynamicSecondHelper =
-        needsListRcDecSumRecord3DynamicHelper listRefCountDecSumRecord3DynamicSecondHelperLabel
+        needsListRcDecSumRecordDynamicHelper
+            listRefCountDecSumRecord3DynamicSecondHelperLabel
+            (releasePlanIsFixedBlockWithDynamicBufferOffsets 24 [8])
 
     let needsListRcDecSumRecord3DynamicAllHelper =
-        needsListRcDecSumRecord3DynamicHelper listRefCountDecSumRecord3DynamicAllHelperLabel
+        needsListRcDecSumRecordDynamicHelper
+            listRefCountDecSumRecord3DynamicAllHelperLabel
+            (releasePlanIsFixedBlockWithDynamicBufferOffsets 24 [0; 8; 16])
 
     let needsListRcDecSumRecord3DynamicListDictHelper =
-        needsListRcDecSumRecord3DynamicHelper listRefCountDecSumRecord3DynamicListDictHelperLabel
+        needsListRcDecSumRecordDynamicHelper
+            listRefCountDecSumRecord3DynamicListDictHelperLabel
+            (releasePlanIsFixedBlockWithExactFieldReleases
+                24
+                [
+                    0, releasePlanIsDynamicBufferRelease
+                    8, releasePlanIsRootKind ANF.TaggedList
+                    16, releasePlanIsRootKind ANF.DictHeap
+                ])
 
     let needsListRcDecSumRecord4DynamicListDictHelper =
-        needsListRcDecSumRecord3DynamicHelper listRefCountDecSumRecord4DynamicListDictHelperLabel
+        needsListRcDecSumRecordDynamicHelper
+            listRefCountDecSumRecord4DynamicListDictHelperLabel
+            (releasePlanIsFixedBlockWithExactFieldReleases
+                32
+                [
+                    0, releasePlanIsDynamicBufferRelease
+                    8, releasePlanIsDynamicBufferRelease
+                    16, releasePlanIsRootKind ANF.TaggedList
+                    24, releasePlanIsRootKind ANF.DictHeap
+                ])
 
     let needsListRcDecSumRecord4ClosureDynamicListDictHelper =
-        needsListRcDecSumRecord3DynamicHelper listRefCountDecSumRecord4ClosureDynamicListDictHelperLabel
+        needsListRcDecSumRecordDynamicHelper
+            listRefCountDecSumRecord4ClosureDynamicListDictHelperLabel
+            (releasePlanIsFixedBlockWithExactFieldReleases
+                32
+                [
+                    0, releasePlanIsRootKind ANF.ClosureHeap
+                    8, releasePlanIsDynamicBufferRelease
+                    16, releasePlanIsRootKind ANF.TaggedList
+                    24, releasePlanIsRootKind ANF.DictHeap
+                ])
 
     let needsListRcDecNestedSumDynamicHelper =
         let matchesPlan =
