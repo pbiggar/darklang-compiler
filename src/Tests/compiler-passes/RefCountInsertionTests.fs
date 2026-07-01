@@ -571,6 +571,7 @@ let testInferCallReturnsFunctionReturnType () : TestResult =
     let ctx : TypeContext = {
         TypeReg = Map.empty
         VariantLookup = Map.empty
+        SumShapeReg = Map.empty
         FuncReg =
             Map.ofList [
                 ("mkPair", AST.TFunction ([AST.TInt64], AST.TTuple [AST.TInt64; AST.TInt64]))
@@ -651,6 +652,7 @@ let testNonSelfTailCallDoesNotLeaveDecAfterTailCall () : TestResult =
     let ctx : TypeContext = {
         TypeReg = Map.empty
         VariantLookup = Map.empty
+        SumShapeReg = Map.empty
         FuncReg = funcReg
         FuncParams = Map.empty
         TempTypes = Map.empty
@@ -694,6 +696,7 @@ let testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed () : TestRe
     let ctx : TypeContext = {
         TypeReg = Map.empty
         VariantLookup = Map.empty
+        SumShapeReg = Map.empty
         FuncReg = funcReg
         FuncParams = Map.empty
         TempTypes = Map.empty
@@ -739,6 +742,7 @@ let testBorrowedCallStillGetsAutoDecUnderConservativePolicy () : TestResult =
     let ctx : TypeContext = {
         TypeReg = Map.empty
         VariantLookup = Map.empty
+        SumShapeReg = Map.empty
         FuncReg = funcReg
         FuncParams = Map.empty
         TempTypes = Map.empty
@@ -781,6 +785,7 @@ let testPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
     let ctx : TypeContext = {
         TypeReg = Map.empty
         VariantLookup = Map.empty
+        SumShapeReg = Map.empty
         FuncReg = Map.empty
         FuncParams = Map.empty
         TempTypes = Map.empty
@@ -814,6 +819,51 @@ let testPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
     else
         Ok ()
 
+let testGenericPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup =
+            Map.ofList [
+                ("Left", ("Phantom", ["a"], 0, None))
+                ("Right", ("Phantom", ["a"], 1, None))
+            ]
+        SumShapeReg =
+            Map.ofList [
+                ("Phantom", { TypeParams = ["a"]; Payloads = [None; None] })
+            ]
+        FuncReg = Map.empty
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let enumTemp = TempId 0
+    let resultTemp = TempId 1
+    let enumType = AST.TSum ("Phantom", [AST.TString])
+    let func : Function = {
+        Name = "genericPureEnumBinding"
+        TypedParams = []
+        ReturnType = AST.TInt64
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                enumTemp,
+                TypedAtom (IntLiteral (Int64 0L), enumType),
+                Let (
+                    resultTemp,
+                    Atom (IntLiteral (Int64 1L)),
+                    Return (Var resultTemp)
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountDecForTemp enumTemp transformed.Body then
+        Error "Generic pure enum binding should classify from variant metadata and must not get automatic RefCountDec"
+    else
+        Ok ()
+
 let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes () : TestResult =
     let payloadType = AST.TRecord ("Payload", [])
     let dictType = AST.TDict (AST.TInt64, payloadType)
@@ -823,6 +873,10 @@ let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes () : TestResult =
             Map.ofList [
                 ("Empty", ("Payload", [], 0, None))
                 ("SomePayload", ("Payload", [], 1, Some AST.TString))
+            ]
+        SumShapeReg =
+            Map.ofList [
+                ("Payload", { TypeParams = []; Payloads = [None; Some AST.TString] })
             ]
         FuncReg =
             Map.ofList [
@@ -888,5 +942,6 @@ let tests = [
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
     ("borrowed call still gets auto-dec under conservative policy", testBorrowedCallStillGetsAutoDecUnderConservativePolicy)
     ("pure enum binding does not get automatic dec", testPureEnumBindingDoesNotGetAutomaticDec)
+    ("generic pure enum binding does not get automatic dec", testGenericPureEnumBindingDoesNotGetAutomaticDec)
     ("bare sum type refs are canonicalized for RC source types", testBareSumTypeRefsAreCanonicalizedForRcSourceTypes)
 ]

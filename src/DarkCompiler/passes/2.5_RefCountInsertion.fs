@@ -25,6 +25,7 @@ open AST_to_ANF
 type TypeContext = {
     TypeReg: TypeRegistry
     VariantLookup: VariantLookup
+    SumShapeReg: RcSumShapeRegistry
     FuncReg: FunctionRegistry
     FuncParams: Map<string, (string * AST.Type) list>
     /// Maps TempId -> Type for values we've seen
@@ -38,10 +39,37 @@ type CExprTypeCache = Map<CExpr, AST.Type option>
 
 let emptyCExprTypeCache : CExprTypeCache = Map.empty
 
+let private rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : RcSumShapeRegistry =
+    let addVariant
+        (acc: Map<string, string list * (int * AST.Type option) list>)
+        (_variantName: string, (typeName, typeParams, tag, payloadType))
+        =
+        match Map.tryFind typeName acc with
+        | None ->
+            Map.add typeName (typeParams, [(tag, payloadType)]) acc
+        | Some (existingTypeParams, variants) ->
+            if existingTypeParams = typeParams then
+                Map.add typeName (typeParams, (tag, payloadType) :: variants) acc
+            else
+                Map.add typeName (existingTypeParams, (tag, payloadType) :: variants) acc
+
+    let toSumShapeInfo _typeName (typeParams, variants) =
+        { TypeParams = typeParams
+          Payloads =
+            variants
+            |> List.sortBy fst
+            |> List.map snd }
+
+    variantLookup
+    |> Map.toList
+    |> List.fold addVariant Map.empty
+    |> Map.map toSumShapeInfo
+
 /// Create initial context from conversion result
 let createContext (result: ConversionResult) : TypeContext =
     { TypeReg = result.TypeReg
       VariantLookup = result.VariantLookup
+      SumShapeReg = rcSumShapeRegistryFromVariantLookup result.VariantLookup
       FuncReg = result.FuncReg
       FuncParams = result.FuncParams
       TempTypes = Map.empty
@@ -449,16 +477,8 @@ let private canonicalRcTypeForShape (ctx: TypeContext) (typ: AST.Type) : AST.Typ
         |> List.map (fun (_, (typeName, _, _, _)) -> typeName)
         |> Set.ofList
 
-    let sumTypeHasPayload (sumTypeName: string) : bool =
-        ctx.VariantLookup
-        |> Map.exists (fun _ (typeName, _, _, payloadType) ->
-            typeName = sumTypeName && Option.isSome payloadType)
-
     let canonicalBareSum name =
-        if sumTypeHasPayload name then
-            AST.TSum (name, [AST.TVar $"__sum_payload_{name}"])
-        else
-            AST.TSum (name, [])
+        AST.TSum (name, [])
 
     let rec canonicalize typ =
         match typ with
@@ -518,7 +538,9 @@ let private canonicalRcSourceType (ctx: TypeContext) (typ: AST.Type) : AST.Type 
     canonicalize typ
 
 let private rcShapeForType (ctx: TypeContext) (typ: AST.Type) : RcShape =
-    typ |> canonicalRcTypeForShape ctx |> rcShapeOfType ctx.TypeReg
+    typ
+    |> canonicalRcTypeForShape ctx
+    |> rcShapeOfTypeWithSums ctx.TypeReg ctx.SumShapeReg
 
 let private needsManagedAliasRootPreservation (ctx: TypeContext) (typ: AST.Type) : bool =
     typ |> rcShapeForType ctx |> rcShapeNeedsManagedAliasRootPreservation
