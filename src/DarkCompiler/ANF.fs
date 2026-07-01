@@ -667,10 +667,6 @@ let rec rcReleasePlanOfTypeWithSums
     : RcReleasePlan =
     t |> rcShapeOfTypeWithSums typeReg sumReg |> rcShapeReleasePlan
 
-/// Compatibility heap classifier backed by RcShape.
-let isHeapTypeWithRegistry (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type) : bool =
-    t |> rcShapeOfType typeReg |> rcShapeNeedsOwnedScopeRelease
-
 /// Compatibility heap classifier for contexts that do not have record metadata.
 let isHeapType (t: AST.Type) : bool =
     let rec containsRecord (typ: AST.Type) : bool =

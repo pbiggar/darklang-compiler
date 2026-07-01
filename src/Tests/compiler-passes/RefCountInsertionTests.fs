@@ -85,29 +85,7 @@ let testRcShapeClassifiesRemainingRuntimeShapes () : TestResult =
     | Some (typ, expected) ->
         Error $"Expected {typ} to classify as {expected}, got {rcShapeOfType Map.empty typ}"
 
-let testLegacyRcClassifiersUseRcShape () : TestResult =
-    let typeReg =
-        Map.ofList [
-            ("Box", [("value", AST.TString)])
-        ]
-
-    let heapSamples = [
-        AST.TString
-        AST.TBytes
-        AST.TFunction ([AST.TInt64], AST.TString)
-        AST.TRecord ("Box", [])
-        AST.TList AST.TInt64
-        AST.TDict (AST.TInt64, AST.TString)
-        AST.TSum ("Payload", [AST.TString])
-    ]
-
-    let nonHeapSamples = [
-        AST.TInt64
-        AST.TBool
-        AST.TRawPtr
-        AST.TSum ("Enum", [])
-    ]
-
+let testMetadataFreeHeapClassifierUsesRcShape () : TestResult =
     let metadataFreeHeapSamples = [
         AST.TString
         AST.TBytes
@@ -129,23 +107,15 @@ let testLegacyRcClassifiersUseRcShape () : TestResult =
         AST.TSum ("Enum", [])
     ]
 
-    match heapSamples |> List.tryFind (fun typ -> not (isHeapTypeWithRegistry typeReg typ)) with
+    match metadataFreeHeapSamples |> List.tryFind (fun typ -> not (isHeapType typ)) with
     | Some typ ->
-        Error $"Expected legacy heap classifier to treat {typ} as managed through RcShape"
+        Error $"Expected metadata-free heap classifier to treat {typ} as managed through RcShape"
     | None ->
-        match metadataFreeHeapSamples |> List.tryFind (fun typ -> not (isHeapType typ)) with
+        match metadataFreeNonHeapSamples |> List.tryFind isHeapType with
         | Some typ ->
-            Error $"Expected metadata-free legacy heap classifier to treat {typ} as managed through RcShape"
+            Error $"Expected metadata-free heap classifier to treat {typ} as unmanaged through RcShape"
         | None ->
-            match nonHeapSamples |> List.tryFind (isHeapTypeWithRegistry typeReg) with
-            | Some typ ->
-                Error $"Expected legacy heap classifier to treat {typ} as unmanaged through RcShape"
-            | None ->
-                match metadataFreeNonHeapSamples |> List.tryFind isHeapType with
-                | Some typ ->
-                    Error $"Expected metadata-free legacy heap classifier to treat {typ} as unmanaged through RcShape"
-                | None ->
-                    Ok ()
+            Ok ()
 
 let testRcShapeClassifiesSumsWithVariantMetadata () : TestResult =
     let typeReg =
@@ -921,7 +891,7 @@ let tests = [
     ("RcShape classifies primitives as immediate", testRcShapeClassifiesPrimitivesAsImmediate)
     ("RcShape classifies tuples and records as fixed blocks", testRcShapeClassifiesTuplesAndRecordsAsFixedBlocks)
     ("RcShape classifies remaining runtime shapes", testRcShapeClassifiesRemainingRuntimeShapes)
-    ("legacy RC classifiers use RcShape", testLegacyRcClassifiersUseRcShape)
+    ("metadata-free heap classifier uses RcShape", testMetadataFreeHeapClassifierUsesRcShape)
     ("RcShape classifies sums with variant metadata", testRcShapeClassifiesSumsWithVariantMetadata)
     ("RcShape ownership helpers classify managed roots", testRcShapeOwnershipHelpersClassifyManagedRoots)
     ("RcShape ownership helpers classify automatic binding decs", testRcShapeOwnershipHelpersClassifyAutomaticBindingDecs)
