@@ -654,83 +654,65 @@ This distinction matters for long-running programs and benchmarks.
 
 ## Remaining Work By Area
 
-## 1. Replace Legacy Heap Classification With `RcShape`
+## 1. Complete Backend `RcReleasePlan` Consumption
 
 ### Problem
 
-`RcShape` exists, but production ownership decisions still use:
+The shared `RcShape` classifier is now the production source for optimizer
+ownership-sensitive DCE and RC insertion. The old metadata-free
+`ANF.isHeapType` helper has been removed, ANF optimization requires an explicit
+record/sum metadata context, and RC insertion builds retains, releases, binding
+decrefs, borrowed retains, alias preservation, and ownership-transfer checks
+through `RcShape` operations.
 
-- `ANF.isHeapType`
-- `payloadSize`
-- `rcKind`
-- local type checks such as `t = AST.TString || isRcManagedHeapType t`
-- backend-specific pattern matching on `sourceType`
-
-This keeps representation knowledge spread across ANF, RC insertion, list
-lowering, raw-set codegen, and backend destructors.
+The remaining managed-shape work is in backend helper selection and recursive
+payload cleanup. Both backends consume `RcReleasePlan` in several paths, but
+there are still large helper tables and helper-selection scans that encode
+shape-specific cases directly.
 
 ### Why It Matters
 
-The current tests pass because many special cases have been patched. The risk
-is that the next data shape or language feature will need another local patch
-instead of flowing through one consistent ownership classifier.
+Backend helper tables are currently correct for covered cases, but they are
+still expensive to extend. A new recursive shape should be represented once in
+`RcShape`/`RcReleasePlan`, then consumed by both backends. It should not require
+another matrix of source-type predicates and per-architecture helper labels.
 
-Concrete examples:
+### Completed Since This File Was Written
 
-- `TFunction` is not generally heap-managed in `ANF.isHeapType`, but closures
-  are heap objects.
-- `TString` is not a fixed block, but dynamic strings need scoped decrefs and
-  field retains/releases.
-- `TBytes` now has dynamic RC, but container ownership is not as complete as
-  strings.
-- `TSum` is conservatively heap-like even though pure enums can be immediate.
-- `TDict` is a managed root with raw internals, not a generic fixed block.
+- `ANF.isHeapType` was removed.
+- ANF DCE uses `rcShapeOfTypeWithSums` through an explicit
+  `ANF_Optimize.OptimizeContext`.
+- Compiler and optimization test-runner calls pass real type and sum metadata
+  into ANF optimization.
+- RC insertion uses `rcShapeForType`/`RcShape` helpers for managed-alias
+  preservation, automatic binding decrefs, borrowed retains, retain/release
+  operation selection, ownership-transfer roots, and RC metadata.
+- RC insertion reuses the shared `AST_to_ANF.rcSumShapeRegistryFromVariantLookup`
+  helper rather than maintaining a separate copy.
+- Raw-set retain decisions on ARM64 and x64 use sum-aware `RcShape`.
+- x64 and ARM64 reject missing sum metadata in sum-aware shape classification.
 
 ### Remaining Tasks
 
-1. Extend the small ownership API over `RcShape`.
-
-   Initial operations exist for owned scope release, root dispatch kind, root
-   payload size, storage classification, retain/release operations,
-   borrowed-retain classification, automatic binding-decref classification,
-   ownership-transfer root classification, a recursive `RcReleasePlan`, and
-   `rcReleasePlanOfType`. The remaining work here is consumption: backend
-   release paths still need to use the shared plan broadly instead of
-   reconstructing field cleanup from local source-type matches. x64 generic
-   fixed-block dynamic string/bytes, list-root, dict-root, and closure-root
-   field release now uses the plan directly for tuples, records, and boxed-sum
-   payload fields. Nested generic fixed-block and boxed-sum field release in
-   that path is also plan-gated. Pure enums now classify as immediate values,
-   so planner consumers do not emit heap release for no-payload sums.
-
-2. Finish replacing `isRcManagedHeapType` and `needsAutomaticDec` in
-   `2.5_RefCountInsertion.fs` with shape-operation decisions. Retain/release
-   emission now uses `rcShapeRetainOperation` and `rcShapeReleaseOperation`,
-   and the legacy fixed-root compatibility predicate now uses
-   `rcShapeStorageClass`, but the current adapter still has a metadata-gap
-   fallback for record-like names missing from `TypeReg` and some
-   classification checks still use legacy names.
-
-3. Replace backend dispatch based on `payloadSize` and partial `sourceType`
-   pattern matching with `RcReleasePlan`.
-
-4. Continue adding classifier-consumer tests as backend paths migrate. Direct
+1. Continue replacing backend helper selection based on helper-table pattern
+   matrices with direct `RcReleasePlan` consumption where practical.
+2. Keep x64 and ARM64 parity as new recursive payload-release cases are added.
+3. Continue adding classifier-consumer tests as backend paths migrate. Direct
    planner tests now prove pure enums do not heap-release, boxed sums release
    through generic heap roots, closure values use closure release, strings and
    bytes use dynamic-buffer release, dict values use dict-root release, and raw
    pointers do not release.
+4. Keep raw allocation policy out of this section; that remains explicitly
+   deferred in section 8.
 
 ### Suggested Commit Breakdown
 
-1. Add pure tests for `rcShapeOfType` behavior that currently lacks direct
-   coverage. The main root-kind and release-plan cases are now covered.
-2. Extend the ownership helpers around `RcShape` without changing codegen.
-3. Finish converting RC insertion for strings and bytes to use the planner.
-4. Finish converting RC insertion for fixed blocks and lists to use the planner.
-5. Continue converting backend fixed-block field release selection to consume
-   `RcReleasePlan`; dynamic string/bytes, list-root, dict-root, and
-   closure-root field release, plus nested generic fixed-block field release,
-   are complete for the x64 generic fixed-block path.
+1. Add one backend regression test for a missing recursive payload case.
+2. Replace the smallest matching helper-table predicate with a release-plan
+   predicate or direct release-plan traversal.
+3. Run the full suite and commit.
+4. Repeat per helper family, keeping x64 and ARM64 changes separate unless the
+   shared planner API itself changes.
 
 ## 2. Complete Bytes Ownership To Match Strings
 
