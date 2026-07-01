@@ -84,6 +84,7 @@ let private listRefCountDecTuple2Closure1HelperLabel = "__dark_list_refcount_dec
 let private listRefCountDecTuple2ClosureBothHelperLabel = "__dark_list_refcount_dec_tuple2_closure_both_helper"
 let private listRefCountDecTuple3ManagedHelperLabel = "__dark_list_refcount_dec_tuple3_managed_helper"
 let private listRefCountDecTuple3BytesListDictHelperLabel = "__dark_list_refcount_dec_tuple3_bytes_list_dict_helper"
+let private listRefCountDecTuple3BytesListDictListHelperLabel = "__dark_list_refcount_dec_tuple3_bytes_list_dict_list_helper"
 let private listRefCountDecClosureListDictHelperLabel = "__dark_list_refcount_dec_closure_list_dict_helper"
 let private listRefCountDecStringBytesListHelperLabel = "__dark_list_refcount_dec_string_bytes_list_helper"
 let private listRefCountDecStringBytesDictHelperLabel = "__dark_list_refcount_dec_string_bytes_dict_helper"
@@ -518,8 +519,18 @@ let private generateListRefCountDecHelperWith
         @ callInstrs
         @ [ARM64Symbolic.Label fieldDone]
 
-    let releaseDictLeafField (fieldOffset: int) : ARM64Symbolic.Instr list =
+    let leafDictHelperLabel (fieldType: AST.Type) : string =
+        match fieldType with
+        | AST.TDict (_, AST.TList _) ->
+            dictRefCountDecListValueHelperLabel
+        | AST.TDict (_, AST.TDict _) ->
+            dictRefCountDecDictValueHelperLabel
+        | _ ->
+            dictRefCountDecHelperLabel
+
+    let releaseDictLeafField (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
         let fieldDone = label $"leaf_dict_field_{fieldOffset}_done"
+        let helperLabel = leafDictHelperLabel fieldType
         let callInstrs = [
             ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
             ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -528,7 +539,7 @@ let private generateListRefCountDecHelperWith
             ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
             ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 80s)
             ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X8)
-            ARM64Symbolic.BL dictRefCountDecHelperLabel
+            ARM64Symbolic.BL helperLabel
             ARM64Symbolic.LDR (ARM64Symbolic.X30, ARM64Symbolic.SP, 80s)
             ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
             ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
@@ -718,7 +729,7 @@ let private generateListRefCountDecHelperWith
             | AST.TList _ ->
                 releaseListLeafField fieldOffset fieldType
             | AST.TDict _ ->
-                releaseDictLeafField fieldOffset
+                releaseDictLeafField fieldOffset fieldType
             | AST.TFunction _ ->
                 releaseClosureLeafField fieldOffset
             | AST.TTuple _
@@ -1087,6 +1098,12 @@ let private listRefCountDecHelperSpecs : ListRefCountDecHelperSpec list =
       ReleaseLeafDictPayload = false
       ReleaseLeafClosurePayload = false
       ManagedLeafFieldTypes = [ AST.TBytes; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] }
+    { Label = listRefCountDecTuple3BytesListDictListHelperLabel
+      LeafGenericPayloadSize = (Some 24)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TBytes; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TList AST.TInt64) ] }
     { Label = listRefCountDecClosureListDictHelperLabel
       LeafGenericPayloadSize = (Some 24)
       ReleaseLeafListPayload = false
@@ -6178,6 +6195,26 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             |> unionLabelSets)
         |> Option.defaultValue Set.empty
 
+    let dictDecHelperLabelsForDictType (fieldType: AST.Type) : Set<string> =
+        match fieldType with
+        | AST.TDict (_, AST.TList _) ->
+            Set.singleton dictRefCountDecListValueHelperLabel
+        | AST.TDict (_, AST.TDict _) ->
+            Set.singleton dictRefCountDecDictValueHelperLabel
+        | AST.TDict _ ->
+            Set.singleton dictRefCountDecHelperLabel
+        | _ ->
+            Set.empty
+
+    let listDecHelperDictDependencyLabels (helperLabel: string) : Set<string> =
+        listRefCountDecHelperSpecs
+        |> List.tryFind (fun spec -> spec.Label = helperLabel)
+        |> Option.map (fun spec ->
+            spec.ManagedLeafFieldTypes
+            |> List.map dictDecHelperLabelsForDictType
+            |> unionLabelSets)
+        |> Option.defaultValue Set.empty
+
     let rec expandListDecHelperDependencies (selectedLabels: Set<string>) (pendingLabels: string list) : Set<string> =
         match pendingLabels with
         | [] ->
@@ -6327,11 +6364,19 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> unionLabelSets)
             |> unionLabelSets
 
+        let listHelperDictLabels =
+            neededListRcDecHelperLabels
+            |> Set.toList
+            |> List.map listDecHelperDictDependencyLabels
+            |> unionLabelSets
+
         calledLabels
+        |> Set.union listHelperDictLabels
         |> Set.toList
         |> List.map dictDecHelperDependencyLabels
         |> unionLabelSets
         |> Set.union calledLabels
+        |> Set.union listHelperDictLabels
 
     let needsDictRcDecHelper =
         Set.contains dictRefCountDecHelperLabel neededDictRcDecHelperLabels

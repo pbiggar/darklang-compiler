@@ -7,6 +7,12 @@ module ARM64CodeGenTests
 
 type TestResult = Result<unit, string>
 
+let private rcMetadata (typ: AST.Type) : ANF.RcMetadata =
+    {
+        ANF.ReleasePlan = Some (ANF.rcReleasePlanOfTypeWithSums Map.empty Map.empty typ)
+        ANF.SourceType = Some typ
+    }
+
 let private makeSimpleProgramWithVariants
     (instrs: LIR.Instr list)
     (variants: LIR.VariantRegistry)
@@ -69,6 +75,37 @@ let testRawSetPureEnumDoesNotEmitGenericRetain () : TestResult =
         else
             Ok ()
 
+let testListTuple3BytesListDictListValueUsesTypedDictHelper () : TestResult =
+    let dictType = AST.TDict (AST.TInt64, AST.TList AST.TInt64)
+    let tupleType = AST.TTuple [ AST.TBytes; AST.TList AST.TInt64; dictType ]
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    0,
+                    LIR.TaggedList,
+                    Some (rcMetadata (AST.TList tupleType)))
+            ]
+            Map.empty
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let callsTypedDictListHelper =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.BL "__dark_dict_refcount_dec_list_value_helper" ->
+                    true
+                | _ ->
+                    false)
+        if callsTypedDictListHelper then
+            Ok ()
+        else
+            Error "List of tuple(bytes, list, dict<int, list<int>>) did not emit typed dict-list value release helper"
+
 let tests : (string * (unit -> TestResult)) list = [
     ("RawSet pure enum skips generic retain", testRawSetPureEnumDoesNotEmitGenericRetain)
+    ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
 ]
