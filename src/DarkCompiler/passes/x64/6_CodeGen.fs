@@ -5477,9 +5477,9 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                         | Some (AST.TList AST.TBytes) -> false
                         | _ -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching (fun _ -> true) sourceType
+                        typeContainsRootKindRelease ANF.TaggedList sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching (fun _ -> true)))
+            || closureCapturesContainRootKindRelease ANF.TaggedList)
 
     let needsListRcDecTuple2Helper =
         functions
