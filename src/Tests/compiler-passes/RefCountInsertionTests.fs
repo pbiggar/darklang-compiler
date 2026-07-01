@@ -473,6 +473,63 @@ let testRcReleasePlanOfTypeUsesSumPayloadMetadata () : TestResult =
     else
         Error $"Expected sum type to use release plan {expected}, got {actual}"
 
+let testRcReleasePlanOfTypeWithSumsUsesVariantMetadata () : TestResult =
+    let typeReg =
+        Map.ofList [
+            ("PayloadRecord", [("name", AST.TString); ("blob", AST.TBytes)])
+        ]
+
+    let sumReg : RcSumShapeRegistry =
+        Map.ofList [
+            ("Color", { TypeParams = []; Payloads = [None; None; None] })
+            ("Maybe", { TypeParams = ["a"]; Payloads = [None; Some (AST.TVar "a")] })
+            ("Packet", { TypeParams = []; Payloads = [Some (AST.TRecord ("PayloadRecord", [])); Some (AST.TList AST.TString)] })
+        ]
+
+    let samples = [
+        (AST.TSum ("Color", []), NoReleasePlan)
+        (AST.TSum ("Maybe", [AST.TString]),
+            RootRelease (
+                16,
+                GenericHeap,
+                BoxedSumPayloadRelease (
+                    16,
+                    [
+                        FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
+                    ])))
+        (AST.TSum ("Packet", []),
+            RootRelease (
+                16,
+                GenericHeap,
+                BoxedSumPayloadRelease (
+                    16,
+                    [
+                        FieldRelease (
+                            8,
+                            RootRelease (
+                                16,
+                                GenericHeap,
+                                FixedBlockPayloadRelease (
+                                    16,
+                                    [
+                                        FieldRelease (0, DynamicBufferRelease DynamicStringBuffer)
+                                        FieldRelease (8, DynamicBufferRelease DynamicBytesBuffer)
+                                    ])))
+                        FieldRelease (
+                            8,
+                            RootRelease (
+                                24,
+                                TaggedList,
+                                TaggedListPayloadRelease (DynamicBufferRelease DynamicStringBuffer)))
+                    ])))
+    ]
+
+    match samples |> List.tryFind (fun (typ, expected) -> rcReleasePlanOfTypeWithSums typeReg sumReg typ <> expected) with
+    | None ->
+        Ok ()
+    | Some (typ, expected) ->
+        Error $"Expected sum-aware release plan for {typ} to be {expected}, got {rcReleasePlanOfTypeWithSums typeReg sumReg typ}"
+
 let testRcReleasePlanOfTypeClassifiesRemainingRootKinds () : TestResult =
     let samples = [
         (AST.TSum ("Color", []), NoReleasePlan)
@@ -823,6 +880,7 @@ let tests = [
     ("RcShape release plan classifies field cleanup", testRcShapeReleasePlanClassifiesFieldCleanup)
     ("RcReleasePlan of type uses record metadata", testRcReleasePlanOfTypeUsesRecordMetadata)
     ("RcReleasePlan of type uses sum payload metadata", testRcReleasePlanOfTypeUsesSumPayloadMetadata)
+    ("RcReleasePlan of type with sums uses variant metadata", testRcReleasePlanOfTypeWithSumsUsesVariantMetadata)
     ("RcReleasePlan of type classifies remaining root kinds", testRcReleasePlanOfTypeClassifiesRemainingRootKinds)
     ("RcShape requires record metadata", testRcShapeRequiresRecordMetadata)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
