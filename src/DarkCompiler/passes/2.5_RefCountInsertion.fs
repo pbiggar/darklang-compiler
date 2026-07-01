@@ -39,31 +39,6 @@ type CExprTypeCache = Map<CExpr, AST.Type option>
 
 let emptyCExprTypeCache : CExprTypeCache = Map.empty
 
-let private rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : RcSumShapeRegistry =
-    let addVariant
-        (acc: Map<string, string list * (int * AST.Type option) list>)
-        (_variantName: string, (typeName, typeParams, tag, payloadType))
-        =
-        match Map.tryFind typeName acc with
-        | None ->
-            Map.add typeName (typeParams, [(tag, payloadType)]) acc
-        | Some (existingTypeParams, variants) ->
-            if existingTypeParams = typeParams then
-                Map.add typeName (typeParams, (tag, payloadType) :: variants) acc
-            else
-                Map.add typeName (existingTypeParams, (tag, payloadType) :: variants) acc
-
-    let toSumShapeInfo _typeName (typeParams, variants) =
-        { TypeParams = typeParams
-          Payloads =
-            variants
-            |> List.sortBy fst }
-
-    variantLookup
-    |> Map.toList
-    |> List.fold addVariant Map.empty
-    |> Map.map toSumShapeInfo
-
 /// Create initial context from conversion result
 let createContext (result: ConversionResult) : TypeContext =
     { TypeReg = result.TypeReg
