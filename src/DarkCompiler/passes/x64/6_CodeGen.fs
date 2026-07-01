@@ -759,6 +759,8 @@ let private recordListHelperForType (recordRegistry: LIR.RecordRegistry) (name: 
         | [AST.TInt64; AST.TInt64; AST.TInt64; AST.TTuple [AST.TFunction _; dynamicFieldType; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64)]], [] when
             isDynamicBufferType dynamicFieldType ->
             listRefCountDecTuple4NestedTupleClosureDynamicListDictHelperLabel
+        | [AST.TInt64; AST.TInt64; AST.TInt64; AST.TTuple nestedFields], [] when tuple2DynamicBufferOffsets nestedFields = [0] ->
+            listRefCountDecTuple4NestedTupleDynamicHelperLabel
         | [dynamicFieldType; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64)], [0] when isDynamicBufferType dynamicFieldType ->
             listRefCountDecRecord3DynamicListDictHelperLabel
         | [AST.TFunction _; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64)], [] ->
@@ -5086,6 +5088,8 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
         match fieldType with
         | AST.TList (AST.TTuple fields) ->
             tupleListHelperForFields fields = listRefCountDecTuple4NestedTupleDynamicHelperLabel
+        | AST.TList (AST.TRecord (name, _)) ->
+            recordListHelperForType recordRegistry name = listRefCountDecTuple4NestedTupleDynamicHelperLabel
         | _ -> false
 
     let isTuple4NestedTupleDynamicListDictList (fieldType: AST.Type) : bool =
@@ -5637,6 +5641,8 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
                         tupleListHelperForFields fields = listRefCountDecTuple4NestedTupleDynamicHelperLabel
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TRecord (name, _)))) ->
+                        recordListHelperForType recordRegistry name = listRefCountDecTuple4NestedTupleDynamicHelperLabel
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
                         typeContainsListMatching isTuple4NestedTupleDynamicList sourceType
                     | _ -> false))
