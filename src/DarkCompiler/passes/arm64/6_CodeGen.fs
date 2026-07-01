@@ -4778,26 +4778,15 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     | _ ->
                         []
 
-                let releaseFixedBlockField (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
-                    let fieldPayloadSize =
-                        match fieldType with
-                        | AST.TTuple fields ->
-                            Some (List.length fields * 8)
-                        | AST.TRecord (name, _) ->
-                            ctx.RecordRegistry
-                            |> Map.tryFind name
-                            |> Option.map (fun fields -> List.length fields * 8)
-                        | _ ->
-                            None
-
-                    match fieldPayloadSize with
-                    | None ->
-                        []
-                    | Some childPayloadSize ->
+                let releaseFixedBlockFieldWithPlan
+                    (fieldOffset: int)
+                    (childPayloadSize: int)
+                    (fieldReleasePlan: ANF.RcReleasePlan)
+                    : ARM64Symbolic.Instr list =
                         let childFieldReleaseInstrs =
-                            match tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry fieldType with
-                            | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)))
-                            | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases))) ->
+                            match fieldReleasePlan with
+                            | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+                            | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
                                 fieldReleases
                                 |> List.collect (fun (ANF.FieldRelease (childFieldOffset, fieldReleasePlan)) ->
                                     releaseFieldPlanFrom ARM64Symbolic.X11 childFieldOffset fieldReleasePlan)
@@ -4848,6 +4837,36 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                             ARM64Symbolic.LDP_post (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 32s)
                         ]
 
+                let releaseFixedBlockField (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
+                    match tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry fieldType with
+                    | Some (ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _) as fieldReleasePlan) ->
+                        releaseFixedBlockFieldWithPlan fieldOffset childPayloadSize fieldReleasePlan
+                    | Some (ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _) as fieldReleasePlan) ->
+                        releaseFixedBlockFieldWithPlan fieldOffset childPayloadSize fieldReleasePlan
+                    | _ ->
+                        []
+
+                let releasePlanHasDirectStringField (fieldReleases: ANF.RcFieldRelease list) : bool =
+                    fieldReleases
+                    |> List.exists (function
+                        | ANF.FieldRelease (_, ANF.DynamicBufferRelease ANF.DynamicStringBuffer) ->
+                            true
+                        | _ ->
+                            false)
+
+                let releasePlanHasLegacyNestedStringField (fieldReleasePlan: ANF.RcReleasePlan) : bool =
+                    match fieldReleasePlan with
+                    | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
+                        releasePlanHasDirectStringField fieldReleases
+                        || fieldReleases
+                           |> List.exists (function
+                               | ANF.FieldRelease (_, ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, nestedFieldReleases))) ->
+                                   releasePlanHasDirectStringField nestedFieldReleases
+                               | _ ->
+                                   false)
+                    | _ ->
+                        false
+
                 let fixedBlockFieldReleaseInstrs =
                     let directFieldReleaseInstrs =
                         sourceType
@@ -4862,20 +4881,21 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         |> Option.defaultValue []
 
                     let nestedFixedBlockReleaseInstrs =
-                        fixedBlockFieldTypes ctx.RecordRegistry sourceType
-                        |> List.mapi (fun index fieldType ->
-                            let fieldOffset = index * 8
-                            match fieldType with
-                            | AST.TTuple fields when
-                                List.contains AST.TString fields
-                                || fields
-                                   |> List.exists (function
-                                       | AST.TTuple nestedFields -> List.contains AST.TString nestedFields
-                                       | _ -> false) ->
-                                releaseFixedBlockField fieldOffset fieldType
+                        sourceType
+                        |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry)
+                        |> Option.map (function
+                            | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
+                                fieldReleases
+                                |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
+                                    match fieldReleasePlan with
+                                    | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _)
+                                        when releasePlanHasLegacyNestedStringField fieldReleasePlan ->
+                                        releaseFixedBlockFieldWithPlan fieldOffset childPayloadSize fieldReleasePlan
+                                    | _ ->
+                                        [])
                             | _ ->
                                 [])
-                        |> List.concat
+                        |> Option.defaultValue []
 
                     directFieldReleaseInstrs @ nestedFixedBlockReleaseInstrs
 
