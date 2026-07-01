@@ -999,8 +999,7 @@ let selectInstr
                         | AST.TString | AST.TChar | AST.TInt128 | AST.TUInt128 ->
                             [LIR.PrintHeapStringNoNewline (LIR.Physical LIR.X0)]
                         | AST.TList _ ->
-                            // Fallback: print list address in tuple contexts for now.
-                            [LIR.PrintInt64NoNewline (LIR.Physical LIR.X0)]
+                            Crash.crash $"Unsupported nested list tuple element type for printing: {elemType}"
                         | t ->
                             Crash.crash $"Unsupported tuple element type for printing: {t}"
                     sepInstrs @ [loadInstr] @ printInstrs)
@@ -1012,14 +1011,7 @@ let selectInstr
             Ok (saveTupleAddr @ openParen @ elemInstrs @ closeParenNewline, state)
 
         | AST.TList elemType when elemType = AST.TInt128 || elemType = AST.TUInt128 ->
-            // Current list pretty-printer path does not support Int128/UInt128 element decoding yet.
-            // Fallback to printing the list pointer to avoid runtime crashes.
-            let lirSrc = convertOperand src
-            let moveToX0 =
-                match lirSrc with
-                | LIR.Reg (LIR.Physical LIR.X0) -> []
-                | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
-            Ok (moveToX0 @ [LIR.PrintInt64 (LIR.Physical LIR.X0)], state)
+            Crash.crash $"Unsupported Int128/UInt128 list element type for printing: {elemType}"
 
         | AST.TList elemType ->
             // Print list as [elem1, elem2, ...]
@@ -1053,13 +1045,7 @@ let selectInstr
                     | other -> [LIR.Mov (LIR.Physical LIR.X19, other)]
                 Ok (moveToX19 @ [LIR.PrintSum (LIR.Physical LIR.X19, substitutedVariants)], state)
             | None ->
-                // Unknown type, just print address
-                let lirSrc = convertOperand src
-                let moveToX0 =
-                    match lirSrc with
-                    | LIR.Reg (LIR.Physical LIR.X0) -> []
-                    | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
-                Ok (moveToX0 @ [LIR.PrintInt64 (LIR.Physical LIR.X0)], state)
+                Crash.crash $"Missing sum variant metadata for printing sum type '{typeName}'"
 
         | AST.TRecord (typeName, _) ->
             // Print record with field names and values
