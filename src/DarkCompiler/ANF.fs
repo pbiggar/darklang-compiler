@@ -722,29 +722,6 @@ let isHeapType (t: AST.Type) : bool =
     else
         t |> rcShapeOfType Map.empty |> rcShapeNeedsOwnedScopeRelease
 
-/// Compatibility payload-size classifier backed by RcShape.
-let payloadSize (t: AST.Type) (typeReg: Map<string, (string * AST.Type) list>) : int =
-    t
-    |> rcShapeOfType typeReg
-    |> rcShapePayloadSize
-    |> Option.defaultValue 0
-
-/// Compatibility reference-count dispatch classifier backed by RcShape.
-let rcKindWithRegistry (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type) : RcKind =
-    match t |> rcShapeOfType typeReg |> rcShapeRootKind with
-    | Some kind ->
-        kind
-    | None ->
-        Crash.crash $"rcKindWithRegistry: type '{t}' does not have an RC root kind"
-
-/// Compatibility reference-count dispatch classifier for metadata-free contexts.
-let rcKind (t: AST.Type) : RcKind =
-    match t with
-    | AST.TRecord _ ->
-        GenericHeap
-    | _ ->
-        rcKindWithRegistry Map.empty t
-
 // ============================================================================
 // Coverage Types
 // ============================================================================

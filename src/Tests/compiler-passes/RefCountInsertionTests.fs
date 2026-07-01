@@ -129,26 +129,6 @@ let testLegacyRcClassifiersUseRcShape () : TestResult =
         AST.TSum ("Enum", [])
     ]
 
-    let payloadSamples = [
-        AST.TString, 0
-        AST.TBytes, 0
-        AST.TFunction ([AST.TInt64], AST.TString), 0
-        AST.TRecord ("Box", []), 8
-        AST.TList AST.TInt64, 24
-        AST.TDict (AST.TInt64, AST.TString), 8
-        AST.TSum ("Payload", [AST.TString]), 16
-        AST.TSum ("Enum", []), 0
-    ]
-
-    let kindSamples = [
-        AST.TFunction ([AST.TInt64], AST.TString), ClosureHeap
-        AST.TList (AST.TFunction ([AST.TInt64], AST.TString)), GenericHeap
-        AST.TList AST.TInt64, TaggedList
-        AST.TDict (AST.TInt64, AST.TString), DictHeap
-        AST.TRecord ("Box", []), GenericHeap
-        AST.TSum ("Payload", [AST.TString]), GenericHeap
-    ]
-
     match heapSamples |> List.tryFind (fun typ -> not (isHeapTypeWithRegistry typeReg typ)) with
     | Some typ ->
         Error $"Expected legacy heap classifier to treat {typ} as managed through RcShape"
@@ -165,15 +145,7 @@ let testLegacyRcClassifiersUseRcShape () : TestResult =
                 | Some typ ->
                     Error $"Expected metadata-free legacy heap classifier to treat {typ} as unmanaged through RcShape"
                 | None ->
-                    match payloadSamples |> List.tryFind (fun (typ, expected) -> payloadSize typ typeReg <> expected) with
-                    | Some (typ, expected) ->
-                        Error $"Expected payloadSize for {typ} to be {expected}, got {payloadSize typ typeReg}"
-                    | None ->
-                        match kindSamples |> List.tryFind (fun (typ, expected) -> rcKindWithRegistry typeReg typ <> expected) with
-                        | Some (typ, expected) ->
-                            Error $"Expected rcKind for {typ} to be {expected}, got {rcKindWithRegistry typeReg typ}"
-                        | None ->
-                            Ok ()
+                    Ok ()
 
 let testRcShapeClassifiesSumsWithVariantMetadata () : TestResult =
     let typeReg =
