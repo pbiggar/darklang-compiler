@@ -434,7 +434,7 @@ let rec rcShapeOfTypeWithSums
 
                 BoxedSum (16, fieldShapes, variants)
         | None ->
-            rcShapeOfType typeReg t
+            Crash.crash $"rcShapeOfTypeWithSums: Sum type '{name}' not found in sumReg"
     | AST.TList elemType ->
         TaggedListShape (classify elemType)
     | AST.TDict (keyType, valueType) ->

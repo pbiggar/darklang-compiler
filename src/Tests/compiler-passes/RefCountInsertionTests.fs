@@ -582,6 +582,14 @@ let testRcShapeRequiresRecordMetadata () : TestResult =
     | ex when ex.Message.Contains("MissingRecordMetadata") ->
         Ok ()
 
+let testRcShapeWithSumsRequiresSumMetadata () : TestResult =
+    try
+        let _ = rcShapeOfTypeWithSums Map.empty Map.empty (AST.TSum ("MissingSumMetadata", []))
+        Error "Expected missing sum metadata to fail before ownership decisions can fall back to generic boxed sums"
+    with
+    | ex when ex.Message.Contains("MissingSumMetadata") ->
+        Ok ()
+
 let testInferCallReturnsFunctionReturnType () : TestResult =
     let ctx : TypeContext = {
         TypeReg = Map.empty
@@ -800,7 +808,10 @@ let testPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
     let ctx : TypeContext = {
         TypeReg = Map.empty
         VariantLookup = Map.empty
-        SumShapeReg = Map.empty
+        SumShapeReg =
+            Map.ofList [
+                ("Color", { TypeParams = []; Payloads = [0, None; 1, None] })
+            ]
         FuncReg = Map.empty
         FuncParams = Map.empty
         TempTypes = Map.empty
@@ -952,6 +963,7 @@ let tests = [
     ("RcReleasePlan of type with sums uses variant metadata", testRcReleasePlanOfTypeWithSumsUsesVariantMetadata)
     ("RcReleasePlan of type classifies remaining root kinds", testRcReleasePlanOfTypeClassifiesRemainingRootKinds)
     ("RcShape requires record metadata", testRcShapeRequiresRecordMetadata)
+    ("RcShape with sums requires sum metadata", testRcShapeWithSumsRequiresSumMetadata)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)

@@ -4,9 +4,172 @@
 
 module X86_64CodeGenTests
 
+let rec private inferFixtureVariantsFromType (typ: AST.Type) : LIR.VariantRegistry =
+    let merge left right =
+        Map.fold
+            (fun acc typeName variants ->
+                match Map.tryFind typeName acc with
+                | None ->
+                    Map.add typeName variants acc
+                | Some existing when existing = variants ->
+                    acc
+                | Some _ ->
+                    Crash.crash $"Conflicting inferred test variant metadata for {typeName}")
+            left
+            right
+
+    match typ with
+    | AST.TSum (name, typeArgs) ->
+        let self =
+            match typeArgs with
+            | [] ->
+                let variants : LIR.TypeVariants =
+                    { TypeParams = []
+                      Variants = [{ Name = $"{name}_case"; Tag = 0; Payload = None }] }
+                Map.ofList [
+                    (name, variants)
+                ]
+            | [_] ->
+                let variants : LIR.TypeVariants =
+                    { TypeParams = ["a"]
+                      Variants = [{ Name = $"{name}_payload"; Tag = 0; Payload = Some (AST.TVar "a") }] }
+                Map.ofList [
+                    (name, variants)
+                ]
+            | _ ->
+                Crash.crash $"Cannot infer test variant metadata for multi-argument sum {name}"
+
+        typeArgs
+        |> List.map inferFixtureVariantsFromType
+        |> List.fold merge self
+    | AST.TTuple fields ->
+        fields
+        |> List.map inferFixtureVariantsFromType
+        |> List.fold merge Map.empty
+    | AST.TRecord (_, typeArgs) ->
+        typeArgs
+        |> List.map inferFixtureVariantsFromType
+        |> List.fold merge Map.empty
+    | AST.TList elemType ->
+        inferFixtureVariantsFromType elemType
+    | AST.TDict (keyType, valueType) ->
+        merge (inferFixtureVariantsFromType keyType) (inferFixtureVariantsFromType valueType)
+    | AST.TFunction (paramTypes, returnType) ->
+        returnType :: paramTypes
+        |> List.map inferFixtureVariantsFromType
+        |> List.fold merge Map.empty
+    | AST.TInt8
+    | AST.TInt16
+    | AST.TInt32
+    | AST.TInt64
+    | AST.TInt128
+    | AST.TUInt8
+    | AST.TUInt16
+    | AST.TUInt32
+    | AST.TUInt64
+    | AST.TUInt128
+    | AST.TBool
+    | AST.TFloat64
+    | AST.TString
+    | AST.TBytes
+    | AST.TChar
+    | AST.TUnit
+    | AST.TRawPtr
+    | AST.TRuntimeError
+    | AST.TVar _ ->
+        Map.empty
+
+let private inferFixtureVariantsFromRcMetadata (metadata: ANF.RcMetadata option) : LIR.VariantRegistry =
+    metadata
+    |> Option.bind (fun rcMetadata -> rcMetadata.SourceType)
+    |> Option.map inferFixtureVariantsFromType
+    |> Option.defaultValue Map.empty
+
+let private inferFixtureVariantsFromInstr (instr: LIR.Instr) : LIR.VariantRegistry =
+    let merge left right =
+        Map.fold
+            (fun acc typeName variants ->
+                match Map.tryFind typeName acc with
+                | None ->
+                    Map.add typeName variants acc
+                | Some existing when existing = variants ->
+                    acc
+                | Some _ ->
+                    Crash.crash $"Conflicting inferred test variant metadata for {typeName}")
+            left
+            right
+
+    match instr with
+    | LIR.Phi (_, _, Some typ)
+    | LIR.HeapStore (_, _, _, Some typ)
+    | LIR.RawSet (_, _, _, Some typ) ->
+        inferFixtureVariantsFromType typ
+    | LIR.RefCountInc (_, _, _, metadata)
+    | LIR.RefCountDec (_, _, _, metadata) ->
+        inferFixtureVariantsFromRcMetadata metadata
+    | LIR.PrintList (_, elemType) ->
+        inferFixtureVariantsFromType elemType
+    | LIR.PrintSum (_, variants) ->
+        variants
+        |> List.choose (fun (_, _, payload) -> payload)
+        |> List.map inferFixtureVariantsFromType
+        |> List.fold merge Map.empty
+    | LIR.PrintRecord (_, _, fields) ->
+        fields
+        |> List.map (fun (_, fieldType) -> inferFixtureVariantsFromType fieldType)
+        |> List.fold merge Map.empty
+    | _ ->
+        Map.empty
+
+let private inferFixtureVariantsFromFunction (func: LIR.Function) : LIR.VariantRegistry =
+    let merge left right =
+        Map.fold
+            (fun acc typeName variants ->
+                match Map.tryFind typeName acc with
+                | None ->
+                    Map.add typeName variants acc
+                | Some existing when existing = variants ->
+                    acc
+                | Some _ ->
+                    Crash.crash $"Conflicting inferred test variant metadata for {typeName}")
+            left
+            right
+
+    let paramVariants =
+        func.TypedParams
+        |> List.map (fun param -> inferFixtureVariantsFromType param.Type)
+        |> List.fold merge Map.empty
+
+    func.CFG.Blocks
+    |> Map.toList
+    |> List.collect (fun (_, block) -> block.Instrs)
+    |> List.map inferFixtureVariantsFromInstr
+    |> List.fold merge paramVariants
+
+let private completeFixtureVariants (program: LIR.Program) : LIR.Program =
+    let mergeInferred explicit inferred =
+        Map.fold
+            (fun acc typeName variants ->
+                match Map.tryFind typeName acc with
+                | Some _ ->
+                    acc
+                | None ->
+                    Map.add typeName variants acc)
+            explicit
+            inferred
+
+    match program with
+    | LIR.Program (functions, variants, records) ->
+        let inferred =
+            functions
+            |> List.map inferFixtureVariantsFromFunction
+            |> List.fold mergeInferred Map.empty
+
+        LIR.Program (functions, mergeInferred variants inferred, records)
+
 /// Build and run a LIR program, returning exit code, stdout, and stderr.
 let private runLIRProgramFullWithOptions (program: LIR.Program) (enableLeakCheck: bool) : Result<int * string * string, string> =
-    match CodeGen_X86_64.translateProgram program enableLeakCheck with
+    match CodeGen_X86_64.translateProgram (completeFixtureVariants program) enableLeakCheck with
     | Error e -> Error $"Codegen error: {e}"
     | Ok instrs ->
         match X86_64_Resolve.resolveAndEncode instrs with
@@ -62,7 +225,7 @@ let private runLIRProgramFull (program: LIR.Program) : Result<int * string, stri
 
 /// Build and run a LIR program, returning the exit code
 let private runLIRProgram (program: LIR.Program) : Result<int, string> =
-    match CodeGen_X86_64.translateProgram program false with
+    match CodeGen_X86_64.translateProgram (completeFixtureVariants program) false with
     | Error e -> Error $"Codegen error: {e}"
     | Ok instrs ->
         match X86_64_Resolve.resolveAndEncode instrs with
