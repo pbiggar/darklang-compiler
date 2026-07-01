@@ -1475,25 +1475,6 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
         else
             []
 
-    let fixedBlockPayloadSize (typ: AST.Type) : int option =
-        match typ with
-        | AST.TRecord (name, _) when not (Map.containsKey name ctx.RecordRegistry) ->
-            None
-        | _ ->
-            match ANF.rcShapeOfType ctx.RecordRegistry typ with
-            | ANF.FixedBlock (payloadSize, _)
-            | ANF.BoxedSum (payloadSize, _) ->
-                Some payloadSize
-            | ANF.Immediate
-            | ANF.TaggedListShape _
-            | ANF.DictRoot _
-            | ANF.DynamicString
-            | ANF.DynamicBytes
-            | ANF.ClosureShape _
-            | ANF.StaticString
-            | ANF.RawUnmanaged ->
-                None
-
     let releaseFixedChildField
         (fieldOffset: int)
         (payloadSize: int)
@@ -1595,27 +1576,24 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
         @ [ARM64Symbolic.Label bufferDone]
 
     let fixedBlockFieldReleases
-        (captureType: AST.Type)
+        (releasePlan: ANF.RcReleasePlan)
         (doneLabel: string)
         : ARM64Symbolic.Instr list =
-        captureType
-        |> tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry
-        |> Option.map (function
-            | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
-                fieldReleases
-                |> List.collect (function
-                    | ANF.FieldRelease (fieldOffset, ANF.DynamicBufferRelease _) ->
-                        releaseDynamicBufferChildField fieldOffset doneLabel
-                    | ANF.FieldRelease (fieldOffset, ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _))
-                    | ANF.FieldRelease (fieldOffset, ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _)) ->
-                        releaseFixedChildField fieldOffset payloadSize doneLabel
-                    | _ ->
-                        [])
-            | _ ->
-                [])
-        |> Option.defaultValue []
+        match releasePlan with
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
+            fieldReleases
+            |> List.collect (function
+                | ANF.FieldRelease (fieldOffset, ANF.DynamicBufferRelease _) ->
+                    releaseDynamicBufferChildField fieldOffset doneLabel
+                | ANF.FieldRelease (fieldOffset, ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _))
+                | ANF.FieldRelease (fieldOffset, ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _)) ->
+                    releaseFixedChildField fieldOffset payloadSize doneLabel
+                | _ ->
+                    [])
+        | _ ->
+            []
 
-    let releaseFixedCapture (fieldOffset: int) (captureType: AST.Type) (payloadSize: int) (doneLabel: string) : ARM64Symbolic.Instr list =
+    let releaseFixedCapture (fieldOffset: int) (releasePlan: ANF.RcReleasePlan) (payloadSize: int) (doneLabel: string) : ARM64Symbolic.Instr list =
         let captureDone = label $"{doneLabel}_field_{fieldOffset}_done"
         let captureSkipFreelist = label $"{doneLabel}_field_{fieldOffset}_skip_freelist"
         [
@@ -1626,7 +1604,7 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
             ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X8, int16 payloadSize)
             ARM64Symbolic.CBNZ (ARM64Symbolic.X15, captureDone)
         ]
-        @ fixedBlockFieldReleases captureType doneLabel
+        @ fixedBlockFieldReleases releasePlan doneLabel
         @ (if payloadSize >= 0 && payloadSize < 256 then
             [
                 ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X27, uint16 payloadSize)
@@ -1657,10 +1635,11 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
                     | AST.TBytes ->
                         releaseDynamicCapture fieldOffset $"captures_{index}_{captureIndex}"
                     | _ ->
-                        fixedBlockPayloadSize captureType
-                        |> Option.map (fun payloadSize ->
-                            releaseFixedCapture fieldOffset captureType payloadSize $"captures_{index}_{captureIndex}")
-                        |> Option.defaultValue [])
+                        match tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry captureType with
+                        | Some (ANF.RootRelease (payloadSize, ANF.GenericHeap, (ANF.FixedBlockPayloadRelease _ | ANF.BoxedSumPayloadRelease _)) as releasePlan) ->
+                            releaseFixedCapture fieldOffset releasePlan payloadSize $"captures_{index}_{captureIndex}"
+                        | _ ->
+                            [])
                 |> List.concat
             [
                 ARM64Symbolic.ADR (ARM64Symbolic.X11, codeLabel funcName)
