@@ -4627,8 +4627,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 let listHelperLabelForField (fieldType: AST.Type) : string =
                     listDecHelperForType ctx (Some fieldType)
 
-                let releaseListFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
-                    let helperLabel = listHelperLabelForField fieldType
+                let releaseListFieldFromHelper (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (helperLabel: string) : ARM64Symbolic.Instr list =
                     let callInstrs = [
                         ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
                         ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -4649,12 +4648,17 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
                         ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
                     ] @ callInstrs
+
+                let releaseListFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
+                    releaseListFieldFromHelper baseReg fieldOffset (listHelperLabelForField fieldType)
+
+                let releaseListFieldFromPlan (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldReleasePlan: ANF.RcReleasePlan) : ARM64Symbolic.Instr list =
+                    releaseListFieldFromHelper baseReg fieldOffset (listDecHelperForReleasePlan fieldReleasePlan)
 
                 let releaseListField (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
                     releaseListFieldFrom addrReg fieldOffset fieldType
 
-                let releaseDictFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldType: AST.Type option) : ARM64Symbolic.Instr list =
-                    let helperLabel = dictDecHelperForType ctx fieldType
+                let releaseDictFieldFromHelper (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (helperLabel: string) : ARM64Symbolic.Instr list =
                     let callInstrs = [
                         ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
                         ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -4675,6 +4679,12 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
                         ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
                     ] @ callInstrs
+
+                let releaseDictFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldType: AST.Type option) : ARM64Symbolic.Instr list =
+                    releaseDictFieldFromHelper baseReg fieldOffset (dictDecHelperForType ctx fieldType)
+
+                let releaseDictFieldFromPlan (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldReleasePlan: ANF.RcReleasePlan) : ARM64Symbolic.Instr list =
+                    releaseDictFieldFromHelper baseReg fieldOffset (dictDecHelperForReleasePlan fieldReleasePlan)
 
                 let releaseDictField (fieldOffset: int) (fieldType: AST.Type option) : ARM64Symbolic.Instr list =
                     releaseDictFieldFrom addrReg fieldOffset fieldType
@@ -4751,6 +4761,23 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 let releaseDynamicBufferField (fieldOffset: int) : ARM64Symbolic.Instr list =
                     releaseDynamicBufferFieldFrom addrReg fieldOffset
 
+                let releaseFieldPlanFrom
+                    (baseReg: ARM64Symbolic.Reg)
+                    (fieldOffset: int)
+                    (fieldReleasePlan: ANF.RcReleasePlan)
+                    : ARM64Symbolic.Instr list =
+                    match fieldReleasePlan with
+                    | ANF.DynamicBufferRelease _ ->
+                        releaseDynamicBufferFieldFrom baseReg fieldOffset
+                    | ANF.RootRelease (_, ANF.TaggedList, _) ->
+                        releaseListFieldFromPlan baseReg fieldOffset fieldReleasePlan
+                    | ANF.RootRelease (_, ANF.DictHeap, _) ->
+                        releaseDictFieldFromPlan baseReg fieldOffset fieldReleasePlan
+                    | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
+                        releaseClosureFieldFrom baseReg fieldOffset
+                    | _ ->
+                        []
+
                 let releaseFixedBlockField (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
                     let fieldPayloadSize =
                         match fieldType with
@@ -4768,22 +4795,14 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         []
                     | Some childPayloadSize ->
                         let childFieldReleaseInstrs =
-                            fixedBlockFieldTypes ctx.RecordRegistry (Some fieldType)
-                            |> List.mapi (fun index childFieldType ->
-                                let childFieldOffset = index * 8
-                                match childFieldType with
-                                | AST.TString
-                                | AST.TBytes ->
-                                    releaseDynamicBufferFieldFrom ARM64Symbolic.X11 childFieldOffset
-                                | AST.TList _ ->
-                                    releaseListFieldFrom ARM64Symbolic.X11 childFieldOffset childFieldType
-                                | AST.TDict _ ->
-                                    releaseDictFieldFrom ARM64Symbolic.X11 childFieldOffset (Some childFieldType)
-                                | AST.TFunction _ ->
-                                    releaseClosureFieldFrom ARM64Symbolic.X11 childFieldOffset
-                                | _ ->
-                                    [])
-                            |> List.concat
+                            match tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry fieldType with
+                            | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)))
+                            | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases))) ->
+                                fieldReleases
+                                |> List.collect (fun (ANF.FieldRelease (childFieldOffset, fieldReleasePlan)) ->
+                                    releaseFieldPlanFrom ARM64Symbolic.X11 childFieldOffset fieldReleasePlan)
+                            | _ ->
+                                []
                         let childLeakDec = generateLeakCounterDec ctx
                         let freeChild =
                             (if List.isEmpty childFieldReleaseInstrs then
