@@ -5046,30 +5046,6 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
             | Error e -> Error e
             | Ok instrs -> translateFuncs (instrs :: acc) rest
 
-    let rec typeContainsDict (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TDict _ -> true
-        | AST.TTuple fields -> fields |> List.exists typeContainsDict
-        | AST.TSum (_, payloadTypes) -> payloadTypes |> List.exists typeContainsDict
-        | AST.TRecord (name, _) ->
-            recordRegistry
-            |> Map.tryFind name
-            |> Option.map (List.exists (fun (_, fieldType) -> typeContainsDict fieldType))
-            |> Option.defaultValue false
-        | _ -> false
-
-    let rec typeContainsClosure (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TFunction _ -> true
-        | AST.TTuple fields -> fields |> List.exists typeContainsClosure
-        | AST.TSum (_, payloadTypes) -> payloadTypes |> List.exists typeContainsClosure
-        | AST.TRecord (name, _) ->
-            recordRegistry
-            |> Map.tryFind name
-            |> Option.map (List.exists (fun (_, fieldType) -> typeContainsClosure fieldType))
-            |> Option.defaultValue false
-        | _ -> false
-
     let rec typeContainsListMatching (matcher: AST.Type -> bool) (fieldType: AST.Type) : bool =
         match fieldType with
         | AST.TList _ as listType -> matcher listType
@@ -5087,6 +5063,14 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
     let closureCapturesContain (predicate: AST.Type -> bool) : bool =
         closureCaptureTypes
         |> Map.exists (fun _ captureTypes -> captureTypes |> List.exists predicate)
+
+    let typeContainsRootKindRelease (kind: ANF.RcKind) (sourceType: AST.Type) : bool =
+        typeReleasePlanContains (releasePlanIsRootKind kind) recordRegistry sourceType
+
+    let closureCapturesContainRootKindRelease (kind: ANF.RcKind) : bool =
+        closureCaptureTypes
+        |> Map.exists (fun _ captureTypes ->
+            captureTypes |> List.exists (typeContainsRootKindRelease kind))
 
     let isTuple2List (fieldType: AST.Type) : bool =
         match fieldType with
@@ -6337,9 +6321,9 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                  |> List.exists (function
                      | LIR.RefCountDec (_, _, LIR.DictHeap, _) -> true
                      | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                         typeContainsDict sourceType
+                         typeContainsRootKindRelease ANF.DictHeap sourceType
                      | _ -> false))))
-        || closureCapturesContain typeContainsDict
+        || closureCapturesContainRootKindRelease ANF.DictHeap
 
     let needsClosureRcDecHelper =
         functions
@@ -6350,7 +6334,7 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.ClosureHeap, _) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsClosure sourceType
+                        typeContainsRootKindRelease ANF.ClosureHeap sourceType
                     | _ -> false)))
 
     let closurePayloadSizes =
