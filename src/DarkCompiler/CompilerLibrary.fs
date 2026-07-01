@@ -451,9 +451,12 @@ let private buildAnf
     if shouldDumpIR verbosity options.DumpANF then
         printANFProgram "=== ANF (before optimization) ===" anfProgram
     let anfOptStart = sw.Elapsed.TotalMilliseconds
+    let anfOptimizeContext : ANF_Optimize.OptimizeContext =
+        { TypeReg = registries.TypeReg
+          SumShapeReg = AST_to_ANF.rcSumShapeRegistryFromVariantLookup registries.VariantLookup }
     let anfOptimized =
         if shouldRunANFOptimize anfOptions then
-            ANF_Optimize.optimizeProgramWithOptions anfOptions anfProgram
+            ANF_Optimize.optimizeProgramWithContextAndOptions anfOptimizeContext anfOptions anfProgram
         else
             anfProgram
     let anfOptElapsed = sw.Elapsed.TotalMilliseconds - anfOptStart

@@ -25,12 +25,23 @@ type OptimizeOptions = {
     EnableStrengthReduction: bool
 }
 
+/// Type metadata needed for ownership-sensitive optimizer decisions.
+type OptimizeContext = {
+    TypeReg: Map<string, (string * AST.Type) list>
+    SumShapeReg: RcSumShapeRegistry
+}
+
 let defaultOptimizeOptions = {
     EnableConstFolding = true
     EnableConstProp = true
     EnableCopyProp = true
     EnableDCE = true
     EnableStrengthReduction = true
+}
+
+let emptyOptimizeContext = {
+    TypeReg = Map.empty
+    SumShapeReg = Map.empty
 }
 
 /// Check if n is a power of 2, and if so return its log2
@@ -168,8 +179,13 @@ let foldUnaryOp (op: UnaryOp) (src: Atom) : CExpr option =
     | BitNot, IntLiteral (Int64 n) -> Some (Atom (IntLiteral (Int64 (~~~n))))
     | _ -> None
 
+let private typeNeedsTypedAtomDceProtection (context: OptimizeContext) (typ: AST.Type) : bool =
+    typ
+    |> rcShapeOfTypeWithSums context.TypeReg context.SumShapeReg
+    |> rcShapeNeedsOwnedScopeRelease
+
 /// Check if a CExpr has side effects
-let hasSideEffects (cexpr: CExpr) : bool =
+let hasSideEffects (context: OptimizeContext) (cexpr: CExpr) : bool =
     match cexpr with
     | Atom _ -> false
     | TypedAtom (_, typ) ->
@@ -177,7 +193,7 @@ let hasSideEffects (cexpr: CExpr) : bool =
         // raw pointer with its heap type. Dropping that marker before RC
         // insertion can orphan the allocation even though the cast itself is
         // computationally pure.
-        isHeapType typ
+        typeNeedsTypedAtomDceProtection context typ
     | Prim _ -> false
     | UnaryPrim _ -> false
     | IfValue _ -> false
@@ -381,7 +397,7 @@ type OptimizeAExprResult = {
 }
 
 /// Optimize an AExpr, returning optimized expression, change flag, and used TempIds
-let rec private optimizeAExprWithUses (options: OptimizeOptions) (env: ConstEnv) (aexpr: AExpr) : OptimizeAExprResult =
+let rec private optimizeAExprWithUses (context: OptimizeContext) (options: OptimizeOptions) (env: ConstEnv) (aexpr: AExpr) : OptimizeAExprResult =
     match aexpr with
     | Return atom ->
         let atom' = substAtom env atom
@@ -398,7 +414,7 @@ let rec private optimizeAExprWithUses (options: OptimizeOptions) (env: ConstEnv)
         // Check for copy propagation: if cexpr is just an Atom, substitute it
         let (env', skipBinding) =
             match cexpr' with
-            | Atom a when options.EnableCopyProp && not (hasSideEffects cexpr') ->
+            | Atom a when options.EnableCopyProp && not (hasSideEffects context cexpr') ->
                 // Copy propagation: don't emit binding, just substitute
                 (Map.add tid a env, true)
             | Atom (IntLiteral _ | BoolLiteral _ | FloatLiteral _ | StringLiteral _ | UnitLiteral as constAtom)
@@ -409,11 +425,11 @@ let rec private optimizeAExprWithUses (options: OptimizeOptions) (env: ConstEnv)
                 (env, false)
 
         // Optimize the body
-        let bodyResult = optimizeAExprWithUses options env' body
+        let bodyResult = optimizeAExprWithUses context options env' body
 
         // Dead code elimination: if tid is not used in body and cexpr has no side effects
         let usesInBody = bodyResult.Uses
-        let isDead = options.EnableDCE && not (Set.contains tid usesInBody) && not (hasSideEffects cexpr')
+        let isDead = options.EnableDCE && not (Set.contains tid usesInBody) && not (hasSideEffects context cexpr')
         let usesInBodyWithoutTid = Set.remove tid usesInBody
 
         if skipBinding then
@@ -445,22 +461,22 @@ let rec private optimizeAExprWithUses (options: OptimizeOptions) (env: ConstEnv)
         // Fold constant conditions
         match cond' with
         | BoolLiteral true when options.EnableConstFolding ->
-            let thenResult = optimizeAExprWithUses options env thenBranch
+            let thenResult = optimizeAExprWithUses context options env thenBranch
             {
                 Expr = thenResult.Expr
                 Changed = true
                 Uses = thenResult.Uses
             }
         | BoolLiteral false when options.EnableConstFolding ->
-            let elseResult = optimizeAExprWithUses options env elseBranch
+            let elseResult = optimizeAExprWithUses context options env elseBranch
             {
                 Expr = elseResult.Expr
                 Changed = true
                 Uses = elseResult.Uses
             }
         | _ ->
-            let thenResult = optimizeAExprWithUses options env thenBranch
-            let elseResult = optimizeAExprWithUses options env elseBranch
+            let thenResult = optimizeAExprWithUses context options env thenBranch
+            let elseResult = optimizeAExprWithUses context options env elseBranch
             let uses = Set.unionMany [collectAtomUses cond'; thenResult.Uses; elseResult.Uses]
             {
                 Expr = If (cond', thenResult.Expr, elseResult.Expr)
@@ -469,33 +485,45 @@ let rec private optimizeAExprWithUses (options: OptimizeOptions) (env: ConstEnv)
             }
 
 /// Optimize an AExpr
-let optimizeAExpr (options: OptimizeOptions) (env: ConstEnv) (aexpr: AExpr) : AExpr * bool =
-    let result = optimizeAExprWithUses options env aexpr
+let optimizeAExprWithContext (context: OptimizeContext) (options: OptimizeOptions) (env: ConstEnv) (aexpr: AExpr) : AExpr * bool =
+    let result = optimizeAExprWithUses context options env aexpr
     (result.Expr, result.Changed)
+
+/// Optimize an AExpr
+let optimizeAExpr (options: OptimizeOptions) (env: ConstEnv) (aexpr: AExpr) : AExpr * bool =
+    optimizeAExprWithContext emptyOptimizeContext options env aexpr
+
+/// Optimize a function
+let optimizeFunctionWithContext (context: OptimizeContext) (options: OptimizeOptions) (func: Function) : Function * bool =
+    // Initialize env with function parameters (they're not constants)
+    let env = Map.empty
+    let (body', changed) = optimizeAExprWithContext context options env func.Body
+    ({ func with Body = body' }, changed)
 
 /// Optimize a function
 let optimizeFunction (options: OptimizeOptions) (func: Function) : Function * bool =
-    // Initialize env with function parameters (they're not constants)
-    let env = Map.empty
-    let (body', changed) = optimizeAExpr options env func.Body
-    ({ func with Body = body' }, changed)
+    optimizeFunctionWithContext emptyOptimizeContext options func
 
 /// Optimize until fixed point
-let rec optimizeToFixedPoint (options: OptimizeOptions) (func: Function) (maxIterations: int) : Function =
+let rec optimizeToFixedPointWithContext (context: OptimizeContext) (options: OptimizeOptions) (func: Function) (maxIterations: int) : Function =
     if maxIterations <= 0 then func
     else
-        let (func', changed) = optimizeFunction options func
+        let (func', changed) = optimizeFunctionWithContext context options func
         if changed then
-            optimizeToFixedPoint options func' (maxIterations - 1)
+            optimizeToFixedPointWithContext context options func' (maxIterations - 1)
         else
             func'
 
+/// Optimize until fixed point
+let optimizeToFixedPoint (options: OptimizeOptions) (func: Function) (maxIterations: int) : Function =
+    optimizeToFixedPointWithContext emptyOptimizeContext options func maxIterations
+
 /// Optimize a program with explicit options
-let optimizeProgramWithOptions (options: OptimizeOptions) (program: Program) : Program =
+let optimizeProgramWithContextAndOptions (context: OptimizeContext) (options: OptimizeOptions) (program: Program) : Program =
     let (Program (functions, mainExpr)) = program
 
     // Optimize all functions
-    let functions' = functions |> List.map (fun f -> optimizeToFixedPoint options f 10)
+    let functions' = functions |> List.map (fun f -> optimizeToFixedPointWithContext context options f 10)
 
     // Optimize main expression
     let mainFunc = { Name = "__main__"
@@ -503,9 +531,13 @@ let optimizeProgramWithOptions (options: OptimizeOptions) (program: Program) : P
                      ReturnType = AST.TUnit
                      ReturnOwnership = OwnedReturn
                      Body = mainExpr }
-    let mainOptimized = optimizeToFixedPoint options mainFunc 10
+    let mainOptimized = optimizeToFixedPointWithContext context options mainFunc 10
 
     Program (functions', mainOptimized.Body)
+
+/// Optimize a program with explicit options
+let optimizeProgramWithOptions (options: OptimizeOptions) (program: Program) : Program =
+    optimizeProgramWithContextAndOptions emptyOptimizeContext options program
 
 /// Optimize a program with default options
 let optimizeProgram (program: Program) : Program =

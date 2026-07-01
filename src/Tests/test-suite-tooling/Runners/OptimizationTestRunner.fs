@@ -60,6 +60,10 @@ let private convertTypedProgram (typedAst: AST.Program) : Result<AST_to_ANF.Conv
                         ModuleRegistry = registries.ModuleRegistry
                     }))))
 
+let private optimizeContextFromConversionResult (convResult: AST_to_ANF.ConversionResult) : ANF_Optimize.OptimizeContext =
+    { TypeReg = convResult.TypeReg
+      SumShapeReg = AST_to_ANF.rcSumShapeRegistryFromVariantLookup convResult.VariantLookup }
+
 /// Normalize IR output for comparison
 /// - Trim whitespace
 /// - Normalize line endings
@@ -85,7 +89,11 @@ let getOptimizedANF (stdlib: CompilerLibrary.StdlibResult) (source: string) : Re
             | Error e -> Error $"ANF conversion error: {e}"
             | Ok convResult ->
                 // Optimize ANF
-                let optimized = ANF_Optimize.optimizeProgram convResult.Program
+                let optimized =
+                    ANF_Optimize.optimizeProgramWithContextAndOptions
+                        (optimizeContextFromConversionResult convResult)
+                        ANF_Optimize.defaultOptimizeOptions
+                        convResult.Program
 
                 // Pretty-print the result
                 Ok (formatANF optimized)
@@ -105,7 +113,11 @@ let getOptimizedMIR (stdlib: CompilerLibrary.StdlibResult) (source: string) : Re
             | Error e -> Error $"ANF conversion error: {e}"
             | Ok convResult ->
                 // Optimize ANF
-                let optimized = ANF_Optimize.optimizeProgram convResult.Program
+                let optimized =
+                    ANF_Optimize.optimizeProgramWithContextAndOptions
+                        (optimizeContextFromConversionResult convResult)
+                        ANF_Optimize.defaultOptimizeOptions
+                        convResult.Program
 
                 // Reference counting and print insertion
                 let convResultOptimized = { convResult with Program = optimized }
@@ -145,7 +157,11 @@ let getOptimizedLIR (stdlib: CompilerLibrary.StdlibResult) (source: string) : Re
             | Error e -> Error $"ANF conversion error: {e}"
             | Ok convResult ->
                 // Optimize ANF
-                let optimized = ANF_Optimize.optimizeProgram convResult.Program
+                let optimized =
+                    ANF_Optimize.optimizeProgramWithContextAndOptions
+                        (optimizeContextFromConversionResult convResult)
+                        ANF_Optimize.defaultOptimizeOptions
+                        convResult.Program
 
                 // Reference counting and print insertion
                 let convResultOptimized = { convResult with Program = optimized }

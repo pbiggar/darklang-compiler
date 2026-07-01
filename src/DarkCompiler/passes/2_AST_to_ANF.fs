@@ -398,7 +398,7 @@ type TypeRegistry = Map<string, (string * AST.Type) list>
 /// Variant lookup - maps variant names to (type name, type params, tag index, payload type)
 type VariantLookup = Map<string, (string * string list * int * AST.Type option)>
 
-let private rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : ANF.RcSumShapeRegistry =
+let rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : ANF.RcSumShapeRegistry =
     let addVariant
         (acc: Map<string, string list * (int * AST.Type option) list>)
         (_variantName: string, (typeName, typeParams, tag, payloadType))

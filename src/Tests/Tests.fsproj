@@ -70,6 +70,7 @@
 
     <!-- Optimization tests -->
     <Compile Include="optimizations/MIROptimizeTests.fs" />
+    <Compile Include="optimizations/ANFOptimizeTests.fs" />
     <Compile Include="optimizations/ANFInliningTests.fs" />
 
     <!-- Test Runner (must be last) -->
