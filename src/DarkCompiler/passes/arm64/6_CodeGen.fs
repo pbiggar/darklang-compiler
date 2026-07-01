@@ -1445,6 +1445,17 @@ let private generateClosureRefCountIncHelper (ctx: CodeGenContext) : ARM64Symbol
         ARM64Symbolic.RET
     ]
 
+let private tryRcReleasePlanOfType
+    (recordRegistry: LIR.RecordRegistry)
+    (sumShapeRegistry: ANF.RcSumShapeRegistry)
+    (typ: AST.Type)
+    : ANF.RcReleasePlan option =
+    match typ with
+    | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
+        None
+    | _ ->
+        Some (ANF.rcReleasePlanOfTypeWithSums recordRegistry sumShapeRegistry typ)
+
 let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_closure_rc_dec_{name}"
     let ready = label "payload_ready"
@@ -1485,37 +1496,33 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
 
     let releaseFixedChildField
         (fieldOffset: int)
-        (fieldType: AST.Type)
+        (payloadSize: int)
         (doneLabel: string)
         : ARM64Symbolic.Instr list =
-        match fixedBlockPayloadSize fieldType with
-        | None ->
-            []
-        | Some payloadSize ->
-            let childDone = label $"{doneLabel}_child_{fieldOffset}_done"
-            let childSkipFreelist = label $"{doneLabel}_child_{fieldOffset}_skip_freelist"
+        let childDone = label $"{doneLabel}_child_{fieldOffset}_done"
+        let childSkipFreelist = label $"{doneLabel}_child_{fieldOffset}_skip_freelist"
+        [
+            ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X8, int16 fieldOffset)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X12, childDone)
+            ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, int16 payloadSize)
+            ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+            ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X12, int16 payloadSize)
+            ARM64Symbolic.CBNZ (ARM64Symbolic.X15, childDone)
+        ]
+        @ (if payloadSize >= 0 && payloadSize < 256 then
             [
-                ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X8, int16 fieldOffset)
-                ARM64Symbolic.CBZ (ARM64Symbolic.X12, childDone)
-                ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, int16 payloadSize)
-                ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
-                ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X12, int16 payloadSize)
-                ARM64Symbolic.CBNZ (ARM64Symbolic.X15, childDone)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X27, uint16 payloadSize)
+                ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X13, 0s)
+                ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.X12, 0s)
+                ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X13, 0s)
             ]
-            @ (if payloadSize >= 0 && payloadSize < 256 then
-                [
-                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X27, uint16 payloadSize)
-                    ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X13, 0s)
-                    ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.X12, 0s)
-                    ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X13, 0s)
-                ]
-               else
-                [ARM64Symbolic.B_label childSkipFreelist])
-            @ [
-                ARM64Symbolic.Label childSkipFreelist
-            ]
-            @ leakDec
-            @ [ARM64Symbolic.Label childDone]
+           else
+            [ARM64Symbolic.B_label childSkipFreelist])
+        @ [
+            ARM64Symbolic.Label childSkipFreelist
+        ]
+        @ leakDec
+        @ [ARM64Symbolic.Label childDone]
 
     let releaseDynamicBufferChildField (fieldOffset: int) (doneLabel: string) : ARM64Symbolic.Instr list =
         let bufferDone = label $"{doneLabel}_dynamic_buffer_{fieldOffset}_done"
@@ -1591,27 +1598,22 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
         (captureType: AST.Type)
         (doneLabel: string)
         : ARM64Symbolic.Instr list =
-        let fieldTypes =
-            match captureType with
-            | AST.TTuple fields ->
-                fields
-            | AST.TRecord (name, _) ->
-                ctx.RecordRegistry
-                |> Map.tryFind name
-                |> Option.map (List.map snd)
-                |> Option.defaultValue []
+        captureType
+        |> tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry
+        |> Option.map (function
+            | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
+                fieldReleases
+                |> List.collect (function
+                    | ANF.FieldRelease (fieldOffset, ANF.DynamicBufferRelease _) ->
+                        releaseDynamicBufferChildField fieldOffset doneLabel
+                    | ANF.FieldRelease (fieldOffset, ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _))
+                    | ANF.FieldRelease (fieldOffset, ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _)) ->
+                        releaseFixedChildField fieldOffset payloadSize doneLabel
+                    | _ ->
+                        [])
             | _ ->
-                []
-
-        fieldTypes
-        |> List.mapi (fun index fieldType ->
-            match fieldType with
-            | AST.TString
-            | AST.TBytes ->
-                releaseDynamicBufferChildField (index * 8) doneLabel
-            | _ ->
-                releaseFixedChildField (index * 8) fieldType doneLabel)
-        |> List.concat
+                [])
+        |> Option.defaultValue []
 
     let releaseFixedCapture (fieldOffset: int) (captureType: AST.Type) (payloadSize: int) (doneLabel: string) : ARM64Symbolic.Instr list =
         let captureDone = label $"{doneLabel}_field_{fieldOffset}_done"
@@ -1702,17 +1704,6 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
         ARM64Symbolic.Label helperRet
         ARM64Symbolic.RET
     ]
-
-let private tryRcReleasePlanOfType
-    (recordRegistry: LIR.RecordRegistry)
-    (sumShapeRegistry: ANF.RcSumShapeRegistry)
-    (typ: AST.Type)
-    : ANF.RcReleasePlan option =
-    match typ with
-    | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
-        None
-    | _ ->
-        Some (ANF.rcReleasePlanOfTypeWithSums recordRegistry sumShapeRegistry typ)
 
 let private releasePlanIsRootKind (kind: ANF.RcKind) (releasePlan: ANF.RcReleasePlan) : bool =
     match releasePlan with
