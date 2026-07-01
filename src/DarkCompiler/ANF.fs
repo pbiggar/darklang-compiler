@@ -323,6 +323,8 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
             FixedBlock (List.length fields * 8, fieldShapes)
         | None ->
             Crash.crash $"rcShapeOfType: Record type '{name}' not found in typeReg"
+    | AST.TSum (_, []) ->
+        Immediate
     | AST.TSum _ ->
         BoxedSum 16
     | AST.TList elemType ->

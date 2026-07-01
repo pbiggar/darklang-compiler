@@ -697,7 +697,8 @@ Concrete examples:
    reconstructing field cleanup from local source-type matches. x64 generic
    fixed-block dynamic string/bytes, list-root, dict-root, and closure-root
    field release now uses the plan directly for tuples, records, and boxed-sum
-   payload fields.
+   payload fields. Pure enums now classify as immediate values, so planner
+   consumers do not emit heap release for no-payload sums.
 
 2. Finish replacing `isRcManagedHeapType` and `needsAutomaticDec` in
    `2.5_RefCountInsertion.fs` with shape-operation decisions. Retain/release
@@ -710,19 +711,16 @@ Concrete examples:
 3. Replace backend dispatch based on `payloadSize` and partial `sourceType`
    pattern matching with `RcReleasePlan`.
 
-4. Add tests that prove the classifier controls behavior:
-
-   - pure enum values are not heap-released
-   - boxed sums are heap-released
-   - closure values use closure release
-   - string and bytes values use dynamic-buffer release
-   - dict values use dict-root release
-   - raw pointers do not get automatic release
+4. Continue adding classifier-consumer tests as backend paths migrate. Direct
+   planner tests now prove pure enums do not heap-release, boxed sums release
+   through generic heap roots, closure values use closure release, strings and
+   bytes use dynamic-buffer release, dict values use dict-root release, and raw
+   pointers do not release.
 
 ### Suggested Commit Breakdown
 
 1. Add pure tests for `rcShapeOfType` behavior that currently lacks direct
-   coverage.
+   coverage. The main root-kind and release-plan cases are now covered.
 2. Extend the ownership helpers around `RcShape` without changing codegen.
 3. Finish converting RC insertion for strings and bytes to use the planner.
 4. Finish converting RC insertion for fixed blocks and lists to use the planner.

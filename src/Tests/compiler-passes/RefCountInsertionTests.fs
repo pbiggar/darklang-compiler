@@ -74,6 +74,7 @@ let testRcShapeClassifiesRemainingRuntimeShapes () : TestResult =
         (AST.TBytes, DynamicBytes)
         (AST.TRawPtr, RawUnmanaged)
         (AST.TFunction ([AST.TInt64], AST.TString), ClosureShape [])
+        (AST.TSum ("Color", []), Immediate)
         (AST.TSum ("Option", [AST.TString]), BoxedSum 16)
         (AST.TList AST.TString, TaggedListShape DynamicString)
         (AST.TDict (AST.TString, AST.TList AST.TInt64), DictRoot (DynamicString, TaggedListShape Immediate))
@@ -386,6 +387,35 @@ let testRcReleasePlanOfTypeUsesSumPayloadMetadata () : TestResult =
     else
         Error $"Expected sum type to use release plan {expected}, got {actual}"
 
+let testRcReleasePlanOfTypeClassifiesRemainingRootKinds () : TestResult =
+    let samples = [
+        (AST.TSum ("Color", []), NoReleasePlan)
+        (AST.TSum ("MaybeString", [AST.TString]),
+            RootRelease (
+                16,
+                GenericHeap,
+                BoxedSumPayloadRelease (
+                    16,
+                    [
+                        FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
+                    ])))
+        (AST.TFunction ([AST.TInt64], AST.TString), RootRelease (0, ClosureHeap, ClosurePayloadRelease []))
+        (AST.TString, DynamicBufferRelease DynamicStringBuffer)
+        (AST.TBytes, DynamicBufferRelease DynamicBytesBuffer)
+        (AST.TDict (AST.TString, AST.TBytes),
+            RootRelease (
+                8,
+                DictHeap,
+                DictPayloadRelease (DynamicBufferRelease DynamicStringBuffer, DynamicBufferRelease DynamicBytesBuffer)))
+        (AST.TRawPtr, NoReleasePlan)
+    ]
+
+    match samples |> List.tryFind (fun (typ, expected) -> rcReleasePlanOfType Map.empty typ <> expected) with
+    | None ->
+        Ok ()
+    | Some (typ, expected) ->
+        Error $"Expected type {typ} to use release plan {expected}, got {rcReleasePlanOfType Map.empty typ}"
+
 let testInferCallReturnsFunctionReturnType () : TestResult =
     let ctx : TypeContext = {
         TypeReg = Map.empty
@@ -600,6 +630,7 @@ let tests = [
     ("RcShape release plan classifies field cleanup", testRcShapeReleasePlanClassifiesFieldCleanup)
     ("RcReleasePlan of type uses record metadata", testRcReleasePlanOfTypeUsesRecordMetadata)
     ("RcReleasePlan of type uses sum payload metadata", testRcReleasePlanOfTypeUsesSumPayloadMetadata)
+    ("RcReleasePlan of type classifies remaining root kinds", testRcReleasePlanOfTypeClassifiesRemainingRootKinds)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
