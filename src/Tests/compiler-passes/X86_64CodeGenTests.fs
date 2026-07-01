@@ -2080,6 +2080,36 @@ let testTaggedListRefCountDecTuple2NestedTupleStringPayload () : Result<unit, st
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list tuple2 nested tuple string payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases tuple4 nested tuple dynamic payloads.
+let testTaggedListRefCountDecTuple4NestedTupleStringPayload () : Result<unit, string> =
+    let nestedTupleType = AST.TTuple [AST.TString; AST.TInt64]
+    let tupleType = AST.TTuple [AST.TInt64; AST.TInt64; AST.TInt64; nestedTupleType]
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 16)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Imm 7L, None)
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 32)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 11L, None)
+                LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Imm 22L, None)
+                LIR.HeapStore (LIR.Physical LIR.X4, 16, LIR.Imm 33L, None)
+                LIR.HeapStore (LIR.Physical LIR.X4, 24, LIR.Reg (LIR.Physical LIR.X3), Some nestedTupleType)
+                LIR.HeapAlloc (LIR.Physical LIR.X5, 8)
+                LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some tupleType)
+                LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList tupleType))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected list tuple4 nested tuple string payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 tagged-list RefCountDec releases nested tuple dynamic payloads at later offsets.
 let testTaggedListRefCountDecTuple2NestedTupleDynamicPayloadCombinations () : Result<unit, string> =
     let runCase (name: string, nestedTupleType: AST.Type, setup: LIR.Instr list, nestedStores: LIR.Instr list) : Result<unit, string> =
@@ -3163,6 +3193,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases tuple4 string/bytes/list/dict payload", testTaggedListRefCountDecTuple4StringBytesListDictPayload)
     ("LIR tagged list RefCountDec releases tuple4 closure/bytes/list/dict payload", testTaggedListRefCountDecTuple4ClosureBytesListDictPayload)
     ("LIR tagged list RefCountDec releases tuple2 nested tuple string payload", testTaggedListRefCountDecTuple2NestedTupleStringPayload)
+    ("LIR tagged list RefCountDec releases tuple4 nested tuple string payload", testTaggedListRefCountDecTuple4NestedTupleStringPayload)
     ("LIR tagged list RefCountDec releases tuple2 nested tuple dynamic combinations", testTaggedListRefCountDecTuple2NestedTupleDynamicPayloadCombinations)
     ("LIR tagged list RefCountDec releases tuple2 nested tuple string/list/dict payload", testTaggedListRefCountDecTuple2NestedTupleStringListDictPayload)
     ("LIR tagged list RefCountDec releases tuple2 nested tuple list/dict payload", testTaggedListRefCountDecTuple2NestedTupleListDictPayload)
