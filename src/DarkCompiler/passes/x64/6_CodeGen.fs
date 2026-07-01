@@ -570,6 +570,7 @@ let private listRefCountDecTuple3DynamicFirstThirdHelperLabel = "__dark_list_rc_
 let private listRefCountDecTuple3DynamicSecondHelperLabel = "__dark_list_rc_dec_tuple3_dynamic_second_helper"
 let private listRefCountDecTuple3DynamicAllHelperLabel = "__dark_list_rc_dec_tuple3_dynamic_all_helper"
 let private listRefCountDecTuple3DynamicListDictHelperLabel = "__dark_list_rc_dec_tuple3_dynamic_list_dict_helper"
+let private listRefCountDecTuple3DynamicListDictListHelperLabel = "__dark_list_rc_dec_tuple3_dynamic_list_dict_list_helper"
 let private listRefCountDecTuple3ClosureListDictHelperLabel = "__dark_list_rc_dec_tuple3_closure_list_dict_helper"
 let private listRefCountDecTuple4DynamicListDictHelperLabel = "__dark_list_rc_dec_tuple4_dynamic_list_dict_helper"
 let private listRefCountDecTuple4ClosureDynamicListDictHelperLabel = "__dark_list_rc_dec_tuple4_closure_dynamic_list_dict_helper"
@@ -878,6 +879,17 @@ let private releasePlanIsRootKindAt
     | Some (ANF.RootRelease (_, planKind, _)) when planKind = kind -> true
     | _ -> false
 
+let private releasePlanIsDictWithValueAt
+    (fieldOffset: int)
+    (valuePredicate: ANF.RcReleasePlan -> bool)
+    (fieldReleases: ANF.RcFieldRelease list)
+    : bool =
+    match releasePlanFieldReleaseAt fieldOffset fieldReleases with
+    | Some (ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, valueRelease))) ->
+        valuePredicate valueRelease
+    | _ ->
+        false
+
 let rec private fixedBlockListHelperForPayloadRelease
     (payloadSize: int)
     (fieldReleases: ANF.RcFieldRelease list)
@@ -947,6 +959,11 @@ let rec private fixedBlockListHelperForPayloadRelease
         listRefCountDecTuple3DynamicSecondHelperLabel
     | 24, Some [0; 8; 16], _, _ ->
         listRefCountDecTuple3DynamicAllHelperLabel
+    | 24, _, _, _
+        when releasePlanIsDynamicBufferAt 0 fieldReleases
+             && releasePlanIsRootKindAt 8 ANF.TaggedList fieldReleases
+             && releasePlanIsDictWithValueAt 16 (releasePlanIsRootKind ANF.TaggedList) fieldReleases ->
+        listRefCountDecTuple3DynamicListDictListHelperLabel
     | 24, _, _, _
         when releasePlanIsDynamicBufferAt 0 fieldReleases
              && releasePlanIsRootKindAt 8 ANF.TaggedList fieldReleases
@@ -1234,7 +1251,7 @@ type private ListLeafPayloadRelease =
     | FixedBlockDictFieldPayload of payloadSize: int * dictFieldOffset: int
     | FixedBlockClosureFieldPayload of payloadSize: int * closureFieldOffset: int
     | FixedBlockFixedBlockFieldPayload of payloadSize: int * fixedBlockFieldOffset: int * childPayloadSize: int * childDynamicBufferOffsets: int list
-    | FixedBlockDynamicListDictPayload of payloadSize: int * dynamicFieldOffset: int * listFieldOffset: int * dictFieldOffset: int
+    | FixedBlockDynamicListDictPayload of payloadSize: int * dynamicFieldOffset: int * listFieldOffset: int * dictFieldOffset: int * dictHelperLabel: string
     | FixedBlockClosureListDictPayload of payloadSize: int * closureFieldOffset: int * listFieldOffset: int * dictFieldOffset: int
     | FixedBlockClosureDynamicListDictPayload of payloadSize: int * closureFieldOffset: int * dynamicFieldOffset: int * listFieldOffset: int * dictFieldOffset: int
     | FixedBlockDynamicBuffersListDictPayload of payloadSize: int * dynamicFieldOffsets: int list * listFieldOffset: int * dictFieldOffset: int
@@ -1559,7 +1576,7 @@ let private generateListRefCountDecHelperWith
                else [])
             @ leakDec
             @ [X86_64.Label leafPayloadDone]
-        | FixedBlockDynamicListDictPayload (payloadSize, dynamicFieldOffset, listFieldOffset, dictFieldOffset) ->
+        | FixedBlockDynamicListDictPayload (payloadSize, dynamicFieldOffset, listFieldOffset, dictFieldOffset, dictHelperLabel) ->
             [X86_64.MOV_load (X86_64.R11, X86_64.RDI, 0)
              X86_64.TEST_reg (X86_64.R11, X86_64.R11)
              X86_64.Jcc (X86_64.EQ, leafPayloadDone)
@@ -1584,7 +1601,7 @@ let private generateListRefCountDecHelperWith
                X86_64.PUSH X86_64.RCX
                X86_64.PUSH X86_64.R11
                X86_64.MOV_load (X86_64.RAX, X86_64.R11, dictFieldOffset)
-               X86_64.CALL dictRefCountDecHelperLabel
+               X86_64.CALL dictHelperLabel
                X86_64.POP X86_64.R11
                X86_64.POP X86_64.RCX
                X86_64.POP X86_64.RSI
@@ -2276,7 +2293,8 @@ let private listRefCountDecHelperSpecs : (string * ListLeafPayloadRelease) list 
     (listRefCountDecTuple3DynamicFirstThirdHelperLabel, (FixedBlockLeafPayload (24, [0; 16])))
     (listRefCountDecTuple3DynamicSecondHelperLabel, (FixedBlockLeafPayload (24, [8])))
     (listRefCountDecTuple3DynamicAllHelperLabel, (FixedBlockLeafPayload (24, [0; 8; 16])))
-    (listRefCountDecTuple3DynamicListDictHelperLabel, (FixedBlockDynamicListDictPayload (24, 0, 8, 16)))
+    (listRefCountDecTuple3DynamicListDictHelperLabel, (FixedBlockDynamicListDictPayload (24, 0, 8, 16, dictRefCountDecHelperLabel)))
+    (listRefCountDecTuple3DynamicListDictListHelperLabel, (FixedBlockDynamicListDictPayload (24, 0, 8, 16, dictRefCountDecListValueHelperLabel)))
     (listRefCountDecTuple3ClosureListDictHelperLabel, (FixedBlockClosureListDictPayload (24, 0, 8, 16)))
     (listRefCountDecTuple4DynamicListDictHelperLabel, (FixedBlockDynamicBuffersListDictPayload (32, [0; 8], 16, 24)))
     (listRefCountDecTuple4ClosureDynamicListDictHelperLabel, (FixedBlockClosureDynamicListDictPayload (32, 0, 8, 16, 24)))
@@ -2291,7 +2309,7 @@ let private listRefCountDecHelperSpecs : (string * ListLeafPayloadRelease) list 
     (listRefCountDecRecord3DynamicFirstThirdHelperLabel, (FixedBlockLeafPayload (24, [0; 16])))
     (listRefCountDecRecord3DynamicSecondHelperLabel, (FixedBlockLeafPayload (24, [8])))
     (listRefCountDecRecord3DynamicAllHelperLabel, (FixedBlockLeafPayload (24, [0; 8; 16])))
-    (listRefCountDecRecord3DynamicListDictHelperLabel, (FixedBlockDynamicListDictPayload (24, 0, 8, 16)))
+    (listRefCountDecRecord3DynamicListDictHelperLabel, (FixedBlockDynamicListDictPayload (24, 0, 8, 16, dictRefCountDecHelperLabel)))
     (listRefCountDecRecord3ClosureListDictHelperLabel, (FixedBlockClosureListDictPayload (24, 0, 8, 16)))
     (listRefCountDecRecord4DynamicListDictHelperLabel, (FixedBlockDynamicBuffersListDictPayload (32, [0; 8], 16, 24)))
     (listRefCountDecRecord4ClosureDynamicListDictHelperLabel, (FixedBlockClosureDynamicListDictPayload (32, 0, 8, 16, 24)))
@@ -2334,7 +2352,6 @@ let private listRefCountDecHelperSpecs : (string * ListLeafPayloadRelease) list 
 let private listLeafPayloadNeedsDictDecHelper (leafPayloadRelease: ListLeafPayloadRelease) : bool =
     match leafPayloadRelease with
     | FixedBlockDictFieldPayload _
-    | FixedBlockDynamicListDictPayload _
     | FixedBlockClosureListDictPayload _
     | FixedBlockClosureDynamicListDictPayload _
     | FixedBlockDynamicBuffersListDictPayload _
@@ -2345,6 +2362,8 @@ let private listLeafPayloadNeedsDictDecHelper (leafPayloadRelease: ListLeafPaylo
     | FixedBlockFixedBlockClosureDynamicListDictFieldPayload _
     | DictLeafPayload ->
         true
+    | FixedBlockDynamicListDictPayload (_, _, _, _, dictHelperLabel) ->
+        dictHelperLabel = dictRefCountDecHelperLabel
     | DictListLeafPayload ->
         false
     | NoLeafPayloadRelease
@@ -2362,13 +2381,14 @@ let private listLeafPayloadNeedsDictListValueDecHelper (leafPayloadRelease: List
     match leafPayloadRelease with
     | DictListLeafPayload ->
         true
+    | FixedBlockDynamicListDictPayload (_, _, _, _, dictHelperLabel) ->
+        dictHelperLabel = dictRefCountDecListValueHelperLabel
     | NoLeafPayloadRelease
     | FixedBlockLeafPayload _
     | FixedBlockListFieldPayload _
     | FixedBlockDictFieldPayload _
     | FixedBlockClosureFieldPayload _
     | FixedBlockFixedBlockFieldPayload _
-    | FixedBlockDynamicListDictPayload _
     | FixedBlockDynamicBuffersListDictPayload _
     | FixedBlockFixedBlockListDictFieldPayload _
     | FixedBlockFixedBlockDictFieldPayload _
@@ -5426,7 +5446,8 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
             Set.empty
 
     let typedListDecHelpersNeedListDecHelper =
-        if Set.contains listRefCountDecDictListHelperLabel neededListDecHelperLabels then
+        if Set.contains listRefCountDecDictListHelperLabel neededListDecHelperLabels
+           || Set.contains listRefCountDecTuple3DynamicListDictListHelperLabel neededListDecHelperLabels then
             Set.singleton listRefCountDecHelperLabel
         else
             Set.empty
