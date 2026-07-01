@@ -248,7 +248,7 @@ predicate:
 - `scripts/run-in-container ./run-tests --filter=refcounting`: `205 passed`
 - `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `104 passed`
 - Full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4815 passed, 2 failed`
+  `4816 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -321,14 +321,16 @@ require concrete payload metadata before they are emitted.
 
 `ANF.fs` now also exposes `RcOperation`, `RcStorageClass`,
 `rcShapeStorageClass`, `rcShapeRetainOperation`, and
-`rcShapeReleaseOperation`, and `rcShapeNeedsBorrowedRetain`. These helpers
-separate unmanaged values, dynamic buffers, and fixed/tagged RC roots, then
-combine dynamic-buffer operations with fixed-size root payload/kind dispatch.
-`2.5_RefCountInsertion.fs` uses them when emitting retain/release expressions
-and when deciding whether a borrowed value must be retained before being
-returned or otherwise materialized as owned. Its legacy fixed-root
-compatibility predicate now routes through `rcShapeStorageClass`; other
-production paths still consume older lower-level helper combinations directly.
+`rcShapeReleaseOperation`, `rcShapeNeedsBorrowedRetain`, and
+`rcShapeIsOwnershipTransferRoot`. These helpers separate unmanaged values,
+dynamic buffers, and fixed/tagged RC roots, then combine dynamic-buffer
+operations with fixed-size root payload/kind dispatch.
+`2.5_RefCountInsertion.fs` uses them when emitting retain/release expressions,
+when deciding whether a borrowed value must be retained before being returned
+or otherwise materialized as owned, and when checking whether a helper-call
+parameter type transfers RC-root ownership. Its legacy fixed-root compatibility
+predicate now routes through `rcShapeStorageClass`; other production paths
+still consume older lower-level helper combinations directly.
 `ANF.fs` also exposes `rcShapeIsRootManaged` and
 `rcShapeNeedsRecursiveRelease` as early planner predicates for separating
 root-managed values from dynamic buffers and for identifying shapes whose
@@ -670,8 +672,9 @@ Concrete examples:
 1. Extend the small ownership API over `RcShape`.
 
    Initial operations exist for owned scope release, root dispatch kind, root
-   payload size, storage classification, retain/release operations, and
-   borrowed-retain classification. Remaining suggested shape operations:
+   payload size, storage classification, retain/release operations,
+   borrowed-retain classification, and ownership-transfer root classification.
+   Remaining suggested shape operations:
 
    - `fieldReleasePlan : RcShape -> FieldReleasePlan list`
    - `containerPayloadPlan : RcShape -> PayloadReleasePlan`

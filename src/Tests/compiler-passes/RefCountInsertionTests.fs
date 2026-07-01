@@ -231,6 +231,33 @@ let testRcShapeOwnershipHelpersClassifyRootManagement () : TestResult =
         | None ->
             Ok ()
 
+let testRcShapeOwnershipHelpersClassifyOwnershipTransferRoots () : TestResult =
+    let transferRootShapes = [
+        FixedBlock (16, [Immediate; DynamicString])
+        BoxedSum 16
+        TaggedListShape DynamicString
+        DictRoot (DynamicString, Immediate)
+        ClosureShape [DynamicString]
+    ]
+
+    let nonTransferRootShapes = [
+        Immediate
+        DynamicString
+        DynamicBytes
+        StaticString
+        RawUnmanaged
+    ]
+
+    match transferRootShapes |> List.tryFind (fun shape -> not (rcShapeIsOwnershipTransferRoot shape)) with
+    | Some shape ->
+        Error $"Expected shape {shape} to be an ownership-transfer root"
+    | None ->
+        match nonTransferRootShapes |> List.tryFind rcShapeIsOwnershipTransferRoot with
+        | Some shape ->
+            Error $"Expected shape {shape} not to be an ownership-transfer root"
+        | None ->
+            Ok ()
+
 let testRcShapeOwnershipHelpersClassifyRecursiveRelease () : TestResult =
     let recursiveShapes = [
         FixedBlock (16, [Immediate; DynamicString])
@@ -470,6 +497,7 @@ let tests = [
     ("RcShape ownership helpers select retain/release operations", testRcShapeOwnershipHelpersSelectRetainReleaseOperations)
     ("RcShape ownership helpers classify storage", testRcShapeOwnershipHelpersClassifyStorage)
     ("RcShape ownership helpers classify managed RC roots", testRcShapeOwnershipHelpersClassifyRootManagement)
+    ("RcShape ownership helpers classify ownership-transfer roots", testRcShapeOwnershipHelpersClassifyOwnershipTransferRoots)
     ("RcShape ownership helpers classify recursive release", testRcShapeOwnershipHelpersClassifyRecursiveRelease)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)

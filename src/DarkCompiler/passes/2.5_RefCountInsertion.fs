@@ -868,10 +868,11 @@ let rec insertRCWithAnalysis
             let returnDecs' =
                 let secondParamNeedsOwnershipTransfer (funcName: string) : bool =
                     let isOwnershipTransferredParamType (typ: AST.Type) : bool =
-                        isRcManagedHeapType ctx typ
-                        || match typ with
-                           | AST.TFunction _ -> true
-                           | _ -> false
+                        match tryRcShapeForType ctx typ with
+                        | Some shape ->
+                            rcShapeIsOwnershipTransferRoot shape
+                        | None ->
+                            isHeapType typ
                     match Map.tryFind funcName ctx.FuncReg with
                     | Some (AST.TFunction (paramTypes, _)) ->
                         match paramTypes with

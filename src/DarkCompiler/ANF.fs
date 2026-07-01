@@ -431,6 +431,16 @@ let rcShapeStorageClass (shape: RcShape) : RcStorageClass =
         | _ ->
             UnmanagedStorage
 
+/// True when a value is represented by an RC root whose ownership can be
+/// transferred to another aggregate or helper call.
+let rcShapeIsOwnershipTransferRoot (shape: RcShape) : bool =
+    match rcShapeStorageClass shape with
+    | ManagedRcRoot _ ->
+        true
+    | ManagedDynamicBuffer _
+    | UnmanagedStorage ->
+        false
+
 /// Retain operation for an owned or borrowed value of the given shape.
 let rcShapeRetainOperation (shape: RcShape) : RcOperation option =
     match rcShapeStorageClass shape with
