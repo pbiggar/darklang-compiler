@@ -40,9 +40,11 @@ Important current rules:
 - RC operations are side-effecting and are preserved by optimization passes
 - cleanup is preserved before tail calls
 
-The pass still uses transitional type-driven helpers in several places. The
-target model is for ownership decisions to come from `RcShape` or a successor
-representation plan rather than ad hoc source-type predicates.
+The pass now routes its ownership-sensitive decisions through `RcShape` helpers:
+automatic binding release, borrowed-return retain, alias root preservation,
+ownership-transfer root detection, and retain/release operation selection all
+use representation shape rather than ad hoc source-type predicates. Local
+expression predicates still decide whether a binding is owned or borrowed.
 
 ## Backend Lowering
 
@@ -91,13 +93,14 @@ of relying only on leak-check silence.
 
 The major remaining work is:
 
-- replace legacy heap classification with shape-driven ownership planning
+- continue replacing backend helper selection tables with direct
+  `RcReleasePlan` consumption
 - complete deeper bytes coverage and constructor/layout audits
 - generalize fixed-block recursive release
 - generalize tagged-list payload release without helper explosion
 - define dict/HAMT structural sharing and raw-node lifecycle semantics
 - bring x64 recursive release parity up to ARM64
-- distinguish pure enum sums from boxed sums in ownership planning
+- expand mixed and nested sum payload coverage
 - distinguish static function references from heap closures
 - document or implement the deferred raw memory policy
 

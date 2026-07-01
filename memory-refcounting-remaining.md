@@ -1325,10 +1325,9 @@ More projected shapes still need the same confidence:
    - deeper nested tuple/record fields beyond the covered tuple projection path
    - branch-selected borrowed values beyond the covered string projection case
 
-2. Make borrowed-return retention shape-driven.
-3. Ensure print insertion and cleanup ordering is safe for every retained
+2. Ensure print insertion and cleanup ordering is safe for every retained
    borrowed value.
-4. Audit helper register preservation for values live across cleanup on both
+3. Audit helper register preservation for values live across cleanup on both
    backends. The x64 generic fixed-block dynamic-buffer, nested fixed-block,
    list, dict, and closure field cleanup paths have coverage for live `RAX`;
    other helpers and live registers remain to be proved.
@@ -1337,18 +1336,20 @@ More projected shapes still need the same confidence:
 
 1. Add broader borrowed-return sum payload projection coverage.
 2. Add deeper borrowed-return tuple/record projection coverage.
-3. Convert return-retain logic to `RcShape`.
-4. Add backend register-preservation regression tests.
+3. Add backend register-preservation regression tests.
 
 ## 10. Sum Type Representation And Recursive Payloads
 
 ### Current State
 
-`RcShape` has `BoxedSum`, but `rcShapeOfType` currently treats all `TSum` as
-boxed:
+`RcShape` has `BoxedSum`, and the sum-aware classifier now distinguishes pure
+enum sums from boxed payload sums when variant metadata is available. The
+metadata-free classifier also treats bare no-argument sums as immediate and
+single-argument sums as boxed payloads:
 
 ```fsharp
-| AST.TSum _ -> BoxedSum 16
+| AST.TSum (_, []) -> Immediate
+| AST.TSum (_, [payloadType]) -> BoxedSum (16, [(8, rcShapeOfType typeReg payloadType)], [])
 ```
 
 Current tests cover:
@@ -1364,6 +1365,7 @@ Current tests cover:
 - mixed sum releases no-payload variant
 - mixed sum releases payload variant
 - pure enum sum is reclaimed without heap ownership
+- `RcShape` classifies pure enum sums as immediate when sum metadata is present
 - record releases sum field payload
 - returned dict releases sum value payload fields
 
@@ -1371,8 +1373,6 @@ Current tests cover:
 
 The compiler still needs precise handling for:
 
-- `RcShape`-level pure enum classification is still conservative even though
-  direct runtime leak coverage exists for a pure no-payload enum binding
 - mixed sums beyond direct payload and no-payload cleanup smoke coverage
 - deeper fixed-block payload recursion beyond direct tuple/record payloads
 - broader list/dict/record-contained sum shapes beyond the direct covered cases
@@ -1380,11 +1380,8 @@ The compiler still needs precise handling for:
 
 ### Remaining Tasks
 
-1. Teach `rcShapeOfType` or a companion classifier to distinguish pure enum
-   sums from boxed sums using variant metadata.
-2. Extend pure enum allocation/leak coverage if sum representation changes.
-3. Continue applying boxed-sum payload release plans in backend consumers.
-4. Cover sum payload matrix:
+1. Continue applying boxed-sum payload release plans in backend consumers.
+2. Cover sum payload matrix:
 
    - string
    - bytes
@@ -1395,17 +1392,16 @@ The compiler still needs precise handling for:
    - closure
    - nested sum
 
-5. Ensure pattern matching that extracts payloads retains returned borrowed
+3. Ensure pattern matching that extracts payloads retains returned borrowed
    payloads when necessary.
 
 ### Suggested Commit Breakdown
 
-1. Classify pure enum sums as immediate in `RcShape` once variant metadata is
-   available.
-2. Extend pure enum leak-check coverage beyond the direct no-payload binding if
-   representation changes.
-3. Add boxed sum bytes/dict/closure payload coverage.
-4. Generalize boxed sum payload release through shape plans in both backends.
+1. Add one mixed or nested boxed-sum leak-check probe for a currently uncovered
+   payload shape.
+2. Generalize the corresponding boxed-sum payload release through shape plans
+   in both backends.
+3. Repeat by payload family, keeping x64 and ARM64 parity visible.
 
 ## 11. Closure Ownership And Function-Typed Values
 
