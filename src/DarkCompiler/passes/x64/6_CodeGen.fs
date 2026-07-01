@@ -829,6 +829,238 @@ let private isDynamicBufferType (fieldType: AST.Type) : bool =
     | AST.TBytes -> true
     | _ -> false
 
+let private releasePlanDynamicBufferOffsets (fieldReleases: ANF.RcFieldRelease list) : int list option =
+    let dynamicOffsets =
+        fieldReleases
+        |> List.choose (function
+            | ANF.FieldRelease (offset, ANF.DynamicBufferRelease _) ->
+                Some offset
+            | _ ->
+                None)
+
+    if List.length dynamicOffsets = List.length fieldReleases then
+        Some dynamicOffsets
+    else
+        None
+
+let private releasePlanFieldReleaseAt
+    (fieldOffset: int)
+    (fieldReleases: ANF.RcFieldRelease list)
+    : ANF.RcReleasePlan option =
+    fieldReleases
+    |> List.tryPick (function
+        | ANF.FieldRelease (offset, releasePlan) when offset = fieldOffset ->
+            Some releasePlan
+        | _ ->
+            None)
+
+let private releasePlanIsFixedBlockRelease
+    (payloadSize: int)
+    (fieldReleases: ANF.RcFieldRelease list)
+    (releasePlan: ANF.RcReleasePlan)
+    : bool =
+    match releasePlan with
+    | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (planPayloadSize, planFieldReleases)) ->
+        planPayloadSize = payloadSize && planFieldReleases = fieldReleases
+    | _ ->
+        false
+
+let private releasePlanIsDynamicBufferAt (fieldOffset: int) (fieldReleases: ANF.RcFieldRelease list) : bool =
+    match releasePlanFieldReleaseAt fieldOffset fieldReleases with
+    | Some (ANF.DynamicBufferRelease _) -> true
+    | _ -> false
+
+let private releasePlanIsRootKindAt
+    (fieldOffset: int)
+    (kind: ANF.RcKind)
+    (fieldReleases: ANF.RcFieldRelease list)
+    : bool =
+    match releasePlanFieldReleaseAt fieldOffset fieldReleases with
+    | Some (ANF.RootRelease (_, planKind, _)) when planKind = kind -> true
+    | _ -> false
+
+let rec private fixedBlockListHelperForPayloadRelease
+    (payloadSize: int)
+    (fieldReleases: ANF.RcFieldRelease list)
+    : string =
+    let dynamicOffsets =
+        releasePlanDynamicBufferOffsets fieldReleases
+
+    let nestedFixedBlockAt fieldOffset =
+        match releasePlanFieldReleaseAt fieldOffset fieldReleases with
+        | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (nestedPayloadSize, nestedFieldReleases))) ->
+            Some (nestedPayloadSize, nestedFieldReleases)
+        | _ ->
+            None
+
+    match payloadSize, dynamicOffsets, nestedFixedBlockAt 8, nestedFixedBlockAt 24 with
+    | 8, Some [0], _, _ ->
+        listRefCountDecRecord1DynamicHelperLabel
+    | 16, Some [], _, _ ->
+        listRefCountDecTuple2HelperLabel
+    | 16, Some [0], _, _ ->
+        listRefCountDecTuple2DynamicFirstHelperLabel
+    | 16, Some [8], _, _ ->
+        listRefCountDecTuple2DynamicSecondHelperLabel
+    | 16, Some [0; 8], _, _ ->
+        listRefCountDecTuple2DynamicBothHelperLabel
+    | 16, _, Some (16, nestedFieldReleases), _
+        when releasePlanDynamicBufferOffsets nestedFieldReleases = Some [0] ->
+        listRefCountDecTuple2NestedTupleDynamicFirstHelperLabel
+    | 16, _, Some (16, nestedFieldReleases), _
+        when releasePlanDynamicBufferOffsets nestedFieldReleases = Some [8] ->
+        listRefCountDecTuple2NestedTupleDynamicSecondHelperLabel
+    | 16, _, Some (16, nestedFieldReleases), _
+        when releasePlanDynamicBufferOffsets nestedFieldReleases = Some [0; 8] ->
+        listRefCountDecTuple2NestedTupleDynamicBothHelperLabel
+    | 16, _, Some (8, nestedFieldReleases), _
+        when releasePlanIsRootKindAt 0 ANF.DictHeap nestedFieldReleases ->
+        listRefCountDecTuple2NestedTupleDictHelperLabel
+    | 16, _, Some (8, nestedFieldReleases), _
+        when releasePlanIsRootKindAt 0 ANF.ClosureHeap nestedFieldReleases ->
+        listRefCountDecTuple2NestedTupleClosureHelperLabel
+    | 16, _, Some (16, nestedFieldReleases), _
+        when releasePlanIsRootKindAt 0 ANF.TaggedList nestedFieldReleases
+             && releasePlanIsRootKindAt 8 ANF.DictHeap nestedFieldReleases ->
+        listRefCountDecTuple2NestedTupleListDictHelperLabel
+    | 16, _, Some (24, nestedFieldReleases), _
+        when releasePlanIsDynamicBufferAt 0 nestedFieldReleases
+             && releasePlanIsRootKindAt 8 ANF.TaggedList nestedFieldReleases
+             && releasePlanIsRootKindAt 16 ANF.DictHeap nestedFieldReleases ->
+        listRefCountDecTuple2NestedTupleDynamicListDictHelperLabel
+    | 16, _, Some (32, nestedFieldReleases), _
+        when releasePlanIsDynamicBufferAt 0 nestedFieldReleases
+             && releasePlanIsDynamicBufferAt 8 nestedFieldReleases
+             && releasePlanIsRootKindAt 16 ANF.TaggedList nestedFieldReleases
+             && releasePlanIsRootKindAt 24 ANF.DictHeap nestedFieldReleases ->
+        listRefCountDecTuple2NestedTupleDynamicBuffersListDictHelperLabel
+    | 24, Some [0], _, _ ->
+        listRefCountDecTuple3DynamicFirstHelperLabel
+    | 24, Some [16], _, _ ->
+        listRefCountDecTuple3DynamicThirdHelperLabel
+    | 24, Some [0; 8], _, _ ->
+        listRefCountDecTuple3DynamicFirstSecondHelperLabel
+    | 24, Some [8; 16], _, _ ->
+        listRefCountDecTuple3DynamicSecondThirdHelperLabel
+    | 24, Some [0; 16], _, _ ->
+        listRefCountDecTuple3DynamicFirstThirdHelperLabel
+    | 24, Some [8], _, _ ->
+        listRefCountDecTuple3DynamicSecondHelperLabel
+    | 24, Some [0; 8; 16], _, _ ->
+        listRefCountDecTuple3DynamicAllHelperLabel
+    | 24, _, _, _
+        when releasePlanIsDynamicBufferAt 0 fieldReleases
+             && releasePlanIsRootKindAt 8 ANF.TaggedList fieldReleases
+             && releasePlanIsRootKindAt 16 ANF.DictHeap fieldReleases ->
+        listRefCountDecTuple3DynamicListDictHelperLabel
+    | 24, _, _, _
+        when releasePlanIsRootKindAt 0 ANF.ClosureHeap fieldReleases
+             && releasePlanIsRootKindAt 8 ANF.TaggedList fieldReleases
+             && releasePlanIsRootKindAt 16 ANF.DictHeap fieldReleases ->
+        listRefCountDecTuple3ClosureListDictHelperLabel
+    | 32, _, _, Some (16, nestedFieldReleases)
+        when releasePlanDynamicBufferOffsets nestedFieldReleases = Some [0] ->
+        listRefCountDecTuple4NestedTupleDynamicHelperLabel
+    | 32, _, _, Some (24, nestedFieldReleases)
+        when releasePlanIsDynamicBufferAt 0 nestedFieldReleases
+             && releasePlanIsRootKindAt 8 ANF.TaggedList nestedFieldReleases
+             && releasePlanIsRootKindAt 16 ANF.DictHeap nestedFieldReleases ->
+        listRefCountDecTuple4NestedTupleDynamicListDictHelperLabel
+    | 32, _, _, Some (32, nestedFieldReleases)
+        when releasePlanIsRootKindAt 0 ANF.ClosureHeap nestedFieldReleases
+             && releasePlanIsDynamicBufferAt 8 nestedFieldReleases
+             && releasePlanIsRootKindAt 16 ANF.TaggedList nestedFieldReleases
+             && releasePlanIsRootKindAt 24 ANF.DictHeap nestedFieldReleases ->
+        listRefCountDecTuple4NestedTupleClosureDynamicListDictHelperLabel
+    | 32, _, _, _
+        when releasePlanIsDynamicBufferAt 0 fieldReleases
+             && releasePlanIsDynamicBufferAt 8 fieldReleases
+             && releasePlanIsRootKindAt 16 ANF.TaggedList fieldReleases
+             && releasePlanIsRootKindAt 24 ANF.DictHeap fieldReleases ->
+        listRefCountDecTuple4DynamicListDictHelperLabel
+    | 32, _, _, _
+        when releasePlanIsRootKindAt 0 ANF.ClosureHeap fieldReleases
+             && releasePlanIsDynamicBufferAt 8 fieldReleases
+             && releasePlanIsRootKindAt 16 ANF.TaggedList fieldReleases
+             && releasePlanIsRootKindAt 24 ANF.DictHeap fieldReleases ->
+        listRefCountDecTuple4ClosureDynamicListDictHelperLabel
+    | _ ->
+        listRefCountDecHelperLabel
+
+let rec private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
+    let sumPayloadHelper (fieldReleases: ANF.RcFieldRelease list) : string =
+        match releasePlanFieldReleaseAt 8 fieldReleases with
+        | Some (ANF.DynamicBufferRelease _) ->
+            listRefCountDecSumDynamicHelperLabel
+        | Some (ANF.RootRelease (_, ANF.TaggedList, _)) ->
+            listRefCountDecSumListHelperLabel
+        | Some (ANF.RootRelease (_, ANF.DictHeap, _)) ->
+            listRefCountDecSumDictHelperLabel
+        | Some (ANF.RootRelease (_, ANF.ClosureHeap, _)) ->
+            listRefCountDecSumClosureHelperLabel
+        | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (payloadSize, payloadFieldReleases))) ->
+            match fixedBlockListHelperForPayloadRelease payloadSize payloadFieldReleases with
+            | label when label = listRefCountDecRecord1DynamicHelperLabel ->
+                listRefCountDecSumRecord1DynamicHelperLabel
+            | label when label = listRefCountDecTuple2DynamicFirstHelperLabel ->
+                listRefCountDecSumTuple2DynamicFirstHelperLabel
+            | label when label = listRefCountDecTuple2DynamicSecondHelperLabel ->
+                listRefCountDecSumTuple2DynamicSecondHelperLabel
+            | label when label = listRefCountDecTuple2DynamicBothHelperLabel ->
+                listRefCountDecSumTuple2DynamicBothHelperLabel
+            | label when label = listRefCountDecTuple3DynamicFirstHelperLabel ->
+                listRefCountDecSumTuple3DynamicFirstHelperLabel
+            | label when label = listRefCountDecTuple3DynamicThirdHelperLabel ->
+                listRefCountDecSumTuple3DynamicThirdHelperLabel
+            | label when label = listRefCountDecTuple3DynamicFirstSecondHelperLabel ->
+                listRefCountDecSumTuple3DynamicFirstSecondHelperLabel
+            | label when label = listRefCountDecTuple3DynamicSecondThirdHelperLabel ->
+                listRefCountDecSumTuple3DynamicSecondThirdHelperLabel
+            | label when label = listRefCountDecTuple3DynamicFirstThirdHelperLabel ->
+                listRefCountDecSumTuple3DynamicFirstThirdHelperLabel
+            | label when label = listRefCountDecTuple3DynamicSecondHelperLabel ->
+                listRefCountDecSumTuple3DynamicSecondHelperLabel
+            | label when label = listRefCountDecTuple3DynamicAllHelperLabel ->
+                listRefCountDecSumTuple3DynamicAllHelperLabel
+            | label when label = listRefCountDecTuple3DynamicListDictHelperLabel ->
+                listRefCountDecSumTuple3DynamicListDictHelperLabel
+            | label when label = listRefCountDecTuple4DynamicListDictHelperLabel ->
+                listRefCountDecSumTuple4DynamicListDictHelperLabel
+            | label when label = listRefCountDecTuple4ClosureDynamicListDictHelperLabel ->
+                listRefCountDecSumTuple4ClosureDynamicListDictHelperLabel
+            | _ ->
+                listRefCountDecHelperLabel
+        | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, nestedFieldReleases))) ->
+            match releasePlanFieldReleaseAt 8 nestedFieldReleases with
+            | Some (ANF.DynamicBufferRelease _) ->
+                listRefCountDecNestedSumDynamicHelperLabel
+            | _ ->
+                listRefCountDecHelperLabel
+        | _ ->
+            listRefCountDecHelperLabel
+
+    match releasePlan with
+    | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease elementRelease) ->
+        match elementRelease with
+        | ANF.NoReleasePlan ->
+            listRefCountDecHelperLabel
+        | ANF.DynamicBufferRelease _ ->
+            listRefCountDecDynamicBufferHelperLabel
+        | ANF.RootRelease (_, ANF.TaggedList, _) ->
+            listRefCountDecListHelperLabel
+        | ANF.RootRelease (_, ANF.DictHeap, _) ->
+            listRefCountDecDictHelperLabel
+        | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
+            listRefCountDecClosureHelperLabel
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (payloadSize, fieldReleases)) ->
+            fixedBlockListHelperForPayloadRelease payloadSize fieldReleases
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
+            sumPayloadHelper fieldReleases
+        | ANF.RootRelease (_, ANF.GenericHeap, _) ->
+            listRefCountDecHelperLabel
+    | _ ->
+        listRefCountDecHelperLabel
+
 let private tuple2DynamicBufferOffsets (fields: AST.Type list) : int list =
     fields
     |> List.mapi (fun index fieldType ->
@@ -991,120 +1223,66 @@ let private sumRecord3ListHelperForRecord (recordRegistry: LIR.RecordRegistry) (
     |> sumRecord3ListHelperForRecordHelper
 
 let private listDecHelperForType (recordRegistry: LIR.RecordRegistry) (fieldType: AST.Type) : string =
-    match fieldType with
-    | AST.TList (AST.TList _) ->
-        listRefCountDecListHelperLabel
-    | AST.TList (AST.TFunction _) ->
-        listRefCountDecClosureHelperLabel
-    | AST.TList (AST.TDict _) ->
-        listRefCountDecDictHelperLabel
-    | AST.TList AST.TString
-    | AST.TList AST.TBytes ->
-        listRefCountDecDynamicBufferHelperLabel
-    | AST.TList (AST.TTuple fields) ->
-        tupleListHelperForFields fields
-    | AST.TList (AST.TRecord (name, _)) ->
-        recordListHelperForType recordRegistry name
-    | AST.TList (AST.TSum (_, [payloadType])) when isDynamicBufferType payloadType ->
-        listRefCountDecSumDynamicHelperLabel
-    | AST.TList (AST.TSum (_, [AST.TList _])) ->
-        listRefCountDecSumListHelperLabel
-    | AST.TList (AST.TSum (_, [AST.TDict _])) ->
-        listRefCountDecSumDictHelperLabel
-    | AST.TList (AST.TSum (_, [AST.TFunction _])) ->
-        listRefCountDecSumClosureHelperLabel
-    | AST.TList (AST.TSum (_, [AST.TTuple fields])) when tuple2DynamicBufferOffsets fields = [0] ->
-        listRefCountDecSumTuple2DynamicFirstHelperLabel
-    | AST.TList (AST.TSum (_, [AST.TTuple fields])) when tuple2DynamicBufferOffsets fields = [8] ->
-        listRefCountDecSumTuple2DynamicSecondHelperLabel
-    | AST.TList (AST.TSum (_, [AST.TTuple fields])) when tuple2DynamicBufferOffsets fields = [0; 8] ->
-        listRefCountDecSumTuple2DynamicBothHelperLabel
-    | AST.TList (AST.TSum (_, [AST.TTuple fields])) ->
-        match sumTuple3ListHelperForFields fields with
-        | Some helperLabel -> helperLabel
-        | None -> listRefCountDecHelperLabel
-    | AST.TList (AST.TSum (_, [AST.TRecord (name, _)])) when
-        recordListHelperForType recordRegistry name = listRefCountDecRecord1DynamicHelperLabel ->
-        listRefCountDecSumRecord1DynamicHelperLabel
-    | AST.TList (AST.TSum (_, [AST.TRecord (name, _)])) ->
-        match sumRecord3ListHelperForRecord recordRegistry name with
-        | Some helperLabel -> helperLabel
-        | None -> listRefCountDecHelperLabel
-    | AST.TList (AST.TSum (_, [AST.TSum (_, [payloadType])])) when isDynamicBufferType payloadType ->
-        listRefCountDecNestedSumDynamicHelperLabel
-    | _ ->
-        listRefCountDecHelperLabel
+    fieldType
+    |> tryRcReleasePlanOfType recordRegistry
+    |> Option.map listDecHelperForReleasePlan
+    |> Option.defaultValue listRefCountDecHelperLabel
 
-let private genListFieldRelease (ctx: FuncCtx) (fieldOffset: int) (fieldType: AST.Type) : X86_64.Instr list =
+let private genListFieldRelease (fieldOffset: int) (fieldReleasePlan: ANF.RcReleasePlan) : X86_64.Instr list =
     [X86_64.PUSH X86_64.RDX
      X86_64.MOV_load (X86_64.RAX, X86_64.RDX, fieldOffset)
-     X86_64.CALL (listDecHelperForType ctx.RecordRegistry fieldType)
+     X86_64.CALL (listDecHelperForReleasePlan fieldReleasePlan)
      X86_64.POP X86_64.RDX]
 
-let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type option) : X86_64.Instr list =
-    let fieldTypes =
-        match sourceType with
-        | Some (AST.TTuple fields) -> fields
-        | Some (AST.TRecord (name, _)) ->
-            ctx.RecordRegistry
-            |> Map.tryFind name
-            |> Option.map (List.map snd)
-            |> Option.defaultValue []
-        | Some (AST.TSum (_, [payloadType])) -> [AST.TInt64; payloadType]
-        | _ -> []
+let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (releasePlan: ANF.RcReleasePlan option) : X86_64.Instr list =
+    let fieldReleases =
+        match releasePlan with
+        | Some (ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, plannedFieldReleases)))
+        | Some (ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, plannedFieldReleases))) ->
+            plannedFieldReleases
+        | _ ->
+            []
 
-    let plannedFieldReleaseAt (fieldOffset: int) : ANF.RcReleasePlan option =
-        match sourceType with
-        | None ->
-            None
-        | Some typ ->
-            match ANF.rcReleasePlanOfType ctx.RecordRegistry typ with
-            | ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, fieldReleases))
-            | ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
-                fieldReleases
-                |> List.tryPick (fun fieldRelease ->
-                    match fieldRelease with
-                    | ANF.FieldRelease (offset, releasePlan) when offset = fieldOffset ->
-                        Some releasePlan
-                    | _ ->
-                        None)
+    fieldReleases
+    |> List.collect (function
+        | ANF.FieldRelease (fieldOffset, fieldReleasePlan) ->
+            match fieldReleasePlan with
+            | ANF.DynamicBufferRelease _ ->
+                genDynamicBufferFieldRelease ctx fieldOffset
+            | ANF.RootRelease (_, ANF.DictHeap, _) ->
+                genDictFieldRelease fieldOffset
+            | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
+                genClosureFieldRelease fieldOffset
+            | ANF.RootRelease (_, ANF.TaggedList, _) ->
+                genListFieldRelease fieldOffset fieldReleasePlan
+            | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _)
+            | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _) ->
+                genFixedBlockFieldRelease ctx fieldOffset childPayloadSize fieldReleasePlan
             | _ ->
-                None
+                [])
 
-    fieldTypes
-    |> List.mapi (fun index fieldType ->
-        let fieldOffset = index * 8
-        match plannedFieldReleaseAt fieldOffset with
-        | Some (ANF.DynamicBufferRelease _) ->
-            genDynamicBufferFieldRelease ctx fieldOffset
-        | Some (ANF.RootRelease (_, ANF.DictHeap, _)) ->
-            genDictFieldRelease fieldOffset
-        | Some (ANF.RootRelease (_, ANF.ClosureHeap, _)) ->
-            genClosureFieldRelease fieldOffset
-        | Some (ANF.RootRelease (_, ANF.TaggedList, _)) ->
-            genListFieldRelease ctx fieldOffset fieldType
-        | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _))
-        | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _)) ->
-            genFixedBlockFieldRelease ctx fieldOffset fieldType
-        | _ -> [])
-    |> List.concat
-
-and private genFixedBlockFieldRelease (ctx: FuncCtx) (fieldOffset: int) (fieldType: AST.Type) : X86_64.Instr list =
-    match fixedBlockPayloadSize ctx.RecordRegistry fieldType with
-    | None ->
-        []
-    | Some childPayloadSize ->
+and private genFixedBlockFieldRelease
+    (ctx: FuncCtx)
+    (fieldOffset: int)
+    (childPayloadSize: int)
+    (fieldReleasePlan: ANF.RcReleasePlan)
+    : X86_64.Instr list =
         [X86_64.MOV_load (X86_64.R8, X86_64.RDX, fieldOffset)]
-        @ genRefCountDecGeneric ctx X86_64.R8 childPayloadSize (Some fieldType)
+        @ genRefCountDecGenericWithPlan ctx X86_64.R8 childPayloadSize (Some fieldReleasePlan)
 
 /// Generic RefCountDec: decrement refcount at [addr + payloadSize].
 /// If zero, release known fields, free block to free list, and update leak accounting.
 /// Uses saved scratch registers for recursive fixed-block payload release.
-and private genRefCountDecGeneric (ctx: FuncCtx) (addrReg: X86_64.Reg) (payloadSize: int) (sourceType: AST.Type option) : X86_64.Instr list =
+and private genRefCountDecGenericWithPlan
+    (ctx: FuncCtx)
+    (addrReg: X86_64.Reg)
+    (payloadSize: int)
+    (releasePlan: ANF.RcReleasePlan option)
+    : X86_64.Instr list =
     let skipLabel = freshLabel "rc_dec_skip"
     let noFreeLabel = freshLabel "rc_dec_nofree"
     let leakDec = genLeakCounterDec ctx
-    let fieldReleases = genFixedBlockFieldReleases ctx sourceType
+    let fieldReleases = genFixedBlockFieldReleases ctx releasePlan
     let saveRegs = [X86_64.RAX; X86_64.RDX; X86_64.RCX; X86_64.R8; X86_64.R9; X86_64.R10; scratch]
     let saves = saveRegs |> List.map X86_64.PUSH
     let restores = saveRegs |> List.rev |> List.map X86_64.POP
@@ -1127,6 +1305,13 @@ and private genRefCountDecGeneric (ctx: FuncCtx) (addrReg: X86_64.Reg) (payloadS
     @ [X86_64.Label noFreeLabel]
     @ restores
     @ [X86_64.Label skipLabel]
+
+and private genRefCountDecGeneric (ctx: FuncCtx) (addrReg: X86_64.Reg) (payloadSize: int) (sourceType: AST.Type option) : X86_64.Instr list =
+    let releasePlan =
+        sourceType
+        |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry)
+
+    genRefCountDecGenericWithPlan ctx addrReg payloadSize releasePlan
 
 /// Generic RefCountInc: increment refcount at [addr + payloadSize].
 let private genRefCountIncGeneric (addrReg: X86_64.Reg) (payloadSize: int) : X86_64.Instr list =
@@ -3883,46 +4068,8 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 // TaggedList RefCountDec: calls the recursive FingerTree DFS helper.
                 let helperLabel =
                     match sourceType with
-                    | Some (AST.TList (AST.TList _)) ->
-                        listRefCountDecListHelperLabel
-                    | Some (AST.TList (AST.TFunction _)) ->
-                        listRefCountDecClosureHelperLabel
-                    | Some (AST.TList (AST.TDict _)) ->
-                        listRefCountDecDictHelperLabel
-                    | Some (AST.TList AST.TString)
-                    | Some (AST.TList AST.TBytes) ->
-                        listRefCountDecDynamicBufferHelperLabel
-                    | Some (AST.TList (AST.TTuple fields)) ->
-                        tupleListHelperForFields fields
-                    | Some (AST.TList (AST.TRecord (name, _))) ->
-                        recordListHelperForType ctx.RecordRegistry name
-                    | Some (AST.TList (AST.TSum (_, [payloadType]))) when isDynamicBufferType payloadType ->
-                        listRefCountDecSumDynamicHelperLabel
-                    | Some (AST.TList (AST.TSum (_, [AST.TList _]))) ->
-                        listRefCountDecSumListHelperLabel
-                    | Some (AST.TList (AST.TSum (_, [AST.TDict _]))) ->
-                        listRefCountDecSumDictHelperLabel
-                    | Some (AST.TList (AST.TSum (_, [AST.TFunction _]))) ->
-                        listRefCountDecSumClosureHelperLabel
-                    | Some (AST.TList (AST.TSum (_, [AST.TTuple fields]))) when tuple2DynamicBufferOffsets fields = [0] ->
-                        listRefCountDecSumTuple2DynamicFirstHelperLabel
-                    | Some (AST.TList (AST.TSum (_, [AST.TTuple fields]))) when tuple2DynamicBufferOffsets fields = [8] ->
-                        listRefCountDecSumTuple2DynamicSecondHelperLabel
-                    | Some (AST.TList (AST.TSum (_, [AST.TTuple fields]))) when tuple2DynamicBufferOffsets fields = [0; 8] ->
-                        listRefCountDecSumTuple2DynamicBothHelperLabel
-                    | Some (AST.TList (AST.TSum (_, [AST.TTuple fields]))) ->
-                        match sumTuple3ListHelperForFields fields with
-                        | Some sumTupleHelper -> sumTupleHelper
-                        | None -> listRefCountDecHelperLabel
-                    | Some (AST.TList (AST.TSum (_, [AST.TRecord (name, _)]))) when
-                        recordListHelperForType ctx.RecordRegistry name = listRefCountDecRecord1DynamicHelperLabel ->
-                        listRefCountDecSumRecord1DynamicHelperLabel
-                    | Some (AST.TList (AST.TSum (_, [AST.TRecord (name, _)]))) ->
-                        match sumRecord3ListHelperForRecord ctx.RecordRegistry name with
-                        | Some sumRecordHelper -> sumRecordHelper
-                        | None -> listRefCountDecHelperLabel
-                    | Some (AST.TList (AST.TSum (_, [AST.TSum (_, [payloadType])]))) when isDynamicBufferType payloadType ->
-                        listRefCountDecNestedSumDynamicHelperLabel
+                    | Some typ ->
+                        listDecHelperForType ctx.RecordRegistry typ
                     | _ ->
                         listRefCountDecHelperLabel
                 let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; scratch]
@@ -6366,6 +6513,150 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                         typeContainsDynamicBufferListElementRelease sourceType
                     | _ -> false))
             || closureCapturesContainDynamicBufferListElementRelease ())
+
+    let unionLabelSets sets =
+        match sets with
+        | [] -> Set.empty
+        | _ -> Set.unionMany sets
+
+    let rec listDecHelperLabelsInReleasePlan (releasePlan: ANF.RcReleasePlan) : Set<string> =
+        let labelsInFieldReleases fieldReleases =
+            fieldReleases
+            |> List.map (function
+                | ANF.FieldRelease (_, fieldReleasePlan) ->
+                    listDecHelperLabelsInReleasePlan fieldReleasePlan)
+            |> unionLabelSets
+
+        match releasePlan with
+        | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease _) ->
+            Set.singleton (listDecHelperForReleasePlan releasePlan)
+        | ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+        | ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, fieldReleases))
+        | ANF.RootRelease (_, _, ANF.ClosurePayloadRelease fieldReleases) ->
+            labelsInFieldReleases fieldReleases
+        | ANF.RootRelease (_, _, ANF.DictPayloadRelease (keyRelease, valueRelease)) ->
+            Set.union
+                (listDecHelperLabelsInReleasePlan keyRelease)
+                (listDecHelperLabelsInReleasePlan valueRelease)
+        | ANF.RootRelease (_, _, ANF.NoPayloadRelease) ->
+            Set.empty
+        | ANF.NoReleasePlan
+        | ANF.DynamicBufferRelease _ ->
+            Set.empty
+
+    let listDecHelperLabelsInType sourceType =
+        sourceType
+        |> tryRcReleasePlanOfType recordRegistry
+        |> Option.map listDecHelperLabelsInReleasePlan
+        |> Option.defaultValue Set.empty
+
+    let neededListDecHelperLabels =
+        let labelsFromFunctions =
+            functions
+            |> List.map (fun func ->
+                func.CFG.Blocks
+                |> Map.toList
+                |> List.map (fun (_, block) ->
+                    block.Instrs
+                    |> List.map (function
+                        | LIR.RefCountDec (_, _, LIR.TaggedList, Some sourceType) ->
+                            Set.singleton (listDecHelperForType recordRegistry sourceType)
+                        | LIR.RefCountDec (_, _, LIR.TaggedList, None) ->
+                            Set.singleton listRefCountDecHelperLabel
+                        | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
+                            listDecHelperLabelsInType sourceType
+                        | _ ->
+                            Set.empty)
+                    |> unionLabelSets)
+                |> unionLabelSets)
+            |> unionLabelSets
+
+        let labelsFromClosureCaptures =
+            closureCaptureTypes
+            |> Map.toList
+            |> List.map (fun (_, captureTypes) ->
+                captureTypes
+                |> List.map listDecHelperLabelsInType
+                |> unionLabelSets)
+            |> unionLabelSets
+
+        Set.union labelsFromFunctions labelsFromClosureCaptures
+
+    let listDecHelperLabelNeeded helperLabel =
+        Set.contains helperLabel neededListDecHelperLabels
+
+    let needsListRcDecHelper = listDecHelperLabelNeeded listRefCountDecHelperLabel
+    let needsListRcDecTuple2Helper = listDecHelperLabelNeeded listRefCountDecTuple2HelperLabel
+    let needsListRcDecTuple2DynamicFirstHelper = listDecHelperLabelNeeded listRefCountDecTuple2DynamicFirstHelperLabel
+    let needsListRcDecTuple2DynamicSecondHelper = listDecHelperLabelNeeded listRefCountDecTuple2DynamicSecondHelperLabel
+    let needsListRcDecTuple2DynamicBothHelper = listDecHelperLabelNeeded listRefCountDecTuple2DynamicBothHelperLabel
+    let needsListRcDecTuple2NestedTupleDynamicFirstHelper = listDecHelperLabelNeeded listRefCountDecTuple2NestedTupleDynamicFirstHelperLabel
+    let needsListRcDecTuple2NestedTupleDynamicSecondHelper = listDecHelperLabelNeeded listRefCountDecTuple2NestedTupleDynamicSecondHelperLabel
+    let needsListRcDecTuple2NestedTupleDynamicBothHelper = listDecHelperLabelNeeded listRefCountDecTuple2NestedTupleDynamicBothHelperLabel
+    let needsListRcDecTuple2NestedTupleListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple2NestedTupleListDictHelperLabel
+    let needsListRcDecTuple2NestedTupleDictHelper = listDecHelperLabelNeeded listRefCountDecTuple2NestedTupleDictHelperLabel
+    let needsListRcDecTuple2NestedTupleClosureHelper = listDecHelperLabelNeeded listRefCountDecTuple2NestedTupleClosureHelperLabel
+    let needsListRcDecTuple2NestedTupleDynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple2NestedTupleDynamicListDictHelperLabel
+    let needsListRcDecTuple2NestedTupleDynamicBuffersListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple2NestedTupleDynamicBuffersListDictHelperLabel
+    let needsListRcDecTuple3DynamicFirstHelper = listDecHelperLabelNeeded listRefCountDecTuple3DynamicFirstHelperLabel
+    let needsListRcDecTuple3DynamicThirdHelper = listDecHelperLabelNeeded listRefCountDecTuple3DynamicThirdHelperLabel
+    let needsListRcDecTuple3DynamicFirstSecondHelper = listDecHelperLabelNeeded listRefCountDecTuple3DynamicFirstSecondHelperLabel
+    let needsListRcDecTuple3DynamicSecondThirdHelper = listDecHelperLabelNeeded listRefCountDecTuple3DynamicSecondThirdHelperLabel
+    let needsListRcDecTuple3DynamicFirstThirdHelper = listDecHelperLabelNeeded listRefCountDecTuple3DynamicFirstThirdHelperLabel
+    let needsListRcDecTuple3DynamicSecondHelper = listDecHelperLabelNeeded listRefCountDecTuple3DynamicSecondHelperLabel
+    let needsListRcDecTuple3DynamicAllHelper = listDecHelperLabelNeeded listRefCountDecTuple3DynamicAllHelperLabel
+    let needsListRcDecTuple3DynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple3DynamicListDictHelperLabel
+    let needsListRcDecTuple3ClosureListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple3ClosureListDictHelperLabel
+    let needsListRcDecTuple4DynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple4DynamicListDictHelperLabel
+    let needsListRcDecTuple4ClosureDynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple4ClosureDynamicListDictHelperLabel
+    let needsListRcDecTuple4NestedTupleDynamicHelper = listDecHelperLabelNeeded listRefCountDecTuple4NestedTupleDynamicHelperLabel
+    let needsListRcDecTuple4NestedTupleDynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple4NestedTupleDynamicListDictHelperLabel
+    let needsListRcDecTuple4NestedTupleClosureDynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple4NestedTupleClosureDynamicListDictHelperLabel
+    let needsListRcDecRecord1DynamicHelper = listDecHelperLabelNeeded listRefCountDecRecord1DynamicHelperLabel
+    let needsListRcDecRecord3DynamicFirstHelper = listDecHelperLabelNeeded listRefCountDecRecord3DynamicFirstHelperLabel
+    let needsListRcDecRecord3DynamicThirdHelper = listDecHelperLabelNeeded listRefCountDecRecord3DynamicThirdHelperLabel
+    let needsListRcDecRecord3DynamicFirstSecondHelper = listDecHelperLabelNeeded listRefCountDecRecord3DynamicFirstSecondHelperLabel
+    let needsListRcDecRecord3DynamicSecondThirdHelper = listDecHelperLabelNeeded listRefCountDecRecord3DynamicSecondThirdHelperLabel
+    let needsListRcDecRecord3DynamicFirstThirdHelper = listDecHelperLabelNeeded listRefCountDecRecord3DynamicFirstThirdHelperLabel
+    let needsListRcDecRecord3DynamicSecondHelper = listDecHelperLabelNeeded listRefCountDecRecord3DynamicSecondHelperLabel
+    let needsListRcDecRecord3DynamicAllHelper = listDecHelperLabelNeeded listRefCountDecRecord3DynamicAllHelperLabel
+    let needsListRcDecRecord3DynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecRecord3DynamicListDictHelperLabel
+    let needsListRcDecRecord3ClosureListDictHelper = listDecHelperLabelNeeded listRefCountDecRecord3ClosureListDictHelperLabel
+    let needsListRcDecRecord4DynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecRecord4DynamicListDictHelperLabel
+    let needsListRcDecRecord4ClosureDynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecRecord4ClosureDynamicListDictHelperLabel
+    let needsListRcDecSumDynamicHelper = listDecHelperLabelNeeded listRefCountDecSumDynamicHelperLabel
+    let needsListRcDecSumListHelper = listDecHelperLabelNeeded listRefCountDecSumListHelperLabel
+    let needsListRcDecSumDictHelper = listDecHelperLabelNeeded listRefCountDecSumDictHelperLabel
+    let needsListRcDecSumClosureHelper = listDecHelperLabelNeeded listRefCountDecSumClosureHelperLabel
+    let needsListRcDecSumTuple2DynamicFirstHelper = listDecHelperLabelNeeded listRefCountDecSumTuple2DynamicFirstHelperLabel
+    let needsListRcDecSumTuple2DynamicSecondHelper = listDecHelperLabelNeeded listRefCountDecSumTuple2DynamicSecondHelperLabel
+    let needsListRcDecSumTuple2DynamicBothHelper = listDecHelperLabelNeeded listRefCountDecSumTuple2DynamicBothHelperLabel
+    let needsListRcDecSumTuple3DynamicFirstHelper = listDecHelperLabelNeeded listRefCountDecSumTuple3DynamicFirstHelperLabel
+    let needsListRcDecSumTuple3DynamicThirdHelper = listDecHelperLabelNeeded listRefCountDecSumTuple3DynamicThirdHelperLabel
+    let needsListRcDecSumTuple3DynamicFirstSecondHelper = listDecHelperLabelNeeded listRefCountDecSumTuple3DynamicFirstSecondHelperLabel
+    let needsListRcDecSumTuple3DynamicSecondThirdHelper = listDecHelperLabelNeeded listRefCountDecSumTuple3DynamicSecondThirdHelperLabel
+    let needsListRcDecSumTuple3DynamicFirstThirdHelper = listDecHelperLabelNeeded listRefCountDecSumTuple3DynamicFirstThirdHelperLabel
+    let needsListRcDecSumTuple3DynamicSecondHelper = listDecHelperLabelNeeded listRefCountDecSumTuple3DynamicSecondHelperLabel
+    let needsListRcDecSumTuple3DynamicAllHelper = listDecHelperLabelNeeded listRefCountDecSumTuple3DynamicAllHelperLabel
+    let needsListRcDecSumTuple3DynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecSumTuple3DynamicListDictHelperLabel
+    let needsListRcDecSumTuple4DynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecSumTuple4DynamicListDictHelperLabel
+    let needsListRcDecSumTuple4ClosureDynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecSumTuple4ClosureDynamicListDictHelperLabel
+    let needsListRcDecSumRecord1DynamicHelper = listDecHelperLabelNeeded listRefCountDecSumRecord1DynamicHelperLabel
+    let needsListRcDecSumRecord3DynamicFirstHelper = listDecHelperLabelNeeded listRefCountDecSumRecord3DynamicFirstHelperLabel
+    let needsListRcDecSumRecord3DynamicThirdHelper = listDecHelperLabelNeeded listRefCountDecSumRecord3DynamicThirdHelperLabel
+    let needsListRcDecSumRecord3DynamicFirstSecondHelper = listDecHelperLabelNeeded listRefCountDecSumRecord3DynamicFirstSecondHelperLabel
+    let needsListRcDecSumRecord3DynamicSecondThirdHelper = listDecHelperLabelNeeded listRefCountDecSumRecord3DynamicSecondThirdHelperLabel
+    let needsListRcDecSumRecord3DynamicFirstThirdHelper = listDecHelperLabelNeeded listRefCountDecSumRecord3DynamicFirstThirdHelperLabel
+    let needsListRcDecSumRecord3DynamicSecondHelper = listDecHelperLabelNeeded listRefCountDecSumRecord3DynamicSecondHelperLabel
+    let needsListRcDecSumRecord3DynamicAllHelper = listDecHelperLabelNeeded listRefCountDecSumRecord3DynamicAllHelperLabel
+    let needsListRcDecSumRecord3DynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecSumRecord3DynamicListDictHelperLabel
+    let needsListRcDecSumRecord4DynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecSumRecord4DynamicListDictHelperLabel
+    let needsListRcDecSumRecord4ClosureDynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecSumRecord4ClosureDynamicListDictHelperLabel
+    let needsListRcDecNestedSumDynamicHelper = listDecHelperLabelNeeded listRefCountDecNestedSumDynamicHelperLabel
+    let needsListRcDecListHelper = listDecHelperLabelNeeded listRefCountDecListHelperLabel
+    let needsListRcDecClosureHelper = listDecHelperLabelNeeded listRefCountDecClosureHelperLabel
+    let needsListRcDecDictHelper = listDecHelperLabelNeeded listRefCountDecDictHelperLabel
+    let needsListRcDecDynamicBufferHelper = listDecHelperLabelNeeded listRefCountDecDynamicBufferHelperLabel
 
     let needsListRcIncHelper =
         functions
