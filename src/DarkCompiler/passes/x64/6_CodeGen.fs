@@ -648,25 +648,6 @@ let private rawSetRootRetainTarget
             | ANF.RawUnmanaged ->
                 None))
 
-let private fixedBlockPayloadSize (recordRegistry: LIR.RecordRegistry) (fieldType: AST.Type) : int option =
-    match fieldType with
-    | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
-        None
-    | _ ->
-        match ANF.rcShapeOfType recordRegistry fieldType with
-        | ANF.FixedBlock (payloadSize, _)
-        | ANF.BoxedSum (payloadSize, _) ->
-            Some payloadSize
-        | ANF.Immediate
-        | ANF.TaggedListShape _
-        | ANF.DictRoot _
-        | ANF.DynamicString
-        | ANF.DynamicBytes
-        | ANF.ClosureShape _
-        | ANF.StaticString
-        | ANF.RawUnmanaged ->
-            None
-
 let private tryRcReleasePlanOfType (recordRegistry: LIR.RecordRegistry) (typ: AST.Type) : ANF.RcReleasePlan option =
     match typ with
     | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
@@ -2730,14 +2711,14 @@ let private generateClosureRefCountDecHelper
         @ [X86_64.Label doneLabel]
 
     let releaseFixedBlockCapture (fieldOffset: int) (captureType: AST.Type) : X86_64.Instr list =
-        match fixedBlockPayloadSize recordRegistry captureType with
-        | None ->
-            []
-        | Some payloadSize ->
+        match tryRcReleasePlanOfType recordRegistry captureType with
+        | Some (ANF.RootRelease (payloadSize, ANF.GenericHeap, (ANF.FixedBlockPayloadRelease _ | ANF.BoxedSumPayloadRelease _)) as releasePlan) ->
             [X86_64.MOV_load (X86_64.R9, X86_64.RAX, fieldOffset)
              X86_64.PUSH X86_64.RAX]
-            @ genRefCountDecGeneric helperCtx X86_64.R9 payloadSize (Some captureType)
+            @ genRefCountDecGenericWithPlan helperCtx X86_64.R9 payloadSize (Some releasePlan)
             @ [X86_64.POP X86_64.RAX]
+        | _ ->
+            []
 
     let releaseCaptureCases =
         closureCaptureTypes
