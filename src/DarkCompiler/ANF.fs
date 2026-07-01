@@ -594,6 +594,19 @@ let rcShapeNeedsAutomaticBindingDec (shape: RcShape) : bool =
     | _ ->
         rcShapeNeedsOwnedScopeRelease shape
 
+/// True when a borrowed alias of this shape carries a managed root identity
+/// that should be preserved by type inference. Closure aliases are excluded
+/// because closure-producing expressions own their lifetime separately.
+let rcShapeNeedsManagedAliasRootPreservation (shape: RcShape) : bool =
+    match rcShapeStorageClass shape with
+    | ManagedRcRoot (_, ClosureHeap) ->
+        false
+    | ManagedRcRoot _ ->
+        true
+    | ManagedDynamicBuffer _
+    | UnmanagedStorage ->
+        false
+
 /// Release plan for a value with the given runtime shape.
 let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
     let fieldReleasePlans (fieldShapes: RcShape list) : RcFieldRelease list =

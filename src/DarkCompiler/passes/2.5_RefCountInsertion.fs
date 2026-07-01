@@ -520,15 +520,8 @@ let private canonicalRcSourceType (ctx: TypeContext) (typ: AST.Type) : AST.Type 
 let private rcShapeForType (ctx: TypeContext) (typ: AST.Type) : RcShape =
     typ |> canonicalRcTypeForShape ctx |> rcShapeOfType ctx.TypeReg
 
-let private typeHasRcShapeManagedAliasRoot (ctx: TypeContext) (typ: AST.Type) : bool =
-    match typ |> rcShapeForType ctx |> rcShapeStorageClass with
-    | ManagedRcRoot (_, ClosureHeap) ->
-        false
-    | ManagedRcRoot _ ->
-        true
-    | ManagedDynamicBuffer _
-    | UnmanagedStorage ->
-        false
+let private needsManagedAliasRootPreservation (ctx: TypeContext) (typ: AST.Type) : bool =
+    typ |> rcShapeForType ctx |> rcShapeNeedsManagedAliasRootPreservation
 
 let private needsAutomaticDec (ctx: TypeContext) (typ: AST.Type) : bool =
     typ |> rcShapeForType ctx |> rcShapeNeedsAutomaticBindingDec
@@ -825,7 +818,7 @@ let rec insertRCWithAnalysis
                 | RLet (nextAliasTemp, Atom (Var sourceId), nextNextBody, _) when sourceId = aliasedTemp ->
                     inferAliasedVarTypeFromUse nextAliasTemp nextNextBody
                 | RLet (nextAliasTemp, TypedAtom (Var sourceId, aliasType), nextNextBody, _) when sourceId = aliasedTemp ->
-                    if typeHasRcShapeManagedAliasRoot ctx aliasType then
+                    if needsManagedAliasRootPreservation ctx aliasType then
                         Some aliasType
                     else
                         inferAliasedVarTypeFromUse nextAliasTemp nextNextBody
@@ -849,7 +842,7 @@ let rec insertRCWithAnalysis
                             None
 
                     match aliasTypeFromBody with
-                    | Some inferredAliasType when typeHasRcShapeManagedAliasRoot ctx inferredAliasType && not (typeHasRcShapeManagedAliasRoot ctx t) ->
+                    | Some inferredAliasType when needsManagedAliasRootPreservation ctx inferredAliasType && not (needsManagedAliasRootPreservation ctx t) ->
                         inferredAliasType
                     | _ ->
                         t
