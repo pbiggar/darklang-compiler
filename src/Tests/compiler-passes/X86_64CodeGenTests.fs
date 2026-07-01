@@ -1067,6 +1067,37 @@ let testDictRefCountDecDictValue () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected nested dict values to be released, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 DictHeap RefCountDec releases tuple leaf values with managed fields through release-plan metadata.
+let testDictRefCountDecTupleStringListValue () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let tupleType = AST.TTuple [AST.TString; listType]
+    let dictType = AST.TDict (AST.TInt64, tupleType)
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X4, LIR.Physical LIR.X3, LIR.Physical LIR.X4)
+                LIR.HeapAlloc (LIR.Physical LIR.X5, 16)
+                LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X5, 8, LIR.Reg (LIR.Physical LIR.X4), Some listType)
+                LIR.HeapAlloc (LIR.Physical LIR.X6, 16)
+                LIR.HeapStore (LIR.Physical LIR.X6, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X6, 8, LIR.Reg (LIR.Physical LIR.X5), Some tupleType)
+                LIR.Mov (LIR.Physical LIR.X7, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
+                LIR.RefCountDec (LIR.Physical LIR.X7, 0, LIR.DictHeap, Some (rcMetadata dictType))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected dict tuple string/list values to be released, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 generic fixed-block RefCountDec preserves live RAX across nested list field release.
 let testGenericRefCountDecPreservesLiveRaxAcrossListFieldRelease () : Result<unit, string> =
     let listType = AST.TList AST.TInt64
@@ -3628,6 +3659,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec releases dict field", testGenericRefCountDecDictField)
     ("LIR DictHeap RefCountDec releases list leaf values", testDictRefCountDecListValue)
     ("LIR DictHeap RefCountDec releases nested dict leaf values", testDictRefCountDecDictValue)
+    ("LIR DictHeap RefCountDec releases tuple string/list leaf values", testDictRefCountDecTupleStringListValue)
     ("LIR generic RefCountDec preserves live RAX across list field release", testGenericRefCountDecPreservesLiveRaxAcrossListFieldRelease)
     ("LIR generic RefCountDec preserves live RAX across dict field release", testGenericRefCountDecPreservesLiveRaxAcrossDictFieldRelease)
     ("LIR generic RefCountDec preserves live RAX across closure field release", testGenericRefCountDecPreservesLiveRaxAcrossClosureFieldRelease)
