@@ -1703,18 +1703,6 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
         ARM64Symbolic.RET
     ]
 
-let private fixedBlockFieldTypes (recordRegistry: LIR.RecordRegistry) (sourceType: AST.Type option) : AST.Type list =
-    match sourceType with
-    | Some (AST.TTuple fields) ->
-        fields
-    | Some (AST.TRecord (name, _)) ->
-        recordRegistry
-        |> Map.tryFind name
-        |> Option.map (List.map snd)
-        |> Option.defaultValue []
-    | _ ->
-        []
-
 let private tryRcReleasePlanOfType
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: ANF.RcSumShapeRegistry)
