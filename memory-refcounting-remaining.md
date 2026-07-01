@@ -120,7 +120,8 @@ closure/bytes/list/dict payload release, plus x64 tagged-list record4
 closure/bytes/list/dict payload release, plus x64 tagged-list tuple4
 nested tuple dynamic string payload release, plus x64 tagged-list tuple4
 nested tuple string/list/dict payload release, plus x64 tagged-list tuple4
-nested tuple closure/bytes/list/dict payload release.
+nested tuple closure/bytes/list/dict payload release, plus x64 tagged-list
+record4 nested tuple string/list/dict payload release.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -233,12 +234,13 @@ tuple4 closure/bytes/list/dict payload release, plus x64 tagged-list record4
 closure/bytes/list/dict payload release, plus x64 tagged-list tuple4 nested
 tuple dynamic string payload release, plus x64 tagged-list tuple4 nested tuple
 string/list/dict payload release, plus x64 tagged-list tuple4 nested tuple
-closure/bytes/list/dict payload release:
+closure/bytes/list/dict payload release, plus x64 tagged-list record4 nested
+tuple string/list/dict payload release:
 
 - `scripts/run-in-container ./run-tests --filter=refcounting`: `205 passed`
-- `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `101 passed`
+- `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `102 passed`
 - Full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4810 passed, 2 failed`
+  `4811 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -1076,6 +1078,7 @@ commits enabled:
 - tagged-list tuple4 nested tuple dynamic string payload release
 - tagged-list tuple4 nested tuple string/list/dict payload release
 - tagged-list tuple4 nested tuple closure/bytes/list/dict payload release
+- tagged-list record4 nested tuple string/list/dict payload release
 - tagged-list one-field record dynamic string field release
 - tagged-list three-field record dynamic string/bytes field release for all
   non-empty dynamic-buffer field combinations
@@ -1138,10 +1141,11 @@ Likely gaps:
   closure/list/dict shapes,
   mixed tuple4 string/bytes/list/dict and closure/bytes/list/dict shapes,
   tuple4 nested tuple dynamic string, string/list/dict, and
-  closure/bytes/list/dict shapes, record1, exhaustive record3 dynamic-buffer
-  combinations, mixed record3 string/bytes/list/dict and closure/list/dict
-  shapes, mixed record4 string/bytes/list/dict and
-  closure/bytes/list/dict shapes, sum dynamic-buffer, sum-list/sum-dict,
+  closure/bytes/list/dict shapes, record4 nested tuple string/list/dict shape,
+  record1, exhaustive record3 dynamic-buffer combinations, mixed record3
+  string/bytes/list/dict and closure/list/dict shapes, mixed record4
+  string/bytes/list/dict and closure/bytes/list/dict shapes, sum dynamic-buffer,
+  sum-list/sum-dict,
   sum-closure, mixed sum-tuple3 string/list/dict variants, mixed sum-tuple4
   string/bytes/list/dict and closure/bytes/list/dict variants,
   sum-record3 string/list/dict variants, mixed sum-record4

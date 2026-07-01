@@ -753,6 +753,9 @@ let private recordListHelperForType (recordRegistry: LIR.RecordRegistry) (name: 
             listRefCountDecRecord4DynamicListDictHelperLabel
         | [AST.TFunction _; dynamicFieldType; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64)], [8] when isDynamicBufferType dynamicFieldType ->
             listRefCountDecRecord4ClosureDynamicListDictHelperLabel
+        | [AST.TInt64; AST.TInt64; AST.TInt64; AST.TTuple [dynamicFieldType; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64)]], [] when
+            isDynamicBufferType dynamicFieldType ->
+            listRefCountDecTuple4NestedTupleDynamicListDictHelperLabel
         | [dynamicFieldType; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64)], [0] when isDynamicBufferType dynamicFieldType ->
             listRefCountDecRecord3DynamicListDictHelperLabel
         | [AST.TFunction _; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64)], [] ->
@@ -5086,6 +5089,8 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
         match fieldType with
         | AST.TList (AST.TTuple fields) ->
             tupleListHelperForFields fields = listRefCountDecTuple4NestedTupleDynamicListDictHelperLabel
+        | AST.TList (AST.TRecord (name, _)) ->
+            recordListHelperForType recordRegistry name = listRefCountDecTuple4NestedTupleDynamicListDictHelperLabel
         | _ -> false
 
     let isTuple4NestedTupleClosureDynamicListDictList (fieldType: AST.Type) : bool =
@@ -5641,6 +5646,8 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
                         tupleListHelperForFields fields = listRefCountDecTuple4NestedTupleDynamicListDictHelperLabel
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TRecord (name, _)))) ->
+                        recordListHelperForType recordRegistry name = listRefCountDecTuple4NestedTupleDynamicListDictHelperLabel
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
                         typeContainsListMatching isTuple4NestedTupleDynamicListDictList sourceType
                     | _ -> false))
