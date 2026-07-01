@@ -4653,7 +4653,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 let releaseListField (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
                     releaseListFieldFrom addrReg fieldOffset fieldType
 
-                let releaseDictFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) : ARM64Symbolic.Instr list =
+                let releaseDictFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldType: AST.Type option) : ARM64Symbolic.Instr list =
+                    let helperLabel = dictDecHelperForType ctx fieldType
                     let callInstrs = [
                         ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
                         ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -4662,7 +4663,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
                         ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
                         ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X12)
-                        ARM64Symbolic.BL dictRefCountDecHelperLabel
+                        ARM64Symbolic.BL helperLabel
                         ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
                         ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
@@ -4675,8 +4676,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
                     ] @ callInstrs
 
-                let releaseDictField (fieldOffset: int) : ARM64Symbolic.Instr list =
-                    releaseDictFieldFrom addrReg fieldOffset
+                let releaseDictField (fieldOffset: int) (fieldType: AST.Type option) : ARM64Symbolic.Instr list =
+                    releaseDictFieldFrom addrReg fieldOffset fieldType
 
                 let releaseClosureFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) : ARM64Symbolic.Instr list =
                     let callInstrs = [
@@ -4777,7 +4778,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                                 | AST.TList _ ->
                                     releaseListFieldFrom ARM64Symbolic.X11 childFieldOffset childFieldType
                                 | AST.TDict _ ->
-                                    releaseDictFieldFrom ARM64Symbolic.X11 childFieldOffset
+                                    releaseDictFieldFrom ARM64Symbolic.X11 childFieldOffset (Some childFieldType)
                                 | AST.TFunction _ ->
                                     releaseClosureFieldFrom ARM64Symbolic.X11 childFieldOffset
                                 | _ ->
@@ -4839,7 +4840,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         | AST.TList _ ->
                             releaseListField fieldOffset fieldType
                         | AST.TDict _ ->
-                            releaseDictField fieldOffset
+                            releaseDictField fieldOffset (Some fieldType)
                         | AST.TFunction _ ->
                             releaseClosureField fieldOffset
                         | AST.TTuple fields when
@@ -4862,7 +4863,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         | AST.TList _ ->
                             releaseListField 8 payloadType
                         | AST.TDict _ ->
-                            releaseDictField 8
+                            releaseDictField 8 (Some payloadType)
                         | AST.TFunction _ ->
                             releaseClosureField 8
                         | AST.TTuple _
