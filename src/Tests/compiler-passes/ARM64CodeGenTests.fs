@@ -197,6 +197,48 @@ let testListNestedTupleDictListValueUsesTypedDictHelper () : TestResult =
         ])
         "List of tuple(string, bytes, tuple(dict<int, list<int>>, string), list<int>)"
 
+let testListTuple2NestedTupleDictListValueUsesTypedDictHelper () : TestResult =
+    assertListElementUsesTypedDictListHelper
+        (AST.TTuple [
+            AST.TInt64
+            AST.TTuple [
+                AST.TString
+                AST.TBytes
+                AST.TList AST.TInt64
+                AST.TDict (AST.TInt64, AST.TList AST.TInt64)
+            ]
+        ])
+        "List of tuple(int, tuple(string, bytes, list<int>, dict<int, list<int>>))"
+
+let testListTuple4NestedTupleDynamicDictListValueUsesTypedDictHelper () : TestResult =
+    assertListElementUsesTypedDictListHelper
+        (AST.TTuple [
+            AST.TInt64
+            AST.TInt64
+            AST.TInt64
+            AST.TTuple [
+                AST.TString
+                AST.TList AST.TInt64
+                AST.TDict (AST.TInt64, AST.TList AST.TInt64)
+            ]
+        ])
+        "List of tuple(int, int, int, tuple(string, list<int>, dict<int, list<int>>))"
+
+let testListTuple4NestedTupleClosureDictListValueUsesTypedDictHelper () : TestResult =
+    assertListElementUsesTypedDictListHelper
+        (AST.TTuple [
+            AST.TInt64
+            AST.TInt64
+            AST.TInt64
+            AST.TTuple [
+                AST.TFunction ([ AST.TInt64 ], AST.TInt64)
+                AST.TString
+                AST.TList AST.TInt64
+                AST.TDict (AST.TInt64, AST.TList AST.TInt64)
+            ]
+        ])
+        "List of tuple(int, int, int, tuple(closure, string, list<int>, dict<int, list<int>>))"
+
 let private assertListSumPayloadUsesTypedDictListHelper (payloadType: AST.Type) (caseName: string) : TestResult =
     let sanitizedName =
         caseName
@@ -319,6 +361,9 @@ let tests : (string * (unit -> TestResult)) list = [
     ("List tuple4 closure/bytes/list/dict-list uses typed dict helper", testListTuple4ClosureBytesListDictListValueUsesTypedDictHelper)
     ("List dict-list uses typed dict helper", testListDictListValueUsesTypedDictHelper)
     ("List nested tuple dict-list uses typed dict helper", testListNestedTupleDictListValueUsesTypedDictHelper)
+    ("List tuple2 nested tuple dict-list uses typed dict helper", testListTuple2NestedTupleDictListValueUsesTypedDictHelper)
+    ("List tuple4 nested tuple dynamic dict-list uses typed dict helper", testListTuple4NestedTupleDynamicDictListValueUsesTypedDictHelper)
+    ("List tuple4 nested tuple closure dict-list uses typed dict helper", testListTuple4NestedTupleClosureDictListValueUsesTypedDictHelper)
     ("List sum tuple3 dict-list uses typed dict helper", testListSumTuple3DictListValueUsesTypedDictHelper)
     ("List sum tuple4 dict-list uses typed dict helper", testListSumTuple4DictListValueUsesTypedDictHelper)
     ("List sum tuple3 closure dict-list uses typed dict helper", testListSumTuple3ClosureDictListValueUsesTypedDictHelper)
