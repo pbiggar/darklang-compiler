@@ -309,8 +309,8 @@ def Stdlib.List.__stringsDisplayItems(list: List<String>, first: Bool) : String 
     match list with
     | [] -> ""
     | [h] ->
-        let item = Stdlib.List.__quoteStringForDisplay(h) in
-        if first then item else ", " ++ item
+        if first then Stdlib.List.__quoteStringForDisplay(h)
+        else ", " ++ Stdlib.List.__quoteStringForDisplay(h)
     | [h, ...t] ->
         let item = Stdlib.List.__quoteStringForDisplay(h) in
         let rest = Stdlib.List.__stringsDisplayItems(t, false) in

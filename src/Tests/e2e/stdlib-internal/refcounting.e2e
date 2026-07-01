@@ -23,6 +23,7 @@ let s = Stdlib.String.padStart("x", 3, "0") in 0 = stdout="0\n" stderr="" // str
 let s = Stdlib.String.trim(" " ++ "ab" ++ " ") in 0 = stdout="0\n" stderr="" // string trim result and intermediate slices reclaimed
 let s = Stdlib.List.toDisplayString_i64([1, 2, 3]) in 0 = stdout="0\n" stderr="" // int list display string reclaimed
 let s = Stdlib.List.toDisplayString_str(["a" ++ "b"]) in 0 = stdout="0\n" stderr="" // string list display string and input reclaimed
+let s = Stdlib.List.toDisplayString_str(["a" ++ "b", "c" ++ "d"]) in 0 = stdout="0\n" stderr="" // multi string list display string and inputs reclaimed
 let s = Stdlib.List.toDisplayString_bool([true, false]) in 0 = stdout="0\n" stderr="" // bool list display string reclaimed
 let s = Stdlib.List.toDisplayString_f64([1.25, 2.0]) in 0 = stdout="0\n" stderr="" // float list display string reclaimed
 let s = Stdlib.Crypto.bytesToHex(Bytes.fromList([1, 2, 255])) in 0 = stdout="0\n" stderr="" // bytes-to-hex display string and input reclaimed
