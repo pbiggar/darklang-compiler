@@ -5165,60 +5165,6 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
             tuple2DynamicBufferOffsets fields = [0; 8]
         | _ -> false
 
-    let isTuple3DynamicFirstList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TTuple fields) ->
-            tupleListHelperForFields fields = listRefCountDecTuple3DynamicFirstHelperLabel
-        | _ -> false
-
-    let isTuple3DynamicThirdList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TTuple fields) ->
-            tupleListHelperForFields fields = listRefCountDecTuple3DynamicThirdHelperLabel
-        | _ -> false
-
-    let isTuple3DynamicFirstSecondList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TTuple fields) ->
-            tupleListHelperForFields fields = listRefCountDecTuple3DynamicFirstSecondHelperLabel
-        | _ -> false
-
-    let isTuple3DynamicSecondThirdList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TTuple fields) ->
-            tupleListHelperForFields fields = listRefCountDecTuple3DynamicSecondThirdHelperLabel
-        | _ -> false
-
-    let isTuple3DynamicFirstThirdList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TTuple fields) ->
-            tupleListHelperForFields fields = listRefCountDecTuple3DynamicFirstThirdHelperLabel
-        | _ -> false
-
-    let isTuple3DynamicSecondList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TTuple fields) ->
-            tupleListHelperForFields fields = listRefCountDecTuple3DynamicSecondHelperLabel
-        | _ -> false
-
-    let isTuple3DynamicAllList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TTuple fields) ->
-            tupleListHelperForFields fields = listRefCountDecTuple3DynamicAllHelperLabel
-        | _ -> false
-
-    let isTuple3DynamicListDictList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TTuple fields) ->
-            tupleListHelperForFields fields = listRefCountDecTuple3DynamicListDictHelperLabel
-        | _ -> false
-
-    let isTuple3ClosureListDictList (fieldType: AST.Type) : bool =
-        match fieldType with
-        | AST.TList (AST.TTuple fields) ->
-            tupleListHelperForFields fields = listRefCountDecTuple3ClosureListDictHelperLabel
-        | _ -> false
-
     let isTuple4DynamicListDictList (fieldType: AST.Type) : bool =
         match fieldType with
         | AST.TList (AST.TTuple fields) ->
@@ -5745,6 +5691,9 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
             || closureCapturesContainReleasePlan matchesPlan)
 
     let needsListRcDecTuple3DynamicFirstHelper =
+        let matchesPlan =
+            releasePlanIsTaggedListWithFixedBlockDynamicBufferOffsets 24 [0]
+
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -5754,11 +5703,14 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
                         tupleListHelperForFields fields = listRefCountDecTuple3DynamicFirstHelperLabel
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isTuple3DynamicFirstList sourceType
+                        typeReleasePlanContains matchesPlan recordRegistry sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isTuple3DynamicFirstList))
+            || closureCapturesContainReleasePlan matchesPlan)
 
     let needsListRcDecTuple3DynamicThirdHelper =
+        let matchesPlan =
+            releasePlanIsTaggedListWithFixedBlockDynamicBufferOffsets 24 [16]
+
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -5768,11 +5720,14 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
                         tupleListHelperForFields fields = listRefCountDecTuple3DynamicThirdHelperLabel
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isTuple3DynamicThirdList sourceType
+                        typeReleasePlanContains matchesPlan recordRegistry sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isTuple3DynamicThirdList))
+            || closureCapturesContainReleasePlan matchesPlan)
 
     let needsListRcDecTuple3DynamicFirstSecondHelper =
+        let matchesPlan =
+            releasePlanIsTaggedListWithFixedBlockDynamicBufferOffsets 24 [0; 8]
+
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -5782,11 +5737,14 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
                         tupleListHelperForFields fields = listRefCountDecTuple3DynamicFirstSecondHelperLabel
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isTuple3DynamicFirstSecondList sourceType
+                        typeReleasePlanContains matchesPlan recordRegistry sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isTuple3DynamicFirstSecondList))
+            || closureCapturesContainReleasePlan matchesPlan)
 
     let needsListRcDecTuple3DynamicSecondThirdHelper =
+        let matchesPlan =
+            releasePlanIsTaggedListWithFixedBlockDynamicBufferOffsets 24 [8; 16]
+
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -5796,11 +5754,14 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
                         tupleListHelperForFields fields = listRefCountDecTuple3DynamicSecondThirdHelperLabel
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isTuple3DynamicSecondThirdList sourceType
+                        typeReleasePlanContains matchesPlan recordRegistry sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isTuple3DynamicSecondThirdList))
+            || closureCapturesContainReleasePlan matchesPlan)
 
     let needsListRcDecTuple3DynamicFirstThirdHelper =
+        let matchesPlan =
+            releasePlanIsTaggedListWithFixedBlockDynamicBufferOffsets 24 [0; 16]
+
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -5810,11 +5771,14 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
                         tupleListHelperForFields fields = listRefCountDecTuple3DynamicFirstThirdHelperLabel
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isTuple3DynamicFirstThirdList sourceType
+                        typeReleasePlanContains matchesPlan recordRegistry sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isTuple3DynamicFirstThirdList))
+            || closureCapturesContainReleasePlan matchesPlan)
 
     let needsListRcDecTuple3DynamicSecondHelper =
+        let matchesPlan =
+            releasePlanIsTaggedListWithFixedBlockDynamicBufferOffsets 24 [8]
+
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -5824,11 +5788,14 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
                         tupleListHelperForFields fields = listRefCountDecTuple3DynamicSecondHelperLabel
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isTuple3DynamicSecondList sourceType
+                        typeReleasePlanContains matchesPlan recordRegistry sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isTuple3DynamicSecondList))
+            || closureCapturesContainReleasePlan matchesPlan)
 
     let needsListRcDecTuple3DynamicAllHelper =
+        let matchesPlan =
+            releasePlanIsTaggedListWithFixedBlockDynamicBufferOffsets 24 [0; 8; 16]
+
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -5838,11 +5805,21 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
                         tupleListHelperForFields fields = listRefCountDecTuple3DynamicAllHelperLabel
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isTuple3DynamicAllList sourceType
+                        typeReleasePlanContains matchesPlan recordRegistry sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isTuple3DynamicAllList))
+            || closureCapturesContainReleasePlan matchesPlan)
 
     let needsListRcDecTuple3DynamicListDictHelper =
+        let matchesPlan =
+            releasePlanIsTaggedListWithElementRelease
+                (releasePlanIsFixedBlockWithExactFieldReleases
+                    24
+                    [
+                        0, releasePlanIsDynamicBufferRelease
+                        8, releasePlanIsRootKind ANF.TaggedList
+                        16, releasePlanIsRootKind ANF.DictHeap
+                    ])
+
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -5852,11 +5829,21 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
                         tupleListHelperForFields fields = listRefCountDecTuple3DynamicListDictHelperLabel
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isTuple3DynamicListDictList sourceType
+                        typeReleasePlanContains matchesPlan recordRegistry sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isTuple3DynamicListDictList))
+            || closureCapturesContainReleasePlan matchesPlan)
 
     let needsListRcDecTuple3ClosureListDictHelper =
+        let matchesPlan =
+            releasePlanIsTaggedListWithElementRelease
+                (releasePlanIsFixedBlockWithExactFieldReleases
+                    24
+                    [
+                        0, releasePlanIsRootKind ANF.ClosureHeap
+                        8, releasePlanIsRootKind ANF.TaggedList
+                        16, releasePlanIsRootKind ANF.DictHeap
+                    ])
+
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -5866,9 +5853,9 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
                         tupleListHelperForFields fields = listRefCountDecTuple3ClosureListDictHelperLabel
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isTuple3ClosureListDictList sourceType
+                        typeReleasePlanContains matchesPlan recordRegistry sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isTuple3ClosureListDictList))
+            || closureCapturesContainReleasePlan matchesPlan)
 
     let needsListRcDecTuple4DynamicListDictHelper =
         functions
