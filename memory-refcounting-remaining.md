@@ -106,6 +106,7 @@ release, plus x64 tagged-list tuple4 string/bytes/list/dict payload release,
 plus x64 tagged-list boxed-sum tuple4 string/bytes/list/dict payload release,
 plus x64 tagged-list boxed-sum record4 string/bytes/list/dict payload release,
 plus x64 tagged-list boxed-sum tuple4 closure/bytes/list/dict payload release,
+plus x64 tagged-list boxed-sum record4 closure/bytes/list/dict payload release,
 plus x64 tagged-list tuple2 nested tuple dynamic string/bytes payload release
 for all non-empty dynamic-buffer field combinations, plus x64 tagged-list
 tuple2 nested tuple list/dict payload release, plus x64 tagged-list tuple2
@@ -215,6 +216,7 @@ string/bytes/list/dict payload release, plus x64 tagged-list tuple4
 string/bytes/list/dict payload release, plus x64 tagged-list boxed-sum tuple4
 string/bytes/list/dict payload release, plus x64 tagged-list boxed-sum record4
 string/bytes/list/dict payload release, plus x64 tagged-list boxed-sum tuple4
+closure/bytes/list/dict payload release, plus x64 tagged-list boxed-sum record4
 closure/bytes/list/dict payload release, plus x64 tagged-list tuple2 nested
 tuple dynamic string/bytes payload release for all non-empty dynamic-buffer
 field combinations, plus x64 tagged-list tuple2 nested tuple string/list/dict
@@ -228,9 +230,9 @@ tuple4 closure/bytes/list/dict payload release, plus x64 tagged-list record4
 closure/bytes/list/dict payload release:
 
 - `scripts/run-in-container ./run-tests --filter=refcounting`: `205 passed`
-- `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `97 passed`
+- `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `98 passed`
 - Full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4806 passed, 2 failed`
+  `4807 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -1081,6 +1083,7 @@ commits enabled:
   non-empty dynamic-buffer field combinations
 - tagged-list boxed sum tuple3 string/list/dict payload release
 - tagged-list boxed sum tuple4 closure/bytes/list/dict payload release
+- tagged-list boxed sum record4 closure/bytes/list/dict payload release
 - tagged-list boxed sum record dynamic string payload release
 - tagged-list boxed sum record3 dynamic string/bytes payload release for all
   non-empty dynamic-buffer field combinations
@@ -1131,7 +1134,8 @@ Likely gaps:
   closure/bytes/list/dict shapes, sum dynamic-buffer, sum-list/sum-dict,
   sum-closure, mixed sum-tuple3 string/list/dict variants, mixed sum-tuple4
   string/bytes/list/dict and closure/bytes/list/dict variants,
-  sum-record3/sum-record4 string/list/dict variants,
+  sum-record3 string/list/dict variants, mixed sum-record4
+  string/bytes/list/dict and closure/bytes/list/dict variants,
   list/closure/dict/string
 - dict helper key/value recursion parity
 - dynamic bytes literal sentinel/aligned layout parity if a separate bytes

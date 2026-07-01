@@ -2903,6 +2903,53 @@ let testTaggedListRefCountDecSumRecord4StringBytesListDictPayload () : Result<un
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list sum record4 string/bytes/list/dict payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases boxed sum record4 payloads with closure/bytes/list/dict fields.
+let testTaggedListRefCountDecSumRecord4ClosureBytesListDictPayload () : Result<unit, string> =
+    let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
+    let listType = AST.TList AST.TInt64
+    let dictType = AST.TDict (AST.TInt64, AST.TInt64)
+    let recordType = AST.TRecord ("X64ListRcSumRecord4ClosureBytesListDict", [])
+    let records =
+        Map.ofList
+            [("X64ListRcSumRecord4ClosureBytesListDict", [("callback", closureType); ("blob", AST.TBytes); ("items", listType); ("lookup", dictType)])]
+    let sumType = AST.TSum ("X64ListRcSumRecord4ClosureBytesListDictWrapper", [recordType])
+    let program =
+        makeSimpleProgramWithRecords
+            [
+                LIR.ClosureAlloc (LIR.Physical LIR.X2, "_start", [])
+                LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "bytes", LIR.StringSymbol "payload")
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
+                LIR.HeapAlloc (LIR.Physical LIR.X6, 16)
+                LIR.HeapStore (LIR.Physical LIR.X6, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X6, 8, LIR.Imm 2L, None)
+                LIR.Mov (LIR.Physical LIR.X7, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
+                LIR.HeapAlloc (LIR.Physical LIR.X19, 32)
+                LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
+                LIR.HeapStore (LIR.Physical LIR.X19, 24, LIR.Reg (LIR.Physical LIR.X7), Some dictType)
+                LIR.HeapAlloc (LIR.Physical LIR.X20, 16)
+                LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Imm 0L, None)
+                LIR.HeapStore (LIR.Physical LIR.X20, 8, LIR.Reg (LIR.Physical LIR.X19), Some recordType)
+                LIR.HeapAlloc (LIR.Physical LIR.X21, 8)
+                LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some sumType)
+                LIR.Mov (LIR.Physical LIR.X22, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X22, LIR.Physical LIR.X21, LIR.Physical LIR.X22)
+                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (AST.TList sumType))
+            ]
+            LIR.Ret
+            records
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected list sum record4 closure/bytes/list/dict payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 tagged-list RefCountDec releases boxed sum record3 middle dynamic payloads.
 let testTaggedListRefCountDecSumRecord3MiddleDynamicPayload () : Result<unit, string> =
     let recordType = AST.TRecord ("X64ListRcSumRecord3Middle", [])
@@ -3137,6 +3184,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases sum record string payload", testTaggedListRefCountDecSumRecordStringPayload)
     ("LIR tagged list RefCountDec releases sum record3 string/list/dict payload", testTaggedListRefCountDecSumRecord3StringListDictPayload)
     ("LIR tagged list RefCountDec releases sum record4 string/bytes/list/dict payload", testTaggedListRefCountDecSumRecord4StringBytesListDictPayload)
+    ("LIR tagged list RefCountDec releases sum record4 closure/bytes/list/dict payload", testTaggedListRefCountDecSumRecord4ClosureBytesListDictPayload)
     ("LIR tagged list RefCountDec releases sum record3 middle dynamic payload", testTaggedListRefCountDecSumRecord3MiddleDynamicPayload)
     ("LIR tagged list RefCountDec releases sum record3 dynamic payload combinations", testTaggedListRefCountDecSumRecord3DynamicPayloadCombinations)
     ("LIR tagged list RefCountDec releases nested sum string payload", testTaggedListRefCountDecNestedSumStringPayload)
