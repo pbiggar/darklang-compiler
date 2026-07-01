@@ -6133,10 +6133,24 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 (Set.union selectedLabels dependencyLabels)
                 (rest @ Set.toList dependencyLabels)
 
-    let listDecHelperLabelsInFixedBlockType (sourceType: AST.Type option) : Set<string> =
-        fixedBlockFieldTypes ctx.RecordRegistry sourceType
-        |> List.map listDecHelperLabelsForListType
-        |> unionLabelSets
+    let rec listDecHelperLabelsInReleasePlan (releasePlan: ANF.RcReleasePlan) : Set<string> =
+        match releasePlan with
+        | ANF.RootRelease (_, ANF.TaggedList, _) ->
+            Set.singleton (listDecHelperForReleasePlan releasePlan)
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
+            fieldReleases
+            |> List.map (fun (ANF.FieldRelease (_, fieldReleasePlan)) ->
+                listDecHelperLabelsInReleasePlan fieldReleasePlan)
+            |> unionLabelSets
+        | _ ->
+            Set.empty
+
+    let listDecHelperLabelsInType (sourceType: AST.Type option) : Set<string> =
+        sourceType
+        |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry)
+        |> Option.map listDecHelperLabelsInReleasePlan
+        |> Option.defaultValue Set.empty
 
     let neededListRcDecHelperLabels =
         let calledLabels =
@@ -6150,7 +6164,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
                             Set.singleton (listDecHelperForType ctx sourceType)
                         | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                            listDecHelperLabelsInFixedBlockType sourceType
+                            listDecHelperLabelsInType sourceType
                         | _ ->
                             Set.empty)
                     |> unionLabelSets)
