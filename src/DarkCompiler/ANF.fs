@@ -273,9 +273,9 @@ type TypedProgram = {
 
 /// Classify a source type into its current runtime RC representation shape.
 ///
-/// The classifier is intentionally pure and side-effect free. Early migration
-/// commits use it only in tests/adapters; ownership insertion remains on the
-/// legacy helpers until each runtime shape has matching retain/release support.
+/// The classifier is intentionally pure and side-effect free. Ownership
+/// insertion and backend helper selection use this as the source of truth for
+/// runtime retain/release shape decisions.
 let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type) : RcShape =
     match t with
     | AST.TInt8
