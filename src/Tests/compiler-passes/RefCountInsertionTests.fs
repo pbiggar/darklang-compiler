@@ -335,7 +335,7 @@ let testRcShapeReleasePlanClassifiesFieldCleanup () : TestResult =
             RootRelease (16, GenericHeap, FixedBlockPayloadRelease (16, [FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)])))
         (ClosureShape [DynamicString],
             RootRelease (0, ClosureHeap, ClosurePayloadRelease [FieldRelease (0, DynamicBufferRelease DynamicStringBuffer)]))
-        (BoxedSum 16, RootRelease (16, GenericHeap, BoxedSumPayloadRelease 16))
+        (BoxedSum 16, RootRelease (16, GenericHeap, BoxedSumPayloadRelease (16, [])))
     ]
 
     match samples |> List.tryFind (fun (shape, expected) -> rcShapeReleasePlan shape <> expected) with
@@ -366,6 +366,25 @@ let testRcReleasePlanOfTypeUsesRecordMetadata () : TestResult =
         Ok ()
     else
         Error $"Expected record type to use release plan {expected}, got {actual}"
+
+let testRcReleasePlanOfTypeUsesSumPayloadMetadata () : TestResult =
+    let sumType = AST.TSum ("MaybeString", [AST.TString])
+
+    let expected =
+        RootRelease (
+            16,
+            GenericHeap,
+            BoxedSumPayloadRelease (
+                16,
+                [
+                    FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
+                ]))
+
+    let actual = rcReleasePlanOfType Map.empty sumType
+    if actual = expected then
+        Ok ()
+    else
+        Error $"Expected sum type to use release plan {expected}, got {actual}"
 
 let testInferCallReturnsFunctionReturnType () : TestResult =
     let ctx : TypeContext = {
@@ -580,6 +599,7 @@ let tests = [
     ("RcShape ownership helpers classify recursive release", testRcShapeOwnershipHelpersClassifyRecursiveRelease)
     ("RcShape release plan classifies field cleanup", testRcShapeReleasePlanClassifiesFieldCleanup)
     ("RcReleasePlan of type uses record metadata", testRcReleasePlanOfTypeUsesRecordMetadata)
+    ("RcReleasePlan of type uses sum payload metadata", testRcReleasePlanOfTypeUsesSumPayloadMetadata)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)

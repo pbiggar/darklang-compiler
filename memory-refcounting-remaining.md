@@ -127,7 +127,8 @@ record4 nested tuple closure/bytes/list/dict payload release, plus initial
 `RcShape` storage-class classification used by RC insertion's legacy fixed-root
 compatibility predicate, plus shared `RcReleasePlan` metadata and initial x64
 generic fixed-block dynamic string/bytes field release consumption through
-`RcReleasePlan`.
+`RcReleasePlan`, plus boxed-sum release plans that carry source-type payload
+field cleanup when variant payload metadata is available.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -250,7 +251,7 @@ predicate:
 - `scripts/run-in-container ./run-tests --filter=refcounting`: `205 passed`
 - `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `104 passed`
 - Full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4819 passed, 2 failed`
+  `4820 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -327,6 +328,10 @@ rather than retaining an additional reference. It deliberately preserves the
 previous non-crashing classification for generated record names whose field
 metadata is not present in the current `TypeReg`; fixed root operations still
 require concrete payload metadata before they are emitted.
+
+`BoxedSumPayloadRelease` now carries field releases when `rcReleasePlanOfType`
+has source-type payload metadata. Shape-only `BoxedSum` classification remains
+conservative and records an empty boxed-sum payload field list.
 
 `ANF.fs` now also exposes `RcOperation`, `RcStorageClass`,
 `rcShapeStorageClass`, `rcShapeRetainOperation`, and
@@ -1385,7 +1390,7 @@ The compiler still needs precise handling for:
 1. Teach `rcShapeOfType` or a companion classifier to distinguish pure enum
    sums from boxed sums using variant metadata.
 2. Extend pure enum allocation/leak coverage if sum representation changes.
-3. Add recursive payload release plans for boxed sums.
+3. Continue applying boxed-sum payload release plans in backend consumers.
 4. Cover sum payload matrix:
 
    - string
@@ -1407,7 +1412,7 @@ The compiler still needs precise handling for:
 2. Extend pure enum leak-check coverage beyond the direct no-payload binding if
    representation changes.
 3. Add boxed sum bytes/dict/closure payload coverage.
-4. Generalize boxed sum payload release through shape plans.
+4. Generalize boxed sum payload release through shape plans in both backends.
 
 ## 11. Closure Ownership And Function-Typed Values
 

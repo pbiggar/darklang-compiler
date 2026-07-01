@@ -154,7 +154,7 @@ type RcReleasePlan =
 and RcPayloadReleasePlan =
     | NoPayloadRelease
     | FixedBlockPayloadRelease of payloadSize:int * fieldReleases:RcFieldRelease list
-    | BoxedSumPayloadRelease of payloadSize:int
+    | BoxedSumPayloadRelease of payloadSize:int * fieldReleases:RcFieldRelease list
     | TaggedListPayloadRelease of elementRelease:RcReleasePlan
     | DictPayloadRelease of keyRelease:RcReleasePlan * valueRelease:RcReleasePlan
     | ClosurePayloadRelease of captureReleases:RcFieldRelease list
@@ -510,7 +510,7 @@ let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
         | FixedBlock (payloadSize, fieldShapes) ->
             FixedBlockPayloadRelease (payloadSize, fieldReleasePlans fieldShapes)
         | BoxedSum payloadSize ->
-            BoxedSumPayloadRelease payloadSize
+            BoxedSumPayloadRelease (payloadSize, [])
         | TaggedListShape elementShape ->
             TaggedListPayloadRelease (rcShapeReleasePlan elementShape)
         | DictRoot (keyShape, valueShape) ->
@@ -533,8 +533,24 @@ let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
         RootRelease (payloadSize, kind, rootPayloadPlan shape)
 
 /// Release plan for a source type using the current representation registry.
-let rcReleasePlanOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type) : RcReleasePlan =
-    t |> rcShapeOfType typeReg |> rcShapeReleasePlan
+let rec rcReleasePlanOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type) : RcReleasePlan =
+    let fieldRelease offset releasePlan =
+        match releasePlan with
+        | NoReleasePlan ->
+            None
+        | _ ->
+            Some (FieldRelease (offset, releasePlan))
+
+    match t with
+    | AST.TSum (_, [payloadType]) ->
+        let payloadReleases =
+            rcReleasePlanOfType typeReg payloadType
+            |> fieldRelease 8
+            |> Option.toList
+
+        RootRelease (16, GenericHeap, BoxedSumPayloadRelease (16, payloadReleases))
+    | _ ->
+        t |> rcShapeOfType typeReg |> rcShapeReleasePlan
 
 /// Determine reference-count dispatch kind for a heap type
 let rcKind (t: AST.Type) : RcKind =
