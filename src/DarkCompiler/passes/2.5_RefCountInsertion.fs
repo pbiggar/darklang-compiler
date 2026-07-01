@@ -523,14 +523,14 @@ let private rcMetadataForType (ctx: TypeContext) (typ: AST.Type) : RcMetadata =
         SourceType = Some canonicalType
     }
 
-let private needsManagedAliasRootPreservation (ctx: TypeContext) (typ: AST.Type) : bool =
+let private shapeNeedsManagedAliasRootPreservation (ctx: TypeContext) (typ: AST.Type) : bool =
     typ |> rcShapeForType ctx |> rcShapeNeedsManagedAliasRootPreservation
 
-let private needsAutomaticDec (ctx: TypeContext) (typ: AST.Type) : bool =
+let private shapeNeedsAutomaticBindingDec (ctx: TypeContext) (typ: AST.Type) : bool =
     typ |> rcShapeForType ctx |> rcShapeNeedsAutomaticBindingDec
 
-let private bindingNeedsAutomaticDec (ctx: TypeContext) (cexpr: CExpr) (typ: AST.Type) : bool =
-    needsAutomaticDec ctx typ
+let private bindingNeedsShapeAutomaticDec (ctx: TypeContext) (cexpr: CExpr) (typ: AST.Type) : bool =
+    shapeNeedsAutomaticBindingDec ctx typ
     || match typ, cexpr with
        | AST.TFunction _, ClosureAlloc _ -> true
        | AST.TFunction _, Call (funcName, _) when not (funcName.StartsWith("Stdlib.")) -> true
@@ -568,7 +568,7 @@ let private releaseExprForType
     | None ->
         Crash.crash $"releaseExprForType: type '{typ}' does not have an RC release operation"
 
-let private needsRetainForBorrowedValue (ctx: TypeContext) (typ: AST.Type) : bool =
+let private shapeNeedsBorrowedRetain (ctx: TypeContext) (typ: AST.Type) : bool =
     typ |> rcShapeForType ctx |> rcShapeNeedsBorrowedRetain
 
 let rec private isStoredByRawSet (tempId: TempId) (bodyInfo: ReturnAnnotatedExpr) : bool =
@@ -852,7 +852,7 @@ let rec insertRCWithAnalysis
                 | RLet (nextAliasTemp, Atom (Var sourceId), nextNextBody, _) when sourceId = aliasedTemp ->
                     inferAliasedVarTypeFromUse nextAliasTemp nextNextBody
                 | RLet (nextAliasTemp, TypedAtom (Var sourceId, aliasType), nextNextBody, _) when sourceId = aliasedTemp ->
-                    if needsManagedAliasRootPreservation ctx aliasType then
+                    if shapeNeedsManagedAliasRootPreservation ctx aliasType then
                         Some aliasType
                     else
                         inferAliasedVarTypeFromUse nextAliasTemp nextNextBody
@@ -876,7 +876,7 @@ let rec insertRCWithAnalysis
                             None
 
                     match aliasTypeFromBody with
-                    | Some inferredAliasType when needsManagedAliasRootPreservation ctx inferredAliasType && not (needsManagedAliasRootPreservation ctx t) ->
+                    | Some inferredAliasType when shapeNeedsManagedAliasRootPreservation ctx inferredAliasType && not (shapeNeedsManagedAliasRootPreservation ctx t) ->
                         inferredAliasType
                     | _ ->
                         t
@@ -997,7 +997,7 @@ let rec insertRCWithAnalysis
                        | AST.TDict (AST.TInt64, AST.TInt64) -> true
                        | _ -> false
 
-                if bindingNeedsAutomaticDec ctx cexpr inferredType
+                if bindingNeedsShapeAutomaticDec ctx cexpr inferredType
                    && not (Set.contains tempId bodyReturned)
                    && not (isBorrowingExpr cexpr)
                    && not skipReturnDecForPushBackHelpers
@@ -1032,7 +1032,7 @@ let rec insertRCWithAnalysis
                         match atom with
                         | Var tid ->
                             match tryGetType ctx tid with
-                            | Some t when needsRetainForBorrowedValue ctx t ->
+                            | Some t when shapeNeedsBorrowedRetain ctx t ->
                                 (tid, t) :: acc
                             | _ -> acc
                         | _ -> acc
@@ -1044,7 +1044,7 @@ let rec insertRCWithAnalysis
                         match atom with
                         | Var tid ->
                             match tryGetType ctx tid with
-                            | Some t when needsRetainForBorrowedValue ctx t ->
+                            | Some t when shapeNeedsBorrowedRetain ctx t ->
                                 (tid, t) :: acc
                             | _ -> acc
                         | _ -> acc
@@ -1057,7 +1057,7 @@ let rec insertRCWithAnalysis
                     match atom with
                     | Var tid ->
                         match tryGetType ctx tid with
-                        | Some t when needsRetainForBorrowedValue ctx t -> Some t
+                        | Some t when shapeNeedsBorrowedRetain ctx t -> Some t
                         | _ -> None
                     | _ -> None
 
@@ -1072,7 +1072,7 @@ let rec insertRCWithAnalysis
                 | Atom (Var sourceId)
                 | TypedAtom (Var sourceId, _) ->
                     // Returning a pure alias of an already-returned owned value should not inc again.
-                    if needsRetainForBorrowedValue ctx inferredType
+                    if shapeNeedsBorrowedRetain ctx inferredType
                        && Set.contains tempId bodyReturned
                        && isBorrowingExpr cexpr then
                         if Set.contains sourceId bodyReturned then
@@ -1082,7 +1082,7 @@ let rec insertRCWithAnalysis
                     else
                         None
                 | _ ->
-                    if needsRetainForBorrowedValue ctx inferredType
+                    if shapeNeedsBorrowedRetain ctx inferredType
                        && Set.contains tempId bodyReturned
                        && isBorrowingExpr cexpr then
                         Some inferredType
@@ -1095,7 +1095,7 @@ let rec insertRCWithAnalysis
                 TupleIncTargets = tupleIncTargets
                 ReturnInc = returnInc
                 BranchDec =
-                    if bindingNeedsAutomaticDec ctx cexpr inferredType
+                    if bindingNeedsShapeAutomaticDec ctx cexpr inferredType
                        && not (isBorrowingExpr cexpr)
                        && not skipReturnDecForPushBackHelpers
                        && not consumedByImmediateI64Push
@@ -1159,7 +1159,7 @@ let private insertRCInFunctionInternal
     let paramIncsRev =
         func.TypedParams
         |> List.fold (fun acc param ->
-            if needsRetainForBorrowedValue ctxWithParams param.Type then
+            if shapeNeedsBorrowedRetain ctxWithParams param.Type then
                 (param.Id, param.Type) :: acc
             else
                 acc
