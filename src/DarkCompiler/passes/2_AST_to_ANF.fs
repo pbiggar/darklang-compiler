@@ -4476,7 +4476,12 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                     | shape ->
                         match ANF.rcShapePayloadSize shape, ANF.rcShapeRootKind shape with
                         | Some size, Some kind ->
-                            Some (ANF.RefCountInc (elemAtom, size, kind, Some elemType))
+                            let metadata =
+                                {
+                                    ANF.ReleasePlan = Some (ANF.rcShapeReleasePlan shape)
+                                    ANF.SourceType = Some elemType
+                                }
+                            Some (ANF.RefCountInc (elemAtom, size, kind, Some metadata))
                         | _ ->
                             None
 
@@ -8222,7 +8227,12 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                     | shape ->
                         match ANF.rcShapePayloadSize shape, ANF.rcShapeRootKind shape with
                         | Some size, Some kind ->
-                            Some (ANF.RefCountInc (elemAtom, size, kind, Some elemType))
+                            let metadata =
+                                {
+                                    ANF.ReleasePlan = Some (ANF.rcShapeReleasePlan shape)
+                                    ANF.SourceType = Some elemType
+                                }
+                            Some (ANF.RefCountInc (elemAtom, size, kind, Some metadata))
                         | _ ->
                             None
 

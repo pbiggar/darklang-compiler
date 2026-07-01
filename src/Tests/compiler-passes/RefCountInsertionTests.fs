@@ -604,8 +604,8 @@ let rec private tryRefCountDecSourceTypeForTemp (target: TempId) (expr: AExpr) :
     match expr with
     | Return _ ->
         None
-    | Let (_, RefCountDec (Var tempId, _, _, sourceType), _) when tempId = target ->
-        sourceType
+    | Let (_, RefCountDec (Var tempId, _, _, metadata), _) when tempId = target ->
+        metadata |> Option.bind (fun value -> value.SourceType)
     | Let (_, _, body) ->
         tryRefCountDecSourceTypeForTemp target body
     | If (_, thenBranch, elseBranch) ->

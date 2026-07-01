@@ -169,6 +169,16 @@ and RcPayloadReleasePlan =
 and RcFieldRelease =
     | FieldRelease of offset:int * release:RcReleasePlan
 
+/// Metadata carried by refcount operations after ownership insertion.
+///
+/// ReleasePlan is the backend-facing source of truth for retain/release helper
+/// selection. SourceType is retained only for tag-aware named-sum cleanup that
+/// has not yet been represented directly in RcReleasePlan.
+type RcMetadata = {
+    ReleasePlan: RcReleasePlan option
+    SourceType: AST.Type option
+}
+
 /// Function return ownership convention
 type ReturnOwnership =
     | OwnedReturn
@@ -194,8 +204,8 @@ type CExpr =
     // String operations (heap-allocating)
     | StringConcat of left:Atom * right:Atom    // Concatenate strings: s1 ++ s2
     // Reference counting operations
-    | RefCountInc of Atom * payloadSize:int * kind:RcKind * sourceType:AST.Type option    // Increment ref count of heap value
-    | RefCountDec of Atom * payloadSize:int * kind:RcKind * sourceType:AST.Type option    // Decrement ref count, free if zero
+    | RefCountInc of Atom * payloadSize:int * kind:RcKind * metadata:RcMetadata option    // Increment ref count of heap value
+    | RefCountDec of Atom * payloadSize:int * kind:RcKind * metadata:RcMetadata option    // Decrement ref count, free if zero
     // Output operations (for main expression result)
     | Print of Atom * AST.Type                 // Print value with type-appropriate formatting
     | RuntimeError of message:string           // Print runtime error to stderr and exit with code 1

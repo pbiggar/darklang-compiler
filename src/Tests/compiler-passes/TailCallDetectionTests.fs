@@ -29,6 +29,12 @@ let testNonSelfTailCallMovesDecBeforeTailCall () : TestResult =
     let tupleTmp = TempId 1
     let callTmp = TempId 2
     let decTmp = TempId 3
+    let tupleType = AST.TTuple [AST.TInt64; AST.TInt64]
+    let tupleMetadata =
+        {
+            ReleasePlan = Some (rcReleasePlanOfType Map.empty tupleType)
+            SourceType = Some tupleType
+        }
 
     let caller : Function = {
         Name = "caller"
@@ -42,7 +48,7 @@ let testNonSelfTailCallMovesDecBeforeTailCall () : TestResult =
                 Let (
                     callTmp,
                     Call ("callee", [Var p0]),
-                    Let (decTmp, RefCountDec (Var tupleTmp, 16, GenericHeap, Some (AST.TTuple [AST.TInt64; AST.TInt64])), Return (Var callTmp))
+                    Let (decTmp, RefCountDec (Var tupleTmp, 16, GenericHeap, Some tupleMetadata), Return (Var callTmp))
                 )
             )
     }

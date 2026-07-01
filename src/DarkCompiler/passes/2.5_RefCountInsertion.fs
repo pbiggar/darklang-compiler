@@ -542,6 +542,14 @@ let private rcShapeForType (ctx: TypeContext) (typ: AST.Type) : RcShape =
     |> canonicalRcTypeForShape ctx
     |> rcShapeOfTypeWithSums ctx.TypeReg ctx.SumShapeReg
 
+let private rcMetadataForType (ctx: TypeContext) (typ: AST.Type) : RcMetadata =
+    let canonicalType = canonicalRcSourceType ctx typ
+    let shape = rcShapeForType ctx typ
+    {
+        ReleasePlan = Some (rcShapeReleasePlan shape)
+        SourceType = Some canonicalType
+    }
+
 let private needsManagedAliasRootPreservation (ctx: TypeContext) (typ: AST.Type) : bool =
     typ |> rcShapeForType ctx |> rcShapeNeedsManagedAliasRootPreservation
 
@@ -565,7 +573,7 @@ let private retainExprForType (ctx: TypeContext) (tempId: TempId) (typ: AST.Type
     | Some DynamicBytesBuffer ->
         RefCountIncBytes (Var tempId)
     | Some (FixedSizeRoot (size, kind)) ->
-        RefCountInc (Var tempId, size, kind, Some (canonicalRcSourceType ctx typ))
+        RefCountInc (Var tempId, size, kind, Some (rcMetadataForType ctx typ))
     | None ->
         Crash.crash $"retainExprForType: type '{typ}' does not have an RC retain operation"
 
@@ -583,7 +591,7 @@ let private releaseExprForType
         RefCountDecBytes (Var tempId)
     | Some (FixedSizeRoot (size, defaultKind)) ->
         let kind = kindOverride |> Option.defaultValue defaultKind
-        RefCountDec (Var tempId, size, kind, Some (canonicalRcSourceType ctx typ))
+        RefCountDec (Var tempId, size, kind, Some (rcMetadataForType ctx typ))
     | None ->
         Crash.crash $"releaseExprForType: type '{typ}' does not have an RC release operation"
 

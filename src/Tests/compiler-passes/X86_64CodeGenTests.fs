@@ -73,6 +73,28 @@ let private runLIRProgram (program: LIR.Program) : Result<int, string> =
                     resolveResult.MachineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false 0
             X86_64BinaryTests.runElfBinary binary
 
+let private rcMetadata (typ: AST.Type) : ANF.RcMetadata =
+    {
+        ANF.ReleasePlan = None
+        ANF.SourceType = Some typ
+    }
+
+let private completeRcMetadata (records: LIR.RecordRegistry) (metadata: ANF.RcMetadata option) : ANF.RcMetadata option =
+    match metadata with
+    | Some ({ ReleasePlan = None; SourceType = Some sourceType } as value) ->
+        Some { value with ReleasePlan = Some (ANF.rcReleasePlanOfType records sourceType) }
+    | _ ->
+        metadata
+
+let private completeRcInstrMetadata (records: LIR.RecordRegistry) (instr: LIR.Instr) : LIR.Instr =
+    match instr with
+    | LIR.RefCountInc (addr, payloadSize, kind, metadata) ->
+        LIR.RefCountInc (addr, payloadSize, kind, completeRcMetadata records metadata)
+    | LIR.RefCountDec (addr, payloadSize, kind, metadata) ->
+        LIR.RefCountDec (addr, payloadSize, kind, completeRcMetadata records metadata)
+    | _ ->
+        instr
+
 /// Create a minimal LIR function with a single basic block
 let private makeSimpleProgramWithRecords (instrs: LIR.Instr list) (term: LIR.Terminator) (records: LIR.RecordRegistry) : LIR.Program =
     let entryLabel = LIR.Label "_start_entry"
@@ -84,7 +106,7 @@ let private makeSimpleProgramWithRecords (instrs: LIR.Instr list) (term: LIR.Ter
     }
     let bodyBlock : LIR.BasicBlock = {
         Label = bodyLabel
-        Instrs = instrs
+        Instrs = instrs |> List.map (completeRcInstrMetadata records)
         Terminator = term
     }
     let func : LIR.Function = {
@@ -399,7 +421,7 @@ let testGenericRefCountDecStringField () : Result<unit, string> =
                 LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "a", LIR.StringSymbol "b")
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
-                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (AST.TTuple [AST.TString]))
+                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (rcMetadata ((AST.TTuple [AST.TString]))))
             ]
             LIR.Ret
 
@@ -416,7 +438,7 @@ let testGenericRefCountDecLiteralStringFieldSkipsRelease () : Result<unit, strin
             [
                 LIR.HeapAlloc (LIR.Physical LIR.X2, 8)
                 LIR.HeapStore (LIR.Physical LIR.X2, 0, LIR.StringSymbol "literal", Some AST.TString)
-                LIR.RefCountDec (LIR.Physical LIR.X2, 8, LIR.GenericHeap, Some (AST.TTuple [AST.TString]))
+                LIR.RefCountDec (LIR.Physical LIR.X2, 8, LIR.GenericHeap, Some (rcMetadata ((AST.TTuple [AST.TString]))))
             ]
             LIR.Ret
 
@@ -434,7 +456,7 @@ let testGenericRefCountDecBytesField () : Result<unit, string> =
                 LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "a", LIR.StringSymbol "b")
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBytes)
-                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (AST.TTuple [AST.TBytes]))
+                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (rcMetadata ((AST.TTuple [AST.TBytes]))))
             ]
             LIR.Ret
 
@@ -454,7 +476,7 @@ let testGenericRefCountDecNestedStringTupleField () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some (AST.TTuple [AST.TString]))
-                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some (AST.TTuple [AST.TTuple [AST.TString]]))
+                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some (rcMetadata ((AST.TTuple [AST.TTuple [AST.TString]]))))
             ]
             LIR.Ret
 
@@ -486,7 +508,7 @@ let testGenericRefCountDecTupleStringListDictFields () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
                 LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X4), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X6), Some dictType)
-                LIR.RefCountDec (LIR.Physical LIR.X19, 24, LIR.GenericHeap, Some tupleType)
+                LIR.RefCountDec (LIR.Physical LIR.X19, 24, LIR.GenericHeap, Some (rcMetadata (tupleType)))
             ]
             LIR.Ret
 
@@ -505,7 +527,7 @@ let testGenericRefCountDecSkipsPureEnumField () : Result<unit, string> =
             [
                 LIR.HeapAlloc (LIR.Physical LIR.X2, 8)
                 LIR.HeapStore (LIR.Physical LIR.X2, 0, LIR.Imm 1L, Some pureEnumType)
-                LIR.RefCountDec (LIR.Physical LIR.X2, 8, LIR.GenericHeap, Some tupleType)
+                LIR.RefCountDec (LIR.Physical LIR.X2, 8, LIR.GenericHeap, Some (rcMetadata (tupleType)))
             ]
             LIR.Ret
 
@@ -525,7 +547,7 @@ let testGenericRefCountDecRecordStringField () : Result<unit, string> =
                 LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "a", LIR.StringSymbol "b")
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
-                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some recordType)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (rcMetadata (recordType)))
             ]
             LIR.Ret
             records
@@ -551,7 +573,7 @@ let testGenericRefCountDecRecordDictField () : Result<unit, string> =
                 LIR.Orr (LIR.Physical LIR.X3, LIR.Physical LIR.X2, LIR.Physical LIR.X3)
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some dictType)
-                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some recordType)
+                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some (rcMetadata (recordType)))
             ]
             LIR.Ret
             records
@@ -573,7 +595,7 @@ let testGenericRefCountDecRecordClosureField () : Result<unit, string> =
                 LIR.ClosureAlloc (LIR.Physical LIR.X2, "_start", [])
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
-                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some recordType)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (rcMetadata (recordType)))
             ]
             LIR.Ret
             records
@@ -609,7 +631,7 @@ let testGenericRefCountDecRecordStringListDictFields () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
                 LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X4), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X6), Some dictType)
-                LIR.RefCountDec (LIR.Physical LIR.X19, 24, LIR.GenericHeap, Some recordType)
+                LIR.RefCountDec (LIR.Physical LIR.X19, 24, LIR.GenericHeap, Some (rcMetadata (recordType)))
             ]
             LIR.Ret
             records
@@ -630,7 +652,7 @@ let testGenericRefCountDecSumStringPayload () : Result<unit, string> =
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 16)
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 0L, None)
                 LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
-                LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.GenericHeap, Some sumType)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.GenericHeap, Some (rcMetadata (sumType)))
             ]
             LIR.Ret
 
@@ -650,7 +672,7 @@ let testGenericRefCountDecSumBytesPayload () : Result<unit, string> =
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 16)
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 0L, None)
                 LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBytes)
-                LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.GenericHeap, Some sumType)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.GenericHeap, Some (rcMetadata (sumType)))
             ]
             LIR.Ret
 
@@ -672,7 +694,7 @@ let testGenericRefCountDecNestedSumStringField () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some sumType)
-                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some (AST.TTuple [sumType]))
+                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some (rcMetadata ((AST.TTuple [sumType]))))
             ]
             LIR.Ret
 
@@ -695,7 +717,7 @@ let testGenericRefCountDecSumListPayload () : Result<unit, string> =
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 16)
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 1L, None)
                 LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some (AST.TList AST.TInt64))
-                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.GenericHeap, Some sumType)
+                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.GenericHeap, Some (rcMetadata (sumType)))
             ]
             LIR.Ret
 
@@ -720,7 +742,7 @@ let testGenericRefCountDecSumDictPayload () : Result<unit, string> =
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 16)
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 1L, None)
                 LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some dictType)
-                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.GenericHeap, Some sumType)
+                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.GenericHeap, Some (rcMetadata (sumType)))
             ]
             LIR.Ret
 
@@ -756,7 +778,7 @@ let testGenericRefCountDecSumTupleStringListDictPayload () : Result<unit, string
                 LIR.HeapAlloc (LIR.Physical LIR.X20, 16)
                 LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Imm 0L, None)
                 LIR.HeapStore (LIR.Physical LIR.X20, 8, LIR.Reg (LIR.Physical LIR.X19), Some tupleType)
-                LIR.RefCountDec (LIR.Physical LIR.X20, 16, LIR.GenericHeap, Some sumType)
+                LIR.RefCountDec (LIR.Physical LIR.X20, 16, LIR.GenericHeap, Some (rcMetadata (sumType)))
             ]
             LIR.Ret
 
@@ -795,7 +817,7 @@ let testGenericRefCountDecSumRecordStringListDictPayload () : Result<unit, strin
                 LIR.HeapAlloc (LIR.Physical LIR.X20, 16)
                 LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Imm 0L, None)
                 LIR.HeapStore (LIR.Physical LIR.X20, 8, LIR.Reg (LIR.Physical LIR.X19), Some recordType)
-                LIR.RefCountDec (LIR.Physical LIR.X20, 16, LIR.GenericHeap, Some sumType)
+                LIR.RefCountDec (LIR.Physical LIR.X20, 16, LIR.GenericHeap, Some (rcMetadata (sumType)))
             ]
             LIR.Ret
             records
@@ -819,7 +841,7 @@ let testGenericRefCountDecDictField () : Result<unit, string> =
                 LIR.Orr (LIR.Physical LIR.X3, LIR.Physical LIR.X2, LIR.Physical LIR.X3)
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some dictType)
-                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some (AST.TTuple [dictType]))
+                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some (rcMetadata ((AST.TTuple [dictType]))))
             ]
             LIR.Ret
 
@@ -842,7 +864,7 @@ let testGenericRefCountDecPreservesLiveRaxAcrossListFieldRelease () : Result<uni
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some listType)
                 LIR.Mov (LIR.Physical LIR.X0, LIR.Imm 123L)
-                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some (AST.TTuple [listType]))
+                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some (rcMetadata ((AST.TTuple [listType]))))
                 LIR.PrintInt64 (LIR.Physical LIR.X0)
             ]
             LIR.Ret
@@ -869,7 +891,7 @@ let testGenericRefCountDecPreservesLiveRaxAcrossDictFieldRelease () : Result<uni
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some dictType)
                 LIR.Mov (LIR.Physical LIR.X0, LIR.Imm 456L)
-                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some (AST.TTuple [dictType]))
+                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some (rcMetadata ((AST.TTuple [dictType]))))
                 LIR.PrintInt64 (LIR.Physical LIR.X0)
             ]
             LIR.Ret
@@ -892,7 +914,7 @@ let testGenericRefCountDecPreservesLiveRaxAcrossClosureFieldRelease () : Result<
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
                 LIR.Mov (LIR.Physical LIR.X0, LIR.Imm 789L)
-                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (AST.TTuple [closureType]))
+                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (rcMetadata ((AST.TTuple [closureType]))))
                 LIR.PrintInt64 (LIR.Physical LIR.X0)
             ]
             LIR.Ret
@@ -914,7 +936,7 @@ let testGenericRefCountDecPreservesLiveRaxAcrossStringFieldRelease () : Result<u
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
                 LIR.Mov (LIR.Physical LIR.X0, LIR.Imm 321L)
-                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (AST.TTuple [AST.TString]))
+                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (rcMetadata ((AST.TTuple [AST.TString]))))
                 LIR.PrintInt64 (LIR.Physical LIR.X0)
             ]
             LIR.Ret
@@ -936,7 +958,7 @@ let testGenericRefCountDecPreservesLiveRaxAcrossBytesFieldRelease () : Result<un
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBytes)
                 LIR.Mov (LIR.Physical LIR.X0, LIR.Imm 654L)
-                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (AST.TTuple [AST.TBytes]))
+                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (rcMetadata ((AST.TTuple [AST.TBytes]))))
                 LIR.PrintInt64 (LIR.Physical LIR.X0)
             ]
             LIR.Ret
@@ -962,7 +984,7 @@ let testGenericRefCountDecPreservesLiveRaxAcrossNestedFixedBlockRelease () : Res
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some childType)
                 LIR.Mov (LIR.Physical LIR.X0, LIR.Imm 987L)
-                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some parentType)
+                LIR.RefCountDec (LIR.Physical LIR.X4, 8, LIR.GenericHeap, Some (rcMetadata (parentType)))
                 LIR.PrintInt64 (LIR.Physical LIR.X0)
             ]
             LIR.Ret
@@ -982,7 +1004,7 @@ let testClosureAllocRefCountDecBalancesLeakCounter () : Result<unit, string> =
         makeSimpleProgram
             [
                 LIR.ClosureAlloc (LIR.Physical LIR.X2, "_start", [])
-                LIR.RefCountDec (LIR.Physical LIR.X2, 8, LIR.ClosureHeap, Some closureType)
+                LIR.RefCountDec (LIR.Physical LIR.X2, 8, LIR.ClosureHeap, Some (rcMetadata (closureType)))
             ]
             LIR.Ret
 
@@ -1001,7 +1023,7 @@ let testGenericRefCountDecClosureField () : Result<unit, string> =
                 LIR.ClosureAlloc (LIR.Physical LIR.X2, "_start", [])
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
-                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (AST.TTuple [closureType]))
+                LIR.RefCountDec (LIR.Physical LIR.X3, 8, LIR.GenericHeap, Some (rcMetadata ((AST.TTuple [closureType]))))
             ]
             LIR.Ret
 
@@ -1022,7 +1044,7 @@ let testGenericRefCountDecSumClosurePayload () : Result<unit, string> =
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 16)
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 1L, None)
                 LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
-                LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.GenericHeap, Some sumType)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.GenericHeap, Some (rcMetadata (sumType)))
             ]
             LIR.Ret
 
@@ -1044,7 +1066,7 @@ let testClosureRefCountDecStringCapture () : Result<unit, string> =
             [
                 LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
                 LIR.ClosureAlloc (LIR.Physical LIR.X3, "x64_string_capture_fn", [LIR.Reg (LIR.Physical LIR.X2)])
-                LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+                LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.ClosureHeap, Some (rcMetadata ((AST.TFunction ([AST.TInt64], AST.TInt64)))))
             ]
             LIR.Ret with
         | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
@@ -1068,7 +1090,7 @@ let testClosureRefCountDecBytesCapture () : Result<unit, string> =
             [
                 LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
                 LIR.ClosureAlloc (LIR.Physical LIR.X3, "x64_bytes_capture_fn", [LIR.Reg (LIR.Physical LIR.X2)])
-                LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+                LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.ClosureHeap, Some (rcMetadata ((AST.TFunction ([AST.TInt64], AST.TInt64)))))
             ]
             LIR.Ret with
         | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
@@ -1096,7 +1118,7 @@ let testClosureRefCountDecListCapture () : Result<unit, string> =
                 LIR.Mov (LIR.Physical LIR.X3, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X3, LIR.Physical LIR.X2, LIR.Physical LIR.X3)
                 LIR.ClosureAlloc (LIR.Physical LIR.X4, "x64_list_capture_fn", [LIR.Reg (LIR.Physical LIR.X3)])
-                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (rcMetadata ((AST.TFunction ([AST.TInt64], AST.TInt64)))))
             ]
             LIR.Ret with
         | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
@@ -1125,7 +1147,7 @@ let testClosureRefCountDecDictCapture () : Result<unit, string> =
                 LIR.Mov (LIR.Physical LIR.X3, LIR.Imm 2L)
                 LIR.Orr (LIR.Physical LIR.X3, LIR.Physical LIR.X2, LIR.Physical LIR.X3)
                 LIR.ClosureAlloc (LIR.Physical LIR.X4, "x64_dict_capture_fn", [LIR.Reg (LIR.Physical LIR.X3)])
-                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (rcMetadata ((AST.TFunction ([AST.TInt64], AST.TInt64)))))
             ]
             LIR.Ret with
         | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
@@ -1150,7 +1172,7 @@ let testClosureRefCountDecClosureCapture () : Result<unit, string> =
             [
                 LIR.ClosureAlloc (LIR.Physical LIR.X2, "_start", [])
                 LIR.ClosureAlloc (LIR.Physical LIR.X3, "x64_closure_capture_fn", [LIR.Reg (LIR.Physical LIR.X2)])
-                LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.ClosureHeap, Some closureType)
+                LIR.RefCountDec (LIR.Physical LIR.X3, 16, LIR.ClosureHeap, Some (rcMetadata (closureType)))
             ]
             LIR.Ret with
         | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
@@ -1178,7 +1200,7 @@ let testClosureRefCountDecTupleStringCapture () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
                 LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Imm 7L, None)
                 LIR.ClosureAlloc (LIR.Physical LIR.X4, "x64_tuple_capture_fn", [LIR.Reg (LIR.Physical LIR.X3)])
-                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (rcMetadata ((AST.TFunction ([AST.TInt64], AST.TInt64)))))
             ]
             LIR.Ret with
         | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
@@ -1218,7 +1240,7 @@ let testClosureRefCountDecTupleStringListDictCapture () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X4), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X6), Some dictType)
                 LIR.ClosureAlloc (LIR.Physical LIR.X20, "x64_tuple_string_list_dict_capture_fn", [LIR.Reg (LIR.Physical LIR.X19)])
-                LIR.RefCountDec (LIR.Physical LIR.X20, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+                LIR.RefCountDec (LIR.Physical LIR.X20, 16, LIR.ClosureHeap, Some (rcMetadata ((AST.TFunction ([AST.TInt64], AST.TInt64)))))
             ]
             LIR.Ret with
         | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
@@ -1246,7 +1268,7 @@ let testClosureRefCountDecRecordStringCapture () : Result<unit, string> =
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
                 LIR.ClosureAlloc (LIR.Physical LIR.X4, "x64_record_capture_fn", [LIR.Reg (LIR.Physical LIR.X3)])
-                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (rcMetadata ((AST.TFunction ([AST.TInt64], AST.TInt64)))))
             ]
             LIR.Ret
             records with
@@ -1290,7 +1312,7 @@ let testClosureRefCountDecRecordStringListDictCapture () : Result<unit, string> 
                 LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X4), Some listType)
                 LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X6), Some dictType)
                 LIR.ClosureAlloc (LIR.Physical LIR.X20, "x64_record_string_list_dict_capture_fn", [LIR.Reg (LIR.Physical LIR.X19)])
-                LIR.RefCountDec (LIR.Physical LIR.X20, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+                LIR.RefCountDec (LIR.Physical LIR.X20, 16, LIR.ClosureHeap, Some (rcMetadata ((AST.TFunction ([AST.TInt64], AST.TInt64)))))
             ]
             LIR.Ret
             records with
@@ -1319,7 +1341,7 @@ let testClosureRefCountDecSumStringCapture () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 0L, None)
                 LIR.HeapStore (LIR.Physical LIR.X3, 8, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
                 LIR.ClosureAlloc (LIR.Physical LIR.X4, "x64_sum_capture_fn", [LIR.Reg (LIR.Physical LIR.X3)])
-                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (rcMetadata ((AST.TFunction ([AST.TInt64], AST.TInt64)))))
             ]
             LIR.Ret with
         | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
@@ -1363,7 +1385,7 @@ let testClosureRefCountDecSumTupleStringListDictCapture () : Result<unit, string
                 LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Imm 0L, None)
                 LIR.HeapStore (LIR.Physical LIR.X20, 8, LIR.Reg (LIR.Physical LIR.X19), Some tupleType)
                 LIR.ClosureAlloc (LIR.Physical LIR.X21, "x64_sum_tuple_string_list_dict_capture_fn", [LIR.Reg (LIR.Physical LIR.X20)])
-                LIR.RefCountDec (LIR.Physical LIR.X21, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+                LIR.RefCountDec (LIR.Physical LIR.X21, 16, LIR.ClosureHeap, Some (rcMetadata ((AST.TFunction ([AST.TInt64], AST.TInt64)))))
             ]
             LIR.Ret with
         | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
@@ -1410,7 +1432,7 @@ let testClosureRefCountDecSumRecordStringListDictCapture () : Result<unit, strin
                 LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Imm 0L, None)
                 LIR.HeapStore (LIR.Physical LIR.X20, 8, LIR.Reg (LIR.Physical LIR.X19), Some recordType)
                 LIR.ClosureAlloc (LIR.Physical LIR.X21, "x64_sum_record_string_list_dict_capture_fn", [LIR.Reg (LIR.Physical LIR.X20)])
-                LIR.RefCountDec (LIR.Physical LIR.X21, 16, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+                LIR.RefCountDec (LIR.Physical LIR.X21, 16, LIR.ClosureHeap, Some (rcMetadata ((AST.TFunction ([AST.TInt64], AST.TInt64)))))
             ]
             LIR.Ret
             records with
@@ -1440,7 +1462,7 @@ let testClosureRefCountDecMultipleCaptures () : Result<unit, string> =
                 LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X4, LIR.Physical LIR.X3, LIR.Physical LIR.X4)
                 LIR.ClosureAlloc (LIR.Physical LIR.X5, "x64_multi_capture_fn", [LIR.Reg (LIR.Physical LIR.X2); LIR.Reg (LIR.Physical LIR.X4)])
-                LIR.RefCountDec (LIR.Physical LIR.X5, 24, LIR.ClosureHeap, Some (AST.TFunction ([AST.TInt64], AST.TInt64)))
+                LIR.RefCountDec (LIR.Physical LIR.X5, 24, LIR.ClosureHeap, Some (rcMetadata ((AST.TFunction ([AST.TInt64], AST.TInt64)))))
             ]
             LIR.Ret with
         | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
@@ -1463,7 +1485,7 @@ let testTaggedListRefCountDecClosurePayload () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
                 LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X4, LIR.Physical LIR.X3, LIR.Physical LIR.X4)
-                LIR.RefCountDec (LIR.Physical LIR.X4, 0, LIR.TaggedList, Some (AST.TList closureType))
+                LIR.RefCountDec (LIR.Physical LIR.X4, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList closureType))))
             ]
             LIR.Ret
 
@@ -1488,7 +1510,7 @@ let testTaggedListRefCountDecDictPayload () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some dictType)
                 LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
-                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (AST.TList dictType))
+                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList dictType))))
             ]
             LIR.Ret
 
@@ -1508,7 +1530,7 @@ let testTaggedListRefCountDecStringPayload () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
                 LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X4, LIR.Physical LIR.X3, LIR.Physical LIR.X4)
-                LIR.RefCountDec (LIR.Physical LIR.X4, 0, LIR.TaggedList, Some (AST.TList AST.TString))
+                LIR.RefCountDec (LIR.Physical LIR.X4, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList AST.TString))))
             ]
             LIR.Ret
 
@@ -1532,7 +1554,7 @@ let testTaggedListRefCountDecTupleStringPayload () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
-                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (AST.TList tupleType))
+                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -1558,7 +1580,7 @@ let testTaggedListRefCountDecTuple3DynamicPayload () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
-                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList tupleType))
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -1583,7 +1605,7 @@ let testTaggedListRefCountDecTuple3MiddleDynamicPayload () : Result<unit, string
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
-                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (AST.TList tupleType))
+                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -1636,7 +1658,7 @@ let testTaggedListRefCountDecTuple3DynamicPayloadCombinations () : Result<unit, 
                     LIR.HeapStore (LIR.Physical LIR.X6, 0, LIR.Reg (LIR.Physical LIR.X5), Some tupleType)
                     LIR.Mov (LIR.Physical LIR.X7, LIR.Imm 5L)
                     LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
-                    LIR.RefCountDec (LIR.Physical LIR.X7, 0, LIR.TaggedList, Some (AST.TList tupleType))])
+                    LIR.RefCountDec (LIR.Physical LIR.X7, 0, LIR.TaggedList, Some (rcMetadata (AST.TList tupleType)))])
                 LIR.Ret
 
         match runLIRProgramFullWithOptions program true with
@@ -1686,7 +1708,7 @@ let testTaggedListRefCountDecTuple3StringListDictPayload () : Result<unit, strin
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X7), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X20, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X20, LIR.Physical LIR.X19, LIR.Physical LIR.X20)
-                LIR.RefCountDec (LIR.Physical LIR.X20, 0, LIR.TaggedList, Some (AST.TList tupleType))
+                LIR.RefCountDec (LIR.Physical LIR.X20, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -1723,7 +1745,7 @@ let testTaggedListRefCountDecTuple3ClosureListDictPayload () : Result<unit, stri
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X7), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X20, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X20, LIR.Physical LIR.X19, LIR.Physical LIR.X20)
-                LIR.RefCountDec (LIR.Physical LIR.X20, 0, LIR.TaggedList, Some (AST.TList tupleType))
+                LIR.RefCountDec (LIR.Physical LIR.X20, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -1747,7 +1769,7 @@ let testTaggedListRefCountDecRecordStringPayload () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some recordType)
                 LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
-                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (AST.TList recordType))
+                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList recordType))))
             ]
             LIR.Ret
             records
@@ -1777,7 +1799,7 @@ let testTaggedListRefCountDecRecord3DynamicPayload () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some recordType)
                 LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
-                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList recordType))
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList recordType))))
             ]
             LIR.Ret
             records
@@ -1817,7 +1839,7 @@ let testTaggedListRefCountDecRecord3StringListDictPayload () : Result<unit, stri
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X7), Some recordType)
                 LIR.Mov (LIR.Physical LIR.X20, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X20, LIR.Physical LIR.X19, LIR.Physical LIR.X20)
-                LIR.RefCountDec (LIR.Physical LIR.X20, 0, LIR.TaggedList, Some (AST.TList recordType))
+                LIR.RefCountDec (LIR.Physical LIR.X20, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList recordType))))
             ]
             LIR.Ret
             records
@@ -1857,7 +1879,7 @@ let testTaggedListRefCountDecRecord3BytesListDictPayload () : Result<unit, strin
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X7), Some recordType)
                 LIR.Mov (LIR.Physical LIR.X20, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X20, LIR.Physical LIR.X19, LIR.Physical LIR.X20)
-                LIR.RefCountDec (LIR.Physical LIR.X20, 0, LIR.TaggedList, Some (AST.TList recordType))
+                LIR.RefCountDec (LIR.Physical LIR.X20, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList recordType))))
             ]
             LIR.Ret
             records
@@ -1898,7 +1920,7 @@ let testTaggedListRefCountDecRecord3ClosureListDictPayload () : Result<unit, str
                 LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X7), Some recordType)
                 LIR.Mov (LIR.Physical LIR.X20, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X20, LIR.Physical LIR.X19, LIR.Physical LIR.X20)
-                LIR.RefCountDec (LIR.Physical LIR.X20, 0, LIR.TaggedList, Some (AST.TList recordType))
+                LIR.RefCountDec (LIR.Physical LIR.X20, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList recordType))))
             ]
             LIR.Ret
             records
@@ -1940,7 +1962,7 @@ let testTaggedListRefCountDecRecord4StringBytesListDictPayload () : Result<unit,
                 LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Reg (LIR.Physical LIR.X19), Some recordType)
                 LIR.Mov (LIR.Physical LIR.X21, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X21, LIR.Physical LIR.X20, LIR.Physical LIR.X21)
-                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (AST.TList recordType))
+                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList recordType))))
             ]
             LIR.Ret
             records
@@ -1983,7 +2005,7 @@ let testTaggedListRefCountDecRecord4ClosureBytesListDictPayload () : Result<unit
                 LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Reg (LIR.Physical LIR.X19), Some recordType)
                 LIR.Mov (LIR.Physical LIR.X21, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X21, LIR.Physical LIR.X20, LIR.Physical LIR.X21)
-                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (AST.TList recordType))
+                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList recordType))))
             ]
             LIR.Ret
             records
@@ -2029,7 +2051,7 @@ let testTaggedListRefCountDecRecord4NestedTupleStringListDictPayload () : Result
                 LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Reg (LIR.Physical LIR.X19), Some recordType)
                 LIR.Mov (LIR.Physical LIR.X21, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X21, LIR.Physical LIR.X20, LIR.Physical LIR.X21)
-                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (AST.TList recordType))
+                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList recordType))))
             ]
             LIR.Ret
             records
@@ -2063,7 +2085,7 @@ let testTaggedListRefCountDecRecord4NestedTupleStringPayload () : Result<unit, s
                 LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some recordType)
                 LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
-                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList recordType))
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList recordType))))
             ]
             LIR.Ret
             records
@@ -2112,7 +2134,7 @@ let testTaggedListRefCountDecRecord4NestedTupleClosureBytesListDictPayload () : 
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some recordType)
                 LIR.Mov (LIR.Physical LIR.X22, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X22, LIR.Physical LIR.X21, LIR.Physical LIR.X22)
-                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (AST.TList recordType))
+                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList recordType))))
             ]
             LIR.Ret
             records
@@ -2151,7 +2173,7 @@ let testTaggedListRefCountDecTuple4StringBytesListDictPayload () : Result<unit, 
                 LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Reg (LIR.Physical LIR.X19), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X21, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X21, LIR.Physical LIR.X20, LIR.Physical LIR.X21)
-                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (AST.TList tupleType))
+                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -2190,7 +2212,7 @@ let testTaggedListRefCountDecTuple4ClosureBytesListDictPayload () : Result<unit,
                 LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Reg (LIR.Physical LIR.X19), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X21, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X21, LIR.Physical LIR.X20, LIR.Physical LIR.X21)
-                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (AST.TList tupleType))
+                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -2218,7 +2240,7 @@ let testTaggedListRefCountDecTuple2NestedTupleStringPayload () : Result<unit, st
                 LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
-                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList tupleType))
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -2248,7 +2270,7 @@ let testTaggedListRefCountDecTuple4NestedTupleStringPayload () : Result<unit, st
                 LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
-                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList tupleType))
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -2290,7 +2312,7 @@ let testTaggedListRefCountDecTuple4NestedTupleStringListDictPayload () : Result<
                 LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Reg (LIR.Physical LIR.X19), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X21, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X21, LIR.Physical LIR.X20, LIR.Physical LIR.X21)
-                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (AST.TList tupleType))
+                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -2335,7 +2357,7 @@ let testTaggedListRefCountDecTuple4NestedTupleClosureBytesListDictPayload () : R
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X22, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X22, LIR.Physical LIR.X21, LIR.Physical LIR.X22)
-                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (AST.TList tupleType))
+                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -2361,7 +2383,7 @@ let testTaggedListRefCountDecTuple2NestedTupleDynamicPayloadCombinations () : Re
                     LIR.HeapStore (LIR.Physical LIR.X6, 0, LIR.Reg (LIR.Physical LIR.X5), Some tupleType)
                     LIR.Mov (LIR.Physical LIR.X7, LIR.Imm 5L)
                     LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
-                    LIR.RefCountDec (LIR.Physical LIR.X7, 0, LIR.TaggedList, Some (AST.TList tupleType))])
+                    LIR.RefCountDec (LIR.Physical LIR.X7, 0, LIR.TaggedList, Some (rcMetadata (AST.TList tupleType)))])
                 LIR.Ret
 
         match runLIRProgramFullWithOptions program true with
@@ -2419,7 +2441,7 @@ let testTaggedListRefCountDecTuple2NestedTupleStringListDictPayload () : Result<
                 LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Reg (LIR.Physical LIR.X19), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X21, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X21, LIR.Physical LIR.X20, LIR.Physical LIR.X21)
-                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (AST.TList tupleType))
+                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -2457,7 +2479,7 @@ let testTaggedListRefCountDecTuple2NestedTupleListDictPayload () : Result<unit, 
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X1, LIR.Physical LIR.X21, LIR.Physical LIR.X1)
-                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (AST.TList tupleType))
+                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -2489,7 +2511,7 @@ let testTaggedListRefCountDecTuple2NestedTupleDictPayload () : Result<unit, stri
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X1, LIR.Physical LIR.X21, LIR.Physical LIR.X1)
-                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (AST.TList tupleType))
+                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -2517,7 +2539,7 @@ let testTaggedListRefCountDecTuple2NestedTupleClosurePayload () : Result<unit, s
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X1, LIR.Physical LIR.X21, LIR.Physical LIR.X1)
-                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (AST.TList tupleType))
+                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -2559,7 +2581,7 @@ let testTaggedListRefCountDecTuple2NestedTupleStringBytesListDictPayload () : Re
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some tupleType)
                 LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X1, LIR.Physical LIR.X21, LIR.Physical LIR.X1)
-                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (AST.TList tupleType))
+                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -2587,7 +2609,7 @@ let testTaggedListRefCountDecRecord3MiddleDynamicPayload () : Result<unit, strin
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some recordType)
                 LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
-                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (AST.TList recordType))
+                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList recordType))))
             ]
             LIR.Ret
             records
@@ -2646,7 +2668,7 @@ let testTaggedListRefCountDecRecord3DynamicPayloadCombinations () : Result<unit,
                     LIR.HeapStore (LIR.Physical LIR.X6, 0, LIR.Reg (LIR.Physical LIR.X5), Some recordType)
                     LIR.Mov (LIR.Physical LIR.X7, LIR.Imm 5L)
                     LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
-                    LIR.RefCountDec (LIR.Physical LIR.X7, 0, LIR.TaggedList, Some (AST.TList recordType))])
+                    LIR.RefCountDec (LIR.Physical LIR.X7, 0, LIR.TaggedList, Some (rcMetadata (AST.TList recordType)))])
                 LIR.Ret
                 records
 
@@ -2685,7 +2707,7 @@ let testTaggedListRefCountDecSumStringPayload () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some sumType)
                 LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
-                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (AST.TList sumType))
+                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
 
@@ -2713,7 +2735,7 @@ let testTaggedListRefCountDecSumListPayload () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some sumType)
                 LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
-                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList sumType))
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
 
@@ -2742,7 +2764,7 @@ let testTaggedListRefCountDecSumDictPayload () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some sumType)
                 LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
-                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList sumType))
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
 
@@ -2767,7 +2789,7 @@ let testTaggedListRefCountDecSumClosurePayload () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X3), Some sumType)
                 LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
-                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (AST.TList sumType))
+                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
 
@@ -2795,7 +2817,7 @@ let testTaggedListRefCountDecSumTupleStringPayload () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some sumType)
                 LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
-                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList sumType))
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
 
@@ -2821,7 +2843,7 @@ let testTaggedListRefCountDecSumTuple2DynamicPayloadCombinations () : Result<uni
                     LIR.HeapStore (LIR.Physical LIR.X6, 0, LIR.Reg (LIR.Physical LIR.X5), Some sumType)
                     LIR.Mov (LIR.Physical LIR.X7, LIR.Imm 5L)
                     LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
-                    LIR.RefCountDec (LIR.Physical LIR.X7, 0, LIR.TaggedList, Some (AST.TList sumType))])
+                    LIR.RefCountDec (LIR.Physical LIR.X7, 0, LIR.TaggedList, Some (rcMetadata (AST.TList sumType)))])
                 LIR.Ret
 
         match runLIRProgramFullWithOptions program true with
@@ -2898,7 +2920,7 @@ let testTaggedListRefCountDecSumTuple3DynamicPayloadCombinations () : Result<uni
                     LIR.HeapStore (LIR.Physical LIR.X7, 0, LIR.Reg (LIR.Physical LIR.X6), Some sumType)
                     LIR.Mov (LIR.Physical LIR.X8, LIR.Imm 5L)
                     LIR.Orr (LIR.Physical LIR.X8, LIR.Physical LIR.X7, LIR.Physical LIR.X8)
-                    LIR.RefCountDec (LIR.Physical LIR.X8, 0, LIR.TaggedList, Some (AST.TList sumType))])
+                    LIR.RefCountDec (LIR.Physical LIR.X8, 0, LIR.TaggedList, Some (rcMetadata (AST.TList sumType)))])
                 LIR.Ret
 
         match runLIRProgramFullWithOptions program true with
@@ -2954,7 +2976,7 @@ let testTaggedListRefCountDecSumTuple3StringListDictPayload () : Result<unit, st
                 LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Reg (LIR.Physical LIR.X19), Some sumType)
                 LIR.Mov (LIR.Physical LIR.X21, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X21, LIR.Physical LIR.X20, LIR.Physical LIR.X21)
-                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (AST.TList sumType))
+                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
 
@@ -2996,7 +3018,7 @@ let testTaggedListRefCountDecSumTuple4StringBytesListDictPayload () : Result<uni
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some sumType)
                 LIR.Mov (LIR.Physical LIR.X22, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X22, LIR.Physical LIR.X21, LIR.Physical LIR.X22)
-                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (AST.TList sumType))
+                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
 
@@ -3039,7 +3061,7 @@ let testTaggedListRefCountDecSumTuple4ClosureBytesListDictPayload () : Result<un
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some sumType)
                 LIR.Mov (LIR.Physical LIR.X22, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X22, LIR.Physical LIR.X21, LIR.Physical LIR.X22)
-                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (AST.TList sumType))
+                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
 
@@ -3067,7 +3089,7 @@ let testTaggedListRefCountDecSumRecordStringPayload () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some sumType)
                 LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
-                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList sumType))
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
             records
@@ -3111,7 +3133,7 @@ let testTaggedListRefCountDecSumRecord3StringListDictPayload () : Result<unit, s
                 LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Reg (LIR.Physical LIR.X19), Some sumType)
                 LIR.Mov (LIR.Physical LIR.X21, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X21, LIR.Physical LIR.X20, LIR.Physical LIR.X21)
-                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (AST.TList sumType))
+                LIR.RefCountDec (LIR.Physical LIR.X21, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
             records
@@ -3157,7 +3179,7 @@ let testTaggedListRefCountDecSumRecord4StringBytesListDictPayload () : Result<un
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some sumType)
                 LIR.Mov (LIR.Physical LIR.X22, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X22, LIR.Physical LIR.X21, LIR.Physical LIR.X22)
-                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (AST.TList sumType))
+                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
             records
@@ -3204,7 +3226,7 @@ let testTaggedListRefCountDecSumRecord4ClosureBytesListDictPayload () : Result<u
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some sumType)
                 LIR.Mov (LIR.Physical LIR.X22, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X22, LIR.Physical LIR.X21, LIR.Physical LIR.X22)
-                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (AST.TList sumType))
+                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
             records
@@ -3237,7 +3259,7 @@ let testTaggedListRefCountDecSumRecord3MiddleDynamicPayload () : Result<unit, st
                 LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some sumType)
                 LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
-                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList sumType))
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
             records
@@ -3300,7 +3322,7 @@ let testTaggedListRefCountDecSumRecord3DynamicPayloadCombinations () : Result<un
                     LIR.HeapStore (LIR.Physical LIR.X7, 0, LIR.Reg (LIR.Physical LIR.X6), Some sumType)
                     LIR.Mov (LIR.Physical LIR.X8, LIR.Imm 5L)
                     LIR.Orr (LIR.Physical LIR.X8, LIR.Physical LIR.X7, LIR.Physical LIR.X8)
-                    LIR.RefCountDec (LIR.Physical LIR.X8, 0, LIR.TaggedList, Some (AST.TList sumType))])
+                    LIR.RefCountDec (LIR.Physical LIR.X8, 0, LIR.TaggedList, Some (rcMetadata (AST.TList sumType)))])
                 LIR.Ret
                 records
 
@@ -3344,7 +3366,7 @@ let testTaggedListRefCountDecNestedSumStringPayload () : Result<unit, string> =
                 LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Reg (LIR.Physical LIR.X4), Some outerSumType)
                 LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
                 LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
-                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (AST.TList outerSumType))
+                LIR.RefCountDec (LIR.Physical LIR.X6, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList outerSumType))))
             ]
             LIR.Ret
 

@@ -655,6 +655,9 @@ let private tryRcReleasePlanOfType (recordRegistry: LIR.RecordRegistry) (typ: AS
     | _ ->
         Some (ANF.rcReleasePlanOfType recordRegistry typ)
 
+let private rcMetadataReleasePlan (metadata: ANF.RcMetadata option) : ANF.RcReleasePlan option =
+    metadata |> Option.bind (fun m -> m.ReleasePlan)
+
 let private releasePlanIsRootKind (kind: ANF.RcKind) (releasePlan: ANF.RcReleasePlan) : bool =
     match releasePlan with
     | ANF.RootRelease (_, planKind, _) when planKind = kind ->
@@ -1120,12 +1123,8 @@ and private genRefCountDecGenericWithPlan
     @ restores
     @ [X86_64.Label skipLabel]
 
-and private genRefCountDecGeneric (ctx: FuncCtx) (addrReg: X86_64.Reg) (payloadSize: int) (sourceType: AST.Type option) : X86_64.Instr list =
-    let releasePlan =
-        sourceType
-        |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry)
-
-    genRefCountDecGenericWithPlan ctx addrReg payloadSize releasePlan
+and private genRefCountDecGeneric (ctx: FuncCtx) (addrReg: X86_64.Reg) (payloadSize: int) (metadata: ANF.RcMetadata option) : X86_64.Instr list =
+    genRefCountDecGenericWithPlan ctx addrReg payloadSize (rcMetadataReleasePlan metadata)
 
 /// Generic RefCountInc: increment refcount at [addr + payloadSize].
 let private genRefCountIncGeneric (addrReg: X86_64.Reg) (payloadSize: int) : X86_64.Instr list =
@@ -3807,16 +3806,16 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
             | LIR.GenericHeap ->
                 genRefCountIncGeneric addrReg payloadSize)
 
-    | LIR.RefCountDec (addr, payloadSize, kind, sourceType) ->
+    | LIR.RefCountDec (addr, payloadSize, kind, metadata) ->
         resolveReg addr
         |> Result.map (fun addrReg ->
             match kind with
             | LIR.TaggedList ->
                 // TaggedList RefCountDec: calls the recursive FingerTree DFS helper.
                 let helperLabel =
-                    match sourceType with
-                    | Some typ ->
-                        listDecHelperForType ctx.RecordRegistry typ
+                    match rcMetadataReleasePlan metadata with
+                    | Some releasePlan ->
+                        listDecHelperForReleasePlan releasePlan
                     | _ ->
                         listRefCountDecHelperLabel
                 let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; scratch]
@@ -3840,7 +3839,7 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL closureRefCountDecHelperLabel]
                 @ restores
             | LIR.GenericHeap ->
-                genRefCountDecGeneric ctx addrReg payloadSize sourceType)
+                genRefCountDecGeneric ctx addrReg payloadSize metadata)
 
     | LIR.RefCountIncString str
     | LIR.RefCountIncBytes str ->
@@ -5100,6 +5099,12 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
         |> Option.map listDecHelperLabelsInReleasePlan
         |> Option.defaultValue Set.empty
 
+    let listDecHelperLabelsInMetadata metadata =
+        metadata
+        |> rcMetadataReleasePlan
+        |> Option.map listDecHelperLabelsInReleasePlan
+        |> Option.defaultValue Set.empty
+
     let neededListDecHelperLabels =
         let labelsFromFunctions =
             functions
@@ -5109,12 +5114,13 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                 |> List.map (fun (_, block) ->
                     block.Instrs
                     |> List.map (function
-                        | LIR.RefCountDec (_, _, LIR.TaggedList, Some sourceType) ->
-                            Set.singleton (listDecHelperForType recordRegistry sourceType)
-                        | LIR.RefCountDec (_, _, LIR.TaggedList, None) ->
-                            Set.singleton listRefCountDecHelperLabel
-                        | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                            listDecHelperLabelsInType sourceType
+                        | LIR.RefCountDec (_, _, LIR.TaggedList, metadata) ->
+                            metadata
+                            |> rcMetadataReleasePlan
+                            |> Option.map (listDecHelperForReleasePlan >> Set.singleton)
+                            |> Option.defaultValue (Set.singleton listRefCountDecHelperLabel)
+                        | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
+                            listDecHelperLabelsInMetadata metadata
                         | _ ->
                             Set.empty)
                     |> unionLabelSets)
@@ -5174,8 +5180,10 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                  block.Instrs
                  |> List.exists (function
                      | LIR.RefCountDec (_, _, LIR.DictHeap, _) -> true
-                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                         typeContainsRootKindRelease ANF.DictHeap sourceType
+                     | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
+                         metadata
+                         |> rcMetadataReleasePlan
+                         |> Option.exists (rcReleasePlanContains (releasePlanIsRootKind ANF.DictHeap))
                      | _ -> false))))
         || closureCapturesContainRootKindRelease ANF.DictHeap
 
@@ -5187,8 +5195,10 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.ClosureHeap, _) -> true
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsRootKindRelease ANF.ClosureHeap sourceType
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
+                        metadata
+                        |> rcMetadataReleasePlan
+                        |> Option.exists (rcReleasePlanContains (releasePlanIsRootKind ANF.ClosureHeap))
                     | _ -> false)))
 
     let closurePayloadSizes =

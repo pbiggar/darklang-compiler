@@ -1452,6 +1452,12 @@ let private tryRcReleasePlanOfType
     | _ ->
         Some (ANF.rcReleasePlanOfTypeWithSums recordRegistry sumShapeRegistry typ)
 
+let private rcMetadataReleasePlan (metadata: ANF.RcMetadata option) : ANF.RcReleasePlan option =
+    metadata |> Option.bind (fun m -> m.ReleasePlan)
+
+let private rcMetadataSourceType (metadata: ANF.RcMetadata option) : AST.Type option =
+    metadata |> Option.bind (fun m -> m.SourceType)
+
 let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_closure_rc_dec_{name}"
     let ready = label "payload_ready"
@@ -4553,7 +4559,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     ARM64Symbolic.CBZ_offset (addrReg, 4)
                 ] @ tupleIncPath)
 
-    | LIR.RefCountDec (addr, payloadSize, kind, sourceType) ->
+    | LIR.RefCountDec (addr, payloadSize, kind, metadata) ->
         // Decrement ref count at [addr + payloadSize]
         // Skip if addr is null (e.g., empty list = 0)
         // When ref count hits 0, add block to free list for memory reuse
@@ -4576,6 +4582,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
         //   (continue)
         lirRegToARM64Reg addr
         |> Result.map (fun addrReg ->
+            let releasePlan = rcMetadataReleasePlan metadata
+            let sourceType = rcMetadataSourceType metadata
             let leakDec = generateLeakCounterDec ctx
             let tupleDecPath =
                 let listHelperLabelForField (fieldType: AST.Type) : string =
@@ -4823,8 +4831,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
 
                 let fixedBlockFieldReleaseInstrs =
                     let directFieldReleaseInstrs =
-                        sourceType
-                        |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry)
+                        releasePlan
                         |> Option.map (function
                             | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
                                 fieldReleases
@@ -4835,8 +4842,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         |> Option.defaultValue []
 
                     let nestedFixedBlockReleaseInstrs =
-                        sourceType
-                        |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry)
+                        releasePlan
                         |> Option.map (function
                             | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
                                 fieldReleases
@@ -6126,9 +6132,9 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         | _ ->
             Set.empty
 
-    let listDecHelperLabelsInType (sourceType: AST.Type option) : Set<string> =
-        sourceType
-        |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry)
+    let listDecHelperLabelsInMetadata (metadata: ANF.RcMetadata option) : Set<string> =
+        metadata
+        |> rcMetadataReleasePlan
         |> Option.map listDecHelperLabelsInReleasePlan
         |> Option.defaultValue Set.empty
 
@@ -6141,10 +6147,13 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> List.map (fun (_, block) ->
                     block.Instrs
                     |> List.map (function
-                        | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                            Set.singleton (listDecHelperForType ctx sourceType)
-                        | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                            listDecHelperLabelsInType sourceType
+                        | LIR.RefCountDec (_, _, LIR.TaggedList, metadata) ->
+                            metadata
+                            |> rcMetadataReleasePlan
+                            |> Option.map (listDecHelperForReleasePlan >> Set.singleton)
+                            |> Option.defaultValue (Set.singleton listRefCountDecHelperLabel)
+                        | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
+                            listDecHelperLabelsInMetadata metadata
                         | _ ->
                             Set.empty)
                     |> unionLabelSets)
@@ -6217,9 +6226,9 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         | _ ->
             Set.empty
 
-    let dictDecHelperLabelsInType (sourceType: AST.Type option) : Set<string> =
-        sourceType
-        |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry)
+    let dictDecHelperLabelsInMetadata (metadata: ANF.RcMetadata option) : Set<string> =
+        metadata
+        |> rcMetadataReleasePlan
         |> Option.map dictDecHelperLabelsInReleasePlan
         |> Option.defaultValue Set.empty
 
@@ -6232,10 +6241,13 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> List.map (fun (_, block) ->
                     block.Instrs
                     |> List.map (function
-                        | LIR.RefCountDec (_, _, LIR.DictHeap, sourceType) ->
-                            Set.singleton (dictDecHelperForType ctx sourceType)
-                        | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                            dictDecHelperLabelsInType sourceType
+                        | LIR.RefCountDec (_, _, LIR.DictHeap, metadata) ->
+                            metadata
+                            |> rcMetadataReleasePlan
+                            |> Option.map (dictDecHelperForReleasePlan >> Set.singleton)
+                            |> Option.defaultValue (Set.singleton dictRefCountDecHelperLabel)
+                        | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
+                            dictDecHelperLabelsInMetadata metadata
                         | _ ->
                             Set.empty)
                     |> unionLabelSets)
@@ -6288,9 +6300,9 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         | _ ->
             false
 
-    let typeContainsClosureHelperCall (sourceType: AST.Type option) : bool =
-        sourceType
-        |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry)
+    let metadataContainsClosureHelperCall (metadata: ANF.RcMetadata option) : bool =
+        metadata
+        |> rcMetadataReleasePlan
         |> Option.map releasePlanContainsClosureHelperCall
         |> Option.defaultValue false
 
@@ -6302,8 +6314,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.ClosureHeap, _) -> true
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        typeContainsClosureHelperCall sourceType
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
+                        metadataContainsClosureHelperCall metadata
                     | _ -> false)))
 
     ResultList.mapResults (convertFunction ctx) sortedFunctions
