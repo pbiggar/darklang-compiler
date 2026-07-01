@@ -416,6 +416,14 @@ let testRcReleasePlanOfTypeClassifiesRemainingRootKinds () : TestResult =
     | Some (typ, expected) ->
         Error $"Expected type {typ} to use release plan {expected}, got {rcReleasePlanOfType Map.empty typ}"
 
+let testRcShapeRequiresRecordMetadata () : TestResult =
+    try
+        let _ = rcShapeOfType Map.empty (AST.TRecord ("MissingRecordMetadata", []))
+        Error "Expected missing record metadata to fail before ownership decisions can fall back to source-level heap checks"
+    with
+    | ex when ex.Message.Contains("MissingRecordMetadata") ->
+        Ok ()
+
 let testInferCallReturnsFunctionReturnType () : TestResult =
     let ctx : TypeContext = {
         TypeReg = Map.empty
@@ -476,6 +484,19 @@ let rec private hasRefCountDecForTemp (target: TempId) (expr: AExpr) : bool =
     | If (_, thenBranch, elseBranch) ->
         hasRefCountDecForTemp target thenBranch
         || hasRefCountDecForTemp target elseBranch
+
+let rec private tryRefCountDecSourceTypeForTemp (target: TempId) (expr: AExpr) : AST.Type option =
+    match expr with
+    | Return _ ->
+        None
+    | Let (_, RefCountDec (Var tempId, _, _, sourceType), _) when tempId = target ->
+        sourceType
+    | Let (_, _, body) ->
+        tryRefCountDecSourceTypeForTemp target body
+    | If (_, thenBranch, elseBranch) ->
+        match tryRefCountDecSourceTypeForTemp target thenBranch with
+        | Some typ -> Some typ
+        | None -> tryRefCountDecSourceTypeForTemp target elseBranch
 
 let testNonSelfTailCallDoesNotLeaveDecAfterTailCall () : TestResult =
     let funcReg : AST_to_ANF.FunctionRegistry =
@@ -650,6 +671,53 @@ let testPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
     else
         Ok ()
 
+let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes () : TestResult =
+    let payloadType = AST.TRecord ("Payload", [])
+    let dictType = AST.TDict (AST.TInt64, payloadType)
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup =
+            Map.ofList [
+                ("Empty", ("Payload", [], 0, None))
+                ("SomePayload", ("Payload", [], 1, Some AST.TString))
+            ]
+        FuncReg =
+            Map.ofList [
+                ("mkDict", AST.TFunction ([], dictType))
+            ]
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let dictTemp = TempId 0
+    let resultTemp = TempId 1
+    let func : Function = {
+        Name = "canonicalBareSum"
+        TypedParams = []
+        ReturnType = AST.TInt64
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                dictTemp,
+                Call ("mkDict", []),
+                Let (
+                    resultTemp,
+                    Atom (IntLiteral (Int64 1L)),
+                    Return (Var resultTemp)
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+    match tryRefCountDecSourceTypeForTemp dictTemp transformed.Body with
+    | Some (AST.TDict (AST.TInt64, AST.TSum ("Payload", []))) ->
+        Ok ()
+    | Some other ->
+        Error $"Expected dict dec source type to canonicalize Payload as a sum, got {other}"
+    | None ->
+        Error "Expected dict binding to receive automatic RefCountDec"
+
 let tests = [
     ("RcShape supports structural construction and equality", testRcShapeConstructionAndEquality)
     ("RcShape classifies primitives as immediate", testRcShapeClassifiesPrimitivesAsImmediate)
@@ -668,9 +736,11 @@ let tests = [
     ("RcReleasePlan of type uses record metadata", testRcReleasePlanOfTypeUsesRecordMetadata)
     ("RcReleasePlan of type uses sum payload metadata", testRcReleasePlanOfTypeUsesSumPayloadMetadata)
     ("RcReleasePlan of type classifies remaining root kinds", testRcReleasePlanOfTypeClassifiesRemainingRootKinds)
+    ("RcShape requires record metadata", testRcShapeRequiresRecordMetadata)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
     ("borrowed call still gets auto-dec under conservative policy", testBorrowedCallStillGetsAutoDecUnderConservativePolicy)
     ("pure enum binding does not get automatic dec", testPureEnumBindingDoesNotGetAutomaticDec)
+    ("bare sum type refs are canonicalized for RC source types", testBareSumTypeRefsAreCanonicalizedForRcSourceTypes)
 ]

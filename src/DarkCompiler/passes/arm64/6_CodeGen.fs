@@ -114,6 +114,7 @@ let private dictRefCountDecListValueHelperLabel = "__dark_dict_refcount_dec_list
 let private dictRefCountDecDictValueHelperLabel = "__dark_dict_refcount_dec_dict_value_helper"
 let private dictRefCountDecTupleStringListValueHelperLabel = "__dark_dict_refcount_dec_tuple_string_list_value_helper"
 let private dictRefCountDecTupleStringListDictValueHelperLabel = "__dark_dict_refcount_dec_tuple_string_list_dict_value_helper"
+let private dictRefCountDecSumStringValueHelperLabel = "__dark_dict_refcount_dec_sum_string_value_helper"
 let private closureRefCountIncHelperLabel = "__dark_closure_refcount_inc_helper"
 let private closureRefCountDecHelperLabel = "__dark_closure_refcount_dec_helper"
 
@@ -2271,15 +2272,37 @@ let private sumPayloadsForList (variantRegistry: LIR.VariantRegistry) (sourceTyp
     | _ ->
         []
 
-let private sumPayloadsAllMatch (variantRegistry: LIR.VariantRegistry) (sourceType: AST.Type option) (predicate: AST.Type -> bool) : bool =
-    match sumPayloadsForList variantRegistry sourceType with
+let private sumPayloadsForDictValue (variantRegistry: LIR.VariantRegistry) (sourceType: AST.Type option) : AST.Type list =
+    match sourceType with
+    | Some (AST.TDict (_, AST.TSum (typeName, typeArgs))) ->
+        variantRegistry
+        |> Map.tryFind typeName
+        |> Option.map (fun typeVariants ->
+            typeVariants.Variants
+            |> List.choose (fun variant ->
+                variant.Payload
+                |> Option.map (applyTypeSubst typeVariants.TypeParams typeArgs)))
+        |> Option.defaultValue []
+    | _ ->
+        []
+
+let private payloadsAllMatch (payloads: AST.Type list) (predicate: AST.Type -> bool) : bool =
+    match payloads with
     | [] -> false
     | payloads -> payloads |> List.forall predicate
+
+let private sumPayloadsAllMatch (variantRegistry: LIR.VariantRegistry) (sourceType: AST.Type option) (predicate: AST.Type -> bool) : bool =
+    payloadsAllMatch (sumPayloadsForList variantRegistry sourceType) predicate
 
 let private isStringPayloadSumList (variantRegistry: LIR.VariantRegistry) (sourceType: AST.Type option) : bool =
     match sourceType with
     | Some (AST.TList (AST.TSum (_, [AST.TString]))) -> true
     | _ -> sumPayloadsAllMatch variantRegistry sourceType (fun payload -> payload = AST.TString)
+
+let private isStringPayloadSumDictValue (variantRegistry: LIR.VariantRegistry) (sourceType: AST.Type option) : bool =
+    match sourceType with
+    | Some (AST.TDict (_, AST.TSum (_, [AST.TString]))) -> true
+    | _ -> payloadsAllMatch (sumPayloadsForDictValue variantRegistry sourceType) (fun payload -> payload = AST.TString)
 
 let private isBytesPayloadSumList (variantRegistry: LIR.VariantRegistry) (sourceType: AST.Type option) : bool =
     match sourceType with
@@ -2564,6 +2587,7 @@ let private generateDictRefCountDecHelper
     (releaseLeafDictValue: bool)
     (releaseLeafTupleStringListValue: bool)
     (releaseLeafTupleStringListDictValue: bool)
+    (releaseLeafSumStringValue: bool)
     (ctx: CodeGenContext)
     : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"{helperLabel}_{name}"
@@ -2622,6 +2646,9 @@ let private generateDictRefCountDecHelper
     let skipLeafDictValueRelease = label "skip_leaf_dict_value_release"
     let skipLeafTupleStringListValueRelease = label "skip_leaf_tuple_string_list_value_release"
     let tupleStringListValueDone = label "tuple_string_list_value_done"
+    let skipLeafSumStringValueRelease = label "skip_leaf_sum_string_value_release"
+    let sumStringValueDone = label "sum_string_value_done"
+    let sumStringBufferDone = label "sum_string_buffer_done"
 
     let releaseLeafManagedRootValueInstrs (targetHelperLabel: string) (skipLabel: string) =
         [
@@ -2749,6 +2776,78 @@ let private generateDictRefCountDecHelper
         else
             []
 
+    let releaseLeafSumStringValueInstrs =
+        if releaseLeafSumStringValue then
+            let bufferLeakDec = leakDec
+            let bufferRefcountUpdate =
+                if List.isEmpty bufferLeakDec then
+                    [
+                        ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+                        ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+                    ]
+                else
+                    [
+                        ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+                        ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+                        ARM64Symbolic.CBNZ (ARM64Symbolic.X15, sumStringBufferDone)
+                    ] @ bufferLeakDec
+            [
+                ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 2us)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, skipLeafSumStringValueRelease)
+                ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -112s)
+                ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+                ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 96s)
+                ARM64Symbolic.LDR (ARM64Symbolic.X11, ARM64Symbolic.X3, 8s)
+                ARM64Symbolic.CBZ (ARM64Symbolic.X11, sumStringValueDone)
+                ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X11, 16s)
+                ARM64Symbolic.SUB_imm (ARM64Symbolic.X12, ARM64Symbolic.X12, 1us)
+                ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X11, 16s)
+                ARM64Symbolic.CBNZ (ARM64Symbolic.X12, sumStringValueDone)
+
+                ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X11, 8s)
+                ARM64Symbolic.CBZ (ARM64Symbolic.X12, sumStringBufferDone)
+                ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 7us)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 3us, 0)
+                ARM64Symbolic.LSR_reg (ARM64Symbolic.X15, ARM64Symbolic.X15, ARM64Symbolic.X13)
+                ARM64Symbolic.LSL_reg (ARM64Symbolic.X15, ARM64Symbolic.X15, ARM64Symbolic.X13)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X14, ARM64Symbolic.X12, 8us)
+                ARM64Symbolic.ADD_reg (ARM64Symbolic.X14, ARM64Symbolic.X14, ARM64Symbolic.X15)
+                ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 0xFFFFus, 0)
+                ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 16)
+                ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 32)
+                ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0x7FFFus, 48)
+                ARM64Symbolic.CMP_reg (ARM64Symbolic.X15, ARM64Symbolic.X13)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, sumStringBufferDone)
+            ]
+            @ bufferRefcountUpdate
+            @ [
+                ARM64Symbolic.Label sumStringBufferDone
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X27, 16us)
+                ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X13, 0s)
+                ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.X11, 0s)
+                ARM64Symbolic.STR (ARM64Symbolic.X11, ARM64Symbolic.X13, 0s)
+            ]
+            @ leakDec
+            @ [
+                ARM64Symbolic.Label sumStringValueDone
+                ARM64Symbolic.LDR (ARM64Symbolic.X30, ARM64Symbolic.SP, 96s)
+                ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+                ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 112s)
+                ARM64Symbolic.Label skipLeafSumStringValueRelease
+            ]
+        else
+            []
+
     [
         ARM64Symbolic.Label helperLabel
         // X0 = current tagged HAMT root, X1 = pending work stack count.
@@ -2809,6 +2908,7 @@ let private generateDictRefCountDecHelper
     @ releaseLeafListValueInstrs
     @ releaseLeafDictValueInstrs
     @ releaseLeafTupleStringListValueInstrs
+    @ releaseLeafSumStringValueInstrs
     @ [
         ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 1us)
         ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, collectInternal)
@@ -5426,6 +5526,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         dictRefCountDecTupleStringListValueHelperLabel
                     | Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _; AST.TDict _ ])) ->
                         dictRefCountDecTupleStringListDictValueHelperLabel
+                    | _ when isStringPayloadSumDictValue ctx.VariantRegistry sourceType ->
+                        dictRefCountDecSumStringValueHelperLabel
                     | _ ->
                         dictRefCountDecHelperLabel
                 let dictDecCall = [
@@ -7439,6 +7541,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         | Some (AST.TDict (_, AST.TDict _))
                         | Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _ ]))
                         | Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _; AST.TDict _ ])) -> false
+                        | _ when isStringPayloadSumDictValue ctx.VariantRegistry sourceType -> false
                         | _ -> true
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TDict _))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
@@ -7483,6 +7586,17 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.DictHeap, Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _; AST.TDict _ ]))) -> true
+                    | _ -> false)))
+
+    let needsDictRcDecSumStringValueHelper =
+        sortedFunctions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountDec (_, _, LIR.DictHeap, sourceType) ->
+                        isStringPayloadSumDictValue ctx.VariantRegistry sourceType
                     | _ -> false)))
 
     let needsClosureRcIncHelper =
@@ -7574,11 +7688,12 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             @ (if needsListRcDecSumTuple4NestedClosureHelper then generateListRefCountDecSumTuple4NestedClosureHelper ctx else [])
         let dictRcHelpers =
             (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
-            @ (if needsDictRcDecHelper || needsListRcDecClosureStringListDictHelper || needsListRcDecStringBytesListDictHelper || needsListRcDecClosureListDictHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper || needsListRcDecRecordListDictHelper || needsListRcDecTuple2DictHelper || needsDictRcDecTupleStringListDictValueHelper || needsListRcDecSumTuple4StringBytesListDictHelper || needsListRcDecSumTuple4NestedDictHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false false ctx else [])
-            @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel true false false false ctx else [])
-            @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false true false false ctx else [])
-            @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false true false ctx else [])
-            @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false true ctx else [])
+            @ (if needsDictRcDecHelper || needsListRcDecClosureStringListDictHelper || needsListRcDecStringBytesListDictHelper || needsListRcDecClosureListDictHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper || needsListRcDecRecordListDictHelper || needsListRcDecTuple2DictHelper || needsDictRcDecTupleStringListDictValueHelper || needsListRcDecSumTuple4StringBytesListDictHelper || needsListRcDecSumTuple4NestedDictHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false false false ctx else [])
+            @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel true false false false false ctx else [])
+            @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false true false false false ctx else [])
+            @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false true false false ctx else [])
+            @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false true false ctx else [])
+            @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false false true ctx else [])
         let closureRcHelpers =
             (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
             @ (if needsClosureRcDecHelper then generateClosureRefCountDecHelper ctx else [])

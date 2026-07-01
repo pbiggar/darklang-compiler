@@ -693,28 +693,28 @@ let private collectSpecsFromTests
     (sourceSyntax: CompilerLibrary.SourceSyntax)
     (typeCheckEnv: TypeCheckEnv)
     (tests: E2ETest list)
-    : Result<Set<SpecKey> * TypeRegistry, string> =
-    let typeRegFromTypedProgram (typedAst: Program) : TypeRegistry =
+    : Result<Set<SpecKey> * TypeRegistry * VariantLookup, string> =
+    let registriesFromTypedProgram (typedAst: Program) : TypeRegistry * VariantLookup =
         match AST_to_ANF.splitTopLevels typedAst with
         | Ok (typeDefs, functions, _expr) ->
             let aliasReg = AST_to_ANF.buildAliasRegistry typeDefs
             let resolvedFunctions = AST_to_ANF.resolveAliasesInFunctions aliasReg functions
             let registries = AST_to_ANF.buildRegistries Map.empty typeDefs aliasReg resolvedFunctions
-            registries.TypeReg
+            (registries.TypeReg, registries.VariantLookup)
         | Error _ ->
-            Map.empty
+            (Map.empty, Map.empty)
     let testsToAnalyze =
         tests
         |> List.filter (fun test -> not test.ExpectCompileError && Option.isNone test.SkipReason)
-    let rec loop remaining accSpecs accTypeReg =
+    let rec loop remaining accSpecs accTypeReg accVariantLookup =
         match remaining with
-        | [] -> Ok (accSpecs, accTypeReg)
+        | [] -> Ok (accSpecs, accTypeReg, accVariantLookup)
         | test :: rest ->
             match sourceToExecute sourceSyntax allowInternal test with
             | Error _ ->
                 // Best effort: source synthesis may fail for malformed tests and
                 // should not block suite-level specialization discovery.
-                loop rest accSpecs accTypeReg
+                loop rest accSpecs accTypeReg accVariantLookup
             | Ok source ->
                 let specsResult =
                     CompilerLibrary.parseProgram sourceSyntax allowInternal source
@@ -722,24 +722,27 @@ let private collectSpecsFromTests
                         typeCheckProgramForSourceSyntax sourceSyntax typeCheckEnv testAst
                         |> Result.mapError typeErrorToString
                         |> Result.map (fun (_programType, typedAst, _) ->
-                            (collectTypeAppsFromProgram typedAst, typeRegFromTypedProgram typedAst)))
+                            let (typeReg, variantLookup) = registriesFromTypedProgram typedAst
+                            (collectTypeAppsFromProgram typedAst, typeReg, variantLookup)))
 
                 match specsResult with
-                | Ok (specs, typeReg) ->
+                | Ok (specs, typeReg, variantLookup) ->
                     let mergedTypeReg =
                         Map.fold (fun acc k v -> Map.add k v acc) accTypeReg typeReg
-                    loop rest (Set.union accSpecs specs) mergedTypeReg
+                    let mergedVariantLookup =
+                        Map.fold (fun acc k v -> Map.add k v acc) accVariantLookup variantLookup
+                    loop rest (Set.union accSpecs specs) mergedTypeReg mergedVariantLookup
                 | Error _ ->
                     // Best effort: a test may intentionally fail to parse/typecheck,
                     // and that should not prevent building suite-level specializations.
-                    loop rest accSpecs accTypeReg
-    loop testsToAnalyze Set.empty Map.empty
+                    loop rest accSpecs accTypeReg accVariantLookup
+    loop testsToAnalyze Set.empty Map.empty Map.empty
 
 let private buildPreamblePlan
     (stdlib: CompilerLibrary.StdlibResult)
     (spec: PreambleBuildSpec)
     (tests: E2ETest list)
-    : Result<PreamblePlan * Set<SpecKey> * TypeRegistry, string> =
+    : Result<PreamblePlan * Set<SpecKey> * TypeRegistry * VariantLookup, string> =
     let analysisResult = analyzePreambleForPlan stdlib spec tests
 
     analysisResult
@@ -749,25 +752,27 @@ let private buildPreamblePlan
             | Some analysis -> analysis.TypeCheckEnv
             | None -> stdlib.Context.TypeCheckEnv
         collectSpecsFromTests spec.AllowInternal spec.SourceSyntax typeCheckEnv tests
-        |> Result.bind (fun (testSpecs, testTypeReg) ->
+        |> Result.bind (fun (testSpecs, testTypeReg, testVariantLookup) ->
             let preambleSpecs =
                 match analysisOpt with
                 | None -> Set.empty
                 | Some analysis -> collectTypeAppsFromProgram analysis.TypedAST
-            let preambleTypeReg =
+            let (preambleTypeReg, preambleVariantLookup) =
                 match analysisOpt with
-                | None -> Map.empty
+                | None -> (Map.empty, Map.empty)
                 | Some analysis ->
                     match AST_to_ANF.splitTopLevels analysis.TypedAST with
                     | Ok (typeDefs, functions, _expr) ->
                         let aliasReg = AST_to_ANF.buildAliasRegistry typeDefs
                         let resolvedFunctions = AST_to_ANF.resolveAliasesInFunctions aliasReg functions
                         let registries = AST_to_ANF.buildRegistries Map.empty typeDefs aliasReg resolvedFunctions
-                        registries.TypeReg
+                        (registries.TypeReg, registries.VariantLookup)
                     | Error _ ->
-                        Map.empty
+                        (Map.empty, Map.empty)
             let externalTypeReg =
                 Map.fold (fun acc k v -> Map.add k v acc) testTypeReg preambleTypeReg
+            let externalVariantLookup =
+                Map.fold (fun acc k v -> Map.add k v acc) testVariantLookup preambleVariantLookup
             let combinedSpecs = Set.union testSpecs preambleSpecs
             let preambleGenericDefs =
                 match analysisOpt with
@@ -792,7 +797,7 @@ let private buildPreamblePlan
                 Analysis = analysisOpt
                 Specialization = specialization
             }
-            Ok (plan, stdlibSpecs, externalTypeReg)))
+            Ok (plan, stdlibSpecs, externalTypeReg, externalVariantLookup)))
 
 /// Build suite stdlib specializations and per-file/per-preamble contexts
 let buildSuiteContexts
@@ -810,20 +815,22 @@ let buildSuiteContexts
         |> List.fold
             (fun acc (contextKey, group) ->
                 acc
-                |> Result.bind (fun (plans, stdlibSpecs, stdlibTypeReg) ->
+                |> Result.bind (fun (plans, stdlibSpecs, stdlibTypeReg, stdlibVariantLookup) ->
                     let (sourceFile, _) = contextKey
                     buildPreambleBuildSpec sourceFile group
                     |> Result.bind (fun spec ->
                         buildPreamblePlan stdlib spec group
-                        |> Result.map (fun (plan, specs, typeReg) ->
+                        |> Result.map (fun (plan, specs, typeReg, variantLookup) ->
                             let mergedTypeReg =
                                 Map.fold (fun acc k v -> Map.add k v acc) stdlibTypeReg typeReg
-                            ((contextKey, plan) :: plans, Set.union stdlibSpecs specs, mergedTypeReg)))))
-            (Ok ([], Set.empty, Map.empty))
+                            let mergedVariantLookup =
+                                Map.fold (fun acc k v -> Map.add k v acc) stdlibVariantLookup variantLookup
+                            ((contextKey, plan) :: plans, Set.union stdlibSpecs specs, mergedTypeReg, mergedVariantLookup)))))
+            (Ok ([], Set.empty, Map.empty, Map.empty))
 
     plansResult
-    |> Result.bind (fun (plans, stdlibSpecs, externalTypeReg) ->
-        CompilerLibrary.buildStdlibSpecializations stdlib stdlibSpecs externalTypeReg passTimingRecorder
+    |> Result.bind (fun (plans, stdlibSpecs, externalTypeReg, externalVariantLookup) ->
+        CompilerLibrary.buildStdlibSpecializations stdlib stdlibSpecs externalTypeReg externalVariantLookup passTimingRecorder
         |> Result.bind (fun stdlibWithSpecs ->
             let buildEmptyContext () : CompilerLibrary.PreambleContext =
                 {

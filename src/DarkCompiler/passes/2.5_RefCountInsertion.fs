@@ -442,50 +442,96 @@ let isBorrowingExpr (cexpr: CExpr) : bool =
     | TypedAtom (Var _, _) -> true // TypedAtom wrapping a variable - also borrowed
     | _ -> false
 
+let private canonicalRcTypeForShape (ctx: TypeContext) (typ: AST.Type) : AST.Type =
+    let sumTypeNames =
+        ctx.VariantLookup
+        |> Map.toList
+        |> List.map (fun (_, (typeName, _, _, _)) -> typeName)
+        |> Set.ofList
+
+    let sumTypeHasPayload (sumTypeName: string) : bool =
+        ctx.VariantLookup
+        |> Map.exists (fun _ (typeName, _, _, payloadType) ->
+            typeName = sumTypeName && Option.isSome payloadType)
+
+    let canonicalBareSum name =
+        if sumTypeHasPayload name then
+            AST.TSum (name, [AST.TVar $"__sum_payload_{name}"])
+        else
+            AST.TSum (name, [])
+
+    let rec canonicalize typ =
+        match typ with
+        | AST.TRecord (name, []) when Set.contains name sumTypeNames ->
+            canonicalBareSum name
+        | AST.TSum (name, []) when Set.contains name sumTypeNames ->
+            canonicalBareSum name
+        | AST.TRecord (name, typeArgs) ->
+            AST.TRecord (name, List.map canonicalize typeArgs)
+        | AST.TSum (name, typeArgs) ->
+            AST.TSum (name, List.map canonicalize typeArgs)
+        | AST.TFunction (paramTypes, returnType) ->
+            AST.TFunction (List.map canonicalize paramTypes, canonicalize returnType)
+        | AST.TTuple elemTypes ->
+            AST.TTuple (List.map canonicalize elemTypes)
+        | AST.TList elemType ->
+            AST.TList (canonicalize elemType)
+        | AST.TDict (keyType, valueType) ->
+            AST.TDict (canonicalize keyType, canonicalize valueType)
+        | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128
+        | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
+        | AST.TBool | AST.TFloat64 | AST.TString | AST.TBytes | AST.TChar
+        | AST.TUnit | AST.TRawPtr | AST.TRuntimeError ->
+            typ
+
+    canonicalize typ
+
+let private canonicalRcSourceType (ctx: TypeContext) (typ: AST.Type) : AST.Type =
+    let sumTypeNames =
+        ctx.VariantLookup
+        |> Map.toList
+        |> List.map (fun (_, (typeName, _, _, _)) -> typeName)
+        |> Set.ofList
+
+    let rec canonicalize typ =
+        match typ with
+        | AST.TRecord (name, []) when Set.contains name sumTypeNames ->
+            AST.TSum (name, [])
+        | AST.TRecord (name, typeArgs) ->
+            AST.TRecord (name, List.map canonicalize typeArgs)
+        | AST.TSum (name, typeArgs) ->
+            AST.TSum (name, List.map canonicalize typeArgs)
+        | AST.TFunction (paramTypes, returnType) ->
+            AST.TFunction (List.map canonicalize paramTypes, canonicalize returnType)
+        | AST.TTuple elemTypes ->
+            AST.TTuple (List.map canonicalize elemTypes)
+        | AST.TList elemType ->
+            AST.TList (canonicalize elemType)
+        | AST.TDict (keyType, valueType) ->
+            AST.TDict (canonicalize keyType, canonicalize valueType)
+        | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128
+        | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
+        | AST.TBool | AST.TFloat64 | AST.TString | AST.TBytes | AST.TChar
+        | AST.TUnit | AST.TRawPtr | AST.TRuntimeError ->
+            typ
+
+    canonicalize typ
+
 let private rcShapeForType (ctx: TypeContext) (typ: AST.Type) : RcShape =
-    rcShapeOfType ctx.TypeReg typ
+    typ |> canonicalRcTypeForShape ctx |> rcShapeOfType ctx.TypeReg
 
-let rec private canClassifyRcShape (ctx: TypeContext) (typ: AST.Type) : bool =
-    match typ with
-    | AST.TTuple elemTypes ->
-        elemTypes |> List.forall (canClassifyRcShape ctx)
-    | AST.TRecord (name, _) ->
-        match Map.tryFind name ctx.TypeReg with
-        | Some fields ->
-            fields |> List.forall (fun (_, fieldType) -> canClassifyRcShape ctx fieldType)
-        | None ->
-            false
-    | AST.TList elemType ->
-        canClassifyRcShape ctx elemType
-    | AST.TDict (keyType, valueType) ->
-        canClassifyRcShape ctx keyType && canClassifyRcShape ctx valueType
-    | _ ->
-        true
-
-let private tryRcShapeForType (ctx: TypeContext) (typ: AST.Type) : RcShape option =
-    if canClassifyRcShape ctx typ then
-        Some (rcShapeForType ctx typ)
-    else
-        None
-
-let private isRcManagedHeapType (ctx: TypeContext) (typ: AST.Type) : bool =
-    match tryRcShapeForType ctx typ |> Option.map rcShapeStorageClass with
-    | Some (ManagedRcRoot (_, ClosureHeap)) ->
+let private isRcManagedRootAliasType (ctx: TypeContext) (typ: AST.Type) : bool =
+    match typ |> rcShapeForType ctx |> rcShapeStorageClass with
+    | ManagedRcRoot (_, ClosureHeap) ->
         false
-    | Some (ManagedRcRoot _) ->
+    | ManagedRcRoot _ ->
         true
-    | Some (ManagedDynamicBuffer _)
-    | Some UnmanagedStorage ->
+    | ManagedDynamicBuffer _
+    | UnmanagedStorage ->
         false
-    | None ->
-        isHeapType typ
 
 let private needsAutomaticDec (ctx: TypeContext) (typ: AST.Type) : bool =
-    match tryRcShapeForType ctx typ with
-    | Some shape ->
-        rcShapeNeedsAutomaticBindingDec shape
-    | None ->
-        isHeapType typ
+    typ |> rcShapeForType ctx |> rcShapeNeedsAutomaticBindingDec
 
 let private bindingNeedsAutomaticDec (ctx: TypeContext) (cexpr: CExpr) (typ: AST.Type) : bool =
     needsAutomaticDec ctx typ
@@ -504,7 +550,7 @@ let private retainExprForType (ctx: TypeContext) (tempId: TempId) (typ: AST.Type
     | Some DynamicBytesBuffer ->
         RefCountIncBytes (Var tempId)
     | Some (FixedSizeRoot (size, kind)) ->
-        RefCountInc (Var tempId, size, kind, Some typ)
+        RefCountInc (Var tempId, size, kind, Some (canonicalRcSourceType ctx typ))
     | None ->
         Crash.crash $"retainExprForType: type '{typ}' does not have an RC retain operation"
 
@@ -522,16 +568,12 @@ let private releaseExprForType
         RefCountDecBytes (Var tempId)
     | Some (FixedSizeRoot (size, defaultKind)) ->
         let kind = kindOverride |> Option.defaultValue defaultKind
-        RefCountDec (Var tempId, size, kind, Some typ)
+        RefCountDec (Var tempId, size, kind, Some (canonicalRcSourceType ctx typ))
     | None ->
         Crash.crash $"releaseExprForType: type '{typ}' does not have an RC release operation"
 
 let private needsRetainForBorrowedValue (ctx: TypeContext) (typ: AST.Type) : bool =
-    match tryRcShapeForType ctx typ with
-    | Some shape ->
-        rcShapeNeedsBorrowedRetain shape
-    | None ->
-        isHeapType typ
+    typ |> rcShapeForType ctx |> rcShapeNeedsBorrowedRetain
 
 let rec private isStoredByRawSet (tempId: TempId) (bodyInfo: ReturnAnnotatedExpr) : bool =
     match bodyInfo with
@@ -783,7 +825,7 @@ let rec insertRCWithAnalysis
                 | RLet (nextAliasTemp, Atom (Var sourceId), nextNextBody, _) when sourceId = aliasedTemp ->
                     inferAliasedVarTypeFromUse nextAliasTemp nextNextBody
                 | RLet (nextAliasTemp, TypedAtom (Var sourceId, aliasType), nextNextBody, _) when sourceId = aliasedTemp ->
-                    if isRcManagedHeapType ctx aliasType then
+                    if isRcManagedRootAliasType ctx aliasType then
                         Some aliasType
                     else
                         inferAliasedVarTypeFromUse nextAliasTemp nextNextBody
@@ -807,7 +849,7 @@ let rec insertRCWithAnalysis
                             None
 
                     match aliasTypeFromBody with
-                    | Some inferredAliasType when isRcManagedHeapType ctx inferredAliasType && not (isRcManagedHeapType ctx t) ->
+                    | Some inferredAliasType when isRcManagedRootAliasType ctx inferredAliasType && not (isRcManagedRootAliasType ctx t) ->
                         inferredAliasType
                     | _ ->
                         t
@@ -866,11 +908,7 @@ let rec insertRCWithAnalysis
             let returnDecs' =
                 let secondParamNeedsOwnershipTransfer (funcName: string) : bool =
                     let isOwnershipTransferredParamType (typ: AST.Type) : bool =
-                        match tryRcShapeForType ctx typ with
-                        | Some shape ->
-                            rcShapeIsOwnershipTransferRoot shape
-                        | None ->
-                            isHeapType typ
+                        typ |> rcShapeForType ctx |> rcShapeIsOwnershipTransferRoot
                     match Map.tryFind funcName ctx.FuncReg with
                     | Some (AST.TFunction (paramTypes, _)) ->
                         match paramTypes with

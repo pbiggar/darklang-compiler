@@ -52,6 +52,15 @@ let testNeedsLambdaLoweringDetectsLambda () : TestResult =
     if programNeedsLambdaLowering knownFuncs program then Ok ()
     else Error "Expected lambda to trigger lambda lowering"
 
+let testMangledTypePreservesFreshenedTypeVariables () : TestResult =
+    match tryParseMangledType Map.empty "k$0" with
+    | Ok (AST.TVar "k$0") ->
+        Ok ()
+    | Ok other ->
+        Error $"Expected freshened type variable to remain TVar, got {other}"
+    | Error err ->
+        Error $"Expected freshened type variable to parse, got error: {err}"
+
 let rec private findCallArgs (funcName: string) (expr: ANF.AExpr) : ANF.Atom list option =
     match expr with
     | ANF.Let (_, ANF.Call (name, args), rest) when name = funcName ->
@@ -112,6 +121,7 @@ let tests = [
     ("Lambda lowering ignores shadowed functions", testNeedsLambdaLoweringIgnoresShadowedFunc)
     ("Lambda lowering detects function value", testNeedsLambdaLoweringDetectsFuncValue)
     ("Lambda lowering detects lambda", testNeedsLambdaLoweringDetectsLambda)
+    ("Mangled type preserves freshened type variables", testMangledTypePreservesFreshenedTypeVariables)
     ("Synthetic nullary call lowers to zero args", testSyntheticNullaryCallLowersToZeroArgs)
     ("Synthetic unit param lowers function to zero params", testSyntheticUnitParamLowersFunctionToZeroParams)
 ]

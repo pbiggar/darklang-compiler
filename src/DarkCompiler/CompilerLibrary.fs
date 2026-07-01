@@ -1137,6 +1137,7 @@ let buildStdlibSpecializations
     (stdlib: StdlibResult)
     (specs: Set<AST_to_ANF.SpecKey>)
     (externalTypeReg: AST_to_ANF.TypeRegistry)
+    (externalVariantLookup: AST_to_ANF.VariantLookup)
     (passTimingRecorder: PassTimingRecorder option)
     : Result<StdlibResult, string> =
     if Set.isEmpty specs then
@@ -1180,6 +1181,8 @@ let buildStdlibSpecializations
                     registries with
                         TypeReg =
                             Map.fold (fun acc k v -> Map.add k v acc) registries.TypeReg externalTypeReg
+                        VariantLookup =
+                            Map.fold (fun acc k v -> Map.add k v acc) registries.VariantLookup externalVariantLookup
                 }
                 let localReturnTypes = extractReturnTypes localRegistries.FuncReg
 

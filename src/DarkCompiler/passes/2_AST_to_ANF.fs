@@ -109,6 +109,9 @@ let private tryParseMangledTypeForRawIntrinsic
     let mkNamedType (name: string) (args: AST.Type list) : AST.Type =
         if Set.contains name sumTypeNames then AST.TSum (name, args) else AST.TRecord (name, args)
 
+    let isFreshenedTypeVarName (tok: string) : bool =
+        tok.Contains("$")
+
     let tryPrimitive (tok: string) : AST.Type option =
         match tok with
         | "i8" -> Some AST.TInt8
@@ -148,6 +151,7 @@ let private tryParseMangledTypeForRawIntrinsic
             | _ ->
                 match tryPrimitive tok with
                 | Some prim -> [ (prim, rest) ]
+                | None when isFreshenedTypeVarName tok -> [ (AST.TVar tok, rest) ]
                 | None ->
                     let baseType = (mkNamedType tok [], rest)
                     let withArgs =
@@ -581,6 +585,9 @@ let tryParseMangledType (variantLookup: VariantLookup) (mangled: string) : Resul
     let mkNamedType (name: string) (args: AST.Type list) : AST.Type =
         if Set.contains name sumTypeNames then AST.TSum (name, args) else AST.TRecord (name, args)
 
+    let isFreshenedTypeVarName (tok: string) : bool =
+        tok.Contains("$")
+
     let tryPrimitive (tok: string) : AST.Type option =
         match tok with
         | "i8" -> Some AST.TInt8
@@ -620,6 +627,7 @@ let tryParseMangledType (variantLookup: VariantLookup) (mangled: string) : Resul
             | _ ->
                 match tryPrimitive tok with
                 | Some prim -> [ (prim, rest) ]
+                | None when isFreshenedTypeVarName tok -> [ (AST.TVar tok, rest) ]
                 | None ->
                     // Parse as named type with optional type arguments.
                     let baseType = (mkNamedType tok [], rest)
