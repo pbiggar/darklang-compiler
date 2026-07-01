@@ -2594,6 +2594,16 @@ let private releasePlanIsRootKind (kind: ANF.RcKind) (releasePlan: ANF.RcRelease
     | _ ->
         false
 
+let private releasePlanIsTaggedListWithElementRelease
+    (elementPredicate: ANF.RcReleasePlan -> bool)
+    (releasePlan: ANF.RcReleasePlan)
+    : bool =
+    match releasePlan with
+    | ANF.RootRelease (_, ANF.TaggedList, ANF.TaggedListPayloadRelease elementRelease) ->
+        elementPredicate elementRelease
+    | _ ->
+        false
+
 let private generateDictRefCountIncHelper () : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_dict_rc_inc_{name}"
     let internalTag = label "internal"
@@ -7289,7 +7299,10 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TList _))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField (function | AST.TList (AST.TList _) -> true | _ -> false) ctx.RecordRegistry sourceType
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithElementRelease (releasePlanIsRootKind ANF.TaggedList))
+                            ctx.RecordRegistry
+                            sourceType
                     | _ -> false)))
 
     let needsListRcDecDictHelper =
@@ -7301,7 +7314,10 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TDict _))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField (function | AST.TList (AST.TDict _) -> true | _ -> false) ctx.RecordRegistry sourceType
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithElementRelease (releasePlanIsRootKind ANF.DictHeap))
+                            ctx.RecordRegistry
+                            sourceType
                     | _ -> false)))
 
     let needsListRcDecClosureHelper =
@@ -7313,7 +7329,10 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TFunction _))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField (function | AST.TList (AST.TFunction _) -> true | _ -> false) ctx.RecordRegistry sourceType
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsTaggedListWithElementRelease (releasePlanIsRootKind ANF.ClosureHeap))
+                            ctx.RecordRegistry
+                            sourceType
                     | _ -> false)))
 
     let needsListRcDecRecord1Helper =
