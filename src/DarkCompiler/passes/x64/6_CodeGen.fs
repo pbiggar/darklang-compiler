@@ -5151,9 +5151,9 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                     |> List.map (function
                         | LIR.RefCountDec (_, _, LIR.TaggedList, metadata) ->
                             metadata
-                            |> rcMetadataReleasePlan
-                            |> Option.map (listDecHelperForReleasePlan >> Set.singleton)
-                            |> Option.defaultValue (Set.singleton listRefCountDecHelperLabel)
+                            |> requiredRcMetadataReleasePlan "TaggedList RefCountDec helper selection"
+                            |> listDecHelperForReleasePlan
+                            |> Set.singleton
                         | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
                             listDecHelperLabelsInMetadata metadata
                         | _ ->
