@@ -749,6 +749,11 @@ Current tests prove:
 - dict roots release scoped dynamic bytes keys and values
 - dict overwrite with equal dynamic bytes keys uses byte-wise hash/equality and
   releases replaced dynamic payloads
+- persistent dict bytes keys stay live across old and new roots
+- persistent dict bytes values stay live across old and new roots
+- sum payloads containing bytes are released directly and under list payloads
+- nested bytes combinations under tuples, records, lists, sums, dicts, and
+  closure-containing payloads are covered by leak-check tests
 - persistent dict update/remove keep old and new roots live with managed string
   values
 - persistent dict overwrite keeps old and new roots live with managed string
@@ -760,13 +765,13 @@ Current tests prove:
 
 ### Remaining Gaps
 
-Bytes coverage is much thinner than string coverage. Missing or under-proven
-cases include:
+Bytes ownership coverage is now close to string coverage for managed
+refcounting behavior. The remaining gaps are lower-level:
 
-- broader nested bytes combinations, especially bytes inside records/tuples
-  nested under list or sum payloads
-- persistent dict sharing cases involving bytes keys/values when old and new
-  roots are both live
+- auditing every bytes constructor/transform for the aligned
+  `[length][data][padding][refcount]` layout
+- deciding whether zero-refcount bytes blocks only balance leak counters or can
+  enter a reusable variable-size free path
 
 ### Risks
 
@@ -781,17 +786,17 @@ from either:
 
 ### Remaining Tasks
 
-1. Add failing-then-passing e2e leak-check tests for the missing cases above.
-2. Add equivalent x64 support if missing.
-3. Audit bytes constructors and transforms for aligned refcount layout.
-4. Decide whether zero-refcount bytes blocks should only balance leak counters
+1. Audit bytes constructors and transforms for aligned refcount layout.
+2. Add targeted leak-check tests only if the audit finds an uncovered path.
+3. Decide whether zero-refcount bytes blocks should only balance leak counters
    or also be reusable.
 
 ### Suggested Commit Breakdown
 
-1. Cover sum bytes payloads.
-2. Cover nested bytes combinations.
-3. Audit bytes constructor and transform layout.
+1. Inspect each stdlib bytes-producing function and document whether it writes
+   the trailing refcount at the aligned offset.
+2. Add one failing-then-passing test for any uncovered constructor/transform.
+3. Defer variable-size bytes reuse to the raw/dynamic-buffer policy work.
 
 ## 3. Finish Dynamic String Edge Coverage And Reuse Semantics
 
