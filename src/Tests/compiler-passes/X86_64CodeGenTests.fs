@@ -681,6 +681,35 @@ let testGenericRefCountDecTupleStringListDictFields () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected tuple string/list/dict field release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 generic fixed-block RefCountDec uses dict field release metadata for managed dict values.
+let testGenericRefCountDecDictListValueField () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let dictType = AST.TDict (AST.TInt64, listType)
+    let tupleType = AST.TTuple [dictType]
+    let program =
+        makeSimpleProgram
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X2, 8)
+                LIR.HeapStore (LIR.Physical LIR.X2, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X3, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X3, LIR.Physical LIR.X2, LIR.Physical LIR.X3)
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 16)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some listType)
+                LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
+                LIR.HeapAlloc (LIR.Physical LIR.X6, 8)
+                LIR.HeapStore (LIR.Physical LIR.X6, 0, LIR.Reg (LIR.Physical LIR.X5), Some dictType)
+                LIR.RefCountDec (LIR.Physical LIR.X6, 8, LIR.GenericHeap, Some (rcMetadata tupleType))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected tuple dict field list values to be released, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 generic fixed-block RefCountDec does not release pure enum fields.
 let testGenericRefCountDecSkipsPureEnumField () : Result<unit, string> =
     let pureEnumType = AST.TSum ("X64PureEnum", [])
@@ -3708,6 +3737,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec releases bytes field", testGenericRefCountDecBytesField)
     ("LIR generic RefCountDec releases nested string tuple field", testGenericRefCountDecNestedStringTupleField)
     ("LIR generic RefCountDec releases tuple string/list/dict fields", testGenericRefCountDecTupleStringListDictFields)
+    ("LIR generic RefCountDec releases dict field list values", testGenericRefCountDecDictListValueField)
     ("LIR generic RefCountDec skips pure enum field", testGenericRefCountDecSkipsPureEnumField)
     ("LIR generic RefCountDec releases record string field", testGenericRefCountDecRecordStringField)
     ("LIR generic RefCountDec releases record dict field", testGenericRefCountDecRecordDictField)

@@ -820,13 +820,6 @@ let private typeReleasePlanContains
     |> tryRcReleasePlanOfType recordRegistry sumShapeRegistry
     |> Option.exists (rcReleasePlanContains predicate)
 
-let private genDictFieldRelease (fieldOffset: int) : X86_64.Instr list =
-    [X86_64.PUSH X86_64.RDX
-     X86_64.MOV_load (X86_64.R8, X86_64.RDX, fieldOffset)
-     X86_64.MOV_reg (X86_64.RAX, X86_64.R8)
-     X86_64.CALL dictRefCountDecHelperLabel
-     X86_64.POP X86_64.RDX]
-
 let private genClosureFieldRelease (fieldOffset: int) : X86_64.Instr list =
     [X86_64.PUSH X86_64.RDX
      X86_64.MOV_load (X86_64.RAX, X86_64.RDX, fieldOffset)
@@ -1123,6 +1116,13 @@ let private dictSumStringValueReleasePlan : ANF.RcReleasePlan =
               [ANF.FieldRelease (8, ANF.DynamicBufferRelease ANF.DynamicStringBuffer)],
               []))
 
+let private genDictFieldRelease (fieldOffset: int) (fieldReleasePlan: ANF.RcReleasePlan) : X86_64.Instr list =
+    [X86_64.PUSH X86_64.RDX
+     X86_64.MOV_load (X86_64.R8, X86_64.RDX, fieldOffset)
+     X86_64.MOV_reg (X86_64.RAX, X86_64.R8)
+     X86_64.CALL (dictDecHelperForReleasePlan fieldReleasePlan)
+     X86_64.POP X86_64.RDX]
+
 let private genListFieldRelease (fieldOffset: int) (fieldReleasePlan: ANF.RcReleasePlan) : X86_64.Instr list =
     [X86_64.PUSH X86_64.RDX
      X86_64.MOV_load (X86_64.RAX, X86_64.RDX, fieldOffset)
@@ -1145,7 +1145,7 @@ let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (releasePlan: ANF.RcRe
             | ANF.DynamicBufferRelease _ ->
                 genDynamicBufferFieldRelease ctx fieldOffset
             | ANF.RootRelease (_, ANF.DictHeap, _) ->
-                genDictFieldRelease fieldOffset
+                genDictFieldRelease fieldOffset fieldReleasePlan
             | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
                 genClosureFieldRelease fieldOffset
             | ANF.RootRelease (_, ANF.TaggedList, _) ->
@@ -5260,6 +5260,39 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         |> Option.map listDecHelperLabelsInReleasePlan
         |> Option.defaultValue Set.empty
 
+    let rec dictDecHelperLabelsInReleasePlan (releasePlan: ANF.RcReleasePlan) : Set<string> =
+        let labelsInFieldReleases fieldReleases =
+            fieldReleases
+            |> List.map (function
+                | ANF.FieldRelease (_, fieldReleasePlan) ->
+                    dictDecHelperLabelsInReleasePlan fieldReleasePlan)
+            |> unionLabelSets
+
+        match releasePlan with
+        | ANF.RootRelease (_, ANF.DictHeap, _) ->
+            Set.singleton (dictDecHelperForReleasePlan releasePlan)
+        | ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+        | ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, fieldReleases, _))
+        | ANF.RootRelease (_, _, ANF.ClosurePayloadRelease fieldReleases) ->
+            labelsInFieldReleases fieldReleases
+        | ANF.RootRelease (_, _, ANF.DictPayloadRelease (keyRelease, valueRelease)) ->
+            Set.union
+                (dictDecHelperLabelsInReleasePlan keyRelease)
+                (dictDecHelperLabelsInReleasePlan valueRelease)
+        | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease elementRelease) ->
+            dictDecHelperLabelsInReleasePlan elementRelease
+        | ANF.RootRelease (_, _, ANF.NoPayloadRelease) ->
+            Set.empty
+        | ANF.NoReleasePlan
+        | ANF.DynamicBufferRelease _ ->
+            Set.empty
+
+    let dictDecHelperLabelsInMetadata metadata =
+        metadata
+        |> rcMetadataReleasePlan
+        |> Option.map dictDecHelperLabelsInReleasePlan
+        |> Option.defaultValue Set.empty
+
     let neededListDecHelperLabels =
         let labelsFromFunctions =
             functions
@@ -5309,10 +5342,7 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                             |> Set.singleton
                         | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
                             metadata
-                            |> rcMetadataReleasePlan
-                            |> Option.filter (rcReleasePlanContains (releasePlanIsRootKind ANF.DictHeap))
-                            |> Option.map (fun _ -> Set.singleton dictRefCountDecHelperLabel)
-                            |> Option.defaultValue Set.empty
+                            |> dictDecHelperLabelsInMetadata
                         | _ ->
                             Set.empty)
                     |> unionLabelSets)
