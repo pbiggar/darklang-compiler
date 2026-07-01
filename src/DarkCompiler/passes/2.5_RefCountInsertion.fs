@@ -469,11 +469,14 @@ let private tryRcShapeForType (ctx: TypeContext) (typ: AST.Type) : RcShape optio
         None
 
 let private isRcManagedHeapType (ctx: TypeContext) (typ: AST.Type) : bool =
-    match tryRcShapeForType ctx typ |> Option.bind rcShapeRootKind with
-    | Some ClosureHeap ->
+    match tryRcShapeForType ctx typ |> Option.map rcShapeStorageClass with
+    | Some (ManagedRcRoot (_, ClosureHeap)) ->
         false
-    | Some _ ->
+    | Some (ManagedRcRoot _) ->
         true
+    | Some (ManagedDynamicBuffer _)
+    | Some UnmanagedStorage ->
+        false
     | None ->
         isHeapType typ
 

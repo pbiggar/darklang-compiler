@@ -156,6 +156,27 @@ let testRcShapeOwnershipHelpersSelectRetainReleaseOperations () : TestResult =
         | None ->
             Ok ()
 
+let testRcShapeOwnershipHelpersClassifyStorage () : TestResult =
+    let samples = [
+        (FixedBlock (16, [DynamicString]), ManagedRcRoot (16, GenericHeap))
+        (BoxedSum 16, ManagedRcRoot (16, GenericHeap))
+        (TaggedListShape DynamicString, ManagedRcRoot (24, TaggedList))
+        (TaggedListShape (ClosureShape []), ManagedRcRoot (24, GenericHeap))
+        (DictRoot (Immediate, DynamicString), ManagedRcRoot (8, DictHeap))
+        (ClosureShape [DynamicString], ManagedRcRoot (0, ClosureHeap))
+        (DynamicString, ManagedDynamicBuffer DynamicStringBuffer)
+        (DynamicBytes, ManagedDynamicBuffer DynamicBytesBuffer)
+        (Immediate, UnmanagedStorage)
+        (StaticString, UnmanagedStorage)
+        (RawUnmanaged, UnmanagedStorage)
+    ]
+
+    match samples |> List.tryFind (fun (shape, expected) -> rcShapeStorageClass shape <> expected) with
+    | None ->
+        Ok ()
+    | Some (shape, expected) ->
+        Error $"Expected shape {shape} to use storage class {expected}, got {rcShapeStorageClass shape}"
+
 let testRcShapeOwnershipHelpersClassifyRootManagement () : TestResult =
     let managedRootShapes = [
         FixedBlock (16, [Immediate; DynamicString])
@@ -419,6 +440,7 @@ let tests = [
     ("RcShape ownership helpers classify managed roots", testRcShapeOwnershipHelpersClassifyManagedRoots)
     ("RcShape ownership helpers select root dispatch", testRcShapeOwnershipHelpersSelectRootDispatch)
     ("RcShape ownership helpers select retain/release operations", testRcShapeOwnershipHelpersSelectRetainReleaseOperations)
+    ("RcShape ownership helpers classify storage", testRcShapeOwnershipHelpersClassifyStorage)
     ("RcShape ownership helpers classify managed RC roots", testRcShapeOwnershipHelpersClassifyRootManagement)
     ("RcShape ownership helpers classify recursive release", testRcShapeOwnershipHelpersClassifyRecursiveRelease)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)

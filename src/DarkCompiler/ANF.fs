@@ -135,6 +135,12 @@ type RcOperation =
     | DynamicStringBuffer
     | DynamicBytesBuffer
 
+/// High-level storage management class selected from a runtime shape.
+type RcStorageClass =
+    | UnmanagedStorage
+    | ManagedDynamicBuffer of operation:RcOperation
+    | ManagedRcRoot of payloadSize:int * kind:RcKind
+
 /// Function return ownership convention
 type ReturnOwnership =
     | OwnedReturn
@@ -410,19 +416,30 @@ let rcShapePayloadSize (shape: RcShape) : int option =
     | RawUnmanaged ->
         None
 
-/// Retain operation for an owned or borrowed value of the given shape.
-let rcShapeRetainOperation (shape: RcShape) : RcOperation option =
+/// Storage class for deciding whether a value is unmanaged, managed by a
+/// dynamic-buffer helper, or managed by a fixed/tagged RC root helper.
+let rcShapeStorageClass (shape: RcShape) : RcStorageClass =
     match shape with
     | DynamicString ->
-        Some DynamicStringBuffer
+        ManagedDynamicBuffer DynamicStringBuffer
     | DynamicBytes ->
-        Some DynamicBytesBuffer
+        ManagedDynamicBuffer DynamicBytesBuffer
     | _ ->
         match rcShapePayloadSize shape, rcShapeRootKind shape with
         | Some payloadSize, Some kind ->
-            Some (FixedSizeRoot (payloadSize, kind))
+            ManagedRcRoot (payloadSize, kind)
         | _ ->
-            None
+            UnmanagedStorage
+
+/// Retain operation for an owned or borrowed value of the given shape.
+let rcShapeRetainOperation (shape: RcShape) : RcOperation option =
+    match rcShapeStorageClass shape with
+    | ManagedDynamicBuffer operation ->
+        Some operation
+    | ManagedRcRoot (payloadSize, kind) ->
+        Some (FixedSizeRoot (payloadSize, kind))
+    | UnmanagedStorage ->
+        None
 
 /// Release operation for an owned value of the given shape.
 let rcShapeReleaseOperation (shape: RcShape) : RcOperation option =

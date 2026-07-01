@@ -123,7 +123,9 @@ nested tuple string/list/dict payload release, plus x64 tagged-list tuple4
 nested tuple closure/bytes/list/dict payload release, plus x64 tagged-list
 record4 nested tuple dynamic string payload release, plus x64 tagged-list
 record4 nested tuple string/list/dict payload release, plus x64 tagged-list
-record4 nested tuple closure/bytes/list/dict payload release.
+record4 nested tuple closure/bytes/list/dict payload release, plus initial
+`RcShape` storage-class classification used by RC insertion's legacy fixed-root
+compatibility predicate.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -239,12 +241,14 @@ string/list/dict payload release, plus x64 tagged-list tuple4 nested tuple
 closure/bytes/list/dict payload release, plus x64 tagged-list record4 nested
 tuple dynamic string payload release, plus x64 tagged-list record4 nested tuple
 string/list/dict payload release, plus x64 tagged-list record4 nested tuple
-closure/bytes/list/dict payload release:
+closure/bytes/list/dict payload release, plus initial `RcShape` storage-class
+classification used by RC insertion's legacy fixed-root compatibility
+predicate:
 
 - `scripts/run-in-container ./run-tests --filter=refcounting`: `205 passed`
 - `scripts/run-in-container ./run-tests --filter="x64 codegen"`: `104 passed`
 - Full-suite baseline: `scripts/run-in-container ./run-tests`:
-  `4813 passed, 2 failed`
+  `4814 passed, 2 failed`
 - The remaining failures were the known float baseline:
   - `floats.e2e:L494`
   - `floats.e2e:L495`
@@ -315,11 +319,14 @@ previous non-crashing classification for generated record names whose field
 metadata is not present in the current `TypeReg`; fixed root operations still
 require concrete payload metadata before they are emitted.
 
-`ANF.fs` now also exposes `RcOperation`, `rcShapeRetainOperation`, and
-`rcShapeReleaseOperation`. These helpers combine dynamic-buffer operations with
+`ANF.fs` now also exposes `RcOperation`, `RcStorageClass`,
+`rcShapeStorageClass`, `rcShapeRetainOperation`, and
+`rcShapeReleaseOperation`. These helpers separate unmanaged values, dynamic
+buffers, and fixed/tagged RC roots, then combine dynamic-buffer operations with
 fixed-size root payload/kind dispatch. `2.5_RefCountInsertion.fs` uses them
-when emitting retain/release expressions; other production paths still consume
-older lower-level helper combinations directly.
+when emitting retain/release expressions, and its legacy fixed-root
+compatibility predicate now routes through `rcShapeStorageClass`; other
+production paths still consume older lower-level helper combinations directly.
 `ANF.fs` also exposes `rcShapeIsRootManaged` and
 `rcShapeNeedsRecursiveRelease` as early planner predicates for separating
 root-managed values from dynamic buffers and for identifying shapes whose
@@ -661,19 +668,20 @@ Concrete examples:
 1. Extend the small ownership API over `RcShape`.
 
    Initial operations exist for owned scope release, root dispatch kind, root
-   payload size, and retain/release operations. Remaining suggested shape
-   operations:
+   payload size, storage classification, and retain/release operations.
+   Remaining suggested shape operations:
 
    - `fieldReleasePlan : RcShape -> FieldReleasePlan list`
    - `containerPayloadPlan : RcShape -> PayloadReleasePlan`
-   - root-management classification
    - recursive-release classification
 
 2. Finish replacing `isRcManagedHeapType` and `needsAutomaticDec` in
    `2.5_RefCountInsertion.fs` with shape-operation decisions. Retain/release
    emission now uses `rcShapeRetainOperation` and `rcShapeReleaseOperation`,
-   but the current adapter still has a metadata-gap fallback for generated
-   record names and some classification checks still use legacy names.
+   and the legacy fixed-root compatibility predicate now uses
+   `rcShapeStorageClass`, but the current adapter still has a metadata-gap
+   fallback for generated record names and some classification checks still use
+   legacy names.
 
 3. Replace backend dispatch based on `payloadSize` and partial `sourceType`
    pattern matching with a serialized release plan.
