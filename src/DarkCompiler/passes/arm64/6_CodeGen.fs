@@ -1928,6 +1928,44 @@ let private normalizedFieldReleases (fieldReleases: ANF.RcFieldRelease list) : A
     |> List.sortBy (function
         | ANF.FieldRelease (offset, _) -> offset)
 
+let rec private managedLeafSpecShapeOfType (typ: AST.Type) : ANF.RcShape =
+    match typ with
+    | AST.TInt8
+    | AST.TInt16
+    | AST.TInt32
+    | AST.TInt64
+    | AST.TInt128
+    | AST.TUInt8
+    | AST.TUInt16
+    | AST.TUInt32
+    | AST.TUInt64
+    | AST.TUInt128
+    | AST.TBool
+    | AST.TFloat64
+    | AST.TChar
+    | AST.TUnit
+    | AST.TRuntimeError
+    | AST.TVar _ ->
+        ANF.Immediate
+    | AST.TString ->
+        ANF.DynamicString
+    | AST.TBytes ->
+        ANF.DynamicBytes
+    | AST.TRawPtr ->
+        ANF.RawUnmanaged
+    | AST.TTuple fieldTypes ->
+        ANF.FixedBlock (List.length fieldTypes * 8, fieldTypes |> List.map managedLeafSpecShapeOfType)
+    | AST.TList elemType ->
+        ANF.TaggedListShape (managedLeafSpecShapeOfType elemType)
+    | AST.TDict (keyType, valueType) ->
+        ANF.DictRoot (managedLeafSpecShapeOfType keyType, managedLeafSpecShapeOfType valueType)
+    | AST.TFunction _ ->
+        ANF.ClosureShape []
+    | AST.TRecord (name, _) ->
+        Crash.crash $"managedLeafSpecShapeOfType: record type '{name}' requires metadata and is not valid in ARM64 list helper specs"
+    | AST.TSum (name, _) ->
+        Crash.crash $"managedLeafSpecShapeOfType: sum type '{name}' requires metadata and is not valid in ARM64 list helper specs"
+
 let private managedLeafFieldReleases
     (payloadSize: int)
     (fieldTypes: AST.Type list)
@@ -1936,7 +1974,7 @@ let private managedLeafFieldReleases
     | [] ->
         Some []
     | _ ->
-        match ANF.rcReleasePlanOfType Map.empty (AST.TTuple fieldTypes) with
+        match AST.TTuple fieldTypes |> managedLeafSpecShapeOfType |> ANF.rcShapeReleasePlan with
         | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (planPayloadSize, fieldReleases))
             when planPayloadSize = payloadSize ->
             Some fieldReleases
