@@ -650,13 +650,22 @@ let private rawSetRootRetainTarget
 
 let private fixedBlockPayloadSize (recordRegistry: LIR.RecordRegistry) (fieldType: AST.Type) : int option =
     match fieldType with
-    | AST.TTuple fields -> Some (List.length fields * 8)
-    | AST.TSum _ -> Some 16
-    | AST.TRecord (name, _) ->
-        recordRegistry
-        |> Map.tryFind name
-        |> Option.map (fun fields -> List.length fields * 8)
-    | _ -> None
+    | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
+        None
+    | _ ->
+        match ANF.rcShapeOfType recordRegistry fieldType with
+        | ANF.FixedBlock (payloadSize, _)
+        | ANF.BoxedSum payloadSize ->
+            Some payloadSize
+        | ANF.Immediate
+        | ANF.TaggedListShape _
+        | ANF.DictRoot _
+        | ANF.DynamicString
+        | ANF.DynamicBytes
+        | ANF.ClosureShape _
+        | ANF.StaticString
+        | ANF.RawUnmanaged ->
+            None
 
 let private genDictFieldRelease (fieldOffset: int) : X86_64.Instr list =
     [X86_64.PUSH X86_64.RDX

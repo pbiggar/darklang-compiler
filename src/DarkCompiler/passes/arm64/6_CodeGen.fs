@@ -1511,16 +1511,22 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
 
     let fixedBlockPayloadSize (typ: AST.Type) : int option =
         match typ with
-        | AST.TTuple fields ->
-            Some (List.length fields * 8)
-        | AST.TRecord (name, _) ->
-            ctx.RecordRegistry
-            |> Map.tryFind name
-            |> Option.map (fun fields -> List.length fields * 8)
-        | AST.TSum _ ->
-            Some 16
-        | _ ->
+        | AST.TRecord (name, _) when not (Map.containsKey name ctx.RecordRegistry) ->
             None
+        | _ ->
+            match ANF.rcShapeOfType ctx.RecordRegistry typ with
+            | ANF.FixedBlock (payloadSize, _)
+            | ANF.BoxedSum payloadSize ->
+                Some payloadSize
+            | ANF.Immediate
+            | ANF.TaggedListShape _
+            | ANF.DictRoot _
+            | ANF.DynamicString
+            | ANF.DynamicBytes
+            | ANF.ClosureShape _
+            | ANF.StaticString
+            | ANF.RawUnmanaged ->
+                None
 
     let releaseFixedChildField
         (fieldOffset: int)
