@@ -691,6 +691,34 @@ let private releasePlanIsTaggedListWithElementRelease
     | _ ->
         false
 
+let private releasePlanIsDynamicBufferRelease (releasePlan: ANF.RcReleasePlan) : bool =
+    match releasePlan with
+    | ANF.DynamicBufferRelease _ ->
+        true
+    | _ ->
+        false
+
+let private releasePlanIsBoxedSumWithPayloadRelease
+    (payloadPredicate: ANF.RcReleasePlan -> bool)
+    (releasePlan: ANF.RcReleasePlan)
+    : bool =
+    match releasePlan with
+    | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
+        fieldReleases
+        |> List.exists (function
+            | ANF.FieldRelease (_, payloadRelease) ->
+                payloadPredicate payloadRelease)
+    | _ ->
+        false
+
+let private releasePlanIsTaggedListWithSumPayloadRelease
+    (payloadPredicate: ANF.RcReleasePlan -> bool)
+    (releasePlan: ANF.RcReleasePlan)
+    : bool =
+    releasePlanIsTaggedListWithElementRelease
+        (releasePlanIsBoxedSumWithPayloadRelease payloadPredicate)
+        releasePlan
+
 let rec private rcReleasePlanContains
     (predicate: ANF.RcReleasePlan -> bool)
     (releasePlan: ANF.RcReleasePlan)
@@ -5398,6 +5426,23 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
             captureTypes
             |> List.exists (typeContainsNestedListElementRelease elementKind fallbackMatcher))
 
+    let typeContainsSumListPayloadRelease
+        (payloadPredicate: ANF.RcReleasePlan -> bool)
+        (sourceType: AST.Type)
+        : bool =
+        typeReleasePlanContains
+            (releasePlanIsTaggedListWithSumPayloadRelease payloadPredicate)
+            recordRegistry
+            sourceType
+
+    let closureCapturesContainSumListPayloadRelease
+        (payloadPredicate: ANF.RcReleasePlan -> bool)
+        : bool =
+        closureCaptureTypes
+        |> Map.exists (fun _ captureTypes ->
+            captureTypes
+            |> List.exists (typeContainsSumListPayloadRelease payloadPredicate))
+
     // Check if any function uses TaggedList RefCountDec or RefCountInc
     let needsListRcDecHelper =
         functions
@@ -5983,6 +6028,7 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
             || closureCapturesContain (typeContainsListMatching isRecord4ClosureDynamicListDictList))
 
     let needsListRcDecSumDynamicHelper =
+        let matchesPlan = releasePlanIsDynamicBufferRelease
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -5992,11 +6038,12 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TSum (_, [payloadType])))) ->
                         isDynamicBufferType payloadType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isSumDynamicList sourceType
+                        typeContainsSumListPayloadRelease matchesPlan sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isSumDynamicList))
+            || closureCapturesContainSumListPayloadRelease matchesPlan)
 
     let needsListRcDecSumListHelper =
+        let matchesPlan = releasePlanIsRootKind ANF.TaggedList
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -6005,11 +6052,12 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TSum (_, [AST.TList _])))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isSumListList sourceType
+                        typeContainsSumListPayloadRelease matchesPlan sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isSumListList))
+            || closureCapturesContainSumListPayloadRelease matchesPlan)
 
     let needsListRcDecSumDictHelper =
+        let matchesPlan = releasePlanIsRootKind ANF.DictHeap
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -6018,11 +6066,12 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TSum (_, [AST.TDict _])))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isSumDictList sourceType
+                        typeContainsSumListPayloadRelease matchesPlan sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isSumDictList))
+            || closureCapturesContainSumListPayloadRelease matchesPlan)
 
     let needsListRcDecSumClosureHelper =
+        let matchesPlan = releasePlanIsRootKind ANF.ClosureHeap
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -6031,9 +6080,9 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TSum (_, [AST.TFunction _])))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isSumClosureList sourceType
+                        typeContainsSumListPayloadRelease matchesPlan sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isSumClosureList))
+            || closureCapturesContainSumListPayloadRelease matchesPlan)
 
     let needsListRcDecSumTuple2DynamicFirstHelper =
         functions
@@ -6182,6 +6231,9 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
         needsListRcDecSumRecord3DynamicHelper listRefCountDecSumRecord4ClosureDynamicListDictHelperLabel
 
     let needsListRcDecNestedSumDynamicHelper =
+        let matchesPlan =
+            releasePlanIsBoxedSumWithPayloadRelease releasePlanIsDynamicBufferRelease
+
         functions
         |> List.exists (fun func ->
             func.CFG.Blocks
@@ -6191,9 +6243,9 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TSum (_, [AST.TSum (_, [payloadType])]))) ) ->
                         isDynamicBufferType payloadType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isNestedSumDynamicList sourceType
+                        typeContainsSumListPayloadRelease matchesPlan sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isNestedSumDynamicList))
+            || closureCapturesContainSumListPayloadRelease matchesPlan)
 
     let needsListRcDecListHelper =
         functions
