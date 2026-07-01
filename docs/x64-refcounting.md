@@ -104,6 +104,7 @@ x64 probes cover the full ARM64 memory matrix.
   dynamic field combinations
 - tagged-list boxed sum tuple3 string/list/dict payload release
 - tagged-list boxed sum tuple4 string/bytes/list/dict payload release
+- tagged-list boxed sum tuple4 closure/bytes/list/dict payload release
 - tagged-list boxed sum record dynamic-buffer payload release, covering
   one-field records and all non-empty three-field dynamic-buffer combinations
 - tagged-list boxed sum record3 string/list/dict payload release
@@ -152,6 +153,7 @@ exist for:
 - boxed sum tuple2 and tuple3 dynamic string/bytes field combinations
 - boxed sum tuple3 leaf payloads with string/list/dict fields
 - boxed sum tuple4 leaf payloads with string/bytes/list/dict fields
+- boxed sum tuple4 leaf payloads with closure/bytes/list/dict fields
 - boxed sum record leaf payloads covering one-field dynamic string/bytes,
   three-field dynamic string/bytes combinations, record3 string/list/dict, and
   record4 string/bytes/list/dict shapes
@@ -199,9 +201,10 @@ The main x64 gaps are:
 - fixed-block field release for boxed sum payloads beyond the current string,
   list, dict, closure, tuple dynamic-buffer, tuple string/list/dict,
   tuple4 string/bytes/list/dict, tuple4 closure/bytes/list/dict, record
-  dynamic-buffer, record string/list/dict, record4 string/bytes/list/dict, and
-  record4 closure/bytes/list/dict payload paths, plus nested sum
-  dynamic-buffer payload paths; closure payloads beyond
+  dynamic-buffer, record string/list/dict, record4 string/bytes/list/dict,
+  record4 closure/bytes/list/dict, sum tuple4 string/bytes/list/dict, and sum
+  tuple4 closure/bytes/list/dict payload paths, plus nested sum dynamic-buffer
+  payload paths; closure payloads beyond
   direct dynamic-buffer and direct list/dict/closure/fixed-block captures
 - broader record field coverage beyond the current string/bytes/nested
   fixed-block/string-list-dict/string-bytes-list-dict release paths
@@ -216,7 +219,8 @@ The main x64 gaps are:
   string/bytes/list/dict and closure/list/dict shapes, covered record4
   string/bytes/list/dict and closure/bytes/list/dict shapes, broader
   multi-field records and higher-arity tuples, and non-dynamic-buffer sum
-  payloads beyond the current list/dict/closure and fixed-block mixed shapes
+  payloads beyond the current list/dict/closure, sum tuple4, and fixed-block
+  mixed shapes
 - dict/HAMT key and value recursive retain/release coverage
 - helper register preservation for values live across cleanup beyond the
   covered generic fixed-block dynamic-buffer, nested fixed-block, list, dict,
