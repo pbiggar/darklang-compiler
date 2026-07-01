@@ -18,6 +18,7 @@ let s = Stdlib.String.toUpperCase("a" ++ "b") in 0 = stdout="0\n" stderr="" // s
 let s = Stdlib.String.replace("a,b,c", ",", "|") in 0 = stdout="0\n" stderr="" // string replace result and intermediate splits reclaimed
 let s = Stdlib.String.join(["a" ++ "b", "c" ++ "d"], ",") in 0 = stdout="0\n" stderr="" // string join result and list payloads reclaimed
 let parts = Stdlib.String.split("a,b,c", ",") in 0 = stdout="0\n" stderr="" // string split list payloads reclaimed
+def quoteBranchItem(s: String): String = "\"" ++ s ++ "\"" def branchSelectedString(list: List<String>, first: Bool): String = match list with | [] -> "" | [h] -> let item = quoteBranchItem(h) in if first then item else ", " ++ item | [h, ...t] -> branchSelectedString(t, false) let s = branchSelectedString(["a" ++ "b", "c" ++ "d"], true) in 0 = stdout="0\n" stderr="" // branch-local string intermediate reclaimed
 let h = Stdlib.String.head("a" ++ "b") in 0 = stdout="0\n" stderr="" // string head option payload reclaimed
 let s = Stdlib.String.padStart("x", 3, "0") in 0 = stdout="0\n" stderr="" // string padStart result and intermediate pads reclaimed
 let s = Stdlib.String.trim(" " ++ "ab" ++ " ") in 0 = stdout="0\n" stderr="" // string trim result and intermediate slices reclaimed

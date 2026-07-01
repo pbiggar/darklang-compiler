@@ -626,6 +626,7 @@ type LetFrame = {
     CExpr: CExpr
     TupleIncTargets: (TempId * AST.Type) list
     ReturnInc: AST.Type option
+    BranchDec: ReturnDec option
 }
 
 /// Apply a single Let frame around an expression (uses current varGen/types)
@@ -773,10 +774,40 @@ let rec insertRCWithAnalysis
             (finalExpr, finalVarGen, finalTypes, typeCache)
 
         | RIf (cond, thenBranch, elseBranch, _) ->
+            let returnDecTemps =
+                returnDecs
+                |> List.map (fun (tempId, _, _) -> tempId)
+                |> Set.ofList
+            let branchLocalDecs (branchReturned: Set<TempId>) : ReturnDec list =
+                frames
+                |> List.choose (fun frame ->
+                    match frame.BranchDec with
+                    | Some (tempId, _, _ as dec)
+                        when not (Set.contains tempId branchReturned)
+                             && not (Set.contains tempId returnDecTemps) ->
+                        Some dec
+                    | _ ->
+                        None)
             let (thenBranch', varGen1, types1, typeCache1) =
-                insertRCWithAnalysis ctx currentFuncName thenBranch varGen returnDecs paramIncs types typeCache
+                insertRCWithAnalysis
+                    ctx
+                    currentFuncName
+                    thenBranch
+                    varGen
+                    (branchLocalDecs (returnedSet thenBranch) @ returnDecs)
+                    paramIncs
+                    types
+                    typeCache
             let (elseBranch', varGen2, types2, typeCache2) =
-                insertRCWithAnalysis ctx currentFuncName elseBranch varGen1 returnDecs paramIncs types1 typeCache1
+                insertRCWithAnalysis
+                    ctx
+                    currentFuncName
+                    elseBranch
+                    varGen1
+                    (branchLocalDecs (returnedSet elseBranch) @ returnDecs)
+                    paramIncs
+                    types1
+                    typeCache1
             let (finalExpr, finalVarGen, finalTypes) =
                 applyLetFrames ctx frames (If (cond, thenBranch', elseBranch'), varGen2, types2)
             (finalExpr, finalVarGen, finalTypes, typeCache2)
@@ -901,50 +932,50 @@ let rec insertRCWithAnalysis
                     isI64Push funcName && consumesSecondArg args
                 | _ ->
                     false
-            let returnDecs' =
-                let secondParamNeedsOwnershipTransfer (funcName: string) : bool =
-                    let isOwnershipTransferredParamType (typ: AST.Type) : bool =
-                        typ |> rcShapeForType ctx |> rcShapeIsOwnershipTransferRoot
-                    match Map.tryFind funcName ctx.FuncReg with
-                    | Some (AST.TFunction (paramTypes, _)) ->
-                        match paramTypes with
-                        | _ :: secondParamType :: _ -> isOwnershipTransferredParamType secondParamType
-                        | _ -> false
-                    | _ ->
-                        false
-                let skipReturnDecForPushBackHelpers =
-                    match currentFuncName with
-                    | Some funcName ->
-                        let isFunctionSpecialization = funcName.Contains("_fn_")
-                        let isPushBackFamily =
-                            funcName = "Stdlib.List.pushBack"
-                            || funcName.StartsWith("Stdlib.List.pushBack_")
-                            || funcName = "Stdlib.__FingerTree.pushBack"
-                            || funcName.StartsWith("Stdlib.__FingerTree.pushBack_")
-                            || funcName = "Stdlib.__FingerTree.__pushBackNode"
-                            || funcName.StartsWith("Stdlib.__FingerTree.__pushBackNode_")
-                            || funcName.StartsWith("Stdlib.List.__mapHelper_")
-                        isPushBackFamily
-                        && isFunctionSpecialization
-                        && secondParamNeedsOwnershipTransfer funcName
-                        && match inferredType with
-                           | AST.TList _ -> true
-                           | _ -> false
-                    | None ->
-                        false
-                let closureOwnershipTransferredToRawStorage =
-                    match cexpr with
-                    | ClosureAlloc _ -> isStoredByRawSet tempId bodyInfo
+            let secondParamNeedsOwnershipTransfer (funcName: string) : bool =
+                let isOwnershipTransferredParamType (typ: AST.Type) : bool =
+                    typ |> rcShapeForType ctx |> rcShapeIsOwnershipTransferRoot
+                match Map.tryFind funcName ctx.FuncReg with
+                | Some (AST.TFunction (paramTypes, _)) ->
+                    match paramTypes with
+                    | _ :: secondParamType :: _ -> isOwnershipTransferredParamType secondParamType
                     | _ -> false
-                let functionListProducedByStdlibMap =
-                    match cexpr, inferredType with
-                    | Call (funcName, _), AST.TList (AST.TFunction _) ->
-                        funcName = "Stdlib.List.map"
-                        || funcName.StartsWith("Stdlib.List.map_")
-                        || funcName = "Stdlib.List.__mapHelper"
+                | _ ->
+                    false
+            let skipReturnDecForPushBackHelpers =
+                match currentFuncName with
+                | Some funcName ->
+                    let isFunctionSpecialization = funcName.Contains("_fn_")
+                    let isPushBackFamily =
+                        funcName = "Stdlib.List.pushBack"
+                        || funcName.StartsWith("Stdlib.List.pushBack_")
+                        || funcName = "Stdlib.__FingerTree.pushBack"
+                        || funcName.StartsWith("Stdlib.__FingerTree.pushBack_")
+                        || funcName = "Stdlib.__FingerTree.__pushBackNode"
+                        || funcName.StartsWith("Stdlib.__FingerTree.__pushBackNode_")
                         || funcName.StartsWith("Stdlib.List.__mapHelper_")
-                    | _ ->
-                        false
+                    isPushBackFamily
+                    && isFunctionSpecialization
+                    && secondParamNeedsOwnershipTransfer funcName
+                    && match inferredType with
+                       | AST.TList _ -> true
+                       | _ -> false
+                | None ->
+                    false
+            let closureOwnershipTransferredToRawStorage =
+                match cexpr with
+                | ClosureAlloc _ -> isStoredByRawSet tempId bodyInfo
+                | _ -> false
+            let functionListProducedByStdlibMap =
+                match cexpr, inferredType with
+                | Call (funcName, _), AST.TList (AST.TFunction _) ->
+                    funcName = "Stdlib.List.map"
+                    || funcName.StartsWith("Stdlib.List.map_")
+                    || funcName = "Stdlib.List.__mapHelper"
+                    || funcName.StartsWith("Stdlib.List.__mapHelper_")
+                | _ ->
+                    false
+            let returnDecs' =
                 let functionReturnsNestedRecordListDict =
                     let isSingleListDictRecord (name: string) : bool =
                         ctx.TypeReg
@@ -1063,6 +1094,24 @@ let rec insertRCWithAnalysis
                 CExpr = cexpr
                 TupleIncTargets = tupleIncTargets
                 ReturnInc = returnInc
+                BranchDec =
+                    if bindingNeedsAutomaticDec ctx cexpr inferredType
+                       && not (isBorrowingExpr cexpr)
+                       && not skipReturnDecForPushBackHelpers
+                       && not consumedByImmediateI64Push
+                       && not closureOwnershipTransferredToRawStorage
+                       && not functionListProducedByStdlibMap then
+                        let kindOverride =
+                            match inferredType, currentFuncName with
+                            | AST.TList (AST.TFunction _), Some funcName when funcName.StartsWith("Stdlib.") ->
+                                None
+                            | AST.TList (AST.TFunction _), _ ->
+                                Some TaggedList
+                            | _ ->
+                                None
+                        Some (tempId, inferredType, kindOverride)
+                    else
+                        None
             }
 
             // Process the body iteratively, then rebuild on the way back out
