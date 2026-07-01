@@ -1060,10 +1060,9 @@ let private listDecHelperForType
     (sumShapeRegistry: ANF.RcSumShapeRegistry)
     (fieldType: AST.Type)
     : string =
-    fieldType
-    |> tryRcReleasePlanOfType recordRegistry sumShapeRegistry
-    |> Option.map listDecHelperForReleasePlan
-    |> Option.defaultValue listRefCountDecHelperLabel
+    match tryRcReleasePlanOfType recordRegistry sumShapeRegistry fieldType with
+    | Some releasePlan -> listDecHelperForReleasePlan releasePlan
+    | None -> Crash.crash $"listDecHelperForType: missing RC metadata for list element type {fieldType}"
 
 let private genListFieldRelease (fieldOffset: int) (fieldReleasePlan: ANF.RcReleasePlan) : X86_64.Instr list =
     [X86_64.PUSH X86_64.RDX

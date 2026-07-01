@@ -2187,11 +2187,10 @@ let private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : strin
     | _ ->
         listRefCountDecHelperLabel
 
-let private listDecHelperForType (ctx: CodeGenContext) (sourceType: AST.Type option) : string =
-    sourceType
-    |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry)
-    |> Option.map listDecHelperForReleasePlan
-    |> Option.defaultValue listRefCountDecHelperLabel
+let private listDecHelperForType (ctx: CodeGenContext) (sourceType: AST.Type) : string =
+    match tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry sourceType with
+    | Some releasePlan -> listDecHelperForReleasePlan releasePlan
+    | None -> Crash.crash $"listDecHelperForType: missing RC metadata for list element type {sourceType}"
 
 let private dictDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
     match releasePlan with
@@ -2217,12 +2216,6 @@ let private dictDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : strin
             dictRefCountDecHelperLabel
     | _ ->
         dictRefCountDecHelperLabel
-
-let private dictDecHelperForType (ctx: CodeGenContext) (sourceType: AST.Type option) : string =
-    sourceType
-    |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry)
-    |> Option.map dictDecHelperForReleasePlan
-    |> Option.defaultValue dictRefCountDecHelperLabel
 
 let private generateDictRefCountIncHelper () : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_dict_rc_inc_{name}"
@@ -4693,9 +4686,6 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
             let releasePlan = rcMetadataReleasePlan metadata
             let leakDec = generateLeakCounterDec ctx
             let tupleDecPath =
-                let listHelperLabelForField (fieldType: AST.Type) : string =
-                    listDecHelperForType ctx (Some fieldType)
-
                 let releaseListFieldFromHelper (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (helperLabel: string) : ARM64Symbolic.Instr list =
                     let callInstrs = [
                         ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
@@ -4717,9 +4707,6 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
                         ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
                     ] @ callInstrs
-
-                let releaseListFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
-                    releaseListFieldFromHelper baseReg fieldOffset (listHelperLabelForField fieldType)
 
                 let releaseListFieldFromPlan (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldReleasePlan: ANF.RcReleasePlan) : ARM64Symbolic.Instr list =
                     releaseListFieldFromHelper baseReg fieldOffset (listDecHelperForReleasePlan fieldReleasePlan)
@@ -4745,9 +4732,6 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
                         ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
                     ] @ callInstrs
-
-                let releaseDictFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldType: AST.Type option) : ARM64Symbolic.Instr list =
-                    releaseDictFieldFromHelper baseReg fieldOffset (dictDecHelperForType ctx fieldType)
 
                 let releaseDictFieldFromPlan (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldReleasePlan: ANF.RcReleasePlan) : ARM64Symbolic.Instr list =
                     releaseDictFieldFromHelper baseReg fieldOffset (dictDecHelperForReleasePlan fieldReleasePlan)
@@ -6176,7 +6160,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
     let listDecHelperLabelsForListType (fieldType: AST.Type) : Set<string> =
         match fieldType with
         | AST.TList _ ->
-            Set.singleton (listDecHelperForType ctx (Some fieldType))
+            Set.singleton (listDecHelperForType ctx fieldType)
         | _ ->
             Set.empty
 
