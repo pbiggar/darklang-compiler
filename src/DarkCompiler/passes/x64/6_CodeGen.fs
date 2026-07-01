@@ -392,7 +392,17 @@ type private FuncCtx = {
     UsedCalleeSaved: LIR.PhysReg list
     EnableLeakCheck: bool
     RecordRegistry: LIR.RecordRegistry
+    SumShapeRegistry: ANF.RcSumShapeRegistry
 }
+
+let private rcSumShapeRegistryFromVariantRegistry (variantRegistry: LIR.VariantRegistry) : ANF.RcSumShapeRegistry =
+    variantRegistry
+    |> Map.map (fun _typeName typeVariants ->
+        { ANF.TypeParams = typeVariants.TypeParams
+          ANF.Payloads =
+            typeVariants.Variants
+            |> List.sortBy (fun variant -> variant.Tag)
+            |> List.map (fun variant -> variant.Tag, variant.Payload) })
 
 // ============================================================================
 // Leak Counter (data label _leak_count in ELF data section)
@@ -621,6 +631,7 @@ type private RawSetRootRetainTarget =
 
 let private rawSetRootRetainTarget
     (recordRegistry: LIR.RecordRegistry)
+    (sumShapeRegistry: ANF.RcSumShapeRegistry)
     (valueType: AST.Type option)
     : RawSetRootRetainTarget option =
     let shapeOfKnownType (typ: AST.Type) : ANF.RcShape option =
@@ -628,7 +639,7 @@ let private rawSetRootRetainTarget
         | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
             None
         | _ ->
-            Some (ANF.rcShapeOfType recordRegistry typ)
+            Some (ANF.rcShapeOfTypeWithSums recordRegistry sumShapeRegistry typ)
 
     valueType
     |> Option.bind (fun typ ->
@@ -648,12 +659,16 @@ let private rawSetRootRetainTarget
             | ANF.RawUnmanaged ->
                 None))
 
-let private tryRcReleasePlanOfType (recordRegistry: LIR.RecordRegistry) (typ: AST.Type) : ANF.RcReleasePlan option =
+let private tryRcReleasePlanOfType
+    (recordRegistry: LIR.RecordRegistry)
+    (sumShapeRegistry: ANF.RcSumShapeRegistry)
+    (typ: AST.Type)
+    : ANF.RcReleasePlan option =
     match typ with
     | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
         None
     | _ ->
-        Some (ANF.rcReleasePlanOfType recordRegistry typ)
+        Some (ANF.rcReleasePlanOfTypeWithSums recordRegistry sumShapeRegistry typ)
 
 let private rcMetadataReleasePlan (metadata: ANF.RcMetadata option) : ANF.RcReleasePlan option =
     metadata |> Option.bind (fun m -> m.ReleasePlan)
@@ -788,10 +803,11 @@ let rec private rcReleasePlanContains
 let private typeReleasePlanContains
     (predicate: ANF.RcReleasePlan -> bool)
     (recordRegistry: LIR.RecordRegistry)
+    (sumShapeRegistry: ANF.RcSumShapeRegistry)
     (typ: AST.Type)
     : bool =
     typ
-    |> tryRcReleasePlanOfType recordRegistry
+    |> tryRcReleasePlanOfType recordRegistry sumShapeRegistry
     |> Option.exists (rcReleasePlanContains predicate)
 
 let private genDictFieldRelease (fieldOffset: int) : X86_64.Instr list =
@@ -1039,9 +1055,13 @@ let rec private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : s
     | _ ->
         listRefCountDecHelperLabel
 
-let private listDecHelperForType (recordRegistry: LIR.RecordRegistry) (fieldType: AST.Type) : string =
+let private listDecHelperForType
+    (recordRegistry: LIR.RecordRegistry)
+    (sumShapeRegistry: ANF.RcSumShapeRegistry)
+    (fieldType: AST.Type)
+    : string =
     fieldType
-    |> tryRcReleasePlanOfType recordRegistry
+    |> tryRcReleasePlanOfType recordRegistry sumShapeRegistry
     |> Option.map listDecHelperForReleasePlan
     |> Option.defaultValue listRefCountDecHelperLabel
 
@@ -2631,6 +2651,7 @@ let private closurePayloadSizesFromParams (functions: LIR.Function list) : Map<s
 let private generateClosureRefCountDecHelper
     (enableLeakCheck: bool)
     (recordRegistry: LIR.RecordRegistry)
+    (sumShapeRegistry: ANF.RcSumShapeRegistry)
     (closurePayloadSizes: Map<string, int>)
     (closureCaptureTypes: Map<string, AST.Type list>)
     : X86_64.Instr list =
@@ -2658,6 +2679,7 @@ let private generateClosureRefCountDecHelper
         UsedCalleeSaved = []
         EnableLeakCheck = enableLeakCheck
         RecordRegistry = recordRegistry
+        SumShapeRegistry = sumShapeRegistry
     }
 
     let payloadCases =
@@ -2710,7 +2732,7 @@ let private generateClosureRefCountDecHelper
         @ [X86_64.Label doneLabel]
 
     let releaseFixedBlockCapture (fieldOffset: int) (captureType: AST.Type) : X86_64.Instr list =
-        match tryRcReleasePlanOfType recordRegistry captureType with
+        match tryRcReleasePlanOfType recordRegistry sumShapeRegistry captureType with
         | Some (ANF.RootRelease (payloadSize, ANF.GenericHeap, (ANF.FixedBlockPayloadRelease _ | ANF.BoxedSumPayloadRelease _)) as releasePlan) ->
             [X86_64.MOV_load (X86_64.R9, X86_64.RAX, fieldOffset)
              X86_64.PUSH X86_64.RAX]
@@ -2733,7 +2755,7 @@ let private generateClosureRefCountDecHelper
                     | AST.TBytes ->
                         releaseDynamicBufferCapture fieldOffset $"{index}_{captureIndex}"
                     | AST.TList _ ->
-                        releaseHeapRootCapture fieldOffset (listDecHelperForType recordRegistry captureType) $"{index}_{captureIndex}_list"
+                        releaseHeapRootCapture fieldOffset (listDecHelperForType recordRegistry sumShapeRegistry captureType) $"{index}_{captureIndex}_list"
                     | AST.TDict _ ->
                         releaseHeapRootCapture fieldOffset dictRefCountDecHelperLabel $"{index}_{captureIndex}_dict"
                     | AST.TFunction _ ->
@@ -4336,7 +4358,7 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                     // intentionally omitted here: list leaves currently consume those
                     // freshly owned values instead of retaining an extra reference.
                     let ownershipInc : X86_64.Instr list =
-                        match rawSetRootRetainTarget ctx.RecordRegistry valueType with
+                        match rawSetRootRetainTarget ctx.RecordRegistry ctx.SumShapeRegistry valueType with
                         | Some RawSetListRootRetain ->
                             let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI]
                             let saves = saveRegs |> List.map X86_64.PUSH
@@ -4936,7 +4958,12 @@ let private translateBlock (ctx: FuncCtx) (epilogueLabel: string) (block: LIR.Ba
             labelInstr @ bodyInstrs @ termInstrs)
 
 /// Translate a LIR function to x86-64 instructions
-let translateFunction (enableLeakCheck: bool) (recordRegistry: LIR.RecordRegistry) (func: LIR.Function) : Result<X86_64.Instr list, string> =
+let translateFunction
+    (enableLeakCheck: bool)
+    (recordRegistry: LIR.RecordRegistry)
+    (sumShapeRegistry: ANF.RcSumShapeRegistry)
+    (func: LIR.Function)
+    : Result<X86_64.Instr list, string> =
     let epilogueLabel = "_epilogue_" + func.Name
     let prologue = genPrologue func.StackSize func.UsedCalleeSaved
 
@@ -4963,6 +4990,7 @@ let translateFunction (enableLeakCheck: bool) (recordRegistry: LIR.RecordRegistr
                 UsedCalleeSaved = func.UsedCalleeSaved
                 EnableLeakCheck = enableLeakCheck
                 RecordRegistry = recordRegistry
+                SumShapeRegistry = sumShapeRegistry
             }
             match translateBlock ctx epilogueLabel block with
             | Error e -> Error e
@@ -4994,19 +5022,21 @@ let translateFunction (enableLeakCheck: bool) (recordRegistry: LIR.RecordRegistr
         Ok (funcLabel @ prologue @ heapInit @ blockInstrs @ epilogue)
 
 /// Translate a complete LIR program to x86-64 instructions
-let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakCheck: bool) : Result<X86_64.Instr list, string> =
+let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) (enableLeakCheck: bool) : Result<X86_64.Instr list, string> =
+    let sumShapeRegistry = rcSumShapeRegistryFromVariantRegistry variantRegistry
+
     let rec translateFuncs acc remaining =
         match remaining with
         | [] -> Ok (List.rev acc |> List.concat)
         | func :: rest ->
-            match translateFunction enableLeakCheck recordRegistry func with
+            match translateFunction enableLeakCheck recordRegistry sumShapeRegistry func with
             | Error e -> Error e
             | Ok instrs -> translateFuncs (instrs :: acc) rest
 
     let closureCaptureTypes = closureCaptureTypesFromParams functions
 
     let typeContainsRootKindRelease (kind: ANF.RcKind) (sourceType: AST.Type) : bool =
-        typeReleasePlanContains (releasePlanIsRootKind kind) recordRegistry sourceType
+        typeReleasePlanContains (releasePlanIsRootKind kind) recordRegistry sumShapeRegistry sourceType
 
     let closureCapturesContainRootKindRelease (kind: ANF.RcKind) : bool =
         closureCaptureTypes
@@ -5016,7 +5046,7 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
     let closureCapturesContainReleasePlan (predicate: ANF.RcReleasePlan -> bool) : bool =
         closureCaptureTypes
         |> Map.exists (fun _ captureTypes ->
-            captureTypes |> List.exists (typeReleasePlanContains predicate recordRegistry))
+            captureTypes |> List.exists (typeReleasePlanContains predicate recordRegistry sumShapeRegistry))
 
     let typeContainsNestedListElementRelease
         (elementKind: ANF.RcKind)
@@ -5025,12 +5055,13 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
         let releasePlanMatches =
             releasePlanIsTaggedListWithElementRelease (releasePlanIsRootKind elementKind)
 
-        typeReleasePlanContains releasePlanMatches recordRegistry sourceType
+        typeReleasePlanContains releasePlanMatches recordRegistry sumShapeRegistry sourceType
 
     let typeContainsDynamicBufferListElementRelease (sourceType: AST.Type) : bool =
         typeReleasePlanContains
             (releasePlanIsTaggedListWithElementRelease releasePlanIsDynamicBufferRelease)
             recordRegistry
+            sumShapeRegistry
             sourceType
 
     let closureCapturesContainDynamicBufferListElementRelease () : bool =
@@ -5053,6 +5084,7 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
         typeReleasePlanContains
             (releasePlanIsTaggedListWithSumPayloadRelease payloadPredicate)
             recordRegistry
+            sumShapeRegistry
             sourceType
 
     let closureCapturesContainSumListPayloadRelease
@@ -5095,7 +5127,7 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
 
     let listDecHelperLabelsInType sourceType =
         sourceType
-        |> tryRcReleasePlanOfType recordRegistry
+        |> tryRcReleasePlanOfType recordRegistry sumShapeRegistry
         |> Option.map listDecHelperLabelsInReleasePlan
         |> Option.defaultValue Set.empty
 
@@ -5153,7 +5185,7 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                 |> List.exists (function
                     | LIR.RefCountInc (_, _, LIR.TaggedList, _) -> true
                     | LIR.RawSet (_, _, _, valueType) ->
-                        match rawSetRootRetainTarget recordRegistry valueType with
+                        match rawSetRootRetainTarget recordRegistry sumShapeRegistry valueType with
                         | Some RawSetListRootRetain -> true
                         | _ -> false
                     | _ -> false)))
@@ -5167,7 +5199,7 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                 |> List.exists (function
                     | LIR.RefCountInc (_, _, LIR.DictHeap, _) -> true
                     | LIR.RawSet (_, _, _, valueType) ->
-                        match rawSetRootRetainTarget recordRegistry valueType with
+                        match rawSetRootRetainTarget recordRegistry sumShapeRegistry valueType with
                         | Some RawSetDictRootRetain -> true
                         | _ -> false
                     | _ -> false)))
@@ -5220,6 +5252,6 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
             if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper then generateDictRefCountDecHelper enableLeakCheck
             else []
         let closureDecHelper =
-            if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper enableLeakCheck recordRegistry closurePayloadSizes closureCaptureTypes
+            if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper enableLeakCheck recordRegistry sumShapeRegistry closurePayloadSizes closureCaptureTypes
             else []
         allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ dictDecHelper @ closureDecHelper @ genOomHandler ())

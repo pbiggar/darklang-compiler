@@ -226,6 +226,7 @@ let main args =
         { Name = "Progress Bar Tests"; Tests = ProgressBarTests.tests }
         { Name = "ARM64 Encoding Tests"; Tests = ARM64EncodingTests.tests }
         { Name = "ARM64 Binary Tests"; Tests = ARM64BinaryTests.tests }
+        { Name = "ARM64 CodeGen Tests"; Tests = ARM64CodeGenTests.tests }
         { Name = "x64 Encoding Tests"; Tests = X86_64EncodingTests.tests }
         { Name = "x64 Binary Tests"; Tests = X86_64BinaryTests.tests }
         { Name = "x64 Resolve Tests"; Tests = X86_64ResolveTests.tests }

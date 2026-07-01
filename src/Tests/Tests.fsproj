@@ -60,6 +60,7 @@
     <!-- ARM64 backend tests -->
     <Compile Include="compiler-passes/ARM64EncodingTests.fs" />
     <Compile Include="compiler-passes/ARM64BinaryTests.fs" />
+    <Compile Include="compiler-passes/ARM64CodeGenTests.fs" />
 
     <!-- x64 backend tests -->
     <Compile Include="compiler-passes/X86_64EncodingTests.fs" />

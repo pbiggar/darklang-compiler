@@ -138,6 +138,7 @@ type private RawSetRootRetainTarget =
 
 let private rawSetRootRetainTarget
     (recordRegistry: LIR.RecordRegistry)
+    (sumShapeRegistry: ANF.RcSumShapeRegistry)
     (valueType: AST.Type option)
     : RawSetRootRetainTarget option =
     let shapeOfKnownType (typ: AST.Type) : ANF.RcShape option =
@@ -145,7 +146,7 @@ let private rawSetRootRetainTarget
         | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
             None
         | _ ->
-            Some (ANF.rcShapeOfType recordRegistry typ)
+            Some (ANF.rcShapeOfTypeWithSums recordRegistry sumShapeRegistry typ)
 
     valueType
     |> Option.bind (fun typ ->
@@ -5454,7 +5455,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     ]
 
                     let ownershipInc =
-                        match rawSetRootRetainTarget ctx.RecordRegistry valueType with
+                        match rawSetRootRetainTarget ctx.RecordRegistry ctx.SumShapeRegistry valueType with
                         | Some RawSetListRootRetain ->
                             [
                                 ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -64s)
@@ -6154,7 +6155,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> List.exists (function
                     | LIR.RefCountInc (_, _, LIR.TaggedList, _) -> true
                     | LIR.RawSet (_, _, _, valueType) ->
-                        match rawSetRootRetainTarget ctx.RecordRegistry valueType with
+                        match rawSetRootRetainTarget ctx.RecordRegistry ctx.SumShapeRegistry valueType with
                         | Some RawSetListRootRetain -> true
                         | _ -> false
                     | _ -> false)))
@@ -6168,7 +6169,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> List.exists (function
                     | LIR.RefCountInc (_, _, LIR.DictHeap, _) -> true
                     | LIR.RawSet (_, _, _, valueType) ->
-                        match rawSetRootRetainTarget ctx.RecordRegistry valueType with
+                        match rawSetRootRetainTarget ctx.RecordRegistry ctx.SumShapeRegistry valueType with
                         | Some RawSetDictRootRetain -> true
                         | _ -> false
                     | _ -> false)))
