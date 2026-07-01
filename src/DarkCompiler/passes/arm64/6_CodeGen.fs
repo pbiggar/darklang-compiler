@@ -104,12 +104,15 @@ let private listRefCountDecStringBytesTupleListHelperLabel = "__dark_list_refcou
 let private listRefCountDecStringBytesTupleDynamic3HelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_dynamic3_helper"
 let private listRefCountDecStringBytesTupleManaged3ListHelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_managed3_list_helper"
 let private listRefCountDecStringBytesTupleManaged3DictHelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_managed3_dict_helper"
+let private listRefCountDecStringBytesTupleManaged3DictListHelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_managed3_dict_list_helper"
 let private listRefCountDecStringBytesTupleManaged3ClosureHelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_managed3_closure_helper"
 let private listRefCountDecStringBytesTupleManagedListHelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_managed_list_helper"
 let private listRefCountDecStringBytesTupleManagedDictHelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_managed_dict_helper"
+let private listRefCountDecStringBytesTupleManagedDictListHelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_managed_dict_list_helper"
 let private listRefCountDecStringBytesTupleManagedClosureHelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_managed_closure_helper"
 let private listRefCountDecStringBytesRecordManagedListHelperLabel = "__dark_list_refcount_dec_string_bytes_record_managed_list_helper"
 let private listRefCountDecStringBytesRecordManagedDictHelperLabel = "__dark_list_refcount_dec_string_bytes_record_managed_dict_helper"
+let private listRefCountDecStringBytesRecordManagedDictListHelperLabel = "__dark_list_refcount_dec_string_bytes_record_managed_dict_list_helper"
 let private listRefCountDecStringBytesRecordManagedClosureHelperLabel = "__dark_list_refcount_dec_string_bytes_record_managed_closure_helper"
 let private listRefCountDecListHelperLabel = "__dark_list_refcount_dec_list_helper"
 let private listRefCountDecDictHelperLabel = "__dark_list_refcount_dec_dict_helper"
@@ -534,6 +537,15 @@ let private generateListRefCountDecHelperWith
         | _ ->
             dictRefCountDecHelperLabel
 
+    let leafDictHelperLabelForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
+        match releasePlan with
+        | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, ANF.RootRelease (_, ANF.TaggedList, _))) ->
+            dictRefCountDecListValueHelperLabel
+        | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, ANF.RootRelease (_, ANF.DictHeap, _))) ->
+            dictRefCountDecDictValueHelperLabel
+        | _ ->
+            dictRefCountDecHelperLabel
+
     let releaseDictLeafField (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
         let fieldDone = label $"leaf_dict_field_{fieldOffset}_done"
         let helperLabel = leafDictHelperLabel fieldType
@@ -687,12 +699,12 @@ let private generateListRefCountDecHelperWith
                             childOffset
                             "leaf_fixed_list_child"
                             (leafListHelperLabelForReleasePlan childReleasePlan)
-                    | ANF.FieldRelease (childOffset, ANF.RootRelease (_, ANF.DictHeap, _)) ->
+                    | ANF.FieldRelease (childOffset, (ANF.RootRelease (_, ANF.DictHeap, _) as childReleasePlan)) ->
                         releaseManagedRootFixedLeafChildField
                             fieldOffset
                             childOffset
                             "leaf_fixed_dict_child"
-                            dictRefCountDecHelperLabel
+                            (leafDictHelperLabelForReleasePlan childReleasePlan)
                     | ANF.FieldRelease (childOffset, ANF.RootRelease (_, ANF.ClosureHeap, _)) ->
                         releaseManagedRootFixedLeafChildField
                             fieldOffset
@@ -1229,6 +1241,12 @@ let private listRefCountDecHelperSpecs : ListRefCountDecHelperSpec list =
       ReleaseLeafDictPayload = false
       ReleaseLeafClosurePayload = false
       ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ] ] }
+    { Label = listRefCountDecStringBytesTupleManaged3DictListHelperLabel
+      LeafGenericPayloadSize = (Some 24)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TDict (AST.TInt64, AST.TList AST.TInt64); AST.TString ] ] }
     { Label = listRefCountDecStringBytesTupleManaged3ClosureHelperLabel
       LeafGenericPayloadSize = (Some 24)
       ReleaseLeafListPayload = false
@@ -1247,6 +1265,12 @@ let private listRefCountDecHelperSpecs : ListRefCountDecHelperSpec list =
       ReleaseLeafDictPayload = false
       ReleaseLeafClosurePayload = false
       ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ]; AST.TList AST.TInt64 ] }
+    { Label = listRefCountDecStringBytesTupleManagedDictListHelperLabel
+      LeafGenericPayloadSize = (Some 32)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TDict (AST.TInt64, AST.TList AST.TInt64); AST.TString ]; AST.TList AST.TInt64 ] }
     { Label = listRefCountDecStringBytesTupleManagedClosureHelperLabel
       LeafGenericPayloadSize = (Some 32)
       ReleaseLeafListPayload = false
@@ -1270,6 +1294,12 @@ let private listRefCountDecHelperSpecs : ListRefCountDecHelperSpec list =
       ReleaseLeafDictPayload = false
       ReleaseLeafClosurePayload = false
       ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ]; AST.TList AST.TInt64 ] }
+    { Label = listRefCountDecStringBytesRecordManagedDictListHelperLabel
+      LeafGenericPayloadSize = (Some 32)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TDict (AST.TInt64, AST.TList AST.TInt64); AST.TString ]; AST.TList AST.TInt64 ] }
     { Label = listRefCountDecStringBytesRecordManagedClosureHelperLabel
       LeafGenericPayloadSize = (Some 32)
       ReleaseLeafListPayload = false
@@ -6251,7 +6281,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             |> unionLabelSets)
         |> Option.defaultValue Set.empty
 
-    let dictDecHelperLabelsForDictType (fieldType: AST.Type) : Set<string> =
+    let rec dictDecHelperLabelsForDictType (fieldType: AST.Type) : Set<string> =
         match fieldType with
         | AST.TDict (_, AST.TList _) ->
             Set.singleton dictRefCountDecListValueHelperLabel
@@ -6259,6 +6289,12 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             Set.singleton dictRefCountDecDictValueHelperLabel
         | AST.TDict _ ->
             Set.singleton dictRefCountDecHelperLabel
+        | AST.TTuple fieldTypes ->
+            fieldTypes
+            |> List.map dictDecHelperLabelsForDictType
+            |> unionLabelSets
+        | AST.TList elementType ->
+            dictDecHelperLabelsForDictType elementType
         | _ ->
             Set.empty
 
