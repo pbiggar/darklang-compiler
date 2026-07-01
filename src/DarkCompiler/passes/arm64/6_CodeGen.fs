@@ -433,6 +433,18 @@ let private generateListRefCountDecHelperWith
         | _ ->
             listRefCountDecHelperLabel
 
+    let leafListHelperLabelForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
+        match releasePlan with
+        | ANF.RootRelease (_, ANF.TaggedList, ANF.TaggedListPayloadRelease (ANF.RootRelease (_, ANF.TaggedList, _))) ->
+            listRefCountDecListHelperLabel
+        | ANF.RootRelease (_, ANF.TaggedList, ANF.TaggedListPayloadRelease (ANF.RootRelease (_, ANF.DictHeap, _))) ->
+            listRefCountDecDictHelperLabel
+        | ANF.RootRelease (_, ANF.TaggedList, ANF.TaggedListPayloadRelease (ANF.RootRelease (_, ANF.ClosureHeap, _)))
+            when not (ctx.FunctionName.StartsWith("Stdlib.")) ->
+            listRefCountDecClosureHelperLabel
+        | _ ->
+            listRefCountDecHelperLabel
+
     let releaseListLeafField (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
         let fieldDone = label $"leaf_list_field_{fieldOffset}_done"
         let helperLabel = leafListHelperLabel fieldType
@@ -516,28 +528,15 @@ let private generateListRefCountDecHelperWith
         @ callInstrs
         @ [ARM64Symbolic.Label fieldDone]
 
-    let fixedBlockLeafPayloadSize (fieldType: AST.Type) : int option =
+    let fixedBlockLeafReleasePlan (fieldType: AST.Type) : ANF.RcReleasePlan option =
         match fieldType with
-        | AST.TTuple fields ->
-            Some (List.length fields * 8)
-        | AST.TRecord (name, _) ->
-            ctx.RecordRegistry
-            |> Map.tryFind name
-            |> Option.map (fun fields -> List.length fields * 8)
+        | AST.TRecord (name, _) when not (Map.containsKey name ctx.RecordRegistry) ->
+            None
+        | AST.TTuple _
+        | AST.TRecord _ ->
+            Some (ANF.rcReleasePlanOfTypeWithSums ctx.RecordRegistry ctx.SumShapeRegistry fieldType)
         | _ ->
             None
-
-    let fixedBlockLeafFieldTypes (fieldType: AST.Type) : AST.Type list =
-        match fieldType with
-        | AST.TTuple fields ->
-            fields
-        | AST.TRecord (name, _) ->
-            ctx.RecordRegistry
-            |> Map.tryFind name
-            |> Option.map (List.map snd)
-            |> Option.defaultValue []
-        | _ ->
-            []
 
     let releaseDynamicBufferFixedLeafChildField (fieldOffset: int) (childOffset: int) : ARM64Symbolic.Instr list =
         let childDone = label $"leaf_fixed_dynamic_child_{fieldOffset}_{childOffset}_done"
@@ -615,39 +614,34 @@ let private generateListRefCountDecHelperWith
         @ [ARM64Symbolic.Label childDone]
 
     let releaseFixedBlockLeafField (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
-        match fixedBlockLeafPayloadSize fieldType with
-        | None ->
-            []
-        | Some payloadSize ->
+        match fixedBlockLeafReleasePlan fieldType with
+        | Some (ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))) ->
             let fieldDone = label $"leaf_fixed_field_{fieldOffset}_done"
             let childReleases =
-                fixedBlockLeafFieldTypes fieldType
-                |> List.mapi (fun index childFieldType ->
-                    match childFieldType with
-                    | AST.TString
-                    | AST.TBytes ->
-                        releaseDynamicBufferFixedLeafChildField fieldOffset (index * 8)
-                    | AST.TList _ ->
+                fieldReleases
+                |> List.collect (function
+                    | ANF.FieldRelease (childOffset, ANF.DynamicBufferRelease _) ->
+                        releaseDynamicBufferFixedLeafChildField fieldOffset childOffset
+                    | ANF.FieldRelease (childOffset, (ANF.RootRelease (_, ANF.TaggedList, _) as childReleasePlan)) ->
                         releaseManagedRootFixedLeafChildField
                             fieldOffset
-                            (index * 8)
+                            childOffset
                             "leaf_fixed_list_child"
-                            (leafListHelperLabel childFieldType)
-                    | AST.TDict _ ->
+                            (leafListHelperLabelForReleasePlan childReleasePlan)
+                    | ANF.FieldRelease (childOffset, ANF.RootRelease (_, ANF.DictHeap, _)) ->
                         releaseManagedRootFixedLeafChildField
                             fieldOffset
-                            (index * 8)
+                            childOffset
                             "leaf_fixed_dict_child"
                             dictRefCountDecHelperLabel
-                    | AST.TFunction _ ->
+                    | ANF.FieldRelease (childOffset, ANF.RootRelease (_, ANF.ClosureHeap, _)) ->
                         releaseManagedRootFixedLeafChildField
                             fieldOffset
-                            (index * 8)
+                            childOffset
                             "leaf_fixed_closure_child"
                             closureRefCountDecHelperLabel
                     | _ ->
                         [])
-                |> List.concat
             [
                 ARM64Symbolic.LDR (ARM64Symbolic.X11, ARM64Symbolic.X3, 0s)
                 ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X11, int16 fieldOffset)
@@ -668,6 +662,8 @@ let private generateListRefCountDecHelperWith
                 [])
             @ leakDec
             @ [ARM64Symbolic.Label fieldDone]
+        | _ ->
+            []
 
     let releaseManagedLeafFields =
         managedLeafFieldTypes
