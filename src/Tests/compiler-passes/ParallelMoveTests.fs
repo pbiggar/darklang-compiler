@@ -22,6 +22,7 @@ let convertTailArgMoves (moves: (LIR.PhysReg * LIR.Operand) list) : Result<ARM64
     let ctx : CodeGen.CodeGenContext = {
         Options = CodeGen.defaultOptions
         VariantRegistry = Map.empty
+        SumShapeRegistry = Map.empty
         RecordRegistry = Map.empty
         ClosurePayloadSizes = Map.empty
         ClosureCaptureTypes = Map.empty
@@ -37,6 +38,7 @@ let convertRawAlloc (dest: LIR.PhysReg) (numBytes: LIR.PhysReg) : Result<ARM64Sy
     let ctx : CodeGen.CodeGenContext = {
         Options = CodeGen.defaultOptions
         VariantRegistry = Map.empty
+        SumShapeRegistry = Map.empty
         RecordRegistry = Map.empty
         ClosurePayloadSizes = Map.empty
         ClosureCaptureTypes = Map.empty

@@ -41,6 +41,7 @@ let defaultOptions : CodeGenOptions = {
 type CodeGenContext = {
     Options: CodeGenOptions
     VariantRegistry: LIR.VariantRegistry
+    SumShapeRegistry: ANF.RcSumShapeRegistry
     RecordRegistry: LIR.RecordRegistry
     ClosurePayloadSizes: Map<string, int>
     ClosureCaptureTypes: Map<string, AST.Type list>
@@ -50,6 +51,15 @@ type CodeGenContext = {
     UsedCalleeSaved: LIR.PhysReg list
     HeapOverflowLabel: string
 }
+
+let private rcSumShapeRegistryFromVariantRegistry (variantRegistry: LIR.VariantRegistry) : ANF.RcSumShapeRegistry =
+    variantRegistry
+    |> Map.map (fun _typeName typeVariants ->
+        { TypeParams = typeVariants.TypeParams
+          Payloads =
+            typeVariants.Variants
+            |> List.sortBy (fun variant -> variant.Tag)
+            |> List.map (fun variant -> variant.Payload) })
 
 let leakCounterLabel = "_leak_count"
 let heapOutOfMemoryMessage = "Out of heap memory"
@@ -1981,20 +1991,25 @@ let private fixedBlockHasField (predicate: AST.Type -> bool) (recordRegistry: LI
     fixedBlockFieldTypes recordRegistry sourceType
     |> List.exists predicate
 
-let private tryRcReleasePlanOfType (recordRegistry: LIR.RecordRegistry) (typ: AST.Type) : ANF.RcReleasePlan option =
+let private tryRcReleasePlanOfType
+    (recordRegistry: LIR.RecordRegistry)
+    (sumShapeRegistry: ANF.RcSumShapeRegistry)
+    (typ: AST.Type)
+    : ANF.RcReleasePlan option =
     match typ with
     | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
         None
     | _ ->
-        Some (ANF.rcReleasePlanOfType recordRegistry typ)
+        Some (ANF.rcReleasePlanOfTypeWithSums recordRegistry sumShapeRegistry typ)
 
 let private directFixedBlockFieldHasRelease
     (predicate: ANF.RcReleasePlan -> bool)
     (recordRegistry: LIR.RecordRegistry)
+    (sumShapeRegistry: ANF.RcSumShapeRegistry)
     (sourceType: AST.Type option)
     : bool =
     sourceType
-    |> Option.bind (tryRcReleasePlanOfType recordRegistry)
+    |> Option.bind (tryRcReleasePlanOfType recordRegistry sumShapeRegistry)
     |> Option.map (function
         | ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, fieldReleases))
         | ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
@@ -2400,9 +2415,40 @@ let private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : strin
 
 let private listDecHelperForType (ctx: CodeGenContext) (sourceType: AST.Type option) : string =
     sourceType
-    |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry)
+    |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry)
     |> Option.map listDecHelperForReleasePlan
     |> Option.defaultValue listRefCountDecHelperLabel
+
+let private dictDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
+    match releasePlan with
+    | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, valueRelease)) ->
+        match valueRelease with
+        | ANF.RootRelease (_, ANF.TaggedList, _) ->
+            dictRefCountDecListValueHelperLabel
+        | ANF.RootRelease (_, ANF.DictHeap, _) ->
+            dictRefCountDecDictValueHelperLabel
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (16, fieldReleases))
+            when releasePlanDynamicOperationAt 0 ANF.DynamicStringBuffer fieldReleases
+                 && releasePlanRootKindAt 8 ANF.TaggedList fieldReleases ->
+            dictRefCountDecTupleStringListValueHelperLabel
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (24, fieldReleases))
+            when releasePlanDynamicOperationAt 0 ANF.DynamicStringBuffer fieldReleases
+                 && releasePlanRootKindAt 8 ANF.TaggedList fieldReleases
+                 && releasePlanRootKindAt 16 ANF.DictHeap fieldReleases ->
+            dictRefCountDecTupleStringListDictValueHelperLabel
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases))
+            when releasePlanDynamicOperationAt 8 ANF.DynamicStringBuffer fieldReleases ->
+            dictRefCountDecSumStringValueHelperLabel
+        | _ ->
+            dictRefCountDecHelperLabel
+    | _ ->
+        dictRefCountDecHelperLabel
+
+let private dictDecHelperForType (ctx: CodeGenContext) (sourceType: AST.Type option) : string =
+    sourceType
+    |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry)
+    |> Option.map dictDecHelperForReleasePlan
+    |> Option.defaultValue dictRefCountDecHelperLabel
 
 let private generateDictRefCountIncHelper () : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_dict_rc_inc_{name}"
@@ -5217,20 +5263,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 ]
                 @ listDecCall
             | LIR.DictHeap ->
-                let helperLabel =
-                    match sourceType with
-                    | Some (AST.TDict (_, AST.TList _)) ->
-                        dictRefCountDecListValueHelperLabel
-                    | Some (AST.TDict (_, AST.TDict _)) ->
-                        dictRefCountDecDictValueHelperLabel
-                    | Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _ ])) ->
-                        dictRefCountDecTupleStringListValueHelperLabel
-                    | Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _; AST.TDict _ ])) ->
-                        dictRefCountDecTupleStringListDictValueHelperLabel
-                    | _ when isStringPayloadSumDictValue ctx.VariantRegistry sourceType ->
-                        dictRefCountDecSumStringValueHelperLabel
-                    | _ ->
-                        dictRefCountDecHelperLabel
+                let helperLabel = dictDecHelperForType ctx sourceType
                 let dictDecCall = [
                     ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
                     ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -6322,6 +6355,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
     let ctx = {
         Options = options
         VariantRegistry = variantRegistry
+        SumShapeRegistry = rcSumShapeRegistryFromVariantRegistry variantRegistry
         RecordRegistry = recordRegistry
         ClosurePayloadSizes = closurePayloadSizes
         ClosureCaptureTypes = closureCaptureTypes
@@ -6438,79 +6472,80 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         | _ -> false
                     | _ -> false)))
 
+    let dictDecHelperDependencyLabels (helperLabel: string) : Set<string> =
+        match helperLabel with
+        | label when label = dictRefCountDecListValueHelperLabel ->
+            Set.singleton listRefCountDecHelperLabel
+        | label when label = dictRefCountDecDictValueHelperLabel ->
+            Set.singleton dictRefCountDecHelperLabel
+        | label when label = dictRefCountDecTupleStringListValueHelperLabel ->
+            Set.singleton listRefCountDecHelperLabel
+        | label when label = dictRefCountDecTupleStringListDictValueHelperLabel ->
+            Set.ofList [ listRefCountDecHelperLabel; dictRefCountDecHelperLabel ]
+        | _ ->
+            Set.empty
+
+    let neededDictRcDecHelperLabels =
+        let calledLabels =
+            sortedFunctions
+            |> List.map (fun func ->
+                func.CFG.Blocks
+                |> Map.toList
+                |> List.map (fun (_, block) ->
+                    block.Instrs
+                    |> List.map (function
+                        | LIR.RefCountDec (_, _, LIR.DictHeap, sourceType) ->
+                            Set.singleton (dictDecHelperForType ctx sourceType)
+                        | _ ->
+                            Set.empty)
+                    |> unionLabelSets)
+                |> unionLabelSets)
+            |> unionLabelSets
+
+        let genericFixedBlockNeedsDictHelper =
+            sortedFunctions
+            |> List.exists (fun func ->
+                func.CFG.Blocks
+                |> Map.exists (fun _ block ->
+                    block.Instrs
+                    |> List.exists (function
+                        | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                            directFixedBlockFieldHasRelease
+                                (releasePlanIsRootKind ANF.DictHeap)
+                                ctx.RecordRegistry
+                                ctx.SumShapeRegistry
+                                sourceType
+                        | _ -> false)))
+
+        let labelsWithGenericFixedBlock =
+            if genericFixedBlockNeedsDictHelper then
+                Set.add dictRefCountDecHelperLabel calledLabels
+            else
+                calledLabels
+
+        labelsWithGenericFixedBlock
+        |> Set.toList
+        |> List.map dictDecHelperDependencyLabels
+        |> unionLabelSets
+        |> Set.union labelsWithGenericFixedBlock
+
     let needsDictRcDecHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.DictHeap, sourceType) ->
-                        match sourceType with
-                        | Some (AST.TDict (_, AST.TList _))
-                        | Some (AST.TDict (_, AST.TDict _))
-                        | Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _ ]))
-                        | Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _; AST.TDict _ ])) -> false
-                        | _ when isStringPayloadSumDictValue ctx.VariantRegistry sourceType -> false
-                        | _ -> true
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TDict _))) -> true
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsRootKind ANF.DictHeap)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
+        Set.contains dictRefCountDecHelperLabel neededDictRcDecHelperLabels
 
     let needsDictRcDecListValueHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.DictHeap, Some (AST.TDict (_, AST.TList _))) -> true
-                    | _ -> false)))
+        Set.contains dictRefCountDecListValueHelperLabel neededDictRcDecHelperLabels
 
     let needsDictRcDecDictValueHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.DictHeap, Some (AST.TDict (_, AST.TDict _))) -> true
-                    | _ -> false)))
+        Set.contains dictRefCountDecDictValueHelperLabel neededDictRcDecHelperLabels
 
     let needsDictRcDecTupleStringListValueHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.DictHeap, Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _ ]))) -> true
-                    | _ -> false)))
+        Set.contains dictRefCountDecTupleStringListValueHelperLabel neededDictRcDecHelperLabels
 
     let needsDictRcDecTupleStringListDictValueHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.DictHeap, Some (AST.TDict (_, AST.TTuple [ AST.TString; AST.TList _; AST.TDict _ ]))) -> true
-                    | _ -> false)))
+        Set.contains dictRefCountDecTupleStringListDictValueHelperLabel neededDictRcDecHelperLabels
 
     let needsDictRcDecSumStringValueHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.DictHeap, sourceType) ->
-                        isStringPayloadSumDictValue ctx.VariantRegistry sourceType
-                    | _ -> false)))
+        Set.contains dictRefCountDecSumStringValueHelperLabel neededDictRcDecHelperLabels
 
     let needsClosureRcIncHelper =
         sortedFunctions
@@ -6534,13 +6569,28 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         directFixedBlockFieldHasRelease
                             (releasePlanIsRootKind ANF.ClosureHeap)
                             ctx.RecordRegistry
+                            ctx.SumShapeRegistry
                             sourceType
                     | _ -> false)))
 
     ResultList.mapResults (convertFunction ctx) sortedFunctions
     |> Result.map (fun instrLists ->
         let allFunctionInstrs = instrLists |> List.concat
-        let selectedListRcDecHelperLabels = neededListRcDecHelperLabels
+        let listRcDecHelperLabelsFromDictHelpers =
+            neededDictRcDecHelperLabels
+            |> Set.toList
+            |> List.map dictDecHelperDependencyLabels
+            |> unionLabelSets
+            |> Set.filter (fun label -> label = listRefCountDecHelperLabel)
+
+        let selectedListRcDecHelperLabels =
+            Set.union neededListRcDecHelperLabels listRcDecHelperLabelsFromDictHelpers
+
+        let selectedListHelpersNeedDictDecHelper =
+            selectedListRefCountDecHelpersNeedDictDecHelper selectedListRcDecHelperLabels
+
+        let selectedListHelpersNeedClosureDecHelper =
+            selectedListRefCountDecHelpersNeedClosureDecHelper selectedListRcDecHelperLabels
 
         let listRcHelpers =
             (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
