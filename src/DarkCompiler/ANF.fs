@@ -120,7 +120,7 @@ type RcKind =
 type RcShape =
     | Immediate
     | FixedBlock of payloadSize:int * fieldShapes:RcShape list
-    | BoxedSum of payloadSize:int * fieldShapes:(int * RcShape) list
+    | BoxedSum of payloadSize:int * fieldShapes:(int * RcShape) list * variants:RcBoxedSumVariantShape list
     | TaggedListShape of elementShape:RcShape
     | DictRoot of keyShape:RcShape * valueShape:RcShape
     | DynamicString
@@ -128,11 +128,15 @@ type RcShape =
     | ClosureShape of captureShapes:RcShape list
     | StaticString
     | RawUnmanaged
+and RcBoxedSumVariantShape = {
+    Tag: int
+    FieldShapes: (int * RcShape) list
+}
 
 /// Minimal sum metadata needed by RcShape without depending on later IR modules.
 type RcSumShapeInfo = {
     TypeParams: string list
-    Payloads: AST.Type option list
+    Payloads: (int * AST.Type option) list
 }
 
 type RcSumShapeRegistry = Map<string, RcSumShapeInfo>
@@ -162,18 +166,23 @@ type RcReleasePlan =
 and RcPayloadReleasePlan =
     | NoPayloadRelease
     | FixedBlockPayloadRelease of payloadSize:int * fieldReleases:RcFieldRelease list
-    | BoxedSumPayloadRelease of payloadSize:int * fieldReleases:RcFieldRelease list
+    | BoxedSumPayloadRelease of payloadSize:int * fieldReleases:RcFieldRelease list * variants:RcBoxedSumVariantRelease list
     | TaggedListPayloadRelease of elementRelease:RcReleasePlan
     | DictPayloadRelease of keyRelease:RcReleasePlan * valueRelease:RcReleasePlan
     | ClosurePayloadRelease of captureReleases:RcFieldRelease list
 and RcFieldRelease =
     | FieldRelease of offset:int * release:RcReleasePlan
+and RcBoxedSumVariantRelease = {
+    Tag: int
+    FieldReleases: RcFieldRelease list
+}
 
 /// Metadata carried by refcount operations after ownership insertion.
 ///
 /// ReleasePlan is the backend-facing source of truth for retain/release helper
-/// selection. SourceType is retained only for tag-aware named-sum cleanup that
-/// has not yet been represented directly in RcReleasePlan.
+/// selection. SourceType is retained as contextual metadata for diagnostics and
+/// focused compiler-pass tests; backend cleanup must not reconstruct release
+/// behavior from it.
 type RcMetadata = {
     ReleasePlan: RcReleasePlan option
     SourceType: AST.Type option
@@ -320,9 +329,9 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
     | AST.TSum (_, []) ->
         Immediate
     | AST.TSum (_, [payloadType]) ->
-        BoxedSum (16, [(8, rcShapeOfType typeReg payloadType)])
+        BoxedSum (16, [(8, rcShapeOfType typeReg payloadType)], [])
     | AST.TSum _ ->
-        BoxedSum (16, [])
+        BoxedSum (16, [], [])
     | AST.TList elemType ->
         TaggedListShape (rcShapeOfType typeReg elemType)
     | AST.TDict (keyType, valueType) ->
@@ -405,17 +414,25 @@ let rec rcShapeOfTypeWithSums
         | Some sumInfo ->
             let subst = rcShapeTypeSubstitution sumInfo.TypeParams typeArgs
 
-            let payloadShapes =
+            let variantShapes =
                 sumInfo.Payloads
                 |> List.choose (fun maybePayload ->
-                    maybePayload
-                    |> Option.map (applyRcShapeTypeSubstitution subst >> classify))
+                    match maybePayload with
+                    | tag, Some payload ->
+                        let payloadShape = payload |> applyRcShapeTypeSubstitution subst |> classify
+                        Some { Tag = tag; FieldShapes = [(8, payloadShape)] }
+                    | _, None ->
+                        None)
 
-            match payloadShapes with
+            match variantShapes with
             | [] ->
                 Immediate
-            | shapes ->
-                BoxedSum (16, shapes |> List.map (fun shape -> (8, shape)))
+            | variants ->
+                let fieldShapes =
+                    variants
+                    |> List.collect (fun variant -> variant.FieldShapes)
+
+                BoxedSum (16, fieldShapes, variants)
         | None ->
             rcShapeOfType typeReg t
     | AST.TList elemType ->
@@ -489,7 +506,7 @@ let rec rcShapeNeedsRecursiveRelease (shape: RcShape) : bool =
     match shape with
     | FixedBlock (_, fieldShapes) ->
         fieldShapes |> List.exists rcShapeNeedsOwnedScopeRelease
-    | BoxedSum (_, fieldShapes) ->
+    | BoxedSum (_, fieldShapes, _) ->
         fieldShapes
         |> List.exists (fun (_, fieldShape) -> rcShapeNeedsOwnedScopeRelease fieldShape)
     | TaggedListShape elementShape ->
@@ -532,7 +549,7 @@ let rcShapeRootKind (shape: RcShape) : RcKind option =
 let rcShapePayloadSize (shape: RcShape) : int option =
     match shape with
     | FixedBlock (payloadSize, _)
-    | BoxedSum (payloadSize, _) ->
+    | BoxedSum (payloadSize, _, _) ->
         Some payloadSize
     | TaggedListShape _ ->
         Some 24
@@ -633,7 +650,7 @@ let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
         match rootShape with
         | FixedBlock (payloadSize, fieldShapes) ->
             FixedBlockPayloadRelease (payloadSize, fieldReleasePlans fieldShapes)
-        | BoxedSum (payloadSize, fieldShapes) ->
+        | BoxedSum (payloadSize, fieldShapes, variants) ->
             let fieldReleases =
                 fieldShapes
                 |> List.choose (fun (offset, fieldShape) ->
@@ -643,7 +660,21 @@ let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
                     | releasePlan ->
                         Some (FieldRelease (offset, releasePlan)))
 
-            BoxedSumPayloadRelease (payloadSize, fieldReleases)
+            let variantReleases =
+                variants
+                |> List.map (fun variant ->
+                    let releases =
+                        variant.FieldShapes
+                        |> List.choose (fun (offset, fieldShape) ->
+                            match rcShapeReleasePlan fieldShape with
+                            | NoReleasePlan ->
+                                None
+                            | releasePlan ->
+                                Some (FieldRelease (offset, releasePlan)))
+
+                    { Tag = variant.Tag; FieldReleases = releases })
+
+            BoxedSumPayloadRelease (payloadSize, fieldReleases, variantReleases)
         | TaggedListShape elementShape ->
             TaggedListPayloadRelease (rcShapeReleasePlan elementShape)
         | DictRoot (keyShape, valueShape) ->

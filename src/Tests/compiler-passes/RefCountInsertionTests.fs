@@ -75,7 +75,7 @@ let testRcShapeClassifiesRemainingRuntimeShapes () : TestResult =
         (AST.TRawPtr, RawUnmanaged)
         (AST.TFunction ([AST.TInt64], AST.TString), ClosureShape [])
         (AST.TSum ("Color", []), Immediate)
-        (AST.TSum ("Option", [AST.TString]), BoxedSum (16, [(8, DynamicString)]))
+        (AST.TSum ("Option", [AST.TString]), BoxedSum (16, [(8, DynamicString)], []))
         (AST.TList AST.TString, TaggedListShape DynamicString)
         (AST.TDict (AST.TString, AST.TList AST.TInt64), DictRoot (DynamicString, TaggedListShape Immediate))
     ]
@@ -125,15 +125,23 @@ let testRcShapeClassifiesSumsWithVariantMetadata () : TestResult =
 
     let variantReg : RcSumShapeRegistry =
         Map.ofList [
-            ("Enum", { TypeParams = []; Payloads = [None; None] })
-            ("Maybe", { TypeParams = ["a"]; Payloads = [None; Some (AST.TVar "a")] })
-            ("Packet", { TypeParams = []; Payloads = [Some (AST.TRecord ("PayloadRecord", [])); Some AST.TBytes] })
+            ("Enum", { TypeParams = []; Payloads = [0, None; 1, None] })
+            ("Maybe", { TypeParams = ["a"]; Payloads = [0, None; 1, Some (AST.TVar "a")] })
+            ("Packet", { TypeParams = []; Payloads = [0, Some (AST.TRecord ("PayloadRecord", [])); 1, Some AST.TBytes] })
         ]
 
     let samples = [
         AST.TSum ("Enum", []), Immediate
-        AST.TSum ("Maybe", [AST.TString]), BoxedSum (16, [(8, DynamicString)])
-        AST.TSum ("Packet", []), BoxedSum (16, [(8, FixedBlock (8, [DynamicString])); (8, DynamicBytes)])
+        AST.TSum ("Maybe", [AST.TString]),
+            BoxedSum (16, [(8, DynamicString)], [{ Tag = 1; FieldShapes = [(8, DynamicString)] }])
+        AST.TSum ("Packet", []),
+            BoxedSum (
+                16,
+                [(8, FixedBlock (8, [DynamicString])); (8, DynamicBytes)],
+                [
+                    { Tag = 0; FieldShapes = [(8, FixedBlock (8, [DynamicString]))] }
+                    { Tag = 1; FieldShapes = [(8, DynamicBytes)] }
+                ])
     ]
 
     match samples |> List.tryFind (fun (typ, expected) -> rcShapeOfTypeWithSums typeReg variantReg typ <> expected) with
@@ -147,7 +155,7 @@ let testRcShapeOwnershipHelpersClassifyManagedRoots () : TestResult =
         DynamicString
         DynamicBytes
         FixedBlock (16, [Immediate; DynamicString])
-        BoxedSum (16, [])
+        BoxedSum (16, [], [])
         TaggedListShape DynamicString
         DictRoot (DynamicString, Immediate)
         ClosureShape [DynamicString]
@@ -174,7 +182,7 @@ let testRcShapeOwnershipHelpersClassifyAutomaticBindingDecs () : TestResult =
         DynamicString
         DynamicBytes
         FixedBlock (16, [Immediate; DynamicString])
-        BoxedSum (16, [])
+        BoxedSum (16, [], [])
         TaggedListShape DynamicString
         DictRoot (DynamicString, Immediate)
     ]
@@ -201,7 +209,7 @@ let testRcShapeOwnershipHelpersClassifyBorrowedRetains () : TestResult =
         DynamicString
         DynamicBytes
         FixedBlock (16, [Immediate; DynamicString])
-        BoxedSum (16, [])
+        BoxedSum (16, [], [])
         TaggedListShape DynamicString
         DictRoot (DynamicString, Immediate)
         ClosureShape [DynamicString]
@@ -226,7 +234,7 @@ let testRcShapeOwnershipHelpersClassifyBorrowedRetains () : TestResult =
 let testRcShapeOwnershipHelpersSelectRootDispatch () : TestResult =
     let samples = [
         (FixedBlock (16, [DynamicString]), Some GenericHeap)
-        (BoxedSum (16, []), Some GenericHeap)
+        (BoxedSum (16, [], []), Some GenericHeap)
         (TaggedListShape DynamicString, Some TaggedList)
         (TaggedListShape (ClosureShape []), Some GenericHeap)
         (DictRoot (Immediate, DynamicString), Some DictHeap)
@@ -246,7 +254,7 @@ let testRcShapeOwnershipHelpersSelectRootDispatch () : TestResult =
 let testRcShapeOwnershipHelpersSelectRetainReleaseOperations () : TestResult =
     let samples = [
         (FixedBlock (16, [DynamicString]), Some (FixedSizeRoot (16, GenericHeap)))
-        (BoxedSum (16, []), Some (FixedSizeRoot (16, GenericHeap)))
+        (BoxedSum (16, [], []), Some (FixedSizeRoot (16, GenericHeap)))
         (TaggedListShape DynamicString, Some (FixedSizeRoot (24, TaggedList)))
         (TaggedListShape (ClosureShape []), Some (FixedSizeRoot (24, GenericHeap)))
         (DictRoot (Immediate, DynamicString), Some (FixedSizeRoot (8, DictHeap)))
@@ -271,7 +279,7 @@ let testRcShapeOwnershipHelpersSelectRetainReleaseOperations () : TestResult =
 let testRcShapeOwnershipHelpersClassifyStorage () : TestResult =
     let samples = [
         (FixedBlock (16, [DynamicString]), ManagedRcRoot (16, GenericHeap))
-        (BoxedSum (16, []), ManagedRcRoot (16, GenericHeap))
+        (BoxedSum (16, [], []), ManagedRcRoot (16, GenericHeap))
         (TaggedListShape DynamicString, ManagedRcRoot (24, TaggedList))
         (TaggedListShape (ClosureShape []), ManagedRcRoot (24, GenericHeap))
         (DictRoot (Immediate, DynamicString), ManagedRcRoot (8, DictHeap))
@@ -292,7 +300,7 @@ let testRcShapeOwnershipHelpersClassifyStorage () : TestResult =
 let testRcShapeOwnershipHelpersClassifyRootManagement () : TestResult =
     let managedRootShapes = [
         FixedBlock (16, [Immediate; DynamicString])
-        BoxedSum (16, [])
+        BoxedSum (16, [], [])
         TaggedListShape DynamicString
         DictRoot (DynamicString, TaggedListShape Immediate)
         ClosureShape [DynamicString]
@@ -319,7 +327,7 @@ let testRcShapeOwnershipHelpersClassifyRootManagement () : TestResult =
 let testRcShapeOwnershipHelpersClassifyOwnershipTransferRoots () : TestResult =
     let transferRootShapes = [
         FixedBlock (16, [Immediate; DynamicString])
-        BoxedSum (16, [])
+        BoxedSum (16, [], [])
         TaggedListShape DynamicString
         DictRoot (DynamicString, Immediate)
         ClosureShape [DynamicString]
@@ -346,7 +354,7 @@ let testRcShapeOwnershipHelpersClassifyOwnershipTransferRoots () : TestResult =
 let testRcShapeOwnershipHelpersClassifyRecursiveRelease () : TestResult =
     let recursiveShapes = [
         FixedBlock (16, [Immediate; DynamicString])
-        BoxedSum (16, [(8, DynamicString)])
+        BoxedSum (16, [(8, DynamicString)], [])
         TaggedListShape (FixedBlock (8, [DynamicString]))
         DictRoot (DynamicString, TaggedListShape Immediate)
         ClosureShape [DynamicString]
@@ -393,7 +401,7 @@ let testRcShapeReleasePlanClassifiesFieldCleanup () : TestResult =
             RootRelease (16, GenericHeap, FixedBlockPayloadRelease (16, [FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)])))
         (ClosureShape [DynamicString],
             RootRelease (0, ClosureHeap, ClosurePayloadRelease [FieldRelease (0, DynamicBufferRelease DynamicStringBuffer)]))
-        (BoxedSum (16, []), RootRelease (16, GenericHeap, BoxedSumPayloadRelease (16, [])))
+        (BoxedSum (16, [], []), RootRelease (16, GenericHeap, BoxedSumPayloadRelease (16, [], [])))
     ]
 
     match samples |> List.tryFind (fun (shape, expected) -> rcShapeReleasePlan shape <> expected) with
@@ -436,7 +444,8 @@ let testRcReleasePlanOfTypeUsesSumPayloadMetadata () : TestResult =
                 16,
                 [
                     FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
-                ]))
+                ],
+                []))
 
     let actual = rcReleasePlanOfType Map.empty sumType
     if actual = expected then
@@ -452,9 +461,9 @@ let testRcReleasePlanOfTypeWithSumsUsesVariantMetadata () : TestResult =
 
     let sumReg : RcSumShapeRegistry =
         Map.ofList [
-            ("Color", { TypeParams = []; Payloads = [None; None; None] })
-            ("Maybe", { TypeParams = ["a"]; Payloads = [None; Some (AST.TVar "a")] })
-            ("Packet", { TypeParams = []; Payloads = [Some (AST.TRecord ("PayloadRecord", [])); Some (AST.TList AST.TString)] })
+            ("Color", { TypeParams = []; Payloads = [0, None; 1, None; 2, None] })
+            ("Maybe", { TypeParams = ["a"]; Payloads = [0, None; 1, Some (AST.TVar "a")] })
+            ("Packet", { TypeParams = []; Payloads = [0, Some (AST.TRecord ("PayloadRecord", [])); 1, Some (AST.TList AST.TString)] })
         ]
 
     let samples = [
@@ -464,10 +473,13 @@ let testRcReleasePlanOfTypeWithSumsUsesVariantMetadata () : TestResult =
                 16,
                 GenericHeap,
                 BoxedSumPayloadRelease (
-                    16,
-                    [
-                        FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
-                    ])))
+                16,
+                [
+                    FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
+                ],
+                [
+                    { Tag = 1; FieldReleases = [FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)] }
+                ])))
         (AST.TSum ("Packet", []),
             RootRelease (
                 16,
@@ -486,13 +498,44 @@ let testRcReleasePlanOfTypeWithSumsUsesVariantMetadata () : TestResult =
                                         FieldRelease (0, DynamicBufferRelease DynamicStringBuffer)
                                         FieldRelease (8, DynamicBufferRelease DynamicBytesBuffer)
                                     ])))
-                        FieldRelease (
-                            8,
-                            RootRelease (
-                                24,
-                                TaggedList,
-                                TaggedListPayloadRelease (DynamicBufferRelease DynamicStringBuffer)))
-                    ])))
+                    ; FieldRelease (
+                        8,
+                        RootRelease (
+                            24,
+                            TaggedList,
+                            TaggedListPayloadRelease (DynamicBufferRelease DynamicStringBuffer)))
+                ],
+                [
+                    {
+                        Tag = 0
+                        FieldReleases =
+                            [
+                                FieldRelease (
+                                    8,
+                                    RootRelease (
+                                        16,
+                                        GenericHeap,
+                                        FixedBlockPayloadRelease (
+                                            16,
+                                            [
+                                                FieldRelease (0, DynamicBufferRelease DynamicStringBuffer)
+                                                FieldRelease (8, DynamicBufferRelease DynamicBytesBuffer)
+                                            ])))
+                            ]
+                    }
+                    {
+                        Tag = 1
+                        FieldReleases =
+                            [
+                                FieldRelease (
+                                    8,
+                                    RootRelease (
+                                        24,
+                                        TaggedList,
+                                        TaggedListPayloadRelease (DynamicBufferRelease DynamicStringBuffer)))
+                            ]
+                    }
+                ])))
     ]
 
     match samples |> List.tryFind (fun (typ, expected) -> rcReleasePlanOfTypeWithSums typeReg sumReg typ <> expected) with
@@ -509,10 +552,11 @@ let testRcReleasePlanOfTypeClassifiesRemainingRootKinds () : TestResult =
                 16,
                 GenericHeap,
                 BoxedSumPayloadRelease (
-                    16,
-                    [
-                        FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
-                    ])))
+                16,
+                [
+                    FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
+                ],
+                [])))
         (AST.TFunction ([AST.TInt64], AST.TString), RootRelease (0, ClosureHeap, ClosurePayloadRelease []))
         (AST.TString, DynamicBufferRelease DynamicStringBuffer)
         (AST.TBytes, DynamicBufferRelease DynamicBytesBuffer)
@@ -800,7 +844,7 @@ let testGenericPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
             ]
         SumShapeReg =
             Map.ofList [
-                ("Phantom", { TypeParams = ["a"]; Payloads = [None; None] })
+                ("Phantom", { TypeParams = ["a"]; Payloads = [0, None; 1, None] })
             ]
         FuncReg = Map.empty
         FuncParams = Map.empty
@@ -847,7 +891,7 @@ let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes () : TestResult =
             ]
         SumShapeReg =
             Map.ofList [
-                ("Payload", { TypeParams = []; Payloads = [None; Some AST.TString] })
+                ("Payload", { TypeParams = []; Payloads = [0, None; 1, Some AST.TString] })
             ]
         FuncReg =
             Map.ofList [

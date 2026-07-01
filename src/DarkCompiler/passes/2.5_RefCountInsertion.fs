@@ -57,8 +57,7 @@ let private rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) :
         { TypeParams = typeParams
           Payloads =
             variants
-            |> List.sortBy fst
-            |> List.map snd }
+            |> List.sortBy fst }
 
     variantLookup
     |> Map.toList

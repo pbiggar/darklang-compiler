@@ -58,7 +58,7 @@ let private rcSumShapeRegistryFromVariantRegistry (variantRegistry: LIR.VariantR
           Payloads =
             typeVariants.Variants
             |> List.sortBy (fun variant -> variant.Tag)
-            |> List.map (fun variant -> variant.Payload) })
+            |> List.map (fun variant -> variant.Tag, variant.Payload) })
 
 let leakCounterLabel = "_leak_count"
 let heapOutOfMemoryMessage = "Out of heap memory"
@@ -159,7 +159,7 @@ let private rawSetRootRetainTarget
                 match typ with
                 | AST.TTuple _ -> Some (RawSetGenericRootRetain payloadSize)
                 | _ -> None
-            | ANF.BoxedSum (payloadSize, _) ->
+            | ANF.BoxedSum (payloadSize, _, _) ->
                 match typ with
                 | AST.TSum _ -> Some (RawSetGenericRootRetain payloadSize)
                 | _ -> None
@@ -1455,9 +1455,6 @@ let private tryRcReleasePlanOfType
 let private rcMetadataReleasePlan (metadata: ANF.RcMetadata option) : ANF.RcReleasePlan option =
     metadata |> Option.bind (fun m -> m.ReleasePlan)
 
-let private rcMetadataSourceType (metadata: ANF.RcMetadata option) : AST.Type option =
-    metadata |> Option.bind (fun m -> m.SourceType)
-
 let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_closure_rc_dec_{name}"
     let ready = label "payload_ready"
@@ -1762,7 +1759,7 @@ let private releasePlanIsBoxedSumWithPayloadRelease
     (releasePlan: ANF.RcReleasePlan)
     : bool =
     match releasePlan with
-    | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
+    | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
         fieldReleases
         |> List.exists (function
             | ANF.FieldRelease (_, payloadRelease) ->
@@ -2072,7 +2069,7 @@ let private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : strin
             listRefCountDecClosureHelperLabel
         | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (payloadSize, fieldReleases)) ->
             fixedBlockListHelperForPayloadRelease payloadSize fieldReleases
-        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
             sumPayloadHelper fieldReleases
         | ANF.RootRelease (_, ANF.GenericHeap, _) ->
             listRefCountDecHelperLabel
@@ -2102,7 +2099,7 @@ let private dictDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : strin
                  && releasePlanRootKindAt 8 ANF.TaggedList fieldReleases
                  && releasePlanRootKindAt 16 ANF.DictHeap fieldReleases ->
             dictRefCountDecTupleStringListDictValueHelperLabel
-        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases))
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _))
             when releasePlanDynamicOperationAt 8 ANF.DynamicStringBuffer fieldReleases ->
             dictRefCountDecSumStringValueHelperLabel
         | _ ->
@@ -4583,7 +4580,6 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
         lirRegToARM64Reg addr
         |> Result.map (fun addrReg ->
             let releasePlan = rcMetadataReleasePlan metadata
-            let sourceType = rcMetadataSourceType metadata
             let leakDec = generateLeakCounterDec ctx
             let tupleDecPath =
                 let listHelperLabelForField (fieldType: AST.Type) : string =
@@ -4617,9 +4613,6 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 let releaseListFieldFromPlan (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldReleasePlan: ANF.RcReleasePlan) : ARM64Symbolic.Instr list =
                     releaseListFieldFromHelper baseReg fieldOffset (listDecHelperForReleasePlan fieldReleasePlan)
 
-                let releaseListField (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
-                    releaseListFieldFrom addrReg fieldOffset fieldType
-
                 let releaseDictFieldFromHelper (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (helperLabel: string) : ARM64Symbolic.Instr list =
                     let callInstrs = [
                         ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
@@ -4648,9 +4641,6 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 let releaseDictFieldFromPlan (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldReleasePlan: ANF.RcReleasePlan) : ARM64Symbolic.Instr list =
                     releaseDictFieldFromHelper baseReg fieldOffset (dictDecHelperForReleasePlan fieldReleasePlan)
 
-                let releaseDictField (fieldOffset: int) (fieldType: AST.Type option) : ARM64Symbolic.Instr list =
-                    releaseDictFieldFrom addrReg fieldOffset fieldType
-
                 let releaseClosureFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) : ARM64Symbolic.Instr list =
                     let callInstrs = [
                         ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
@@ -4672,9 +4662,6 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
                         ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length callInstrs + 1)
                     ] @ callInstrs
-
-                let releaseClosureField (fieldOffset: int) : ARM64Symbolic.Instr list =
-                    releaseClosureFieldFrom addrReg fieldOffset
 
                 let releaseDynamicBufferFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) : ARM64Symbolic.Instr list =
                     let bufferLeakDec = generateLeakCounterDec ctx
@@ -4748,7 +4735,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         let childFieldReleaseInstrs =
                             match fieldReleasePlan with
                             | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
-                            | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
+                            | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
                                 fieldReleases
                                 |> List.collect (fun (ANF.FieldRelease (childFieldOffset, fieldReleasePlan)) ->
                                     releaseFieldPlanFrom ARM64Symbolic.X11 childFieldOffset fieldReleasePlan)
@@ -4798,15 +4785,6 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                             ARM64Symbolic.LDP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 16s)
                             ARM64Symbolic.LDP_post (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 32s)
                         ]
-
-                let releaseFixedBlockField (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
-                    match tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry fieldType with
-                    | Some (ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _) as fieldReleasePlan) ->
-                        releaseFixedBlockFieldWithPlan fieldOffset childPayloadSize fieldReleasePlan
-                    | Some (ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _) as fieldReleasePlan) ->
-                        releaseFixedBlockFieldWithPlan fieldOffset childPayloadSize fieldReleasePlan
-                    | _ ->
-                        []
 
                 let releasePlanHasDirectStringField (fieldReleases: ANF.RcFieldRelease list) : bool =
                     fieldReleases
@@ -4860,71 +4838,60 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     directFieldReleaseInstrs @ nestedFixedBlockReleaseInstrs
 
                 let releaseSumPayloadInstrs =
-                    let releasePayloadForType (payloadType: AST.Type) : ARM64Symbolic.Instr list =
-                        match payloadType with
-                        | AST.TString
-                        | AST.TBytes ->
-                            releaseDynamicBufferField 8
-                        | AST.TList _ ->
-                            releaseListField 8 payloadType
-                        | AST.TDict _ ->
-                            releaseDictField 8 (Some payloadType)
-                        | AST.TFunction _ ->
-                            releaseClosureField 8
-                        | AST.TTuple _
-                        | AST.TRecord _ ->
-                            releaseFixedBlockField 8 payloadType
+                    let releaseSumField (fieldOffset: int) (fieldReleasePlan: ANF.RcReleasePlan) : ARM64Symbolic.Instr list =
+                        match fieldReleasePlan with
+                        | ANF.DynamicBufferRelease _ ->
+                            releaseDynamicBufferFieldFrom addrReg fieldOffset
+                        | ANF.RootRelease (_, ANF.TaggedList, _) ->
+                            releaseListFieldFromPlan addrReg fieldOffset fieldReleasePlan
+                        | ANF.RootRelease (_, ANF.DictHeap, _) ->
+                            releaseDictFieldFromPlan addrReg fieldOffset fieldReleasePlan
+                        | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
+                            releaseClosureFieldFrom addrReg fieldOffset
+                        | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _)
+                        | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _) ->
+                            releaseFixedBlockFieldWithPlan fieldOffset childPayloadSize fieldReleasePlan
                         | _ ->
                             []
 
-                    let optionPayloadNeedsRelease (valueType: AST.Type) : bool =
-                        let callerOwnsOptionPayload =
-                            ctx.FunctionName.StartsWith("Stdlib.Dict.")
-                            || not (ctx.FunctionName.StartsWith("Stdlib."))
-                        let managedPayload =
-                            match valueType with
-                            | AST.TString
-                            | AST.TBytes
-                            | AST.TList _
-                            | AST.TDict _
-                            | AST.TFunction _
-                            | AST.TTuple _
-                            | AST.TRecord _ ->
-                                true
-                            | _ ->
-                                false
-                        callerOwnsOptionPayload && managedPayload
+                    let releaseVariant (variant: ANF.RcBoxedSumVariantRelease) : (int * ARM64Symbolic.Instr list) option =
+                        let releaseInstrs =
+                            variant.FieldReleases
+                            |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
+                                releaseSumField fieldOffset fieldReleasePlan)
 
-                    match sourceType with
-                    | Some (AST.TSum ("Stdlib.Option.Option", [ valueType ])) when optionPayloadNeedsRelease valueType ->
-                        let valueRelease = releasePayloadForType valueType
-                        if List.isEmpty valueRelease then
+                        if List.isEmpty releaseInstrs then
+                            None
+                        else
+                            Some (variant.Tag, releaseInstrs)
+
+                    let variantReleaseInstrs (variants: ANF.RcBoxedSumVariantRelease list) : ARM64Symbolic.Instr list =
+                        let cases = variants |> List.choose releaseVariant
+
+                        if List.isEmpty cases then
                             []
                         else
                             [
-                                ARM64Symbolic.LDR (ARM64Symbolic.X12, addrReg, 0s)
-                                ARM64Symbolic.CBNZ_offset (ARM64Symbolic.X12, List.length valueRelease + 1)
-                            ] @ valueRelease
-                    | Some (AST.TSum ("Stdlib.Result.Result", [ okType; errType ])) ->
-                        let okRelease = releasePayloadForType okType
-                        let errRelease = releasePayloadForType errType
-                        match List.isEmpty okRelease, List.isEmpty errRelease with
-                        | true, true ->
+                                ARM64Symbolic.LDR (ARM64Symbolic.X10, addrReg, 0s)
+                            ]
+                            @
+                            (cases
+                             |> List.collect (fun (tag, releaseInstrs) ->
+                                [
+                                    ARM64Symbolic.CMP_imm (ARM64Symbolic.X10, uint16 tag)
+                                    ARM64Symbolic.B_cond (ARM64Symbolic.NE, List.length releaseInstrs + 1)
+                                ] @ releaseInstrs))
+
+                    match releasePlan with
+                    | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, _, variants))) ->
+                        let callerOwnsSinglePayloadSum =
+                            ctx.FunctionName.StartsWith("Stdlib.Dict.")
+                            || not (ctx.FunctionName.StartsWith("Stdlib."))
+
+                        if List.length variants = 1 && not callerOwnsSinglePayloadSum then
                             []
-                        | false, false when okType = errType ->
-                            okRelease
-                        | true, false ->
-                            [
-                                ARM64Symbolic.LDR (ARM64Symbolic.X12, addrReg, 0s)
-                                ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length errRelease + 1)
-                            ] @ errRelease
-                        | false, true ->
-                            [
-                                ARM64Symbolic.LDR (ARM64Symbolic.X12, addrReg, 0s)
-                                ARM64Symbolic.CBNZ_offset (ARM64Symbolic.X12, List.length okRelease + 1)
-                            ] @ okRelease
-                        | false, false ->
-                            []
+                        else
+                            variantReleaseInstrs variants
                     | _ ->
                         []
 
@@ -4954,7 +4921,10 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
 
             match kind with
             | LIR.TaggedList ->
-                let helperLabel = listDecHelperForType ctx sourceType
+                let helperLabel =
+                    releasePlan
+                    |> Option.map listDecHelperForReleasePlan
+                    |> Option.defaultValue listRefCountDecHelperLabel
                 let listDecCall = [
                     ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -80s)
                     ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -4975,7 +4945,10 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 ]
                 @ listDecCall
             | LIR.DictHeap ->
-                let helperLabel = dictDecHelperForType ctx sourceType
+                let helperLabel =
+                    releasePlan
+                    |> Option.map dictDecHelperForReleasePlan
+                    |> Option.defaultValue dictRefCountDecHelperLabel
                 let dictDecCall = [
                     ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
                     ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -6124,7 +6097,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         | ANF.RootRelease (_, ANF.TaggedList, _) ->
             Set.singleton (listDecHelperForReleasePlan releasePlan)
         | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
-        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
             fieldReleases
             |> List.map (fun (ANF.FieldRelease (_, fieldReleasePlan)) ->
                 listDecHelperLabelsInReleasePlan fieldReleasePlan)
@@ -6218,7 +6191,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         | ANF.RootRelease (_, ANF.DictHeap, _) ->
             Set.singleton (dictDecHelperForReleasePlan releasePlan)
         | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
-        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
             fieldReleases
             |> List.map (fun (ANF.FieldRelease (_, fieldReleasePlan)) ->
                 dictDecHelperLabelsInReleasePlan fieldReleasePlan)
@@ -6293,7 +6266,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
             true
         | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
-        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
             fieldReleases
             |> List.exists (fun (ANF.FieldRelease (_, fieldReleasePlan)) ->
                 releasePlanContainsClosureHelperCall fieldReleasePlan)

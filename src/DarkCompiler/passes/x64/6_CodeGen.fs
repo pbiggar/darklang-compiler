@@ -751,7 +751,7 @@ let private releasePlanIsBoxedSumWithPayloadRelease
     (releasePlan: ANF.RcReleasePlan)
     : bool =
     match releasePlan with
-    | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
+    | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
         fieldReleases
         |> List.exists (function
             | ANF.FieldRelease (_, payloadRelease) ->
@@ -776,7 +776,7 @@ let rec private rcReleasePlanContains
     else
         match releasePlan with
         | ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, fieldReleases))
-        | ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, fieldReleases))
+        | ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, fieldReleases, _))
         | ANF.RootRelease (_, _, ANF.ClosurePayloadRelease fieldReleases) ->
             fieldReleases
             |> List.exists (function
@@ -1008,7 +1008,7 @@ let rec private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : s
                 listRefCountDecSumTuple4ClosureDynamicListDictHelperLabel
             | _ ->
                 listRefCountDecHelperLabel
-        | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, nestedFieldReleases))) ->
+        | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, nestedFieldReleases, _))) ->
             match releasePlanFieldReleaseAt 8 nestedFieldReleases with
             | Some (ANF.DynamicBufferRelease _) ->
                 listRefCountDecNestedSumDynamicHelperLabel
@@ -1032,7 +1032,7 @@ let rec private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : s
             listRefCountDecClosureHelperLabel
         | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (payloadSize, fieldReleases)) ->
             fixedBlockListHelperForPayloadRelease payloadSize fieldReleases
-        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
             sumPayloadHelper fieldReleases
         | ANF.RootRelease (_, ANF.GenericHeap, _) ->
             listRefCountDecHelperLabel
@@ -1055,7 +1055,7 @@ let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (releasePlan: ANF.RcRe
     let fieldReleases =
         match releasePlan with
         | Some (ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, plannedFieldReleases)))
-        | Some (ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, plannedFieldReleases))) ->
+        | Some (ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, plannedFieldReleases, _))) ->
             plannedFieldReleases
         | _ ->
             []
@@ -5080,7 +5080,7 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
         | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease _) ->
             Set.singleton (listDecHelperForReleasePlan releasePlan)
         | ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, fieldReleases))
-        | ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, fieldReleases))
+        | ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, fieldReleases, _))
         | ANF.RootRelease (_, _, ANF.ClosurePayloadRelease fieldReleases) ->
             labelsInFieldReleases fieldReleases
         | ANF.RootRelease (_, _, ANF.DictPayloadRelease (keyRelease, valueRelease)) ->
