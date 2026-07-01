@@ -398,6 +398,31 @@ type TypeRegistry = Map<string, (string * AST.Type) list>
 /// Variant lookup - maps variant names to (type name, type params, tag index, payload type)
 type VariantLookup = Map<string, (string * string list * int * AST.Type option)>
 
+let private rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : ANF.RcSumShapeRegistry =
+    let addVariant
+        (acc: Map<string, string list * (int * AST.Type option) list>)
+        (_variantName: string, (typeName, typeParams, tag, payloadType))
+        =
+        match Map.tryFind typeName acc with
+        | None ->
+            Map.add typeName (typeParams, [(tag, payloadType)]) acc
+        | Some (existingTypeParams, variants) ->
+            if existingTypeParams = typeParams then
+                Map.add typeName (typeParams, (tag, payloadType) :: variants) acc
+            else
+                Map.add typeName (existingTypeParams, (tag, payloadType) :: variants) acc
+
+    let toSumShapeInfo _typeName (typeParams, variants) =
+        { ANF.TypeParams = typeParams
+          ANF.Payloads =
+            variants
+            |> List.sortBy fst }
+
+    variantLookup
+    |> Map.toList
+    |> List.fold addVariant Map.empty
+    |> Map.map toSumShapeInfo
+
 /// Function registry - maps function names to their FULL function types (TFunction)
 type FunctionRegistry = Map<string, AST.Type>
 
@@ -4463,13 +4488,16 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         // DEEP layout: [measure:8][prefixCount:8][p0:8][p1:8][p2:8][p3:8][middle:8][suffixCount:8][s0:8][s1:8][s2:8][s3:8]
 
         // Increment refcount for heap elements stored in leaves
+        let sumShapeReg = rcSumShapeRegistryFromVariantLookup variantLookup
+
         let addLeafInc (elemAtom: ANF.Atom) (elemType: AST.Type) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let retainExprForElement () : ANF.CExpr option =
                 match elemType with
                 | AST.TFunction _ ->
                     None
                 | _ ->
-                    match ANF.rcShapeOfType typeReg elemType with
+                    let canonicalElemType = canonicalizeBareSumTypeRefs variantLookup elemType
+                    match ANF.rcShapeOfTypeWithSums typeReg sumShapeReg canonicalElemType with
                     | ANF.DynamicString
                     | ANF.DynamicBytes ->
                         None
@@ -4479,7 +4507,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                             let metadata =
                                 {
                                     ANF.ReleasePlan = Some (ANF.rcShapeReleasePlan shape)
-                                    ANF.SourceType = Some elemType
+                                    ANF.SourceType = Some canonicalElemType
                                 }
                             Some (ANF.RefCountInc (elemAtom, size, kind, Some metadata))
                         | _ ->
@@ -8214,13 +8242,16 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         // DEEP layout: [measure:8][prefixCount:8][p0:8][p1:8][p2:8][p3:8][middle:8][suffixCount:8][s0:8][s1:8][s2:8][s3:8]
 
         // Increment refcount for heap elements stored in leaves
+        let sumShapeReg = rcSumShapeRegistryFromVariantLookup variantLookup
+
         let addLeafInc (elemAtom: ANF.Atom) (elemType: AST.Type) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let retainExprForElement () : ANF.CExpr option =
                 match elemType with
                 | AST.TFunction _ ->
                     None
                 | _ ->
-                    match ANF.rcShapeOfType typeReg elemType with
+                    let canonicalElemType = canonicalizeBareSumTypeRefs variantLookup elemType
+                    match ANF.rcShapeOfTypeWithSums typeReg sumShapeReg canonicalElemType with
                     | ANF.DynamicString
                     | ANF.DynamicBytes ->
                         None
@@ -8230,7 +8261,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
                             let metadata =
                                 {
                                     ANF.ReleasePlan = Some (ANF.rcShapeReleasePlan shape)
-                                    ANF.SourceType = Some elemType
+                                    ANF.SourceType = Some canonicalElemType
                                 }
                             Some (ANF.RefCountInc (elemAtom, size, kind, Some metadata))
                         | _ ->
