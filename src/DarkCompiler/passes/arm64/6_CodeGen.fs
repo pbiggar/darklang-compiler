@@ -139,6 +139,7 @@ let private dictRefCountIncHelperLabel = "__dark_dict_refcount_inc_helper"
 let private dictRefCountDecHelperLabel = "__dark_dict_refcount_dec_helper"
 let private dictRefCountDecListValueHelperLabel = "__dark_dict_refcount_dec_list_value_helper"
 let private dictRefCountDecDictValueHelperLabel = "__dark_dict_refcount_dec_dict_value_helper"
+let private dictRefCountDecDictListValueHelperLabel = "__dark_dict_refcount_dec_dict_list_value_helper"
 let private dictRefCountDecTupleStringListValueHelperLabel = "__dark_dict_refcount_dec_tuple_string_list_value_helper"
 let private dictRefCountDecTupleStringListDictValueHelperLabel = "__dark_dict_refcount_dec_tuple_string_list_dict_value_helper"
 let private dictRefCountDecSumStringValueHelperLabel = "__dark_dict_refcount_dec_sum_string_value_helper"
@@ -2360,6 +2361,8 @@ let private dictDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : strin
         match valueRelease with
         | ANF.RootRelease (_, ANF.TaggedList, _) ->
             dictRefCountDecListValueHelperLabel
+        | ANF.RootRelease (_, ANF.DictHeap, _) when releasePlanIsDictWithListValue valueRelease ->
+            dictRefCountDecDictListValueHelperLabel
         | ANF.RootRelease (_, ANF.DictHeap, _) ->
             dictRefCountDecDictValueHelperLabel
         | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (16, fieldReleases))
@@ -2543,7 +2546,12 @@ let private generateDictRefCountDecHelper
 
     let releaseLeafDictValueInstrs =
         if releaseLeafDictValue then
-            releaseLeafManagedRootValueInstrs dictRefCountDecHelperLabel skipLeafDictValueRelease
+            let targetHelperLabel =
+                if helperLabel = dictRefCountDecDictListValueHelperLabel then
+                    dictRefCountDecListValueHelperLabel
+                else
+                    dictRefCountDecHelperLabel
+            releaseLeafManagedRootValueInstrs targetHelperLabel skipLeafDictValueRelease
         else
             []
 
@@ -6339,6 +6347,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         match fieldType with
         | AST.TDict (_, AST.TList _) ->
             Set.singleton dictRefCountDecListValueHelperLabel
+        | AST.TDict (_, AST.TDict (_, AST.TList _)) ->
+            Set.singleton dictRefCountDecDictListValueHelperLabel
         | AST.TDict (_, AST.TDict _) ->
             Set.singleton dictRefCountDecDictValueHelperLabel
         | AST.TDict _ ->
@@ -6465,6 +6475,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             Set.singleton listRefCountDecHelperLabel
         | label when label = dictRefCountDecDictValueHelperLabel ->
             Set.singleton dictRefCountDecHelperLabel
+        | label when label = dictRefCountDecDictListValueHelperLabel ->
+            Set.singleton dictRefCountDecListValueHelperLabel
         | label when label = dictRefCountDecTupleStringListValueHelperLabel ->
             Set.singleton listRefCountDecHelperLabel
         | label when label = dictRefCountDecTupleStringListDictValueHelperLabel ->
@@ -6535,6 +6547,9 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
 
     let needsDictRcDecDictValueHelper =
         Set.contains dictRefCountDecDictValueHelperLabel neededDictRcDecHelperLabels
+
+    let needsDictRcDecDictListValueHelper =
+        Set.contains dictRefCountDecDictListValueHelperLabel neededDictRcDecHelperLabels
 
     let needsDictRcDecTupleStringListValueHelper =
         Set.contains dictRefCountDecTupleStringListValueHelperLabel neededDictRcDecHelperLabels
@@ -6612,6 +6627,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             @ (if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false false false ctx else [])
             @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel true false false false false ctx else [])
             @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false true false false false ctx else [])
+            @ (if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false true false false false ctx else [])
             @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false true false false ctx else [])
             @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false true false ctx else [])
             @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false false true ctx else [])

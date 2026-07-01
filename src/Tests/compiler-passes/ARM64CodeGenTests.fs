@@ -261,6 +261,35 @@ let testListSumTuple4DictListValueUsesTypedDictHelper () : TestResult =
         (AST.TTuple [ AST.TString; AST.TBytes; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TList AST.TInt64) ])
         "sum tuple4 string bytes list dict-list"
 
+let testDictDictListValueUsesTypedDictHelper () : TestResult =
+    let dictType = AST.TDict (AST.TInt64, AST.TDict (AST.TInt64, AST.TList AST.TInt64))
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    0,
+                    LIR.DictHeap,
+                    Some (rcMetadata dictType))
+            ]
+            Map.empty
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let callsTypedNestedDictListHelper =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.BL "__dark_dict_refcount_dec_dict_list_value_helper" ->
+                    true
+                | _ ->
+                    false)
+        if callsTypedNestedDictListHelper then
+            Ok ()
+        else
+            Error "Dict<int, dict<int, list<int>>> did not emit typed nested dict-list value release helper"
+
 let tests : (string * (unit -> TestResult)) list = [
     ("RawSet pure enum skips generic retain", testRawSetPureEnumDoesNotEmitGenericRetain)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
@@ -273,4 +302,5 @@ let tests : (string * (unit -> TestResult)) list = [
     ("List nested tuple dict-list uses typed dict helper", testListNestedTupleDictListValueUsesTypedDictHelper)
     ("List sum tuple3 dict-list uses typed dict helper", testListSumTuple3DictListValueUsesTypedDictHelper)
     ("List sum tuple4 dict-list uses typed dict helper", testListSumTuple4DictListValueUsesTypedDictHelper)
+    ("Dict dict-list uses typed dict helper", testDictDictListValueUsesTypedDictHelper)
 ]
