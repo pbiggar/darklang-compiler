@@ -2179,221 +2179,154 @@ let private generateListRefCountDecHelperWith
        X86_64.Label helperRet
        X86_64.RET]
 
-let private generateListRefCountDecHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecHelperLabel enableLeakCheck NoLeafPayloadRelease
-
-let private generateListRefCountDecTuple2Helper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2HelperLabel enableLeakCheck (FixedBlockLeafPayload (16, []))
-
-let private generateListRefCountDecTuple2DynamicFirstHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2DynamicFirstHelperLabel enableLeakCheck (FixedBlockLeafPayload (16, [0]))
-
-let private generateListRefCountDecTuple2DynamicSecondHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2DynamicSecondHelperLabel enableLeakCheck (FixedBlockLeafPayload (16, [8]))
-
-let private generateListRefCountDecTuple2DynamicBothHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2DynamicBothHelperLabel enableLeakCheck (FixedBlockLeafPayload (16, [0; 8]))
-
-let private generateListRefCountDecTuple2NestedTupleDynamicFirstHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2NestedTupleDynamicFirstHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 16, [0]))
-
-let private generateListRefCountDecTuple2NestedTupleDynamicSecondHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2NestedTupleDynamicSecondHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 16, [8]))
-
-let private generateListRefCountDecTuple2NestedTupleDynamicBothHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2NestedTupleDynamicBothHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 16, [0; 8]))
-
-let private generateListRefCountDecTuple2NestedTupleListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2NestedTupleListDictHelperLabel enableLeakCheck (FixedBlockFixedBlockListDictFieldPayload (16, 8, 16, 0, 8))
-
-let private generateListRefCountDecTuple2NestedTupleDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2NestedTupleDictHelperLabel enableLeakCheck (FixedBlockFixedBlockDictFieldPayload (16, 8, 8, 0))
-
-let private generateListRefCountDecTuple2NestedTupleClosureHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2NestedTupleClosureHelperLabel enableLeakCheck (FixedBlockFixedBlockClosureFieldPayload (16, 8, 8, 0))
-
-let private generateListRefCountDecTuple2NestedTupleDynamicListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2NestedTupleDynamicListDictHelperLabel enableLeakCheck (FixedBlockFixedBlockDynamicListDictFieldPayload (16, 8, 24, 0, 8, 16))
-
-let private generateListRefCountDecTuple2NestedTupleDynamicBuffersListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2NestedTupleDynamicBuffersListDictHelperLabel enableLeakCheck (FixedBlockFixedBlockDynamicBuffersListDictFieldPayload (16, 8, 32, [0; 8], 16, 24))
-
-let private generateListRefCountDecTuple3DynamicFirstHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple3DynamicFirstHelperLabel enableLeakCheck (FixedBlockLeafPayload (24, [0]))
-
-let private generateListRefCountDecTuple3DynamicThirdHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple3DynamicThirdHelperLabel enableLeakCheck (FixedBlockLeafPayload (24, [16]))
-
-let private generateListRefCountDecTuple3DynamicFirstSecondHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple3DynamicFirstSecondHelperLabel enableLeakCheck (FixedBlockLeafPayload (24, [0; 8]))
-
-let private generateListRefCountDecTuple3DynamicSecondThirdHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple3DynamicSecondThirdHelperLabel enableLeakCheck (FixedBlockLeafPayload (24, [8; 16]))
-
-let private generateListRefCountDecTuple3DynamicFirstThirdHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple3DynamicFirstThirdHelperLabel enableLeakCheck (FixedBlockLeafPayload (24, [0; 16]))
-
-let private generateListRefCountDecTuple3DynamicSecondHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple3DynamicSecondHelperLabel enableLeakCheck (FixedBlockLeafPayload (24, [8]))
-
-let private generateListRefCountDecTuple3DynamicAllHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple3DynamicAllHelperLabel enableLeakCheck (FixedBlockLeafPayload (24, [0; 8; 16]))
-
-let private generateListRefCountDecTuple3DynamicListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple3DynamicListDictHelperLabel enableLeakCheck (FixedBlockDynamicListDictPayload (24, 0, 8, 16))
-
-let private generateListRefCountDecTuple3ClosureListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple3ClosureListDictHelperLabel enableLeakCheck (FixedBlockClosureListDictPayload (24, 0, 8, 16))
-
-let private generateListRefCountDecTuple4DynamicListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple4DynamicListDictHelperLabel enableLeakCheck (FixedBlockDynamicBuffersListDictPayload (32, [0; 8], 16, 24))
-
-let private generateListRefCountDecTuple4ClosureDynamicListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple4ClosureDynamicListDictHelperLabel enableLeakCheck (FixedBlockClosureDynamicListDictPayload (32, 0, 8, 16, 24))
-
-let private generateListRefCountDecTuple4NestedTupleDynamicHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple4NestedTupleDynamicHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (32, 24, 16, [0]))
-
-let private generateListRefCountDecTuple4NestedTupleDynamicListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple4NestedTupleDynamicListDictHelperLabel enableLeakCheck (FixedBlockFixedBlockDynamicListDictFieldPayload (32, 24, 24, 0, 8, 16))
-
-let private generateListRefCountDecTuple4NestedTupleClosureDynamicListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple4NestedTupleClosureDynamicListDictHelperLabel enableLeakCheck (FixedBlockFixedBlockClosureDynamicListDictFieldPayload (32, 24, 32, 0, 8, 16, 24))
-
-let private generateListRefCountDecRecord1DynamicHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord1DynamicHelperLabel enableLeakCheck (FixedBlockLeafPayload (8, [0]))
-
-let private generateListRefCountDecRecord3DynamicFirstHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord3DynamicFirstHelperLabel enableLeakCheck (FixedBlockLeafPayload (24, [0]))
-
-let private generateListRefCountDecRecord3DynamicThirdHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord3DynamicThirdHelperLabel enableLeakCheck (FixedBlockLeafPayload (24, [16]))
-
-let private generateListRefCountDecRecord3DynamicFirstSecondHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord3DynamicFirstSecondHelperLabel enableLeakCheck (FixedBlockLeafPayload (24, [0; 8]))
-
-let private generateListRefCountDecRecord3DynamicSecondThirdHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord3DynamicSecondThirdHelperLabel enableLeakCheck (FixedBlockLeafPayload (24, [8; 16]))
-
-let private generateListRefCountDecRecord3DynamicFirstThirdHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord3DynamicFirstThirdHelperLabel enableLeakCheck (FixedBlockLeafPayload (24, [0; 16]))
-
-let private generateListRefCountDecRecord3DynamicSecondHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord3DynamicSecondHelperLabel enableLeakCheck (FixedBlockLeafPayload (24, [8]))
-
-let private generateListRefCountDecRecord3DynamicAllHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord3DynamicAllHelperLabel enableLeakCheck (FixedBlockLeafPayload (24, [0; 8; 16]))
-
-let private generateListRefCountDecRecord3DynamicListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord3DynamicListDictHelperLabel enableLeakCheck (FixedBlockDynamicListDictPayload (24, 0, 8, 16))
-
-let private generateListRefCountDecRecord3ClosureListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord3ClosureListDictHelperLabel enableLeakCheck (FixedBlockClosureListDictPayload (24, 0, 8, 16))
-
-let private generateListRefCountDecRecord4DynamicListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord4DynamicListDictHelperLabel enableLeakCheck (FixedBlockDynamicBuffersListDictPayload (32, [0; 8], 16, 24))
-
-let private generateListRefCountDecRecord4ClosureDynamicListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord4ClosureDynamicListDictHelperLabel enableLeakCheck (FixedBlockClosureDynamicListDictPayload (32, 0, 8, 16, 24))
-
-let private generateListRefCountDecSumDynamicHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumDynamicHelperLabel enableLeakCheck (FixedBlockLeafPayload (16, [8]))
-
-let private generateListRefCountDecSumListHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumListHelperLabel enableLeakCheck (FixedBlockListFieldPayload (16, 8))
-
-let private generateListRefCountDecSumDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumDictHelperLabel enableLeakCheck (FixedBlockDictFieldPayload (16, 8))
-
-let private generateListRefCountDecSumClosureHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumClosureHelperLabel enableLeakCheck (FixedBlockClosureFieldPayload (16, 8))
-
-let private generateListRefCountDecSumTuple2DynamicFirstHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumTuple2DynamicFirstHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 16, [0]))
-
-let private generateListRefCountDecSumTuple2DynamicSecondHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumTuple2DynamicSecondHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 16, [8]))
-
-let private generateListRefCountDecSumTuple2DynamicBothHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumTuple2DynamicBothHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 16, [0; 8]))
-
-let private generateListRefCountDecSumTuple3DynamicFirstHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumTuple3DynamicFirstHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0]))
-
-let private generateListRefCountDecSumTuple3DynamicThirdHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumTuple3DynamicThirdHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 24, [16]))
-
-let private generateListRefCountDecSumTuple3DynamicFirstSecondHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumTuple3DynamicFirstSecondHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0; 8]))
-
-let private generateListRefCountDecSumTuple3DynamicSecondThirdHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumTuple3DynamicSecondThirdHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 24, [8; 16]))
-
-let private generateListRefCountDecSumTuple3DynamicFirstThirdHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumTuple3DynamicFirstThirdHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0; 16]))
-
-let private generateListRefCountDecSumTuple3DynamicSecondHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumTuple3DynamicSecondHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 24, [8]))
-
-let private generateListRefCountDecSumTuple3DynamicAllHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumTuple3DynamicAllHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0; 8; 16]))
-
-let private generateListRefCountDecSumTuple3DynamicListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumTuple3DynamicListDictHelperLabel enableLeakCheck (FixedBlockFixedBlockDynamicListDictFieldPayload (16, 8, 24, 0, 8, 16))
-
-let private generateListRefCountDecSumTuple4DynamicListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumTuple4DynamicListDictHelperLabel enableLeakCheck (FixedBlockFixedBlockDynamicBuffersListDictFieldPayload (16, 8, 32, [0; 8], 16, 24))
-
-let private generateListRefCountDecSumTuple4ClosureDynamicListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumTuple4ClosureDynamicListDictHelperLabel enableLeakCheck (FixedBlockFixedBlockClosureDynamicListDictFieldPayload (16, 8, 32, 0, 8, 16, 24))
-
-let private generateListRefCountDecSumRecord1DynamicHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumRecord1DynamicHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 8, [0]))
-
-let private generateListRefCountDecSumRecord3DynamicFirstHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumRecord3DynamicFirstHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0]))
-
-let private generateListRefCountDecSumRecord3DynamicThirdHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumRecord3DynamicThirdHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 24, [16]))
-
-let private generateListRefCountDecSumRecord3DynamicFirstSecondHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumRecord3DynamicFirstSecondHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0; 8]))
-
-let private generateListRefCountDecSumRecord3DynamicSecondThirdHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumRecord3DynamicSecondThirdHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 24, [8; 16]))
-
-let private generateListRefCountDecSumRecord3DynamicFirstThirdHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumRecord3DynamicFirstThirdHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0; 16]))
-
-let private generateListRefCountDecSumRecord3DynamicSecondHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumRecord3DynamicSecondHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 24, [8]))
-
-let private generateListRefCountDecSumRecord3DynamicAllHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumRecord3DynamicAllHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0; 8; 16]))
-
-let private generateListRefCountDecSumRecord3DynamicListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumRecord3DynamicListDictHelperLabel enableLeakCheck (FixedBlockFixedBlockDynamicListDictFieldPayload (16, 8, 24, 0, 8, 16))
-
-let private generateListRefCountDecSumRecord4DynamicListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumRecord4DynamicListDictHelperLabel enableLeakCheck (FixedBlockFixedBlockDynamicBuffersListDictFieldPayload (16, 8, 32, [0; 8], 16, 24))
-
-let private generateListRefCountDecSumRecord4ClosureDynamicListDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecSumRecord4ClosureDynamicListDictHelperLabel enableLeakCheck (FixedBlockFixedBlockClosureDynamicListDictFieldPayload (16, 8, 32, 0, 8, 16, 24))
-
-let private generateListRefCountDecNestedSumDynamicHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecNestedSumDynamicHelperLabel enableLeakCheck (FixedBlockFixedBlockFieldPayload (16, 8, 16, [8]))
-
-let private generateListRefCountDecListHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecListHelperLabel enableLeakCheck ListLeafPayload
-
-let private generateListRefCountDecClosureHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecClosureHelperLabel enableLeakCheck ClosureLeafPayload
-
-let private generateListRefCountDecDictHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecDictHelperLabel enableLeakCheck DictLeafPayload
-
-let private generateListRefCountDecDynamicBufferHelper (enableLeakCheck: bool) : X86_64.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecDynamicBufferHelperLabel enableLeakCheck DynamicBufferLeafPayload
+let private listRefCountDecHelperSpecs : (string * ListLeafPayloadRelease) list =
+    [
+    (listRefCountDecHelperLabel, NoLeafPayloadRelease)
+    (listRefCountDecTuple2HelperLabel, (FixedBlockLeafPayload (16, [])))
+    (listRefCountDecTuple2DynamicFirstHelperLabel, (FixedBlockLeafPayload (16, [0])))
+    (listRefCountDecTuple2DynamicSecondHelperLabel, (FixedBlockLeafPayload (16, [8])))
+    (listRefCountDecTuple2DynamicBothHelperLabel, (FixedBlockLeafPayload (16, [0; 8])))
+    (listRefCountDecTuple2NestedTupleDynamicFirstHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 16, [0])))
+    (listRefCountDecTuple2NestedTupleDynamicSecondHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 16, [8])))
+    (listRefCountDecTuple2NestedTupleDynamicBothHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 16, [0; 8])))
+    (listRefCountDecTuple2NestedTupleListDictHelperLabel, (FixedBlockFixedBlockListDictFieldPayload (16, 8, 16, 0, 8)))
+    (listRefCountDecTuple2NestedTupleDictHelperLabel, (FixedBlockFixedBlockDictFieldPayload (16, 8, 8, 0)))
+    (listRefCountDecTuple2NestedTupleClosureHelperLabel, (FixedBlockFixedBlockClosureFieldPayload (16, 8, 8, 0)))
+    (listRefCountDecTuple2NestedTupleDynamicListDictHelperLabel, (FixedBlockFixedBlockDynamicListDictFieldPayload (16, 8, 24, 0, 8, 16)))
+    (listRefCountDecTuple2NestedTupleDynamicBuffersListDictHelperLabel, (FixedBlockFixedBlockDynamicBuffersListDictFieldPayload (16, 8, 32, [0; 8], 16, 24)))
+    (listRefCountDecTuple3DynamicFirstHelperLabel, (FixedBlockLeafPayload (24, [0])))
+    (listRefCountDecTuple3DynamicThirdHelperLabel, (FixedBlockLeafPayload (24, [16])))
+    (listRefCountDecTuple3DynamicFirstSecondHelperLabel, (FixedBlockLeafPayload (24, [0; 8])))
+    (listRefCountDecTuple3DynamicSecondThirdHelperLabel, (FixedBlockLeafPayload (24, [8; 16])))
+    (listRefCountDecTuple3DynamicFirstThirdHelperLabel, (FixedBlockLeafPayload (24, [0; 16])))
+    (listRefCountDecTuple3DynamicSecondHelperLabel, (FixedBlockLeafPayload (24, [8])))
+    (listRefCountDecTuple3DynamicAllHelperLabel, (FixedBlockLeafPayload (24, [0; 8; 16])))
+    (listRefCountDecTuple3DynamicListDictHelperLabel, (FixedBlockDynamicListDictPayload (24, 0, 8, 16)))
+    (listRefCountDecTuple3ClosureListDictHelperLabel, (FixedBlockClosureListDictPayload (24, 0, 8, 16)))
+    (listRefCountDecTuple4DynamicListDictHelperLabel, (FixedBlockDynamicBuffersListDictPayload (32, [0; 8], 16, 24)))
+    (listRefCountDecTuple4ClosureDynamicListDictHelperLabel, (FixedBlockClosureDynamicListDictPayload (32, 0, 8, 16, 24)))
+    (listRefCountDecTuple4NestedTupleDynamicHelperLabel, (FixedBlockFixedBlockFieldPayload (32, 24, 16, [0])))
+    (listRefCountDecTuple4NestedTupleDynamicListDictHelperLabel, (FixedBlockFixedBlockDynamicListDictFieldPayload (32, 24, 24, 0, 8, 16)))
+    (listRefCountDecTuple4NestedTupleClosureDynamicListDictHelperLabel, (FixedBlockFixedBlockClosureDynamicListDictFieldPayload (32, 24, 32, 0, 8, 16, 24)))
+    (listRefCountDecRecord1DynamicHelperLabel, (FixedBlockLeafPayload (8, [0])))
+    (listRefCountDecRecord3DynamicFirstHelperLabel, (FixedBlockLeafPayload (24, [0])))
+    (listRefCountDecRecord3DynamicThirdHelperLabel, (FixedBlockLeafPayload (24, [16])))
+    (listRefCountDecRecord3DynamicFirstSecondHelperLabel, (FixedBlockLeafPayload (24, [0; 8])))
+    (listRefCountDecRecord3DynamicSecondThirdHelperLabel, (FixedBlockLeafPayload (24, [8; 16])))
+    (listRefCountDecRecord3DynamicFirstThirdHelperLabel, (FixedBlockLeafPayload (24, [0; 16])))
+    (listRefCountDecRecord3DynamicSecondHelperLabel, (FixedBlockLeafPayload (24, [8])))
+    (listRefCountDecRecord3DynamicAllHelperLabel, (FixedBlockLeafPayload (24, [0; 8; 16])))
+    (listRefCountDecRecord3DynamicListDictHelperLabel, (FixedBlockDynamicListDictPayload (24, 0, 8, 16)))
+    (listRefCountDecRecord3ClosureListDictHelperLabel, (FixedBlockClosureListDictPayload (24, 0, 8, 16)))
+    (listRefCountDecRecord4DynamicListDictHelperLabel, (FixedBlockDynamicBuffersListDictPayload (32, [0; 8], 16, 24)))
+    (listRefCountDecRecord4ClosureDynamicListDictHelperLabel, (FixedBlockClosureDynamicListDictPayload (32, 0, 8, 16, 24)))
+    (listRefCountDecSumDynamicHelperLabel, (FixedBlockLeafPayload (16, [8])))
+    (listRefCountDecSumListHelperLabel, (FixedBlockListFieldPayload (16, 8)))
+    (listRefCountDecSumDictHelperLabel, (FixedBlockDictFieldPayload (16, 8)))
+    (listRefCountDecSumClosureHelperLabel, (FixedBlockClosureFieldPayload (16, 8)))
+    (listRefCountDecSumTuple2DynamicFirstHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 16, [0])))
+    (listRefCountDecSumTuple2DynamicSecondHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 16, [8])))
+    (listRefCountDecSumTuple2DynamicBothHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 16, [0; 8])))
+    (listRefCountDecSumTuple3DynamicFirstHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0])))
+    (listRefCountDecSumTuple3DynamicThirdHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [16])))
+    (listRefCountDecSumTuple3DynamicFirstSecondHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0; 8])))
+    (listRefCountDecSumTuple3DynamicSecondThirdHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [8; 16])))
+    (listRefCountDecSumTuple3DynamicFirstThirdHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0; 16])))
+    (listRefCountDecSumTuple3DynamicSecondHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [8])))
+    (listRefCountDecSumTuple3DynamicAllHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0; 8; 16])))
+    (listRefCountDecSumTuple3DynamicListDictHelperLabel, (FixedBlockFixedBlockDynamicListDictFieldPayload (16, 8, 24, 0, 8, 16)))
+    (listRefCountDecSumTuple4DynamicListDictHelperLabel, (FixedBlockFixedBlockDynamicBuffersListDictFieldPayload (16, 8, 32, [0; 8], 16, 24)))
+    (listRefCountDecSumTuple4ClosureDynamicListDictHelperLabel, (FixedBlockFixedBlockClosureDynamicListDictFieldPayload (16, 8, 32, 0, 8, 16, 24)))
+    (listRefCountDecSumRecord1DynamicHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 8, [0])))
+    (listRefCountDecSumRecord3DynamicFirstHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0])))
+    (listRefCountDecSumRecord3DynamicThirdHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [16])))
+    (listRefCountDecSumRecord3DynamicFirstSecondHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0; 8])))
+    (listRefCountDecSumRecord3DynamicSecondThirdHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [8; 16])))
+    (listRefCountDecSumRecord3DynamicFirstThirdHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0; 16])))
+    (listRefCountDecSumRecord3DynamicSecondHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [8])))
+    (listRefCountDecSumRecord3DynamicAllHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0; 8; 16])))
+    (listRefCountDecSumRecord3DynamicListDictHelperLabel, (FixedBlockFixedBlockDynamicListDictFieldPayload (16, 8, 24, 0, 8, 16)))
+    (listRefCountDecSumRecord4DynamicListDictHelperLabel, (FixedBlockFixedBlockDynamicBuffersListDictFieldPayload (16, 8, 32, [0; 8], 16, 24)))
+    (listRefCountDecSumRecord4ClosureDynamicListDictHelperLabel, (FixedBlockFixedBlockClosureDynamicListDictFieldPayload (16, 8, 32, 0, 8, 16, 24)))
+    (listRefCountDecNestedSumDynamicHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 16, [8])))
+    (listRefCountDecListHelperLabel, ListLeafPayload)
+    (listRefCountDecClosureHelperLabel, ClosureLeafPayload)
+    (listRefCountDecDictHelperLabel, DictLeafPayload)
+    (listRefCountDecDynamicBufferHelperLabel, DynamicBufferLeafPayload)
+    ]
+
+let private listLeafPayloadNeedsDictDecHelper (leafPayloadRelease: ListLeafPayloadRelease) : bool =
+    match leafPayloadRelease with
+    | FixedBlockDictFieldPayload _
+    | FixedBlockDynamicListDictPayload _
+    | FixedBlockClosureListDictPayload _
+    | FixedBlockClosureDynamicListDictPayload _
+    | FixedBlockDynamicBuffersListDictPayload _
+    | FixedBlockFixedBlockListDictFieldPayload _
+    | FixedBlockFixedBlockDictFieldPayload _
+    | FixedBlockFixedBlockDynamicListDictFieldPayload _
+    | FixedBlockFixedBlockDynamicBuffersListDictFieldPayload _
+    | FixedBlockFixedBlockClosureDynamicListDictFieldPayload _
+    | DictLeafPayload ->
+        true
+    | NoLeafPayloadRelease
+    | FixedBlockLeafPayload _
+    | FixedBlockListFieldPayload _
+    | FixedBlockClosureFieldPayload _
+    | FixedBlockFixedBlockFieldPayload _
+    | FixedBlockFixedBlockClosureFieldPayload _
+    | ListLeafPayload
+    | ClosureLeafPayload
+    | DynamicBufferLeafPayload ->
+        false
+
+let private listLeafPayloadNeedsClosureDecHelper (leafPayloadRelease: ListLeafPayloadRelease) : bool =
+    match leafPayloadRelease with
+    | FixedBlockClosureFieldPayload _
+    | FixedBlockClosureListDictPayload _
+    | FixedBlockClosureDynamicListDictPayload _
+    | FixedBlockFixedBlockClosureFieldPayload _
+    | FixedBlockFixedBlockClosureDynamicListDictFieldPayload _
+    | ClosureLeafPayload ->
+        true
+    | NoLeafPayloadRelease
+    | FixedBlockLeafPayload _
+    | FixedBlockListFieldPayload _
+    | FixedBlockDictFieldPayload _
+    | FixedBlockFixedBlockFieldPayload _
+    | FixedBlockDynamicListDictPayload _
+    | FixedBlockDynamicBuffersListDictPayload _
+    | FixedBlockFixedBlockListDictFieldPayload _
+    | FixedBlockFixedBlockDictFieldPayload _
+    | FixedBlockFixedBlockDynamicListDictFieldPayload _
+    | FixedBlockFixedBlockDynamicBuffersListDictFieldPayload _
+    | ListLeafPayload
+    | DictLeafPayload
+    | DynamicBufferLeafPayload ->
+        false
+
+let private generateNeededListRefCountDecHelpers
+    (neededListDecHelperLabels: Set<string>)
+    (enableLeakCheck: bool)
+    : X86_64.Instr list =
+    listRefCountDecHelperSpecs
+    |> List.collect (fun (helperLabel, leafPayloadRelease) ->
+        if Set.contains helperLabel neededListDecHelperLabels then
+            generateListRefCountDecHelperWith helperLabel enableLeakCheck leafPayloadRelease
+        else
+            [])
+
+let private selectedListRefCountDecHelpersNeedDictDecHelper (neededListDecHelperLabels: Set<string>) : bool =
+    listRefCountDecHelperSpecs
+    |> List.exists (fun (helperLabel, leafPayloadRelease) ->
+        Set.contains helperLabel neededListDecHelperLabels
+        && listLeafPayloadNeedsDictDecHelper leafPayloadRelease)
+
+let private selectedListRefCountDecHelpersNeedClosureDecHelper (neededListDecHelperLabels: Set<string>) : bool =
+    listRefCountDecHelperSpecs
+    |> List.exists (fun (helperLabel, leafPayloadRelease) ->
+        Set.contains helperLabel neededListDecHelperLabels
+        && listLeafPayloadNeedsClosureDecHelper leafPayloadRelease)
 
 // ============================================================================
 // TaggedList RefCountInc Helper (increment root node refcount only)
@@ -5218,81 +5151,11 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
 
         Set.union labelsFromFunctions labelsFromClosureCaptures
 
-    let listDecHelperLabelNeeded helperLabel =
-        Set.contains helperLabel neededListDecHelperLabels
+    let selectedListHelpersNeedDictDecHelper =
+        selectedListRefCountDecHelpersNeedDictDecHelper neededListDecHelperLabels
 
-    let needsListRcDecHelper = listDecHelperLabelNeeded listRefCountDecHelperLabel
-    let needsListRcDecTuple2Helper = listDecHelperLabelNeeded listRefCountDecTuple2HelperLabel
-    let needsListRcDecTuple2DynamicFirstHelper = listDecHelperLabelNeeded listRefCountDecTuple2DynamicFirstHelperLabel
-    let needsListRcDecTuple2DynamicSecondHelper = listDecHelperLabelNeeded listRefCountDecTuple2DynamicSecondHelperLabel
-    let needsListRcDecTuple2DynamicBothHelper = listDecHelperLabelNeeded listRefCountDecTuple2DynamicBothHelperLabel
-    let needsListRcDecTuple2NestedTupleDynamicFirstHelper = listDecHelperLabelNeeded listRefCountDecTuple2NestedTupleDynamicFirstHelperLabel
-    let needsListRcDecTuple2NestedTupleDynamicSecondHelper = listDecHelperLabelNeeded listRefCountDecTuple2NestedTupleDynamicSecondHelperLabel
-    let needsListRcDecTuple2NestedTupleDynamicBothHelper = listDecHelperLabelNeeded listRefCountDecTuple2NestedTupleDynamicBothHelperLabel
-    let needsListRcDecTuple2NestedTupleListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple2NestedTupleListDictHelperLabel
-    let needsListRcDecTuple2NestedTupleDictHelper = listDecHelperLabelNeeded listRefCountDecTuple2NestedTupleDictHelperLabel
-    let needsListRcDecTuple2NestedTupleClosureHelper = listDecHelperLabelNeeded listRefCountDecTuple2NestedTupleClosureHelperLabel
-    let needsListRcDecTuple2NestedTupleDynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple2NestedTupleDynamicListDictHelperLabel
-    let needsListRcDecTuple2NestedTupleDynamicBuffersListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple2NestedTupleDynamicBuffersListDictHelperLabel
-    let needsListRcDecTuple3DynamicFirstHelper = listDecHelperLabelNeeded listRefCountDecTuple3DynamicFirstHelperLabel
-    let needsListRcDecTuple3DynamicThirdHelper = listDecHelperLabelNeeded listRefCountDecTuple3DynamicThirdHelperLabel
-    let needsListRcDecTuple3DynamicFirstSecondHelper = listDecHelperLabelNeeded listRefCountDecTuple3DynamicFirstSecondHelperLabel
-    let needsListRcDecTuple3DynamicSecondThirdHelper = listDecHelperLabelNeeded listRefCountDecTuple3DynamicSecondThirdHelperLabel
-    let needsListRcDecTuple3DynamicFirstThirdHelper = listDecHelperLabelNeeded listRefCountDecTuple3DynamicFirstThirdHelperLabel
-    let needsListRcDecTuple3DynamicSecondHelper = listDecHelperLabelNeeded listRefCountDecTuple3DynamicSecondHelperLabel
-    let needsListRcDecTuple3DynamicAllHelper = listDecHelperLabelNeeded listRefCountDecTuple3DynamicAllHelperLabel
-    let needsListRcDecTuple3DynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple3DynamicListDictHelperLabel
-    let needsListRcDecTuple3ClosureListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple3ClosureListDictHelperLabel
-    let needsListRcDecTuple4DynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple4DynamicListDictHelperLabel
-    let needsListRcDecTuple4ClosureDynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple4ClosureDynamicListDictHelperLabel
-    let needsListRcDecTuple4NestedTupleDynamicHelper = listDecHelperLabelNeeded listRefCountDecTuple4NestedTupleDynamicHelperLabel
-    let needsListRcDecTuple4NestedTupleDynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple4NestedTupleDynamicListDictHelperLabel
-    let needsListRcDecTuple4NestedTupleClosureDynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecTuple4NestedTupleClosureDynamicListDictHelperLabel
-    let needsListRcDecRecord1DynamicHelper = listDecHelperLabelNeeded listRefCountDecRecord1DynamicHelperLabel
-    let needsListRcDecRecord3DynamicFirstHelper = listDecHelperLabelNeeded listRefCountDecRecord3DynamicFirstHelperLabel
-    let needsListRcDecRecord3DynamicThirdHelper = listDecHelperLabelNeeded listRefCountDecRecord3DynamicThirdHelperLabel
-    let needsListRcDecRecord3DynamicFirstSecondHelper = listDecHelperLabelNeeded listRefCountDecRecord3DynamicFirstSecondHelperLabel
-    let needsListRcDecRecord3DynamicSecondThirdHelper = listDecHelperLabelNeeded listRefCountDecRecord3DynamicSecondThirdHelperLabel
-    let needsListRcDecRecord3DynamicFirstThirdHelper = listDecHelperLabelNeeded listRefCountDecRecord3DynamicFirstThirdHelperLabel
-    let needsListRcDecRecord3DynamicSecondHelper = listDecHelperLabelNeeded listRefCountDecRecord3DynamicSecondHelperLabel
-    let needsListRcDecRecord3DynamicAllHelper = listDecHelperLabelNeeded listRefCountDecRecord3DynamicAllHelperLabel
-    let needsListRcDecRecord3DynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecRecord3DynamicListDictHelperLabel
-    let needsListRcDecRecord3ClosureListDictHelper = listDecHelperLabelNeeded listRefCountDecRecord3ClosureListDictHelperLabel
-    let needsListRcDecRecord4DynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecRecord4DynamicListDictHelperLabel
-    let needsListRcDecRecord4ClosureDynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecRecord4ClosureDynamicListDictHelperLabel
-    let needsListRcDecSumDynamicHelper = listDecHelperLabelNeeded listRefCountDecSumDynamicHelperLabel
-    let needsListRcDecSumListHelper = listDecHelperLabelNeeded listRefCountDecSumListHelperLabel
-    let needsListRcDecSumDictHelper = listDecHelperLabelNeeded listRefCountDecSumDictHelperLabel
-    let needsListRcDecSumClosureHelper = listDecHelperLabelNeeded listRefCountDecSumClosureHelperLabel
-    let needsListRcDecSumTuple2DynamicFirstHelper = listDecHelperLabelNeeded listRefCountDecSumTuple2DynamicFirstHelperLabel
-    let needsListRcDecSumTuple2DynamicSecondHelper = listDecHelperLabelNeeded listRefCountDecSumTuple2DynamicSecondHelperLabel
-    let needsListRcDecSumTuple2DynamicBothHelper = listDecHelperLabelNeeded listRefCountDecSumTuple2DynamicBothHelperLabel
-    let needsListRcDecSumTuple3DynamicFirstHelper = listDecHelperLabelNeeded listRefCountDecSumTuple3DynamicFirstHelperLabel
-    let needsListRcDecSumTuple3DynamicThirdHelper = listDecHelperLabelNeeded listRefCountDecSumTuple3DynamicThirdHelperLabel
-    let needsListRcDecSumTuple3DynamicFirstSecondHelper = listDecHelperLabelNeeded listRefCountDecSumTuple3DynamicFirstSecondHelperLabel
-    let needsListRcDecSumTuple3DynamicSecondThirdHelper = listDecHelperLabelNeeded listRefCountDecSumTuple3DynamicSecondThirdHelperLabel
-    let needsListRcDecSumTuple3DynamicFirstThirdHelper = listDecHelperLabelNeeded listRefCountDecSumTuple3DynamicFirstThirdHelperLabel
-    let needsListRcDecSumTuple3DynamicSecondHelper = listDecHelperLabelNeeded listRefCountDecSumTuple3DynamicSecondHelperLabel
-    let needsListRcDecSumTuple3DynamicAllHelper = listDecHelperLabelNeeded listRefCountDecSumTuple3DynamicAllHelperLabel
-    let needsListRcDecSumTuple3DynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecSumTuple3DynamicListDictHelperLabel
-    let needsListRcDecSumTuple4DynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecSumTuple4DynamicListDictHelperLabel
-    let needsListRcDecSumTuple4ClosureDynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecSumTuple4ClosureDynamicListDictHelperLabel
-    let needsListRcDecSumRecord1DynamicHelper = listDecHelperLabelNeeded listRefCountDecSumRecord1DynamicHelperLabel
-    let needsListRcDecSumRecord3DynamicFirstHelper = listDecHelperLabelNeeded listRefCountDecSumRecord3DynamicFirstHelperLabel
-    let needsListRcDecSumRecord3DynamicThirdHelper = listDecHelperLabelNeeded listRefCountDecSumRecord3DynamicThirdHelperLabel
-    let needsListRcDecSumRecord3DynamicFirstSecondHelper = listDecHelperLabelNeeded listRefCountDecSumRecord3DynamicFirstSecondHelperLabel
-    let needsListRcDecSumRecord3DynamicSecondThirdHelper = listDecHelperLabelNeeded listRefCountDecSumRecord3DynamicSecondThirdHelperLabel
-    let needsListRcDecSumRecord3DynamicFirstThirdHelper = listDecHelperLabelNeeded listRefCountDecSumRecord3DynamicFirstThirdHelperLabel
-    let needsListRcDecSumRecord3DynamicSecondHelper = listDecHelperLabelNeeded listRefCountDecSumRecord3DynamicSecondHelperLabel
-    let needsListRcDecSumRecord3DynamicAllHelper = listDecHelperLabelNeeded listRefCountDecSumRecord3DynamicAllHelperLabel
-    let needsListRcDecSumRecord3DynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecSumRecord3DynamicListDictHelperLabel
-    let needsListRcDecSumRecord4DynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecSumRecord4DynamicListDictHelperLabel
-    let needsListRcDecSumRecord4ClosureDynamicListDictHelper = listDecHelperLabelNeeded listRefCountDecSumRecord4ClosureDynamicListDictHelperLabel
-    let needsListRcDecNestedSumDynamicHelper = listDecHelperLabelNeeded listRefCountDecNestedSumDynamicHelperLabel
-    let needsListRcDecListHelper = listDecHelperLabelNeeded listRefCountDecListHelperLabel
-    let needsListRcDecClosureHelper = listDecHelperLabelNeeded listRefCountDecClosureHelperLabel
-    let needsListRcDecDictHelper = listDecHelperLabelNeeded listRefCountDecDictHelperLabel
-    let needsListRcDecDynamicBufferHelper = listDecHelperLabelNeeded listRefCountDecDynamicBufferHelperLabel
+    let selectedListHelpersNeedClosureDecHelper =
+        selectedListRefCountDecHelpersNeedClosureDecHelper neededListDecHelperLabels
 
     let needsListRcIncHelper =
         functions
@@ -5357,229 +5220,15 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
         let listIncHelper =
             if needsListRcIncHelper then generateListRefCountIncHelper ()
             else []
-        let listDecHelper =
-            if needsListRcDecHelper then generateListRefCountDecHelper enableLeakCheck
-            else []
-        let listDecTuple2Helper =
-            if needsListRcDecTuple2Helper then generateListRefCountDecTuple2Helper enableLeakCheck
-            else []
-        let listDecTuple2DynamicFirstHelper =
-            if needsListRcDecTuple2DynamicFirstHelper then generateListRefCountDecTuple2DynamicFirstHelper enableLeakCheck
-            else []
-        let listDecTuple2DynamicSecondHelper =
-            if needsListRcDecTuple2DynamicSecondHelper then generateListRefCountDecTuple2DynamicSecondHelper enableLeakCheck
-            else []
-        let listDecTuple2DynamicBothHelper =
-            if needsListRcDecTuple2DynamicBothHelper then generateListRefCountDecTuple2DynamicBothHelper enableLeakCheck
-            else []
-        let listDecTuple2NestedTupleDynamicFirstHelper =
-            if needsListRcDecTuple2NestedTupleDynamicFirstHelper then generateListRefCountDecTuple2NestedTupleDynamicFirstHelper enableLeakCheck
-            else []
-        let listDecTuple2NestedTupleDynamicSecondHelper =
-            if needsListRcDecTuple2NestedTupleDynamicSecondHelper then generateListRefCountDecTuple2NestedTupleDynamicSecondHelper enableLeakCheck
-            else []
-        let listDecTuple2NestedTupleDynamicBothHelper =
-            if needsListRcDecTuple2NestedTupleDynamicBothHelper then generateListRefCountDecTuple2NestedTupleDynamicBothHelper enableLeakCheck
-            else []
-        let listDecTuple2NestedTupleListDictHelper =
-            if needsListRcDecTuple2NestedTupleListDictHelper then generateListRefCountDecTuple2NestedTupleListDictHelper enableLeakCheck
-            else []
-        let listDecTuple2NestedTupleDictHelper =
-            if needsListRcDecTuple2NestedTupleDictHelper then generateListRefCountDecTuple2NestedTupleDictHelper enableLeakCheck
-            else []
-        let listDecTuple2NestedTupleClosureHelper =
-            if needsListRcDecTuple2NestedTupleClosureHelper then generateListRefCountDecTuple2NestedTupleClosureHelper enableLeakCheck
-            else []
-        let listDecTuple2NestedTupleDynamicListDictHelper =
-            if needsListRcDecTuple2NestedTupleDynamicListDictHelper then generateListRefCountDecTuple2NestedTupleDynamicListDictHelper enableLeakCheck
-            else []
-        let listDecTuple2NestedTupleDynamicBuffersListDictHelper =
-            if needsListRcDecTuple2NestedTupleDynamicBuffersListDictHelper then generateListRefCountDecTuple2NestedTupleDynamicBuffersListDictHelper enableLeakCheck
-            else []
-        let listDecTuple3DynamicFirstHelper =
-            if needsListRcDecTuple3DynamicFirstHelper then generateListRefCountDecTuple3DynamicFirstHelper enableLeakCheck
-            else []
-        let listDecTuple3DynamicThirdHelper =
-            if needsListRcDecTuple3DynamicThirdHelper then generateListRefCountDecTuple3DynamicThirdHelper enableLeakCheck
-            else []
-        let listDecTuple3DynamicFirstSecondHelper =
-            if needsListRcDecTuple3DynamicFirstSecondHelper then generateListRefCountDecTuple3DynamicFirstSecondHelper enableLeakCheck
-            else []
-        let listDecTuple3DynamicSecondThirdHelper =
-            if needsListRcDecTuple3DynamicSecondThirdHelper then generateListRefCountDecTuple3DynamicSecondThirdHelper enableLeakCheck
-            else []
-        let listDecTuple3DynamicFirstThirdHelper =
-            if needsListRcDecTuple3DynamicFirstThirdHelper then generateListRefCountDecTuple3DynamicFirstThirdHelper enableLeakCheck
-            else []
-        let listDecTuple3DynamicSecondHelper =
-            if needsListRcDecTuple3DynamicSecondHelper then generateListRefCountDecTuple3DynamicSecondHelper enableLeakCheck
-            else []
-        let listDecTuple3DynamicAllHelper =
-            if needsListRcDecTuple3DynamicAllHelper then generateListRefCountDecTuple3DynamicAllHelper enableLeakCheck
-            else []
-        let listDecTuple3DynamicListDictHelper =
-            if needsListRcDecTuple3DynamicListDictHelper then generateListRefCountDecTuple3DynamicListDictHelper enableLeakCheck
-            else []
-        let listDecTuple3ClosureListDictHelper =
-            if needsListRcDecTuple3ClosureListDictHelper then generateListRefCountDecTuple3ClosureListDictHelper enableLeakCheck
-            else []
-        let listDecTuple4DynamicListDictHelper =
-            if needsListRcDecTuple4DynamicListDictHelper then generateListRefCountDecTuple4DynamicListDictHelper enableLeakCheck
-            else []
-        let listDecTuple4ClosureDynamicListDictHelper =
-            if needsListRcDecTuple4ClosureDynamicListDictHelper then generateListRefCountDecTuple4ClosureDynamicListDictHelper enableLeakCheck
-            else []
-        let listDecTuple4NestedTupleDynamicHelper =
-            if needsListRcDecTuple4NestedTupleDynamicHelper then generateListRefCountDecTuple4NestedTupleDynamicHelper enableLeakCheck
-            else []
-        let listDecTuple4NestedTupleDynamicListDictHelper =
-            if needsListRcDecTuple4NestedTupleDynamicListDictHelper then generateListRefCountDecTuple4NestedTupleDynamicListDictHelper enableLeakCheck
-            else []
-        let listDecTuple4NestedTupleClosureDynamicListDictHelper =
-            if needsListRcDecTuple4NestedTupleClosureDynamicListDictHelper then generateListRefCountDecTuple4NestedTupleClosureDynamicListDictHelper enableLeakCheck
-            else []
-        let listDecRecord1DynamicHelper =
-            if needsListRcDecRecord1DynamicHelper then generateListRefCountDecRecord1DynamicHelper enableLeakCheck
-            else []
-        let listDecRecord3DynamicFirstHelper =
-            if needsListRcDecRecord3DynamicFirstHelper then generateListRefCountDecRecord3DynamicFirstHelper enableLeakCheck
-            else []
-        let listDecRecord3DynamicThirdHelper =
-            if needsListRcDecRecord3DynamicThirdHelper then generateListRefCountDecRecord3DynamicThirdHelper enableLeakCheck
-            else []
-        let listDecRecord3DynamicFirstSecondHelper =
-            if needsListRcDecRecord3DynamicFirstSecondHelper then generateListRefCountDecRecord3DynamicFirstSecondHelper enableLeakCheck
-            else []
-        let listDecRecord3DynamicSecondThirdHelper =
-            if needsListRcDecRecord3DynamicSecondThirdHelper then generateListRefCountDecRecord3DynamicSecondThirdHelper enableLeakCheck
-            else []
-        let listDecRecord3DynamicFirstThirdHelper =
-            if needsListRcDecRecord3DynamicFirstThirdHelper then generateListRefCountDecRecord3DynamicFirstThirdHelper enableLeakCheck
-            else []
-        let listDecRecord3DynamicSecondHelper =
-            if needsListRcDecRecord3DynamicSecondHelper then generateListRefCountDecRecord3DynamicSecondHelper enableLeakCheck
-            else []
-        let listDecRecord3DynamicAllHelper =
-            if needsListRcDecRecord3DynamicAllHelper then generateListRefCountDecRecord3DynamicAllHelper enableLeakCheck
-            else []
-        let listDecRecord3DynamicListDictHelper =
-            if needsListRcDecRecord3DynamicListDictHelper then generateListRefCountDecRecord3DynamicListDictHelper enableLeakCheck
-            else []
-        let listDecRecord3ClosureListDictHelper =
-            if needsListRcDecRecord3ClosureListDictHelper then generateListRefCountDecRecord3ClosureListDictHelper enableLeakCheck
-            else []
-        let listDecRecord4DynamicListDictHelper =
-            if needsListRcDecRecord4DynamicListDictHelper then generateListRefCountDecRecord4DynamicListDictHelper enableLeakCheck
-            else []
-        let listDecRecord4ClosureDynamicListDictHelper =
-            if needsListRcDecRecord4ClosureDynamicListDictHelper then generateListRefCountDecRecord4ClosureDynamicListDictHelper enableLeakCheck
-            else []
-        let listDecSumDynamicHelper =
-            if needsListRcDecSumDynamicHelper then generateListRefCountDecSumDynamicHelper enableLeakCheck
-            else []
-        let listDecSumListHelper =
-            if needsListRcDecSumListHelper then generateListRefCountDecSumListHelper enableLeakCheck
-            else []
-        let listDecSumDictHelper =
-            if needsListRcDecSumDictHelper then generateListRefCountDecSumDictHelper enableLeakCheck
-            else []
-        let listDecSumClosureHelper =
-            if needsListRcDecSumClosureHelper then generateListRefCountDecSumClosureHelper enableLeakCheck
-            else []
-        let listDecSumTuple2DynamicFirstHelper =
-            if needsListRcDecSumTuple2DynamicFirstHelper then generateListRefCountDecSumTuple2DynamicFirstHelper enableLeakCheck
-            else []
-        let listDecSumTuple2DynamicSecondHelper =
-            if needsListRcDecSumTuple2DynamicSecondHelper then generateListRefCountDecSumTuple2DynamicSecondHelper enableLeakCheck
-            else []
-        let listDecSumTuple2DynamicBothHelper =
-            if needsListRcDecSumTuple2DynamicBothHelper then generateListRefCountDecSumTuple2DynamicBothHelper enableLeakCheck
-            else []
-        let listDecSumTuple3DynamicFirstHelper =
-            if needsListRcDecSumTuple3DynamicFirstHelper then generateListRefCountDecSumTuple3DynamicFirstHelper enableLeakCheck
-            else []
-        let listDecSumTuple3DynamicThirdHelper =
-            if needsListRcDecSumTuple3DynamicThirdHelper then generateListRefCountDecSumTuple3DynamicThirdHelper enableLeakCheck
-            else []
-        let listDecSumTuple3DynamicFirstSecondHelper =
-            if needsListRcDecSumTuple3DynamicFirstSecondHelper then generateListRefCountDecSumTuple3DynamicFirstSecondHelper enableLeakCheck
-            else []
-        let listDecSumTuple3DynamicSecondThirdHelper =
-            if needsListRcDecSumTuple3DynamicSecondThirdHelper then generateListRefCountDecSumTuple3DynamicSecondThirdHelper enableLeakCheck
-            else []
-        let listDecSumTuple3DynamicFirstThirdHelper =
-            if needsListRcDecSumTuple3DynamicFirstThirdHelper then generateListRefCountDecSumTuple3DynamicFirstThirdHelper enableLeakCheck
-            else []
-        let listDecSumTuple3DynamicSecondHelper =
-            if needsListRcDecSumTuple3DynamicSecondHelper then generateListRefCountDecSumTuple3DynamicSecondHelper enableLeakCheck
-            else []
-        let listDecSumTuple3DynamicAllHelper =
-            if needsListRcDecSumTuple3DynamicAllHelper then generateListRefCountDecSumTuple3DynamicAllHelper enableLeakCheck
-            else []
-        let listDecSumTuple3DynamicListDictHelper =
-            if needsListRcDecSumTuple3DynamicListDictHelper then generateListRefCountDecSumTuple3DynamicListDictHelper enableLeakCheck
-            else []
-        let listDecSumTuple4DynamicListDictHelper =
-            if needsListRcDecSumTuple4DynamicListDictHelper then generateListRefCountDecSumTuple4DynamicListDictHelper enableLeakCheck
-            else []
-        let listDecSumTuple4ClosureDynamicListDictHelper =
-            if needsListRcDecSumTuple4ClosureDynamicListDictHelper then generateListRefCountDecSumTuple4ClosureDynamicListDictHelper enableLeakCheck
-            else []
-        let listDecSumRecord1DynamicHelper =
-            if needsListRcDecSumRecord1DynamicHelper then generateListRefCountDecSumRecord1DynamicHelper enableLeakCheck
-            else []
-        let listDecSumRecord3DynamicFirstHelper =
-            if needsListRcDecSumRecord3DynamicFirstHelper then generateListRefCountDecSumRecord3DynamicFirstHelper enableLeakCheck
-            else []
-        let listDecSumRecord3DynamicThirdHelper =
-            if needsListRcDecSumRecord3DynamicThirdHelper then generateListRefCountDecSumRecord3DynamicThirdHelper enableLeakCheck
-            else []
-        let listDecSumRecord3DynamicFirstSecondHelper =
-            if needsListRcDecSumRecord3DynamicFirstSecondHelper then generateListRefCountDecSumRecord3DynamicFirstSecondHelper enableLeakCheck
-            else []
-        let listDecSumRecord3DynamicSecondThirdHelper =
-            if needsListRcDecSumRecord3DynamicSecondThirdHelper then generateListRefCountDecSumRecord3DynamicSecondThirdHelper enableLeakCheck
-            else []
-        let listDecSumRecord3DynamicFirstThirdHelper =
-            if needsListRcDecSumRecord3DynamicFirstThirdHelper then generateListRefCountDecSumRecord3DynamicFirstThirdHelper enableLeakCheck
-            else []
-        let listDecSumRecord3DynamicSecondHelper =
-            if needsListRcDecSumRecord3DynamicSecondHelper then generateListRefCountDecSumRecord3DynamicSecondHelper enableLeakCheck
-            else []
-        let listDecSumRecord3DynamicAllHelper =
-            if needsListRcDecSumRecord3DynamicAllHelper then generateListRefCountDecSumRecord3DynamicAllHelper enableLeakCheck
-            else []
-        let listDecSumRecord3DynamicListDictHelper =
-            if needsListRcDecSumRecord3DynamicListDictHelper then generateListRefCountDecSumRecord3DynamicListDictHelper enableLeakCheck
-            else []
-        let listDecSumRecord4DynamicListDictHelper =
-            if needsListRcDecSumRecord4DynamicListDictHelper then generateListRefCountDecSumRecord4DynamicListDictHelper enableLeakCheck
-            else []
-        let listDecSumRecord4ClosureDynamicListDictHelper =
-            if needsListRcDecSumRecord4ClosureDynamicListDictHelper then generateListRefCountDecSumRecord4ClosureDynamicListDictHelper enableLeakCheck
-            else []
-        let listDecNestedSumDynamicHelper =
-            if needsListRcDecNestedSumDynamicHelper then generateListRefCountDecNestedSumDynamicHelper enableLeakCheck
-            else []
-        let listDecListHelper =
-            if needsListRcDecListHelper then generateListRefCountDecListHelper enableLeakCheck
-            else []
-        let listDecClosureHelper =
-            if needsListRcDecClosureHelper then generateListRefCountDecClosureHelper enableLeakCheck
-            else []
-        let listDecDictHelper =
-            if needsListRcDecDictHelper then generateListRefCountDecDictHelper enableLeakCheck
-            else []
-        let listDecDynamicBufferHelper =
-            if needsListRcDecDynamicBufferHelper then generateListRefCountDecDynamicBufferHelper enableLeakCheck
-            else []
+        let listDecHelpers =
+            generateNeededListRefCountDecHelpers neededListDecHelperLabels enableLeakCheck
         let dictIncHelper =
             if needsDictRcIncHelper then generateDictRefCountIncHelper ()
             else []
         let dictDecHelper =
-            if needsDictRcDecHelper || needsListRcDecDictHelper || needsListRcDecSumDictHelper || needsListRcDecTuple2NestedTupleListDictHelper || needsListRcDecTuple2NestedTupleDictHelper || needsListRcDecTuple2NestedTupleDynamicListDictHelper || needsListRcDecTuple2NestedTupleDynamicBuffersListDictHelper || needsListRcDecTuple3DynamicListDictHelper || needsListRcDecTuple3ClosureListDictHelper || needsListRcDecTuple4DynamicListDictHelper || needsListRcDecTuple4ClosureDynamicListDictHelper || needsListRcDecTuple4NestedTupleDynamicListDictHelper || needsListRcDecTuple4NestedTupleClosureDynamicListDictHelper || needsListRcDecRecord3DynamicListDictHelper || needsListRcDecRecord3ClosureListDictHelper || needsListRcDecRecord4DynamicListDictHelper || needsListRcDecRecord4ClosureDynamicListDictHelper || needsListRcDecSumTuple3DynamicListDictHelper || needsListRcDecSumTuple4DynamicListDictHelper || needsListRcDecSumTuple4ClosureDynamicListDictHelper || needsListRcDecSumRecord3DynamicListDictHelper || needsListRcDecSumRecord4DynamicListDictHelper || needsListRcDecSumRecord4ClosureDynamicListDictHelper then generateDictRefCountDecHelper enableLeakCheck
+            if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper then generateDictRefCountDecHelper enableLeakCheck
             else []
         let closureDecHelper =
-            if needsClosureRcDecHelper || needsListRcDecClosureHelper || needsListRcDecSumClosureHelper || needsListRcDecTuple2NestedTupleClosureHelper || needsListRcDecTuple3ClosureListDictHelper || needsListRcDecTuple4ClosureDynamicListDictHelper || needsListRcDecTuple4NestedTupleClosureDynamicListDictHelper || needsListRcDecRecord3ClosureListDictHelper || needsListRcDecRecord4ClosureDynamicListDictHelper || needsListRcDecSumTuple4ClosureDynamicListDictHelper || needsListRcDecSumRecord4ClosureDynamicListDictHelper then generateClosureRefCountDecHelper enableLeakCheck recordRegistry closurePayloadSizes closureCaptureTypes
+            if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper enableLeakCheck recordRegistry closurePayloadSizes closureCaptureTypes
             else []
-        allInstrs @ listIncHelper @ listDecHelper @ listDecTuple2Helper @ listDecTuple2DynamicFirstHelper @ listDecTuple2DynamicSecondHelper @ listDecTuple2DynamicBothHelper @ listDecTuple2NestedTupleDynamicFirstHelper @ listDecTuple2NestedTupleDynamicSecondHelper @ listDecTuple2NestedTupleDynamicBothHelper @ listDecTuple2NestedTupleListDictHelper @ listDecTuple2NestedTupleDictHelper @ listDecTuple2NestedTupleClosureHelper @ listDecTuple2NestedTupleDynamicListDictHelper @ listDecTuple2NestedTupleDynamicBuffersListDictHelper @ listDecTuple3DynamicFirstHelper @ listDecTuple3DynamicThirdHelper @ listDecTuple3DynamicFirstSecondHelper @ listDecTuple3DynamicSecondThirdHelper @ listDecTuple3DynamicFirstThirdHelper @ listDecTuple3DynamicSecondHelper @ listDecTuple3DynamicAllHelper @ listDecTuple3DynamicListDictHelper @ listDecTuple3ClosureListDictHelper @ listDecTuple4DynamicListDictHelper @ listDecTuple4ClosureDynamicListDictHelper @ listDecTuple4NestedTupleDynamicHelper @ listDecTuple4NestedTupleDynamicListDictHelper @ listDecTuple4NestedTupleClosureDynamicListDictHelper @ listDecRecord1DynamicHelper @ listDecRecord3DynamicFirstHelper @ listDecRecord3DynamicThirdHelper @ listDecRecord3DynamicFirstSecondHelper @ listDecRecord3DynamicSecondThirdHelper @ listDecRecord3DynamicFirstThirdHelper @ listDecRecord3DynamicSecondHelper @ listDecRecord3DynamicAllHelper @ listDecRecord3DynamicListDictHelper @ listDecRecord3ClosureListDictHelper @ listDecRecord4DynamicListDictHelper @ listDecRecord4ClosureDynamicListDictHelper @ listDecSumDynamicHelper @ listDecSumListHelper @ listDecSumDictHelper @ listDecSumClosureHelper @ listDecSumTuple2DynamicFirstHelper @ listDecSumTuple2DynamicSecondHelper @ listDecSumTuple2DynamicBothHelper @ listDecSumTuple3DynamicFirstHelper @ listDecSumTuple3DynamicThirdHelper @ listDecSumTuple3DynamicFirstSecondHelper @ listDecSumTuple3DynamicSecondThirdHelper @ listDecSumTuple3DynamicFirstThirdHelper @ listDecSumTuple3DynamicSecondHelper @ listDecSumTuple3DynamicAllHelper @ listDecSumTuple3DynamicListDictHelper @ listDecSumTuple4DynamicListDictHelper @ listDecSumTuple4ClosureDynamicListDictHelper @ listDecSumRecord1DynamicHelper @ listDecSumRecord3DynamicFirstHelper @ listDecSumRecord3DynamicThirdHelper @ listDecSumRecord3DynamicFirstSecondHelper @ listDecSumRecord3DynamicSecondThirdHelper @ listDecSumRecord3DynamicFirstThirdHelper @ listDecSumRecord3DynamicSecondHelper @ listDecSumRecord3DynamicAllHelper @ listDecSumRecord3DynamicListDictHelper @ listDecSumRecord4DynamicListDictHelper @ listDecSumRecord4ClosureDynamicListDictHelper @ listDecNestedSumDynamicHelper @ listDecListHelper @ listDecClosureHelper @ listDecDictHelper @ listDecDynamicBufferHelper @ dictIncHelper @ dictDecHelper @ closureDecHelper @ genOomHandler ())
+        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ dictDecHelper @ closureDecHelper @ genOomHandler ())
