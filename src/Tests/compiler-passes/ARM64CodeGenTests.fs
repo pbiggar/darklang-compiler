@@ -76,8 +76,7 @@ let testRawSetPureEnumDoesNotEmitGenericRetain () : TestResult =
             Ok ()
 
 let testListTuple3BytesListDictListValueUsesTypedDictHelper () : TestResult =
-    let dictType = AST.TDict (AST.TInt64, AST.TList AST.TInt64)
-    let tupleType = AST.TTuple [ AST.TBytes; AST.TList AST.TInt64; dictType ]
+    let tupleType = AST.TTuple [ AST.TBytes; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TList AST.TInt64) ]
     let program =
         makeSimpleProgramWithVariants
             [
@@ -105,7 +104,84 @@ let testListTuple3BytesListDictListValueUsesTypedDictHelper () : TestResult =
         else
             Error "List of tuple(bytes, list, dict<int, list<int>>) did not emit typed dict-list value release helper"
 
+let private assertListElementUsesTypedDictListHelper (elementType: AST.Type) (caseName: string) : TestResult =
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    0,
+                    LIR.TaggedList,
+                    Some (rcMetadata (AST.TList elementType)))
+            ]
+            Map.empty
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let callsTypedDictListHelper =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.BL "__dark_dict_refcount_dec_list_value_helper" ->
+                    true
+                | _ ->
+                    false)
+        if callsTypedDictListHelper then
+            Ok ()
+        else
+            Error $"{caseName} did not emit typed dict-list value release helper"
+
+let testListTuple3StringListDictListValueUsesTypedDictHelper () : TestResult =
+    assertListElementUsesTypedDictListHelper
+        (AST.TTuple [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TList AST.TInt64) ])
+        "List of tuple(string, list, dict<int, list<int>>)"
+
+let testListTuple3ClosureListDictListValueUsesTypedDictHelper () : TestResult =
+    assertListElementUsesTypedDictListHelper
+        (AST.TTuple [
+            AST.TFunction ([ AST.TInt64 ], AST.TInt64)
+            AST.TList AST.TInt64
+            AST.TDict (AST.TInt64, AST.TList AST.TInt64)
+        ])
+        "List of tuple(closure, list, dict<int, list<int>>)"
+
+let testListTuple4StringBytesListDictListValueUsesTypedDictHelper () : TestResult =
+    assertListElementUsesTypedDictListHelper
+        (AST.TTuple [
+            AST.TString
+            AST.TBytes
+            AST.TList AST.TInt64
+            AST.TDict (AST.TInt64, AST.TList AST.TInt64)
+        ])
+        "List of tuple(string, bytes, list, dict<int, list<int>>)"
+
+let testListTuple4ClosureStringListDictListValueUsesTypedDictHelper () : TestResult =
+    assertListElementUsesTypedDictListHelper
+        (AST.TTuple [
+            AST.TFunction ([ AST.TInt64 ], AST.TInt64)
+            AST.TString
+            AST.TList AST.TInt64
+            AST.TDict (AST.TInt64, AST.TList AST.TInt64)
+        ])
+        "List of tuple(closure, string, list, dict<int, list<int>>)"
+
+let testListTuple4ClosureBytesListDictListValueUsesTypedDictHelper () : TestResult =
+    assertListElementUsesTypedDictListHelper
+        (AST.TTuple [
+            AST.TFunction ([ AST.TInt64 ], AST.TInt64)
+            AST.TBytes
+            AST.TList AST.TInt64
+            AST.TDict (AST.TInt64, AST.TList AST.TInt64)
+        ])
+        "List of tuple(closure, bytes, list, dict<int, list<int>>)"
+
 let tests : (string * (unit -> TestResult)) list = [
     ("RawSet pure enum skips generic retain", testRawSetPureEnumDoesNotEmitGenericRetain)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
+    ("List tuple3 string/list/dict-list uses typed dict helper", testListTuple3StringListDictListValueUsesTypedDictHelper)
+    ("List tuple3 closure/list/dict-list uses typed dict helper", testListTuple3ClosureListDictListValueUsesTypedDictHelper)
+    ("List tuple4 string/bytes/list/dict-list uses typed dict helper", testListTuple4StringBytesListDictListValueUsesTypedDictHelper)
+    ("List tuple4 closure/string/list/dict-list uses typed dict helper", testListTuple4ClosureStringListDictListValueUsesTypedDictHelper)
+    ("List tuple4 closure/bytes/list/dict-list uses typed dict helper", testListTuple4ClosureBytesListDictListValueUsesTypedDictHelper)
 ]
