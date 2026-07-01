@@ -129,6 +129,14 @@ type RcShape =
     | StaticString
     | RawUnmanaged
 
+/// Minimal sum metadata needed by RcShape without depending on later IR modules.
+type RcSumShapeInfo = {
+    TypeParams: string list
+    Payloads: AST.Type option list
+}
+
+type RcSumShapeRegistry = Map<string, RcSumShapeInfo>
+
 /// Root-level retain/release operation selected from a runtime shape.
 type RcOperation =
     | FixedSizeRoot of payloadSize:int * kind:RcKind
@@ -263,30 +271,6 @@ type TypedProgram = {
     TypeMap: TypeMap
 }
 
-/// Check if a type requires reference counting (heap-allocated)
-let isHeapType (t: AST.Type) : bool =
-    match t with
-    | AST.TTuple _ -> true
-    | AST.TRecord _ -> true
-    | AST.TList _ -> true
-    | AST.TSum _ -> true  // Conservative: sum types with payloads are heap-allocated
-    | AST.TDict _ -> true  // Dict root pointer is heap-allocated
-    | _ -> false
-
-/// Calculate payload size in bytes for a heap-allocated type
-let payloadSize (t: AST.Type) (typeReg: Map<string, (string * AST.Type) list>) : int =
-    match t with
-    | AST.TTuple ts -> List.length ts * 8
-    | AST.TRecord (name, _) ->
-        match Map.tryFind name typeReg with
-        | Some fields -> List.length fields * 8
-        | None -> Crash.crash $"payloadSize: Record type '{name}' not found in typeReg"
-    | AST.TList _ -> 24  // [tag, head, tail] - same size for all element types
-    | AST.TSum _ -> 16  // [tag, payload]
-    | AST.TDict _ -> 8  // Root pointer only (HAMT structure is variable-sized raw memory)
-    | AST.TFunction _ -> 0  // Closure helper resolves payload size from the function pointer
-    | _ -> 0  // Non-heap types
-
 /// Classify a source type into its current runtime RC representation shape.
 ///
 /// The classifier is intentionally pure and side-effect free. Early migration
@@ -341,6 +325,118 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
         ClosureShape []
     | AST.TRawPtr ->
         RawUnmanaged
+
+let private rcShapeTypeSubstitution (typeParams: string list) (typeArgs: AST.Type list) : Map<string, AST.Type> =
+    if List.length typeParams = List.length typeArgs then
+        List.zip typeParams typeArgs |> Map.ofList
+    else
+        Crash.crash $"rcShapeOfTypeWithSums: sum type argument mismatch: params={typeParams.Length}, args={typeArgs.Length}"
+
+let rec private applyRcShapeTypeSubstitution (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
+    match typ with
+    | AST.TVar name ->
+        match Map.tryFind name subst with
+        | Some concrete -> concrete
+        | None -> typ
+    | AST.TTuple elemTypes ->
+        AST.TTuple (elemTypes |> List.map (applyRcShapeTypeSubstitution subst))
+    | AST.TRecord (name, typeArgs) ->
+        AST.TRecord (name, typeArgs |> List.map (applyRcShapeTypeSubstitution subst))
+    | AST.TList elemType ->
+        AST.TList (applyRcShapeTypeSubstitution subst elemType)
+    | AST.TDict (keyType, valueType) ->
+        AST.TDict (applyRcShapeTypeSubstitution subst keyType, applyRcShapeTypeSubstitution subst valueType)
+    | AST.TSum (name, typeArgs) ->
+        AST.TSum (name, typeArgs |> List.map (applyRcShapeTypeSubstitution subst))
+    | AST.TFunction (paramTypes, returnType) ->
+        AST.TFunction (
+            paramTypes |> List.map (applyRcShapeTypeSubstitution subst),
+            applyRcShapeTypeSubstitution subst returnType
+        )
+    | AST.TInt8
+    | AST.TInt16
+    | AST.TInt32
+    | AST.TInt64
+    | AST.TInt128
+    | AST.TUInt8
+    | AST.TUInt16
+    | AST.TUInt32
+    | AST.TUInt64
+    | AST.TUInt128
+    | AST.TBool
+    | AST.TFloat64
+    | AST.TString
+    | AST.TBytes
+    | AST.TChar
+    | AST.TUnit
+    | AST.TRawPtr
+    | AST.TRuntimeError ->
+        typ
+
+/// Classify a source type using record metadata and optional named-sum metadata.
+let rec rcShapeOfTypeWithSums
+    (typeReg: Map<string, (string * AST.Type) list>)
+    (sumReg: RcSumShapeRegistry)
+    (t: AST.Type)
+    : RcShape =
+    let classify = rcShapeOfTypeWithSums typeReg sumReg
+
+    match t with
+    | AST.TTuple elemTypes ->
+        FixedBlock (List.length elemTypes * 8, elemTypes |> List.map classify)
+    | AST.TRecord (name, _) ->
+        match Map.tryFind name typeReg with
+        | Some fields ->
+            FixedBlock (List.length fields * 8, fields |> List.map (fun (_, fieldType) -> classify fieldType))
+        | None ->
+            Crash.crash $"rcShapeOfTypeWithSums: Record type '{name}' not found in typeReg"
+    | AST.TSum (name, typeArgs) ->
+        match Map.tryFind name sumReg with
+        | Some sumInfo ->
+            let subst = rcShapeTypeSubstitution sumInfo.TypeParams typeArgs
+
+            let payloadShapes =
+                sumInfo.Payloads
+                |> List.choose (fun maybePayload ->
+                    maybePayload
+                    |> Option.map (applyRcShapeTypeSubstitution subst >> classify))
+
+            match payloadShapes with
+            | [] ->
+                Immediate
+            | shapes ->
+                BoxedSum (16, shapes |> List.map (fun shape -> (8, shape)))
+        | None ->
+            rcShapeOfType typeReg t
+    | AST.TList elemType ->
+        TaggedListShape (classify elemType)
+    | AST.TDict (keyType, valueType) ->
+        DictRoot (classify keyType, classify valueType)
+    | AST.TFunction _ ->
+        ClosureShape []
+    | AST.TString ->
+        DynamicString
+    | AST.TBytes ->
+        DynamicBytes
+    | AST.TRawPtr ->
+        RawUnmanaged
+    | AST.TInt8
+    | AST.TInt16
+    | AST.TInt32
+    | AST.TInt64
+    | AST.TInt128
+    | AST.TUInt8
+    | AST.TUInt16
+    | AST.TUInt32
+    | AST.TUInt64
+    | AST.TUInt128
+    | AST.TBool
+    | AST.TFloat64
+    | AST.TChar
+    | AST.TUnit
+    | AST.TRuntimeError
+    | AST.TVar _ ->
+        Immediate
 
 /// True when a runtime shape can own managed memory that must be released when
 /// an owning binding leaves scope.
@@ -550,14 +646,74 @@ let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
 let rec rcReleasePlanOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type) : RcReleasePlan =
     t |> rcShapeOfType typeReg |> rcShapeReleasePlan
 
-/// Determine reference-count dispatch kind for a heap type
+/// Release plan for a source type using record and named-sum metadata.
+let rec rcReleasePlanOfTypeWithSums
+    (typeReg: Map<string, (string * AST.Type) list>)
+    (sumReg: RcSumShapeRegistry)
+    (t: AST.Type)
+    : RcReleasePlan =
+    t |> rcShapeOfTypeWithSums typeReg sumReg |> rcShapeReleasePlan
+
+/// Compatibility heap classifier backed by RcShape.
+let isHeapTypeWithRegistry (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type) : bool =
+    t |> rcShapeOfType typeReg |> rcShapeNeedsOwnedScopeRelease
+
+/// Compatibility heap classifier for contexts that do not have record metadata.
+let isHeapType (t: AST.Type) : bool =
+    match t with
+    | AST.TTuple _
+    | AST.TRecord _
+    | AST.TList _
+    | AST.TDict _
+    | AST.TString
+    | AST.TBytes
+    | AST.TFunction _ ->
+        true
+    | AST.TSum (_, []) ->
+        false
+    | AST.TSum _ ->
+        true
+    | AST.TInt8
+    | AST.TInt16
+    | AST.TInt32
+    | AST.TInt64
+    | AST.TInt128
+    | AST.TUInt8
+    | AST.TUInt16
+    | AST.TUInt32
+    | AST.TUInt64
+    | AST.TUInt128
+    | AST.TBool
+    | AST.TFloat64
+    | AST.TChar
+    | AST.TUnit
+    | AST.TRawPtr
+    | AST.TRuntimeError
+    | AST.TVar _ ->
+        false
+
+/// Compatibility payload-size classifier backed by RcShape.
+let payloadSize (t: AST.Type) (typeReg: Map<string, (string * AST.Type) list>) : int =
+    t
+    |> rcShapeOfType typeReg
+    |> rcShapePayloadSize
+    |> Option.defaultValue 0
+
+/// Compatibility reference-count dispatch classifier backed by RcShape.
+let rcKindWithRegistry (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type) : RcKind =
+    match t |> rcShapeOfType typeReg |> rcShapeRootKind with
+    | Some kind ->
+        kind
+    | None ->
+        Crash.crash $"rcKindWithRegistry: type '{t}' does not have an RC root kind"
+
+/// Compatibility reference-count dispatch classifier for metadata-free contexts.
 let rcKind (t: AST.Type) : RcKind =
     match t with
-    | AST.TDict _ -> DictHeap
-    | AST.TFunction _ -> ClosureHeap
-    | AST.TList (AST.TFunction _) -> GenericHeap
-    | AST.TList _ -> TaggedList
-    | _ -> GenericHeap
+    | AST.TRecord _ ->
+        GenericHeap
+    | _ ->
+        rcKindWithRegistry Map.empty t
 
 // ============================================================================
 // Coverage Types

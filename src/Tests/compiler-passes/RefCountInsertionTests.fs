@@ -85,6 +85,92 @@ let testRcShapeClassifiesRemainingRuntimeShapes () : TestResult =
     | Some (typ, expected) ->
         Error $"Expected {typ} to classify as {expected}, got {rcShapeOfType Map.empty typ}"
 
+let testLegacyRcClassifiersUseRcShape () : TestResult =
+    let typeReg =
+        Map.ofList [
+            ("Box", [("value", AST.TString)])
+        ]
+
+    let heapSamples = [
+        AST.TString
+        AST.TBytes
+        AST.TFunction ([AST.TInt64], AST.TString)
+        AST.TRecord ("Box", [])
+        AST.TList AST.TInt64
+        AST.TDict (AST.TInt64, AST.TString)
+        AST.TSum ("Payload", [AST.TString])
+    ]
+
+    let nonHeapSamples = [
+        AST.TInt64
+        AST.TBool
+        AST.TRawPtr
+        AST.TSum ("Enum", [])
+    ]
+
+    let payloadSamples = [
+        AST.TString, 0
+        AST.TBytes, 0
+        AST.TFunction ([AST.TInt64], AST.TString), 0
+        AST.TRecord ("Box", []), 8
+        AST.TList AST.TInt64, 24
+        AST.TDict (AST.TInt64, AST.TString), 8
+        AST.TSum ("Payload", [AST.TString]), 16
+        AST.TSum ("Enum", []), 0
+    ]
+
+    let kindSamples = [
+        AST.TFunction ([AST.TInt64], AST.TString), ClosureHeap
+        AST.TList (AST.TFunction ([AST.TInt64], AST.TString)), GenericHeap
+        AST.TList AST.TInt64, TaggedList
+        AST.TDict (AST.TInt64, AST.TString), DictHeap
+        AST.TRecord ("Box", []), GenericHeap
+        AST.TSum ("Payload", [AST.TString]), GenericHeap
+    ]
+
+    match heapSamples |> List.tryFind (fun typ -> not (isHeapTypeWithRegistry typeReg typ)) with
+    | Some typ ->
+        Error $"Expected legacy heap classifier to treat {typ} as managed through RcShape"
+    | None ->
+        match nonHeapSamples |> List.tryFind (isHeapTypeWithRegistry typeReg) with
+        | Some typ ->
+            Error $"Expected legacy heap classifier to treat {typ} as unmanaged through RcShape"
+        | None ->
+            match payloadSamples |> List.tryFind (fun (typ, expected) -> payloadSize typ typeReg <> expected) with
+            | Some (typ, expected) ->
+                Error $"Expected payloadSize for {typ} to be {expected}, got {payloadSize typ typeReg}"
+            | None ->
+                match kindSamples |> List.tryFind (fun (typ, expected) -> rcKindWithRegistry typeReg typ <> expected) with
+                | Some (typ, expected) ->
+                    Error $"Expected rcKind for {typ} to be {expected}, got {rcKindWithRegistry typeReg typ}"
+                | None ->
+                    Ok ()
+
+let testRcShapeClassifiesSumsWithVariantMetadata () : TestResult =
+    let typeReg =
+        Map.ofList [
+            ("PayloadRecord", [("name", AST.TString)])
+        ]
+
+    let variantReg : RcSumShapeRegistry =
+        Map.ofList [
+            ("Enum", { TypeParams = []; Payloads = [None; None] })
+            ("Maybe", { TypeParams = ["a"]; Payloads = [None; Some (AST.TVar "a")] })
+            ("Packet", { TypeParams = []; Payloads = [Some (AST.TRecord ("PayloadRecord", [])); Some AST.TBytes] })
+        ]
+
+    let samples = [
+        AST.TSum ("Enum", []), Immediate
+        AST.TSum ("Maybe", [AST.TString]), BoxedSum (16, [(8, DynamicString)])
+        AST.TSum ("Packet", []), BoxedSum (16, [(8, FixedBlock (8, [DynamicString])); (8, DynamicBytes)])
+    ]
+
+    match samples |> List.tryFind (fun (typ, expected) -> rcShapeOfTypeWithSums typeReg variantReg typ <> expected) with
+    | Some (typ, expected) ->
+        Error $"Expected variant-aware shape for {typ} to be {expected}, got {rcShapeOfTypeWithSums typeReg variantReg typ}"
+    | None ->
+        Ok ()
+
 let testRcShapeOwnershipHelpersClassifyManagedRoots () : TestResult =
     let managedShapes = [
         DynamicString
@@ -723,6 +809,8 @@ let tests = [
     ("RcShape classifies primitives as immediate", testRcShapeClassifiesPrimitivesAsImmediate)
     ("RcShape classifies tuples and records as fixed blocks", testRcShapeClassifiesTuplesAndRecordsAsFixedBlocks)
     ("RcShape classifies remaining runtime shapes", testRcShapeClassifiesRemainingRuntimeShapes)
+    ("legacy RC classifiers use RcShape", testLegacyRcClassifiersUseRcShape)
+    ("RcShape classifies sums with variant metadata", testRcShapeClassifiesSumsWithVariantMetadata)
     ("RcShape ownership helpers classify managed roots", testRcShapeOwnershipHelpersClassifyManagedRoots)
     ("RcShape ownership helpers classify automatic binding decs", testRcShapeOwnershipHelpersClassifyAutomaticBindingDecs)
     ("RcShape ownership helpers classify borrowed retains", testRcShapeOwnershipHelpersClassifyBorrowedRetains)

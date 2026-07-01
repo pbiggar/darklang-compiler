@@ -520,7 +520,7 @@ let private canonicalRcSourceType (ctx: TypeContext) (typ: AST.Type) : AST.Type 
 let private rcShapeForType (ctx: TypeContext) (typ: AST.Type) : RcShape =
     typ |> canonicalRcTypeForShape ctx |> rcShapeOfType ctx.TypeReg
 
-let private isRcManagedRootAliasType (ctx: TypeContext) (typ: AST.Type) : bool =
+let private typeHasRcShapeManagedAliasRoot (ctx: TypeContext) (typ: AST.Type) : bool =
     match typ |> rcShapeForType ctx |> rcShapeStorageClass with
     | ManagedRcRoot (_, ClosureHeap) ->
         false
@@ -825,7 +825,7 @@ let rec insertRCWithAnalysis
                 | RLet (nextAliasTemp, Atom (Var sourceId), nextNextBody, _) when sourceId = aliasedTemp ->
                     inferAliasedVarTypeFromUse nextAliasTemp nextNextBody
                 | RLet (nextAliasTemp, TypedAtom (Var sourceId, aliasType), nextNextBody, _) when sourceId = aliasedTemp ->
-                    if isRcManagedRootAliasType ctx aliasType then
+                    if typeHasRcShapeManagedAliasRoot ctx aliasType then
                         Some aliasType
                     else
                         inferAliasedVarTypeFromUse nextAliasTemp nextNextBody
@@ -849,7 +849,7 @@ let rec insertRCWithAnalysis
                             None
 
                     match aliasTypeFromBody with
-                    | Some inferredAliasType when isRcManagedRootAliasType ctx inferredAliasType && not (isRcManagedRootAliasType ctx t) ->
+                    | Some inferredAliasType when typeHasRcShapeManagedAliasRoot ctx inferredAliasType && not (typeHasRcShapeManagedAliasRoot ctx t) ->
                         inferredAliasType
                     | _ ->
                         t
