@@ -532,6 +532,10 @@ let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
     | ManagedRcRoot (payloadSize, kind) ->
         RootRelease (payloadSize, kind, rootPayloadPlan shape)
 
+/// Release plan for a source type using the current representation registry.
+let rcReleasePlanOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type) : RcReleasePlan =
+    t |> rcShapeOfType typeReg |> rcShapeReleasePlan
+
 /// Determine reference-count dispatch kind for a heap type
 let rcKind (t: AST.Type) : RcKind =
     match t with

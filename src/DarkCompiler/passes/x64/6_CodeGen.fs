@@ -868,18 +868,40 @@ let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type 
         | Some (AST.TSum (_, [payloadType])) -> [AST.TInt64; payloadType]
         | _ -> []
 
+    let plannedFieldReleaseAt (fieldOffset: int) : ANF.RcReleasePlan option =
+        match sourceType with
+        | None ->
+            None
+        | Some typ ->
+            match ANF.rcReleasePlanOfType ctx.RecordRegistry typ with
+            | ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
+                fieldReleases
+                |> List.tryPick (fun fieldRelease ->
+                    match fieldRelease with
+                    | ANF.FieldRelease (offset, releasePlan) when offset = fieldOffset ->
+                        Some releasePlan
+                    | _ ->
+                        None)
+            | _ ->
+                None
+
     fieldTypes
     |> List.mapi (fun index fieldType ->
-        match fieldType with
-        | AST.TString
-        | AST.TBytes -> genDynamicBufferFieldRelease ctx (index * 8)
-        | AST.TDict _ -> genDictFieldRelease (index * 8)
-        | AST.TFunction _ -> genClosureFieldRelease (index * 8)
-        | AST.TList _ -> genListFieldRelease ctx (index * 8) fieldType
-        | AST.TTuple _
-        | AST.TRecord _
-        | AST.TSum _ -> genFixedBlockFieldRelease ctx (index * 8) fieldType
-        | _ -> [])
+        let fieldOffset = index * 8
+        match plannedFieldReleaseAt fieldOffset with
+        | Some (ANF.DynamicBufferRelease _) ->
+            genDynamicBufferFieldRelease ctx fieldOffset
+        | _ ->
+            match fieldType with
+            | AST.TString
+            | AST.TBytes -> genDynamicBufferFieldRelease ctx fieldOffset
+            | AST.TDict _ -> genDictFieldRelease fieldOffset
+            | AST.TFunction _ -> genClosureFieldRelease fieldOffset
+            | AST.TList _ -> genListFieldRelease ctx fieldOffset fieldType
+            | AST.TTuple _
+            | AST.TRecord _
+            | AST.TSum _ -> genFixedBlockFieldRelease ctx fieldOffset fieldType
+            | _ -> [])
     |> List.concat
 
 and private genFixedBlockFieldRelease (ctx: FuncCtx) (fieldOffset: int) (fieldType: AST.Type) : X86_64.Instr list =

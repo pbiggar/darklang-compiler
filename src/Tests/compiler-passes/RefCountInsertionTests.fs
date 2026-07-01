@@ -344,6 +344,29 @@ let testRcShapeReleasePlanClassifiesFieldCleanup () : TestResult =
     | Some (shape, expected) ->
         Error $"Expected shape {shape} to use release plan {expected}, got {rcShapeReleasePlan shape}"
 
+let testRcReleasePlanOfTypeUsesRecordMetadata () : TestResult =
+    let typeReg =
+        Map.ofList [
+            ("Packet", [("header", AST.TInt64); ("body", AST.TString); ("tail", AST.TBytes)])
+        ]
+
+    let expected =
+        RootRelease (
+            24,
+            GenericHeap,
+            FixedBlockPayloadRelease (
+                24,
+                [
+                    FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
+                    FieldRelease (16, DynamicBufferRelease DynamicBytesBuffer)
+                ]))
+
+    let actual = rcReleasePlanOfType typeReg (AST.TRecord ("Packet", []))
+    if actual = expected then
+        Ok ()
+    else
+        Error $"Expected record type to use release plan {expected}, got {actual}"
+
 let testInferCallReturnsFunctionReturnType () : TestResult =
     let ctx : TypeContext = {
         TypeReg = Map.empty
@@ -556,6 +579,7 @@ let tests = [
     ("RcShape ownership helpers classify ownership-transfer roots", testRcShapeOwnershipHelpersClassifyOwnershipTransferRoots)
     ("RcShape ownership helpers classify recursive release", testRcShapeOwnershipHelpersClassifyRecursiveRelease)
     ("RcShape release plan classifies field cleanup", testRcShapeReleasePlanClassifiesFieldCleanup)
+    ("RcReleasePlan of type uses record metadata", testRcReleasePlanOfTypeUsesRecordMetadata)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
