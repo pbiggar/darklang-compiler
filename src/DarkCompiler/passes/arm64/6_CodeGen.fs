@@ -1726,24 +1726,6 @@ let private tryRcReleasePlanOfType
     | _ ->
         Some (ANF.rcReleasePlanOfTypeWithSums recordRegistry sumShapeRegistry typ)
 
-let private directFixedBlockFieldHasRelease
-    (predicate: ANF.RcReleasePlan -> bool)
-    (recordRegistry: LIR.RecordRegistry)
-    (sumShapeRegistry: ANF.RcSumShapeRegistry)
-    (sourceType: AST.Type option)
-    : bool =
-    sourceType
-    |> Option.bind (tryRcReleasePlanOfType recordRegistry sumShapeRegistry)
-    |> Option.map (function
-        | ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, fieldReleases))
-        | ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
-            fieldReleases
-            |> List.exists (function
-                | ANF.FieldRelease (_, releasePlan) -> predicate releasePlan)
-        | _ ->
-            false)
-    |> Option.defaultValue false
-
 let private releasePlanIsRootKind (kind: ANF.RcKind) (releasePlan: ANF.RcReleasePlan) : bool =
     match releasePlan with
     | ANF.RootRelease (_, planKind, _) when planKind = kind ->
@@ -6222,6 +6204,25 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         | _ ->
             Set.empty
 
+    let rec dictDecHelperLabelsInReleasePlan (releasePlan: ANF.RcReleasePlan) : Set<string> =
+        match releasePlan with
+        | ANF.RootRelease (_, ANF.DictHeap, _) ->
+            Set.singleton (dictDecHelperForReleasePlan releasePlan)
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
+            fieldReleases
+            |> List.map (fun (ANF.FieldRelease (_, fieldReleasePlan)) ->
+                dictDecHelperLabelsInReleasePlan fieldReleasePlan)
+            |> unionLabelSets
+        | _ ->
+            Set.empty
+
+    let dictDecHelperLabelsInType (sourceType: AST.Type option) : Set<string> =
+        sourceType
+        |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry)
+        |> Option.map dictDecHelperLabelsInReleasePlan
+        |> Option.defaultValue Set.empty
+
     let neededDictRcDecHelperLabels =
         let calledLabels =
             sortedFunctions
@@ -6233,38 +6234,19 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     |> List.map (function
                         | LIR.RefCountDec (_, _, LIR.DictHeap, sourceType) ->
                             Set.singleton (dictDecHelperForType ctx sourceType)
+                        | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                            dictDecHelperLabelsInType sourceType
                         | _ ->
                             Set.empty)
                     |> unionLabelSets)
                 |> unionLabelSets)
             |> unionLabelSets
 
-        let genericFixedBlockNeedsDictHelper =
-            sortedFunctions
-            |> List.exists (fun func ->
-                func.CFG.Blocks
-                |> Map.exists (fun _ block ->
-                    block.Instrs
-                    |> List.exists (function
-                        | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                            directFixedBlockFieldHasRelease
-                                (releasePlanIsRootKind ANF.DictHeap)
-                                ctx.RecordRegistry
-                                ctx.SumShapeRegistry
-                                sourceType
-                        | _ -> false)))
-
-        let labelsWithGenericFixedBlock =
-            if genericFixedBlockNeedsDictHelper then
-                Set.add dictRefCountDecHelperLabel calledLabels
-            else
-                calledLabels
-
-        labelsWithGenericFixedBlock
+        calledLabels
         |> Set.toList
         |> List.map dictDecHelperDependencyLabels
         |> unionLabelSets
-        |> Set.union labelsWithGenericFixedBlock
+        |> Set.union calledLabels
 
     let needsDictRcDecHelper =
         Set.contains dictRefCountDecHelperLabel neededDictRcDecHelperLabels
@@ -6294,6 +6276,24 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountInc (_, _, LIR.ClosureHeap, _) -> true
                     | _ -> false)))
 
+    let rec releasePlanContainsClosureHelperCall (releasePlan: ANF.RcReleasePlan) : bool =
+        match releasePlan with
+        | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
+            true
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
+            fieldReleases
+            |> List.exists (fun (ANF.FieldRelease (_, fieldReleasePlan)) ->
+                releasePlanContainsClosureHelperCall fieldReleasePlan)
+        | _ ->
+            false
+
+    let typeContainsClosureHelperCall (sourceType: AST.Type option) : bool =
+        sourceType
+        |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry)
+        |> Option.map releasePlanContainsClosureHelperCall
+        |> Option.defaultValue false
+
     let needsClosureRcDecHelper =
         sortedFunctions
         |> List.exists (fun func ->
@@ -6303,11 +6303,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.ClosureHeap, _) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsRootKind ANF.ClosureHeap)
-                            ctx.RecordRegistry
-                            ctx.SumShapeRegistry
-                            sourceType
+                        typeContainsClosureHelperCall sourceType
                     | _ -> false)))
 
     ResultList.mapResults (convertFunction ctx) sortedFunctions
