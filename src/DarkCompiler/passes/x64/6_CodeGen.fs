@@ -627,6 +627,7 @@ let private dictRefCountDecListValueHelperLabel = "__dark_dict_rc_dec_list_value
 let private dictRefCountDecDictValueHelperLabel = "__dark_dict_rc_dec_dict_value_helper"
 let private dictRefCountDecTupleStringListValueHelperLabel = "__dark_dict_rc_dec_tuple_string_list_value_helper"
 let private dictRefCountDecTupleStringListDictValueHelperLabel = "__dark_dict_rc_dec_tuple_string_list_dict_value_helper"
+let private dictRefCountDecSumStringValueHelperLabel = "__dark_dict_rc_dec_sum_string_value_helper"
 let private closureRefCountDecHelperLabel = "__dark_closure_rc_dec_helper"
 
 type private RawSetRootRetainTarget =
@@ -1088,6 +1089,9 @@ let private dictDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : strin
              && releasePlanIsRootKindAt 8 ANF.TaggedList fieldReleases
              && releasePlanIsRootKindAt 16 ANF.DictHeap fieldReleases ->
         dictRefCountDecTupleStringListDictValueHelperLabel
+    | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _))))
+        when releasePlanIsDynamicBufferAt 8 fieldReleases ->
+        dictRefCountDecSumStringValueHelperLabel
     | _ ->
         dictRefCountDecHelperLabel
 
@@ -1109,6 +1113,15 @@ let private dictTupleStringListDictValueReleasePlan : ANF.RcReleasePlan =
               [ANF.FieldRelease (0, ANF.DynamicBufferRelease ANF.DynamicStringBuffer)
                ANF.FieldRelease (8, ANF.RootRelease (0, ANF.TaggedList, ANF.TaggedListPayloadRelease ANF.NoReleasePlan))
                ANF.FieldRelease (16, ANF.RootRelease (0, ANF.DictHeap, ANF.DictPayloadRelease (ANF.NoReleasePlan, ANF.NoReleasePlan)))]))
+
+let private dictSumStringValueReleasePlan : ANF.RcReleasePlan =
+    ANF.RootRelease
+        (16,
+         ANF.GenericHeap,
+         ANF.BoxedSumPayloadRelease
+             (16,
+              [ANF.FieldRelease (8, ANF.DynamicBufferRelease ANF.DynamicStringBuffer)],
+              []))
 
 let private genListFieldRelease (fieldOffset: int) (fieldReleasePlan: ANF.RcReleasePlan) : X86_64.Instr list =
     [X86_64.PUSH X86_64.RDX
@@ -5371,6 +5384,9 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
     let needsDictRcDecTupleStringListDictValueHelper =
         Set.contains dictRefCountDecTupleStringListDictValueHelperLabel neededDictDecHelperLabels
 
+    let needsDictRcDecSumStringValueHelper =
+        Set.contains dictRefCountDecSumStringValueHelperLabel neededDictDecHelperLabels
+
     let needsClosureRcDecHelper =
         functions
         |> List.exists (fun func ->
@@ -5415,7 +5431,10 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         let dictDecTupleStringListDictValueHelper =
             if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false (Some (24, dictTupleStringListDictValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
             else []
+        let dictDecSumStringValueHelper =
+            if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false (Some (16, dictSumStringValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
+            else []
         let closureDecHelper =
             if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper enableLeakCheck recordRegistry sumShapeRegistry closurePayloadSizes closureCaptureTypes
             else []
-        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ dictDecHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ closureDecHelper @ genOomHandler ())
+        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ dictDecHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ dictDecSumStringValueHelper @ closureDecHelper @ genOomHandler ())
