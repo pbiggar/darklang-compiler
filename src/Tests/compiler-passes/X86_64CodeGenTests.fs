@@ -2231,6 +2231,47 @@ let testTaggedListRefCountDecTuple3ClosureListDictPayload () : Result<unit, stri
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list tuple3 closure/list/dict payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec preserves dict field value metadata in closure tuple3 payloads.
+let testTaggedListRefCountDecTuple3ClosureListDictListPayload () : Result<unit, string> =
+    let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
+    let listType = AST.TList AST.TInt64
+    let dictType = AST.TDict (AST.TInt64, listType)
+    let tupleType = AST.TTuple [closureType; listType; dictType]
+    let program =
+        makeSimpleProgram
+            [
+                LIR.ClosureAlloc (LIR.Physical LIR.X2, "_start", [])
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X4, LIR.Physical LIR.X3, LIR.Physical LIR.X4)
+                LIR.HeapAlloc (LIR.Physical LIR.X5, 8)
+                LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Imm 7L, None)
+                LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
+                LIR.HeapAlloc (LIR.Physical LIR.X7, 16)
+                LIR.HeapStore (LIR.Physical LIR.X7, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X7, 8, LIR.Reg (LIR.Physical LIR.X6), Some listType)
+                LIR.Mov (LIR.Physical LIR.X19, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X19, LIR.Physical LIR.X7, LIR.Physical LIR.X19)
+                LIR.HeapAlloc (LIR.Physical LIR.X20, 24)
+                LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
+                LIR.HeapStore (LIR.Physical LIR.X20, 8, LIR.Reg (LIR.Physical LIR.X4), Some listType)
+                LIR.HeapStore (LIR.Physical LIR.X20, 16, LIR.Reg (LIR.Physical LIR.X19), Some dictType)
+                LIR.HeapAlloc (LIR.Physical LIR.X21, 8)
+                LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some tupleType)
+                LIR.Mov (LIR.Physical LIR.X22, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X22, LIR.Physical LIR.X21, LIR.Physical LIR.X22)
+                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected list tuple3 closure/list/dict-list payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 tagged-list RefCountDec releases fields inside record leaf payloads.
 let testTaggedListRefCountDecRecordStringPayload () : Result<unit, string> =
     let recordType = AST.TRecord ("X64ListRcRecord", [])
@@ -3927,6 +3968,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases tuple3 string/list/dict payload", testTaggedListRefCountDecTuple3StringListDictPayload)
     ("LIR tagged list RefCountDec releases tuple3 string/list/dict-list payload", testTaggedListRefCountDecTuple3StringListDictListPayload)
     ("LIR tagged list RefCountDec releases tuple3 closure/list/dict payload", testTaggedListRefCountDecTuple3ClosureListDictPayload)
+    ("LIR tagged list RefCountDec releases tuple3 closure/list/dict-list payload", testTaggedListRefCountDecTuple3ClosureListDictListPayload)
     ("LIR tagged list RefCountDec releases record string payload", testTaggedListRefCountDecRecordStringPayload)
     ("LIR tagged list RefCountDec releases record3 dynamic payload", testTaggedListRefCountDecRecord3DynamicPayload)
     ("LIR tagged list RefCountDec releases record3 string/list/dict payload", testTaggedListRefCountDecRecord3StringListDictPayload)
