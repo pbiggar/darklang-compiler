@@ -2697,7 +2697,164 @@ let private releasePlanIsTaggedListWithTuple2ElementFieldRelease
         | _ ->
             false)
 
-let private listDecHelperForType (ctx: CodeGenContext) (sourceType: AST.Type option) : string =
+let private releasePlanFieldReleaseAt
+    (fieldOffset: int)
+    (fieldReleases: ANF.RcFieldRelease list)
+    : ANF.RcReleasePlan option =
+    fieldReleases
+    |> List.tryPick (function
+        | ANF.FieldRelease (offset, releasePlan) when offset = fieldOffset ->
+            Some releasePlan
+        | _ ->
+            None)
+
+let private releasePlanDynamicBufferOffsets (fieldReleases: ANF.RcFieldRelease list) : int list option =
+    let dynamicOffsets =
+        fieldReleases
+        |> List.choose (function
+            | ANF.FieldRelease (offset, ANF.DynamicBufferRelease _) ->
+                Some offset
+            | _ ->
+                None)
+
+    if List.length dynamicOffsets = List.length fieldReleases then
+        Some dynamicOffsets
+    else
+        None
+
+let private releasePlanRootKindAt
+    (fieldOffset: int)
+    (kind: ANF.RcKind)
+    (fieldReleases: ANF.RcFieldRelease list)
+    : bool =
+    match releasePlanFieldReleaseAt fieldOffset fieldReleases with
+    | Some (ANF.RootRelease (_, planKind, _)) when planKind = kind ->
+        true
+    | _ ->
+        false
+
+let private releasePlanDynamicOperationAt
+    (fieldOffset: int)
+    (operation: ANF.RcOperation)
+    (fieldReleases: ANF.RcFieldRelease list)
+    : bool =
+    match releasePlanFieldReleaseAt fieldOffset fieldReleases with
+    | Some (ANF.DynamicBufferRelease planOperation) when planOperation = operation ->
+        true
+    | _ ->
+        false
+
+let private fixedBlockListHelperForPayloadRelease
+    (payloadSize: int)
+    (fieldReleases: ANF.RcFieldRelease list)
+    : string =
+    match payloadSize, releasePlanDynamicBufferOffsets fieldReleases with
+    | 16, Some [] ->
+        listRefCountDecTuple2HelperLabel
+    | 16, Some [0] ->
+        listRefCountDecTuple2Dynamic0HelperLabel
+    | 16, Some [8] ->
+        listRefCountDecTuple2Dynamic1HelperLabel
+    | 16, Some [0; 8] ->
+        listRefCountDecTuple2DynamicBothHelperLabel
+    | 16, _ when releasePlanRootKindAt 0 ANF.TaggedList fieldReleases && not (releasePlanRootKindAt 8 ANF.TaggedList fieldReleases) ->
+        listRefCountDecTuple2List0HelperLabel
+    | 16, _ when releasePlanRootKindAt 8 ANF.TaggedList fieldReleases && not (releasePlanRootKindAt 0 ANF.TaggedList fieldReleases) ->
+        listRefCountDecTuple2List1HelperLabel
+    | 16, _ when releasePlanRootKindAt 0 ANF.TaggedList fieldReleases && releasePlanRootKindAt 8 ANF.TaggedList fieldReleases ->
+        listRefCountDecTuple2ListBothHelperLabel
+    | 16, _ when releasePlanRootKindAt 0 ANF.DictHeap fieldReleases && not (releasePlanRootKindAt 8 ANF.DictHeap fieldReleases) ->
+        listRefCountDecTuple2Dict0HelperLabel
+    | 16, _ when releasePlanRootKindAt 8 ANF.DictHeap fieldReleases && not (releasePlanRootKindAt 0 ANF.DictHeap fieldReleases) ->
+        listRefCountDecTuple2Dict1HelperLabel
+    | 16, _ when releasePlanRootKindAt 0 ANF.DictHeap fieldReleases && releasePlanRootKindAt 8 ANF.DictHeap fieldReleases ->
+        listRefCountDecTuple2DictBothHelperLabel
+    | 16, _ when releasePlanRootKindAt 0 ANF.ClosureHeap fieldReleases && not (releasePlanRootKindAt 8 ANF.ClosureHeap fieldReleases) ->
+        listRefCountDecTuple2Closure0HelperLabel
+    | 16, _ when releasePlanRootKindAt 8 ANF.ClosureHeap fieldReleases && not (releasePlanRootKindAt 0 ANF.ClosureHeap fieldReleases) ->
+        listRefCountDecTuple2Closure1HelperLabel
+    | 16, _ when releasePlanRootKindAt 0 ANF.ClosureHeap fieldReleases && releasePlanRootKindAt 8 ANF.ClosureHeap fieldReleases ->
+        listRefCountDecTuple2ClosureBothHelperLabel
+    | 24, _ when releasePlanDynamicOperationAt 0 ANF.DynamicStringBuffer fieldReleases
+                 && releasePlanRootKindAt 8 ANF.TaggedList fieldReleases
+                 && releasePlanRootKindAt 16 ANF.DictHeap fieldReleases ->
+        listRefCountDecTuple3ManagedHelperLabel
+    | 24, _ when releasePlanRootKindAt 0 ANF.ClosureHeap fieldReleases
+                 && releasePlanRootKindAt 8 ANF.TaggedList fieldReleases
+                 && releasePlanRootKindAt 16 ANF.DictHeap fieldReleases ->
+        listRefCountDecClosureListDictHelperLabel
+    | 24, _ when releasePlanDynamicOperationAt 0 ANF.DynamicStringBuffer fieldReleases
+                 && releasePlanDynamicOperationAt 8 ANF.DynamicBytesBuffer fieldReleases
+                 && releasePlanRootKindAt 16 ANF.TaggedList fieldReleases ->
+        listRefCountDecStringBytesListHelperLabel
+    | 24, _ when releasePlanDynamicOperationAt 0 ANF.DynamicStringBuffer fieldReleases
+                 && releasePlanDynamicOperationAt 8 ANF.DynamicBytesBuffer fieldReleases
+                 && releasePlanRootKindAt 16 ANF.DictHeap fieldReleases ->
+        listRefCountDecStringBytesDictHelperLabel
+    | 24, _ when releasePlanDynamicOperationAt 0 ANF.DynamicStringBuffer fieldReleases
+                 && releasePlanDynamicOperationAt 8 ANF.DynamicBytesBuffer fieldReleases
+                 && releasePlanRootKindAt 16 ANF.ClosureHeap fieldReleases ->
+        listRefCountDecStringBytesClosureHelperLabel
+    | 32, _ when releasePlanDynamicOperationAt 0 ANF.DynamicStringBuffer fieldReleases
+                 && releasePlanDynamicOperationAt 8 ANF.DynamicBytesBuffer fieldReleases
+                 && releasePlanRootKindAt 16 ANF.TaggedList fieldReleases
+                 && releasePlanRootKindAt 24 ANF.DictHeap fieldReleases ->
+        listRefCountDecStringBytesListDictHelperLabel
+    | 32, _ when releasePlanRootKindAt 0 ANF.ClosureHeap fieldReleases
+                 && releasePlanDynamicOperationAt 8 ANF.DynamicStringBuffer fieldReleases
+                 && releasePlanRootKindAt 16 ANF.TaggedList fieldReleases
+                 && releasePlanRootKindAt 24 ANF.DictHeap fieldReleases ->
+        listRefCountDecClosureStringListDictHelperLabel
+    | _ ->
+        listRefCountDecHelperLabel
+
+let private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
+    let sumPayloadHelper (fieldReleases: ANF.RcFieldRelease list) : string =
+        match releasePlanFieldReleaseAt 8 fieldReleases with
+        | Some (ANF.DynamicBufferRelease ANF.DynamicStringBuffer) ->
+            listRefCountDecSumStringHelperLabel
+        | Some (ANF.DynamicBufferRelease ANF.DynamicBytesBuffer) ->
+            listRefCountDecSumBytesHelperLabel
+        | Some (ANF.RootRelease (_, ANF.TaggedList, _)) ->
+            listRefCountDecSumListHelperLabel
+        | Some (ANF.RootRelease (_, ANF.DictHeap, _)) ->
+            listRefCountDecSumDictHelperLabel
+        | Some (ANF.RootRelease (_, ANF.ClosureHeap, _)) ->
+            listRefCountDecSumClosureHelperLabel
+        | Some payloadRelease when releasePlanIsTuple4StringBytesListDictPayload payloadRelease ->
+            listRefCountDecSumTuple4StringBytesListDictHelperLabel
+        | Some payloadRelease when releasePlanIsTuple4NestedTuplePayload payloadRelease ->
+            listRefCountDecSumTuple4NestedTupleHelperLabel
+        | Some payloadRelease when releasePlanIsTuple4NestedDictPayload payloadRelease ->
+            listRefCountDecSumTuple4NestedDictHelperLabel
+        | Some payloadRelease when releasePlanIsTuple4NestedClosurePayload payloadRelease ->
+            listRefCountDecSumTuple4NestedClosureHelperLabel
+        | _ ->
+            listRefCountDecHelperLabel
+
+    match releasePlan with
+    | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease elementRelease) ->
+        match elementRelease with
+        | ANF.NoReleasePlan ->
+            listRefCountDecHelperLabel
+        | ANF.DynamicBufferRelease _ ->
+            listRefCountDecHelperLabel
+        | ANF.RootRelease (_, ANF.TaggedList, _) ->
+            listRefCountDecListHelperLabel
+        | ANF.RootRelease (_, ANF.DictHeap, _) ->
+            listRefCountDecDictHelperLabel
+        | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
+            listRefCountDecClosureHelperLabel
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (payloadSize, fieldReleases)) ->
+            fixedBlockListHelperForPayloadRelease payloadSize fieldReleases
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
+            sumPayloadHelper fieldReleases
+        | ANF.RootRelease (_, ANF.GenericHeap, _) ->
+            listRefCountDecHelperLabel
+    | _ ->
+        listRefCountDecHelperLabel
+
+let private sourceListDecHelperForType (ctx: CodeGenContext) (sourceType: AST.Type option) : string =
     match sourceType with
     | Some (AST.TList (AST.TList _)) ->
         listRefCountDecListHelperLabel
@@ -2789,6 +2946,18 @@ let private listDecHelperForType (ctx: CodeGenContext) (sourceType: AST.Type opt
         listRefCountDecSumTuple4NestedClosureHelperLabel
     | _ ->
         listRefCountDecHelperLabel
+
+let private listDecHelperForType (ctx: CodeGenContext) (sourceType: AST.Type option) : string =
+    let releasePlanHelper =
+        sourceType
+        |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry)
+        |> Option.map listDecHelperForReleasePlan
+        |> Option.defaultValue listRefCountDecHelperLabel
+
+    if releasePlanHelper = listRefCountDecHelperLabel then
+        sourceListDecHelperForType ctx sourceType
+    else
+        releasePlanHelper
 
 let private generateDictRefCountIncHelper () : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_dict_rc_inc_{name}"
