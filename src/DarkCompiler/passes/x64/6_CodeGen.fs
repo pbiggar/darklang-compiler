@@ -5399,6 +5399,17 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
 
         typeReleasePlanContains releasePlanMatches recordRegistry sourceType
 
+    let typeContainsDynamicBufferListElementRelease (sourceType: AST.Type) : bool =
+        typeReleasePlanContains
+            (releasePlanIsTaggedListWithElementRelease releasePlanIsDynamicBufferRelease)
+            recordRegistry
+            sourceType
+
+    let closureCapturesContainDynamicBufferListElementRelease () : bool =
+        closureCaptureTypes
+        |> Map.exists (fun _ captureTypes ->
+            captureTypes |> List.exists typeContainsDynamicBufferListElementRelease)
+
     let closureCapturesContainNestedListElementRelease
         (elementKind: ANF.RcKind)
         : bool =
@@ -6277,9 +6288,9 @@ let translateProgram (LIR.Program (functions, _, recordRegistry)) (enableLeakChe
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList AST.TString))
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList AST.TBytes)) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, Some sourceType) ->
-                        typeContainsListMatching isDynamicBufferList sourceType
+                        typeContainsDynamicBufferListElementRelease sourceType
                     | _ -> false))
-            || closureCapturesContain (typeContainsListMatching isDynamicBufferList))
+            || closureCapturesContainDynamicBufferListElementRelease ())
 
     let needsListRcIncHelper =
         functions
