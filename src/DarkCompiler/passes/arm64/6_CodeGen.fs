@@ -1524,6 +1524,11 @@ let private tryRcReleasePlanOfType
 let private rcMetadataReleasePlan (metadata: ANF.RcMetadata option) : ANF.RcReleasePlan option =
     metadata |> Option.bind (fun m -> m.ReleasePlan)
 
+let private requiredRcMetadataReleasePlan (context: string) (metadata: ANF.RcMetadata option) : ANF.RcReleasePlan =
+    match rcMetadataReleasePlan metadata with
+    | Some releasePlan -> releasePlan
+    | None -> Crash.crash $"{context}: missing RC release plan metadata"
+
 let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_closure_rc_dec_{name}"
     let ready = label "payload_ready"
@@ -5017,9 +5022,9 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
             match kind with
             | LIR.TaggedList ->
                 let helperLabel =
-                    releasePlan
-                    |> Option.map listDecHelperForReleasePlan
-                    |> Option.defaultValue listRefCountDecHelperLabel
+                    metadata
+                    |> requiredRcMetadataReleasePlan "TaggedList RefCountDec"
+                    |> listDecHelperForReleasePlan
                 let listDecCall = [
                     ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -80s)
                     ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -5041,9 +5046,9 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 @ listDecCall
             | LIR.DictHeap ->
                 let helperLabel =
-                    releasePlan
-                    |> Option.map dictDecHelperForReleasePlan
-                    |> Option.defaultValue dictRefCountDecHelperLabel
+                    metadata
+                    |> requiredRcMetadataReleasePlan "DictHeap RefCountDec"
+                    |> dictDecHelperForReleasePlan
                 let dictDecCall = [
                     ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
                     ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)

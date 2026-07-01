@@ -673,6 +673,11 @@ let private tryRcReleasePlanOfType
 let private rcMetadataReleasePlan (metadata: ANF.RcMetadata option) : ANF.RcReleasePlan option =
     metadata |> Option.bind (fun m -> m.ReleasePlan)
 
+let private requiredRcMetadataReleasePlan (context: string) (metadata: ANF.RcMetadata option) : ANF.RcReleasePlan =
+    match rcMetadataReleasePlan metadata with
+    | Some releasePlan -> releasePlan
+    | None -> Crash.crash $"{context}: missing RC release plan metadata"
+
 let private releasePlanIsRootKind (kind: ANF.RcKind) (releasePlan: ANF.RcReleasePlan) : bool =
     match releasePlan with
     | ANF.RootRelease (_, planKind, _) when planKind = kind ->
@@ -3834,11 +3839,9 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
             | LIR.TaggedList ->
                 // TaggedList RefCountDec: calls the recursive FingerTree DFS helper.
                 let helperLabel =
-                    match rcMetadataReleasePlan metadata with
-                    | Some releasePlan ->
-                        listDecHelperForReleasePlan releasePlan
-                    | _ ->
-                        listRefCountDecHelperLabel
+                    metadata
+                    |> requiredRcMetadataReleasePlan "TaggedList RefCountDec"
+                    |> listDecHelperForReleasePlan
                 let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; scratch]
                 let saves = saveRegs |> List.map X86_64.PUSH
                 let restores = saveRegs |> List.rev |> List.map X86_64.POP
@@ -3846,6 +3849,7 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL helperLabel]
                 @ restores
             | LIR.DictHeap ->
+                let _releasePlan = requiredRcMetadataReleasePlan "DictHeap RefCountDec" metadata
                 let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; scratch]
                 let saves = saveRegs |> List.map X86_64.PUSH
                 let restores = saveRegs |> List.rev |> List.map X86_64.POP
