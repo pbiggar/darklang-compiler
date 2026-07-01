@@ -72,6 +72,7 @@ let private listRefCountDecTuple2Closure0HelperLabel = "__dark_list_refcount_dec
 let private listRefCountDecTuple2Closure1HelperLabel = "__dark_list_refcount_dec_tuple2_closure1_helper"
 let private listRefCountDecTuple2ClosureBothHelperLabel = "__dark_list_refcount_dec_tuple2_closure_both_helper"
 let private listRefCountDecTuple3ManagedHelperLabel = "__dark_list_refcount_dec_tuple3_managed_helper"
+let private listRefCountDecTuple3BytesListDictHelperLabel = "__dark_list_refcount_dec_tuple3_bytes_list_dict_helper"
 let private listRefCountDecClosureListDictHelperLabel = "__dark_list_refcount_dec_closure_list_dict_helper"
 let private listRefCountDecStringBytesListHelperLabel = "__dark_list_refcount_dec_string_bytes_list_helper"
 let private listRefCountDecStringBytesDictHelperLabel = "__dark_list_refcount_dec_string_bytes_dict_helper"
@@ -81,6 +82,7 @@ let private listRefCountDecStringBytesRecordManagedDict3HelperLabel = "__dark_li
 let private listRefCountDecStringBytesRecordManagedClosure3HelperLabel = "__dark_list_refcount_dec_string_bytes_record_managed_closure3_helper"
 let private listRefCountDecStringBytesListDictHelperLabel = "__dark_list_refcount_dec_string_bytes_list_dict_helper"
 let private listRefCountDecClosureStringListDictHelperLabel = "__dark_list_refcount_dec_closure_string_list_dict_helper"
+let private listRefCountDecClosureBytesListDictHelperLabel = "__dark_list_refcount_dec_closure_bytes_list_dict_helper"
 let private listRefCountDecStringBytesTupleListHelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_list_helper"
 let private listRefCountDecStringBytesTupleDynamic3HelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_dynamic3_helper"
 let private listRefCountDecStringBytesTupleManaged3ListHelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_managed3_list_helper"
@@ -96,6 +98,8 @@ let private listRefCountDecListHelperLabel = "__dark_list_refcount_dec_list_help
 let private listRefCountDecDictHelperLabel = "__dark_list_refcount_dec_dict_helper"
 let private listRefCountDecClosureHelperLabel = "__dark_list_refcount_dec_closure_helper"
 let private listRefCountDecRecord1HelperLabel = "__dark_list_refcount_dec_record1_helper"
+let private listRefCountDecRecord1DynamicHelperLabel = "__dark_list_refcount_dec_record1_dynamic_helper"
+let private listRefCountDecRecord1NestedDynamicHelperLabel = "__dark_list_refcount_dec_record1_nested_dynamic_helper"
 let private listRefCountDecRecord2HelperLabel = "__dark_list_refcount_dec_record2_helper"
 let private listRefCountDecRecordListDictHelperLabel = "__dark_list_refcount_dec_record_list_dict_helper"
 let private listRefCountDecRecord3ManagedHelperLabel = "__dark_list_refcount_dec_record3_managed_helper"
@@ -1028,6 +1032,12 @@ let private listRefCountDecHelperSpecs : ListRefCountDecHelperSpec list =
       ReleaseLeafDictPayload = false
       ReleaseLeafClosurePayload = false
       ManagedLeafFieldTypes = [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] }
+    { Label = listRefCountDecTuple3BytesListDictHelperLabel
+      LeafGenericPayloadSize = (Some 24)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TBytes; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] }
     { Label = listRefCountDecClosureListDictHelperLabel
       LeafGenericPayloadSize = (Some 24)
       ReleaseLeafListPayload = false
@@ -1082,6 +1092,12 @@ let private listRefCountDecHelperSpecs : ListRefCountDecHelperSpec list =
       ReleaseLeafDictPayload = false
       ReleaseLeafClosurePayload = false
       ManagedLeafFieldTypes = [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] }
+    { Label = listRefCountDecClosureBytesListDictHelperLabel
+      LeafGenericPayloadSize = (Some 32)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TBytes; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] }
     { Label = listRefCountDecStringBytesTupleListHelperLabel
       LeafGenericPayloadSize = (Some 32)
       ReleaseLeafListPayload = false
@@ -1182,6 +1198,18 @@ let private listRefCountDecHelperSpecs : ListRefCountDecHelperSpec list =
       ReleaseLeafDictPayload = false
       ReleaseLeafClosurePayload = false
       ManagedLeafFieldTypes = [] }
+    { Label = listRefCountDecRecord1DynamicHelperLabel
+      LeafGenericPayloadSize = (Some 8)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TBytes ] }
+    { Label = listRefCountDecRecord1NestedDynamicHelperLabel
+      LeafGenericPayloadSize = (Some 8)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TTuple [ AST.TString ] ] }
     { Label = listRefCountDecRecord2HelperLabel
       LeafGenericPayloadSize = (Some 16)
       ReleaseLeafListPayload = false
@@ -2992,16 +3020,10 @@ let private sourceListDecHelperForType (ctx: CodeGenContext) (sourceType: AST.Ty
         listRefCountDecHelperLabel
 
 let private listDecHelperForType (ctx: CodeGenContext) (sourceType: AST.Type option) : string =
-    let releasePlanHelper =
-        sourceType
-        |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry)
-        |> Option.map listDecHelperForReleasePlan
-        |> Option.defaultValue listRefCountDecHelperLabel
-
-    if releasePlanHelper = listRefCountDecHelperLabel then
-        sourceListDecHelperForType ctx sourceType
-    else
-        releasePlanHelper
+    sourceType
+    |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry)
+    |> Option.map listDecHelperForReleasePlan
+    |> Option.defaultValue listRefCountDecHelperLabel
 
 let private generateDictRefCountIncHelper () : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_dict_rc_inc_{name}"
