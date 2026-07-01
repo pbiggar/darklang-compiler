@@ -20,7 +20,7 @@ let private dceOnlyOptions : ANF_Optimize.OptimizeOptions =
 let private optimizeMain (context: ANF_Optimize.OptimizeContext) (expr: AExpr) : AExpr =
     let program = Program ([], expr)
     let (Program (_, optimizedMain)) =
-        ANF_Optimize.optimizeProgramWithContextAndOptions context dceOnlyOptions program
+        ANF_Optimize.optimizeProgramWithOptions context dceOnlyOptions program
     optimizedMain
 
 let private markerContext : ANF_Optimize.OptimizeContext =

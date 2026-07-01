@@ -90,7 +90,7 @@ let getOptimizedANF (stdlib: CompilerLibrary.StdlibResult) (source: string) : Re
             | Ok convResult ->
                 // Optimize ANF
                 let optimized =
-                    ANF_Optimize.optimizeProgramWithContextAndOptions
+                    ANF_Optimize.optimizeProgramWithOptions
                         (optimizeContextFromConversionResult convResult)
                         ANF_Optimize.defaultOptimizeOptions
                         convResult.Program
@@ -114,7 +114,7 @@ let getOptimizedMIR (stdlib: CompilerLibrary.StdlibResult) (source: string) : Re
             | Ok convResult ->
                 // Optimize ANF
                 let optimized =
-                    ANF_Optimize.optimizeProgramWithContextAndOptions
+                    ANF_Optimize.optimizeProgramWithOptions
                         (optimizeContextFromConversionResult convResult)
                         ANF_Optimize.defaultOptimizeOptions
                         convResult.Program
@@ -158,7 +158,7 @@ let getOptimizedLIR (stdlib: CompilerLibrary.StdlibResult) (source: string) : Re
             | Ok convResult ->
                 // Optimize ANF
                 let optimized =
-                    ANF_Optimize.optimizeProgramWithContextAndOptions
+                    ANF_Optimize.optimizeProgramWithOptions
                         (optimizeContextFromConversionResult convResult)
                         ANF_Optimize.defaultOptimizeOptions
                         convResult.Program

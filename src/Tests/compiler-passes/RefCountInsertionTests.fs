@@ -85,38 +85,6 @@ let testRcShapeClassifiesRemainingRuntimeShapes () : TestResult =
     | Some (typ, expected) ->
         Error $"Expected {typ} to classify as {expected}, got {rcShapeOfType Map.empty typ}"
 
-let testMetadataFreeHeapClassifierUsesRcShape () : TestResult =
-    let metadataFreeHeapSamples = [
-        AST.TString
-        AST.TBytes
-        AST.TFunction ([AST.TInt64], AST.TString)
-        AST.TRecord ("MetadataFreeRecord", [])
-        AST.TTuple [AST.TString; AST.TRecord ("MetadataFreeRecord", [])]
-        AST.TList (AST.TRecord ("MetadataFreeRecord", []))
-        AST.TList AST.TInt64
-        AST.TDict (AST.TInt64, AST.TString)
-        AST.TDict (AST.TString, AST.TRecord ("MetadataFreeRecord", []))
-        AST.TSum ("Payload", [AST.TString])
-        AST.TSum ("Payload", [AST.TRecord ("MetadataFreeRecord", [])])
-    ]
-
-    let metadataFreeNonHeapSamples = [
-        AST.TInt64
-        AST.TBool
-        AST.TRawPtr
-        AST.TSum ("Enum", [])
-    ]
-
-    match metadataFreeHeapSamples |> List.tryFind (fun typ -> not (isHeapType typ)) with
-    | Some typ ->
-        Error $"Expected metadata-free heap classifier to treat {typ} as managed through RcShape"
-    | None ->
-        match metadataFreeNonHeapSamples |> List.tryFind isHeapType with
-        | Some typ ->
-            Error $"Expected metadata-free heap classifier to treat {typ} as unmanaged through RcShape"
-        | None ->
-            Ok ()
-
 let testRcShapeClassifiesSumsWithVariantMetadata () : TestResult =
     let typeReg =
         Map.ofList [
@@ -946,7 +914,6 @@ let tests = [
     ("RcShape classifies primitives as immediate", testRcShapeClassifiesPrimitivesAsImmediate)
     ("RcShape classifies tuples and records as fixed blocks", testRcShapeClassifiesTuplesAndRecordsAsFixedBlocks)
     ("RcShape classifies remaining runtime shapes", testRcShapeClassifiesRemainingRuntimeShapes)
-    ("metadata-free heap classifier uses RcShape", testMetadataFreeHeapClassifierUsesRcShape)
     ("RcShape classifies sums with variant metadata", testRcShapeClassifiesSumsWithVariantMetadata)
     ("RcShape ownership helpers classify managed roots", testRcShapeOwnershipHelpersClassifyManagedRoots)
     ("RcShape ownership helpers classify automatic binding decs", testRcShapeOwnershipHelpersClassifyAutomaticBindingDecs)

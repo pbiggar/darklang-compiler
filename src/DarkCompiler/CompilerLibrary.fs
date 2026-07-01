@@ -456,7 +456,7 @@ let private buildAnf
           SumShapeReg = AST_to_ANF.rcSumShapeRegistryFromVariantLookup registries.VariantLookup }
     let anfOptimized =
         if shouldRunANFOptimize anfOptions then
-            ANF_Optimize.optimizeProgramWithContextAndOptions anfOptimizeContext anfOptions anfProgram
+            ANF_Optimize.optimizeProgramWithOptions anfOptimizeContext anfOptions anfProgram
         else
             anfProgram
     let anfOptElapsed = sw.Elapsed.TotalMilliseconds - anfOptStart

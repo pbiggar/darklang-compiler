@@ -39,11 +39,6 @@ let defaultOptimizeOptions = {
     EnableStrengthReduction = true
 }
 
-let emptyOptimizeContext = {
-    TypeReg = Map.empty
-    SumShapeReg = Map.empty
-}
-
 /// Check if n is a power of 2, and if so return its log2
 /// Returns None if n is not a power of 2 or is <= 0
 let tryLog2 (n: int64) : int64 option =
@@ -485,45 +480,33 @@ let rec private optimizeAExprWithUses (context: OptimizeContext) (options: Optim
             }
 
 /// Optimize an AExpr
-let optimizeAExprWithContext (context: OptimizeContext) (options: OptimizeOptions) (env: ConstEnv) (aexpr: AExpr) : AExpr * bool =
+let optimizeAExpr (context: OptimizeContext) (options: OptimizeOptions) (env: ConstEnv) (aexpr: AExpr) : AExpr * bool =
     let result = optimizeAExprWithUses context options env aexpr
     (result.Expr, result.Changed)
 
-/// Optimize an AExpr
-let optimizeAExpr (options: OptimizeOptions) (env: ConstEnv) (aexpr: AExpr) : AExpr * bool =
-    optimizeAExprWithContext emptyOptimizeContext options env aexpr
-
 /// Optimize a function
-let optimizeFunctionWithContext (context: OptimizeContext) (options: OptimizeOptions) (func: Function) : Function * bool =
+let optimizeFunction (context: OptimizeContext) (options: OptimizeOptions) (func: Function) : Function * bool =
     // Initialize env with function parameters (they're not constants)
     let env = Map.empty
-    let (body', changed) = optimizeAExprWithContext context options env func.Body
+    let (body', changed) = optimizeAExpr context options env func.Body
     ({ func with Body = body' }, changed)
 
-/// Optimize a function
-let optimizeFunction (options: OptimizeOptions) (func: Function) : Function * bool =
-    optimizeFunctionWithContext emptyOptimizeContext options func
-
 /// Optimize until fixed point
-let rec optimizeToFixedPointWithContext (context: OptimizeContext) (options: OptimizeOptions) (func: Function) (maxIterations: int) : Function =
+let rec optimizeToFixedPoint (context: OptimizeContext) (options: OptimizeOptions) (func: Function) (maxIterations: int) : Function =
     if maxIterations <= 0 then func
     else
-        let (func', changed) = optimizeFunctionWithContext context options func
+        let (func', changed) = optimizeFunction context options func
         if changed then
-            optimizeToFixedPointWithContext context options func' (maxIterations - 1)
+            optimizeToFixedPoint context options func' (maxIterations - 1)
         else
             func'
 
-/// Optimize until fixed point
-let optimizeToFixedPoint (options: OptimizeOptions) (func: Function) (maxIterations: int) : Function =
-    optimizeToFixedPointWithContext emptyOptimizeContext options func maxIterations
-
 /// Optimize a program with explicit options
-let optimizeProgramWithContextAndOptions (context: OptimizeContext) (options: OptimizeOptions) (program: Program) : Program =
+let optimizeProgramWithOptions (context: OptimizeContext) (options: OptimizeOptions) (program: Program) : Program =
     let (Program (functions, mainExpr)) = program
 
     // Optimize all functions
-    let functions' = functions |> List.map (fun f -> optimizeToFixedPointWithContext context options f 10)
+    let functions' = functions |> List.map (fun f -> optimizeToFixedPoint context options f 10)
 
     // Optimize main expression
     let mainFunc = { Name = "__main__"
@@ -531,20 +514,17 @@ let optimizeProgramWithContextAndOptions (context: OptimizeContext) (options: Op
                      ReturnType = AST.TUnit
                      ReturnOwnership = OwnedReturn
                      Body = mainExpr }
-    let mainOptimized = optimizeToFixedPointWithContext context options mainFunc 10
+    let mainOptimized = optimizeToFixedPoint context options mainFunc 10
 
     Program (functions', mainOptimized.Body)
 
-/// Optimize a program with explicit options
-let optimizeProgramWithOptions (options: OptimizeOptions) (program: Program) : Program =
-    optimizeProgramWithContextAndOptions emptyOptimizeContext options program
-
 /// Optimize a program with default options
-let optimizeProgram (program: Program) : Program =
-    optimizeProgramWithOptions defaultOptimizeOptions program
+let optimizeProgram (context: OptimizeContext) (program: Program) : Program =
+    optimizeProgramWithOptions context defaultOptimizeOptions program
 
-let optimizeConstFolding (program: Program) : Program =
+let optimizeConstFolding (context: OptimizeContext) (program: Program) : Program =
     optimizeProgramWithOptions
+        context
         { defaultOptimizeOptions with
             EnableConstFolding = true
             EnableConstProp = false
@@ -553,8 +533,9 @@ let optimizeConstFolding (program: Program) : Program =
             EnableStrengthReduction = false }
         program
 
-let optimizeCopyProp (program: Program) : Program =
+let optimizeCopyProp (context: OptimizeContext) (program: Program) : Program =
     optimizeProgramWithOptions
+        context
         { defaultOptimizeOptions with
             EnableConstFolding = false
             EnableConstProp = false
@@ -563,8 +544,9 @@ let optimizeCopyProp (program: Program) : Program =
             EnableStrengthReduction = false }
         program
 
-let optimizeDCE (program: Program) : Program =
+let optimizeDCE (context: OptimizeContext) (program: Program) : Program =
     optimizeProgramWithOptions
+        context
         { defaultOptimizeOptions with
             EnableConstFolding = false
             EnableConstProp = false
