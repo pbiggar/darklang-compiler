@@ -874,7 +874,8 @@ let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type 
             None
         | Some typ ->
             match ANF.rcReleasePlanOfType ctx.RecordRegistry typ with
-            | ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
+            | ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+            | ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
                 fieldReleases
                 |> List.tryPick (fun fieldRelease ->
                     match fieldRelease with
@@ -893,8 +894,6 @@ let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type 
             genDynamicBufferFieldRelease ctx fieldOffset
         | _ ->
             match fieldType with
-            | AST.TString
-            | AST.TBytes -> genDynamicBufferFieldRelease ctx fieldOffset
             | AST.TDict _ -> genDictFieldRelease fieldOffset
             | AST.TFunction _ -> genClosureFieldRelease fieldOffset
             | AST.TList _ -> genListFieldRelease ctx fieldOffset fieldType
