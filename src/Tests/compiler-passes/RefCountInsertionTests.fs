@@ -111,6 +111,33 @@ let testRcShapeOwnershipHelpersClassifyManagedRoots () : TestResult =
         | None ->
             Ok ()
 
+let testRcShapeOwnershipHelpersClassifyBorrowedRetains () : TestResult =
+    let retainedShapes = [
+        DynamicString
+        DynamicBytes
+        FixedBlock (16, [Immediate; DynamicString])
+        BoxedSum 16
+        TaggedListShape DynamicString
+        DictRoot (DynamicString, Immediate)
+        ClosureShape [DynamicString]
+    ]
+
+    let skippedShapes = [
+        Immediate
+        StaticString
+        RawUnmanaged
+    ]
+
+    match retainedShapes |> List.tryFind (fun shape -> not (rcShapeNeedsBorrowedRetain shape)) with
+    | Some shape ->
+        Error $"Expected borrowed shape {shape} to need retain when materializing ownership"
+    | None ->
+        match skippedShapes |> List.tryFind rcShapeNeedsBorrowedRetain with
+        | Some shape ->
+            Error $"Expected borrowed shape {shape} to skip retain"
+        | None ->
+            Ok ()
+
 let testRcShapeOwnershipHelpersSelectRootDispatch () : TestResult =
     let samples = [
         (FixedBlock (16, [DynamicString]), Some GenericHeap)
@@ -438,6 +465,7 @@ let tests = [
     ("RcShape classifies tuples and records as fixed blocks", testRcShapeClassifiesTuplesAndRecordsAsFixedBlocks)
     ("RcShape classifies remaining runtime shapes", testRcShapeClassifiesRemainingRuntimeShapes)
     ("RcShape ownership helpers classify managed roots", testRcShapeOwnershipHelpersClassifyManagedRoots)
+    ("RcShape ownership helpers classify borrowed retains", testRcShapeOwnershipHelpersClassifyBorrowedRetains)
     ("RcShape ownership helpers select root dispatch", testRcShapeOwnershipHelpersSelectRootDispatch)
     ("RcShape ownership helpers select retain/release operations", testRcShapeOwnershipHelpersSelectRetainReleaseOperations)
     ("RcShape ownership helpers classify storage", testRcShapeOwnershipHelpersClassifyStorage)

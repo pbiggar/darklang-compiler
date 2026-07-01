@@ -529,12 +529,11 @@ let private releaseExprForType
         Crash.crash $"releaseExprForType: type '{typ}' does not have an RC release operation"
 
 let private needsRetainForBorrowedValue (ctx: TypeContext) (typ: AST.Type) : bool =
-    (match tryRcShapeForType ctx typ with
-     | Some shape -> rcShapeNeedsOwnedScopeRelease shape
-     | None -> isHeapType typ)
-    || match typ with
-       | AST.TFunction _ -> true
-       | _ -> false
+    match tryRcShapeForType ctx typ with
+    | Some shape ->
+        rcShapeNeedsBorrowedRetain shape
+    | None ->
+        isHeapType typ
 
 let rec private isStoredByRawSet (tempId: TempId) (bodyInfo: ReturnAnnotatedExpr) : bool =
     match bodyInfo with

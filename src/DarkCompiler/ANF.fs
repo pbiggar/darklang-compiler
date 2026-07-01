@@ -448,6 +448,11 @@ let rcShapeReleaseOperation (shape: RcShape) : RcOperation option =
     else
         None
 
+/// True when a borrowed value of this shape needs a retain before it can be
+/// returned or otherwise materialized as a new owned value.
+let rcShapeNeedsBorrowedRetain (shape: RcShape) : bool =
+    rcShapeRetainOperation shape |> Option.isSome
+
 /// Determine reference-count dispatch kind for a heap type
 let rcKind (t: AST.Type) : RcKind =
     match t with
