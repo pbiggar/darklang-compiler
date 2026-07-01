@@ -699,8 +699,9 @@ Concrete examples:
    reconstructing field cleanup from local source-type matches. x64 generic
    fixed-block dynamic string/bytes, list-root, dict-root, and closure-root
    field release now uses the plan directly for tuples, records, and boxed-sum
-   payload fields. Pure enums now classify as immediate values, so planner
-   consumers do not emit heap release for no-payload sums.
+   payload fields. Nested generic fixed-block and boxed-sum field release in
+   that path is also plan-gated. Pure enums now classify as immediate values,
+   so planner consumers do not emit heap release for no-payload sums.
 
 2. Finish replacing `isRcManagedHeapType` and `needsAutomaticDec` in
    `2.5_RefCountInsertion.fs` with shape-operation decisions. Retain/release
@@ -728,8 +729,8 @@ Concrete examples:
 4. Finish converting RC insertion for fixed blocks and lists to use the planner.
 5. Continue converting backend fixed-block field release selection to consume
    `RcReleasePlan`; dynamic string/bytes, list-root, dict-root, and
-   closure-root field release are complete for the x64 generic fixed-block
-   path.
+   closure-root field release, plus nested generic fixed-block field release,
+   are complete for the x64 generic fixed-block path.
 
 ## 2. Complete Bytes Ownership To Match Strings
 

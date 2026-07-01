@@ -496,6 +496,25 @@ let testGenericRefCountDecTupleStringListDictFields () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected tuple string/list/dict field release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 generic fixed-block RefCountDec does not release pure enum fields.
+let testGenericRefCountDecSkipsPureEnumField () : Result<unit, string> =
+    let pureEnumType = AST.TSum ("X64PureEnum", [])
+    let tupleType = AST.TTuple [pureEnumType]
+    let program =
+        makeSimpleProgram
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X2, 8)
+                LIR.HeapStore (LIR.Physical LIR.X2, 0, LIR.Imm 1L, Some pureEnumType)
+                LIR.RefCountDec (LIR.Physical LIR.X2, 8, LIR.GenericHeap, Some tupleType)
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected pure enum field release to skip heap cleanup, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 generic fixed-block RefCountDec releases a record string field.
 let testGenericRefCountDecRecordStringField () : Result<unit, string> =
     let recordType = AST.TRecord ("X64RcRecord", [])
@@ -3356,6 +3375,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec releases bytes field", testGenericRefCountDecBytesField)
     ("LIR generic RefCountDec releases nested string tuple field", testGenericRefCountDecNestedStringTupleField)
     ("LIR generic RefCountDec releases tuple string/list/dict fields", testGenericRefCountDecTupleStringListDictFields)
+    ("LIR generic RefCountDec skips pure enum field", testGenericRefCountDecSkipsPureEnumField)
     ("LIR generic RefCountDec releases record string field", testGenericRefCountDecRecordStringField)
     ("LIR generic RefCountDec releases record dict field", testGenericRefCountDecRecordDictField)
     ("LIR generic RefCountDec releases record closure field", testGenericRefCountDecRecordClosureField)

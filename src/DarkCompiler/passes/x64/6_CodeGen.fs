@@ -898,12 +898,10 @@ let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type 
             genClosureFieldRelease fieldOffset
         | Some (ANF.RootRelease (_, ANF.TaggedList, _)) ->
             genListFieldRelease ctx fieldOffset fieldType
-        | _ ->
-            match fieldType with
-            | AST.TTuple _
-            | AST.TRecord _
-            | AST.TSum _ -> genFixedBlockFieldRelease ctx fieldOffset fieldType
-            | _ -> [])
+        | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _))
+        | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _)) ->
+            genFixedBlockFieldRelease ctx fieldOffset fieldType
+        | _ -> [])
     |> List.concat
 
 and private genFixedBlockFieldRelease (ctx: FuncCtx) (fieldOffset: int) (fieldType: AST.Type) : X86_64.Instr list =
