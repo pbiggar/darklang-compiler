@@ -2563,6 +2563,37 @@ let private fixedBlockHasField (predicate: AST.Type -> bool) (recordRegistry: LI
     fixedBlockFieldTypes recordRegistry sourceType
     |> List.exists predicate
 
+let private tryRcReleasePlanOfType (recordRegistry: LIR.RecordRegistry) (typ: AST.Type) : ANF.RcReleasePlan option =
+    match typ with
+    | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
+        None
+    | _ ->
+        Some (ANF.rcReleasePlanOfType recordRegistry typ)
+
+let private directFixedBlockFieldHasRelease
+    (predicate: ANF.RcReleasePlan -> bool)
+    (recordRegistry: LIR.RecordRegistry)
+    (sourceType: AST.Type option)
+    : bool =
+    sourceType
+    |> Option.bind (tryRcReleasePlanOfType recordRegistry)
+    |> Option.map (function
+        | ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+        | ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, fieldReleases)) ->
+            fieldReleases
+            |> List.exists (function
+                | ANF.FieldRelease (_, releasePlan) -> predicate releasePlan)
+        | _ ->
+            false)
+    |> Option.defaultValue false
+
+let private releasePlanIsRootKind (kind: ANF.RcKind) (releasePlan: ANF.RcReleasePlan) : bool =
+    match releasePlan with
+    | ANF.RootRelease (_, planKind, _) when planKind = kind ->
+        true
+    | _ ->
+        false
+
 let private generateDictRefCountIncHelper () : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_dict_rc_inc_{name}"
     let internalTag = label "internal"
@@ -6740,7 +6771,10 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         | _ when isTwoFieldRecordList ctx.RecordRegistry sourceType -> false
                         | _ -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField (function | AST.TList _ -> true | _ -> false) ctx.RecordRegistry sourceType
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsRootKind ANF.TaggedList)
+                            ctx.RecordRegistry
+                            sourceType
                     | _ -> false)))
 
     let needsListRcDecTuple2Helper =
@@ -7580,7 +7614,10 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         | _ -> true
                     | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TDict _))) -> true
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField (function | AST.TDict _ -> true | _ -> false) ctx.RecordRegistry sourceType
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsRootKind ANF.DictHeap)
+                            ctx.RecordRegistry
+                            sourceType
                     | _ -> false)))
 
     let needsDictRcDecListValueHelper =
@@ -7662,7 +7699,10 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         || isClosureListDictRecordList ctx.RecordRegistry sourceType
                         || isTuple4NestedClosurePayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField (function | AST.TFunction _ -> true | _ -> false) ctx.RecordRegistry sourceType
+                        directFixedBlockFieldHasRelease
+                            (releasePlanIsRootKind ANF.ClosureHeap)
+                            ctx.RecordRegistry
+                            sourceType
                     | _ -> false)))
 
     ResultList.mapResults (convertFunction ctx) sortedFunctions
