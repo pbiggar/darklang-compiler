@@ -2655,6 +2655,99 @@ let private releasePlanIsTaggedListWithTuple2ElementFieldRelease
         | _ ->
             false)
 
+let private listDecHelperForType (ctx: CodeGenContext) (sourceType: AST.Type option) : string =
+    match sourceType with
+    | Some (AST.TList (AST.TList _)) ->
+        listRefCountDecListHelperLabel
+    | Some (AST.TList (AST.TDict _)) ->
+        listRefCountDecDictHelperLabel
+    | Some (AST.TList (AST.TFunction _)) when not (ctx.FunctionName.StartsWith("Stdlib.")) ->
+        listRefCountDecClosureHelperLabel
+    | _ when isStringBytesTupleManagedClosureTupleList sourceType ->
+        listRefCountDecStringBytesTupleManagedClosureHelperLabel
+    | _ when isStringBytesTupleManagedDictTupleList sourceType ->
+        listRefCountDecStringBytesTupleManagedDictHelperLabel
+    | _ when isStringBytesTupleDynamic3TupleList sourceType ->
+        listRefCountDecStringBytesTupleDynamic3HelperLabel
+    | _ when isStringBytesTupleManaged3ListTupleList sourceType ->
+        listRefCountDecStringBytesTupleManaged3ListHelperLabel
+    | _ when isStringBytesTupleManaged3DictTupleList sourceType ->
+        listRefCountDecStringBytesTupleManaged3DictHelperLabel
+    | _ when isStringBytesTupleManaged3ClosureTupleList sourceType ->
+        listRefCountDecStringBytesTupleManaged3ClosureHelperLabel
+    | _ when isStringBytesTupleManagedListTupleList sourceType ->
+        listRefCountDecStringBytesTupleManagedListHelperLabel
+    | _ when isStringBytesRecordManagedListTupleList ctx.RecordRegistry sourceType ->
+        listRefCountDecStringBytesRecordManagedListHelperLabel
+    | _ when isStringBytesRecordManagedDictTupleList ctx.RecordRegistry sourceType ->
+        listRefCountDecStringBytesRecordManagedDictHelperLabel
+    | _ when isStringBytesRecordManagedClosureTupleList ctx.RecordRegistry sourceType ->
+        listRefCountDecStringBytesRecordManagedClosureHelperLabel
+    | _ when isStringBytesTupleListTupleList sourceType ->
+        listRefCountDecStringBytesTupleListHelperLabel
+    | _ when isClosureStringListDictTupleList sourceType ->
+        listRefCountDecClosureStringListDictHelperLabel
+    | _ when isStringBytesListTupleList sourceType ->
+        listRefCountDecStringBytesListHelperLabel
+    | _ when isStringBytesDictTupleList sourceType ->
+        listRefCountDecStringBytesDictHelperLabel
+    | _ when isStringBytesClosureTupleList sourceType ->
+        listRefCountDecStringBytesClosureHelperLabel
+    | _ when isStringBytesRecordManagedTupleList ctx.RecordRegistry sourceType ->
+        listRefCountDecStringBytesRecordManagedHelperLabel
+    | _ when isStringBytesRecordManagedDict3TupleList ctx.RecordRegistry sourceType ->
+        listRefCountDecStringBytesRecordManagedDict3HelperLabel
+    | _ when isStringBytesRecordManagedClosure3TupleList ctx.RecordRegistry sourceType ->
+        listRefCountDecStringBytesRecordManagedClosure3HelperLabel
+    | _ when isStringBytesListDictTupleList sourceType ->
+        listRefCountDecStringBytesListDictHelperLabel
+    | _ when isClosureListDictTupleList sourceType ->
+        listRefCountDecClosureListDictHelperLabel
+    | _ when isManagedThreeFieldTupleList sourceType ->
+        listRefCountDecTuple3ManagedHelperLabel
+    | Some (AST.TList (AST.TTuple fields)) ->
+        match tuple2DynamicHelperLabel fields, tuple2ListHelperLabel fields, tuple2DictHelperLabel fields, tuple2ClosureHelperLabel fields with
+        | Some helperLabel, _, _, _ -> helperLabel
+        | None, Some helperLabel, _, _ -> helperLabel
+        | None, None, Some helperLabel, _ -> helperLabel
+        | None, None, None, Some helperLabel -> helperLabel
+        | None, None, None, None when fields = [AST.TInt64; AST.TInt64] -> listRefCountDecTuple2HelperLabel
+        | None, None, None, None -> listRefCountDecHelperLabel
+    | _ when isRecordListDictList ctx.RecordRegistry sourceType ->
+        listRefCountDecRecordListDictHelperLabel
+    | _ when isSingleFieldRecordList ctx.RecordRegistry sourceType ->
+        listRefCountDecRecord1HelperLabel
+    | _ when isTwoFieldRecordList ctx.RecordRegistry sourceType ->
+        listRefCountDecRecord2HelperLabel
+    | _ when isClosureStringListDictRecordList ctx.RecordRegistry sourceType ->
+        listRefCountDecClosureStringListDictHelperLabel
+    | _ when isStringBytesListDictRecordList ctx.RecordRegistry sourceType ->
+        listRefCountDecStringBytesListDictHelperLabel
+    | _ when isClosureListDictRecordList ctx.RecordRegistry sourceType ->
+        listRefCountDecClosureListDictHelperLabel
+    | _ when isManagedThreeFieldRecordList ctx.RecordRegistry sourceType ->
+        listRefCountDecRecord3ManagedHelperLabel
+    | _ when isStringPayloadSumList ctx.VariantRegistry sourceType ->
+        listRefCountDecSumStringHelperLabel
+    | _ when isBytesPayloadSumList ctx.VariantRegistry sourceType ->
+        listRefCountDecSumBytesHelperLabel
+    | _ when isListPayloadSumList ctx.VariantRegistry sourceType ->
+        listRefCountDecSumListHelperLabel
+    | _ when isDictPayloadSumList ctx.VariantRegistry sourceType ->
+        listRefCountDecSumDictHelperLabel
+    | _ when isClosurePayloadSumList ctx.VariantRegistry sourceType ->
+        listRefCountDecSumClosureHelperLabel
+    | _ when isTuple4StringBytesListDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType ->
+        listRefCountDecSumTuple4StringBytesListDictHelperLabel
+    | _ when isTuple4NestedTuplePayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType ->
+        listRefCountDecSumTuple4NestedTupleHelperLabel
+    | _ when isTuple4NestedDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType ->
+        listRefCountDecSumTuple4NestedDictHelperLabel
+    | _ when isTuple4NestedClosurePayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType ->
+        listRefCountDecSumTuple4NestedClosureHelperLabel
+    | _ ->
+        listRefCountDecHelperLabel
+
 let private generateDictRefCountIncHelper () : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"__dark_dict_rc_inc_{name}"
     let internalTag = label "internal"
@@ -5124,102 +5217,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
             let leakDec = generateLeakCounterDec ctx
             let tupleDecPath =
                 let listHelperLabelForField (fieldType: AST.Type) : string =
-                    match fieldType with
-                    | AST.TList (AST.TList _) ->
-                        listRefCountDecListHelperLabel
-                    | AST.TList (AST.TDict _) ->
-                        listRefCountDecDictHelperLabel
-                    | AST.TList (AST.TFunction _) when not (ctx.FunctionName.StartsWith("Stdlib.")) ->
-                        listRefCountDecClosureHelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesTupleManagedClosureTupleList (Some fieldType) ->
-                        listRefCountDecStringBytesTupleManagedClosureHelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesTupleManagedDictTupleList (Some fieldType) ->
-                        listRefCountDecStringBytesTupleManagedDictHelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesTupleDynamic3TupleList (Some fieldType) ->
-                        listRefCountDecStringBytesTupleDynamic3HelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesTupleManaged3ListTupleList (Some fieldType) ->
-                        listRefCountDecStringBytesTupleManaged3ListHelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesTupleManaged3DictTupleList (Some fieldType) ->
-                        listRefCountDecStringBytesTupleManaged3DictHelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesTupleManaged3ClosureTupleList (Some fieldType) ->
-                        listRefCountDecStringBytesTupleManaged3ClosureHelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesTupleManagedListTupleList (Some fieldType) ->
-                        listRefCountDecStringBytesTupleManagedListHelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesRecordManagedListTupleList ctx.RecordRegistry (Some fieldType) ->
-                        listRefCountDecStringBytesRecordManagedListHelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesRecordManagedDictTupleList ctx.RecordRegistry (Some fieldType) ->
-                        listRefCountDecStringBytesRecordManagedDictHelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesRecordManagedClosureTupleList ctx.RecordRegistry (Some fieldType) ->
-                        listRefCountDecStringBytesRecordManagedClosureHelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesTupleListTupleList (Some fieldType) ->
-                        listRefCountDecStringBytesTupleListHelperLabel
-                    | AST.TList (AST.TTuple _) when isClosureStringListDictTupleList (Some fieldType) ->
-                        listRefCountDecClosureStringListDictHelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesListTupleList (Some fieldType) ->
-                        listRefCountDecStringBytesListHelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesDictTupleList (Some fieldType) ->
-                        listRefCountDecStringBytesDictHelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesClosureTupleList (Some fieldType) ->
-                        listRefCountDecStringBytesClosureHelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesRecordManagedTupleList ctx.RecordRegistry (Some fieldType) ->
-                        listRefCountDecStringBytesRecordManagedHelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesRecordManagedDict3TupleList ctx.RecordRegistry (Some fieldType) ->
-                        listRefCountDecStringBytesRecordManagedDict3HelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesRecordManagedClosure3TupleList ctx.RecordRegistry (Some fieldType) ->
-                        listRefCountDecStringBytesRecordManagedClosure3HelperLabel
-                    | AST.TList (AST.TTuple _) when isStringBytesListDictTupleList (Some fieldType) ->
-                        listRefCountDecStringBytesListDictHelperLabel
-                    | AST.TList (AST.TTuple _) when isClosureListDictTupleList (Some fieldType) ->
-                        listRefCountDecClosureListDictHelperLabel
-                    | AST.TList (AST.TTuple _) when isManagedThreeFieldTupleList (Some fieldType) ->
-                        listRefCountDecTuple3ManagedHelperLabel
-                    | AST.TList (AST.TTuple fields) ->
-                        match tuple2DynamicHelperLabel fields, tuple2ListHelperLabel fields, tuple2DictHelperLabel fields, tuple2ClosureHelperLabel fields with
-                        | Some helperLabel, _, _, _ -> helperLabel
-                        | None, Some helperLabel, _, _ -> helperLabel
-                        | None, None, Some helperLabel, _ -> helperLabel
-                        | None, None, None, Some helperLabel -> helperLabel
-                        | None, None, None, None when fields = [AST.TInt64; AST.TInt64] -> listRefCountDecTuple2HelperLabel
-                        | None, None, None, None -> listRefCountDecHelperLabel
-                    | AST.TList (AST.TRecord (name, _)) ->
-                        match Map.tryFind name ctx.RecordRegistry with
-                        | Some fields when isSingleListDictFieldShape fields ->
-                            listRefCountDecRecordListDictHelperLabel
-                        | Some fields when List.length fields = 1 -> listRefCountDecRecord1HelperLabel
-                        | Some fields when List.length fields = 2 -> listRefCountDecRecord2HelperLabel
-                        | Some fields when fields |> List.map snd |> isClosureStringListDictFieldShape ->
-                            listRefCountDecClosureStringListDictHelperLabel
-                        | Some fields when fields |> List.map snd |> isStringBytesListDictFieldShape ->
-                            listRefCountDecStringBytesListDictHelperLabel
-                        | Some fields when fields |> List.map snd |> isClosureListDictFieldShape ->
-                            listRefCountDecClosureListDictHelperLabel
-                        | Some fields when
-                            match fields |> List.map snd with
-                            | [ first; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] ->
-                                isDynamicBufferType first
-                            | _ ->
-                                false
-                            ->
-                            listRefCountDecRecord3ManagedHelperLabel
-                        | _ -> listRefCountDecHelperLabel
-                    | AST.TList (AST.TSum (_, [AST.TString])) ->
-                        listRefCountDecSumStringHelperLabel
-                    | AST.TList (AST.TSum (_, [AST.TBytes])) ->
-                        listRefCountDecSumBytesHelperLabel
-                    | AST.TList (AST.TSum (_, [AST.TList _])) ->
-                        listRefCountDecSumListHelperLabel
-                    | AST.TList (AST.TSum (_, [AST.TDict _])) ->
-                        listRefCountDecSumDictHelperLabel
-                    | AST.TList (AST.TSum _) when isTuple4StringBytesListDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry (Some fieldType) ->
-                        listRefCountDecSumTuple4StringBytesListDictHelperLabel
-                    | AST.TList (AST.TSum _) when isTuple4NestedTuplePayloadSumList ctx.RecordRegistry ctx.VariantRegistry (Some fieldType) ->
-                        listRefCountDecSumTuple4NestedTupleHelperLabel
-                    | AST.TList (AST.TSum _) when isTuple4NestedDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry (Some fieldType) ->
-                        listRefCountDecSumTuple4NestedDictHelperLabel
-                    | AST.TList (AST.TSum _) when isTuple4NestedClosurePayloadSumList ctx.RecordRegistry ctx.VariantRegistry (Some fieldType) ->
-                        listRefCountDecSumTuple4NestedClosureHelperLabel
-                    | _ ->
-                        listRefCountDecHelperLabel
+                    listDecHelperForType ctx (Some fieldType)
 
                 let releaseListFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) (fieldType: AST.Type) : ARM64Symbolic.Instr list =
                     let helperLabel = listHelperLabelForField fieldType
@@ -5542,98 +5540,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
 
             match kind with
             | LIR.TaggedList ->
-                let helperLabel =
-                    match sourceType with
-                    | Some (AST.TList (AST.TList _)) ->
-                        listRefCountDecListHelperLabel
-                    | Some (AST.TList (AST.TDict _)) ->
-                        listRefCountDecDictHelperLabel
-                    | Some (AST.TList (AST.TFunction _)) when not (ctx.FunctionName.StartsWith("Stdlib.")) ->
-                        listRefCountDecClosureHelperLabel
-                    | _ when isStringBytesTupleManagedClosureTupleList sourceType ->
-                        listRefCountDecStringBytesTupleManagedClosureHelperLabel
-                    | _ when isStringBytesTupleManagedDictTupleList sourceType ->
-                        listRefCountDecStringBytesTupleManagedDictHelperLabel
-                    | _ when isStringBytesTupleDynamic3TupleList sourceType ->
-                        listRefCountDecStringBytesTupleDynamic3HelperLabel
-                    | _ when isStringBytesTupleManaged3ListTupleList sourceType ->
-                        listRefCountDecStringBytesTupleManaged3ListHelperLabel
-                    | _ when isStringBytesTupleManaged3DictTupleList sourceType ->
-                        listRefCountDecStringBytesTupleManaged3DictHelperLabel
-                    | _ when isStringBytesTupleManaged3ClosureTupleList sourceType ->
-                        listRefCountDecStringBytesTupleManaged3ClosureHelperLabel
-                    | _ when isStringBytesTupleManagedListTupleList sourceType ->
-                        listRefCountDecStringBytesTupleManagedListHelperLabel
-                    | _ when isStringBytesRecordManagedListTupleList ctx.RecordRegistry sourceType ->
-                        listRefCountDecStringBytesRecordManagedListHelperLabel
-                    | _ when isStringBytesRecordManagedDictTupleList ctx.RecordRegistry sourceType ->
-                        listRefCountDecStringBytesRecordManagedDictHelperLabel
-                    | _ when isStringBytesRecordManagedClosureTupleList ctx.RecordRegistry sourceType ->
-                        listRefCountDecStringBytesRecordManagedClosureHelperLabel
-                    | _ when isStringBytesTupleListTupleList sourceType ->
-                        listRefCountDecStringBytesTupleListHelperLabel
-                    | _ when isClosureStringListDictTupleList sourceType ->
-                        listRefCountDecClosureStringListDictHelperLabel
-                    | _ when isStringBytesListTupleList sourceType ->
-                        listRefCountDecStringBytesListHelperLabel
-                    | _ when isStringBytesDictTupleList sourceType ->
-                        listRefCountDecStringBytesDictHelperLabel
-                    | _ when isStringBytesClosureTupleList sourceType ->
-                        listRefCountDecStringBytesClosureHelperLabel
-                    | _ when isStringBytesRecordManagedTupleList ctx.RecordRegistry sourceType ->
-                        listRefCountDecStringBytesRecordManagedHelperLabel
-                    | _ when isStringBytesRecordManagedDict3TupleList ctx.RecordRegistry sourceType ->
-                        listRefCountDecStringBytesRecordManagedDict3HelperLabel
-                    | _ when isStringBytesRecordManagedClosure3TupleList ctx.RecordRegistry sourceType ->
-                        listRefCountDecStringBytesRecordManagedClosure3HelperLabel
-                    | _ when isStringBytesListDictTupleList sourceType ->
-                        listRefCountDecStringBytesListDictHelperLabel
-                    | _ when isClosureListDictTupleList sourceType ->
-                        listRefCountDecClosureListDictHelperLabel
-                    | _ when isManagedThreeFieldTupleList sourceType ->
-                        listRefCountDecTuple3ManagedHelperLabel
-                    | Some (AST.TList (AST.TTuple fields)) ->
-                        match tuple2DynamicHelperLabel fields, tuple2ListHelperLabel fields, tuple2DictHelperLabel fields, tuple2ClosureHelperLabel fields with
-                        | Some helperLabel, _, _, _ -> helperLabel
-                        | None, Some helperLabel, _, _ -> helperLabel
-                        | None, None, Some helperLabel, _ -> helperLabel
-                        | None, None, None, Some helperLabel -> helperLabel
-                        | None, None, None, None when fields = [AST.TInt64; AST.TInt64] -> listRefCountDecTuple2HelperLabel
-                        | None, None, None, None -> listRefCountDecHelperLabel
-                    | _ when isRecordListDictList ctx.RecordRegistry sourceType ->
-                        listRefCountDecRecordListDictHelperLabel
-                    | _ when isSingleFieldRecordList ctx.RecordRegistry sourceType ->
-                        listRefCountDecRecord1HelperLabel
-                    | _ when isTwoFieldRecordList ctx.RecordRegistry sourceType ->
-                        listRefCountDecRecord2HelperLabel
-                    | _ when isClosureStringListDictRecordList ctx.RecordRegistry sourceType ->
-                        listRefCountDecClosureStringListDictHelperLabel
-                    | _ when isStringBytesListDictRecordList ctx.RecordRegistry sourceType ->
-                        listRefCountDecStringBytesListDictHelperLabel
-                    | _ when isClosureListDictRecordList ctx.RecordRegistry sourceType ->
-                        listRefCountDecClosureListDictHelperLabel
-                    | _ when isManagedThreeFieldRecordList ctx.RecordRegistry sourceType ->
-                        listRefCountDecRecord3ManagedHelperLabel
-                    | _ when isStringPayloadSumList ctx.VariantRegistry sourceType ->
-                        listRefCountDecSumStringHelperLabel
-                    | _ when isBytesPayloadSumList ctx.VariantRegistry sourceType ->
-                        listRefCountDecSumBytesHelperLabel
-                    | _ when isListPayloadSumList ctx.VariantRegistry sourceType ->
-                        listRefCountDecSumListHelperLabel
-                    | _ when isDictPayloadSumList ctx.VariantRegistry sourceType ->
-                        listRefCountDecSumDictHelperLabel
-                    | _ when isClosurePayloadSumList ctx.VariantRegistry sourceType ->
-                        listRefCountDecSumClosureHelperLabel
-                    | _ when isTuple4StringBytesListDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType ->
-                        listRefCountDecSumTuple4StringBytesListDictHelperLabel
-                    | _ when isTuple4NestedTuplePayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType ->
-                        listRefCountDecSumTuple4NestedTupleHelperLabel
-                    | _ when isTuple4NestedDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType ->
-                        listRefCountDecSumTuple4NestedDictHelperLabel
-                    | _ when isTuple4NestedClosurePayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType ->
-                        listRefCountDecSumTuple4NestedClosureHelperLabel
-                    | _ ->
-                        listRefCountDecHelperLabel
+                let helperLabel = listDecHelperForType ctx sourceType
                 let listDecCall = [
                     ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -80s)
                     ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
