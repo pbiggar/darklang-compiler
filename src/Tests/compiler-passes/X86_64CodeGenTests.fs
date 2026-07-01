@@ -1499,6 +1499,40 @@ let testClosureRefCountDecDictCapture () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected closure dict capture release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 closure RefCountDec releases captured dict roots using value release metadata.
+let testClosureRefCountDecDictListValueCapture () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let dictType = AST.TDict (AST.TInt64, listType)
+    let closureTupleType = AST.TTuple [AST.TInt64; dictType]
+    let capturedFunc =
+        makeEmptyFunction
+            "x64_dict_list_value_capture_fn"
+            [{ Reg = LIR.Physical LIR.X0; Type = closureTupleType }]
+    let main =
+        match makeSimpleProgram
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X2, 8)
+                LIR.HeapStore (LIR.Physical LIR.X2, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X3, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X3, LIR.Physical LIR.X2, LIR.Physical LIR.X3)
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 16)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some listType)
+                LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
+                LIR.ClosureAlloc (LIR.Physical LIR.X6, "x64_dict_list_value_capture_fn", [LIR.Reg (LIR.Physical LIR.X5)])
+                LIR.RefCountDec (LIR.Physical LIR.X6, 16, LIR.ClosureHeap, Some (rcMetadata ((AST.TFunction ([AST.TInt64], AST.TInt64)))))
+            ]
+            LIR.Ret with
+        | LIR.Program ([func], variants, records) -> LIR.Program ([func; capturedFunc], variants, records)
+        | other -> other
+
+    match runLIRProgramFullWithOptions main true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected closure dict capture list values to be released, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 closure RefCountDec releases captured closure roots.
 let testClosureRefCountDecClosureCapture () : Result<unit, string> =
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
@@ -3769,6 +3803,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR closure RefCountDec releases bytes capture", testClosureRefCountDecBytesCapture)
     ("LIR closure RefCountDec releases list capture", testClosureRefCountDecListCapture)
     ("LIR closure RefCountDec releases dict capture", testClosureRefCountDecDictCapture)
+    ("LIR closure RefCountDec releases dict list value capture", testClosureRefCountDecDictListValueCapture)
     ("LIR closure RefCountDec releases closure capture", testClosureRefCountDecClosureCapture)
     ("LIR closure RefCountDec releases tuple string capture", testClosureRefCountDecTupleStringCapture)
     ("LIR closure RefCountDec releases tuple string/list/dict capture", testClosureRefCountDecTupleStringListDictCapture)

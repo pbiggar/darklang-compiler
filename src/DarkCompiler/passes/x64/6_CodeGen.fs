@@ -2878,7 +2878,11 @@ let private generateClosureRefCountDecHelper
                     | AST.TList _ ->
                         releaseHeapRootCapture fieldOffset (listDecHelperForType recordRegistry sumShapeRegistry captureType) $"{index}_{captureIndex}_list"
                     | AST.TDict _ ->
-                        releaseHeapRootCapture fieldOffset dictRefCountDecHelperLabel $"{index}_{captureIndex}_dict"
+                        match tryRcReleasePlanOfType recordRegistry sumShapeRegistry captureType with
+                        | Some releasePlan ->
+                            releaseHeapRootCapture fieldOffset (dictDecHelperForReleasePlan releasePlan) $"{index}_{captureIndex}_dict"
+                        | None ->
+                            Crash.crash $"generateClosureRefCountDecHelper: missing RC metadata for dict capture type {captureType}"
                     | AST.TFunction _ ->
                         releaseHeapRootCapture fieldOffset closureRefCountDecHelperLabel $"{index}_{captureIndex}_closure"
                     | AST.TTuple _
@@ -5158,14 +5162,6 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
 
     let closureCaptureTypes = closureCaptureTypesFromParams functions
 
-    let typeContainsRootKindRelease (kind: ANF.RcKind) (sourceType: AST.Type) : bool =
-        typeReleasePlanContains (releasePlanIsRootKind kind) recordRegistry sumShapeRegistry sourceType
-
-    let closureCapturesContainRootKindRelease (kind: ANF.RcKind) : bool =
-        closureCaptureTypes
-        |> Map.exists (fun _ captureTypes ->
-            captureTypes |> List.exists (typeContainsRootKindRelease kind))
-
     let closureCapturesContainReleasePlan (predicate: ANF.RcReleasePlan -> bool) : bool =
         closureCaptureTypes
         |> Map.exists (fun _ captureTypes ->
@@ -5293,6 +5289,12 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         |> Option.map dictDecHelperLabelsInReleasePlan
         |> Option.defaultValue Set.empty
 
+    let dictDecHelperLabelsInType sourceType =
+        sourceType
+        |> tryRcReleasePlanOfType recordRegistry sumShapeRegistry
+        |> Option.map dictDecHelperLabelsInReleasePlan
+        |> Option.defaultValue Set.empty
+
     let neededListDecHelperLabels =
         let labelsFromFunctions =
             functions
@@ -5349,10 +5351,16 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                 |> unionLabelSets)
             |> unionLabelSets
 
-        if closureCapturesContainRootKindRelease ANF.DictHeap then
-            Set.add dictRefCountDecHelperLabel labelsFromFunctions
-        else
-            labelsFromFunctions
+        let labelsFromClosureCaptures =
+            closureCaptureTypes
+            |> Map.toList
+            |> List.map (fun (_, captureTypes) ->
+                captureTypes
+                |> List.map dictDecHelperLabelsInType
+                |> unionLabelSets)
+            |> unionLabelSets
+
+        Set.union labelsFromFunctions labelsFromClosureCaptures
 
     let typedDictDecHelpersNeedListDecHelper =
         if Set.contains dictRefCountDecListValueHelperLabel neededDictDecHelperLabels
