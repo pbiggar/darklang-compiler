@@ -129,7 +129,9 @@ let private listRefCountDecSumBytesHelperLabel = "__dark_list_refcount_dec_sum_b
 let private listRefCountDecSumListHelperLabel = "__dark_list_refcount_dec_sum_list_helper"
 let private listRefCountDecSumDictHelperLabel = "__dark_list_refcount_dec_sum_dict_helper"
 let private listRefCountDecSumClosureHelperLabel = "__dark_list_refcount_dec_sum_closure_helper"
+let private listRefCountDecSumTuple3DynamicListDictListHelperLabel = "__dark_list_refcount_dec_sum_tuple3_dynamic_list_dict_list_helper"
 let private listRefCountDecSumTuple4StringBytesListDictHelperLabel = "__dark_list_refcount_dec_sum_tuple4_string_bytes_list_dict_helper"
+let private listRefCountDecSumTuple4StringBytesListDictListHelperLabel = "__dark_list_refcount_dec_sum_tuple4_string_bytes_list_dict_list_helper"
 let private listRefCountDecSumTuple4NestedTupleHelperLabel = "__dark_list_refcount_dec_sum_tuple4_nested_tuple_helper"
 let private listRefCountDecSumTuple4NestedDictHelperLabel = "__dark_list_refcount_dec_sum_tuple4_nested_dict_helper"
 let private listRefCountDecSumTuple4NestedClosureHelperLabel = "__dark_list_refcount_dec_sum_tuple4_nested_closure_helper"
@@ -1401,6 +1403,19 @@ let private listRefCountDecHelperSpecs : ListRefCountDecHelperSpec list =
       ReleaseLeafDictPayload = false
       ReleaseLeafClosurePayload = false
       ManagedLeafFieldTypes = [ AST.TInt64; AST.TFunction ([AST.TInt64], AST.TInt64) ] }
+    { Label = listRefCountDecSumTuple3DynamicListDictListHelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [
+                              AST.TInt64
+                              AST.TTuple [
+                              AST.TString
+                              AST.TList AST.TInt64
+                              AST.TDict (AST.TInt64, AST.TList AST.TInt64)
+                              ]
+                              ] }
     { Label = listRefCountDecSumTuple4StringBytesListDictHelperLabel
       LeafGenericPayloadSize = (Some 16)
       ReleaseLeafListPayload = false
@@ -1413,6 +1428,20 @@ let private listRefCountDecHelperSpecs : ListRefCountDecHelperSpec list =
                               AST.TBytes
                               AST.TList AST.TInt64
                               AST.TDict (AST.TInt64, AST.TInt64)
+                              ]
+                              ] }
+    { Label = listRefCountDecSumTuple4StringBytesListDictListHelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [
+                              AST.TInt64
+                              AST.TTuple [
+                              AST.TString
+                              AST.TBytes
+                              AST.TList AST.TInt64
+                              AST.TDict (AST.TInt64, AST.TList AST.TInt64)
                               ]
                               ] }
     { Label = listRefCountDecSumTuple4NestedTupleHelperLabel
@@ -1961,6 +1990,27 @@ let private releasePlanIsTuple4StringBytesListDictPayload (releasePlan: ANF.RcRe
             24, releasePlanIsRootKind ANF.DictHeap
         ]
 
+let private releasePlanIsTuple3DynamicListDictListPayload (releasePlan: ANF.RcReleasePlan) : bool =
+    releasePlan
+    |> releasePlanIsFixedBlockWithFieldReleases
+        24
+        [
+            0, releasePlanIsDynamicBufferOperation ANF.DynamicStringBuffer
+            8, releasePlanIsRootKind ANF.TaggedList
+            16, releasePlanIsDictWithListValue
+        ]
+
+let private releasePlanIsTuple4StringBytesListDictListPayload (releasePlan: ANF.RcReleasePlan) : bool =
+    releasePlan
+    |> releasePlanIsFixedBlockWithFieldReleases
+        32
+        [
+            0, releasePlanIsDynamicBufferOperation ANF.DynamicStringBuffer
+            8, releasePlanIsDynamicBufferOperation ANF.DynamicBytesBuffer
+            16, releasePlanIsRootKind ANF.TaggedList
+            24, releasePlanIsDictWithListValue
+        ]
+
 let private releasePlanIsTuple4NestedTuplePayload (releasePlan: ANF.RcReleasePlan) : bool =
     let nestedPayload =
         releasePlanIsFixedBlockWithFieldReleases
@@ -2256,6 +2306,10 @@ let private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : strin
             listRefCountDecSumDictHelperLabel
         | Some (ANF.RootRelease (_, ANF.ClosureHeap, _)) ->
             listRefCountDecSumClosureHelperLabel
+        | Some payloadRelease when releasePlanIsTuple3DynamicListDictListPayload payloadRelease ->
+            listRefCountDecSumTuple3DynamicListDictListHelperLabel
+        | Some payloadRelease when releasePlanIsTuple4StringBytesListDictListPayload payloadRelease ->
+            listRefCountDecSumTuple4StringBytesListDictListHelperLabel
         | Some payloadRelease when releasePlanIsTuple4StringBytesListDictPayload payloadRelease ->
             listRefCountDecSumTuple4StringBytesListDictHelperLabel
         | Some payloadRelease when releasePlanIsTuple4NestedTuplePayload payloadRelease ->

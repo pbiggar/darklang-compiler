@@ -13,6 +13,12 @@ let private rcMetadata (typ: AST.Type) : ANF.RcMetadata =
         ANF.SourceType = Some typ
     }
 
+let private rcMetadataWithSumShapes (sumShapes: ANF.RcSumShapeRegistry) (typ: AST.Type) : ANF.RcMetadata =
+    {
+        ANF.ReleasePlan = Some (ANF.rcReleasePlanOfTypeWithSums Map.empty sumShapes typ)
+        ANF.SourceType = Some typ
+    }
+
 let private makeSimpleProgramWithVariants
     (instrs: LIR.Instr list)
     (variants: LIR.VariantRegistry)
@@ -191,6 +197,70 @@ let testListNestedTupleDictListValueUsesTypedDictHelper () : TestResult =
         ])
         "List of tuple(string, bytes, tuple(dict<int, list<int>>, string), list<int>)"
 
+let private assertListSumPayloadUsesTypedDictListHelper (payloadType: AST.Type) (caseName: string) : TestResult =
+    let sanitizedName =
+        caseName
+            .Replace(" ", "")
+            .Replace(",", "")
+            .Replace("(", "")
+            .Replace(")", "")
+            .Replace("<", "")
+            .Replace(">", "")
+            .Replace("-", "")
+    let sumName = $"ARM64{sanitizedName}"
+    let sumType = AST.TSum (sumName, [])
+    let variants : LIR.VariantRegistry =
+        Map.ofList [
+            (sumName,
+                { TypeParams = []
+                  Variants =
+                    [
+                        { Name = $"{sumName}Case"; Tag = 0; Payload = Some payloadType }
+                    ] })
+        ]
+    let sumShapes : ANF.RcSumShapeRegistry =
+        Map.ofList [
+            (sumName,
+                { TypeParams = []
+                  Payloads = [ 0, Some payloadType ] })
+        ]
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    0,
+                    LIR.TaggedList,
+                    Some (rcMetadataWithSumShapes sumShapes (AST.TList sumType)))
+            ]
+            variants
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let callsTypedDictListHelper =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.BL "__dark_dict_refcount_dec_list_value_helper" ->
+                    true
+                | _ ->
+                    false)
+        if callsTypedDictListHelper then
+            Ok ()
+        else
+            Error $"{caseName} sum payload did not emit typed dict-list value release helper"
+
+let testListSumTuple3DictListValueUsesTypedDictHelper () : TestResult =
+    assertListSumPayloadUsesTypedDictListHelper
+        (AST.TTuple [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TList AST.TInt64) ])
+        "sum tuple3 string list dict-list"
+
+let testListSumTuple4DictListValueUsesTypedDictHelper () : TestResult =
+    assertListSumPayloadUsesTypedDictListHelper
+        (AST.TTuple [ AST.TString; AST.TBytes; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TList AST.TInt64) ])
+        "sum tuple4 string bytes list dict-list"
+
 let tests : (string * (unit -> TestResult)) list = [
     ("RawSet pure enum skips generic retain", testRawSetPureEnumDoesNotEmitGenericRetain)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
@@ -201,4 +271,6 @@ let tests : (string * (unit -> TestResult)) list = [
     ("List tuple4 closure/bytes/list/dict-list uses typed dict helper", testListTuple4ClosureBytesListDictListValueUsesTypedDictHelper)
     ("List dict-list uses typed dict helper", testListDictListValueUsesTypedDictHelper)
     ("List nested tuple dict-list uses typed dict helper", testListNestedTupleDictListValueUsesTypedDictHelper)
+    ("List sum tuple3 dict-list uses typed dict helper", testListSumTuple3DictListValueUsesTypedDictHelper)
+    ("List sum tuple4 dict-list uses typed dict helper", testListSumTuple4DictListValueUsesTypedDictHelper)
 ]
