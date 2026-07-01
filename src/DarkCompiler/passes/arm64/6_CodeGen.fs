@@ -7058,15 +7058,6 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountDec (_, _, LIR.ClosureHeap, _) -> true
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TFunction _))) -> true
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isClosurePayloadSumList ctx.VariantRegistry sourceType
-                        || isTuple2ClosureList sourceType
-                        || isClosureStringListDictTupleList sourceType
-                        || isClosureStringListDictRecordList ctx.RecordRegistry sourceType
-                        || isClosureListDictTupleList sourceType
-                        || isClosureListDictRecordList ctx.RecordRegistry sourceType
-                        || isTuple4NestedClosurePayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
                         directFixedBlockFieldHasRelease
                             (releasePlanIsRootKind ANF.ClosureHeap)
