@@ -40,7 +40,6 @@ let defaultOptions : CodeGenOptions = {
 /// Code generation context (passed through to instruction conversion)
 type CodeGenContext = {
     Options: CodeGenOptions
-    VariantRegistry: LIR.VariantRegistry
     SumShapeRegistry: ANF.RcSumShapeRegistry
     RecordRegistry: LIR.RecordRegistry
     ClosurePayloadSizes: Map<string, int>
@@ -6079,7 +6078,6 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
     // StackSize and UsedCalleeSaved are set per-function in convertFunction
     let ctx = {
         Options = options
-        VariantRegistry = variantRegistry
         SumShapeRegistry = rcSumShapeRegistryFromVariantRegistry variantRegistry
         RecordRegistry = recordRegistry
         ClosurePayloadSizes = closurePayloadSizes

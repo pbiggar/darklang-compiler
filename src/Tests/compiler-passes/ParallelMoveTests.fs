@@ -21,7 +21,6 @@ type TestResult = Result<unit, string>
 let convertTailArgMoves (moves: (LIR.PhysReg * LIR.Operand) list) : Result<ARM64Symbolic.Instr list, string> =
     let ctx : CodeGen.CodeGenContext = {
         Options = CodeGen.defaultOptions
-        VariantRegistry = Map.empty
         SumShapeRegistry = Map.empty
         RecordRegistry = Map.empty
         ClosurePayloadSizes = Map.empty
@@ -37,7 +36,6 @@ let convertTailArgMoves (moves: (LIR.PhysReg * LIR.Operand) list) : Result<ARM64
 let convertRawAlloc (dest: LIR.PhysReg) (numBytes: LIR.PhysReg) : Result<ARM64Symbolic.Instr list, string> =
     let ctx : CodeGen.CodeGenContext = {
         Options = CodeGen.defaultOptions
-        VariantRegistry = Map.empty
         SumShapeRegistry = Map.empty
         RecordRegistry = Map.empty
         ClosurePayloadSizes = Map.empty
