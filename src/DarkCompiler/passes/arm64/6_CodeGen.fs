@@ -927,508 +927,384 @@ let private generateListRefCountDecHelperWith
         ARM64Symbolic.RET
     ]
 
-let private generateListRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecHelperLabel ctx None false false false []
+type private ListRefCountDecHelperSpec = {
+    Label: string
+    LeafGenericPayloadSize: int option
+    ReleaseLeafListPayload: bool
+    ReleaseLeafDictPayload: bool
+    ReleaseLeafClosurePayload: bool
+    ManagedLeafFieldTypes: AST.Type list
+}
 
-let private generateListRefCountDecTuple2Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecTuple2HelperLabel ctx (Some 16) false false false []
+let private listRefCountDecHelperSpecs : ListRefCountDecHelperSpec list =
+    [
+    { Label = listRefCountDecHelperLabel
+      LeafGenericPayloadSize = None
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [] }
+    { Label = listRefCountDecTuple2HelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [] }
+    { Label = listRefCountDecTuple2Dynamic0HelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TInt64 ] }
+    { Label = listRefCountDecTuple2Dynamic1HelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TInt64; AST.TString ] }
+    { Label = listRefCountDecTuple2DynamicBothHelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TString ] }
+    { Label = listRefCountDecTuple2List0HelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TList AST.TInt64; AST.TInt64 ] }
+    { Label = listRefCountDecTuple2List1HelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TInt64; AST.TList AST.TInt64 ] }
+    { Label = listRefCountDecTuple2ListBothHelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TList AST.TInt64; AST.TList AST.TInt64 ] }
+    { Label = listRefCountDecTuple2Dict0HelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TDict (AST.TInt64, AST.TInt64); AST.TInt64 ] }
+    { Label = listRefCountDecTuple2Dict1HelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] }
+    { Label = listRefCountDecTuple2DictBothHelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TDict (AST.TInt64, AST.TInt64); AST.TDict (AST.TInt64, AST.TInt64) ] }
+    { Label = listRefCountDecTuple2Closure0HelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TInt64 ] }
+    { Label = listRefCountDecTuple2Closure1HelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TInt64; AST.TFunction ([ AST.TInt64 ], AST.TInt64) ] }
+    { Label = listRefCountDecTuple2ClosureBothHelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TFunction ([ AST.TInt64 ], AST.TInt64) ] }
+    { Label = listRefCountDecTuple3ManagedHelperLabel
+      LeafGenericPayloadSize = (Some 24)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] }
+    { Label = listRefCountDecClosureListDictHelperLabel
+      LeafGenericPayloadSize = (Some 24)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] }
+    { Label = listRefCountDecStringBytesListHelperLabel
+      LeafGenericPayloadSize = (Some 24)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TList AST.TInt64 ] }
+    { Label = listRefCountDecStringBytesDictHelperLabel
+      LeafGenericPayloadSize = (Some 24)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TDict (AST.TInt64, AST.TInt64) ] }
+    { Label = listRefCountDecStringBytesClosureHelperLabel
+      LeafGenericPayloadSize = (Some 24)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TFunction ([ AST.TInt64 ], AST.TInt64) ] }
+    { Label = listRefCountDecStringBytesRecordManagedHelperLabel
+      LeafGenericPayloadSize = (Some 24)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TList AST.TInt64; AST.TString ] ] }
+    { Label = listRefCountDecStringBytesRecordManagedDict3HelperLabel
+      LeafGenericPayloadSize = (Some 24)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ] ] }
+    { Label = listRefCountDecStringBytesRecordManagedClosure3HelperLabel
+      LeafGenericPayloadSize = (Some 24)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TString ] ] }
+    { Label = listRefCountDecStringBytesListDictHelperLabel
+      LeafGenericPayloadSize = (Some 32)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] }
+    { Label = listRefCountDecClosureStringListDictHelperLabel
+      LeafGenericPayloadSize = (Some 32)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] }
+    { Label = listRefCountDecStringBytesTupleListHelperLabel
+      LeafGenericPayloadSize = (Some 32)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TInt64; AST.TString ]; AST.TList AST.TInt64 ] }
+    { Label = listRefCountDecStringBytesTupleDynamic3HelperLabel
+      LeafGenericPayloadSize = (Some 24)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TInt64; AST.TString ] ] }
+    { Label = listRefCountDecStringBytesTupleManaged3ListHelperLabel
+      LeafGenericPayloadSize = (Some 24)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TList AST.TInt64; AST.TString ] ] }
+    { Label = listRefCountDecStringBytesTupleManaged3DictHelperLabel
+      LeafGenericPayloadSize = (Some 24)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ] ] }
+    { Label = listRefCountDecStringBytesTupleManaged3ClosureHelperLabel
+      LeafGenericPayloadSize = (Some 24)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TString ] ] }
+    { Label = listRefCountDecStringBytesTupleManagedListHelperLabel
+      LeafGenericPayloadSize = (Some 32)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TList AST.TInt64; AST.TString ]; AST.TList AST.TInt64 ] }
+    { Label = listRefCountDecStringBytesTupleManagedDictHelperLabel
+      LeafGenericPayloadSize = (Some 32)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ]; AST.TList AST.TInt64 ] }
+    { Label = listRefCountDecStringBytesTupleManagedClosureHelperLabel
+      LeafGenericPayloadSize = (Some 32)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [
+                              AST.TString
+                              AST.TBytes
+                              AST.TTuple [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TString ]
+                              AST.TList AST.TInt64
+                              ] }
+    { Label = listRefCountDecStringBytesRecordManagedListHelperLabel
+      LeafGenericPayloadSize = (Some 32)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TList AST.TInt64; AST.TString ]; AST.TList AST.TInt64 ] }
+    { Label = listRefCountDecStringBytesRecordManagedDictHelperLabel
+      LeafGenericPayloadSize = (Some 32)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TBytes; AST.TTuple [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ]; AST.TList AST.TInt64 ] }
+    { Label = listRefCountDecStringBytesRecordManagedClosureHelperLabel
+      LeafGenericPayloadSize = (Some 32)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [
+                              AST.TString
+                              AST.TBytes
+                              AST.TTuple [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TString ]
+                              AST.TList AST.TInt64
+                              ] }
+    { Label = listRefCountDecListHelperLabel
+      LeafGenericPayloadSize = None
+      ReleaseLeafListPayload = true
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [] }
+    { Label = listRefCountDecDictHelperLabel
+      LeafGenericPayloadSize = None
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = true
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [] }
+    { Label = listRefCountDecClosureHelperLabel
+      LeafGenericPayloadSize = None
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = true
+      ManagedLeafFieldTypes = [] }
+    { Label = listRefCountDecRecord1HelperLabel
+      LeafGenericPayloadSize = (Some 8)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [] }
+    { Label = listRefCountDecRecord2HelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [] }
+    { Label = listRefCountDecRecordListDictHelperLabel
+      LeafGenericPayloadSize = (Some 8)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TList (AST.TDict (AST.TInt64, AST.TInt64)) ] }
+    { Label = listRefCountDecRecord3ManagedHelperLabel
+      LeafGenericPayloadSize = (Some 24)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] }
+    { Label = listRefCountDecSumStringHelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TInt64; AST.TString ] }
+    { Label = listRefCountDecSumBytesHelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TInt64; AST.TBytes ] }
+    { Label = listRefCountDecSumListHelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TInt64; AST.TList AST.TInt64 ] }
+    { Label = listRefCountDecSumDictHelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ] }
+    { Label = listRefCountDecSumClosureHelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [ AST.TInt64; AST.TFunction ([AST.TInt64], AST.TInt64) ] }
+    { Label = listRefCountDecSumTuple4StringBytesListDictHelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [
+                              AST.TInt64
+                              AST.TTuple [
+                              AST.TString
+                              AST.TBytes
+                              AST.TList AST.TInt64
+                              AST.TDict (AST.TInt64, AST.TInt64)
+                              ]
+                              ] }
+    { Label = listRefCountDecSumTuple4NestedTupleHelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [
+                              AST.TInt64
+                              AST.TTuple [
+                              AST.TString
+                              AST.TBytes
+                              AST.TTuple [ AST.TList AST.TInt64; AST.TString ]
+                              AST.TList AST.TInt64
+                              ]
+                              ] }
+    { Label = listRefCountDecSumTuple4NestedDictHelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [
+                              AST.TInt64
+                              AST.TTuple [
+                              AST.TString
+                              AST.TBytes
+                              AST.TTuple [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ]
+                              AST.TList AST.TInt64
+                              ]
+                              ] }
+    { Label = listRefCountDecSumTuple4NestedClosureHelperLabel
+      LeafGenericPayloadSize = (Some 16)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [
+                              AST.TInt64
+                              AST.TTuple [
+                              AST.TString
+                              AST.TBytes
+                              AST.TTuple [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TString ]
+                              AST.TList AST.TInt64
+                              ]
+                              ] }
+    ]
 
-let private generateListRefCountDecTuple2Dynamic0Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecTuple2Dynamic0HelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TString; AST.TInt64 ]
-
-let private generateListRefCountDecTuple2Dynamic1Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecTuple2Dynamic1HelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TInt64; AST.TString ]
-
-let private generateListRefCountDecTuple2DynamicBothHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecTuple2DynamicBothHelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TString; AST.TString ]
-
-let private generateListRefCountDecTuple2List0Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecTuple2List0HelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TList AST.TInt64; AST.TInt64 ]
-
-let private generateListRefCountDecTuple2List1Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecTuple2List1HelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TInt64; AST.TList AST.TInt64 ]
-
-let private generateListRefCountDecTuple2ListBothHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecTuple2ListBothHelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TList AST.TInt64; AST.TList AST.TInt64 ]
-
-let private generateListRefCountDecTuple2Dict0Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecTuple2Dict0HelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TDict (AST.TInt64, AST.TInt64); AST.TInt64 ]
-
-let private generateListRefCountDecTuple2Dict1Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecTuple2Dict1HelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ]
-
-let private generateListRefCountDecTuple2DictBothHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecTuple2DictBothHelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TDict (AST.TInt64, AST.TInt64); AST.TDict (AST.TInt64, AST.TInt64) ]
-
-let private generateListRefCountDecTuple2Closure0Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecTuple2Closure0HelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TInt64 ]
-
-let private generateListRefCountDecTuple2Closure1Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecTuple2Closure1HelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TInt64; AST.TFunction ([ AST.TInt64 ], AST.TInt64) ]
-
-let private generateListRefCountDecTuple2ClosureBothHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecTuple2ClosureBothHelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TFunction ([ AST.TInt64 ], AST.TInt64) ]
-
-let private generateListRefCountDecTuple3ManagedHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecTuple3ManagedHelperLabel
-        ctx
-        (Some 24)
-        false
-        false
-        false
-        [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ]
-
-let private generateListRefCountDecClosureListDictHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecClosureListDictHelperLabel
-        ctx
-        (Some 24)
-        false
-        false
-        false
-        [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ]
-
-let private generateListRefCountDecStringBytesListHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesListHelperLabel
-        ctx
-        (Some 24)
-        false
-        false
-        false
-        [ AST.TString; AST.TBytes; AST.TList AST.TInt64 ]
-
-let private generateListRefCountDecStringBytesDictHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesDictHelperLabel
-        ctx
-        (Some 24)
-        false
-        false
-        false
-        [ AST.TString; AST.TBytes; AST.TDict (AST.TInt64, AST.TInt64) ]
-
-let private generateListRefCountDecStringBytesClosureHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesClosureHelperLabel
-        ctx
-        (Some 24)
-        false
-        false
-        false
-        [ AST.TString; AST.TBytes; AST.TFunction ([ AST.TInt64 ], AST.TInt64) ]
-
-let private generateListRefCountDecStringBytesRecordManagedHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesRecordManagedHelperLabel
-        ctx
-        (Some 24)
-        false
-        false
-        false
-        [ AST.TString; AST.TBytes; AST.TTuple [ AST.TList AST.TInt64; AST.TString ] ]
-
-let private generateListRefCountDecStringBytesRecordManagedDict3Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesRecordManagedDict3HelperLabel
-        ctx
-        (Some 24)
-        false
-        false
-        false
-        [ AST.TString; AST.TBytes; AST.TTuple [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ] ]
-
-let private generateListRefCountDecStringBytesRecordManagedClosure3Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesRecordManagedClosure3HelperLabel
-        ctx
-        (Some 24)
-        false
-        false
-        false
-        [ AST.TString; AST.TBytes; AST.TTuple [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TString ] ]
-
-let private generateListRefCountDecStringBytesListDictHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesListDictHelperLabel
-        ctx
-        (Some 32)
-        false
-        false
-        false
-        [ AST.TString; AST.TBytes; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ]
-
-let private generateListRefCountDecClosureStringListDictHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecClosureStringListDictHelperLabel
-        ctx
-        (Some 32)
-        false
-        false
-        false
-        [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ]
-
-let private generateListRefCountDecStringBytesTupleListHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesTupleListHelperLabel
-        ctx
-        (Some 32)
-        false
-        false
-        false
-        [ AST.TString; AST.TBytes; AST.TTuple [ AST.TInt64; AST.TString ]; AST.TList AST.TInt64 ]
-
-let private generateListRefCountDecStringBytesTupleDynamic3Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesTupleDynamic3HelperLabel
-        ctx
-        (Some 24)
-        false
-        false
-        false
-        [ AST.TString; AST.TBytes; AST.TTuple [ AST.TInt64; AST.TString ] ]
-
-let private generateListRefCountDecStringBytesTupleManaged3ListHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesTupleManaged3ListHelperLabel
-        ctx
-        (Some 24)
-        false
-        false
-        false
-        [ AST.TString; AST.TBytes; AST.TTuple [ AST.TList AST.TInt64; AST.TString ] ]
-
-let private generateListRefCountDecStringBytesTupleManaged3DictHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesTupleManaged3DictHelperLabel
-        ctx
-        (Some 24)
-        false
-        false
-        false
-        [ AST.TString; AST.TBytes; AST.TTuple [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ] ]
-
-let private generateListRefCountDecStringBytesTupleManaged3ClosureHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesTupleManaged3ClosureHelperLabel
-        ctx
-        (Some 24)
-        false
-        false
-        false
-        [ AST.TString; AST.TBytes; AST.TTuple [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TString ] ]
-
-let private generateListRefCountDecStringBytesTupleManagedListHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesTupleManagedListHelperLabel
-        ctx
-        (Some 32)
-        false
-        false
-        false
-        [ AST.TString; AST.TBytes; AST.TTuple [ AST.TList AST.TInt64; AST.TString ]; AST.TList AST.TInt64 ]
-
-let private generateListRefCountDecStringBytesTupleManagedDictHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesTupleManagedDictHelperLabel
-        ctx
-        (Some 32)
-        false
-        false
-        false
-        [ AST.TString; AST.TBytes; AST.TTuple [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ]; AST.TList AST.TInt64 ]
-
-let private generateListRefCountDecStringBytesTupleManagedClosureHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesTupleManagedClosureHelperLabel
-        ctx
-        (Some 32)
-        false
-        false
-        false
-        [
-            AST.TString
-            AST.TBytes
-            AST.TTuple [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TString ]
-            AST.TList AST.TInt64
-        ]
-
-let private generateListRefCountDecStringBytesRecordManagedListHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesRecordManagedListHelperLabel
-        ctx
-        (Some 32)
-        false
-        false
-        false
-        [ AST.TString; AST.TBytes; AST.TTuple [ AST.TList AST.TInt64; AST.TString ]; AST.TList AST.TInt64 ]
-
-let private generateListRefCountDecStringBytesRecordManagedDictHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesRecordManagedDictHelperLabel
-        ctx
-        (Some 32)
-        false
-        false
-        false
-        [ AST.TString; AST.TBytes; AST.TTuple [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ]; AST.TList AST.TInt64 ]
-
-let private generateListRefCountDecStringBytesRecordManagedClosureHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecStringBytesRecordManagedClosureHelperLabel
-        ctx
-        (Some 32)
-        false
-        false
-        false
-        [
-            AST.TString
-            AST.TBytes
-            AST.TTuple [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TString ]
-            AST.TList AST.TInt64
-        ]
-
-let private generateListRefCountDecListHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecListHelperLabel ctx None true false false []
-
-let private generateListRefCountDecDictHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecDictHelperLabel ctx None false true false []
-
-let private generateListRefCountDecClosureHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecClosureHelperLabel ctx None false false true []
-
-let private generateListRefCountDecRecord1Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord1HelperLabel ctx (Some 8) false false false []
-
-let private generateListRefCountDecRecord2Helper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith listRefCountDecRecord2HelperLabel ctx (Some 16) false false false []
-
-let private generateListRefCountDecRecordListDictHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecRecordListDictHelperLabel
-        ctx
-        (Some 8)
-        false
-        false
-        false
-        [ AST.TList (AST.TDict (AST.TInt64, AST.TInt64)) ]
-
-let private generateListRefCountDecRecord3ManagedHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecRecord3ManagedHelperLabel
-        ctx
-        (Some 24)
-        false
-        false
-        false
-        [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ]
-
-let private generateListRefCountDecSumStringHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecSumStringHelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TInt64; AST.TString ]
-
-let private generateListRefCountDecSumBytesHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecSumBytesHelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TInt64; AST.TBytes ]
-
-let private generateListRefCountDecSumListHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecSumListHelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TInt64; AST.TList AST.TInt64 ]
-
-let private generateListRefCountDecSumDictHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecSumDictHelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ]
-
-let private generateListRefCountDecSumClosureHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecSumClosureHelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [ AST.TInt64; AST.TFunction ([AST.TInt64], AST.TInt64) ]
-
-let private generateListRefCountDecSumTuple4StringBytesListDictHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecSumTuple4StringBytesListDictHelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [
-            AST.TInt64
-            AST.TTuple [
-                AST.TString
-                AST.TBytes
-                AST.TList AST.TInt64
-                AST.TDict (AST.TInt64, AST.TInt64)
-            ]
-        ]
-
-let private generateListRefCountDecSumTuple4NestedTupleHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecSumTuple4NestedTupleHelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [
-            AST.TInt64
-            AST.TTuple [
-                AST.TString
-                AST.TBytes
-                AST.TTuple [ AST.TList AST.TInt64; AST.TString ]
-                AST.TList AST.TInt64
-            ]
-        ]
-
-let private generateListRefCountDecSumTuple4NestedDictHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecSumTuple4NestedDictHelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [
-            AST.TInt64
-            AST.TTuple [
-                AST.TString
-                AST.TBytes
-                AST.TTuple [ AST.TDict (AST.TInt64, AST.TInt64); AST.TString ]
-                AST.TList AST.TInt64
-            ]
-        ]
-
-let private generateListRefCountDecSumTuple4NestedClosureHelper (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
-    generateListRefCountDecHelperWith
-        listRefCountDecSumTuple4NestedClosureHelperLabel
-        ctx
-        (Some 16)
-        false
-        false
-        false
-        [
-            AST.TInt64
-            AST.TTuple [
-                AST.TString
-                AST.TBytes
-                AST.TTuple [ AST.TFunction ([ AST.TInt64 ], AST.TInt64); AST.TString ]
-                AST.TList AST.TInt64
-            ]
-        ]
+let private generateNeededListRefCountDecHelpers
+    (ctx: CodeGenContext)
+    (neededHelperLabels: Set<string>)
+    : ARM64Symbolic.Instr list =
+    listRefCountDecHelperSpecs
+    |> List.collect (fun spec ->
+        if Set.contains spec.Label neededHelperLabels then
+            generateListRefCountDecHelperWith
+                spec.Label
+                ctx
+                spec.LeafGenericPayloadSize
+                spec.ReleaseLeafListPayload
+                spec.ReleaseLeafDictPayload
+                spec.ReleaseLeafClosurePayload
+                spec.ManagedLeafFieldTypes
+        else
+            [])
 
 let private closurePayloadSizesFromAllocs (functions: LIR.Function list) : Map<string, int> =
     functions
@@ -7849,59 +7725,65 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
     ResultList.mapResults (convertFunction ctx) sortedFunctions
     |> Result.map (fun instrLists ->
         let allFunctionInstrs = instrLists |> List.concat
+        let selectedListRcDecHelperLabels =
+            [
+                if needsListRcDecHelper || needsListRcDecStringBytesRecordManagedClosureHelper || needsListRcDecStringBytesRecordManagedDictHelper || needsListRcDecStringBytesRecordManagedListHelper || needsListRcDecStringBytesTupleManagedClosureHelper || needsListRcDecStringBytesTupleManagedDictHelper || needsListRcDecStringBytesTupleManagedListHelper || needsListRcDecStringBytesTupleManaged3ListHelper || needsListRcDecStringBytesTupleManaged3DictHelper || needsListRcDecStringBytesTupleManaged3ClosureHelper || needsListRcDecStringBytesTupleDynamic3Helper || needsListRcDecStringBytesTupleListHelper || needsListRcDecClosureStringListDictHelper || needsListRcDecStringBytesListHelper || needsListRcDecStringBytesDictHelper || needsListRcDecStringBytesClosureHelper || needsListRcDecStringBytesRecordManagedHelper || needsListRcDecStringBytesRecordManagedDict3Helper || needsListRcDecStringBytesRecordManagedClosure3Helper || needsListRcDecStringBytesListDictHelper || needsListRcDecClosureListDictHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper || needsListRcDecSumTuple4StringBytesListDictHelper || needsListRcDecSumTuple4NestedTupleHelper || needsListRcDecSumTuple4NestedDictHelper || needsListRcDecSumTuple4NestedClosureHelper then listRefCountDecHelperLabel
+                if needsListRcDecTuple2Helper then listRefCountDecTuple2HelperLabel
+                if needsListRcDecTuple2DynamicHelper then listRefCountDecTuple2Dynamic0HelperLabel
+                if needsListRcDecTuple2DynamicHelper then listRefCountDecTuple2Dynamic1HelperLabel
+                if needsListRcDecTuple2DynamicHelper then listRefCountDecTuple2DynamicBothHelperLabel
+                if needsListRcDecTuple2ListHelper then listRefCountDecTuple2List0HelperLabel
+                if needsListRcDecTuple2ListHelper then listRefCountDecTuple2List1HelperLabel
+                if needsListRcDecTuple2ListHelper then listRefCountDecTuple2ListBothHelperLabel
+                if needsListRcDecTuple2DictHelper then listRefCountDecTuple2Dict0HelperLabel
+                if needsListRcDecTuple2DictHelper then listRefCountDecTuple2Dict1HelperLabel
+                if needsListRcDecTuple2DictHelper then listRefCountDecTuple2DictBothHelperLabel
+                if needsListRcDecTuple2ClosureHelper then listRefCountDecTuple2Closure0HelperLabel
+                if needsListRcDecTuple2ClosureHelper then listRefCountDecTuple2Closure1HelperLabel
+                if needsListRcDecTuple2ClosureHelper then listRefCountDecTuple2ClosureBothHelperLabel
+                if needsListRcDecTuple3ManagedHelper then listRefCountDecTuple3ManagedHelperLabel
+                if needsListRcDecClosureListDictHelper then listRefCountDecClosureListDictHelperLabel
+                if needsListRcDecStringBytesListHelper then listRefCountDecStringBytesListHelperLabel
+                if needsListRcDecStringBytesDictHelper then listRefCountDecStringBytesDictHelperLabel
+                if needsListRcDecStringBytesClosureHelper then listRefCountDecStringBytesClosureHelperLabel
+                if needsListRcDecStringBytesRecordManagedHelper then listRefCountDecStringBytesRecordManagedHelperLabel
+                if needsListRcDecStringBytesRecordManagedDict3Helper then listRefCountDecStringBytesRecordManagedDict3HelperLabel
+                if needsListRcDecStringBytesRecordManagedClosure3Helper then listRefCountDecStringBytesRecordManagedClosure3HelperLabel
+                if needsListRcDecStringBytesListDictHelper then listRefCountDecStringBytesListDictHelperLabel
+                if needsListRcDecClosureStringListDictHelper then listRefCountDecClosureStringListDictHelperLabel
+                if needsListRcDecStringBytesTupleListHelper then listRefCountDecStringBytesTupleListHelperLabel
+                if needsListRcDecStringBytesTupleDynamic3Helper then listRefCountDecStringBytesTupleDynamic3HelperLabel
+                if needsListRcDecStringBytesTupleManaged3ListHelper then listRefCountDecStringBytesTupleManaged3ListHelperLabel
+                if needsListRcDecStringBytesTupleManaged3DictHelper then listRefCountDecStringBytesTupleManaged3DictHelperLabel
+                if needsListRcDecStringBytesTupleManaged3ClosureHelper then listRefCountDecStringBytesTupleManaged3ClosureHelperLabel
+                if needsListRcDecStringBytesTupleManagedListHelper then listRefCountDecStringBytesTupleManagedListHelperLabel
+                if needsListRcDecStringBytesTupleManagedDictHelper then listRefCountDecStringBytesTupleManagedDictHelperLabel
+                if needsListRcDecStringBytesTupleManagedClosureHelper then listRefCountDecStringBytesTupleManagedClosureHelperLabel
+                if needsListRcDecStringBytesRecordManagedListHelper then listRefCountDecStringBytesRecordManagedListHelperLabel
+                if needsListRcDecStringBytesRecordManagedDictHelper then listRefCountDecStringBytesRecordManagedDictHelperLabel
+                if needsListRcDecStringBytesRecordManagedClosureHelper then listRefCountDecStringBytesRecordManagedClosureHelperLabel
+                if needsListRcDecListHelper then listRefCountDecListHelperLabel
+                if needsListRcDecDictHelper || needsListRcDecRecordListDictHelper then listRefCountDecDictHelperLabel
+                if needsListRcDecClosureHelper then listRefCountDecClosureHelperLabel
+                if needsListRcDecRecord1Helper then listRefCountDecRecord1HelperLabel
+                if needsListRcDecRecord2Helper then listRefCountDecRecord2HelperLabel
+                if needsListRcDecRecordListDictHelper then listRefCountDecRecordListDictHelperLabel
+                if needsListRcDecRecord3ManagedHelper then listRefCountDecRecord3ManagedHelperLabel
+                if needsListRcDecSumStringHelper then listRefCountDecSumStringHelperLabel
+                if needsListRcDecSumBytesHelper then listRefCountDecSumBytesHelperLabel
+                if needsListRcDecSumListHelper then listRefCountDecSumListHelperLabel
+                if needsListRcDecSumDictHelper then listRefCountDecSumDictHelperLabel
+                if needsListRcDecSumClosureHelper then listRefCountDecSumClosureHelperLabel
+                if needsListRcDecSumTuple4StringBytesListDictHelper then listRefCountDecSumTuple4StringBytesListDictHelperLabel
+                if needsListRcDecSumTuple4NestedTupleHelper then listRefCountDecSumTuple4NestedTupleHelperLabel
+                if needsListRcDecSumTuple4NestedDictHelper then listRefCountDecSumTuple4NestedDictHelperLabel
+                if needsListRcDecSumTuple4NestedClosureHelper then listRefCountDecSumTuple4NestedClosureHelperLabel
+            ]
+            |> Set.ofList
+
         let listRcHelpers =
             (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
-            @ (if needsListRcDecHelper || needsListRcDecStringBytesRecordManagedClosureHelper || needsListRcDecStringBytesRecordManagedDictHelper || needsListRcDecStringBytesRecordManagedListHelper || needsListRcDecStringBytesTupleManagedClosureHelper || needsListRcDecStringBytesTupleManagedDictHelper || needsListRcDecStringBytesTupleManagedListHelper || needsListRcDecStringBytesTupleManaged3ListHelper || needsListRcDecStringBytesTupleManaged3DictHelper || needsListRcDecStringBytesTupleManaged3ClosureHelper || needsListRcDecStringBytesTupleDynamic3Helper || needsListRcDecStringBytesTupleListHelper || needsListRcDecClosureStringListDictHelper || needsListRcDecStringBytesListHelper || needsListRcDecStringBytesDictHelper || needsListRcDecStringBytesClosureHelper || needsListRcDecStringBytesRecordManagedHelper || needsListRcDecStringBytesRecordManagedDict3Helper || needsListRcDecStringBytesRecordManagedClosure3Helper || needsListRcDecStringBytesListDictHelper || needsListRcDecClosureListDictHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper || needsListRcDecSumTuple4StringBytesListDictHelper || needsListRcDecSumTuple4NestedTupleHelper || needsListRcDecSumTuple4NestedDictHelper || needsListRcDecSumTuple4NestedClosureHelper then generateListRefCountDecHelper ctx else [])
-            @ (if needsListRcDecTuple2Helper then generateListRefCountDecTuple2Helper ctx else [])
-            @ (if needsListRcDecTuple2DynamicHelper then generateListRefCountDecTuple2Dynamic0Helper ctx else [])
-            @ (if needsListRcDecTuple2DynamicHelper then generateListRefCountDecTuple2Dynamic1Helper ctx else [])
-            @ (if needsListRcDecTuple2DynamicHelper then generateListRefCountDecTuple2DynamicBothHelper ctx else [])
-            @ (if needsListRcDecTuple2ListHelper then generateListRefCountDecTuple2List0Helper ctx else [])
-            @ (if needsListRcDecTuple2ListHelper then generateListRefCountDecTuple2List1Helper ctx else [])
-            @ (if needsListRcDecTuple2ListHelper then generateListRefCountDecTuple2ListBothHelper ctx else [])
-            @ (if needsListRcDecTuple2DictHelper then generateListRefCountDecTuple2Dict0Helper ctx else [])
-            @ (if needsListRcDecTuple2DictHelper then generateListRefCountDecTuple2Dict1Helper ctx else [])
-            @ (if needsListRcDecTuple2DictHelper then generateListRefCountDecTuple2DictBothHelper ctx else [])
-            @ (if needsListRcDecTuple2ClosureHelper then generateListRefCountDecTuple2Closure0Helper ctx else [])
-            @ (if needsListRcDecTuple2ClosureHelper then generateListRefCountDecTuple2Closure1Helper ctx else [])
-            @ (if needsListRcDecTuple2ClosureHelper then generateListRefCountDecTuple2ClosureBothHelper ctx else [])
-            @ (if needsListRcDecTuple3ManagedHelper then generateListRefCountDecTuple3ManagedHelper ctx else [])
-            @ (if needsListRcDecClosureListDictHelper then generateListRefCountDecClosureListDictHelper ctx else [])
-            @ (if needsListRcDecStringBytesListHelper then generateListRefCountDecStringBytesListHelper ctx else [])
-            @ (if needsListRcDecStringBytesDictHelper then generateListRefCountDecStringBytesDictHelper ctx else [])
-            @ (if needsListRcDecStringBytesClosureHelper then generateListRefCountDecStringBytesClosureHelper ctx else [])
-            @ (if needsListRcDecStringBytesRecordManagedHelper then generateListRefCountDecStringBytesRecordManagedHelper ctx else [])
-            @ (if needsListRcDecStringBytesRecordManagedDict3Helper then generateListRefCountDecStringBytesRecordManagedDict3Helper ctx else [])
-            @ (if needsListRcDecStringBytesRecordManagedClosure3Helper then generateListRefCountDecStringBytesRecordManagedClosure3Helper ctx else [])
-            @ (if needsListRcDecStringBytesListDictHelper then generateListRefCountDecStringBytesListDictHelper ctx else [])
-            @ (if needsListRcDecClosureStringListDictHelper then generateListRefCountDecClosureStringListDictHelper ctx else [])
-            @ (if needsListRcDecStringBytesTupleListHelper then generateListRefCountDecStringBytesTupleListHelper ctx else [])
-            @ (if needsListRcDecStringBytesTupleDynamic3Helper then generateListRefCountDecStringBytesTupleDynamic3Helper ctx else [])
-            @ (if needsListRcDecStringBytesTupleManaged3ListHelper then generateListRefCountDecStringBytesTupleManaged3ListHelper ctx else [])
-            @ (if needsListRcDecStringBytesTupleManaged3DictHelper then generateListRefCountDecStringBytesTupleManaged3DictHelper ctx else [])
-            @ (if needsListRcDecStringBytesTupleManaged3ClosureHelper then generateListRefCountDecStringBytesTupleManaged3ClosureHelper ctx else [])
-            @ (if needsListRcDecStringBytesTupleManagedListHelper then generateListRefCountDecStringBytesTupleManagedListHelper ctx else [])
-            @ (if needsListRcDecStringBytesTupleManagedDictHelper then generateListRefCountDecStringBytesTupleManagedDictHelper ctx else [])
-            @ (if needsListRcDecStringBytesTupleManagedClosureHelper then generateListRefCountDecStringBytesTupleManagedClosureHelper ctx else [])
-            @ (if needsListRcDecStringBytesRecordManagedListHelper then generateListRefCountDecStringBytesRecordManagedListHelper ctx else [])
-            @ (if needsListRcDecStringBytesRecordManagedDictHelper then generateListRefCountDecStringBytesRecordManagedDictHelper ctx else [])
-            @ (if needsListRcDecStringBytesRecordManagedClosureHelper then generateListRefCountDecStringBytesRecordManagedClosureHelper ctx else [])
-            @ (if needsListRcDecListHelper then generateListRefCountDecListHelper ctx else [])
-            @ (if needsListRcDecDictHelper || needsListRcDecRecordListDictHelper then generateListRefCountDecDictHelper ctx else [])
-            @ (if needsListRcDecClosureHelper then generateListRefCountDecClosureHelper ctx else [])
-            @ (if needsListRcDecRecord1Helper then generateListRefCountDecRecord1Helper ctx else [])
-            @ (if needsListRcDecRecord2Helper then generateListRefCountDecRecord2Helper ctx else [])
-            @ (if needsListRcDecRecordListDictHelper then generateListRefCountDecRecordListDictHelper ctx else [])
-            @ (if needsListRcDecRecord3ManagedHelper then generateListRefCountDecRecord3ManagedHelper ctx else [])
-            @ (if needsListRcDecSumStringHelper then generateListRefCountDecSumStringHelper ctx else [])
-            @ (if needsListRcDecSumBytesHelper then generateListRefCountDecSumBytesHelper ctx else [])
-            @ (if needsListRcDecSumListHelper then generateListRefCountDecSumListHelper ctx else [])
-            @ (if needsListRcDecSumDictHelper then generateListRefCountDecSumDictHelper ctx else [])
-            @ (if needsListRcDecSumClosureHelper then generateListRefCountDecSumClosureHelper ctx else [])
-            @ (if needsListRcDecSumTuple4StringBytesListDictHelper then generateListRefCountDecSumTuple4StringBytesListDictHelper ctx else [])
-            @ (if needsListRcDecSumTuple4NestedTupleHelper then generateListRefCountDecSumTuple4NestedTupleHelper ctx else [])
-            @ (if needsListRcDecSumTuple4NestedDictHelper then generateListRefCountDecSumTuple4NestedDictHelper ctx else [])
-            @ (if needsListRcDecSumTuple4NestedClosureHelper then generateListRefCountDecSumTuple4NestedClosureHelper ctx else [])
+            @ generateNeededListRefCountDecHelpers ctx selectedListRcDecHelperLabels
         let dictRcHelpers =
             (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
             @ (if needsDictRcDecHelper || needsListRcDecClosureStringListDictHelper || needsListRcDecStringBytesListDictHelper || needsListRcDecClosureListDictHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper || needsListRcDecRecordListDictHelper || needsListRcDecTuple2DictHelper || needsDictRcDecTupleStringListDictValueHelper || needsListRcDecSumTuple4StringBytesListDictHelper || needsListRcDecSumTuple4NestedDictHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false false false ctx else [])
