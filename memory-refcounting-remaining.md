@@ -695,8 +695,9 @@ Concrete examples:
    `rcReleasePlanOfType`. The remaining work here is consumption: backend
    release paths still need to use the shared plan broadly instead of
    reconstructing field cleanup from local source-type matches. x64 generic
-   fixed-block dynamic string/bytes, dict-root, and closure-root field release
-   now uses the plan directly for tuples, records, and boxed-sum payload fields.
+   fixed-block dynamic string/bytes, list-root, dict-root, and closure-root
+   field release now uses the plan directly for tuples, records, and boxed-sum
+   payload fields.
 
 2. Finish replacing `isRcManagedHeapType` and `needsAutomaticDec` in
    `2.5_RefCountInsertion.fs` with shape-operation decisions. Retain/release
@@ -726,8 +727,9 @@ Concrete examples:
 3. Finish converting RC insertion for strings and bytes to use the planner.
 4. Finish converting RC insertion for fixed blocks and lists to use the planner.
 5. Continue converting backend fixed-block field release selection to consume
-   `RcReleasePlan`; dynamic string/bytes, dict-root, and closure-root field
-   release are complete for the x64 generic fixed-block path.
+   `RcReleasePlan`; dynamic string/bytes, list-root, dict-root, and
+   closure-root field release are complete for the x64 generic fixed-block
+   path.
 
 ## 2. Complete Bytes Ownership To Match Strings
 

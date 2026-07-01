@@ -896,9 +896,10 @@ let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (sourceType: AST.Type 
             genDictFieldRelease fieldOffset
         | Some (ANF.RootRelease (_, ANF.ClosureHeap, _)) ->
             genClosureFieldRelease fieldOffset
+        | Some (ANF.RootRelease (_, ANF.TaggedList, _)) ->
+            genListFieldRelease ctx fieldOffset fieldType
         | _ ->
             match fieldType with
-            | AST.TList _ -> genListFieldRelease ctx fieldOffset fieldType
             | AST.TTuple _
             | AST.TRecord _
             | AST.TSum _ -> genFixedBlockFieldRelease ctx fieldOffset fieldType
