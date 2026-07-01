@@ -146,7 +146,7 @@ let private rawSetRootRetainTarget
                 match typ with
                 | AST.TTuple _ -> Some (RawSetGenericRootRetain payloadSize)
                 | _ -> None
-            | ANF.BoxedSum payloadSize ->
+            | ANF.BoxedSum (payloadSize, _) ->
                 match typ with
                 | AST.TSum _ -> Some (RawSetGenericRootRetain payloadSize)
                 | _ -> None
@@ -1516,7 +1516,7 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
         | _ ->
             match ANF.rcShapeOfType ctx.RecordRegistry typ with
             | ANF.FixedBlock (payloadSize, _)
-            | ANF.BoxedSum payloadSize ->
+            | ANF.BoxedSum (payloadSize, _) ->
                 Some payloadSize
             | ANF.Immediate
             | ANF.TaggedListShape _

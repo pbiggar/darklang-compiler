@@ -75,7 +75,7 @@ let testRcShapeClassifiesRemainingRuntimeShapes () : TestResult =
         (AST.TRawPtr, RawUnmanaged)
         (AST.TFunction ([AST.TInt64], AST.TString), ClosureShape [])
         (AST.TSum ("Color", []), Immediate)
-        (AST.TSum ("Option", [AST.TString]), BoxedSum 16)
+        (AST.TSum ("Option", [AST.TString]), BoxedSum (16, [(8, DynamicString)]))
         (AST.TList AST.TString, TaggedListShape DynamicString)
         (AST.TDict (AST.TString, AST.TList AST.TInt64), DictRoot (DynamicString, TaggedListShape Immediate))
     ]
@@ -90,7 +90,7 @@ let testRcShapeOwnershipHelpersClassifyManagedRoots () : TestResult =
         DynamicString
         DynamicBytes
         FixedBlock (16, [Immediate; DynamicString])
-        BoxedSum 16
+        BoxedSum (16, [])
         TaggedListShape DynamicString
         DictRoot (DynamicString, Immediate)
         ClosureShape [DynamicString]
@@ -117,7 +117,7 @@ let testRcShapeOwnershipHelpersClassifyAutomaticBindingDecs () : TestResult =
         DynamicString
         DynamicBytes
         FixedBlock (16, [Immediate; DynamicString])
-        BoxedSum 16
+        BoxedSum (16, [])
         TaggedListShape DynamicString
         DictRoot (DynamicString, Immediate)
     ]
@@ -144,7 +144,7 @@ let testRcShapeOwnershipHelpersClassifyBorrowedRetains () : TestResult =
         DynamicString
         DynamicBytes
         FixedBlock (16, [Immediate; DynamicString])
-        BoxedSum 16
+        BoxedSum (16, [])
         TaggedListShape DynamicString
         DictRoot (DynamicString, Immediate)
         ClosureShape [DynamicString]
@@ -169,7 +169,7 @@ let testRcShapeOwnershipHelpersClassifyBorrowedRetains () : TestResult =
 let testRcShapeOwnershipHelpersSelectRootDispatch () : TestResult =
     let samples = [
         (FixedBlock (16, [DynamicString]), Some GenericHeap)
-        (BoxedSum 16, Some GenericHeap)
+        (BoxedSum (16, []), Some GenericHeap)
         (TaggedListShape DynamicString, Some TaggedList)
         (TaggedListShape (ClosureShape []), Some GenericHeap)
         (DictRoot (Immediate, DynamicString), Some DictHeap)
@@ -189,7 +189,7 @@ let testRcShapeOwnershipHelpersSelectRootDispatch () : TestResult =
 let testRcShapeOwnershipHelpersSelectRetainReleaseOperations () : TestResult =
     let samples = [
         (FixedBlock (16, [DynamicString]), Some (FixedSizeRoot (16, GenericHeap)))
-        (BoxedSum 16, Some (FixedSizeRoot (16, GenericHeap)))
+        (BoxedSum (16, []), Some (FixedSizeRoot (16, GenericHeap)))
         (TaggedListShape DynamicString, Some (FixedSizeRoot (24, TaggedList)))
         (TaggedListShape (ClosureShape []), Some (FixedSizeRoot (24, GenericHeap)))
         (DictRoot (Immediate, DynamicString), Some (FixedSizeRoot (8, DictHeap)))
@@ -214,7 +214,7 @@ let testRcShapeOwnershipHelpersSelectRetainReleaseOperations () : TestResult =
 let testRcShapeOwnershipHelpersClassifyStorage () : TestResult =
     let samples = [
         (FixedBlock (16, [DynamicString]), ManagedRcRoot (16, GenericHeap))
-        (BoxedSum 16, ManagedRcRoot (16, GenericHeap))
+        (BoxedSum (16, []), ManagedRcRoot (16, GenericHeap))
         (TaggedListShape DynamicString, ManagedRcRoot (24, TaggedList))
         (TaggedListShape (ClosureShape []), ManagedRcRoot (24, GenericHeap))
         (DictRoot (Immediate, DynamicString), ManagedRcRoot (8, DictHeap))
@@ -235,7 +235,7 @@ let testRcShapeOwnershipHelpersClassifyStorage () : TestResult =
 let testRcShapeOwnershipHelpersClassifyRootManagement () : TestResult =
     let managedRootShapes = [
         FixedBlock (16, [Immediate; DynamicString])
-        BoxedSum 16
+        BoxedSum (16, [])
         TaggedListShape DynamicString
         DictRoot (DynamicString, TaggedListShape Immediate)
         ClosureShape [DynamicString]
@@ -262,7 +262,7 @@ let testRcShapeOwnershipHelpersClassifyRootManagement () : TestResult =
 let testRcShapeOwnershipHelpersClassifyOwnershipTransferRoots () : TestResult =
     let transferRootShapes = [
         FixedBlock (16, [Immediate; DynamicString])
-        BoxedSum 16
+        BoxedSum (16, [])
         TaggedListShape DynamicString
         DictRoot (DynamicString, Immediate)
         ClosureShape [DynamicString]
@@ -289,7 +289,7 @@ let testRcShapeOwnershipHelpersClassifyOwnershipTransferRoots () : TestResult =
 let testRcShapeOwnershipHelpersClassifyRecursiveRelease () : TestResult =
     let recursiveShapes = [
         FixedBlock (16, [Immediate; DynamicString])
-        BoxedSum 16
+        BoxedSum (16, [(8, DynamicString)])
         TaggedListShape (FixedBlock (8, [DynamicString]))
         DictRoot (DynamicString, TaggedListShape Immediate)
         ClosureShape [DynamicString]
@@ -336,7 +336,7 @@ let testRcShapeReleasePlanClassifiesFieldCleanup () : TestResult =
             RootRelease (16, GenericHeap, FixedBlockPayloadRelease (16, [FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)])))
         (ClosureShape [DynamicString],
             RootRelease (0, ClosureHeap, ClosurePayloadRelease [FieldRelease (0, DynamicBufferRelease DynamicStringBuffer)]))
-        (BoxedSum 16, RootRelease (16, GenericHeap, BoxedSumPayloadRelease (16, [])))
+        (BoxedSum (16, []), RootRelease (16, GenericHeap, BoxedSumPayloadRelease (16, [])))
     ]
 
     match samples |> List.tryFind (fun (shape, expected) -> rcShapeReleasePlan shape <> expected) with

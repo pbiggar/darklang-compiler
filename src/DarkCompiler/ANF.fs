@@ -120,7 +120,7 @@ type RcKind =
 type RcShape =
     | Immediate
     | FixedBlock of payloadSize:int * fieldShapes:RcShape list
-    | BoxedSum of payloadSize:int
+    | BoxedSum of payloadSize:int * fieldShapes:(int * RcShape) list
     | TaggedListShape of elementShape:RcShape
     | DictRoot of keyShape:RcShape * valueShape:RcShape
     | DynamicString
@@ -325,8 +325,10 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
             Crash.crash $"rcShapeOfType: Record type '{name}' not found in typeReg"
     | AST.TSum (_, []) ->
         Immediate
+    | AST.TSum (_, [payloadType]) ->
+        BoxedSum (16, [(8, rcShapeOfType typeReg payloadType)])
     | AST.TSum _ ->
-        BoxedSum 16
+        BoxedSum (16, [])
     | AST.TList elemType ->
         TaggedListShape (rcShapeOfType typeReg elemType)
     | AST.TDict (keyType, valueType) ->
@@ -381,8 +383,9 @@ let rec rcShapeNeedsRecursiveRelease (shape: RcShape) : bool =
     match shape with
     | FixedBlock (_, fieldShapes) ->
         fieldShapes |> List.exists rcShapeNeedsOwnedScopeRelease
-    | BoxedSum _ ->
-        true
+    | BoxedSum (_, fieldShapes) ->
+        fieldShapes
+        |> List.exists (fun (_, fieldShape) -> rcShapeNeedsOwnedScopeRelease fieldShape)
     | TaggedListShape elementShape ->
         rcShapeNeedsOwnedScopeRelease elementShape
     | DictRoot (keyShape, valueShape) ->
@@ -423,7 +426,7 @@ let rcShapeRootKind (shape: RcShape) : RcKind option =
 let rcShapePayloadSize (shape: RcShape) : int option =
     match shape with
     | FixedBlock (payloadSize, _)
-    | BoxedSum payloadSize ->
+    | BoxedSum (payloadSize, _) ->
         Some payloadSize
     | TaggedListShape _ ->
         Some 24
@@ -511,8 +514,17 @@ let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
         match rootShape with
         | FixedBlock (payloadSize, fieldShapes) ->
             FixedBlockPayloadRelease (payloadSize, fieldReleasePlans fieldShapes)
-        | BoxedSum payloadSize ->
-            BoxedSumPayloadRelease (payloadSize, [])
+        | BoxedSum (payloadSize, fieldShapes) ->
+            let fieldReleases =
+                fieldShapes
+                |> List.choose (fun (offset, fieldShape) ->
+                    match rcShapeReleasePlan fieldShape with
+                    | NoReleasePlan ->
+                        None
+                    | releasePlan ->
+                        Some (FieldRelease (offset, releasePlan)))
+
+            BoxedSumPayloadRelease (payloadSize, fieldReleases)
         | TaggedListShape elementShape ->
             TaggedListPayloadRelease (rcShapeReleasePlan elementShape)
         | DictRoot (keyShape, valueShape) ->
@@ -536,23 +548,7 @@ let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
 
 /// Release plan for a source type using the current representation registry.
 let rec rcReleasePlanOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type) : RcReleasePlan =
-    let fieldRelease offset releasePlan =
-        match releasePlan with
-        | NoReleasePlan ->
-            None
-        | _ ->
-            Some (FieldRelease (offset, releasePlan))
-
-    match t with
-    | AST.TSum (_, [payloadType]) ->
-        let payloadReleases =
-            rcReleasePlanOfType typeReg payloadType
-            |> fieldRelease 8
-            |> Option.toList
-
-        RootRelease (16, GenericHeap, BoxedSumPayloadRelease (16, payloadReleases))
-    | _ ->
-        t |> rcShapeOfType typeReg |> rcShapeReleasePlan
+    t |> rcShapeOfType typeReg |> rcShapeReleasePlan
 
 /// Determine reference-count dispatch kind for a heap type
 let rcKind (t: AST.Type) : RcKind =

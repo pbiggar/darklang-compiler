@@ -655,7 +655,7 @@ let private fixedBlockPayloadSize (recordRegistry: LIR.RecordRegistry) (fieldTyp
     | _ ->
         match ANF.rcShapeOfType recordRegistry fieldType with
         | ANF.FixedBlock (payloadSize, _)
-        | ANF.BoxedSum payloadSize ->
+        | ANF.BoxedSum (payloadSize, _) ->
             Some payloadSize
         | ANF.Immediate
         | ANF.TaggedListShape _
