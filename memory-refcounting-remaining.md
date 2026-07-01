@@ -126,10 +126,10 @@ record4 nested tuple string/list/dict payload release, plus x64 tagged-list
 record4 nested tuple closure/bytes/list/dict payload release, plus initial
 `RcShape` storage-class classification used by RC insertion's legacy fixed-root
 compatibility predicate, plus shared `RcReleasePlan` metadata and x64 generic
-fixed-block dynamic string/bytes field release consumption through
-`RcReleasePlan` for tuples, records, and boxed-sum payloads, plus boxed-sum
-release plans that carry source-type payload field cleanup when variant payload
-metadata is available.
+fixed-block dynamic string/bytes, dict-root, and closure-root field release
+consumption through `RcReleasePlan` for tuples, records, and boxed-sum payloads,
+plus boxed-sum release plans that carry source-type payload field cleanup when
+variant payload metadata is available.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -695,8 +695,8 @@ Concrete examples:
    `rcReleasePlanOfType`. The remaining work here is consumption: backend
    release paths still need to use the shared plan broadly instead of
    reconstructing field cleanup from local source-type matches. x64 generic
-   fixed-block dynamic string/bytes field release now uses the plan directly
-   for tuples, records, and boxed-sum payload fields.
+   fixed-block dynamic string/bytes, dict-root, and closure-root field release
+   now uses the plan directly for tuples, records, and boxed-sum payload fields.
 
 2. Finish replacing `isRcManagedHeapType` and `needsAutomaticDec` in
    `2.5_RefCountInsertion.fs` with shape-operation decisions. Retain/release
@@ -726,8 +726,8 @@ Concrete examples:
 3. Finish converting RC insertion for strings and bytes to use the planner.
 4. Finish converting RC insertion for fixed blocks and lists to use the planner.
 5. Continue converting backend fixed-block field release selection to consume
-   `RcReleasePlan`; dynamic string/bytes field release is complete for the x64
-   generic fixed-block path.
+   `RcReleasePlan`; dynamic string/bytes, dict-root, and closure-root field
+   release are complete for the x64 generic fixed-block path.
 
 ## 2. Complete Bytes Ownership To Match Strings
 
