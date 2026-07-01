@@ -4849,29 +4849,35 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ]
 
                 let fixedBlockFieldReleaseInstrs =
-                    fixedBlockFieldTypes ctx.RecordRegistry sourceType
-                    |> List.mapi (fun index fieldType ->
-                        let fieldOffset = index * 8
-                        match fieldType with
-                        | AST.TString
-                        | AST.TBytes ->
-                            releaseDynamicBufferField fieldOffset
-                        | AST.TList _ ->
-                            releaseListField fieldOffset fieldType
-                        | AST.TDict _ ->
-                            releaseDictField fieldOffset (Some fieldType)
-                        | AST.TFunction _ ->
-                            releaseClosureField fieldOffset
-                        | AST.TTuple fields when
-                            List.contains AST.TString fields
-                            || fields
-                               |> List.exists (function
-                                   | AST.TTuple nestedFields -> List.contains AST.TString nestedFields
-                                   | _ -> false) ->
-                            releaseFixedBlockField fieldOffset fieldType
-                        | _ ->
-                            [])
-                    |> List.concat
+                    let directFieldReleaseInstrs =
+                        sourceType
+                        |> Option.bind (tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry)
+                        |> Option.map (function
+                            | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
+                                fieldReleases
+                                |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
+                                    releaseFieldPlanFrom addrReg fieldOffset fieldReleasePlan)
+                            | _ ->
+                                [])
+                        |> Option.defaultValue []
+
+                    let nestedFixedBlockReleaseInstrs =
+                        fixedBlockFieldTypes ctx.RecordRegistry sourceType
+                        |> List.mapi (fun index fieldType ->
+                            let fieldOffset = index * 8
+                            match fieldType with
+                            | AST.TTuple fields when
+                                List.contains AST.TString fields
+                                || fields
+                                   |> List.exists (function
+                                       | AST.TTuple nestedFields -> List.contains AST.TString nestedFields
+                                       | _ -> false) ->
+                                releaseFixedBlockField fieldOffset fieldType
+                            | _ ->
+                                [])
+                        |> List.concat
+
+                    directFieldReleaseInstrs @ nestedFixedBlockReleaseInstrs
 
                 let releaseSumPayloadInstrs =
                     let releasePayloadForType (payloadType: AST.Type) : ARM64Symbolic.Instr list =
