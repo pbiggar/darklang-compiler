@@ -1040,6 +1040,33 @@ let testDictRefCountDecListValue () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected dict list values to be released, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 DictHeap RefCountDec releases nested dict leaf values through release-plan metadata.
+let testDictRefCountDecDictValue () : Result<unit, string> =
+    let innerDictType = AST.TDict (AST.TInt64, AST.TInt64)
+    let outerDictType = AST.TDict (AST.TInt64, innerDictType)
+    let program =
+        makeSimpleProgram
+            [
+                LIR.HeapAlloc (LIR.Physical LIR.X2, 16)
+                LIR.HeapStore (LIR.Physical LIR.X2, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X2, 8, LIR.Imm 2L, None)
+                LIR.Mov (LIR.Physical LIR.X3, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X3, LIR.Physical LIR.X2, LIR.Physical LIR.X3)
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 16)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 3L, None)
+                LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some innerDictType)
+                LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
+                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.DictHeap, Some (rcMetadata outerDictType))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected nested dict values to be released, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 generic fixed-block RefCountDec preserves live RAX across nested list field release.
 let testGenericRefCountDecPreservesLiveRaxAcrossListFieldRelease () : Result<unit, string> =
     let listType = AST.TList AST.TInt64
@@ -3600,6 +3627,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec releases sum record string/list/dict payload", testGenericRefCountDecSumRecordStringListDictPayload)
     ("LIR generic RefCountDec releases dict field", testGenericRefCountDecDictField)
     ("LIR DictHeap RefCountDec releases list leaf values", testDictRefCountDecListValue)
+    ("LIR DictHeap RefCountDec releases nested dict leaf values", testDictRefCountDecDictValue)
     ("LIR generic RefCountDec preserves live RAX across list field release", testGenericRefCountDecPreservesLiveRaxAcrossListFieldRelease)
     ("LIR generic RefCountDec preserves live RAX across dict field release", testGenericRefCountDecPreservesLiveRaxAcrossDictFieldRelease)
     ("LIR generic RefCountDec preserves live RAX across closure field release", testGenericRefCountDecPreservesLiveRaxAcrossClosureFieldRelease)

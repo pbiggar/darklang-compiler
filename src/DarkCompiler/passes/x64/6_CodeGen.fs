@@ -624,6 +624,7 @@ let private listRefCountDecDynamicBufferHelperLabel = "__dark_list_rc_dec_dynami
 let private dictRefCountIncHelperLabel = "__dark_dict_rc_inc_helper"
 let private dictRefCountDecHelperLabel = "__dark_dict_rc_dec_helper"
 let private dictRefCountDecListValueHelperLabel = "__dark_dict_rc_dec_list_value_helper"
+let private dictRefCountDecDictValueHelperLabel = "__dark_dict_rc_dec_dict_value_helper"
 let private closureRefCountDecHelperLabel = "__dark_closure_rc_dec_helper"
 
 type private RawSetRootRetainTarget =
@@ -1074,6 +1075,8 @@ let private dictDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : strin
     match releasePlan with
     | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, ANF.RootRelease (_, ANF.TaggedList, _))) ->
         dictRefCountDecListValueHelperLabel
+    | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, ANF.RootRelease (_, ANF.DictHeap, _))) ->
+        dictRefCountDecDictValueHelperLabel
     | _ ->
         dictRefCountDecHelperLabel
 
@@ -2471,6 +2474,7 @@ let private generateDictRefCountIncHelper () : X86_64.Instr list =
 let private generateDictRefCountDecHelper
     (helperLabel: string)
     (releaseLeafListValue: bool)
+    (releaseLeafDictValue: bool)
     (enableLeakCheck: bool)
     : X86_64.Instr list =
     let label name = $"{helperLabel}_{name}"
@@ -2488,6 +2492,7 @@ let private generateDictRefCountDecHelper
     let freeNode = label "free_node"
     let skipFreeList = label "skip_freelist"
     let skipLeafListValueRelease = label "skip_leaf_list_value_release"
+    let skipLeafDictValueRelease = label "skip_leaf_dict_value_release"
 
     let leakDec =
         if enableLeakCheck then
@@ -2528,20 +2533,31 @@ let private generateDictRefCountDecHelper
          X86_64.ADD_imm (X86_64.RCX, 1)
          X86_64.Label doneLabel]
 
-    let releaseLeafListValueInstrs =
-        if releaseLeafListValue then
-            let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; X86_64.R11; scratch]
-            let saves = saveRegs |> List.map X86_64.PUSH
-            let restores = saveRegs |> List.rev |> List.map X86_64.POP
-            [X86_64.CMP_imm (X86_64.RDX, 2)
-             X86_64.Jcc (X86_64.NE, skipLeafListValueRelease)]
-            @ saves
-            @ [X86_64.MOV_load (X86_64.RAX, X86_64.RDI, 8)
-               X86_64.CALL listRefCountDecHelperLabel]
-            @ restores
-            @ [X86_64.Label skipLeafListValueRelease]
-        else
-            []
+    let releaseLeafManagedRootValueInstrs (targetHelperLabel: string) (skipLabel: string) =
+        let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; X86_64.R11; scratch]
+        let saves = saveRegs |> List.map X86_64.PUSH
+        let restores = saveRegs |> List.rev |> List.map X86_64.POP
+        [X86_64.CMP_imm (X86_64.RDX, 2)
+         X86_64.Jcc (X86_64.NE, skipLabel)]
+        @ saves
+        @ [X86_64.MOV_load (X86_64.RAX, X86_64.RDI, 8)
+           X86_64.CALL targetHelperLabel]
+        @ restores
+        @ [X86_64.Label skipLabel]
+
+    let releaseLeafValueInstrs =
+        let listValueInstrs =
+            if releaseLeafListValue then
+                releaseLeafManagedRootValueInstrs listRefCountDecHelperLabel skipLeafListValueRelease
+            else
+                []
+        let dictValueInstrs =
+            if releaseLeafDictValue then
+                releaseLeafManagedRootValueInstrs dictRefCountDecHelperLabel skipLeafDictValueRelease
+            else
+                []
+
+        listValueInstrs @ dictValueInstrs
 
     [X86_64.Label helperLabel
      X86_64.XOR_reg (X86_64.RCX, X86_64.RCX)
@@ -2624,7 +2640,7 @@ let private generateDictRefCountDecHelper
     @ [X86_64.ADD_imm (X86_64.R9, 1)
        X86_64.JMP collectLoop
        X86_64.Label freeNode]
-    @ releaseLeafListValueInstrs
+    @ releaseLeafValueInstrs
     @ [X86_64.CMP_imm (X86_64.RSI, freeListSize)
        X86_64.Jcc (X86_64.GE, skipFreeList)
        X86_64.MOV_reg (X86_64.R9, freeListBase)
@@ -5284,6 +5300,9 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
     let needsDictRcDecListValueHelper =
         Set.contains dictRefCountDecListValueHelperLabel neededDictDecHelperLabels
 
+    let needsDictRcDecDictValueHelper =
+        Set.contains dictRefCountDecDictValueHelperLabel neededDictDecHelperLabels
+
     let needsClosureRcDecHelper =
         functions
         |> List.exists (fun func ->
@@ -5314,12 +5333,15 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
             if needsDictRcIncHelper then generateDictRefCountIncHelper ()
             else []
         let dictDecHelper =
-            if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false enableLeakCheck
+            if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper || needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false enableLeakCheck
             else []
         let dictDecListValueHelper =
-            if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel true enableLeakCheck
+            if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel true false enableLeakCheck
+            else []
+        let dictDecDictValueHelper =
+            if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false true enableLeakCheck
             else []
         let closureDecHelper =
             if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper enableLeakCheck recordRegistry sumShapeRegistry closurePayloadSizes closureCaptureTypes
             else []
-        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ dictDecHelper @ dictDecListValueHelper @ closureDecHelper @ genOomHandler ())
+        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ dictDecHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ closureDecHelper @ genOomHandler ())
