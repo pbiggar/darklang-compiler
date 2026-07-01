@@ -1306,6 +1306,48 @@ let private generateNeededListRefCountDecHelpers
         else
             [])
 
+let rec private typeContainsDictRoot (typ: AST.Type) : bool =
+    match typ with
+    | AST.TDict _ ->
+        true
+    | AST.TTuple fields ->
+        fields |> List.exists typeContainsDictRoot
+    | AST.TList elementType ->
+        typeContainsDictRoot elementType
+    | _ ->
+        false
+
+let rec private typeContainsClosureRoot (typ: AST.Type) : bool =
+    match typ with
+    | AST.TFunction _ ->
+        true
+    | AST.TTuple fields ->
+        fields |> List.exists typeContainsClosureRoot
+    | AST.TList elementType ->
+        typeContainsClosureRoot elementType
+    | _ ->
+        false
+
+let private listRefCountDecHelperNeedsDictDecHelper (spec: ListRefCountDecHelperSpec) : bool =
+    spec.ReleaseLeafDictPayload
+    || (spec.ManagedLeafFieldTypes |> List.exists typeContainsDictRoot)
+
+let private listRefCountDecHelperNeedsClosureDecHelper (spec: ListRefCountDecHelperSpec) : bool =
+    spec.ReleaseLeafClosurePayload
+    || (spec.ManagedLeafFieldTypes |> List.exists typeContainsClosureRoot)
+
+let private selectedListRefCountDecHelpersNeedDictDecHelper (neededHelperLabels: Set<string>) : bool =
+    listRefCountDecHelperSpecs
+    |> List.exists (fun spec ->
+        Set.contains spec.Label neededHelperLabels
+        && listRefCountDecHelperNeedsDictDecHelper spec)
+
+let private selectedListRefCountDecHelpersNeedClosureDecHelper (neededHelperLabels: Set<string>) : bool =
+    listRefCountDecHelperSpecs
+    |> List.exists (fun spec ->
+        Set.contains spec.Label neededHelperLabels
+        && listRefCountDecHelperNeedsClosureDecHelper spec)
+
 let private closurePayloadSizesFromAllocs (functions: LIR.Function list) : Map<string, int> =
     functions
     |> List.collect (fun func ->
@@ -6683,815 +6725,76 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             startFunc :: otherFuncs
         | None -> functions  // No _start, keep original order
 
-    let needsListRcDecHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        match sourceType with
-                        | _ when isStringBytesTupleManagedClosureTupleList sourceType -> false
-                        | _ when isStringBytesTupleManagedDictTupleList sourceType -> false
-                        | _ when isStringBytesTupleDynamic3TupleList sourceType -> false
-                        | _ when isStringBytesTupleManaged3ListTupleList sourceType -> false
-                        | _ when isStringBytesTupleManaged3DictTupleList sourceType -> false
-                        | _ when isStringBytesTupleManaged3ClosureTupleList sourceType -> false
-                        | _ when isStringBytesTupleManagedListTupleList sourceType -> false
-                        | _ when isStringBytesRecordManagedListTupleList ctx.RecordRegistry sourceType -> false
-                        | _ when isStringBytesRecordManagedDictTupleList ctx.RecordRegistry sourceType -> false
-                        | _ when isStringBytesRecordManagedClosureTupleList ctx.RecordRegistry sourceType -> false
-                        | _ when isStringBytesTupleListTupleList sourceType -> false
-                        | _ when isClosureStringListDictTupleList sourceType -> false
-                        | _ when isStringBytesListTupleList sourceType -> false
-                        | _ when isStringBytesDictTupleList sourceType -> false
-                        | _ when isStringBytesClosureTupleList sourceType -> false
-                        | _ when isStringBytesRecordManagedTupleList ctx.RecordRegistry sourceType -> false
-                        | _ when isStringBytesRecordManagedDict3TupleList ctx.RecordRegistry sourceType -> false
-                        | _ when isStringBytesRecordManagedClosure3TupleList ctx.RecordRegistry sourceType -> false
-                        | _ when isStringBytesListDictTupleList sourceType -> false
-                        | _ when isClosureListDictTupleList sourceType -> false
-                        | _ when isManagedThreeFieldTupleList sourceType -> false
-                        | Some (AST.TList (AST.TTuple fields)) when tuple2DynamicFieldPattern fields |> Option.isSome -> false
-                        | Some (AST.TList (AST.TTuple fields)) when tuple2ListFieldPattern fields |> Option.isSome -> false
-                        | Some (AST.TList (AST.TTuple fields)) when tuple2DictFieldPattern fields |> Option.isSome -> false
-                        | Some (AST.TList (AST.TTuple fields)) when tuple2ClosureFieldPattern fields |> Option.isSome -> false
-                        | Some (AST.TList (AST.TTuple fields)) when fields = [AST.TInt64; AST.TInt64] -> false
-                        | Some (AST.TList (AST.TList _)) -> false
-                        | Some (AST.TList (AST.TDict _)) -> false
-                        | Some (AST.TList (AST.TFunction _)) -> false
-                        | _ when isRecordListDictList ctx.RecordRegistry sourceType -> false
-                        | _ when isClosureStringListDictRecordList ctx.RecordRegistry sourceType -> false
-                        | _ when isStringBytesListDictRecordList ctx.RecordRegistry sourceType -> false
-                        | _ when isClosureListDictRecordList ctx.RecordRegistry sourceType -> false
-                        | _ when isManagedThreeFieldRecordList ctx.RecordRegistry sourceType -> false
-                        | _ when isStringPayloadSumList ctx.VariantRegistry sourceType -> false
-                        | _ when isBytesPayloadSumList ctx.VariantRegistry sourceType -> false
-                        | _ when isListPayloadSumList ctx.VariantRegistry sourceType -> false
-                        | _ when isDictPayloadSumList ctx.VariantRegistry sourceType -> false
-                        | _ when isClosurePayloadSumList ctx.VariantRegistry sourceType -> false
-                        | _ when isTuple4StringBytesListDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType -> false
-                        | _ when isTuple4NestedTuplePayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType -> false
-                        | _ when isTuple4NestedDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType -> false
-                        | _ when isTuple4NestedClosurePayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType -> false
-                        | _ when isSingleFieldRecordList ctx.RecordRegistry sourceType -> false
-                        | _ when isTwoFieldRecordList ctx.RecordRegistry sourceType -> false
-                        | _ -> true
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsRootKind ANF.TaggedList)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
+    let unionLabelSets (sets: Set<string> list) : Set<string> =
+        match sets with
+        | [] -> Set.empty
+        | _ -> Set.unionMany sets
 
-    let needsListRcDecTuple2Helper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TTuple fields))) ->
-                        fields = [AST.TInt64; AST.TInt64]
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple fields) ->
-                                 fields = [AST.TInt64; AST.TInt64]
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
+    let listDecHelperLabelsForListType (fieldType: AST.Type) : Set<string> =
+        match fieldType with
+        | AST.TList _ ->
+            Set.singleton (listDecHelperForType ctx (Some fieldType))
+        | _ ->
+            Set.empty
 
-    let needsListRcDecTuple2DynamicHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isTuple2DynamicList sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithTuple2ElementFieldRelease releasePlanIsDynamicBufferRelease)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
+    let listDecHelperDependencyLabels (helperLabel: string) : Set<string> =
+        listRefCountDecHelperSpecs
+        |> List.tryFind (fun spec -> spec.Label = helperLabel)
+        |> Option.map (fun spec ->
+            spec.ManagedLeafFieldTypes
+            |> List.map listDecHelperLabelsForListType
+            |> unionLabelSets)
+        |> Option.defaultValue Set.empty
 
-    let needsListRcDecTuple2ListHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isTuple2ListList sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithTuple2ElementFieldRelease (releasePlanIsRootKind ANF.TaggedList))
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
+    let rec expandListDecHelperDependencies (selectedLabels: Set<string>) (pendingLabels: string list) : Set<string> =
+        match pendingLabels with
+        | [] ->
+            selectedLabels
+        | helperLabel :: rest ->
+            let dependencyLabels =
+                listDecHelperDependencyLabels helperLabel
+                |> Set.filter (fun dependencyLabel ->
+                    not (Set.contains dependencyLabel selectedLabels))
 
-    let needsListRcDecTuple2DictHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isTuple2DictList sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithTuple2ElementFieldRelease (releasePlanIsRootKind ANF.DictHeap))
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
+            expandListDecHelperDependencies
+                (Set.union selectedLabels dependencyLabels)
+                (rest @ Set.toList dependencyLabels)
 
-    let needsListRcDecTuple2ClosureHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isTuple2ClosureList sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithTuple2ElementFieldRelease (releasePlanIsRootKind ANF.ClosureHeap))
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
+    let listDecHelperLabelsInFixedBlockType (sourceType: AST.Type option) : Set<string> =
+        fixedBlockFieldTypes ctx.RecordRegistry sourceType
+        |> List.map listDecHelperLabelsForListType
+        |> unionLabelSets
 
-    let needsListRcDecTuple3ManagedHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isManagedThreeFieldTupleList sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isManagedThreeFieldTupleList (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
+    let neededListRcDecHelperLabels =
+        let calledLabels =
+            sortedFunctions
+            |> List.map (fun func ->
+                func.CFG.Blocks
+                |> Map.toList
+                |> List.map (fun (_, block) ->
+                    block.Instrs
+                    |> List.map (function
+                        | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
+                            Set.singleton (listDecHelperForType ctx sourceType)
+                        | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
+                            listDecHelperLabelsInFixedBlockType sourceType
+                        | _ ->
+                            Set.empty)
+                    |> unionLabelSets)
+                |> unionLabelSets)
+            |> unionLabelSets
 
-    let needsListRcDecClosureListDictHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isClosureListDictTupleList sourceType
-                        || isClosureListDictRecordList ctx.RecordRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isClosureListDictTupleList (Some listType)
-                             | AST.TList (AST.TRecord _) as listType ->
-                                 isClosureListDictRecordList ctx.RecordRegistry (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
+        if Set.isEmpty calledLabels then
+            Set.empty
+        else
+            let rootLabels = Set.add listRefCountDecHelperLabel calledLabels
+            expandListDecHelperDependencies rootLabels (Set.toList rootLabels)
 
-    let needsListRcDecStringBytesListHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesListTupleList sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesListTupleList (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
+    let selectedListHelpersNeedDictDecHelper =
+        selectedListRefCountDecHelpersNeedDictDecHelper neededListRcDecHelperLabels
 
-    let needsListRcDecStringBytesDictHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesDictTupleList sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesDictTupleList (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecStringBytesClosureHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesClosureTupleList sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesClosureTupleList (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecStringBytesRecordManagedHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesRecordManagedTupleList ctx.RecordRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesRecordManagedTupleList ctx.RecordRegistry (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecStringBytesRecordManagedDict3Helper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesRecordManagedDict3TupleList ctx.RecordRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesRecordManagedDict3TupleList ctx.RecordRegistry (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecStringBytesRecordManagedClosure3Helper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesRecordManagedClosure3TupleList ctx.RecordRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesRecordManagedClosure3TupleList ctx.RecordRegistry (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecStringBytesListDictHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesListDictTupleList sourceType
-                        || isStringBytesListDictRecordList ctx.RecordRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesListDictTupleList (Some listType)
-                             | AST.TList (AST.TRecord _) as listType ->
-                                 isStringBytesListDictRecordList ctx.RecordRegistry (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecClosureStringListDictHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isClosureStringListDictTupleList sourceType
-                        || isClosureStringListDictRecordList ctx.RecordRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isClosureStringListDictTupleList (Some listType)
-                             | AST.TList (AST.TRecord _) as listType ->
-                                 isClosureStringListDictRecordList ctx.RecordRegistry (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecStringBytesTupleListHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesTupleListTupleList sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesTupleListTupleList (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecStringBytesTupleDynamic3Helper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesTupleDynamic3TupleList sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesTupleDynamic3TupleList (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecStringBytesTupleManaged3ListHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesTupleManaged3ListTupleList sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesTupleManaged3ListTupleList (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecStringBytesTupleManaged3DictHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesTupleManaged3DictTupleList sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesTupleManaged3DictTupleList (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecStringBytesTupleManaged3ClosureHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesTupleManaged3ClosureTupleList sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesTupleManaged3ClosureTupleList (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecStringBytesTupleManagedListHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesTupleManagedListTupleList sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesTupleManagedListTupleList (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecStringBytesRecordManagedListHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesRecordManagedListTupleList ctx.RecordRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesRecordManagedListTupleList ctx.RecordRegistry (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecStringBytesRecordManagedDictHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesRecordManagedDictTupleList ctx.RecordRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesRecordManagedDictTupleList ctx.RecordRegistry (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecStringBytesRecordManagedClosureHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesRecordManagedClosureTupleList ctx.RecordRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesRecordManagedClosureTupleList ctx.RecordRegistry (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecStringBytesTupleManagedDictHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesTupleManagedDictTupleList sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesTupleManagedDictTupleList (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecStringBytesTupleManagedClosureHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringBytesTupleManagedClosureTupleList sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        fixedBlockHasField
-                            (function
-                             | AST.TList (AST.TTuple _) as listType ->
-                                 isStringBytesTupleManagedClosureTupleList (Some listType)
-                             | _ -> false)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecListHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TList _))) -> true
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithElementRelease (releasePlanIsRootKind ANF.TaggedList))
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecDictHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TDict _))) -> true
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithElementRelease (releasePlanIsRootKind ANF.DictHeap))
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecClosureHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, Some (AST.TList (AST.TFunction _))) -> true
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithElementRelease (releasePlanIsRootKind ANF.ClosureHeap))
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecRecord1Helper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isSingleFieldRecordList ctx.RecordRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithElementRelease
-                                (releasePlanIsFixedBlockRootWithPayloadSize 8))
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecRecord2Helper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isTwoFieldRecordList ctx.RecordRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithElementRelease
-                                (releasePlanIsFixedBlockRootWithPayloadSize 16))
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecRecordListDictHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isRecordListDictList ctx.RecordRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithElementRelease releasePlanIsSingleListDictFieldPayload)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecRecord3ManagedHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isManagedThreeFieldRecordList ctx.RecordRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithElementRelease releasePlanIsThreeManagedFieldPayload)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecSumStringHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isStringPayloadSumList ctx.VariantRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithSumPayloadRelease
-                                (releasePlanIsDynamicBufferOperation ANF.DynamicStringBuffer))
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecSumBytesHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isBytesPayloadSumList ctx.VariantRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithSumPayloadRelease
-                                (releasePlanIsDynamicBufferOperation ANF.DynamicBytesBuffer))
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecSumListHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isListPayloadSumList ctx.VariantRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithSumPayloadRelease (releasePlanIsRootKind ANF.TaggedList))
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecSumDictHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isDictPayloadSumList ctx.VariantRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithSumPayloadRelease (releasePlanIsRootKind ANF.DictHeap))
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecSumClosureHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isClosurePayloadSumList ctx.VariantRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithSumPayloadRelease (releasePlanIsRootKind ANF.ClosureHeap))
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecSumTuple4StringBytesListDictHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isTuple4StringBytesListDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithSumPayloadRelease releasePlanIsTuple4StringBytesListDictPayload)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecSumTuple4NestedTupleHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isTuple4NestedTuplePayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithSumPayloadRelease releasePlanIsTuple4NestedTuplePayload)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecSumTuple4NestedDictHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isTuple4NestedDictPayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithSumPayloadRelease releasePlanIsTuple4NestedDictPayload)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
-
-    let needsListRcDecSumTuple4NestedClosureHelper =
-        sortedFunctions
-        |> List.exists (fun func ->
-            func.CFG.Blocks
-            |> Map.exists (fun _ block ->
-                block.Instrs
-                |> List.exists (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, sourceType) ->
-                        isTuple4NestedClosurePayloadSumList ctx.RecordRegistry ctx.VariantRegistry sourceType
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, sourceType) ->
-                        directFixedBlockFieldHasRelease
-                            (releasePlanIsTaggedListWithSumPayloadRelease releasePlanIsTuple4NestedClosurePayload)
-                            ctx.RecordRegistry
-                            sourceType
-                    | _ -> false)))
+    let selectedListHelpersNeedClosureDecHelper =
+        selectedListRefCountDecHelpersNeedClosureDecHelper neededListRcDecHelperLabels
 
     let needsListRcIncHelper =
         sortedFunctions
@@ -7632,68 +6935,14 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
     ResultList.mapResults (convertFunction ctx) sortedFunctions
     |> Result.map (fun instrLists ->
         let allFunctionInstrs = instrLists |> List.concat
-        let selectedListRcDecHelperLabels =
-            [
-                if needsListRcDecHelper || needsListRcDecStringBytesRecordManagedClosureHelper || needsListRcDecStringBytesRecordManagedDictHelper || needsListRcDecStringBytesRecordManagedListHelper || needsListRcDecStringBytesTupleManagedClosureHelper || needsListRcDecStringBytesTupleManagedDictHelper || needsListRcDecStringBytesTupleManagedListHelper || needsListRcDecStringBytesTupleManaged3ListHelper || needsListRcDecStringBytesTupleManaged3DictHelper || needsListRcDecStringBytesTupleManaged3ClosureHelper || needsListRcDecStringBytesTupleDynamic3Helper || needsListRcDecStringBytesTupleListHelper || needsListRcDecClosureStringListDictHelper || needsListRcDecStringBytesListHelper || needsListRcDecStringBytesDictHelper || needsListRcDecStringBytesClosureHelper || needsListRcDecStringBytesRecordManagedHelper || needsListRcDecStringBytesRecordManagedDict3Helper || needsListRcDecStringBytesRecordManagedClosure3Helper || needsListRcDecStringBytesListDictHelper || needsListRcDecClosureListDictHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper || needsListRcDecSumTuple4StringBytesListDictHelper || needsListRcDecSumTuple4NestedTupleHelper || needsListRcDecSumTuple4NestedDictHelper || needsListRcDecSumTuple4NestedClosureHelper then listRefCountDecHelperLabel
-                if needsListRcDecTuple2Helper then listRefCountDecTuple2HelperLabel
-                if needsListRcDecTuple2DynamicHelper then listRefCountDecTuple2Dynamic0HelperLabel
-                if needsListRcDecTuple2DynamicHelper then listRefCountDecTuple2Dynamic1HelperLabel
-                if needsListRcDecTuple2DynamicHelper then listRefCountDecTuple2DynamicBothHelperLabel
-                if needsListRcDecTuple2ListHelper then listRefCountDecTuple2List0HelperLabel
-                if needsListRcDecTuple2ListHelper then listRefCountDecTuple2List1HelperLabel
-                if needsListRcDecTuple2ListHelper then listRefCountDecTuple2ListBothHelperLabel
-                if needsListRcDecTuple2DictHelper then listRefCountDecTuple2Dict0HelperLabel
-                if needsListRcDecTuple2DictHelper then listRefCountDecTuple2Dict1HelperLabel
-                if needsListRcDecTuple2DictHelper then listRefCountDecTuple2DictBothHelperLabel
-                if needsListRcDecTuple2ClosureHelper then listRefCountDecTuple2Closure0HelperLabel
-                if needsListRcDecTuple2ClosureHelper then listRefCountDecTuple2Closure1HelperLabel
-                if needsListRcDecTuple2ClosureHelper then listRefCountDecTuple2ClosureBothHelperLabel
-                if needsListRcDecTuple3ManagedHelper then listRefCountDecTuple3ManagedHelperLabel
-                if needsListRcDecClosureListDictHelper then listRefCountDecClosureListDictHelperLabel
-                if needsListRcDecStringBytesListHelper then listRefCountDecStringBytesListHelperLabel
-                if needsListRcDecStringBytesDictHelper then listRefCountDecStringBytesDictHelperLabel
-                if needsListRcDecStringBytesClosureHelper then listRefCountDecStringBytesClosureHelperLabel
-                if needsListRcDecStringBytesRecordManagedHelper then listRefCountDecStringBytesRecordManagedHelperLabel
-                if needsListRcDecStringBytesRecordManagedDict3Helper then listRefCountDecStringBytesRecordManagedDict3HelperLabel
-                if needsListRcDecStringBytesRecordManagedClosure3Helper then listRefCountDecStringBytesRecordManagedClosure3HelperLabel
-                if needsListRcDecStringBytesListDictHelper then listRefCountDecStringBytesListDictHelperLabel
-                if needsListRcDecClosureStringListDictHelper then listRefCountDecClosureStringListDictHelperLabel
-                if needsListRcDecStringBytesTupleListHelper then listRefCountDecStringBytesTupleListHelperLabel
-                if needsListRcDecStringBytesTupleDynamic3Helper then listRefCountDecStringBytesTupleDynamic3HelperLabel
-                if needsListRcDecStringBytesTupleManaged3ListHelper then listRefCountDecStringBytesTupleManaged3ListHelperLabel
-                if needsListRcDecStringBytesTupleManaged3DictHelper then listRefCountDecStringBytesTupleManaged3DictHelperLabel
-                if needsListRcDecStringBytesTupleManaged3ClosureHelper then listRefCountDecStringBytesTupleManaged3ClosureHelperLabel
-                if needsListRcDecStringBytesTupleManagedListHelper then listRefCountDecStringBytesTupleManagedListHelperLabel
-                if needsListRcDecStringBytesTupleManagedDictHelper then listRefCountDecStringBytesTupleManagedDictHelperLabel
-                if needsListRcDecStringBytesTupleManagedClosureHelper then listRefCountDecStringBytesTupleManagedClosureHelperLabel
-                if needsListRcDecStringBytesRecordManagedListHelper then listRefCountDecStringBytesRecordManagedListHelperLabel
-                if needsListRcDecStringBytesRecordManagedDictHelper then listRefCountDecStringBytesRecordManagedDictHelperLabel
-                if needsListRcDecStringBytesRecordManagedClosureHelper then listRefCountDecStringBytesRecordManagedClosureHelperLabel
-                if needsListRcDecListHelper then listRefCountDecListHelperLabel
-                if needsListRcDecDictHelper || needsListRcDecRecordListDictHelper then listRefCountDecDictHelperLabel
-                if needsListRcDecClosureHelper then listRefCountDecClosureHelperLabel
-                if needsListRcDecRecord1Helper then listRefCountDecRecord1HelperLabel
-                if needsListRcDecRecord2Helper then listRefCountDecRecord2HelperLabel
-                if needsListRcDecRecordListDictHelper then listRefCountDecRecordListDictHelperLabel
-                if needsListRcDecRecord3ManagedHelper then listRefCountDecRecord3ManagedHelperLabel
-                if needsListRcDecSumStringHelper then listRefCountDecSumStringHelperLabel
-                if needsListRcDecSumBytesHelper then listRefCountDecSumBytesHelperLabel
-                if needsListRcDecSumListHelper then listRefCountDecSumListHelperLabel
-                if needsListRcDecSumDictHelper then listRefCountDecSumDictHelperLabel
-                if needsListRcDecSumClosureHelper then listRefCountDecSumClosureHelperLabel
-                if needsListRcDecSumTuple4StringBytesListDictHelper then listRefCountDecSumTuple4StringBytesListDictHelperLabel
-                if needsListRcDecSumTuple4NestedTupleHelper then listRefCountDecSumTuple4NestedTupleHelperLabel
-                if needsListRcDecSumTuple4NestedDictHelper then listRefCountDecSumTuple4NestedDictHelperLabel
-                if needsListRcDecSumTuple4NestedClosureHelper then listRefCountDecSumTuple4NestedClosureHelperLabel
-            ]
-            |> Set.ofList
+        let selectedListRcDecHelperLabels = neededListRcDecHelperLabels
 
         let listRcHelpers =
             (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
             @ generateNeededListRefCountDecHelpers ctx selectedListRcDecHelperLabels
         let dictRcHelpers =
             (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
-            @ (if needsDictRcDecHelper || needsListRcDecClosureStringListDictHelper || needsListRcDecStringBytesListDictHelper || needsListRcDecClosureListDictHelper || needsListRcDecRecord3ManagedHelper || needsListRcDecTuple3ManagedHelper || needsListRcDecRecordListDictHelper || needsListRcDecTuple2DictHelper || needsDictRcDecTupleStringListDictValueHelper || needsListRcDecSumTuple4StringBytesListDictHelper || needsListRcDecSumTuple4NestedDictHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false false false ctx else [])
+            @ (if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false false false ctx else [])
             @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel true false false false false ctx else [])
             @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false true false false false ctx else [])
             @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false true false false ctx else [])
@@ -7701,7 +6950,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false false true ctx else [])
         let closureRcHelpers =
             (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
-            @ (if needsClosureRcDecHelper then generateClosureRefCountDecHelper ctx else [])
+            @ (if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper ctx else [])
         (allFunctionInstrs @ listRcHelpers @ dictRcHelpers @ closureRcHelpers) |> peepholeOptimize)
 
 /// Convert LIR program to ARM64 instructions (uses default options)
