@@ -130,6 +130,8 @@ specializations instead of one shared shape-plan executor.
   dynamic field combinations
 - tagged-list boxed sum tuple3 string/list/dict payload release
 - tagged-list boxed sum tuple4 string/bytes/list/dict payload release
+- tagged-list boxed sum tuple4 nested tuple string/list/dict payload release
+  through a planned `RcReleasePlan` leaf helper
 - tagged-list boxed sum tuple4 string/bytes/list/dict-list payload release
 - tagged-list boxed sum tuple4 closure/bytes/list/dict payload release
 - tagged-list boxed sum tuple4 closure/string/list/dict-list payload release
@@ -191,6 +193,8 @@ exist for:
 - boxed sum tuple2 and tuple3 dynamic string/bytes field combinations
 - boxed sum tuple3 leaf payloads with string/list/dict fields
 - boxed sum tuple4 leaf payloads with string/bytes/list/dict fields
+- boxed sum tuple4 leaf payloads with nested tuple string/list/dict fields
+  through a planned `RcReleasePlan` helper
 - boxed sum tuple4 leaf payloads with closure/bytes/list/dict fields
 - boxed sum record leaf payloads covering one-field dynamic string/bytes,
   three-field dynamic string/bytes combinations, record3 string/list/dict, and
@@ -243,7 +247,8 @@ The main x64 gaps are:
   the current top-level, nested-child, closure-capture, and tagged-list
   no-payload/dynamic-payload variant-dispatched cases and the string, list,
   dict, closure, tuple dynamic-buffer, tuple string/list/dict, tuple4
-  string/bytes/list/dict, tuple4 closure/bytes/list/dict, record
+  string/bytes/list/dict, tuple4 nested tuple string/list/dict, tuple4
+  closure/bytes/list/dict, record
   dynamic-buffer, record string/list/dict, record4 string/bytes/list/dict,
   record4 closure/bytes/list/dict, sum tuple4 string/bytes/list/dict, sum
   tuple4 closure/bytes/list/dict, sum record4 string/bytes/list/dict, and sum

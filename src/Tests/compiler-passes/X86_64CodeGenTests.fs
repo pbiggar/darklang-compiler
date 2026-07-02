@@ -4562,6 +4562,52 @@ let testTaggedListRefCountDecSumTuple4StringBytesListDictPayload () : Result<uni
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list sum tuple4 string/bytes/list/dict payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases boxed sum tuple4 payloads with nested tuple string/list/dict fields.
+let testTaggedListRefCountDecSumTuple4NestedTupleStringListDictPayload () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let dictType = AST.TDict (AST.TInt64, AST.TInt64)
+    let nestedTupleType = AST.TTuple [AST.TString; listType; dictType]
+    let tupleType = AST.TTuple [AST.TInt64; AST.TInt64; AST.TInt64; nestedTupleType]
+    let sumType = AST.TSum ("X64ListRcSumTuple4NestedTupleStringListDict", [tupleType])
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X4, LIR.Physical LIR.X3, LIR.Physical LIR.X4)
+                LIR.HeapAlloc (LIR.Physical LIR.X5, 16)
+                LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X5, 8, LIR.Imm 2L, None)
+                LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
+                LIR.HeapAlloc (LIR.Physical LIR.X7, 24)
+                LIR.HeapStore (LIR.Physical LIR.X7, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X7, 8, LIR.Reg (LIR.Physical LIR.X4), Some listType)
+                LIR.HeapStore (LIR.Physical LIR.X7, 16, LIR.Reg (LIR.Physical LIR.X6), Some dictType)
+                LIR.HeapAlloc (LIR.Physical LIR.X19, 32)
+                LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Imm 11L, None)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Imm 22L, None)
+                LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Imm 33L, None)
+                LIR.HeapStore (LIR.Physical LIR.X19, 24, LIR.Reg (LIR.Physical LIR.X7), Some nestedTupleType)
+                LIR.HeapAlloc (LIR.Physical LIR.X20, 16)
+                LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Imm 0L, None)
+                LIR.HeapStore (LIR.Physical LIR.X20, 8, LIR.Reg (LIR.Physical LIR.X19), Some tupleType)
+                LIR.HeapAlloc (LIR.Physical LIR.X21, 8)
+                LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some sumType)
+                LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X1, LIR.Physical LIR.X21, LIR.Physical LIR.X1)
+                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected list sum tuple4 nested tuple string/list/dict payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 tagged-list RefCountDec preserves dict value metadata in boxed sum tuple4 payloads.
 let testTaggedListRefCountDecSumTuple4StringBytesListDictListPayload () : Result<unit, string> =
     let listType = AST.TList AST.TInt64
@@ -5187,6 +5233,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases sum tuple3 closure/list/dict payload", testTaggedListRefCountDecSumTuple3ClosureListDictPayload)
     ("LIR tagged list RefCountDec releases sum tuple3 closure/list/dict-list payload", testTaggedListRefCountDecSumTuple3ClosureListDictListPayload)
     ("LIR tagged list RefCountDec releases sum tuple4 string/bytes/list/dict payload", testTaggedListRefCountDecSumTuple4StringBytesListDictPayload)
+    ("LIR tagged list RefCountDec releases sum tuple4 nested tuple string/list/dict payload", testTaggedListRefCountDecSumTuple4NestedTupleStringListDictPayload)
     ("LIR tagged list RefCountDec releases sum tuple4 string/bytes/list/dict-list payload", testTaggedListRefCountDecSumTuple4StringBytesListDictListPayload)
     ("LIR tagged list RefCountDec releases sum tuple4 closure/bytes/list/dict payload", testTaggedListRefCountDecSumTuple4ClosureBytesListDictPayload)
     ("LIR tagged list RefCountDec releases sum tuple4 closure/string/list/dict-list payload", testTaggedListRefCountDecSumTuple4ClosureStringListDictListPayload)
