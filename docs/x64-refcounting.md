@@ -192,9 +192,13 @@ exist for:
 - four-field record leaf payloads with string/bytes/list/dict fields
 - four-field record leaf payloads with closure/bytes/list/dict fields
 - boxed sum leaf payload roots with dynamic string/bytes payload fields
-- boxed sum tuple2 and tuple3 dynamic string/bytes field combinations
-- boxed sum tuple3 leaf payloads with string/list/dict fields
-- boxed sum tuple4 leaf payloads with string/bytes/list/dict fields
+- boxed sum tuple2 and tuple3 dynamic string/bytes field combinations through
+  planned fixed-block `RcReleasePlan` helpers
+- boxed sum tuple3 leaf payloads with string/list/dict and
+  closure/list/dict fields through planned fixed-block `RcReleasePlan` helpers
+- boxed sum tuple4 leaf payloads with string/bytes/list/dict and
+  closure/bytes/list/dict fields through planned fixed-block `RcReleasePlan`
+  helpers
 - boxed sum tuple4 leaf payloads with nested tuple string/list/dict fields
   through a planned `RcReleasePlan` helper
 - boxed sum tuple4 leaf payloads with closure/bytes/list/dict fields
@@ -210,11 +214,12 @@ exist for:
 This is still narrower than ARM64 for broader nested tuple/record payloads, but
 the common dynamic-buffer, list, dict, closure, tuple3, tuple4, nested-tuple,
 record3, record4, and boxed-sum list payload families now have targeted x64
-probes. The tuple2 and tuple4 nested-tuple families and the tuple4
-nested-record middle-field string/list/dict and string/list/dict-list cases
-route through the generic `RcReleasePlan` fixed-block executor. Planned list
-helpers also discover recursive list-helper dependencies by walking their
-`RcReleasePlan`, instead of relying only on helper-label special cases.
+probes. The tuple2 and tuple4 nested-tuple families, covered boxed-sum tuple
+families, and the tuple4 nested-record middle-field string/list/dict and
+string/list/dict-list cases route through the generic `RcReleasePlan`
+fixed-block executor. Planned list helpers also discover recursive list-helper
+dependencies by walking their `RcReleasePlan`, instead of relying only on
+helper-label special cases.
 
 ## Dicts
 
@@ -279,8 +284,9 @@ The main x64 gaps are:
   string/bytes/list/dict and closure/list/dict shapes, covered record4
   string/bytes/list/dict and closure/bytes/list/dict shapes, broader
   multi-field records and higher-arity tuples, and arbitrary
-  non-dynamic-buffer sum payloads beyond the current list/dict/closure, sum
-  tuple3, sum tuple4, sum record3, sum record4, and fixed-block mixed shapes
+  non-dynamic-buffer sum payloads beyond the current list/dict/closure, planned
+  sum tuple3 and sum tuple4 helper families, sum record3, sum record4, and
+  fixed-block mixed shapes
 - dict/HAMT key and value recursive retain/release coverage beyond direct
   dynamic string leaf key/value release and the current nested value-helper
   probes
@@ -305,8 +311,8 @@ The main x64 gaps are:
    `String/List<Int64>/Dict<Int64, Int64>` fields are also covered.
 2. Continue replacing x64 helper-family selection with shared shape-driven
    release plan execution instead of continuing helper explosion. The tuple2
-   and tuple4 nested-tuple list helper families now use planned fixed-block
-   execution.
+   and tuple4 nested-tuple list helper families and covered boxed-sum tuple
+   helper families now use planned fixed-block execution.
 3. Add x64 dict key/value shape matrix tests for typed recursive values.
 4. Add a real dual-backend memory matrix if the test harness grows support for
    forcing the backend independent of the host architecture.
