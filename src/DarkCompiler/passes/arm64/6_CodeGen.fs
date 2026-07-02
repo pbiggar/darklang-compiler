@@ -2170,6 +2170,8 @@ let private dictPayloadReleaseNeedsPlannedHelper (keyRelease: ANF.RcReleasePlan)
     | ANF.NoReleasePlan, ANF.RootRelease (_, ANF.TaggedList, _)
     | ANF.NoReleasePlan, ANF.RootRelease (_, ANF.DictHeap, _) ->
         true
+    | _, ANF.RootRelease (_, ANF.GenericHeap, _) ->
+        true
     | _ ->
         false
 
@@ -2273,6 +2275,7 @@ let private generateDictRefCountDecHelper
     (releaseLeafDynamicValue: bool)
     (releaseLeafListValue: bool)
     (releaseLeafDictValueHelper: string option)
+    (leafFixedBlockValueRelease: (int * ANF.RcReleasePlan) option)
     (releaseLeafTupleStringListValue: bool)
     (releaseLeafTupleStringListDictValue: bool)
     (releaseLeafSumStringValue: bool)
@@ -2344,6 +2347,10 @@ let private generateDictRefCountDecHelper
     let collisionRootPayloadDone = label "collision_root_payload_done"
     let skipCollisionListValueRelease = label "skip_collision_list_value_release"
     let skipCollisionDictValueRelease = label "skip_collision_dict_value_release"
+    let skipLeafFixedBlockValueRelease = label "skip_leaf_fixed_block_value_release"
+    let skipCollisionGenericPayloadRelease = label "skip_collision_generic_payload_release"
+    let collisionGenericPayloadLoop = label "collision_generic_payload_loop"
+    let collisionGenericPayloadDone = label "collision_generic_payload_done"
     let skipLeafTupleStringListValueRelease = label "skip_leaf_tuple_string_list_value_release"
     let tupleStringListValueDone = label "tuple_string_list_value_done"
     let skipLeafSumStringValueRelease = label "skip_leaf_sum_string_value_release"
@@ -2486,6 +2493,154 @@ let private generateDictRefCountDecHelper
         @ refcountUpdate
         @ [ARM64Symbolic.Label skipLabel]
 
+    let rec releasePlanFieldFrom
+        (baseReg: ARM64.Reg)
+        (fieldOffset: int)
+        (path: string)
+        (fieldReleasePlan: ANF.RcReleasePlan)
+        : ARM64Symbolic.Instr list =
+        match fieldReleasePlan with
+        | ANF.DynamicBufferRelease _ ->
+            releaseDynamicBufferFieldAtBaseInstrs baseReg (int16 fieldOffset) (label $"generic_dynamic_{path}_{fieldOffset}_done")
+        | ANF.RootRelease (_, ANF.TaggedList, _) ->
+            releaseManagedRootValueAtBaseInstrs
+                baseReg
+                (int16 fieldOffset)
+                (listDecHelperForReleasePlan fieldReleasePlan)
+                (label $"generic_list_{path}_{fieldOffset}_done")
+        | ANF.RootRelease (_, ANF.DictHeap, _) ->
+            releaseManagedRootValueAtBaseInstrs
+                baseReg
+                (int16 fieldOffset)
+                (dictDecHelperForReleasePlan fieldReleasePlan)
+                (label $"generic_dict_{path}_{fieldOffset}_done")
+        | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
+            releaseManagedRootValueAtBaseInstrs
+                baseReg
+                (int16 fieldOffset)
+                closureRefCountDecHelperLabel
+                (label $"generic_closure_{path}_{fieldOffset}_done")
+        | ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _)
+        | ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _) ->
+            releaseGenericValueAtBaseInstrs
+                baseReg
+                (int16 fieldOffset)
+                payloadSize
+                fieldReleasePlan
+                $"{path}_{fieldOffset}"
+        | _ ->
+            []
+
+    and releasePlanBoxedSumVariantFieldsFrom
+        (baseReg: ARM64.Reg)
+        (path: string)
+        (variants: ANF.RcBoxedSumVariantRelease list)
+        : ARM64Symbolic.Instr list =
+        let releaseVariant (variant: ANF.RcBoxedSumVariantRelease) =
+            let releaseInstrs =
+                variant.FieldReleases
+                |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
+                    releasePlanFieldFrom
+                        baseReg
+                        fieldOffset
+                        $"{path}_tag_{variant.Tag}"
+                        fieldReleasePlan)
+
+            if List.isEmpty releaseInstrs then
+                None
+            else
+                Some (variant.Tag, releaseInstrs)
+
+        let cases = variants |> List.choose releaseVariant
+
+        if List.isEmpty cases then
+            []
+        else
+            let sumDone = label $"generic_sum_{path}_done"
+            [
+                ARM64Symbolic.LDR (ARM64Symbolic.X10, baseReg, 0s)
+            ]
+            @
+            (cases
+             |> List.mapi (fun index (tag, releaseInstrs) ->
+                let nextCase = label $"generic_sum_{path}_variant_{index}_next"
+                [
+                    ARM64Symbolic.CMP_imm (ARM64Symbolic.X10, uint16 tag)
+                    ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, nextCase)
+                ]
+                @ releaseInstrs
+                @ [
+                    ARM64Symbolic.B_label sumDone
+                    ARM64Symbolic.Label nextCase
+                ])
+             |> List.concat)
+            @ [ARM64Symbolic.Label sumDone]
+
+    and releaseGenericValueAtBaseInstrs
+        (baseReg: ARM64.Reg)
+        (fieldOffset: int16)
+        (payloadSize: int)
+        (releasePlan: ANF.RcReleasePlan)
+        (path: string)
+        : ARM64Symbolic.Instr list =
+        let genericDone = label $"generic_value_{path}_done"
+        let childFieldReleases =
+            match releasePlan with
+            | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
+                fieldReleases
+                |> List.collect (fun (ANF.FieldRelease (childOffset, childReleasePlan)) ->
+                    releasePlanFieldFrom
+                        ARM64Symbolic.X11
+                        childOffset
+                        $"{path}_{childOffset}"
+                        childReleasePlan)
+            | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, _, variants)) ->
+                releasePlanBoxedSumVariantFieldsFrom ARM64Symbolic.X11 path variants
+            | _ ->
+                []
+
+        [
+            ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -112s)
+            ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+            ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+            ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+            ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+            ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 96s)
+            ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, fieldOffset)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X12, genericDone)
+            ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, int16 payloadSize)
+            ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+            ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X12, int16 payloadSize)
+            ARM64Symbolic.CBNZ (ARM64Symbolic.X15, genericDone)
+            ARM64Symbolic.MOV_reg (ARM64Symbolic.X11, ARM64Symbolic.X12)
+            ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.SP, 104s)
+        ]
+        @ childFieldReleases
+        @ [
+            ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.SP, 104s)
+        ]
+        @ (if payloadSize >= 0 && payloadSize < 256 then
+            [
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X27, uint16 payloadSize)
+                ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X13, 0s)
+                ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.X12, 0s)
+                ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X13, 0s)
+            ]
+           else
+            [])
+        @ leakDec
+        @ [
+            ARM64Symbolic.Label genericDone
+            ARM64Symbolic.LDR (ARM64Symbolic.X30, ARM64Symbolic.SP, 96s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 112s)
+        ]
+
     let releaseLeafDynamicKeyInstrs =
         if releaseLeafDynamicKey then
             releaseLeafDynamicBufferFieldInstrs 0s skipLeafDynamicKeyRelease
@@ -2571,6 +2726,55 @@ let private generateDictRefCountDecHelper
                 ARM64Symbolic.Label collisionRootPayloadDone
                 ARM64Symbolic.Label skipCollisionRootPayloadRelease
             ]
+
+    let releaseLeafGenericValueInstrs =
+        match leafFixedBlockValueRelease with
+        | Some (payloadSize, releasePlan) ->
+            [
+                ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 2us)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, skipLeafFixedBlockValueRelease)
+            ]
+            @ releaseGenericValueAtBaseInstrs
+                ARM64Symbolic.X3
+                8s
+                payloadSize
+                releasePlan
+                "leaf_value"
+            @ [
+                ARM64Symbolic.Label skipLeafFixedBlockValueRelease
+            ]
+        | None ->
+            []
+
+    let releaseCollisionGenericValueInstrs =
+        match leafFixedBlockValueRelease with
+        | Some (payloadSize, releasePlan) ->
+            [
+                ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 3us)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, skipCollisionGenericPayloadRelease)
+                ARM64Symbolic.LDR (ARM64Symbolic.X5, ARM64Symbolic.X3, 0s)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X6, 0us, 0)
+                ARM64Symbolic.Label collisionGenericPayloadLoop
+                ARM64Symbolic.CMP_reg (ARM64Symbolic.X6, ARM64Symbolic.X5)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, collisionGenericPayloadDone)
+                ARM64Symbolic.LSL_imm (ARM64Symbolic.X11, ARM64Symbolic.X6, 4)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X11, ARM64Symbolic.X11, 8us)
+                ARM64Symbolic.ADD_reg (ARM64Symbolic.X11, ARM64Symbolic.X3, ARM64Symbolic.X11)
+            ]
+            @ releaseGenericValueAtBaseInstrs
+                ARM64Symbolic.X11
+                8s
+                payloadSize
+                releasePlan
+                "collision_value"
+            @ [
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X6, ARM64Symbolic.X6, 1us)
+                ARM64Symbolic.B_label collisionGenericPayloadLoop
+                ARM64Symbolic.Label collisionGenericPayloadDone
+                ARM64Symbolic.Label skipCollisionGenericPayloadRelease
+            ]
+        | None ->
+            []
 
     let releaseLeafListValueInstrs =
         if releaseLeafListValue then
@@ -2809,8 +3013,10 @@ let private generateDictRefCountDecHelper
     @ releaseLeafDynamicValueInstrs
     @ releaseCollisionDynamicPayloadInstrs
     @ releaseCollisionManagedRootValueInstrs
+    @ releaseCollisionGenericValueInstrs
     @ releaseLeafListValueInstrs
     @ releaseLeafDictValueInstrs
+    @ releaseLeafGenericValueInstrs
     @ releaseLeafTupleStringListValueInstrs
     @ releaseLeafSumStringValueInstrs
     @ [
@@ -2878,31 +3084,34 @@ let private generatePlannedDictRefCountDecHelper
             releaseLeafDynamicValue,
             releaseLeafListValue,
             releaseLeafDictValueHelper,
+            leafFixedBlockValueRelease,
             releaseLeafTupleStringListValue,
             releaseLeafTupleStringListDictValue,
             releaseLeafSumStringValue
             ) =
             match valueRelease with
             | ANF.NoReleasePlan ->
-                false, false, None, false, false, false
+                false, false, None, None, false, false, false
             | ANF.DynamicBufferRelease _ ->
-                true, false, None, false, false, false
+                true, false, None, None, false, false, false
             | ANF.RootRelease (_, ANF.TaggedList, _) ->
-                false, true, None, false, false, false
+                false, true, None, None, false, false, false
             | ANF.RootRelease (_, ANF.DictHeap, _) ->
-                false, false, Some (dictDecHelperForReleasePlan valueRelease), false, false, false
+                false, false, Some (dictDecHelperForReleasePlan valueRelease), None, false, false, false
             | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (16, fieldReleases))
                 when releasePlanDynamicOperationAt 0 ANF.DynamicStringBuffer fieldReleases
                      && releasePlanRootKindAt 8 ANF.TaggedList fieldReleases ->
-                false, false, None, true, false, false
+                false, false, None, Some (16, valueRelease), false, false, false
             | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (24, fieldReleases))
                 when releasePlanDynamicOperationAt 0 ANF.DynamicStringBuffer fieldReleases
                      && releasePlanRootKindAt 8 ANF.TaggedList fieldReleases
                      && releasePlanRootKindAt 16 ANF.DictHeap fieldReleases ->
-                false, false, None, false, true, false
+                false, false, None, Some (24, valueRelease), false, false, false
             | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _))
                 when releasePlanDynamicOperationAt 8 ANF.DynamicStringBuffer fieldReleases ->
-                false, false, None, false, false, true
+                false, false, None, Some (16, valueRelease), false, false, false
+            | ANF.RootRelease (payloadSize, ANF.GenericHeap, _) ->
+                false, false, None, Some (payloadSize, valueRelease), false, false, false
             | other ->
                 unsupported "value" other
 
@@ -2912,6 +3121,7 @@ let private generatePlannedDictRefCountDecHelper
             releaseLeafDynamicValue
             releaseLeafListValue
             releaseLeafDictValueHelper
+            leafFixedBlockValueRelease
             releaseLeafTupleStringListValue
             releaseLeafTupleStringListDictValue
             releaseLeafSumStringValue
@@ -7075,13 +7285,13 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                |> Map.toList
                |> List.collect (fun (helperLabel, releasePlan) ->
                    generatePlannedDictRefCountDecHelper helperLabel releasePlan ctx))
-            @ (if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper || not (Map.isEmpty plannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false None false false false ctx else [])
-            @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel false false true None false false false ctx else [])
-            @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false false false (Some dictRefCountDecHelperLabel) false false false ctx else [])
-            @ (if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false false false (Some dictRefCountDecListValueHelperLabel) false false false ctx else [])
-            @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false false None true false false ctx else [])
-            @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false None false true false ctx else [])
-            @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None false false true ctx else [])
+            @ (if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper || not (Map.isEmpty plannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false None None false false false ctx else [])
+            @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel false false true None None false false false ctx else [])
+            @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false false false (Some dictRefCountDecHelperLabel) None false false false ctx else [])
+            @ (if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false false false (Some dictRefCountDecListValueHelperLabel) None false false false ctx else [])
+            @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false false None None true false false ctx else [])
+            @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false None None false true false ctx else [])
+            @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None None false false true ctx else [])
         let closureRcHelpers =
             (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
             @ (if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper ctx else [])
