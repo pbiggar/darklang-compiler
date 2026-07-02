@@ -2189,6 +2189,63 @@ let testClosureRefCountDecSumStringCapture () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected closure sum capture release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 closure RefCountDec dispatches captured mixed boxed-sum cleanup by tag.
+let testClosureRefCountDecMixedSumCaptureUsesVariantDispatch () : Result<unit, string> =
+    let sumName = "X64ClosureMixedSumCaptureDispatch"
+    let sumType = AST.TSum (sumName, [])
+    let closureTupleType = AST.TTuple [AST.TInt64; sumType]
+    let variants : LIR.VariantRegistry =
+        Map.ofList [
+            (sumName,
+                { TypeParams = []
+                  Variants =
+                    [
+                        { Name = "X64ClosureMixedSumNoPayload"; Tag = 0; Payload = None }
+                        { Name = "X64ClosureMixedSumBytesPayload"; Tag = 1; Payload = Some AST.TBytes }
+                    ] })
+        ]
+    let capturedFunc =
+        makeEmptyFunction
+            "x64_mixed_sum_capture_fn"
+            [{ Reg = LIR.Physical LIR.X0; Type = closureTupleType }]
+    let main =
+        match
+            makeSimpleProgram
+                [
+                    LIR.ClosureAlloc (
+                        LIR.Physical LIR.X4,
+                        "x64_mixed_sum_capture_fn",
+                        [LIR.Reg (LIR.Physical LIR.X3)])
+                    LIR.RefCountDec (
+                        LIR.Physical LIR.X4,
+                        16,
+                        LIR.ClosureHeap,
+                        Some (rcMetadata (AST.TFunction ([AST.TInt64], AST.TInt64))))
+                ]
+                LIR.Ret
+        with
+        | LIR.Program ([func], _, records) ->
+            LIR.Program ([func; capturedFunc], variants, records)
+        | other ->
+            other
+
+    match CodeGen_X86_64.translateProgram (completeFixtureVariants main) false with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let emitsCapturedSumTagLoad =
+            instrs
+            |> List.exists (function
+                | X86_64.MOV_load (X86_64.R10, X86_64.RDX, 0) ->
+                    true
+                | _ ->
+                    false)
+
+        if emitsCapturedSumTagLoad then
+            Ok ()
+        else
+            Error "x64 closure mixed boxed-sum capture release did not dispatch on the captured sum variant tag"
+
 /// Test: x64 closure RefCountDec releases captured boxed sums with nested managed fields.
 let testClosureRefCountDecSumTupleStringListDictCapture () : Result<unit, string> =
     let listType = AST.TList AST.TInt64
@@ -4927,6 +4984,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR closure RefCountDec releases record string/list/dict capture", testClosureRefCountDecRecordStringListDictCapture)
     ("LIR closure RefCountDec releases record string/bytes/list/dict-list capture", testClosureRefCountDecRecordStringBytesListDictListCapture)
     ("LIR closure RefCountDec releases sum string capture", testClosureRefCountDecSumStringCapture)
+    ("LIR closure RefCountDec dispatches mixed sum capture cleanup", testClosureRefCountDecMixedSumCaptureUsesVariantDispatch)
     ("LIR closure RefCountDec releases sum tuple string/list/dict capture", testClosureRefCountDecSumTupleStringListDictCapture)
     ("LIR closure RefCountDec releases sum record string/list/dict capture", testClosureRefCountDecSumRecordStringListDictCapture)
     ("LIR closure RefCountDec releases multiple captures", testClosureRefCountDecMultipleCaptures)
