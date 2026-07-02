@@ -3774,11 +3774,19 @@ let private allocateRegistersInternal
             let cfgWithParamCopies : LIR.CFG =
                 { Entry = func.CFG.Entry; Blocks = blocksToMap blockIndex updatedBlocks }
 
-            // Step 10: Set parameters to calling convention registers
-            // Create TypedLIRParams with physical registers
-            let allocatedTypedParams : LIR.TypedLIRParam list =
+            // Step 10: Set integer parameters to their calling convention registers.
+            // AAPCS64 uses separate counters for X and D argument registers; floats are
+            // skipped here because float setup is emitted by the allocator's FMovs.
+            let (_, allocatedTypedParamsRev) =
                 func.TypedParams
-                |> List.mapi (fun i tp -> { Reg = LIR.Physical (List.item i parameterRegs); Type = tp.Type })
+                |> List.fold (fun (intIdx, acc) tp ->
+                    if tp.Type = AST.TFloat64 then
+                        (intIdx, { tp with Reg = LIR.Physical LIR.X0 } :: acc)
+                    else
+                        let paramReg = List.item intIdx parameterRegs
+                        (intIdx + 1, { tp with Reg = LIR.Physical paramReg } :: acc)
+                ) (0, [])
+            let allocatedTypedParams = List.rev allocatedTypedParamsRev
 
             (cfgWithParamCopies, allocatedTypedParams))
 
