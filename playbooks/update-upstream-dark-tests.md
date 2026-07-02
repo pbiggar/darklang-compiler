@@ -86,7 +86,7 @@ python3 scripts/diff-upstream-execution-tests.py --ref main
 ## 6) Validate
 1. Run full tests:
 ```bash
-./run-tests
+./run-tests --ai
 ```
 2. If failures appear:
 - fix runner/patch/test data first
@@ -98,4 +98,4 @@ python3 scripts/diff-upstream-execution-tests.py --ref main
 - [ ] no remaining `*.rej` files
 - [ ] `scripts/upstream-execution-expected.patch` regenerated
 - [ ] `python3 scripts/diff-upstream-execution-tests.py --ref main` exits clean
-- [ ] `./run-tests` passes
+- [ ] `./run-tests --ai` passes

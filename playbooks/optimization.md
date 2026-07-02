@@ -30,7 +30,7 @@ You are going to implement EXACTLY ONE optimization.
    - Add comments explaining non-obvious logic
    - Do not refactor unrelated code
 
-6. RUN THE TEST SUITE (`./run-tests`). All tests must pass. If tests fail:
+6. RUN THE TEST SUITE (`./run-tests --ai`). All tests must pass. If tests fail:
 
    - Fix the compiler, not the tests
    - The optimization may have exposed a latent bug - fix it

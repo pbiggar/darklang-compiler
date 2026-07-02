@@ -13,12 +13,12 @@ Loop (one actionable item per iteration)
 2. Find tests for the function in `https://github.com/darklang/dark`.
 3. Copy the smallest relevant test(s) into `src/Tests/e2e/` and adapt only what is necessary.
 4. If no upstream test exists, add a minimal E2E test yourself.
-5. Run `./run-tests` and confirm the new test fails.
+5. Run `./run-tests --ai` and confirm the new test fails.
 6. Implement the smallest change to match interpreter behavior.
 7. Default assumption: implement in stdlib Darklang code under `src/DarkCompiler/stdlib/*.dark`.
 8. Only touch compiler passes if the stdlib cannot express the behavior.
 9. Follow repo rules: pure functional style, `Result`/`Option`, no exceptions, no mutation, no defaults.
-10. Run `./run-tests` and confirm the test passes.
+10. Run `./run-tests --ai` and confirm the test passes.
 11. Update `interpreter-compiler-modules.md` to flip `Comp` to `✅`.
 12. Commit with message: `Align compiler with interpreter: <module>.<name>`, then proceed to the next actionable item.
 

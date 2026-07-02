@@ -13,6 +13,7 @@ dotnet build
 
 ```bash
 ./run-tests                      # Build and run the full suite
+./run-tests --ai                 # AI-friendly progress output
 ./run-tests --quiet              # Less output
 ./run-tests --filter=tuple       # Filter by case-insensitive substring
 ./run-tests --filter=List.map    # Filter by test name fragment

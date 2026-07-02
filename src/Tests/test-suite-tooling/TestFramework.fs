@@ -68,6 +68,7 @@ type TestRunState = {
     Timings: ResizeArray<TestTiming>
     mutable PassTimings: Map<string, TimeSpan>
     PassTimingOrder: ResizeArray<string>
+    CompletedTestReporter: (int -> unit) option
 }
 
 type OutputSymbols = {
@@ -76,13 +77,17 @@ type OutputSymbols = {
     SectionPrefix: string
 }
 
-let createState () : TestRunState =
+let createStateWithProgressReporter (completedTestReporter: (int -> unit) option) : TestRunState =
     { Passed = 0
       Failed = 0
       FailedTests = ResizeArray()
       Timings = ResizeArray()
       PassTimings = Map.empty
-      PassTimingOrder = ResizeArray() }
+      PassTimingOrder = ResizeArray()
+      CompletedTestReporter = completedTestReporter }
+
+let createState () : TestRunState =
+    createStateWithProgressReporter None
 
 let recordTiming (state: TestRunState) (timing: TestTiming) : unit =
     state.Timings.Add timing
@@ -102,10 +107,20 @@ let recordResults
     (failedDelta: int)
     (failedTestsDelta: FailedTestInfo list)
     : unit =
+    let previousCompleted = state.Passed + state.Failed
     state.Passed <- state.Passed + passedDelta
     state.Failed <- state.Failed + failedDelta
     for test in failedTestsDelta do
         state.FailedTests.Add test
+    match state.CompletedTestReporter with
+    | Some reportCompletedTest ->
+        let completedDelta = passedDelta + failedDelta
+        if completedDelta < 0 then
+            Crash.crash $"recordResults: completed test delta cannot be negative ({completedDelta})"
+        else
+            for completed in previousCompleted + 1 .. previousCompleted + completedDelta do
+                reportCompletedTest completed
+    | None -> ()
 
 // Format elapsed time
 let formatTime (elapsed: TimeSpan) =

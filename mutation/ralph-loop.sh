@@ -195,7 +195,7 @@ Write an E2E test that would FAIL if this mutation were applied (i.e., the test 
 1. **Understand** what code path uses this operator and what behavior it affects
 2. **Design** a test input that would produce different output with the mutation applied. Validate the test fails if the mutation is present, and passes with the mutation removed.
 3. **Add** the test to the appropriate .e2e file in src/Tests/e2e/
-4. **Run** ./run-tests to verify your test passes with the original code
+4. **Run** ./run-tests --ai to verify your test passes with the original code
 5. **Commit** your changes with message: 'Add E2E test for mutation #$id'
    - Include the .e2e file you modified
    - Include mutation/results/addressed.txt (add line: $id)

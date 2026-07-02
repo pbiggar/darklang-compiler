@@ -1,149 +1,42 @@
 #!/bin/bash
-# run-tests - Wrapper script to build and run the Dark compiler test suite
-#
-# Usage: ./run-tests [OPTIONS]
-#
-# Options:
-#   --filter=PATTERN   Run only tests matching PATTERN (case-insensitive)
-#   --verification     Enable verification/stress tests
-#   --parser-pretty-roundtrip  Legacy no-op (parser/pretty corpus roundtrip runs by default)
-#   --roundtrip-all-dark  Include all upstream .dark files in parser/pretty corpus roundtrip
-#   --all-test-timings  Print timing for every test in final timing summary
-#   --timings-json=PATH  Write machine-readable timing data to PATH
-#   --build-only       Only build, don't run tests
-#   --quiet            Quiet mode: print "success" or list failed tests
-#   --ai               AI mode: compact output with sparse running updates
-#   --ai-progress-seconds=N  Seconds between AI mode running updates (default: 30)
-#   --verbose          Print failing tests as soon as they occur
-#   -h, --help         Show this help message
-#
-# Examples:
-#   ./run-tests                      Run all tests
-#   ./run-tests --filter=tuple       Run tests with 'tuple' in the name
-#   ./run-tests --filter=string      Run tests with 'string' in the name
-#   ./run-tests --filter=list
+# run-tests - Build and execute the F# Dark compiler test suite.
 
 set -e
 
-# Parse arguments
-FILTER=""
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+. "$SCRIPT_DIR/scripts/test-common.sh"
+
 BUILD_ONLY=false
-QUIET=false
-AI_MODE=false
-AI_PROGRESS_SECONDS=30
-HELP=false
+QUIET_BUILD=false
+AI_BUILD=false
 TEST_ARGS=()
-TIMINGS_JSON_SET=false
-TIMINGS_JSON_PATH=""
 
 while [[ $# -gt 0 ]]; do
-    case $1 in
-        --filter=*)
-            FILTER="${1#*=}"
-            TEST_ARGS+=("--filter=$FILTER")
-            shift
-            ;;
-        --verification)
-            TEST_ARGS+=("--verification")
-            shift
-            ;;
-        --parser-pretty-roundtrip)
-            # Legacy no-op: parser/pretty corpus roundtrip now runs by default.
-            shift
-            ;;
-        --roundtrip-all-dark)
-            TEST_ARGS+=("--roundtrip-all-dark")
-            shift
-            ;;
-        --all-test-timings)
-            TEST_ARGS+=("--all-test-timings")
-            shift
-            ;;
-        --timings-json=*)
-            TEST_ARGS+=("$1")
-            TIMINGS_JSON_SET=true
-            TIMINGS_JSON_PATH="${1#*=}"
-            shift
-            ;;
+    case "$1" in
         --build-only)
             BUILD_ONLY=true
             shift
             ;;
         --quiet)
-            QUIET=true
+            QUIET_BUILD=true
+            TEST_ARGS+=("$1")
             shift
             ;;
         --ai)
-            AI_MODE=true
-            shift
-            ;;
-        --ai-progress-seconds=*)
-            AI_PROGRESS_SECONDS="${1#*=}"
-            shift
-            ;;
-        --verbose)
-            TEST_ARGS+=("--verbose")
-            shift
-            ;;
-        -h|--help)
-            HELP=true
+            AI_BUILD=true
+            TEST_ARGS+=("$1")
             shift
             ;;
         *)
-            # Pass unknown args to test runner
             TEST_ARGS+=("$1")
             shift
             ;;
     esac
 done
 
-# Show help
-if [ "$HELP" = true ]; then
-    echo "Usage: ./run-tests [OPTIONS]"
-    echo ""
-    echo "Build and run the Dark compiler test suite."
-    echo ""
-    echo "Options:"
-    echo "  --filter=PATTERN   Run only tests matching PATTERN (case-insensitive substring)"
-    echo "  --verification     Enable verification/stress tests"
-    echo "  --parser-pretty-roundtrip  Legacy no-op (corpus roundtrip is enabled by default)"
-    echo "  --roundtrip-all-dark  Include all upstream .dark files in parser/pretty corpus roundtrip"
-    echo "  --all-test-timings  Print timing for every test in final timing summary"
-    echo "  --timings-json=PATH  Write machine-readable timing data to PATH"
-    echo "  --build-only       Only build, don't run tests"
-    echo "  --quiet            Quiet mode: print 'success' or list failed tests"
-    echo "  --ai               AI mode: compact output with sparse running updates"
-    echo "  --ai-progress-seconds=N  Seconds between AI mode running updates (default: 30)"
-    echo "  --verbose          Print failing tests as soon as they occur"
-    echo "  -h, --help         Show this help message"
-    echo ""
-    echo "Examples:"
-    echo "  ./run-tests                          Run all tests"
-    echo "  ./run-tests --filter=tuple           Run tests with 'tuple' in the name"
-    echo "  ./run-tests --filter=string          Run tests with 'string' in the name"
-    echo "  ./run-tests --filter=List.map        Run List.map tests"
-    echo "  ./run-tests --filter=list"
-    echo ""
-    echo "Test categories matched by filter:"
-    echo "  tuple, record, list, string, float, int, bool"
-    echo "  closure, match, adt, generic, stdlib"
-    echo "  ANF, MIR, LIR, ARM64, Encoding, Binary"
-    exit 0
-fi
-
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR"
-
-. "$SCRIPT_DIR/scripts/test-common.sh"
-
-if [ "$AI_MODE" = true ] && ! [[ "$AI_PROGRESS_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
-    echo "--ai-progress-seconds must be a positive integer"
-    exit 1
-fi
-
-# Build
-if [ "$AI_MODE" = true ]; then
+if [ "$AI_BUILD" = true ]; then
     echo "building"
     BUILD_OUTPUT="$(mktemp)"
     if ! build_tests "$SCRIPT_DIR" "$SCRIPT_DIR/NuGet.Config" > "$BUILD_OUTPUT" 2>&1; then
@@ -154,168 +47,21 @@ if [ "$AI_MODE" = true ]; then
     fi
     rm -f "$BUILD_OUTPUT"
     echo "build complete"
-elif [ "$QUIET" = true ]; then
+elif [ "$QUIET_BUILD" = true ]; then
     if ! build_tests "$SCRIPT_DIR" "$SCRIPT_DIR/NuGet.Config" > /dev/null 2>&1; then
         echo "build failed"
         exit 1
     fi
 else
-    if ! build_tests "$SCRIPT_DIR" "$SCRIPT_DIR/NuGet.Config"; then
-        exit 1
-    fi
+    build_tests "$SCRIPT_DIR" "$SCRIPT_DIR/NuGet.Config"
 fi
 
 if [ "$BUILD_ONLY" = true ]; then
-    if [ "$QUIET" != true ]; then
+    if [ "$QUIET_BUILD" != true ]; then
         echo "Build-only mode, skipping tests."
     fi
     exit 0
 fi
 
-# Find and run the test executable
-TEST_EXE="$(find_test_exe "$SCRIPT_DIR" "Try running the build first.")" || exit 1
-
-print_ai_summary() {
-    local status="$1"
-    local output_file="$2"
-    local timings_file="$3"
-
-    python3 - "$status" "$output_file" "$timings_file" <<'PY'
-import json
-import os
-import re
-import sys
-
-status, output_path, timings_path = sys.argv[1:4]
-
-ansi = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-
-def clean(text):
-    return ansi.sub("", text).replace("\r", "\n")
-
-summary = None
-if timings_path and os.path.exists(timings_path) and os.path.getsize(timings_path) > 0:
-    try:
-        with open(timings_path, "r", encoding="utf-8") as f:
-            summary = json.load(f).get("summary")
-    except (OSError, json.JSONDecodeError):
-        summary = None
-
-if status == "success":
-    if summary:
-        total_seconds = summary.get("total_ms", 0) / 1000.0
-        passed = summary.get("passed", 0)
-        total = summary.get("total", passed)
-        print(f"success: {passed}/{total} passed in {total_seconds:.1f}s")
-    else:
-        print("success")
-    sys.exit(0)
-
-print("failed")
-if summary:
-    total_seconds = summary.get("total_ms", 0) / 1000.0
-    print(
-        f"summary: {summary.get('passed', 0)} passed, "
-        f"{summary.get('failed', 0)} failed, {total_seconds:.1f}s"
-    )
-
-try:
-    with open(output_path, "r", encoding="utf-8", errors="replace") as f:
-        lines = clean(f.read()).splitlines()
-except OSError as ex:
-    print(f"could not read test output: {ex}")
-    sys.exit(0)
-
-failure_indexes = [
-    i for i, line in enumerate(lines)
-    if "Failing Tests" in line or "First " in line and "Failing Tests" in line
-]
-
-if failure_indexes:
-    start = max(0, failure_indexes[-1] - 1)
-    selected = [
-        line.rstrip()
-        for line in lines[start:]
-        if line.strip() and not set(line.strip()) <= {"═"}
-    ]
-    for line in selected[:80]:
-        print(line)
-else:
-    print("last output:")
-    for line in [line.rstrip() for line in lines[-80:] if line.strip()]:
-        print(line)
-PY
-}
-
-run_ai_tests() {
-    local output_file
-    local timings_file
-    local exit_code
-    local test_pid
-    local start_time
-    local elapsed
-
-    output_file="$(mktemp)"
-    timings_file=""
-    if [ "$TIMINGS_JSON_SET" = true ]; then
-        timings_file="$TIMINGS_JSON_PATH"
-    else
-        timings_file="$(mktemp)"
-        TEST_ARGS+=("--timings-json=$timings_file")
-    fi
-
-    echo "running tests (AI mode)"
-    "$TEST_EXE" "${TEST_ARGS[@]}" > "$output_file" 2>&1 &
-    test_pid=$!
-    start_time=$(date +%s)
-
-    while kill -0 "$test_pid" 2>/dev/null; do
-        sleep "$AI_PROGRESS_SECONDS"
-        if kill -0 "$test_pid" 2>/dev/null; then
-            elapsed=$(($(date +%s) - start_time))
-            echo "still running: ${elapsed}s elapsed"
-        fi
-    done
-
-    if wait "$test_pid"; then
-        exit_code=0
-    else
-        exit_code=$?
-    fi
-
-    if [ "$exit_code" -eq 0 ]; then
-        print_ai_summary "success" "$output_file" "$timings_file"
-    else
-        print_ai_summary "failure" "$output_file" "$timings_file"
-    fi
-
-    rm -f "$output_file"
-    if [ "$TIMINGS_JSON_SET" != true ] && [ -n "$timings_file" ]; then
-        rm -f "$timings_file"
-    fi
-    return "$exit_code"
-}
-
-# Run tests
-if [ "$AI_MODE" = true ]; then
-    run_ai_tests
-elif [ "$QUIET" = true ]; then
-    EXIT_CODE=0
-    OUTPUT=$("$TEST_EXE" "${TEST_ARGS[@]}" 2>&1) || EXIT_CODE=$?
-    # Check for failures by looking for FAIL lines
-    FAILED=$(echo "$OUTPUT" | grep -E "^\s*FAIL\s+" || true)
-    if [ $EXIT_CODE -ne 0 ] || [ -n "$FAILED" ]; then
-        echo "failed tests:"
-        if [ -n "$FAILED" ]; then
-            echo "$FAILED"
-        else
-            echo "(test runner exited with code $EXIT_CODE)"
-        fi
-        exit 1
-    else
-        echo "success"
-        exit 0
-    fi
-else
-    run_tests "$TEST_EXE" "${TEST_ARGS[@]}"
-fi
+TEST_EXE="$(find_test_exe "$SCRIPT_DIR" "Try running the build first.")"
+exec "$TEST_EXE" "${TEST_ARGS[@]}"

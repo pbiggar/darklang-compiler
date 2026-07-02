@@ -24,7 +24,7 @@ You are going to fix EXACTLY ONE code quality issue that does not require adding
    - If a value truly cannot be known, use `Crash.crash` with a clear message
    - Add a brief comment only if the logic is non-obvious to a senior compiler engineer
 
-4. Run the full test suite (`./run-tests`). Fix the compiler, not the tests, until all tests pass.
+4. Run the full test suite (`./run-tests --ai`). Fix the compiler, not the tests, until all tests pass.
 
 5. Run full benchmarks (`./benchmarks/run_benchmarks.sh`). Ignore quicksort failures. If `RESULTS.md` changes, record the new "Performance ratio: X.XX" in your report.
 

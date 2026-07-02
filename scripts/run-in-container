@@ -7,7 +7,7 @@
 #
 # Example:
 #   scripts/run-in-container dotnet build --verbosity quiet
-#   scripts/run-in-container ./run-tests --quiet
+#   scripts/run-in-container ./run-tests --ai
 #
 # Detection:
 #   - Already in the container? Just exec the command.

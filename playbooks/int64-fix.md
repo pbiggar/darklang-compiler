@@ -10,7 +10,7 @@ You are going to resolve EXACTLY ONE type checking issue.
 
 4. In some cases, the removed assumption will lead to a problem later in the compiler, where types are not properly propagates, or later passes did not handle this type. Fix these bugs. NEVER CHANGE THE TEST TO ALLOW THE TEST TO PASS (unless the test is actually wrong, which is unlikely). NEVER CHANGE OTHER TESTS.
 
-5. Run the test suite (`./run-tests`). If tests now start to fail, attempt to fix the compiler to make the tests pass. Repeat until all tests pass. RUN ALL TESTS, not a subset. The test suite is very fast.
+5. Run the test suite (`./run-tests --ai`). If tests now start to fail, attempt to fix the compiler to make the tests pass. Repeat until all tests pass. RUN ALL TESTS, not a subset. The test suite is very fast.
 
 6. If the failing tests are incorrect and should be failing, continue and tell the developer.
 

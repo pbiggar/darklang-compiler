@@ -35,7 +35,7 @@ that needs to call into the build/test environment:
 
 ```bash
 scripts/run-in-container dotnet build --verbosity quiet
-scripts/run-in-container ./run-tests
+scripts/run-in-container ./run-tests --ai
 scripts/run-in-container ./dark -r -e "2 + 3"
 ```
 

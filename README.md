@@ -10,9 +10,10 @@ external assembler or linker.
 ## Quick start
 
 ```bash
-dotnet build           # build the compiler
-./run-tests            # run the full test suite
-./dark -r -e "2 + 3"   # compile and execute a Dark expression
+dotnet build             # build the compiler
+./run-tests              # run the full test suite
+./run-tests --ai         # run the full suite with AI-friendly output
+./dark -r -e "2 + 3"     # compile and execute a Dark expression
 ```
 
 See [`docs/quick-start.md`](docs/quick-start.md) for the full CLI
@@ -25,7 +26,7 @@ project's Docker devcontainer — no host installs needed.
 
 - VS Code: "Reopen in Container" uses `.devcontainer/devcontainer.json`.
 - CLI: `docker compose up -d` and then
-  `scripts/run-in-container ./run-tests`.
+  `scripts/run-in-container ./run-tests --ai` for agent sessions.
 
 See [`docs/docker.md`](docs/docker.md) for details on the container,
 Codex/Claude integration, and git worktrees.
@@ -64,4 +65,5 @@ See [`TODOs.md`](TODOs.md) for active work and the backlog.
 
 [`AGENTS.md`](AGENTS.md) is the canonical agent/contributor guide
 (conventions, testing rules, commit workflow). [`CLAUDE.md`](CLAUDE.md)
-is a thin pointer to it.
+is a thin pointer to it. AI agents should run the suite with
+`./run-tests --ai` for compact progress output.

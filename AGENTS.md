@@ -5,7 +5,7 @@
 - **Language**: Pure functional F# (no mutable state, no exceptions)
 - **Target**: native binaries (macOS Mach-O, Linux ELF)
 - **Pipeline**: 8 passes from source to executable (see `docs/compiler-passes.md`)
-- **testing**: Run `./run-tests` to run tests. Tests are very fast, don't use filters, just run the whole test suite.
+- **testing**: Run `./run-tests --ai` to run tests. Tests are very fast, don't use filters, just run the whole test suite.
 - **Scripting**: Use `python3` for scripts (not `python`).
 
 ## Architecture Overview
@@ -107,8 +107,8 @@ Focus near-exclusively on end-to-end language tests in `src/Tests/e2e/`. If writ
 **Running tests:**
 
 ```bash
-./run-tests                      # Run all tests
-./run-tests --filter=PATTERN     # Run matching tests (case-insensitive)
+./run-tests --ai                 # Run all tests with AI-friendly progress output
+./run-tests --ai --filter=PATTERN  # Run matching tests (case-insensitive)
 ./run-tests --quiet              # Much less output
 ./run-tests --help               # Full usage information
 ```
@@ -122,7 +122,7 @@ devcontainer. Use `scripts/run-in-container` — it auto-detects whether
 you're inside the container or on the host and dispatches correctly:
 
 ```bash
-scripts/run-in-container ./run-tests
+scripts/run-in-container ./run-tests --ai
 scripts/run-in-container ./dark -r -e "2 + 3"
 scripts/run-in-container dotnet build --verbosity quiet
 ```

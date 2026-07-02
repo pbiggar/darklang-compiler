@@ -83,7 +83,7 @@ You are going to fix EXACTLY ONE difference (syntactic or semantic).
    - Modify the compiler to produce the correct result
    - The Darklang interpreter is authoritative - our compiler must match it
 
-7. Run the test suite (`./run-tests`). If tests fail:
+7. Run the test suite (`./run-tests --ai`). If tests fail:
 
    - Fix the compiler, not the tests (unless a test had the wrong expected value)
    - Repeat until all tests pass
@@ -105,7 +105,7 @@ You are going to fix EXACTLY ONE difference (syntactic or semantic).
     - **Test investigated**: File, line number, expression
     - **Finding**: What differed between this compiler and `darklang-interpreter`
     - **Fix applied**: What changes were made to the compiler
-    - **Validation**: Confirm the test now passes both `./run-tests` and `validate-darklang.py`
+    - **Validation**: Confirm the test now passes both `./run-tests --ai` and `validate-darklang.py`
 
 11. **Documentation Check** (before commit):
 

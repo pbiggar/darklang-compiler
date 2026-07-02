@@ -8,6 +8,8 @@ open System
 open System.IO
 open System.Diagnostics
 open System.Globalization
+open System.Text.Json
+open System.Text.Json.Serialization
 open System.Threading.Tasks
 open Output
 open TestDSL.PassTestRunner
@@ -30,6 +32,9 @@ let printHelp () =
     println "  --roundtrip-all-dark  Include all upstream .dark files in parser/pretty corpus roundtrip"
     println "  --all-test-timings  Print timing for every test in final timing summary"
     println "  --timings-json=PATH  Write machine-readable timing data to PATH"
+    println "  --quiet            Quiet mode: print 'success' or list failed tests"
+    println "  --ai               AI mode: compact output with sparse running updates"
+    println "  --ai-progress-seconds=N  Seconds between AI mode running updates (default: 30)"
     println "  --verbose, -v      Print failing tests as soon as they occur"
     println "  --help, -h         Show this help message"
     println ""
@@ -44,12 +49,60 @@ let printHelp () =
     println "  Tests --all-test-timings  Show timing for every test at the end"
     println "  Tests --timings-json=/tmp/timings.json  Write timing data as JSON"
 
-[<EntryPoint>]
-let main args =
+type private TestRunResult =
+    { ExitCode: int
+      State: TestRunState
+      TotalTime: TimeSpan
+      UnaccountedBreakdown: UnaccountedTimeBreakdown }
+
+let private defaultAiProgressSeconds = 30
+
+let private emptyRunResult (exitCode: int) : TestRunResult =
+    { ExitCode = exitCode
+      State = TestFramework.createState ()
+      TotalTime = TimeSpan.Zero
+      UnaccountedBreakdown =
+        { Unaccounted = TimeSpan.Zero
+          Runtime = TimeSpan.Zero
+          Overhead = TimeSpan.Zero } }
+
+type TimingJsonSummary =
+    { passed: int
+      failed: int
+      total: int
+      total_ms: float
+      unaccounted_ms: float
+      runtime_unaccounted_ms: float
+      overhead_unaccounted_ms: float }
+
+type TimingJsonTest =
+    { name: string
+      total_ms: float
+      compile_ms: Nullable<float>
+      runtime_ms: Nullable<float> }
+
+type TimingJsonPass =
+    { name: string
+      elapsed_ms: float }
+
+type TimingJsonPayload =
+    { summary: TimingJsonSummary
+      tests: TimingJsonTest array
+      passes: TimingJsonPass array }
+
+let private milliseconds (elapsed: TimeSpan) : float =
+    Math.Round(elapsed.TotalMilliseconds, 3)
+
+let private optionalMilliseconds (elapsed: TimeSpan option) : Nullable<float> =
+    match elapsed with
+    | Some value -> Nullable(milliseconds value)
+    | None -> Nullable()
+
+let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) option) args =
     // Check for --help flag
     if hasHelpArg args then
         printHelp ()
-        0
+        emptyRunResult 0
     else
 
     let totalTimer = Stopwatch.StartNew()
@@ -223,6 +276,7 @@ let main args =
         { Name = "MIR Optimize Tests"; Tests = MIROptimizeTests.tests }
         { Name = "ANF Optimize Tests"; Tests = ANFOptimizeTests.tests }
         { Name = "Script Helper Tests"; Tests = ScriptHelperTests.tests }
+        { Name = "Test Runner Args Tests"; Tests = TestRunnerArgsTests.tests }
         { Name = "Pass Test Runner Tests"; Tests = PassTestRunnerTests.tests }
         { Name = "Progress Bar Tests"; Tests = ProgressBarTests.tests }
         { Name = "ARM64 Encoding Tests"; Tests = ARM64EncodingTests.tests }
@@ -255,12 +309,13 @@ let main args =
           Fail = "✗"
           SectionPrefix = "└─" }
 
-    let runState = TestFramework.createState ()
+    let runState = TestFramework.createStateWithProgressReporter completedTestReporter
     let recordTiming = TestFramework.recordTiming runState
     let recordResults = TestFramework.recordResults runState
     let recordPassTiming = TestFramework.recordPassTiming runState
     let passTimingTotal () = TestFramework.calculatePassTimingsTotalForOverhead runState.PassTimings
     let mergeRunState (target: TestRunState) (source: TestRunState) : unit =
+        let previousCompleted = target.Passed + target.Failed
         target.Passed <- target.Passed + source.Passed
         target.Failed <- target.Failed + source.Failed
         for failedTest in source.FailedTests do
@@ -277,6 +332,12 @@ let main args =
                     |> Option.defaultValue TimeSpan.Zero
                 target.PassTimings <- Map.add passName (existing + elapsed) target.PassTimings
             | None -> ()
+        match target.CompletedTestReporter with
+        | Some reportCompletedTest ->
+            let completedDelta = source.Passed + source.Failed
+            for completed in previousCompleted + 1 .. previousCompleted + completedDelta do
+                reportCompletedTest completed
+        | None -> ()
     let recordNonPassTiming (name: string) (elapsed: TimeSpan) : unit =
         if elapsed > TimeSpan.Zero then
             recordPassTiming { Pass = name; Elapsed = elapsed }
@@ -956,27 +1017,6 @@ let main args =
             runState.PassTimings
             runState.Timings
 
-    let escapeJsonString (value: string) : string =
-        value
-        |> Seq.map (fun ch ->
-            match ch with
-            | '\\' -> "\\\\"
-            | '"' -> "\\\""
-            | '\n' -> "\\n"
-            | '\r' -> "\\r"
-            | '\t' -> "\\t"
-            | _ when int ch < 32 -> $"\\u{int ch:x4}"
-            | _ -> string ch)
-        |> String.concat ""
-
-    let formatMilliseconds (elapsed: TimeSpan) : string =
-        elapsed.TotalMilliseconds.ToString("0.###", CultureInfo.InvariantCulture)
-
-    let formatOptionalMilliseconds (elapsed: TimeSpan option) : string =
-        match elapsed with
-        | Some value -> formatMilliseconds value
-        | None -> "null"
-
     let orderedPassTimingNames : string list =
         let knownOrder = runState.PassTimingOrder |> Seq.toList
         let extras =
@@ -989,26 +1029,42 @@ let main args =
         knownOrder @ extras
 
     let writeTimingsJson (path: string) : unit =
-        let testEntries =
+        let testEntries : TimingJsonTest array =
             runState.Timings
             |> Seq.sortByDescending (fun timing -> timing.TotalTime)
             |> Seq.map (fun timing ->
-                $"{{\"name\":\"{escapeJsonString timing.Name}\",\"total_ms\":{formatMilliseconds timing.TotalTime},\"compile_ms\":{formatOptionalMilliseconds timing.CompileTime},\"runtime_ms\":{formatOptionalMilliseconds timing.RuntimeTime}}}")
-            |> String.concat ","
-        let passEntries =
+                { name = timing.Name
+                  total_ms = milliseconds timing.TotalTime
+                  compile_ms = optionalMilliseconds timing.CompileTime
+                  runtime_ms = optionalMilliseconds timing.RuntimeTime })
+            |> Seq.toArray
+        let passEntries : TimingJsonPass array =
             orderedPassTimingNames
             |> List.choose (fun name ->
                 Map.tryFind name runState.PassTimings
                 |> Option.map (fun elapsed ->
-                    $"{{\"name\":\"{escapeJsonString name}\",\"elapsed_ms\":{formatMilliseconds elapsed}}}"))
-            |> String.concat ","
-        let summary =
-            $"\"summary\":{{\"passed\":{runState.Passed},\"failed\":{runState.Failed},\"total\":{runState.Passed + runState.Failed},\"total_ms\":{formatMilliseconds totalTimer.Elapsed},\"unaccounted_ms\":{formatMilliseconds unaccountedBreakdown.Unaccounted},\"runtime_unaccounted_ms\":{formatMilliseconds unaccountedBreakdown.Runtime},\"overhead_unaccounted_ms\":{formatMilliseconds unaccountedBreakdown.Overhead}}}"
-        let payload = $"{{{summary},\"tests\":[{testEntries}],\"passes\":[{passEntries}]}}"
+                    { name = name
+                      elapsed_ms = milliseconds elapsed }))
+            |> List.toArray
+        let payload =
+            { summary =
+                { passed = runState.Passed
+                  failed = runState.Failed
+                  total = runState.Passed + runState.Failed
+                  total_ms = milliseconds totalTimer.Elapsed
+                  unaccounted_ms = milliseconds unaccountedBreakdown.Unaccounted
+                  runtime_unaccounted_ms = milliseconds unaccountedBreakdown.Runtime
+                  overhead_unaccounted_ms = milliseconds unaccountedBreakdown.Overhead }
+              tests = testEntries
+              passes = passEntries }
+        let options =
+            JsonSerializerOptions(
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            )
         let directory = Path.GetDirectoryName(path)
         if not (String.IsNullOrWhiteSpace(directory)) then
             Directory.CreateDirectory(directory) |> ignore
-        File.WriteAllText(path, payload)
+        File.WriteAllText(path, JsonSerializer.Serialize(payload, options))
 
     match timingsJsonPath with
     | Some path ->
@@ -1176,6 +1232,138 @@ let main args =
             println $"{Colors.gray}... and {moreCount} more failing test(s){Colors.reset}"
             println ""
 
-    (if runState.Failed = 0 then 0 else 1)
-    |> fun exitCode ->
-        exitCode
+    let exitCode = if runState.Failed = 0 then 0 else 1
+    { ExitCode = exitCode
+      State = runState
+      TotalTime = totalTimer.Elapsed
+      UnaccountedBreakdown = unaccountedBreakdown }
+
+let private runTests args =
+    runTestsWithProgressReporter None args
+
+let private captureOutput (run: unit -> TestRunResult) : TestRunResult =
+    let originalOut = Console.Out
+    let originalError = Console.Error
+    use buffer = new StringWriter(CultureInfo.InvariantCulture)
+    Console.SetOut(buffer)
+    Console.SetError(buffer)
+    try
+        let result = run ()
+        Console.Out.Flush()
+        Console.Error.Flush()
+        result
+    finally
+        Console.SetOut(originalOut)
+        Console.SetError(originalError)
+
+let private formatFailureDisplayName (test: FailedTestInfo) : string =
+    let fileName = if test.File <> "" then Path.GetFileName test.File else ""
+    if fileName <> "" && test.Name.StartsWith("E2E: L") then
+        let afterPrefix = test.Name.Substring(5)
+        $"E2E: {fileName}:{afterPrefix}"
+    elif fileName <> "" then
+        $"{fileName}: {test.Name}"
+    else
+        test.Name
+
+let private printStructuredFailures (state: TestRunState) (limit: int) : unit =
+    let displayCount = min limit state.FailedTests.Count
+    for i in 0 .. displayCount - 1 do
+        let test = state.FailedTests.[i]
+        println $"{i + 1}. {formatFailureDisplayName test}"
+        println $"   {test.Message}"
+        for detail in test.Details do
+            println $"   {detail}"
+    let moreCount = state.FailedTests.Count - displayCount
+    if moreCount > 0 then
+        println $"... and {moreCount} more failing test(s)"
+
+let private printQuietResult (result: TestRunResult) : int =
+    if result.ExitCode = 0 then
+        println "success"
+        0
+    else
+        println "failed tests:"
+        if result.State.FailedTests.Count = 0 then
+            println $"(test runner exited with code {result.ExitCode})"
+        else
+            printStructuredFailures result.State 20
+        1
+
+let private waitForAiRunWithProgress
+    (writer: TextWriter)
+    (progressSeconds: int)
+    (task: Task<TestRunResult>)
+    : unit =
+    let progressDelay = TimeSpan.FromSeconds(float progressSeconds)
+    let timer = Stopwatch.StartNew()
+    let rec loop () =
+        let completed =
+            Task.WhenAny(task :> Task, Task.Delay(progressDelay)).GetAwaiter().GetResult()
+        if Object.ReferenceEquals(completed, task) then
+            ()
+        else
+            let elapsedSeconds =
+                int (Math.Floor(timer.Elapsed.TotalSeconds))
+            writer.WriteLine($"still running: {elapsedSeconds}s elapsed")
+            writer.Flush()
+            loop ()
+    loop ()
+
+let private runAiMode (args: string array) : int =
+    let originalOut = Console.Out
+    let originalError = Console.Error
+    match parseAiProgressSecondsArg args with
+    | Error msg ->
+        originalOut.WriteLine(msg)
+        1
+    | Ok requestedProgressSeconds ->
+        let progressSeconds =
+            requestedProgressSeconds
+            |> Option.defaultValue defaultAiProgressSeconds
+
+        use buffer = new StringWriter(CultureInfo.InvariantCulture)
+        Console.SetOut(buffer)
+        Console.SetError(buffer)
+        let task = Task.Run(fun () -> runTestsWithProgressReporter None args)
+        originalOut.WriteLine("running tests (AI mode)")
+        waitForAiRunWithProgress originalOut progressSeconds task
+
+        let result =
+            try
+                task.GetAwaiter().GetResult()
+            finally
+                Console.Out.Flush()
+                Console.Error.Flush()
+                Console.SetOut(originalOut)
+                Console.SetError(originalError)
+
+        let capturedOutput = buffer.ToString()
+        if not (String.IsNullOrEmpty(capturedOutput)) then
+            originalOut.Write(capturedOutput)
+
+        let total = result.State.Passed + result.State.Failed
+        let totalSecondsText =
+            result.TotalTime.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)
+        if result.ExitCode = 0 then
+            originalOut.WriteLine($"success: {result.State.Passed}/{total} passed in {totalSecondsText}s")
+        else
+            originalOut.WriteLine("failed")
+            originalOut.WriteLine($"summary: {result.State.Passed} passed, {result.State.Failed} failed, {totalSecondsText}s")
+            printStructuredFailures result.State 20
+
+        result.ExitCode
+
+[<EntryPoint>]
+let main args =
+    if hasHelpArg args then
+        printHelp ()
+        0
+    elif hasQuietArg args then
+        captureOutput (fun () -> runTests args)
+        |> printQuietResult
+    elif hasAiArg args then
+        runAiMode args
+    else
+        let result = runTests args
+        result.ExitCode
