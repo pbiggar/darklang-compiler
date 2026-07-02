@@ -1530,6 +1530,45 @@ let testDictRefCountDecTupleStringListDictValue () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected dict tuple string/list/dict values to be released, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 DictHeap RefCountDec releases dynamic string keys with tuple leaf values.
+let testDictRefCountDecStringKeyTupleStringListDictValue () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let nestedDictType = AST.TDict (AST.TInt64, AST.TInt64)
+    let tupleType = AST.TTuple [AST.TString; listType; nestedDictType]
+    let dictType = AST.TDict (AST.TString, tupleType)
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "key", LIR.StringSymbol "!")
+                LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
+                LIR.HeapAlloc (LIR.Physical LIR.X6, 16)
+                LIR.HeapStore (LIR.Physical LIR.X6, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X6, 8, LIR.Imm 2L, None)
+                LIR.Mov (LIR.Physical LIR.X19, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X19, LIR.Physical LIR.X6, LIR.Physical LIR.X19)
+                LIR.HeapAlloc (LIR.Physical LIR.X20, 24)
+                LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Reg (LIR.Physical LIR.X3), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X20, 8, LIR.Reg (LIR.Physical LIR.X5), Some listType)
+                LIR.HeapStore (LIR.Physical LIR.X20, 16, LIR.Reg (LIR.Physical LIR.X19), Some nestedDictType)
+                LIR.HeapAlloc (LIR.Physical LIR.X21, 16)
+                LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X21, 8, LIR.Reg (LIR.Physical LIR.X20), Some tupleType)
+                LIR.Mov (LIR.Physical LIR.X7, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X21, LIR.Physical LIR.X7)
+                LIR.RefCountDec (LIR.Physical LIR.X7, 0, LIR.DictHeap, Some (rcMetadata dictType))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected dict string keys and tuple string/list/dict values to be released, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 DictHeap RefCountDec releases boxed sum leaf values with string payloads through release-plan metadata.
 let testDictRefCountDecSumStringValue () : Result<unit, string> =
     let sumType = AST.TSum ("X64DictRcSumStringValue", [AST.TString])
@@ -5018,6 +5057,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR DictHeap RefCountDec releases nested dict list leaf values", testDictRefCountDecDictListValue)
     ("LIR DictHeap RefCountDec releases tuple string/list leaf values", testDictRefCountDecTupleStringListValue)
     ("LIR DictHeap RefCountDec releases tuple string/list/dict leaf values", testDictRefCountDecTupleStringListDictValue)
+    ("LIR DictHeap RefCountDec releases string keys and tuple string/list/dict leaf values", testDictRefCountDecStringKeyTupleStringListDictValue)
     ("LIR DictHeap RefCountDec releases sum string leaf values", testDictRefCountDecSumStringValue)
     ("LIR generic RefCountDec preserves live RAX across list field release", testGenericRefCountDecPreservesLiveRaxAcrossListFieldRelease)
     ("LIR generic RefCountDec preserves live RAX across dict field release", testGenericRefCountDecPreservesLiveRaxAcrossDictFieldRelease)

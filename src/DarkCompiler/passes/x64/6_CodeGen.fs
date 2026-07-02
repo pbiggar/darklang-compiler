@@ -673,6 +673,7 @@ let private dictRefCountDecDictValueHelperLabel = "__dark_dict_rc_dec_dict_value
 let private dictRefCountDecDictListValueHelperLabel = "__dark_dict_rc_dec_dict_list_value_helper"
 let private dictRefCountDecTupleStringListValueHelperLabel = "__dark_dict_rc_dec_tuple_string_list_value_helper"
 let private dictRefCountDecTupleStringListDictValueHelperLabel = "__dark_dict_rc_dec_tuple_string_list_dict_value_helper"
+let private dictRefCountDecDynamicKeyTupleStringListDictValueHelperLabel = "__dark_dict_rc_dec_dynamic_key_tuple_string_list_dict_value_helper"
 let private dictRefCountDecSumStringValueHelperLabel = "__dark_dict_rc_dec_sum_string_value_helper"
 let private closureRefCountDecHelperLabel = "__dark_closure_rc_dec_helper"
 
@@ -1211,6 +1212,11 @@ let private dictDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : strin
         dictRefCountDecDynamicKeyDictListValueHelperLabel
     | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (ANF.DynamicBufferRelease _, ANF.RootRelease (_, ANF.DictHeap, _))) ->
         dictRefCountDecDynamicKeyDictValueHelperLabel
+    | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (ANF.DynamicBufferRelease _, ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (24, fieldReleases))))
+        when releasePlanIsDynamicBufferAt 0 fieldReleases
+             && releasePlanIsRootKindAt 8 ANF.TaggedList fieldReleases
+             && releasePlanIsRootKindAt 16 ANF.DictHeap fieldReleases ->
+        dictRefCountDecDynamicKeyTupleStringListDictValueHelperLabel
     | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (ANF.DynamicBufferRelease _, ANF.NoReleasePlan)) ->
         dictRefCountDecDynamicKeyHelperLabel
     | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, ANF.DynamicBufferRelease _)) ->
@@ -5767,6 +5773,7 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
            || Set.contains dictRefCountDecDictListValueHelperLabel neededDictDecHelperLabels
            || Set.contains dictRefCountDecTupleStringListValueHelperLabel neededDictDecHelperLabels
            || Set.contains dictRefCountDecTupleStringListDictValueHelperLabel neededDictDecHelperLabels
+           || Set.contains dictRefCountDecDynamicKeyTupleStringListDictValueHelperLabel neededDictDecHelperLabels
            || Set.contains dictRefCountDecDynamicKeyListValueHelperLabel neededDictDecHelperLabels
            || Set.contains dictRefCountDecDynamicKeyDictListValueHelperLabel neededDictDecHelperLabels then
             Set.singleton listRefCountDecHelperLabel
@@ -5866,6 +5873,9 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
     let needsDictRcDecTupleStringListDictValueHelper =
         Set.contains dictRefCountDecTupleStringListDictValueHelperLabel neededDictDecHelperLabels
 
+    let needsDictRcDecDynamicKeyTupleStringListDictValueHelper =
+        Set.contains dictRefCountDecDynamicKeyTupleStringListDictValueHelperLabel neededDictDecHelperLabels
+
     let needsDictRcDecSumStringValueHelper =
         Set.contains dictRefCountDecSumStringValueHelperLabel neededDictDecHelperLabels
 
@@ -5899,7 +5909,7 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
             if needsDictRcIncHelper then generateDictRefCountIncHelper ()
             else []
         let dictDecHelper =
-            if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper || needsDictRcDecDictValueHelper || needsDictRcDecDynamicKeyDictValueHelper || needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false None None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper || needsDictRcDecDictValueHelper || needsDictRcDecDynamicKeyDictValueHelper || needsDictRcDecTupleStringListDictValueHelper || needsDictRcDecDynamicKeyTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false None None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyHelper =
             if needsDictRcDecDynamicKeyHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyHelperLabel true false false None None enableLeakCheck recordRegistry sumShapeRegistry
@@ -5934,10 +5944,13 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         let dictDecTupleStringListDictValueHelper =
             if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false None (Some (24, dictTupleStringListDictValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
             else []
+        let dictDecDynamicKeyTupleStringListDictValueHelper =
+            if needsDictRcDecDynamicKeyTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyTupleStringListDictValueHelperLabel true false false None (Some (24, dictTupleStringListDictValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
+            else []
         let dictDecSumStringValueHelper =
             if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None (Some (16, dictSumStringValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let closureDecHelper =
             if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper enableLeakCheck recordRegistry sumShapeRegistry closurePayloadSizes closureCaptureTypes
             else []
-        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ dictDecHelper @ dictDecDynamicKeyHelper @ dictDecDynamicValueHelper @ dictDecDynamicKeyValueHelper @ dictDecDynamicKeyListValueHelper @ dictDecDynamicKeyDictValueHelper @ dictDecDynamicKeyDictListValueHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecDictListValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ dictDecSumStringValueHelper @ closureDecHelper @ genOomHandler ())
+        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ dictDecHelper @ dictDecDynamicKeyHelper @ dictDecDynamicValueHelper @ dictDecDynamicKeyValueHelper @ dictDecDynamicKeyListValueHelper @ dictDecDynamicKeyDictValueHelper @ dictDecDynamicKeyDictListValueHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecDictListValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ dictDecDynamicKeyTupleStringListDictValueHelper @ dictDecSumStringValueHelper @ closureDecHelper @ genOomHandler ())
