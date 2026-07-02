@@ -121,6 +121,7 @@ specializations instead of one shared shape-plan executor.
   one-field records and all non-empty three-field dynamic-buffer combinations
 - tagged-list boxed sum record3 string/list/dict payload release
 - tagged-list boxed sum record4 string/bytes/list/dict payload release
+- tagged-list boxed sum record4 string/bytes/list/dict-list payload release
 - tagged-list boxed sum record4 closure/bytes/list/dict payload release
 - tagged-list nested boxed sum dynamic-buffer payload release
 
