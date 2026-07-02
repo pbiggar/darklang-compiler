@@ -3623,6 +3623,58 @@ let testTaggedListRefCountDecTuple4NestedRecordMiddleStringListDictPayload () : 
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list tuple4 nested record string/list/dict payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec releases tuple4 nested record dict-list payloads in the middle field.
+let testTaggedListRefCountDecTuple4NestedRecordMiddleStringListDictListPayload () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let dictType = AST.TDict (AST.TInt64, listType)
+    let nestedRecordType = AST.TRecord ("X64ListRcNestedRecordMiddleStringListDictList", [])
+    let tupleType = AST.TTuple [AST.TInt64; AST.TInt64; nestedRecordType; AST.TInt64]
+    let records =
+        Map.ofList
+            [("X64ListRcNestedRecordMiddleStringListDictList", [("name", AST.TString); ("items", listType); ("lookup", dictType)])]
+    let program =
+        makeSimpleProgramWithRecords
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X4, LIR.Physical LIR.X3, LIR.Physical LIR.X4)
+                LIR.HeapAlloc (LIR.Physical LIR.X19, 24)
+                LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X4), Some listType)
+                LIR.HeapAlloc (LIR.Physical LIR.X5, 8)
+                LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Imm 7L, None)
+                LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
+                LIR.HeapAlloc (LIR.Physical LIR.X7, 16)
+                LIR.HeapStore (LIR.Physical LIR.X7, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X7, 8, LIR.Reg (LIR.Physical LIR.X6), Some listType)
+                LIR.Mov (LIR.Physical LIR.X20, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X20, LIR.Physical LIR.X7, LIR.Physical LIR.X20)
+                LIR.HeapStore (LIR.Physical LIR.X19, 16, LIR.Reg (LIR.Physical LIR.X20), Some dictType)
+                LIR.HeapAlloc (LIR.Physical LIR.X20, 32)
+                LIR.HeapStore (LIR.Physical LIR.X20, 0, LIR.Imm 11L, None)
+                LIR.HeapStore (LIR.Physical LIR.X20, 8, LIR.Imm 22L, None)
+                LIR.HeapStore (LIR.Physical LIR.X20, 16, LIR.Reg (LIR.Physical LIR.X19), Some nestedRecordType)
+                LIR.HeapStore (LIR.Physical LIR.X20, 24, LIR.Imm 33L, None)
+                LIR.HeapAlloc (LIR.Physical LIR.X21, 8)
+                LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some tupleType)
+                LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X1, LIR.Physical LIR.X21, LIR.Physical LIR.X1)
+                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
+            ]
+            LIR.Ret
+            records
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (exitCode, _, stderr) when exitCode <> 0 ->
+        Error $"Expected list tuple4 nested record string/list/dict-list payload release to exit 0, got {exitCode}"
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected list tuple4 nested record string/list/dict-list payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 tagged-list RefCountDec releases tuple4 nested tuple closure/dynamic/list/dict payloads.
 let testTaggedListRefCountDecTuple4NestedTupleClosureBytesListDictPayload () : Result<unit, string> =
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
@@ -5210,6 +5262,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases tuple4 nested tuple string payload", testTaggedListRefCountDecTuple4NestedTupleStringPayload)
     ("LIR tagged list RefCountDec releases tuple4 nested tuple string/list/dict payload", testTaggedListRefCountDecTuple4NestedTupleStringListDictPayload)
     ("LIR tagged list RefCountDec releases tuple4 nested record middle string/list/dict payload", testTaggedListRefCountDecTuple4NestedRecordMiddleStringListDictPayload)
+    ("LIR tagged list RefCountDec releases tuple4 nested record middle string/list/dict-list payload", testTaggedListRefCountDecTuple4NestedRecordMiddleStringListDictListPayload)
     ("LIR tagged list RefCountDec releases tuple4 nested tuple closure/bytes/list/dict payload", testTaggedListRefCountDecTuple4NestedTupleClosureBytesListDictPayload)
     ("LIR tagged list RefCountDec releases tuple2 nested tuple dynamic combinations", testTaggedListRefCountDecTuple2NestedTupleDynamicPayloadCombinations)
     ("LIR tagged list RefCountDec releases tuple2 nested tuple string/list/dict payload", testTaggedListRefCountDecTuple2NestedTupleStringListDictPayload)
