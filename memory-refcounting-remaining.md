@@ -15,6 +15,11 @@ Status date: 2026-07-02.
 
 Latest update:
 
+- x64 `Dict<String, Int64>` leaf release now decrements dynamic string keys
+  using a release-plan-selected dict helper variant. The new
+  `X86_64CodeGenTests.testDictRefCountDecStringKey` first exposed the old
+  x64 value-only helper behavior as `leaks: 1`, then passed after adding the
+  dynamic-key helper path. Broader x64 dict key/value matrix work remains open.
 - x64 now has an explicit stdlib-context closure-list release probe. The
   ARM64 bug was an architecture-local helper-selection guard that excluded
   `Stdlib.*` functions; x64 did not have that guard, and
@@ -1133,6 +1138,7 @@ commits enabled:
 - tagged-list tuple3 string/list/dict payload release
 - tagged-list tuple3 closure/list/dict payload release
 - tagged-list tuple4 closure/bytes/list/dict payload release
+- dict dynamic string leaf key release for `Dict<String, Int64>`
 - tagged-list tuple4 nested tuple dynamic string payload release
 - tagged-list tuple4 nested tuple string/list/dict payload release
 - tagged-list tuple4 nested tuple closure/bytes/list/dict payload release

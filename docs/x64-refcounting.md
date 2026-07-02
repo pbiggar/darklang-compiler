@@ -250,7 +250,8 @@ The main x64 gaps are:
   multi-field records and higher-arity tuples, and arbitrary
   non-dynamic-buffer sum payloads beyond the current list/dict/closure, sum
   tuple3, sum tuple4, sum record3, sum record4, and fixed-block mixed shapes
-- dict/HAMT key and value recursive retain/release coverage
+- dict/HAMT key and value recursive retain/release coverage beyond direct
+  dynamic string leaf key release and the current value-helper probes
 - helper register preservation for values live across cleanup beyond the
   covered generic fixed-block dynamic-buffer, nested fixed-block, list, dict,
   and closure field `RAX` cases
@@ -262,7 +263,8 @@ The main x64 gaps are:
 1. Keep adding x64 probes when ARM64 gains a new recursive helper family.
    `List<TFunction>` release from a `Stdlib.List.__mapHelper*` context is
    already covered and uses the closure-list helper without a stdlib-specific
-   exclusion.
+   exclusion. Direct `Dict<String, Int64>` dynamic leaf key release is also
+   covered.
 2. Replace x64 helper-family selection with a shared shape-driven release plan
    executor instead of continuing helper explosion.
 3. Add x64 dict key/value shape matrix tests for typed recursive values.
