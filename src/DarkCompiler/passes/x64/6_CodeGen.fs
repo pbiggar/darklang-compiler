@@ -5,7 +5,9 @@
 // Maps LIR physical registers to x86-64 registers:
 //   X0→RAX, X1→RDI, X2→RSI, X3→RCX, X4→R8, X5→R9,
 //   X6→R10, X7→RDX, X8-X17→R11 (shared scratch),
-//   X19→RBX, X20→R12, X21→R13, X22→R14 (heap), X23→R15 (freelist).
+//   X19→RBX, X20→R12, X21→R13.
+// X22 and X23 are reserved for x64 runtime state. X24-X27 have no valid x64
+// lowering and must be rejected before instruction selection.
 //
 // Key traits of the x86-64 instruction set:
 //   - CISC: most instructions modify destination in-place (dest = dest OP src),
@@ -18,6 +20,21 @@
 module CodeGen_X86_64
 
 let private syscalls = Platform.linuxX86_64SyscallNumbers
+
+let private invalidX64PhysRegReason (reg: LIR.PhysReg) : string option =
+    match reg with
+    | LIR.X22 ->
+        Some "X22 maps to the x64 heap pointer runtime register"
+    | LIR.X23 ->
+        Some "X23 maps to the x64 free-list runtime register"
+    | LIR.X24
+    | LIR.X25
+    | LIR.X26 ->
+        Some $"{reg} has no allocatable x64 register mapping"
+    | LIR.X27 ->
+        Some "X27 is reserved runtime state and cannot be lowered on x64"
+    | _ ->
+        None
 
 /// Map LIR.PhysReg to x86-64 register
 let lirRegToX86 (reg: LIR.PhysReg) : X86_64.Reg =
@@ -43,15 +60,23 @@ let lirRegToX86 (reg: LIR.PhysReg) : X86_64.Reg =
     | LIR.X19 -> X86_64.RBX   // Callee-saved 1
     | LIR.X20 -> X86_64.R12   // Callee-saved 2
     | LIR.X21 -> X86_64.R13   // Callee-saved 3
-    | LIR.X22 -> X86_64.R14   // Reserved: heap bump pointer
-    | LIR.X23 -> X86_64.R15   // Reserved: free list base
-    | LIR.X24 -> X86_64.R15   // Overflow (shouldn't be allocated on x86_64)
-    | LIR.X25 -> X86_64.R15
-    | LIR.X26 -> X86_64.R15
-    | LIR.X27 -> X86_64.RBP   // Reserved (free list / heap)
+    | LIR.X22
+    | LIR.X23
+    | LIR.X24
+    | LIR.X25
+    | LIR.X26
+    | LIR.X27 ->
+        Crash.crash $"lirRegToX86: invalid x64 physical register {reg}"
     | LIR.X29 -> X86_64.RBP   // Frame pointer
     | LIR.X30 -> X86_64.RAX   // Link register (not applicable on x86_64)
     | LIR.SP  -> X86_64.RSP
+
+let private resolvePhysReg (context: string) (reg: LIR.PhysReg) : Result<X86_64.Reg, string> =
+    match invalidX64PhysRegReason reg with
+    | Some reason ->
+        Error $"{context}: invalid x64 physical register {reg}: {reason}"
+    | None ->
+        Ok (lirRegToX86 reg)
 
 /// Map LIR.FReg to x86-64 XMM register
 let lirFRegToX86 (freg: LIR.PhysFPReg) : X86_64.FReg =
@@ -76,7 +101,7 @@ let private resolveFreg (freg: LIR.FReg) : Result<X86_64.FReg, string> =
 /// Resolve a LIR.Reg (Physical or Virtual) to x86-64 register.
 let resolveReg (reg: LIR.Reg) : Result<X86_64.Reg, string> =
     match reg with
-    | LIR.Physical phys -> Ok (lirRegToX86 phys)
+    | LIR.Physical phys -> resolvePhysReg "resolveReg" phys
     | LIR.Virtual id -> Error $"Unresolved virtual register v{id} in x86-64 codegen"
 
 /// Load a 64-bit immediate into a register.

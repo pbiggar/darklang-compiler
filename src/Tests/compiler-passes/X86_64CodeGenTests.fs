@@ -300,6 +300,20 @@ let private makeEmptyFunction (name: string) (typedParams: LIR.TypedLIRParam lis
         UsedCalleeSaved = []
     }
 
+/// Test: x64 codegen rejects ARM64-only/overflow physical registers instead of aliasing runtime state.
+let testRejectsReservedOverflowPhysicalRegister () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [
+                LIR.Mov (LIR.Physical LIR.X24, LIR.Imm 1L)
+            ]
+            LIR.Ret
+
+    match CodeGen_X86_64.translateProgram (completeFixtureVariants program) false with
+    | Error e when e.Contains "X24" -> Ok ()
+    | Error e -> Error $"Expected X24-specific codegen error, got '{e}'"
+    | Ok _ -> Error "Expected x64 codegen to reject X24, but translation succeeded"
+
 /// Test: MOV immediate + exit
 let testMovAndExit () : Result<unit, string> =
     // exit(42): X0 <- 42; X1 <- X0; Exit
@@ -2182,9 +2196,9 @@ let testTaggedListRefCountDecTuple3StringListDictListPayload () : Result<unit, s
                 LIR.HeapStore (LIR.Physical LIR.X20, 16, LIR.Reg (LIR.Physical LIR.X19), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X21, 8)
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some tupleType)
-                LIR.Mov (LIR.Physical LIR.X22, LIR.Imm 5L)
-                LIR.Orr (LIR.Physical LIR.X22, LIR.Physical LIR.X21, LIR.Physical LIR.X22)
-                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
+                LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X1, LIR.Physical LIR.X21, LIR.Physical LIR.X1)
+                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -2260,9 +2274,9 @@ let testTaggedListRefCountDecTuple3ClosureListDictListPayload () : Result<unit, 
                 LIR.HeapStore (LIR.Physical LIR.X20, 16, LIR.Reg (LIR.Physical LIR.X19), Some dictType)
                 LIR.HeapAlloc (LIR.Physical LIR.X21, 8)
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some tupleType)
-                LIR.Mov (LIR.Physical LIR.X22, LIR.Imm 5L)
-                LIR.Orr (LIR.Physical LIR.X22, LIR.Physical LIR.X21, LIR.Physical LIR.X22)
-                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
+                LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X1, LIR.Physical LIR.X21, LIR.Physical LIR.X1)
+                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList tupleType))))
             ]
             LIR.Ret
 
@@ -3897,9 +3911,9 @@ let testTaggedListRefCountDecSumTuple4StringBytesListDictPayload () : Result<uni
                 LIR.HeapStore (LIR.Physical LIR.X20, 8, LIR.Reg (LIR.Physical LIR.X19), Some tupleType)
                 LIR.HeapAlloc (LIR.Physical LIR.X21, 8)
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some sumType)
-                LIR.Mov (LIR.Physical LIR.X22, LIR.Imm 5L)
-                LIR.Orr (LIR.Physical LIR.X22, LIR.Physical LIR.X21, LIR.Physical LIR.X22)
-                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
+                LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X1, LIR.Physical LIR.X21, LIR.Physical LIR.X1)
+                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
 
@@ -3986,9 +4000,9 @@ let testTaggedListRefCountDecSumTuple4ClosureBytesListDictPayload () : Result<un
                 LIR.HeapStore (LIR.Physical LIR.X20, 8, LIR.Reg (LIR.Physical LIR.X19), Some tupleType)
                 LIR.HeapAlloc (LIR.Physical LIR.X21, 8)
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some sumType)
-                LIR.Mov (LIR.Physical LIR.X22, LIR.Imm 5L)
-                LIR.Orr (LIR.Physical LIR.X22, LIR.Physical LIR.X21, LIR.Physical LIR.X22)
-                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
+                LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X1, LIR.Physical LIR.X21, LIR.Physical LIR.X1)
+                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
 
@@ -4151,9 +4165,9 @@ let testTaggedListRefCountDecSumRecord4StringBytesListDictPayload () : Result<un
                 LIR.HeapStore (LIR.Physical LIR.X20, 8, LIR.Reg (LIR.Physical LIR.X19), Some recordType)
                 LIR.HeapAlloc (LIR.Physical LIR.X21, 8)
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some sumType)
-                LIR.Mov (LIR.Physical LIR.X22, LIR.Imm 5L)
-                LIR.Orr (LIR.Physical LIR.X22, LIR.Physical LIR.X21, LIR.Physical LIR.X22)
-                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
+                LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X1, LIR.Physical LIR.X21, LIR.Physical LIR.X1)
+                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
             records
@@ -4198,9 +4212,9 @@ let testTaggedListRefCountDecSumRecord4ClosureBytesListDictPayload () : Result<u
                 LIR.HeapStore (LIR.Physical LIR.X20, 8, LIR.Reg (LIR.Physical LIR.X19), Some recordType)
                 LIR.HeapAlloc (LIR.Physical LIR.X21, 8)
                 LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X20), Some sumType)
-                LIR.Mov (LIR.Physical LIR.X22, LIR.Imm 5L)
-                LIR.Orr (LIR.Physical LIR.X22, LIR.Physical LIR.X21, LIR.Physical LIR.X22)
-                LIR.RefCountDec (LIR.Physical LIR.X22, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
+                LIR.Mov (LIR.Physical LIR.X1, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X1, LIR.Physical LIR.X21, LIR.Physical LIR.X1)
+                LIR.RefCountDec (LIR.Physical LIR.X1, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList sumType))))
             ]
             LIR.Ret
             records
@@ -4351,6 +4365,7 @@ let testTaggedListRefCountDecNestedSumStringPayload () : Result<unit, string> =
         else Error $"Expected list nested sum payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
 let tests : (string * (unit -> Result<unit, string>)) list = [
+    ("LIR rejects x64 overflow physical registers", testRejectsReservedOverflowPhysicalRegister)
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
     ("LIR SUB", testSub)
