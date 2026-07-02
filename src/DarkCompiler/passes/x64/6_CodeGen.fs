@@ -1023,15 +1023,6 @@ let private genRefCountIncGeneric (addrReg: X86_64.Reg) (payloadSize: int) : X86
 
 type private ListLeafPayloadRelease =
     | NoLeafPayloadRelease
-    | FixedBlockLeafPayload of payloadSize: int * dynamicBufferOffsets: int list
-    | FixedBlockTaggedDynamicFieldPayload of payloadSize: int * payloadTag: int * dynamicFieldOffset: int
-    | FixedBlockListFieldPayload of payloadSize: int * listFieldOffset: int
-    | FixedBlockDictFieldPayload of payloadSize: int * dictFieldOffset: int
-    | FixedBlockClosureFieldPayload of payloadSize: int * closureFieldOffset: int
-    | FixedBlockDynamicListDictPayload of payloadSize: int * dynamicFieldOffset: int * listFieldOffset: int * dictFieldOffset: int * dictHelperLabel: string
-    | FixedBlockClosureListDictPayload of payloadSize: int * closureFieldOffset: int * listFieldOffset: int * dictFieldOffset: int * dictHelperLabel: string
-    | FixedBlockClosureDynamicListDictPayload of payloadSize: int * closureFieldOffset: int * dynamicFieldOffset: int * listFieldOffset: int * dictFieldOffset: int * dictHelperLabel: string
-    | FixedBlockDynamicBuffersListDictPayload of payloadSize: int * dynamicFieldOffsets: int list * listFieldOffset: int * dictFieldOffset: int * dictHelperLabel: string
     | FixedBlockPlannedLeafPayload of payloadSize: int * releasePlan: ANF.RcReleasePlan
     | ListLeafPayload
     | ClosureLeafPayload
@@ -1135,28 +1126,6 @@ let private generateListRefCountDecHelperWith
     let afterSuffix = label "after_suffix"
     let freeNode = label "free_node"
 
-    let releaseDynamicBufferField (fieldOffset: int) : X86_64.Instr list =
-        let doneLabel = label $"dynamic_field_done_{fieldOffset}"
-        [X86_64.MOV_load (X86_64.R11, X86_64.R8, fieldOffset)
-         X86_64.TEST_reg (X86_64.R11, X86_64.R11)
-         X86_64.Jcc (X86_64.EQ, doneLabel)
-         X86_64.MOV_load (X86_64.R9, X86_64.R11, 0)
-         X86_64.ADD_imm (X86_64.R9, 7)
-         X86_64.AND_imm (X86_64.R9, -8)
-         X86_64.ADD_imm (X86_64.R9, 8)
-         X86_64.MOV_reg (X86_64.R10, X86_64.R11)
-         X86_64.ADD_reg (X86_64.R10, X86_64.R9)
-         X86_64.MOV_load (X86_64.R9, X86_64.R10, 0)]
-        @ loadImm64 scratch 0x7FFFFFFFFFFFFFFFL
-        @ [X86_64.CMP_reg (X86_64.R9, scratch)
-           X86_64.Jcc (X86_64.EQ, doneLabel)
-           X86_64.SUB_imm (X86_64.R9, 1)
-           X86_64.MOV_store (X86_64.R10, 0, X86_64.R9)
-           X86_64.TEST_reg (X86_64.R9, X86_64.R9)
-           X86_64.Jcc (X86_64.NE, doneLabel)]
-        @ leakDec
-        @ [X86_64.Label doneLabel]
-
     let releaseLeafPayload =
         match leafPayloadRelease with
         | NoLeafPayloadRelease -> []
@@ -1213,23 +1182,6 @@ let private generateListRefCountDecHelperWith
                X86_64.Jcc (X86_64.NE, leafPayloadDone)]
             @ leakDec
             @ [X86_64.Label leafPayloadDone]
-        | FixedBlockLeafPayload (payloadSize, dynamicBufferOffsets) ->
-            [X86_64.MOV_load (X86_64.R8, X86_64.RDI, 0)
-             X86_64.TEST_reg (X86_64.R8, X86_64.R8)
-             X86_64.Jcc (X86_64.EQ, leafPayloadDone)
-             X86_64.MOV_load (X86_64.R9, X86_64.R8, payloadSize)
-             X86_64.SUB_imm (X86_64.R9, 1)
-             X86_64.MOV_store (X86_64.R8, payloadSize, X86_64.R9)
-             X86_64.TEST_reg (X86_64.R9, X86_64.R9)
-             X86_64.Jcc (X86_64.NE, leafPayloadDone)]
-            @ (dynamicBufferOffsets |> List.collect releaseDynamicBufferField)
-            @ (if payloadSize >= 0 && payloadSize < freeListSize then
-                [X86_64.MOV_load (X86_64.R10, freeListBase, payloadSize)
-                 X86_64.MOV_store (X86_64.R8, 0, X86_64.R10)
-                 X86_64.MOV_store (freeListBase, payloadSize, X86_64.R8)]
-               else [])
-            @ leakDec
-            @ [X86_64.Label leafPayloadDone]
         | FixedBlockPlannedLeafPayload (payloadSize, releasePlan) ->
             [X86_64.PUSH X86_64.RDI
              X86_64.PUSH X86_64.RSI
@@ -1237,288 +1189,6 @@ let private generateListRefCountDecHelperWith
             @ genRefCountDecGenericWithPlan helperCtx X86_64.R8 payloadSize (Some releasePlan)
             @ [X86_64.POP X86_64.RSI
                X86_64.POP X86_64.RDI]
-        | FixedBlockTaggedDynamicFieldPayload (payloadSize, payloadTag, dynamicFieldOffset) ->
-            let skipVariantPayload = label $"leaf_payload_tagged_dynamic_skip_{payloadTag}_{dynamicFieldOffset}"
-            [X86_64.MOV_load (X86_64.R11, X86_64.RDI, 0)
-             X86_64.TEST_reg (X86_64.R11, X86_64.R11)
-             X86_64.Jcc (X86_64.EQ, leafPayloadDone)
-             X86_64.CMP_reg (X86_64.R11, freeListBase)
-             X86_64.Jcc (X86_64.B, leafPayloadDone)
-             X86_64.CMP_reg (X86_64.R11, heapPtr)
-             X86_64.Jcc (X86_64.AE, leafPayloadDone)
-             X86_64.MOV_load (X86_64.R9, X86_64.R11, payloadSize)
-             X86_64.SUB_imm (X86_64.R9, 1)
-             X86_64.MOV_store (X86_64.R11, payloadSize, X86_64.R9)
-             X86_64.TEST_reg (X86_64.R9, X86_64.R9)
-             X86_64.Jcc (X86_64.NE, leafPayloadDone)
-             X86_64.MOV_load (X86_64.R10, X86_64.R11, 0)
-             X86_64.CMP_imm (X86_64.R10, payloadTag)
-             X86_64.Jcc (X86_64.NE, skipVariantPayload)
-             X86_64.PUSH X86_64.R11
-             X86_64.MOV_reg (X86_64.R8, X86_64.R11)]
-            @ releaseDynamicBufferField dynamicFieldOffset
-            @ [X86_64.POP X86_64.R11
-               X86_64.Label skipVariantPayload]
-            @ (if payloadSize >= 0 && payloadSize < freeListSize then
-                [X86_64.MOV_load (X86_64.R10, freeListBase, payloadSize)
-                 X86_64.MOV_store (X86_64.R11, 0, X86_64.R10)
-                 X86_64.MOV_store (freeListBase, payloadSize, X86_64.R11)]
-               else [])
-            @ leakDec
-            @ [X86_64.Label leafPayloadDone]
-        | FixedBlockListFieldPayload (payloadSize, listFieldOffset) ->
-            [X86_64.MOV_load (X86_64.R11, X86_64.RDI, 0)
-             X86_64.TEST_reg (X86_64.R11, X86_64.R11)
-             X86_64.Jcc (X86_64.EQ, leafPayloadDone)
-             X86_64.CMP_reg (X86_64.R11, freeListBase)
-             X86_64.Jcc (X86_64.B, leafPayloadDone)
-             X86_64.CMP_reg (X86_64.R11, heapPtr)
-             X86_64.Jcc (X86_64.AE, leafPayloadDone)
-             X86_64.MOV_load (X86_64.R9, X86_64.R11, payloadSize)
-             X86_64.SUB_imm (X86_64.R9, 1)
-             X86_64.MOV_store (X86_64.R11, payloadSize, X86_64.R9)
-             X86_64.TEST_reg (X86_64.R9, X86_64.R9)
-             X86_64.Jcc (X86_64.NE, leafPayloadDone)
-             X86_64.MOV_load (X86_64.R8, X86_64.R11, listFieldOffset)]
-            @ addChild "leaf_payload_fixed_block_list_field"
-            @ (if payloadSize >= 0 && payloadSize < freeListSize then
-                [X86_64.MOV_load (X86_64.R10, freeListBase, payloadSize)
-                 X86_64.MOV_store (X86_64.R11, 0, X86_64.R10)
-                 X86_64.MOV_store (freeListBase, payloadSize, X86_64.R11)]
-               else [])
-            @ leakDec
-            @ [X86_64.Label leafPayloadDone]
-        | FixedBlockDictFieldPayload (payloadSize, dictFieldOffset) ->
-            [X86_64.MOV_load (X86_64.R11, X86_64.RDI, 0)
-             X86_64.TEST_reg (X86_64.R11, X86_64.R11)
-             X86_64.Jcc (X86_64.EQ, leafPayloadDone)
-             X86_64.CMP_reg (X86_64.R11, freeListBase)
-             X86_64.Jcc (X86_64.B, leafPayloadDone)
-             X86_64.CMP_reg (X86_64.R11, heapPtr)
-             X86_64.Jcc (X86_64.AE, leafPayloadDone)
-             X86_64.MOV_load (X86_64.R9, X86_64.R11, payloadSize)
-             X86_64.SUB_imm (X86_64.R9, 1)
-             X86_64.MOV_store (X86_64.R11, payloadSize, X86_64.R9)
-             X86_64.TEST_reg (X86_64.R9, X86_64.R9)
-             X86_64.Jcc (X86_64.NE, leafPayloadDone)
-             X86_64.PUSH X86_64.RDI
-             X86_64.PUSH X86_64.RSI
-             X86_64.PUSH X86_64.RCX
-             X86_64.PUSH X86_64.R11
-             X86_64.MOV_load (X86_64.RAX, X86_64.R11, dictFieldOffset)
-             X86_64.CALL dictRefCountDecHelperLabel
-             X86_64.POP X86_64.R11
-             X86_64.POP X86_64.RCX
-             X86_64.POP X86_64.RSI
-             X86_64.POP X86_64.RDI
-             X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)]
-            @ (if payloadSize >= 0 && payloadSize < freeListSize then
-                [X86_64.MOV_load (X86_64.R10, freeListBase, payloadSize)
-                 X86_64.MOV_store (X86_64.R11, 0, X86_64.R10)
-                 X86_64.MOV_store (freeListBase, payloadSize, X86_64.R11)]
-               else [])
-            @ leakDec
-            @ [X86_64.Label leafPayloadDone]
-        | FixedBlockClosureFieldPayload (payloadSize, closureFieldOffset) ->
-            [X86_64.MOV_load (X86_64.R11, X86_64.RDI, 0)
-             X86_64.TEST_reg (X86_64.R11, X86_64.R11)
-             X86_64.Jcc (X86_64.EQ, leafPayloadDone)
-             X86_64.CMP_reg (X86_64.R11, freeListBase)
-             X86_64.Jcc (X86_64.B, leafPayloadDone)
-             X86_64.CMP_reg (X86_64.R11, heapPtr)
-             X86_64.Jcc (X86_64.AE, leafPayloadDone)
-             X86_64.MOV_load (X86_64.R9, X86_64.R11, payloadSize)
-             X86_64.SUB_imm (X86_64.R9, 1)
-             X86_64.MOV_store (X86_64.R11, payloadSize, X86_64.R9)
-             X86_64.TEST_reg (X86_64.R9, X86_64.R9)
-             X86_64.Jcc (X86_64.NE, leafPayloadDone)
-             X86_64.PUSH X86_64.RDI
-             X86_64.PUSH X86_64.RSI
-             X86_64.PUSH X86_64.RCX
-             X86_64.PUSH X86_64.R11
-             X86_64.MOV_load (X86_64.RAX, X86_64.R11, closureFieldOffset)
-             X86_64.CALL closureRefCountDecHelperLabel
-             X86_64.POP X86_64.R11
-             X86_64.POP X86_64.RCX
-             X86_64.POP X86_64.RSI
-             X86_64.POP X86_64.RDI
-             X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)]
-            @ (if payloadSize >= 0 && payloadSize < freeListSize then
-                [X86_64.MOV_load (X86_64.R10, freeListBase, payloadSize)
-                 X86_64.MOV_store (X86_64.R11, 0, X86_64.R10)
-                 X86_64.MOV_store (freeListBase, payloadSize, X86_64.R11)]
-               else [])
-            @ leakDec
-            @ [X86_64.Label leafPayloadDone]
-        | FixedBlockDynamicListDictPayload (payloadSize, dynamicFieldOffset, listFieldOffset, dictFieldOffset, dictHelperLabel) ->
-            [X86_64.MOV_load (X86_64.R11, X86_64.RDI, 0)
-             X86_64.TEST_reg (X86_64.R11, X86_64.R11)
-             X86_64.Jcc (X86_64.EQ, leafPayloadDone)
-             X86_64.CMP_reg (X86_64.R11, freeListBase)
-             X86_64.Jcc (X86_64.B, leafPayloadDone)
-             X86_64.CMP_reg (X86_64.R11, heapPtr)
-             X86_64.Jcc (X86_64.AE, leafPayloadDone)
-             X86_64.MOV_load (X86_64.R9, X86_64.R11, payloadSize)
-             X86_64.SUB_imm (X86_64.R9, 1)
-             X86_64.MOV_store (X86_64.R11, payloadSize, X86_64.R9)
-             X86_64.TEST_reg (X86_64.R9, X86_64.R9)
-             X86_64.Jcc (X86_64.NE, leafPayloadDone)
-             X86_64.PUSH X86_64.R11
-             X86_64.MOV_reg (X86_64.R8, X86_64.R11)]
-            @ releaseDynamicBufferField dynamicFieldOffset
-            @ [X86_64.POP X86_64.R11
-               X86_64.MOV_load (X86_64.R8, X86_64.R11, listFieldOffset)]
-            @ addChild "leaf_payload_fixed_block_dynamic_list_dict_list_field"
-            @ [X86_64.PUSH X86_64.RAX
-               X86_64.PUSH X86_64.RDI
-               X86_64.PUSH X86_64.RSI
-               X86_64.PUSH X86_64.RCX
-               X86_64.PUSH X86_64.R11
-               X86_64.MOV_load (X86_64.RAX, X86_64.R11, dictFieldOffset)
-               X86_64.CALL dictHelperLabel
-               X86_64.POP X86_64.R11
-               X86_64.POP X86_64.RCX
-               X86_64.POP X86_64.RSI
-               X86_64.POP X86_64.RDI
-               X86_64.POP X86_64.RAX]
-            @ (if payloadSize >= 0 && payloadSize < freeListSize then
-                [X86_64.MOV_load (X86_64.R10, freeListBase, payloadSize)
-                 X86_64.MOV_store (X86_64.R11, 0, X86_64.R10)
-                 X86_64.MOV_store (freeListBase, payloadSize, X86_64.R11)]
-               else [])
-            @ leakDec
-            @ [X86_64.Label leafPayloadDone]
-        | FixedBlockClosureListDictPayload (payloadSize, closureFieldOffset, listFieldOffset, dictFieldOffset, dictHelperLabel) ->
-            [X86_64.MOV_load (X86_64.R11, X86_64.RDI, 0)
-             X86_64.TEST_reg (X86_64.R11, X86_64.R11)
-             X86_64.Jcc (X86_64.EQ, leafPayloadDone)
-             X86_64.CMP_reg (X86_64.R11, freeListBase)
-             X86_64.Jcc (X86_64.B, leafPayloadDone)
-             X86_64.CMP_reg (X86_64.R11, heapPtr)
-             X86_64.Jcc (X86_64.AE, leafPayloadDone)
-             X86_64.MOV_load (X86_64.R9, X86_64.R11, payloadSize)
-             X86_64.SUB_imm (X86_64.R9, 1)
-             X86_64.MOV_store (X86_64.R11, payloadSize, X86_64.R9)
-             X86_64.TEST_reg (X86_64.R9, X86_64.R9)
-             X86_64.Jcc (X86_64.NE, leafPayloadDone)
-             X86_64.PUSH X86_64.RDI
-             X86_64.PUSH X86_64.RSI
-             X86_64.PUSH X86_64.RCX
-             X86_64.PUSH X86_64.R11
-             X86_64.MOV_load (X86_64.RAX, X86_64.R11, closureFieldOffset)
-             X86_64.CALL closureRefCountDecHelperLabel
-             X86_64.POP X86_64.R11
-             X86_64.POP X86_64.RCX
-             X86_64.POP X86_64.RSI
-             X86_64.POP X86_64.RDI
-             X86_64.MOV_load (X86_64.R8, X86_64.R11, listFieldOffset)]
-            @ addChild "leaf_payload_fixed_block_closure_list_dict_list_field"
-            @ [X86_64.PUSH X86_64.RAX
-               X86_64.PUSH X86_64.RDI
-               X86_64.PUSH X86_64.RSI
-               X86_64.PUSH X86_64.RCX
-               X86_64.PUSH X86_64.R11
-               X86_64.MOV_load (X86_64.RAX, X86_64.R11, dictFieldOffset)
-               X86_64.CALL dictHelperLabel
-               X86_64.POP X86_64.R11
-               X86_64.POP X86_64.RCX
-               X86_64.POP X86_64.RSI
-               X86_64.POP X86_64.RDI
-               X86_64.POP X86_64.RAX]
-            @ (if payloadSize >= 0 && payloadSize < freeListSize then
-                [X86_64.MOV_load (X86_64.R10, freeListBase, payloadSize)
-                 X86_64.MOV_store (X86_64.R11, 0, X86_64.R10)
-                 X86_64.MOV_store (freeListBase, payloadSize, X86_64.R11)]
-               else [])
-            @ leakDec
-            @ [X86_64.Label leafPayloadDone]
-        | FixedBlockClosureDynamicListDictPayload (payloadSize, closureFieldOffset, dynamicFieldOffset, listFieldOffset, dictFieldOffset, dictHelperLabel) ->
-            [X86_64.MOV_load (X86_64.R11, X86_64.RDI, 0)
-             X86_64.TEST_reg (X86_64.R11, X86_64.R11)
-             X86_64.Jcc (X86_64.EQ, leafPayloadDone)
-             X86_64.CMP_reg (X86_64.R11, freeListBase)
-             X86_64.Jcc (X86_64.B, leafPayloadDone)
-             X86_64.CMP_reg (X86_64.R11, heapPtr)
-             X86_64.Jcc (X86_64.AE, leafPayloadDone)
-             X86_64.MOV_load (X86_64.R9, X86_64.R11, payloadSize)
-             X86_64.SUB_imm (X86_64.R9, 1)
-             X86_64.MOV_store (X86_64.R11, payloadSize, X86_64.R9)
-             X86_64.TEST_reg (X86_64.R9, X86_64.R9)
-             X86_64.Jcc (X86_64.NE, leafPayloadDone)
-             X86_64.PUSH X86_64.RDI
-             X86_64.PUSH X86_64.RSI
-             X86_64.PUSH X86_64.RCX
-             X86_64.PUSH X86_64.R11
-             X86_64.MOV_load (X86_64.RAX, X86_64.R11, closureFieldOffset)
-             X86_64.CALL closureRefCountDecHelperLabel
-             X86_64.POP X86_64.R11
-             X86_64.POP X86_64.RCX
-             X86_64.POP X86_64.RSI
-             X86_64.POP X86_64.RDI
-             X86_64.PUSH X86_64.R11
-             X86_64.MOV_reg (X86_64.R8, X86_64.R11)]
-            @ releaseDynamicBufferField dynamicFieldOffset
-            @ [X86_64.POP X86_64.R11
-               X86_64.MOV_load (X86_64.R8, X86_64.R11, listFieldOffset)]
-            @ addChild "leaf_payload_fixed_block_closure_dynamic_list_dict_list_field"
-            @ [X86_64.PUSH X86_64.RAX
-               X86_64.PUSH X86_64.RDI
-               X86_64.PUSH X86_64.RSI
-               X86_64.PUSH X86_64.RCX
-               X86_64.PUSH X86_64.R11
-               X86_64.MOV_load (X86_64.RAX, X86_64.R11, dictFieldOffset)
-               X86_64.CALL dictHelperLabel
-               X86_64.POP X86_64.R11
-               X86_64.POP X86_64.RCX
-               X86_64.POP X86_64.RSI
-               X86_64.POP X86_64.RDI
-               X86_64.POP X86_64.RAX]
-            @ (if payloadSize >= 0 && payloadSize < freeListSize then
-                [X86_64.MOV_load (X86_64.R10, freeListBase, payloadSize)
-                 X86_64.MOV_store (X86_64.R11, 0, X86_64.R10)
-                 X86_64.MOV_store (freeListBase, payloadSize, X86_64.R11)]
-               else [])
-            @ leakDec
-            @ [X86_64.Label leafPayloadDone]
-        | FixedBlockDynamicBuffersListDictPayload (payloadSize, dynamicFieldOffsets, listFieldOffset, dictFieldOffset, dictHelperLabel) ->
-            [X86_64.MOV_load (X86_64.R11, X86_64.RDI, 0)
-             X86_64.TEST_reg (X86_64.R11, X86_64.R11)
-             X86_64.Jcc (X86_64.EQ, leafPayloadDone)
-             X86_64.CMP_reg (X86_64.R11, freeListBase)
-             X86_64.Jcc (X86_64.B, leafPayloadDone)
-             X86_64.CMP_reg (X86_64.R11, heapPtr)
-             X86_64.Jcc (X86_64.AE, leafPayloadDone)
-             X86_64.MOV_load (X86_64.R9, X86_64.R11, payloadSize)
-             X86_64.SUB_imm (X86_64.R9, 1)
-             X86_64.MOV_store (X86_64.R11, payloadSize, X86_64.R9)
-             X86_64.TEST_reg (X86_64.R9, X86_64.R9)
-             X86_64.Jcc (X86_64.NE, leafPayloadDone)
-             X86_64.PUSH X86_64.R11
-             X86_64.MOV_reg (X86_64.R8, X86_64.R11)]
-            @ (dynamicFieldOffsets |> List.collect releaseDynamicBufferField)
-            @ [X86_64.POP X86_64.R11
-               X86_64.MOV_load (X86_64.R8, X86_64.R11, listFieldOffset)]
-            @ addChild "leaf_payload_fixed_block_dynamic_buffers_list_dict_list_field"
-            @ [X86_64.PUSH X86_64.RAX
-               X86_64.PUSH X86_64.RDI
-               X86_64.PUSH X86_64.RSI
-               X86_64.PUSH X86_64.RCX
-               X86_64.PUSH X86_64.R11
-               X86_64.MOV_load (X86_64.RAX, X86_64.R11, dictFieldOffset)
-               X86_64.CALL dictHelperLabel
-               X86_64.POP X86_64.R11
-               X86_64.POP X86_64.RCX
-               X86_64.POP X86_64.RSI
-               X86_64.POP X86_64.RDI
-               X86_64.POP X86_64.RAX]
-            @ (if payloadSize >= 0 && payloadSize < freeListSize then
-                [X86_64.MOV_load (X86_64.R10, freeListBase, payloadSize)
-                 X86_64.MOV_store (X86_64.R11, 0, X86_64.R10)
-                 X86_64.MOV_store (freeListBase, payloadSize, X86_64.R11)]
-               else [])
-            @ leakDec
-            @ [X86_64.Label leafPayloadDone]
-
     [X86_64.Label helperLabel
      // RAX = tagged list pointer, init pending count
      X86_64.XOR_reg (X86_64.RCX, X86_64.RCX)  // pending = 0
@@ -1702,26 +1372,13 @@ let private listRefCountDecHelperSpecs : (string * ListLeafPayloadRelease) list 
 
 let private listLeafPayloadNeedsDictDecHelper (leafPayloadRelease: ListLeafPayloadRelease) : bool =
     match leafPayloadRelease with
-    | FixedBlockDictFieldPayload _
     | DictLeafPayload ->
         true
-    | FixedBlockDynamicListDictPayload (_, _, _, _, dictHelperLabel) ->
-        dictHelperLabel = dictRefCountDecHelperLabel
-    | FixedBlockClosureListDictPayload (_, _, _, _, dictHelperLabel) ->
-        dictHelperLabel = dictRefCountDecHelperLabel
-    | FixedBlockDynamicBuffersListDictPayload (_, _, _, _, dictHelperLabel) ->
-        dictHelperLabel = dictRefCountDecHelperLabel
-    | FixedBlockClosureDynamicListDictPayload (_, _, _, _, _, dictHelperLabel) ->
-        dictHelperLabel = dictRefCountDecHelperLabel
     | FixedBlockPlannedLeafPayload (_, releasePlan) ->
         rcReleasePlanContains (releasePlanIsRootKind ANF.DictHeap) releasePlan
     | DictListLeafPayload ->
         false
     | NoLeafPayloadRelease
-    | FixedBlockLeafPayload _
-    | FixedBlockTaggedDynamicFieldPayload _
-    | FixedBlockListFieldPayload _
-    | FixedBlockClosureFieldPayload _
     | ListLeafPayload
     | ClosureLeafPayload
     | DynamicBufferLeafPayload ->
@@ -1731,22 +1388,9 @@ let private listLeafPayloadNeedsDictListValueDecHelper (leafPayloadRelease: List
     match leafPayloadRelease with
     | DictListLeafPayload ->
         true
-    | FixedBlockDynamicListDictPayload (_, _, _, _, dictHelperLabel) ->
-        dictHelperLabel = dictRefCountDecListValueHelperLabel
-    | FixedBlockClosureListDictPayload (_, _, _, _, dictHelperLabel) ->
-        dictHelperLabel = dictRefCountDecListValueHelperLabel
-    | FixedBlockDynamicBuffersListDictPayload (_, _, _, _, dictHelperLabel) ->
-        dictHelperLabel = dictRefCountDecListValueHelperLabel
-    | FixedBlockClosureDynamicListDictPayload (_, _, _, _, _, dictHelperLabel) ->
-        dictHelperLabel = dictRefCountDecListValueHelperLabel
     | FixedBlockPlannedLeafPayload (_, releasePlan) ->
         rcReleasePlanContains releasePlanIsDictWithListValue releasePlan
     | NoLeafPayloadRelease
-    | FixedBlockLeafPayload _
-    | FixedBlockTaggedDynamicFieldPayload _
-    | FixedBlockListFieldPayload _
-    | FixedBlockDictFieldPayload _
-    | FixedBlockClosureFieldPayload _
     | ListLeafPayload
     | ClosureLeafPayload
     | DictLeafPayload
@@ -1755,20 +1399,11 @@ let private listLeafPayloadNeedsDictListValueDecHelper (leafPayloadRelease: List
 
 let private listLeafPayloadNeedsClosureDecHelper (leafPayloadRelease: ListLeafPayloadRelease) : bool =
     match leafPayloadRelease with
-    | FixedBlockClosureFieldPayload _
-    | FixedBlockClosureListDictPayload _
-    | FixedBlockClosureDynamicListDictPayload _
     | ClosureLeafPayload ->
         true
     | FixedBlockPlannedLeafPayload (_, releasePlan) ->
         rcReleasePlanContains (releasePlanIsRootKind ANF.ClosureHeap) releasePlan
     | NoLeafPayloadRelease
-    | FixedBlockLeafPayload _
-    | FixedBlockTaggedDynamicFieldPayload _
-    | FixedBlockListFieldPayload _
-    | FixedBlockDictFieldPayload _
-    | FixedBlockDynamicListDictPayload _
-    | FixedBlockDynamicBuffersListDictPayload _
     | ListLeafPayload
     | DictLeafPayload
     | DictListLeafPayload
