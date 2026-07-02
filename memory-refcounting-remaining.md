@@ -25,7 +25,9 @@ Latest update:
   `Dict<String, String>` now uses a combined dynamic key/value helper pinned by
   `X86_64CodeGenTests.testDictRefCountDecStringKeyValue`. The same
   dynamic-buffer helper path is pinned for `Dict<Bytes, Bytes>` by
-  `X86_64CodeGenTests.testDictRefCountDecBytesKeyValue`. Broader x64 dict
+  `X86_64CodeGenTests.testDictRefCountDecBytesKeyValue`. x64 also now covers
+  mixed dynamic string keys with list leaf values via
+  `X86_64CodeGenTests.testDictRefCountDecStringKeyListValue`. Broader x64 dict
   key/value matrix work remains open.
 - x64 now has an explicit stdlib-context closure-list release probe. The
   ARM64 bug was an architecture-local helper-selection guard that excluded
@@ -1149,6 +1151,8 @@ commits enabled:
 - dict dynamic string leaf value release for `Dict<Int64, String>`
 - dict dynamic string leaf key/value release for `Dict<String, String>`
 - dict dynamic bytes leaf key/value release for `Dict<Bytes, Bytes>`
+- dict dynamic string leaf key plus list value release for
+  `Dict<String, List<Int64>>`
 - tagged-list tuple4 nested tuple dynamic string payload release
 - tagged-list tuple4 nested tuple string/list/dict payload release
 - tagged-list tuple4 nested tuple closure/bytes/list/dict payload release

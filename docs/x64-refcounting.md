@@ -267,7 +267,8 @@ The main x64 gaps are:
    exclusion. Direct `Dict<String, Int64>` dynamic leaf key release and
    `Dict<Int64, String>` dynamic leaf value release are covered, as is the
    combined `Dict<String, String>` leaf case. The same dynamic-buffer path is
-   pinned for `Dict<Bytes, Bytes>`.
+   pinned for `Dict<Bytes, Bytes>`, and mixed `Dict<String, List<Int64>>`
+   release is covered.
 2. Replace x64 helper-family selection with a shared shape-driven release plan
    executor instead of continuing helper explosion.
 3. Add x64 dict key/value shape matrix tests for typed recursive values.
