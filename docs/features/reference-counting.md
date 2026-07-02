@@ -37,6 +37,11 @@ Important current rules:
 - local aliases and projections are treated as borrowed
 - returned borrowed managed values, including container fields and covered sum
   payload projections, are retained before cleanup
+- closure-producing `Stdlib.List.__mapHelper` specializations treat the source
+  and accumulator parameters as owned helper state; callers retain the borrowed
+  source before entering those helpers, helper recursion releases replaced
+  owned roots before self tail calls, and closure-list `pushBack` consumes an
+  immediate closure-call result
 - RC operations are side-effecting and are preserved by optimization passes
 - cleanup is preserved before tail calls
 

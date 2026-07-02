@@ -487,7 +487,7 @@ let private generateListRefCountDecHelperWith
             listRefCountDecListHelperLabel
         | AST.TList (AST.TDict _) ->
             listRefCountDecDictHelperLabel
-        | AST.TList (AST.TFunction _) when not (ctx.FunctionName.StartsWith("Stdlib.")) ->
+        | AST.TList (AST.TFunction _) ->
             listRefCountDecClosureHelperLabel
         | _ ->
             listRefCountDecHelperLabel
@@ -498,8 +498,7 @@ let private generateListRefCountDecHelperWith
             listRefCountDecListHelperLabel
         | ANF.RootRelease (_, ANF.TaggedList, ANF.TaggedListPayloadRelease (ANF.RootRelease (_, ANF.DictHeap, _))) ->
             listRefCountDecDictHelperLabel
-        | ANF.RootRelease (_, ANF.TaggedList, ANF.TaggedListPayloadRelease (ANF.RootRelease (_, ANF.ClosureHeap, _)))
-            when not (ctx.FunctionName.StartsWith("Stdlib.")) ->
+        | ANF.RootRelease (_, ANF.TaggedList, ANF.TaggedListPayloadRelease (ANF.RootRelease (_, ANF.ClosureHeap, _))) ->
             listRefCountDecClosureHelperLabel
         | _ ->
             listRefCountDecHelperLabel

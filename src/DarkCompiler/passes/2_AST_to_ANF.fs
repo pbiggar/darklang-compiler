@@ -544,6 +544,9 @@ let extractGenericFuncDefs (program: AST.Program) : GenericFuncDefs =
         | _ -> None)
     |> Map.ofList
 
+let private mangleTypeVarName (name: string) : string =
+    name.Replace("_", "$u")
+
 /// Convert a type to a string for name mangling
 let rec typeToMangledName (t: AST.Type) : string =
     match t with
@@ -581,7 +584,7 @@ let rec typeToMangledName (t: AST.Type) : string =
         $"{name}_{argsStr}"
     | AST.TList elemType -> $"list_{typeToMangledName elemType}"
     | AST.TDict (keyType, valueType) -> $"dict_{typeToMangledName keyType}_{typeToMangledName valueType}"
-    | AST.TVar name -> name  // Should not appear after monomorphization
+    | AST.TVar name -> mangleTypeVarName name  // Should not appear after monomorphization
     | AST.TRawPtr -> "rawptr"  // Internal raw pointer type
 
 /// Check if a type contains any type variables

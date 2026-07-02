@@ -530,8 +530,6 @@ let rcShapeRootKind (shape: RcShape) : RcKind option =
     | FixedBlock _
     | BoxedSum _ ->
         Some GenericHeap
-    | TaggedListShape (ClosureShape _) ->
-        Some GenericHeap
     | TaggedListShape _ ->
         Some TaggedList
     | DictRoot _ ->

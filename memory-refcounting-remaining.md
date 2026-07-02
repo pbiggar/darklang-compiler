@@ -11,10 +11,19 @@ changes need in order to avoid re-opening completed problems.
 
 # Refcounting Remaining Work
 
-Status date: 2026-07-01.
+Status date: 2026-07-02.
 
 Latest update:
 
+- Closure lists produced by `Stdlib.List.map` are now covered by leak-check
+  tests. `List<TFunction>` roots route through tagged-list release helpers
+  rather than generic fixed-block release, ARM64 closure-list helper selection
+  no longer excludes stdlib functions, and RC insertion models the map helper's
+  closure-producing specializations explicitly: callers retain the borrowed
+  source before entering those helpers, helper recursion releases replaced
+  source and accumulator roots before self tail calls, and closure values
+  returned directly into closure-list `pushBack` are treated as ownership
+  transfers instead of receiving an immediate local decrement.
 - ARM64 dict-list value release parity was extended after this document was
   first written. ARM64 now has focused symbolic coverage for direct list
   elements, nested tuple/list payloads, boxed-sum tuple payloads, and nested

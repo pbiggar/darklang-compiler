@@ -61,6 +61,17 @@ let testMangledTypePreservesFreshenedTypeVariables () : TestResult =
     | Error err ->
         Error $"Expected freshened type variable to parse, got error: {err}"
 
+let testMangledFunctionTypePreservesSyntheticInterpreterTypeVariables () : TestResult =
+    let typ = AST.TFunction ([AST.TVar "__interp_lambda_0_1_y"], AST.TInt64)
+    let mangled = typeToMangledName typ
+    match tryParseMangledType Map.empty mangled with
+    | Ok (AST.TFunction ([AST.TVar "$u$uinterp$ulambda$u0$u1$uy"], AST.TInt64)) ->
+        Ok ()
+    | Ok other ->
+        Error $"Expected synthetic interpreter type variable to parse inside function type, got {other} from {mangled}"
+    | Error err ->
+        Error $"Expected synthetic interpreter type variable function type to parse from {mangled}, got error: {err}"
+
 let rec private findCallArgs (funcName: string) (expr: ANF.AExpr) : ANF.Atom list option =
     match expr with
     | ANF.Let (_, ANF.Call (name, args), rest) when name = funcName ->
@@ -122,6 +133,7 @@ let tests = [
     ("Lambda lowering detects function value", testNeedsLambdaLoweringDetectsFuncValue)
     ("Lambda lowering detects lambda", testNeedsLambdaLoweringDetectsLambda)
     ("Mangled type preserves freshened type variables", testMangledTypePreservesFreshenedTypeVariables)
+    ("Mangled function type preserves synthetic interpreter type variables", testMangledFunctionTypePreservesSyntheticInterpreterTypeVariables)
     ("Synthetic nullary call lowers to zero args", testSyntheticNullaryCallLowersToZeroArgs)
     ("Synthetic unit param lowers function to zero params", testSyntheticUnitParamLowersFunctionToZeroParams)
 ]

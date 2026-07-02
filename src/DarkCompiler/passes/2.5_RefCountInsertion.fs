@@ -286,7 +286,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         // Prefer the concrete closure target when available; otherwise use
         // the closure value's function type carried by the ANF type registry.
         match tryGetClosureFunc ctx closureAtom with
-        | Some funcName -> Map.tryFind funcName ctx.FuncReg
+        | Some funcName -> tryGetFuncReturnTypeFromReg ctx funcName
         | None ->
             match closureAtom with
             | Var tid ->
@@ -297,7 +297,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | ClosureTailCall (closureAtom, _) ->
         // Same as ClosureCall
         match tryGetClosureFunc ctx closureAtom with
-        | Some funcName -> Map.tryFind funcName ctx.FuncReg
+        | Some funcName -> tryGetFuncReturnTypeFromReg ctx funcName
         | None ->
             match closureAtom with
             | Var tid ->
@@ -534,6 +534,7 @@ let private bindingNeedsShapeAutomaticDec (ctx: TypeContext) (cexpr: CExpr) (typ
     || match typ, cexpr with
        | AST.TFunction _, ClosureAlloc _ -> true
        | AST.TFunction _, Call (funcName, _) when not (funcName.StartsWith("Stdlib.")) -> true
+       | AST.TFunction _, ClosureCall _ -> true
        | _ -> false
 
 type private ReturnDec = TempId * AST.Type * RcKind option
@@ -570,6 +571,25 @@ let private releaseExprForType
 
 let private shapeNeedsBorrowedRetain (ctx: TypeContext) (typ: AST.Type) : bool =
     typ |> rcShapeForType ctx |> rcShapeNeedsBorrowedRetain
+
+let private functionParamReturnTransfersOwnedAccumulator
+    (ctx: TypeContext)
+    (funcName: string)
+    (paramIndex: int)
+    (paramType: AST.Type)
+    : bool =
+    let isMapHelper =
+        funcName = "Stdlib.List.__mapHelper"
+        || funcName.StartsWith("Stdlib.List.__mapHelper_")
+    let returnsClosureList =
+        match tryGetFuncReturnTypeFromReg ctx funcName with
+        | Some (AST.TList (AST.TFunction _)) -> true
+        | _ -> false
+
+    match isMapHelper, paramIndex, paramType with
+    | true, 0, AST.TList _ when returnsClosureList -> true
+    | true, 2, AST.TList _ -> true
+    | _ -> false
 
 let rec private isStoredByRawSet (tempId: TempId) (bodyInfo: ReturnAnnotatedExpr) : bool =
     match bodyInfo with
@@ -742,6 +762,130 @@ let rec private moveDecsBeforeNonSelfTailCalls (currentFuncName: string) (expr: 
         | _ ->
             Let (tempId, cexpr, body')
 
+let rec private insertOwnedAccumulatorDecsBeforeSelfTailCalls
+    (ctx: TypeContext)
+    (currentFuncName: string)
+    (ownedParamDecs: ReturnDec list)
+    (expr: AExpr)
+    (varGen: VarGen)
+    (types: Map<TempId, AST.Type>)
+    : AExpr * VarGen * Map<TempId, AST.Type> =
+    let decsForSelfTailCall (args: Atom list) : ReturnDec list =
+        let argTemps =
+            args
+            |> List.fold (fun acc atom ->
+                match atom with
+                | Var tempId -> Set.add tempId acc
+                | _ -> acc) Set.empty
+
+        ownedParamDecs
+        |> List.filter (fun (tempId, _, _) -> not (Set.contains tempId argTemps))
+
+    let isSelfTailCallTarget (targetFunc: string) : bool =
+        targetFunc = currentFuncName
+        || targetFunc.StartsWith($"{currentFuncName}_")
+
+    let wrapOwnedAccumulatorDecs
+        (decs: ReturnDec list)
+        (tailExpr: AExpr)
+        (varGen: VarGen)
+        (types: Map<TempId, AST.Type>)
+        : AExpr * VarGen * Map<TempId, AST.Type> =
+        decs
+        |> List.fold
+            (fun (accExpr, accVarGen, accTypes) (tempId, typ, kindOverride) ->
+                let (dummyId, varGen') = freshVar accVarGen
+                let decExpr = releaseExprForType ctx tempId typ kindOverride
+                (Let (dummyId, decExpr, accExpr), varGen', Map.add dummyId AST.TUnit accTypes))
+            (tailExpr, varGen, types)
+
+    match expr with
+    | Return _ ->
+        (expr, varGen, types)
+    | If (cond, thenBranch, elseBranch) ->
+        let (thenBranch', varGen1, types1) =
+            insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs thenBranch varGen types
+        let (elseBranch', varGen2, types2) =
+            insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs elseBranch varGen1 types1
+        (If (cond, thenBranch', elseBranch'), varGen2, types2)
+    | Let (tempId, Call (targetFunc, args), body) when isSelfTailCallTarget targetFunc ->
+        let (body', varGen1, types1) =
+            insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs body varGen types
+        let callExpr = Let (tempId, Call (targetFunc, args), body')
+        wrapOwnedAccumulatorDecs (decsForSelfTailCall args) callExpr varGen1 types1
+    | Let (tempId, TailCall (targetFunc, args), body) when isSelfTailCallTarget targetFunc ->
+        let (body', varGen1, types1) =
+            insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs body varGen types
+        let tailExpr = Let (tempId, TailCall (targetFunc, args), body')
+        wrapOwnedAccumulatorDecs (decsForSelfTailCall args) tailExpr varGen1 types1
+    | Let (tempId, cexpr, body) ->
+        let (body', varGen1, types1) =
+            insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs body varGen types
+        (Let (tempId, cexpr, body'), varGen1, types1)
+
+let rec private insertClosureMapSourceRetainsBeforeHelperCalls
+    (ctx: TypeContext)
+    (currentFuncName: string)
+    (expr: AExpr)
+    (varGen: VarGen)
+    (types: Map<TempId, AST.Type>)
+    : AExpr * VarGen * Map<TempId, AST.Type> =
+    let currentIsMapHelper =
+        currentFuncName = "Stdlib.List.__mapHelper"
+        || currentFuncName.StartsWith("Stdlib.List.__mapHelper_")
+
+    let isMapHelperTarget (targetFunc: string) : bool =
+        targetFunc = "Stdlib.List.__mapHelper"
+        || targetFunc.StartsWith("Stdlib.List.__mapHelper_")
+
+    let targetReturnsClosureList (targetFunc: string) : bool =
+        match tryGetFuncReturnTypeFromReg ctx targetFunc with
+        | Some (AST.TList (AST.TFunction _)) -> true
+        | _ -> false
+
+    let wrapSourceRetain
+        (targetFunc: string)
+        (args: Atom list)
+        (callExpr: AExpr)
+        (varGen: VarGen)
+        (types: Map<TempId, AST.Type>)
+        : AExpr * VarGen * Map<TempId, AST.Type> =
+        match currentIsMapHelper, targetReturnsClosureList targetFunc, args with
+        | false, true, Var sourceTemp :: _ ->
+            match tryGetType (withTempTypes ctx types) sourceTemp with
+            | Some sourceType when shapeNeedsBorrowedRetain ctx sourceType ->
+                let (dummyId, varGen') = freshVar varGen
+                let incExpr = retainExprForType ctx sourceTemp sourceType
+                (Let (dummyId, incExpr, callExpr), varGen', Map.add dummyId AST.TUnit types)
+            | _ ->
+                (callExpr, varGen, types)
+        | _ ->
+            (callExpr, varGen, types)
+
+    match expr with
+    | Return _ ->
+        (expr, varGen, types)
+    | If (cond, thenBranch, elseBranch) ->
+        let (thenBranch', varGen1, types1) =
+            insertClosureMapSourceRetainsBeforeHelperCalls ctx currentFuncName thenBranch varGen types
+        let (elseBranch', varGen2, types2) =
+            insertClosureMapSourceRetainsBeforeHelperCalls ctx currentFuncName elseBranch varGen1 types1
+        (If (cond, thenBranch', elseBranch'), varGen2, types2)
+    | Let (tempId, Call (targetFunc, args), body) when isMapHelperTarget targetFunc ->
+        let (body', varGen1, types1) =
+            insertClosureMapSourceRetainsBeforeHelperCalls ctx currentFuncName body varGen types
+        let callExpr = Let (tempId, Call (targetFunc, args), body')
+        wrapSourceRetain targetFunc args callExpr varGen1 types1
+    | Let (tempId, TailCall (targetFunc, args), body) when isMapHelperTarget targetFunc ->
+        let (body', varGen1, types1) =
+            insertClosureMapSourceRetainsBeforeHelperCalls ctx currentFuncName body varGen types
+        let callExpr = Let (tempId, TailCall (targetFunc, args), body')
+        wrapSourceRetain targetFunc args callExpr varGen1 types1
+    | Let (tempId, cexpr, body) ->
+        let (body', varGen1, types1) =
+            insertClosureMapSourceRetainsBeforeHelperCalls ctx currentFuncName body varGen types
+        (Let (tempId, cexpr, body'), varGen1, types1)
+
 /// Insert reference counting operations using return analysis and a dec stack
 /// Returns (transformed expr, varGen, types defined in this subtree)
 let rec insertRCWithAnalysis
@@ -779,15 +923,17 @@ let rec insertRCWithAnalysis
                 |> List.map (fun (tempId, _, _) -> tempId)
                 |> Set.ofList
             let branchLocalDecs (branchReturned: Set<TempId>) : ReturnDec list =
-                frames
-                |> List.choose (fun frame ->
-                    match frame.BranchDec with
-                    | Some (tempId, _, _ as dec)
-                        when not (Set.contains tempId branchReturned)
-                             && not (Set.contains tempId returnDecTemps) ->
-                        Some dec
-                    | _ ->
-                        None)
+                let frameDecs =
+                    frames
+                    |> List.choose (fun frame ->
+                        match frame.BranchDec with
+                        | Some (tempId, _, _ as dec)
+                            when not (Set.contains tempId branchReturned)
+                                 && not (Set.contains tempId returnDecTemps) ->
+                            Some dec
+                        | _ ->
+                            None)
+                frameDecs
             let (thenBranch', varGen1, types1, typeCache1) =
                 insertRCWithAnalysis
                     ctx
@@ -932,6 +1078,20 @@ let rec insertRCWithAnalysis
                     isI64Push funcName && consumesSecondArg args
                 | _ ->
                     false
+            let consumedByImmediateClosurePushBack =
+                let isClosurePushBack (funcName: string) : bool =
+                    funcName.StartsWith("Stdlib.__FingerTree.pushBack_fn_")
+                    || funcName.StartsWith("Stdlib.List.pushBack_fn_")
+                let consumesSecondArg (args: Atom list) : bool =
+                    match args with
+                    | _listAtom :: Var valueTemp :: _ -> valueTemp = tempId
+                    | _ -> false
+                match cexpr, bodyInfo with
+                | ClosureCall _, RLet (_, Call (funcName, args), _, _)
+                | ClosureCall _, RLet (_, TailCall (funcName, args), _, _) ->
+                    isClosurePushBack funcName && consumesSecondArg args
+                | _ ->
+                    false
             let secondParamNeedsOwnershipTransfer (funcName: string) : bool =
                 let isOwnershipTransferredParamType (typ: AST.Type) : bool =
                     typ |> rcShapeForType ctx |> rcShapeIsOwnershipTransferRoot
@@ -942,20 +1102,13 @@ let rec insertRCWithAnalysis
                     | _ -> false
                 | _ ->
                     false
-            let skipReturnDecForPushBackHelpers =
+            let skipReturnDecForMapHelperLists =
                 match currentFuncName with
                 | Some funcName ->
-                    let isFunctionSpecialization = funcName.Contains("_fn_")
-                    let isPushBackFamily =
-                        funcName = "Stdlib.List.pushBack"
-                        || funcName.StartsWith("Stdlib.List.pushBack_")
-                        || funcName = "Stdlib.__FingerTree.pushBack"
-                        || funcName.StartsWith("Stdlib.__FingerTree.pushBack_")
-                        || funcName = "Stdlib.__FingerTree.__pushBackNode"
-                        || funcName.StartsWith("Stdlib.__FingerTree.__pushBackNode_")
+                    let isMapHelper =
+                        funcName = "Stdlib.List.__mapHelper"
                         || funcName.StartsWith("Stdlib.List.__mapHelper_")
-                    isPushBackFamily
-                    && isFunctionSpecialization
+                    isMapHelper
                     && secondParamNeedsOwnershipTransfer funcName
                     && match inferredType with
                        | AST.TList _ -> true
@@ -966,15 +1119,6 @@ let rec insertRCWithAnalysis
                 match cexpr with
                 | ClosureAlloc _ -> isStoredByRawSet tempId bodyInfo
                 | _ -> false
-            let functionListProducedByStdlibMap =
-                match cexpr, inferredType with
-                | Call (funcName, _), AST.TList (AST.TFunction _) ->
-                    funcName = "Stdlib.List.map"
-                    || funcName.StartsWith("Stdlib.List.map_")
-                    || funcName = "Stdlib.List.__mapHelper"
-                    || funcName.StartsWith("Stdlib.List.__mapHelper_")
-                | _ ->
-                    false
             let returnDecs' =
                 let functionReturnsNestedRecordListDict =
                     let isSingleListDictRecord (name: string) : bool =
@@ -1000,18 +1144,14 @@ let rec insertRCWithAnalysis
                 if bindingNeedsShapeAutomaticDec ctx cexpr inferredType
                    && not (Set.contains tempId bodyReturned)
                    && not (isBorrowingExpr cexpr)
-                   && not skipReturnDecForPushBackHelpers
+                   && not skipReturnDecForMapHelperLists
                    && not consumedByImmediateI64Push
-                   && not closureOwnershipTransferredToRawStorage
-                   && not functionListProducedByStdlibMap then
+                   && not consumedByImmediateClosurePushBack
+                   && not closureOwnershipTransferredToRawStorage then
                     let kindOverride =
-                        match inferredType, currentFuncName with
-                        | AST.TList (AST.TFunction _), Some funcName when funcName.StartsWith("Stdlib.") ->
-                            None
-                        | AST.TList (AST.TFunction _), _ ->
-                            Some TaggedList
-                        | _ ->
-                            None
+                        match inferredType with
+                        | AST.TList (AST.TFunction _) -> Some TaggedList
+                        | _ -> None
                     let dec = (tempId, inferredType, kindOverride)
                     if needsNestedRecordListDictDictDec then
                         // List<Record { List<Dict<Int64, Int64>> }> construction retains the
@@ -1097,18 +1237,14 @@ let rec insertRCWithAnalysis
                 BranchDec =
                     if bindingNeedsShapeAutomaticDec ctx cexpr inferredType
                        && not (isBorrowingExpr cexpr)
-                       && not skipReturnDecForPushBackHelpers
+                       && not skipReturnDecForMapHelperLists
                        && not consumedByImmediateI64Push
-                       && not closureOwnershipTransferredToRawStorage
-                       && not functionListProducedByStdlibMap then
+                       && not consumedByImmediateClosurePushBack
+                       && not closureOwnershipTransferredToRawStorage then
                         let kindOverride =
-                            match inferredType, currentFuncName with
-                            | AST.TList (AST.TFunction _), Some funcName when funcName.StartsWith("Stdlib.") ->
-                                None
-                            | AST.TList (AST.TFunction _), _ ->
-                                Some TaggedList
-                            | _ ->
-                                None
+                            match inferredType with
+                            | AST.TList (AST.TFunction _) -> Some TaggedList
+                            | _ -> None
                         Some (tempId, inferredType, kindOverride)
                     else
                         None
@@ -1158,19 +1294,38 @@ let private insertRCInFunctionInternal
     let bodyInfo = analyzeReturns Map.empty func.Body
     let paramIncsRev =
         func.TypedParams
-        |> List.fold (fun acc param ->
-            if shapeNeedsBorrowedRetain ctxWithParams param.Type then
+        |> List.mapi (fun index param -> (index, param))
+        |> List.fold (fun acc (index, param) ->
+            if shapeNeedsBorrowedRetain ctxWithParams param.Type
+               && not (functionParamReturnTransfersOwnedAccumulator ctxWithParams func.Name index param.Type) then
                 (param.Id, param.Type) :: acc
             else
                 acc
         ) []
     let paramIncs = List.rev paramIncsRev
+    let ownedParamDecs =
+        func.TypedParams
+        |> List.mapi (fun index param -> (index, param))
+        |> List.choose (fun (index, param) ->
+            if functionParamReturnTransfersOwnedAccumulator ctxWithParams func.Name index param.Type then
+                Some (param.Id, param.Type, None)
+            else
+                None)
 
     // Process function body with return analysis
     let (bodyWithRC, varGen', accTypes, typeCache') =
         insertRCWithAnalysis ctxWithParams (Some func.Name) bodyInfo varGen [] paramIncs typesWithParams typeCache
-    let body' = moveDecsBeforeNonSelfTailCalls func.Name bodyWithRC
-    ({ func with Body = body' }, varGen', accTypes, typeCache')
+    let (bodyWithOwnedAccumulatorDecs, varGen'', accTypes') =
+        insertOwnedAccumulatorDecsBeforeSelfTailCalls ctxWithParams func.Name ownedParamDecs bodyWithRC varGen' accTypes
+    let (bodyWithClosureMapSourceRetains, varGen''', accTypes'') =
+        insertClosureMapSourceRetainsBeforeHelperCalls
+            ctxWithParams
+            func.Name
+            bodyWithOwnedAccumulatorDecs
+            varGen''
+            accTypes'
+    let body' = moveDecsBeforeNonSelfTailCalls func.Name bodyWithClosureMapSourceRetains
+    ({ func with Body = body' }, varGen''', accTypes'', typeCache')
 
 /// Insert RC operations into a function
 /// Returns (transformed function, varGen, accumulated TempTypes)

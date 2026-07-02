@@ -204,7 +204,7 @@ let testRcShapeOwnershipHelpersSelectRootDispatch () : TestResult =
         (FixedBlock (16, [DynamicString]), Some GenericHeap)
         (BoxedSum (16, [], []), Some GenericHeap)
         (TaggedListShape DynamicString, Some TaggedList)
-        (TaggedListShape (ClosureShape []), Some GenericHeap)
+        (TaggedListShape (ClosureShape []), Some TaggedList)
         (DictRoot (Immediate, DynamicString), Some DictHeap)
         (ClosureShape [DynamicString], Some ClosureHeap)
         (Immediate, None)
@@ -224,7 +224,7 @@ let testRcShapeOwnershipHelpersSelectRetainReleaseOperations () : TestResult =
         (FixedBlock (16, [DynamicString]), Some (FixedSizeRoot (16, GenericHeap)))
         (BoxedSum (16, [], []), Some (FixedSizeRoot (16, GenericHeap)))
         (TaggedListShape DynamicString, Some (FixedSizeRoot (24, TaggedList)))
-        (TaggedListShape (ClosureShape []), Some (FixedSizeRoot (24, GenericHeap)))
+        (TaggedListShape (ClosureShape []), Some (FixedSizeRoot (24, TaggedList)))
         (DictRoot (Immediate, DynamicString), Some (FixedSizeRoot (8, DictHeap)))
         (ClosureShape [DynamicString], Some (FixedSizeRoot (0, ClosureHeap)))
         (DynamicString, Some DynamicStringBuffer)
@@ -249,7 +249,7 @@ let testRcShapeOwnershipHelpersClassifyStorage () : TestResult =
         (FixedBlock (16, [DynamicString]), ManagedRcRoot (16, GenericHeap))
         (BoxedSum (16, [], []), ManagedRcRoot (16, GenericHeap))
         (TaggedListShape DynamicString, ManagedRcRoot (24, TaggedList))
-        (TaggedListShape (ClosureShape []), ManagedRcRoot (24, GenericHeap))
+        (TaggedListShape (ClosureShape []), ManagedRcRoot (24, TaggedList))
         (DictRoot (Immediate, DynamicString), ManagedRcRoot (8, DictHeap))
         (ClosureShape [DynamicString], ManagedRcRoot (0, ClosureHeap))
         (DynamicString, ManagedDynamicBuffer DynamicStringBuffer)
@@ -721,6 +721,260 @@ let testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed () : TestRe
     else
         Error "Alias return should materialize ownership with RefCountInc even when function is marked BorrowedReturn"
 
+let testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator () : TestResult =
+    let sourceListType = AST.TList AST.TInt64
+    let mappedListType = AST.TList (AST.TFunction ([AST.TInt64], AST.TInt64))
+    let mapperType = AST.TFunction ([AST.TInt64], AST.TFunction ([AST.TInt64], AST.TInt64))
+    let helperName = "Stdlib.List.__mapHelper_i64_fn_i64_to_i64"
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            (helperName, AST.TFunction ([sourceListType; mapperType; mappedListType], mappedListType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let sourceParam = TempId 0
+    let mapperParam = TempId 1
+    let accParam = TempId 2
+    let func : Function = {
+        Name = helperName
+        TypedParams = [
+            { Id = sourceParam; Type = sourceListType }
+            { Id = mapperParam; Type = mapperType }
+            { Id = accParam; Type = mappedListType }
+        ]
+        ReturnType = mappedListType
+        ReturnOwnership = OwnedReturn
+        Body = Return (Var accParam)
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountIncForTemp accParam transformed.Body then
+        Error "Stdlib.List.__mapHelper should transfer its owned accumulator return without retaining it"
+    else
+        Ok ()
+
+let testMapHelperSelfTailCallReleasesReplacedAccumulator () : TestResult =
+    let sourceListType = AST.TList AST.TInt64
+    let mappedListType = AST.TList (AST.TFunction ([AST.TInt64], AST.TInt64))
+    let mapperType = AST.TFunction ([AST.TInt64], AST.TFunction ([AST.TInt64], AST.TInt64))
+    let helperName = "Stdlib.List.__mapHelper"
+    let specializedHelperName = "Stdlib.List.__mapHelper_i64_fn_i64_to_i64"
+    let pushBackName = "Stdlib.__FingerTree.pushBack_fn_i64_to_i64"
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            (helperName, AST.TFunction ([sourceListType; mapperType; mappedListType], mappedListType))
+            (specializedHelperName, AST.TFunction ([sourceListType; mapperType; mappedListType], mappedListType))
+            ("mappedClosure", AST.TFunction ([AST.TInt64], AST.TInt64))
+            (pushBackName, AST.TFunction ([mappedListType; AST.TFunction ([AST.TInt64], AST.TInt64)], mappedListType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let sourceParam = TempId 0
+    let mapperParam = TempId 1
+    let accParam = TempId 2
+    let closureTemp = TempId 3
+    let newAccTemp = TempId 4
+    let tailTemp = TempId 5
+    let func : Function = {
+        Name = helperName
+        TypedParams = [
+            { Id = sourceParam; Type = sourceListType }
+            { Id = mapperParam; Type = mapperType }
+            { Id = accParam; Type = mappedListType }
+        ]
+        ReturnType = mappedListType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                closureTemp,
+                ClosureAlloc ("mappedClosure", []),
+                Let (
+                    newAccTemp,
+                    Call (pushBackName, [Var accParam; Var closureTemp]),
+                    Let (
+                        tailTemp,
+                        TailCall (specializedHelperName, [Var sourceParam; Var mapperParam; Var newAccTemp]),
+                        Return (Var tailTemp)
+                    )
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountDecForTemp accParam transformed.Body then
+        Ok ()
+    else
+        Error "Stdlib.List.__mapHelper self tail-call should release the replaced owned accumulator"
+
+let testMapHelperClosureProducingCallRetainsBorrowedSource () : TestResult =
+    let sourceListType = AST.TList AST.TInt64
+    let mappedListType = AST.TList (AST.TFunction ([AST.TInt64], AST.TInt64))
+    let mapperType = AST.TFunction ([AST.TInt64], AST.TFunction ([AST.TInt64], AST.TInt64))
+    let helperName = "Stdlib.List.__mapHelper_i64_fn_i64_to_i64"
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            (helperName, AST.TFunction ([sourceListType; mapperType; mappedListType], mappedListType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let sourceParam = TempId 0
+    let mapperParam = TempId 1
+    let accParam = TempId 2
+    let mappedTemp = TempId 3
+    let func : Function = {
+        Name = "caller"
+        TypedParams = [
+            { Id = sourceParam; Type = sourceListType }
+            { Id = mapperParam; Type = mapperType }
+            { Id = accParam; Type = mappedListType }
+        ]
+        ReturnType = mappedListType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                mappedTemp,
+                Call (helperName, [Var sourceParam; Var mapperParam; Var accParam]),
+                Return (Var mappedTemp)
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountIncForTemp sourceParam transformed.Body then
+        Ok ()
+    else
+        Error "Callers entering closure-producing Stdlib.List.__mapHelper should retain the borrowed source list"
+
+let testMapHelperClosureSourceToValueKeepsSourceBorrowed () : TestResult =
+    let sourceListType = AST.TList (AST.TFunction ([AST.TInt64], AST.TInt64))
+    let mappedListType = AST.TList AST.TInt64
+    let mapperType = AST.TFunction ([AST.TFunction ([AST.TInt64], AST.TInt64)], AST.TInt64)
+    let helperName = "Stdlib.List.__mapHelper_fn_i64_to_i64_i64"
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            (helperName, AST.TFunction ([sourceListType; mapperType; mappedListType], mappedListType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let sourceParam = TempId 0
+    let mapperParam = TempId 1
+    let accParam = TempId 2
+    let func : Function = {
+        Name = helperName
+        TypedParams = [
+            { Id = sourceParam; Type = sourceListType }
+            { Id = mapperParam; Type = mapperType }
+            { Id = accParam; Type = mappedListType }
+        ]
+        ReturnType = mappedListType
+        ReturnOwnership = OwnedReturn
+        Body = Return (Var accParam)
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountIncForTemp sourceParam transformed.Body then
+        Error "Stdlib.List.__mapHelper over closure source to value should not retain an unreturned borrowed source parameter"
+    elif hasRefCountDecForTemp sourceParam transformed.Body then
+        Error "Stdlib.List.__mapHelper over closure source to value should not release a borrowed source parameter"
+    else
+        Ok ()
+
+let testClosurePushBackConsumesImmediateClosureCallResult () : TestResult =
+    let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
+    let makerType = AST.TFunction ([AST.TInt64], closureType)
+    let listType = AST.TList closureType
+    let pushBackName = "Stdlib.__FingerTree.pushBack_fn_i64_to_i64"
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            ("makeClosure", makerType)
+            ("mappedClosure", closureType)
+            ("returnedClosure", closureType)
+            (pushBackName, AST.TFunction ([listType; closureType], listType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let makerTemp = TempId 0
+    let returnedTemp = TempId 1
+    let listParam = TempId 2
+    let pushedTemp = TempId 3
+    let func : Function = {
+        Name = "caller"
+        TypedParams = [
+            { Id = listParam; Type = listType }
+        ]
+        ReturnType = listType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                makerTemp,
+                ClosureAlloc ("makeClosure", []),
+                Let (
+                    returnedTemp,
+                    ClosureCall (Var makerTemp, [IntLiteral (Int64 5L)]),
+                    Let (
+                        pushedTemp,
+                        Call (pushBackName, [Var listParam; Var returnedTemp]),
+                        Return (Var pushedTemp)
+                    )
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountDecForTemp returnedTemp transformed.Body then
+        Error "ClosureCall result passed directly to closure-list pushBack should transfer ownership without an immediate local dec"
+    else
+        Ok ()
+
 let testBorrowedCallStillGetsAutoDecUnderConservativePolicy () : TestResult =
     let nodeType = AST.TList AST.TInt64
     let funcReg : AST_to_ANF.FunctionRegistry =
@@ -814,6 +1068,56 @@ let testCallReturningClosureGetsAutoDecAfterUse () : TestResult =
         Ok ()
     else
         Error "Call result with function type should receive automatic closure RefCountDec after use"
+
+let testClosureCallReturningClosureGetsAutoDecAfterUse () : TestResult =
+    let returnedClosureType = AST.TFunction ([AST.TInt64], AST.TInt64)
+    let makerClosureType = AST.TFunction ([AST.TInt64], returnedClosureType)
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            ("makeClosure", makerClosureType)
+            ("returnedClosure", returnedClosureType)
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let makerTemp = TempId 0
+    let returnedTemp = TempId 1
+    let resultTemp = TempId 2
+    let func : Function = {
+        Name = "caller"
+        TypedParams = []
+        ReturnType = AST.TInt64
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                makerTemp,
+                ClosureAlloc ("makeClosure", []),
+                Let (
+                    returnedTemp,
+                    ClosureCall (Var makerTemp, [IntLiteral (Int64 5L)]),
+                    Let (
+                        resultTemp,
+                        Atom (IntLiteral (Int64 0L)),
+                        Return (Var resultTemp)
+                    )
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountDecForTemp returnedTemp transformed.Body then
+        Ok ()
+    else
+        Error "ClosureCall result with function return type should receive automatic closure RefCountDec after use"
 
 let testPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
     let ctx : TypeContext = {
@@ -977,8 +1281,14 @@ let tests = [
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
+    ("map helper accumulator return transfers ownership without retain", testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator)
+    ("map helper self tail-call releases replaced accumulator", testMapHelperSelfTailCallReleasesReplacedAccumulator)
+    ("map helper closure-producing call retains borrowed source", testMapHelperClosureProducingCallRetainsBorrowedSource)
+    ("map helper closure source to value keeps source borrowed", testMapHelperClosureSourceToValueKeepsSourceBorrowed)
+    ("closure pushBack consumes immediate closure-call result", testClosurePushBackConsumesImmediateClosureCallResult)
     ("borrowed call still gets auto-dec under conservative policy", testBorrowedCallStillGetsAutoDecUnderConservativePolicy)
     ("call returning closure gets auto-dec after use", testCallReturningClosureGetsAutoDecAfterUse)
+    ("closure call returning closure gets auto-dec after use", testClosureCallReturningClosureGetsAutoDecAfterUse)
     ("pure enum binding does not get automatic dec", testPureEnumBindingDoesNotGetAutomaticDec)
     ("generic pure enum binding does not get automatic dec", testGenericPureEnumBindingDoesNotGetAutomaticDec)
     ("bare sum type refs are canonicalized for RC source types", testBareSumTypeRefsAreCanonicalizedForRcSourceTypes)
