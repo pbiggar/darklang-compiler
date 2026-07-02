@@ -2164,6 +2164,9 @@ let private listDecHelperForType (ctx: CodeGenContext) (sourceType: AST.Type) : 
 
 let private dictPayloadReleaseNeedsPlannedHelper (keyRelease: ANF.RcReleasePlan) (valueRelease: ANF.RcReleasePlan) : bool =
     match keyRelease, valueRelease with
+    | ANF.DynamicBufferRelease _, _
+    | _, ANF.DynamicBufferRelease _ ->
+        true
     | ANF.NoReleasePlan, ANF.RootRelease (_, ANF.TaggedList, _)
     | ANF.NoReleasePlan, ANF.RootRelease (_, ANF.DictHeap, _) ->
         true
@@ -2266,6 +2269,8 @@ let private generateDictRefCountIncHelper () : ARM64Symbolic.Instr list =
 
 let private generateDictRefCountDecHelper
     (helperLabel: string)
+    (releaseLeafDynamicKey: bool)
+    (releaseLeafDynamicValue: bool)
     (releaseLeafListValue: bool)
     (releaseLeafDictValueHelper: string option)
     (releaseLeafTupleStringListValue: bool)
@@ -2327,6 +2332,8 @@ let private generateDictRefCountDecHelper
     let skipFreeList = label "skip_freelist"
     let skipLeafListValueRelease = label "skip_leaf_list_value_release"
     let skipLeafDictValueRelease = label "skip_leaf_dict_value_release"
+    let skipLeafDynamicKeyRelease = label "skip_leaf_dynamic_key_release"
+    let skipLeafDynamicValueRelease = label "skip_leaf_dynamic_value_release"
     let skipLeafTupleStringListValueRelease = label "skip_leaf_tuple_string_list_value_release"
     let tupleStringListValueDone = label "tuple_string_list_value_done"
     let skipLeafSumStringValueRelease = label "skip_leaf_sum_string_value_release"
@@ -2355,6 +2362,62 @@ let private generateDictRefCountDecHelper
             ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 112s)
             ARM64Symbolic.Label skipLabel
         ]
+
+    let releaseLeafDynamicBufferFieldInstrs
+        (fieldOffset: int16)
+        (skipLabel: string)
+        : ARM64Symbolic.Instr list =
+        let refcountUpdate =
+            if List.isEmpty leakDec then
+                [
+                    ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+                    ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+                ]
+            else
+                [
+                    ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+                    ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+                    ARM64Symbolic.CBNZ (ARM64Symbolic.X15, skipLabel)
+                ] @ leakDec
+
+        [
+            ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 2us)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, skipLabel)
+            ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X3, fieldOffset)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X12, skipLabel)
+            ARM64Symbolic.CMP_reg (ARM64Symbolic.X12, ARM64Symbolic.X27)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, skipLabel)
+            ARM64Symbolic.CMP_reg (ARM64Symbolic.X12, ARM64Symbolic.X28)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.GT, skipLabel)
+            ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
+            ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 7us)
+            ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 3us, 0)
+            ARM64Symbolic.LSR_reg (ARM64Symbolic.X15, ARM64Symbolic.X15, ARM64Symbolic.X13)
+            ARM64Symbolic.LSL_reg (ARM64Symbolic.X15, ARM64Symbolic.X15, ARM64Symbolic.X13)
+            ARM64Symbolic.ADD_imm (ARM64Symbolic.X14, ARM64Symbolic.X12, 8us)
+            ARM64Symbolic.ADD_reg (ARM64Symbolic.X14, ARM64Symbolic.X14, ARM64Symbolic.X15)
+            ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+            ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 0xFFFFus, 0)
+            ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 16)
+            ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 32)
+            ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0x7FFFus, 48)
+            ARM64Symbolic.CMP_reg (ARM64Symbolic.X15, ARM64Symbolic.X13)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, skipLabel)
+        ]
+        @ refcountUpdate
+        @ [ARM64Symbolic.Label skipLabel]
+
+    let releaseLeafDynamicKeyInstrs =
+        if releaseLeafDynamicKey then
+            releaseLeafDynamicBufferFieldInstrs 0s skipLeafDynamicKeyRelease
+        else
+            []
+
+    let releaseLeafDynamicValueInstrs =
+        if releaseLeafDynamicValue then
+            releaseLeafDynamicBufferFieldInstrs 8s skipLeafDynamicValueRelease
+        else
+            []
 
     let releaseLeafListValueInstrs =
         if releaseLeafListValue then
@@ -2589,6 +2652,8 @@ let private generateDictRefCountDecHelper
         ARM64Symbolic.STR (ARM64Symbolic.X7, ARM64Symbolic.X6, 0s)
         ARM64Symbolic.CBNZ (ARM64Symbolic.X7, popOrRet)
     ]
+    @ releaseLeafDynamicKeyInstrs
+    @ releaseLeafDynamicValueInstrs
     @ releaseLeafListValueInstrs
     @ releaseLeafDictValueInstrs
     @ releaseLeafTupleStringListValueInstrs
@@ -2648,26 +2713,53 @@ let private generatePlannedDictRefCountDecHelper
 
     match releasePlan with
     | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (keyRelease, valueRelease)) ->
-        match keyRelease with
-        | ANF.NoReleasePlan -> ()
-        | other -> unsupported "key" other
+        let releaseLeafDynamicKey =
+            match keyRelease with
+            | ANF.NoReleasePlan -> false
+            | ANF.DynamicBufferRelease _ -> true
+            | other -> unsupported "key" other
 
-        let releaseLeafListValue, releaseLeafDictValueHelper =
+        let (
+            releaseLeafDynamicValue,
+            releaseLeafListValue,
+            releaseLeafDictValueHelper,
+            releaseLeafTupleStringListValue,
+            releaseLeafTupleStringListDictValue,
+            releaseLeafSumStringValue
+            ) =
             match valueRelease with
+            | ANF.NoReleasePlan ->
+                false, false, None, false, false, false
+            | ANF.DynamicBufferRelease _ ->
+                true, false, None, false, false, false
             | ANF.RootRelease (_, ANF.TaggedList, _) ->
-                true, None
+                false, true, None, false, false, false
             | ANF.RootRelease (_, ANF.DictHeap, _) ->
-                false, Some (dictDecHelperForReleasePlan valueRelease)
+                false, false, Some (dictDecHelperForReleasePlan valueRelease), false, false, false
+            | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (16, fieldReleases))
+                when releasePlanDynamicOperationAt 0 ANF.DynamicStringBuffer fieldReleases
+                     && releasePlanRootKindAt 8 ANF.TaggedList fieldReleases ->
+                false, false, None, true, false, false
+            | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (24, fieldReleases))
+                when releasePlanDynamicOperationAt 0 ANF.DynamicStringBuffer fieldReleases
+                     && releasePlanRootKindAt 8 ANF.TaggedList fieldReleases
+                     && releasePlanRootKindAt 16 ANF.DictHeap fieldReleases ->
+                false, false, None, false, true, false
+            | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _))
+                when releasePlanDynamicOperationAt 8 ANF.DynamicStringBuffer fieldReleases ->
+                false, false, None, false, false, true
             | other ->
                 unsupported "value" other
 
         generateDictRefCountDecHelper
             helperLabel
+            releaseLeafDynamicKey
+            releaseLeafDynamicValue
             releaseLeafListValue
             releaseLeafDictValueHelper
-            false
-            false
-            false
+            releaseLeafTupleStringListValue
+            releaseLeafTupleStringListDictValue
+            releaseLeafSumStringValue
             ctx
     | other ->
         Crash.crash $"ARM64 planned dict RefCountDec helper requires a DictHeap release plan, got {other}"
@@ -6824,13 +6916,13 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                |> Map.toList
                |> List.collect (fun (helperLabel, releasePlan) ->
                    generatePlannedDictRefCountDecHelper helperLabel releasePlan ctx))
-            @ (if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper || not (Map.isEmpty plannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel false None false false false ctx else [])
-            @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel true None false false false ctx else [])
-            @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false (Some dictRefCountDecHelperLabel) false false false ctx else [])
-            @ (if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false (Some dictRefCountDecListValueHelperLabel) false false false ctx else [])
-            @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false None true false false ctx else [])
-            @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false None false true false ctx else [])
-            @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false None false false true ctx else [])
+            @ (if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper || not (Map.isEmpty plannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false None false false false ctx else [])
+            @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel false false true None false false false ctx else [])
+            @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false false false (Some dictRefCountDecHelperLabel) false false false ctx else [])
+            @ (if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false false false (Some dictRefCountDecListValueHelperLabel) false false false ctx else [])
+            @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false false None true false false ctx else [])
+            @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false None false true false ctx else [])
+            @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None false false true ctx else [])
         let closureRcHelpers =
             (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
             @ (if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper ctx else [])

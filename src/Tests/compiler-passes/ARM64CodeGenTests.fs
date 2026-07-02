@@ -455,6 +455,51 @@ let testDictDictListValueUsesPlannedDictHelper () : TestResult =
         else
             Ok ()
 
+let private assertDictRefCountDecUsesPlannedDictHelper
+    (dictType: AST.Type)
+    (caseName: string)
+    : TestResult =
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    0,
+                    LIR.DictHeap,
+                    Some (rcMetadata dictType))
+            ]
+            Map.empty
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let callsPlannedDictHelper =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.BL label when label.StartsWith("__dark_dict_refcount_dec_plan_") -> true
+                | _ -> false)
+
+        if callsPlannedDictHelper then
+            Ok ()
+        else
+            Error $"{caseName} did not emit a planned dict release helper"
+
+let testDictStringKeyUsesPlannedDictHelper () : TestResult =
+    assertDictRefCountDecUsesPlannedDictHelper
+        (AST.TDict (AST.TString, AST.TInt64))
+        "Dict<string, int>"
+
+let testDictStringValueUsesPlannedDictHelper () : TestResult =
+    assertDictRefCountDecUsesPlannedDictHelper
+        (AST.TDict (AST.TInt64, AST.TString))
+        "Dict<int, string>"
+
+let testDictStringKeyListValueUsesPlannedDictHelper () : TestResult =
+    assertDictRefCountDecUsesPlannedDictHelper
+        (AST.TDict (AST.TString, AST.TList AST.TInt64))
+        "Dict<string, list<int>>"
+
 let testGenericFixedBlockNestedBytesFieldUsesReleasePlan () : TestResult =
     let nestedType = AST.TTuple [ AST.TBytes ]
     let parentType = AST.TTuple [ nestedType ]
@@ -749,6 +794,9 @@ let tests : (string * (unit -> TestResult)) list = [
     ("List sum tuple4 closure dict-list uses typed dict helper", testListSumTuple4ClosureDictListValueUsesTypedDictHelper)
     ("List sum tuple4 closure string dict-list uses typed dict helper", testListSumTuple4ClosureStringDictListValueUsesTypedDictHelper)
     ("Dict dict-list uses planned dict helper", testDictDictListValueUsesPlannedDictHelper)
+    ("Dict string key uses planned dict helper", testDictStringKeyUsesPlannedDictHelper)
+    ("Dict string value uses planned dict helper", testDictStringValueUsesPlannedDictHelper)
+    ("Dict string key list value uses planned dict helper", testDictStringKeyListValueUsesPlannedDictHelper)
     ("Generic fixed-block nested bytes field uses release plan", testGenericFixedBlockNestedBytesFieldUsesReleasePlan)
     ("Generic fixed-block nested immediate field releases child root", testGenericFixedBlockNestedImmediateFieldReleasesChildRoot)
     ("Generic fixed-block nested mixed boxed-sum bytes payload uses variant dispatch", testGenericFixedBlockNestedMixedBoxedSumBytesPayloadUsesVariantDispatch)
