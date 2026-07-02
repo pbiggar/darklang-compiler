@@ -172,6 +172,13 @@ Latest update:
   cases, so extending tuple/record/sum list payload cleanup should now happen
   by extending `RcShape`/`RcReleasePlan` and the generic release-plan executor,
   not by adding more per-shape helper labels.
+- Both backends now have focused guard tests that generic tuple and record list
+  payloads select planned list helpers. `X86_64CodeGenTests` checks emitted
+  calls with the `__dark_list_rc_dec_plan_` prefix, and
+  `ARM64CodeGenTests` checks generated labels/calls with the
+  `__dark_list_refcount_dec_plan_` prefix. These tests are intentionally about
+  helper selection rather than one concrete tuple/record layout, so they should
+  fail if a future change rebuilds a tuple/record list-helper matrix.
 
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
 release, tuple-only nested fixed-block field release, record-registry-based
@@ -1439,6 +1446,8 @@ Likely gaps:
 3. Preserve the planned `RcReleasePlan` execution path for generic list leaf
    payloads on both backends; extending tuple/record/sum list payload cleanup
    should mean extending the release-plan executor, not adding helper labels.
+   Current tuple and record guard tests assert the planned helper prefixes on
+   both x64 and ARM64.
 4. Keep x64 closure capture release probes in parity with ARM64 when new
    capture families are added. Current x64 probes cover dynamic buffers,
    list/dict/closure roots, tuple/record/sum fixed blocks, mixed sums,

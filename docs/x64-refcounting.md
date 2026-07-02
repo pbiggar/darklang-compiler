@@ -181,6 +181,9 @@ their `RcReleasePlan`, not by enumerating helper-label special cases.
 This means new tuple, record, and boxed-sum list payload shapes should be
 covered by extending `RcShape`/`RcReleasePlan` metadata and the shared generic
 executor, not by adding another tuple/record/sum list helper label.
+Focused x64 and ARM64 codegen tests now guard this selection rule for tuple and
+record list payloads by checking that generated code uses the planned-list
+helper label prefixes.
 
 ## Dicts
 
@@ -240,6 +243,7 @@ The main x64 gaps are:
    `String/List<Int64>/Dict<Int64, Int64>` fields are also covered.
 2. Keep fixed-block and boxed-sum list payload cleanup on the planned
    `RcReleasePlan` path; do not reintroduce tuple/record/sum helper matrices.
+   Tuple and record payload guard tests now pin this on both backends.
 3. Add x64 dict key/value shape matrix tests for typed recursive values.
 4. Add a real dual-backend memory matrix if the test harness grows support for
    forcing the backend independent of the host architecture.
