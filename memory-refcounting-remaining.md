@@ -118,6 +118,15 @@ Latest update:
   ending at `cbbe933` added typed helper selection for tuple3, tuple4,
   nested tuple, boxed-sum, and nested dict-list payload shapes. Raw memory
   policy remains explicitly deferred.
+- x64 tagged-list fixed-block leaf payload cleanup now has its first planned
+  `RcReleasePlan` execution path. A `List<(Int64, Int64, Record, Int64)>`
+  shape whose middle record contains `String`, `List<Int64>`, and
+  `Dict<Int64, Int64>` previously selected the plain list helper and leaked
+  the tuple root, nested record root, and all nested managed children. It is
+  now pinned by
+  `X86_64CodeGenTests.testTaggedListRefCountDecTuple4NestedRecordMiddleStringListDictPayload`
+  and handled by a planned fixed-block list leaf helper that delegates payload
+  cleanup to the shared x64 generic `RcReleasePlan` executor.
 
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
 release, tuple-only nested fixed-block field release, record-registry-based
@@ -230,6 +239,9 @@ nested tuple closure/bytes/list/dict payload release, plus x64 tagged-list
 record4 nested tuple dynamic string payload release, plus x64 tagged-list
 record4 nested tuple string/list/dict payload release, plus x64 tagged-list
 record4 nested tuple closure/bytes/list/dict payload release, plus initial
+planned x64 tagged-list tuple4 nested-record middle-field string/list/dict
+payload release through the shared generic fixed-block `RcReleasePlan`
+executor, plus initial
 `RcShape` storage-class classification used by RC insertion's legacy fixed-root
 compatibility predicate, plus shared `RcReleasePlan` metadata and x64 generic
 fixed-block dynamic string/bytes, dict-root, and closure-root field release
@@ -1334,7 +1346,9 @@ Likely gaps:
   closure/bytes/list/dict, and closure/string/list/dict-list shapes,
   tuple4 nested tuple dynamic string, string/list/dict, and
   closure/bytes/list/dict shapes, record4 nested tuple dynamic string,
-  string/list/dict, and closure/bytes/list/dict shapes, record1, exhaustive
+  string/list/dict, and closure/bytes/list/dict shapes, tuple4 nested-record
+  middle-field string/list/dict through a planned `RcReleasePlan` helper,
+  record1, exhaustive
   record3 dynamic-buffer combinations, mixed record3 string/bytes/list/dict
   and closure/list/dict shapes, mixed record4
   string/bytes/list/dict and closure/bytes/list/dict shapes, sum dynamic-buffer,
@@ -1360,7 +1374,9 @@ Likely gaps:
 2. Keep `docs/x64-refcounting.md` current after every parity or shape-plan
    slice.
 3. Replace backend helper-family matching with shared `RcReleasePlan`
-   execution where practical.
+   execution where practical. x64 now has one tagged-list fixed-block leaf
+   payload using this path; use that as the template for the remaining nested
+   list payload families.
 4. Port ARM64 closure capture release semantics beyond the current direct
    dynamic-buffer, managed-root, and fixed-block probes to x64.
 5. Port any missing list helper variants to x64 until the shared shape-plan
