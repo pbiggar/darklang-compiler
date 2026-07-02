@@ -765,91 +765,6 @@ let private releasePlanIsDynamicBufferRelease (releasePlan: ANF.RcReleasePlan) :
     | _ ->
         false
 
-let private releasePlanFieldHasRelease
-    (fieldOffset: int)
-    (predicate: ANF.RcReleasePlan -> bool)
-    (fieldReleases: ANF.RcFieldRelease list)
-    : bool =
-    fieldReleases
-    |> List.exists (function
-        | ANF.FieldRelease (offset, releasePlan) when offset = fieldOffset ->
-            predicate releasePlan
-        | _ ->
-            false)
-
-let private releasePlanIsFixedBlockWithExactFieldReleases
-    (payloadSize: int)
-    (expectedFieldReleases: (int * (ANF.RcReleasePlan -> bool)) list)
-    (releasePlan: ANF.RcReleasePlan)
-    : bool =
-    match releasePlan with
-    | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (planPayloadSize, fieldReleases))
-        when planPayloadSize = payloadSize && List.length fieldReleases = List.length expectedFieldReleases ->
-        expectedFieldReleases
-        |> List.forall (fun (fieldOffset, predicate) ->
-            releasePlanFieldHasRelease fieldOffset predicate fieldReleases)
-    | _ ->
-        false
-
-let private releasePlanIsFixedBlockWithDynamicBufferOffsets
-    (payloadSize: int)
-    (expectedDynamicOffsets: int list)
-    (releasePlan: ANF.RcReleasePlan)
-    : bool =
-    match releasePlan with
-    | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (planPayloadSize, fieldReleases))
-        when planPayloadSize = payloadSize ->
-        let dynamicOffsets =
-            fieldReleases
-            |> List.choose (function
-                | ANF.FieldRelease (offset, ANF.DynamicBufferRelease _) ->
-                    Some offset
-                | _ ->
-                    None)
-
-        List.length dynamicOffsets = List.length fieldReleases
-        && dynamicOffsets = expectedDynamicOffsets
-    | _ ->
-        false
-
-let private releasePlanIsTaggedListWithFixedBlockDynamicBufferOffsets
-    (payloadSize: int)
-    (expectedDynamicOffsets: int list)
-    (releasePlan: ANF.RcReleasePlan)
-    : bool =
-    releasePlan
-    |> releasePlanIsTaggedListWithElementRelease
-        (releasePlanIsFixedBlockWithDynamicBufferOffsets payloadSize expectedDynamicOffsets)
-
-let private releasePlanIsTaggedListWithTuple2NestedPayload
-    (nestedPayloadPredicate: ANF.RcReleasePlan -> bool)
-    (releasePlan: ANF.RcReleasePlan)
-    : bool =
-    releasePlan
-    |> releasePlanIsTaggedListWithElementRelease
-        (releasePlanIsFixedBlockWithExactFieldReleases 16 [8, nestedPayloadPredicate])
-
-let private releasePlanIsBoxedSumWithPayloadRelease
-    (payloadPredicate: ANF.RcReleasePlan -> bool)
-    (releasePlan: ANF.RcReleasePlan)
-    : bool =
-    match releasePlan with
-    | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
-        fieldReleases
-        |> List.exists (function
-            | ANF.FieldRelease (_, payloadRelease) ->
-                payloadPredicate payloadRelease)
-    | _ ->
-        false
-
-let private releasePlanIsTaggedListWithSumPayloadRelease
-    (payloadPredicate: ANF.RcReleasePlan -> bool)
-    (releasePlan: ANF.RcReleasePlan)
-    : bool =
-    releasePlanIsTaggedListWithElementRelease
-        (releasePlanIsBoxedSumWithPayloadRelease payloadPredicate)
-        releasePlan
-
 let private stableRcReleasePlanHash (releasePlan: ANF.RcReleasePlan) : string =
     let fnvOffset = 14695981039346656037UL
     let fnvPrime = 1099511628211UL
@@ -902,20 +817,6 @@ let private genClosureFieldRelease (fieldOffset: int) : X86_64.Instr list =
      X86_64.CALL closureRefCountDecHelperLabel
      X86_64.POP X86_64.RDX]
 
-let private releasePlanDynamicBufferOffsets (fieldReleases: ANF.RcFieldRelease list) : int list option =
-    let dynamicOffsets =
-        fieldReleases
-        |> List.choose (function
-            | ANF.FieldRelease (offset, ANF.DynamicBufferRelease _) ->
-                Some offset
-            | _ ->
-                None)
-
-    if List.length dynamicOffsets = List.length fieldReleases then
-        Some dynamicOffsets
-    else
-        None
-
 let private releasePlanFieldReleaseAt
     (fieldOffset: int)
     (fieldReleases: ANF.RcFieldRelease list)
@@ -926,17 +827,6 @@ let private releasePlanFieldReleaseAt
             Some releasePlan
         | _ ->
             None)
-
-let private releasePlanIsFixedBlockRelease
-    (payloadSize: int)
-    (fieldReleases: ANF.RcFieldRelease list)
-    (releasePlan: ANF.RcReleasePlan)
-    : bool =
-    match releasePlan with
-    | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (planPayloadSize, planFieldReleases)) ->
-        planPayloadSize = payloadSize && planFieldReleases = fieldReleases
-    | _ ->
-        false
 
 let private releasePlanIsDynamicBufferAt (fieldOffset: int) (fieldReleases: ANF.RcFieldRelease list) : bool =
     match releasePlanFieldReleaseAt fieldOffset fieldReleases with
@@ -962,177 +852,6 @@ let private releasePlanIsDictWithValueAt
         valuePredicate valueRelease
     | _ ->
         false
-
-let rec private fixedBlockListHelperForPayloadRelease
-    (payloadSize: int)
-    (fieldReleases: ANF.RcFieldRelease list)
-    : string =
-    let dynamicOffsets =
-        releasePlanDynamicBufferOffsets fieldReleases
-
-    let nestedFixedBlockAt fieldOffset =
-        match releasePlanFieldReleaseAt fieldOffset fieldReleases with
-        | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (nestedPayloadSize, nestedFieldReleases))) ->
-            Some (nestedPayloadSize, nestedFieldReleases)
-        | _ ->
-            None
-
-    let nestedMiddleDynamicListDict =
-        match nestedFixedBlockAt 16 with
-        | Some (24, nestedFieldReleases) ->
-            releasePlanIsDynamicBufferAt 0 nestedFieldReleases
-            && releasePlanIsRootKindAt 8 ANF.TaggedList nestedFieldReleases
-            && releasePlanIsRootKindAt 16 ANF.DictHeap nestedFieldReleases
-        | _ ->
-            false
-
-    let nestedMiddleDynamicListDictList =
-        match nestedFixedBlockAt 16 with
-        | Some (24, nestedFieldReleases) ->
-            releasePlanIsDynamicBufferAt 0 nestedFieldReleases
-            && releasePlanIsRootKindAt 8 ANF.TaggedList nestedFieldReleases
-            && releasePlanIsDictWithValueAt 16 (releasePlanIsRootKind ANF.TaggedList) nestedFieldReleases
-        | _ ->
-            false
-
-    match payloadSize, dynamicOffsets, nestedFixedBlockAt 8, nestedFixedBlockAt 24 with
-    | 8, Some [0], _, _ ->
-        listRefCountDecRecord1DynamicHelperLabel
-    | 16, Some [], _, _ ->
-        listRefCountDecTuple2HelperLabel
-    | 16, Some [0], _, _ ->
-        listRefCountDecTuple2DynamicFirstHelperLabel
-    | 16, Some [8], _, _ ->
-        listRefCountDecTuple2DynamicSecondHelperLabel
-    | 16, Some [0; 8], _, _ ->
-        listRefCountDecTuple2DynamicBothHelperLabel
-    | 16, _, Some (16, nestedFieldReleases), _
-        when releasePlanDynamicBufferOffsets nestedFieldReleases = Some [0] ->
-        listRefCountDecTuple2NestedTupleDynamicFirstHelperLabel
-    | 16, _, Some (16, nestedFieldReleases), _
-        when releasePlanDynamicBufferOffsets nestedFieldReleases = Some [8] ->
-        listRefCountDecTuple2NestedTupleDynamicSecondHelperLabel
-    | 16, _, Some (16, nestedFieldReleases), _
-        when releasePlanDynamicBufferOffsets nestedFieldReleases = Some [0; 8] ->
-        listRefCountDecTuple2NestedTupleDynamicBothHelperLabel
-    | 16, _, Some (8, nestedFieldReleases), _
-        when releasePlanIsRootKindAt 0 ANF.DictHeap nestedFieldReleases ->
-        listRefCountDecTuple2NestedTupleDictHelperLabel
-    | 16, _, Some (8, nestedFieldReleases), _
-        when releasePlanIsRootKindAt 0 ANF.ClosureHeap nestedFieldReleases ->
-        listRefCountDecTuple2NestedTupleClosureHelperLabel
-    | 16, _, Some (16, nestedFieldReleases), _
-        when releasePlanIsRootKindAt 0 ANF.TaggedList nestedFieldReleases
-             && releasePlanIsRootKindAt 8 ANF.DictHeap nestedFieldReleases ->
-        listRefCountDecTuple2NestedTupleListDictHelperLabel
-    | 16, _, Some (24, nestedFieldReleases), _
-        when releasePlanIsDynamicBufferAt 0 nestedFieldReleases
-             && releasePlanIsRootKindAt 8 ANF.TaggedList nestedFieldReleases
-             && releasePlanIsRootKindAt 16 ANF.DictHeap nestedFieldReleases ->
-        listRefCountDecTuple2NestedTupleDynamicListDictHelperLabel
-    | 16, _, Some (32, nestedFieldReleases), _
-        when releasePlanIsDynamicBufferAt 0 nestedFieldReleases
-             && releasePlanIsDynamicBufferAt 8 nestedFieldReleases
-             && releasePlanIsRootKindAt 16 ANF.TaggedList nestedFieldReleases
-             && releasePlanIsDictWithValueAt 24 (releasePlanIsRootKind ANF.TaggedList) nestedFieldReleases ->
-        listRefCountDecTuple2NestedTupleDynamicBuffersListDictListHelperLabel
-    | 16, _, Some (32, nestedFieldReleases), _
-        when releasePlanIsDynamicBufferAt 0 nestedFieldReleases
-             && releasePlanIsDynamicBufferAt 8 nestedFieldReleases
-             && releasePlanIsRootKindAt 16 ANF.TaggedList nestedFieldReleases
-             && releasePlanIsRootKindAt 24 ANF.DictHeap nestedFieldReleases ->
-        listRefCountDecTuple2NestedTupleDynamicBuffersListDictHelperLabel
-    | 24, Some [0], _, _ ->
-        listRefCountDecTuple3DynamicFirstHelperLabel
-    | 24, Some [16], _, _ ->
-        listRefCountDecTuple3DynamicThirdHelperLabel
-    | 24, Some [0; 8], _, _ ->
-        listRefCountDecTuple3DynamicFirstSecondHelperLabel
-    | 24, Some [8; 16], _, _ ->
-        listRefCountDecTuple3DynamicSecondThirdHelperLabel
-    | 24, Some [0; 16], _, _ ->
-        listRefCountDecTuple3DynamicFirstThirdHelperLabel
-    | 24, Some [8], _, _ ->
-        listRefCountDecTuple3DynamicSecondHelperLabel
-    | 24, Some [0; 8; 16], _, _ ->
-        listRefCountDecTuple3DynamicAllHelperLabel
-    | 24, _, _, _
-        when releasePlanIsDynamicBufferAt 0 fieldReleases
-             && releasePlanIsRootKindAt 8 ANF.TaggedList fieldReleases
-             && releasePlanIsDictWithValueAt 16 (releasePlanIsRootKind ANF.TaggedList) fieldReleases ->
-        listRefCountDecTuple3DynamicListDictListHelperLabel
-    | 24, _, _, _
-        when releasePlanIsDynamicBufferAt 0 fieldReleases
-             && releasePlanIsRootKindAt 8 ANF.TaggedList fieldReleases
-             && releasePlanIsRootKindAt 16 ANF.DictHeap fieldReleases ->
-        listRefCountDecTuple3DynamicListDictHelperLabel
-    | 24, _, _, _
-        when releasePlanIsRootKindAt 0 ANF.ClosureHeap fieldReleases
-             && releasePlanIsRootKindAt 8 ANF.TaggedList fieldReleases
-             && releasePlanIsDictWithValueAt 16 (releasePlanIsRootKind ANF.TaggedList) fieldReleases ->
-        listRefCountDecTuple3ClosureListDictListHelperLabel
-    | 24, _, _, _
-        when releasePlanIsRootKindAt 0 ANF.ClosureHeap fieldReleases
-             && releasePlanIsRootKindAt 8 ANF.TaggedList fieldReleases
-             && releasePlanIsRootKindAt 16 ANF.DictHeap fieldReleases ->
-        listRefCountDecTuple3ClosureListDictHelperLabel
-    | 32, _, _, Some (16, nestedFieldReleases)
-        when releasePlanDynamicBufferOffsets nestedFieldReleases = Some [0] ->
-        listRefCountDecTuple4NestedTupleDynamicHelperLabel
-    | 32, _, _, Some (24, nestedFieldReleases)
-        when releasePlanIsDynamicBufferAt 0 nestedFieldReleases
-             && releasePlanIsRootKindAt 8 ANF.TaggedList nestedFieldReleases
-             && releasePlanIsDictWithValueAt 16 (releasePlanIsRootKind ANF.TaggedList) nestedFieldReleases ->
-        listRefCountDecTuple4NestedTupleDynamicListDictListHelperLabel
-    | 32, _, _, Some (24, nestedFieldReleases)
-        when releasePlanIsDynamicBufferAt 0 nestedFieldReleases
-             && releasePlanIsRootKindAt 8 ANF.TaggedList nestedFieldReleases
-             && releasePlanIsRootKindAt 16 ANF.DictHeap nestedFieldReleases ->
-        listRefCountDecTuple4NestedTupleDynamicListDictHelperLabel
-    | 32, _, _, Some (32, nestedFieldReleases)
-        when releasePlanIsRootKindAt 0 ANF.ClosureHeap nestedFieldReleases
-             && releasePlanIsDynamicBufferAt 8 nestedFieldReleases
-             && releasePlanIsRootKindAt 16 ANF.TaggedList nestedFieldReleases
-             && releasePlanIsDictWithValueAt 24 (releasePlanIsRootKind ANF.TaggedList) nestedFieldReleases ->
-        listRefCountDecTuple4NestedTupleClosureDynamicListDictListHelperLabel
-    | 32, _, _, Some (32, nestedFieldReleases)
-        when releasePlanIsRootKindAt 0 ANF.ClosureHeap nestedFieldReleases
-             && releasePlanIsDynamicBufferAt 8 nestedFieldReleases
-             && releasePlanIsRootKindAt 16 ANF.TaggedList nestedFieldReleases
-             && releasePlanIsRootKindAt 24 ANF.DictHeap nestedFieldReleases ->
-        listRefCountDecTuple4NestedTupleClosureDynamicListDictHelperLabel
-    | 32, _, _, _
-        when nestedMiddleDynamicListDictList ->
-        listRefCountDecTuple4NestedRecordMiddleDynamicListDictListHelperLabel
-    | 32, _, _, _
-        when nestedMiddleDynamicListDict ->
-        listRefCountDecTuple4NestedRecordMiddleDynamicListDictHelperLabel
-    | 32, _, _, _
-        when releasePlanIsDynamicBufferAt 0 fieldReleases
-             && releasePlanIsDynamicBufferAt 8 fieldReleases
-             && releasePlanIsRootKindAt 16 ANF.TaggedList fieldReleases
-             && releasePlanIsDictWithValueAt 24 (releasePlanIsRootKind ANF.TaggedList) fieldReleases ->
-        listRefCountDecTuple4DynamicListDictListHelperLabel
-    | 32, _, _, _
-        when releasePlanIsDynamicBufferAt 0 fieldReleases
-             && releasePlanIsDynamicBufferAt 8 fieldReleases
-             && releasePlanIsRootKindAt 16 ANF.TaggedList fieldReleases
-             && releasePlanIsRootKindAt 24 ANF.DictHeap fieldReleases ->
-        listRefCountDecTuple4DynamicListDictHelperLabel
-    | 32, _, _, _
-        when releasePlanIsRootKindAt 0 ANF.ClosureHeap fieldReleases
-             && releasePlanIsDynamicBufferAt 8 fieldReleases
-             && releasePlanIsRootKindAt 16 ANF.TaggedList fieldReleases
-             && releasePlanIsDictWithValueAt 24 (releasePlanIsRootKind ANF.TaggedList) fieldReleases ->
-        listRefCountDecTuple4ClosureDynamicListDictListHelperLabel
-    | 32, _, _, _
-        when releasePlanIsRootKindAt 0 ANF.ClosureHeap fieldReleases
-             && releasePlanIsDynamicBufferAt 8 fieldReleases
-             && releasePlanIsRootKindAt 16 ANF.TaggedList fieldReleases
-             && releasePlanIsRootKindAt 24 ANF.DictHeap fieldReleases ->
-        listRefCountDecTuple4ClosureDynamicListDictHelperLabel
-    | _ ->
-        listRefCountDecHelperLabel
 
 let rec private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
     match releasePlan with
@@ -5273,58 +4992,6 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
 
     let closureCaptureTypes = closureCaptureTypesFromParams functions
 
-    let closureCapturesContainReleasePlan (predicate: ANF.RcReleasePlan -> bool) : bool =
-        closureCaptureTypes
-        |> Map.exists (fun _ captureTypes ->
-            captureTypes |> List.exists (typeReleasePlanContains predicate recordRegistry sumShapeRegistry))
-
-    let typeContainsNestedListElementRelease
-        (elementKind: ANF.RcKind)
-        (sourceType: AST.Type)
-        : bool =
-        let releasePlanMatches =
-            releasePlanIsTaggedListWithElementRelease (releasePlanIsRootKind elementKind)
-
-        typeReleasePlanContains releasePlanMatches recordRegistry sumShapeRegistry sourceType
-
-    let typeContainsDynamicBufferListElementRelease (sourceType: AST.Type) : bool =
-        typeReleasePlanContains
-            (releasePlanIsTaggedListWithElementRelease releasePlanIsDynamicBufferRelease)
-            recordRegistry
-            sumShapeRegistry
-            sourceType
-
-    let closureCapturesContainDynamicBufferListElementRelease () : bool =
-        closureCaptureTypes
-        |> Map.exists (fun _ captureTypes ->
-            captureTypes |> List.exists typeContainsDynamicBufferListElementRelease)
-
-    let closureCapturesContainNestedListElementRelease
-        (elementKind: ANF.RcKind)
-        : bool =
-        closureCaptureTypes
-        |> Map.exists (fun _ captureTypes ->
-            captureTypes
-            |> List.exists (typeContainsNestedListElementRelease elementKind))
-
-    let typeContainsSumListPayloadRelease
-        (payloadPredicate: ANF.RcReleasePlan -> bool)
-        (sourceType: AST.Type)
-        : bool =
-        typeReleasePlanContains
-            (releasePlanIsTaggedListWithSumPayloadRelease payloadPredicate)
-            recordRegistry
-            sumShapeRegistry
-            sourceType
-
-    let closureCapturesContainSumListPayloadRelease
-        (payloadPredicate: ANF.RcReleasePlan -> bool)
-        : bool =
-        closureCaptureTypes
-        |> Map.exists (fun _ captureTypes ->
-            captureTypes
-            |> List.exists (typeContainsSumListPayloadRelease payloadPredicate))
-
     let unionLabelSets sets =
         match sets with
         | [] -> Set.empty
@@ -5586,21 +5253,7 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
             Set.empty
 
     let typedListDecHelpersNeedListDecHelper =
-        if Set.contains listRefCountDecDictListHelperLabel neededListDecHelperLabels
-           || Set.contains listRefCountDecTuple2NestedTupleDynamicBuffersListDictListHelperLabel neededListDecHelperLabels
-           || Set.contains listRefCountDecTuple3DynamicListDictListHelperLabel neededListDecHelperLabels
-           || Set.contains listRefCountDecSumTuple3DynamicListDictListHelperLabel neededListDecHelperLabels
-           || Set.contains listRefCountDecTuple3ClosureListDictListHelperLabel neededListDecHelperLabels
-           || Set.contains listRefCountDecSumTuple3ClosureListDictListHelperLabel neededListDecHelperLabels
-           || Set.contains listRefCountDecTuple4DynamicListDictListHelperLabel neededListDecHelperLabels
-           || Set.contains listRefCountDecTuple4ClosureDynamicListDictListHelperLabel neededListDecHelperLabels
-           || Set.contains listRefCountDecTuple4NestedTupleDynamicListDictListHelperLabel neededListDecHelperLabels
-           || Set.contains listRefCountDecTuple4NestedTupleClosureDynamicListDictListHelperLabel neededListDecHelperLabels
-           || Set.contains listRefCountDecTuple4NestedRecordMiddleDynamicListDictHelperLabel neededListDecHelperLabels
-           || Set.contains listRefCountDecTuple4NestedRecordMiddleDynamicListDictListHelperLabel neededListDecHelperLabels
-           || Set.contains listRefCountDecSumTuple4DynamicListDictListHelperLabel neededListDecHelperLabels
-           || Set.contains listRefCountDecSumTuple4ClosureDynamicListDictListHelperLabel neededListDecHelperLabels
-           || Set.contains listRefCountDecSumTuple4NestedTupleDynamicListDictHelperLabel neededListDecHelperLabels then
+        if Set.contains listRefCountDecDictListHelperLabel neededListDecHelperLabels then
             Set.singleton listRefCountDecHelperLabel
         else
             Set.empty
