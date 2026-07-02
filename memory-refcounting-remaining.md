@@ -11,7 +11,17 @@ changes need in order to avoid re-opening completed problems.
 
 # Refcounting Remaining Work
 
-Status date: 2026-05-18.
+Status date: 2026-07-01.
+
+Latest update:
+
+- ARM64 dict-list value release parity was extended after this document was
+  first written. ARM64 now has focused symbolic coverage for direct list
+  elements, nested tuple/list payloads, boxed-sum tuple payloads, and nested
+  dict values that contain `Dict<Int64, List<Int64>>`. The recent commits
+  ending at `cbbe933` added typed helper selection for tuple3, tuple4,
+  nested tuple, boxed-sum, and nested dict-list payload shapes. Raw memory
+  policy remains explicitly deferred.
 
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
 release, tuple-only nested fixed-block field release, record-registry-based
@@ -1030,14 +1040,16 @@ managed, but the raw node lifecycle needs a clear correctness story:
 - whether x64 and ARM64 dict helpers are semantically equivalent
 
 Recent probes showed that scope-only dict leaf values can leak when their
-payload shape is not one of the current ARM64 typed helper cases. The immediate
-cause is that `__dark_dict_rc_dec_helper` can balance HAMT raw nodes, but it is
-not typed and therefore cannot recursively release arbitrary typed key/value
+payload shape is not one of the typed helper cases. The immediate cause is that
+the generic dict decrement helper can balance HAMT raw nodes, but it is not
+typed and therefore cannot recursively release arbitrary typed key/value
 payloads stored in leaf or collision nodes. Narrow ARM64 helpers now handle
-leaf `List` values, closure values, nested dict values, and tuple values of
-`(String, List<Int64>)`, and tuple values of
-`(String, List<Int64>, Dict<Int64, Int64>)`; future fixes should add typed dict
-release helpers or a serialized shape-plan path for the remaining leaf and
+leaf `List` values, closure values, nested dict values, tuple values of
+`(String, List<Int64>)`, tuple values of
+`(String, List<Int64>, Dict<Int64, Int64>)`, and the current
+`Dict<Int64, List<Int64>>` matrix used by list, nested tuple, boxed-sum, and
+nested dict payload tests. Future fixes should add a serialized shape-plan path
+or more complete typed dict release helpers for the remaining arbitrary leaf and
 collision payload shapes. This is separate from the later raw-allocation policy
 decision.
 
@@ -1056,7 +1068,8 @@ decision.
 
 ### Suggested Commit Breakdown
 
-1. Add dict value shape matrix tests for ARM64.
+1. Extend dict value shape matrix tests beyond the current ARM64 dict-list
+   coverage.
 2. Fix any key/value recursive retain gaps.
 3. Fix any key/value recursive release gaps.
 4. Add x64 parity tests or architecture-specific probes.
