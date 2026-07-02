@@ -41,6 +41,29 @@ let private makeSimpleProgramWithVariants
     }
     LIR.Program ([func], variants, Map.empty)
 
+let private makeEmptyFunction
+    (name: string)
+    (typedParams: LIR.TypedLIRParam list)
+    : LIR.Function =
+    let label = LIR.Label $"{name}_entry"
+    {
+        Name = name
+        TypedParams = typedParams
+        CFG = {
+            Entry = label
+            Blocks = Map.ofList [
+                label,
+                {
+                    Label = label
+                    Instrs = []
+                    Terminator = LIR.Ret
+                }
+            ]
+        }
+        StackSize = 0
+        UsedCalleeSaved = []
+    }
+
 let testRawSetPureEnumDoesNotEmitGenericRetain () : TestResult =
     let enumType = AST.TSum ("RawSetPureEnum", [AST.TString])
     let variants : LIR.VariantRegistry =
@@ -430,6 +453,51 @@ let testGenericFixedBlockNestedImmediateFieldReleasesChildRoot () : TestResult =
         else
             Error "Generic fixed-block nested immediate field release did not release the child root"
 
+let testClosureCaptureNestedFixedBlockBytesFieldUsesReleasePlan () : TestResult =
+    let nestedType = AST.TTuple [ AST.TBytes ]
+    let captureType = AST.TTuple [ nestedType ]
+    let closureParamType = AST.TTuple [ AST.TInt64; captureType ]
+    let capturedFunc =
+        makeEmptyFunction
+            "arm64_nested_tuple_capture_fn"
+            [{ Reg = LIR.Physical LIR.X0; Type = closureParamType }]
+    let main =
+        match
+            makeSimpleProgramWithVariants
+                [
+                    LIR.ClosureAlloc (
+                        LIR.Physical LIR.X1,
+                        "arm64_nested_tuple_capture_fn",
+                        [LIR.Reg (LIR.Physical LIR.X2)])
+                    LIR.RefCountDec (
+                        LIR.Physical LIR.X1,
+                        16,
+                        LIR.ClosureHeap,
+                        Some (rcMetadata (AST.TFunction ([AST.TInt64], AST.TInt64))))
+                ]
+                Map.empty
+        with
+        | LIR.Program ([func], variants, records) ->
+            LIR.Program ([func; capturedFunc], variants, records)
+        | other ->
+            other
+
+    match CodeGen.generateARM64 main with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let releasesNestedBytesField =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.LDR (ARM64.X12, ARM64.X11, 0s) ->
+                    true
+                | _ ->
+                    false)
+        if releasesNestedBytesField then
+            Ok ()
+        else
+            Error "Closure capture nested fixed-block bytes field release did not consume the nested release plan"
+
 let tests : (string * (unit -> TestResult)) list = [
     ("RawSet pure enum skips generic retain", testRawSetPureEnumDoesNotEmitGenericRetain)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
@@ -451,4 +519,5 @@ let tests : (string * (unit -> TestResult)) list = [
     ("Dict dict-list uses typed dict helper", testDictDictListValueUsesTypedDictHelper)
     ("Generic fixed-block nested bytes field uses release plan", testGenericFixedBlockNestedBytesFieldUsesReleasePlan)
     ("Generic fixed-block nested immediate field releases child root", testGenericFixedBlockNestedImmediateFieldReleasesChildRoot)
+    ("Closure capture nested fixed-block bytes field uses release plan", testClosureCaptureNestedFixedBlockBytesFieldUsesReleasePlan)
 ]

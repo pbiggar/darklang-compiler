@@ -37,6 +37,11 @@ Latest update:
   shared shape-plan executor; list, dict, closure, dynamic-buffer, fixed-block,
   and boxed-sum field releases now enter through the same local dispatcher in
   the ARM64 generic-root path.
+- ARM64 closure capture cleanup now also recurses through nested fixed-block
+  and boxed-sum child release plans before freeing the child root. The first
+  pinned case is a captured tuple containing a nested tuple with a bytes field;
+  before the fix, the closure helper decremented the nested tuple root but did
+  not release the bytes field inside it.
 - x64 `Dict<String, Int64>` leaf release now decrements dynamic string keys
   using a release-plan-selected dict helper variant. The new
   `X86_64CodeGenTests.testDictRefCountDecStringKey` first exposed the old
@@ -970,13 +975,16 @@ Current tests cover tuple, record, sum, closure capture, nested fixed-block
 capture, returned record/tuple, and several list/dict/string combinations.
 ARM64 generic fixed-block cleanup now consumes release plans for nested
 fixed-block and boxed-sum child roots even when those child roots have no
-managed fields of their own.
+managed fields of their own. ARM64 closure capture cleanup now consumes nested
+fixed-block child release plans before freeing captured child roots.
 
 ### Remaining Gaps
 
 The implementation is still specialized and partial:
 
-- bytes fields are not covered to the same level as strings
+- bytes fields are still not covered to the same level as strings across every
+  backend path, though ARM64 generic fixed-block and closure nested fixed-block
+  cleanup now have explicit bytes-field coverage
 - dict fields in arbitrary fixed blocks need explicit tests
 - closure fields in arbitrary fixed blocks need broader tests
 - nested fixed blocks outside closure captures need broader matrix tests, but
