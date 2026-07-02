@@ -92,7 +92,10 @@ Latest update:
   `X86_64CodeGenTests.testDictRefCountDecStringKeyDictValue`. Nested
   dict-list values under dynamic string keys are covered by
   `X86_64CodeGenTests.testDictRefCountDecStringKeyDictListValue`. Broader x64
-  dict key/value matrix work remains open.
+  dict key/value matrix work remains open. Dynamic string keys paired with
+  tuple leaf values containing `String`, `List<Int64>`, and
+  `Dict<Int64, Int64>` fields are now pinned by
+  `X86_64CodeGenTests.testDictRefCountDecStringKeyTupleStringListDictValue`.
 - x64 now has an explicit stdlib-context closure-list release probe. The
   ARM64 bug was an architecture-local helper-selection guard that excluded
   `Stdlib.*` functions; x64 did not have that guard, and
@@ -1242,6 +1245,8 @@ commits enabled:
   `Dict<String, Dict<Int64, Int64>>`
 - dict dynamic string leaf key plus nested dict-list value release for
   `Dict<String, Dict<Int64, List<Int64>>>`
+- dict dynamic string leaf key plus tuple string/list/dict value release for
+  `Dict<String, (String, List<Int64>, Dict<Int64, Int64>)>`
 - tagged-list tuple4 nested tuple dynamic string payload release
 - tagged-list tuple4 nested tuple string/list/dict payload release
 - tagged-list tuple4 nested tuple closure/bytes/list/dict payload release
