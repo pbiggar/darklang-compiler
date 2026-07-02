@@ -31,6 +31,12 @@ Latest update:
 - RC insertion now processes each function with a fresh local temp-type
   environment before merging the resulting type map, avoiding stale
   cross-function `TempId` type inference during ownership insertion.
+- ARM64 generic fixed-block and boxed-sum field cleanup now routes each field
+  through one recursive `RcReleasePlan` dispatcher instead of a separate
+  direct-field pass plus a nested fixed-block pass. This is a step toward a
+  shared shape-plan executor; list, dict, closure, dynamic-buffer, fixed-block,
+  and boxed-sum field releases now enter through the same local dispatcher in
+  the ARM64 generic-root path.
 - x64 `Dict<String, Int64>` leaf release now decrements dynamic string keys
   using a release-plan-selected dict helper variant. The new
   `X86_64CodeGenTests.testDictRefCountDecStringKey` first exposed the old
@@ -993,7 +999,10 @@ The implementation is still specialized and partial:
 2. Add returned-value variants for each test shape.
 3. Add use-after-return variants where a borrowed child is returned and must be
    retained before cleanup.
-4. Move field release selection from ad hoc backend matches to `RcReleasePlan`.
+4. Continue moving field release selection from ad hoc backend matches to
+   `RcReleasePlan`; ARM64 generic fixed-block field dispatch now has a single
+   recursive release-plan entry point, but list/dict helper selection and x64
+   still have specialized tables.
 5. Implement the same release plan on x64.
 
 ### Suggested Commit Breakdown
@@ -1003,7 +1012,7 @@ The implementation is still specialized and partial:
 3. Cover closure fields in tuples and multi-field records.
 4. Cover broader nested fixed-block field matrices outside closures.
 5. Cover sum payloads nested in fixed blocks.
-6. Convert ARM64 fixed-block release to shape plans.
+6. Continue converting ARM64 fixed-block release to shape plans.
 7. Port shape-plan release to x64.
 
 ## 5. Generalize Tagged List Payload Release

@@ -5091,7 +5091,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                 let releaseDynamicBufferField (fieldOffset: int) : ARM64Symbolic.Instr list =
                     releaseDynamicBufferFieldFrom addrReg fieldOffset
 
-                let releaseFieldPlanFrom
+                let rec releaseFieldPlanFrom
                     (baseReg: ARM64Symbolic.Reg)
                     (fieldOffset: int)
                     (fieldReleasePlan: ANF.RcReleasePlan)
@@ -5105,10 +5105,14 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         releaseDictFieldFromPlan baseReg fieldOffset fieldReleasePlan
                     | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
                         releaseClosureFieldFrom baseReg fieldOffset
+                    | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _)
+                    | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _) ->
+                        releaseFixedBlockFieldWithPlan baseReg fieldOffset childPayloadSize fieldReleasePlan
                     | _ ->
                         []
 
-                let releaseFixedBlockFieldWithPlan
+                and releaseFixedBlockFieldWithPlan
+                    (baseReg: ARM64Symbolic.Reg)
                     (fieldOffset: int)
                     (childPayloadSize: int)
                     (fieldReleasePlan: ANF.RcReleasePlan)
@@ -5150,7 +5154,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                                 @ freeChild
                         let body =
                             [
-                                ARM64Symbolic.LDR (ARM64Symbolic.X12, addrReg, int16 fieldOffset)
+                                ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
                                 ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, 3 + List.length afterDec + 1)
                                 ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, int16 childPayloadSize)
                                 ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
@@ -5170,57 +5174,22 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ]
 
                 let fixedBlockFieldReleaseInstrs =
-                    let directFieldReleaseInstrs =
-                        releasePlan
-                        |> Option.map (function
-                            | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
-                                fieldReleases
-                                |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
-                                    releaseFieldPlanFrom addrReg fieldOffset fieldReleasePlan)
-                            | _ ->
-                                [])
-                        |> Option.defaultValue []
-
-                    let nestedFixedBlockReleaseInstrs =
-                        releasePlan
-                        |> Option.map (function
-                            | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
-                                fieldReleases
-                                |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
-                                    match fieldReleasePlan with
-                                    | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _)
-                                    | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _) ->
-                                        releaseFixedBlockFieldWithPlan fieldOffset childPayloadSize fieldReleasePlan
-                                    | _ ->
-                                        [])
-                            | _ ->
-                                [])
-                        |> Option.defaultValue []
-
-                    directFieldReleaseInstrs @ nestedFixedBlockReleaseInstrs
+                    releasePlan
+                    |> Option.map (function
+                        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
+                            fieldReleases
+                            |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
+                                releaseFieldPlanFrom addrReg fieldOffset fieldReleasePlan)
+                        | _ ->
+                            [])
+                    |> Option.defaultValue []
 
                 let releaseSumPayloadInstrs =
-                    let releaseSumField (fieldOffset: int) (fieldReleasePlan: ANF.RcReleasePlan) : ARM64Symbolic.Instr list =
-                        match fieldReleasePlan with
-                        | ANF.DynamicBufferRelease _ ->
-                            releaseDynamicBufferFieldFrom addrReg fieldOffset
-                        | ANF.RootRelease (_, ANF.TaggedList, _) ->
-                            releaseListFieldFromPlan addrReg fieldOffset fieldReleasePlan
-                        | ANF.RootRelease (_, ANF.DictHeap, _) ->
-                            releaseDictFieldFromPlan addrReg fieldOffset fieldReleasePlan
-                        | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
-                            releaseClosureFieldFrom addrReg fieldOffset
-                        | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _)
-                        | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _) ->
-                            releaseFixedBlockFieldWithPlan fieldOffset childPayloadSize fieldReleasePlan
-                        | _ ->
-                            []
-
                     let releaseVariant (variant: ANF.RcBoxedSumVariantRelease) : (int * ARM64Symbolic.Instr list) option =
                         let releaseInstrs =
                             variant.FieldReleases
                             |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
-                                releaseSumField fieldOffset fieldReleasePlan)
+                                releaseFieldPlanFrom addrReg fieldOffset fieldReleasePlan)
 
                         if List.isEmpty releaseInstrs then
                             None
