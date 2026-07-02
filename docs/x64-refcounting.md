@@ -57,6 +57,8 @@ specializations instead of one shared shape-plan executor.
   variant tag when sum-aware `RcReleasePlan` metadata is present
 - closure capture mixed boxed-sum cleanup dispatch by active variant tag when
   sum-aware `RcReleasePlan` metadata is present
+- tagged-list boxed-sum mixed no-payload/dynamic-payload cleanup dispatch by
+  active variant tag when sum-aware `RcReleasePlan` metadata is present
 - generic fixed-block dict root field release
 - generic fixed-block dynamic-buffer, nested fixed-block, list, dict, and
   closure field release preserving live `RAX` across cleanup
@@ -115,6 +117,7 @@ specializations instead of one shared shape-plan executor.
 - tagged-list four-field record string/bytes/list/dict payload release
 - tagged-list four-field record closure/bytes/list/dict payload release
 - tagged-list boxed sum dynamic-buffer payload release
+- tagged-list boxed sum mixed no-payload/dynamic-payload release dispatch
 - tagged-list boxed sum list payload release
 - tagged-list boxed sum dict payload release
 - tagged-list boxed sum closure payload release
@@ -228,10 +231,11 @@ buffer reuse is still a broader memory-policy question, shared with ARM64.
 
 The main x64 gaps are:
 
-- fixed-block field release for boxed-sum payload shapes beyond the current
-  top-level and nested-child variant-dispatched mixed-payload cases and the
-  string, list, dict, closure, tuple dynamic-buffer, tuple string/list/dict,
-  tuple4 string/bytes/list/dict, tuple4 closure/bytes/list/dict, record
+- fixed-block and tagged-list field release for boxed-sum payload shapes beyond
+  the current top-level, nested-child, closure-capture, and tagged-list
+  no-payload/dynamic-payload variant-dispatched cases and the string, list,
+  dict, closure, tuple dynamic-buffer, tuple string/list/dict, tuple4
+  string/bytes/list/dict, tuple4 closure/bytes/list/dict, record
   dynamic-buffer, record string/list/dict, record4 string/bytes/list/dict,
   record4 closure/bytes/list/dict, sum tuple4 string/bytes/list/dict, sum
   tuple4 closure/bytes/list/dict, sum record4 string/bytes/list/dict, and sum

@@ -69,6 +69,12 @@ Latest update:
   A captured mixed no-payload/bytes-payload sum must dispatch through its
   active variant during closure root cleanup, pinned by
   `X86_64CodeGenTests.testClosureRefCountDecMixedSumCaptureUsesVariantDispatch`.
+- x64 tagged-list boxed-sum cleanup now preserves no-payload variants in
+  `RcShape`/`RcReleasePlan` metadata and dispatches mixed no-payload/dynamic
+  payload release by active variant tag. This prevents the flattened
+  field-release summary from releasing offset 8 for primitive variants and is
+  pinned by
+  `X86_64CodeGenTests.testTaggedListRefCountDecMixedSumDynamicPayloadUsesVariantDispatch`.
 - x64 `Dict<String, Int64>` leaf release now decrements dynamic string keys
   using a release-plan-selected dict helper variant. The new
   `X86_64CodeGenTests.testDictRefCountDecStringKey` first exposed the old
@@ -229,7 +235,8 @@ plus boxed-sum release plans that carry source-type payload field cleanup when
 variant payload metadata is available, plus x64 top-level generic boxed-sum
 variant dispatch for mixed payload cleanup, plus x64 nested generic boxed-sum
 child variant-dispatch coverage, plus x64 closure capture mixed boxed-sum
-variant-dispatch coverage.
+variant-dispatch coverage, plus x64 tagged-list boxed-sum mixed
+no-payload/dynamic-payload variant-dispatch coverage.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -1286,6 +1293,8 @@ commits enabled:
   variant tag when sum-aware `RcReleasePlan` metadata is present
 - closure capture mixed boxed-sum release dispatch by active variant tag when
   sum-aware `RcReleasePlan` metadata is present
+- tagged-list boxed-sum mixed no-payload/dynamic-payload release dispatch by
+  active variant tag when sum-aware `RcReleasePlan` metadata is present
 
 The current focused x64 suite covers the major root, fixed-block, list,
 boxed-sum, closure-capture, and selected dict-list value families. It does not
