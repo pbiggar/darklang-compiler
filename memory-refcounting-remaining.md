@@ -154,6 +154,11 @@ Latest update:
   and closure/bytes/list/dict tests. The planned-helper dependency discovery
   now walks selected helpers' `RcReleasePlan`s so recursive list helper
   dependencies are emitted automatically.
+- x64 tagged-list boxed-sum tuple helper specs now execute the covered tuple2,
+  tuple3, tuple4, and tuple4 nested-tuple payload cleanup through planned
+  fixed-block `RcReleasePlan` helpers instead of handwritten boxed-sum
+  nested fixed-block list-helper variants. Record-shaped boxed sums remain a
+  separate registry-aware follow-up.
 
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
 release, tuple-only nested fixed-block field release, record-registry-based
@@ -279,8 +284,10 @@ coverage, plus initial
 compatibility predicate, plus shared `RcReleasePlan` metadata and x64 generic
 fixed-block dynamic string/bytes, dict-root, and closure-root field release
 consumption through `RcReleasePlan` for tuples, records, and boxed-sum payloads,
-plus boxed-sum release plans that carry source-type payload field cleanup when
-variant payload metadata is available, plus x64 top-level generic boxed-sum
+plus planned boxed-sum tuple list helpers that carry source-type payload field
+cleanup through `RcReleasePlan`, plus boxed-sum release plans that carry
+source-type payload field cleanup when variant payload metadata is available,
+plus x64 top-level generic boxed-sum
 variant dispatch for mixed payload cleanup, plus x64 nested generic boxed-sum
 child variant-dispatch coverage, plus x64 closure capture mixed boxed-sum
 variant-dispatch coverage, plus x64 tagged-list boxed-sum mixed
@@ -1412,8 +1419,9 @@ Likely gaps:
 3. Continue replacing backend helper-family matching with shared
    `RcReleasePlan` execution where practical. x64 tagged-list tuple2 and
    tuple4 nested-tuple leaf helpers, tuple4 nested-record middle-field leaf
-   helpers, and the boxed-sum nested tuple helper now use this path; use those
-   as the template for remaining nested list and sum payload families.
+   helpers, and covered boxed-sum tuple helpers now use this path; use those
+   as the template for remaining nested list, record-shaped sum, and deeper sum
+   payload families.
 4. Port ARM64 closure capture release semantics beyond the current direct
    dynamic-buffer, managed-root, and fixed-block probes to x64.
 5. Port any missing list helper variants to x64 until the shared shape-plan
