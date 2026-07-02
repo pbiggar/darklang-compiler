@@ -620,6 +620,28 @@ let rec private hasRefCountDecForTemp (target: TempId) (expr: AExpr) : bool =
         hasRefCountDecForTemp target thenBranch
         || hasRefCountDecForTemp target elseBranch
 
+let private pathHasRetainsBeforeDec
+    (retainTargets: TempId list)
+    (decTarget: TempId)
+    (expr: AExpr)
+    : bool =
+    let required = Set.ofList retainTargets
+
+    let rec loop (seenRetains: Set<TempId>) (expr: AExpr) : bool =
+        match expr with
+        | Return _ ->
+            false
+        | Let (_, RefCountInc (Var tempId, _, _, _), body) ->
+            loop (Set.add tempId seenRetains) body
+        | Let (_, RefCountDec (Var tempId, _, _, _), _) when tempId = decTarget ->
+            Set.isSubset required seenRetains
+        | Let (_, _, body) ->
+            loop seenRetains body
+        | If (_, thenBranch, elseBranch) ->
+            loop seenRetains thenBranch || loop seenRetains elseBranch
+
+    loop Set.empty expr
+
 let rec private tryRefCountDecSourceTypeForTemp (target: TempId) (expr: AExpr) : AST.Type option =
     match expr with
     | Return _ ->
@@ -825,6 +847,314 @@ let testMapHelperSelfTailCallReleasesReplacedAccumulator () : TestResult =
         Ok ()
     else
         Error "Stdlib.List.__mapHelper self tail-call should release the replaced owned accumulator"
+
+let private testBorrowedProjectionRecursiveArgsAreRetained (recursiveCExpr: string -> Atom list -> CExpr) : TestResult =
+    let state1Type = AST.TTuple [AST.TInt64; AST.TInt64; AST.TInt64]
+    let state2Type = AST.TTuple [AST.TInt64; AST.TInt64]
+    let resultType = AST.TTuple [state1Type; state2Type]
+    let helperName = "loop"
+    let roundName = "round"
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            (helperName, AST.TFunction ([state1Type; state2Type; AST.TInt64], resultType))
+            (roundName, AST.TFunction ([state1Type; state2Type; AST.TInt64], resultType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let state1Param = TempId 0
+    let state2Param = TempId 1
+    let iParam = TempId 2
+    let resultTemp = TempId 3
+    let nextState1Temp = TempId 4
+    let nextState2Temp = TempId 5
+    let tailTemp = TempId 6
+    let func : Function = {
+        Name = helperName
+        TypedParams = [
+            { Id = state1Param; Type = state1Type }
+            { Id = state2Param; Type = state2Type }
+            { Id = iParam; Type = AST.TInt64 }
+        ]
+        ReturnType = resultType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                resultTemp,
+                Call (roundName, [Var state1Param; Var state2Param; Var iParam]),
+                Let (
+                    nextState1Temp,
+                    TupleGet (Var resultTemp, 0),
+                    Let (
+                        nextState2Temp,
+                        TupleGet (Var resultTemp, 1),
+                        Let (
+                            tailTemp,
+                            recursiveCExpr helperName [Var nextState1Temp; Var nextState2Temp; Var iParam],
+                            Return (Var tailTemp)
+                        )
+                    )
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if pathHasRetainsBeforeDec [nextState1Temp; nextState2Temp] resultTemp transformed.Body then
+        Ok ()
+    else
+        Error "Borrowed tuple projections passed as self-tail-call accumulators should be retained before parent cleanup"
+
+let testBorrowedProjectionSelfTailCallArgsAreRetained () : TestResult =
+    testBorrowedProjectionRecursiveArgsAreRetained (fun funcName args -> TailCall (funcName, args))
+
+let testBorrowedProjectionSelfRecursiveCallArgsAreRetained () : TestResult =
+    testBorrowedProjectionRecursiveArgsAreRetained (fun funcName args -> Call (funcName, args))
+
+let testBorrowedProjectionAliasSelfRecursiveCallArgsAreRetained () : TestResult =
+    let state1Type = AST.TTuple [AST.TInt64; AST.TInt64; AST.TInt64]
+    let state2Type = AST.TTuple [AST.TInt64; AST.TInt64]
+    let resultType = AST.TTuple [state1Type; state2Type]
+    let helperName = "loop"
+    let roundName = "round"
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            (helperName, AST.TFunction ([state1Type; state2Type; AST.TInt64], resultType))
+            (roundName, AST.TFunction ([state1Type; state2Type; AST.TInt64], resultType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let state1Param = TempId 0
+    let state2Param = TempId 1
+    let iParam = TempId 2
+    let resultTemp = TempId 3
+    let nextState1Temp = TempId 4
+    let nextState2Temp = TempId 5
+    let nextState1Alias = TempId 6
+    let nextState2Alias = TempId 7
+    let tailTemp = TempId 8
+    let func : Function = {
+        Name = helperName
+        TypedParams = [
+            { Id = state1Param; Type = state1Type }
+            { Id = state2Param; Type = state2Type }
+            { Id = iParam; Type = AST.TInt64 }
+        ]
+        ReturnType = resultType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                resultTemp,
+                Call (roundName, [Var state1Param; Var state2Param; Var iParam]),
+                Let (
+                    nextState1Temp,
+                    TupleGet (Var resultTemp, 0),
+                    Let (
+                        nextState2Temp,
+                        TupleGet (Var resultTemp, 1),
+                        Let (
+                            nextState1Alias,
+                            TypedAtom (Var nextState1Temp, state1Type),
+                            Let (
+                                nextState2Alias,
+                                TypedAtom (Var nextState2Temp, state2Type),
+                                Let (
+                                    tailTemp,
+                                    Call (helperName, [Var nextState1Alias; Var nextState2Alias; Var iParam]),
+                                    Return (Var tailTemp)
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountIncForTemp nextState1Temp transformed.Body
+       && hasRefCountIncForTemp nextState2Temp transformed.Body then
+        Ok ()
+    else
+        Error "Borrowed tuple projection aliases passed as self-recursive accumulators should be retained before parent cleanup"
+
+let testBorrowedProjectionIfBranchSelfRecursiveCallArgsAreRetained () : TestResult =
+    let state1Type = AST.TTuple [AST.TInt64; AST.TInt64; AST.TInt64]
+    let state2Type = AST.TTuple [AST.TInt64; AST.TInt64]
+    let resultType = AST.TTuple [state1Type; state2Type]
+    let helperName = "loop"
+    let roundName = "round"
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            (helperName, AST.TFunction ([state1Type; state2Type; AST.TInt64], resultType))
+            (roundName, AST.TFunction ([state1Type; state2Type; AST.TInt64], resultType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let state1Param = TempId 0
+    let state2Param = TempId 1
+    let iParam = TempId 2
+    let baseResultTemp = TempId 3
+    let roundResultTemp = TempId 4
+    let roundResultAliasTemp = TempId 5
+    let nextState1Temp = TempId 6
+    let nextState1AliasTemp = TempId 7
+    let nextState1SecondAliasTemp = TempId 8
+    let nextState2Temp = TempId 9
+    let nextState2AliasTemp = TempId 10
+    let nextState2SecondAliasTemp = TempId 11
+    let nextI = TempId 12
+    let recursiveResultTemp = TempId 13
+    let func : Function = {
+        Name = helperName
+        TypedParams = [
+            { Id = state1Param; Type = state1Type }
+            { Id = state2Param; Type = state2Type }
+            { Id = iParam; Type = AST.TInt64 }
+        ]
+        ReturnType = resultType
+        ReturnOwnership = OwnedReturn
+        Body =
+            If (
+                Var iParam,
+                Let (
+                    baseResultTemp,
+                    TupleAlloc [Var state1Param; Var state2Param],
+                    Return (Var baseResultTemp)
+                ),
+                Let (
+                    roundResultTemp,
+                    Call (roundName, [Var state1Param; Var state2Param; Var iParam]),
+                    Let (
+                        roundResultAliasTemp,
+                        Atom (Var roundResultTemp),
+                        Let (
+                            nextState1Temp,
+                            TupleGet (Var roundResultAliasTemp, 0),
+                            Let (
+                                nextState1AliasTemp,
+                                TypedAtom (Var nextState1Temp, state1Type),
+                                Let (
+                                    nextState1SecondAliasTemp,
+                                    TypedAtom (Var nextState1AliasTemp, state1Type),
+                                    Let (
+                                        nextState2Temp,
+                                        TupleGet (Var roundResultAliasTemp, 1),
+                                        Let (
+                                            nextState2AliasTemp,
+                                            TypedAtom (Var nextState2Temp, state2Type),
+                                            Let (
+                                                nextState2SecondAliasTemp,
+                                                TypedAtom (Var nextState2AliasTemp, state2Type),
+                                                Let (
+                                                    nextI,
+                                                    Prim (Add, Var iParam, IntLiteral (Int64 1L)),
+                                                    Let (
+                                                        recursiveResultTemp,
+                                                        Call (
+                                                            helperName,
+                                                            [
+                                                                Var nextState1SecondAliasTemp
+                                                                Var nextState2SecondAliasTemp
+                                                                Var nextI
+                                                            ]
+                                                        ),
+                                                        Return (Var recursiveResultTemp)
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if pathHasRetainsBeforeDec [nextState1Temp; nextState2Temp] roundResultTemp transformed.Body then
+        Ok ()
+    else
+        Error "Borrowed tuple projections in recursive if branches should be retained before parent cleanup"
+
+let testBorrowedProjectionFromParameterSelfRecursiveCallStaysBorrowed () : TestResult =
+    let childType = AST.TTuple [AST.TInt64]
+    let parentType = AST.TTuple [childType]
+    let helperName = "loop"
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            (helperName, AST.TFunction ([parentType; childType], childType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let parentParam = TempId 0
+    let childParam = TempId 1
+    let projectedTemp = TempId 2
+    let resultTemp = TempId 3
+    let func : Function = {
+        Name = helperName
+        TypedParams = [
+            { Id = parentParam; Type = parentType }
+            { Id = childParam; Type = childType }
+        ]
+        ReturnType = childType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                projectedTemp,
+                TupleGet (Var parentParam, 0),
+                Let (
+                    resultTemp,
+                    Call (helperName, [Var parentParam; Var projectedTemp]),
+                    Return (Var resultTemp)
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountIncForTemp projectedTemp transformed.Body then
+        Error "Borrowed projection from a parameter should not be retained solely because it feeds a self-recursive call"
+    else
+        Ok ()
 
 let testMapHelperClosureProducingCallRetainsBorrowedSource () : TestResult =
     let sourceListType = AST.TList AST.TInt64
@@ -1283,6 +1613,11 @@ let tests = [
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
     ("map helper accumulator return transfers ownership without retain", testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator)
     ("map helper self tail-call releases replaced accumulator", testMapHelperSelfTailCallReleasesReplacedAccumulator)
+    ("borrowed projection self tail-call args are retained", testBorrowedProjectionSelfTailCallArgsAreRetained)
+    ("borrowed projection self-recursive call args are retained", testBorrowedProjectionSelfRecursiveCallArgsAreRetained)
+    ("borrowed projection alias self-recursive call args are retained", testBorrowedProjectionAliasSelfRecursiveCallArgsAreRetained)
+    ("borrowed projection if-branch self-recursive call args are retained", testBorrowedProjectionIfBranchSelfRecursiveCallArgsAreRetained)
+    ("borrowed projection from parameter self-recursive call stays borrowed", testBorrowedProjectionFromParameterSelfRecursiveCallStaysBorrowed)
     ("map helper closure-producing call retains borrowed source", testMapHelperClosureProducingCallRetainsBorrowedSource)
     ("map helper closure source to value keeps source borrowed", testMapHelperClosureSourceToValueKeepsSourceBorrowed)
     ("closure pushBack consumes immediate closure-call result", testClosurePushBackConsumesImmediateClosureCallResult)
