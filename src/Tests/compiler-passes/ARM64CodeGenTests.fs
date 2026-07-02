@@ -69,6 +69,15 @@ let private makeSimpleProgramWithRecords
     }
     LIR.Program ([func], Map.empty, records)
 
+let private emitsPlannedListHelperLabel (instrs: ARM64Symbolic.Instr list) : bool =
+    instrs
+    |> List.exists (function
+        | ARM64Symbolic.Label label
+        | ARM64Symbolic.BL label ->
+            label.StartsWith("__dark_list_refcount_dec_plan_")
+        | _ ->
+            false)
+
 let private makeEmptyFunction
     (name: string)
     (typedParams: LIR.TypedLIRParam list)
@@ -692,6 +701,55 @@ let testPlannedListNestedGenericReleasePreservesBlockPointer () : TestResult =
         else
             Error "ARM64 planned list nested generic release did not preserve the block pointer across nested field releases"
 
+let testPlannedListTuplePayloadUsesPlannedHelper () : TestResult =
+    let tupleType =
+        AST.TTuple [ AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64) ]
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    0,
+                    LIR.TaggedList,
+                    Some (rcMetadata (AST.TList tupleType)))
+            ]
+            Map.empty
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        if emitsPlannedListHelperLabel instrs then
+            Ok ()
+        else
+            Error "ARM64 tuple list payload did not emit a planned list helper"
+
+let testPlannedListRecordPayloadUsesPlannedHelper () : TestResult =
+    let recordType = AST.TRecord ("ARM64PlannedListRecordPayload", [])
+    let records =
+        Map.ofList [
+            ("ARM64PlannedListRecordPayload", [ ("name", AST.TString); ("items", AST.TList AST.TInt64) ])
+        ]
+    let program =
+        makeSimpleProgramWithRecords
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    0,
+                    LIR.TaggedList,
+                    Some (rcMetadataWithRecords records (AST.TList recordType)))
+            ]
+            records
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        if emitsPlannedListHelperLabel instrs then
+            Ok ()
+        else
+            Error "ARM64 record list payload did not emit a planned list helper"
+
 let testGenericFixedBlockNestedImmediateFieldReleasesChildRoot () : TestResult =
     let nestedType = AST.TTuple [ AST.TInt64 ]
     let parentType = AST.TTuple [ nestedType ]
@@ -956,6 +1014,8 @@ let tests : (string * (unit -> TestResult)) list = [
     ("Generic fixed-block nested bytes field uses release plan", testGenericFixedBlockNestedBytesFieldUsesReleasePlan)
     ("Planned list generic leaf release reloads block pointer", testPlannedListGenericLeafReleaseReloadsBlockPointer)
     ("Planned list nested generic release preserves block pointer", testPlannedListNestedGenericReleasePreservesBlockPointer)
+    ("Planned list tuple payload uses planned helper", testPlannedListTuplePayloadUsesPlannedHelper)
+    ("Planned list record payload uses planned helper", testPlannedListRecordPayloadUsesPlannedHelper)
     ("Generic fixed-block nested immediate field releases child root", testGenericFixedBlockNestedImmediateFieldReleasesChildRoot)
     ("Generic fixed-block nested mixed boxed-sum bytes payload uses variant dispatch", testGenericFixedBlockNestedMixedBoxedSumBytesPayloadUsesVariantDispatch)
     ("Generic mixed boxed-sum payload dispatch skips remaining cases", testGenericMixedBoxedSumPayloadDispatchSkipsRemainingCases)

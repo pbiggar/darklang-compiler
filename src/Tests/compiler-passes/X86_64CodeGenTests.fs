@@ -246,6 +246,16 @@ let private generatedCallLabels (program: LIR.Program) : Result<string list, str
             | _ -> None)
         |> Ok
 
+let private assertCallsPlannedListHelper (context: string) (program: LIR.Program) : Result<unit, string> =
+    match generatedCallLabels program with
+    | Error e ->
+        Error e
+    | Ok labels ->
+        if labels |> List.exists (fun label -> label.StartsWith("__dark_list_rc_dec_plan_")) then
+            Ok ()
+        else
+            Error $"{context} did not call a planned list helper; calls were {labels}"
+
 let private rcMetadata (typ: AST.Type) : ANF.RcMetadata =
     {
         ANF.ReleasePlan = None
@@ -1497,6 +1507,43 @@ let testDictRefCountDecDictListValueUsesPlannedHelper () : Result<unit, string> 
             Error $"Nested dict/list RefCountDec still called the dict-list matrix helper; calls were {labels}"
         else
             Ok ()
+
+/// Test: x64 tagged-list generic tuple payloads stay on planned list helpers.
+let testTaggedListTuplePayloadUsesPlannedHelper () : Result<unit, string> =
+    let tupleType = AST.TTuple [AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TInt64)]
+    let program =
+        makeSimpleProgram
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    0,
+                    LIR.TaggedList,
+                    Some (rcMetadata (AST.TList tupleType)))
+            ]
+            LIR.Ret
+
+    assertCallsPlannedListHelper "Tuple list payload" program
+
+/// Test: x64 tagged-list generic record payloads stay on planned list helpers.
+let testTaggedListRecordPayloadUsesPlannedHelper () : Result<unit, string> =
+    let recordType = AST.TRecord ("X64PlannedListRecordPayload", [])
+    let records =
+        Map.ofList [
+            ("X64PlannedListRecordPayload", [("name", AST.TString); ("items", AST.TList AST.TInt64)])
+        ]
+    let program =
+        makeSimpleProgramWithRecords
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    0,
+                    LIR.TaggedList,
+                    Some (rcMetadata (AST.TList recordType)))
+            ]
+            LIR.Ret
+            records
+
+    assertCallsPlannedListHelper "Record list payload" program
 
 /// Test: x64 DictHeap RefCountDec releases tuple leaf values with managed fields through release-plan metadata.
 let testDictRefCountDecTupleStringListValue () : Result<unit, string> =
@@ -5265,6 +5312,8 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR DictHeap RefCountDec releases nested dict leaf values", testDictRefCountDecDictValue)
     ("LIR DictHeap RefCountDec releases nested dict list leaf values", testDictRefCountDecDictListValue)
     ("LIR DictHeap RefCountDec uses planned helper for nested dict list leaf values", testDictRefCountDecDictListValueUsesPlannedHelper)
+    ("LIR tagged list RefCountDec uses planned helper for tuple payload", testTaggedListTuplePayloadUsesPlannedHelper)
+    ("LIR tagged list RefCountDec uses planned helper for record payload", testTaggedListRecordPayloadUsesPlannedHelper)
     ("LIR DictHeap RefCountDec releases tuple string/list leaf values", testDictRefCountDecTupleStringListValue)
     ("LIR DictHeap RefCountDec releases tuple string/list/dict leaf values", testDictRefCountDecTupleStringListDictValue)
     ("LIR DictHeap RefCountDec releases string keys and tuple string/list/dict leaf values", testDictRefCountDecStringKeyTupleStringListDictValue)
