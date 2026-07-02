@@ -2339,6 +2339,11 @@ let private generateDictRefCountDecHelper
     let collisionPayloadDone = label "collision_payload_done"
     let skipCollisionDynamicKeyRelease = label "skip_collision_dynamic_key_release"
     let skipCollisionDynamicValueRelease = label "skip_collision_dynamic_value_release"
+    let skipCollisionRootPayloadRelease = label "skip_collision_root_payload_release"
+    let collisionRootPayloadLoop = label "collision_root_payload_loop"
+    let collisionRootPayloadDone = label "collision_root_payload_done"
+    let skipCollisionListValueRelease = label "skip_collision_list_value_release"
+    let skipCollisionDictValueRelease = label "skip_collision_dict_value_release"
     let skipLeafTupleStringListValueRelease = label "skip_leaf_tuple_string_list_value_release"
     let tupleStringListValueDone = label "tuple_string_list_value_done"
     let skipLeafSumStringValueRelease = label "skip_leaf_sum_string_value_release"
@@ -2357,6 +2362,32 @@ let private generateDictRefCountDecHelper
             ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
             ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 96s)
             ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.X3, 8s)
+            ARM64Symbolic.BL targetHelperLabel
+            ARM64Symbolic.LDR (ARM64Symbolic.X30, ARM64Symbolic.SP, 96s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 112s)
+            ARM64Symbolic.Label skipLabel
+        ]
+
+    let releaseManagedRootValueAtBaseInstrs
+        (baseReg: ARM64.Reg)
+        (fieldOffset: int16)
+        (targetHelperLabel: string)
+        (skipLabel: string)
+        =
+        [
+            ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -112s)
+            ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+            ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+            ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+            ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+            ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 96s)
+            ARM64Symbolic.LDR (ARM64Symbolic.X0, baseReg, fieldOffset)
             ARM64Symbolic.BL targetHelperLabel
             ARM64Symbolic.LDR (ARM64Symbolic.X30, ARM64Symbolic.SP, 96s)
             ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
@@ -2497,6 +2528,49 @@ let private generateDictRefCountDecHelper
             ]
         else
             []
+
+    let releaseCollisionManagedRootValueInstrs =
+        let releases =
+            (if releaseLeafListValue then
+                 releaseManagedRootValueAtBaseInstrs
+                     ARM64Symbolic.X11
+                     8s
+                     listRefCountDecHelperLabel
+                     skipCollisionListValueRelease
+             else
+                 [])
+            @ (match releaseLeafDictValueHelper with
+               | Some targetHelperLabel ->
+                   releaseManagedRootValueAtBaseInstrs
+                       ARM64Symbolic.X11
+                       8s
+                       targetHelperLabel
+                       skipCollisionDictValueRelease
+               | None ->
+                   [])
+
+        if List.isEmpty releases then
+            []
+        else
+            [
+                ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 3us)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, skipCollisionRootPayloadRelease)
+                ARM64Symbolic.LDR (ARM64Symbolic.X5, ARM64Symbolic.X3, 0s)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X6, 0us, 0)
+                ARM64Symbolic.Label collisionRootPayloadLoop
+                ARM64Symbolic.CMP_reg (ARM64Symbolic.X6, ARM64Symbolic.X5)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, collisionRootPayloadDone)
+                ARM64Symbolic.LSL_imm (ARM64Symbolic.X11, ARM64Symbolic.X6, 4)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X11, ARM64Symbolic.X11, 8us)
+                ARM64Symbolic.ADD_reg (ARM64Symbolic.X11, ARM64Symbolic.X3, ARM64Symbolic.X11)
+            ]
+            @ releases
+            @ [
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X6, ARM64Symbolic.X6, 1us)
+                ARM64Symbolic.B_label collisionRootPayloadLoop
+                ARM64Symbolic.Label collisionRootPayloadDone
+                ARM64Symbolic.Label skipCollisionRootPayloadRelease
+            ]
 
     let releaseLeafListValueInstrs =
         if releaseLeafListValue then
@@ -2734,6 +2808,7 @@ let private generateDictRefCountDecHelper
     @ releaseLeafDynamicKeyInstrs
     @ releaseLeafDynamicValueInstrs
     @ releaseCollisionDynamicPayloadInstrs
+    @ releaseCollisionManagedRootValueInstrs
     @ releaseLeafListValueInstrs
     @ releaseLeafDictValueInstrs
     @ releaseLeafTupleStringListValueInstrs
