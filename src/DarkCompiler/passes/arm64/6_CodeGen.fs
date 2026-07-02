@@ -1733,21 +1733,43 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
         else
             []
 
-    let releaseFixedChildField
+    let rec releaseFixedChildField
+        (baseReg: ARM64Symbolic.Reg)
         (fieldOffset: int)
         (payloadSize: int)
+        (fieldReleasePlan: ANF.RcReleasePlan)
         (doneLabel: string)
         : ARM64Symbolic.Instr list =
         let childDone = label $"{doneLabel}_child_{fieldOffset}_done"
         let childSkipFreelist = label $"{doneLabel}_child_{fieldOffset}_skip_freelist"
+        let childFieldReleaseInstrs =
+            match fieldReleasePlan with
+            | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+            | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
+                fieldReleases
+                |> List.collect (fun (ANF.FieldRelease (childFieldOffset, childFieldReleasePlan)) ->
+                    releaseFieldPlanFrom ARM64Symbolic.X11 childFieldOffset childFieldReleasePlan childDone)
+            | _ ->
+                []
+        let releaseChildFields =
+            if List.isEmpty childFieldReleaseInstrs then
+                []
+            else
+                [
+                    ARM64Symbolic.STP_pre (ARM64Symbolic.X11, ARM64Symbolic.X12, ARM64Symbolic.SP, -16s)
+                    ARM64Symbolic.MOV_reg (ARM64Symbolic.X11, ARM64Symbolic.X12)
+                ]
+                @ childFieldReleaseInstrs
+                @ [ARM64Symbolic.LDP_post (ARM64Symbolic.X11, ARM64Symbolic.X12, ARM64Symbolic.SP, 16s)]
         [
-            ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X8, int16 fieldOffset)
+            ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
             ARM64Symbolic.CBZ (ARM64Symbolic.X12, childDone)
             ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, int16 payloadSize)
             ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
             ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X12, int16 payloadSize)
             ARM64Symbolic.CBNZ (ARM64Symbolic.X15, childDone)
         ]
+        @ releaseChildFields
         @ (if payloadSize >= 0 && payloadSize < 256 then
             [
                 ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X27, uint16 payloadSize)
@@ -1763,7 +1785,11 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
         @ leakDec
         @ [ARM64Symbolic.Label childDone]
 
-    let releaseDynamicBufferChildField (fieldOffset: int) (doneLabel: string) : ARM64Symbolic.Instr list =
+    and releaseDynamicBufferChildField
+        (baseReg: ARM64Symbolic.Reg)
+        (fieldOffset: int)
+        (doneLabel: string)
+        : ARM64Symbolic.Instr list =
         let bufferDone = label $"{doneLabel}_dynamic_buffer_{fieldOffset}_done"
         let refcountUpdate =
             if List.isEmpty leakDec then
@@ -1778,7 +1804,7 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
                     ARM64Symbolic.CBNZ (ARM64Symbolic.X15, bufferDone)
                 ] @ leakDec
         [
-            ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X8, int16 fieldOffset)
+            ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
             ARM64Symbolic.CBZ (ARM64Symbolic.X12, bufferDone)
             ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
             ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 7us)
@@ -1797,6 +1823,53 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
         ]
         @ refcountUpdate
         @ [ARM64Symbolic.Label bufferDone]
+
+    and releaseManagedRootChildField
+        (baseReg: ARM64Symbolic.Reg)
+        (fieldOffset: int)
+        (helperLabel: string)
+        (doneLabel: string)
+        : ARM64Symbolic.Instr list =
+        let childDone = label $"{doneLabel}_child_root_{fieldOffset}_done"
+        [
+            ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X12, childDone)
+            ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X8, ARM64Symbolic.SP, -32s)
+            ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X12)
+            ARM64Symbolic.BL helperLabel
+            ARM64Symbolic.LDR (ARM64Symbolic.X30, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X8, ARM64Symbolic.SP, 32s)
+            ARM64Symbolic.Label childDone
+        ]
+
+    and releaseFieldPlanFrom
+        (baseReg: ARM64Symbolic.Reg)
+        (fieldOffset: int)
+        (fieldReleasePlan: ANF.RcReleasePlan)
+        (doneLabel: string)
+        : ARM64Symbolic.Instr list =
+        let dictHelperForChildPlan (fieldReleasePlan: ANF.RcReleasePlan) : string =
+            match fieldReleasePlan with
+            | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, ANF.RootRelease (_, ANF.TaggedList, _))) ->
+                dictRefCountDecListValueHelperLabel
+            | _ ->
+                dictRefCountDecHelperLabel
+
+        match fieldReleasePlan with
+        | ANF.DynamicBufferRelease _ ->
+            releaseDynamicBufferChildField baseReg fieldOffset doneLabel
+        | ANF.RootRelease (_, ANF.TaggedList, _) ->
+            releaseManagedRootChildField baseReg fieldOffset listRefCountDecHelperLabel doneLabel
+        | ANF.RootRelease (_, ANF.DictHeap, _) ->
+            releaseManagedRootChildField baseReg fieldOffset (dictHelperForChildPlan fieldReleasePlan) doneLabel
+        | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
+            releaseManagedRootChildField baseReg fieldOffset closureRefCountDecHelperLabel doneLabel
+        | ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _)
+        | ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _) ->
+            releaseFixedChildField baseReg fieldOffset payloadSize fieldReleasePlan doneLabel
+        | _ ->
+            []
 
     let releaseDynamicCapture (fieldOffset: int) (doneLabel: string) : ARM64Symbolic.Instr list =
         let bufferDone = label $"{doneLabel}_dynamic_capture_{fieldOffset}_done"
@@ -1837,47 +1910,11 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
         (releasePlan: ANF.RcReleasePlan)
         (doneLabel: string)
         : ARM64Symbolic.Instr list =
-        let dictHelperForChildPlan (fieldReleasePlan: ANF.RcReleasePlan) : string =
-            match fieldReleasePlan with
-            | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, ANF.RootRelease (_, ANF.TaggedList, _))) ->
-                dictRefCountDecListValueHelperLabel
-            | _ ->
-                dictRefCountDecHelperLabel
-
-        let releaseManagedRootChildField
-            (fieldOffset: int)
-            (helperLabel: string)
-            : ARM64Symbolic.Instr list =
-            let childDone = label $"{doneLabel}_child_root_{fieldOffset}_done"
-            [
-                ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X8, int16 fieldOffset)
-                ARM64Symbolic.CBZ (ARM64Symbolic.X12, childDone)
-                ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X8, ARM64Symbolic.SP, -32s)
-                ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 16s)
-                ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X12)
-                ARM64Symbolic.BL helperLabel
-                ARM64Symbolic.LDR (ARM64Symbolic.X30, ARM64Symbolic.SP, 16s)
-                ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X8, ARM64Symbolic.SP, 32s)
-                ARM64Symbolic.Label childDone
-            ]
-
         match releasePlan with
         | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
             fieldReleases
-            |> List.collect (function
-                | ANF.FieldRelease (fieldOffset, ANF.DynamicBufferRelease _) ->
-                    releaseDynamicBufferChildField fieldOffset doneLabel
-                | ANF.FieldRelease (fieldOffset, ANF.RootRelease (_, ANF.TaggedList, _)) ->
-                    releaseManagedRootChildField fieldOffset listRefCountDecHelperLabel
-                | ANF.FieldRelease (fieldOffset, (ANF.RootRelease (_, ANF.DictHeap, _) as fieldReleasePlan)) ->
-                    releaseManagedRootChildField fieldOffset (dictHelperForChildPlan fieldReleasePlan)
-                | ANF.FieldRelease (fieldOffset, ANF.RootRelease (_, ANF.ClosureHeap, _)) ->
-                    releaseManagedRootChildField fieldOffset closureRefCountDecHelperLabel
-                | ANF.FieldRelease (fieldOffset, ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _))
-                | ANF.FieldRelease (fieldOffset, ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _)) ->
-                    releaseFixedChildField fieldOffset payloadSize doneLabel
-                | _ ->
-                    [])
+            |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
+                releaseFieldPlanFrom ARM64Symbolic.X8 fieldOffset fieldReleasePlan doneLabel)
         | _ ->
             []
 
