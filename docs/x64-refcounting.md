@@ -136,10 +136,12 @@ specializations instead of one shared shape-plan executor.
 - tagged-list boxed sum tuple4 closure/string/list/dict-list payload release
 - tagged-list boxed sum record dynamic-buffer payload release, covering
   one-field records and all non-empty three-field dynamic-buffer combinations
-- tagged-list boxed sum record3 string/list/dict payload release
-- tagged-list boxed sum record4 string/bytes/list/dict payload release
-- tagged-list boxed sum record4 string/bytes/list/dict-list payload release
-- tagged-list boxed sum record4 closure/bytes/list/dict payload release
+  through planned fixed-block `RcReleasePlan` helpers
+- tagged-list boxed sum record3 string/list/dict payload release through a
+  planned fixed-block `RcReleasePlan` helper
+- tagged-list boxed sum record4 string/bytes/list/dict payload release,
+  string/bytes/list/dict-list payload release, and closure/bytes/list/dict
+  payload release through planned fixed-block `RcReleasePlan` helpers
 - tagged-list nested boxed sum dynamic-buffer payload release
 
 The x64 tests run generated x64 ELF binaries directly on x64 hosts and through
@@ -204,7 +206,8 @@ exist for:
 - boxed sum tuple4 leaf payloads with closure/bytes/list/dict fields
 - boxed sum record leaf payloads covering one-field dynamic string/bytes,
   three-field dynamic string/bytes combinations, record3 string/list/dict, and
-  record4 string/bytes/list/dict and closure/bytes/list/dict shapes
+  record4 string/bytes/list/dict and closure/bytes/list/dict shapes through
+  planned fixed-block `RcReleasePlan` helpers
 - nested boxed sum dynamic string/bytes payload fields
 - nested list leaf payload roots
 - closure leaf payload roots
@@ -214,8 +217,8 @@ exist for:
 This is still narrower than ARM64 for broader nested tuple/record payloads, but
 the common dynamic-buffer, list, dict, closure, tuple3, tuple4, nested-tuple,
 record3, record4, and boxed-sum list payload families now have targeted x64
-probes. The tuple2 and tuple4 nested-tuple families, covered boxed-sum tuple
-families, and the tuple4 nested-record middle-field string/list/dict and
+probes. The tuple2 and tuple4 nested-tuple families, covered boxed-sum tuple and
+record families, and the tuple4 nested-record middle-field string/list/dict and
 string/list/dict-list cases route through the generic `RcReleasePlan`
 fixed-block executor. Planned list helpers also discover recursive list-helper
 dependencies by walking their `RcReleasePlan`, instead of relying only on
@@ -285,7 +288,7 @@ The main x64 gaps are:
   string/bytes/list/dict and closure/bytes/list/dict shapes, broader
   multi-field records and higher-arity tuples, and arbitrary
   non-dynamic-buffer sum payloads beyond the current list/dict/closure, planned
-  sum tuple3 and sum tuple4 helper families, sum record3, sum record4, and
+  sum tuple3, sum tuple4, sum record3, and sum record4 helper families, and
   fixed-block mixed shapes
 - dict/HAMT key and value recursive retain/release coverage beyond direct
   dynamic string leaf key/value release and the current nested value-helper
@@ -311,8 +314,8 @@ The main x64 gaps are:
    `String/List<Int64>/Dict<Int64, Int64>` fields are also covered.
 2. Continue replacing x64 helper-family selection with shared shape-driven
    release plan execution instead of continuing helper explosion. The tuple2
-   and tuple4 nested-tuple list helper families and covered boxed-sum tuple
-   helper families now use planned fixed-block execution.
+   and tuple4 nested-tuple list helper families and covered boxed-sum tuple and
+   record helper families now use planned fixed-block execution.
 3. Add x64 dict key/value shape matrix tests for typed recursive values.
 4. Add a real dual-backend memory matrix if the test harness grows support for
    forcing the backend independent of the host architecture.
