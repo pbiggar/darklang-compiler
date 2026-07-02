@@ -4161,7 +4161,7 @@ let testTaggedListRefCountDecMixedSumDynamicPayloadUsesVariantDispatch () : Resu
             match remaining with
             | [] ->
                 false
-            | X86_64.MOV_load (X86_64.R10, X86_64.R11, 0) :: rest ->
+            | X86_64.MOV_load (X86_64.R10, X86_64.RDX, 0) :: rest ->
                 seesTagCheckBeforeDynamicRelease true rest
             | X86_64.CMP_imm (X86_64.R10, 1) :: _ when sawTagLoad ->
                 true
