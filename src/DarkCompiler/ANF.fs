@@ -416,23 +416,26 @@ let rec rcShapeOfTypeWithSums
 
             let variantShapes =
                 sumInfo.Payloads
-                |> List.choose (fun maybePayload ->
+                |> List.map (fun maybePayload ->
                     match maybePayload with
                     | tag, Some payload ->
                         let payloadShape = payload |> applyRcShapeTypeSubstitution subst |> classify
-                        Some { Tag = tag; FieldShapes = [(8, payloadShape)] }
-                    | _, None ->
-                        None)
+                        { Tag = tag; FieldShapes = [(8, payloadShape)] }
+                    | tag, None ->
+                        { Tag = tag; FieldShapes = [] })
 
-            match variantShapes with
-            | [] ->
-                Immediate
-            | variants ->
+            let hasPayloadVariant =
+                sumInfo.Payloads
+                |> List.exists (fun (_, payload) -> Option.isSome payload)
+
+            if hasPayloadVariant then
                 let fieldShapes =
-                    variants
+                    variantShapes
                     |> List.collect (fun variant -> variant.FieldShapes)
 
-                BoxedSum (16, fieldShapes, variants)
+                BoxedSum (16, fieldShapes, variantShapes)
+            else
+                Immediate
         | None ->
             Crash.crash $"rcShapeOfTypeWithSums: Sum type '{name}' not found in sumReg"
     | AST.TList elemType ->

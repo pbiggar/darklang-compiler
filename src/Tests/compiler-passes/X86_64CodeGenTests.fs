@@ -3979,6 +3979,63 @@ let testTaggedListRefCountDecSumStringPayload () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list sum string payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 tagged-list RefCountDec dispatches mixed boxed-sum dynamic payload cleanup by tag.
+let testTaggedListRefCountDecMixedSumDynamicPayloadUsesVariantDispatch () : Result<unit, string> =
+    let sumName = "X64ListMixedSumDynamicDispatch"
+    let sumType = AST.TSum (sumName, [])
+    let variants : LIR.VariantRegistry =
+        Map.ofList [
+            (sumName,
+                { TypeParams = []
+                  Variants =
+                    [
+                        { Name = "X64ListMixedSumNoPayload"; Tag = 0; Payload = None }
+                        { Name = "X64ListMixedSumBytesPayload"; Tag = 1; Payload = Some AST.TBytes }
+                    ] })
+        ]
+    let sumShapes =
+        variants
+        |> Map.map (fun _ typeVariants ->
+            { ANF.TypeParams = typeVariants.TypeParams
+              ANF.Payloads =
+                typeVariants.Variants
+                |> List.sortBy (fun variant -> variant.Tag)
+                |> List.map (fun variant -> variant.Tag, variant.Payload) })
+    let program =
+        match
+            makeSimpleProgram
+                [
+                    LIR.RefCountDec (
+                        LIR.Physical LIR.X5,
+                        0,
+                        LIR.TaggedList,
+                        Some (rcMetadataWithSumShapes sumShapes (AST.TList sumType)))
+                ]
+                LIR.Ret
+        with
+        | LIR.Program (functions, _, records) ->
+            LIR.Program (functions, variants, records)
+
+    match CodeGen_X86_64.translateProgram (completeFixtureVariants program) false with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let rec seesTagCheckBeforeDynamicRelease (sawTagLoad: bool) (remaining: X86_64.Instr list) : bool =
+            match remaining with
+            | [] ->
+                false
+            | X86_64.MOV_load (X86_64.R10, X86_64.R11, 0) :: rest ->
+                seesTagCheckBeforeDynamicRelease true rest
+            | X86_64.CMP_imm (X86_64.R10, 1) :: _ when sawTagLoad ->
+                true
+            | _ :: rest ->
+                seesTagCheckBeforeDynamicRelease sawTagLoad rest
+
+        if seesTagCheckBeforeDynamicRelease false instrs then
+            Ok ()
+        else
+            Error "x64 tagged-list mixed boxed-sum dynamic payload release did not check the active variant tag"
+
 /// Test: x64 tagged-list RefCountDec releases boxed sum leaf list payloads.
 let testTaggedListRefCountDecSumListPayload () : Result<unit, string> =
     let innerListType = AST.TList AST.TInt64
@@ -5031,6 +5088,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR tagged list RefCountDec releases record3 middle dynamic payload", testTaggedListRefCountDecRecord3MiddleDynamicPayload)
     ("LIR tagged list RefCountDec releases record3 dynamic payload combinations", testTaggedListRefCountDecRecord3DynamicPayloadCombinations)
     ("LIR tagged list RefCountDec releases sum string payload", testTaggedListRefCountDecSumStringPayload)
+    ("LIR tagged list RefCountDec dispatches mixed sum dynamic payload cleanup", testTaggedListRefCountDecMixedSumDynamicPayloadUsesVariantDispatch)
     ("LIR tagged list RefCountDec releases sum list payload", testTaggedListRefCountDecSumListPayload)
     ("LIR tagged list RefCountDec releases sum dict payload", testTaggedListRefCountDecSumDictPayload)
     ("LIR tagged list RefCountDec releases sum closure payload", testTaggedListRefCountDecSumClosurePayload)
