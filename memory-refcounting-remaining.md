@@ -41,6 +41,10 @@ Latest update:
   payload releases by variant tag before freeing the child root. The mixed
   no-payload/bytes-payload case is pinned so a primitive variant no longer
   risks running payload cleanup from the boxed-sum field-release summary.
+- ARM64 top-level generic boxed-sum payload cleanup now uses the same
+  match-and-branch-past-remaining-cases dispatch shape. Mixed sums with multiple
+  managed payload variants no longer fall through from one matched payload
+  cleanup into later variant cases after helper calls.
 - ARM64 closure capture cleanup now also recurses through nested fixed-block
   and boxed-sum child release plans before freeing the child root. The first
   pinned case is a captured tuple containing a nested tuple with a bytes field;
@@ -983,10 +987,11 @@ capture, returned record/tuple, and several list/dict/string combinations.
 ARM64 generic fixed-block cleanup now consumes release plans for nested
 fixed-block and boxed-sum child roots even when those child roots have no
 managed fields of their own, and it now dispatches nested boxed-sum child
-payload cleanup by active variant tag for mixed sums. ARM64 closure capture
-cleanup now consumes nested fixed-block child release plans before freeing
-captured child roots, and it dispatches captured boxed-sum variant payload
-release plans.
+payload cleanup by active variant tag for mixed sums. ARM64 top-level generic
+boxed-sum payload cleanup also branches past remaining cases after a match.
+ARM64 closure capture cleanup now consumes nested fixed-block child release
+plans before freeing captured child roots, and it dispatches captured boxed-sum
+variant payload release plans.
 
 ### Remaining Gaps
 
@@ -1000,8 +1005,8 @@ The implementation is still specialized and partial:
 - nested fixed blocks outside closure captures need broader matrix tests, but
   the primitive-only child-root case is covered and implemented
 - sum payload recursive release is not generalized across all backend paths,
-  though ARM64 generic fixed-block child cleanup now handles mixed boxed-sum
-  child payload dispatch
+  though ARM64 generic fixed-block child cleanup and top-level generic boxed-sum
+  cleanup now handle mixed boxed-sum payload dispatch
 - fixed-block arities beyond one and two are sparsely tested for heap fields
 - x64 fixed-block field release parity is not clearly complete
 
