@@ -2353,6 +2353,10 @@ let private generateDictRefCountDecHelper
     let skipLeafFixedBlockValueRelease = label "skip_leaf_fixed_block_value_release"
     let skipLeafDynamicKeyRelease = label "skip_leaf_dynamic_key_release"
     let skipLeafDynamicValueRelease = label "skip_leaf_dynamic_value_release"
+    let skipLeafPayloadRelease = label "skip_leaf_payload_release"
+    let skipCollisionPayloadRelease = label "skip_collision_payload_release"
+    let collisionPayloadLoop = label "collision_payload_loop"
+    let collisionPayloadDone = label "collision_payload_done"
 
     let leakDec =
         if enableLeakCheck then
@@ -2401,80 +2405,119 @@ let private generateDictRefCountDecHelper
          X86_64.ADD_imm (X86_64.RCX, 1)
          X86_64.Label doneLabel]
 
-    let releaseLeafManagedRootValueInstrs (targetHelperLabel: string) (skipLabel: string) =
+    let releaseManagedRootValueInstrs
+        (baseReg: X86_64.Reg)
+        (fieldOffset: int)
+        (targetHelperLabel: string)
+        (skipLabel: string)
+        =
         let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; X86_64.R11; scratch]
         let saves = saveRegs |> List.map X86_64.PUSH
         let restores = saveRegs |> List.rev |> List.map X86_64.POP
-        [X86_64.CMP_imm (X86_64.RDX, 2)
-         X86_64.Jcc (X86_64.NE, skipLabel)]
-        @ saves
-        @ [X86_64.MOV_load (X86_64.RAX, X86_64.RDI, 8)
+        saves
+        @ [X86_64.MOV_load (X86_64.RAX, baseReg, fieldOffset)
            X86_64.CALL targetHelperLabel]
         @ restores
         @ [X86_64.Label skipLabel]
 
-    let releaseLeafDynamicBufferKeyInstrs =
-        if releaseLeafDynamicKey then
-            let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; X86_64.R11; scratch]
-            let saves = saveRegs |> List.map X86_64.PUSH
-            let restores = saveRegs |> List.rev |> List.map X86_64.POP
-            [X86_64.CMP_imm (X86_64.RDX, 2)
-             X86_64.Jcc (X86_64.NE, skipLeafDynamicKeyRelease)]
-            @ saves
-            @ [X86_64.MOV_reg (X86_64.RDX, X86_64.RDI)]
-            @ genDynamicBufferFieldRelease helperCtx 0
-            @ restores
-            @ [X86_64.Label skipLeafDynamicKeyRelease]
-        else
-            []
-
-    let releaseLeafDynamicBufferValueInstrs =
-        if releaseLeafDynamicValue then
-            let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; X86_64.R11; scratch]
-            let saves = saveRegs |> List.map X86_64.PUSH
-            let restores = saveRegs |> List.rev |> List.map X86_64.POP
-            [X86_64.CMP_imm (X86_64.RDX, 2)
-             X86_64.Jcc (X86_64.NE, skipLeafDynamicValueRelease)]
-            @ saves
-            @ [X86_64.MOV_reg (X86_64.RDX, X86_64.RDI)]
-            @ genDynamicBufferFieldRelease helperCtx 8
-            @ restores
-            @ [X86_64.Label skipLeafDynamicValueRelease]
-        else
-            []
-
-    let releaseLeafFixedBlockValueInstrs (payloadSize: int) (releasePlan: ANF.RcReleasePlan) =
+    let releaseDynamicBufferFieldInstrs
+        (baseReg: X86_64.Reg)
+        (fieldOffset: int)
+        (skipLabel: string)
+        : X86_64.Instr list =
         let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; X86_64.R11; scratch]
         let saves = saveRegs |> List.map X86_64.PUSH
         let restores = saveRegs |> List.rev |> List.map X86_64.POP
-        [X86_64.CMP_imm (X86_64.RDX, 2)
-         X86_64.Jcc (X86_64.NE, skipLeafFixedBlockValueRelease)]
-        @ saves
-        @ [X86_64.MOV_load (X86_64.RAX, X86_64.RDI, 8)]
+        saves
+        @ [X86_64.MOV_reg (X86_64.RDX, baseReg)]
+        @ genDynamicBufferFieldRelease helperCtx fieldOffset
+        @ restores
+        @ [X86_64.Label skipLabel]
+
+    let releaseDynamicBufferKeyInstrs baseReg =
+        if releaseLeafDynamicKey then
+            releaseDynamicBufferFieldInstrs baseReg 0 skipLeafDynamicKeyRelease
+        else
+            []
+
+    let releaseDynamicBufferValueInstrs baseReg =
+        if releaseLeafDynamicValue then
+            releaseDynamicBufferFieldInstrs baseReg 8 skipLeafDynamicValueRelease
+        else
+            []
+
+    let releaseFixedBlockValueInstrs
+        (baseReg: X86_64.Reg)
+        (fieldOffset: int)
+        (payloadSize: int)
+        (releasePlan: ANF.RcReleasePlan)
+        =
+        let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; X86_64.R11; scratch]
+        let saves = saveRegs |> List.map X86_64.PUSH
+        let restores = saveRegs |> List.rev |> List.map X86_64.POP
+        saves
+        @ [X86_64.MOV_load (X86_64.RAX, baseReg, fieldOffset)]
         @ genRefCountDecGenericWithPlan helperCtx X86_64.RAX payloadSize (Some releasePlan)
         @ restores
         @ [X86_64.Label skipLeafFixedBlockValueRelease]
 
-    let releaseLeafValueInstrs =
+    let releasePayloadInstrs (baseReg: X86_64.Reg) =
         let listValueInstrs =
             if releaseLeafListValue then
-                releaseLeafManagedRootValueInstrs listRefCountDecHelperLabel skipLeafListValueRelease
+                releaseManagedRootValueInstrs baseReg 8 listRefCountDecHelperLabel skipLeafListValueRelease
             else
                 []
         let dictValueInstrs =
             match releaseLeafDictValueHelper with
             | Some targetHelperLabel ->
-                releaseLeafManagedRootValueInstrs targetHelperLabel skipLeafDictValueRelease
+                releaseManagedRootValueInstrs baseReg 8 targetHelperLabel skipLeafDictValueRelease
             | None ->
                 []
         let fixedBlockValueInstrs =
             match leafFixedBlockValueRelease with
             | Some (payloadSize, releasePlan) ->
-                releaseLeafFixedBlockValueInstrs payloadSize releasePlan
+                releaseFixedBlockValueInstrs baseReg 8 payloadSize releasePlan
             | None ->
                 []
 
-        releaseLeafDynamicBufferKeyInstrs @ releaseLeafDynamicBufferValueInstrs @ listValueInstrs @ dictValueInstrs @ fixedBlockValueInstrs
+        releaseDynamicBufferKeyInstrs baseReg @ releaseDynamicBufferValueInstrs baseReg @ listValueInstrs @ dictValueInstrs @ fixedBlockValueInstrs
+
+    let hasPayloadRelease =
+        releaseLeafDynamicKey
+        || releaseLeafDynamicValue
+        || releaseLeafListValue
+        || Option.isSome releaseLeafDictValueHelper
+        || Option.isSome leafFixedBlockValueRelease
+
+    let releaseLeafValueInstrs =
+        if hasPayloadRelease then
+            [X86_64.CMP_imm (X86_64.RDX, 2)
+             X86_64.Jcc (X86_64.NE, skipLeafPayloadRelease)]
+            @ releasePayloadInstrs X86_64.RDI
+            @ [X86_64.Label skipLeafPayloadRelease]
+        else
+            []
+
+    let releaseCollisionValueInstrs =
+        if hasPayloadRelease then
+            [X86_64.CMP_imm (X86_64.RDX, 3)
+             X86_64.Jcc (X86_64.NE, skipCollisionPayloadRelease)
+             X86_64.MOV_load (X86_64.R8, X86_64.RDI, 0)
+             X86_64.XOR_reg (X86_64.R9, X86_64.R9)
+             X86_64.Label collisionPayloadLoop
+             X86_64.CMP_reg (X86_64.R9, X86_64.R8)
+             X86_64.Jcc (X86_64.GE, collisionPayloadDone)
+             X86_64.MOV_reg (X86_64.R10, X86_64.R9)
+             X86_64.SHL_imm (X86_64.R10, 4)
+             X86_64.ADD_imm (X86_64.R10, 8)
+             X86_64.ADD_reg (X86_64.R10, X86_64.RDI)]
+            @ releasePayloadInstrs X86_64.R10
+            @ [X86_64.ADD_imm (X86_64.R9, 1)
+               X86_64.JMP collisionPayloadLoop
+               X86_64.Label collisionPayloadDone
+               X86_64.Label skipCollisionPayloadRelease]
+        else
+            []
 
     [X86_64.Label helperLabel
      X86_64.XOR_reg (X86_64.RCX, X86_64.RCX)
@@ -2558,6 +2601,7 @@ let private generateDictRefCountDecHelper
        X86_64.JMP collectLoop
        X86_64.Label freeNode]
     @ releaseLeafValueInstrs
+    @ releaseCollisionValueInstrs
     @ [X86_64.CMP_imm (X86_64.RSI, freeListSize)
        X86_64.Jcc (X86_64.GE, skipFreeList)
        X86_64.MOV_reg (X86_64.R9, freeListBase)
