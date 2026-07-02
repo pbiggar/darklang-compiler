@@ -163,6 +163,15 @@ Latest update:
   fixed-block `RcReleasePlan` helpers. The old `FixedBlockFixedBlock*`
   generator branches have been removed from the x64 helper generator; nested
   fixed-block list payload cleanup now goes through planned release execution.
+- ARM64 and x64 no longer carry static tuple/record/boxed-sum list helper
+  matrices for fixed-block list leaf payloads. Direct list helpers remain for
+  root payload families such as nested lists, dicts, closures, dict-list
+  values, and dynamic buffers; generic fixed-block and boxed-sum list elements
+  route through stable planned helper labels derived from their
+  `RcReleasePlan`. x64 also removed the old fixed-block list payload generator
+  cases, so extending tuple/record/sum list payload cleanup should now happen
+  by extending `RcShape`/`RcReleasePlan` and the generic release-plan executor,
+  not by adding more per-shape helper labels.
 
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
 release, tuple-only nested fixed-block field release, record-registry-based
@@ -439,15 +448,20 @@ overlapping allocation and ownership systems:
 
 Since then, many of the high-priority gaps have been implemented and tested.
 The remaining work is no longer "add refcounting everywhere" in the broad
-sense. The remaining work is:
+sense. Most managed root families now have shape-driven retain/release paths
+and both backends consume `RcReleasePlan` in the important recursive cleanup
+paths. The remaining work is:
 
-- finish replacing legacy type-level ownership checks with explicit runtime
-  shape decisions
-- finish backend parity, especially x64 recursive payload release
-- finish edge coverage for bytes, strings, closures, and sum payloads
+- keep backend helper selection shape-driven and avoid reintroducing helper
+  matrices for tuple/record/sum families
+- finish dict/HAMT key/value recursive retain/release semantics, including
+  collision nodes and arbitrary typed key/value payloads
+- add broader dual-backend memory probes where the harness can force a backend
+  independently of host architecture
+- finish edge documentation and focused tests for bytes/string runtime helpers
+  when new allocation paths are introduced
 - defer the broader raw-memory policy and allocator redesign until the managed
-  refcounting model is shape-driven and backend-parity work is complete
-- update user-facing docs to match the implementation
+  refcounting model remains stable
 
 ## Completed Context To Preserve
 
@@ -831,15 +845,17 @@ record/sum metadata context, and RC insertion builds retains, releases, binding
 decrefs, borrowed retains, alias preservation, and ownership-transfer checks
 through `RcShape` operations.
 
-The remaining managed-shape work is in backend helper selection and recursive
-payload cleanup. Both backends consume `RcReleasePlan` in several paths, but
-there are still large helper tables and helper-selection scans that encode
-shape-specific cases directly.
+The remaining managed-shape work is mainly in dict/HAMT helper selection and in
+keeping future backend additions on the `RcReleasePlan` path. Both backends
+consume `RcReleasePlan` in generic fixed-block cleanup, boxed-sum cleanup,
+closure capture cleanup, planned list leaf payload cleanup, and planned dict
+value cleanup. The old fixed-block tagged-list tuple/record/sum helper matrices
+have been removed.
 
 ### Why It Matters
 
-Backend helper tables are currently correct for covered cases, but they are
-still expensive to extend. A new recursive shape should be represented once in
+Backend helper tables are now much smaller for lists, but the same design
+constraint still applies. A new recursive shape should be represented once in
 `RcShape`/`RcReleasePlan`, then consumed by both backends. It should not require
 another matrix of source-type predicates and per-architecture helper labels.
 
@@ -860,8 +876,8 @@ another matrix of source-type predicates and per-architecture helper labels.
 
 ### Remaining Tasks
 
-1. Continue replacing backend helper selection based on helper-table pattern
-   matrices with direct `RcReleasePlan` consumption where practical.
+1. Keep future backend helper selection on direct `RcReleasePlan` consumption
+   where practical; do not recreate fixed-block list helper matrices.
 2. Keep x64 and ARM64 parity as new recursive payload-release cases are added.
 3. Continue adding classifier-consumer tests as backend paths migrate. Direct
    planner tests now prove pure enums do not heap-release, boxed sums release
@@ -1420,16 +1436,15 @@ Likely gaps:
    gains a new recursive helper family.
 2. Keep `docs/x64-refcounting.md` current after every parity or shape-plan
    slice.
-3. Continue replacing backend helper-family matching with shared
-   `RcReleasePlan` execution where practical. x64 tagged-list tuple2 and
-   tuple4 nested-tuple leaf helpers, tuple4 nested-record middle-field leaf
-   helpers, and covered boxed-sum tuple and record helpers now use this path;
-   use those as the template for remaining nested list and deeper sum payload
-   families.
-4. Port ARM64 closure capture release semantics beyond the current direct
-   dynamic-buffer, managed-root, and fixed-block probes to x64.
-5. Port any missing list helper variants to x64 until the shared shape-plan
-   executor replaces the need for per-family helpers.
+3. Preserve the planned `RcReleasePlan` execution path for generic list leaf
+   payloads on both backends; extending tuple/record/sum list payload cleanup
+   should mean extending the release-plan executor, not adding helper labels.
+4. Keep x64 closure capture release probes in parity with ARM64 when new
+   capture families are added. Current x64 probes cover dynamic buffers,
+   list/dict/closure roots, tuple/record/sum fixed blocks, mixed sums,
+   dict-list values, and multiple managed captures.
+5. Treat missing list behavior as a release-plan executor gap unless it is a
+   direct root payload family.
 6. Confirm dynamic bytes literal layout if bytes gains a separate literal
    materialization path. x64 materialized string literals now carry the
    immutable sentinel and skip dynamic RC.

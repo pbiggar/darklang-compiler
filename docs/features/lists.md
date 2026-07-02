@@ -59,38 +59,36 @@ RC:
 - decrements traverse list nodes iteratively and free nodes whose refcount
   reaches zero
 - typed `RawSet` retains child list and dict edges
-- selected leaf payload helpers release managed element payloads
+- direct leaf payload helpers release root element payloads
+- generic fixed-block and boxed-sum element payloads use planned
+  `RcReleasePlan` helpers
 
-Current ARM64 leaf payload coverage includes:
+Current leaf payload coverage includes:
 
 - primitive payloads, which need no payload release
 - dynamic strings and bytes
 - nested lists
 - dict roots
 - closure roots
-- tuple payloads, including selected higher-arity managed-field shapes
-- one-field, two-field, nested, and selected three-field records
+- tuple payloads through planned `RcReleasePlan` helpers
+- record payloads through planned `RcReleasePlan` helpers
 - boxed sums carrying dynamic buffers, lists, dicts, closures, tuples, records,
-  and selected nested sums
+  and selected nested sums through planned `RcReleasePlan` helpers
 
-x64 has root/node reclamation plus focused helper coverage for dynamic buffers,
-tuples, records, boxed sums, lists, dicts, and closures. It still has less
-end-to-end coverage than ARM64 and should be checked against
-[`docs/x64-refcounting.md`](../x64-refcounting.md) before assuming parity for a
-new shape.
+ARM64 and x64 both route generic fixed-block list payload cleanup through
+planned helpers derived from `RcReleasePlan`. x64 no longer has a static
+tuple/record/boxed-sum helper matrix.
 
 ## Remaining Work
 
-List memory management still needs to move from per-shape helper variants to a
-shape-driven payload release plan. Remaining gaps include:
+List memory management should stay on the shape-driven payload release path.
+Remaining gaps are mostly around:
 
-- three-element tuples with managed fields
-- additional multi-field record shapes
-- sum payloads beyond currently covered dynamic-buffer, root, tuple, and record
-  payload shapes
-- bytes/list/dict/closure combinations nested more deeply
-- x64 parity for ARM64 helper variants
-- avoiding unbounded helper growth as new shapes are covered
+- adding focused tests when new recursive payload families are introduced
+- extending the generic `RcReleasePlan` executor if a new tuple/record/sum
+  shape exposes an unsupported release-plan case
+- keeping ARM64 and x64 helper dependency discovery in parity
+- avoiding new per-shape helper matrices
 
 See [`memory-refcounting-remaining.md`](../../memory-refcounting-remaining.md)
 for the current task breakdown.
