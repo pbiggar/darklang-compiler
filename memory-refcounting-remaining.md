@@ -138,7 +138,13 @@ Latest update:
   the typed dict-list value case as well. The new
   `X86_64CodeGenTests.testTaggedListRefCountDecTuple4NestedRecordMiddleStringListDictListPayload`
   proves the helper selection and dependencies release `Dict<Int64,
-  List<Int64>>` values in that nested record shape.
+  List<Int64>>` values in that nested record shape. That path now also uses a
+  planned fixed-block `RcReleasePlan` leaf helper instead of handwritten
+  nested fixed-block release code.
+- ARM64 helper-selection parity now includes the same tuple4 middle-field
+  nested-record dict-list shape. `ARM64CodeGenTests.testListTuple4NestedRecordMiddleDictListValueUsesTypedDictHelper`
+  pins the typed dict-list value helper for `List<(Int64, Int64, Record
+  { String; List<Int64>; Dict<Int64, List<Int64>> }, Int64)>`.
 
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
 release, tuple-only nested fixed-block field release, record-registry-based
@@ -255,8 +261,9 @@ record4 nested tuple string/list/dict payload release, plus x64 tagged-list
 record4 nested tuple closure/bytes/list/dict payload release, plus initial
 planned x64 tagged-list tuple4 nested-record middle-field string/list/dict
 payload release through the shared generic fixed-block `RcReleasePlan`
-executor, plus x64 tagged-list tuple4 nested-record middle-field
-string/list/dict-list payload release coverage, plus initial
+executor, plus planned x64 tagged-list tuple4 nested-record middle-field
+string/list/dict-list payload release with ARM64 helper-selection parity
+coverage, plus initial
 `RcShape` storage-class classification used by RC insertion's legacy fixed-root
 compatibility predicate, plus shared `RcReleasePlan` metadata and x64 generic
 fixed-block dynamic string/bytes, dict-root, and closure-root field release
@@ -1362,8 +1369,8 @@ Likely gaps:
   tuple4 nested tuple dynamic string, string/list/dict, and
   closure/bytes/list/dict shapes, record4 nested tuple dynamic string,
   string/list/dict, and closure/bytes/list/dict shapes, tuple4 nested-record
-  middle-field string/list/dict through a planned `RcReleasePlan` helper and
-  string/list/dict-list coverage, record1, exhaustive
+  middle-field string/list/dict and string/list/dict-list through planned
+  `RcReleasePlan` helpers, record1, exhaustive
   record3 dynamic-buffer combinations, mixed record3 string/bytes/list/dict
   and closure/list/dict shapes, mixed record4
   string/bytes/list/dict and closure/bytes/list/dict shapes, sum dynamic-buffer,

@@ -19,6 +19,12 @@ let private rcMetadataWithSumShapes (sumShapes: ANF.RcSumShapeRegistry) (typ: AS
         ANF.SourceType = Some typ
     }
 
+let private rcMetadataWithRecords (records: LIR.RecordRegistry) (typ: AST.Type) : ANF.RcMetadata =
+    {
+        ANF.ReleasePlan = Some (ANF.rcReleasePlanOfTypeWithSums records Map.empty typ)
+        ANF.SourceType = Some typ
+    }
+
 let private makeSimpleProgramWithVariants
     (instrs: LIR.Instr list)
     (variants: LIR.VariantRegistry)
@@ -40,6 +46,28 @@ let private makeSimpleProgramWithVariants
         UsedCalleeSaved = []
     }
     LIR.Program ([func], variants, Map.empty)
+
+let private makeSimpleProgramWithRecords
+    (instrs: LIR.Instr list)
+    (records: LIR.RecordRegistry)
+    : LIR.Program =
+    let label = LIR.Label "_start_entry"
+    let block : LIR.BasicBlock = {
+        Label = label
+        Instrs = instrs
+        Terminator = LIR.Ret
+    }
+    let func : LIR.Function = {
+        Name = "_start"
+        TypedParams = []
+        CFG = {
+            Entry = label
+            Blocks = Map.ofList [(label, block)]
+        }
+        StackSize = 0
+        UsedCalleeSaved = []
+    }
+    LIR.Program ([func], Map.empty, records)
 
 let private makeEmptyFunction
     (name: string)
@@ -246,6 +274,43 @@ let testListTuple4NestedTupleDynamicDictListValueUsesTypedDictHelper () : TestRe
             ]
         ])
         "List of tuple(int, int, int, tuple(string, list<int>, dict<int, list<int>>))"
+
+let testListTuple4NestedRecordMiddleDictListValueUsesTypedDictHelper () : TestResult =
+    let listType = AST.TList AST.TInt64
+    let dictType = AST.TDict (AST.TInt64, listType)
+    let recordName = "ARM64ListRcNestedRecordMiddleStringListDictList"
+    let nestedRecordType = AST.TRecord (recordName, [])
+    let tupleType = AST.TTuple [ AST.TInt64; AST.TInt64; nestedRecordType; AST.TInt64 ]
+    let records =
+        Map.ofList [
+            (recordName, [ ("name", AST.TString); ("items", listType); ("lookup", dictType) ])
+        ]
+    let program =
+        makeSimpleProgramWithRecords
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    0,
+                    LIR.TaggedList,
+                    Some (rcMetadataWithRecords records (AST.TList tupleType)))
+            ]
+            records
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let callsTypedDictListHelper =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.BL "__dark_dict_refcount_dec_list_value_helper" ->
+                    true
+                | _ ->
+                    false)
+        if callsTypedDictListHelper then
+            Ok ()
+        else
+            Error "List of tuple(int, int, record(string, list, dict<int, list<int>>), int) did not emit typed dict-list value release helper"
 
 let testListTuple4NestedTupleClosureDictListValueUsesTypedDictHelper () : TestResult =
     assertListElementUsesTypedDictListHelper
@@ -670,6 +735,7 @@ let tests : (string * (unit -> TestResult)) list = [
     ("List nested tuple dict-list uses typed dict helper", testListNestedTupleDictListValueUsesTypedDictHelper)
     ("List tuple2 nested tuple dict-list uses typed dict helper", testListTuple2NestedTupleDictListValueUsesTypedDictHelper)
     ("List tuple4 nested tuple dynamic dict-list uses typed dict helper", testListTuple4NestedTupleDynamicDictListValueUsesTypedDictHelper)
+    ("List tuple4 nested record middle dict-list uses typed dict helper", testListTuple4NestedRecordMiddleDictListValueUsesTypedDictHelper)
     ("List tuple4 nested tuple closure dict-list uses typed dict helper", testListTuple4NestedTupleClosureDictListValueUsesTypedDictHelper)
     ("List sum tuple3 dict-list uses typed dict helper", testListSumTuple3DictListValueUsesTypedDictHelper)
     ("List sum tuple4 dict-list uses typed dict helper", testListSumTuple4DictListValueUsesTypedDictHelper)

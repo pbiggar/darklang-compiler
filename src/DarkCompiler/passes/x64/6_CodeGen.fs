@@ -2607,6 +2607,30 @@ let private listRefCountDecTuple4NestedRecordMiddleDynamicListDictReleasePlan : 
                                ANF.FieldRelease (8, ANF.RootRelease (0, ANF.TaggedList, ANF.TaggedListPayloadRelease ANF.NoReleasePlan))
                                ANF.FieldRelease (16, ANF.RootRelease (0, ANF.DictHeap, ANF.DictPayloadRelease (ANF.NoReleasePlan, ANF.NoReleasePlan)))])))]))
 
+let private listRefCountDecTuple4NestedRecordMiddleDynamicListDictListReleasePlan : ANF.RcReleasePlan =
+    ANF.RootRelease
+        (32,
+         ANF.GenericHeap,
+         ANF.FixedBlockPayloadRelease
+             (32,
+              [ANF.FieldRelease
+                   (16,
+                    ANF.RootRelease
+                        (24,
+                         ANF.GenericHeap,
+                         ANF.FixedBlockPayloadRelease
+                             (24,
+                              [ANF.FieldRelease (0, ANF.DynamicBufferRelease ANF.DynamicStringBuffer)
+                               ANF.FieldRelease (8, ANF.RootRelease (0, ANF.TaggedList, ANF.TaggedListPayloadRelease ANF.NoReleasePlan))
+                               ANF.FieldRelease
+                                   (16,
+                                    ANF.RootRelease
+                                        (0,
+                                         ANF.DictHeap,
+                                         ANF.DictPayloadRelease
+                                             (ANF.NoReleasePlan,
+                                              ANF.RootRelease (0, ANF.TaggedList, ANF.TaggedListPayloadRelease ANF.NoReleasePlan))))])))]))
+
 let private tuple4NestedTupleDynamicListDictReleasePlan : ANF.RcReleasePlan =
     ANF.RootRelease
         (32,
@@ -2670,7 +2694,7 @@ let private listRefCountDecHelperSpecs : (string * ListLeafPayloadRelease) list 
     (listRefCountDecTuple4NestedTupleClosureDynamicListDictHelperLabel, (FixedBlockFixedBlockClosureDynamicListDictFieldPayload (32, 24, 32, 0, 8, 16, 24, dictRefCountDecHelperLabel)))
     (listRefCountDecTuple4NestedTupleClosureDynamicListDictListHelperLabel, (FixedBlockFixedBlockClosureDynamicListDictFieldPayload (32, 24, 32, 0, 8, 16, 24, dictRefCountDecListValueHelperLabel)))
     (listRefCountDecTuple4NestedRecordMiddleDynamicListDictHelperLabel, (FixedBlockPlannedLeafPayload (32, listRefCountDecTuple4NestedRecordMiddleDynamicListDictReleasePlan)))
-    (listRefCountDecTuple4NestedRecordMiddleDynamicListDictListHelperLabel, (FixedBlockFixedBlockDynamicListDictFieldPayload (32, 16, 24, 0, 8, 16, dictRefCountDecListValueHelperLabel)))
+    (listRefCountDecTuple4NestedRecordMiddleDynamicListDictListHelperLabel, (FixedBlockPlannedLeafPayload (32, listRefCountDecTuple4NestedRecordMiddleDynamicListDictListReleasePlan)))
     (listRefCountDecRecord1DynamicHelperLabel, (FixedBlockLeafPayload (8, [0])))
     (listRefCountDecRecord3DynamicFirstHelperLabel, (FixedBlockLeafPayload (24, [0])))
     (listRefCountDecRecord3DynamicThirdHelperLabel, (FixedBlockLeafPayload (24, [16])))
