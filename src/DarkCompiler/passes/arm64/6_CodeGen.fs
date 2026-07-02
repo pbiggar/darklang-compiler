@@ -5309,34 +5309,6 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     |> Option.defaultValue []
 
                 let releaseSumPayloadInstrs =
-                    let releaseVariant (variant: ANF.RcBoxedSumVariantRelease) : (int * ARM64Symbolic.Instr list) option =
-                        let releaseInstrs =
-                            variant.FieldReleases
-                            |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
-                                releaseFieldPlanFrom addrReg fieldOffset fieldReleasePlan)
-
-                        if List.isEmpty releaseInstrs then
-                            None
-                        else
-                            Some (variant.Tag, releaseInstrs)
-
-                    let variantReleaseInstrs (variants: ANF.RcBoxedSumVariantRelease list) : ARM64Symbolic.Instr list =
-                        let cases = variants |> List.choose releaseVariant
-
-                        if List.isEmpty cases then
-                            []
-                        else
-                            [
-                                ARM64Symbolic.LDR (ARM64Symbolic.X10, addrReg, 0s)
-                            ]
-                            @
-                            (cases
-                             |> List.collect (fun (tag, releaseInstrs) ->
-                                [
-                                    ARM64Symbolic.CMP_imm (ARM64Symbolic.X10, uint16 tag)
-                                    ARM64Symbolic.B_cond (ARM64Symbolic.NE, List.length releaseInstrs + 1)
-                                ] @ releaseInstrs))
-
                     match releasePlan with
                     | Some (ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, _, variants))) ->
                         let callerOwnsSinglePayloadSum =
@@ -5346,7 +5318,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         if List.length variants = 1 && not callerOwnsSinglePayloadSum then
                             []
                         else
-                            variantReleaseInstrs variants
+                            releaseBoxedSumVariantFieldsFrom addrReg variants
                     | _ ->
                         []
 

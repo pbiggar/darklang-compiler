@@ -502,6 +502,63 @@ let testGenericFixedBlockNestedMixedBoxedSumBytesPayloadUsesVariantDispatch () :
         else
             Error "Generic fixed-block nested mixed boxed-sum payload release did not dispatch on the child variant tag"
 
+let testGenericMixedBoxedSumPayloadDispatchSkipsRemainingCases () : TestResult =
+    let sumName = "Arm64MixedSumPayloadDispatch"
+    let sumType = AST.TSum (sumName, [])
+    let variants : LIR.VariantRegistry =
+        Map.ofList [
+            (sumName,
+                { TypeParams = []
+                  Variants =
+                    [
+                        { Name = "Arm64MixedSumBytesPayload"; Tag = 0; Payload = Some AST.TBytes }
+                        { Name = "Arm64MixedSumListPayload"; Tag = 1; Payload = Some (AST.TList AST.TInt64) }
+                    ] })
+        ]
+    let sumShapes =
+        variants
+        |> Map.map (fun _ typeVariants ->
+            { ANF.TypeParams = typeVariants.TypeParams
+              ANF.Payloads =
+                typeVariants.Variants
+                |> List.sortBy (fun variant -> variant.Tag)
+                |> List.map (fun variant -> variant.Tag, variant.Payload) })
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    16,
+                    LIR.GenericHeap,
+                    Some (rcMetadataWithSumShapes sumShapes sumType))
+            ]
+            variants
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let rec branchAppearsBeforeSecondCase (seenFirstCase: bool) (remaining: ARM64Symbolic.Instr list) : bool =
+            match remaining with
+            | [] ->
+                false
+            | ARM64Symbolic.CMP_imm (ARM64.X10, 0us) :: rest ->
+                branchAppearsBeforeSecondCase true rest
+            | ARM64Symbolic.CMP_imm (ARM64.X10, 1us) :: _ when seenFirstCase ->
+                false
+            | ARM64Symbolic.B _ :: _ when seenFirstCase ->
+                true
+            | _ :: rest ->
+                branchAppearsBeforeSecondCase seenFirstCase rest
+
+        let emitsBranchAfterMatchedPayload =
+            branchAppearsBeforeSecondCase false instrs
+
+        if emitsBranchAfterMatchedPayload then
+            Ok ()
+        else
+            Error "Generic mixed boxed-sum payload release did not branch past remaining variant cases after a match"
+
 let testClosureCaptureNestedFixedBlockBytesFieldUsesReleasePlan () : TestResult =
     let nestedType = AST.TTuple [ AST.TBytes ]
     let captureType = AST.TTuple [ nestedType ]
@@ -623,6 +680,7 @@ let tests : (string * (unit -> TestResult)) list = [
     ("Generic fixed-block nested bytes field uses release plan", testGenericFixedBlockNestedBytesFieldUsesReleasePlan)
     ("Generic fixed-block nested immediate field releases child root", testGenericFixedBlockNestedImmediateFieldReleasesChildRoot)
     ("Generic fixed-block nested mixed boxed-sum bytes payload uses variant dispatch", testGenericFixedBlockNestedMixedBoxedSumBytesPayloadUsesVariantDispatch)
+    ("Generic mixed boxed-sum payload dispatch skips remaining cases", testGenericMixedBoxedSumPayloadDispatchSkipsRemainingCases)
     ("Closure capture nested fixed-block bytes field uses release plan", testClosureCaptureNestedFixedBlockBytesFieldUsesReleasePlan)
     ("Closure capture boxed-sum bytes payload uses release plan", testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan)
 ]
