@@ -322,6 +322,16 @@ let testListSumTuple4ClosureDictListValueUsesTypedDictHelper () : TestResult =
         ])
         "sum tuple4 closure bytes list dict-list"
 
+let testListSumTuple4ClosureStringDictListValueUsesTypedDictHelper () : TestResult =
+    assertListSumPayloadUsesTypedDictListHelper
+        (AST.TTuple [
+            AST.TFunction ([ AST.TInt64 ], AST.TInt64)
+            AST.TString
+            AST.TList AST.TInt64
+            AST.TDict (AST.TInt64, AST.TList AST.TInt64)
+        ])
+        "sum tuple4 closure string list dict-list"
+
 let testDictDictListValueUsesTypedDictHelper () : TestResult =
     let dictType = AST.TDict (AST.TInt64, AST.TDict (AST.TInt64, AST.TList AST.TInt64))
     let program =
@@ -368,5 +378,6 @@ let tests : (string * (unit -> TestResult)) list = [
     ("List sum tuple4 dict-list uses typed dict helper", testListSumTuple4DictListValueUsesTypedDictHelper)
     ("List sum tuple3 closure dict-list uses typed dict helper", testListSumTuple3ClosureDictListValueUsesTypedDictHelper)
     ("List sum tuple4 closure dict-list uses typed dict helper", testListSumTuple4ClosureDictListValueUsesTypedDictHelper)
+    ("List sum tuple4 closure string dict-list uses typed dict helper", testListSumTuple4ClosureStringDictListValueUsesTypedDictHelper)
     ("Dict dict-list uses typed dict helper", testDictDictListValueUsesTypedDictHelper)
 ]
