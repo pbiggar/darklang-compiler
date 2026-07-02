@@ -918,45 +918,33 @@ let private generateListRefCountDecHelperWith
 
 type private ListRefCountDecHelperSpec = {
     Label: string
-    LeafGenericPayloadSize: int option
     ReleaseLeafListPayload: bool
     ReleaseLeafDictPayload: bool
     ReleaseLeafClosurePayload: bool
-    ManagedLeafFieldTypes: AST.Type list
 }
 
 let private listRefCountDecHelperSpecs : ListRefCountDecHelperSpec list =
     [
     { Label = listRefCountDecHelperLabel
-      LeafGenericPayloadSize = None
       ReleaseLeafListPayload = false
       ReleaseLeafDictPayload = false
-      ReleaseLeafClosurePayload = false
-      ManagedLeafFieldTypes = [] }
+      ReleaseLeafClosurePayload = false }
     { Label = listRefCountDecListHelperLabel
-      LeafGenericPayloadSize = None
       ReleaseLeafListPayload = true
       ReleaseLeafDictPayload = false
-      ReleaseLeafClosurePayload = false
-      ManagedLeafFieldTypes = [] }
+      ReleaseLeafClosurePayload = false }
     { Label = listRefCountDecDictHelperLabel
-      LeafGenericPayloadSize = None
       ReleaseLeafListPayload = false
       ReleaseLeafDictPayload = true
-      ReleaseLeafClosurePayload = false
-      ManagedLeafFieldTypes = [] }
+      ReleaseLeafClosurePayload = false }
     { Label = listRefCountDecDictListHelperLabel
-      LeafGenericPayloadSize = None
       ReleaseLeafListPayload = false
       ReleaseLeafDictPayload = true
-      ReleaseLeafClosurePayload = false
-      ManagedLeafFieldTypes = [] }
+      ReleaseLeafClosurePayload = false }
     { Label = listRefCountDecClosureHelperLabel
-      LeafGenericPayloadSize = None
       ReleaseLeafListPayload = false
       ReleaseLeafDictPayload = false
-      ReleaseLeafClosurePayload = true
-      ManagedLeafFieldTypes = [] }
+      ReleaseLeafClosurePayload = true }
     ]
 
 let private generateNeededListRefCountDecHelpers
@@ -971,13 +959,13 @@ let private generateNeededListRefCountDecHelpers
                  generateListRefCountDecHelperWith
                      spec.Label
                      ctx
-                     spec.LeafGenericPayloadSize
+                     None
                      None
                      false
                      spec.ReleaseLeafListPayload
                      spec.ReleaseLeafDictPayload
                      spec.ReleaseLeafClosurePayload
-                     spec.ManagedLeafFieldTypes
+                     []
              else
                  []))
         @ (if Set.contains listRefCountDecStringHelperLabel neededHelperLabels then
@@ -6147,13 +6135,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         if helperLabel = listRefCountDecDictListHelperLabel then
             Set.singleton dictRefCountDecListValueHelperLabel
         else
-            listRefCountDecHelperSpecs
-            |> List.tryFind (fun spec -> spec.Label = helperLabel)
-            |> Option.map (fun spec ->
-                spec.ManagedLeafFieldTypes
-                |> List.map dictDecHelperLabelsForFieldType
-                |> unionLabelSets)
-            |> Option.defaultValue Set.empty
+            Set.empty
 
     let rec listDecHelperLabelsInReleasePlan (releasePlan: ANF.RcReleasePlan) : Set<string> =
         let labelsInFieldReleases fieldReleases =
@@ -6352,13 +6334,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             listDecHelperLabelsInReleasePlan releasePlan
             |> Set.remove helperLabel
         | None ->
-            listRefCountDecHelperSpecs
-            |> List.tryFind (fun spec -> spec.Label = helperLabel)
-            |> Option.map (fun spec ->
-                spec.ManagedLeafFieldTypes
-                |> List.map listDecHelperLabelsForFieldType
-                |> unionLabelSets)
-            |> Option.defaultValue Set.empty
+            Set.empty
 
     let rec expandListDecHelperDependencies (selectedLabels: Set<string>) (pendingLabels: string list) : Set<string> =
         match pendingLabels with
@@ -6446,23 +6422,16 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
 
     let selectedStaticListHelpersNeed
         (directSpecNeed: ListRefCountDecHelperSpec -> bool)
-        (predicate: ANF.RcReleasePlan -> bool)
         (selectedLabels: Set<string>)
         : bool =
         listRefCountDecHelperSpecs
         |> List.exists (fun spec ->
             Set.contains spec.Label selectedLabels
-            && (directSpecNeed spec
-                || (spec.ManagedLeafFieldTypes
-                    |> List.exists (fun fieldType ->
-                        fieldType
-                        |> tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry
-                        |> Option.exists (rcReleasePlanContains predicate)))))
+            && directSpecNeed spec)
 
     let selectedListHelpersNeedDictDecHelper =
         selectedStaticListHelpersNeed
             (fun spec -> spec.ReleaseLeafDictPayload)
-            (function ANF.RootRelease (_, ANF.DictHeap, _) -> true | _ -> false)
             neededListRcDecHelperLabels
         || selectedPlannedListHelpersNeed
             (function ANF.RootRelease (_, ANF.DictHeap, _) -> true | _ -> false)
@@ -6471,7 +6440,6 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
     let selectedListHelpersNeedClosureDecHelper =
         selectedStaticListHelpersNeed
             (fun spec -> spec.ReleaseLeafClosurePayload)
-            (function ANF.RootRelease (_, ANF.ClosureHeap, _) -> true | _ -> false)
             neededListRcDecHelperLabels
         || selectedPlannedListHelpersNeed
             (function ANF.RootRelease (_, ANF.ClosureHeap, _) -> true | _ -> false)
@@ -6699,7 +6667,6 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         let selectedListHelpersNeedDictDecHelper =
             selectedStaticListHelpersNeed
                 (fun spec -> spec.ReleaseLeafDictPayload)
-                (function ANF.RootRelease (_, ANF.DictHeap, _) -> true | _ -> false)
                 selectedListRcDecHelperLabels
             || selectedPlannedListHelpersNeed
                 (function ANF.RootRelease (_, ANF.DictHeap, _) -> true | _ -> false)
@@ -6708,7 +6675,6 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         let selectedListHelpersNeedClosureDecHelper =
             selectedStaticListHelpersNeed
                 (fun spec -> spec.ReleaseLeafClosurePayload)
-                (function ANF.RootRelease (_, ANF.ClosureHeap, _) -> true | _ -> false)
                 selectedListRcDecHelperLabels
             || selectedPlannedListHelpersNeed
                 (function ANF.RootRelease (_, ANF.ClosureHeap, _) -> true | _ -> false)
