@@ -1150,6 +1150,7 @@ commits enabled:
   capture release
 - direct closure tuple string/list/dict capture release
 - direct closure record string/list/dict capture release
+- direct closure record string/bytes/list/dict-list capture release
 - direct closure sum tuple string/list/dict capture release
 - direct closure sum record string/list/dict capture release
 - direct closure release with multiple managed captures
@@ -1458,7 +1459,6 @@ Closure roots and several capture cases are covered:
 2. Add closure capture tests for recursive capture payloads beyond the current
    direct dynamic-buffer, managed-root, and fixed-block probes:
 
-   - record with multiple heap fields
    - tuple with multiple heap fields
 
 3. Add returned closure tests that use captured values after cleanup.

@@ -1745,6 +1745,57 @@ let testClosureRefCountDecRecordStringListDictCapture () : Result<unit, string> 
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected closure record string/list/dict capture release to balance leak counter, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 closure RefCountDec releases captured records whose dict fields own list values.
+let testClosureRefCountDecRecordStringBytesListDictListCapture () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let dictType = AST.TDict (AST.TInt64, listType)
+    let recordType = AST.TRecord ("X64ClosureCaptureRecordStringBytesListDictList", [])
+    let records =
+        Map.ofList
+            [("X64ClosureCaptureRecordStringBytesListDictList",
+              [("name", AST.TString); ("blob", AST.TBytes); ("items", listType); ("lookup", dictType)])]
+    let closureTupleType = AST.TTuple [AST.TInt64; recordType]
+    let capturedFunc =
+        makeEmptyFunction
+            "x64_record_string_bytes_list_dict_list_capture_fn"
+            [{ Reg = LIR.Physical LIR.X0; Type = closureTupleType }]
+    let main =
+        match makeSimpleProgramWithRecords
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
+                LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "blob", LIR.StringSymbol "bytes")
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
+                LIR.HeapAlloc (LIR.Physical LIR.X6, 8)
+                LIR.HeapStore (LIR.Physical LIR.X6, 0, LIR.Imm 99L, None)
+                LIR.Mov (LIR.Physical LIR.X7, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X7, LIR.Physical LIR.X6, LIR.Physical LIR.X7)
+                LIR.HeapAlloc (LIR.Physical LIR.X19, 16)
+                LIR.HeapStore (LIR.Physical LIR.X19, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X19, 8, LIR.Reg (LIR.Physical LIR.X7), Some listType)
+                LIR.Mov (LIR.Physical LIR.X20, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X20, LIR.Physical LIR.X19, LIR.Physical LIR.X20)
+                LIR.HeapAlloc (LIR.Physical LIR.X21, 32)
+                LIR.HeapStore (LIR.Physical LIR.X21, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X21, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X21, 16, LIR.Reg (LIR.Physical LIR.X5), Some listType)
+                LIR.HeapStore (LIR.Physical LIR.X21, 24, LIR.Reg (LIR.Physical LIR.X20), Some dictType)
+                LIR.ClosureAlloc (LIR.Physical LIR.X4, "x64_record_string_bytes_list_dict_list_capture_fn", [LIR.Reg (LIR.Physical LIR.X21)])
+                LIR.RefCountDec (LIR.Physical LIR.X4, 16, LIR.ClosureHeap, Some (rcMetadata ((AST.TFunction ([AST.TInt64], AST.TInt64)))))
+            ]
+            LIR.Ret
+            records with
+        | LIR.Program ([func], variants, programRecords) -> LIR.Program ([func; capturedFunc], variants, programRecords)
+        | other -> other
+
+    match runLIRProgramFullWithOptions main true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected closure record string/bytes/list/dict-list capture release to balance leak counter, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 closure RefCountDec releases captured boxed sum payloads.
 let testClosureRefCountDecSumStringCapture () : Result<unit, string> =
     let sumType = AST.TSum ("X64ClosureCaptureSum", [AST.TString])
@@ -4475,6 +4526,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR closure RefCountDec releases tuple string/list/dict capture", testClosureRefCountDecTupleStringListDictCapture)
     ("LIR closure RefCountDec releases record string capture", testClosureRefCountDecRecordStringCapture)
     ("LIR closure RefCountDec releases record string/list/dict capture", testClosureRefCountDecRecordStringListDictCapture)
+    ("LIR closure RefCountDec releases record string/bytes/list/dict-list capture", testClosureRefCountDecRecordStringBytesListDictListCapture)
     ("LIR closure RefCountDec releases sum string capture", testClosureRefCountDecSumStringCapture)
     ("LIR closure RefCountDec releases sum tuple string/list/dict capture", testClosureRefCountDecSumTupleStringListDictCapture)
     ("LIR closure RefCountDec releases sum record string/list/dict capture", testClosureRefCountDecSumRecordStringListDictCapture)
