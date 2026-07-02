@@ -5158,37 +5158,26 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                             ] @ afterDec
 
                         [
-                            ARM64Symbolic.STP_pre (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, -32s)
-                            ARM64Symbolic.STP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 16s)
+                            ARM64Symbolic.STP_pre (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, -48s)
+                            ARM64Symbolic.STP (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 16s)
+                            ARM64Symbolic.STP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 32s)
                         ]
                         @ body
                         @ [
-                            ARM64Symbolic.LDP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 16s)
-                            ARM64Symbolic.LDP_post (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 32s)
+                            ARM64Symbolic.LDP (ARM64Symbolic.X14, ARM64Symbolic.X15, ARM64Symbolic.SP, 32s)
+                            ARM64Symbolic.LDP (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 16s)
+                            ARM64Symbolic.LDP_post (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 48s)
                         ]
 
-                let releasePlanHasDirectStringField (fieldReleases: ANF.RcFieldRelease list) : bool =
-                    fieldReleases
-                    |> List.exists (function
-                        | ANF.FieldRelease (_, ANF.DynamicBufferRelease ANF.DynamicStringBuffer) ->
-                            true
-                        | _ ->
-                            false)
-
-                let releasePlanHasLegacyNestedStringField (fieldReleasePlan: ANF.RcReleasePlan) : bool =
-                    match fieldReleasePlan with
-                    | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
-                        releasePlanHasDirectStringField fieldReleases
-                        || fieldReleases
-                           |> List.exists (function
-                               | ANF.FieldRelease (_, ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, nestedFieldReleases))) ->
-                                   releasePlanHasDirectStringField nestedFieldReleases
-                               | _ ->
-                                   false)
-                    | _ ->
-                        false
-
                 let fixedBlockFieldReleaseInstrs =
+                    let releasePlanHasFieldReleases (fieldReleasePlan: ANF.RcReleasePlan) : bool =
+                        match fieldReleasePlan with
+                        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+                        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
+                            not (List.isEmpty fieldReleases)
+                        | _ ->
+                            false
+
                     let directFieldReleaseInstrs =
                         releasePlan
                         |> Option.map (function
@@ -5208,7 +5197,8 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                                 |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
                                     match fieldReleasePlan with
                                     | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _)
-                                        when releasePlanHasLegacyNestedStringField fieldReleasePlan ->
+                                    | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _)
+                                        when releasePlanHasFieldReleases fieldReleasePlan ->
                                         releaseFixedBlockFieldWithPlan fieldOffset childPayloadSize fieldReleasePlan
                                     | _ ->
                                         [])

@@ -361,6 +361,45 @@ let testDictDictListValueUsesTypedDictHelper () : TestResult =
         else
             Error "Dict<int, dict<int, list<int>>> did not emit typed nested dict-list value release helper"
 
+let testGenericFixedBlockNestedBytesFieldUsesReleasePlan () : TestResult =
+    let nestedType = AST.TTuple [ AST.TBytes ]
+    let parentType = AST.TTuple [ nestedType ]
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    8,
+                    LIR.GenericHeap,
+                    Some (rcMetadata parentType))
+            ]
+            Map.empty
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let releasesNestedBytesField =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.LDR (ARM64.X12, ARM64.X11, 0s) ->
+                    true
+                | _ ->
+                    false)
+        let preservesNestedBaseRegister =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.STP_pre (ARM64.X10, ARM64.X11, ARM64.SP, -48s) ->
+                    true
+                | _ ->
+                    false)
+        if not releasesNestedBytesField then
+            Error "Generic fixed-block nested bytes field release did not consume the nested release plan"
+        elif not preservesNestedBaseRegister then
+            Error "Generic fixed-block nested release did not preserve X11 while using it as child base"
+        else
+            Ok ()
+
 let tests : (string * (unit -> TestResult)) list = [
     ("RawSet pure enum skips generic retain", testRawSetPureEnumDoesNotEmitGenericRetain)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
@@ -380,4 +419,5 @@ let tests : (string * (unit -> TestResult)) list = [
     ("List sum tuple4 closure dict-list uses typed dict helper", testListSumTuple4ClosureDictListValueUsesTypedDictHelper)
     ("List sum tuple4 closure string dict-list uses typed dict helper", testListSumTuple4ClosureStringDictListValueUsesTypedDictHelper)
     ("Dict dict-list uses typed dict helper", testDictDictListValueUsesTypedDictHelper)
+    ("Generic fixed-block nested bytes field uses release plan", testGenericFixedBlockNestedBytesFieldUsesReleasePlan)
 ]
