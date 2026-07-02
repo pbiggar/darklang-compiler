@@ -15,6 +15,22 @@ Status date: 2026-07-02.
 
 Latest update:
 
+- ARM64 now releases nested fixed-block and boxed-sum child roots even when the
+  child root has only primitive fields. This removed the intentional guard that
+  skipped primitive-only child roots during generic fixed-block cleanup. The
+  regression is pinned by
+  `ARM64CodeGenTests.testGenericFixedBlockNestedImmediateFieldReleasesChildRoot`.
+- Borrowed tuple projections that flow into self-recursive or self-tail calls
+  are now retained before the owned parent result is released, including the
+  lowered pattern-match shape used by `Stdlib.Crypto.__sha1Rounds`: an owned
+  call result may be aliased, projected, re-typed through one or more aliases,
+  and then passed as the next recursive state. `Crypto.sha1` no longer crashes
+  when primitive-only nested child roots are released, and the exact ownership
+  insertion shape is pinned by borrowed-projection tests in
+  `RefCountInsertionTests`.
+- RC insertion now processes each function with a fresh local temp-type
+  environment before merging the resulting type map, avoiding stale
+  cross-function `TempId` type inference during ownership insertion.
 - x64 `Dict<String, Int64>` leaf release now decrements dynamic string keys
   using a release-plan-selected dict helper variant. The new
   `X86_64CodeGenTests.testDictRefCountDecStringKey` first exposed the old
@@ -946,6 +962,9 @@ ARM64 fixed-block release can release several field shapes:
 
 Current tests cover tuple, record, sum, closure capture, nested fixed-block
 capture, returned record/tuple, and several list/dict/string combinations.
+ARM64 generic fixed-block cleanup now consumes release plans for nested
+fixed-block and boxed-sum child roots even when those child roots have no
+managed fields of their own.
 
 ### Remaining Gaps
 
@@ -954,7 +973,8 @@ The implementation is still specialized and partial:
 - bytes fields are not covered to the same level as strings
 - dict fields in arbitrary fixed blocks need explicit tests
 - closure fields in arbitrary fixed blocks need broader tests
-- nested fixed blocks outside closure captures need broader tests
+- nested fixed blocks outside closure captures need broader matrix tests, but
+  the primitive-only child-root case is covered and implemented
 - sum payload recursive release is not generalized
 - fixed-block arities beyond one and two are sparsely tested for heap fields
 - x64 fixed-block field release parity is not clearly complete
@@ -981,7 +1001,7 @@ The implementation is still specialized and partial:
 1. Cover bytes fields in fixed blocks.
 2. Cover dict fields in fixed blocks.
 3. Cover closure fields in tuples and multi-field records.
-4. Cover nested fixed-block fields outside closures.
+4. Cover broader nested fixed-block field matrices outside closures.
 5. Cover sum payloads nested in fixed blocks.
 6. Convert ARM64 fixed-block release to shape plans.
 7. Port shape-plan release to x64.
@@ -1292,8 +1312,8 @@ Likely gaps:
 
 This area should stay later than the managed refcounting work above. The next
 implementation slices should not attempt a broad `RawFree` or raw allocator
-redesign. First finish bytes parity, borrowed projection ownership, fixed-block
-and list generalization, dict root semantics, and x64 parity. Raw-memory policy
+redesign. First finish bytes parity, fixed-block and list generalization, dict
+root semantics, and x64 parity. Raw-memory policy
 should only be tackled once those managed-shape rules are stable.
 
 ### Current State
@@ -1375,6 +1395,10 @@ containing a dynamic string, bytes, list, dict, closure, tuple, record, or
 nested sum payload.
 Branch-selected borrowed returns are now covered for strings, bytes, lists,
 dicts, closures, tuples, and records.
+Self-recursive uses of borrowed tuple projections from an owned local parent
+are also covered, including source aliases and typed alias chains before the
+recursive call. Projections from parameters remain borrowed unless another
+rule materializes ownership.
 
 ### Remaining Gaps
 
@@ -1382,8 +1406,8 @@ More projected shapes still need the same confidence:
 
 - broader sum payload shapes beyond the covered string, bytes, list, dict,
   closure, tuple, record, and nested sum payload projections
-- deeper nested projections through `RawGet` or typed aliases beyond the
-  covered tuple and record projection paths
+- deeper nested projections through `RawGet` beyond the covered tuple and
+  record projection paths
 - branch-selected borrowed values beyond the covered string, bytes, list, dict,
   closure, tuple, and record projection cases
 - x64 backend parity for each retained projection family
@@ -1393,7 +1417,8 @@ More projected shapes still need the same confidence:
 1. Add tests that return/use borrowed projections after parent cleanup for:
 
    - broader sum payload shapes
-   - deeper nested tuple/record fields beyond the covered tuple projection path
+   - deeper nested tuple/record fields beyond the covered recursive tuple
+     projection path
    - branch-selected borrowed values beyond the covered string projection case
 
 2. Ensure print insertion and cleanup ordering is safe for every retained
@@ -1406,7 +1431,7 @@ More projected shapes still need the same confidence:
 ### Suggested Commit Breakdown
 
 1. Add broader borrowed-return sum payload projection coverage.
-2. Add deeper borrowed-return tuple/record projection coverage.
+2. Add deeper borrowed-return tuple/record and raw-backed projection coverage.
 3. Add backend register-preservation regression tests.
 
 ## 10. Sum Type Representation And Recursive Payloads

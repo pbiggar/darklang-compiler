@@ -37,6 +37,9 @@ Important current rules:
 - local aliases and projections are treated as borrowed
 - returned borrowed managed values, including container fields and covered sum
   payload projections, are retained before cleanup
+- borrowed tuple projections from owned local parents are retained before
+  self-recursive or self-tail calls when the parent will be cleaned up,
+  including alias chains introduced by pattern lowering
 - closure-producing `Stdlib.List.__mapHelper` specializations treat the source
   and accumulator parameters as owned helper state; callers retain the borrowed
   source before entering those helpers, helper recursion releases replaced
@@ -62,8 +65,8 @@ ARM64 has the most complete memory support today:
 - dict root helpers
 - closure root helpers
 - recursive field release for selected fixed-block, sum, and closure-capture
-  shapes, including returned closures with record string/bytes/list/dict-list
-  captures
+  shapes, including primitive-only nested fixed-block child roots and returned
+  closures with record string/bytes/list/dict-list captures
 
 x64 has active root RC support and focused unit coverage for:
 
