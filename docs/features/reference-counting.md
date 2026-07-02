@@ -15,7 +15,7 @@ The compiler currently has these managed or partially managed runtime shapes:
 |---|---|---|
 | Fixed blocks | `[payload fields][refcount:8]` | Generic root retain/release; managed field release for many tuple, record, sum, and closure-capture shapes |
 | Boxed sums | fixed block with tag/payload | Root RC; payload release for strings, bytes, lists, dicts, closures, tuples, records, and selected nested sums |
-| Tagged lists | FingerTree nodes allocated through raw memory | Root and node RC helpers; selected leaf payload helpers for dynamic buffers, fixed blocks, lists, dicts, and closures |
+| Tagged lists | FingerTree nodes allocated through raw memory | Root and node RC helpers; direct root leaf helpers plus planned `RcReleasePlan` helpers for generic fixed-block and boxed-sum payloads |
 | Dicts | tagged HAMT root with raw HAMT nodes | Dict root RC helpers; raw HAMT lifecycle still needs a complete sharing story |
 | Dynamic strings | `[length:8][data][padding][refcount:8]` | Scoped RC, field retain/release, borrowed projection retain, literal sentinel skip |
 | Dynamic bytes | `[length:8][data][padding][refcount:8]` | Scoped RC, constructor/transform coverage, container retains/releases, and initial parity with strings |
@@ -61,7 +61,7 @@ ARM64 has the most complete memory support today:
 - fixed-block root RC
 - dynamic string/bytes RC
 - tagged-list root and recursive node helpers
-- list leaf payload helpers for several common shapes
+- list leaf payload helpers for direct roots and planned generic payloads
 - dict root helpers
 - closure root helpers
 - recursive field release for selected fixed-block, sum, and closure-capture
@@ -105,15 +105,13 @@ of relying only on leak-check silence.
 
 The major remaining work is:
 
-- continue replacing backend helper selection tables with direct
-  `RcReleasePlan` consumption
-- complete deeper bytes coverage and constructor/layout audits
-- generalize fixed-block recursive release
-- generalize tagged-list payload release without helper explosion
-- define dict/HAMT structural sharing and raw-node lifecycle semantics
+- keep future backend helper selection on direct `RcReleasePlan` consumption
+  rather than rebuilding tuple/record/sum helper matrices
+- define dict/HAMT structural sharing, recursive key/value ownership, and
+  raw-node lifecycle semantics
 - keep x64 and ARM64 recursive release semantics in parity as shape-plan work
   replaces helper-family special cases
-- expand mixed and nested sum payload coverage
+- add focused coverage for any new bytes/string runtime allocation paths
 - distinguish static function references from heap closures
 - document or implement the deferred raw memory policy
 

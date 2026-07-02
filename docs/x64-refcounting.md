@@ -18,9 +18,11 @@ operations:
 The remaining x64 work is no longer "turn refcounting on". The backend has
 broad focused coverage for root helpers, recursive fixed-block payloads,
 tagged-list payloads, boxed sums, closures, and selected dict-value shapes.
+Tagged-list fixed-block leaf payloads now route through planned
+`RcReleasePlan` helpers instead of a static tuple/record/sum helper matrix.
 The remaining risk is that there is not yet a complete dual-backend E2E memory
-matrix, and arbitrary recursive payloads still depend on helper-family
-specializations instead of one shared shape-plan executor.
+matrix, dict/HAMT recursive payload ownership still needs a clearer
+shape-driven story, and raw-memory policy remains deferred.
 
 ## Covered By Tests
 
@@ -159,70 +161,26 @@ handles all five list tags:
 - `NODE3`
 - `LEAF`
 
-The generic list helper reclaims list nodes. Specialized helpers currently
-exist for:
+The generic list helper reclaims list nodes with no leaf payload cleanup.
+Direct static leaf helpers remain only for root payload families:
 
-- tuple2 leaf payload roots
-- tuple2 leaf payload dynamic string/bytes fields when their offsets are known
-- tuple3 leaf payload dynamic string/bytes field combinations
-- tuple3 leaf payloads with string/list/dict fields
-- tuple3 leaf payloads with closure/list/dict fields
-- tuple4 leaf payloads with string/bytes/list/dict fields
-- tuple4 leaf payloads with closure/bytes/list/dict fields
-- tuple2 leaf payloads with nested tuple dynamic string/bytes field
-  combinations
-- tuple2 leaf payloads with nested tuple list/dict fields
-- tuple2 leaf payloads with nested tuple dict fields
-- tuple2 leaf payloads with nested tuple closure, string/list/dict, and
-  string/bytes/list/dict fields through planned fixed-block `RcReleasePlan`
-  helpers
-- tuple4 leaf payloads with nested tuple dynamic-buffer, string/list/dict,
-  string/list/dict-list, and closure/bytes/list/dict fields through planned
-  fixed-block `RcReleasePlan` helpers
-- tuple4 leaf payloads with a nested record in the middle field containing
-  string/list/dict fields through a planned `RcReleasePlan` fixed-block helper
-- tuple4 leaf payloads with a nested record in the middle field containing
-  string/list/dict-list fields through a planned `RcReleasePlan` fixed-block
-  helper, with ARM64 helper-selection parity pinned by a matching symbolic test
-- record4 leaf payloads with nested tuple dynamic-buffer fields
-- record4 leaf payloads with nested tuple string/list/dict fields
-- record4 leaf payloads with nested tuple closure/bytes/list/dict fields
-- one-field record leaf payload roots with dynamic string/bytes fields
-- three-field record leaf payload dynamic string/bytes field combinations
-- three-field record leaf payloads with string/bytes/list/dict fields
-- three-field record leaf payloads with closure/list/dict fields
-- four-field record leaf payloads with string/bytes/list/dict fields
-- four-field record leaf payloads with closure/bytes/list/dict fields
-- boxed sum leaf payload roots with dynamic string/bytes payload fields
-- boxed sum tuple2 and tuple3 dynamic string/bytes field combinations through
-  planned fixed-block `RcReleasePlan` helpers
-- boxed sum tuple3 leaf payloads with string/list/dict and
-  closure/list/dict fields through planned fixed-block `RcReleasePlan` helpers
-- boxed sum tuple4 leaf payloads with string/bytes/list/dict and
-  closure/bytes/list/dict fields through planned fixed-block `RcReleasePlan`
-  helpers
-- boxed sum tuple4 leaf payloads with nested tuple string/list/dict fields
-  through a planned `RcReleasePlan` helper
-- boxed sum tuple4 leaf payloads with closure/bytes/list/dict fields
-- boxed sum record leaf payloads covering one-field dynamic string/bytes,
-  three-field dynamic string/bytes combinations, record3 string/list/dict, and
-  record4 string/bytes/list/dict and closure/bytes/list/dict shapes through
-  planned fixed-block `RcReleasePlan` helpers
-- nested boxed sum dynamic string/bytes payload fields
-- nested list leaf payload roots
-- closure leaf payload roots
-- dict leaf payload roots
-- dynamic string leaf payload roots
+- nested list roots
+- closure roots
+- dict roots
+- dict roots whose values are lists
+- direct dynamic string/bytes buffers
 
-This is still narrower than ARM64 for broader nested tuple/record payloads, but
-the common dynamic-buffer, list, dict, closure, tuple3, tuple4, nested-tuple,
-record3, record4, and boxed-sum list payload families now have targeted x64
-probes. The tuple2 and tuple4 nested-tuple families, covered boxed-sum tuple and
-record families, and the tuple4 nested-record middle-field string/list/dict and
-string/list/dict-list cases route through the generic `RcReleasePlan`
-fixed-block executor. Planned list helpers also discover recursive list-helper
-dependencies by walking their `RcReleasePlan`, instead of relying only on
-helper-label special cases.
+Fixed-block and boxed-sum leaf payloads no longer have a static x64
+tuple/record/sum helper matrix. When a list element is represented as
+`GenericHeap`, helper selection creates a stable planned-list helper label from
+the element `RcReleasePlan`, and `generateListRefCountDecHelper` delegates the
+leaf payload cleanup to the shared generic release-plan executor. Planned list
+helpers discover recursive list/dict/closure helper dependencies by walking
+their `RcReleasePlan`, not by enumerating helper-label special cases.
+
+This means new tuple, record, and boxed-sum list payload shapes should be
+covered by extending `RcShape`/`RcReleasePlan` metadata and the shared generic
+executor, not by adding another tuple/record/sum list helper label.
 
 ## Dicts
 
@@ -254,50 +212,18 @@ buffer reuse is still a broader memory-policy question, shared with ARM64.
 
 The main x64 gaps are:
 
-- fixed-block and tagged-list field release for boxed-sum payload shapes beyond
-  the current top-level, nested-child, closure-capture, and tagged-list
-  no-payload/dynamic-payload variant-dispatched cases and the string, list,
-  dict, closure, tuple dynamic-buffer, tuple string/list/dict, tuple4
-  string/bytes/list/dict, tuple4 nested tuple string/list/dict, tuple4
-  closure/bytes/list/dict, record
-  dynamic-buffer, record string/list/dict, record4 string/bytes/list/dict,
-  record4 closure/bytes/list/dict, sum tuple4 string/bytes/list/dict, sum
-  tuple4 closure/bytes/list/dict, sum record4 string/bytes/list/dict, and sum
-  record4 closure/bytes/list/dict payload paths, plus nested sum
-  dynamic-buffer payload paths; closure payloads beyond direct dynamic-buffer,
-  direct list/dict/closure/fixed-block captures, and the covered tuple and
-  record string/bytes/list/dict-list capture shapes
-- broader record field coverage beyond the current string/bytes/nested
-  fixed-block/string-list-dict/string-bytes-list-dict release paths
-- closure capture recursive release coverage beyond the current direct dynamic,
-  root, tuple-string-list-dict, record-string-list-dict,
-  mixed-sum, sum-tuple-string-list-dict, sum-record-string-list-dict, and
-  fixed-block capture probes
-- list helper variants for deeper nested tuple/record payloads beyond the
-  covered tuple2 nested tuple dynamic-buffer, list/dict, dict, closure,
-  string/list/dict, and string/bytes/list/dict shapes through planned
-  `RcReleasePlan` helpers, covered tuple3
-  closure/list/dict and string/list/dict shapes, covered tuple4 nested tuple
-  dynamic-buffer, string/list/dict, string/list/dict-list, and
-  closure/bytes/list/dict shapes through planned `RcReleasePlan` helpers,
-  covered tuple4 nested-record middle-field string/list/dict and
-  string/list/dict-list shapes through planned `RcReleasePlan` helpers,
-  covered record4 nested tuple dynamic-buffer, string/list/dict, and
-  closure/bytes/list/dict shapes, covered record3
-  string/bytes/list/dict and closure/list/dict shapes, covered record4
-  string/bytes/list/dict and closure/bytes/list/dict shapes, broader
-  multi-field records and higher-arity tuples, and arbitrary
-  non-dynamic-buffer sum payloads beyond the current list/dict/closure, planned
-  sum tuple3, sum tuple4, sum record3, and sum record4 helper families, and
-  fixed-block mixed shapes
-- dict/HAMT key and value recursive retain/release coverage beyond direct
-  dynamic string leaf key/value release and the current nested value-helper
-  probes
-- helper register preservation for values live across cleanup beyond the
+- dict/HAMT key and value recursive retain/release coverage beyond the current
+  dynamic-buffer key/value, list-value, nested-dict-value, dict-list-value, and
+  tuple-value probes
+- a complete dual-backend E2E memory matrix that can force ARM64 and x64
+  independently of the host architecture
+- helper register-preservation probes for values live across cleanup beyond the
   covered generic fixed-block dynamic-buffer, nested fixed-block, list, dict,
   and closure field `RAX` cases
 - documentation and tests that distinguish leak-counter balance from allocator
   reuse
+- the deferred raw-memory policy shared with list nodes, HAMT nodes, dynamic
+  buffers, and user-visible raw pointers
 
 ## Recommended Next Steps
 
@@ -312,10 +238,8 @@ The main x64 gaps are:
    `Dict<String, Dict<Int64, List<Int64>>>` release are covered. Dynamic
    string keys paired with tuple leaf values containing
    `String/List<Int64>/Dict<Int64, Int64>` fields are also covered.
-2. Continue replacing x64 helper-family selection with shared shape-driven
-   release plan execution instead of continuing helper explosion. The tuple2
-   and tuple4 nested-tuple list helper families and covered boxed-sum tuple and
-   record helper families now use planned fixed-block execution.
+2. Keep fixed-block and boxed-sum list payload cleanup on the planned
+   `RcReleasePlan` path; do not reintroduce tuple/record/sum helper matrices.
 3. Add x64 dict key/value shape matrix tests for typed recursive values.
 4. Add a real dual-backend memory matrix if the test harness grows support for
    forcing the backend independent of the host architecture.
