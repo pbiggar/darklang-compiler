@@ -5170,14 +5170,6 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                         ]
 
                 let fixedBlockFieldReleaseInstrs =
-                    let releasePlanHasFieldReleases (fieldReleasePlan: ANF.RcReleasePlan) : bool =
-                        match fieldReleasePlan with
-                        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
-                        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
-                            not (List.isEmpty fieldReleases)
-                        | _ ->
-                            false
-
                     let directFieldReleaseInstrs =
                         releasePlan
                         |> Option.map (function
@@ -5197,8 +5189,7 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                                 |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
                                     match fieldReleasePlan with
                                     | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _)
-                                    | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _)
-                                        when releasePlanHasFieldReleases fieldReleasePlan ->
+                                    | ANF.RootRelease (childPayloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _) ->
                                         releaseFixedBlockFieldWithPlan fieldOffset childPayloadSize fieldReleasePlan
                                     | _ ->
                                         [])

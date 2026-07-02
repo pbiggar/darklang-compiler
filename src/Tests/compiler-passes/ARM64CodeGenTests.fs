@@ -400,6 +400,36 @@ let testGenericFixedBlockNestedBytesFieldUsesReleasePlan () : TestResult =
         else
             Ok ()
 
+let testGenericFixedBlockNestedImmediateFieldReleasesChildRoot () : TestResult =
+    let nestedType = AST.TTuple [ AST.TInt64 ]
+    let parentType = AST.TTuple [ nestedType ]
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    8,
+                    LIR.GenericHeap,
+                    Some (rcMetadata parentType))
+            ]
+            Map.empty
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let releasesNestedRoot =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.LDR (ARM64.X12, ARM64.X0, 0s) ->
+                    true
+                | _ ->
+                    false)
+        if releasesNestedRoot then
+            Ok ()
+        else
+            Error "Generic fixed-block nested immediate field release did not release the child root"
+
 let tests : (string * (unit -> TestResult)) list = [
     ("RawSet pure enum skips generic retain", testRawSetPureEnumDoesNotEmitGenericRetain)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
@@ -420,4 +450,5 @@ let tests : (string * (unit -> TestResult)) list = [
     ("List sum tuple4 closure string dict-list uses typed dict helper", testListSumTuple4ClosureStringDictListValueUsesTypedDictHelper)
     ("Dict dict-list uses typed dict helper", testDictDictListValueUsesTypedDictHelper)
     ("Generic fixed-block nested bytes field uses release plan", testGenericFixedBlockNestedBytesFieldUsesReleasePlan)
+    ("Generic fixed-block nested immediate field releases child root", testGenericFixedBlockNestedImmediateFieldReleasesChildRoot)
 ]

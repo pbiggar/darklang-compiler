@@ -710,6 +710,42 @@ let private tailCallArgTempIds (cexpr: CExpr) : Set<TempId> =
     | _ ->
         Set.empty
 
+let private isSelfTailCallTarget (currentFuncName: string) (targetFunc: string) : bool =
+    targetFunc = currentFuncName
+    || targetFunc.StartsWith($"{currentFuncName}_")
+
+let rec private isTempUsedAsSelfTailCallArg
+    (currentFuncName: string)
+    (targetTemp: TempId)
+    (expr: ReturnAnnotatedExpr)
+    : bool =
+    let rec loop (aliases: Set<TempId>) (expr: ReturnAnnotatedExpr) : bool =
+        let argsContainAlias (args: Atom list) : bool =
+            args
+            |> List.exists (function
+                | Var tempId -> Set.contains tempId aliases
+                | _ -> false)
+
+        match expr with
+        | RReturn _ ->
+            false
+        | RLet (_, Call (targetFunc, args), _, _)
+            when isSelfTailCallTarget currentFuncName targetFunc && argsContainAlias args ->
+            true
+        | RLet (_, TailCall (targetFunc, args), _, _)
+            when isSelfTailCallTarget currentFuncName targetFunc && argsContainAlias args ->
+            true
+        | RLet (aliasTemp, Atom (Var sourceTemp), body, _)
+        | RLet (aliasTemp, TypedAtom (Var sourceTemp, _), body, _)
+            when Set.contains sourceTemp aliases ->
+            loop (Set.add aliasTemp aliases) body
+        | RLet (_, _, body, _) ->
+            loop aliases body
+        | RIf (_, thenBranch, elseBranch, _) ->
+            loop aliases thenBranch || loop aliases elseBranch
+
+    loop (Set.singleton targetTemp) expr
+
 let rec private collectMovableTailDecPrefix
     (tailArgTemps: Set<TempId>)
     (expr: AExpr)
@@ -781,10 +817,6 @@ let rec private insertOwnedAccumulatorDecsBeforeSelfTailCalls
         ownedParamDecs
         |> List.filter (fun (tempId, _, _) -> not (Set.contains tempId argTemps))
 
-    let isSelfTailCallTarget (targetFunc: string) : bool =
-        targetFunc = currentFuncName
-        || targetFunc.StartsWith($"{currentFuncName}_")
-
     let wrapOwnedAccumulatorDecs
         (decs: ReturnDec list)
         (tailExpr: AExpr)
@@ -808,12 +840,12 @@ let rec private insertOwnedAccumulatorDecsBeforeSelfTailCalls
         let (elseBranch', varGen2, types2) =
             insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs elseBranch varGen1 types1
         (If (cond, thenBranch', elseBranch'), varGen2, types2)
-    | Let (tempId, Call (targetFunc, args), body) when isSelfTailCallTarget targetFunc ->
+    | Let (tempId, Call (targetFunc, args), body) when isSelfTailCallTarget currentFuncName targetFunc ->
         let (body', varGen1, types1) =
             insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs body varGen types
         let callExpr = Let (tempId, Call (targetFunc, args), body')
         wrapOwnedAccumulatorDecs (decsForSelfTailCall args) callExpr varGen1 types1
-    | Let (tempId, TailCall (targetFunc, args), body) when isSelfTailCallTarget targetFunc ->
+    | Let (tempId, TailCall (targetFunc, args), body) when isSelfTailCallTarget currentFuncName targetFunc ->
         let (body', varGen1, types1) =
             insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs body varGen types
         let tailExpr = Let (tempId, TailCall (targetFunc, args), body')
@@ -1201,6 +1233,31 @@ let rec insertRCWithAnalysis
                         | _ -> None
                     | _ -> None
 
+                let borrowedProjectionFeedsSelfTailCall =
+                    let sourceParentIsOwnedLocal (sourceId: TempId) : bool =
+                        let rec loop (visited: Set<TempId>) (candidateId: TempId) : bool =
+                            if Set.contains candidateId visited then
+                                false
+                            else
+                                frames
+                                |> List.tryFind (fun frame -> frame.TempId = candidateId)
+                                |> Option.exists (fun frame ->
+                                    match frame.CExpr with
+                                    | Atom (Var aliasedId)
+                                    | TypedAtom (Var aliasedId, _) ->
+                                        loop (Set.add candidateId visited) aliasedId
+                                    | _ ->
+                                        not (isBorrowingExpr frame.CExpr))
+
+                        loop Set.empty sourceId
+
+                    match currentFuncName, cexpr with
+                    | Some funcName, TupleGet (Var sourceId, _) ->
+                        sourceParentIsOwnedLocal sourceId
+                        && isTempUsedAsSelfTailCallArg funcName tempId bodyInfo
+                    | _ ->
+                        false
+
                 match cexpr with
                 | IfValue (_, thenAtom, elseAtom) ->
                     // IfValue selects one of two existing heap values.
@@ -1209,6 +1266,9 @@ let rec insertRCWithAnalysis
                     | Some info, _ -> Some info
                     | None, Some info -> Some info
                     | None, None -> None
+                | _ when borrowedProjectionFeedsSelfTailCall
+                         && shapeNeedsBorrowedRetain ctx inferredType ->
+                    Some inferredType
                 | Atom (Var sourceId)
                 | TypedAtom (Var sourceId, _) ->
                     // Returning a pure alias of an already-returned owned value should not inc again.
@@ -1397,8 +1457,10 @@ let private insertRCInProgramInternal
             // Cache keys use TempIds from the current function body, so sharing
             // across functions can reuse stale types for unrelated TempIds.
             let (f', vg', types, _typeCache) =
-                insertRCInFunctionInternal ctx f vg accTypes emptyCExprTypeCache
-            processFuncs rest vg' (f' :: accFuncs) types
+                insertRCInFunctionInternal ctx f vg Map.empty emptyCExprTypeCache
+            let accTypes' =
+                Map.fold (fun acc tempId typ -> Map.add tempId typ acc) accTypes types
+            processFuncs rest vg' (f' :: accFuncs) accTypes'
 
     let (functions', varGen1, typesFromFuncs) =
         processFuncs functions varGen [] Map.empty
