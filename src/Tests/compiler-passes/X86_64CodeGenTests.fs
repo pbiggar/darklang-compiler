@@ -1235,6 +1235,39 @@ let testDictRefCountDecStringKeyDictValue () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected dict string keys and nested dict values to be released, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 DictHeap RefCountDec releases dynamic string keys with nested dict-list values.
+let testDictRefCountDecStringKeyDictListValue () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let nestedDictType = AST.TDict (AST.TInt64, listType)
+    let dictType = AST.TDict (AST.TString, nestedDictType)
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "key", LIR.StringSymbol "!")
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X4, LIR.Physical LIR.X3, LIR.Physical LIR.X4)
+                LIR.HeapAlloc (LIR.Physical LIR.X5, 16)
+                LIR.HeapStore (LIR.Physical LIR.X5, 0, LIR.Imm 1L, None)
+                LIR.HeapStore (LIR.Physical LIR.X5, 8, LIR.Reg (LIR.Physical LIR.X4), Some listType)
+                LIR.Mov (LIR.Physical LIR.X6, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X6, LIR.Physical LIR.X5, LIR.Physical LIR.X6)
+                LIR.HeapAlloc (LIR.Physical LIR.X7, 16)
+                LIR.HeapStore (LIR.Physical LIR.X7, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X7, 8, LIR.Reg (LIR.Physical LIR.X6), Some nestedDictType)
+                LIR.Mov (LIR.Physical LIR.X8, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X8, LIR.Physical LIR.X7, LIR.Physical LIR.X8)
+                LIR.RefCountDec (LIR.Physical LIR.X8, 0, LIR.DictHeap, Some (rcMetadata dictType))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected dict string keys and nested dict-list values to be released, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 DictHeap RefCountDec releases nested dict leaf values through release-plan metadata.
 let testDictRefCountDecDictValue () : Result<unit, string> =
     let innerDictType = AST.TDict (AST.TInt64, AST.TInt64)
@@ -4728,6 +4761,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR DictHeap RefCountDec releases bytes leaf keys and values", testDictRefCountDecBytesKeyValue)
     ("LIR DictHeap RefCountDec releases string leaf keys and list values", testDictRefCountDecStringKeyListValue)
     ("LIR DictHeap RefCountDec releases string leaf keys and dict values", testDictRefCountDecStringKeyDictValue)
+    ("LIR DictHeap RefCountDec releases string leaf keys and dict-list values", testDictRefCountDecStringKeyDictListValue)
     ("LIR DictHeap RefCountDec releases nested dict leaf values", testDictRefCountDecDictValue)
     ("LIR DictHeap RefCountDec releases nested dict list leaf values", testDictRefCountDecDictListValue)
     ("LIR DictHeap RefCountDec releases tuple string/list leaf values", testDictRefCountDecTupleStringListValue)
