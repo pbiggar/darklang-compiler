@@ -665,8 +665,12 @@ let private generateListRefCountDecHelperWith
             ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X12, int16 payloadSize)
             ARM64Symbolic.CBNZ (ARM64Symbolic.X15, fieldDone)
             ARM64Symbolic.MOV_reg (ARM64Symbolic.X11, ARM64Symbolic.X12)
+            ARM64Symbolic.STP_pre (ARM64Symbolic.X12, ARM64Symbolic.X30, ARM64Symbolic.SP, -16s)
         ]
         @ childFieldReleases
+        @ [
+            ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.SP, 0s)
+        ]
         @ (if payloadSize >= 0 && payloadSize < 256 then
             [
                 ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X27, uint16 payloadSize)
@@ -677,7 +681,10 @@ let private generateListRefCountDecHelperWith
            else
             [])
         @ leakDec
-        @ [ARM64Symbolic.Label fieldDone]
+        @ [
+            ARM64Symbolic.LDP_post (ARM64Symbolic.X12, ARM64Symbolic.X30, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.Label fieldDone
+        ]
 
     let releaseManagedLeafFieldsFromPlan (releasePlan: ANF.RcReleasePlan) : ARM64Symbolic.Instr list =
         match releasePlan with

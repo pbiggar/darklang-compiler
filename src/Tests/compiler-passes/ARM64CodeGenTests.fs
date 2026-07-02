@@ -632,6 +632,66 @@ let testGenericFixedBlockNestedBytesFieldUsesReleasePlan () : TestResult =
         else
             Ok ()
 
+let testPlannedListGenericLeafReleaseReloadsBlockPointer () : TestResult =
+    let listType = AST.TList (AST.TTuple [ AST.TString; AST.TInt64 ])
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    0,
+                    LIR.TaggedList,
+                    Some (rcMetadata listType))
+            ]
+            Map.empty
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let reloadsGenericLeafPointer =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.LDR (ARM64.X8, ARM64.X3, 0s) ->
+                    true
+                | _ ->
+                    false)
+
+        if reloadsGenericLeafPointer then
+            Ok ()
+        else
+            Error "ARM64 planned list generic release did not reload the leaf pointer before freeing it"
+
+let testPlannedListNestedGenericReleasePreservesBlockPointer () : TestResult =
+    let listType = AST.TList (AST.TTuple [ AST.TTuple [ AST.TString; AST.TInt64 ]; AST.TInt64 ])
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    0,
+                    LIR.TaggedList,
+                    Some (rcMetadata listType))
+            ]
+            Map.empty
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let preservesNestedGenericBlockPointer =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.STP_pre (ARM64.X12, ARM64.X30, ARM64.SP, -16s) ->
+                    true
+                | _ ->
+                    false)
+
+        if preservesNestedGenericBlockPointer then
+            Ok ()
+        else
+            Error "ARM64 planned list nested generic release did not preserve the block pointer across nested field releases"
+
 let testGenericFixedBlockNestedImmediateFieldReleasesChildRoot () : TestResult =
     let nestedType = AST.TTuple [ AST.TInt64 ]
     let parentType = AST.TTuple [ nestedType ]
@@ -894,6 +954,8 @@ let tests : (string * (unit -> TestResult)) list = [
     ("Dict list value planned helper releases collision payloads", testDictListValuePlannedHelperReleasesCollisionPayloads)
     ("Dict tuple value planned helper releases collision payloads", testDictTupleValuePlannedHelperReleasesCollisionPayloads)
     ("Generic fixed-block nested bytes field uses release plan", testGenericFixedBlockNestedBytesFieldUsesReleasePlan)
+    ("Planned list generic leaf release reloads block pointer", testPlannedListGenericLeafReleaseReloadsBlockPointer)
+    ("Planned list nested generic release preserves block pointer", testPlannedListNestedGenericReleasePreservesBlockPointer)
     ("Generic fixed-block nested immediate field releases child root", testGenericFixedBlockNestedImmediateFieldReleasesChildRoot)
     ("Generic fixed-block nested mixed boxed-sum bytes payload uses variant dispatch", testGenericFixedBlockNestedMixedBoxedSumBytesPayloadUsesVariantDispatch)
     ("Generic mixed boxed-sum payload dispatch skips remaining cases", testGenericMixedBoxedSumPayloadDispatchSkipsRemainingCases)
