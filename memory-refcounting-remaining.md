@@ -127,6 +127,13 @@ Latest update:
   `X86_64CodeGenTests.testTaggedListRefCountDecTuple4NestedRecordMiddleStringListDictPayload`
   and handled by a planned fixed-block list leaf helper that delegates payload
   cleanup to the shared x64 generic `RcReleasePlan` executor.
+- x64 tagged-list boxed-sum payload cleanup now also has a planned
+  `RcReleasePlan` path for nested fixed-block payloads. A boxed-sum leaf whose
+  active variant contains a tuple4 with a nested tuple of `String`,
+  `List<Int64>`, and `Dict<Int64, Int64>` previously selected the plain list
+  helper and leaked the sum root, tuple root, nested tuple root, and nested
+  managed children. It is pinned by
+  `X86_64CodeGenTests.testTaggedListRefCountDecSumTuple4NestedTupleStringListDictPayload`.
 
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
 release, tuple-only nested fixed-block field release, record-registry-based
@@ -220,6 +227,8 @@ payload release, plus x64 tagged-list record4 string/bytes/list/dict payload
 release, plus x64 tagged-list tuple4 string/bytes/list/dict payload release,
 plus x64 tagged-list boxed-sum tuple4 string/bytes/list/dict payload release,
 plus x64 tagged-list boxed-sum record4 string/bytes/list/dict payload release,
+plus planned x64 tagged-list boxed-sum tuple4 nested tuple string/list/dict
+payload release through the shared generic `RcReleasePlan` executor,
 plus x64 tagged-list boxed-sum tuple4 closure/bytes/list/dict payload release,
 plus x64 tagged-list boxed-sum record4 closure/bytes/list/dict payload release,
 plus x64 tagged-list tuple2 nested tuple dynamic string/bytes payload release
@@ -1355,7 +1364,8 @@ Likely gaps:
   sum-list/sum-dict,
   sum-closure, mixed sum-tuple3 string/list/dict variants, mixed sum-tuple4
   string/bytes/list/dict, string/bytes/list/dict-list,
-  closure/bytes/list/dict, and closure/string/list/dict-list variants,
+  nested tuple string/list/dict, closure/bytes/list/dict, and
+  closure/string/list/dict-list variants,
   sum-record3 string/list/dict variants, mixed sum-record4
   string/bytes/list/dict and closure/bytes/list/dict variants,
   list/closure/dict/string
