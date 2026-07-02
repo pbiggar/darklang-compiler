@@ -53,6 +53,13 @@ Latest update:
 - ARM64 closure capture cleanup now dispatches boxed-sum variant payload
   release plans as well. A captured boxed sum with a bytes payload now releases
   that payload before the captured sum root is freed.
+- x64 top-level generic boxed-sum cleanup now uses sum-aware
+  `RcReleasePlan` variant metadata when it is present: the generated release
+  code loads the active tag, runs only the matching variant's field releases,
+  and branches past the remaining cases. Field-list-only boxed-sum plans still
+  use their explicit payload field releases, which preserves the existing
+  single-payload/generic-shape release contract. This is pinned by
+  `X86_64CodeGenTests.testGenericRefCountDecMixedSumPayloadUsesVariantDispatch`.
 - x64 `Dict<String, Int64>` leaf release now decrements dynamic string keys
   using a release-plan-selected dict helper variant. The new
   `X86_64CodeGenTests.testDictRefCountDecStringKey` first exposed the old
@@ -210,7 +217,8 @@ compatibility predicate, plus shared `RcReleasePlan` metadata and x64 generic
 fixed-block dynamic string/bytes, dict-root, and closure-root field release
 consumption through `RcReleasePlan` for tuples, records, and boxed-sum payloads,
 plus boxed-sum release plans that carry source-type payload field cleanup when
-variant payload metadata is available.
+variant payload metadata is available, plus x64 top-level generic boxed-sum
+variant dispatch for mixed payload cleanup.
 
 Last full-suite verification after the x64 fixed-block dynamic string/bytes
 field coverage, nested fixed-block release, record string field release, boxed
@@ -1006,7 +1014,8 @@ The implementation is still specialized and partial:
   the primitive-only child-root case is covered and implemented
 - sum payload recursive release is not generalized across all backend paths,
   though ARM64 generic fixed-block child cleanup and top-level generic boxed-sum
-  cleanup now handle mixed boxed-sum payload dispatch
+  cleanup, plus x64 top-level generic boxed-sum cleanup, now handle mixed
+  boxed-sum payload dispatch
 - fixed-block arities beyond one and two are sparsely tested for heap fields
 - x64 fixed-block field release parity is not clearly complete
 
@@ -1260,6 +1269,8 @@ commits enabled:
 - generic fixed-block record string/list/dict field release
 - generic fixed-block boxed sum tuple string/list/dict payload release
 - generic fixed-block boxed sum record string/list/dict payload release
+- generic boxed-sum mixed-payload release dispatch by active variant tag when
+  sum-aware `RcReleasePlan` metadata is present
 
 The current focused x64 suite covers the major root, fixed-block, list,
 boxed-sum, closure-capture, and selected dict-list value families. It does not
@@ -1276,7 +1287,8 @@ match ARM64 for every recursive payload shape?"
 
 Likely gaps:
 
-- fixed-block field release for boxed sum payloads beyond the current
+- fixed-block field release for boxed-sum payload shapes beyond the current
+  top-level variant-dispatched mixed-payload case and the
   string/list/dict/closure/tuple-string/tuple3-string-list-dict/
   tuple4-string-bytes-list-dict/record-string/record3-string-list-dict/
   record4-string-bytes-list-dict/nested-sum-string cases, and
@@ -1506,7 +1518,8 @@ The compiler still needs precise handling for:
 - mixed sums beyond direct payload and no-payload cleanup smoke coverage
 - deeper fixed-block payload recursion beyond direct tuple/record payloads
 - broader list/dict/record-contained sum shapes beyond the direct covered cases
-- x64 parity
+- x64 parity beyond the current top-level generic boxed-sum variant-dispatch
+  coverage
 
 ### Remaining Tasks
 

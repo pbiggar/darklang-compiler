@@ -242,6 +242,12 @@ let private rcMetadata (typ: AST.Type) : ANF.RcMetadata =
         ANF.SourceType = Some typ
     }
 
+let private rcMetadataWithSumShapes (sumShapes: ANF.RcSumShapeRegistry) (typ: AST.Type) : ANF.RcMetadata =
+    {
+        ANF.ReleasePlan = Some (ANF.rcReleasePlanOfTypeWithSums Map.empty sumShapes typ)
+        ANF.SourceType = Some typ
+    }
+
 let private completeRcMetadata (records: LIR.RecordRegistry) (metadata: ANF.RcMetadata option) : ANF.RcMetadata option =
     match metadata with
     | Some ({ ReleasePlan = None; SourceType = Some sourceType } as value) ->
@@ -908,6 +914,65 @@ let testGenericRefCountDecSumBytesPayload () : Result<unit, string> =
     | Ok (_, _, stderr) ->
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected boxed sum bytes payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
+/// Test: x64 generic boxed-sum RefCountDec dispatches mixed payload cleanup by tag.
+let testGenericRefCountDecMixedSumPayloadUsesVariantDispatch () : Result<unit, string> =
+    let sumName = "X64MixedSumPayloadDispatch"
+    let sumType = AST.TSum (sumName, [])
+    let variants : LIR.VariantRegistry =
+        Map.ofList [
+            (sumName,
+                { TypeParams = []
+                  Variants =
+                    [
+                        { Name = "X64MixedSumBytesPayload"; Tag = 0; Payload = Some AST.TBytes }
+                        { Name = "X64MixedSumListPayload"; Tag = 1; Payload = Some (AST.TList AST.TInt64) }
+                    ] })
+        ]
+    let sumShapes =
+        variants
+        |> Map.map (fun _ typeVariants ->
+            { ANF.TypeParams = typeVariants.TypeParams
+              ANF.Payloads =
+                typeVariants.Variants
+                |> List.sortBy (fun variant -> variant.Tag)
+                |> List.map (fun variant -> variant.Tag, variant.Payload) })
+    let program =
+        match
+            makeSimpleProgram
+                [
+                    LIR.RefCountDec (
+                        LIR.Physical LIR.X3,
+                        16,
+                        LIR.GenericHeap,
+                        Some (rcMetadataWithSumShapes sumShapes sumType))
+                ]
+                LIR.Ret
+        with
+        | LIR.Program (functions, _, records) ->
+            LIR.Program (functions, variants, records)
+
+    match CodeGen_X86_64.translateProgram (completeFixtureVariants program) false with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let rec branchAppearsBeforeSecondCase (seenFirstCase: bool) (remaining: X86_64.Instr list) : bool =
+            match remaining with
+            | [] ->
+                false
+            | X86_64.CMP_imm (_, 0) :: rest ->
+                branchAppearsBeforeSecondCase true rest
+            | X86_64.CMP_imm (_, 1) :: _ when seenFirstCase ->
+                false
+            | X86_64.JMP _ :: _ when seenFirstCase ->
+                true
+            | _ :: rest ->
+                branchAppearsBeforeSecondCase seenFirstCase rest
+
+        if branchAppearsBeforeSecondCase false instrs then
+            Ok ()
+        else
+            Error "x64 generic mixed boxed-sum payload release did not branch past remaining variant cases after a match"
 
 /// Test: x64 generic fixed-block RefCountDec releases nested boxed sum fields.
 let testGenericRefCountDecNestedSumStringField () : Result<unit, string> =
@@ -4764,6 +4829,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR generic RefCountDec releases record string/list/dict fields", testGenericRefCountDecRecordStringListDictFields)
     ("LIR generic RefCountDec releases sum string payload", testGenericRefCountDecSumStringPayload)
     ("LIR generic RefCountDec releases sum bytes payload", testGenericRefCountDecSumBytesPayload)
+    ("LIR generic RefCountDec dispatches mixed sum payload cleanup", testGenericRefCountDecMixedSumPayloadUsesVariantDispatch)
     ("LIR generic RefCountDec releases nested sum string field", testGenericRefCountDecNestedSumStringField)
     ("LIR generic RefCountDec releases sum list payload", testGenericRefCountDecSumListPayload)
     ("LIR generic RefCountDec releases sum dict payload", testGenericRefCountDecSumDictPayload)
