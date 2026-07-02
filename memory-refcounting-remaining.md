@@ -99,7 +99,9 @@ Latest update:
   The narrower `Dict<String, (String, List<Int64>)>` leaf shape is now pinned
   by `X86_64CodeGenTests.testDictRefCountDecStringKeyTupleListValue`, and
   `X86_64CodeGenTests.testDictRefCountDecStringKeyTupleValueUsesPlannedHelper`
-  ensures that shape stays on the planned dict helper path.
+  ensures that shape stays on the planned dict helper path. Collision nodes for
+  the same dynamic-key plus tuple/list value shape are pinned by
+  `X86_64CodeGenTests.testDictRefCountDecStringCollisionKeysAndTupleListValues`.
 - x64 now has an explicit stdlib-context closure-list release probe. The
   ARM64 bug was an architecture-local helper-selection guard that excluded
   `Stdlib.*` functions; x64 did not have that guard, and
@@ -1256,21 +1258,16 @@ leaf `List` values, closure values, nested dict values, tuple values of
 nested dict payload tests. ARM64 also now has planned-helper selection coverage
 for `Dict<String, (String, List<Int64>)>` and a symbolic guard that its planned
 helper emits the generic collision-payload release loop. x64 now has leaf
-runtime coverage and planned-helper selection coverage for that same
-`Dict<String, (String, List<Int64>)>` shape. A runtime x64 collision probe for
-dynamic string keys paired with `(String, List<Int64>)` tuple values still
-leaked all pair payloads (`leaks: 9`), so that broader collision shape remains
-open instead of being kept as a passing test. Future fixes should add a
-serialized shape-plan path or more complete typed dict release helpers for the
-remaining arbitrary leaf and collision payload shapes. This is separate from
-the later raw-allocation policy decision.
+runtime coverage, planned-helper selection coverage, and collision-node
+coverage for that same `Dict<String, (String, List<Int64>)>` shape. Future
+fixes should add a serialized shape-plan path or more complete typed dict
+release helpers for the remaining arbitrary leaf and collision payload shapes.
+This is separate from the later raw-allocation policy decision.
 
 ### Remaining Tasks
 
 1. Add key/value shape matrix tests:
 
-   - x64 collision cases where dynamic keys and recursive fixed-block values
-     both require release
    - remaining leaf and collision cases where managed keys and values both
      require recursive release
 
@@ -1939,8 +1936,6 @@ appropriate.
 
 - keep old root and new root live after update
 - keep old root and removed root live after remove
-- x64 dict collision release for dynamic string keys paired with recursive
-  tuple/list values
 - remaining dict key/value leaf and collision release where both sides have
   managed payloads
 
