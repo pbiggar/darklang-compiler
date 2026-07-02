@@ -440,21 +440,41 @@ def append_to_history(benchmarks_dir: Path, json_results: dict, metadata: dict):
     # Read existing or create new
     if history_path.exists():
         content = history_path.read_text()
-        # Find end of header (after the separator line)
         lines = content.split("\n")
-        header_end = 0
+        log_start = None
         for i, line in enumerate(lines):
-            if line.startswith("|---"):
-                header_end = i + 1
+            if line.strip() == "## Log":
+                log_start = i
                 break
 
-        header = "\n".join(lines[:header_end])
-        existing_rows = "\n".join(lines[header_end:])
+        if log_start is None:
+            header = HISTORY_HEADER.rstrip()
+            existing_rows = content
+        else:
+            misplaced_rows = []
+            pre_log_lines = []
+            for line in lines[:log_start]:
+                if re.match(r"^\| \d{4}-\d{2}-\d{2} \|", line):
+                    misplaced_rows.append(line)
+                else:
+                    pre_log_lines.append(line)
+
+            log_lines = lines[log_start:]
+            header_end = len(log_lines)
+            for i, line in enumerate(log_lines):
+                if line.startswith("|---") or line.startswith("| Date"):
+                    header_end = i + 1
+                    if line.startswith("|---"):
+                        break
+
+            header = "\n".join(pre_log_lines + log_lines[:header_end])
+            existing_row_lines = misplaced_rows + log_lines[header_end:]
+            existing_rows = "\n".join(line for line in existing_row_lines if line not in new_rows)
     else:
         header = HISTORY_HEADER.rstrip()
         existing_rows = ""
 
-    # Prepend new rows
+    # Prepend new rows to the Log table.
     new_content = header + "\n" + "\n".join(new_rows)
     if existing_rows.strip():
         new_content += "\n" + existing_rows
