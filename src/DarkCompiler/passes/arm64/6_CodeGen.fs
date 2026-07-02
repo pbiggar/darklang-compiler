@@ -67,6 +67,7 @@ let private heapMmapSizeMovzImm16 = 0x2000us  // 512MB == 0x20000000
 let private heapOverflowLabelPrefix = "__heap_oom_"
 let private listRefCountIncHelperLabel = "__dark_list_refcount_inc_helper"
 let private listRefCountDecHelperLabel = "__dark_list_refcount_dec_helper"
+let private plannedListRefCountDecHelperLabelPrefix = "__dark_list_refcount_dec_plan_"
 let private listRefCountDecStringHelperLabel = "__dark_list_refcount_dec_string_helper"
 let private listRefCountDecBytesHelperLabel = "__dark_list_refcount_dec_bytes_helper"
 let private listRefCountDecTuple2HelperLabel = "__dark_list_refcount_dec_tuple2_helper"
@@ -150,6 +151,19 @@ let private dictRefCountDecTupleStringListDictValueHelperLabel = "__dark_dict_re
 let private dictRefCountDecSumStringValueHelperLabel = "__dark_dict_refcount_dec_sum_string_value_helper"
 let private closureRefCountIncHelperLabel = "__dark_closure_refcount_inc_helper"
 let private closureRefCountDecHelperLabel = "__dark_closure_refcount_dec_helper"
+
+let private stableRcReleasePlanHash (releasePlan: ANF.RcReleasePlan) : string =
+    let fnvOffset = 14695981039346656037UL
+    let fnvPrime = 1099511628211UL
+
+    $"{releasePlan}"
+    |> Seq.fold (fun hash ch ->
+        (hash ^^^ uint64 (int ch)) * fnvPrime)
+        fnvOffset
+    |> fun hash -> hash.ToString("x16")
+
+let private plannedListDecHelperLabelForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
+    $"{plannedListRefCountDecHelperLabelPrefix}{stableRcReleasePlanHash releasePlan}"
 
 type private RawSetRootRetainTarget =
     | RawSetListRootRetain
@@ -319,6 +333,7 @@ let private generateListRefCountDecHelperWith
     (helperLabel: string)
     (ctx: CodeGenContext)
     (leafGenericPayloadSize: int option)
+    (leafGenericReleasePlan: ANF.RcReleasePlan option)
     (releaseLeafDynamicBufferPayload: bool)
     (releaseLeafListPayload: bool)
     (releaseLeafDictPayload: bool)
@@ -495,12 +510,24 @@ let private generateListRefCountDecHelperWith
 
     let leafListHelperLabelForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
         match releasePlan with
-        | ANF.RootRelease (_, ANF.TaggedList, ANF.TaggedListPayloadRelease (ANF.RootRelease (_, ANF.TaggedList, _))) ->
-            listRefCountDecListHelperLabel
-        | ANF.RootRelease (_, ANF.TaggedList, ANF.TaggedListPayloadRelease (ANF.RootRelease (_, ANF.DictHeap, _))) ->
-            listRefCountDecDictHelperLabel
-        | ANF.RootRelease (_, ANF.TaggedList, ANF.TaggedListPayloadRelease (ANF.RootRelease (_, ANF.ClosureHeap, _))) ->
-            listRefCountDecClosureHelperLabel
+        | ANF.RootRelease (_, ANF.TaggedList, ANF.TaggedListPayloadRelease elementRelease) ->
+            match elementRelease with
+            | ANF.NoReleasePlan ->
+                listRefCountDecHelperLabel
+            | ANF.DynamicBufferRelease ANF.DynamicStringBuffer ->
+                listRefCountDecStringHelperLabel
+            | ANF.DynamicBufferRelease ANF.DynamicBytesBuffer ->
+                listRefCountDecBytesHelperLabel
+            | ANF.DynamicBufferRelease _ ->
+                listRefCountDecHelperLabel
+            | ANF.RootRelease (_, ANF.TaggedList, _) ->
+                listRefCountDecListHelperLabel
+            | ANF.RootRelease (_, ANF.DictHeap, _) ->
+                listRefCountDecDictHelperLabel
+            | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
+                listRefCountDecClosureHelperLabel
+            | ANF.RootRelease (_, ANF.GenericHeap, _) ->
+                plannedListDecHelperLabelForReleasePlan elementRelease
         | _ ->
             listRefCountDecHelperLabel
 
@@ -743,6 +770,203 @@ let private generateListRefCountDecHelperWith
         | _ ->
             []
 
+    let releasePlanDynamicBufferFieldFrom
+        (baseReg: ARM64Symbolic.Reg)
+        (fieldOffset: int)
+        (path: string)
+        : ARM64Symbolic.Instr list =
+        let fieldDone = label $"leaf_plan_dynamic_{path}_{fieldOffset}_done"
+        let refcountUpdate =
+            if List.isEmpty leakDec then
+                [
+                    ARM64Symbolic.SUB_imm (ARM64Symbolic.X14, ARM64Symbolic.X14, 1us)
+                    ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.X13, 0s)
+                ]
+            else
+                [
+                    ARM64Symbolic.SUB_imm (ARM64Symbolic.X14, ARM64Symbolic.X14, 1us)
+                    ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.X13, 0s)
+                    ARM64Symbolic.CBNZ (ARM64Symbolic.X14, fieldDone)
+                ] @ leakDec
+        [
+            ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X12, fieldDone)
+            ARM64Symbolic.CMP_reg (ARM64Symbolic.X12, ARM64Symbolic.X27)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, fieldDone)
+            ARM64Symbolic.CMP_reg (ARM64Symbolic.X12, ARM64Symbolic.X28)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.GT, fieldDone)
+            ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X12, 0s)
+            ARM64Symbolic.ADD_imm (ARM64Symbolic.X14, ARM64Symbolic.X14, 7us)
+            ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 3us, 0)
+            ARM64Symbolic.LSR_reg (ARM64Symbolic.X14, ARM64Symbolic.X14, ARM64Symbolic.X13)
+            ARM64Symbolic.LSL_reg (ARM64Symbolic.X14, ARM64Symbolic.X14, ARM64Symbolic.X13)
+            ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X12, 8us)
+            ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X14)
+            ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X13, 0s)
+            ARM64Symbolic.MOVZ (ARM64Symbolic.X15, 0xFFFFus, 0)
+            ARM64Symbolic.MOVK (ARM64Symbolic.X15, 0xFFFFus, 16)
+            ARM64Symbolic.MOVK (ARM64Symbolic.X15, 0xFFFFus, 32)
+            ARM64Symbolic.MOVK (ARM64Symbolic.X15, 0x7FFFus, 48)
+            ARM64Symbolic.CMP_reg (ARM64Symbolic.X14, ARM64Symbolic.X15)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, fieldDone)
+        ]
+        @ refcountUpdate
+        @ [ARM64Symbolic.Label fieldDone]
+
+    let releasePlanManagedRootFieldFrom
+        (baseReg: ARM64Symbolic.Reg)
+        (fieldOffset: int)
+        (path: string)
+        (helperLabel: string)
+        : ARM64Symbolic.Instr list =
+        let fieldDone = label $"leaf_plan_root_{path}_{fieldOffset}_done"
+        [
+            ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X12, fieldDone)
+            ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -112s)
+            ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+            ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+            ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+            ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+            ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 96s)
+            ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X12)
+            ARM64Symbolic.BL helperLabel
+            ARM64Symbolic.LDR (ARM64Symbolic.X30, ARM64Symbolic.SP, 96s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+            ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+            ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 112s)
+            ARM64Symbolic.Label fieldDone
+        ]
+
+    let rec releasePlanFieldFrom
+        (baseReg: ARM64Symbolic.Reg)
+        (fieldOffset: int)
+        (path: string)
+        (fieldReleasePlan: ANF.RcReleasePlan)
+        : ARM64Symbolic.Instr list =
+        match fieldReleasePlan with
+        | ANF.DynamicBufferRelease _ ->
+            releasePlanDynamicBufferFieldFrom baseReg fieldOffset path
+        | ANF.RootRelease (_, ANF.TaggedList, _) ->
+            releasePlanManagedRootFieldFrom
+                baseReg
+                fieldOffset
+                path
+                (leafListHelperLabelForReleasePlan fieldReleasePlan)
+        | ANF.RootRelease (_, ANF.DictHeap, _) ->
+            releasePlanManagedRootFieldFrom
+                baseReg
+                fieldOffset
+                path
+                (leafDictHelperLabelForReleasePlan fieldReleasePlan)
+        | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
+            releasePlanManagedRootFieldFrom baseReg fieldOffset path closureRefCountDecHelperLabel
+        | ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _)
+        | ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _) ->
+            releasePlanGenericFieldFrom baseReg fieldOffset payloadSize path fieldReleasePlan
+        | _ ->
+            []
+
+    and releasePlanBoxedSumVariantFieldsFrom
+        (baseReg: ARM64Symbolic.Reg)
+        (path: string)
+        (variants: ANF.RcBoxedSumVariantRelease list)
+        : ARM64Symbolic.Instr list =
+        let releaseVariant (variant: ANF.RcBoxedSumVariantRelease) : (int * ARM64Symbolic.Instr list) option =
+            let releaseInstrs =
+                variant.FieldReleases
+                |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
+                    releasePlanFieldFrom
+                        baseReg
+                        fieldOffset
+                        $"{path}_tag_{variant.Tag}"
+                        fieldReleasePlan)
+
+            if List.isEmpty releaseInstrs then
+                None
+            else
+                Some (variant.Tag, releaseInstrs)
+
+        let cases = variants |> List.choose releaseVariant
+
+        if List.isEmpty cases then
+            []
+        else
+            let sumDone = label $"leaf_plan_sum_{path}_done"
+            [
+                ARM64Symbolic.LDR (ARM64Symbolic.X10, baseReg, 0s)
+            ]
+            @
+            (cases
+             |> List.mapi (fun index (tag, releaseInstrs) ->
+                let nextCase = label $"leaf_plan_sum_{path}_variant_{index}_next"
+                [
+                    ARM64Symbolic.CMP_imm (ARM64Symbolic.X10, uint16 tag)
+                    ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, nextCase)
+                ]
+                @ releaseInstrs
+                @ [
+                    ARM64Symbolic.B_label sumDone
+                    ARM64Symbolic.Label nextCase
+                ])
+             |> List.concat)
+            @ [ARM64Symbolic.Label sumDone]
+
+    and releasePlanGenericFieldFrom
+        (baseReg: ARM64Symbolic.Reg)
+        (fieldOffset: int)
+        (payloadSize: int)
+        (path: string)
+        (fieldReleasePlan: ANF.RcReleasePlan)
+        : ARM64Symbolic.Instr list =
+        let fieldDone = label $"leaf_plan_generic_{path}_{fieldOffset}_done"
+        let childFieldReleases =
+            match fieldReleasePlan with
+            | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
+                fieldReleases
+                |> List.collect (fun (ANF.FieldRelease (childOffset, childReleasePlan)) ->
+                    releasePlanFieldFrom ARM64Symbolic.X11 childOffset $"{path}_{fieldOffset}" childReleasePlan)
+            | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, _, variants)) ->
+                releasePlanBoxedSumVariantFieldsFrom ARM64Symbolic.X11 $"{path}_{fieldOffset}" variants
+            | _ ->
+                []
+        [
+            ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X12, fieldDone)
+            ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, int16 payloadSize)
+            ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+            ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X12, int16 payloadSize)
+            ARM64Symbolic.CBNZ (ARM64Symbolic.X15, fieldDone)
+            ARM64Symbolic.MOV_reg (ARM64Symbolic.X11, ARM64Symbolic.X12)
+        ]
+        @ childFieldReleases
+        @ (if payloadSize >= 0 && payloadSize < 256 then
+            [
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X13, ARM64Symbolic.X27, uint16 payloadSize)
+                ARM64Symbolic.LDR (ARM64Symbolic.X14, ARM64Symbolic.X13, 0s)
+                ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.X12, 0s)
+                ARM64Symbolic.STR (ARM64Symbolic.X12, ARM64Symbolic.X13, 0s)
+            ]
+           else
+            [])
+        @ leakDec
+        @ [ARM64Symbolic.Label fieldDone]
+
+    let releaseManagedLeafFieldsFromPlan (releasePlan: ANF.RcReleasePlan) : ARM64Symbolic.Instr list =
+        match releasePlan with
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
+            fieldReleases
+            |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
+                releasePlanFieldFrom ARM64Symbolic.X8 fieldOffset "root" fieldReleasePlan)
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, _, variants)) ->
+            releasePlanBoxedSumVariantFieldsFrom ARM64Symbolic.X8 "root" variants
+        | _ ->
+            []
+
     let releaseManagedLeafFields =
         managedLeafFieldTypes
         |> List.mapi (fun index fieldType ->
@@ -763,6 +987,13 @@ let private generateListRefCountDecHelperWith
             | _ ->
                 [])
         |> List.concat
+
+    let releaseLeafFieldPayloads =
+        match leafGenericReleasePlan with
+        | Some releasePlan ->
+            releaseManagedLeafFieldsFromPlan releasePlan
+        | None ->
+            releaseManagedLeafFields
 
     let releaseLeafPayload =
         match leafGenericPayloadSize, releaseLeafDynamicBufferPayload, releaseLeafListPayload, releaseLeafDictPayload, releaseLeafClosurePayload with
@@ -818,8 +1049,8 @@ let private generateListRefCountDecHelperWith
                 ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.X8, int16 payloadSize)
                 ARM64Symbolic.CBNZ (ARM64Symbolic.X9, leafPayloadDone)
             ]
-            @ releaseManagedLeafFields
-            @ (if List.isEmpty releaseManagedLeafFields then
+            @ releaseLeafFieldPayloads
+            @ (if List.isEmpty releaseLeafFieldPayloads then
                 []
                else
                 // Field release may use X8 for nested payloads; reload the leaf payload before freeing it.
@@ -1569,45 +1800,70 @@ let private listRefCountDecHelperSpecs : ListRefCountDecHelperSpec list =
 let private generateNeededListRefCountDecHelpers
     (ctx: CodeGenContext)
     (neededHelperLabels: Set<string>)
+    (plannedListDecHelpers: Map<string, int * ANF.RcReleasePlan>)
     : ARM64Symbolic.Instr list =
-    (listRefCountDecHelperSpecs
-     |> List.collect (fun spec ->
-         if Set.contains spec.Label neededHelperLabels then
-             generateListRefCountDecHelperWith
-                 spec.Label
-                 ctx
-                 spec.LeafGenericPayloadSize
-                 false
-                 spec.ReleaseLeafListPayload
-                 spec.ReleaseLeafDictPayload
-                 spec.ReleaseLeafClosurePayload
-                 spec.ManagedLeafFieldTypes
-         else
-             []))
-    @ (if Set.contains listRefCountDecStringHelperLabel neededHelperLabels then
-           generateListRefCountDecHelperWith
-               listRefCountDecStringHelperLabel
-               ctx
-               None
-               true
-               false
-               false
-               false
-               []
-       else
-           [])
-    @ (if Set.contains listRefCountDecBytesHelperLabel neededHelperLabels then
-           generateListRefCountDecHelperWith
-               listRefCountDecBytesHelperLabel
-               ctx
-               None
-               true
-               false
-               false
-               false
-               []
-       else
-           [])
+    let staticHelpers =
+        (listRefCountDecHelperSpecs
+         |> List.collect (fun spec ->
+             if Set.contains spec.Label neededHelperLabels then
+                 generateListRefCountDecHelperWith
+                     spec.Label
+                     ctx
+                     spec.LeafGenericPayloadSize
+                     None
+                     false
+                     spec.ReleaseLeafListPayload
+                     spec.ReleaseLeafDictPayload
+                     spec.ReleaseLeafClosurePayload
+                     spec.ManagedLeafFieldTypes
+             else
+                 []))
+        @ (if Set.contains listRefCountDecStringHelperLabel neededHelperLabels then
+               generateListRefCountDecHelperWith
+                   listRefCountDecStringHelperLabel
+                   ctx
+                   None
+                   None
+                   true
+                   false
+                   false
+                   false
+                   []
+           else
+               [])
+        @ (if Set.contains listRefCountDecBytesHelperLabel neededHelperLabels then
+               generateListRefCountDecHelperWith
+                   listRefCountDecBytesHelperLabel
+                   ctx
+                   None
+                   None
+                   true
+                   false
+                   false
+                   false
+                   []
+           else
+               [])
+
+    let plannedHelpers =
+        plannedListDecHelpers
+        |> Map.toList
+        |> List.collect (fun (helperLabel, (payloadSize, releasePlan)) ->
+            if Set.contains helperLabel neededHelperLabels then
+                generateListRefCountDecHelperWith
+                    helperLabel
+                    ctx
+                    (Some payloadSize)
+                    (Some releasePlan)
+                    false
+                    false
+                    false
+                    false
+                    []
+            else
+                [])
+
+    staticHelpers @ plannedHelpers
 
 let rec private typeContainsDictRoot (typ: AST.Type) : bool =
     match typ with
@@ -2554,12 +2810,8 @@ let private listDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : strin
             listRefCountDecDictHelperLabel
         | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
             listRefCountDecClosureHelperLabel
-        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (payloadSize, fieldReleases)) ->
-            fixedBlockListHelperForPayloadRelease payloadSize fieldReleases
-        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
-            sumPayloadHelper fieldReleases
         | ANF.RootRelease (_, ANF.GenericHeap, _) ->
-            listRefCountDecHelperLabel
+            plannedListDecHelperLabelForReleasePlan elementRelease
     | _ ->
         listRefCountDecHelperLabel
 
@@ -6505,21 +6757,34 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         | [] -> Set.empty
         | _ -> Set.unionMany sets
 
+    let mergePlannedListDecHelperMaps
+        (left: Map<string, int * ANF.RcReleasePlan>)
+        (right: Map<string, int * ANF.RcReleasePlan>)
+        : Map<string, int * ANF.RcReleasePlan> =
+        Map.fold
+            (fun acc helperLabel helperSpec ->
+                match Map.tryFind helperLabel acc with
+                | Some existingSpec when existingSpec <> helperSpec ->
+                    Crash.crash $"planned list RC helper label collision for {helperLabel}"
+                | Some _ ->
+                    acc
+                | None ->
+                    Map.add helperLabel helperSpec acc)
+            left
+            right
+
+    let unionPlannedListDecHelperMaps
+        (maps: Map<string, int * ANF.RcReleasePlan> list)
+        : Map<string, int * ANF.RcReleasePlan> =
+        maps
+        |> List.fold mergePlannedListDecHelperMaps Map.empty
+
     let listDecHelperLabelsForListType (fieldType: AST.Type) : Set<string> =
         match fieldType with
         | AST.TList _ ->
             Set.singleton (listDecHelperForType ctx fieldType)
         | _ ->
             Set.empty
-
-    let listDecHelperDependencyLabels (helperLabel: string) : Set<string> =
-        listRefCountDecHelperSpecs
-        |> List.tryFind (fun spec -> spec.Label = helperLabel)
-        |> Option.map (fun spec ->
-            spec.ManagedLeafFieldTypes
-            |> List.map listDecHelperLabelsForListType
-            |> unionLabelSets)
-        |> Option.defaultValue Set.empty
 
     let rec dictDecHelperLabelsForDictType (fieldType: AST.Type) : Set<string> =
         match fieldType with
@@ -6552,6 +6817,108 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> unionLabelSets)
             |> Option.defaultValue Set.empty
 
+    let rec listDecHelperLabelsInReleasePlan (releasePlan: ANF.RcReleasePlan) : Set<string> =
+        let labelsInFieldReleases fieldReleases =
+            fieldReleases
+            |> List.map (fun (ANF.FieldRelease (_, fieldReleasePlan)) ->
+                listDecHelperLabelsInReleasePlan fieldReleasePlan)
+            |> unionLabelSets
+
+        match releasePlan with
+        | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease elementRelease) ->
+            Set.add
+                (listDecHelperForReleasePlan releasePlan)
+                (listDecHelperLabelsInReleasePlan elementRelease)
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _))
+        | ANF.RootRelease (_, _, ANF.ClosurePayloadRelease fieldReleases) ->
+            labelsInFieldReleases fieldReleases
+        | ANF.RootRelease (_, _, ANF.DictPayloadRelease (keyRelease, valueRelease)) ->
+            Set.union
+                (listDecHelperLabelsInReleasePlan keyRelease)
+                (listDecHelperLabelsInReleasePlan valueRelease)
+        | _ ->
+            Set.empty
+
+    let rec plannedListDecHelpersInReleasePlan
+        (releasePlan: ANF.RcReleasePlan)
+        : Map<string, int * ANF.RcReleasePlan> =
+        let helpersInFieldReleases fieldReleases =
+            fieldReleases
+            |> List.map (fun (ANF.FieldRelease (_, fieldReleasePlan)) ->
+                plannedListDecHelpersInReleasePlan fieldReleasePlan)
+            |> unionPlannedListDecHelperMaps
+
+        match releasePlan with
+        | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease elementRelease) ->
+            let nestedHelpers =
+                plannedListDecHelpersInReleasePlan elementRelease
+
+            match elementRelease with
+            | ANF.RootRelease (payloadSize, ANF.GenericHeap, _) ->
+                Map.empty
+                |> Map.add
+                    (plannedListDecHelperLabelForReleasePlan elementRelease)
+                    (payloadSize, elementRelease)
+                |> mergePlannedListDecHelperMaps nestedHelpers
+            | _ ->
+                nestedHelpers
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _))
+        | ANF.RootRelease (_, _, ANF.ClosurePayloadRelease fieldReleases) ->
+            helpersInFieldReleases fieldReleases
+        | ANF.RootRelease (_, _, ANF.DictPayloadRelease (keyRelease, valueRelease)) ->
+            mergePlannedListDecHelperMaps
+                (plannedListDecHelpersInReleasePlan keyRelease)
+                (plannedListDecHelpersInReleasePlan valueRelease)
+        | _ ->
+            Map.empty
+
+    let listDecHelperLabelsInMetadata (metadata: ANF.RcMetadata option) : Set<string> =
+        metadata
+        |> rcMetadataReleasePlan
+        |> Option.map listDecHelperLabelsInReleasePlan
+        |> Option.defaultValue Set.empty
+
+    let plannedListDecHelpersInMetadata
+        (metadata: ANF.RcMetadata option)
+        : Map<string, int * ANF.RcReleasePlan> =
+        metadata
+        |> rcMetadataReleasePlan
+        |> Option.map plannedListDecHelpersInReleasePlan
+        |> Option.defaultValue Map.empty
+
+    let plannedListDecHelpers =
+        sortedFunctions
+        |> List.map (fun func ->
+            func.CFG.Blocks
+            |> Map.toList
+            |> List.map (fun (_, block) ->
+                block.Instrs
+                |> List.map (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, metadata)
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
+                        plannedListDecHelpersInMetadata metadata
+                    | _ ->
+                        Map.empty)
+                |> unionPlannedListDecHelperMaps)
+            |> unionPlannedListDecHelperMaps)
+        |> unionPlannedListDecHelperMaps
+
+    let listDecHelperDependencyLabels (helperLabel: string) : Set<string> =
+        match Map.tryFind helperLabel plannedListDecHelpers with
+        | Some (_, releasePlan) ->
+            listDecHelperLabelsInReleasePlan releasePlan
+            |> Set.remove helperLabel
+        | None ->
+            listRefCountDecHelperSpecs
+            |> List.tryFind (fun spec -> spec.Label = helperLabel)
+            |> Option.map (fun spec ->
+                spec.ManagedLeafFieldTypes
+                |> List.map listDecHelperLabelsForListType
+                |> unionLabelSets)
+            |> Option.defaultValue Set.empty
+
     let rec expandListDecHelperDependencies (selectedLabels: Set<string>) (pendingLabels: string list) : Set<string> =
         match pendingLabels with
         | [] ->
@@ -6565,25 +6932,6 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             expandListDecHelperDependencies
                 (Set.union selectedLabels dependencyLabels)
                 (rest @ Set.toList dependencyLabels)
-
-    let rec listDecHelperLabelsInReleasePlan (releasePlan: ANF.RcReleasePlan) : Set<string> =
-        match releasePlan with
-        | ANF.RootRelease (_, ANF.TaggedList, _) ->
-            Set.singleton (listDecHelperForReleasePlan releasePlan)
-        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
-        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
-            fieldReleases
-            |> List.map (fun (ANF.FieldRelease (_, fieldReleasePlan)) ->
-                listDecHelperLabelsInReleasePlan fieldReleasePlan)
-            |> unionLabelSets
-        | _ ->
-            Set.empty
-
-    let listDecHelperLabelsInMetadata (metadata: ANF.RcMetadata option) : Set<string> =
-        metadata
-        |> rcMetadataReleasePlan
-        |> Option.map listDecHelperLabelsInReleasePlan
-        |> Option.defaultValue Set.empty
 
     let neededListRcDecHelperLabels =
         let calledLabels =
@@ -6613,11 +6961,46 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             let rootLabels = Set.add listRefCountDecHelperLabel calledLabels
             expandListDecHelperDependencies rootLabels (Set.toList rootLabels)
 
+    let rec rcReleasePlanContains
+        (predicate: ANF.RcReleasePlan -> bool)
+        (releasePlan: ANF.RcReleasePlan)
+        : bool =
+        if predicate releasePlan then
+            true
+        else
+            match releasePlan with
+            | ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+            | ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, fieldReleases, _))
+            | ANF.RootRelease (_, _, ANF.ClosurePayloadRelease fieldReleases) ->
+                fieldReleases
+                |> List.exists (fun (ANF.FieldRelease (_, fieldReleasePlan)) ->
+                    rcReleasePlanContains predicate fieldReleasePlan)
+            | ANF.RootRelease (_, _, ANF.DictPayloadRelease (keyRelease, valueRelease)) ->
+                rcReleasePlanContains predicate keyRelease
+                || rcReleasePlanContains predicate valueRelease
+            | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease elementRelease) ->
+                rcReleasePlanContains predicate elementRelease
+            | _ ->
+                false
+
+    let selectedPlannedListHelpersNeed predicate selectedLabels =
+        plannedListDecHelpers
+        |> Map.toList
+        |> List.exists (fun (helperLabel, (_, releasePlan)) ->
+            Set.contains helperLabel selectedLabels
+            && rcReleasePlanContains predicate releasePlan)
+
     let selectedListHelpersNeedDictDecHelper =
         selectedListRefCountDecHelpersNeedDictDecHelper neededListRcDecHelperLabels
+        || selectedPlannedListHelpersNeed
+            (function ANF.RootRelease (_, ANF.DictHeap, _) -> true | _ -> false)
+            neededListRcDecHelperLabels
 
     let selectedListHelpersNeedClosureDecHelper =
         selectedListRefCountDecHelpersNeedClosureDecHelper neededListRcDecHelperLabels
+        || selectedPlannedListHelpersNeed
+            (function ANF.RootRelease (_, ANF.ClosureHeap, _) -> true | _ -> false)
+            neededListRcDecHelperLabels
 
     let needsListRcIncHelper =
         sortedFunctions
@@ -6663,15 +7046,25 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             Set.empty
 
     let rec dictDecHelperLabelsInReleasePlan (releasePlan: ANF.RcReleasePlan) : Set<string> =
-        match releasePlan with
-        | ANF.RootRelease (_, ANF.DictHeap, _) ->
-            Set.singleton (dictDecHelperForReleasePlan releasePlan)
-        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
-        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
+        let labelsInFieldReleases fieldReleases =
             fieldReleases
             |> List.map (fun (ANF.FieldRelease (_, fieldReleasePlan)) ->
                 dictDecHelperLabelsInReleasePlan fieldReleasePlan)
             |> unionLabelSets
+
+        match releasePlan with
+        | ANF.RootRelease (_, ANF.DictHeap, _) ->
+            Set.singleton (dictDecHelperForReleasePlan releasePlan)
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _))
+        | ANF.RootRelease (_, _, ANF.ClosurePayloadRelease fieldReleases) ->
+            labelsInFieldReleases fieldReleases
+        | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease elementRelease) ->
+            dictDecHelperLabelsInReleasePlan elementRelease
+        | ANF.RootRelease (_, _, ANF.DictPayloadRelease (keyRelease, valueRelease)) ->
+            Set.union
+                (dictDecHelperLabelsInReleasePlan keyRelease)
+                (dictDecHelperLabelsInReleasePlan valueRelease)
         | _ ->
             Set.empty
 
@@ -6706,7 +7099,16 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         let listHelperDictLabels =
             neededListRcDecHelperLabels
             |> Set.toList
-            |> List.map listDecHelperDictDependencyLabels
+            |> List.map (fun helperLabel ->
+                let staticLabels = listDecHelperDictDependencyLabels helperLabel
+                let plannedLabels =
+                    plannedListDecHelpers
+                    |> Map.tryFind helperLabel
+                    |> Option.map (fun (_, releasePlan) ->
+                        dictDecHelperLabelsInReleasePlan releasePlan)
+                    |> Option.defaultValue Set.empty
+
+                Set.union staticLabels plannedLabels)
             |> unionLabelSets
 
         calledLabels
@@ -6793,13 +7195,19 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
 
         let selectedListHelpersNeedDictDecHelper =
             selectedListRefCountDecHelpersNeedDictDecHelper selectedListRcDecHelperLabels
+            || selectedPlannedListHelpersNeed
+                (function ANF.RootRelease (_, ANF.DictHeap, _) -> true | _ -> false)
+                selectedListRcDecHelperLabels
 
         let selectedListHelpersNeedClosureDecHelper =
             selectedListRefCountDecHelpersNeedClosureDecHelper selectedListRcDecHelperLabels
+            || selectedPlannedListHelpersNeed
+                (function ANF.RootRelease (_, ANF.ClosureHeap, _) -> true | _ -> false)
+                selectedListRcDecHelperLabels
 
         let listRcHelpers =
             (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
-            @ generateNeededListRefCountDecHelpers ctx selectedListRcDecHelperLabels
+            @ generateNeededListRefCountDecHelpers ctx selectedListRcDecHelperLabels plannedListDecHelpers
         let dictRcHelpers =
             (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
             @ (if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false false false ctx else [])
