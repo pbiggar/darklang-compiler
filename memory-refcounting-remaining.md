@@ -1440,6 +1440,8 @@ Closure roots and several capture cases are covered:
 - fixed-block capture retained when returned
 - fixed-block capture fields released
 - nested fixed-block capture fields released
+- returned closure uses and releases a record string/bytes/list/dict-list
+  capture
 - list of closures released
 - returned list releases closure payload roots
 
@@ -1457,10 +1459,9 @@ Closure roots and several capture cases are covered:
 
 1. Represent static function references and heap closures distinctly in shape
    planning.
-2. Add returned closure tests that use captured values after cleanup.
-3. Ensure list-of-function behavior does not regress into tagged-list helper
+2. Ensure list-of-function behavior does not regress into tagged-list helper
    mismatch.
-4. Port recursive closure capture release parity to x64.
+3. Port recursive closure capture release parity to x64.
 
 ### Suggested Commit Breakdown
 

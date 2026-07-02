@@ -1838,12 +1838,42 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
         (releasePlan: ANF.RcReleasePlan)
         (doneLabel: string)
         : ARM64Symbolic.Instr list =
+        let dictHelperForChildPlan (fieldReleasePlan: ANF.RcReleasePlan) : string =
+            match fieldReleasePlan with
+            | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, ANF.RootRelease (_, ANF.TaggedList, _))) ->
+                dictRefCountDecListValueHelperLabel
+            | _ ->
+                dictRefCountDecHelperLabel
+
+        let releaseManagedRootChildField
+            (fieldOffset: int)
+            (helperLabel: string)
+            : ARM64Symbolic.Instr list =
+            let childDone = label $"{doneLabel}_child_root_{fieldOffset}_done"
+            [
+                ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X8, int16 fieldOffset)
+                ARM64Symbolic.CBZ (ARM64Symbolic.X12, childDone)
+                ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X8, ARM64Symbolic.SP, -32s)
+                ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 16s)
+                ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X12)
+                ARM64Symbolic.BL helperLabel
+                ARM64Symbolic.LDR (ARM64Symbolic.X30, ARM64Symbolic.SP, 16s)
+                ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X8, ARM64Symbolic.SP, 32s)
+                ARM64Symbolic.Label childDone
+            ]
+
         match releasePlan with
         | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
             fieldReleases
             |> List.collect (function
                 | ANF.FieldRelease (fieldOffset, ANF.DynamicBufferRelease _) ->
                     releaseDynamicBufferChildField fieldOffset doneLabel
+                | ANF.FieldRelease (fieldOffset, ANF.RootRelease (_, ANF.TaggedList, _)) ->
+                    releaseManagedRootChildField fieldOffset listRefCountDecHelperLabel
+                | ANF.FieldRelease (fieldOffset, (ANF.RootRelease (_, ANF.DictHeap, _) as fieldReleasePlan)) ->
+                    releaseManagedRootChildField fieldOffset (dictHelperForChildPlan fieldReleasePlan)
+                | ANF.FieldRelease (fieldOffset, ANF.RootRelease (_, ANF.ClosureHeap, _)) ->
+                    releaseManagedRootChildField fieldOffset closureRefCountDecHelperLabel
                 | ANF.FieldRelease (fieldOffset, ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.FixedBlockPayloadRelease _))
                 | ANF.FieldRelease (fieldOffset, ANF.RootRelease (payloadSize, ANF.GenericHeap, ANF.BoxedSumPayloadRelease _)) ->
                     releaseFixedChildField fieldOffset payloadSize doneLabel

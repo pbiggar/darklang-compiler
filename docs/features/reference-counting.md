@@ -57,7 +57,8 @@ ARM64 has the most complete memory support today:
 - dict root helpers
 - closure root helpers
 - recursive field release for selected fixed-block, sum, and closure-capture
-  shapes
+  shapes, including returned closures with record string/bytes/list/dict-list
+  captures
 
 x64 has active root RC support and focused unit coverage for:
 

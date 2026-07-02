@@ -772,6 +772,49 @@ let testBorrowedCallStillGetsAutoDecUnderConservativePolicy () : TestResult =
     else
         Error "BorrowedCall should be treated as owned result under conservative policy and get automatic RefCountDec"
 
+let testCallReturningClosureGetsAutoDecAfterUse () : TestResult =
+    let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
+    let funcReg : AST_to_ANF.FunctionRegistry =
+        Map.ofList [
+            ("makeClosure", AST.TFunction ([], closureType))
+        ]
+
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = funcReg
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let closureTemp = TempId 0
+    let resultTemp = TempId 1
+    let func : Function = {
+        Name = "caller"
+        TypedParams = []
+        ReturnType = AST.TInt64
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                closureTemp,
+                Call ("makeClosure", []),
+                Let (
+                    resultTemp,
+                    ClosureCall (Var closureTemp, [IntLiteral (Int64 5L)]),
+                    Return (Var resultTemp)
+                )
+            )
+    }
+
+    let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
+
+    if hasRefCountDecForTemp closureTemp transformed.Body then
+        Ok ()
+    else
+        Error "Call result with function type should receive automatic closure RefCountDec after use"
+
 let testPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
     let ctx : TypeContext = {
         TypeReg = Map.empty
@@ -935,6 +978,7 @@ let tests = [
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
     ("borrowed call still gets auto-dec under conservative policy", testBorrowedCallStillGetsAutoDecUnderConservativePolicy)
+    ("call returning closure gets auto-dec after use", testCallReturningClosureGetsAutoDecAfterUse)
     ("pure enum binding does not get automatic dec", testPureEnumBindingDoesNotGetAutomaticDec)
     ("generic pure enum binding does not get automatic dec", testGenericPureEnumBindingDoesNotGetAutomaticDec)
     ("bare sum type refs are canonicalized for RC source types", testBareSumTypeRefsAreCanonicalizedForRcSourceTypes)
