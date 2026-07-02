@@ -833,7 +833,16 @@ let main args =
             |> Array.partition (fun suite -> Set.contains suite.Name needsStdlibSet)
         (noStdlibSuites, needsStdlibSuites)
 
-    let unitTests = allUnitTests |> Array.filter (fun suite -> matchesFilter filter suite.Name)
+    let unitTests =
+        allUnitTests
+        |> Array.choose (fun suite ->
+            if matchesFilter filter suite.Name then
+                Some suite
+            else
+                let filteredTests =
+                    suite.Tests
+                    |> List.filter (fun (testName, _) -> matchesFilter filter testName)
+                if List.isEmpty filteredTests then None else Some { suite with Tests = filteredTests })
 
     let (unitTestsNoStdlib, unitTestsWithStdlib) =
         splitUnitTestsByStdlibNeed unitStdlibSuites unitTests
