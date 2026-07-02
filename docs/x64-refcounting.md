@@ -94,17 +94,13 @@ specializations instead of one shared shape-plan executor.
 - tagged-list tuple4 string/bytes/list/dict payload release
 - tagged-list tuple4 closure/bytes/list/dict payload release
 - tagged-list tuple2 payload release with nested tuple dynamic string/bytes
-  field combinations
-- tagged-list tuple2 payload release with nested tuple list/dict fields
-- tagged-list tuple2 payload release with nested tuple dict fields
-- tagged-list tuple2 payload release with nested tuple closure fields
-- tagged-list tuple2 payload release with nested tuple string/list/dict fields
-- tagged-list tuple2 payload release with nested tuple string/bytes/list/dict
-  fields
-- tagged-list tuple4 payload release with nested tuple dynamic-buffer fields
-- tagged-list tuple4 payload release with nested tuple string/list/dict fields
-- tagged-list tuple4 payload release with nested tuple closure/bytes/list/dict
-  fields
+  field combinations, list/dict fields, dict fields, closure fields,
+  string/list/dict fields, and string/bytes/list/dict fields through planned
+  fixed-block `RcReleasePlan` leaf helpers
+- tagged-list tuple4 payload release with nested tuple dynamic-buffer fields,
+  string/list/dict fields, string/list/dict-list fields, and
+  closure/bytes/list/dict fields through planned fixed-block `RcReleasePlan`
+  leaf helpers
 - tagged-list tuple4 payload release with a nested record in the middle field
   containing string/list/dict fields, using a planned fixed-block
   `RcReleasePlan` leaf helper instead of another handwritten release program
@@ -175,12 +171,12 @@ exist for:
   combinations
 - tuple2 leaf payloads with nested tuple list/dict fields
 - tuple2 leaf payloads with nested tuple dict fields
-- tuple2 leaf payloads with nested tuple closure fields
-- tuple2 leaf payloads with nested tuple string/list/dict fields
-- tuple2 leaf payloads with nested tuple string/bytes/list/dict fields
-- tuple4 leaf payloads with nested tuple dynamic-buffer fields
-- tuple4 leaf payloads with nested tuple string/list/dict fields
-- tuple4 leaf payloads with nested tuple closure/bytes/list/dict fields
+- tuple2 leaf payloads with nested tuple closure, string/list/dict, and
+  string/bytes/list/dict fields through planned fixed-block `RcReleasePlan`
+  helpers
+- tuple4 leaf payloads with nested tuple dynamic-buffer, string/list/dict,
+  string/list/dict-list, and closure/bytes/list/dict fields through planned
+  fixed-block `RcReleasePlan` helpers
 - tuple4 leaf payloads with a nested record in the middle field containing
   string/list/dict fields through a planned `RcReleasePlan` fixed-block helper
 - tuple4 leaf payloads with a nested record in the middle field containing
@@ -214,10 +210,11 @@ exist for:
 This is still narrower than ARM64 for broader nested tuple/record payloads, but
 the common dynamic-buffer, list, dict, closure, tuple3, tuple4, nested-tuple,
 record3, record4, and boxed-sum list payload families now have targeted x64
-probes. The tuple4 nested-record middle-field string/list/dict and
-string/list/dict-list cases route through the generic `RcReleasePlan`
-fixed-block executor, which is the intended replacement direction for further
-helper-family specializations.
+probes. The tuple2 and tuple4 nested-tuple families and the tuple4
+nested-record middle-field string/list/dict and string/list/dict-list cases
+route through the generic `RcReleasePlan` fixed-block executor. Planned list
+helpers also discover recursive list-helper dependencies by walking their
+`RcReleasePlan`, instead of relying only on helper-label special cases.
 
 ## Dicts
 
@@ -270,9 +267,11 @@ The main x64 gaps are:
   fixed-block capture probes
 - list helper variants for deeper nested tuple/record payloads beyond the
   covered tuple2 nested tuple dynamic-buffer, list/dict, dict, closure,
-  string/list/dict, and string/bytes/list/dict shapes, covered tuple3
+  string/list/dict, and string/bytes/list/dict shapes through planned
+  `RcReleasePlan` helpers, covered tuple3
   closure/list/dict and string/list/dict shapes, covered tuple4 nested tuple
-  dynamic-buffer, string/list/dict, and closure/bytes/list/dict shapes,
+  dynamic-buffer, string/list/dict, string/list/dict-list, and
+  closure/bytes/list/dict shapes through planned `RcReleasePlan` helpers,
   covered tuple4 nested-record middle-field string/list/dict and
   string/list/dict-list shapes through planned `RcReleasePlan` helpers,
   covered record4 nested tuple dynamic-buffer, string/list/dict, and
@@ -304,8 +303,10 @@ The main x64 gaps are:
    `Dict<String, Dict<Int64, List<Int64>>>` release are covered. Dynamic
    string keys paired with tuple leaf values containing
    `String/List<Int64>/Dict<Int64, Int64>` fields are also covered.
-2. Replace x64 helper-family selection with a shared shape-driven release plan
-   executor instead of continuing helper explosion.
+2. Continue replacing x64 helper-family selection with shared shape-driven
+   release plan execution instead of continuing helper explosion. The tuple2
+   and tuple4 nested-tuple list helper families now use planned fixed-block
+   execution.
 3. Add x64 dict key/value shape matrix tests for typed recursive values.
 4. Add a real dual-backend memory matrix if the test harness grows support for
    forcing the backend independent of the host architecture.
