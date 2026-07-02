@@ -161,8 +161,8 @@ Latest update:
 - x64 tagged-list boxed-sum record helper specs now execute the covered
   record1, record3, record4, and nested-sum payload cleanup through planned
   fixed-block `RcReleasePlan` helpers. The old `FixedBlockFixedBlock*`
-  generator branches are no longer selected by helper specs; deleting those
-  dead branches is now mechanical cleanup rather than a behavior gap.
+  generator branches have been removed from the x64 helper generator; nested
+  fixed-block list payload cleanup now goes through planned release execution.
 
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
 release, tuple-only nested fixed-block field release, record-registry-based
