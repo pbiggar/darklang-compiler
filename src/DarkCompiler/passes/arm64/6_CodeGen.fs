@@ -111,6 +111,7 @@ let private listRefCountDecStringBytesTupleManagedDictHelperLabel = "__dark_list
 let private listRefCountDecStringBytesTupleManagedDictListHelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_managed_dict_list_helper"
 let private listRefCountDecStringBytesTupleManagedClosureHelperLabel = "__dark_list_refcount_dec_string_bytes_tuple_managed_closure_helper"
 let private listRefCountDecTuple4NestedTupleDynamicListDictListHelperLabel = "__dark_list_refcount_dec_tuple4_nested_tuple_dynamic_list_dict_list_helper"
+let private listRefCountDecTuple4NestedTupleMiddleDynamicListDictListHelperLabel = "__dark_list_refcount_dec_tuple4_nested_tuple_middle_dynamic_list_dict_list_helper"
 let private listRefCountDecTuple4NestedTupleClosureDynamicListDictListHelperLabel = "__dark_list_refcount_dec_tuple4_nested_tuple_closure_dynamic_list_dict_list_helper"
 let private listRefCountDecStringBytesRecordManagedListHelperLabel = "__dark_list_refcount_dec_string_bytes_record_managed_list_helper"
 let private listRefCountDecStringBytesRecordManagedDictHelperLabel = "__dark_list_refcount_dec_string_bytes_record_managed_dict_helper"
@@ -1302,6 +1303,21 @@ let private listRefCountDecHelperSpecs : ListRefCountDecHelperSpec list =
                                   AST.TList AST.TInt64
                                   AST.TDict (AST.TInt64, AST.TList AST.TInt64)
                               ]
+                              ] }
+    { Label = listRefCountDecTuple4NestedTupleMiddleDynamicListDictListHelperLabel
+      LeafGenericPayloadSize = (Some 32)
+      ReleaseLeafListPayload = false
+      ReleaseLeafDictPayload = false
+      ReleaseLeafClosurePayload = false
+      ManagedLeafFieldTypes = [
+                              AST.TInt64
+                              AST.TInt64
+                              AST.TTuple [
+                                  AST.TString
+                                  AST.TList AST.TInt64
+                                  AST.TDict (AST.TInt64, AST.TList AST.TInt64)
+                              ]
+                              AST.TInt64
                               ] }
     { Label = listRefCountDecTuple4NestedTupleClosureDynamicListDictListHelperLabel
       LeafGenericPayloadSize = (Some 32)

@@ -109,7 +109,8 @@ specializations instead of one shared shape-plan executor.
   containing string/list/dict fields, using a planned fixed-block
   `RcReleasePlan` leaf helper instead of another handwritten release program
 - tagged-list tuple4 payload release with a nested record in the middle field
-  containing string/list/dict-list fields
+  containing string/list/dict-list fields, also using a planned fixed-block
+  `RcReleasePlan` leaf helper
 - tagged-list record4 payload release with nested tuple dynamic-buffer fields
 - tagged-list record4 payload release with nested tuple string/list/dict fields
 - tagged-list record4 payload release with nested tuple closure/bytes/list/dict
@@ -183,7 +184,8 @@ exist for:
 - tuple4 leaf payloads with a nested record in the middle field containing
   string/list/dict fields through a planned `RcReleasePlan` fixed-block helper
 - tuple4 leaf payloads with a nested record in the middle field containing
-  string/list/dict-list fields
+  string/list/dict-list fields through a planned `RcReleasePlan` fixed-block
+  helper, with ARM64 helper-selection parity pinned by a matching symbolic test
 - record4 leaf payloads with nested tuple dynamic-buffer fields
 - record4 leaf payloads with nested tuple string/list/dict fields
 - record4 leaf payloads with nested tuple closure/bytes/list/dict fields
@@ -212,10 +214,10 @@ exist for:
 This is still narrower than ARM64 for broader nested tuple/record payloads, but
 the common dynamic-buffer, list, dict, closure, tuple3, tuple4, nested-tuple,
 record3, record4, and boxed-sum list payload families now have targeted x64
-probes. The tuple4 nested-record middle-field case is the first x64 tagged-list
-leaf payload that routes through the generic `RcReleasePlan` fixed-block
-executor, which is the intended replacement direction for further helper-family
-specializations.
+probes. The tuple4 nested-record middle-field string/list/dict and
+string/list/dict-list cases route through the generic `RcReleasePlan`
+fixed-block executor, which is the intended replacement direction for further
+helper-family specializations.
 
 ## Dicts
 
@@ -271,8 +273,8 @@ The main x64 gaps are:
   string/list/dict, and string/bytes/list/dict shapes, covered tuple3
   closure/list/dict and string/list/dict shapes, covered tuple4 nested tuple
   dynamic-buffer, string/list/dict, and closure/bytes/list/dict shapes,
-  covered tuple4 nested-record middle-field string/list/dict shape through a
-  planned `RcReleasePlan` helper,
+  covered tuple4 nested-record middle-field string/list/dict and
+  string/list/dict-list shapes through planned `RcReleasePlan` helpers,
   covered record4 nested tuple dynamic-buffer, string/list/dict, and
   closure/bytes/list/dict shapes, covered record3
   string/bytes/list/dict and closure/list/dict shapes, covered record4
