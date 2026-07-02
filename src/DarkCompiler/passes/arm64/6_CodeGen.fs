@@ -2334,6 +2334,11 @@ let private generateDictRefCountDecHelper
     let skipLeafDictValueRelease = label "skip_leaf_dict_value_release"
     let skipLeafDynamicKeyRelease = label "skip_leaf_dynamic_key_release"
     let skipLeafDynamicValueRelease = label "skip_leaf_dynamic_value_release"
+    let skipCollisionPayloadRelease = label "skip_collision_payload_release"
+    let collisionPayloadLoop = label "collision_payload_loop"
+    let collisionPayloadDone = label "collision_payload_done"
+    let skipCollisionDynamicKeyRelease = label "skip_collision_dynamic_key_release"
+    let skipCollisionDynamicValueRelease = label "skip_collision_dynamic_value_release"
     let skipLeafTupleStringListValueRelease = label "skip_leaf_tuple_string_list_value_release"
     let tupleStringListValueDone = label "tuple_string_list_value_done"
     let skipLeafSumStringValueRelease = label "skip_leaf_sum_string_value_release"
@@ -2407,6 +2412,49 @@ let private generateDictRefCountDecHelper
         @ refcountUpdate
         @ [ARM64Symbolic.Label skipLabel]
 
+    let releaseDynamicBufferFieldAtBaseInstrs
+        (baseReg: ARM64.Reg)
+        (fieldOffset: int16)
+        (skipLabel: string)
+        : ARM64Symbolic.Instr list =
+        let refcountUpdate =
+            if List.isEmpty leakDec then
+                [
+                    ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+                    ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+                ]
+            else
+                [
+                    ARM64Symbolic.SUB_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+                    ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+                    ARM64Symbolic.CBNZ (ARM64Symbolic.X15, skipLabel)
+                ] @ leakDec
+
+        [
+            ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, fieldOffset)
+            ARM64Symbolic.CBZ (ARM64Symbolic.X12, skipLabel)
+            ARM64Symbolic.CMP_reg (ARM64Symbolic.X12, ARM64Symbolic.X27)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, skipLabel)
+            ARM64Symbolic.CMP_reg (ARM64Symbolic.X12, ARM64Symbolic.X28)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.GT, skipLabel)
+            ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
+            ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 7us)
+            ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 3us, 0)
+            ARM64Symbolic.LSR_reg (ARM64Symbolic.X15, ARM64Symbolic.X15, ARM64Symbolic.X13)
+            ARM64Symbolic.LSL_reg (ARM64Symbolic.X15, ARM64Symbolic.X15, ARM64Symbolic.X13)
+            ARM64Symbolic.ADD_imm (ARM64Symbolic.X14, ARM64Symbolic.X12, 8us)
+            ARM64Symbolic.ADD_reg (ARM64Symbolic.X14, ARM64Symbolic.X14, ARM64Symbolic.X15)
+            ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+            ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 0xFFFFus, 0)
+            ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 16)
+            ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 32)
+            ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0x7FFFus, 48)
+            ARM64Symbolic.CMP_reg (ARM64Symbolic.X15, ARM64Symbolic.X13)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, skipLabel)
+        ]
+        @ refcountUpdate
+        @ [ARM64Symbolic.Label skipLabel]
+
     let releaseLeafDynamicKeyInstrs =
         if releaseLeafDynamicKey then
             releaseLeafDynamicBufferFieldInstrs 0s skipLeafDynamicKeyRelease
@@ -2416,6 +2464,37 @@ let private generateDictRefCountDecHelper
     let releaseLeafDynamicValueInstrs =
         if releaseLeafDynamicValue then
             releaseLeafDynamicBufferFieldInstrs 8s skipLeafDynamicValueRelease
+        else
+            []
+
+    let releaseCollisionDynamicPayloadInstrs =
+        if releaseLeafDynamicKey || releaseLeafDynamicValue then
+            [
+                ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 3us)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, skipCollisionPayloadRelease)
+                ARM64Symbolic.LDR (ARM64Symbolic.X5, ARM64Symbolic.X3, 0s)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X6, 0us, 0)
+                ARM64Symbolic.Label collisionPayloadLoop
+                ARM64Symbolic.CMP_reg (ARM64Symbolic.X6, ARM64Symbolic.X5)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, collisionPayloadDone)
+                ARM64Symbolic.LSL_imm (ARM64Symbolic.X11, ARM64Symbolic.X6, 4)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X11, ARM64Symbolic.X11, 8us)
+                ARM64Symbolic.ADD_reg (ARM64Symbolic.X11, ARM64Symbolic.X3, ARM64Symbolic.X11)
+            ]
+            @ (if releaseLeafDynamicKey then
+                   releaseDynamicBufferFieldAtBaseInstrs ARM64Symbolic.X11 0s skipCollisionDynamicKeyRelease
+               else
+                   [])
+            @ (if releaseLeafDynamicValue then
+                   releaseDynamicBufferFieldAtBaseInstrs ARM64Symbolic.X11 8s skipCollisionDynamicValueRelease
+               else
+                   [])
+            @ [
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X6, ARM64Symbolic.X6, 1us)
+                ARM64Symbolic.B_label collisionPayloadLoop
+                ARM64Symbolic.Label collisionPayloadDone
+                ARM64Symbolic.Label skipCollisionPayloadRelease
+            ]
         else
             []
 
@@ -2654,6 +2733,7 @@ let private generateDictRefCountDecHelper
     ]
     @ releaseLeafDynamicKeyInstrs
     @ releaseLeafDynamicValueInstrs
+    @ releaseCollisionDynamicPayloadInstrs
     @ releaseLeafListValueInstrs
     @ releaseLeafDictValueInstrs
     @ releaseLeafTupleStringListValueInstrs

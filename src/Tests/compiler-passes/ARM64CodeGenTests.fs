@@ -500,6 +500,37 @@ let testDictStringKeyListValueUsesPlannedDictHelper () : TestResult =
         (AST.TDict (AST.TString, AST.TList AST.TInt64))
         "Dict<string, list<int>>"
 
+let testDictStringKeyValuePlannedHelperReleasesCollisionPayloads () : TestResult =
+    let dictType = AST.TDict (AST.TString, AST.TString)
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    0,
+                    LIR.DictHeap,
+                    Some (rcMetadata dictType))
+            ]
+            Map.empty
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let hasCollisionPayloadLoop =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.Label label
+                    when label.Contains("collision_payload_loop") ->
+                    true
+                | _ ->
+                    false)
+
+        if hasCollisionPayloadLoop then
+            Ok ()
+        else
+            Error "Dict<string, string> planned helper did not emit a collision payload release loop"
+
 let testGenericFixedBlockNestedBytesFieldUsesReleasePlan () : TestResult =
     let nestedType = AST.TTuple [ AST.TBytes ]
     let parentType = AST.TTuple [ nestedType ]
@@ -797,6 +828,7 @@ let tests : (string * (unit -> TestResult)) list = [
     ("Dict string key uses planned dict helper", testDictStringKeyUsesPlannedDictHelper)
     ("Dict string value uses planned dict helper", testDictStringValueUsesPlannedDictHelper)
     ("Dict string key list value uses planned dict helper", testDictStringKeyListValueUsesPlannedDictHelper)
+    ("Dict string key/value planned helper releases collision payloads", testDictStringKeyValuePlannedHelperReleasesCollisionPayloads)
     ("Generic fixed-block nested bytes field uses release plan", testGenericFixedBlockNestedBytesFieldUsesReleasePlan)
     ("Generic fixed-block nested immediate field releases child root", testGenericFixedBlockNestedImmediateFieldReleasesChildRoot)
     ("Generic fixed-block nested mixed boxed-sum bytes payload uses variant dispatch", testGenericFixedBlockNestedMixedBoxedSumBytesPayloadUsesVariantDispatch)
