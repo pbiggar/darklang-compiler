@@ -2967,7 +2967,7 @@ let generateEpilogue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM6
     restoreCalleeSavedInstrs @ deallocStack @ restoreFpLr @ ret
 
 /// Convert LIR instruction to ARM64 instructions
-let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic.Instr list, string> =
+let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic.Instr list, string> =
     let getListDisplayStringFunc (elemType: AST.Type) : string option =
         match elemType with
         | AST.TInt64 -> Some "Stdlib.List.toDisplayString_i64"
@@ -3584,10 +3584,15 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                                     match getListDisplayStringFunc elemType with
                                     | Some funcName ->
                                         let callToDisplay = [ARM64Symbolic.BL funcName]
+                                        let saveDisplayString = [ARM64Symbolic.MOV_reg (ARM64Symbolic.X21, ARM64Symbolic.X0)]
                                         let printString =
                                             [ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.X0, 0s); ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X0, 8us)] @
                                             runtimeInstrs (Runtime.generatePrintStringNoNewline ())
-                                        callToDisplay @ printString
+                                        let releaseDisplayString =
+                                            match convertInstr ctx (LIR.RefCountDecString (LIR.Reg (LIR.Physical LIR.X21))) with
+                                            | Ok instrs -> instrs
+                                            | Error e -> Crash.crash e
+                                        callToDisplay @ saveDisplayString @ printString @ releaseDisplayString
                                     | None ->
                                         Crash.crash $"Unsupported list element type in sum variant: {elemType}"
                                 | t -> Crash.crash $"Unsupported payload type in sum variant: {t}"
