@@ -427,6 +427,32 @@ let TempId 2 = f(42)
 return t2
 
 ---NAME---
+identity_bitand_self
+---INPUT---
+def f(x: Int64) : Int64 = x & x
+f(42)
+---EXPECTED---
+Function f:
+return t0
+
+Main:
+let TempId 2 = f(42)
+return t2
+
+---NAME---
+identity_bitor_self
+---INPUT---
+def f(x: Int64) : Int64 = x ||| x
+f(42)
+---EXPECTED---
+Function f:
+return t0
+
+Main:
+let TempId 2 = f(42)
+return t2
+
+---NAME---
 strength_reduce_float_div_2
 ---INPUT---
 def f(x: Float) : Float = x / 2.0

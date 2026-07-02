@@ -115,8 +115,10 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | Mul, x, FloatLiteral 1.0 -> Some (Atom x)
     | Div, x, FloatLiteral 1.0 -> Some (Atom x)
 
-    // Self-subtraction: x - x -> 0 (only for Int64, not Float due to NaN)
+    // Self-identities on integer operations. Float is excluded where NaN changes identity laws.
     | Sub, Var a, Var b when a = b -> Some (Atom (IntLiteral (Int64 0L)))
+    | BitAnd, Var a, Var b when a = b -> Some (Atom (Var a))
+    | BitOr, Var a, Var b when a = b -> Some (Atom (Var a))
 
     // Short-circuit boolean
     | And, BoolLiteral false, _ -> Some (Atom (BoolLiteral false))

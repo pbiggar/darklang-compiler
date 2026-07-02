@@ -18,6 +18,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, canonical boolean simplification with direct fit in MIR SSA constant folding; useful for eliminating provably constant branches.
 - Notes: Implemented in MIR constant folding during the second Phase 1 sandbox trial. Validation passed with `scripts/run-in-container ./run-tests` and `scripts/run-in-container ./benchmarks/quick_check.sh --quiet`.
 
+### Bitwise idempotence simplification
+
+- Optimization name: Bitwise idempotence simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical integer simplification that removes redundant bitwise operations in ANF before backend lowering.
+- Notes: Implemented for `x & x -> x` and `x ||| x -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Phase 2 sandbox trial. Covered by `identity_bitand_self` and `identity_bitor_self` in `src/Tests/optimization/anf.opt`.
+
 ## Strength reduction
 
 ### Multiplication by power-of-two lowering
