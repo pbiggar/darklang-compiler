@@ -66,6 +66,66 @@ let freshTempFReg (state: TempState) : LIR.FReg * TempState =
     let reg = LIR.FVirtual state.NextFRegId
     (reg, { state with NextFRegId = state.NextFRegId + 1 })
 
+let private rcSumShapeRegistryFromVariantRegistry (variantRegistry: MIR.VariantRegistry) : ANF.RcSumShapeRegistry =
+    variantRegistry
+    |> Map.map (fun _typeName typeVariants ->
+        { ANF.TypeParams = typeVariants.TypeParams
+          ANF.Payloads =
+            typeVariants.Variants
+            |> List.sortBy (fun variant -> variant.Tag)
+            |> List.map (fun variant -> variant.Tag, variant.Payload) })
+
+let private rcMetadataForPrintType
+    (variantRegistry: MIR.VariantRegistry)
+    (recordRegistry: MIR.RecordRegistry)
+    (typ: AST.Type)
+    : ANF.RcMetadata =
+    let anfRecordRegistry =
+        recordRegistry
+        |> Map.map (fun _typeName fields ->
+            fields |> List.map (fun field -> field.Name, field.Type))
+    { ANF.ReleasePlan = Some (ANF.rcReleasePlanOfTypeWithSums anfRecordRegistry (rcSumShapeRegistryFromVariantRegistry variantRegistry) typ)
+      ANF.SourceType = Some typ }
+
+let private releasePrintedValueFromReg
+    (variantRegistry: MIR.VariantRegistry)
+    (recordRegistry: MIR.RecordRegistry)
+    (reg: LIR.Reg)
+    (typ: AST.Type)
+    : LIR.Instr list =
+    let anfRecordRegistry =
+        recordRegistry
+        |> Map.map (fun _typeName fields ->
+            fields |> List.map (fun field -> field.Name, field.Type))
+    let shape = ANF.rcShapeOfTypeWithSums anfRecordRegistry (rcSumShapeRegistryFromVariantRegistry variantRegistry) typ
+    match ANF.rcShapeReleaseOperation shape with
+    | Some ANF.DynamicStringBuffer ->
+        [LIR.RefCountDecString (LIR.Reg reg)]
+    | Some ANF.DynamicBytesBuffer ->
+        [LIR.RefCountDecBytes (LIR.Reg reg)]
+    | Some (ANF.FixedSizeRoot (payloadSize, kind)) ->
+        let lirKind =
+            match kind with
+            | ANF.GenericHeap -> LIR.GenericHeap
+            | ANF.TaggedList -> LIR.TaggedList
+            | ANF.DictHeap -> LIR.DictHeap
+            | ANF.ClosureHeap -> LIR.ClosureHeap
+        [LIR.RefCountDec (reg, payloadSize, lirKind, Some (rcMetadataForPrintType variantRegistry recordRegistry typ))]
+    | None ->
+        []
+
+let private releasePrintedValue
+    (variantRegistry: MIR.VariantRegistry)
+    (recordRegistry: MIR.RecordRegistry)
+    (src: MIR.Operand)
+    (typ: AST.Type)
+    : LIR.Instr list =
+    match src with
+    | MIR.Register vreg ->
+        releasePrintedValueFromReg variantRegistry recordRegistry (vregToLIRReg vreg) typ
+    | _ ->
+        []
+
 /// Ensure operand is in a register (may need to load immediate)
 let ensureInRegister (operand: MIR.Operand) (state: TempState) : Result<LIR.Instr list * LIR.Reg * TempState, string> =
     match operand with
@@ -900,6 +960,10 @@ let selectInstr
 
     | MIR.Print (src, valueType) ->
         // Generate appropriate print instruction based on type
+        let finishPrint instrs =
+            Ok (instrs @ releasePrintedValue variantRegistry recordRegistry src valueType, state)
+        let finishPrintFromReg reg instrs =
+            Ok (instrs @ releasePrintedValueFromReg variantRegistry recordRegistry reg valueType, state)
         match valueType with
         | AST.TBool ->
             let lirSrc = convertOperand src
@@ -907,7 +971,7 @@ let selectInstr
                 match lirSrc with
                 | LIR.Reg (LIR.Physical LIR.X0) -> []
                 | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
-            Ok (moveToX0 @ [LIR.PrintBool (LIR.Physical LIR.X0)], state)
+            finishPrint (moveToX0 @ [LIR.PrintBool (LIR.Physical LIR.X0)])
         | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
         | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 ->
             let lirSrc = convertOperand src
@@ -915,19 +979,21 @@ let selectInstr
                 match lirSrc with
                 | LIR.Reg (LIR.Physical LIR.X0) -> []
                 | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
-            Ok (moveToX0 @ [LIR.PrintInt64 (LIR.Physical LIR.X0)], state)
+            finishPrint (moveToX0 @ [LIR.PrintInt64 (LIR.Physical LIR.X0)])
         | AST.TFloat64 ->
             // Float needs to be in D0 for printing
             match src with
             | MIR.FloatSymbol value ->
                 // Literal float - load into D0
-                Ok ([LIR.FLoad (LIR.FPhysical LIR.D0, value)
-                     LIR.PrintFloat (LIR.FPhysical LIR.D0)], state)
+                finishPrint
+                    [LIR.FLoad (LIR.FPhysical LIR.D0, value)
+                     LIR.PrintFloat (LIR.FPhysical LIR.D0)]
             | MIR.Register vreg ->
                 // Computed float - it's in an FVirtual register, move to D0 for printing
                 let srcFReg = vregToLIRFReg vreg
-                Ok ([LIR.FMov (LIR.FPhysical LIR.D0, srcFReg)
-                     LIR.PrintFloat (LIR.FPhysical LIR.D0)], state)
+                finishPrint
+                    [LIR.FMov (LIR.FPhysical LIR.D0, srcFReg)
+                     LIR.PrintFloat (LIR.FPhysical LIR.D0)]
             | _ ->
                 Error "Internal error: unexpected operand type for float print"
         | AST.TString | AST.TChar | AST.TInt128 | AST.TUInt128 ->
@@ -936,11 +1002,11 @@ let selectInstr
             // Int128/UInt128 are lowered as canonical decimal strings.
             match src with
             | MIR.StringSymbol value ->
-                Ok ([LIR.PrintString value], state)
+                finishPrint [LIR.PrintString value]
             | MIR.Register vreg ->
                 // Heap string (from concatenation): use PrintHeapString
                 let lirReg = vregToLIRReg vreg
-                Ok ([LIR.PrintHeapString lirReg], state)
+                finishPrint [LIR.PrintHeapString lirReg]
             | other ->
                 Error $"Print: Unexpected operand type for string: {other}"
         | AST.TTuple elemTypes ->
@@ -1008,7 +1074,7 @@ let selectInstr
             // Combine: save addr + "(" + elements + ")\n"
             let openParen = [LIR.PrintChars [byte '(']]
             let closeParenNewline = [LIR.PrintChars [byte ')'; byte '\n']]
-            Ok (saveTupleAddr @ openParen @ elemInstrs @ closeParenNewline, state)
+            finishPrintFromReg tupleAddrReg (saveTupleAddr @ openParen @ elemInstrs @ closeParenNewline)
 
         | AST.TList elemType when elemType = AST.TInt128 || elemType = AST.TUInt128 ->
             Crash.crash $"Unsupported Int128/UInt128 list element type for printing: {elemType}"
@@ -1021,7 +1087,7 @@ let selectInstr
                 | LIR.Reg (LIR.Physical LIR.X19) -> []
                 | LIR.Reg r -> [LIR.Mov (LIR.Physical LIR.X19, LIR.Reg r)]
                 | other -> [LIR.Mov (LIR.Physical LIR.X19, other)]
-            Ok (moveToX19 @ [LIR.PrintList (LIR.Physical LIR.X19, elemType)], state)
+            finishPrintFromReg (LIR.Physical LIR.X19) (moveToX19 @ [LIR.PrintList (LIR.Physical LIR.X19, elemType)])
 
         | AST.TSum (typeName, typeArgs) ->
             // Sum type printing: look up variants and generate PrintSum
@@ -1043,7 +1109,7 @@ let selectInstr
                     | LIR.Reg (LIR.Physical LIR.X19) -> []
                     | LIR.Reg r -> [LIR.Mov (LIR.Physical LIR.X19, LIR.Reg r)]
                     | other -> [LIR.Mov (LIR.Physical LIR.X19, other)]
-                Ok (moveToX19 @ [LIR.PrintSum (LIR.Physical LIR.X19, substitutedVariants)], state)
+                finishPrintFromReg (LIR.Physical LIR.X19) (moveToX19 @ [LIR.PrintSum (LIR.Physical LIR.X19, substitutedVariants)])
             | None ->
                 Crash.crash $"Missing sum variant metadata for printing sum type '{typeName}'"
 
@@ -1059,7 +1125,7 @@ let selectInstr
                     | _ -> [LIR.Mov (LIR.Physical LIR.X19, lirSrc)]
                 // Convert RecordField list to tuple format for LIR
                 let fieldTuples = fields |> List.map (fun f -> (f.Name, f.Type))
-                Ok (moveToX19 @ [LIR.PrintRecord (LIR.Physical LIR.X19, typeName, fieldTuples)], state)
+                finishPrintFromReg (LIR.Physical LIR.X19) (moveToX19 @ [LIR.PrintRecord (LIR.Physical LIR.X19, typeName, fieldTuples)])
             | None ->
                 Error $"Print: Record type '{typeName}' not found in recordRegistry"
         | AST.TDict _ ->
@@ -1069,14 +1135,14 @@ let selectInstr
                 match lirSrc with
                 | LIR.Reg (LIR.Physical LIR.X0) -> []
                 | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
-            Ok (moveToX0 @ [LIR.PrintInt64 (LIR.Physical LIR.X0)], state)
+            finishPrint (moveToX0 @ [LIR.PrintInt64 (LIR.Physical LIR.X0)])
         | AST.TUnit ->
             // Unit: print "()" with newline
-            Ok ([LIR.PrintChars [byte '('; byte ')'; byte '\n']], state)
+            finishPrint [LIR.PrintChars [byte '('; byte ')'; byte '\n']]
         | AST.TRuntimeError ->
             // Runtime-error expressions are normalized to Unit before print insertion,
             // but keep this branch explicit for exhaustiveness.
-            Ok ([LIR.PrintChars [byte '('; byte ')'; byte '\n']], state)
+            finishPrint [LIR.PrintChars [byte '('; byte ')'; byte '\n']]
         | AST.TFunction _ ->
             // Functions shouldn't be printed, but just print address
             let lirSrc = convertOperand src
@@ -1084,7 +1150,7 @@ let selectInstr
                 match lirSrc with
                 | LIR.Reg (LIR.Physical LIR.X0) -> []
                 | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
-            Ok (moveToX0 @ [LIR.PrintInt64 (LIR.Physical LIR.X0)], state)
+            finishPrint (moveToX0 @ [LIR.PrintInt64 (LIR.Physical LIR.X0)])
         | AST.TRawPtr ->
             // Raw pointer: print address
             let lirSrc = convertOperand src
@@ -1092,7 +1158,7 @@ let selectInstr
                 match lirSrc with
                 | LIR.Reg (LIR.Physical LIR.X0) -> []
                 | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
-            Ok (moveToX0 @ [LIR.PrintInt64 (LIR.Physical LIR.X0)], state)
+            finishPrint (moveToX0 @ [LIR.PrintInt64 (LIR.Physical LIR.X0)])
         | AST.TBytes ->
             // Bytes: print as "<N bytes>" where N is the length
             let lirSrc = convertOperand src
@@ -1101,7 +1167,7 @@ let selectInstr
                 | LIR.Reg (LIR.Physical LIR.X19) -> []
                 | LIR.Reg r -> [LIR.Mov (LIR.Physical LIR.X19, LIR.Reg r)]
                 | other -> [LIR.Mov (LIR.Physical LIR.X19, other)]
-            Ok (moveToX19 @ [LIR.PrintBytes (LIR.Physical LIR.X19)], state)
+            finishPrintFromReg (LIR.Physical LIR.X19) (moveToX19 @ [LIR.PrintBytes (LIR.Physical LIR.X19)])
         | AST.TVar _ ->
             // Type variables should be monomorphized away before reaching LIR
             Error "Internal error: Type variable reached MIR_to_LIR (should be monomorphized)"

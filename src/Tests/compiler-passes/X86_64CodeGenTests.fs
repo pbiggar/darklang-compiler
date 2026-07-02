@@ -256,6 +256,16 @@ let private assertCallsPlannedListHelper (context: string) (program: LIR.Program
         else
             Error $"{context} did not call a planned list helper; calls were {labels}"
 
+let private assertCallsPlannedDictHelper (context: string) (program: LIR.Program) : Result<unit, string> =
+    match generatedCallLabels program with
+    | Error e ->
+        Error e
+    | Ok labels ->
+        if labels |> List.exists (fun label -> label.StartsWith("__dark_dict_rc_dec_plan_")) then
+            Ok ()
+        else
+            Error $"{context} did not call a planned dict helper; calls were {labels}"
+
 let private rcMetadata (typ: AST.Type) : ANF.RcMetadata =
     {
         ANF.ReleasePlan = None
@@ -1680,6 +1690,50 @@ let testDictRefCountDecStringCollisionKeysAndValues () : Result<unit, string> =
     | Ok (_, _, stderr) ->
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected dict collision string keys and values to be released, got stderr '{stderr.Trim()}'"
+
+/// Test: x64 DictHeap RefCountDec releases managed string keys and recursive tuple/list leaf values.
+let testDictRefCountDecStringKeyTupleListValue () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let tupleType = AST.TTuple [AST.TString; listType]
+    let dictType = AST.TDict (AST.TString, tupleType)
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "key", LIR.StringSymbol "1")
+                LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "value", LIR.StringSymbol "1")
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 42L, None)
+                LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
+                LIR.HeapAlloc (LIR.Physical LIR.X6, 16)
+                LIR.HeapStore (LIR.Physical LIR.X6, 0, LIR.Reg (LIR.Physical LIR.X3), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X6, 8, LIR.Reg (LIR.Physical LIR.X5), Some listType)
+                LIR.HeapAlloc (LIR.Physical LIR.X7, 16)
+                LIR.HeapStore (LIR.Physical LIR.X7, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
+                LIR.HeapStore (LIR.Physical LIR.X7, 8, LIR.Reg (LIR.Physical LIR.X6), Some tupleType)
+                LIR.Mov (LIR.Physical LIR.X8, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X8, LIR.Physical LIR.X7, LIR.Physical LIR.X8)
+                LIR.RefCountDec (LIR.Physical LIR.X8, 0, LIR.DictHeap, Some (rcMetadata dictType))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected dict string keys and tuple/list values to be released, got stderr '{stderr.Trim()}'"
+
+/// Test: x64 DictHeap RefCountDec keeps recursive string-key tuple values on planned dict helpers.
+let testDictRefCountDecStringKeyTupleValueUsesPlannedHelper () : Result<unit, string> =
+    let dictType = AST.TDict (AST.TString, AST.TTuple [AST.TString; AST.TList AST.TInt64])
+    let program =
+        makeSimpleProgram
+            [
+                LIR.RefCountDec (LIR.Physical LIR.X0, 0, LIR.DictHeap, Some (rcMetadata dictType))
+            ]
+            LIR.Ret
+
+    assertCallsPlannedDictHelper "Dict string key tuple value" program
 
 /// Test: x64 DictHeap RefCountDec releases boxed sum leaf values with string payloads through release-plan metadata.
 let testDictRefCountDecSumStringValue () : Result<unit, string> =
@@ -5318,6 +5372,8 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR DictHeap RefCountDec releases tuple string/list/dict leaf values", testDictRefCountDecTupleStringListDictValue)
     ("LIR DictHeap RefCountDec releases string keys and tuple string/list/dict leaf values", testDictRefCountDecStringKeyTupleStringListDictValue)
     ("LIR DictHeap RefCountDec releases string collision keys and values", testDictRefCountDecStringCollisionKeysAndValues)
+    ("LIR DictHeap RefCountDec releases string keys and tuple/list values", testDictRefCountDecStringKeyTupleListValue)
+    ("LIR DictHeap RefCountDec uses planned helper for string keys and tuple/list values", testDictRefCountDecStringKeyTupleValueUsesPlannedHelper)
     ("LIR DictHeap RefCountDec releases sum string leaf values", testDictRefCountDecSumStringValue)
     ("LIR generic RefCountDec preserves live RAX across list field release", testGenericRefCountDecPreservesLiveRaxAcrossListFieldRelease)
     ("LIR generic RefCountDec preserves live RAX across dict field release", testGenericRefCountDecPreservesLiveRaxAcrossDictFieldRelease)

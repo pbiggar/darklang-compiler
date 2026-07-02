@@ -46,6 +46,11 @@ let a = (1, 1) in let b = (2, 2) in let c = (3, 3) in let d = (4, 4) in a.0 + b.
 let t = (1, 2, 3) in t.0 + t.1 + t.2 = stdout="6\n" stderr=""
 type Point3 = { x: Int64, y: Int64, z: Int64 } let p = Point3 { x = 1, y = 2, z = 3 } in p.x + p.y + p.z = stdout="6\n" stderr=""
 
+// Displaying managed final values should release the printed value after output
+type DisplayRecordLeak = { name: String, age: Int64 } DisplayRecordLeak { name = "record", age = 42 } = stdout="DisplayRecordLeak { name = record, age = 42 }\n" stderr=""
+type DisplaySumLeak = SumList of List<Int64> | SumString of String let items = [1, 2, 3] in SumList(items) = stdout="SumList([1, 2, 3])\n" stderr=""
+Bytes.fromList([65, 66, 67]) = stdout="<3 bytes>\n" stderr=""
+
 // ===================================================================
 // Function calls with heap values
 // ===================================================================
