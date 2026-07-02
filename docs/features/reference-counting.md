@@ -71,7 +71,10 @@ x64 has active root RC support and focused unit coverage for:
 - recursive release for covered fixed-block, list, boxed-sum, and closure
   capture shapes
 
-x64 still trails ARM64 for recursive payload release. See
+x64 no longer has generic RC disabled or an obvious root-helper gap. Its
+remaining risk is narrower: focused helper coverage is broad, but the project
+does not yet run a complete dual-backend E2E memory matrix, and some recursive
+dict/HAMT and arbitrary shape-plan cases remain documented in
 [`../x64-refcounting.md`](../x64-refcounting.md).
 
 ## Leak Checking
@@ -99,7 +102,8 @@ The major remaining work is:
 - generalize fixed-block recursive release
 - generalize tagged-list payload release without helper explosion
 - define dict/HAMT structural sharing and raw-node lifecycle semantics
-- bring x64 recursive release parity up to ARM64
+- keep x64 and ARM64 recursive release semantics in parity as shape-plan work
+  replaces helper-family special cases
 - expand mixed and nested sum payload coverage
 - distinguish static function references from heap closures
 - document or implement the deferred raw memory policy

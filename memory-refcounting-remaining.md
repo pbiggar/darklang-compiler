@@ -1138,6 +1138,7 @@ commits enabled:
   non-empty dynamic-buffer field combinations
 - tagged-list boxed sum tuple3 string/list/dict payload release
 - tagged-list boxed sum tuple4 closure/bytes/list/dict payload release
+- tagged-list boxed sum tuple4 closure/string/list/dict-list payload release
 - tagged-list boxed sum record4 closure/bytes/list/dict payload release
 - tagged-list boxed sum record dynamic string payload release
 - tagged-list boxed sum record3 dynamic string/bytes payload release for all
@@ -1158,9 +1159,13 @@ commits enabled:
 - generic fixed-block boxed sum tuple string/list/dict payload release
 - generic fixed-block boxed sum record string/list/dict payload release
 
-However, x64 is still not as well covered as ARM64 in the memory tests run in
-this environment, and docs still say recursive fixed-block/list payload release
-and dict/HAMT reclamation are remaining work.
+The current focused x64 suite covers the major root, fixed-block, list,
+boxed-sum, closure-capture, and selected dict-list value families. It does not
+prove full parity with ARM64 because the test harness still does not run every
+E2E memory case through both backends, and the backend still relies on
+helper-family specializations rather than a single shared shape-plan executor.
+Dict/HAMT reclamation remains separately constrained by raw-node lifecycle
+semantics.
 
 ### Remaining Gaps
 
@@ -1182,7 +1187,8 @@ Likely gaps:
 - list payload helper variants beyond the currently covered tuple2, exhaustive
   tuple3 dynamic-buffer combinations, mixed tuple3 string/list/dict and
   closure/list/dict shapes,
-  mixed tuple4 string/bytes/list/dict and closure/bytes/list/dict shapes,
+  mixed tuple4 string/bytes/list/dict, string/bytes/list/dict-list,
+  closure/bytes/list/dict, and closure/string/list/dict-list shapes,
   tuple4 nested tuple dynamic string, string/list/dict, and
   closure/bytes/list/dict shapes, record4 nested tuple dynamic string,
   string/list/dict, and closure/bytes/list/dict shapes, record1, exhaustive
@@ -1191,7 +1197,8 @@ Likely gaps:
   string/bytes/list/dict and closure/bytes/list/dict shapes, sum dynamic-buffer,
   sum-list/sum-dict,
   sum-closure, mixed sum-tuple3 string/list/dict variants, mixed sum-tuple4
-  string/bytes/list/dict and closure/bytes/list/dict variants,
+  string/bytes/list/dict, string/bytes/list/dict-list,
+  closure/bytes/list/dict, and closure/string/list/dict-list variants,
   sum-record3 string/list/dict variants, mixed sum-record4
   string/bytes/list/dict and closure/bytes/list/dict variants,
   list/closure/dict/string
@@ -1205,13 +1212,16 @@ Likely gaps:
 
 ### Remaining Tasks
 
-1. Add or run architecture-specific leak-check probes on x64 for every shape
-   currently covered by `stdlib-internal/refcounting.e2e`.
-2. Update `docs/x64-refcounting.md` with the actual current state.
-3. Port ARM64 fixed-block field release semantics to x64.
+1. Add or run architecture-specific leak-check probes on x64 whenever ARM64
+   gains a new recursive helper family.
+2. Keep `docs/x64-refcounting.md` current after every parity or shape-plan
+   slice.
+3. Replace backend helper-family matching with shared `RcReleasePlan`
+   execution where practical.
 4. Port ARM64 closure capture release semantics beyond the current direct
    dynamic-buffer, managed-root, and fixed-block probes to x64.
-5. Port any missing list helper variants to x64.
+5. Port any missing list helper variants to x64 until the shared shape-plan
+   executor replaces the need for per-family helpers.
 6. Confirm dynamic bytes literal layout if bytes gains a separate literal
    materialization path. x64 materialized string literals now carry the
    immutable sentinel and skip dynamic RC.

@@ -15,10 +15,12 @@ operations:
 - dict root `RefCountInc` and `RefCountDec` helpers are enabled
 - dynamic string and bytes RC lower through the dynamic-buffer path
 
-The remaining x64 work is parity for recursive payload release. ARM64 has more
-specialized container and fixed-block destructors today, so x64 should be
-treated as partially implemented for nested managed payloads until targeted
-x64 probes cover the full ARM64 memory matrix.
+The remaining x64 work is no longer "turn refcounting on". The backend has
+broad focused coverage for root helpers, recursive fixed-block payloads,
+tagged-list payloads, boxed sums, closures, and selected dict-value shapes.
+The remaining risk is that there is not yet a complete dual-backend E2E memory
+matrix, and arbitrary recursive payloads still depend on helper-family
+specializations instead of one shared shape-plan executor.
 
 ## Covered By Tests
 
@@ -112,7 +114,9 @@ x64 probes cover the full ARM64 memory matrix.
   dynamic field combinations
 - tagged-list boxed sum tuple3 string/list/dict payload release
 - tagged-list boxed sum tuple4 string/bytes/list/dict payload release
+- tagged-list boxed sum tuple4 string/bytes/list/dict-list payload release
 - tagged-list boxed sum tuple4 closure/bytes/list/dict payload release
+- tagged-list boxed sum tuple4 closure/string/list/dict-list payload release
 - tagged-list boxed sum record dynamic-buffer payload release, covering
   one-field records and all non-empty three-field dynamic-buffer combinations
 - tagged-list boxed sum record3 string/list/dict payload release
@@ -237,9 +241,9 @@ The main x64 gaps are:
   closure/bytes/list/dict shapes, covered record3
   string/bytes/list/dict and closure/list/dict shapes, covered record4
   string/bytes/list/dict and closure/bytes/list/dict shapes, broader
-  multi-field records and higher-arity tuples, and non-dynamic-buffer sum
-  payloads beyond the current list/dict/closure, sum tuple4, sum record4, and
-  fixed-block mixed shapes
+  multi-field records and higher-arity tuples, and arbitrary
+  non-dynamic-buffer sum payloads beyond the current list/dict/closure, sum
+  tuple3, sum tuple4, sum record3, sum record4, and fixed-block mixed shapes
 - dict/HAMT key and value recursive retain/release coverage
 - helper register preservation for values live across cleanup beyond the
   covered generic fixed-block dynamic-buffer, nested fixed-block, list, dict,
@@ -249,12 +253,10 @@ The main x64 gaps are:
 
 ## Recommended Next Steps
 
-1. Add x64 unit probes for each currently covered ARM64 fixed-block field
-   release shape.
-2. Port the ARM64 fixed-block field release plan to x64.
-3. Add x64 unit probes for list payload variants beyond the currently covered
-   tuple3/tuple4 and record3/record4 mixed managed shapes.
-4. Port the ARM64 list payload release helpers or, preferably, a shared
-   shape-driven release plan.
-5. Add x64 dict key/value shape matrix tests.
-6. Update this file after each parity slice lands.
+1. Keep adding x64 probes when ARM64 gains a new recursive helper family.
+2. Replace x64 helper-family selection with a shared shape-driven release plan
+   executor instead of continuing helper explosion.
+3. Add x64 dict key/value shape matrix tests for typed recursive values.
+4. Add a real dual-backend memory matrix if the test harness grows support for
+   forcing the backend independent of the host architecture.
+5. Update this file after each parity or shape-plan slice lands.
