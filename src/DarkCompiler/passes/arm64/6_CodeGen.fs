@@ -6710,6 +6710,10 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 Set.singleton dictRefCountDecListValueHelperLabel
             | ANF.RootRelease (_, ANF.DictHeap, _) ->
                 Set.singleton (dictDecHelperForReleasePlan valueRelease)
+            | ANF.RootRelease (_, ANF.GenericHeap, _) ->
+                Set.union
+                    (listDecHelperLabelsInReleasePlan valueRelease)
+                    (dictDecHelperLabelsInStaticFieldPlan valueRelease)
             | _ ->
                 Set.empty
         | Some other ->
