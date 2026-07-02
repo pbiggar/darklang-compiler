@@ -1744,11 +1744,12 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
         let childSkipFreelist = label $"{doneLabel}_child_{fieldOffset}_skip_freelist"
         let childFieldReleaseInstrs =
             match fieldReleasePlan with
-            | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
-            | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
+            | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
                 fieldReleases
                 |> List.collect (fun (ANF.FieldRelease (childFieldOffset, childFieldReleasePlan)) ->
                     releaseFieldPlanFrom ARM64Symbolic.X11 childFieldOffset childFieldReleasePlan childDone)
+            | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, _, variants)) ->
+                releaseBoxedSumVariantFieldsFrom ARM64Symbolic.X11 variants childDone
             | _ ->
                 []
         let releaseChildFields =
@@ -1871,6 +1872,47 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
         | _ ->
             []
 
+    and releaseBoxedSumVariantFieldsFrom
+        (baseReg: ARM64Symbolic.Reg)
+        (variants: ANF.RcBoxedSumVariantRelease list)
+        (doneLabel: string)
+        : ARM64Symbolic.Instr list =
+        let releaseVariant (variant: ANF.RcBoxedSumVariantRelease) : (int * ARM64Symbolic.Instr list) option =
+            let releaseInstrs =
+                variant.FieldReleases
+                |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
+                    releaseFieldPlanFrom baseReg fieldOffset fieldReleasePlan doneLabel)
+
+            if List.isEmpty releaseInstrs then
+                None
+            else
+                Some (variant.Tag, releaseInstrs)
+
+        let cases = variants |> List.choose releaseVariant
+
+        if List.isEmpty cases then
+            []
+        else
+            let sumDone = label $"{doneLabel}_sum_done"
+            [
+                ARM64Symbolic.LDR (ARM64Symbolic.X10, baseReg, 0s)
+            ]
+            @
+            (cases
+             |> List.mapi (fun index (tag, releaseInstrs) ->
+                let nextCase = label $"{doneLabel}_sum_variant_{index}_next"
+                [
+                    ARM64Symbolic.CMP_imm (ARM64Symbolic.X10, uint16 tag)
+                    ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, nextCase)
+                ]
+                @ releaseInstrs
+                @ [
+                    ARM64Symbolic.B_label sumDone
+                    ARM64Symbolic.Label nextCase
+                ])
+             |> List.concat)
+            @ [ARM64Symbolic.Label sumDone]
+
     let releaseDynamicCapture (fieldOffset: int) (doneLabel: string) : ARM64Symbolic.Instr list =
         let bufferDone = label $"{doneLabel}_dynamic_capture_{fieldOffset}_done"
         let refcountUpdate =
@@ -1915,6 +1957,8 @@ let private generateClosureRefCountDecHelper (ctx: CodeGenContext) : ARM64Symbol
             fieldReleases
             |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
                 releaseFieldPlanFrom ARM64Symbolic.X8 fieldOffset fieldReleasePlan doneLabel)
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, _, variants)) ->
+            releaseBoxedSumVariantFieldsFrom ARM64Symbolic.X8 variants doneLabel
         | _ ->
             []
 

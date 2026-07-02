@@ -42,6 +42,9 @@ Latest update:
   pinned case is a captured tuple containing a nested tuple with a bytes field;
   before the fix, the closure helper decremented the nested tuple root but did
   not release the bytes field inside it.
+- ARM64 closure capture cleanup now dispatches boxed-sum variant payload
+  release plans as well. A captured boxed sum with a bytes payload now releases
+  that payload before the captured sum root is freed.
 - x64 `Dict<String, Int64>` leaf release now decrements dynamic string keys
   using a release-plan-selected dict helper variant. The new
   `X86_64CodeGenTests.testDictRefCountDecStringKey` first exposed the old
@@ -976,7 +979,8 @@ capture, returned record/tuple, and several list/dict/string combinations.
 ARM64 generic fixed-block cleanup now consumes release plans for nested
 fixed-block and boxed-sum child roots even when those child roots have no
 managed fields of their own. ARM64 closure capture cleanup now consumes nested
-fixed-block child release plans before freeing captured child roots.
+fixed-block child release plans before freeing captured child roots, and it
+dispatches captured boxed-sum variant payload release plans.
 
 ### Remaining Gaps
 
