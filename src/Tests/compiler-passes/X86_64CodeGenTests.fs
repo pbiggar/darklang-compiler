@@ -287,12 +287,26 @@ let private makeSimpleProgramWithRecords (instrs: LIR.Instr list) (term: LIR.Ter
 let private makeSimpleProgram (instrs: LIR.Instr list) (term: LIR.Terminator) : LIR.Program =
     makeSimpleProgramWithRecords instrs term Map.empty
 
-let private renameProgramEntryFunction (name: string) (program: LIR.Program) : LIR.Program =
-    match program with
-    | LIR.Program (func :: rest, variants, records) ->
-        LIR.Program ({ func with Name = name } :: rest, variants, records)
-    | LIR.Program ([], _, _) ->
-        Crash.crash "Test fixture expected a program with an entry function"
+let private runInNamedFunction (name: string) (instrs: LIR.Instr list) (term: LIR.Terminator) : LIR.Program =
+    match makeSimpleProgram [LIR.Call (LIR.Physical LIR.X0, name, [])] LIR.Ret with
+    | LIR.Program ([entryFunc], variants, records) ->
+        let calleeLabel = LIR.Label $"{name}_entry"
+        let callee : LIR.Function = {
+            Name = name
+            TypedParams = []
+            CFG = {
+                Entry = calleeLabel
+                Blocks =
+                    Map.ofList [
+                        (calleeLabel, { Label = calleeLabel; Instrs = instrs |> List.map (completeRcInstrMetadata records); Terminator = term })
+                    ]
+            }
+            StackSize = 0
+            UsedCalleeSaved = []
+        }
+        LIR.Program ([entryFunc; callee], variants, records)
+    | _ ->
+        Crash.crash "Test fixture expected a single entry function"
 
 let private makeEmptyFunction (name: string) (typedParams: LIR.TypedLIRParam list) : LIR.Function =
     let label = LIR.Label $"{name}_entry"
@@ -2201,7 +2215,8 @@ let testTaggedListRefCountDecClosurePayload () : Result<unit, string> =
 let testTaggedListRefCountDecClosurePayloadInStdlibFunction () : Result<unit, string> =
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
     let program =
-        makeSimpleProgram
+        runInNamedFunction
+            "Stdlib.List.__mapHelper_i64_fn_i64_acc_fn_i64"
             [
                 LIR.ClosureAlloc (LIR.Physical LIR.X2, "Stdlib.List.__mapHelper_i64_fn_i64_acc_fn_i64", [])
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
@@ -2211,10 +2226,11 @@ let testTaggedListRefCountDecClosurePayloadInStdlibFunction () : Result<unit, st
                 LIR.RefCountDec (LIR.Physical LIR.X4, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList closureType))))
             ]
             LIR.Ret
-        |> renameProgramEntryFunction "Stdlib.List.__mapHelper_i64_fn_i64_acc_fn_i64"
 
     match runLIRProgramFullWithOptions program true with
     | Error e -> Error e
+    | Ok (exitCode, _, stderr) when exitCode <> 0 ->
+        Error $"Expected stdlib list closure payload release to exit 0, got {exitCode}, stderr '{stderr.Trim()}'"
     | Ok (_, _, stderr) ->
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected stdlib list closure payload release to balance leak counter, got stderr '{stderr.Trim()}'"
