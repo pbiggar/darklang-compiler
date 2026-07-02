@@ -8,8 +8,6 @@ def collatzSteps(n: Int64, steps: Int64) : Int64 =
     if n == 1 then steps
     else if n % 2 == 0 then collatzSteps(n / 2, steps + 1)
     else collatzSteps(3 * n + 1, steps + 1)
-
-collatzSteps(7, 0)
 ---EXPECTED---
 collatzSteps:
   StackSize: 0
@@ -40,20 +38,6 @@ collatzSteps:
     CondBranch(EQ, Label "collatzSteps_L0", Label "collatzSteps_L1")
   Label "collatzSteps_entry":
     Jump(Label "collatzSteps_body")
-
-_start:
-  StackSize: 0
-  UsedCalleeSaved: []
-  Label "_start_body":
-    SaveRegs([], [])
-    ArgMoves(X0 <- Imm 7, X1 <- Imm 0)
-    v10012 <- Call(collatzSteps, [Imm 7, Imm 0])
-    RestoreRegs([], [])
-    v10012 <- Mov(Reg X0)
-    X0 <- Mov(Reg v10012)
-    PrintInt64(X0)
-    X0 <- Mov(Reg v10012)
-    Ret
 
 ---NAME---
 licm_skip_loop_with_call
@@ -89,8 +73,6 @@ def helper(x: Int64) : Int64 =
 def loop(n: Int64, acc: Int64) : Int64 =
     if n == 0 then acc
     else loop(n - 1, helper(3 * acc))
-
-loop(2, 0)
 ---EXPECTED---
 helper:
   StackSize: 0
@@ -150,17 +132,3 @@ loop:
     BranchZero(v10063, Label "loop_L2", Label "loop_L1")
   Label "loop_entry":
     Jump(Label "loop_body")
-
-_start:
-  StackSize: 0
-  UsedCalleeSaved: []
-  Label "_start_body":
-    SaveRegs([], [])
-    ArgMoves(X0 <- Imm 2, X1 <- Imm 0)
-    v10058 <- Call(loop, [Imm 2, Imm 0])
-    RestoreRegs([], [])
-    v10058 <- Mov(Reg X0)
-    X0 <- Mov(Reg v10058)
-    PrintInt64(X0)
-    X0 <- Mov(Reg v10058)
-    Ret

@@ -35,6 +35,23 @@ let private typeCheckWithStdlib (stdlib: CompilerLibrary.StdlibResult) (ast: AST
     | Error e -> Error $"Type error: {TypeChecking.typeErrorToString e}"
     | Ok (programType, typedAst, _env) -> Ok (programType, typedAst)
 
+let private hasTopLevelExpression (AST.Program topLevels: AST.Program) : bool =
+    topLevels
+    |> List.exists (function
+        | AST.Expression _ -> true
+        | AST.FunctionDef _ | AST.TypeDef _ -> false)
+
+let private addSyntheticMainExpressionIfNeeded (AST.Program topLevels: AST.Program) : AST.Program * bool =
+    if hasTopLevelExpression (AST.Program topLevels) then
+        (AST.Program topLevels, false)
+    else
+        (AST.Program (topLevels @ [ AST.Expression (AST.Int64Literal 0L) ]), true)
+
+let private parseOptimizationSource (source: string) : Result<AST.Program * bool, string> =
+    match Parser.parseString true source with
+    | Error e -> Error $"Parse error: {e}"
+    | Ok ast -> Ok (addSyntheticMainExpressionIfNeeded ast)
+
 let private convertTypedProgram (typedAst: AST.Program) : Result<AST_to_ANF.ConversionResult, string> =
     let moduleRegistry = Stdlib.buildModuleRegistry ()
     let monomorphized = AST_to_ANF.monomorphize typedAst
@@ -74,12 +91,51 @@ let normalizeIR (ir: string) : string =
     |> Array.filter (fun line -> line.Length > 0)
     |> String.concat "\n"
 
+let private withoutSyntheticANFMain (ir: string) : string =
+    let suffix = "\n\nMain:\nreturn 0"
+    if ir.EndsWith(suffix, StringComparison.Ordinal) then
+        ir.Substring(0, ir.Length - suffix.Length)
+    else
+        ir
+
+let private formatANFForOptimizationTest (syntheticMain: bool) (program: ANF.Program) : string =
+    let formatted = formatANF program
+    if syntheticMain then
+        withoutSyntheticANFMain formatted
+    else
+        formatted
+
+let private removeSyntheticMIREntry (MIR.Program (functions, variants, records)) : MIR.Program =
+    MIR.Program (
+        functions |> List.filter (fun func -> func.Name <> "_start"),
+        variants,
+        records
+    )
+
+let private formatMIRForOptimizationTest (syntheticMain: bool) (program: MIR.Program) : string =
+    if syntheticMain then
+        formatMIR (removeSyntheticMIREntry program)
+    else
+        formatMIR program
+
+let private removeSyntheticLIREntry (LIR.Program (functions, variants, records)) : LIR.Program =
+    LIR.Program (
+        functions |> List.filter (fun func -> func.Name <> "_start"),
+        variants,
+        records
+    )
+
+let private formatLIRForOptimizationTest (syntheticMain: bool) (program: LIR.Program) : string =
+    if syntheticMain then
+        formatLIR (removeSyntheticLIREntry program)
+    else
+        formatLIR program
+
 /// Compile source and get ANF after optimization
 let getOptimizedANF (stdlib: CompilerLibrary.StdlibResult) (source: string) : Result<string, string> =
-    // Parse source
-    match Parser.parseString true source with
-    | Error e -> Error $"Parse error: {e}"
-    | Ok ast ->
+    match parseOptimizationSource source with
+    | Error e -> Error e
+    | Ok (ast, syntheticMain) ->
         // Type check
         match typeCheckWithStdlib stdlib ast with
         | Error e -> Error e
@@ -96,14 +152,13 @@ let getOptimizedANF (stdlib: CompilerLibrary.StdlibResult) (source: string) : Re
                         convResult.Program
 
                 // Pretty-print the result
-                Ok (formatANF optimized)
+                Ok (formatANFForOptimizationTest syntheticMain optimized)
 
 /// Compile source and get MIR after optimization
 let getOptimizedMIR (stdlib: CompilerLibrary.StdlibResult) (source: string) : Result<string, string> =
-    // Parse source
-    match Parser.parseString true source with
-    | Error e -> Error $"Parse error: {e}"
-    | Ok ast ->
+    match parseOptimizationSource source with
+    | Error e -> Error e
+    | Ok (ast, syntheticMain) ->
         // Type check
         match typeCheckWithStdlib stdlib ast with
         | Error e -> Error e
@@ -140,14 +195,13 @@ let getOptimizedMIR (stdlib: CompilerLibrary.StdlibResult) (source: string) : Re
 
                         // SSA form is now preserved (phi resolution happens in register allocation)
                         // Pretty-print the optimized MIR (still in SSA form)
-                        Ok (formatMIR optimizedMir)
+                        Ok (formatMIRForOptimizationTest syntheticMain optimizedMir)
 
 /// Compile source and get LIR after optimization
 let getOptimizedLIR (stdlib: CompilerLibrary.StdlibResult) (source: string) : Result<string, string> =
-    // Parse source
-    match Parser.parseString true source with
-    | Error e -> Error $"Parse error: {e}"
-    | Ok ast ->
+    match parseOptimizationSource source with
+    | Error e -> Error e
+    | Ok (ast, syntheticMain) ->
         // Type check
         match typeCheckWithStdlib stdlib ast with
         | Error e -> Error e
@@ -188,7 +242,7 @@ let getOptimizedLIR (stdlib: CompilerLibrary.StdlibResult) (source: string) : Re
                             // LIR optimization
                             let optimizedLir = LIR_Peephole.optimizeProgram lirProgram
                             // Pretty-print
-                            Ok (formatLIR optimizedLir)
+                            Ok (formatLIRForOptimizationTest syntheticMain optimizedLir)
 
 /// Run a single optimization test
 let runOptimizationTest (stdlib: CompilerLibrary.StdlibResult) (test: OptimizationTest) : OptimizationTestResult =

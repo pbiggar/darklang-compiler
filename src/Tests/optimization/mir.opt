@@ -9,8 +9,6 @@ def loop(n: Int64, acc: Int64) : Int64 =
     else
         let h = __hash<String>("hello") in
         loop(n - 1, acc + h)
-
-loop(3, 0)
 ---EXPECTED---
 Function loop:
   loop_entry:
@@ -29,11 +27,6 @@ Function loop:
     v10013 <- Phi([(v0, loop_entry), (v10018, loop_L1)]) : TInt64
     v10014 <- v10013 < 1 : TInt64
     branch v10014 ? loop_L2 : loop_L1
-Function _start:
-  _start_body:
-    v10008 <- Call(loop, [3, 0])
-    Print(v10008, type=TInt64)
-    ret v10008
 
 ---NAME---
 licm_skip_constant_move
@@ -41,8 +34,6 @@ licm_skip_constant_move
 def loop(n: Int64) : Int64 =
     if n < 1 then 0
     else loop(1)
-
-loop(2)
 ---EXPECTED---
 Function loop:
   loop_entry:
@@ -56,11 +47,6 @@ Function loop:
     v10004 <- Phi([(v0, loop_entry), (v10006, loop_L1)]) : TInt64
     v10005 <- v10004 < 1 : TInt64
     branch v10005 ? loop_L2 : loop_L1
-Function _start:
-  _start_body:
-    v10003 <- Call(loop, [2])
-    Print(v10003, type=TInt64)
-    ret v10003
 
 ---NAME---
 const_branch_elimination_bitand
@@ -68,38 +54,24 @@ const_branch_elimination_bitand
 def pick(n: Int64) : Int64 =
     let masked = n & 0 in
     if masked == 0 then 1 else 2
-
-pick(42)
 ---EXPECTED---
 Function pick:
   pick_entry:
     jump pick_L0
   pick_L0:
     ret 1
-Function _start:
-  _start_body:
-    v10004 <- Call(pick, [42])
-    Print(v10004, type=TInt64)
-    ret v10004
 
 ---NAME---
 const_branch_elimination_self_eq
 ---INPUT---
 def pick(n: Int64) : Int64 =
     if n == n then 1 else 2
-
-pick(42)
 ---EXPECTED---
 Function pick:
   pick_entry:
     jump pick_L0
   pick_L0:
     ret 1
-Function _start:
-  _start_body:
-    v10002 <- Call(pick, [42])
-    Print(v10002, type=TInt64)
-    ret v10002
 
 ---NAME---
 licm_hoist_tuple_load
@@ -109,8 +81,6 @@ def loop(n: Int64, acc: Int64, t: (Int64, Int64)) : Int64 =
     else
         let v = t.0 in
         loop(n - 1, acc + v, t)
-
-loop(3, 0, (10, 20))
 ---EXPECTED---
 Function loop:
   loop_entry:
@@ -129,12 +99,3 @@ Function loop:
     v10021 <- Phi([(v0, loop_entry), (v10029, loop_L1)]) : TInt64
     v10022 <- v10021 < 1 : TInt64
     branch v10022 ? loop_L2 : loop_L1
-Function _start:
-  _start_body:
-    v10010 <- HeapAlloc(16)
-    HeapStore(v10010, 0, 10)
-    HeapStore(v10010, 8, 20)
-    v10011 <- Call(loop, [3, 0, v10010])
-    RefCountDec(v10010, size=16, kind=generic)
-    Print(v10011, type=TInt64)
-    ret v10011
