@@ -1,22 +1,35 @@
-# Classic Optimizations
+# Classic Optimizations Backlog
 
 Persistent backlog for audit-driven classic compiler optimization work.
 
-## Algebraic Simplification
+## Algebraic simplification
+
+### Modulo by one elimination
 
 - Optimization name: Modulo by one elimination
 - Taxonomy category: Algebraic simplification
-- Priority/rationale: Small, low-risk canonical simplification that removes a runtime remainder operation when the divisor is the literal `1`.
-- Notes: Implemented in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during sandbox testing. Covered by `identity_mod_one` in `src/Tests/optimization/anf.opt`; quick benchmark check did not report a regression.
+- Priority/rationale: Small, low-risk canonical simplification that removes a runtime remainder operation when the divisor is the literal `1`. Low-risk canonical identity; previously used as the first Phase 1 sandbox trial target.
+- Notes: Implemented in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during sandbox testing. Covered by `identity_mod_one` in `src/Tests/optimization/anf.opt`; quick benchmark check did not report a regression. Prior sandbox trial implemented `x % 1 -> 0` in ANF optimization.
 
-## Strength Reduction
+### Integer self-comparison simplification
+
+- Optimization name: Integer self-comparison simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, canonical boolean simplification with direct fit in MIR SSA constant folding; useful for eliminating provably constant branches.
+- Notes: Implemented in MIR constant folding during the second Phase 1 sandbox trial. Validation passed with `scripts/run-in-container ./run-tests` and `scripts/run-in-container ./benchmarks/quick_check.sh --quiet`.
+
+## Strength reduction
+
+### Multiplication by power-of-two lowering
 
 - Optimization name: Multiplication by power-of-two lowering
 - Taxonomy category: Strength reduction
 - Priority/rationale: Existing ANF optimization; keep as catalog evidence rather than a candidate for this iteration.
 - Notes: Implemented in `tryStrengthReduce`.
 
-## Dead Code Elimination
+## Dead code elimination
+
+### Unused ANF binding elimination
 
 - Optimization name: Unused ANF binding elimination
 - Taxonomy category: Dead code elimination

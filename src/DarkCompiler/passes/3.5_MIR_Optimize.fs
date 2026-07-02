@@ -1002,6 +1002,23 @@ let euclideanMod (a: int64) (b: int64) : int64 =
     elif (remainder > 0L && b < 0L) || (remainder < 0L && b > 0L) then remainder + b
     else remainder
 
+let isReflexiveEqualityType (opType: AST.Type) : bool =
+    match opType with
+    | AST.TInt8
+    | AST.TInt16
+    | AST.TInt32
+    | AST.TInt64
+    | AST.TInt128
+    | AST.TUInt8
+    | AST.TUInt16
+    | AST.TUInt32
+    | AST.TUInt64
+    | AST.TUInt128
+    | AST.TBool
+    | AST.TChar
+    | AST.TUnit -> true
+    | _ -> false
+
 /// Constant Folding for MIR
 /// Evaluate operations on constants at compile time
 let tryFoldBinOp (op: BinOp) (left: Operand) (right: Operand) (opType: AST.Type) : Operand option =
@@ -1021,6 +1038,8 @@ let tryFoldBinOp (op: BinOp) (left: Operand) (right: Operand) (opType: AST.Type)
     | Gt, Int64Const a, Int64Const b -> Some (BoolConst (a > b))
     | Lte, Int64Const a, Int64Const b -> Some (BoolConst (a <= b))
     | Gte, Int64Const a, Int64Const b -> Some (BoolConst (a >= b))
+    | Eq, x, y when x = y && isReflexiveEqualityType opType -> Some (BoolConst true)
+    | Neq, x, y when x = y && isReflexiveEqualityType opType -> Some (BoolConst false)
 
     // Boolean operations
     | And, BoolConst a, BoolConst b -> Some (BoolConst (a && b))

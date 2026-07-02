@@ -83,6 +83,25 @@ Function _start:
     ret v10004
 
 ---NAME---
+const_branch_elimination_self_eq
+---INPUT---
+def pick(n: Int64) : Int64 =
+    if n == n then 1 else 2
+
+pick(42)
+---EXPECTED---
+Function pick:
+  pick_entry:
+    jump pick_L0
+  pick_L0:
+    ret 1
+Function _start:
+  _start_body:
+    v10002 <- Call(pick, [42])
+    Print(v10002, type=TInt64)
+    ret v10002
+
+---NAME---
 licm_hoist_tuple_load
 ---INPUT---
 def loop(n: Int64, acc: Int64, t: (Int64, Int64)) : Int64 =
