@@ -55,6 +55,8 @@ specializations instead of one shared shape-plan executor.
   sum-aware `RcReleasePlan` metadata is present
 - nested generic boxed-sum child mixed-payload cleanup dispatch by active
   variant tag when sum-aware `RcReleasePlan` metadata is present
+- closure capture mixed boxed-sum cleanup dispatch by active variant tag when
+  sum-aware `RcReleasePlan` metadata is present
 - generic fixed-block dict root field release
 - generic fixed-block dynamic-buffer, nested fixed-block, list, dict, and
   closure field release preserving live `RAX` across cleanup
@@ -241,8 +243,8 @@ The main x64 gaps are:
   fixed-block/string-list-dict/string-bytes-list-dict release paths
 - closure capture recursive release coverage beyond the current direct dynamic,
   root, tuple-string-list-dict, record-string-list-dict,
-  sum-tuple-string-list-dict, sum-record-string-list-dict, and fixed-block
-  capture probes
+  mixed-sum, sum-tuple-string-list-dict, sum-record-string-list-dict, and
+  fixed-block capture probes
 - list helper variants for deeper nested tuple/record payloads beyond the
   covered tuple2 nested tuple dynamic-buffer, list/dict, dict, closure,
   string/list/dict, and string/bytes/list/dict shapes, covered tuple3
