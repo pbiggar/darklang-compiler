@@ -864,6 +864,11 @@ let rec private rcReleasePlanContains
             |> List.exists (function
                 | ANF.FieldRelease (_, fieldRelease) ->
                     rcReleasePlanContains predicate fieldRelease)
+        | ANF.RootRelease (_, _, ANF.DictPayloadRelease (keyRelease, valueRelease)) ->
+            rcReleasePlanContains predicate keyRelease
+            || rcReleasePlanContains predicate valueRelease
+        | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease elementRelease) ->
+            rcReleasePlanContains predicate elementRelease
         | _ ->
             false
 
