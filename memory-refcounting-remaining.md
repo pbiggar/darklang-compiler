@@ -96,6 +96,10 @@ Latest update:
   tuple leaf values containing `String`, `List<Int64>`, and
   `Dict<Int64, Int64>` fields are now pinned by
   `X86_64CodeGenTests.testDictRefCountDecStringKeyTupleStringListDictValue`.
+  The narrower `Dict<String, (String, List<Int64>)>` leaf shape is now pinned
+  by `X86_64CodeGenTests.testDictRefCountDecStringKeyTupleListValue`, and
+  `X86_64CodeGenTests.testDictRefCountDecStringKeyTupleValueUsesPlannedHelper`
+  ensures that shape stays on the planned dict helper path.
 - x64 now has an explicit stdlib-context closure-list release probe. The
   ARM64 bug was an architecture-local helper-selection guard that excluded
   `Stdlib.*` functions; x64 did not have that guard, and
@@ -1012,6 +1016,11 @@ String ownership is now substantially better than in the original findings:
   instead of first building a temporary `List<String>`
 - `Crypto.bytesToHex` is covered as a dynamic display-string allocator over a
   bytes source
+- top-level display of records, sums with list payloads, and bytes now releases
+  the printed managed value after output. The shared MIR-to-LIR print lowering
+  appends shape-derived decrefs for managed final values, and the ARM64
+  `PrintSum` path releases the temporary list display string after the print
+  syscall.
 
 ### Remaining Gaps
 
@@ -1020,8 +1029,8 @@ Still under-proven or not fully implemented:
 - direct intrinsic coverage for `FloatToString`; the ARM64 helper has been
   patched, but current user-level `Stdlib.Float.toString` does not exercise
   that backend intrinsic directly
-- display/toString paths beyond the covered list display and
-  `Stdlib.Float.toString` cases
+- display/toString paths beyond the covered list display, top-level
+  record/sum/bytes display, and `Stdlib.Float.toString` cases
 - success and error strings for file operations beyond the currently covered
   read success, read error, unaligned read, write success/error, and append
   error cases
@@ -1050,8 +1059,8 @@ Known string-producing operations include:
 - `FloatToString` backend intrinsic path
 - remaining file operation success/error strings not yet covered by leak tests
   outside the currently covered read/write/append/delete/set-executable paths
-- display strings for records, sums, bytes, and display paths not covered by
-  the current list-display tests
+- display strings for nested display values and display paths not covered by
+  the current list, top-level record, top-level sum, and top-level bytes tests
 - runtime error message strings
 
 ### Remaining Tasks
@@ -1059,7 +1068,7 @@ Known string-producing operations include:
 1. Add direct leak-check coverage for the backend `FloatToString` intrinsic if
    or when it is exposed through source-level code generation.
 2. Add leak-check tests for remaining display paths that allocate strings,
-   especially records, sums, bytes, and nested display values.
+   especially nested record, sum, bytes, list, and dict display values.
 3. Add leak-check tests for any future file-operation string result payloads;
    read, write, append, delete, and set-executable paths are now covered.
 4. Audit remaining backend runtime helpers so every heap string initializes
@@ -1244,17 +1253,26 @@ leaf `List` values, closure values, nested dict values, tuple values of
 `(String, List<Int64>)`, tuple values of
 `(String, List<Int64>, Dict<Int64, Int64>)`, and the current
 `Dict<Int64, List<Int64>>` matrix used by list, nested tuple, boxed-sum, and
-nested dict payload tests. Future fixes should add a serialized shape-plan path
-or more complete typed dict release helpers for the remaining arbitrary leaf and
-collision payload shapes. This is separate from the later raw-allocation policy
-decision.
+nested dict payload tests. ARM64 also now has planned-helper selection coverage
+for `Dict<String, (String, List<Int64>)>` and a symbolic guard that its planned
+helper emits the generic collision-payload release loop. x64 now has leaf
+runtime coverage and planned-helper selection coverage for that same
+`Dict<String, (String, List<Int64>)>` shape. A runtime x64 collision probe for
+dynamic string keys paired with `(String, List<Int64>)` tuple values still
+leaked all pair payloads (`leaks: 9`), so that broader collision shape remains
+open instead of being kept as a passing test. Future fixes should add a
+serialized shape-plan path or more complete typed dict release helpers for the
+remaining arbitrary leaf and collision payload shapes. This is separate from
+the later raw-allocation policy decision.
 
 ### Remaining Tasks
 
 1. Add key/value shape matrix tests:
 
-   - collision/leaf cases where managed keys and values both require recursive
-     release
+   - x64 collision cases where dynamic keys and recursive fixed-block values
+     both require release
+   - remaining leaf and collision cases where managed keys and values both
+     require recursive release
 
 2. Audit `Stdlib.__HAMT` raw node allocations and helper-generated releases.
 3. Define whether HAMT raw nodes are refcounted, copied, or uniquely owned.
@@ -1901,7 +1919,7 @@ appropriate.
 - direct backend-intrinsic `FloatToString`, if it becomes source-reachable
 - remaining file-operation success/error string payloads beyond covered read
   success/error, unaligned read, write success/error, and append error cases
-- display string generation for record/sum/bytes and nested display values
+- display string generation for nested record/sum/bytes/list/dict values
 - nested record/list/dict string combinations
 
 ### Fixed Blocks
@@ -1921,8 +1939,10 @@ appropriate.
 
 - keep old root and new root live after update
 - keep old root and removed root live after remove
-- dict key/value leaf and collision release where both sides have managed
-  payloads
+- x64 dict collision release for dynamic string keys paired with recursive
+  tuple/list values
+- remaining dict key/value leaf and collision release where both sides have
+  managed payloads
 
 ### x64
 

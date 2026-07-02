@@ -194,8 +194,10 @@ not yet proven to the same depth as ARM64.
 The next dict parity work should add architecture-targeted tests for:
 
 - persistent sharing across update/remove
-- string keys and values
-- list, record, tuple, closure, bytes, and nested dict values
+- collision release for dynamic string keys paired with recursive fixed-block
+  values
+- remaining record, closure, bytes, and nested dict key/value shapes not already
+  covered by the current leaf and planned-helper probes
 
 ## Dynamic Buffers
 
@@ -217,7 +219,9 @@ The main x64 gaps are:
 
 - dict/HAMT key and value recursive retain/release coverage beyond the current
   dynamic-buffer key/value, list-value, nested-dict-value, dict-list-value, and
-  tuple-value probes
+  tuple-value probes. `Dict<String, (String, List<Int64>)>` is now covered for
+  leaf runtime release and planned-helper selection, but the corresponding x64
+  collision runtime case is still open.
 - a complete dual-backend E2E memory matrix that can force ARM64 and x64
   independently of the host architecture
 - helper register-preservation probes for values live across cleanup beyond the
@@ -240,11 +244,15 @@ The main x64 gaps are:
    `Dict<String, Dict<Int64, Int64>>`, and
    `Dict<String, Dict<Int64, List<Int64>>>` release are covered. Dynamic
    string keys paired with tuple leaf values containing
-   `String/List<Int64>/Dict<Int64, Int64>` fields are also covered.
+   `String/List<Int64>/Dict<Int64, Int64>` fields are also covered, and the
+   narrower `String/List<Int64>` tuple shape now has both leaf runtime coverage
+   and a planned-helper selection guard. ARM64 has the matching helper-selection
+   guard plus collision generic-payload loop coverage for that shape.
 2. Keep fixed-block and boxed-sum list payload cleanup on the planned
    `RcReleasePlan` path; do not reintroduce tuple/record/sum helper matrices.
    Tuple and record payload guard tests now pin this on both backends.
-3. Add x64 dict key/value shape matrix tests for typed recursive values.
+3. Add x64 dict collision tests for typed recursive values, starting with the
+   known-open dynamic string key plus `(String, List<Int64>)` tuple value case.
 4. Add a real dual-backend memory matrix if the test harness grows support for
    forcing the backend independent of the host architecture.
 5. Update this file after each parity or shape-plan slice lands.
