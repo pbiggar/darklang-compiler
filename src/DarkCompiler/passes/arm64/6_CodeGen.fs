@@ -967,24 +967,25 @@ let private generateListRefCountDecHelperWith
         | _ ->
             []
 
+    let managedLeafFieldReleasePlan (fieldType: AST.Type) : ANF.RcReleasePlan option =
+        match fieldType with
+        | AST.TRecord (name, _) when not (Map.containsKey name ctx.RecordRegistry) ->
+            None
+        | _ ->
+            Some (ANF.rcReleasePlanOfTypeWithSums ctx.RecordRegistry ctx.SumShapeRegistry fieldType)
+
     let releaseManagedLeafFields =
         managedLeafFieldTypes
         |> List.mapi (fun index fieldType ->
             let fieldOffset = index * 8
-            match fieldType with
-            | AST.TString
-            | AST.TBytes ->
-                releaseDynamicBufferLeafField fieldOffset
-            | AST.TList _ ->
-                releaseListLeafField fieldOffset fieldType
-            | AST.TDict _ ->
-                releaseDictLeafField fieldOffset fieldType
-            | AST.TFunction _ ->
-                releaseClosureLeafField fieldOffset
-            | AST.TTuple _
-            | AST.TRecord _ ->
-                releaseFixedBlockLeafField fieldOffset fieldType
-            | _ ->
+            match managedLeafFieldReleasePlan fieldType with
+            | Some fieldReleasePlan ->
+                releasePlanFieldFrom
+                    ARM64Symbolic.X8
+                    fieldOffset
+                    $"legacy_{index}"
+                    fieldReleasePlan
+            | None ->
                 [])
         |> List.concat
 
