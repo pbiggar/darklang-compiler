@@ -64,6 +64,8 @@ specializations instead of one shared shape-plan executor.
   `RefCountDec`, including dynamic string fields
 - direct closure tuple string/list/dict capture release on closure
   `RefCountDec`
+- direct closure tuple string/bytes/list/dict-list capture release on closure
+  `RefCountDec`
 - direct closure record string/list/dict capture release on closure
   `RefCountDec`
 - direct closure record string/bytes/list/dict-list capture release on closure
@@ -228,8 +230,8 @@ The main x64 gaps are:
   tuple4 closure/bytes/list/dict, sum record4 string/bytes/list/dict, and sum
   record4 closure/bytes/list/dict payload paths, plus nested sum
   dynamic-buffer payload paths; closure payloads beyond direct dynamic-buffer,
-  direct list/dict/closure/fixed-block captures, and the covered record
-  string/bytes/list/dict-list capture shape
+  direct list/dict/closure/fixed-block captures, and the covered tuple and
+  record string/bytes/list/dict-list capture shapes
 - broader record field coverage beyond the current string/bytes/nested
   fixed-block/string-list-dict/string-bytes-list-dict release paths
 - closure capture recursive release coverage beyond the current direct dynamic,

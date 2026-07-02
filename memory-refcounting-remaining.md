@@ -1149,6 +1149,7 @@ commits enabled:
 - direct closure dynamic string/bytes/list/dict/closure/tuple/record/sum
   capture release
 - direct closure tuple string/list/dict capture release
+- direct closure tuple string/bytes/list/dict-list capture release
 - direct closure record string/list/dict capture release
 - direct closure record string/bytes/list/dict-list capture release
 - direct closure sum tuple string/list/dict capture release
@@ -1456,15 +1457,10 @@ Closure roots and several capture cases are covered:
 
 1. Represent static function references and heap closures distinctly in shape
    planning.
-2. Add closure capture tests for recursive capture payloads beyond the current
-   direct dynamic-buffer, managed-root, and fixed-block probes:
-
-   - tuple with multiple heap fields
-
-3. Add returned closure tests that use captured values after cleanup.
-4. Ensure list-of-function behavior does not regress into tagged-list helper
+2. Add returned closure tests that use captured values after cleanup.
+3. Ensure list-of-function behavior does not regress into tagged-list helper
    mismatch.
-5. Port recursive closure capture release parity to x64.
+4. Port recursive closure capture release parity to x64.
 
 ### Suggested Commit Breakdown
 
