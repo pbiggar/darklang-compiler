@@ -108,6 +108,8 @@ specializations instead of one shared shape-plan executor.
 - tagged-list tuple4 payload release with a nested record in the middle field
   containing string/list/dict fields, using a planned fixed-block
   `RcReleasePlan` leaf helper instead of another handwritten release program
+- tagged-list tuple4 payload release with a nested record in the middle field
+  containing string/list/dict-list fields
 - tagged-list record4 payload release with nested tuple dynamic-buffer fields
 - tagged-list record4 payload release with nested tuple string/list/dict fields
 - tagged-list record4 payload release with nested tuple closure/bytes/list/dict
@@ -180,6 +182,8 @@ exist for:
 - tuple4 leaf payloads with nested tuple closure/bytes/list/dict fields
 - tuple4 leaf payloads with a nested record in the middle field containing
   string/list/dict fields through a planned `RcReleasePlan` fixed-block helper
+- tuple4 leaf payloads with a nested record in the middle field containing
+  string/list/dict-list fields
 - record4 leaf payloads with nested tuple dynamic-buffer fields
 - record4 leaf payloads with nested tuple string/list/dict fields
 - record4 leaf payloads with nested tuple closure/bytes/list/dict fields

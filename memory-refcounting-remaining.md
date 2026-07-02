@@ -134,6 +134,11 @@ Latest update:
   helper and leaked the sum root, tuple root, nested tuple root, and nested
   managed children. It is pinned by
   `X86_64CodeGenTests.testTaggedListRefCountDecSumTuple4NestedTupleStringListDictPayload`.
+- x64 tagged-list middle-field nested-record list payload coverage now includes
+  the typed dict-list value case as well. The new
+  `X86_64CodeGenTests.testTaggedListRefCountDecTuple4NestedRecordMiddleStringListDictListPayload`
+  proves the helper selection and dependencies release `Dict<Int64,
+  List<Int64>>` values in that nested record shape.
 
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
 release, tuple-only nested fixed-block field release, record-registry-based
@@ -250,7 +255,8 @@ record4 nested tuple string/list/dict payload release, plus x64 tagged-list
 record4 nested tuple closure/bytes/list/dict payload release, plus initial
 planned x64 tagged-list tuple4 nested-record middle-field string/list/dict
 payload release through the shared generic fixed-block `RcReleasePlan`
-executor, plus initial
+executor, plus x64 tagged-list tuple4 nested-record middle-field
+string/list/dict-list payload release coverage, plus initial
 `RcShape` storage-class classification used by RC insertion's legacy fixed-root
 compatibility predicate, plus shared `RcReleasePlan` metadata and x64 generic
 fixed-block dynamic string/bytes, dict-root, and closure-root field release
@@ -1356,8 +1362,8 @@ Likely gaps:
   tuple4 nested tuple dynamic string, string/list/dict, and
   closure/bytes/list/dict shapes, record4 nested tuple dynamic string,
   string/list/dict, and closure/bytes/list/dict shapes, tuple4 nested-record
-  middle-field string/list/dict through a planned `RcReleasePlan` helper,
-  record1, exhaustive
+  middle-field string/list/dict through a planned `RcReleasePlan` helper and
+  string/list/dict-list coverage, record1, exhaustive
   record3 dynamic-buffer combinations, mixed record3 string/bytes/list/dict
   and closure/list/dict shapes, mixed record4
   string/bytes/list/dict and closure/bytes/list/dict shapes, sum dynamic-buffer,

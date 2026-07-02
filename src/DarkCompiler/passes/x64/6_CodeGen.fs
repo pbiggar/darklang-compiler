@@ -609,6 +609,7 @@ let private listRefCountDecTuple4NestedTupleDynamicListDictListHelperLabel = "__
 let private listRefCountDecTuple4NestedTupleClosureDynamicListDictHelperLabel = "__dark_list_rc_dec_tuple4_nested_tuple_closure_dynamic_list_dict_helper"
 let private listRefCountDecTuple4NestedTupleClosureDynamicListDictListHelperLabel = "__dark_list_rc_dec_tuple4_nested_tuple_closure_dynamic_list_dict_list_helper"
 let private listRefCountDecTuple4NestedRecordMiddleDynamicListDictHelperLabel = "__dark_list_rc_dec_tuple4_nested_record_middle_dynamic_list_dict_helper"
+let private listRefCountDecTuple4NestedRecordMiddleDynamicListDictListHelperLabel = "__dark_list_rc_dec_tuple4_nested_record_middle_dynamic_list_dict_list_helper"
 let private listRefCountDecRecord1DynamicHelperLabel = "__dark_list_rc_dec_record1_dynamic_helper"
 let private listRefCountDecRecord3DynamicFirstHelperLabel = "__dark_list_rc_dec_record3_dynamic_first_helper"
 let private listRefCountDecRecord3DynamicThirdHelperLabel = "__dark_list_rc_dec_record3_dynamic_third_helper"
@@ -966,6 +967,15 @@ let rec private fixedBlockListHelperForPayloadRelease
         | _ ->
             false
 
+    let nestedMiddleDynamicListDictList =
+        match nestedFixedBlockAt 16 with
+        | Some (24, nestedFieldReleases) ->
+            releasePlanIsDynamicBufferAt 0 nestedFieldReleases
+            && releasePlanIsRootKindAt 8 ANF.TaggedList nestedFieldReleases
+            && releasePlanIsDictWithValueAt 16 (releasePlanIsRootKind ANF.TaggedList) nestedFieldReleases
+        | _ ->
+            false
+
     match payloadSize, dynamicOffsets, nestedFixedBlockAt 8, nestedFixedBlockAt 24 with
     | 8, Some [0], _, _ ->
         listRefCountDecRecord1DynamicHelperLabel
@@ -1072,6 +1082,9 @@ let rec private fixedBlockListHelperForPayloadRelease
              && releasePlanIsRootKindAt 16 ANF.TaggedList nestedFieldReleases
              && releasePlanIsRootKindAt 24 ANF.DictHeap nestedFieldReleases ->
         listRefCountDecTuple4NestedTupleClosureDynamicListDictHelperLabel
+    | 32, _, _, _
+        when nestedMiddleDynamicListDictList ->
+        listRefCountDecTuple4NestedRecordMiddleDynamicListDictListHelperLabel
     | 32, _, _, _
         when nestedMiddleDynamicListDict ->
         listRefCountDecTuple4NestedRecordMiddleDynamicListDictHelperLabel
@@ -2657,6 +2670,7 @@ let private listRefCountDecHelperSpecs : (string * ListLeafPayloadRelease) list 
     (listRefCountDecTuple4NestedTupleClosureDynamicListDictHelperLabel, (FixedBlockFixedBlockClosureDynamicListDictFieldPayload (32, 24, 32, 0, 8, 16, 24, dictRefCountDecHelperLabel)))
     (listRefCountDecTuple4NestedTupleClosureDynamicListDictListHelperLabel, (FixedBlockFixedBlockClosureDynamicListDictFieldPayload (32, 24, 32, 0, 8, 16, 24, dictRefCountDecListValueHelperLabel)))
     (listRefCountDecTuple4NestedRecordMiddleDynamicListDictHelperLabel, (FixedBlockPlannedLeafPayload (32, listRefCountDecTuple4NestedRecordMiddleDynamicListDictReleasePlan)))
+    (listRefCountDecTuple4NestedRecordMiddleDynamicListDictListHelperLabel, (FixedBlockFixedBlockDynamicListDictFieldPayload (32, 16, 24, 0, 8, 16, dictRefCountDecListValueHelperLabel)))
     (listRefCountDecRecord1DynamicHelperLabel, (FixedBlockLeafPayload (8, [0])))
     (listRefCountDecRecord3DynamicFirstHelperLabel, (FixedBlockLeafPayload (24, [0])))
     (listRefCountDecRecord3DynamicThirdHelperLabel, (FixedBlockLeafPayload (24, [16])))
@@ -5885,6 +5899,7 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
            || Set.contains listRefCountDecTuple4NestedTupleDynamicListDictListHelperLabel neededListDecHelperLabels
            || Set.contains listRefCountDecTuple4NestedTupleClosureDynamicListDictListHelperLabel neededListDecHelperLabels
            || Set.contains listRefCountDecTuple4NestedRecordMiddleDynamicListDictHelperLabel neededListDecHelperLabels
+           || Set.contains listRefCountDecTuple4NestedRecordMiddleDynamicListDictListHelperLabel neededListDecHelperLabels
            || Set.contains listRefCountDecSumTuple4DynamicListDictListHelperLabel neededListDecHelperLabels
            || Set.contains listRefCountDecSumTuple4ClosureDynamicListDictListHelperLabel neededListDecHelperLabels
            || Set.contains listRefCountDecSumTuple4NestedTupleDynamicListDictHelperLabel neededListDecHelperLabels then
