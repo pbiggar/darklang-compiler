@@ -4741,15 +4741,18 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
                 let elemBindings = atomsWithBindings |> List.collect (fun (_, _, bindings) -> bindings)
                 let elemAtoms = atomsWithBindings |> List.map (fun (atom, elemType, _) -> (atom, elemType))
 
-                // Create LEAF nodes for all elements
-                let rec createLeaves (atoms: (ANF.Atom * AST.Type) list) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) (acc: ANF.Atom list) =
+                // Create LEAF nodes for all elements. Each leaf is independent,
+                // so collect per-leaf bindings separately to avoid repeatedly
+                // appending to the growing element-binding prefix for large lists.
+                let rec createLeaves (atoms: (ANF.Atom * AST.Type) list) (vg: ANF.VarGen) (bindingChunks: (ANF.TempId * ANF.CExpr) list list) (acc: ANF.Atom list) =
                     match atoms with
-                    | [] -> (List.rev acc, bindings, vg)
+                    | [] -> (List.rev acc, bindingChunks |> List.rev |> List.concat, vg)
                     | (a, elemType) :: rest ->
-                        let (leafAtom, bindings', vg') = allocLeaf a elemType vg bindings
-                        createLeaves rest vg' bindings' (leafAtom :: acc)
+                        let (leafAtom, leafBindings, vg') = allocLeaf a elemType vg []
+                        createLeaves rest vg' (leafBindings :: bindingChunks) (leafAtom :: acc)
 
-                let (leafAtoms, leafBindings, varGen2) = createLeaves elemAtoms varGen1 elemBindings []
+                let (leafAtoms, leafOnlyBindings, varGen2) = createLeaves elemAtoms varGen1 [] []
+                let leafBindings = elemBindings @ leafOnlyBindings
                 let leafNodes = leafAtoms |> List.map (fun atom -> (atom, 1))
 
                 let listType =
