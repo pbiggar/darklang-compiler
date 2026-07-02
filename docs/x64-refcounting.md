@@ -266,7 +266,8 @@ The main x64 gaps are:
    already covered and uses the closure-list helper without a stdlib-specific
    exclusion. Direct `Dict<String, Int64>` dynamic leaf key release and
    `Dict<Int64, String>` dynamic leaf value release are covered, as is the
-   combined `Dict<String, String>` leaf case.
+   combined `Dict<String, String>` leaf case. The same dynamic-buffer path is
+   pinned for `Dict<Bytes, Bytes>`.
 2. Replace x64 helper-family selection with a shared shape-driven release plan
    executor instead of continuing helper explosion.
 3. Add x64 dict key/value shape matrix tests for typed recursive values.

@@ -1157,6 +1157,29 @@ let testDictRefCountDecStringKeyValue () : Result<unit, string> =
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected dict string keys and values to be released, got stderr '{stderr.Trim()}'"
 
+/// Test: x64 DictHeap RefCountDec releases dynamic bytes leaf keys and values.
+let testDictRefCountDecBytesKeyValue () : Result<unit, string> =
+    let dictType = AST.TDict (AST.TBytes, AST.TBytes)
+    let program =
+        makeSimpleProgram
+            [
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "key", LIR.StringSymbol "!")
+                LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "value", LIR.StringSymbol "!")
+                LIR.HeapAlloc (LIR.Physical LIR.X4, 16)
+                LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TBytes)
+                LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBytes)
+                LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 2L)
+                LIR.Orr (LIR.Physical LIR.X5, LIR.Physical LIR.X4, LIR.Physical LIR.X5)
+                LIR.RefCountDec (LIR.Physical LIR.X5, 0, LIR.DictHeap, Some (rcMetadata dictType))
+            ]
+            LIR.Ret
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected dict bytes keys and values to be released, got stderr '{stderr.Trim()}'"
+
 /// Test: x64 DictHeap RefCountDec releases nested dict leaf values through release-plan metadata.
 let testDictRefCountDecDictValue () : Result<unit, string> =
     let innerDictType = AST.TDict (AST.TInt64, AST.TInt64)
@@ -4647,6 +4670,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR DictHeap RefCountDec releases string leaf keys", testDictRefCountDecStringKey)
     ("LIR DictHeap RefCountDec releases string leaf values", testDictRefCountDecStringValue)
     ("LIR DictHeap RefCountDec releases string leaf keys and values", testDictRefCountDecStringKeyValue)
+    ("LIR DictHeap RefCountDec releases bytes leaf keys and values", testDictRefCountDecBytesKeyValue)
     ("LIR DictHeap RefCountDec releases nested dict leaf values", testDictRefCountDecDictValue)
     ("LIR DictHeap RefCountDec releases nested dict list leaf values", testDictRefCountDecDictListValue)
     ("LIR DictHeap RefCountDec releases tuple string/list leaf values", testDictRefCountDecTupleStringListValue)
