@@ -51,6 +51,8 @@ specializations instead of one shared shape-plan executor.
 - generic fixed-block boxed sum closure payload release
 - generic fixed-block boxed sum tuple string/list/dict payload release
 - generic fixed-block boxed sum record string/list/dict payload release
+- generic boxed-sum mixed-payload cleanup dispatch by active variant tag when
+  sum-aware `RcReleasePlan` metadata is present
 - generic fixed-block dict root field release
 - generic fixed-block dynamic-buffer, nested fixed-block, list, dict, and
   closure field release preserving live `RAX` across cleanup
@@ -222,8 +224,9 @@ buffer reuse is still a broader memory-policy question, shared with ARM64.
 
 The main x64 gaps are:
 
-- fixed-block field release for boxed sum payloads beyond the current string,
-  list, dict, closure, tuple dynamic-buffer, tuple string/list/dict,
+- fixed-block field release for boxed-sum payload shapes beyond the current
+  top-level variant-dispatched mixed-payload case and the string, list, dict,
+  closure, tuple dynamic-buffer, tuple string/list/dict,
   tuple4 string/bytes/list/dict, tuple4 closure/bytes/list/dict, record
   dynamic-buffer, record string/list/dict, record4 string/bytes/list/dict,
   record4 closure/bytes/list/dict, sum tuple4 string/bytes/list/dict, sum
