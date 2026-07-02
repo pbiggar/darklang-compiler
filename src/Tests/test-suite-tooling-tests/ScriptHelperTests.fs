@@ -49,6 +49,17 @@ let testCompilerAvoidsFailwith () : TestResult =
             let details = String.concat ", " offenders
             Error $"Unexpected failwith usage in compiler: {details}"
 
+let testRunTestsDocumentsAiMode () : TestResult =
+    let runTestsPath = Path.Combine(repoRoot, "run-tests")
+    match readFile runTestsPath with
+    | Error msg -> Error msg
+    | Ok text ->
+        if text.Contains "--ai" && text.Contains "AI mode" then
+            Ok ()
+        else
+            Error "run-tests should document the --ai AI mode"
+
 let tests = [
     ("compiler avoids failwith", testCompilerAvoidsFailwith)
+    ("run-tests documents AI mode", testRunTestsDocumentsAiMode)
 ]
