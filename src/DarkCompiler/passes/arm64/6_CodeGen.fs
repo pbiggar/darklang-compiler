@@ -149,6 +149,7 @@ let private dictRefCountDecDictListValueHelperLabel = "__dark_dict_refcount_dec_
 let private dictRefCountDecTupleStringListValueHelperLabel = "__dark_dict_refcount_dec_tuple_string_list_value_helper"
 let private dictRefCountDecTupleStringListDictValueHelperLabel = "__dark_dict_refcount_dec_tuple_string_list_dict_value_helper"
 let private dictRefCountDecSumStringValueHelperLabel = "__dark_dict_refcount_dec_sum_string_value_helper"
+let private plannedDictRefCountDecHelperLabelPrefix = "__dark_dict_refcount_dec_plan_"
 let private closureRefCountIncHelperLabel = "__dark_closure_refcount_inc_helper"
 let private closureRefCountDecHelperLabel = "__dark_closure_refcount_dec_helper"
 
@@ -164,6 +165,9 @@ let private stableRcReleasePlanHash (releasePlan: ANF.RcReleasePlan) : string =
 
 let private plannedListDecHelperLabelForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
     $"{plannedListRefCountDecHelperLabelPrefix}{stableRcReleasePlanHash releasePlan}"
+
+let private plannedDictDecHelperLabelForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
+    $"{plannedDictRefCountDecHelperLabelPrefix}{stableRcReleasePlanHash releasePlan}"
 
 type private RawSetRootRetainTarget =
     | RawSetListRootRetain
@@ -2158,8 +2162,19 @@ let private listDecHelperForType (ctx: CodeGenContext) (sourceType: AST.Type) : 
     | Some releasePlan -> listDecHelperForReleasePlan releasePlan
     | None -> Crash.crash $"listDecHelperForType: missing RC metadata for list element type {sourceType}"
 
-let private dictDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
+let private dictPayloadReleaseNeedsPlannedHelper (keyRelease: ANF.RcReleasePlan) (valueRelease: ANF.RcReleasePlan) : bool =
+    match keyRelease, valueRelease with
+    | ANF.NoReleasePlan, ANF.RootRelease (_, ANF.TaggedList, _)
+    | ANF.NoReleasePlan, ANF.RootRelease (_, ANF.DictHeap, _) ->
+        true
+    | _ ->
+        false
+
+let rec private dictDecHelperForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
     match releasePlan with
+    | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (keyRelease, valueRelease))
+        when dictPayloadReleaseNeedsPlannedHelper keyRelease valueRelease ->
+        plannedDictDecHelperLabelForReleasePlan releasePlan
     | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, valueRelease)) ->
         match valueRelease with
         | ANF.RootRelease (_, ANF.TaggedList, _) ->
@@ -2252,7 +2267,7 @@ let private generateDictRefCountIncHelper () : ARM64Symbolic.Instr list =
 let private generateDictRefCountDecHelper
     (helperLabel: string)
     (releaseLeafListValue: bool)
-    (releaseLeafDictValue: bool)
+    (releaseLeafDictValueHelper: string option)
     (releaseLeafTupleStringListValue: bool)
     (releaseLeafTupleStringListDictValue: bool)
     (releaseLeafSumStringValue: bool)
@@ -2348,14 +2363,10 @@ let private generateDictRefCountDecHelper
             []
 
     let releaseLeafDictValueInstrs =
-        if releaseLeafDictValue then
-            let targetHelperLabel =
-                if helperLabel = dictRefCountDecDictListValueHelperLabel then
-                    dictRefCountDecListValueHelperLabel
-                else
-                    dictRefCountDecHelperLabel
+        match releaseLeafDictValueHelper with
+        | Some targetHelperLabel ->
             releaseLeafManagedRootValueInstrs targetHelperLabel skipLeafDictValueRelease
-        else
+        | None ->
             []
 
     let releaseLeafTupleStringListValueInstrs =
@@ -2626,6 +2637,40 @@ let private generateDictRefCountDecHelper
         ARM64Symbolic.Label helperRet
         ARM64Symbolic.RET
     ]
+
+let private generatePlannedDictRefCountDecHelper
+    (helperLabel: string)
+    (releasePlan: ANF.RcReleasePlan)
+    (ctx: CodeGenContext)
+    : ARM64Symbolic.Instr list =
+    let unsupported context release =
+        Crash.crash $"ARM64 planned dict RefCountDec does not support {context} release plan {release}"
+
+    match releasePlan with
+    | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (keyRelease, valueRelease)) ->
+        match keyRelease with
+        | ANF.NoReleasePlan -> ()
+        | other -> unsupported "key" other
+
+        let releaseLeafListValue, releaseLeafDictValueHelper =
+            match valueRelease with
+            | ANF.RootRelease (_, ANF.TaggedList, _) ->
+                true, None
+            | ANF.RootRelease (_, ANF.DictHeap, _) ->
+                false, Some (dictDecHelperForReleasePlan valueRelease)
+            | other ->
+                unsupported "value" other
+
+        generateDictRefCountDecHelper
+            helperLabel
+            releaseLeafListValue
+            releaseLeafDictValueHelper
+            false
+            false
+            false
+            ctx
+    | other ->
+        Crash.crash $"ARM64 planned dict RefCountDec helper requires a DictHeap release plan, got {other}"
 
 let generateLeakCounterInc (ctx: CodeGenContext) : ARM64Symbolic.Instr list =
     if ctx.Options.EnableLeakCheck then
@@ -6117,6 +6162,28 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         maps
         |> List.fold mergePlannedListDecHelperMaps Map.empty
 
+    let mergePlannedDictDecHelperMaps
+        (left: Map<string, ANF.RcReleasePlan>)
+        (right: Map<string, ANF.RcReleasePlan>)
+        : Map<string, ANF.RcReleasePlan> =
+        Map.fold
+            (fun acc helperLabel releasePlan ->
+                match Map.tryFind helperLabel acc with
+                | Some existingPlan when existingPlan <> releasePlan ->
+                    Crash.crash $"planned dict RC helper label collision for {helperLabel}"
+                | Some _ ->
+                    acc
+                | None ->
+                    Map.add helperLabel releasePlan acc)
+            left
+            right
+
+    let unionPlannedDictDecHelperMaps
+        (maps: Map<string, ANF.RcReleasePlan> list)
+        : Map<string, ANF.RcReleasePlan> =
+        maps
+        |> List.fold mergePlannedDictDecHelperMaps Map.empty
+
     let releasePlanForDependencyType (fieldType: AST.Type) : ANF.RcReleasePlan option =
         tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry fieldType
 
@@ -6151,8 +6218,11 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             |> unionLabelSets
 
         match releasePlan with
-        | ANF.RootRelease (_, ANF.DictHeap, _) ->
-            Set.singleton (dictDecHelperForReleasePlan releasePlan)
+        | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (keyRelease, valueRelease)) ->
+            Set.empty
+            |> Set.add (dictDecHelperForReleasePlan releasePlan)
+            |> Set.union (dictDecHelperLabelsInStaticFieldPlan keyRelease)
+            |> Set.union (dictDecHelperLabelsInStaticFieldPlan valueRelease)
         | ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, fieldReleases))
         | ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, fieldReleases, _))
         | ANF.RootRelease (_, _, ANF.ClosurePayloadRelease fieldReleases) ->
@@ -6261,7 +6331,63 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         |> Option.map plannedListDecHelpersInReleasePlan
         |> Option.defaultValue Map.empty
 
-    let plannedListDecHelpers =
+    let plannedListDecHelpersForFieldType
+        (fieldType: AST.Type)
+        : Map<string, int * ANF.RcReleasePlan> =
+        fieldType
+        |> releasePlanForDependencyType
+        |> Option.map plannedListDecHelpersInReleasePlan
+        |> Option.defaultValue Map.empty
+
+    let rec plannedDictDecHelpersInReleasePlan
+        (releasePlan: ANF.RcReleasePlan)
+        : Map<string, ANF.RcReleasePlan> =
+        let helpersInFieldReleases fieldReleases =
+            fieldReleases
+            |> List.map (fun (ANF.FieldRelease (_, fieldReleasePlan)) ->
+                plannedDictDecHelpersInReleasePlan fieldReleasePlan)
+            |> unionPlannedDictDecHelperMaps
+
+        match releasePlan with
+        | ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (keyRelease, valueRelease)) ->
+            let self =
+                if dictPayloadReleaseNeedsPlannedHelper keyRelease valueRelease then
+                    Map.empty
+                    |> Map.add (dictDecHelperForReleasePlan releasePlan) releasePlan
+                else
+                    Map.empty
+
+            self
+            |> mergePlannedDictDecHelperMaps (plannedDictDecHelpersInReleasePlan keyRelease)
+            |> mergePlannedDictDecHelperMaps (plannedDictDecHelpersInReleasePlan valueRelease)
+        | ANF.RootRelease (_, nonDictKind, ANF.DictPayloadRelease _) ->
+            Crash.crash $"ARM64 planned dict dependency collection saw DictPayloadRelease for non-dict kind {nonDictKind}"
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
+        | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _))
+        | ANF.RootRelease (_, _, ANF.ClosurePayloadRelease fieldReleases) ->
+            helpersInFieldReleases fieldReleases
+        | ANF.RootRelease (_, _, ANF.TaggedListPayloadRelease elementRelease) ->
+            plannedDictDecHelpersInReleasePlan elementRelease
+        | _ ->
+            Map.empty
+
+    let plannedDictDecHelpersInMetadata
+        (metadata: ANF.RcMetadata option)
+        : Map<string, ANF.RcReleasePlan> =
+        metadata
+        |> rcMetadataReleasePlan
+        |> Option.map plannedDictDecHelpersInReleasePlan
+        |> Option.defaultValue Map.empty
+
+    let plannedDictDecHelpersForFieldType
+        (fieldType: AST.Type)
+        : Map<string, ANF.RcReleasePlan> =
+        fieldType
+        |> releasePlanForDependencyType
+        |> Option.map plannedDictDecHelpersInReleasePlan
+        |> Option.defaultValue Map.empty
+
+    let plannedListDecHelpersFromFunctions =
         sortedFunctions
         |> List.map (fun func ->
             func.CFG.Blocks
@@ -6270,6 +6396,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.map (function
                     | LIR.RefCountDec (_, _, LIR.TaggedList, metadata)
+                    | LIR.RefCountDec (_, _, LIR.DictHeap, metadata)
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
                         plannedListDecHelpersInMetadata metadata
                     | _ ->
@@ -6277,6 +6404,52 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> unionPlannedListDecHelperMaps)
             |> unionPlannedListDecHelperMaps)
         |> unionPlannedListDecHelperMaps
+
+    let plannedListDecHelpersFromClosureCaptures =
+        closureCaptureTypes
+        |> Map.toList
+        |> List.map (fun (_, captureTypes) ->
+            captureTypes
+            |> List.map plannedListDecHelpersForFieldType
+            |> unionPlannedListDecHelperMaps)
+        |> unionPlannedListDecHelperMaps
+
+    let plannedListDecHelpers =
+        mergePlannedListDecHelperMaps
+            plannedListDecHelpersFromFunctions
+            plannedListDecHelpersFromClosureCaptures
+
+    let plannedDictDecHelpersFromFunctions =
+        sortedFunctions
+        |> List.map (fun func ->
+            func.CFG.Blocks
+            |> Map.toList
+            |> List.map (fun (_, block) ->
+                block.Instrs
+                |> List.map (function
+                    | LIR.RefCountDec (_, _, LIR.TaggedList, metadata)
+                    | LIR.RefCountDec (_, _, LIR.DictHeap, metadata)
+                    | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
+                        plannedDictDecHelpersInMetadata metadata
+                    | _ ->
+                        Map.empty)
+                |> unionPlannedDictDecHelperMaps)
+            |> unionPlannedDictDecHelperMaps)
+        |> unionPlannedDictDecHelperMaps
+
+    let plannedDictDecHelpersFromClosureCaptures =
+        closureCaptureTypes
+        |> Map.toList
+        |> List.map (fun (_, captureTypes) ->
+            captureTypes
+            |> List.map plannedDictDecHelpersForFieldType
+            |> unionPlannedDictDecHelperMaps)
+        |> unionPlannedDictDecHelperMaps
+
+    let plannedDictDecHelpers =
+        mergePlannedDictDecHelperMaps
+            plannedDictDecHelpersFromFunctions
+            plannedDictDecHelpersFromClosureCaptures
 
     let listDecHelperDependencyLabels (helperLabel: string) : Set<string> =
         match Map.tryFind helperLabel plannedListDecHelpers with
@@ -6307,7 +6480,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 (rest @ Set.toList dependencyLabels)
 
     let neededListRcDecHelperLabels =
-        let calledLabels =
+        let functionCalledLabels =
             sortedFunctions
             |> List.map (fun func ->
                 func.CFG.Blocks
@@ -6320,6 +6493,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                             |> requiredRcMetadataReleasePlan "TaggedList RefCountDec helper selection"
                             |> listDecHelperForReleasePlan
                             |> Set.singleton
+                        | LIR.RefCountDec (_, _, LIR.DictHeap, metadata) ->
+                            listDecHelperLabelsInMetadata metadata
                         | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
                             listDecHelperLabelsInMetadata metadata
                         | _ ->
@@ -6327,6 +6502,17 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     |> unionLabelSets)
                 |> unionLabelSets)
             |> unionLabelSets
+
+        let closureCaptureLabels =
+            closureCaptureTypes
+            |> Map.toList
+            |> List.map (fun (_, captureTypes) ->
+                captureTypes
+                |> List.map listDecHelperLabelsForFieldType
+                |> unionLabelSets)
+            |> unionLabelSets
+
+        let calledLabels = Set.union functionCalledLabels closureCaptureLabels
 
         if Set.isEmpty calledLabels then
             Set.empty
@@ -6425,19 +6611,31 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | _ -> false)))
 
     let dictDecHelperDependencyLabels (helperLabel: string) : Set<string> =
-        match helperLabel with
-        | label when label = dictRefCountDecListValueHelperLabel ->
-            Set.singleton listRefCountDecHelperLabel
-        | label when label = dictRefCountDecDictValueHelperLabel ->
-            Set.singleton dictRefCountDecHelperLabel
-        | label when label = dictRefCountDecDictListValueHelperLabel ->
-            Set.singleton dictRefCountDecListValueHelperLabel
-        | label when label = dictRefCountDecTupleStringListValueHelperLabel ->
-            Set.singleton listRefCountDecHelperLabel
-        | label when label = dictRefCountDecTupleStringListDictValueHelperLabel ->
-            Set.ofList [ listRefCountDecHelperLabel; dictRefCountDecHelperLabel ]
-        | _ ->
-            Set.empty
+        match Map.tryFind helperLabel plannedDictDecHelpers with
+        | Some (ANF.RootRelease (_, ANF.DictHeap, ANF.DictPayloadRelease (_, valueRelease))) ->
+            match valueRelease with
+            | ANF.RootRelease (_, ANF.TaggedList, _) ->
+                Set.singleton dictRefCountDecListValueHelperLabel
+            | ANF.RootRelease (_, ANF.DictHeap, _) ->
+                Set.singleton (dictDecHelperForReleasePlan valueRelease)
+            | _ ->
+                Set.empty
+        | Some other ->
+            Crash.crash $"ARM64 planned dict dependency labels require a DictHeap release plan, got {other}"
+        | None ->
+            match helperLabel with
+            | label when label = dictRefCountDecListValueHelperLabel ->
+                Set.singleton listRefCountDecHelperLabel
+            | label when label = dictRefCountDecDictValueHelperLabel ->
+                Set.singleton dictRefCountDecHelperLabel
+            | label when label = dictRefCountDecDictListValueHelperLabel ->
+                Set.singleton dictRefCountDecListValueHelperLabel
+            | label when label = dictRefCountDecTupleStringListValueHelperLabel ->
+                Set.singleton listRefCountDecHelperLabel
+            | label when label = dictRefCountDecTupleStringListDictValueHelperLabel ->
+                Set.ofList [ listRefCountDecHelperLabel; dictRefCountDecHelperLabel ]
+            | _ ->
+                Set.empty
 
     let rec dictDecHelperLabelsInReleasePlan (releasePlan: ANF.RcReleasePlan) : Set<string> =
         let labelsInFieldReleases fieldReleases =
@@ -6469,7 +6667,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         |> Option.defaultValue Set.empty
 
     let neededDictRcDecHelperLabels =
-        let calledLabels =
+        let functionCalledLabels =
             sortedFunctions
             |> List.map (fun func ->
                 func.CFG.Blocks
@@ -6490,6 +6688,15 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 |> unionLabelSets)
             |> unionLabelSets
 
+        let closureCaptureLabels =
+            closureCaptureTypes
+            |> Map.toList
+            |> List.map (fun (_, captureTypes) ->
+                captureTypes
+                |> List.map dictDecHelperLabelsForFieldType
+                |> unionLabelSets)
+            |> unionLabelSets
+
         let listHelperDictLabels =
             neededListRcDecHelperLabels
             |> Set.toList
@@ -6505,13 +6712,16 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 Set.union staticLabels plannedLabels)
             |> unionLabelSets
 
-        calledLabels
-        |> Set.union listHelperDictLabels
+        let directLabels =
+            functionCalledLabels
+            |> Set.union closureCaptureLabels
+            |> Set.union listHelperDictLabels
+
+        directLabels
         |> Set.toList
         |> List.map dictDecHelperDependencyLabels
         |> unionLabelSets
-        |> Set.union calledLabels
-        |> Set.union listHelperDictLabels
+        |> Set.union directLabels
 
     let needsDictRcDecHelper =
         Set.contains dictRefCountDecHelperLabel neededDictRcDecHelperLabels
@@ -6610,13 +6820,17 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
             @ generateNeededListRefCountDecHelpers ctx selectedListRcDecHelperLabels plannedListDecHelpers
         let dictRcHelpers =
             (if needsDictRcIncHelper then generateDictRefCountIncHelper () else [])
-            @ (if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false false false ctx else [])
-            @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel true false false false false ctx else [])
-            @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false true false false false ctx else [])
-            @ (if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false true false false false ctx else [])
-            @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false true false false ctx else [])
-            @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false true false ctx else [])
-            @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false false true ctx else [])
+            @ (plannedDictDecHelpers
+               |> Map.toList
+               |> List.collect (fun (helperLabel, releasePlan) ->
+                   generatePlannedDictRefCountDecHelper helperLabel releasePlan ctx))
+            @ (if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper || not (Map.isEmpty plannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel false None false false false ctx else [])
+            @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel true None false false false ctx else [])
+            @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false (Some dictRefCountDecHelperLabel) false false false ctx else [])
+            @ (if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false (Some dictRefCountDecListValueHelperLabel) false false false ctx else [])
+            @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false None true false false ctx else [])
+            @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false None false true false ctx else [])
+            @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false None false false true ctx else [])
         let closureRcHelpers =
             (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
             @ (if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper ctx else [])
