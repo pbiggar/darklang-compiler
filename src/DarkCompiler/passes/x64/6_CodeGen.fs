@@ -1250,15 +1250,7 @@ let private genListFieldRelease (fieldOffset: int) (fieldReleasePlan: ANF.RcRele
      X86_64.CALL (listDecHelperForReleasePlan fieldReleasePlan)
      X86_64.POP X86_64.RDX]
 
-let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (releasePlan: ANF.RcReleasePlan option) : X86_64.Instr list =
-    let fieldReleases =
-        match releasePlan with
-        | Some (ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, plannedFieldReleases)))
-        | Some (ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, plannedFieldReleases, _))) ->
-            plannedFieldReleases
-        | _ ->
-            []
-
+let rec private genFieldReleases (ctx: FuncCtx) (fieldReleases: ANF.RcFieldRelease list) : X86_64.Instr list =
     fieldReleases
     |> List.collect (function
         | ANF.FieldRelease (fieldOffset, fieldReleasePlan) ->
@@ -1276,6 +1268,48 @@ let rec private genFixedBlockFieldReleases (ctx: FuncCtx) (releasePlan: ANF.RcRe
                 genFixedBlockFieldRelease ctx fieldOffset childPayloadSize fieldReleasePlan
             | _ ->
                 [])
+
+and private genBoxedSumVariantFieldReleases
+    (ctx: FuncCtx)
+    (variants: ANF.RcBoxedSumVariantRelease list)
+    : X86_64.Instr list =
+    let releaseVariant (variant: ANF.RcBoxedSumVariantRelease) : (int * X86_64.Instr list) option =
+        let releaseInstrs = genFieldReleases ctx variant.FieldReleases
+
+        if List.isEmpty releaseInstrs then
+            None
+        else
+            Some (variant.Tag, releaseInstrs)
+
+    let cases = variants |> List.choose releaseVariant
+
+    if List.isEmpty cases then
+        []
+    else
+        let doneLabel = freshLabel "rc_dec_sum_done"
+        [X86_64.MOV_load (X86_64.R10, X86_64.RDX, 0)]
+        @
+        (cases
+         |> List.mapi (fun index (tag, releaseInstrs) ->
+            let nextCaseLabel = freshLabel $"rc_dec_sum_case_{index}_next"
+            [X86_64.CMP_imm (X86_64.R10, tag)
+             X86_64.Jcc (X86_64.NE, nextCaseLabel)]
+            @ releaseInstrs
+            @ [X86_64.JMP doneLabel
+               X86_64.Label nextCaseLabel])
+         |> List.concat)
+        @ [X86_64.Label doneLabel]
+
+and private genFixedBlockFieldReleases (ctx: FuncCtx) (releasePlan: ANF.RcReleasePlan option) : X86_64.Instr list =
+    match releasePlan with
+    | Some (ANF.RootRelease (_, _, ANF.FixedBlockPayloadRelease (_, plannedFieldReleases))) ->
+        genFieldReleases ctx plannedFieldReleases
+    | Some (ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, plannedFieldReleases, []))) ->
+        genFieldReleases ctx plannedFieldReleases
+    | Some (ANF.RootRelease (_, _, ANF.BoxedSumPayloadRelease (_, _, variants))) ->
+        genBoxedSumVariantFieldReleases ctx variants
+    | _ ->
+        []
 
 and private genFixedBlockFieldRelease
     (ctx: FuncCtx)
