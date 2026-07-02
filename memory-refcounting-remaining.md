@@ -37,6 +37,10 @@ Latest update:
   shared shape-plan executor; list, dict, closure, dynamic-buffer, fixed-block,
   and boxed-sum field releases now enter through the same local dispatcher in
   the ARM64 generic-root path.
+- ARM64 generic fixed-block child cleanup now dispatches nested boxed-sum child
+  payload releases by variant tag before freeing the child root. The mixed
+  no-payload/bytes-payload case is pinned so a primitive variant no longer
+  risks running payload cleanup from the boxed-sum field-release summary.
 - ARM64 closure capture cleanup now also recurses through nested fixed-block
   and boxed-sum child release plans before freeing the child root. The first
   pinned case is a captured tuple containing a nested tuple with a bytes field;
@@ -978,9 +982,11 @@ Current tests cover tuple, record, sum, closure capture, nested fixed-block
 capture, returned record/tuple, and several list/dict/string combinations.
 ARM64 generic fixed-block cleanup now consumes release plans for nested
 fixed-block and boxed-sum child roots even when those child roots have no
-managed fields of their own. ARM64 closure capture cleanup now consumes nested
-fixed-block child release plans before freeing captured child roots, and it
-dispatches captured boxed-sum variant payload release plans.
+managed fields of their own, and it now dispatches nested boxed-sum child
+payload cleanup by active variant tag for mixed sums. ARM64 closure capture
+cleanup now consumes nested fixed-block child release plans before freeing
+captured child roots, and it dispatches captured boxed-sum variant payload
+release plans.
 
 ### Remaining Gaps
 
@@ -993,7 +999,9 @@ The implementation is still specialized and partial:
 - closure fields in arbitrary fixed blocks need broader tests
 - nested fixed blocks outside closure captures need broader matrix tests, but
   the primitive-only child-root case is covered and implemented
-- sum payload recursive release is not generalized
+- sum payload recursive release is not generalized across all backend paths,
+  though ARM64 generic fixed-block child cleanup now handles mixed boxed-sum
+  child payload dispatch
 - fixed-block arities beyond one and two are sparsely tested for heap fields
 - x64 fixed-block field release parity is not clearly complete
 

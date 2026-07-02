@@ -453,6 +453,55 @@ let testGenericFixedBlockNestedImmediateFieldReleasesChildRoot () : TestResult =
         else
             Error "Generic fixed-block nested immediate field release did not release the child root"
 
+let testGenericFixedBlockNestedMixedBoxedSumBytesPayloadUsesVariantDispatch () : TestResult =
+    let sumName = "Arm64NestedFixedBlockSumBytes"
+    let sumType = AST.TSum (sumName, [])
+    let parentType = AST.TTuple [ sumType ]
+    let variants : LIR.VariantRegistry =
+        Map.ofList [
+            (sumName,
+                { TypeParams = []
+                  Variants =
+                    [
+                        { Name = "Arm64NestedFixedBlockNoPayload"; Tag = 0; Payload = None }
+                        { Name = "Arm64NestedFixedBlockSumBytesPayload"; Tag = 1; Payload = Some AST.TBytes }
+                    ] })
+        ]
+    let sumShapes =
+        variants
+        |> Map.map (fun _ typeVariants ->
+            { ANF.TypeParams = typeVariants.TypeParams
+              ANF.Payloads =
+                typeVariants.Variants
+                |> List.sortBy (fun variant -> variant.Tag)
+                |> List.map (fun variant -> variant.Tag, variant.Payload) })
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    8,
+                    LIR.GenericHeap,
+                    Some (rcMetadataWithSumShapes sumShapes parentType))
+            ]
+            variants
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let loadsNestedSumTag =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.LDR (ARM64.X10, ARM64.X11, 0s) ->
+                    true
+                | _ ->
+                    false)
+        if loadsNestedSumTag then
+            Ok ()
+        else
+            Error "Generic fixed-block nested mixed boxed-sum payload release did not dispatch on the child variant tag"
+
 let testClosureCaptureNestedFixedBlockBytesFieldUsesReleasePlan () : TestResult =
     let nestedType = AST.TTuple [ AST.TBytes ]
     let captureType = AST.TTuple [ nestedType ]
@@ -573,6 +622,7 @@ let tests : (string * (unit -> TestResult)) list = [
     ("Dict dict-list uses typed dict helper", testDictDictListValueUsesTypedDictHelper)
     ("Generic fixed-block nested bytes field uses release plan", testGenericFixedBlockNestedBytesFieldUsesReleasePlan)
     ("Generic fixed-block nested immediate field releases child root", testGenericFixedBlockNestedImmediateFieldReleasesChildRoot)
+    ("Generic fixed-block nested mixed boxed-sum bytes payload uses variant dispatch", testGenericFixedBlockNestedMixedBoxedSumBytesPayloadUsesVariantDispatch)
     ("Closure capture nested fixed-block bytes field uses release plan", testClosureCaptureNestedFixedBlockBytesFieldUsesReleasePlan)
     ("Closure capture boxed-sum bytes payload uses release plan", testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan)
 ]

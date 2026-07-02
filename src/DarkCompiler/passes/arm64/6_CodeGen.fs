@@ -5192,6 +5192,48 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     | _ ->
                         []
 
+                and releaseBoxedSumVariantFieldsFrom
+                    (baseReg: ARM64Symbolic.Reg)
+                    (variants: ANF.RcBoxedSumVariantRelease list)
+                    : ARM64Symbolic.Instr list =
+                    let releaseVariant (variant: ANF.RcBoxedSumVariantRelease) : (int * ARM64Symbolic.Instr list) option =
+                        let releaseInstrs =
+                            variant.FieldReleases
+                            |> List.collect (fun (ANF.FieldRelease (fieldOffset, fieldReleasePlan)) ->
+                                releaseFieldPlanFrom baseReg fieldOffset fieldReleasePlan)
+
+                        if List.isEmpty releaseInstrs then
+                            None
+                        else
+                            Some (variant.Tag, releaseInstrs)
+
+                    let rec variantCases (cases: (int * ARM64Symbolic.Instr list) list) : ARM64Symbolic.Instr list =
+                        match cases with
+                        | [] ->
+                            []
+                        | (tag, releaseInstrs) :: rest ->
+                            let restInstrs = variantCases rest
+                            let branchToEnd =
+                                if List.isEmpty restInstrs then
+                                    []
+                                else
+                                    [ARM64Symbolic.B (List.length restInstrs + 1)]
+                            [
+                                ARM64Symbolic.CMP_imm (ARM64Symbolic.X10, uint16 tag)
+                                ARM64Symbolic.B_cond (ARM64Symbolic.NE, List.length releaseInstrs + List.length branchToEnd + 1)
+                            ]
+                            @ releaseInstrs
+                            @ branchToEnd
+                            @ restInstrs
+
+                    let cases = variants |> List.choose releaseVariant
+
+                    if List.isEmpty cases then
+                        []
+                    else
+                        [ARM64Symbolic.LDR (ARM64Symbolic.X10, baseReg, 0s)]
+                        @ variantCases cases
+
                 and releaseFixedBlockFieldWithPlan
                     (baseReg: ARM64Symbolic.Reg)
                     (fieldOffset: int)
@@ -5200,11 +5242,12 @@ let convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic
                     : ARM64Symbolic.Instr list =
                         let childFieldReleaseInstrs =
                             match fieldReleasePlan with
-                            | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases))
-                            | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _)) ->
+                            | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (_, fieldReleases)) ->
                                 fieldReleases
                                 |> List.collect (fun (ANF.FieldRelease (childFieldOffset, fieldReleasePlan)) ->
                                     releaseFieldPlanFrom ARM64Symbolic.X11 childFieldOffset fieldReleasePlan)
+                            | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, _, variants)) ->
+                                releaseBoxedSumVariantFieldsFrom ARM64Symbolic.X11 variants
                             | _ ->
                                 []
                         let childLeakDec = generateLeakCounterDec ctx
