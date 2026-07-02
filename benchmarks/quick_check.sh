@@ -17,7 +17,30 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/infrastructure/pretty.sh"
 
-BASELINE_FILE="$SCRIPT_DIR/QUICK_BASELINE.txt"
+machine_arch() {
+    case "$(uname -m)" in
+        x86_64|amd64)
+            echo "x86_64"
+            ;;
+        aarch64|arm64)
+            echo "arm64"
+            ;;
+        *)
+            uname -m
+            ;;
+    esac
+}
+
+ARCH="$(machine_arch)"
+ARCH_BASELINE_FILE="$SCRIPT_DIR/QUICK_BASELINE.$ARCH.txt"
+LEGACY_BASELINE_FILE="$SCRIPT_DIR/QUICK_BASELINE.txt"
+if [ -f "$ARCH_BASELINE_FILE" ]; then
+    BASELINE_FILE="$ARCH_BASELINE_FILE"
+elif [ "$ARCH" = "x86_64" ] && [ -f "$LEGACY_BASELINE_FILE" ]; then
+    BASELINE_FILE="$LEGACY_BASELINE_FILE"
+else
+    BASELINE_FILE="$ARCH_BASELINE_FILE"
+fi
 SAVE_BASELINE=false
 FORCE_BUILD=false
 FAST_MODE=false
@@ -78,6 +101,8 @@ if [ "$QUIET_MODE" != true ]; then
     else
         pretty_section "Quick benchmark check for regression detection"
     fi
+    pretty_info "Architecture: $ARCH"
+    pretty_info "Baseline: $BASELINE_FILE"
     echo ""
 fi
 
@@ -190,6 +215,7 @@ fi
 # Save baseline if requested
 if [ "$SAVE_BASELINE" = true ]; then
     echo "# Quick benchmark baseline - instruction counts" > "$BASELINE_FILE"
+    echo "# Architecture: $ARCH" >> "$BASELINE_FILE"
     echo "# Generated: $(date -Iseconds)" >> "$BASELINE_FILE"
     echo "# Compiler: $(git -C "$PROJECT_ROOT" rev-parse --short HEAD)" >> "$BASELINE_FILE"
     for bench in $BENCHMARKS; do
