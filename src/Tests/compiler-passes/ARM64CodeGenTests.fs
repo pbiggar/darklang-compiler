@@ -498,6 +498,60 @@ let testClosureCaptureNestedFixedBlockBytesFieldUsesReleasePlan () : TestResult 
         else
             Error "Closure capture nested fixed-block bytes field release did not consume the nested release plan"
 
+let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
+    let sumName = "Arm64ClosureCaptureSumBytes"
+    let sumType = AST.TSum (sumName, [])
+    let closureParamType = AST.TTuple [ AST.TInt64; sumType ]
+    let variants : LIR.VariantRegistry =
+        Map.ofList [
+            (sumName,
+                { TypeParams = []
+                  Variants =
+                    [
+                        { Name = "Arm64ClosureCaptureSumBytesPayload"; Tag = 0; Payload = Some AST.TBytes }
+                    ] })
+        ]
+    let capturedFunc =
+        makeEmptyFunction
+            "arm64_sum_bytes_capture_fn"
+            [{ Reg = LIR.Physical LIR.X0; Type = closureParamType }]
+    let main =
+        match
+            makeSimpleProgramWithVariants
+                [
+                    LIR.ClosureAlloc (
+                        LIR.Physical LIR.X1,
+                        "arm64_sum_bytes_capture_fn",
+                        [LIR.Reg (LIR.Physical LIR.X2)])
+                    LIR.RefCountDec (
+                        LIR.Physical LIR.X1,
+                        16,
+                        LIR.ClosureHeap,
+                        Some (rcMetadata (AST.TFunction ([AST.TInt64], AST.TInt64))))
+                ]
+                variants
+        with
+        | LIR.Program ([func], programVariants, records) ->
+            LIR.Program ([func; capturedFunc], programVariants, records)
+        | other ->
+            other
+
+    match CodeGen.generateARM64 main with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let releasesSumBytesPayload =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.LDR (ARM64.X12, ARM64.X8, 8s) ->
+                    true
+                | _ ->
+                    false)
+        if releasesSumBytesPayload then
+            Ok ()
+        else
+            Error "Closure capture boxed-sum bytes payload release did not consume the variant release plan"
+
 let tests : (string * (unit -> TestResult)) list = [
     ("RawSet pure enum skips generic retain", testRawSetPureEnumDoesNotEmitGenericRetain)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
@@ -520,4 +574,5 @@ let tests : (string * (unit -> TestResult)) list = [
     ("Generic fixed-block nested bytes field uses release plan", testGenericFixedBlockNestedBytesFieldUsesReleasePlan)
     ("Generic fixed-block nested immediate field releases child root", testGenericFixedBlockNestedImmediateFieldReleasesChildRoot)
     ("Closure capture nested fixed-block bytes field uses release plan", testClosureCaptureNestedFixedBlockBytesFieldUsesReleasePlan)
+    ("Closure capture boxed-sum bytes payload uses release plan", testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan)
 ]
