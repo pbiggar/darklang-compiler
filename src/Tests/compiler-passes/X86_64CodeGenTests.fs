@@ -236,6 +236,16 @@ let private runLIRProgram (program: LIR.Program) : Result<int, string> =
                     resolveResult.MachineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false 0
             X86_64BinaryTests.runElfBinary binary
 
+let private generatedCallLabels (program: LIR.Program) : Result<string list, string> =
+    match CodeGen_X86_64.translateProgram (completeFixtureVariants program) false with
+    | Error e -> Error $"Codegen error: {e}"
+    | Ok instrs ->
+        instrs
+        |> List.choose (function
+            | X86_64.CALL label -> Some label
+            | _ -> None)
+        |> Ok
+
 let private rcMetadata (typ: AST.Type) : ANF.RcMetadata =
     {
         ANF.ReleasePlan = None
@@ -1460,6 +1470,33 @@ let testDictRefCountDecDictListValue () : Result<unit, string> =
     | Ok (_, _, stderr) ->
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected nested dict list values to be released, got stderr '{stderr.Trim()}'"
+
+/// Test: x64 DictHeap RefCountDec selects a planned helper for nested dict/list payload cleanup.
+let testDictRefCountDecDictListValueUsesPlannedHelper () : Result<unit, string> =
+    let listType = AST.TList AST.TInt64
+    let innerDictType = AST.TDict (AST.TInt64, listType)
+    let outerDictType = AST.TDict (AST.TInt64, innerDictType)
+    let program =
+        makeSimpleProgram
+            [
+                LIR.RefCountDec (LIR.Physical LIR.X0, 0, LIR.DictHeap, Some (rcMetadata outerDictType))
+            ]
+            LIR.Ret
+
+    match generatedCallLabels program with
+    | Error e -> Error e
+    | Ok labels ->
+        let callsPlannedDictHelper =
+            labels |> List.exists (fun label -> label.StartsWith("__dark_dict_rc_dec_plan_"))
+        let callsMatrixDictListHelper =
+            labels |> List.exists ((=) "__dark_dict_rc_dec_dict_list_value_helper")
+
+        if not callsPlannedDictHelper then
+            Error $"Nested dict/list RefCountDec did not call a planned dict helper; calls were {labels}"
+        elif callsMatrixDictListHelper then
+            Error $"Nested dict/list RefCountDec still called the dict-list matrix helper; calls were {labels}"
+        else
+            Ok ()
 
 /// Test: x64 DictHeap RefCountDec releases tuple leaf values with managed fields through release-plan metadata.
 let testDictRefCountDecTupleStringListValue () : Result<unit, string> =
@@ -5199,6 +5236,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR DictHeap RefCountDec releases string leaf keys and dict-list values", testDictRefCountDecStringKeyDictListValue)
     ("LIR DictHeap RefCountDec releases nested dict leaf values", testDictRefCountDecDictValue)
     ("LIR DictHeap RefCountDec releases nested dict list leaf values", testDictRefCountDecDictListValue)
+    ("LIR DictHeap RefCountDec uses planned helper for nested dict list leaf values", testDictRefCountDecDictListValueUsesPlannedHelper)
     ("LIR DictHeap RefCountDec releases tuple string/list leaf values", testDictRefCountDecTupleStringListValue)
     ("LIR DictHeap RefCountDec releases tuple string/list/dict leaf values", testDictRefCountDecTupleStringListDictValue)
     ("LIR DictHeap RefCountDec releases string keys and tuple string/list/dict leaf values", testDictRefCountDecStringKeyTupleStringListDictValue)
