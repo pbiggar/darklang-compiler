@@ -157,8 +157,12 @@ Latest update:
 - x64 tagged-list boxed-sum tuple helper specs now execute the covered tuple2,
   tuple3, tuple4, and tuple4 nested-tuple payload cleanup through planned
   fixed-block `RcReleasePlan` helpers instead of handwritten boxed-sum
-  nested fixed-block list-helper variants. Record-shaped boxed sums remain a
-  separate registry-aware follow-up.
+  nested fixed-block list-helper variants.
+- x64 tagged-list boxed-sum record helper specs now execute the covered
+  record1, record3, record4, and nested-sum payload cleanup through planned
+  fixed-block `RcReleasePlan` helpers. The old `FixedBlockFixedBlock*`
+  generator branches are no longer selected by helper specs; deleting those
+  dead branches is now mechanical cleanup rather than a behavior gap.
 
 Current head reviewed: includes x64 fixed-block dynamic string/bytes field
 release, tuple-only nested fixed-block field release, record-registry-based
@@ -284,10 +288,10 @@ coverage, plus initial
 compatibility predicate, plus shared `RcReleasePlan` metadata and x64 generic
 fixed-block dynamic string/bytes, dict-root, and closure-root field release
 consumption through `RcReleasePlan` for tuples, records, and boxed-sum payloads,
-plus planned boxed-sum tuple list helpers that carry source-type payload field
-cleanup through `RcReleasePlan`, plus boxed-sum release plans that carry
-source-type payload field cleanup when variant payload metadata is available,
-plus x64 top-level generic boxed-sum
+plus planned boxed-sum tuple and record list helpers that carry source-type
+payload field cleanup through `RcReleasePlan`, plus boxed-sum release plans
+that carry source-type payload field cleanup when variant payload metadata is
+available, plus x64 top-level generic boxed-sum
 variant dispatch for mixed payload cleanup, plus x64 nested generic boxed-sum
 child variant-dispatch coverage, plus x64 closure capture mixed boxed-sum
 variant-dispatch coverage, plus x64 tagged-list boxed-sum mixed
@@ -1419,9 +1423,9 @@ Likely gaps:
 3. Continue replacing backend helper-family matching with shared
    `RcReleasePlan` execution where practical. x64 tagged-list tuple2 and
    tuple4 nested-tuple leaf helpers, tuple4 nested-record middle-field leaf
-   helpers, and covered boxed-sum tuple helpers now use this path; use those
-   as the template for remaining nested list, record-shaped sum, and deeper sum
-   payload families.
+   helpers, and covered boxed-sum tuple and record helpers now use this path;
+   use those as the template for remaining nested list and deeper sum payload
+   families.
 4. Port ARM64 closure capture release semantics beyond the current direct
    dynamic-buffer, managed-root, and fixed-block probes to x64.
 5. Port any missing list helper variants to x64 until the shared shape-plan

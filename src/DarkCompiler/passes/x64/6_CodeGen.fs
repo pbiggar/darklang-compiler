@@ -2771,6 +2771,27 @@ let private sumTuple4ClosureDynamicListDictReleasePlan : ANF.RcReleasePlan =
 let private sumTuple4ClosureDynamicListDictListReleasePlan : ANF.RcReleasePlan =
     boxedSumLeafReleasePlan (listLeafFixedBlockReleasePlan (AST.TTuple [AST.TFunction ([AST.TInt64], AST.TInt64); AST.TString; AST.TList AST.TInt64; AST.TDict (AST.TInt64, AST.TList AST.TInt64)]))
 
+let private sumRecord1DynamicReleasePlan : ANF.RcReleasePlan =
+    boxedSumLeafReleasePlan
+        (ANF.RootRelease
+            (8,
+             ANF.GenericHeap,
+             ANF.FixedBlockPayloadRelease
+                 (8,
+                  [ANF.FieldRelease (0, ANF.DynamicBufferRelease ANF.DynamicStringBuffer)])))
+
+let private nestedSumDynamicPayloadReleasePlan : ANF.RcReleasePlan =
+    ANF.RootRelease
+        (16,
+         ANF.GenericHeap,
+         ANF.BoxedSumPayloadRelease
+             (16,
+              [ANF.FieldRelease (8, ANF.DynamicBufferRelease ANF.DynamicStringBuffer)],
+              []))
+
+let private nestedSumDynamicReleasePlan : ANF.RcReleasePlan =
+    boxedSumLeafReleasePlan nestedSumDynamicPayloadReleasePlan
+
 let private listRefCountDecSumTuple4NestedTupleDynamicListDictReleasePlan : ANF.RcReleasePlan =
     boxedSumLeafReleasePlan tuple4NestedTupleDynamicListDictReleasePlan
 
@@ -2848,18 +2869,18 @@ let private listRefCountDecHelperSpecs : (string * ListLeafPayloadRelease) list 
     (listRefCountDecSumTuple4ClosureDynamicListDictHelperLabel, (FixedBlockPlannedLeafPayload (16, sumTuple4ClosureDynamicListDictReleasePlan)))
     (listRefCountDecSumTuple4ClosureDynamicListDictListHelperLabel, (FixedBlockPlannedLeafPayload (16, sumTuple4ClosureDynamicListDictListReleasePlan)))
     (listRefCountDecSumTuple4NestedTupleDynamicListDictHelperLabel, (FixedBlockPlannedLeafPayload (16, listRefCountDecSumTuple4NestedTupleDynamicListDictReleasePlan)))
-    (listRefCountDecSumRecord1DynamicHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 8, [0])))
-    (listRefCountDecSumRecord3DynamicFirstHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0])))
-    (listRefCountDecSumRecord3DynamicThirdHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [16])))
-    (listRefCountDecSumRecord3DynamicFirstSecondHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0; 8])))
-    (listRefCountDecSumRecord3DynamicSecondThirdHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [8; 16])))
-    (listRefCountDecSumRecord3DynamicFirstThirdHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0; 16])))
-    (listRefCountDecSumRecord3DynamicSecondHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [8])))
-    (listRefCountDecSumRecord3DynamicAllHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 24, [0; 8; 16])))
-    (listRefCountDecSumRecord3DynamicListDictHelperLabel, (FixedBlockFixedBlockDynamicListDictFieldPayload (16, 8, 24, 0, 8, 16, dictRefCountDecHelperLabel)))
-    (listRefCountDecSumRecord4DynamicListDictHelperLabel, (FixedBlockFixedBlockDynamicBuffersListDictFieldPayload (16, 8, 32, [0; 8], 16, 24, dictRefCountDecHelperLabel)))
-    (listRefCountDecSumRecord4ClosureDynamicListDictHelperLabel, (FixedBlockFixedBlockClosureDynamicListDictFieldPayload (16, 8, 32, 0, 8, 16, 24, dictRefCountDecHelperLabel)))
-    (listRefCountDecNestedSumDynamicHelperLabel, (FixedBlockFixedBlockFieldPayload (16, 8, 16, [8])))
+    (listRefCountDecSumRecord1DynamicHelperLabel, (FixedBlockPlannedLeafPayload (16, sumRecord1DynamicReleasePlan)))
+    (listRefCountDecSumRecord3DynamicFirstHelperLabel, (FixedBlockPlannedLeafPayload (16, sumTuple3DynamicFirstReleasePlan)))
+    (listRefCountDecSumRecord3DynamicThirdHelperLabel, (FixedBlockPlannedLeafPayload (16, sumTuple3DynamicThirdReleasePlan)))
+    (listRefCountDecSumRecord3DynamicFirstSecondHelperLabel, (FixedBlockPlannedLeafPayload (16, sumTuple3DynamicFirstSecondReleasePlan)))
+    (listRefCountDecSumRecord3DynamicSecondThirdHelperLabel, (FixedBlockPlannedLeafPayload (16, sumTuple3DynamicSecondThirdReleasePlan)))
+    (listRefCountDecSumRecord3DynamicFirstThirdHelperLabel, (FixedBlockPlannedLeafPayload (16, sumTuple3DynamicFirstThirdReleasePlan)))
+    (listRefCountDecSumRecord3DynamicSecondHelperLabel, (FixedBlockPlannedLeafPayload (16, sumTuple3DynamicSecondReleasePlan)))
+    (listRefCountDecSumRecord3DynamicAllHelperLabel, (FixedBlockPlannedLeafPayload (16, sumTuple3DynamicAllReleasePlan)))
+    (listRefCountDecSumRecord3DynamicListDictHelperLabel, (FixedBlockPlannedLeafPayload (16, sumTuple3DynamicListDictReleasePlan)))
+    (listRefCountDecSumRecord4DynamicListDictHelperLabel, (FixedBlockPlannedLeafPayload (16, sumTuple4DynamicListDictReleasePlan)))
+    (listRefCountDecSumRecord4ClosureDynamicListDictHelperLabel, (FixedBlockPlannedLeafPayload (16, sumTuple4ClosureDynamicListDictReleasePlan)))
+    (listRefCountDecNestedSumDynamicHelperLabel, (FixedBlockPlannedLeafPayload (16, nestedSumDynamicReleasePlan)))
     (listRefCountDecListHelperLabel, ListLeafPayload)
     (listRefCountDecClosureHelperLabel, ClosureLeafPayload)
     (listRefCountDecDictHelperLabel, DictLeafPayload)
