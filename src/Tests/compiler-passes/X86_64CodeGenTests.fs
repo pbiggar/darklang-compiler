@@ -287,6 +287,13 @@ let private makeSimpleProgramWithRecords (instrs: LIR.Instr list) (term: LIR.Ter
 let private makeSimpleProgram (instrs: LIR.Instr list) (term: LIR.Terminator) : LIR.Program =
     makeSimpleProgramWithRecords instrs term Map.empty
 
+let private renameProgramEntryFunction (name: string) (program: LIR.Program) : LIR.Program =
+    match program with
+    | LIR.Program (func :: rest, variants, records) ->
+        LIR.Program ({ func with Name = name } :: rest, variants, records)
+    | LIR.Program ([], _, _) ->
+        Crash.crash "Test fixture expected a program with an entry function"
+
 let private makeEmptyFunction (name: string) (typedParams: LIR.TypedLIRParam list) : LIR.Function =
     let label = LIR.Label $"{name}_entry"
     {
@@ -2011,6 +2018,28 @@ let testTaggedListRefCountDecClosurePayload () : Result<unit, string> =
     | Ok (_, _, stderr) ->
         if stderr.Trim() = "" then Ok ()
         else Error $"Expected list closure payload release to balance leak counter, got stderr '{stderr.Trim()}'"
+
+/// Test: x64 tagged-list RefCountDec releases closure payloads in stdlib helper contexts.
+let testTaggedListRefCountDecClosurePayloadInStdlibFunction () : Result<unit, string> =
+    let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
+    let program =
+        makeSimpleProgram
+            [
+                LIR.ClosureAlloc (LIR.Physical LIR.X2, "Stdlib.List.__mapHelper_i64_fn_i64_acc_fn_i64", [])
+                LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
+                LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
+                LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 5L)
+                LIR.Orr (LIR.Physical LIR.X4, LIR.Physical LIR.X3, LIR.Physical LIR.X4)
+                LIR.RefCountDec (LIR.Physical LIR.X4, 0, LIR.TaggedList, Some (rcMetadata ((AST.TList closureType))))
+            ]
+            LIR.Ret
+        |> renameProgramEntryFunction "Stdlib.List.__mapHelper_i64_fn_i64_acc_fn_i64"
+
+    match runLIRProgramFullWithOptions program true with
+    | Error e -> Error e
+    | Ok (_, _, stderr) ->
+        if stderr.Trim() = "" then Ok ()
+        else Error $"Expected stdlib list closure payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
 /// Test: x64 tagged-list RefCountDec releases dict leaf payloads.
 let testTaggedListRefCountDecDictPayload () : Result<unit, string> =
@@ -4579,6 +4608,7 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR closure RefCountDec releases sum record string/list/dict capture", testClosureRefCountDecSumRecordStringListDictCapture)
     ("LIR closure RefCountDec releases multiple captures", testClosureRefCountDecMultipleCaptures)
     ("LIR tagged list RefCountDec releases closure payload", testTaggedListRefCountDecClosurePayload)
+    ("LIR tagged list RefCountDec releases closure payload in stdlib helper", testTaggedListRefCountDecClosurePayloadInStdlibFunction)
     ("LIR tagged list RefCountDec releases dict payload", testTaggedListRefCountDecDictPayload)
     ("LIR tagged list RefCountDec releases dict/list payload", testTaggedListRefCountDecDictListPayload)
     ("LIR tagged list RefCountDec releases string payload", testTaggedListRefCountDecStringPayload)

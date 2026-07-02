@@ -260,6 +260,9 @@ The main x64 gaps are:
 ## Recommended Next Steps
 
 1. Keep adding x64 probes when ARM64 gains a new recursive helper family.
+   `List<TFunction>` release from a `Stdlib.List.__mapHelper*` context is
+   already covered and uses the closure-list helper without a stdlib-specific
+   exclusion.
 2. Replace x64 helper-family selection with a shared shape-driven release plan
    executor instead of continuing helper explosion.
 3. Add x64 dict key/value shape matrix tests for typed recursive values.

@@ -15,6 +15,12 @@ Status date: 2026-07-02.
 
 Latest update:
 
+- x64 now has an explicit stdlib-context closure-list release probe. The
+  ARM64 bug was an architecture-local helper-selection guard that excluded
+  `Stdlib.*` functions; x64 did not have that guard, and
+  `X86_64CodeGenTests.testTaggedListRefCountDecClosurePayloadInStdlibFunction`
+  now pins that `List<TFunction>` releases through the closure-list helper even
+  from a `Stdlib.List.__mapHelper*`-named function.
 - Closure lists produced by `Stdlib.List.map` are now covered by leak-check
   tests. `List<TFunction>` roots route through tagged-list release helpers
   rather than generic fixed-block release, ARM64 closure-list helper selection
@@ -1117,6 +1123,8 @@ commits enabled:
   accounting
 - generic fixed-block zero-capture closure field release
 - tagged-list closure leaf payload release
+- tagged-list closure leaf payload release from a `Stdlib.List.__mapHelper*`
+  x64 function context
 - tagged-list dict leaf payload release
 - tagged-list dynamic string leaf payload release
 - tagged-list tuple dynamic string field release
@@ -1565,7 +1573,9 @@ small enough to test independently.
 
 Goal:
 
-- Establish which memory tests pass on x64 and close parity gaps.
+- Establish which memory tests pass on x64 and close parity gaps. The
+  closure-list/stdlib-helper slice is now accounted for by a focused x64
+  codegen probe.
 
 Tests first:
 
