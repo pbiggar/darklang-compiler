@@ -205,8 +205,17 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.RawFree ptr -> maxTempIdInAtom ptr
     | ANF.RawGet (ptr, offset, _) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom offset)
     | ANF.RawGetByte (ptr, offset) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom offset)
-    | ANF.RawSet (ptr, offset, value, _) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
-    | ANF.RawSetByte (ptr, offset, value) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
+    | ANF.RawWriteWord (ptr, offset, value) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
+    | ANF.RawWriteByte (ptr, offset, value) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
+    | ANF.RawSlotInit (ptr, offset, value, _) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
+    | ANF.StringToRawPtr value -> maxTempIdInAtom value
+    | ANF.RawPtrToString ptr -> maxTempIdInAtom ptr
+    | ANF.BytesToRawPtr value -> maxTempIdInAtom value
+    | ANF.RawPtrToBytes ptr -> maxTempIdInAtom ptr
+    | ANF.DictToRawPtr dict -> maxTempIdInAtom dict
+    | ANF.RawPtrToDict (ptr, tag, _) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom tag)
+    | ANF.ListToRawPtr list -> maxTempIdInAtom list
+    | ANF.RawPtrToList (ptr, tag, _) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom tag)
     | ANF.FloatSqrt atom -> maxTempIdInAtom atom
     | ANF.FloatAbs atom -> maxTempIdInAtom atom
     | ANF.FloatNeg atom -> maxTempIdInAtom atom
@@ -453,18 +462,18 @@ let buildReturnTypeReg
 /// Return type for monomorphized intrinsics not tracked in the return type registry
 let tryGetIntrinsicReturnType (funcName: string) : AST.Type option =
     if funcName.StartsWith("__raw_get_") then Some AST.TInt64
-    elif funcName.StartsWith("__raw_set_") then Some AST.TUnit
+    elif funcName.StartsWith("__raw_slot_init_") then Some AST.TUnit
     elif funcName.StartsWith("__hash_") then Some AST.TInt64
     elif funcName.StartsWith("__key_eq_") then Some AST.TBool
     elif funcName.StartsWith("__empty_dict_") then Some AST.TInt64
     elif funcName.StartsWith("__dict_is_null_") then Some AST.TBool
     elif funcName.StartsWith("__dict_get_tag_") then Some AST.TInt64
-    elif funcName.StartsWith("__dict_to_rawptr_") then Some AST.TInt64
-    elif funcName.StartsWith("__rawptr_to_dict_") then Some AST.TInt64
+    elif funcName.StartsWith("__dict_to_rawptr_") then Some AST.TRawPtr
+    elif funcName.StartsWith("__rawptr_to_dict_") then Some (AST.TDict (AST.TVar "k", AST.TVar "v"))
     elif funcName.StartsWith("__list_is_null_") then Some AST.TBool
     elif funcName.StartsWith("__list_get_tag_") then Some AST.TInt64
-    elif funcName.StartsWith("__list_to_rawptr_") then Some AST.TInt64
-    elif funcName.StartsWith("__rawptr_to_list_") then Some AST.TInt64
+    elif funcName.StartsWith("__list_to_rawptr_") then Some AST.TRawPtr
+    elif funcName.StartsWith("__rawptr_to_list_") then Some (AST.TList (AST.TVar "a"))
     else None
 
 /// CFG builder state - includes lookups to avoid mutable module-level state
@@ -628,8 +637,17 @@ let cexprDescription (cexpr: ANF.CExpr) : string =
     | ANF.RawFree _ -> "RawFree"
     | ANF.RawGet _ -> "RawGet"
     | ANF.RawGetByte _ -> "RawGetByte"
-    | ANF.RawSet _ -> "RawSet"
-    | ANF.RawSetByte _ -> "RawSetByte"
+    | ANF.RawWriteWord _ -> "RawWriteWord"
+    | ANF.RawWriteByte _ -> "RawWriteByte"
+    | ANF.RawSlotInit _ -> "RawSlotInit"
+    | ANF.StringToRawPtr _ -> "StringToRawPtr"
+    | ANF.RawPtrToString _ -> "RawPtrToString"
+    | ANF.BytesToRawPtr _ -> "BytesToRawPtr"
+    | ANF.RawPtrToBytes _ -> "RawPtrToBytes"
+    | ANF.DictToRawPtr _ -> "DictToRawPtr"
+    | ANF.RawPtrToDict _ -> "RawPtrToDict"
+    | ANF.ListToRawPtr _ -> "ListToRawPtr"
+    | ANF.RawPtrToList _ -> "RawPtrToList"
     | ANF.RefCountIncString _ -> "RefCountIncString"
     | ANF.RefCountDecString _ -> "RefCountDecString"
     | ANF.RefCountIncBytes _ -> "RefCountIncBytes"
@@ -1174,22 +1192,66 @@ let rec convertExpr
                         atomToOperand builder offsetAtom
                         |> Result.map (fun offsetOp ->
                             [MIR.RawGetByte (destReg, ptrOp, offsetOp)]))
-                | ANF.RawSet (ptrAtom, offsetAtom, valueAtom, valueType) ->
+                | ANF.RawWriteWord (ptrAtom, offsetAtom, valueAtom) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder offsetAtom
                         |> Result.bind (fun offsetOp ->
                             atomToOperand builder valueAtom
                             |> Result.map (fun valueOp ->
-                                [MIR.RawSet (ptrOp, offsetOp, valueOp, valueType)])))
-                | ANF.RawSetByte (ptrAtom, offsetAtom, valueAtom) ->
+                                [MIR.RawWriteWord (ptrOp, offsetOp, valueOp)])))
+                | ANF.RawWriteByte (ptrAtom, offsetAtom, valueAtom) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder offsetAtom
                         |> Result.bind (fun offsetOp ->
                             atomToOperand builder valueAtom
                             |> Result.map (fun valueOp ->
-                                [MIR.RawSetByte (ptrOp, offsetOp, valueOp)])))
+                                [MIR.RawWriteByte (ptrOp, offsetOp, valueOp)])))
+                | ANF.RawSlotInit (ptrAtom, offsetAtom, valueAtom, valueType) ->
+                    atomToOperand builder ptrAtom
+                    |> Result.bind (fun ptrOp ->
+                        atomToOperand builder offsetAtom
+                        |> Result.bind (fun offsetOp ->
+                            atomToOperand builder valueAtom
+                            |> Result.map (fun valueOp ->
+                                [MIR.RawSlotInit (ptrOp, offsetOp, valueOp, valueType)])))
+                | ANF.StringToRawPtr valueAtom ->
+                    destType := AST.TRawPtr
+                    atomToOperand builder valueAtom
+                    |> Result.map (fun valueOp -> [MIR.StringToRawPtr (destReg, valueOp)])
+                | ANF.RawPtrToString ptrAtom ->
+                    destType := AST.TString
+                    atomToOperand builder ptrAtom
+                    |> Result.map (fun ptrOp -> [MIR.RawPtrToString (destReg, ptrOp)])
+                | ANF.BytesToRawPtr valueAtom ->
+                    destType := AST.TRawPtr
+                    atomToOperand builder valueAtom
+                    |> Result.map (fun valueOp -> [MIR.BytesToRawPtr (destReg, valueOp)])
+                | ANF.RawPtrToBytes ptrAtom ->
+                    destType := AST.TBytes
+                    atomToOperand builder ptrAtom
+                    |> Result.map (fun ptrOp -> [MIR.RawPtrToBytes (destReg, ptrOp)])
+                | ANF.DictToRawPtr dictAtom ->
+                    destType := AST.TRawPtr
+                    atomToOperand builder dictAtom
+                    |> Result.map (fun dictOp -> [MIR.DictToRawPtr (destReg, dictOp)])
+                | ANF.RawPtrToDict (ptrAtom, tagAtom, dictType) ->
+                    destType := dictType
+                    atomToOperand builder ptrAtom
+                    |> Result.bind (fun ptrOp ->
+                        atomToOperand builder tagAtom
+                        |> Result.map (fun tagOp -> [MIR.RawPtrToDict (destReg, ptrOp, tagOp)]))
+                | ANF.ListToRawPtr listAtom ->
+                    destType := AST.TRawPtr
+                    atomToOperand builder listAtom
+                    |> Result.map (fun listOp -> [MIR.ListToRawPtr (destReg, listOp)])
+                | ANF.RawPtrToList (ptrAtom, tagAtom, listType) ->
+                    destType := listType
+                    atomToOperand builder ptrAtom
+                    |> Result.bind (fun ptrOp ->
+                        atomToOperand builder tagAtom
+                        |> Result.map (fun tagOp -> [MIR.RawPtrToList (destReg, ptrOp, tagOp)]))
                 | ANF.FloatSqrt atom ->
                     destType := AST.TFloat64
                     atomToOperand builder atom
@@ -1805,22 +1867,66 @@ and convertExprToOperand
                         atomToOperand builder offsetAtom
                         |> Result.map (fun offsetOp ->
                             [MIR.RawGetByte (destReg, ptrOp, offsetOp)]))
-                | ANF.RawSet (ptrAtom, offsetAtom, valueAtom, valueType) ->
+                | ANF.RawWriteWord (ptrAtom, offsetAtom, valueAtom) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder offsetAtom
                         |> Result.bind (fun offsetOp ->
                             atomToOperand builder valueAtom
                             |> Result.map (fun valueOp ->
-                                [MIR.RawSet (ptrOp, offsetOp, valueOp, valueType)])))
-                | ANF.RawSetByte (ptrAtom, offsetAtom, valueAtom) ->
+                                [MIR.RawWriteWord (ptrOp, offsetOp, valueOp)])))
+                | ANF.RawWriteByte (ptrAtom, offsetAtom, valueAtom) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder offsetAtom
                         |> Result.bind (fun offsetOp ->
                             atomToOperand builder valueAtom
                             |> Result.map (fun valueOp ->
-                                [MIR.RawSetByte (ptrOp, offsetOp, valueOp)])))
+                                [MIR.RawWriteByte (ptrOp, offsetOp, valueOp)])))
+                | ANF.RawSlotInit (ptrAtom, offsetAtom, valueAtom, valueType) ->
+                    atomToOperand builder ptrAtom
+                    |> Result.bind (fun ptrOp ->
+                        atomToOperand builder offsetAtom
+                        |> Result.bind (fun offsetOp ->
+                            atomToOperand builder valueAtom
+                            |> Result.map (fun valueOp ->
+                                [MIR.RawSlotInit (ptrOp, offsetOp, valueOp, valueType)])))
+                | ANF.StringToRawPtr valueAtom ->
+                    destType := AST.TRawPtr
+                    atomToOperand builder valueAtom
+                    |> Result.map (fun valueOp -> [MIR.StringToRawPtr (destReg, valueOp)])
+                | ANF.RawPtrToString ptrAtom ->
+                    destType := AST.TString
+                    atomToOperand builder ptrAtom
+                    |> Result.map (fun ptrOp -> [MIR.RawPtrToString (destReg, ptrOp)])
+                | ANF.BytesToRawPtr valueAtom ->
+                    destType := AST.TRawPtr
+                    atomToOperand builder valueAtom
+                    |> Result.map (fun valueOp -> [MIR.BytesToRawPtr (destReg, valueOp)])
+                | ANF.RawPtrToBytes ptrAtom ->
+                    destType := AST.TBytes
+                    atomToOperand builder ptrAtom
+                    |> Result.map (fun ptrOp -> [MIR.RawPtrToBytes (destReg, ptrOp)])
+                | ANF.DictToRawPtr dictAtom ->
+                    destType := AST.TRawPtr
+                    atomToOperand builder dictAtom
+                    |> Result.map (fun dictOp -> [MIR.DictToRawPtr (destReg, dictOp)])
+                | ANF.RawPtrToDict (ptrAtom, tagAtom, dictType) ->
+                    destType := dictType
+                    atomToOperand builder ptrAtom
+                    |> Result.bind (fun ptrOp ->
+                        atomToOperand builder tagAtom
+                        |> Result.map (fun tagOp -> [MIR.RawPtrToDict (destReg, ptrOp, tagOp)]))
+                | ANF.ListToRawPtr listAtom ->
+                    destType := AST.TRawPtr
+                    atomToOperand builder listAtom
+                    |> Result.map (fun listOp -> [MIR.ListToRawPtr (destReg, listOp)])
+                | ANF.RawPtrToList (ptrAtom, tagAtom, listType) ->
+                    destType := listType
+                    atomToOperand builder ptrAtom
+                    |> Result.bind (fun ptrOp ->
+                        atomToOperand builder tagAtom
+                        |> Result.map (fun tagOp -> [MIR.RawPtrToList (destReg, ptrOp, tagOp)]))
                 | ANF.FloatSqrt atom ->
                     destType := AST.TFloat64
                     atomToOperand builder atom

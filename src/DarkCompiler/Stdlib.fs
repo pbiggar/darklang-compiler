@@ -113,30 +113,28 @@ let rawMemoryIntrinsics : ModuleFunc list = [
     { Name = "__raw_free"; TypeParams = []; ParamTypes = [TRawPtr]; ReturnType = TUnit }
     // __raw_get<v> : (RawPtr, Int64) -> v - read 8 bytes at offset, typed as v
     { Name = "__raw_get"; TypeParams = ["v"]; ParamTypes = [TRawPtr; TInt64]; ReturnType = TVar "v" }
-    // __raw_set<v> : (RawPtr, Int64, v) -> Unit - write 8 bytes at offset
-    { Name = "__raw_set"; TypeParams = ["v"]; ParamTypes = [TRawPtr; TInt64; TVar "v"]; ReturnType = TUnit }
+    // __raw_write_word : (RawPtr, Int64, Int64) -> Unit - write 8 unmanaged bytes at offset
+    { Name = "__raw_write_word"; TypeParams = []; ParamTypes = [TRawPtr; TInt64; TInt64]; ReturnType = TUnit }
     // __raw_get_byte : (RawPtr, Int64) -> Int64 - read 1 byte at offset, zero-extended
     { Name = "__raw_get_byte"; TypeParams = []; ParamTypes = [TRawPtr; TInt64]; ReturnType = TInt64 }
-    // __raw_set_byte : (RawPtr, Int64, Int64) -> Unit - write 1 byte at offset
-    { Name = "__raw_set_byte"; TypeParams = []; ParamTypes = [TRawPtr; TInt64; TInt64]; ReturnType = TUnit }
-    // __rawptr_to_int64 : (RawPtr) -> Int64 - cast pointer to int (for tagging)
-    { Name = "__rawptr_to_int64"; TypeParams = []; ParamTypes = [TRawPtr]; ReturnType = TInt64 }
-    // __int64_to_rawptr : (Int64) -> RawPtr - cast int to pointer (for memory ops)
-    { Name = "__int64_to_rawptr"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TRawPtr }
+    // __raw_write_byte : (RawPtr, Int64, Int64) -> Unit - write 1 unmanaged byte at offset
+    { Name = "__raw_write_byte"; TypeParams = []; ParamTypes = [TRawPtr; TInt64; TInt64]; ReturnType = TUnit }
+    // __raw_slot_init<v> : (RawPtr, Int64, v) -> Unit - initialize a typed slot edge
+    { Name = "__raw_slot_init"; TypeParams = ["v"]; ParamTypes = [TRawPtr; TInt64; TVar "v"]; ReturnType = TUnit }
     // __refcount_inc_string : (String) -> Unit - increment string refcount
     { Name = "__refcount_inc_string"; TypeParams = []; ParamTypes = [TString]; ReturnType = TUnit }
     // __refcount_dec_string : (String) -> Unit - decrement string refcount, free if 0
     { Name = "__refcount_dec_string"; TypeParams = []; ParamTypes = [TString]; ReturnType = TUnit }
-    // __string_to_int64 : (String) -> Int64 - cast string pointer to int (for storage)
-    { Name = "__string_to_int64"; TypeParams = []; ParamTypes = [TString]; ReturnType = TInt64 }
-    // __int64_to_string : (Int64) -> String - cast int to string pointer (for retrieval)
-    { Name = "__int64_to_string"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TString }
+    // __string_to_rawptr : (String) -> RawPtr - borrow string backing pointer
+    { Name = "__string_to_rawptr"; TypeParams = []; ParamTypes = [TString]; ReturnType = TRawPtr }
+    // __rawptr_to_string : (RawPtr) -> String - reinterpret initialized raw allocation as String
+    { Name = "__rawptr_to_string"; TypeParams = []; ParamTypes = [TRawPtr]; ReturnType = TString }
 
     // Bytes intrinsics - for byte array operations
-    // __bytes_to_int64 : (Bytes) -> Int64 - cast bytes pointer to int (for storage)
-    { Name = "__bytes_to_int64"; TypeParams = []; ParamTypes = [TBytes]; ReturnType = TInt64 }
-    // __int64_to_bytes : (Int64) -> Bytes - cast int to bytes pointer (for retrieval)
-    { Name = "__int64_to_bytes"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TBytes }
+    // __bytes_to_rawptr : (Bytes) -> RawPtr - borrow bytes backing pointer
+    { Name = "__bytes_to_rawptr"; TypeParams = []; ParamTypes = [TBytes]; ReturnType = TRawPtr }
+    // __rawptr_to_bytes : (RawPtr) -> Bytes - reinterpret initialized raw allocation as Bytes
+    { Name = "__rawptr_to_bytes"; TypeParams = []; ParamTypes = [TRawPtr]; ReturnType = TBytes }
 
     // Dict intrinsics - for type-safe Dict<k, v> operations
     // __empty_dict<k, v> : () -> Dict<k, v> - create empty dict (null pointer)

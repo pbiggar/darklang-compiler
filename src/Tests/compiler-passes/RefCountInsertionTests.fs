@@ -1255,7 +1255,7 @@ let testMapHelperClosureSourceToValueKeepsSourceBorrowed () : TestResult =
     else
         Ok ()
 
-let testClosurePushBackConsumesImmediateClosureCallResult () : TestResult =
+let testClosurePushBackRetainsImmediateClosureCallResult () : TestResult =
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
     let makerType = AST.TFunction ([AST.TInt64], closureType)
     let listType = AST.TList closureType
@@ -1308,9 +1308,9 @@ let testClosurePushBackConsumesImmediateClosureCallResult () : TestResult =
     let (transformed, _, _) = insertRCInFunction ctx func initialVarGen
 
     if hasRefCountDecForTemp returnedTemp transformed.Body then
-        Error "ClosureCall result passed directly to closure-list pushBack should transfer ownership without an immediate local dec"
-    else
         Ok ()
+    else
+        Error "ClosureCall result passed directly to typed closure-list pushBack should get a local dec because raw storage retains the edge"
 
 let testBorrowedCallStillGetsAutoDecUnderConservativePolicy () : TestResult =
     let nodeType = AST.TList AST.TInt64
@@ -1627,7 +1627,7 @@ let tests = [
     ("borrowed projection from parameter self-recursive call stays borrowed", testBorrowedProjectionFromParameterSelfRecursiveCallStaysBorrowed)
     ("map helper closure-producing call retains borrowed source", testMapHelperClosureProducingCallRetainsBorrowedSource)
     ("map helper closure source to value keeps source borrowed", testMapHelperClosureSourceToValueKeepsSourceBorrowed)
-    ("closure pushBack consumes immediate closure-call result", testClosurePushBackConsumesImmediateClosureCallResult)
+    ("closure pushBack retains immediate closure-call result", testClosurePushBackRetainsImmediateClosureCallResult)
     ("borrowed call still gets auto-dec under conservative policy", testBorrowedCallStillGetsAutoDecUnderConservativePolicy)
     ("call returning closure gets auto-dec after use", testCallReturningClosureGetsAutoDecAfterUse)
     ("closure call returning closure gets auto-dec after use", testClosureCallReturningClosureGetsAutoDecAfterUse)

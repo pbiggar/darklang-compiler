@@ -597,17 +597,21 @@ let private dictRefCountDecTupleStringListDictValueHelperLabel = "__dark_dict_rc
 let private dictRefCountDecDynamicKeyTupleStringListDictValueHelperLabel = "__dark_dict_rc_dec_dynamic_key_tuple_string_list_dict_value_helper"
 let private dictRefCountDecSumStringValueHelperLabel = "__dark_dict_rc_dec_sum_string_value_helper"
 let private plannedDictRefCountDecHelperLabelPrefix = "__dark_dict_rc_dec_plan_"
+let private closureRefCountIncHelperLabel = "__dark_closure_rc_inc_helper"
 let private closureRefCountDecHelperLabel = "__dark_closure_rc_dec_helper"
 
-type private RawSetRootRetainTarget =
-    | RawSetListRootRetain
-    | RawSetDictRootRetain
+type private SlotInitRootRetainTarget =
+    | SlotInitListRootRetain
+    | SlotInitDictRootRetain
+    | SlotInitDynamicBufferRetain
+    | SlotInitClosureRootRetain
+    | SlotInitGenericRootRetain of payloadSize:int
 
-let private rawSetRootRetainTarget
+let private slotInitRootRetainTarget
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: ANF.RcSumShapeRegistry)
-    (valueType: AST.Type option)
-    : RawSetRootRetainTarget option =
+    (valueType: AST.Type)
+    : SlotInitRootRetainTarget option =
     let shapeOfKnownType (typ: AST.Type) : ANF.RcShape option =
         match typ with
         | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
@@ -615,23 +619,30 @@ let private rawSetRootRetainTarget
         | _ ->
             Some (ANF.rcShapeOfTypeWithSums recordRegistry sumShapeRegistry typ)
 
-    valueType
-    |> Option.bind (fun typ ->
-        shapeOfKnownType typ
-        |> Option.bind (function
+    shapeOfKnownType valueType
+    |> Option.bind (function
             | ANF.TaggedListShape _ ->
-                Some RawSetListRootRetain
+                Some SlotInitListRootRetain
             | ANF.DictRoot _ ->
-                Some RawSetDictRootRetain
-            | ANF.Immediate
-            | ANF.FixedBlock _
-            | ANF.BoxedSum _
+                Some SlotInitDictRootRetain
             | ANF.DynamicString
-            | ANF.DynamicBytes
-            | ANF.ClosureShape _
+            | ANF.DynamicBytes ->
+                Some SlotInitDynamicBufferRetain
+            | ANF.ClosureShape _ ->
+                Some SlotInitClosureRootRetain
+            | ANF.FixedBlock (payloadSize, _) ->
+                match valueType with
+                | AST.TTuple _
+                | AST.TRecord _ -> Some (SlotInitGenericRootRetain payloadSize)
+                | _ -> None
+            | ANF.BoxedSum (payloadSize, _, _) ->
+                match valueType with
+                | AST.TSum _ -> Some (SlotInitGenericRootRetain payloadSize)
+                | _ -> None
+            | ANF.Immediate
             | ANF.StaticString
             | ANF.RawUnmanaged ->
-                None))
+                None)
 
 let private tryRcReleasePlanOfType
     (recordRegistry: LIR.RecordRegistry)
@@ -1010,10 +1021,12 @@ let private genRefCountIncGeneric (addrReg: X86_64.Reg) (payloadSize: int) : X86
     [X86_64.TEST_reg (addrReg, addrReg)
      X86_64.Jcc (X86_64.EQ, skipLabel)
      X86_64.PUSH X86_64.RDX
-     X86_64.MOV_reg (X86_64.RDX, addrReg)
-     X86_64.MOV_load (X86_64.RDX, X86_64.RDX, payloadSize)
+     X86_64.PUSH X86_64.R10
+     X86_64.MOV_reg (X86_64.R10, addrReg)
+     X86_64.MOV_load (X86_64.RDX, X86_64.R10, payloadSize)
      X86_64.ADD_imm (X86_64.RDX, 1)
-     X86_64.MOV_store (addrReg, payloadSize, X86_64.RDX)
+     X86_64.MOV_store (X86_64.R10, payloadSize, X86_64.RDX)
+     X86_64.POP X86_64.R10
      X86_64.POP X86_64.RDX
      X86_64.Label skipLabel]
 
@@ -1593,6 +1606,7 @@ let private generateDictRefCountDecHelper
     (releaseLeafDynamicValue: bool)
     (releaseLeafListValue: bool)
     (releaseLeafDictValueHelper: string option)
+    (releaseLeafClosureValue: bool)
     (leafFixedBlockValueRelease: (int * ANF.RcReleasePlan) option)
     (enableLeakCheck: bool)
     (recordRegistry: LIR.RecordRegistry)
@@ -1614,6 +1628,7 @@ let private generateDictRefCountDecHelper
     let skipFreeList = label "skip_freelist"
     let skipLeafListValueRelease = label "skip_leaf_list_value_release"
     let skipLeafDictValueRelease = label "skip_leaf_dict_value_release"
+    let skipLeafClosureValueRelease = label "skip_leaf_closure_value_release"
     let skipLeafFixedBlockValueRelease = label "skip_leaf_fixed_block_value_release"
     let skipLeafDynamicKeyRelease = label "skip_leaf_dynamic_key_release"
     let skipLeafDynamicValueRelease = label "skip_leaf_dynamic_value_release"
@@ -1737,6 +1752,11 @@ let private generateDictRefCountDecHelper
                 releaseManagedRootValueInstrs baseReg 8 targetHelperLabel skipLeafDictValueRelease
             | None ->
                 []
+        let closureValueInstrs =
+            if releaseLeafClosureValue then
+                releaseManagedRootValueInstrs baseReg 8 closureRefCountDecHelperLabel skipLeafClosureValueRelease
+            else
+                []
         let fixedBlockValueInstrs =
             match leafFixedBlockValueRelease with
             | Some (payloadSize, releasePlan) ->
@@ -1744,13 +1764,14 @@ let private generateDictRefCountDecHelper
             | None ->
                 []
 
-        releaseDynamicBufferKeyInstrs baseReg @ releaseDynamicBufferValueInstrs baseReg @ listValueInstrs @ dictValueInstrs @ fixedBlockValueInstrs
+        releaseDynamicBufferKeyInstrs baseReg @ releaseDynamicBufferValueInstrs baseReg @ listValueInstrs @ dictValueInstrs @ closureValueInstrs @ fixedBlockValueInstrs
 
     let hasPayloadRelease =
         releaseLeafDynamicKey
         || releaseLeafDynamicValue
         || releaseLeafListValue
         || Option.isSome releaseLeafDictValueHelper
+        || releaseLeafClosureValue
         || Option.isSome leafFixedBlockValueRelease
 
     let releaseLeafValueInstrs =
@@ -1905,20 +1926,20 @@ let private generatePlannedDictRefCountDecHelper
             | ANF.DynamicBufferRelease _ -> true
             | other -> unsupported "key" other
 
-        let releaseLeafDynamicValue, releaseLeafListValue, releaseLeafDictValueHelper, leafFixedBlockValueRelease =
+        let releaseLeafDynamicValue, releaseLeafListValue, releaseLeafDictValueHelper, releaseLeafClosureValue, leafFixedBlockValueRelease =
             match valueRelease with
             | ANF.NoReleasePlan ->
-                false, false, None, None
+                false, false, None, false, None
             | ANF.DynamicBufferRelease _ ->
-                true, false, None, None
+                true, false, None, false, None
             | ANF.RootRelease (_, ANF.TaggedList, _) ->
-                false, true, None, None
+                false, true, None, false, None
             | ANF.RootRelease (_, ANF.DictHeap, _) ->
-                false, false, Some (dictDecHelperForReleasePlan valueRelease), None
+                false, false, Some (dictDecHelperForReleasePlan valueRelease), false, None
+            | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
+                false, false, None, true, None
             | ANF.RootRelease (payloadSize, ANF.GenericHeap, _) ->
-                false, false, None, Some (payloadSize, valueRelease)
-            | other ->
-                unsupported "value" other
+                false, false, None, false, Some (payloadSize, valueRelease)
 
         generateDictRefCountDecHelper
             helperLabel
@@ -1926,6 +1947,7 @@ let private generatePlannedDictRefCountDecHelper
             releaseLeafDynamicValue
             releaseLeafListValue
             releaseLeafDictValueHelper
+            releaseLeafClosureValue
             leafFixedBlockValueRelease
             enableLeakCheck
             recordRegistry
@@ -1966,6 +1988,40 @@ let private closurePayloadSizesFromParams (functions: LIR.Function list) : Map<s
         | _ ->
             None)
     |> Map.ofList
+
+let private generateClosureRefCountIncHelper (closurePayloadSizes: Map<string, int>) : X86_64.Instr list =
+    let label name = $"__dark_closure_rc_inc_{name}"
+    let helperRet = label "ret"
+    let payloadReady = label "payload_ready"
+
+    let payloadCases =
+        closurePayloadSizes
+        |> Map.toList
+        |> List.filter (fun (_, payloadSize) -> payloadSize <> 8)
+        |> List.mapi (fun index (funcName, payloadSize) ->
+            let nextCase = label $"payload_next_{index}"
+            [X86_64.LEA_rip (X86_64.R10, funcName)
+             X86_64.CMP_reg (X86_64.RDX, X86_64.R10)
+             X86_64.Jcc (X86_64.NE, nextCase)
+             X86_64.MOV_imm32 (X86_64.RCX, int32 payloadSize)
+             X86_64.JMP payloadReady
+             X86_64.Label nextCase])
+        |> List.concat
+
+    [X86_64.Label closureRefCountIncHelperLabel
+     X86_64.TEST_reg (X86_64.RAX, X86_64.RAX)
+     X86_64.Jcc (X86_64.EQ, helperRet)
+     X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 0)
+     X86_64.MOV_imm32 (X86_64.RCX, 8)]
+    @ payloadCases
+    @ [X86_64.Label payloadReady
+       X86_64.MOV_reg (X86_64.RDI, X86_64.RAX)
+       X86_64.ADD_reg (X86_64.RDI, X86_64.RCX)
+       X86_64.MOV_load (X86_64.RDX, X86_64.RDI, 0)
+       X86_64.ADD_imm (X86_64.RDX, 1)
+       X86_64.MOV_store (X86_64.RDI, 0, X86_64.RDX)
+       X86_64.Label helperRet
+       X86_64.RET]
 
 let private generateClosureRefCountDecHelper
     (enableLeakCheck: bool)
@@ -3133,21 +3189,26 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
         |> Result.map (fun addrReg ->
             match kind with
             | LIR.TaggedList ->
-                let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI]
+                let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.R10]
                 let saves = saveRegs |> List.map X86_64.PUSH
                 let restores = saveRegs |> List.rev |> List.map X86_64.POP
                 saves
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL listRefCountIncHelperLabel]
                 @ restores
             | LIR.DictHeap ->
-                let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9]
+                let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10]
                 let saves = saveRegs |> List.map X86_64.PUSH
                 let restores = saveRegs |> List.rev |> List.map X86_64.POP
                 saves
                 @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL dictRefCountIncHelperLabel]
                 @ restores
             | LIR.ClosureHeap ->
-                genRefCountIncGeneric addrReg payloadSize
+                let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.R10]
+                let saves = saveRegs |> List.map X86_64.PUSH
+                let restores = saveRegs |> List.rev |> List.map X86_64.POP
+                saves
+                @ [X86_64.MOV_reg (X86_64.RAX, addrReg); X86_64.CALL closureRefCountIncHelperLabel]
+                @ restores
             | LIR.GenericHeap ->
                 genRefCountIncGeneric addrReg payloadSize)
 
@@ -3675,29 +3736,87 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                          X86_64.ADD_reg (scratch, o)
                          X86_64.MOV_load_byte (d, scratch, 0)])))
 
-    | LIR.RawSet (ptr, byteOffset, value, valueType) ->
+    | LIR.RawWriteWord (ptr, byteOffset, value) ->
         resolveReg ptr |> Result.bind (fun p ->
             resolveReg byteOffset |> Result.bind (fun o ->
                 resolveReg value |> Result.map (fun v ->
-                    // Ownership increment for raw runtime nodes. Dynamic buffers are
-                    // intentionally omitted here: list leaves currently consume those
-                    // freshly owned values instead of retaining an extra reference.
+                    if v = scratch || o = scratch then
+                        let tempReg = X86_64.RCX
+                        if p = tempReg then
+                            [X86_64.PUSH tempReg
+                             X86_64.PUSH scratch
+                             X86_64.MOV_load (scratch, X86_64.RSP, 8)
+                             X86_64.ADD_reg (scratch, o)
+                             X86_64.MOV_load (tempReg, X86_64.RSP, 0)
+                             X86_64.MOV_store (scratch, 0, tempReg)
+                             X86_64.POP scratch
+                             X86_64.POP tempReg]
+                        else
+                            [X86_64.PUSH tempReg
+                             X86_64.MOV_reg (tempReg, v)
+                             X86_64.MOV_reg (scratch, p)
+                             X86_64.ADD_reg (scratch, o)
+                             X86_64.MOV_store (scratch, 0, tempReg)
+                             X86_64.POP tempReg]
+                    else
+                        [X86_64.MOV_reg (scratch, p)
+                         X86_64.ADD_reg (scratch, o)
+                         X86_64.MOV_store (scratch, 0, v)])))
+
+    | LIR.RawSlotInit (ptr, byteOffset, value, valueType) ->
+        resolveReg ptr |> Result.bind (fun p ->
+            resolveReg byteOffset |> Result.bind (fun o ->
+                resolveReg value |> Result.map (fun v ->
+                    // Raw runtime nodes own every managed value stored in an edge slot.
+                    // RawGet is borrowed, so RawSlotInit is the retain point for copied edges.
                     let ownershipInc : X86_64.Instr list =
-                        match rawSetRootRetainTarget ctx.RecordRegistry ctx.SumShapeRegistry valueType with
-                        | Some RawSetListRootRetain ->
-                            let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI]
+                        match slotInitRootRetainTarget ctx.RecordRegistry ctx.SumShapeRegistry valueType with
+                        | Some SlotInitListRootRetain ->
+                            let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.R10]
                             let saves = saveRegs |> List.map X86_64.PUSH
                             let restores = saveRegs |> List.rev |> List.map X86_64.POP
                             saves
                             @ [X86_64.MOV_reg (X86_64.RAX, v); X86_64.CALL listRefCountIncHelperLabel]
                             @ restores
-                        | Some RawSetDictRootRetain ->
-                            let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9]
+                        | Some SlotInitDictRootRetain ->
+                            let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10]
                             let saves = saveRegs |> List.map X86_64.PUSH
                             let restores = saveRegs |> List.rev |> List.map X86_64.POP
                             saves
                             @ [X86_64.MOV_reg (X86_64.RAX, v); X86_64.CALL dictRefCountIncHelperLabel]
                             @ restores
+                        | Some SlotInitDynamicBufferRetain ->
+                            let literalLabel = freshLabel "slotinit_rcinc_dynamic_lit"
+                            [X86_64.PUSH X86_64.RCX
+                             X86_64.PUSH X86_64.RDX
+                             X86_64.PUSH X86_64.R10
+                             X86_64.PUSH scratch
+                             X86_64.MOV_reg (X86_64.R10, v)
+                             X86_64.MOV_load (X86_64.RCX, X86_64.R10, 0)
+                             X86_64.ADD_imm (X86_64.RCX, 7)
+                             X86_64.AND_imm (X86_64.RCX, -8)
+                             X86_64.ADD_imm (X86_64.RCX, 8)
+                             X86_64.ADD_reg (X86_64.RCX, X86_64.R10)
+                             X86_64.MOV_load (X86_64.RDX, X86_64.RCX, 0)]
+                            @ loadImm64 scratch 0x7FFFFFFFFFFFFFFFL
+                            @ [X86_64.CMP_reg (X86_64.RDX, scratch)
+                               X86_64.Jcc (X86_64.EQ, literalLabel)
+                               X86_64.ADD_imm (X86_64.RDX, 1)
+                               X86_64.MOV_store (X86_64.RCX, 0, X86_64.RDX)
+                               X86_64.Label literalLabel
+                               X86_64.POP scratch
+                               X86_64.POP X86_64.R10
+                               X86_64.POP X86_64.RDX
+                               X86_64.POP X86_64.RCX]
+                        | Some SlotInitClosureRootRetain ->
+                            let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.R10]
+                            let saves = saveRegs |> List.map X86_64.PUSH
+                            let restores = saveRegs |> List.rev |> List.map X86_64.POP
+                            saves
+                            @ [X86_64.MOV_reg (X86_64.RAX, v); X86_64.CALL closureRefCountIncHelperLabel]
+                            @ restores
+                        | Some (SlotInitGenericRootRetain payloadSize) ->
+                            genRefCountIncGeneric v payloadSize
                         | _ ->
                             []
 
@@ -3732,9 +3851,9 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                              X86_64.ADD_reg (scratch, o)
                              X86_64.MOV_store (scratch, 0, v)]
 
-                    ownershipInc @ storeInstrs)))
+                    storeInstrs @ ownershipInc)))
 
-    | LIR.RawSetByte (ptr, byteOffset, value) ->
+    | LIR.RawWriteByte (ptr, byteOffset, value) ->
         resolveReg ptr |> Result.bind (fun p ->
             resolveReg byteOffset |> Result.bind (fun o ->
                 resolveReg value |> Result.map (fun v ->
@@ -4790,6 +4909,11 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         selectedListRefCountDecHelpersNeedClosureDecHelper selectedListDecHelperLabels
         || selectedPlannedListHelpersContain (releasePlanIsRootKind ANF.ClosureHeap)
 
+    let plannedDictHelpersNeedClosureDecHelper =
+        neededPlannedDictDecHelpers
+        |> Map.exists (fun _ releasePlan ->
+            rcReleasePlanContains (releasePlanIsRootKind ANF.ClosureHeap) releasePlan)
+
     let needsListRcIncHelper =
         functions
         |> List.exists (fun func ->
@@ -4798,9 +4922,9 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountInc (_, _, LIR.TaggedList, _) -> true
-                    | LIR.RawSet (_, _, _, valueType) ->
-                        match rawSetRootRetainTarget recordRegistry sumShapeRegistry valueType with
-                        | Some RawSetListRootRetain -> true
+                    | LIR.RawSlotInit (_, _, _, valueType) ->
+                        match slotInitRootRetainTarget recordRegistry sumShapeRegistry valueType with
+                        | Some SlotInitListRootRetain -> true
                         | _ -> false
                     | _ -> false)))
 
@@ -4812,9 +4936,9 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountInc (_, _, LIR.DictHeap, _) -> true
-                    | LIR.RawSet (_, _, _, valueType) ->
-                        match rawSetRootRetainTarget recordRegistry sumShapeRegistry valueType with
-                        | Some RawSetDictRootRetain -> true
+                    | LIR.RawSlotInit (_, _, _, valueType) ->
+                        match slotInitRootRetainTarget recordRegistry sumShapeRegistry valueType with
+                        | Some SlotInitDictRootRetain -> true
                         | _ -> false
                     | _ -> false)))
 
@@ -4859,6 +4983,20 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
 
     let needsDictRcDecSumStringValueHelper =
         Set.contains dictRefCountDecSumStringValueHelperLabel neededDictDecHelperLabels
+
+    let needsClosureRcIncHelper =
+        functions
+        |> List.exists (fun func ->
+            func.CFG.Blocks
+            |> Map.exists (fun _ block ->
+                block.Instrs
+                |> List.exists (function
+                    | LIR.RefCountInc (_, _, LIR.ClosureHeap, _) -> true
+                    | LIR.RawSlotInit (_, _, _, valueType) ->
+                        match slotInitRootRetainTarget recordRegistry sumShapeRegistry valueType with
+                        | Some SlotInitClosureRootRetain -> true
+                        | _ -> false
+                    | _ -> false)))
 
     let needsClosureRcDecHelper =
         functions
@@ -4911,48 +5049,51 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                || needsDictRcDecDynamicKeyDictValueHelper
                || needsDictRcDecTupleStringListDictValueHelper
                || needsDictRcDecDynamicKeyTupleStringListDictValueHelper
-               || not (Map.isEmpty neededPlannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false None None enableLeakCheck recordRegistry sumShapeRegistry
+               || not (Map.isEmpty neededPlannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false None false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyHelper =
-            if needsDictRcDecDynamicKeyHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyHelperLabel true false false None None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyHelperLabel true false false None false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicValueHelper =
-            if needsDictRcDecDynamicValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicValueHelperLabel false true false None None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicValueHelperLabel false true false None false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyValueHelper =
-            if needsDictRcDecDynamicKeyValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyValueHelperLabel true true false None None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyValueHelperLabel true true false None false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyListValueHelper =
-            if needsDictRcDecDynamicKeyListValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyListValueHelperLabel true false true None None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyListValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyListValueHelperLabel true false true None false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyDictValueHelper =
-            if needsDictRcDecDynamicKeyDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyDictValueHelperLabel true false false (Some dictRefCountDecHelperLabel) None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyDictValueHelperLabel true false false (Some dictRefCountDecHelperLabel) false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyDictListValueHelper =
-            if needsDictRcDecDynamicKeyDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyDictListValueHelperLabel true false false (Some dictRefCountDecListValueHelperLabel) None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyDictListValueHelperLabel true false false (Some dictRefCountDecListValueHelperLabel) false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecListValueHelper =
-            if needsDictRcDecListValueHelper || needsDictRcDecDictListValueHelper || needsDictRcDecDynamicKeyDictListValueHelper || selectedListHelpersNeedDictListValueDecHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel false false true None None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecListValueHelper || needsDictRcDecDictListValueHelper || needsDictRcDecDynamicKeyDictListValueHelper || selectedListHelpersNeedDictListValueDecHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel false false true None false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDictValueHelper =
-            if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false false false (Some dictRefCountDecHelperLabel) None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false false false (Some dictRefCountDecHelperLabel) false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDictListValueHelper =
-            if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false false false (Some dictRefCountDecListValueHelperLabel) None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false false false (Some dictRefCountDecListValueHelperLabel) false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecTupleStringListValueHelper =
-            if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false false None (Some (16, dictTupleStringListValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false false None false (Some (16, dictTupleStringListValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecTupleStringListDictValueHelper =
-            if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false None (Some (24, dictTupleStringListDictValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false None false (Some (24, dictTupleStringListDictValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyTupleStringListDictValueHelper =
-            if needsDictRcDecDynamicKeyTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyTupleStringListDictValueHelperLabel true false false None (Some (24, dictTupleStringListDictValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyTupleStringListDictValueHelperLabel true false false None false (Some (24, dictTupleStringListDictValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecSumStringValueHelper =
-            if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None (Some (16, dictSumStringValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None false (Some (16, dictSumStringValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let closureDecHelper =
-            if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper enableLeakCheck recordRegistry sumShapeRegistry closurePayloadSizes closureCaptureTypes
+            if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper || plannedDictHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper enableLeakCheck recordRegistry sumShapeRegistry closurePayloadSizes closureCaptureTypes
             else []
-        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ plannedDictDecHelpers @ dictDecHelper @ dictDecDynamicKeyHelper @ dictDecDynamicValueHelper @ dictDecDynamicKeyValueHelper @ dictDecDynamicKeyListValueHelper @ dictDecDynamicKeyDictValueHelper @ dictDecDynamicKeyDictListValueHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecDictListValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ dictDecDynamicKeyTupleStringListDictValueHelper @ dictDecSumStringValueHelper @ closureDecHelper @ genOomHandler ())
+        let closureIncHelper =
+            if needsClosureRcIncHelper then generateClosureRefCountIncHelper closurePayloadSizes
+            else []
+        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ plannedDictDecHelpers @ dictDecHelper @ dictDecDynamicKeyHelper @ dictDecDynamicValueHelper @ dictDecDynamicKeyValueHelper @ dictDecDynamicKeyListValueHelper @ dictDecDynamicKeyDictValueHelper @ dictDecDynamicKeyDictListValueHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecDictListValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ dictDecDynamicKeyTupleStringListDictValueHelper @ dictDecSumStringValueHelper @ closureIncHelper @ closureDecHelper @ genOomHandler ())

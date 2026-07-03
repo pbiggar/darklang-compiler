@@ -15,6 +15,18 @@ Status date: 2026-07-02.
 
 Latest update:
 
+- HAMT/dict raw nodes now have a documented lifecycle: dict nodes are
+  refcounted persistent nodes, updates path-copy changed nodes, typed
+  `RawSlotInit<T>` retains stored managed edges, dict root retain increments
+  only the tagged root node, and dict release recursively releases children
+  and key/value payload edges only when a node refcount reaches zero. The same
+  typed raw-slot-init retain rule now covers dynamic buffers, closures, dicts,
+  lists, and generic fixed-block/boxed-sum roots in raw-backed containers.
+- Closure-list construction no longer models typed `pushBack` as consuming an
+  immediate closure-call result. The typed raw-slot initialization retains the
+  closure payload, and normal local cleanup releases the immediate closure
+  result after the retaining store. This is pinned by the closure-list map
+  leak-check case and the updated RC insertion unit test.
 - ARM64 now releases nested fixed-block and boxed-sum child roots even when the
   child root has only primitive fields. This removed the intentional guard that
   skipped primitive-only child roots during generic fixed-block cleanup. The
@@ -99,7 +111,9 @@ Latest update:
   The narrower `Dict<String, (String, List<Int64>)>` leaf shape is now pinned
   by `X86_64CodeGenTests.testDictRefCountDecStringKeyTupleListValue`, and
   `X86_64CodeGenTests.testDictRefCountDecStringKeyTupleValueUsesPlannedHelper`
-  ensures that shape stays on the planned dict helper path.
+  ensures that shape stays on the planned dict helper path. Collision nodes for
+  the same dynamic-key plus tuple/list value shape are pinned by
+  `X86_64CodeGenTests.testDictRefCountDecStringCollisionKeysAndTupleListValues`.
 - x64 now has an explicit stdlib-context closure-list release probe. The
   ARM64 bug was an architecture-local helper-selection guard that excluded
   `Stdlib.*` functions; x64 did not have that guard, and
@@ -112,9 +126,9 @@ Latest update:
   no longer excludes stdlib functions, and RC insertion models the map helper's
   closure-producing specializations explicitly: callers retain the borrowed
   source before entering those helpers, helper recursion releases replaced
-  source and accumulator roots before self tail calls, and closure values
-  returned directly into closure-list `pushBack` are treated as ownership
-  transfers instead of receiving an immediate local decrement.
+  source and accumulator roots before self tail calls, and typed raw storage
+  retains closure values inserted into list leaves before normal local cleanup
+  releases the immediate closure result.
 - ARM64 dict-list value release parity was extended after this document was
   first written. ARM64 now has focused symbolic coverage for direct list
   elements, nested tuple/list payloads, boxed-sum tuple payloads, and nested
@@ -465,8 +479,9 @@ paths. The remaining work is:
 
 - keep backend helper selection shape-driven and avoid reintroducing helper
   matrices for tuple/record/sum families
-- finish dict/HAMT key/value recursive retain/release semantics, including
-  collision nodes and arbitrary typed key/value payloads
+- extend dict/HAMT key-release helpers if the language adds new managed
+  hashable key families beyond dynamic strings and bytes, and keep value
+  release on the shared `RcReleasePlan` path
 - add broader dual-backend memory probes where the harness can force a backend
   independently of host architecture
 - finish edge documentation and focused tests for bytes/string runtime helpers
@@ -856,12 +871,13 @@ record/sum metadata context, and RC insertion builds retains, releases, binding
 decrefs, borrowed retains, alias preservation, and ownership-transfer checks
 through `RcShape` operations.
 
-The remaining managed-shape work is mainly in dict/HAMT helper selection and in
-keeping future backend additions on the `RcReleasePlan` path. Both backends
-consume `RcReleasePlan` in generic fixed-block cleanup, boxed-sum cleanup,
-closure capture cleanup, planned list leaf payload cleanup, and planned dict
-value cleanup. The old fixed-block tagged-list tuple/record/sum helper matrices
-have been removed.
+The remaining managed-shape work is mainly in keeping future backend additions
+on the `RcReleasePlan` path, and in extending dict/HAMT key-release support if
+new managed hashable key families are introduced. Both backends consume
+`RcReleasePlan` in generic fixed-block cleanup, boxed-sum cleanup, closure
+capture cleanup, planned list leaf payload cleanup, and planned dict value
+cleanup. The old fixed-block tagged-list tuple/record/sum helper matrices have
+been removed.
 
 ### Why It Matters
 
@@ -981,7 +997,7 @@ from either:
 
 - RC insertion and codegen
 - stdlib raw allocation layout
-- raw-set edge metadata
+- raw-slot edge metadata
 - list/dict/fixed-block recursive release plans
 
 ### Remaining Tasks
@@ -1256,21 +1272,16 @@ leaf `List` values, closure values, nested dict values, tuple values of
 nested dict payload tests. ARM64 also now has planned-helper selection coverage
 for `Dict<String, (String, List<Int64>)>` and a symbolic guard that its planned
 helper emits the generic collision-payload release loop. x64 now has leaf
-runtime coverage and planned-helper selection coverage for that same
-`Dict<String, (String, List<Int64>)>` shape. A runtime x64 collision probe for
-dynamic string keys paired with `(String, List<Int64>)` tuple values still
-leaked all pair payloads (`leaks: 9`), so that broader collision shape remains
-open instead of being kept as a passing test. Future fixes should add a
-serialized shape-plan path or more complete typed dict release helpers for the
-remaining arbitrary leaf and collision payload shapes. This is separate from
-the later raw-allocation policy decision.
+runtime coverage, planned-helper selection coverage, and collision-node
+coverage for that same `Dict<String, (String, List<Int64>)>` shape. Future
+fixes should add a serialized shape-plan path or more complete typed dict
+release helpers for the remaining arbitrary leaf and collision payload shapes.
+This is separate from the later raw-allocation policy decision.
 
 ### Remaining Tasks
 
 1. Add key/value shape matrix tests:
 
-   - x64 collision cases where dynamic keys and recursive fixed-block values
-     both require release
    - remaining leaf and collision cases where managed keys and values both
      require recursive release
 
@@ -1502,8 +1513,8 @@ should only be tackled once those managed-shape rules are stable.
 
 Raw memory remains central:
 
-- FingerTree/list nodes use `RawAlloc` and typed `RawSet`.
-- HAMT/dict nodes use `RawAlloc` and typed `RawSet`.
+- FingerTree/list nodes use `RawAlloc`, `RawWriteWord`, and typed `RawSlotInit`.
+- HAMT/dict nodes use `RawAlloc`, `RawWriteWord`, and typed `RawSlotInit`.
 - strings and bytes constructors in stdlib use `RawAlloc`.
 - `RawFree` is still a no-op.
 - Raw allocation has free-list reuse in backend allocation paths for supported
@@ -1535,7 +1546,8 @@ These tasks are intentionally deferred.
    - document that `RawPtr` is unmanaged
    - keep `RawFree` no-op or remove user-facing assumptions around it
    - require every managed raw-backed structure to have typed RC helpers
-   - ensure `RawSet` with `valueType=None` cannot silently store managed values
+   - require typed edges to use `RawSlotInit<T>` and metadata writes to use
+     `RawWriteWord`
 
 3. If option 2:
 
@@ -1554,7 +1566,7 @@ These tasks are intentionally deferred.
 
 1. Add a design doc section for raw memory policy.
 2. Add tests documenting `RawFree` current behavior or intended behavior.
-3. Add diagnostics or assertions for typed `RawSet` omissions.
+3. Add diagnostics or assertions for typed `RawSlotInit<T>` omissions.
 4. Implement chosen policy in small, shape-specific increments.
 
 ## 9. Strengthen Borrowed Return And Projection Ownership
@@ -1893,9 +1905,8 @@ Done when:
 4. Should x64 parity be required for every memory commit, or can ARM64 remain
    the active backend while x64 is brought up in a dedicated phase?
 
-5. Should `RawSet(valueType=None)` be allowed to store values whose source type
-   might be managed, or should that become a compiler crash/assertion in
-   internal lowering?
+5. Closed: `RawWriteWord` stores unmanaged bits only. Managed or potentially
+   managed raw slots must be initialized with `RawSlotInit<T>`.
 
 6. How should closure shape distinguish static function references from heap
    closures after lambda lifting and closure conversion?
@@ -1939,8 +1950,6 @@ appropriate.
 
 - keep old root and new root live after update
 - keep old root and removed root live after remove
-- x64 dict collision release for dynamic string keys paired with recursive
-  tuple/list values
 - remaining dict key/value leaf and collision release where both sides have
   managed payloads
 

@@ -67,8 +67,17 @@ let hasSideEffects (instr: Instr) : bool =
     | RawFree _ -> true   // Frees memory
     | RawGet _ -> false   // Pure memory read
     | RawGetByte _ -> false  // Pure memory read (byte)
-    | RawSet _ -> true    // Writes to memory
-    | RawSetByte _ -> true  // Writes to memory (byte)
+    | RawWriteWord _ -> true    // Writes to memory
+    | RawWriteByte _ -> true  // Writes to memory (byte)
+    | RawSlotInit _ -> true  // Writes to memory and may retain a typed edge
+    | StringToRawPtr _ -> false
+    | RawPtrToString _ -> false
+    | BytesToRawPtr _ -> false
+    | RawPtrToBytes _ -> false
+    | DictToRawPtr _ -> false
+    | RawPtrToDict _ -> false
+    | ListToRawPtr _ -> false
+    | RawPtrToList _ -> false
     | FloatSqrt _ -> false  // Pure float operation
     | FloatAbs _ -> false   // Pure float operation
     | FloatNeg _ -> false   // Pure float operation
@@ -112,6 +121,14 @@ let getInstrDest (instr: Instr) : VReg option =
     | RawAlloc (dest, _) -> Some dest
     | RawGet (dest, _, _, _) -> Some dest
     | RawGetByte (dest, _, _) -> Some dest
+    | StringToRawPtr (dest, _) -> Some dest
+    | RawPtrToString (dest, _) -> Some dest
+    | BytesToRawPtr (dest, _) -> Some dest
+    | RawPtrToBytes (dest, _) -> Some dest
+    | DictToRawPtr (dest, _) -> Some dest
+    | RawPtrToDict (dest, _, _) -> Some dest
+    | ListToRawPtr (dest, _) -> Some dest
+    | RawPtrToList (dest, _, _) -> Some dest
     | FloatSqrt (dest, _) -> Some dest
     | FloatAbs (dest, _) -> Some dest
     | FloatNeg (dest, _) -> Some dest
@@ -123,8 +140,9 @@ let getInstrDest (instr: Instr) : VReg option =
     | RefCountDec _ -> None
     | Print _ -> None
     | RawFree _ -> None
-    | RawSet _ -> None
-    | RawSetByte _ -> None
+    | RawWriteWord _ -> None
+    | RawWriteByte _ -> None
+    | RawSlotInit _ -> None
     | RefCountIncString _ -> None
     | RefCountDecString _ -> None
     | RefCountIncBytes _ -> None
@@ -172,8 +190,17 @@ let getInstrUses (instr: Instr) : Set<VReg> =
     | RawFree ptr -> fromOperand ptr
     | RawGet (_, ptr, byteOffset, _) -> Set.union (fromOperand ptr) (fromOperand byteOffset)
     | RawGetByte (_, ptr, byteOffset) -> Set.union (fromOperand ptr) (fromOperand byteOffset)
-    | RawSet (ptr, byteOffset, value, _) -> Set.unionMany [fromOperand ptr; fromOperand byteOffset; fromOperand value]
-    | RawSetByte (ptr, byteOffset, value) -> Set.unionMany [fromOperand ptr; fromOperand byteOffset; fromOperand value]
+    | StringToRawPtr (_, value) -> fromOperand value
+    | RawPtrToString (_, ptr) -> fromOperand ptr
+    | BytesToRawPtr (_, value) -> fromOperand value
+    | RawPtrToBytes (_, ptr) -> fromOperand ptr
+    | DictToRawPtr (_, dict) -> fromOperand dict
+    | RawPtrToDict (_, ptr, tag) -> Set.union (fromOperand ptr) (fromOperand tag)
+    | ListToRawPtr (_, list) -> fromOperand list
+    | RawPtrToList (_, ptr, tag) -> Set.union (fromOperand ptr) (fromOperand tag)
+    | RawWriteWord (ptr, byteOffset, value) -> Set.unionMany [fromOperand ptr; fromOperand byteOffset; fromOperand value]
+    | RawWriteByte (ptr, byteOffset, value) -> Set.unionMany [fromOperand ptr; fromOperand byteOffset; fromOperand value]
+    | RawSlotInit (ptr, byteOffset, value, _) -> Set.unionMany [fromOperand ptr; fromOperand byteOffset; fromOperand value]
     | FloatSqrt (_, src) -> fromOperand src
     | FloatAbs (_, src) -> fromOperand src
     | FloatNeg (_, src) -> fromOperand src
@@ -735,8 +762,17 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | RawFree ptr -> RawFree (p ptr)
     | RawGet (dest, ptr, byteOffset, valueType) -> RawGet (dest, p ptr, p byteOffset, valueType)
     | RawGetByte (dest, ptr, byteOffset) -> RawGetByte (dest, p ptr, p byteOffset)
-    | RawSet (ptr, byteOffset, value, valueType) -> RawSet (p ptr, p byteOffset, p value, valueType)
-    | RawSetByte (ptr, byteOffset, value) -> RawSetByte (p ptr, p byteOffset, p value)
+    | StringToRawPtr (dest, value) -> StringToRawPtr (dest, p value)
+    | RawPtrToString (dest, ptr) -> RawPtrToString (dest, p ptr)
+    | BytesToRawPtr (dest, value) -> BytesToRawPtr (dest, p value)
+    | RawPtrToBytes (dest, ptr) -> RawPtrToBytes (dest, p ptr)
+    | DictToRawPtr (dest, dict) -> DictToRawPtr (dest, p dict)
+    | RawPtrToDict (dest, ptr, tag) -> RawPtrToDict (dest, p ptr, p tag)
+    | ListToRawPtr (dest, list) -> ListToRawPtr (dest, p list)
+    | RawPtrToList (dest, ptr, tag) -> RawPtrToList (dest, p ptr, p tag)
+    | RawWriteWord (ptr, byteOffset, value) -> RawWriteWord (p ptr, p byteOffset, p value)
+    | RawWriteByte (ptr, byteOffset, value) -> RawWriteByte (p ptr, p byteOffset, p value)
+    | RawSlotInit (ptr, byteOffset, value, valueType) -> RawSlotInit (p ptr, p byteOffset, p value, valueType)
     | FloatSqrt (dest, src) -> FloatSqrt (dest, p src)
     | FloatAbs (dest, src) -> FloatAbs (dest, p src)
     | FloatNeg (dest, src) -> FloatNeg (dest, p src)

@@ -120,11 +120,29 @@ let private prettyPrintANFCExpr = function
         appendANFTypeSuffix valueType baseText
     | ANF.RawGetByte (ptr, byteOffset) ->
         $"RawGetByte({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset})"
-    | ANF.RawSet (ptr, byteOffset, value, valueType) ->
-        let baseText = $"RawSet({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset}, {prettyPrintANFAtom value})"
-        appendANFTypeSuffix valueType baseText
-    | ANF.RawSetByte (ptr, byteOffset, value) ->
-        $"RawSetByte({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset}, {prettyPrintANFAtom value})"
+    | ANF.RawWriteWord (ptr, byteOffset, value) ->
+        $"RawWriteWord({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset}, {prettyPrintANFAtom value})"
+    | ANF.RawWriteByte (ptr, byteOffset, value) ->
+        $"RawWriteByte({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset}, {prettyPrintANFAtom value})"
+    | ANF.RawSlotInit (ptr, byteOffset, value, valueType) ->
+        let baseText = $"RawSlotInit({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset}, {prettyPrintANFAtom value})"
+        appendANFTypeSuffix (Some valueType) baseText
+    | ANF.StringToRawPtr value ->
+        $"StringToRawPtr({prettyPrintANFAtom value})"
+    | ANF.RawPtrToString ptr ->
+        $"RawPtrToString({prettyPrintANFAtom ptr})"
+    | ANF.BytesToRawPtr value ->
+        $"BytesToRawPtr({prettyPrintANFAtom value})"
+    | ANF.RawPtrToBytes ptr ->
+        $"RawPtrToBytes({prettyPrintANFAtom ptr})"
+    | ANF.DictToRawPtr dict ->
+        $"DictToRawPtr({prettyPrintANFAtom dict})"
+    | ANF.RawPtrToDict (ptr, tag, dictType) ->
+        $"RawPtrToDict({prettyPrintANFAtom ptr}, {prettyPrintANFAtom tag}) : {dictType}"
+    | ANF.ListToRawPtr list ->
+        $"ListToRawPtr({prettyPrintANFAtom list})"
+    | ANF.RawPtrToList (ptr, tag, listType) ->
+        $"RawPtrToList({prettyPrintANFAtom ptr}, {prettyPrintANFAtom tag}) : {listType}"
     | ANF.FloatSqrt atom ->
         $"FloatSqrt({prettyPrintANFAtom atom})"
     | ANF.FloatAbs atom ->
@@ -329,11 +347,29 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
         appendTypeSuffix valueType baseText
     | MIR.RawGetByte (dest, ptr, byteOffset) ->
         $"{prettyPrintMIRVReg dest} <- RawGetByte({prettyPrintMIROperand ptr}, {prettyPrintMIROperand byteOffset})"
-    | MIR.RawSet (ptr, byteOffset, value, valueType) ->
-        let baseText = $"RawSet({prettyPrintMIROperand ptr}, {prettyPrintMIROperand byteOffset}, {prettyPrintMIROperand value})"
-        appendTypeSuffix valueType baseText
-    | MIR.RawSetByte (ptr, byteOffset, value) ->
-        $"RawSetByte({prettyPrintMIROperand ptr}, {prettyPrintMIROperand byteOffset}, {prettyPrintMIROperand value})"
+    | MIR.RawWriteWord (ptr, byteOffset, value) ->
+        $"RawWriteWord({prettyPrintMIROperand ptr}, {prettyPrintMIROperand byteOffset}, {prettyPrintMIROperand value})"
+    | MIR.RawWriteByte (ptr, byteOffset, value) ->
+        $"RawWriteByte({prettyPrintMIROperand ptr}, {prettyPrintMIROperand byteOffset}, {prettyPrintMIROperand value})"
+    | MIR.RawSlotInit (ptr, byteOffset, value, valueType) ->
+        let baseText = $"RawSlotInit({prettyPrintMIROperand ptr}, {prettyPrintMIROperand byteOffset}, {prettyPrintMIROperand value})"
+        appendTypeSuffix (Some valueType) baseText
+    | MIR.StringToRawPtr (dest, value) ->
+        $"{prettyPrintMIRVReg dest} <- StringToRawPtr({prettyPrintMIROperand value})"
+    | MIR.RawPtrToString (dest, ptr) ->
+        $"{prettyPrintMIRVReg dest} <- RawPtrToString({prettyPrintMIROperand ptr})"
+    | MIR.BytesToRawPtr (dest, value) ->
+        $"{prettyPrintMIRVReg dest} <- BytesToRawPtr({prettyPrintMIROperand value})"
+    | MIR.RawPtrToBytes (dest, ptr) ->
+        $"{prettyPrintMIRVReg dest} <- RawPtrToBytes({prettyPrintMIROperand ptr})"
+    | MIR.DictToRawPtr (dest, dict) ->
+        $"{prettyPrintMIRVReg dest} <- DictToRawPtr({prettyPrintMIROperand dict})"
+    | MIR.RawPtrToDict (dest, ptr, tag) ->
+        $"{prettyPrintMIRVReg dest} <- RawPtrToDict({prettyPrintMIROperand ptr}, {prettyPrintMIROperand tag})"
+    | MIR.ListToRawPtr (dest, list) ->
+        $"{prettyPrintMIRVReg dest} <- ListToRawPtr({prettyPrintMIROperand list})"
+    | MIR.RawPtrToList (dest, ptr, tag) ->
+        $"{prettyPrintMIRVReg dest} <- RawPtrToList({prettyPrintMIROperand ptr}, {prettyPrintMIROperand tag})"
     | MIR.RefCountIncString str ->
         $"RefCountIncString({prettyPrintMIROperand str})"
     | MIR.RefCountDecString str ->
@@ -642,13 +678,12 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- RawGet({prettyPrintLIRReg ptr}, {prettyPrintLIRReg byteOffset})"
     | LIR.RawGetByte (dest, ptr, byteOffset) ->
         $"{prettyPrintLIRReg dest} <- RawGetByte({prettyPrintLIRReg ptr}, {prettyPrintLIRReg byteOffset})"
-    | LIR.RawSet (ptr, byteOffset, value, valueType) ->
-        let baseText = $"RawSet({prettyPrintLIRReg ptr}, {prettyPrintLIRReg byteOffset}, {prettyPrintLIRReg value})"
-        match valueType with
-        | Some typ -> $"{baseText} : {typ}"
-        | None -> baseText
-    | LIR.RawSetByte (ptr, byteOffset, value) ->
-        $"RawSetByte({prettyPrintLIRReg ptr}, {prettyPrintLIRReg byteOffset}, {prettyPrintLIRReg value})"
+    | LIR.RawWriteWord (ptr, byteOffset, value) ->
+        $"RawWriteWord({prettyPrintLIRReg ptr}, {prettyPrintLIRReg byteOffset}, {prettyPrintLIRReg value})"
+    | LIR.RawWriteByte (ptr, byteOffset, value) ->
+        $"RawWriteByte({prettyPrintLIRReg ptr}, {prettyPrintLIRReg byteOffset}, {prettyPrintLIRReg value})"
+    | LIR.RawSlotInit (ptr, byteOffset, value, valueType) ->
+        $"RawSlotInit({prettyPrintLIRReg ptr}, {prettyPrintLIRReg byteOffset}, {prettyPrintLIRReg value}) : {valueType}"
     | LIR.RefCountIncString str ->
         $"RefCountIncString({prettyPrintLIROperand str})"
     | LIR.RefCountDecString str ->

@@ -6,19 +6,20 @@ for Dark's immutable dictionaries.
 ## Overview
 
 `Dict<K, V>` is an immutable hash map implemented as a HAMT. It provides
-efficient O(log32 n) operations with structural sharing for immutability.
+efficient O(log64 n) operations with structural sharing for immutability.
 
 ## What is a HAMT?
 
 A Hash Array Mapped Trie (HAMT) is a trie where:
 - Keys are hashed to 64-bit integers
-- Hash is consumed 5 bits at a time (32-way branching)
+- Hash is consumed 6 bits at a time (64-way branching)
 - Bitmap compression reduces memory for sparse nodes
-- Maximum depth: 13 levels (64 bits / 5 bits per level)
+- Maximum depth: 11 levels (64 bits / 6 bits per level, rounded up)
 
 ## Node Types
 
-Three node types (distinguished by tag):
+Four tags are used. Three of them are allocated node layouts; empty is the
+null tagged root.
 
 ### Empty (tag = 0)
 ```
@@ -27,16 +28,25 @@ Three node types (distinguished by tag):
 
 ### Internal Node (tag = 1)
 ```
-[bitmap, child0, child1, ..., childN]
+[bitmap, child0, child1, ..., childN, refcount]
 ```
-- Bitmap: 64-bit, indicates which of 32 slots have children
+- Bitmap: 64-bit, indicates which of 64 slots have children
 - Children: only present slots are stored (bitmap compression)
+- Refcount: trailing 64-bit node reference count
 
 ### Leaf Node (tag = 2)
 ```
-[key, value]
+[key, value, refcount]
 ```
 - Stores actual key-value pair
+- Refcount: trailing 64-bit node reference count
+
+### Collision Node (tag = 3)
+```
+[count, key0, value0, key1, value1, ..., refcount]
+```
+- Stores entries whose hashes collide through the entire trie depth
+- Refcount: trailing 64-bit node reference count
 
 ## Memory Layout
 
@@ -46,21 +56,34 @@ Offset 0:  Bitmap (8 bytes)
 Offset 8:  Child 0 pointer (8 bytes)
 Offset 16: Child 1 pointer (8 bytes)
 ...
+Offset 8 + childCount * 8: Refcount (8 bytes)
 ```
 
 ### Leaf Node
 ```
 Offset 0:  Key (8 bytes)
 Offset 8:  Value (8 bytes)
+Offset 16: Refcount (8 bytes)
+```
+
+### Collision Node
+```
+Offset 0:  Count (8 bytes)
+Offset 8:  Key 0 (8 bytes)
+Offset 16: Value 0 (8 bytes)
+Offset 24: Key 1 (8 bytes)
+Offset 32: Value 1 (8 bytes)
+...
+Offset 8 + count * 16: Refcount (8 bytes)
 ```
 
 ## Bitmap Operations
 
-5 bits of hash select position (0-31) in bitmap:
+6 bits of hash select position (0-63) in bitmap:
 
 ```dark
 def hashChunk(hash: Int64, level: Int64) : Int64 =
-    (hash >> (level * 5)) & 31
+    (hash >> (level * 6)) & 63
 
 def hasBit(bitmap: Int64, bit: Int64) : Bool =
     (bitmap & (1 << bit)) != 0
@@ -85,8 +108,8 @@ def get<k, v>(dict: Dict<k, v>, key: k) : Option<v>
 
 Algorithm:
 1. Compute hash of key
-2. For each level (0-12):
-   - Extract 5-bit chunk from hash
+2. For each level (0-10):
+   - Extract 6-bit chunk from hash
    - Check if bitmap has that bit set
    - If yes, follow child pointer
    - If no, key not present
@@ -145,7 +168,8 @@ After set (modified path):
 When two keys hash to the same value:
 1. Continue descending until hashes differ
 2. If all 64 bits match (extremely rare), collision node needed
-3. Current implementation: keys must have distinct hashes
+3. Collision nodes store the colliding key/value entries inline and are copied
+   on update/remove like other HAMT nodes
 
 ## Raw Memory Intrinsics
 
@@ -154,31 +178,55 @@ HAMT uses low-level memory operations:
 ```dark
 __raw_alloc(size: Int64) : RawPtr
 __raw_get<T>(ptr: RawPtr, offset: Int64) : T
-__raw_set<T>(ptr: RawPtr, offset: Int64, value: T) : Unit
+__raw_write_word(ptr: RawPtr, offset: Int64, value: Int64) : Unit
+__raw_write_byte(ptr: RawPtr, offset: Int64, value: Int64) : Unit
+__raw_slot_init<T>(ptr: RawPtr, offset: Int64, value: T) : Unit
 ```
 
-These bypass the normal heap allocator for precise control.
+These bypass the normal value allocator for precise layout control. Typed slots
+must be initialized with `__raw_slot_init<T>` rather than `__raw_write_word` so
+the compiler/backend can retain copied managed edges.
 
 ## Reference Counting
 
-`Dict<K, V>` roots are compiler-managed values. Backends provide dict
-refcount helpers for retaining and releasing tagged HAMT roots, and typed
-`RawSet` sites retain dict edges stored inside other managed structures.
+`Dict<K, V>` roots are compiler-managed values whose raw HAMT nodes are also
+refcounted. Nodes are not uniquely owned and updates do not deep-copy the whole
+tree. Instead, `set`, `remove`, `map`, and collision updates path-copy the
+changed nodes and structurally share the untouched subtrees.
 
-Current leak-check coverage includes common root lifetimes such as singleton
-dicts, overwrite, remove, `fromList`, string keys and values, returned dicts,
-and lists containing dict payloads.
+The ownership invariant is:
 
-The raw HAMT nodes are still an active memory-model area. They are allocated
-with `RawAlloc`, and the project still needs a complete documented story for:
+- every live dict root owns one reference to its tagged root node
+- every internal-node child slot owns one reference to the child node stored in
+  that slot
+- every leaf or collision key/value slot owns one reference to each managed
+  key or value stored in that slot
+- `__raw_get<T>` returns a borrowed value
+- `__raw_slot_init<T>` is the edge-creation operation and retains managed
+  roots stored into raw nodes or other raw-backed containers
+- `__raw_write_word` and `__raw_write_byte` write unmanaged metadata/bits only;
+  they do not create ownership edges
 
-- persistent structural sharing across updates/removes
-- recursive key and value retain/release for every managed shape
-- whether raw HAMT nodes become reusable or only balance leak accounting
-- x64 parity with ARM64 helper behavior
+Dict root retain increments only the root node's trailing node refcount. Dict
+root release decrements the root node refcount; only when it reaches zero does
+the helper recursively release child nodes and leaf/collision payload edges.
+This is what makes structural sharing safe: when a new internal node copies an
+unchanged child pointer from an old internal node,
+`__raw_slot_init<Dict<k, v>>` retains that child. Releasing either old or new root then
+removes only that root's edge. The shared child remains live until all parent
+edges and root edges have been released.
 
-See `memory-refcounting-remaining.md` for the current dict/HAMT remaining
-work.
+For current Dark hashable key semantics, managed keys are dynamic strings and
+bytes. Dict release helpers handle primitive/no-release keys, dynamic
+string/bytes keys, and the covered managed value shapes through
+`RcReleasePlan`-selected helpers: dynamic buffers, lists, nested dicts,
+closures, tuples, records, and boxed sums. If the language later adds new
+managed hashable key families, dict release helpers need symmetric key-release
+support for those shapes.
+
+Raw HAMT memory is reclaimed through dict refcount helpers and backend
+allocation/free-list accounting for supported raw-node size classes. General
+manual `RawFree` policy remains separate from this managed HAMT lifecycle.
 
 ## Tag Encoding
 
@@ -186,14 +234,20 @@ Tags are encoded in the pointer:
 
 ```dark
 def __getTag<k, v>(dict: Dict<k, v>) : Int64 =
-    __dict_to_int64<k, v>(dict) & 3
+    __dict_get_tag<k, v>(dict)
 
 def __clearTag<k, v>(dict: Dict<k, v>) : RawPtr =
-    __int64_to_rawptr(__dict_to_int64<k, v>(dict) & !3)
+    __dict_to_rawptr<k, v>(dict)
 
 def __setTag<k, v>(ptr: RawPtr, tag: Int64) : Dict<k, v> =
-    __int64_to_dict<k, v>(__rawptr_to_int64(ptr) | tag)
+    __rawptr_to_dict<k, v>(ptr, tag)
 ```
+
+`__dict_to_rawptr` returns a borrowed raw view of the tagged dict pointer with
+tag bits cleared. It does not create an `Int64` round trip and does not transfer
+ownership. `__rawptr_to_dict` retags an initialized raw HAMT node as a managed
+`Dict<k, v>` root; refcount insertion treats the resulting dict value as owned
+when it is bound like any other managed value.
 
 ## Stdlib.Dict API
 
@@ -220,33 +274,38 @@ def getOrDefault<k, v>(dict: Dict<k, v>, key: k, default: v) : v
 
 | Operation | Complexity |
 |-----------|------------|
-| get | O(log32 n) ≈ O(1) |
-| set | O(log32 n) |
-| remove | O(log32 n) |
+| get | O(log64 n), effectively constant for normal sizes |
+| set | O(log64 n) |
+| remove | O(log64 n) |
 | size | O(n) |
 | keys/values | O(n) |
 
-With 32-way branching, depth is ~6 for millions of entries.
+With 64-way branching, depth is small for normal program dictionaries.
 
 ## Hash Function
 
-Keys are hashed using `__hash<k>(key)`:
+Keys are hashed using `__hash<k>(key)`. Current stdlib hash/equality
+specializations cover:
 - Int64: identity
-- String: FNV-1a hash
+- Bool: boolean identity
+- String: FNV-1a over string data
+- Bytes: FNV-1a over bytes data
 
 ## Implementation Details
 
-Located in `stdlib.dark:837-1468` (~630 lines):
+Located in `src/DarkCompiler/stdlib/__HAMT.dark`:
 
 | Function | Lines | Purpose |
 |----------|-------|---------|
-| Hash/bitmap helpers | 845-870 | Bit manipulation |
-| Tag helpers | 875-900 | Pointer tagging |
-| `__getHelper` | 912-940 | Recursive get |
-| `__setHelper` | 949-981 | Recursive set |
-| `__expandLeaf` | 987-1017 | Split colliding leaves |
-| `__removeHelper` | 1100-1157 | Recursive remove |
-| Iteration helpers | 1200-1350 | keys/values/entries/fold |
+| Hash/bitmap helpers | top of file | Bit manipulation |
+| Tag helpers | top of file | Pointer tagging |
+| `__allocLeaf` | allocation section | Leaf allocation |
+| `__allocInternal` | allocation section | Internal-node allocation |
+| `__allocCollision` | collision section | Collision-node allocation |
+| `__getHelper` | dict helpers | Recursive get |
+| `__setHelper` | dict helpers | Recursive set |
+| `__removeHelper` | dict helpers | Recursive remove |
+| Iteration helpers | dict helpers | keys/values/entries/fold |
 
 ## Example
 

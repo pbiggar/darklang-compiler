@@ -234,8 +234,8 @@ let tryConstantFoldIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExp
 /// Try to convert a function call to a raw memory intrinsic CExpr
 /// These are internal-only functions for implementing HAMT data structures
 /// Returns Some CExpr if it's a raw memory intrinsic, None otherwise
-/// Note: __raw_get and __raw_set are generic and become monomorphized names like
-/// __raw_get_i64, __raw_get_str, __raw_set_i64, etc.
+/// Note: __raw_get and __raw_slot_init are generic and become monomorphized names like
+/// __raw_get_i64, __raw_get_str, __raw_slot_init_i64, etc.
 let tryRawMemoryIntrinsic
     (variantLookup: Map<string, (string * string list * int * AST.Type option)>)
     (funcName: string)
@@ -250,6 +250,27 @@ let tryRawMemoryIntrinsic
             tryParseMangledTypeForRawIntrinsic variantLookup mangled
         else
             None
+    let tryMonomorphizedSuffix (prefix: string) (name: string) : string option =
+        if name.StartsWith(prefix + "_") then
+            Some (name.Substring(prefix.Length + 1))
+        else
+            None
+    let dictTypeFromRawPtrIntrinsicName (name: string) : AST.Type =
+        match tryMonomorphizedSuffix "__rawptr_to_dict" name with
+        | Some suffix ->
+            match tryParseMangledTypeForRawIntrinsic variantLookup $"dict_{suffix}" with
+            | Some dictType -> dictType
+            | None -> Crash.crash $"Could not recover Dict type from intrinsic '{name}'"
+        | None ->
+            AST.TDict (AST.TVar "k", AST.TVar "v")
+    let listTypeFromRawPtrIntrinsicName (name: string) : AST.Type =
+        match tryMonomorphizedSuffix "__rawptr_to_list" name with
+        | Some suffix ->
+            match tryParseMangledTypeForRawIntrinsic variantLookup suffix with
+            | Some elemType -> AST.TList elemType
+            | None -> Crash.crash $"Could not recover List type from intrinsic '{name}'"
+        | None ->
+            AST.TList (AST.TVar "a")
     match funcName, args with
     | "__raw_alloc", [numBytesAtom] ->
         Some (ANF.RawAlloc numBytesAtom)
@@ -264,36 +285,32 @@ let tryRawMemoryIntrinsic
         // Preserve recovered value type so downstream RC/codegen can handle heap payloads correctly.
         let valueType = tryMonomorphizedValueType "__raw_get" name
         Some (ANF.RawGet (ptrAtom, offsetAtom, valueType))
-    | "__raw_set_byte", [ptrAtom; offsetAtom; valueAtom] ->
+    | "__raw_write_byte", [ptrAtom; offsetAtom; valueAtom] ->
         // Write single byte at offset
-        // IMPORTANT: Must come before the generic __raw_set_* pattern
-        Some (ANF.RawSetByte (ptrAtom, offsetAtom, valueAtom))
-    | name, [ptrAtom; offsetAtom; valueAtom] when name = "__raw_set" || name.StartsWith("__raw_set_") ->
-        // Generic __raw_set<v> monomorphizes to __raw_set_<mangled-type>.
+        Some (ANF.RawWriteByte (ptrAtom, offsetAtom, valueAtom))
+    | "__raw_write_word", [ptrAtom; offsetAtom; valueAtom] ->
+        // Write one unmanaged machine word. This intentionally has no typed edge semantics.
+        Some (ANF.RawWriteWord (ptrAtom, offsetAtom, valueAtom))
+    | name, [ptrAtom; offsetAtom; valueAtom] when name = "__raw_slot_init" || name.StartsWith("__raw_slot_init_") ->
+        // Generic __raw_slot_init<v> monomorphizes to __raw_slot_init_<mangled-type>.
         // Preserve recovered value type so codegen can update ownership for stored heap values.
-        let valueType = tryMonomorphizedValueType "__raw_set" name
-        Some (ANF.RawSet (ptrAtom, offsetAtom, valueAtom, valueType))
-    // Cast operations are no-ops at runtime - just pass through the value
-    | "__rawptr_to_int64", [ptrAtom] ->
-        Some (ANF.Atom ptrAtom)
-    | "__int64_to_rawptr", [intAtom] ->
-        Some (ANF.Atom intAtom)
+        match tryMonomorphizedValueType "__raw_slot_init" name with
+        | Some valueType -> Some (ANF.RawSlotInit (ptrAtom, offsetAtom, valueAtom, valueType))
+        | None -> Crash.crash "__raw_slot_init requires a concrete slot type"
     // String refcount intrinsics (for Dict with string keys)
     | "__refcount_inc_string", [strAtom] ->
         Some (ANF.RefCountIncString strAtom)
     | "__refcount_dec_string", [strAtom] ->
         Some (ANF.RefCountDecString strAtom)
-    // String pointer cast operations are no-ops at runtime - just pass through the value
-    | "__string_to_int64", [strAtom] ->
-        Some (ANF.Atom strAtom)
-    | "__int64_to_string", [intAtom] ->
-        Some (ANF.Atom intAtom)
-
-    // Bytes pointer cast operations are no-ops at runtime - just pass through the value
-    | "__bytes_to_int64", [bytesAtom] ->
-        Some (ANF.Atom bytesAtom)
-    | "__int64_to_bytes", [intAtom] ->
-        Some (ANF.Atom intAtom)
+    // Dynamic buffer backing-pointer views and raw allocation adoption.
+    | "__string_to_rawptr", [strAtom] ->
+        Some (ANF.StringToRawPtr strAtom)
+    | "__rawptr_to_string", [ptrAtom] ->
+        Some (ANF.RawPtrToString ptrAtom)
+    | "__bytes_to_rawptr", [bytesAtom] ->
+        Some (ANF.BytesToRawPtr bytesAtom)
+    | "__rawptr_to_bytes", [ptrAtom] ->
+        Some (ANF.RawPtrToBytes ptrAtom)
 
     // Dict intrinsics - for type-safe Dict<k, v> operations
     // __empty_dict<k, v> returns 0 (null pointer)
@@ -307,10 +324,10 @@ let tryRawMemoryIntrinsic
         Some (ANF.Prim (ANF.BitAnd, dictAtom, ANF.IntLiteral (ANF.Int64 3L)))
     // __dict_to_rawptr<k, v> clears tag bits (dict & -4)
     | name, [dictAtom] when name = "__dict_to_rawptr" || name.StartsWith("__dict_to_rawptr_") ->
-        Some (ANF.Prim (ANF.BitAnd, dictAtom, ANF.IntLiteral (ANF.Int64 -4L)))
+        Some (ANF.DictToRawPtr dictAtom)
     // __rawptr_to_dict<k, v> combines pointer + tag (ptr | tag)
     | name, [ptrAtom; tagAtom] when name = "__rawptr_to_dict" || name.StartsWith("__rawptr_to_dict_") ->
-        Some (ANF.Prim (ANF.BitOr, ptrAtom, tagAtom))
+        Some (ANF.RawPtrToDict (ptrAtom, tagAtom, dictTypeFromRawPtrIntrinsicName name))
 
     // List intrinsics - for Finger Tree implementation
     // __list_is_null<a> checks if list pointer is 0 (empty)
@@ -321,10 +338,10 @@ let tryRawMemoryIntrinsic
         Some (ANF.Prim (ANF.BitAnd, listAtom, ANF.IntLiteral (ANF.Int64 7L)))
     // __list_to_rawptr<a> clears tag bits (list & -8) to get raw pointer
     | name, [listAtom] when name = "__list_to_rawptr" || name.StartsWith("__list_to_rawptr_") ->
-        Some (ANF.Prim (ANF.BitAnd, listAtom, ANF.IntLiteral (ANF.Int64 -8L)))
+        Some (ANF.ListToRawPtr listAtom)
     // __rawptr_to_list<a> combines pointer + tag (ptr | tag) to create tagged list
     | name, [ptrAtom; tagAtom] when name = "__rawptr_to_list" || name.StartsWith("__rawptr_to_list_") ->
-        Some (ANF.Prim (ANF.BitOr, ptrAtom, tagAtom))
+        Some (ANF.RawPtrToList (ptrAtom, tagAtom, listTypeFromRawPtrIntrinsicName name))
     // __list_empty<a> returns 0 (null pointer = empty finger tree)
     | name, [] when name = "__list_empty" || name.StartsWith("__list_empty_") ->
         Some (ANF.Atom (ANF.IntLiteral (ANF.Int64 0L)))
@@ -1225,7 +1242,7 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
 let private isIntrinsicTypeAppName (funcName: string) : bool =
     match funcName with
     | "__raw_get"
-    | "__raw_set"
+    | "__raw_slot_init"
     | "__empty_dict"
     | "__dict_is_null"
     | "__dict_get_tag"
@@ -3650,8 +3667,8 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                         // incorrectly mark pattern-match branches as impossible.
                         let suffix = funcName.Substring("__raw_get_".Length)
                         tryParseMangledType variantLookup suffix
-                    elif funcName.StartsWith("__raw_set_") then
-                        // __raw_set<T> returns Unit
+                    elif funcName.StartsWith("__raw_slot_init_") then
+                        // __raw_slot_init<T> returns Unit
                         Ok AST.TUnit
                     // Key intrinsics for Dict - monomorphized versions
                     elif funcName.StartsWith("__hash_") then
@@ -3671,11 +3688,12 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                         // __dict_get_tag<k, v> returns Int64 (tag bits)
                         Ok AST.TInt64
                     elif funcName.StartsWith("__dict_to_rawptr_") then
-                        // __dict_to_rawptr<k, v> returns RawPtr (as Int64)
-                        Ok AST.TInt64
+                        // __dict_to_rawptr<k, v> returns RawPtr
+                        Ok AST.TRawPtr
                     elif funcName.StartsWith("__rawptr_to_dict_") then
-                        // __rawptr_to_dict<k, v> returns Dict<k, v> (as Int64)
-                        Ok AST.TInt64
+                        // __rawptr_to_dict<k, v> returns Dict<k, v>
+                        let suffix = funcName.Substring("__rawptr_to_dict_".Length)
+                        tryParseMangledType variantLookup $"dict_{suffix}"
                     // List intrinsics - monomorphized versions for Finger Tree
                     elif funcName.StartsWith("__list_is_null_") then
                         // __list_is_null<a> returns Bool
@@ -3684,8 +3702,8 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                         // __list_get_tag<a> returns Int64 (tag bits)
                         Ok AST.TInt64
                     elif funcName.StartsWith("__list_to_rawptr_") then
-                        // __list_to_rawptr<a> returns RawPtr (as Int64)
-                        Ok AST.TInt64
+                        // __list_to_rawptr<a> returns RawPtr
+                        Ok AST.TRawPtr
                     elif funcName.StartsWith("__rawptr_to_list_") then
                         // __rawptr_to_list<a> returns List<a> - parse element type from mangled name
                         let suffix = funcName.Substring("__rawptr_to_list_".Length)
@@ -4490,44 +4508,6 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
         // Tags: EMPTY=0, SINGLE=1, DEEP=2, NODE2=3, NODE3=4, LEAF=5
         // DEEP layout: [measure:8][prefixCount:8][p0:8][p1:8][p2:8][p3:8][middle:8][suffixCount:8][s0:8][s1:8][s2:8][s3:8]
 
-        // Increment refcount for heap elements stored in leaves
-        let sumShapeReg = rcSumShapeRegistryFromVariantLookup variantLookup
-
-        let addLeafInc (elemAtom: ANF.Atom) (elemType: AST.Type) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
-            let retainExprForElement () : ANF.CExpr option =
-                match elemType with
-                | AST.TFunction _ ->
-                    None
-                | _ ->
-                    let canonicalElemType = canonicalizeBareSumTypeRefs variantLookup elemType
-                    match ANF.rcShapeOfTypeWithSums typeReg sumShapeReg canonicalElemType with
-                    | ANF.DynamicString ->
-                        Some (ANF.RefCountIncString elemAtom)
-                    | ANF.DynamicBytes ->
-                        Some (ANF.RefCountIncBytes elemAtom)
-                    | shape ->
-                        match ANF.rcShapePayloadSize shape, ANF.rcShapeRootKind shape with
-                        | Some size, Some kind ->
-                            let metadata =
-                                {
-                                    ANF.ReleasePlan = Some (ANF.rcShapeReleasePlan shape)
-                                    ANF.SourceType = Some canonicalElemType
-                                }
-                            Some (ANF.RefCountInc (elemAtom, size, kind, Some metadata))
-                        | _ ->
-                            None
-
-            match elemAtom with
-            | ANF.Var _ ->
-                match retainExprForElement () with
-                | Some incExpr ->
-                    let (incVar, vg1) = ANF.freshVar vg
-                    (vg1, bindings @ [(incVar, incExpr)])
-                | None ->
-                    (vg, bindings)
-            | _ ->
-                (vg, bindings)
-
         // Tag a raw pointer as a list value without routing through Stdlib wrappers.
         // Keep a typed binding so RC/type inference still treats the result as List<a>.
         let tagRawPtrAsList (listNode: AST.Type) (tag: int64) (ptrVar: ANF.TempId) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
@@ -4543,10 +4523,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             let (setVar, vg2) = ANF.freshVar vg1
             let (setRcVar, vg3) = ANF.freshVar vg2
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 16L))
-            let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), elemAtom, None)
-            let setRcExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 1L), None)
-            let (vg4, bindings4) =
-                addLeafInc elemAtom elemType vg3 (bindings @ [(ptrVar, allocExpr); (setVar, setExpr); (setRcVar, setRcExpr)])
+            let setExpr = ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), elemAtom, elemType)
+            let setRcExpr = ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 1L))
+            let vg4 = vg3
+            let bindings4 = bindings @ [(ptrVar, allocExpr); (setVar, setExpr); (setRcVar, setRcExpr)]
             let leafListType = AST.TList elemType
             tagRawPtrAsList leafListType 5L ptrVar vg4 bindings4
 
@@ -4556,8 +4536,8 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             let (setVar, vg2) = ANF.freshVar vg1
             let (setRcVar, vg3) = ANF.freshVar vg2
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 16L))
-            let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom, Some listNode)
-            let setRcExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 1L), None)
+            let setExpr = ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom, listNode)
+            let setRcExpr = ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 1L))
             let bindings1 = bindings @ [(ptrVar, allocExpr); (setVar, setExpr); (setRcVar, setRcExpr)]
             tagRawPtrAsList listNode 1L ptrVar vg3 bindings1
 
@@ -4571,7 +4551,10 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             // Build all the set operations
             let setAt offset value valueType vg bindings =
                 let (setVar, vg') = ANF.freshVar vg
-                let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 (int64 offset)), value, valueType)
+                let setExpr =
+                    match valueType with
+                    | Some slotType -> ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 (int64 offset)), value, slotType)
+                    | None -> ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 (int64 offset)), value)
                 (vg', bindings @ [(setVar, setExpr)])
 
             let (vg2, bindings2) = setAt 0 (ANF.IntLiteral (ANF.Int64 (int64 measure))) None vg1 (bindings @ [(ptrVar, allocExpr)])
@@ -4612,14 +4595,14 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             let (ptrVar, vg1) = ANF.freshVar vg
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 32L))
             let (set0Var, vg2) = ANF.freshVar vg1
-            let set0Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom left, Some listNode)
+            let set0Expr = ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom left, listNode)
             let (set1Var, vg3) = ANF.freshVar vg2
-            let set1Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), nodeAtom right, Some listNode)
+            let set1Expr = ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), nodeAtom right, listNode)
             let measure = nodeMeasure left + nodeMeasure right
             let (set2Var, vg4) = ANF.freshVar vg3
-            let set2Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), ANF.IntLiteral (ANF.Int64 (int64 measure)), None)
+            let set2Expr = ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), ANF.IntLiteral (ANF.Int64 (int64 measure)))
             let (setRcVar, vg5) = ANF.freshVar vg4
-            let setRcExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 24L), ANF.IntLiteral (ANF.Int64 1L), None)
+            let setRcExpr = ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 24L), ANF.IntLiteral (ANF.Int64 1L))
             let bindings1 =
                 bindings
                 @ [(ptrVar, allocExpr); (set0Var, set0Expr); (set1Var, set1Expr); (set2Var, set2Expr); (setRcVar, setRcExpr)]
@@ -4631,16 +4614,16 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             let (ptrVar, vg1) = ANF.freshVar vg
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 40L))
             let (set0Var, vg2) = ANF.freshVar vg1
-            let set0Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom first, Some listNode)
+            let set0Expr = ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom first, listNode)
             let (set1Var, vg3) = ANF.freshVar vg2
-            let set1Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), nodeAtom second, Some listNode)
+            let set1Expr = ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), nodeAtom second, listNode)
             let (set2Var, vg4) = ANF.freshVar vg3
-            let set2Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), nodeAtom third, Some listNode)
+            let set2Expr = ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), nodeAtom third, listNode)
             let measure = nodeMeasure first + nodeMeasure second + nodeMeasure third
             let (set3Var, vg5) = ANF.freshVar vg4
-            let set3Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 24L), ANF.IntLiteral (ANF.Int64 (int64 measure)), None)
+            let set3Expr = ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 24L), ANF.IntLiteral (ANF.Int64 (int64 measure)))
             let (setRcVar, vg6) = ANF.freshVar vg5
-            let setRcExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 32L), ANF.IntLiteral (ANF.Int64 1L), None)
+            let setRcExpr = ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 32L), ANF.IntLiteral (ANF.Int64 1L))
             let bindings1 =
                 bindings
                 @ [(ptrVar, allocExpr); (set0Var, set0Expr); (set1Var, set1Expr); (set2Var, set2Expr); (set3Var, set3Expr); (setRcVar, setRcExpr)]
@@ -8248,44 +8231,6 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
         // Tags: EMPTY=0, SINGLE=1, DEEP=2, NODE2=3, NODE3=4, LEAF=5
         // DEEP layout: [measure:8][prefixCount:8][p0:8][p1:8][p2:8][p3:8][middle:8][suffixCount:8][s0:8][s1:8][s2:8][s3:8]
 
-        // Increment refcount for heap elements stored in leaves
-        let sumShapeReg = rcSumShapeRegistryFromVariantLookup variantLookup
-
-        let addLeafInc (elemAtom: ANF.Atom) (elemType: AST.Type) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
-            let retainExprForElement () : ANF.CExpr option =
-                match elemType with
-                | AST.TFunction _ ->
-                    None
-                | _ ->
-                    let canonicalElemType = canonicalizeBareSumTypeRefs variantLookup elemType
-                    match ANF.rcShapeOfTypeWithSums typeReg sumShapeReg canonicalElemType with
-                    | ANF.DynamicString ->
-                        Some (ANF.RefCountIncString elemAtom)
-                    | ANF.DynamicBytes ->
-                        Some (ANF.RefCountIncBytes elemAtom)
-                    | shape ->
-                        match ANF.rcShapePayloadSize shape, ANF.rcShapeRootKind shape with
-                        | Some size, Some kind ->
-                            let metadata =
-                                {
-                                    ANF.ReleasePlan = Some (ANF.rcShapeReleasePlan shape)
-                                    ANF.SourceType = Some canonicalElemType
-                                }
-                            Some (ANF.RefCountInc (elemAtom, size, kind, Some metadata))
-                        | _ ->
-                            None
-
-            match elemAtom with
-            | ANF.Var _ ->
-                match retainExprForElement () with
-                | Some incExpr ->
-                    let (incVar, vg1) = ANF.freshVar vg
-                    (vg1, bindings @ [(incVar, incExpr)])
-                | None ->
-                    (vg, bindings)
-            | _ ->
-                (vg, bindings)
-
         let listNode = AST.TList (AST.TVar "a")
         let listNodeType = Some listNode
 
@@ -8304,10 +8249,10 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             let (setVar, vg2) = ANF.freshVar vg1
             let (setRcVar, vg3) = ANF.freshVar vg2
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 16L))
-            let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), elemAtom, None)
-            let setRcExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 1L), None)
-            let (vg4, bindings4) =
-                addLeafInc elemAtom elemType vg3 (bindings @ [(ptrVar, allocExpr); (setVar, setExpr); (setRcVar, setRcExpr)])
+            let setExpr = ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), elemAtom, elemType)
+            let setRcExpr = ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 1L))
+            let vg4 = vg3
+            let bindings4 = bindings @ [(ptrVar, allocExpr); (setVar, setExpr); (setRcVar, setRcExpr)]
             let leafListType = AST.TList elemType
             tagRawPtrAsList leafListType 5L ptrVar vg4 bindings4
 
@@ -8317,8 +8262,8 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             let (setVar, vg2) = ANF.freshVar vg1
             let (setRcVar, vg3) = ANF.freshVar vg2
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 16L))
-            let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom, Some listNode)
-            let setRcExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 1L), None)
+            let setExpr = ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom, listNode)
+            let setRcExpr = ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), ANF.IntLiteral (ANF.Int64 1L))
             let bindings1 = bindings @ [(ptrVar, allocExpr); (setVar, setExpr); (setRcVar, setRcExpr)]
             tagRawPtrAsList listNode 1L ptrVar vg3 bindings1
 
@@ -8332,7 +8277,10 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             // Build all the set operations
             let setAt offset value valueType vg bindings =
                 let (setVar, vg') = ANF.freshVar vg
-                let setExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 (int64 offset)), value, valueType)
+                let setExpr =
+                    match valueType with
+                    | Some slotType -> ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 (int64 offset)), value, slotType)
+                    | None -> ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 (int64 offset)), value)
                 (vg', bindings @ [(setVar, setExpr)])
 
             let (vg2, bindings2) = setAt 0 (ANF.IntLiteral (ANF.Int64 (int64 measure))) None vg1 (bindings @ [(ptrVar, allocExpr)])
@@ -8373,14 +8321,14 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             let (ptrVar, vg1) = ANF.freshVar vg
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 32L))
             let (set0Var, vg2) = ANF.freshVar vg1
-            let set0Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom left, Some listNode)
+            let set0Expr = ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom left, listNode)
             let (set1Var, vg3) = ANF.freshVar vg2
-            let set1Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), nodeAtom right, Some listNode)
+            let set1Expr = ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), nodeAtom right, listNode)
             let measure = nodeMeasure left + nodeMeasure right
             let (set2Var, vg4) = ANF.freshVar vg3
-            let set2Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), ANF.IntLiteral (ANF.Int64 (int64 measure)), None)
+            let set2Expr = ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), ANF.IntLiteral (ANF.Int64 (int64 measure)))
             let (setRcVar, vg5) = ANF.freshVar vg4
-            let setRcExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 24L), ANF.IntLiteral (ANF.Int64 1L), None)
+            let setRcExpr = ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 24L), ANF.IntLiteral (ANF.Int64 1L))
             let bindings1 =
                 bindings
                 @ [(ptrVar, allocExpr); (set0Var, set0Expr); (set1Var, set1Expr); (set2Var, set2Expr); (setRcVar, setRcExpr)]
@@ -8392,16 +8340,16 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             let (ptrVar, vg1) = ANF.freshVar vg
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 40L))
             let (set0Var, vg2) = ANF.freshVar vg1
-            let set0Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom first, Some listNode)
+            let set0Expr = ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 0L), nodeAtom first, listNode)
             let (set1Var, vg3) = ANF.freshVar vg2
-            let set1Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), nodeAtom second, Some listNode)
+            let set1Expr = ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 8L), nodeAtom second, listNode)
             let (set2Var, vg4) = ANF.freshVar vg3
-            let set2Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), nodeAtom third, Some listNode)
+            let set2Expr = ANF.RawSlotInit (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 16L), nodeAtom third, listNode)
             let measure = nodeMeasure first + nodeMeasure second + nodeMeasure third
             let (set3Var, vg5) = ANF.freshVar vg4
-            let set3Expr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 24L), ANF.IntLiteral (ANF.Int64 (int64 measure)), None)
+            let set3Expr = ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 24L), ANF.IntLiteral (ANF.Int64 (int64 measure)))
             let (setRcVar, vg6) = ANF.freshVar vg5
-            let setRcExpr = ANF.RawSet (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 32L), ANF.IntLiteral (ANF.Int64 1L), None)
+            let setRcExpr = ANF.RawWriteWord (ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 32L), ANF.IntLiteral (ANF.Int64 1L))
             let bindings1 =
                 bindings
                 @ [(ptrVar, allocExpr); (set0Var, set0Expr); (set1Var, set1Expr); (set2Var, set2Expr); (set3Var, set3Expr); (setRcVar, setRcExpr)]

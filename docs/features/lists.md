@@ -47,8 +47,9 @@ own their element payload according to the element representation shape.
 
 List construction happens in `src/DarkCompiler/passes/2_AST_to_ANF.fs`.
 Lowering allocates FingerTree nodes with `RawAlloc` and writes fields with
-typed `RawSet`. The optional type on `RawSet` is important because it lets
-backend code retain managed edges, especially list and dict roots.
+`RawWriteWord` for metadata and `RawSlotInit<T>` for typed payload or child
+slots. The type on `RawSlotInit<T>` is important because it lets backend code
+retain managed edges, especially list and dict roots.
 
 ## Reference Counting
 
@@ -58,7 +59,7 @@ RC:
 - root increments retain the tagged root node
 - decrements traverse list nodes iteratively and free nodes whose refcount
   reaches zero
-- typed `RawSet` retains child list and dict edges
+- `RawSlotInit<T>` retains child list and dict edges
 - direct leaf payload helpers release root element payloads
 - generic fixed-block and boxed-sum element payloads use planned
   `RcReleasePlan` helpers

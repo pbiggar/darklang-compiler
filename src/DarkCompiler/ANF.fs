@@ -238,8 +238,17 @@ type CExpr =
     | RawFree of ptr:Atom                     // Manually free raw memory
     | RawGet of ptr:Atom * byteOffset:Atom * valueType:AST.Type option  // Read 8 bytes at offset, valueType for float
     | RawGetByte of ptr:Atom * byteOffset:Atom  // Read 1 byte at offset, returns Int64 (zero-extended)
-    | RawSet of ptr:Atom * byteOffset:Atom * value:Atom * valueType:AST.Type option  // Write 8 bytes at offset, valueType for float
-    | RawSetByte of ptr:Atom * byteOffset:Atom * value:Atom  // Write 1 byte at offset
+    | RawWriteWord of ptr:Atom * byteOffset:Atom * value:Atom  // Write 8 unmanaged bytes at offset
+    | RawWriteByte of ptr:Atom * byteOffset:Atom * value:Atom  // Write 1 unmanaged byte at offset
+    | RawSlotInit of ptr:Atom * byteOffset:Atom * value:Atom * valueType:AST.Type  // Initialize typed 8-byte slot edge at offset
+    | StringToRawPtr of value:Atom              // Borrow raw backing pointer from String
+    | RawPtrToString of ptr:Atom                // Reinterpret raw allocation as owned String
+    | BytesToRawPtr of value:Atom               // Borrow raw backing pointer from Bytes
+    | RawPtrToBytes of ptr:Atom                 // Reinterpret raw allocation as owned Bytes
+    | DictToRawPtr of dict:Atom                 // Strip Dict tag bits, returning RawPtr
+    | RawPtrToDict of ptr:Atom * tag:Atom * dictType:AST.Type  // Re-tag RawPtr as Dict
+    | ListToRawPtr of list:Atom                 // Strip List tag bits, returning RawPtr
+    | RawPtrToList of ptr:Atom * tag:Atom * listType:AST.Type  // Re-tag RawPtr as List
     // Dynamic buffer reference counting (at offset computed from length)
     | RefCountIncString of Atom               // Increment string ref count
     | RefCountDecString of Atom               // Decrement string ref count, free if zero

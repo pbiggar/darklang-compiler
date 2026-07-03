@@ -477,11 +477,15 @@ let getUsedVRegs (instr: LIR.Instr) : int list =
         (regToVReg ptr |> Option.toList) @ (regToVReg byteOffset |> Option.toList)
     | LIR.RawGetByte (_, ptr, byteOffset) ->
         (regToVReg ptr |> Option.toList) @ (regToVReg byteOffset |> Option.toList)
-    | LIR.RawSet (ptr, byteOffset, value, _) ->
+    | LIR.RawWriteWord (ptr, byteOffset, value) ->
         (regToVReg ptr |> Option.toList)
         @ (regToVReg byteOffset |> Option.toList)
         @ (regToVReg value |> Option.toList)
-    | LIR.RawSetByte (ptr, byteOffset, value) ->
+    | LIR.RawWriteByte (ptr, byteOffset, value) ->
+        (regToVReg ptr |> Option.toList)
+        @ (regToVReg byteOffset |> Option.toList)
+        @ (regToVReg value |> Option.toList)
+    | LIR.RawSlotInit (ptr, byteOffset, value, _) ->
         (regToVReg ptr |> Option.toList)
         @ (regToVReg byteOffset |> Option.toList)
         @ (regToVReg value |> Option.toList)
@@ -551,8 +555,9 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.RawGet (dest, _, _) -> regToVReg dest
     | LIR.RawGetByte (dest, _, _) -> regToVReg dest
     | LIR.RawFree _ -> None
-    | LIR.RawSet _ -> None
-    | LIR.RawSetByte _ -> None
+    | LIR.RawWriteWord _ -> None
+    | LIR.RawWriteByte _ -> None
+    | LIR.RawSlotInit _ -> None
     // FloatToInt64 defines an integer destination register
     | LIR.FloatToInt64 (dest, _) -> regToVReg dest
     // FloatToBits defines an integer destination register
@@ -2904,7 +2909,7 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
             | _ -> []
         ptrLoads @ offsetLoads @ [getInstr] @ storeInstrs
 
-    | LIR.RawSet (ptr, byteOffset, value, valueType) ->
+    | LIR.RawWriteWord (ptr, byteOffset, value) ->
         if isX86_64 arch then
             // On x86_64, X12/X13/X14 all alias R11. When both ptr and value are
             // spilled, loading both into R11 clobbers one. Save X3 (RCX) via
@@ -2924,20 +2929,20 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
                 let (valueReg, valueLoads) = loadSpilled mapping value LIR.X12
                 [LIR.SaveRegs ([LIR.X3], [])]
                 @ ptrLoads @ offsetLoads @ valueLoads
-                @ [LIR.RawSet (ptrReg, offsetReg, valueReg, valueType)]
+                @ [LIR.RawWriteWord (ptrReg, offsetReg, valueReg)]
                 @ [LIR.RestoreRegs ([LIR.X3], [])]
             else
                 let (ptrReg, ptrLoads) = loadSpilled mapping ptr LIR.X12
                 let (offsetReg, offsetLoads) = loadSpilled mapping byteOffset LIR.X12
                 let (valueReg, valueLoads) = loadSpilled mapping value LIR.X12
-                ptrLoads @ offsetLoads @ valueLoads @ [LIR.RawSet (ptrReg, offsetReg, valueReg, valueType)]
+                ptrLoads @ offsetLoads @ valueLoads @ [LIR.RawWriteWord (ptrReg, offsetReg, valueReg)]
         else
             let (ptrReg, ptrLoads) = loadSpilled mapping ptr LIR.X12
             let (offsetReg, offsetLoads) = loadSpilled mapping byteOffset LIR.X13
             let (valueReg, valueLoads) = loadSpilled mapping value LIR.X14
-            ptrLoads @ offsetLoads @ valueLoads @ [LIR.RawSet (ptrReg, offsetReg, valueReg, valueType)]
+            ptrLoads @ offsetLoads @ valueLoads @ [LIR.RawWriteWord (ptrReg, offsetReg, valueReg)]
 
-    | LIR.RawSetByte (ptr, byteOffset, value) ->
+    | LIR.RawWriteByte (ptr, byteOffset, value) ->
         if isX86_64 arch then
             let ptrSpilled =
                 match ptr with
@@ -2953,18 +2958,47 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
                 let (valueReg, valueLoads) = loadSpilled mapping value LIR.X12
                 [LIR.SaveRegs ([LIR.X3], [])]
                 @ ptrLoads @ offsetLoads @ valueLoads
-                @ [LIR.RawSetByte (ptrReg, offsetReg, valueReg)]
+                @ [LIR.RawWriteByte (ptrReg, offsetReg, valueReg)]
                 @ [LIR.RestoreRegs ([LIR.X3], [])]
             else
                 let (ptrReg, ptrLoads) = loadSpilled mapping ptr LIR.X12
                 let (offsetReg, offsetLoads) = loadSpilled mapping byteOffset LIR.X12
                 let (valueReg, valueLoads) = loadSpilled mapping value LIR.X12
-                ptrLoads @ offsetLoads @ valueLoads @ [LIR.RawSetByte (ptrReg, offsetReg, valueReg)]
+                ptrLoads @ offsetLoads @ valueLoads @ [LIR.RawWriteByte (ptrReg, offsetReg, valueReg)]
         else
             let (ptrReg, ptrLoads) = loadSpilled mapping ptr LIR.X12
             let (offsetReg, offsetLoads) = loadSpilled mapping byteOffset LIR.X13
             let (valueReg, valueLoads) = loadSpilled mapping value LIR.X14
-            ptrLoads @ offsetLoads @ valueLoads @ [LIR.RawSetByte (ptrReg, offsetReg, valueReg)]
+            ptrLoads @ offsetLoads @ valueLoads @ [LIR.RawWriteByte (ptrReg, offsetReg, valueReg)]
+
+    | LIR.RawSlotInit (ptr, byteOffset, value, valueType) ->
+        if isX86_64 arch then
+            let ptrSpilled =
+                match ptr with
+                | LIR.Virtual id -> match tryAllocation mapping id with Some (StackSlot _) -> true | _ -> false
+                | _ -> false
+            let valueSpilled =
+                match value with
+                | LIR.Virtual id -> match tryAllocation mapping id with Some (StackSlot _) -> true | _ -> false
+                | _ -> false
+            if ptrSpilled && valueSpilled then
+                let (ptrReg, ptrLoads) = loadSpilled mapping ptr LIR.X3
+                let (offsetReg, offsetLoads) = loadSpilled mapping byteOffset LIR.X12
+                let (valueReg, valueLoads) = loadSpilled mapping value LIR.X12
+                [LIR.SaveRegs ([LIR.X3], [])]
+                @ ptrLoads @ offsetLoads @ valueLoads
+                @ [LIR.RawSlotInit (ptrReg, offsetReg, valueReg, valueType)]
+                @ [LIR.RestoreRegs ([LIR.X3], [])]
+            else
+                let (ptrReg, ptrLoads) = loadSpilled mapping ptr LIR.X12
+                let (offsetReg, offsetLoads) = loadSpilled mapping byteOffset LIR.X12
+                let (valueReg, valueLoads) = loadSpilled mapping value LIR.X12
+                ptrLoads @ offsetLoads @ valueLoads @ [LIR.RawSlotInit (ptrReg, offsetReg, valueReg, valueType)]
+        else
+            let (ptrReg, ptrLoads) = loadSpilled mapping ptr LIR.X12
+            let (offsetReg, offsetLoads) = loadSpilled mapping byteOffset LIR.X13
+            let (valueReg, valueLoads) = loadSpilled mapping value LIR.X14
+            ptrLoads @ offsetLoads @ valueLoads @ [LIR.RawSlotInit (ptrReg, offsetReg, valueReg, valueType)]
 
     | LIR.RefCountIncString str ->
         let (strOp, strLoads) = applyToOperand mapping str LIR.X12

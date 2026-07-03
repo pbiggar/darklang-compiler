@@ -101,26 +101,26 @@ let private makeEmptyFunction
         UsedCalleeSaved = []
     }
 
-let testRawSetPureEnumDoesNotEmitGenericRetain () : TestResult =
-    let enumType = AST.TSum ("RawSetPureEnum", [AST.TString])
+let testRawSlotInitPureEnumDoesNotEmitGenericRetain () : TestResult =
+    let enumType = AST.TSum ("RawSlotInitPureEnum", [AST.TString])
     let variants : LIR.VariantRegistry =
         Map.ofList [
-            ("RawSetPureEnum",
+            ("RawSlotInitPureEnum",
                 { TypeParams = ["a"]
                   Variants =
                     [
-                        { Name = "RawSetPureA"; Tag = 0; Payload = None }
-                        { Name = "RawSetPureB"; Tag = 1; Payload = None }
+                        { Name = "RawSlotInitPureA"; Tag = 0; Payload = None }
+                        { Name = "RawSlotInitPureB"; Tag = 1; Payload = None }
                     ] })
         ]
     let program =
         makeSimpleProgramWithVariants
             [
-                LIR.RawSet (
+                LIR.RawSlotInit (
                     LIR.Physical LIR.X0,
                     LIR.Physical LIR.X1,
                     LIR.Physical LIR.X3,
-                    Some enumType)
+                    enumType)
             ]
             variants
 
@@ -137,7 +137,7 @@ let testRawSetPureEnumDoesNotEmitGenericRetain () : TestResult =
                 | _ ->
                     false)
         if emittedGenericRetain then
-            Error "RawSet of a generic pure enum emitted a generic heap retain"
+            Error "RawSlotInit of a generic pure enum emitted a generic heap retain"
         else
             Ok ()
 
@@ -786,6 +786,68 @@ let testPlannedListRecordPayloadUsesPlannedHelper () : TestResult =
         else
             Error "ARM64 record list payload did not emit a planned list helper"
 
+let testPlannedListTuple5PayloadUsesPlannedHelper () : TestResult =
+    let tupleType =
+        AST.TTuple [
+            AST.TString
+            AST.TBytes
+            AST.TList AST.TInt64
+            AST.TDict (AST.TInt64, AST.TList AST.TInt64)
+            AST.TFunction ([AST.TInt64], AST.TInt64)
+        ]
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    0,
+                    LIR.TaggedList,
+                    Some (rcMetadata (AST.TList tupleType)))
+            ]
+            Map.empty
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        if emitsPlannedListHelperLabel instrs then
+            Ok ()
+        else
+            Error "ARM64 tuple5 list payload did not emit a planned list helper"
+
+let testPlannedListRecord5PayloadUsesPlannedHelper () : TestResult =
+    let recordType = AST.TRecord ("ARM64PlannedListRecord5Payload", [])
+    let records =
+        Map.ofList [
+            ("ARM64PlannedListRecord5Payload",
+                [
+                    ("name", AST.TString)
+                    ("blob", AST.TBytes)
+                    ("items", AST.TList AST.TInt64)
+                    ("lookup", AST.TDict (AST.TInt64, AST.TList AST.TInt64))
+                    ("fn", AST.TFunction ([AST.TInt64], AST.TInt64))
+                ])
+        ]
+    let program =
+        makeSimpleProgramWithRecords
+            [
+                LIR.RefCountDec (
+                    LIR.Physical LIR.X0,
+                    0,
+                    LIR.TaggedList,
+                    Some (rcMetadataWithRecords records (AST.TList recordType)))
+            ]
+            records
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        if emitsPlannedListHelperLabel instrs then
+            Ok ()
+        else
+            Error "ARM64 record5 list payload did not emit a planned list helper"
+
 let testGenericFixedBlockNestedImmediateFieldReleasesChildRoot () : TestResult =
     let nestedType = AST.TTuple [ AST.TInt64 ]
     let parentType = AST.TTuple [ nestedType ]
@@ -1022,7 +1084,7 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
             Error "Closure capture boxed-sum bytes payload release did not consume the variant release plan"
 
 let tests : (string * (unit -> TestResult)) list = [
-    ("RawSet pure enum skips generic retain", testRawSetPureEnumDoesNotEmitGenericRetain)
+    ("RawSlotInit pure enum skips generic retain", testRawSlotInitPureEnumDoesNotEmitGenericRetain)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
     ("List tuple3 string/list/dict-list uses typed dict helper", testListTuple3StringListDictListValueUsesTypedDictHelper)
     ("List tuple3 closure/list/dict-list uses typed dict helper", testListTuple3ClosureListDictListValueUsesTypedDictHelper)
@@ -1054,6 +1116,8 @@ let tests : (string * (unit -> TestResult)) list = [
     ("Planned list nested generic release preserves block pointer", testPlannedListNestedGenericReleasePreservesBlockPointer)
     ("Planned list tuple payload uses planned helper", testPlannedListTuplePayloadUsesPlannedHelper)
     ("Planned list record payload uses planned helper", testPlannedListRecordPayloadUsesPlannedHelper)
+    ("Planned list tuple5 payload uses planned helper", testPlannedListTuple5PayloadUsesPlannedHelper)
+    ("Planned list record5 payload uses planned helper", testPlannedListRecord5PayloadUsesPlannedHelper)
     ("Generic fixed-block nested immediate field releases child root", testGenericFixedBlockNestedImmediateFieldReleasesChildRoot)
     ("Generic fixed-block nested mixed boxed-sum bytes payload uses variant dispatch", testGenericFixedBlockNestedMixedBoxedSumBytesPayloadUsesVariantDispatch)
     ("Generic mixed boxed-sum payload dispatch skips remaining cases", testGenericMixedBoxedSumPayloadDispatchSkipsRemainingCases)

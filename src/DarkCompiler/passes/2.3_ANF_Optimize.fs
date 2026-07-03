@@ -223,8 +223,17 @@ let hasSideEffects (context: OptimizeContext) (cexpr: CExpr) : bool =
     | RawFree _ -> true   // Frees memory
     | RawGet _ -> false   // Pure memory read
     | RawGetByte _ -> false  // Pure memory read (byte)
-    | RawSet _ -> true    // Memory mutation
-    | RawSetByte _ -> true  // Memory mutation (byte)
+    | RawWriteWord _ -> true    // Memory mutation
+    | RawWriteByte _ -> true  // Memory mutation (byte)
+    | RawSlotInit _ -> true  // Memory mutation plus possible ownership edge
+    | StringToRawPtr _ -> false
+    | RawPtrToString _ -> false
+    | BytesToRawPtr _ -> false
+    | RawPtrToBytes _ -> false
+    | DictToRawPtr _ -> false
+    | RawPtrToDict _ -> false
+    | ListToRawPtr _ -> false
+    | RawPtrToList _ -> false
     | FloatSqrt _ -> false  // Pure float operation
     | FloatAbs _ -> false   // Pure float operation
     | FloatNeg _ -> false   // Pure float operation
@@ -284,8 +293,17 @@ let collectCExprUses (cexpr: CExpr) : Set<TempId> =
     | RawFree ptr -> collectAtomUses ptr
     | RawGet (ptr, byteOffset, _) -> Set.union (collectAtomUses ptr) (collectAtomUses byteOffset)
     | RawGetByte (ptr, byteOffset) -> Set.union (collectAtomUses ptr) (collectAtomUses byteOffset)
-    | RawSet (ptr, byteOffset, value, _) -> Set.unionMany [collectAtomUses ptr; collectAtomUses byteOffset; collectAtomUses value]
-    | RawSetByte (ptr, byteOffset, value) -> Set.unionMany [collectAtomUses ptr; collectAtomUses byteOffset; collectAtomUses value]
+    | RawWriteWord (ptr, byteOffset, value) -> Set.unionMany [collectAtomUses ptr; collectAtomUses byteOffset; collectAtomUses value]
+    | RawWriteByte (ptr, byteOffset, value) -> Set.unionMany [collectAtomUses ptr; collectAtomUses byteOffset; collectAtomUses value]
+    | RawSlotInit (ptr, byteOffset, value, _) -> Set.unionMany [collectAtomUses ptr; collectAtomUses byteOffset; collectAtomUses value]
+    | StringToRawPtr value -> collectAtomUses value
+    | RawPtrToString ptr -> collectAtomUses ptr
+    | BytesToRawPtr value -> collectAtomUses value
+    | RawPtrToBytes ptr -> collectAtomUses ptr
+    | DictToRawPtr dict -> collectAtomUses dict
+    | RawPtrToDict (ptr, tag, _) -> Set.union (collectAtomUses ptr) (collectAtomUses tag)
+    | ListToRawPtr list -> collectAtomUses list
+    | RawPtrToList (ptr, tag, _) -> Set.union (collectAtomUses ptr) (collectAtomUses tag)
     | FloatSqrt atom -> collectAtomUses atom
     | FloatAbs atom -> collectAtomUses atom
     | FloatNeg atom -> collectAtomUses atom
@@ -341,8 +359,17 @@ let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | RawFree ptr -> RawFree (s ptr)
     | RawGet (ptr, byteOffset, valueType) -> RawGet (s ptr, s byteOffset, valueType)
     | RawGetByte (ptr, byteOffset) -> RawGetByte (s ptr, s byteOffset)
-    | RawSet (ptr, byteOffset, value, valueType) -> RawSet (s ptr, s byteOffset, s value, valueType)
-    | RawSetByte (ptr, byteOffset, value) -> RawSetByte (s ptr, s byteOffset, s value)
+    | RawWriteWord (ptr, byteOffset, value) -> RawWriteWord (s ptr, s byteOffset, s value)
+    | RawWriteByte (ptr, byteOffset, value) -> RawWriteByte (s ptr, s byteOffset, s value)
+    | RawSlotInit (ptr, byteOffset, value, valueType) -> RawSlotInit (s ptr, s byteOffset, s value, valueType)
+    | StringToRawPtr value -> StringToRawPtr (s value)
+    | RawPtrToString ptr -> RawPtrToString (s ptr)
+    | BytesToRawPtr value -> BytesToRawPtr (s value)
+    | RawPtrToBytes ptr -> RawPtrToBytes (s ptr)
+    | DictToRawPtr dict -> DictToRawPtr (s dict)
+    | RawPtrToDict (ptr, tag, dictType) -> RawPtrToDict (s ptr, s tag, dictType)
+    | ListToRawPtr list -> ListToRawPtr (s list)
+    | RawPtrToList (ptr, tag, listType) -> RawPtrToList (s ptr, s tag, listType)
     | FloatSqrt atom -> FloatSqrt (s atom)
     | FloatAbs atom -> FloatAbs (s atom)
     | FloatNeg atom -> FloatNeg (s atom)
