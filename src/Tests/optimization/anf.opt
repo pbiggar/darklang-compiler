@@ -453,6 +453,22 @@ let TempId 2 = f(42)
 return t2
 
 ---NAME---
+identity_shl_zero
+---INPUT---
+def f(x: Int64) : Int64 = x << 0
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_shr_zero
+---INPUT---
+def f(x: Int64) : Int64 = x >> 0
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
 strength_reduce_float_div_2
 ---INPUT---
 def f(x: Float) : Float = x / 2.0

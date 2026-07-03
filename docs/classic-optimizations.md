@@ -25,6 +25,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical integer simplification that removes redundant bitwise operations in ANF before backend lowering.
 - Notes: Implemented for `x & x -> x` and `x ||| x -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Phase 2 sandbox trial. Covered by `identity_bitand_self` and `identity_bitor_self` in `src/Tests/optimization/anf.opt`.
 
+### Shift by zero elimination
+
+- Optimization name: Shift by zero elimination
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical integer identity that removes redundant shift operations in ANF before MIR lowering.
+- Notes: Implemented for `x << 0 -> x` and `x >> 0 -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Phase 2 sandbox trial. Covered by `identity_shl_zero` and `identity_shr_zero` in `src/Tests/optimization/anf.opt`; these tests use the current optimization test format with function-only input and no required main expression.
+
 ## Strength reduction
 
 ### Multiplication by power-of-two lowering
