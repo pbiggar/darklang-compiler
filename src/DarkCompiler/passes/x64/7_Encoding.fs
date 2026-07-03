@@ -42,11 +42,11 @@ let private fregEncoding (reg: FReg) : int * bool =
 /// Build a REX prefix byte. Returns empty array if no REX needed.
 let private rex (w: bool) (r: bool) (x: bool) (b: bool) : byte array =
     if w || r || x || b then
-        let mutable v = 0x40uy
-        if w then v <- v ||| 0x08uy  // REX.W: 64-bit operand
-        if r then v <- v ||| 0x04uy  // REX.R: reg field extension
-        if x then v <- v ||| 0x02uy  // REX.X: SIB index extension
-        if b then v <- v ||| 0x01uy  // REX.B: r/m field extension
+        let wBit = if w then 0x08uy else 0x00uy  // REX.W: 64-bit operand
+        let rBit = if r then 0x04uy else 0x00uy  // REX.R: reg field extension
+        let xBit = if x then 0x02uy else 0x00uy  // REX.X: SIB index extension
+        let bBit = if b then 0x01uy else 0x00uy  // REX.B: r/m field extension
+        let v = 0x40uy ||| wBit ||| rBit ||| xBit ||| bBit
         [| v |]
     else
         [||]
