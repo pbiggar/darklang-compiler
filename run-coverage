@@ -28,7 +28,10 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         *)
-            shift
+            echo "Unknown option: $1"
+            echo "Usage: ./run-coverage [OPTIONS]"
+            echo "Try './run-coverage --help' for more information."
+            exit 1
             ;;
     esac
 done
