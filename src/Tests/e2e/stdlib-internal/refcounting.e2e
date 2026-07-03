@@ -9,6 +9,7 @@ let s = "a" ++ "b" in let _ = __refcount_inc_string(s) in 0 = stdout="0\n" stder
 // re-enabled to expect stderr="" as the refcounting implementation reaches it.
 
 // Dynamic strings are counted and decref'd at scope exit.
+def __stringRefcount(s: String): Int64 = let len = Stdlib.String.length(s) in let dataSize = ((len + 7) / 8) * 8 in __raw_get<Int64>(__int64_to_rawptr(__string_to_int64(s)), 8 + dataSize)
 let s = "a" ++ "b" in 0 = stdout="0\n" stderr="" // string concat reclaimed
 let src = "a" ++ "bc" in let s = Stdlib.String.slice(src, 0, 1) in 0 = stdout="0\n" stderr="" // unaligned string slice reclaimed
 let s = Stdlib.String.fromCodepoints([97]) in 0 = stdout="0\n" stderr="" // unaligned string builder reclaimed
@@ -50,6 +51,7 @@ let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2) in let d2 = Std
 let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2) in let d2 = Stdlib.Dict.remove(d, 1) in 0 = stdout="0\n" stderr="" // dict remove reclaimed
 let d = Stdlib.Dict.fromList<Int64, Int64>([(1, 2), (3, 4)]) in 0 = stdout="0\n" stderr="" // dict fromList and input tuple list reclaimed
 let d = Stdlib.Dict.set(Stdlib.Dict.empty<String, Int64>(), "a" ++ "b", 1) in 0 = stdout="0\n" stderr="" // dict releases dynamic string keys
+let s = "a" ++ "b" in let d = Stdlib.Dict.set(Stdlib.Dict.empty<String, Int64>(), s, 1) in __stringRefcount(s) = stdout="2\n" stderr="" // dict raw leaf retains dynamic string key edge
 let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, String>(), 1, "a" ++ "b") in 0 = stdout="0\n" stderr="" // dict releases dynamic string values
 let d = Stdlib.Dict.set(Stdlib.Dict.empty<Bytes, Int64>(), Bytes.create(4), 1) in 0 = stdout="0\n" stderr="" // dict releases dynamic bytes keys
 let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Bytes>(), 1, Bytes.create(4)) in 0 = stdout="0\n" stderr="" // dict releases dynamic bytes values
@@ -85,6 +87,7 @@ let fs = Stdlib.List.map<Int64, (Int64) -> Int64>([1, 2], (base: Int64) => (x: I
 type ListPhantomEnum<a> = ListPhantomA | ListPhantomB let a = ListPhantomA in let xs = [a] in 0 = stdout="0\n" stderr="" // list does not retain generic pure enum variables as heap roots
 let xs = ["a" ++ "b"] in 0 = stdout="0\n" stderr="" // list releases dynamic string payload
 let s = "a" ++ "b" in let xs = [s] in 0 = stdout="0\n" stderr="" // list retains dynamic string variable payload
+let s = "a" ++ "b" in let xs = Stdlib.List.pushBack<String>([], s) in __stringRefcount(s) = stdout="2\n" stderr="" // FingerTree raw leaf retains dynamic string payload edge
 def listBytes(): List<Bytes> = [Bytes.create(4)] let xs = listBytes() in 0 = stdout="0\n" stderr="" // returned list releases dynamic bytes payloads
 let xs = [Bytes.create(4), Bytes.create(8)] in 0 = stdout="0\n" stderr="" // list releases multiple dynamic bytes payloads
 let b = Bytes.create(4) in let xs = [b] in 0 = stdout="0\n" stderr="" // list retains dynamic bytes variable payload

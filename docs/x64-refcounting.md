@@ -11,7 +11,7 @@ operations:
 - generic tuple fixed-block `RefCountDec` releases dynamic string/bytes fields
   before freeing the enclosing block
 - tagged-list root `RefCountInc` and recursive node `RefCountDec` are enabled
-- tagged-list edge ownership is retained by typed `RawSet`
+- tagged-list edge ownership is retained by `RawSlotInit<T>`
 - dict root `RefCountInc` and `RefCountDec` helpers are enabled
 - dynamic string and bytes RC lower through the dynamic-buffer path
 

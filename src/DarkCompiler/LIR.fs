@@ -153,8 +153,9 @@ type Instr =
     | RawFree of ptr:Reg
     | RawGet of dest:Reg * ptr:Reg * byteOffset:Reg
     | RawGetByte of dest:Reg * ptr:Reg * byteOffset:Reg
-    | RawSet of ptr:Reg * byteOffset:Reg * value:Reg * valueType:AST.Type option
-    | RawSetByte of ptr:Reg * byteOffset:Reg * value:Reg
+    | RawWriteWord of ptr:Reg * byteOffset:Reg * value:Reg
+    | RawWriteByte of ptr:Reg * byteOffset:Reg * value:Reg
+    | RawSlotInit of ptr:Reg * byteOffset:Reg * value:Reg * valueType:AST.Type
     | RefCountIncString of str:Operand
     | RefCountDecString of str:Operand
     | RefCountIncBytes of bytes:Operand

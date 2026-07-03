@@ -56,8 +56,8 @@ def Stdlib.__FingerTree.__isNull<a>(tree: List<a>) : Bool =
 // Create a Single node: [node:8] with tag 1 (stores TreeNode pointer, not element directly)
 def Stdlib.__FingerTree.__allocSingle<a>(node: List<a>) : List<a> =
     let ptr = __raw_alloc(16) in
-    let _ = __raw_set<List<a>>(ptr, 0, node) in
-    let _ = __raw_set<Int64>(ptr, 8, 1) in
+    let _ = __raw_slot_init<List<a>>(ptr, 0, node) in
+    let _ = __raw_write_word(ptr, 8, 1) in
     Stdlib.__FingerTree.__fromRawPtr<a>(ptr, Stdlib.__FingerTree.__TAG_SINGLE())
 
 // Get element from Single node (returns TreeNode pointer, not element directly)
@@ -72,8 +72,8 @@ def Stdlib.__FingerTree.__getSingleElem<a>(tree: List<a>) : List<a> =
 // Create a LEAF node: [value:8] with tag 5
 def Stdlib.__FingerTree.__allocLeaf<a>(value: a) : List<a> =
     let ptr = __raw_alloc(16) in
-    let _ = __raw_set<a>(ptr, 0, value) in
-    let _ = __raw_set<Int64>(ptr, 8, 1) in
+    let _ = __raw_slot_init<a>(ptr, 0, value) in
+    let _ = __raw_write_word(ptr, 8, 1) in
     Stdlib.__FingerTree.__fromRawPtr<a>(ptr, Stdlib.__FingerTree.__TAG_LEAF())
 
 // Get value from LEAF node
@@ -101,21 +101,21 @@ def Stdlib.__FingerTree.__nodeMeasure<a>(node: List<a>) : Int64 =
 // Children should be TreeNodes (LEAF, NODE2, or NODE3)
 def Stdlib.__FingerTree.__allocNode2<a>(c0: List<a>, c1: List<a>, measure: Int64) : List<a> =
     let ptr = __raw_alloc(32) in
-    let _ = __raw_set<List<a>>(ptr, 0, c0) in
-    let _ = __raw_set<List<a>>(ptr, 8, c1) in
-    let _ = __raw_set<Int64>(ptr, 16, measure) in
-    let _ = __raw_set<Int64>(ptr, 24, 1) in
+    let _ = __raw_slot_init<List<a>>(ptr, 0, c0) in
+    let _ = __raw_slot_init<List<a>>(ptr, 8, c1) in
+    let _ = __raw_write_word(ptr, 16, measure) in
+    let _ = __raw_write_word(ptr, 24, 1) in
     Stdlib.__FingerTree.__fromRawPtr<a>(ptr, Stdlib.__FingerTree.__TAG_NODE2())
 
 // Create Node3: [child0:8][child1:8][child2:8][measure:8] with tag 4
 // Children should be TreeNodes (LEAF, NODE2, or NODE3)
 def Stdlib.__FingerTree.__allocNode3<a>(c0: List<a>, c1: List<a>, c2: List<a>, measure: Int64) : List<a> =
     let ptr = __raw_alloc(40) in
-    let _ = __raw_set<List<a>>(ptr, 0, c0) in
-    let _ = __raw_set<List<a>>(ptr, 8, c1) in
-    let _ = __raw_set<List<a>>(ptr, 16, c2) in
-    let _ = __raw_set<Int64>(ptr, 24, measure) in
-    let _ = __raw_set<Int64>(ptr, 32, 1) in
+    let _ = __raw_slot_init<List<a>>(ptr, 0, c0) in
+    let _ = __raw_slot_init<List<a>>(ptr, 8, c1) in
+    let _ = __raw_slot_init<List<a>>(ptr, 16, c2) in
+    let _ = __raw_write_word(ptr, 24, measure) in
+    let _ = __raw_write_word(ptr, 32, 1) in
     Stdlib.__FingerTree.__fromRawPtr<a>(ptr, Stdlib.__FingerTree.__TAG_NODE3())
 
 // Get child from NODE2 at index (0 or 1)
@@ -145,10 +145,10 @@ def Stdlib.__FingerTree.__DEEP_SUFFIX_OFF() : Int64 = 64
 // Allocate Deep node with prefix and suffix counts
 def Stdlib.__FingerTree.__allocDeep<a>(measure: Int64, prefixCount: Int64, suffixCount: Int64) : RawPtr =
     let ptr = __raw_alloc(104) in
-    let _ = __raw_set<Int64>(ptr, Stdlib.__FingerTree.__DEEP_MEASURE_OFF(), measure) in
-    let _ = __raw_set<Int64>(ptr, Stdlib.__FingerTree.__DEEP_PREFIX_COUNT_OFF(), prefixCount) in
-    let _ = __raw_set<Int64>(ptr, Stdlib.__FingerTree.__DEEP_SUFFIX_COUNT_OFF(), suffixCount) in
-    let _ = __raw_set<Int64>(ptr, 96, 1) in
+    let _ = __raw_write_word(ptr, Stdlib.__FingerTree.__DEEP_MEASURE_OFF(), measure) in
+    let _ = __raw_write_word(ptr, Stdlib.__FingerTree.__DEEP_PREFIX_COUNT_OFF(), prefixCount) in
+    let _ = __raw_write_word(ptr, Stdlib.__FingerTree.__DEEP_SUFFIX_COUNT_OFF(), suffixCount) in
+    let _ = __raw_write_word(ptr, 96, 1) in
     ptr
 
 // Get measure from Deep node
@@ -183,7 +183,7 @@ def Stdlib.__FingerTree.__getDeepMiddle<a>(tree: List<a>) : List<a> =
 
 // Set prefix element at index (stores TreeNode, not raw element)
 def Stdlib.__FingerTree.__setDeepPrefixAt<a>(ptr: RawPtr, index: Int64, node: List<a>) : Unit =
-    __raw_set<List<a>>(ptr, Stdlib.__FingerTree.__DEEP_PREFIX_OFF() + (index * 8), node)
+    __raw_slot_init<List<a>>(ptr, Stdlib.__FingerTree.__DEEP_PREFIX_OFF() + (index * 8), node)
 
 // Conditionally copy prefix element from a source tree
 def Stdlib.__FingerTree.__copyDeepPrefixAtIf<a>(dstPtr: RawPtr, shouldCopy: Bool, dstIndex: Int64, srcTree: List<a>, srcIndex: Int64) : Unit =
@@ -208,7 +208,7 @@ def Stdlib.__FingerTree.__copyDeepPrefixAtOrIf<a>(
 
 // Set suffix element at index (stores TreeNode, not raw element)
 def Stdlib.__FingerTree.__setDeepSuffixAt<a>(ptr: RawPtr, index: Int64, node: List<a>) : Unit =
-    __raw_set<List<a>>(ptr, Stdlib.__FingerTree.__DEEP_SUFFIX_OFF() + (index * 8), node)
+    __raw_slot_init<List<a>>(ptr, Stdlib.__FingerTree.__DEEP_SUFFIX_OFF() + (index * 8), node)
 
 // Conditionally copy suffix element from a source tree
 def Stdlib.__FingerTree.__copyDeepSuffixAtIf<a>(dstPtr: RawPtr, shouldCopy: Bool, dstIndex: Int64, srcTree: List<a>, srcIndex: Int64) : Unit =
@@ -233,7 +233,7 @@ def Stdlib.__FingerTree.__copyDeepSuffixAtOrIf<a>(
 
 // Set middle tree (type-uniform: middle is also List<a>)
 def Stdlib.__FingerTree.__setDeepMiddle<a>(ptr: RawPtr, middle: List<a>) : Unit =
-    __raw_set<List<a>>(ptr, Stdlib.__FingerTree.__DEEP_MIDDLE_OFF(), middle)
+    __raw_slot_init<List<a>>(ptr, Stdlib.__FingerTree.__DEEP_MIDDLE_OFF(), middle)
 
 // -----------------------------------------------------------------------------
 // Public API

@@ -102,16 +102,18 @@ let private plannedListDecHelperLabelForReleasePlan (releasePlan: ANF.RcReleaseP
 let private plannedDictDecHelperLabelForReleasePlan (releasePlan: ANF.RcReleasePlan) : string =
     $"{plannedDictRefCountDecHelperLabelPrefix}{stableRcReleasePlanHash releasePlan}"
 
-type private RawSetRootRetainTarget =
-    | RawSetListRootRetain
-    | RawSetDictRootRetain
-    | RawSetGenericRootRetain of payloadSize:int
+type private SlotInitRootRetainTarget =
+    | SlotInitListRootRetain
+    | SlotInitDictRootRetain
+    | SlotInitDynamicBufferRetain
+    | SlotInitClosureRootRetain
+    | SlotInitGenericRootRetain of payloadSize:int
 
-let private rawSetRootRetainTarget
+let private slotInitRootRetainTarget
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: ANF.RcSumShapeRegistry)
-    (valueType: AST.Type option)
-    : RawSetRootRetainTarget option =
+    (valueType: AST.Type)
+    : SlotInitRootRetainTarget option =
     let shapeOfKnownType (typ: AST.Type) : ANF.RcShape option =
         match typ with
         | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
@@ -119,29 +121,30 @@ let private rawSetRootRetainTarget
         | _ ->
             Some (ANF.rcShapeOfTypeWithSums recordRegistry sumShapeRegistry typ)
 
-    valueType
-    |> Option.bind (fun typ ->
-        shapeOfKnownType typ
-        |> Option.bind (function
+    shapeOfKnownType valueType
+    |> Option.bind (function
             | ANF.TaggedListShape _ ->
-                Some RawSetListRootRetain
+                Some SlotInitListRootRetain
             | ANF.DictRoot _ ->
-                Some RawSetDictRootRetain
+                Some SlotInitDictRootRetain
+            | ANF.DynamicString
+            | ANF.DynamicBytes ->
+                Some SlotInitDynamicBufferRetain
+            | ANF.ClosureShape _ ->
+                Some SlotInitClosureRootRetain
             | ANF.FixedBlock (payloadSize, _) ->
-                match typ with
-                | AST.TTuple _ -> Some (RawSetGenericRootRetain payloadSize)
+                match valueType with
+                | AST.TTuple _
+                | AST.TRecord _ -> Some (SlotInitGenericRootRetain payloadSize)
                 | _ -> None
             | ANF.BoxedSum (payloadSize, _, _) ->
-                match typ with
-                | AST.TSum _ -> Some (RawSetGenericRootRetain payloadSize)
+                match valueType with
+                | AST.TSum _ -> Some (SlotInitGenericRootRetain payloadSize)
                 | _ -> None
-            | ANF.ClosureShape _
             | ANF.Immediate
-            | ANF.DynamicString
-            | ANF.DynamicBytes
             | ANF.StaticString
             | ANF.RawUnmanaged ->
-                None))
+                None)
 
 let private dataLabel (name: string) : ARM64Symbolic.LabelRef =
     ARM64Symbolic.DataLabel (ARM64Symbolic.Named name)
@@ -1594,7 +1597,8 @@ let private dictPayloadReleaseNeedsPlannedHelper (keyRelease: ANF.RcReleasePlan)
     | _, ANF.DynamicBufferRelease _ ->
         true
     | ANF.NoReleasePlan, ANF.RootRelease (_, ANF.TaggedList, _)
-    | ANF.NoReleasePlan, ANF.RootRelease (_, ANF.DictHeap, _) ->
+    | ANF.NoReleasePlan, ANF.RootRelease (_, ANF.DictHeap, _)
+    | ANF.NoReleasePlan, ANF.RootRelease (_, ANF.ClosureHeap, _) ->
         true
     | _, ANF.RootRelease (_, ANF.GenericHeap, _) ->
         true
@@ -1701,6 +1705,7 @@ let private generateDictRefCountDecHelper
     (releaseLeafDynamicValue: bool)
     (releaseLeafListValue: bool)
     (releaseLeafDictValueHelper: string option)
+    (releaseLeafClosureValue: bool)
     (leafFixedBlockValueRelease: (int * ANF.RcReleasePlan) option)
     (releaseLeafTupleStringListValue: bool)
     (releaseLeafTupleStringListDictValue: bool)
@@ -1761,6 +1766,7 @@ let private generateDictRefCountDecHelper
     let skipFreeList = label "skip_freelist"
     let skipLeafListValueRelease = label "skip_leaf_list_value_release"
     let skipLeafDictValueRelease = label "skip_leaf_dict_value_release"
+    let skipLeafClosureValueRelease = label "skip_leaf_closure_value_release"
     let skipLeafDynamicKeyRelease = label "skip_leaf_dynamic_key_release"
     let skipLeafDynamicValueRelease = label "skip_leaf_dynamic_value_release"
     let skipCollisionPayloadRelease = label "skip_collision_payload_release"
@@ -1773,6 +1779,7 @@ let private generateDictRefCountDecHelper
     let collisionRootPayloadDone = label "collision_root_payload_done"
     let skipCollisionListValueRelease = label "skip_collision_list_value_release"
     let skipCollisionDictValueRelease = label "skip_collision_dict_value_release"
+    let skipCollisionClosureValueRelease = label "skip_collision_closure_value_release"
     let skipLeafFixedBlockValueRelease = label "skip_leaf_fixed_block_value_release"
     let skipCollisionGenericPayloadRelease = label "skip_collision_generic_payload_release"
     let collisionGenericPayloadLoop = label "collision_generic_payload_loop"
@@ -2129,6 +2136,14 @@ let private generateDictRefCountDecHelper
                        skipCollisionDictValueRelease
                | None ->
                    [])
+            @ (if releaseLeafClosureValue then
+                   releaseManagedRootValueAtBaseInstrs
+                       ARM64Symbolic.X11
+                       8s
+                       closureRefCountDecHelperLabel
+                       skipCollisionClosureValueRelease
+               else
+                   [])
 
         if List.isEmpty releases then
             []
@@ -2213,6 +2228,12 @@ let private generateDictRefCountDecHelper
         | Some targetHelperLabel ->
             releaseLeafManagedRootValueInstrs targetHelperLabel skipLeafDictValueRelease
         | None ->
+            []
+
+    let releaseLeafClosureValueInstrs =
+        if releaseLeafClosureValue then
+            releaseLeafManagedRootValueInstrs closureRefCountDecHelperLabel skipLeafClosureValueRelease
+        else
             []
 
     let releaseLeafTupleStringListValueInstrs =
@@ -2442,6 +2463,7 @@ let private generateDictRefCountDecHelper
     @ releaseCollisionGenericValueInstrs
     @ releaseLeafListValueInstrs
     @ releaseLeafDictValueInstrs
+    @ releaseLeafClosureValueInstrs
     @ releaseLeafGenericValueInstrs
     @ releaseLeafTupleStringListValueInstrs
     @ releaseLeafSumStringValueInstrs
@@ -2510,6 +2532,7 @@ let private generatePlannedDictRefCountDecHelper
             releaseLeafDynamicValue,
             releaseLeafListValue,
             releaseLeafDictValueHelper,
+            releaseLeafClosureValue,
             leafFixedBlockValueRelease,
             releaseLeafTupleStringListValue,
             releaseLeafTupleStringListDictValue,
@@ -2517,29 +2540,29 @@ let private generatePlannedDictRefCountDecHelper
             ) =
             match valueRelease with
             | ANF.NoReleasePlan ->
-                false, false, None, None, false, false, false
+                false, false, None, false, None, false, false, false
             | ANF.DynamicBufferRelease _ ->
-                true, false, None, None, false, false, false
+                true, false, None, false, None, false, false, false
             | ANF.RootRelease (_, ANF.TaggedList, _) ->
-                false, true, None, None, false, false, false
+                false, true, None, false, None, false, false, false
             | ANF.RootRelease (_, ANF.DictHeap, _) ->
-                false, false, Some (dictDecHelperForReleasePlan valueRelease), None, false, false, false
+                false, false, Some (dictDecHelperForReleasePlan valueRelease), false, None, false, false, false
+            | ANF.RootRelease (_, ANF.ClosureHeap, _) ->
+                false, false, None, true, None, false, false, false
             | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (16, fieldReleases))
                 when releasePlanDynamicOperationAt 0 ANF.DynamicStringBuffer fieldReleases
                      && releasePlanRootKindAt 8 ANF.TaggedList fieldReleases ->
-                false, false, None, Some (16, valueRelease), false, false, false
+                false, false, None, false, Some (16, valueRelease), false, false, false
             | ANF.RootRelease (_, ANF.GenericHeap, ANF.FixedBlockPayloadRelease (24, fieldReleases))
                 when releasePlanDynamicOperationAt 0 ANF.DynamicStringBuffer fieldReleases
                      && releasePlanRootKindAt 8 ANF.TaggedList fieldReleases
                      && releasePlanRootKindAt 16 ANF.DictHeap fieldReleases ->
-                false, false, None, Some (24, valueRelease), false, false, false
+                false, false, None, false, Some (24, valueRelease), false, false, false
             | ANF.RootRelease (_, ANF.GenericHeap, ANF.BoxedSumPayloadRelease (_, fieldReleases, _))
                 when releasePlanDynamicOperationAt 8 ANF.DynamicStringBuffer fieldReleases ->
-                false, false, None, Some (16, valueRelease), false, false, false
+                false, false, None, false, Some (16, valueRelease), false, false, false
             | ANF.RootRelease (payloadSize, ANF.GenericHeap, _) ->
-                false, false, None, Some (payloadSize, valueRelease), false, false, false
-            | other ->
-                unsupported "value" other
+                false, false, None, false, Some (payloadSize, valueRelease), false, false, false
 
         generateDictRefCountDecHelper
             helperLabel
@@ -2547,6 +2570,7 @@ let private generatePlannedDictRefCountDecHelper
             releaseLeafDynamicValue
             releaseLeafListValue
             releaseLeafDictValueHelper
+            releaseLeafClosureValue
             leafFixedBlockValueRelease
             releaseLeafTupleStringListValue
             releaseLeafTupleStringListDictValue
@@ -5400,7 +5424,25 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                         ARM64Symbolic.LDRB_imm (destReg, ARM64Symbolic.X15, 0)         // dest = [X15] (byte, zero-extended)
                     ])))
 
-    | LIR.RawSet (ptr, byteOffset, value, valueType) ->
+    | LIR.RawWriteWord (ptr, byteOffset, value) ->
+        // Store 8 unmanaged bytes at ptr + byteOffset.
+        lirRegToARM64Reg ptr
+        |> Result.bind (fun ptrReg ->
+            lirRegToARM64Reg byteOffset
+            |> Result.bind (fun offsetReg ->
+                lirRegToARM64Reg value
+                |> Result.map (fun valueReg ->
+                    let tempReg =
+                        if ptrReg = ARM64Symbolic.X15 || offsetReg = ARM64Symbolic.X15 || valueReg = ARM64Symbolic.X15 then
+                            ARM64Symbolic.X14
+                        else
+                            ARM64Symbolic.X15
+                    [
+                        ARM64Symbolic.ADD_reg (tempReg, ptrReg, offsetReg)   // temp = ptr + offset
+                        ARM64Symbolic.STR (valueReg, tempReg, 0s)            // [temp] = value
+                    ])))
+
+    | LIR.RawSlotInit (ptr, byteOffset, value, valueType) ->
         // Store 8 bytes at ptr + byteOffset.
         // If the stored value is RC-managed, increment ownership because the parent now owns that edge.
         lirRegToARM64Reg ptr
@@ -5420,8 +5462,8 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                     ]
 
                     let ownershipInc =
-                        match rawSetRootRetainTarget ctx.RecordRegistry ctx.SumShapeRegistry valueType with
-                        | Some RawSetListRootRetain ->
+                        match slotInitRootRetainTarget ctx.RecordRegistry ctx.SumShapeRegistry valueType with
+                        | Some SlotInitListRootRetain ->
                             [
                                 ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -64s)
                                 ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -5434,7 +5476,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                                 ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
                                 ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 64s)
                             ]
-                        | Some RawSetDictRootRetain ->
+                        | Some SlotInitDictRootRetain ->
                             [
                                 ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -80s)
                                 ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
@@ -5449,7 +5491,48 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                                 ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
                                 ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 80s)
                             ]
-                        | Some (RawSetGenericRootRetain payloadSize) ->
+                        | Some SlotInitDynamicBufferRetain ->
+                            [
+                                ARM64Symbolic.MOV_reg (ARM64Symbolic.X12, valueReg)
+                                ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
+                                ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 7us)
+                                ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 3us, 0)
+                                ARM64Symbolic.LSR_reg (ARM64Symbolic.X15, ARM64Symbolic.X15, ARM64Symbolic.X13)
+                                ARM64Symbolic.LSL_reg (ARM64Symbolic.X15, ARM64Symbolic.X15, ARM64Symbolic.X13)
+                                ARM64Symbolic.ADD_imm (ARM64Symbolic.X14, ARM64Symbolic.X12, 8us)
+                                ARM64Symbolic.ADD_reg (ARM64Symbolic.X14, ARM64Symbolic.X14, ARM64Symbolic.X15)
+                                ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+                                ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 0xFFFFus, 0)
+                                ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 16)
+                                ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 32)
+                                ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0x7FFFus, 48)
+                                ARM64Symbolic.CMP_reg (ARM64Symbolic.X15, ARM64Symbolic.X13)
+                                ARM64Symbolic.B_cond (ARM64Symbolic.EQ, 3)
+                                ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+                                ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+                            ]
+                        | Some SlotInitClosureRootRetain ->
+                            let closureIncCall = [
+                                ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)
+                                ARM64Symbolic.STP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                                ARM64Symbolic.STP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                                ARM64Symbolic.STP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                                ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                                ARM64Symbolic.STP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+                                ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, valueReg)
+                                ARM64Symbolic.BL closureRefCountIncHelperLabel
+                                ARM64Symbolic.LDP (ARM64Symbolic.X10, ARM64Symbolic.X11, ARM64Symbolic.SP, 80s)
+                                ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
+                                ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)
+                                ARM64Symbolic.LDP (ARM64Symbolic.X4, ARM64Symbolic.X5, ARM64Symbolic.SP, 32s)
+                                ARM64Symbolic.LDP (ARM64Symbolic.X2, ARM64Symbolic.X3, ARM64Symbolic.SP, 16s)
+                                ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, 96s)
+                            ]
+                            [
+                                ARM64Symbolic.CBZ_offset (valueReg, List.length closureIncCall + 1)
+                            ]
+                            @ closureIncCall
+                        | Some (SlotInitGenericRootRetain payloadSize) ->
                             let rcReg =
                                 if valueReg = ARM64Symbolic.X15 then ARM64Symbolic.X14 else ARM64Symbolic.X15
                             [
@@ -5462,7 +5545,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
 
                     storeValue @ ownershipInc)))
 
-    | LIR.RawSetByte (ptr, byteOffset, value) ->
+    | LIR.RawWriteByte (ptr, byteOffset, value) ->
         // Store 1 byte at ptr + byteOffset
         // IMPORTANT: If any input reg is X15, use X14 as temp instead
         lirRegToARM64Reg ptr
@@ -6458,9 +6541,9 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountInc (_, _, LIR.TaggedList, _) -> true
-                    | LIR.RawSet (_, _, _, valueType) ->
-                        match rawSetRootRetainTarget ctx.RecordRegistry ctx.SumShapeRegistry valueType with
-                        | Some RawSetListRootRetain -> true
+                    | LIR.RawSlotInit (_, _, _, valueType) ->
+                        match slotInitRootRetainTarget ctx.RecordRegistry ctx.SumShapeRegistry valueType with
+                        | Some SlotInitListRootRetain -> true
                         | _ -> false
                     | _ -> false)))
 
@@ -6472,9 +6555,9 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountInc (_, _, LIR.DictHeap, _) -> true
-                    | LIR.RawSet (_, _, _, valueType) ->
-                        match rawSetRootRetainTarget ctx.RecordRegistry ctx.SumShapeRegistry valueType with
-                        | Some RawSetDictRootRetain -> true
+                    | LIR.RawSlotInit (_, _, _, valueType) ->
+                        match slotInitRootRetainTarget ctx.RecordRegistry ctx.SumShapeRegistry valueType with
+                        | Some SlotInitDictRootRetain -> true
                         | _ -> false
                     | _ -> false)))
 
@@ -6624,6 +6707,10 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 block.Instrs
                 |> List.exists (function
                     | LIR.RefCountInc (_, _, LIR.ClosureHeap, _) -> true
+                    | LIR.RawSlotInit (_, _, _, valueType) ->
+                        match slotInitRootRetainTarget ctx.RecordRegistry ctx.SumShapeRegistry valueType with
+                        | Some SlotInitClosureRootRetain -> true
+                        | _ -> false
                     | _ -> false)))
 
     let rec releasePlanContainsClosureHelperCall (releasePlan: ANF.RcReleasePlan) : bool =
@@ -6685,6 +6772,13 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                 (function ANF.RootRelease (_, ANF.ClosureHeap, _) -> true | _ -> false)
                 selectedListRcDecHelperLabels
 
+        let plannedDictHelpersNeedClosureDecHelper =
+            plannedDictDecHelpers
+            |> Map.exists (fun _ releasePlan ->
+                rcReleasePlanContains
+                    (function ANF.RootRelease (_, ANF.ClosureHeap, _) -> true | _ -> false)
+                    releasePlan)
+
         let listRcHelpers =
             (if needsListRcIncHelper then generateListRefCountIncHelper () else [])
             @ generateNeededListRefCountDecHelpers ctx selectedListRcDecHelperLabels plannedListDecHelpers
@@ -6694,16 +6788,16 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                |> Map.toList
                |> List.collect (fun (helperLabel, releasePlan) ->
                    generatePlannedDictRefCountDecHelper helperLabel releasePlan ctx))
-            @ (if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper || not (Map.isEmpty plannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false None None false false false ctx else [])
-            @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel false false true None None false false false ctx else [])
-            @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false false false (Some dictRefCountDecHelperLabel) None false false false ctx else [])
-            @ (if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false false false (Some dictRefCountDecListValueHelperLabel) None false false false ctx else [])
-            @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false false None None true false false ctx else [])
-            @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false None None false true false ctx else [])
-            @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None None false false true ctx else [])
+            @ (if needsDictRcDecHelper || selectedListHelpersNeedDictDecHelper || not (Map.isEmpty plannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false None false None false false false ctx else [])
+            @ (if needsDictRcDecListValueHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel false false true None false None false false false ctx else [])
+            @ (if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false false false (Some dictRefCountDecHelperLabel) false None false false false ctx else [])
+            @ (if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false false false (Some dictRefCountDecListValueHelperLabel) false None false false false ctx else [])
+            @ (if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false false None false None true false false ctx else [])
+            @ (if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false None false None false true false ctx else [])
+            @ (if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None false None false false true ctx else [])
         let closureRcHelpers =
             (if needsClosureRcIncHelper then generateClosureRefCountIncHelper ctx else [])
-            @ (if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper ctx else [])
+            @ (if needsClosureRcDecHelper || selectedListHelpersNeedClosureDecHelper || plannedDictHelpersNeedClosureDecHelper then generateClosureRefCountDecHelper ctx else [])
         (allFunctionInstrs @ listRcHelpers @ dictRcHelpers @ closureRcHelpers) |> peepholeOptimize)
 
 /// Convert LIR program to ARM64 instructions (uses default options)

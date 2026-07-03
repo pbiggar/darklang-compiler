@@ -49,16 +49,16 @@ def Stdlib.__HAMT.__setTag<k, v>(ptr: RawPtr, tag: Int64) : Dict<k, v> =
 // Allocate a leaf node: [key:8][value:8][refcount:8] = 24 bytes
 def Stdlib.__HAMT.__allocLeaf<k, v>(key: k, value: v) : Dict<k, v> =
     let ptr = __raw_alloc(24) in
-    let _ = __raw_set<k>(ptr, 0, key) in
-    let _ = __raw_set<v>(ptr, 8, value) in
-    let _ = __raw_set<Int64>(ptr, 16, 1) in
+    let _ = __raw_slot_init<k>(ptr, 0, key) in
+    let _ = __raw_slot_init<v>(ptr, 8, value) in
+    let _ = __raw_write_word(ptr, 16, 1) in
     Stdlib.__HAMT.__setTag<k, v>(ptr, 2)
 
 // Allocate an internal node: [bitmap:8][children...][refcount:8]
 def Stdlib.__HAMT.__allocInternal(bitmap: Int64, numChildren: Int64) : RawPtr =
     let ptr = __raw_alloc(16 + (numChildren * 8)) in
-    let _ = __raw_set<Int64>(ptr, 0, bitmap) in
-    let _ = __raw_set<Int64>(ptr, 8 + (numChildren * 8), 1) in
+    let _ = __raw_write_word(ptr, 0, bitmap) in
+    let _ = __raw_write_word(ptr, 8 + (numChildren * 8), 1) in
     ptr
 
 // =============================================================================
@@ -71,12 +71,12 @@ def Stdlib.__HAMT.__allocInternal(bitmap: Int64, numChildren: Int64) : RawPtr =
 def Stdlib.__HAMT.__allocCollision<k, v>(key1: k, val1: v, key2: k, val2: v) : Dict<k, v> =
     // 8 bytes for count + 2 * 16 bytes for entries + refcount = 48 bytes
     let ptr = __raw_alloc(48) in
-    let _ = __raw_set<Int64>(ptr, 0, 2) in  // count = 2
-    let _ = __raw_set<k>(ptr, 8, key1) in
-    let _ = __raw_set<v>(ptr, 16, val1) in
-    let _ = __raw_set<k>(ptr, 24, key2) in
-    let _ = __raw_set<v>(ptr, 32, val2) in
-    let _ = __raw_set<Int64>(ptr, 40, 1) in
+    let _ = __raw_write_word(ptr, 0, 2) in  // count = 2
+    let _ = __raw_slot_init<k>(ptr, 8, key1) in
+    let _ = __raw_slot_init<v>(ptr, 16, val1) in
+    let _ = __raw_slot_init<k>(ptr, 24, key2) in
+    let _ = __raw_slot_init<v>(ptr, 32, val2) in
+    let _ = __raw_write_word(ptr, 40, 1) in
     Stdlib.__HAMT.__setTag<k, v>(ptr, 3)
 
 // Get count from collision node
@@ -119,8 +119,8 @@ def Stdlib.__HAMT.__copyCollisionExcept<k, v>(oldPtr: RawPtr, newPtr: RawPtr, co
         let destOffset = 8 + (destI * 16) in
         let key = __raw_get<k>(oldPtr, srcOffset) in
         let value = __raw_get<v>(oldPtr, srcOffset + 8) in
-        let _ = __raw_set<k>(newPtr, destOffset, key) in
-        let _ = __raw_set<v>(newPtr, destOffset + 8, value) in
+        let _ = __raw_slot_init<k>(newPtr, destOffset, key) in
+        let _ = __raw_slot_init<v>(newPtr, destOffset + 8, value) in
         Stdlib.__HAMT.__copyCollisionExcept<k, v>(oldPtr, newPtr, count, exceptIdx, i + 1, destI + 1)
 
 // Copy all collision entries
@@ -130,8 +130,8 @@ def Stdlib.__HAMT.__copyAllCollision<k, v>(oldPtr: RawPtr, newPtr: RawPtr, count
         let offset = 8 + (i * 16) in
         let key = __raw_get<k>(oldPtr, offset) in
         let value = __raw_get<v>(oldPtr, offset + 8) in
-        let _ = __raw_set<k>(newPtr, offset, key) in
-        let _ = __raw_set<v>(newPtr, offset + 8, value) in
+        let _ = __raw_slot_init<k>(newPtr, offset, key) in
+        let _ = __raw_slot_init<v>(newPtr, offset + 8, value) in
         Stdlib.__HAMT.__copyAllCollision<k, v>(oldPtr, newPtr, count, i + 1)
 
 // Update or add entry in collision node
@@ -141,22 +141,22 @@ def Stdlib.__HAMT.__setInCollision<k, v>(ptr: RawPtr, key: k, value: v) : Dict<k
     if idx >= 0 then
         // Key exists - create new collision node with updated value
         let newPtr = __raw_alloc(16 + (count * 16)) in
-        let _ = __raw_set<Int64>(newPtr, 0, count) in
+        let _ = __raw_write_word(newPtr, 0, count) in
         let _ = Stdlib.__HAMT.__copyAllCollision<k, v>(ptr, newPtr, count, 0) in
-        let _ = __raw_set<Int64>(newPtr, 8 + (count * 16), 1) in
+        let _ = __raw_write_word(newPtr, 8 + (count * 16), 1) in
         let updateOffset = 8 + (idx * 16) + 8 in
-        let _ = __raw_set<v>(newPtr, updateOffset, value) in
+        let _ = __raw_slot_init<v>(newPtr, updateOffset, value) in
         Stdlib.__HAMT.__setTag<k, v>(newPtr, 3)
     else
         // Key doesn't exist - create new collision node with added entry
         let newCount = count + 1 in
         let newPtr = __raw_alloc(16 + (newCount * 16)) in
-        let _ = __raw_set<Int64>(newPtr, 0, newCount) in
+        let _ = __raw_write_word(newPtr, 0, newCount) in
         let _ = Stdlib.__HAMT.__copyAllCollision<k, v>(ptr, newPtr, count, 0) in
         let newOffset = 8 + (count * 16) in
-        let _ = __raw_set<k>(newPtr, newOffset, key) in
-        let _ = __raw_set<v>(newPtr, newOffset + 8, value) in
-        let _ = __raw_set<Int64>(newPtr, 8 + (newCount * 16), 1) in
+        let _ = __raw_slot_init<k>(newPtr, newOffset, key) in
+        let _ = __raw_slot_init<v>(newPtr, newOffset + 8, value) in
+        let _ = __raw_write_word(newPtr, 8 + (newCount * 16), 1) in
         Stdlib.__HAMT.__setTag<k, v>(newPtr, 3)
 
 // Remove entry from collision node
@@ -176,9 +176,9 @@ def Stdlib.__HAMT.__removeFromCollision<k, v>(ptr: RawPtr, key: k) : Dict<k, v> 
         // Remove entry - create smaller collision node
         let newCount = count - 1 in
         let newPtr = __raw_alloc(16 + (newCount * 16)) in
-        let _ = __raw_set<Int64>(newPtr, 0, newCount) in
+        let _ = __raw_write_word(newPtr, 0, newCount) in
         let _ = Stdlib.__HAMT.__copyCollisionExcept<k, v>(ptr, newPtr, count, idx, 0, 0) in
-        let _ = __raw_set<Int64>(newPtr, 8 + (newCount * 16), 1) in
+        let _ = __raw_write_word(newPtr, 8 + (newCount * 16), 1) in
         Stdlib.__HAMT.__setTag<k, v>(newPtr, 3)
 
 // Check if key exists in collision node
@@ -328,7 +328,7 @@ def Stdlib.__HAMT.__expandLeaf<k, v>(key1: k, key1Hash: Int64, val1: v, key2: k,
             let child = Stdlib.__HAMT.__expandLeaf<k, v>(key1, key1Hash, val1, key2, key2Hash, val2, level + 1) in
             let bitmap = Stdlib.__HAMT.__setBit(0, chunk1) in
             let newNode = Stdlib.__HAMT.__allocInternal(bitmap, 1) in
-            let _ = __raw_set<Dict<k, v>>(newNode, 8, child) in
+            let _ = __raw_slot_init<Dict<k, v>>(newNode, 8, child) in
             Stdlib.__HAMT.__setTag<k, v>(newNode, 1)
     else
         // Different chunks - create internal node with both leaves
@@ -336,12 +336,12 @@ def Stdlib.__HAMT.__expandLeaf<k, v>(key1: k, key1Hash: Int64, val1: v, key2: k,
         let newNode = Stdlib.__HAMT.__allocInternal(bitmap, 2) in
         // Store children in order of their chunks
         if chunk1 < chunk2 then
-            let _ = __raw_set<Dict<k, v>>(newNode, 8, Stdlib.__HAMT.__allocLeaf<k, v>(key1, val1)) in
-            let _ = __raw_set<Dict<k, v>>(newNode, 16, Stdlib.__HAMT.__allocLeaf<k, v>(key2, val2)) in
+            let _ = __raw_slot_init<Dict<k, v>>(newNode, 8, Stdlib.__HAMT.__allocLeaf<k, v>(key1, val1)) in
+            let _ = __raw_slot_init<Dict<k, v>>(newNode, 16, Stdlib.__HAMT.__allocLeaf<k, v>(key2, val2)) in
             Stdlib.__HAMT.__setTag<k, v>(newNode, 1)
         else
-            let _ = __raw_set<Dict<k, v>>(newNode, 8, Stdlib.__HAMT.__allocLeaf<k, v>(key2, val2)) in
-            let _ = __raw_set<Dict<k, v>>(newNode, 16, Stdlib.__HAMT.__allocLeaf<k, v>(key1, val1)) in
+            let _ = __raw_slot_init<Dict<k, v>>(newNode, 8, Stdlib.__HAMT.__allocLeaf<k, v>(key2, val2)) in
+            let _ = __raw_slot_init<Dict<k, v>>(newNode, 16, Stdlib.__HAMT.__allocLeaf<k, v>(key1, val1)) in
             Stdlib.__HAMT.__setTag<k, v>(newNode, 1)
 
 // Copy internal node with one child updated
@@ -358,11 +358,11 @@ def Stdlib.__HAMT.__copyChildren<k, v>(oldPtr: RawPtr, newPtr: RawPtr, numChildr
     else
         let offset = 8 + (i * 8) in
         if i == updateIdx then
-            let _ = __raw_set<Dict<k, v>>(newPtr, offset, newChild) in
+            let _ = __raw_slot_init<Dict<k, v>>(newPtr, offset, newChild) in
             Stdlib.__HAMT.__copyChildren<k, v>(oldPtr, newPtr, numChildren, updateIdx, newChild, i + 1)
         else
             let child = __raw_get<Dict<k, v>>(oldPtr, offset) in
-            let _ = __raw_set<Dict<k, v>>(newPtr, offset, child) in
+            let _ = __raw_slot_init<Dict<k, v>>(newPtr, offset, child) in
             Stdlib.__HAMT.__copyChildren<k, v>(oldPtr, newPtr, numChildren, updateIdx, newChild, i + 1)
 
 // Copy internal node with a new child inserted at position
@@ -378,7 +378,7 @@ def Stdlib.__HAMT.__copyChildrenWithInsert<k, v>(oldPtr: RawPtr, newPtr: RawPtr,
     if newI == insertIdx then
         // Insert the new child here
         let offset = 8 + (newI * 8) in
-        let _ = __raw_set<Dict<k, v>>(newPtr, offset, newChild) in
+        let _ = __raw_slot_init<Dict<k, v>>(newPtr, offset, newChild) in
         Stdlib.__HAMT.__copyChildrenWithInsert<k, v>(oldPtr, newPtr, oldNumChildren, insertIdx, newChild, oldI, newI + 1)
     else if oldI >= oldNumChildren then
         Stdlib.__HAMT.__setTag<k, v>(newPtr, 1)
@@ -387,7 +387,7 @@ def Stdlib.__HAMT.__copyChildrenWithInsert<k, v>(oldPtr: RawPtr, newPtr: RawPtr,
         let oldOffset = 8 + (oldI * 8) in
         let newOffset = 8 + (newI * 8) in
         let child = __raw_get<Dict<k, v>>(oldPtr, oldOffset) in
-        let _ = __raw_set<Dict<k, v>>(newPtr, newOffset, child) in
+        let _ = __raw_slot_init<Dict<k, v>>(newPtr, newOffset, child) in
         Stdlib.__HAMT.__copyChildrenWithInsert<k, v>(oldPtr, newPtr, oldNumChildren, insertIdx, newChild, oldI + 1, newI + 1)
 
 def Stdlib.__HAMT.__copyChildrenExcluding<k, v>(oldPtr: RawPtr, newPtr: RawPtr, oldNumChildren: Int64, excludeIdx: Int64, oldI: Int64, newI: Int64) : Dict<k, v> =
@@ -401,7 +401,7 @@ def Stdlib.__HAMT.__copyChildrenExcluding<k, v>(oldPtr: RawPtr, newPtr: RawPtr, 
         let oldOffset = 8 + (oldI * 8) in
         let newOffset = 8 + (newI * 8) in
         let child = __raw_get<Dict<k, v>>(oldPtr, oldOffset) in
-        let _ = __raw_set<Dict<k, v>>(newPtr, newOffset, child) in
+        let _ = __raw_slot_init<Dict<k, v>>(newPtr, newOffset, child) in
         Stdlib.__HAMT.__copyChildrenExcluding<k, v>(oldPtr, newPtr, oldNumChildren, excludeIdx, oldI + 1, newI + 1)
 
 // Copy internal node with one child removed
@@ -670,7 +670,7 @@ def Stdlib.__HAMT.__mapChildren<k, v, w>(oldPtr: RawPtr, newPtr: RawPtr, bitmap:
     else
         let child = __raw_get<Dict<k, v>>(oldPtr, 8 + (idx * 8)) in
         let mappedChild = Stdlib.__HAMT.__mapHelper<k, v, w>(child, f) in
-        let _ = __raw_set<Dict<k, w>>(newPtr, 8 + (idx * 8), mappedChild) in
+        let _ = __raw_slot_init<Dict<k, w>>(newPtr, 8 + (idx * 8), mappedChild) in
         Stdlib.__HAMT.__mapChildren<k, v, w>(oldPtr, newPtr, bitmap, idx + 1, numChildren, f)
 
 // Filter entries in the dictionary

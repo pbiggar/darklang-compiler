@@ -261,8 +261,9 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | RawFree _ -> defs
         | RawGet (dest, _, _, _) -> Set.add dest defs
         | RawGetByte (dest, _, _) -> Set.add dest defs
-        | RawSet _ -> defs
-        | RawSetByte _ -> defs
+        | RawWriteWord _ -> defs
+        | RawWriteByte _ -> defs
+        | RawSlotInit _ -> defs
         | FloatSqrt (dest, _) -> Set.add dest defs
         | FloatAbs (dest, _) -> Set.add dest defs
         | FloatNeg (dest, _) -> Set.add dest defs
@@ -358,9 +359,11 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
                 uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset)
             | RawGetByte (_, ptr, offset) ->
                 uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset)
-            | RawSet (ptr, offset, value, _) ->
+            | RawWriteWord (ptr, offset, value) ->
                 uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset) |> Set.union (getOperandUses value)
-            | RawSetByte (ptr, offset, value) ->
+            | RawWriteByte (ptr, offset, value) ->
+                uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset) |> Set.union (getOperandUses value)
+            | RawSlotInit (ptr, offset, value, _) ->
                 uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset) |> Set.union (getOperandUses value)
             | FloatSqrt (_, src) -> Set.union uses (getOperandUses src)
             | FloatAbs (_, src) -> Set.union uses (getOperandUses src)
@@ -781,17 +784,23 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let (_, newDest, state') = newVersion state dest
         (RawGetByte (newDest, ptr', byteOffset'), state')
 
-    | RawSet (ptr, byteOffset, value, valueType) ->
+    | RawWriteWord (ptr, byteOffset, value) ->
         let ptr' = renameOperand state ptr
         let byteOffset' = renameOperand state byteOffset
         let value' = renameOperand state value
-        (RawSet (ptr', byteOffset', value', valueType), state)
+        (RawWriteWord (ptr', byteOffset', value'), state)
 
-    | RawSetByte (ptr, byteOffset, value) ->
+    | RawWriteByte (ptr, byteOffset, value) ->
         let ptr' = renameOperand state ptr
         let byteOffset' = renameOperand state byteOffset
         let value' = renameOperand state value
-        (RawSetByte (ptr', byteOffset', value'), state)
+        (RawWriteByte (ptr', byteOffset', value'), state)
+
+    | RawSlotInit (ptr, byteOffset, value, valueType) ->
+        let ptr' = renameOperand state ptr
+        let byteOffset' = renameOperand state byteOffset
+        let value' = renameOperand state value
+        (RawSlotInit (ptr', byteOffset', value', valueType), state)
 
     | FloatSqrt (dest, src) ->
         let src' = renameOperand state src

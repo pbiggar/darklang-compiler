@@ -205,8 +205,9 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.RawFree ptr -> maxTempIdInAtom ptr
     | ANF.RawGet (ptr, offset, _) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom offset)
     | ANF.RawGetByte (ptr, offset) -> max (maxTempIdInAtom ptr) (maxTempIdInAtom offset)
-    | ANF.RawSet (ptr, offset, value, _) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
-    | ANF.RawSetByte (ptr, offset, value) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
+    | ANF.RawWriteWord (ptr, offset, value) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
+    | ANF.RawWriteByte (ptr, offset, value) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
+    | ANF.RawSlotInit (ptr, offset, value, _) -> max (maxTempIdInAtom ptr) (max (maxTempIdInAtom offset) (maxTempIdInAtom value))
     | ANF.FloatSqrt atom -> maxTempIdInAtom atom
     | ANF.FloatAbs atom -> maxTempIdInAtom atom
     | ANF.FloatNeg atom -> maxTempIdInAtom atom
@@ -453,7 +454,7 @@ let buildReturnTypeReg
 /// Return type for monomorphized intrinsics not tracked in the return type registry
 let tryGetIntrinsicReturnType (funcName: string) : AST.Type option =
     if funcName.StartsWith("__raw_get_") then Some AST.TInt64
-    elif funcName.StartsWith("__raw_set_") then Some AST.TUnit
+    elif funcName.StartsWith("__raw_slot_init_") then Some AST.TUnit
     elif funcName.StartsWith("__hash_") then Some AST.TInt64
     elif funcName.StartsWith("__key_eq_") then Some AST.TBool
     elif funcName.StartsWith("__empty_dict_") then Some AST.TInt64
@@ -628,8 +629,9 @@ let cexprDescription (cexpr: ANF.CExpr) : string =
     | ANF.RawFree _ -> "RawFree"
     | ANF.RawGet _ -> "RawGet"
     | ANF.RawGetByte _ -> "RawGetByte"
-    | ANF.RawSet _ -> "RawSet"
-    | ANF.RawSetByte _ -> "RawSetByte"
+    | ANF.RawWriteWord _ -> "RawWriteWord"
+    | ANF.RawWriteByte _ -> "RawWriteByte"
+    | ANF.RawSlotInit _ -> "RawSlotInit"
     | ANF.RefCountIncString _ -> "RefCountIncString"
     | ANF.RefCountDecString _ -> "RefCountDecString"
     | ANF.RefCountIncBytes _ -> "RefCountIncBytes"
@@ -1174,22 +1176,30 @@ let rec convertExpr
                         atomToOperand builder offsetAtom
                         |> Result.map (fun offsetOp ->
                             [MIR.RawGetByte (destReg, ptrOp, offsetOp)]))
-                | ANF.RawSet (ptrAtom, offsetAtom, valueAtom, valueType) ->
+                | ANF.RawWriteWord (ptrAtom, offsetAtom, valueAtom) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder offsetAtom
                         |> Result.bind (fun offsetOp ->
                             atomToOperand builder valueAtom
                             |> Result.map (fun valueOp ->
-                                [MIR.RawSet (ptrOp, offsetOp, valueOp, valueType)])))
-                | ANF.RawSetByte (ptrAtom, offsetAtom, valueAtom) ->
+                                [MIR.RawWriteWord (ptrOp, offsetOp, valueOp)])))
+                | ANF.RawWriteByte (ptrAtom, offsetAtom, valueAtom) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder offsetAtom
                         |> Result.bind (fun offsetOp ->
                             atomToOperand builder valueAtom
                             |> Result.map (fun valueOp ->
-                                [MIR.RawSetByte (ptrOp, offsetOp, valueOp)])))
+                                [MIR.RawWriteByte (ptrOp, offsetOp, valueOp)])))
+                | ANF.RawSlotInit (ptrAtom, offsetAtom, valueAtom, valueType) ->
+                    atomToOperand builder ptrAtom
+                    |> Result.bind (fun ptrOp ->
+                        atomToOperand builder offsetAtom
+                        |> Result.bind (fun offsetOp ->
+                            atomToOperand builder valueAtom
+                            |> Result.map (fun valueOp ->
+                                [MIR.RawSlotInit (ptrOp, offsetOp, valueOp, valueType)])))
                 | ANF.FloatSqrt atom ->
                     destType := AST.TFloat64
                     atomToOperand builder atom
@@ -1805,22 +1815,30 @@ and convertExprToOperand
                         atomToOperand builder offsetAtom
                         |> Result.map (fun offsetOp ->
                             [MIR.RawGetByte (destReg, ptrOp, offsetOp)]))
-                | ANF.RawSet (ptrAtom, offsetAtom, valueAtom, valueType) ->
+                | ANF.RawWriteWord (ptrAtom, offsetAtom, valueAtom) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder offsetAtom
                         |> Result.bind (fun offsetOp ->
                             atomToOperand builder valueAtom
                             |> Result.map (fun valueOp ->
-                                [MIR.RawSet (ptrOp, offsetOp, valueOp, valueType)])))
-                | ANF.RawSetByte (ptrAtom, offsetAtom, valueAtom) ->
+                                [MIR.RawWriteWord (ptrOp, offsetOp, valueOp)])))
+                | ANF.RawWriteByte (ptrAtom, offsetAtom, valueAtom) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
                         atomToOperand builder offsetAtom
                         |> Result.bind (fun offsetOp ->
                             atomToOperand builder valueAtom
                             |> Result.map (fun valueOp ->
-                                [MIR.RawSetByte (ptrOp, offsetOp, valueOp)])))
+                                [MIR.RawWriteByte (ptrOp, offsetOp, valueOp)])))
+                | ANF.RawSlotInit (ptrAtom, offsetAtom, valueAtom, valueType) ->
+                    atomToOperand builder ptrAtom
+                    |> Result.bind (fun ptrOp ->
+                        atomToOperand builder offsetAtom
+                        |> Result.bind (fun offsetOp ->
+                            atomToOperand builder valueAtom
+                            |> Result.map (fun valueOp ->
+                                [MIR.RawSlotInit (ptrOp, offsetOp, valueOp, valueType)])))
                 | ANF.FloatSqrt atom ->
                     destType := AST.TFloat64
                     atomToOperand builder atom

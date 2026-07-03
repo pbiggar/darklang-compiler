@@ -115,8 +115,9 @@ type Instr =
     | RawFree of ptr:Operand                      // Manually free raw memory
     | RawGet of dest:VReg * ptr:Operand * byteOffset:Operand * valueType:AST.Type option  // Read 8 bytes at offset, valueType for float
     | RawGetByte of dest:VReg * ptr:Operand * byteOffset:Operand  // Read 1 byte at offset (zero-extended)
-    | RawSet of ptr:Operand * byteOffset:Operand * value:Operand * valueType:AST.Type option  // Write 8 bytes at offset, valueType for float
-    | RawSetByte of ptr:Operand * byteOffset:Operand * value:Operand  // Write 1 byte at offset
+    | RawWriteWord of ptr:Operand * byteOffset:Operand * value:Operand  // Write 8 unmanaged bytes at offset
+    | RawWriteByte of ptr:Operand * byteOffset:Operand * value:Operand  // Write 1 unmanaged byte at offset
+    | RawSlotInit of ptr:Operand * byteOffset:Operand * value:Operand * valueType:AST.Type  // Initialize typed 8-byte slot edge at offset
     // Dynamic buffer reference counting (at offset computed from length)
     | RefCountIncString of str:Operand             // Increment string ref count (at [str + 8 + len])
     | RefCountDecString of str:Operand             // Decrement string ref count, free if zero

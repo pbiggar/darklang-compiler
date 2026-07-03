@@ -102,7 +102,7 @@ let private inferFixtureVariantsFromInstr (instr: LIR.Instr) : LIR.VariantRegist
     match instr with
     | LIR.Phi (_, _, Some typ)
     | LIR.HeapStore (_, _, _, Some typ)
-    | LIR.RawSet (_, _, _, Some typ) ->
+    | LIR.RawSlotInit (_, _, _, typ) ->
         inferFixtureVariantsFromType typ
     | LIR.RefCountInc (_, _, _, metadata)
     | LIR.RefCountDec (_, _, _, metadata) ->

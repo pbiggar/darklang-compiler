@@ -118,7 +118,7 @@ let private isHeapLikeForBitwiseTagging (typ: AST.Type) : bool =
 /// Return types for monomorphized intrinsics that are not always present in FuncReg
 let private tryGetMonomorphizedIntrinsicReturnType (funcName: string) : AST.Type option =
     if funcName.StartsWith("__raw_get_") then Some AST.TInt64
-    elif funcName.StartsWith("__raw_set_") then Some AST.TUnit
+    elif funcName.StartsWith("__raw_slot_init_") then Some AST.TUnit
     elif funcName.StartsWith("__hash_") then Some AST.TInt64
     elif funcName.StartsWith("__key_eq_") then Some AST.TBool
     elif funcName.StartsWith("__empty_dict_") then Some AST.TInt64
@@ -379,8 +379,9 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | RawFree _ -> Some AST.TUnit  // Returns unit
     | RawGet (_, _, valueType) -> valueType
     | RawGetByte _ -> Some AST.TInt64  // Returns 1-byte value (zero-extended)
-    | RawSet _ -> Some AST.TUnit  // Returns unit
-    | RawSetByte _ -> Some AST.TUnit  // Returns unit
+    | RawWriteWord _ -> Some AST.TUnit  // Returns unit
+    | RawWriteByte _ -> Some AST.TUnit  // Returns unit
+    | RawSlotInit _ -> Some AST.TUnit  // Returns unit
     // Dynamic buffer refcount intrinsics
     | RefCountIncString _ -> Some AST.TUnit  // Returns unit
     | RefCountDecString _ -> Some AST.TUnit  // Returns unit
@@ -590,16 +591,6 @@ let private functionParamReturnTransfersOwnedAccumulator
     | true, 0, AST.TList _ when returnsClosureList -> true
     | true, 2, AST.TList _ -> true
     | _ -> false
-
-let rec private isStoredByRawSet (tempId: TempId) (bodyInfo: ReturnAnnotatedExpr) : bool =
-    match bodyInfo with
-    | RReturn _ -> false
-    | RLet (_, RawSet (_, _, Var valueTemp, _), next, _) when valueTemp = tempId ->
-        true
-    | RLet (_, _, next, _) ->
-        isStoredByRawSet tempId next
-    | RIf (_, thenInfo, elseInfo, _) ->
-        isStoredByRawSet tempId thenInfo || isStoredByRawSet tempId elseInfo
 
 /// Insert RefCountInc for returned parameters at a Return node
 let insertParamIncsAtReturn
@@ -1019,7 +1010,7 @@ let rec insertRCWithAnalysis
                         None
 
                 match nextBody with
-                | RLet (_, RawSet (_, _, Var valueTemp, Some valueType), _, _) when valueTemp = aliasedTemp ->
+                | RLet (_, RawSlotInit (_, _, Var valueTemp, valueType), _, _) when valueTemp = aliasedTemp ->
                     Some valueType
                 | RLet (_, Call (funcName, args), _, _) ->
                     inferFromCall funcName args
@@ -1110,20 +1101,6 @@ let rec insertRCWithAnalysis
                     isI64Push funcName && consumesSecondArg args
                 | _ ->
                     false
-            let consumedByImmediateClosurePushBack =
-                let isClosurePushBack (funcName: string) : bool =
-                    funcName.StartsWith("Stdlib.__FingerTree.pushBack_fn_")
-                    || funcName.StartsWith("Stdlib.List.pushBack_fn_")
-                let consumesSecondArg (args: Atom list) : bool =
-                    match args with
-                    | _listAtom :: Var valueTemp :: _ -> valueTemp = tempId
-                    | _ -> false
-                match cexpr, bodyInfo with
-                | ClosureCall _, RLet (_, Call (funcName, args), _, _)
-                | ClosureCall _, RLet (_, TailCall (funcName, args), _, _) ->
-                    isClosurePushBack funcName && consumesSecondArg args
-                | _ ->
-                    false
             let secondParamNeedsOwnershipTransfer (funcName: string) : bool =
                 let isOwnershipTransferredParamType (typ: AST.Type) : bool =
                     typ |> rcShapeForType ctx |> rcShapeIsOwnershipTransferRoot
@@ -1147,10 +1124,7 @@ let rec insertRCWithAnalysis
                        | _ -> false
                 | None ->
                     false
-            let closureOwnershipTransferredToRawStorage =
-                match cexpr with
-                | ClosureAlloc _ -> isStoredByRawSet tempId bodyInfo
-                | _ -> false
+            let closureOwnershipTransferredToRawStorage = false
             let returnDecs' =
                 let functionReturnsNestedRecordListDict =
                     let isSingleListDictRecord (name: string) : bool =
@@ -1178,7 +1152,6 @@ let rec insertRCWithAnalysis
                    && not (isBorrowingExpr cexpr)
                    && not skipReturnDecForMapHelperLists
                    && not consumedByImmediateI64Push
-                   && not consumedByImmediateClosurePushBack
                    && not closureOwnershipTransferredToRawStorage then
                     let kindOverride =
                         match inferredType with
@@ -1299,7 +1272,6 @@ let rec insertRCWithAnalysis
                        && not (isBorrowingExpr cexpr)
                        && not skipReturnDecForMapHelperLists
                        && not consumedByImmediateI64Push
-                       && not consumedByImmediateClosurePushBack
                        && not closureOwnershipTransferredToRawStorage then
                         let kindOverride =
                             match inferredType with

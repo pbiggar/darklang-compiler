@@ -159,7 +159,9 @@ The implementation is split into two parts:
    - `__raw_alloc(size: Int64) -> RawPtr` - allocate unmanaged memory
    - `__raw_free(ptr: RawPtr) -> Unit` - free memory
    - `__raw_get(ptr: RawPtr, offset: Int64) -> Int64` - read 8 bytes
-   - `__raw_set(ptr: RawPtr, offset: Int64, value: Int64) -> Unit` - write 8 bytes
+   - `__raw_write_word(ptr: RawPtr, offset: Int64, value: Int64) -> Unit` - write 8 unmanaged bytes
+   - `__raw_write_byte(ptr: RawPtr, offset: Int64, value: Int64) -> Unit` - write 1 unmanaged byte
+   - `__raw_slot_init<T>(ptr: RawPtr, offset: Int64, value: T) -> Unit` - initialize a typed 8-byte slot edge
 
 2. **Pure Dark stdlib** (HAMT algorithms):
    - `hashChunk(hash, level)` - extract 6-bit chunk at level

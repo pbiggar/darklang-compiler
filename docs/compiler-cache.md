@@ -82,7 +82,7 @@ Each function's dependency hash was built from:
   parameters and return type.
 - **Type hash**: hash of all types the function touched, including:
   - types in the function signature,
-  - explicit types in ANF (TypedAtom/Print/RawGet/RawSet),
+  - explicit types in ANF (TypedAtom/Print/RawGet/RawSlotInit),
   - TempId types from the RC TypeMap,
   - record and sum type definitions referenced by those types.
 - **Callee hashes** (post-inlining call graph, so only non-inlined calls remain):

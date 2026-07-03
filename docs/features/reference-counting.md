@@ -16,7 +16,7 @@ The compiler currently has these managed or partially managed runtime shapes:
 | Fixed blocks | `[payload fields][refcount:8]` | Generic root retain/release; managed field release for many tuple, record, sum, and closure-capture shapes |
 | Boxed sums | fixed block with tag/payload | Root RC; payload release for strings, bytes, lists, dicts, closures, tuples, records, and selected nested sums |
 | Tagged lists | FingerTree nodes allocated through raw memory | Root and node RC helpers; direct root leaf helpers plus planned `RcReleasePlan` helpers for generic fixed-block and boxed-sum payloads |
-| Dicts | tagged HAMT root with raw HAMT nodes | Dict root RC helpers; raw HAMT lifecycle still needs a complete sharing story |
+| Dicts | tagged HAMT root with refcounted raw HAMT nodes | Path-copy structural sharing; `RawSlotInit<T>` edge retains; recursive node/key/value release when node RC reaches zero |
 | Dynamic strings | `[length:8][data][padding][refcount:8]` | Scoped RC, field retain/release, borrowed projection retain, literal sentinel skip |
 | Dynamic bytes | `[length:8][data][padding][refcount:8]` | Scoped RC, constructor/transform coverage, container retains/releases, and initial parity with strings |
 | Closures | `[func_ptr][captures...][refcount:8]` | Closure root RC and recursive capture release for the covered capture shapes |
@@ -43,8 +43,9 @@ Important current rules:
 - closure-producing `Stdlib.List.__mapHelper` specializations treat the source
   and accumulator parameters as owned helper state; callers retain the borrowed
   source before entering those helpers, helper recursion releases replaced
-  owned roots before self tail calls, and closure-list `pushBack` consumes an
-  immediate closure-call result
+  owned roots before self tail calls, typed raw-slot initialization retains closure payloads
+  written into list leaves, and callers release immediate closure-call results
+  after the retaining store
 - RC operations are side-effecting and are preserved by optimization passes
 - cleanup is preserved before tail calls
 
@@ -83,7 +84,7 @@ x64 has active root RC support and focused unit coverage for:
 x64 no longer has generic RC disabled or an obvious root-helper gap. Its
 remaining risk is narrower: focused helper coverage is broad, but the project
 does not yet run a complete dual-backend E2E memory matrix, and some recursive
-dict/HAMT and arbitrary shape-plan cases remain documented in
+dict/HAMT key-family expansion and arbitrary shape-plan cases remain documented in
 [`../x64-refcounting.md`](../x64-refcounting.md).
 
 ## Leak Checking
@@ -107,8 +108,8 @@ The major remaining work is:
 
 - keep future backend helper selection on direct `RcReleasePlan` consumption
   rather than rebuilding tuple/record/sum helper matrices
-- define dict/HAMT structural sharing, recursive key/value ownership, and
-  raw-node lifecycle semantics
+- extend dict/HAMT key-release helpers if new managed hashable key families are
+  added; current managed hashable keys are dynamic strings and bytes
 - keep x64 and ARM64 recursive release semantics in parity as shape-plan work
   replaces helper-family special cases
 - add focused coverage for any new bytes/string runtime allocation paths

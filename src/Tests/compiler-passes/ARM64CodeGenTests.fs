@@ -101,26 +101,26 @@ let private makeEmptyFunction
         UsedCalleeSaved = []
     }
 
-let testRawSetPureEnumDoesNotEmitGenericRetain () : TestResult =
-    let enumType = AST.TSum ("RawSetPureEnum", [AST.TString])
+let testRawSlotInitPureEnumDoesNotEmitGenericRetain () : TestResult =
+    let enumType = AST.TSum ("RawSlotInitPureEnum", [AST.TString])
     let variants : LIR.VariantRegistry =
         Map.ofList [
-            ("RawSetPureEnum",
+            ("RawSlotInitPureEnum",
                 { TypeParams = ["a"]
                   Variants =
                     [
-                        { Name = "RawSetPureA"; Tag = 0; Payload = None }
-                        { Name = "RawSetPureB"; Tag = 1; Payload = None }
+                        { Name = "RawSlotInitPureA"; Tag = 0; Payload = None }
+                        { Name = "RawSlotInitPureB"; Tag = 1; Payload = None }
                     ] })
         ]
     let program =
         makeSimpleProgramWithVariants
             [
-                LIR.RawSet (
+                LIR.RawSlotInit (
                     LIR.Physical LIR.X0,
                     LIR.Physical LIR.X1,
                     LIR.Physical LIR.X3,
-                    Some enumType)
+                    enumType)
             ]
             variants
 
@@ -137,7 +137,7 @@ let testRawSetPureEnumDoesNotEmitGenericRetain () : TestResult =
                 | _ ->
                     false)
         if emittedGenericRetain then
-            Error "RawSet of a generic pure enum emitted a generic heap retain"
+            Error "RawSlotInit of a generic pure enum emitted a generic heap retain"
         else
             Ok ()
 
@@ -1084,7 +1084,7 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
             Error "Closure capture boxed-sum bytes payload release did not consume the variant release plan"
 
 let tests : (string * (unit -> TestResult)) list = [
-    ("RawSet pure enum skips generic retain", testRawSetPureEnumDoesNotEmitGenericRetain)
+    ("RawSlotInit pure enum skips generic retain", testRawSlotInitPureEnumDoesNotEmitGenericRetain)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
     ("List tuple3 string/list/dict-list uses typed dict helper", testListTuple3StringListDictListValueUsesTypedDictHelper)
     ("List tuple3 closure/list/dict-list uses typed dict helper", testListTuple3ClosureListDictListValueUsesTypedDictHelper)
