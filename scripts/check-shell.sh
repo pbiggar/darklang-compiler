@@ -12,7 +12,14 @@ fi
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-mapfile -d '' bash_files < <(rg -l -0 '^#!.*bash' run-tests scripts)
+mapfile -d '' tracked_files < <(git ls-files -z -- run-tests scripts)
+bash_files=()
+
+for file in "${tracked_files[@]}"; do
+  if [[ -f "$file" ]] && head -n 1 "$file" | rg -q '^#!.*bash'; then
+    bash_files+=("$file")
+  fi
+done
 
 if [[ ${#bash_files[@]} -eq 0 ]]; then
   echo "No bash scripts found."
