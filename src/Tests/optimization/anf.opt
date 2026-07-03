@@ -485,6 +485,38 @@ Function f:
 return t0
 
 ---NAME---
+identity_bitand_all_ones_right
+---INPUT---
+def f(x: Int64) : Int64 = x & -1
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_bitand_all_ones_left
+---INPUT---
+def f(x: Int64) : Int64 = -1 & x
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_bitor_all_ones_right
+---INPUT---
+def f(x: Int64) : Int64 = x ||| -1
+---EXPECTED---
+Function f:
+return -1
+
+---NAME---
+identity_bitor_all_ones_left
+---INPUT---
+def f(x: Int64) : Int64 = -1 ||| x
+---EXPECTED---
+Function f:
+return -1
+
+---NAME---
 identity_shl_zero
 ---INPUT---
 def f(x: Int64) : Int64 = x << 0
