@@ -130,20 +130,12 @@ let intersects (left: Bitset) (right: Bitset) : bool =
             i <- i + 1
         found
 
-let private countTrailingZeros (word: uint64) : int =
-    let mutable temp = word
-    let mutable count = 0
-    while (temp &&& 1UL) = 0UL do
-        temp <- temp >>> 1
-        count <- count + 1
-    count
-
 let iterIndices (bits: Bitset) (f: int -> unit) : unit =
     for wordIdx in 0 .. bits.Length - 1 do
         let mutable word = bits.[wordIdx]
         let baseIdx = wordIdx * 64
         while word <> 0UL do
-            let tz = countTrailingZeros word
+            let tz = System.Numerics.BitOperations.TrailingZeroCount word
             f (baseIdx + tz)
             word <- word &&& (word - 1UL)
 
