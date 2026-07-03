@@ -51,12 +51,17 @@ let uint64ToBytes (value: uint64) : byte array =
 
 /// Convert machine code words to little-endian bytes without per-word arrays
 let private machineCodeToBytes (machineCode: uint32 list) : byte array =
-    let words = machineCode |> List.toArray
-    let byteCount = words.Length * 4
-    Array.init byteCount (fun i ->
-        let word = words.[i / 4]
-        let shift = (i % 4) * 8
-        byte ((word >>> shift) &&& 0xFFu))
+    let bytes = Array.zeroCreate (List.length machineCode * 4)
+    let rec writeWords offset remaining =
+        match remaining with
+        | [] -> bytes
+        | word :: rest ->
+            bytes.[offset] <- byte (word &&& 0xFFu)
+            bytes.[offset + 1] <- byte ((word >>> 8) &&& 0xFFu)
+            bytes.[offset + 2] <- byte ((word >>> 16) &&& 0xFFu)
+            bytes.[offset + 3] <- byte ((word >>> 24) &&& 0xFFu)
+            writeWords (offset + 4) rest
+    writeWords 0 machineCode
 
 /// Serialize ELF64 header to bytes
 let serializeElf64Header (header: Binary_ELF.Elf64Header) : byte array =
