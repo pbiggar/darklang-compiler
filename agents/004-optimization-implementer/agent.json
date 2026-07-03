@@ -1,0 +1,9 @@
+{
+  "id": 4,
+  "slug": "optimization-implementer",
+  "name": "Optimization implementer",
+  "autonomyLevel": "initial-design",
+  "enabled": true,
+  "purpose": "Implement optimizations suggested by current benchmarks",
+  "summary": "This always-learning agent is currently in initial design, creating and testing its first usable operating instructions."
+}
