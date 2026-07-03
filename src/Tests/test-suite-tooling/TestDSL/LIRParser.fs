@@ -204,54 +204,37 @@ let parseLIR (text: string) : Result<LIR.Program, string> =
     | Error e -> Error e
     | Ok [] -> Error "Empty LIR program"
     | Ok parsed ->
-        // Split into instructions and terminator
-        // The last item might be a terminator (Ret) or an instruction
-        let lastItem = List.last parsed
-        let instructions = List.take (List.length parsed - 1) parsed
+        let rec splitInstructions items =
+            match items with
+            | [] -> Error "Empty LIR program"
+            | [ Choice1Of2 instr ] -> Ok ([ instr ], Ret)
+            | [ Choice2Of2 term ] -> Ok ([], term)
+            | Choice1Of2 instr :: rest ->
+                match splitInstructions rest with
+                | Error e -> Error e
+                | Ok (instrs, terminator) -> Ok (instr :: instrs, terminator)
+            | Choice2Of2 _ :: _ ->
+                Error "LIR terminator must be the final line"
 
-        let (instrs, terminator) =
-            match lastItem with
-            | Choice2Of2 term ->
-                // Last item is a terminator
-                let instrs =
-                    instructions
-                    |> List.choose (function
-                        | Choice1Of2 instr -> Some instr
-                        | Choice2Of2 _ -> None)
-                // Check that all non-last items are instructions
-                if List.length instrs <> List.length instructions then
-                    ([], Ret)  // Will trigger error below
-                else
-                    (instrs, term)
-            | Choice1Of2 lastInstr ->
-                // Last item is an instruction - add default Ret terminator
-                let allInstrs =
-                    parsed
-                    |> List.choose (function
-                        | Choice1Of2 instr -> Some instr
-                        | Choice2Of2 _ -> None)
-                // Check that all items are instructions
-                if List.length allInstrs <> List.length parsed then
-                    ([], Ret)  // Will trigger error
-                else
-                    (allInstrs, Ret)
-
-        // Build single-block CFG
-        let entryLabel = LIR.Label "entry"
-        let block = {
-            Label = entryLabel
-            Instrs = instrs
-            Terminator = terminator
-        }
-        let cfg = {
-            Entry = entryLabel
-            Blocks = Map.ofList [(entryLabel, block)]
-        }
-        let func = {
-            Name = "_start"
-            TypedParams = []
-            CFG = cfg
-            StackSize = 0
-            UsedCalleeSaved = []
-        }
-        Ok (Program ([func], Map.empty, Map.empty))
+        match splitInstructions parsed with
+        | Error e -> Error e
+        | Ok (instrs, terminator) ->
+            // Build single-block CFG
+            let entryLabel = LIR.Label "entry"
+            let block = {
+                Label = entryLabel
+                Instrs = instrs
+                Terminator = terminator
+            }
+            let cfg = {
+                Entry = entryLabel
+                Blocks = Map.ofList [(entryLabel, block)]
+            }
+            let func = {
+                Name = "_start"
+                TypedParams = []
+                CFG = cfg
+                StackSize = 0
+                UsedCalleeSaved = []
+            }
+            Ok (Program ([func], Map.empty, Map.empty))

@@ -5,6 +5,7 @@
 module PassTestRunnerTests
 
 open MIR
+open TestDSL.LIRParser
 open TestDSL.PassTestRunner
 
 type TestResult = Result<unit, string>
@@ -51,8 +52,21 @@ let testPrettyPrintMirCfg () : TestResult =
     else
         Error $"Pretty-printed MIR did not match.\nExpected:\n{expected}\nActual:\n{actual}"
 
+let testParseLIRRejectsNonFinalTerminator () : TestResult =
+    let text =
+        [
+            "Ret"
+            "v0 <- Mov(Imm 1)"
+        ]
+        |> String.concat "\n"
+    match parseLIR text with
+    | Error msg when msg.Contains("terminator") -> Ok ()
+    | Error msg -> Error $"Expected non-final terminator error, got: {msg}"
+    | Ok _ -> Error "Expected parseLIR to reject a terminator before the final line"
+
 let tests = [
     ("pretty print MIR CFG", testPrettyPrintMirCfg)
+    ("parse LIR rejects non-final terminator", testParseLIRRejectsNonFinalTerminator)
 ]
 
 let runAll () : TestResult =
