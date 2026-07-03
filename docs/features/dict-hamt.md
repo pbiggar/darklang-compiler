@@ -183,7 +183,9 @@ __raw_write_byte(ptr: RawPtr, offset: Int64, value: Int64) : Unit
 __raw_slot_init<T>(ptr: RawPtr, offset: Int64, value: T) : Unit
 ```
 
-These bypass the normal heap allocator for precise control.
+These bypass the normal value allocator for precise layout control. Typed slots
+must be initialized with `__raw_slot_init<T>` rather than `__raw_write_word` so
+the compiler/backend can retain copied managed edges.
 
 ## Reference Counting
 
@@ -240,6 +242,12 @@ def __clearTag<k, v>(dict: Dict<k, v>) : RawPtr =
 def __setTag<k, v>(ptr: RawPtr, tag: Int64) : Dict<k, v> =
     __rawptr_to_dict<k, v>(ptr, tag)
 ```
+
+`__dict_to_rawptr` returns a borrowed raw view of the tagged dict pointer with
+tag bits cleared. It does not create an `Int64` round trip and does not transfer
+ownership. `__rawptr_to_dict` retags an initialized raw HAMT node as a managed
+`Dict<k, v>` root; refcount insertion treats the resulting dict value as owned
+when it is bound like any other managed value.
 
 ## Stdlib.Dict API
 

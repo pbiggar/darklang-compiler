@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-03 11:17:59
-**Commit:** `37879ff8` - Expand dict refcount coverage for managed payloads
+**Last Updated:** 2026-07-03 11:43:27
+**Commit:** `fca7ad0d` - Split raw slot initialization from raw writes
 
 | Benchmark     |           Dark (4.07x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

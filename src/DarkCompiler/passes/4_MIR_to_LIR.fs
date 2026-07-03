@@ -1325,6 +1325,54 @@ let selectInstr
                 | Ok (valueInstrs, valueReg, nextState) ->
                     Ok (ptrInstrs @ offsetInstrs @ valueInstrs @ [LIR.RawSlotInit (ptrReg, offsetReg, valueReg, valueType)], nextState)
 
+    | MIR.StringToRawPtr (dest, value) ->
+        Ok ([LIR.Mov (vregToLIRReg dest, convertOperand value)], state)
+
+    | MIR.RawPtrToString (dest, ptr) ->
+        Ok ([LIR.Mov (vregToLIRReg dest, convertOperand ptr)], state)
+
+    | MIR.BytesToRawPtr (dest, value) ->
+        Ok ([LIR.Mov (vregToLIRReg dest, convertOperand value)], state)
+
+    | MIR.RawPtrToBytes (dest, ptr) ->
+        Ok ([LIR.Mov (vregToLIRReg dest, convertOperand ptr)], state)
+
+    | MIR.DictToRawPtr (dest, dict) ->
+        match ensureInRegister dict state with
+        | Error err -> Error err
+        | Ok (dictInstrs, dictReg, stateAfterDict) ->
+        match ensureInRegister (MIR.Int64Const -4L) stateAfterDict with
+        | Error err -> Error err
+        | Ok (maskInstrs, maskReg, nextState) ->
+            Ok (dictInstrs @ maskInstrs @ [LIR.And (vregToLIRReg dest, dictReg, maskReg)], nextState)
+
+    | MIR.RawPtrToDict (dest, ptr, tag) ->
+        match ensureInRegister ptr state with
+        | Error err -> Error err
+        | Ok (ptrInstrs, ptrReg, stateAfterPtr) ->
+        match ensureInRegister tag stateAfterPtr with
+        | Error err -> Error err
+        | Ok (tagInstrs, tagReg, nextState) ->
+            Ok (ptrInstrs @ tagInstrs @ [LIR.Orr (vregToLIRReg dest, ptrReg, tagReg)], nextState)
+
+    | MIR.ListToRawPtr (dest, list) ->
+        match ensureInRegister list state with
+        | Error err -> Error err
+        | Ok (listInstrs, listReg, stateAfterList) ->
+        match ensureInRegister (MIR.Int64Const -8L) stateAfterList with
+        | Error err -> Error err
+        | Ok (maskInstrs, maskReg, nextState) ->
+            Ok (listInstrs @ maskInstrs @ [LIR.And (vregToLIRReg dest, listReg, maskReg)], nextState)
+
+    | MIR.RawPtrToList (dest, ptr, tag) ->
+        match ensureInRegister ptr state with
+        | Error err -> Error err
+        | Ok (ptrInstrs, ptrReg, stateAfterPtr) ->
+        match ensureInRegister tag stateAfterPtr with
+        | Error err -> Error err
+        | Ok (tagInstrs, tagReg, nextState) ->
+            Ok (ptrInstrs @ tagInstrs @ [LIR.Orr (vregToLIRReg dest, ptrReg, tagReg)], nextState)
+
     | MIR.FloatSqrt (dest, src) ->
         let lirFDest = vregToLIRFReg dest
         match ensureInFRegister src state with
@@ -1540,6 +1588,14 @@ let vregIdsFromInstr (instr: MIR.Instr) : int list =
     | MIR.RawFree ptr -> vregIdsFromOperand ptr
     | MIR.RawGet (dest, ptr, byteOffset, _) -> vregId dest :: (vregIdsFromOperand ptr @ vregIdsFromOperand byteOffset)
     | MIR.RawGetByte (dest, ptr, byteOffset) -> vregId dest :: (vregIdsFromOperand ptr @ vregIdsFromOperand byteOffset)
+    | MIR.StringToRawPtr (dest, value) -> vregId dest :: vregIdsFromOperand value
+    | MIR.RawPtrToString (dest, ptr) -> vregId dest :: vregIdsFromOperand ptr
+    | MIR.BytesToRawPtr (dest, value) -> vregId dest :: vregIdsFromOperand value
+    | MIR.RawPtrToBytes (dest, ptr) -> vregId dest :: vregIdsFromOperand ptr
+    | MIR.DictToRawPtr (dest, dict) -> vregId dest :: vregIdsFromOperand dict
+    | MIR.RawPtrToDict (dest, ptr, tag) -> vregId dest :: (vregIdsFromOperand ptr @ vregIdsFromOperand tag)
+    | MIR.ListToRawPtr (dest, list) -> vregId dest :: vregIdsFromOperand list
+    | MIR.RawPtrToList (dest, ptr, tag) -> vregId dest :: (vregIdsFromOperand ptr @ vregIdsFromOperand tag)
     | MIR.RawWriteWord (ptr, byteOffset, value) ->
         vregIdsFromOperand ptr @ vregIdsFromOperand byteOffset @ vregIdsFromOperand value
     | MIR.RawWriteByte (ptr, byteOffset, value) ->

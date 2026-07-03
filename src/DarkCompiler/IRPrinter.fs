@@ -127,6 +127,22 @@ let private prettyPrintANFCExpr = function
     | ANF.RawSlotInit (ptr, byteOffset, value, valueType) ->
         let baseText = $"RawSlotInit({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset}, {prettyPrintANFAtom value})"
         appendANFTypeSuffix (Some valueType) baseText
+    | ANF.StringToRawPtr value ->
+        $"StringToRawPtr({prettyPrintANFAtom value})"
+    | ANF.RawPtrToString ptr ->
+        $"RawPtrToString({prettyPrintANFAtom ptr})"
+    | ANF.BytesToRawPtr value ->
+        $"BytesToRawPtr({prettyPrintANFAtom value})"
+    | ANF.RawPtrToBytes ptr ->
+        $"RawPtrToBytes({prettyPrintANFAtom ptr})"
+    | ANF.DictToRawPtr dict ->
+        $"DictToRawPtr({prettyPrintANFAtom dict})"
+    | ANF.RawPtrToDict (ptr, tag, dictType) ->
+        $"RawPtrToDict({prettyPrintANFAtom ptr}, {prettyPrintANFAtom tag}) : {dictType}"
+    | ANF.ListToRawPtr list ->
+        $"ListToRawPtr({prettyPrintANFAtom list})"
+    | ANF.RawPtrToList (ptr, tag, listType) ->
+        $"RawPtrToList({prettyPrintANFAtom ptr}, {prettyPrintANFAtom tag}) : {listType}"
     | ANF.FloatSqrt atom ->
         $"FloatSqrt({prettyPrintANFAtom atom})"
     | ANF.FloatAbs atom ->
@@ -338,6 +354,22 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
     | MIR.RawSlotInit (ptr, byteOffset, value, valueType) ->
         let baseText = $"RawSlotInit({prettyPrintMIROperand ptr}, {prettyPrintMIROperand byteOffset}, {prettyPrintMIROperand value})"
         appendTypeSuffix (Some valueType) baseText
+    | MIR.StringToRawPtr (dest, value) ->
+        $"{prettyPrintMIRVReg dest} <- StringToRawPtr({prettyPrintMIROperand value})"
+    | MIR.RawPtrToString (dest, ptr) ->
+        $"{prettyPrintMIRVReg dest} <- RawPtrToString({prettyPrintMIROperand ptr})"
+    | MIR.BytesToRawPtr (dest, value) ->
+        $"{prettyPrintMIRVReg dest} <- BytesToRawPtr({prettyPrintMIROperand value})"
+    | MIR.RawPtrToBytes (dest, ptr) ->
+        $"{prettyPrintMIRVReg dest} <- RawPtrToBytes({prettyPrintMIROperand ptr})"
+    | MIR.DictToRawPtr (dest, dict) ->
+        $"{prettyPrintMIRVReg dest} <- DictToRawPtr({prettyPrintMIROperand dict})"
+    | MIR.RawPtrToDict (dest, ptr, tag) ->
+        $"{prettyPrintMIRVReg dest} <- RawPtrToDict({prettyPrintMIROperand ptr}, {prettyPrintMIROperand tag})"
+    | MIR.ListToRawPtr (dest, list) ->
+        $"{prettyPrintMIRVReg dest} <- ListToRawPtr({prettyPrintMIROperand list})"
+    | MIR.RawPtrToList (dest, ptr, tag) ->
+        $"{prettyPrintMIRVReg dest} <- RawPtrToList({prettyPrintMIROperand ptr}, {prettyPrintMIROperand tag})"
     | MIR.RefCountIncString str ->
         $"RefCountIncString({prettyPrintMIROperand str})"
     | MIR.RefCountDecString str ->

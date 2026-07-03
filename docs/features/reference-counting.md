@@ -98,6 +98,9 @@ does not always mean the memory is reusable:
 - dynamic strings and bytes currently balance leak accounting, while
   variable-size reuse remains a design decision
 - raw pointers are not automatically reclaimed
+- `String`/`Bytes`/`Dict`/`List -> RawPtr` intrinsics expose borrowed raw views;
+  `RawPtr -> String`/`Bytes` and `RawPtr -> Dict`/`List` retag initialized raw
+  allocations as managed values with normal RC ownership rules
 
 Tests that need to prove allocator reuse should test reuse explicitly instead
 of relying only on leak-check silence.

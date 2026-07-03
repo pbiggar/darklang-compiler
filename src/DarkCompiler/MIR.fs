@@ -118,6 +118,14 @@ type Instr =
     | RawWriteWord of ptr:Operand * byteOffset:Operand * value:Operand  // Write 8 unmanaged bytes at offset
     | RawWriteByte of ptr:Operand * byteOffset:Operand * value:Operand  // Write 1 unmanaged byte at offset
     | RawSlotInit of ptr:Operand * byteOffset:Operand * value:Operand * valueType:AST.Type  // Initialize typed 8-byte slot edge at offset
+    | StringToRawPtr of dest:VReg * value:Operand // Borrow raw backing pointer from String
+    | RawPtrToString of dest:VReg * ptr:Operand   // Reinterpret raw allocation as owned String
+    | BytesToRawPtr of dest:VReg * value:Operand  // Borrow raw backing pointer from Bytes
+    | RawPtrToBytes of dest:VReg * ptr:Operand    // Reinterpret raw allocation as owned Bytes
+    | DictToRawPtr of dest:VReg * dict:Operand    // Strip Dict tag bits, returning RawPtr
+    | RawPtrToDict of dest:VReg * ptr:Operand * tag:Operand // Re-tag RawPtr as Dict
+    | ListToRawPtr of dest:VReg * list:Operand    // Strip List tag bits, returning RawPtr
+    | RawPtrToList of dest:VReg * ptr:Operand * tag:Operand // Re-tag RawPtr as List
     // Dynamic buffer reference counting (at offset computed from length)
     | RefCountIncString of str:Operand             // Increment string ref count (at [str + 8 + len])
     | RefCountDecString of str:Operand             // Decrement string ref count, free if zero

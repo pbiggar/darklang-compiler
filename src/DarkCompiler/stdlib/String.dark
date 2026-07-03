@@ -19,7 +19,7 @@ def Stdlib.String.prepend(s2: String, s1: String) : String = s1 ++ s2
 // Get the length of a string in bytes
 // String format: [len:8 bytes][data:N bytes]
 def Stdlib.String.length(s: String) : Int64 =
-    __raw_get<Int64>(__int64_to_rawptr(__string_to_int64(s)), 0)
+    __raw_get<Int64>(__string_to_rawptr(s), 0)
 
 // Check if string is empty
 def Stdlib.String.isEmpty(s: String) : Bool =
@@ -29,7 +29,7 @@ def Stdlib.String.isEmpty(s: String) : Bool =
 // Returns the byte as an Int64 (0-255)
 // String data starts at offset 8 (after the length field)
 def Stdlib.String.getByteAt(s: String, index: Int64) : Int64 =
-    __raw_get_byte(__int64_to_rawptr(__string_to_int64(s)), index + 8)
+    __raw_get_byte(__string_to_rawptr(s), index + 8)
 
 // Check if a byte is an ASCII lowercase letter (a-z)
 def Stdlib.String.__isLowercase(byte: Int64) : Bool =
@@ -124,7 +124,7 @@ def Stdlib.String.slice(s: String, start: Int64, end_: Int64) : String =
         // Write refcount = 1 at aligned dynamic-buffer offset
         let _ = __raw_write_word(ptr, refcountOffset, 1) in
         // Convert raw pointer to string
-        __int64_to_string(__rawptr_to_int64(ptr))
+        __rawptr_to_string(ptr)
 
 // Get substring from start to end (excluding end) - same as slice
 def Stdlib.String.substring(s: String, start: Int64, end_: Int64) : String =
@@ -267,7 +267,7 @@ def Stdlib.String.fromCodepoints(cps: List<Int64>) : String =
         let _ = Stdlib.String.__encodeCodepointsAt(ptr, 8, cps) in
         // Write refcount = 1 at aligned dynamic-buffer offset
         let _ = __raw_write_word(ptr, refcountOffset, 1) in
-        __int64_to_string(__rawptr_to_int64(ptr))
+        __rawptr_to_string(ptr)
 
 // =============================================================================
 // Case Mapping Functions (ASCII fast path, with Unicode table fallback)

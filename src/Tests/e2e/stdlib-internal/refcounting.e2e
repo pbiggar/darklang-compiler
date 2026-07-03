@@ -9,7 +9,7 @@ let s = "a" ++ "b" in let _ = __refcount_inc_string(s) in 0 = stdout="0\n" stder
 // re-enabled to expect stderr="" as the refcounting implementation reaches it.
 
 // Dynamic strings are counted and decref'd at scope exit.
-def __stringRefcount(s: String): Int64 = let len = Stdlib.String.length(s) in let dataSize = ((len + 7) / 8) * 8 in __raw_get<Int64>(__int64_to_rawptr(__string_to_int64(s)), 8 + dataSize)
+def __stringRefcount(s: String): Int64 = let len = Stdlib.String.length(s) in let dataSize = ((len + 7) / 8) * 8 in __raw_get<Int64>(__string_to_rawptr(s), 8 + dataSize)
 let s = "a" ++ "b" in 0 = stdout="0\n" stderr="" // string concat reclaimed
 let src = "a" ++ "bc" in let s = Stdlib.String.slice(src, 0, 1) in 0 = stdout="0\n" stderr="" // unaligned string slice reclaimed
 let s = Stdlib.String.fromCodepoints([97]) in 0 = stdout="0\n" stderr="" // unaligned string builder reclaimed
@@ -43,7 +43,7 @@ let result = Stdlib.File.setExecutable("/nonexistent/dark/refcounting/set-execut
 
 // Dynamic bytes use the same length-aligned refcount slot as dynamic strings.
 let b = Bytes.create(4) in 0 = stdout="0\n" stderr=""
-def __bytesRefcount(b: Bytes): Int64 = let len = Bytes.length(b) in let dataSize = ((len + 7) / 8) * 8 in __raw_get<Int64>(__int64_to_rawptr(__bytes_to_int64(b)), 8 + dataSize)
+def __bytesRefcount(b: Bytes): Int64 = let len = Bytes.length(b) in let dataSize = ((len + 7) / 8) * 8 in __raw_get<Int64>(__bytes_to_rawptr(b), 8 + dataSize)
 
 // HAMT/dict roots use typed refcounting and reclaim raw nodes when the root dies.
 let d = Stdlib.Dict.set(Stdlib.Dict.empty<Int64, Int64>(), 1, 2) in 0 = stdout="0\n" stderr="" // dict singleton reclaimed

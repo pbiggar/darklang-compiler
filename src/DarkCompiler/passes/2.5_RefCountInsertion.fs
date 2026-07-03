@@ -116,19 +116,34 @@ let private isHeapLikeForBitwiseTagging (typ: AST.Type) : bool =
         false
 
 /// Return types for monomorphized intrinsics that are not always present in FuncReg
-let private tryGetMonomorphizedIntrinsicReturnType (funcName: string) : AST.Type option =
-    if funcName.StartsWith("__raw_get_") then Some AST.TInt64
+let private tryGetMonomorphizedIntrinsicReturnType (ctx: TypeContext) (funcName: string) : AST.Type option =
+    let tryParseMangled (mangled: string) : AST.Type option =
+        match tryParseMangledType ctx.VariantLookup mangled with
+        | Ok typ -> Some typ
+        | Error _ -> None
+
+    if funcName.StartsWith("__raw_get_") then
+        funcName.Substring("__raw_get_".Length)
+        |> tryParseMangled
+        |> Option.defaultValue AST.TInt64
+        |> Some
     elif funcName.StartsWith("__raw_slot_init_") then Some AST.TUnit
     elif funcName.StartsWith("__hash_") then Some AST.TInt64
     elif funcName.StartsWith("__key_eq_") then Some AST.TBool
     elif funcName.StartsWith("__empty_dict_") then Some AST.TInt64
     elif funcName.StartsWith("__dict_is_null_") then Some AST.TBool
     elif funcName.StartsWith("__dict_get_tag_") then Some AST.TInt64
-    elif funcName.StartsWith("__dict_to_rawptr_") then Some AST.TInt64
-    elif funcName.StartsWith("__rawptr_to_dict_") then Some AST.TInt64
+    elif funcName.StartsWith("__dict_to_rawptr_") then Some AST.TRawPtr
+    elif funcName.StartsWith("__rawptr_to_dict_") then
+        funcName.Substring("__rawptr_to_dict_".Length)
+        |> fun suffix -> tryParseMangled $"dict_{suffix}"
     elif funcName.StartsWith("__list_is_null_") then Some AST.TBool
     elif funcName.StartsWith("__list_get_tag_") then Some AST.TInt64
-    elif funcName.StartsWith("__list_to_rawptr_") then Some AST.TInt64
+    elif funcName.StartsWith("__list_to_rawptr_") then Some AST.TRawPtr
+    elif funcName.StartsWith("__rawptr_to_list_") then
+        funcName.Substring("__rawptr_to_list_".Length)
+        |> tryParseMangled
+        |> Option.map AST.TList
     else None
 
 /// Infer the type of a CExpr in the given context
@@ -252,7 +267,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         | _ ->
             match tryGetFuncReturnTypeFromReg ctx funcName with
             | Some t -> Some t
-            | None -> tryGetMonomorphizedIntrinsicReturnType funcName
+            | None -> tryGetMonomorphizedIntrinsicReturnType ctx funcName
     | TailCall (funcName, _) ->
         // Tail calls have same return type as regular calls
         Map.tryFind funcName ctx.FuncReg
@@ -382,6 +397,14 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | RawWriteWord _ -> Some AST.TUnit  // Returns unit
     | RawWriteByte _ -> Some AST.TUnit  // Returns unit
     | RawSlotInit _ -> Some AST.TUnit  // Returns unit
+    | StringToRawPtr _ -> Some AST.TRawPtr
+    | RawPtrToString _ -> Some AST.TString
+    | BytesToRawPtr _ -> Some AST.TRawPtr
+    | RawPtrToBytes _ -> Some AST.TBytes
+    | DictToRawPtr _ -> Some AST.TRawPtr
+    | RawPtrToDict (_, _, dictType) -> Some dictType
+    | ListToRawPtr _ -> Some AST.TRawPtr
+    | RawPtrToList (_, _, listType) -> Some listType
     // Dynamic buffer refcount intrinsics
     | RefCountIncString _ -> Some AST.TUnit  // Returns unit
     | RefCountDecString _ -> Some AST.TUnit  // Returns unit
@@ -440,6 +463,10 @@ let isBorrowingExpr (cexpr: CExpr) : bool =
     | IfValue _ -> true            // Selects one of two existing values; no ownership transfer
     | TupleGet _ -> true           // Extracts pointer from tuple/list - borrowed from parent
     | RawGet _ -> true             // RawGet reads existing memory; it does not transfer ownership
+    | StringToRawPtr _ -> true     // RawPtr view is borrowed from the dynamic buffer
+    | BytesToRawPtr _ -> true      // RawPtr view is borrowed from the dynamic buffer
+    | DictToRawPtr _ -> true       // RawPtr view is borrowed from the tagged container
+    | ListToRawPtr _ -> true       // RawPtr view is borrowed from the tagged container
     | Atom (Var _) -> true         // Alias/copy of existing variable - don't double-dec
     | TypedAtom (Var _, _) -> true // TypedAtom wrapping a variable - also borrowed
     | _ -> false

@@ -72,6 +72,16 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
         extractFromAtom ptr @ extractFromAtom offset @ extractFromAtom value
     | ANF.RawSlotInit (ptr, offset, value, _) ->
         extractFromAtom ptr @ extractFromAtom offset @ extractFromAtom value
+    | ANF.StringToRawPtr value -> extractFromAtom value
+    | ANF.RawPtrToString ptr -> extractFromAtom ptr
+    | ANF.BytesToRawPtr value -> extractFromAtom value
+    | ANF.RawPtrToBytes ptr -> extractFromAtom ptr
+    | ANF.DictToRawPtr dict -> extractFromAtom dict
+    | ANF.RawPtrToDict (ptr, tag, _) ->
+        extractFromAtom ptr @ extractFromAtom tag
+    | ANF.ListToRawPtr list -> extractFromAtom list
+    | ANF.RawPtrToList (ptr, tag, _) ->
+        extractFromAtom ptr @ extractFromAtom tag
     | ANF.RefCountIncString atom -> extractFromAtom atom
     | ANF.RefCountDecString atom -> extractFromAtom atom
     | ANF.RefCountIncBytes atom -> extractFromAtom atom

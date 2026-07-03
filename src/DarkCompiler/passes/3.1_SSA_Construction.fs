@@ -261,6 +261,14 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | RawFree _ -> defs
         | RawGet (dest, _, _, _) -> Set.add dest defs
         | RawGetByte (dest, _, _) -> Set.add dest defs
+        | StringToRawPtr (dest, _) -> Set.add dest defs
+        | RawPtrToString (dest, _) -> Set.add dest defs
+        | BytesToRawPtr (dest, _) -> Set.add dest defs
+        | RawPtrToBytes (dest, _) -> Set.add dest defs
+        | DictToRawPtr (dest, _) -> Set.add dest defs
+        | RawPtrToDict (dest, _, _) -> Set.add dest defs
+        | ListToRawPtr (dest, _) -> Set.add dest defs
+        | RawPtrToList (dest, _, _) -> Set.add dest defs
         | RawWriteWord _ -> defs
         | RawWriteByte _ -> defs
         | RawSlotInit _ -> defs
@@ -359,6 +367,22 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
                 uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset)
             | RawGetByte (_, ptr, offset) ->
                 uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset)
+            | StringToRawPtr (_, value) ->
+                uses |> Set.union (getOperandUses value)
+            | RawPtrToString (_, ptr) ->
+                uses |> Set.union (getOperandUses ptr)
+            | BytesToRawPtr (_, value) ->
+                uses |> Set.union (getOperandUses value)
+            | RawPtrToBytes (_, ptr) ->
+                uses |> Set.union (getOperandUses ptr)
+            | DictToRawPtr (_, dict) ->
+                uses |> Set.union (getOperandUses dict)
+            | RawPtrToDict (_, ptr, tag) ->
+                uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses tag)
+            | ListToRawPtr (_, list) ->
+                uses |> Set.union (getOperandUses list)
+            | RawPtrToList (_, ptr, tag) ->
+                uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses tag)
             | RawWriteWord (ptr, offset, value) ->
                 uses |> Set.union (getOperandUses ptr) |> Set.union (getOperandUses offset) |> Set.union (getOperandUses value)
             | RawWriteByte (ptr, offset, value) ->
@@ -783,6 +807,48 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let byteOffset' = renameOperand state byteOffset
         let (_, newDest, state') = newVersion state dest
         (RawGetByte (newDest, ptr', byteOffset'), state')
+
+    | StringToRawPtr (dest, value) ->
+        let value' = renameOperand state value
+        let (_, newDest, state') = newVersion state dest
+        (StringToRawPtr (newDest, value'), state')
+
+    | RawPtrToString (dest, ptr) ->
+        let ptr' = renameOperand state ptr
+        let (_, newDest, state') = newVersion state dest
+        (RawPtrToString (newDest, ptr'), state')
+
+    | BytesToRawPtr (dest, value) ->
+        let value' = renameOperand state value
+        let (_, newDest, state') = newVersion state dest
+        (BytesToRawPtr (newDest, value'), state')
+
+    | RawPtrToBytes (dest, ptr) ->
+        let ptr' = renameOperand state ptr
+        let (_, newDest, state') = newVersion state dest
+        (RawPtrToBytes (newDest, ptr'), state')
+
+    | DictToRawPtr (dest, dict) ->
+        let dict' = renameOperand state dict
+        let (_, newDest, state') = newVersion state dest
+        (DictToRawPtr (newDest, dict'), state')
+
+    | RawPtrToDict (dest, ptr, tag) ->
+        let ptr' = renameOperand state ptr
+        let tag' = renameOperand state tag
+        let (_, newDest, state') = newVersion state dest
+        (RawPtrToDict (newDest, ptr', tag'), state')
+
+    | ListToRawPtr (dest, list) ->
+        let list' = renameOperand state list
+        let (_, newDest, state') = newVersion state dest
+        (ListToRawPtr (newDest, list'), state')
+
+    | RawPtrToList (dest, ptr, tag) ->
+        let ptr' = renameOperand state ptr
+        let tag' = renameOperand state tag
+        let (_, newDest, state') = newVersion state dest
+        (RawPtrToList (newDest, ptr', tag'), state')
 
     | RawWriteWord (ptr, byteOffset, value) ->
         let ptr' = renameOperand state ptr

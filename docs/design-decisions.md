@@ -158,10 +158,12 @@ The implementation is split into two parts:
 1. **Compiler intrinsics** (low-level memory operations):
    - `__raw_alloc(size: Int64) -> RawPtr` - allocate unmanaged memory
    - `__raw_free(ptr: RawPtr) -> Unit` - free memory
-   - `__raw_get(ptr: RawPtr, offset: Int64) -> Int64` - read 8 bytes
+   - `__raw_get<T>(ptr: RawPtr, offset: Int64) -> T` - read 8 bytes as a typed value
    - `__raw_write_word(ptr: RawPtr, offset: Int64, value: Int64) -> Unit` - write 8 unmanaged bytes
    - `__raw_write_byte(ptr: RawPtr, offset: Int64, value: Int64) -> Unit` - write 1 unmanaged byte
    - `__raw_slot_init<T>(ptr: RawPtr, offset: Int64, value: T) -> Unit` - initialize a typed 8-byte slot edge
+   - `__dict_to_rawptr<k, v>(dict: Dict<k, v>) -> RawPtr` - borrow a raw pointer view with tag bits cleared
+   - `__rawptr_to_dict<k, v>(ptr: RawPtr, tag: Int64) -> Dict<k, v>` - retag an initialized raw HAMT node as a managed dict
 
 2. **Pure Dark stdlib** (HAMT algorithms):
    - `hashChunk(hash, level)` - extract 6-bit chunk at level
@@ -187,7 +189,8 @@ Leaf Node:
 **Trade-offs**:
 
 - **TRawPtr type**: Internal type not exposed to users, enables unsafe memory ops
-- **No GC integration**: Raw memory bypasses reference counting (HAMT manages its own memory)
+- **Explicit RC integration**: Raw HAMT memory uses typed slot initialization
+  and dict release helpers rather than implicit GC scanning
 - **Complexity**: HAMT is more complex than simple hash tables, but necessary for immutability
 
 **Current status**: Phase 4 in progress - bitwise operators and popcount implemented, raw memory intrinsics added, HAMT helper functions in stdlib.dark.

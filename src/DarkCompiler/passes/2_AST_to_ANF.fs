@@ -250,6 +250,27 @@ let tryRawMemoryIntrinsic
             tryParseMangledTypeForRawIntrinsic variantLookup mangled
         else
             None
+    let tryMonomorphizedSuffix (prefix: string) (name: string) : string option =
+        if name.StartsWith(prefix + "_") then
+            Some (name.Substring(prefix.Length + 1))
+        else
+            None
+    let dictTypeFromRawPtrIntrinsicName (name: string) : AST.Type =
+        match tryMonomorphizedSuffix "__rawptr_to_dict" name with
+        | Some suffix ->
+            match tryParseMangledTypeForRawIntrinsic variantLookup $"dict_{suffix}" with
+            | Some dictType -> dictType
+            | None -> Crash.crash $"Could not recover Dict type from intrinsic '{name}'"
+        | None ->
+            AST.TDict (AST.TVar "k", AST.TVar "v")
+    let listTypeFromRawPtrIntrinsicName (name: string) : AST.Type =
+        match tryMonomorphizedSuffix "__rawptr_to_list" name with
+        | Some suffix ->
+            match tryParseMangledTypeForRawIntrinsic variantLookup suffix with
+            | Some elemType -> AST.TList elemType
+            | None -> Crash.crash $"Could not recover List type from intrinsic '{name}'"
+        | None ->
+            AST.TList (AST.TVar "a")
     match funcName, args with
     | "__raw_alloc", [numBytesAtom] ->
         Some (ANF.RawAlloc numBytesAtom)
@@ -276,27 +297,20 @@ let tryRawMemoryIntrinsic
         match tryMonomorphizedValueType "__raw_slot_init" name with
         | Some valueType -> Some (ANF.RawSlotInit (ptrAtom, offsetAtom, valueAtom, valueType))
         | None -> Crash.crash "__raw_slot_init requires a concrete slot type"
-    // Cast operations are no-ops at runtime - just pass through the value
-    | "__rawptr_to_int64", [ptrAtom] ->
-        Some (ANF.Atom ptrAtom)
-    | "__int64_to_rawptr", [intAtom] ->
-        Some (ANF.Atom intAtom)
     // String refcount intrinsics (for Dict with string keys)
     | "__refcount_inc_string", [strAtom] ->
         Some (ANF.RefCountIncString strAtom)
     | "__refcount_dec_string", [strAtom] ->
         Some (ANF.RefCountDecString strAtom)
-    // String pointer cast operations are no-ops at runtime - just pass through the value
-    | "__string_to_int64", [strAtom] ->
-        Some (ANF.Atom strAtom)
-    | "__int64_to_string", [intAtom] ->
-        Some (ANF.Atom intAtom)
-
-    // Bytes pointer cast operations are no-ops at runtime - just pass through the value
-    | "__bytes_to_int64", [bytesAtom] ->
-        Some (ANF.Atom bytesAtom)
-    | "__int64_to_bytes", [intAtom] ->
-        Some (ANF.Atom intAtom)
+    // Dynamic buffer backing-pointer views and raw allocation adoption.
+    | "__string_to_rawptr", [strAtom] ->
+        Some (ANF.StringToRawPtr strAtom)
+    | "__rawptr_to_string", [ptrAtom] ->
+        Some (ANF.RawPtrToString ptrAtom)
+    | "__bytes_to_rawptr", [bytesAtom] ->
+        Some (ANF.BytesToRawPtr bytesAtom)
+    | "__rawptr_to_bytes", [ptrAtom] ->
+        Some (ANF.RawPtrToBytes ptrAtom)
 
     // Dict intrinsics - for type-safe Dict<k, v> operations
     // __empty_dict<k, v> returns 0 (null pointer)
@@ -310,10 +324,10 @@ let tryRawMemoryIntrinsic
         Some (ANF.Prim (ANF.BitAnd, dictAtom, ANF.IntLiteral (ANF.Int64 3L)))
     // __dict_to_rawptr<k, v> clears tag bits (dict & -4)
     | name, [dictAtom] when name = "__dict_to_rawptr" || name.StartsWith("__dict_to_rawptr_") ->
-        Some (ANF.Prim (ANF.BitAnd, dictAtom, ANF.IntLiteral (ANF.Int64 -4L)))
+        Some (ANF.DictToRawPtr dictAtom)
     // __rawptr_to_dict<k, v> combines pointer + tag (ptr | tag)
     | name, [ptrAtom; tagAtom] when name = "__rawptr_to_dict" || name.StartsWith("__rawptr_to_dict_") ->
-        Some (ANF.Prim (ANF.BitOr, ptrAtom, tagAtom))
+        Some (ANF.RawPtrToDict (ptrAtom, tagAtom, dictTypeFromRawPtrIntrinsicName name))
 
     // List intrinsics - for Finger Tree implementation
     // __list_is_null<a> checks if list pointer is 0 (empty)
@@ -324,10 +338,10 @@ let tryRawMemoryIntrinsic
         Some (ANF.Prim (ANF.BitAnd, listAtom, ANF.IntLiteral (ANF.Int64 7L)))
     // __list_to_rawptr<a> clears tag bits (list & -8) to get raw pointer
     | name, [listAtom] when name = "__list_to_rawptr" || name.StartsWith("__list_to_rawptr_") ->
-        Some (ANF.Prim (ANF.BitAnd, listAtom, ANF.IntLiteral (ANF.Int64 -8L)))
+        Some (ANF.ListToRawPtr listAtom)
     // __rawptr_to_list<a> combines pointer + tag (ptr | tag) to create tagged list
     | name, [ptrAtom; tagAtom] when name = "__rawptr_to_list" || name.StartsWith("__rawptr_to_list_") ->
-        Some (ANF.Prim (ANF.BitOr, ptrAtom, tagAtom))
+        Some (ANF.RawPtrToList (ptrAtom, tagAtom, listTypeFromRawPtrIntrinsicName name))
     // __list_empty<a> returns 0 (null pointer = empty finger tree)
     | name, [] when name = "__list_empty" || name.StartsWith("__list_empty_") ->
         Some (ANF.Atom (ANF.IntLiteral (ANF.Int64 0L)))
@@ -3674,11 +3688,12 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                         // __dict_get_tag<k, v> returns Int64 (tag bits)
                         Ok AST.TInt64
                     elif funcName.StartsWith("__dict_to_rawptr_") then
-                        // __dict_to_rawptr<k, v> returns RawPtr (as Int64)
-                        Ok AST.TInt64
+                        // __dict_to_rawptr<k, v> returns RawPtr
+                        Ok AST.TRawPtr
                     elif funcName.StartsWith("__rawptr_to_dict_") then
-                        // __rawptr_to_dict<k, v> returns Dict<k, v> (as Int64)
-                        Ok AST.TInt64
+                        // __rawptr_to_dict<k, v> returns Dict<k, v>
+                        let suffix = funcName.Substring("__rawptr_to_dict_".Length)
+                        tryParseMangledType variantLookup $"dict_{suffix}"
                     // List intrinsics - monomorphized versions for Finger Tree
                     elif funcName.StartsWith("__list_is_null_") then
                         // __list_is_null<a> returns Bool
@@ -3687,8 +3702,8 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                         // __list_get_tag<a> returns Int64 (tag bits)
                         Ok AST.TInt64
                     elif funcName.StartsWith("__list_to_rawptr_") then
-                        // __list_to_rawptr<a> returns RawPtr (as Int64)
-                        Ok AST.TInt64
+                        // __list_to_rawptr<a> returns RawPtr
+                        Ok AST.TRawPtr
                     elif funcName.StartsWith("__rawptr_to_list_") then
                         // __rawptr_to_list<a> returns List<a> - parse element type from mangled name
                         let suffix = funcName.Substring("__rawptr_to_list_".Length)
