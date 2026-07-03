@@ -453,6 +453,38 @@ let TempId 2 = f(42)
 return t2
 
 ---NAME---
+identity_bitand_zero_right
+---INPUT---
+def f(x: Int64) : Int64 = x & 0
+---EXPECTED---
+Function f:
+return 0
+
+---NAME---
+identity_bitand_zero_left
+---INPUT---
+def f(x: Int64) : Int64 = 0 & x
+---EXPECTED---
+Function f:
+return 0
+
+---NAME---
+identity_bitor_zero_right
+---INPUT---
+def f(x: Int64) : Int64 = x ||| 0
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_bitor_zero_left
+---INPUT---
+def f(x: Int64) : Int64 = 0 ||| x
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
 identity_shl_zero
 ---INPUT---
 def f(x: Int64) : Int64 = x << 0
