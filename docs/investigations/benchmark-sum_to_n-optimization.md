@@ -131,36 +131,7 @@ return t12
 - `src/DarkCompiler/passes/2.3_ANF_Optimization.fs` - Add constant folding
 - `src/DarkCompiler/passes/2_AST_to_ANF.fs` - Track purity annotations
 
-### 2. Redundant Move Elimination in LIR (Medium Impact)
-
-**Issue**: The register allocator produces redundant self-moves.
-
-**Evidence**: In the LIR after register allocation:
-
-```
-sumTo_L1:
-    X1 <- Mov(Reg X1)       ; Redundant: X1 already contains X1
-```
-
-And in `repeat`:
-
-```
-repeat_L1:
-    X20 <- Mov(Reg X20)     ; Redundant
-    X19 <- Mov(Reg X19)     ; Redundant
-```
-
-**Impact Estimate**: ~5-10% speedup (1-2 fewer instructions per iteration).
-
-**Implementation Approach**:
-1. Add a post-register-allocation pass to eliminate `X <- Mov(X)` patterns
-2. This can be done in a simple peephole optimization pass
-
-**Files to Modify**:
-- `src/DarkCompiler/passes/4.5_LIR_Optimizations.fs` - Add self-move elimination
-- `src/DarkCompiler/passes/5_RegisterAllocation.fs` - Or handle during allocation
-
-### 3. Conditional Branch Optimization (Low Impact)
+### 2. Conditional Branch Optimization (Low Impact)
 
 **Issue**: Dark uses a two-instruction sequence for conditional branches.
 
@@ -250,7 +221,6 @@ repeat_L1:
 |--------------|--------|--------|----------|
 | Constant folding for pure functions | High (3x) | Medium | P1 |
 | Loop-invariant code motion | High (99x for pattern) | Medium | P1 |
-| Redundant move elimination | Medium (5-10%) | Low | P2 |
 | Direct conditional branches | Low (5%) | Low | P3 |
 
 ## Conclusion
