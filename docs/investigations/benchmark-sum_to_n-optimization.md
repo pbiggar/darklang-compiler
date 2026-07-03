@@ -92,14 +92,13 @@ Dark's generated code for `sumTo`:
 1e0: ret
 ```
 
-Dark's LIR after register allocation shows:
+Dark's current loop shape is:
 
 ```
 sumTo_L1:
     X2 <- Sub(X3, Imm 1)
     X1 <- Add(X1, Reg X3)
     X3 <- Mov(Reg X2)
-    X1 <- Mov(Reg X1)       ; REDUNDANT: X1 = X1
     Jump(Label "sumTo_body")
 ```
 
@@ -196,16 +195,15 @@ repeat_L1:
 |----------|---------------------------|
 | Rust     | 0 (constant folded)       |
 | OCaml    | ~6 (with GC check)        |
-| Dark     | ~7                        |
+| Dark     | ~6                        |
 
 ### Dark sumTo loop body:
 1. `sub x2, x3, #1` - n - 1
 2. `add x1, x1, x3` - acc + n
 3. `mov x3, x2` - update n
-4. `mov x1, x1` - **redundant**
-5. `b sumTo_body` - jump
-6. `cmp x3, #0` - compare
-7. `b.le/b.gt` - conditional branch
+4. `b sumTo_body` - jump
+5. `cmp x3, #0` - compare
+6. `b.le/b.gt` - conditional branch
 
 ### OCaml sum_to loop body:
 1. `add x2, x1, x0` - acc + n
