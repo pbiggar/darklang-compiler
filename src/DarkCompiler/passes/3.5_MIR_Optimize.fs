@@ -1055,6 +1055,20 @@ let isReflexiveEqualityType (opType: AST.Type) : bool =
     | AST.TUnit -> true
     | _ -> false
 
+let isTotallyOrderedIntegerType (opType: AST.Type) : bool =
+    match opType with
+    | AST.TInt8
+    | AST.TInt16
+    | AST.TInt32
+    | AST.TInt64
+    | AST.TInt128
+    | AST.TUInt8
+    | AST.TUInt16
+    | AST.TUInt32
+    | AST.TUInt64
+    | AST.TUInt128 -> true
+    | _ -> false
+
 /// Constant Folding for MIR
 /// Evaluate operations on constants at compile time
 let tryFoldBinOp (op: BinOp) (left: Operand) (right: Operand) (opType: AST.Type) : Operand option =
@@ -1076,6 +1090,10 @@ let tryFoldBinOp (op: BinOp) (left: Operand) (right: Operand) (opType: AST.Type)
     | Gte, Int64Const a, Int64Const b -> Some (BoolConst (a >= b))
     | Eq, x, y when x = y && isReflexiveEqualityType opType -> Some (BoolConst true)
     | Neq, x, y when x = y && isReflexiveEqualityType opType -> Some (BoolConst false)
+    | Lt, x, y when x = y && isTotallyOrderedIntegerType opType -> Some (BoolConst false)
+    | Gt, x, y when x = y && isTotallyOrderedIntegerType opType -> Some (BoolConst false)
+    | Lte, x, y when x = y && isTotallyOrderedIntegerType opType -> Some (BoolConst true)
+    | Gte, x, y when x = y && isTotallyOrderedIntegerType opType -> Some (BoolConst true)
 
     // Boolean operations
     | And, BoolConst a, BoolConst b -> Some (BoolConst (a && b))

@@ -74,6 +74,103 @@ Function pick:
     ret 1
 
 ---NAME---
+const_branch_elimination_self_neq
+---INPUT---
+def pick(n: Int64) : Int64 =
+    if n != n then 1 else 2
+---EXPECTED---
+Function pick:
+  pick_entry:
+    jump pick_L1
+  pick_L1:
+    ret 2
+
+---NAME---
+const_branch_elimination_self_lt
+---INPUT---
+def pick(n: Int64) : Int64 =
+    if n < n then 1 else 2
+---EXPECTED---
+Function pick:
+  pick_entry:
+    jump pick_L1
+  pick_L1:
+    ret 2
+
+---NAME---
+const_branch_elimination_self_gt
+---INPUT---
+def pick(n: Int64) : Int64 =
+    if n > n then 1 else 2
+---EXPECTED---
+Function pick:
+  pick_entry:
+    jump pick_L1
+  pick_L1:
+    ret 2
+
+---NAME---
+const_branch_elimination_self_lte
+---INPUT---
+def pick(n: Int64) : Int64 =
+    if n <= n then 1 else 2
+---EXPECTED---
+Function pick:
+  pick_entry:
+    jump pick_L0
+  pick_L0:
+    ret 1
+
+---NAME---
+const_branch_elimination_self_gte
+---INPUT---
+def pick(n: Int64) : Int64 =
+    if n >= n then 1 else 2
+---EXPECTED---
+Function pick:
+  pick_entry:
+    jump pick_L0
+  pick_L0:
+    ret 1
+
+---NAME---
+self_eq_float_not_folded
+---INPUT---
+def pick(n: Float) : Int64 =
+    if n == n then 1 else 2
+---EXPECTED---
+Function pick:
+  pick_entry:
+    jump pick_body
+  pick_L0:
+    ret 1
+  pick_L1:
+    ret 2
+  pick_body:
+    v10002 <- v0 == v0 : TFloat64
+    branch v10002 ? pick_L0 : pick_L1
+
+---NAME---
+self_eq_shadowed_vars_not_folded
+---INPUT---
+def pick(n: Int64) : Int64 =
+    let x = n in
+    let x = n + 1 in
+    if x == n then 1 else 2
+---EXPECTED---
+Function pick:
+  pick_entry:
+    jump pick_body
+  pick_L0:
+    ret 1
+  pick_L1:
+    ret 2
+  pick_body:
+    v10005 <- v0 + 1 : TInt64
+    v10006 <- v10005 == v0 : TInt64
+    branch v10006 ? pick_L0 : pick_L1
+
+---NAME---
 licm_hoist_tuple_load
 ---INPUT---
 def loop(n: Int64, acc: Int64, t: (Int64, Int64)) : Int64 =
