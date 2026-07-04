@@ -534,6 +534,40 @@ Function f:
 return t0
 
 ---NAME---
+identity_bool_eq_true_right
+---INPUT---
+def f(x: Bool) : Bool = x == true
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_bool_eq_true_left
+---INPUT---
+def f(x: Bool) : Bool = true == x
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_bool_eq_false_right
+---INPUT---
+def f(x: Bool) : Bool = x == false
+---EXPECTED---
+Function f:
+let TempId 1 = !t0
+return t1
+
+---NAME---
+identity_bool_eq_false_left
+---INPUT---
+def f(x: Bool) : Bool = false == x
+---EXPECTED---
+Function f:
+let TempId 1 = !t0
+return t1
+
+---NAME---
 identity_bitand_all_ones_right
 ---INPUT---
 def f(x: Int64) : Int64 = x & -1

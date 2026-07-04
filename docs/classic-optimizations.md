@@ -46,6 +46,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical boolean simplification that removes redundant boolean self-operations in ANF before backend lowering.
 - Notes: Implemented for `x && x -> x` and `x || x -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Guided sandbox trial. Covered by `identity_bool_and_self` and `identity_bool_or_self` in `src/Tests/optimization/anf.opt`.
 
+### Boolean comparison constant simplification
+
+- Optimization name: Boolean comparison constant simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical boolean simplification that removes redundant equality comparisons against boolean literals in ANF before backend lowering.
+- Notes: Implemented for `x == true -> x`, `true == x -> x`, `x == false -> !x`, and `false == x -> !x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Guided sandbox trial. Covered by corresponding boolean equality constant tests in `src/Tests/optimization/anf.opt`.
+
 ### Bitwise all-ones identity simplification
 
 - Optimization name: Bitwise all-ones identity simplification
