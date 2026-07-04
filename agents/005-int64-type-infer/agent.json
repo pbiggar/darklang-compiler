@@ -1,0 +1,9 @@
+{
+  "id": 5,
+  "slug": "int64-type-infer",
+  "name": "Int64 type infer",
+  "autonomyLevel": "initial-design",
+  "enabled": true,
+  "purpose": "Fixing invalid type inference default use",
+  "summary": "This agent is always learning. It starts in initial design, then can gain autonomy as its definition and validation evidence improve."
+}

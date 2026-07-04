@@ -1,0 +1,9 @@
+{
+  "id": 7,
+  "slug": "darklang-compatibility",
+  "name": "Darklang Compatibility",
+  "autonomyLevel": "initial-design",
+  "enabled": true,
+  "purpose": "Find and fix one real syntax or semantic difference between this compiler and the official Darklang interpreter.",
+  "summary": "This always-learning agent starts from the Darklang diff playbook and focuses on one interpreter compatibility gap at a time."
+}
