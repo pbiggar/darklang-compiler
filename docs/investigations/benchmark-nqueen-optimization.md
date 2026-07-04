@@ -289,59 +289,7 @@ Option 3 - LIR peephole:
 
 ---
 
-### 2. Redundant Self-Move Elimination (Post-Register Allocation)
-
-**Impact: ~10-15% performance improvement (estimated)**
-
-**Root Cause:**
-The register allocator generates self-moves that serve no purpose:
-```
-X3 <- Mov(Reg X3)       ; Self-move - no effect!
-X2 <- Mov(Reg X2)       ; Self-move - no effect!
-X1 <- Mov(Reg X1)       ; Self-move - no effect!
-X26 <- Mov(Reg X26)     ; Self-move - no effect!
-```
-
-Additionally, there are sequences of moves to the same register that overwrite previous values:
-```
-X19 <- Mov(Reg X3)      ; Immediately overwritten
-X19 <- Mov(Reg X2)      ; Immediately overwritten
-X19 <- Mov(Reg X1)      ; Immediately overwritten
-X19 <- Mov(Reg X26)     ; Immediately overwritten
-X19 <- Mov(Reg X24)     ; Immediately overwritten
-X19 <- Mov(Reg X20)     ; This is the only one that matters
-```
-
-**Evidence from Dark LIR (After Register Allocation):**
-```
-Label "nqueenSolve_L5":
-    X20 <- Add(X25, Reg X19)
-    X19 <- Mov(Reg X3)
-    X19 <- Mov(Reg X2)
-    X19 <- Mov(Reg X1)
-    X19 <- Mov(Reg X26)
-    X19 <- Mov(Reg X24)
-    X19 <- Mov(Reg X20)
-    X3 <- Mov(Reg X3)       ; REDUNDANT
-    X2 <- Mov(Reg X2)       ; REDUNDANT
-    X1 <- Mov(Reg X1)       ; REDUNDANT
-    X26 <- Mov(Reg X26)     ; REDUNDANT
-    X21 <- Mov(Reg X24)
-    X25 <- Mov(Reg X20)
-```
-
-**Implementation Approach:**
-1. Add post-register-allocation cleanup pass
-2. Remove `Mov(dest, Reg src)` where `dest == src`
-3. Remove dead moves where the destination is immediately overwritten
-
-**Files to Modify:**
-- `src/DarkCompiler/passes/5_RegisterAllocation.fs` - Add cleanup pass
-- OR `src/DarkCompiler/passes/4.5_LIR_Optimizations.fs` - Run after register allocation
-
----
-
-### 3. Eliminate SaveRegs/RestoreRegs for Callee-Saved Only Live Ranges
+### 2. Eliminate SaveRegs/RestoreRegs for Callee-Saved Only Live Ranges
 
 **Impact: ~5-10% performance improvement (estimated)**
 
@@ -367,7 +315,7 @@ But notice that after allocation, the actual live values are in X19-X26 (callee-
 
 ---
 
-### 4. Convert Tail-Recursive Style to While Loop
+### 3. Convert Tail-Recursive Style to While Loop
 
 **Impact: ~5% performance improvement (estimated)**
 

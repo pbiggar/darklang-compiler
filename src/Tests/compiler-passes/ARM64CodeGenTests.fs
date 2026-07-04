@@ -101,6 +101,34 @@ let private makeEmptyFunction
         UsedCalleeSaved = []
     }
 
+let testGeneratedCodeEliminatesSelfMoves () : TestResult =
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.Mov (LIR.Physical LIR.X1, LIR.Reg (LIR.Physical LIR.X1))
+                LIR.FMov (LIR.FPhysical LIR.D1, LIR.FPhysical LIR.D1)
+            ]
+            Map.empty
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let hasSelfMove =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.MOV_reg (dest, src) when dest = src ->
+                    true
+                | ARM64Symbolic.FMOV_reg (dest, src) when dest = src ->
+                    true
+                | _ ->
+                    false)
+
+        if hasSelfMove then
+            Error "Generated ARM64 code contains a redundant self-move"
+        else
+            Ok ()
+
 let testRawSlotInitPureEnumDoesNotEmitGenericRetain () : TestResult =
     let enumType = AST.TSum ("RawSlotInitPureEnum", [AST.TString])
     let variants : LIR.VariantRegistry =
@@ -1084,6 +1112,7 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
             Error "Closure capture boxed-sum bytes payload release did not consume the variant release plan"
 
 let tests : (string * (unit -> TestResult)) list = [
+    ("Generated ARM64 code eliminates self-moves", testGeneratedCodeEliminatesSelfMoves)
     ("RawSlotInit pure enum skips generic retain", testRawSlotInitPureEnumDoesNotEmitGenericRetain)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
     ("List tuple3 string/list/dict-list uses typed dict helper", testListTuple3StringListDictListValueUsesTypedDictHelper)
