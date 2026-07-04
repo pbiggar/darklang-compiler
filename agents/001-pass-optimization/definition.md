@@ -43,6 +43,8 @@ Use repeated measurements rather than a single run:
 - Measure each retained candidate with 5 comparable `-vv` runs.
 - Compare medians for the selected pass, and treat the change as successful only when the selected-pass timing improvement is statistically obvious relative to observed noise.
 
+When a pass is selected from benchmark compile-time evidence, collect pass timing across the full benchmark suite before and after the retained change. Report the selected pass's before/after timing delta for each benchmark, not just the benchmark that first exposed the candidate.
+
 Use the same benchmark command lines, environment, inputs, and build mode for before and after measurements unless there is a documented reason to change them.
 
 If results are noisy, increase runs or narrow the benchmark target before claiming a win.
@@ -50,6 +52,8 @@ If results are noisy, increase runs or narrow the benchmark target before claimi
 Do not claim success from a single favorable timing result.
 
 Wall-clock compile time may be reported as secondary context, especially to catch whole-compiler regressions, but it is not the primary success signal for this agent.
+
+Record before/after test-suite wall-clock timing when the optimization is intended to reduce compile-time cost. Treat it as a regression guard and reporting aid, not as a substitute for selected-pass timing.
 
 ## Optimization Workflow
 
@@ -81,6 +85,7 @@ Validation should protect:
 - Generated-program runtime benchmark behavior.
 - Instruction-count behavior when relevant.
 - Overall compile-time behavior beyond the selected pass when practical.
+- Test-suite wall-clock time when the change targets compile-time performance.
 
 A retained change must not make the compiler code worse in exchange for an unclear timing result.
 
@@ -93,6 +98,8 @@ The final report must include:
 - The benchmark or compile command lines used.
 - Baseline timing numbers and median.
 - After-change timing numbers and median.
+- Full benchmark suite selected-pass before/after timing deltas when benchmark compile-time evidence drove selection.
+- Before/after test-suite wall-clock timing when the change targets compile-time performance.
 - The observed performance problem.
 - Candidate solutions attempted.
 - The retained solution and why it was chosen.
