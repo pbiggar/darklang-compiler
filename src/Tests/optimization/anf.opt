@@ -557,6 +557,22 @@ Function f:
 return t0
 
 ---NAME---
+identity_shl_zero_left
+---INPUT---
+def f(x: Int64) : Int64 = 0 << x
+---EXPECTED---
+Function f:
+return 0
+
+---NAME---
+identity_shr_zero_left
+---INPUT---
+def f(x: Int64) : Int64 = 0 >> x
+---EXPECTED---
+Function f:
+return 0
+
+---NAME---
 strength_reduce_float_div_2
 ---INPUT---
 def f(x: Float) : Float = x / 2.0

@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-03 12:29:11
-**Commit:** `eb63366a` - Merge memory-work main
+**Last Updated:** 2026-07-04 08:14:30
+**Commit:** `186cd36b` - Add ANF bitxor identity simplification
 
 | Benchmark     |           Dark (4.07x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
