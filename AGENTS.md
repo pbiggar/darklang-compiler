@@ -85,6 +85,8 @@ Examples:
 
 ## Testing - TDD Approach
 
+Before reporting any change as verified, read and follow `docs/verification.md`.
+
 **ALWAYS create a failing test first before implementing any feature or fixing any bug.**
 
 1. Write a test that exposes the bug or demonstrates the desired behavior
