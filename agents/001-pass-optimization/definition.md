@@ -66,9 +66,9 @@ Record before/after test-suite wall-clock timing when the optimization is intend
 7. Remove temporary profiling and exploratory instrumentation before the final commit.
 8. Run validation appropriate to the changed compiler surface.
 
-The agent may try multiple implementation approaches. Failed or neutral experiments should be reverted unless they leave behind a small refactor that the human explicitly wants to keep.
+The agent may try multiple implementation approaches. Failed or neutral experiments should be rejected automatically, with all exploratory code changes reverted unless they leave behind a small refactor that the human explicitly wants to keep.
 
-If no attempted optimization clearly wins, ask the human whether to revert all code changes or keep any small neutral refactors. Do not present a neutral change as a performance improvement.
+If no attempted optimization clearly wins, close the attempt as rejected, record the measured reason, and start a fresh testing turn from current local evidence. Do not present a neutral change as a performance improvement, and do not let the rejected pass choice steer the next selection except as trial history.
 
 For performance-only changes, the test-first requirement is satisfied by recording baseline performance measurements before the optimization and proof of improvement after the optimization. Add conventional failing tests first only when changing compiler behavior or fixing a correctness bug.
 
