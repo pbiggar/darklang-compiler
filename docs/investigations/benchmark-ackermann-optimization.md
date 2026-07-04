@@ -176,13 +176,11 @@ ackermann:
 
 1. **Excessive register shuffling at entry (9 MOVs)** - The function entry has 9 consecutive MOV instructions to set up registers. This is executed on every function call.
 
-2. **Redundant self-move** at line `X19 <- Mov(Reg X19)` in L0 block
+2. **Dead code block** (ackermann_L5) that is never jumped to
 
-3. **Dead code block** (ackermann_L5) that is never jumped to
+3. **BranchZero pattern vs cbz** - Using separate compare-and-branch instead of fused ARM64 `cbz`/`cbnz` instructions
 
-4. **BranchZero pattern vs cbz** - Using separate compare-and-branch instead of fused ARM64 `cbz`/`cbnz` instructions
-
-5. **Empty SaveRegs/RestoreRegs pairs** - Still generating markers even when no registers need saving
+4. **Empty SaveRegs/RestoreRegs pairs** - Still generating markers even when no registers need saving
 
 ## Identified Optimization Opportunities
 
@@ -230,40 +228,7 @@ Label "ackermann_entry":
 
 ---
 
-### 2. Redundant Self-Move Elimination (Post-Register Allocation)
-
-**Impact: ~5-10% performance improvement (estimated)**
-
-**Root Cause:**
-After register allocation, some self-moves survive to code generation:
-```
-X19 <- Mov(Reg X19)          ; No effect!
-```
-
-**Evidence from Dark LIR:**
-```
-Label "ackermann_L0":
-    X19 <- Add(X19, Imm 1)
-    X19 <- Mov(Reg X19)      ; REDUNDANT
-    Jump(Label "ackermann_L2")
-
-Label "ackermann_L5":
-    X19 <- Mov(Reg X19)      ; REDUNDANT
-    Jump(Label "ackermann_L2")
-```
-
-**Implementation Approach:**
-Add a post-register-allocation cleanup pass:
-1. Scan through allocated instructions
-2. Remove `Mov(dest, Reg src)` where `dest == src`
-
-**Files to Modify:**
-- `src/DarkCompiler/passes/5_RegisterAllocation.fs` - Add cleanup after allocation
-- Or `src/DarkCompiler/passes/6_CodeGen.fs` - Filter during code generation
-
----
-
-### 3. Dead Code Elimination (Post-Register Allocation)
+### 2. Dead Code Elimination (Post-Register Allocation)
 
 **Impact: ~2-5% improvement (reduces code size, improves icache)**
 
@@ -287,7 +252,7 @@ Label "ackermann_L5":          ; No incoming edges!
 
 ---
 
-### 4. BranchZero to CBZ/CBNZ Fusion
+### 3. BranchZero to CBZ/CBNZ Fusion
 
 **Impact: ~5-10% performance improvement (estimated)**
 
@@ -315,7 +280,7 @@ BranchZero(X20, Label "ackermann_L0", Label "ackermann_L1")
 
 ---
 
-### 5. Empty SaveRegs/RestoreRegs Elimination
+### 4. Empty SaveRegs/RestoreRegs Elimination
 
 **Impact: ~2-5% performance improvement (estimated)**
 
@@ -340,22 +305,20 @@ Skip code generation when register lists are empty.
 | Optimization | Estimated Impact | Complexity |
 |--------------|-----------------|------------|
 | Register Entry Block Optimization | 20-30% | High |
-| Redundant Self-Move Elimination | 5-10% | Low |
 | Dead Code Elimination | 2-5% | Low |
 | BranchZero to CBZ/CBNZ Fusion | 5-10% | Medium |
 | Empty SaveRegs Elimination | 2-5% | Low |
 
-**Total estimated improvement: ~40-60%** (bringing Dark from 3.14x to ~1.5-2x Rust)
+**Total estimated improvement: ~35-50%** (bringing Dark from 3.14x to ~1.5-2x Rust)
 
 Note: Dark already has good tail call optimization (both tail-recursive cases use jumps), so the main issues are register allocation quality and instruction selection.
 
 ## Recommended Implementation Order
 
-1. **Redundant Self-Move Elimination** - Quick win, low complexity
-2. **Empty SaveRegs Elimination** - Quick win, very low complexity
-3. **Dead Code Elimination** - Quick win, low complexity
-4. **BranchZero to CBZ/CBNZ Fusion** - Medium complexity, good improvement
-5. **Register Entry Block Optimization** - High complexity, highest impact
+1. **Empty SaveRegs Elimination** - Quick win, very low complexity
+2. **Dead Code Elimination** - Quick win, low complexity
+3. **BranchZero to CBZ/CBNZ Fusion** - Medium complexity, good improvement
+4. **Register Entry Block Optimization** - High complexity, highest impact
 
 ## Appendix: Full IR Dumps
 
