@@ -96,6 +96,11 @@ let computeDominators (cfg: CFG) (preds: Predecessors) : Dominators =
         | None -> Crash.crash $"SSA: Missing entry label index for {entry}"
     let entryBits = Bitset.singleton wordCount entryIndex
 
+    let requireDomBits (context: string) (doms: Map<Label, Bitset.Bitset>) (label: Label) : Bitset.Bitset =
+        match Map.tryFind label doms with
+        | Some bits -> bits
+        | None -> Crash.crash $"SSA: Missing dominator set for {label} while {context}"
+
     // Initialize: entry dominates itself, other reachable blocks dominated by all reachable
     // Unreachable blocks are NOT included in the dominator computation
     let initialDoms =
@@ -126,13 +131,13 @@ let computeDominators (cfg: CFG) (preds: Predecessors) : Dominators =
                         // Dom(n) = {n} union (intersection of Dom(p) for all predecessors p)
                         let predDoms =
                             predLabels
-                            |> List.map (fun p -> Map.tryFind p m |> Option.defaultValue (Bitset.empty wordCount))
+                            |> List.map (requireDomBits "computing predecessor intersection" m)
                         let intersection =
                             match predDoms with
                             | [] -> Bitset.empty wordCount
                             | first :: rest -> Bitset.intersectMany first rest
                         let newDom = Bitset.add labelIdx intersection
-                        let oldDom = Map.tryFind label m |> Option.defaultValue (Bitset.empty wordCount)
+                        let oldDom = requireDomBits "updating fixed-point iteration" m label
                         if Bitset.equal newDom oldDom then
                             (changed, m)
                         else
@@ -150,7 +155,7 @@ let computeDominators (cfg: CFG) (preds: Predecessors) : Dominators =
         if label = entry then
             idoms  // Entry has no immediate dominator
         else
-            let doms = Map.tryFind label allDoms |> Option.defaultValue (Bitset.empty wordCount)
+            let doms = requireDomBits "extracting immediate dominators" allDoms label
             // Remove self from dominators
             let strictDoms = Bitset.diff doms (Bitset.singleton wordCount labelIdx)
             if Bitset.isEmpty strictDoms then
@@ -163,7 +168,7 @@ let computeDominators (cfg: CFG) (preds: Predecessors) : Dominators =
                     strictIndices
                     |> List.tryFind (fun dIdx ->
                         let dLabel = labelIndex.Labels.[dIdx]
-                        let dDoms = Map.tryFind dLabel allDoms |> Option.defaultValue (Bitset.empty wordCount)
+                        let dDoms = requireDomBits "checking strict dominators" allDoms dLabel
                         // d is idom if all other strict dominators dominate d
                         // i.e., all other strict dominators are in Dom(d)
                         strictIndices
