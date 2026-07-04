@@ -6,8 +6,7 @@ The Dark compiler produces code for the binary_trees benchmark that is approxima
 
 Analysis reveals optimization opportunities primarily in:
 1. **Common Subexpression Elimination (CSE)** - Redundant computations
-2. **Redundant Move Elimination** - Unnecessary register moves in tail call loops
-3. **Prologue/Epilogue Register Move Optimization** - Entry point register shuffling
+2. **Prologue/Epilogue Register Move Optimization** - Entry point register shuffling
 
 ## Benchmark Results
 
@@ -148,43 +147,7 @@ let rec stress_test depth iterations acc =
 
 ## Key Optimization Opportunities
 
-### 1. Redundant Move Elimination in Register Allocator (High Impact)
-
-**Issue:** The register allocator generates sequences of redundant moves, especially after phi-node elimination for tail calls.
-
-**IR Evidence (LIR after Register Allocation) - stressTest_L1:**
-```
-X19 <- Mov(Reg X22)    ; REDUNDANT - immediately overwritten
-X19 <- Mov(Reg X21)    ; REDUNDANT - immediately overwritten
-X19 <- Mov(Reg X20)    ; REDUNDANT - immediately overwritten
-X22 <- Mov(Reg X22)    ; REDUNDANT - self-move (should be caught)
-X21 <- Mov(Reg X21)    ; REDUNDANT - self-move
-X20 <- Mov(Reg X20)    ; REDUNDANT - self-move
-```
-
-**Assembly Evidence:**
-```asm
-38c: mov  x19, x22   ; immediately overwritten
-390: mov  x19, x21   ; immediately overwritten
-394: mov  x19, x20   ; only this one matters
-```
-
-**Root Cause:** The LIR-to-ASM generation doesn't remove dead moves that are immediately overwritten. The phi-node resolution generates parallel moves that get serialized incorrectly.
-
-**Impact Estimate:** ~10-15% improvement. These instructions execute on every loop iteration.
-
-**Implementation:**
-1. Add dead-move elimination pass after register allocation
-2. Look for consecutive moves to the same destination where only the last survives
-3. Remove self-moves (`mov x, x`)
-
-**Files to Modify:**
-- `src/DarkCompiler/passes/4.5_LIR_Optimize.fs` (add dead move elimination)
-- `src/DarkCompiler/passes/5_RegisterAllocation.fs` (better phi resolution)
-
----
-
-### 2. Entry Point Register Shuffling (Medium Impact)
+### 1. Entry Point Register Shuffling (Medium Impact)
 
 **Issue:** Function prologues have unnecessary register shuffles.
 
@@ -220,7 +183,7 @@ The LIR is correct! The problem is in code generation adding extra moves.
 
 ---
 
-### 3. Tail Call Phi-Node Resolution (High Impact)
+### 2. Tail Call Phi-Node Resolution (High Impact)
 
 **Issue:** The stressTest function shows poor phi-node resolution for the tail call loop.
 
@@ -288,17 +251,14 @@ The dependency chain is optimal, but there may be opportunities for better pipel
 | Optimization | OCaml | Dark | Notes |
 |--------------|-------|------|-------|
 | CSE for depth-1 | Yes | **Yes** | Both compute once, reuse |
-| Dead move elimination | Yes | **No** | Dark has consecutive redundant moves |
-| Self-move removal | Yes | **Partial** | 4.5_LIR_Optimize handles some |
 | Efficient phi resolution | Yes | **No** | Dark generates redundant parallel moves |
 | Function prologue opt | Yes | **No** | Dark has unnecessary entry shuffles |
 
 ## Recommended Implementation Priority
 
 1. **Tail call phi-node resolution** - Highest impact, fixes stressTest inner loop
-2. **Dead move elimination** - High impact, relatively straightforward
-3. **Entry point register shuffling** - Medium impact, targeted fix
-4. **Instruction scheduling** - Low priority, diminishing returns
+2. **Entry point register shuffling** - Medium impact, targeted fix
+3. **Instruction scheduling** - Low priority, diminishing returns
 
 ## Verification
 
