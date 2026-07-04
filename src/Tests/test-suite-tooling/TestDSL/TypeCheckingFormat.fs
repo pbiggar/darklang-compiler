@@ -97,22 +97,23 @@ let parseTypeCheckingTestFile (path: string) : Result<TypeCheckingTest list, str
     if not (System.IO.File.Exists path) then
         Error $"Test file not found: {path}"
     else
-        let lines = System.IO.File.ReadAllLines(path)
-
-        let mutable tests = []
-        let mutable errors = []
-
-        for i in 0 .. lines.Length - 1 do
-            let line = lines.[i].Trim()
-            let lineNumber = i + 1
+        let collectParsedLine (tests, errors) (index, rawLine: string) =
+            let line = rawLine.Trim()
+            let lineNumber = index + 1
 
             // Skip blank lines and comments
-            if line.Length > 0 && not (line.StartsWith("//")) then
+            if line.Length = 0 || line.StartsWith("//") then
+                (tests, errors)
+            else
                 match parseTestLine line lineNumber with
-                | Ok test -> tests <- test :: tests
-                | Error err -> errors <- err :: errors
+                | Ok test -> (test :: tests, errors)
+                | Error err -> (tests, err :: errors)
 
-        if errors.Length > 0 then
-            Error (String.concat "\n" (List.rev errors))
-        else
-            Ok (List.rev tests)
+        let tests, errors =
+            System.IO.File.ReadAllLines(path)
+            |> Array.indexed
+            |> Array.fold collectParsedLine ([], [])
+
+        match errors with
+        | [] -> Ok (List.rev tests)
+        | _ -> Error (String.concat "\n" (List.rev errors))
