@@ -51,7 +51,7 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Optimization name: Boolean comparison constant simplification
 - Taxonomy category: Algebraic simplification
 - Priority/rationale: Small, low-risk canonical boolean simplification that removes redundant equality comparisons against boolean literals in ANF before backend lowering.
-- Notes: Implemented for `x == true -> x`, `true == x -> x`, `x == false -> !x`, and `false == x -> !x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Guided sandbox trial. Covered by corresponding boolean equality constant tests in `src/Tests/optimization/anf.opt`.
+- Notes: Implemented for `x == true -> x`, `true == x -> x`, `x == false -> !x`, `false == x -> !x`, `x != true -> !x`, `true != x -> !x`, `x != false -> x`, and `false != x -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Guided sandbox trials. The inequality cases use generic double-negation elimination so the false-literal forms do not need a one-off ANF shape. Covered by corresponding boolean equality, inequality, and double-negation tests in `src/Tests/optimization/anf.opt`.
 
 ### Bitwise all-ones identity simplification
 

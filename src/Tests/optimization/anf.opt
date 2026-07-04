@@ -568,6 +568,48 @@ let TempId 1 = !t0
 return t1
 
 ---NAME---
+identity_bool_neq_true_right
+---INPUT---
+def f(x: Bool) : Bool = x != true
+---EXPECTED---
+Function f:
+let TempId 2 = !t0
+return t2
+
+---NAME---
+identity_bool_neq_true_left
+---INPUT---
+def f(x: Bool) : Bool = true != x
+---EXPECTED---
+Function f:
+let TempId 2 = !t0
+return t2
+
+---NAME---
+identity_bool_neq_false_right
+---INPUT---
+def f(x: Bool) : Bool = x != false
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_bool_neq_false_left
+---INPUT---
+def f(x: Bool) : Bool = false != x
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_bool_double_not
+---INPUT---
+def f(x: Bool) : Bool = !!x
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
 identity_bitand_all_ones_right
 ---INPUT---
 def f(x: Int64) : Int64 = x & -1

@@ -443,6 +443,13 @@ type OptimizeAExprResult = {
     Uses: Set<TempId>
 }
 
+let private trySimplifyDoubleNot (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =
+    match cexpr, body with
+    | UnaryPrim (Not, source), Let (notTid, UnaryPrim (Not, Var sourceTid), notBody)
+        when sourceTid = tid ->
+        Some (Let (notTid, Atom source, notBody))
+    | _ -> None
+
 /// Optimize an AExpr, returning optimized expression, change flag, and used TempIds
 let rec private optimizeAExprWithUses (context: OptimizeContext) (options: OptimizeOptions) (env: ConstEnv) (aexpr: AExpr) : OptimizeAExprResult =
     match aexpr with
@@ -479,21 +486,25 @@ let rec private optimizeAExprWithUses (context: OptimizeContext) (options: Optim
         let isDead = options.EnableDCE && not (Set.contains tid usesInBody) && not (hasSideEffects context cexpr')
         let usesInBodyWithoutTid = Set.remove tid usesInBody
 
-        if skipBinding then
+        match trySimplifyDoubleNot tid cexpr' bodyResult.Expr with
+        | Some replacement when options.EnableConstFolding ->
+            let replacementResult = optimizeAExprWithUses context options env replacement
+            { replacementResult with Changed = true }
+        | _ when skipBinding ->
             // Copy propagation: skip this binding entirely
             {
                 Expr = bodyResult.Expr
                 Changed = true
                 Uses = usesInBodyWithoutTid
             }
-        elif isDead then
+        | _ when isDead ->
             // Dead code elimination
             {
                 Expr = bodyResult.Expr
                 Changed = true
                 Uses = usesInBodyWithoutTid
             }
-        else
+        | _ ->
             let usesInCExpr = collectCExprUses cexpr'
             let uses = Set.union usesInCExpr usesInBodyWithoutTid
             {
