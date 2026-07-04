@@ -106,6 +106,15 @@ let testParseInterpreterPipeMinusOperatorSection () : TestResult =
     | Ok other ->
         Error $"Expected single expression program, got: {other}"
 
+let testInterpreterParserParsesLegacyIntSuffix () : TestResult =
+    match InterpreterParser.parseString false "1I" with
+    | Error err ->
+        Error $"Interpreter parser failed on legacy Int suffix: {err}"
+    | Ok (Program [Expression (Int128Literal value)]) when value = System.Int128.One ->
+        Ok ()
+    | Ok other ->
+        Error $"Expected Int128 literal program for legacy Int suffix, got: {other}"
+
 let testCompilerParserParsesApostropheTypeArgAtCallSite () : TestResult =
     let source = "Stdlib.Json.parse<'a>(\"5\")"
     match Parser.parseString false source with
@@ -826,6 +835,7 @@ let tests = [
     ("parse interpreter triple-quoted interpolation", testParseInterpreterTripleQuotedInterpolation)
     ("parse interpreter negative float application args", testParseInterpreterNegativeFloatApplicationArgs)
     ("parse interpreter pipe minus operator section", testParseInterpreterPipeMinusOperatorSection)
+    ("parse interpreter legacy Int suffix", testInterpreterParserParsesLegacyIntSuffix)
     ("parse compiler apostrophe type argument call site", testCompilerParserParsesApostropheTypeArgAtCallSite)
     ("parse compiler apostrophe type argument space call site", testCompilerParserParsesApostropheTypeArgSpaceCallSite)
     ("parse interpreter bare function type argument call site", testInterpreterParserParsesBareFunctionTypeArgAtCallSite)

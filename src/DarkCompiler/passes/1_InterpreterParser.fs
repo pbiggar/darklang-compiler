@@ -301,6 +301,8 @@ let lex (input: string) : Result<Token list, string> =
                     | (false, _) -> Error $"Integer literal out of range for UInt128: {numStr}"
 
                 match afterInt with
+                | 'I' :: rest ->
+                    parseInt128OrError rest
                 | 'L' :: rest ->
                     parseInt64OrError rest
                 | 'Q' :: rest ->
