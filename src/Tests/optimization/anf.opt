@@ -485,6 +485,30 @@ Function f:
 return t0
 
 ---NAME---
+identity_bitxor_zero_right
+---INPUT---
+def f(x: Int64) : Int64 = x ^ 0
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_bitxor_zero_left
+---INPUT---
+def f(x: Int64) : Int64 = 0 ^ x
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_bitxor_self
+---INPUT---
+def f(x: Int64) : Int64 = x ^ x
+---EXPECTED---
+Function f:
+return 0
+
+---NAME---
 identity_bitand_all_ones_right
 ---INPUT---
 def f(x: Int64) : Int64 = x & -1

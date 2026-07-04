@@ -115,6 +115,8 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | BitOr, IntLiteral (Int64 0L), x -> Some (Atom x)
     | BitOr, _, IntLiteral (Int64 -1L) -> Some (Atom (IntLiteral (Int64 -1L)))
     | BitOr, IntLiteral (Int64 -1L), _ -> Some (Atom (IntLiteral (Int64 -1L)))
+    | BitXor, x, IntLiteral (Int64 0L) -> Some (Atom x)
+    | BitXor, IntLiteral (Int64 0L), x -> Some (Atom x)
 
     // Algebraic identities - Float
     // Note: We skip 0.0 * x -> 0.0 because 0.0 * inf = NaN, 0.0 * NaN = NaN
@@ -129,6 +131,7 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | Sub, Var a, Var b when a = b -> Some (Atom (IntLiteral (Int64 0L)))
     | BitAnd, Var a, Var b when a = b -> Some (Atom (Var a))
     | BitOr, Var a, Var b when a = b -> Some (Atom (Var a))
+    | BitXor, Var a, Var b when a = b -> Some (Atom (IntLiteral (Int64 0L)))
 
     // Short-circuit boolean
     | And, BoolLiteral false, _ -> Some (Atom (BoolLiteral false))
