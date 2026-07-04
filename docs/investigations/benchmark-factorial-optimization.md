@@ -226,45 +226,7 @@ movk    x8, #8643, lsl #48       ; = 2432902008176640000
 
 ---
 
-### 2. Redundant Self-Move Elimination
-
-**Impact: ~5% performance improvement**
-
-**Root Cause:**
-The register allocator generates redundant self-moves that survive to code generation:
-
-```
-X19 <- Mov(Reg X19)             ; Self-move - no effect!
-X20 <- Mov(Reg X20)             ; Self-move - no effect!
-```
-
-These appear in both `factorial` and `repeat` functions after phi node resolution.
-
-**Evidence from LIR (After Register Allocation):**
-```
-factorial_L1:
-    ...
-    X19 <- Mul(X20, Reg X19)
-    X19 <- Mov(Reg X19)         ; REDUNDANT - X19 already contains result
-
-repeat_L1:
-    ...
-    X20 <- Mov(Reg X20)         ; REDUNDANT self-move
-    X19 <- Mov(Reg X19)         ; REDUNDANT self-move
-```
-
-**Implementation Approach:**
-Add a post-register-allocation cleanup pass:
-1. Scan through allocated instructions
-2. Remove `Mov(dest, Reg src)` where `dest == src`
-
-**Files to Modify:**
-- `src/DarkCompiler/passes/5_RegisterAllocation.fs` - Add cleanup pass after allocation
-- Or `src/DarkCompiler/passes/6_CodeGen.fs` - Filter out self-moves during emission
-
----
-
-### 3. Empty SaveRegs/RestoreRegs Elimination
+### 2. Empty SaveRegs/RestoreRegs Elimination
 
 **Impact: ~2-3% performance improvement**
 
@@ -291,7 +253,7 @@ In code generation, skip generating any code for empty SaveRegs/RestoreRegs inst
 
 ---
 
-### 4. Inline Small Pure Functions
+### 3. Inline Small Pure Functions
 
 **Impact: ~10-15% performance improvement**
 
@@ -326,7 +288,6 @@ repeat_L1:
 | Optimization | Estimated Impact | Complexity |
 |--------------|-----------------|------------|
 | Compile-Time Constant Folding | 90%+ (match Rust) | High |
-| Redundant Self-Move Elimination | 5% | Low |
 | Empty SaveRegs Elimination | 2-3% | Low |
 | Inline Small Pure Functions | 10-15% | Medium |
 
@@ -334,10 +295,9 @@ repeat_L1:
 
 ## Recommended Implementation Order
 
-1. **Redundant Self-Move Elimination** - Quick win, low complexity
-2. **Empty SaveRegs Elimination** - Quick win, very low complexity
-3. **Inline Small Pure Functions** - Medium complexity, good improvement
-4. **Compile-Time Constant Folding** - Major impact, high complexity
+1. **Empty SaveRegs Elimination** - Quick win, very low complexity
+2. **Inline Small Pure Functions** - Medium complexity, good improvement
+3. **Compile-Time Constant Folding** - Major impact, high complexity
 
 ## Why Dark Beats OCaml
 
