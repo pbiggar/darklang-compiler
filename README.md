@@ -26,7 +26,10 @@ project's Docker devcontainer — no host installs needed.
 
 - VS Code: "Reopen in Container" uses `.devcontainer/devcontainer.json`.
 - CLI: `docker compose up -d` and then
-  `scripts/run-in-container ./run-tests --ai` for agent sessions.
+  `scripts/run-in-container ./run-tests --ai` from the host.
+- Orchestrated Codex/Claude agent sessions already run inside Docker-backed
+  worktrees, so they should run repository commands directly, for example
+  `./run-tests --ai`.
 
 See [`docs/docker.md`](docs/docker.md) for details on the container,
 Codex/Claude integration, and git worktrees.

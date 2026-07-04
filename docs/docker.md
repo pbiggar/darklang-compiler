@@ -30,8 +30,8 @@ docker compose down
 ## Running commands from the host
 
 The `scripts/run-in-container` helper detects whether you're already
-inside a container and dispatches accordingly. Use it from any script
-that needs to call into the build/test environment:
+inside a container and dispatches accordingly. Use it for manual
+host-side commands that need to call into the build/test environment:
 
 ```bash
 scripts/run-in-container dotnet build --verbosity quiet
@@ -39,8 +39,13 @@ scripts/run-in-container ./run-tests --ai
 scripts/run-in-container ./dark -r -e "2 + 3"
 ```
 
-Inside the container, the same command runs directly without extra
-docker calls.
+Inside the container, run repository commands directly:
+
+```bash
+dotnet build --verbosity quiet
+./run-tests --ai
+./dark -r -e "2 + 3"
+```
 
 ## Host policy
 
@@ -53,6 +58,10 @@ rebuild the image.
 Both `@openai/codex` and `@anthropic-ai/claude-code` are preinstalled.
 Their config and session data persist in Docker-managed volumes
 (`codex-home`, `claude-home`), so you only have to log in once.
+
+Orchestrated agent sessions are started inside Docker-backed compiler
+worktrees. They should run commands directly in that worktree rather than
+wrapping them with `scripts/run-in-container`.
 
 ```bash
 docker compose exec dev codex login    # first time

@@ -120,16 +120,19 @@ Common filter patterns: tuple, record, list, string, float, closure, match, adt,
 ## Devcontainer
 
 Build and test commands require .NET 10, which lives in the Docker
-devcontainer. Use `scripts/run-in-container` — it auto-detects whether
-you're inside the container or on the host and dispatches correctly:
+devcontainer. Orchestrated Codex/Claude agents already run inside
+Docker-backed worktrees, so run repository commands directly:
 
 ```bash
-scripts/run-in-container ./run-tests --ai
-scripts/run-in-container ./dark -r -e "2 + 3"
-scripts/run-in-container dotnet build --verbosity quiet
+./run-tests --ai
+./dark -r -e "2 + 3"
+dotnet build --verbosity quiet
 ```
 
-If the container isn't running: `docker compose up -d` in the repo root.
+For manual host-side commands, use `scripts/run-in-container`; it
+auto-detects whether you are already inside the container and dispatches
+correctly. If the container isn't running: `docker compose up -d` in the
+repo root.
 
 See `docs/docker.md` for devcontainer details, worktree setup, and
 Codex/Claude integration.

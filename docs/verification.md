@@ -10,8 +10,8 @@ Verification means both:
 For compiler repository changes, the default verification commands are:
 
 ```bash
-scripts/run-in-container ./run-tests
-scripts/run-in-container ./benchmarks/run_benchmarks.sh all
+./run-tests --ai
+./benchmarks/run_benchmarks.sh all
 ```
 
 Agents may run narrower checks while developing a change, but a change is not verified until the full verification policy has passed or the agent explicitly reports why full verification could not be completed.
