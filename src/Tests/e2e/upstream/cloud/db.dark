@@ -22,6 +22,29 @@ type SortedX = { x: String; sortBy: Int64 }
 [<DB>]
 type SortedXDB = SortedX
 
+// has both an arbitrary-precision Int field (not queryable) and an Int64 field
+// (queryable), to check the v1 query-compiler policy
+type IntFields = { big: Int; sized: Int64 }
+
+[<DB>]
+type IntFieldsDB = IntFields
+
+// One field per non-Int64 fixed-width int type, for asserting that querying
+// them rejects loudly (rather than silently returning nothing).
+type SizedInts =
+  { i8: Int8
+    u8: UInt8
+    i16: Int16
+    u16: UInt16
+    i32: Int32
+    u32: UInt32
+    u64: UInt64
+    i128: Int128
+    u128: UInt128 }
+
+[<DB>]
+type SizedIntsDB = SizedInts
+
 // simple data stores of Enums
 // , and Records containing Enums
 
@@ -122,7 +145,7 @@ module NestedRecordFieldAccess =
    let shouldBeJustJoe =
      Stdlib.DB.query TestNestedRecord (fun p -> p.details.numbers.age == 41L)
 
-   Stdlib.List.length shouldBeJustJoe) = 1L
+   Stdlib.List.length shouldBeJustJoe) = 1I
 
   // same as above, but with aliases
   (Stdlib.DB.set
@@ -138,7 +161,7 @@ module NestedRecordFieldAccess =
    let shouldBeJustJeremy =
      Stdlib.DB.query TestNestedAliasRecord (fun p -> p.details.numbers.age == 38L)
 
-   Stdlib.List.length shouldBeJustJeremy) = 1L
+   Stdlib.List.length shouldBeJustJeremy) = 1I
 
 
 
@@ -550,17 +573,17 @@ module DeleteAll =
 
 module Count =
   // empty
-  Stdlib.DB.count XDB = 0L
+  Stdlib.DB.count XDB = 0I
 
   // one entries
-  (let _ = Stdlib.DB.set (X { x = "hello" }) "one" XDB in Stdlib.DB.count XDB) = 1L
+  (let _ = Stdlib.DB.set (X { x = "hello" }) "one" XDB in Stdlib.DB.count XDB) = 1I
 
   // multiple entries
   (let _ = Stdlib.DB.set (X { x = "hello" }) "one" XDB
    let _ = Stdlib.DB.set (X { x = "goodbye" }) "two" XDB
    let _ = Stdlib.DB.set (X { x = "howdy" }) "three" XDB
    let _ = Stdlib.DB.set (X { x = "cheers" }) "four" XDB
-   Stdlib.DB.count XDB) = 4L
+   Stdlib.DB.count XDB) = 4I
 
 // ------------
 // SqlCompiler queries
@@ -754,6 +777,29 @@ module FindAll =
   // bad variable name
   friendsError (fun p -> let x = 32L in true && p.height > y) = sqlerror="This variable is not defined: y"
 
+  // arbitrary-precision Int is not queryable yet (v1): comparing an Int field
+  // rejects loudly, while the sized Int64 field compiles fine.
+  (Stdlib.DB.query IntFieldsDB (fun p -> p.big > 5I)) = sqlerror="The arbitrary-precision Int type is not yet queryable in DB.query. Use a sized integer type (e.g. Int64) for fields you filter or sort on."
+  (Stdlib.DB.query IntFieldsDB (fun p -> p.sized > 5L)) = []
+
+  // non-Int64 fixed-width ints also reject loudly: only Int64 is wired through
+  // as a real SQL number, so the rest would silently match nothing. Fail clearly
+  // instead. (One per type; equality and arithmetic both go through the literal.)
+  (Stdlib.DB.query SizedIntsDB (fun p -> p.i8 == 5y)) = sqlerror="Only Int64 integer fields are queryable in DB.query for now. Use Int64 for fields you filter or sort on."
+  (Stdlib.DB.query SizedIntsDB (fun p -> p.u8 == 5uy)) = sqlerror="Only Int64 integer fields are queryable in DB.query for now. Use Int64 for fields you filter or sort on."
+  (Stdlib.DB.query SizedIntsDB (fun p -> p.i16 == 5s)) = sqlerror="Only Int64 integer fields are queryable in DB.query for now. Use Int64 for fields you filter or sort on."
+  (Stdlib.DB.query SizedIntsDB (fun p -> p.u16 == 5us)) = sqlerror="Only Int64 integer fields are queryable in DB.query for now. Use Int64 for fields you filter or sort on."
+  (Stdlib.DB.query SizedIntsDB (fun p -> p.i32 == 5l)) = sqlerror="Only Int64 integer fields are queryable in DB.query for now. Use Int64 for fields you filter or sort on."
+  (Stdlib.DB.query SizedIntsDB (fun p -> p.u32 + 1ul == 6ul)) = sqlerror="Only Int64 integer fields are queryable in DB.query for now. Use Int64 for fields you filter or sort on."
+  (Stdlib.DB.query SizedIntsDB (fun p -> p.u64 == 5UL)) = sqlerror="Only Int64 integer fields are queryable in DB.query for now. Use Int64 for fields you filter or sort on."
+  (Stdlib.DB.query SizedIntsDB (fun p -> p.i128 == 5Q)) = sqlerror="Only Int64 integer fields are queryable in DB.query for now. Use Int64 for fields you filter or sort on."
+  (Stdlib.DB.query SizedIntsDB (fun p -> p.u128 == 5Z)) = sqlerror="Only Int64 integer fields are queryable in DB.query for now. Use Int64 for fields you filter or sort on."
+
+  // storage is untouched: a >Int64 value round-trips through set/get fine
+  // (it's only numeric *querying* that's restricted)
+  (let _ = Stdlib.DB.set (IntFields { big = 9223372036854775808I; sized = 5L }) "k" IntFieldsDB
+   Stdlib.DB.get "k" IntFieldsDB) = Stdlib.Option.Option.Some(IntFields { big = 9223372036854775808I; sized = 5L })
+
   // sql injection
   (friendsError (fun p -> "; select * from users;" == p.name)) = []
 
@@ -809,7 +855,7 @@ module CompiledFunctions =
   // (friends (fun p -> Stdlib.String.reverse p.name == "lehcaR")) = [ "Rachel" ]
 
   // TODO: SQLite's LENGTH counts characters, not EGCs so we made it non queriable for now
-  // (friends (fun p -> Stdlib.String.length p.name > 5L)) = [ " Chandler "
+  // (friends (fun p -> Stdlib.String.length p.name > 5I)) = [ " Chandler "
   //                                                           "GrumpyCat"
   //                                                           "Rachel" ]
   (friends (fun p -> Stdlib.String.contains p.name "ROSS")) = []
@@ -887,7 +933,7 @@ module CompiledFunctions =
   (friends (fun p ->
     Stdlib.DateTime.lessThanOrEqualTo
       p.dob
-      (Stdlib.DateTime.addSeconds (Stdlib.DateTime.now ()) 1L))) = [ " Chandler "
+      (Stdlib.DateTime.addSeconds (Stdlib.DateTime.now ()) 1I))) = [ " Chandler "
                                                                      "GrumpyCat"
                                                                      "Rachel"
                                                                      "Ross" ]
@@ -895,7 +941,7 @@ module CompiledFunctions =
   (friends (fun p ->
     Stdlib.DateTime.lessThanOrEqualTo
       p.dob
-      (Stdlib.DateTime.subtractSeconds (Stdlib.DateTime.now ()) 1L))) = [ " Chandler "
+      (Stdlib.DateTime.subtractSeconds (Stdlib.DateTime.now ()) 1I))) = [ " Chandler "
                                                                           "GrumpyCat"
                                                                           "Rachel"
                                                                           "Ross" ]
@@ -930,10 +976,10 @@ module CompiledFunctions =
   (friends (fun p ->
     Stdlib.Int64.greaterThanOrEqualTo
       p.height
-      Darklang.Test.Values.intValue)) = [ " Chandler "
-                                          "GrumpyCat"
-                                          "Rachel"
-                                          "Ross" ]
+      Darklang.Test.Values.int64Value)) = [ " Chandler "
+                                            "GrumpyCat"
+                                            "Rachel"
+                                            "Ross" ]
 
   // String
   (friends (fun p ->
@@ -964,7 +1010,7 @@ module PartialEvaluation =
 
   (friends (fun p ->
     let x = YL { y = ZL { z = AL { a = [ 1L; 2L; 3L; 4L; 5L ] } } }
-    (Stdlib.List.length x.y.z.a) < p.height)) = [ " Chandler "; "GrumpyCat"; "Rachel"; "Ross" ]
+    (Builtin.unwrap (Stdlib.Int.toInt64 (Stdlib.List.length x.y.z.a))) < p.height)) = [ " Chandler "; "GrumpyCat"; "Rachel"; "Ross" ]
 
   // tuple destructuring inside query - requires tuple pattern support
   (friends (fun p ->
@@ -1001,11 +1047,11 @@ module QueryWithKey =
 module QueryCount =
   // none
   (let _ = prepFriends ()
-   Stdlib.DB.queryCount PersonDB (fun p -> p.name == "bob")) = 0L
+   Stdlib.DB.queryCount PersonDB (fun p -> p.name == "bob")) = 0I
 
   // one
   (let _ = prepFriends ()
-   Stdlib.DB.queryCount PersonDB (fun p -> p.height > 3L)) = 4L
+   Stdlib.DB.queryCount PersonDB (fun p -> p.height > 3L)) = 4I
 
 
-((Stdlib.DB.generateKey ()) |> Stdlib.String.length) = 36L
+((Stdlib.DB.generateKey ()) |> Stdlib.String.length) = 36I

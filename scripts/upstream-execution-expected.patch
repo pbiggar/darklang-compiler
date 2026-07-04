@@ -1,3 +1,82 @@
+--- a/language/apply/eapply.dark
++++ b/language/apply/eapply.dark
+@@ -88,9 +88,8 @@
+   (functionWhichDoesntExist 6L) = error="There is no variable named: functionWhichDoesntExist"
+ 
+ 
+-  // errors around type args. Calling with 0 type args is allowed —
+-  // inference fills `'a` in from the actual arg's ValueType.
+-  fnWithTypeArgAndOneParam 1L = 1L
++  // errors around type args
++  fnWithTypeArgAndOneParam 1L = error="fnWithTypeArgAndOneParam expects 1 type argument, but got 0 type arguments"
+   fnWithTypeArgAndOneParam<Int64, String> 1L = error="fnWithTypeArgAndOneParam expects 1 type argument, but got 2 type arguments"
+   // errors around args
+   stringFn "str1" "str2" = error="stringFn expects 1 argument, but got 2 arguments"
+@@ -142,4 +141,3 @@
+   (let partial = outer<Bool, String> true
+   partial "ignored") = true
+ 
+-
+
+--- a/language/apply/einfix.dark
++++ b/language/apply/einfix.dark
+@@ -3,54 +3,7 @@
+ (5L + (3L)) = 8L
+ Stdlib.Int64.add_v0 5L 3L = 8L
+ 
+-// Numeric operators are polymorphic over numeric types at runtime
+-1.0 + 2.0 = 3.0
+-3.5 * 2.0 = 7.0
+-10.0 - 4.0 = 6.0
+-1y + 2y = 3y
+-100UL - 1UL = 99UL
+-10L / 3L = 3L
+-10.0 / 4.0 = 2.5
+-7L % 3L = 1L
+--8L % 3L = 1L
+-7.5 % 2.0 = 1.5
+--1.5 % 2.0 = 0.5
+-2.0 ^ 3.0 = 8.0
+-2L ^ 3L = 8L
+-2.5 < 3.5 = true
+-5L >= 5L = true
+-2y > 1y = true
+-
+-// Mixed numeric types are a type error (no implicit coercion)
+-5L + true = error="Cannot perform numeric operation on Int64 and Bool"
+-1L + 2.0 = error="Cannot perform numeric operation on Int64 and Float"
+-
+-// Integer +,-,* overflow wraps around (two's complement)
+-127y + 1y = -128y
+-0uy - 1uy = 255uy
+-9223372036854775807L + 1L = -9223372036854775808L
+-2L * 9223372036854775807L = -2L
+-170141183460469231731687303715884105727Q + 1Q = -170141183460469231731687303715884105728Q
+-340282366920938463463374607431768211455Z + 1Z = 0Z
+-// Signed integer division overflow (MinValue / -1) wraps back to MinValue
+--9223372036854775808L / -1L = -9223372036854775808L
+--128y / -1y = -128y
+-// Power overflow wraps around (two's complement)
+-2L ^ 64L = 0L
+-(-9223372036854775808L) ^ 64L = 0L
+-// Integer division by zero raises a clean RTE
+-10L / 0L = error="Cannot divide by 0"
+-// Float overflow follows IEEE (infinity), not an error
+-2.0 ^ 100000.0 = Builtin.testInfinity_v0
+-
+-// `^` (power) works on every integer type and Float; Int128/UInt128 are unsupported
+-2y ^ 3y = 8y
+-3uy ^ 3uy = 27uy
+-2l ^ 10l = 1024l
+-2Q ^ 3Q = error="Cannot perform numeric operation on Int128 and Int128"
+-// unary `-` works on every signed integer type and Float
+--(Stdlib.Int8.add_v0 2y 3y) = -5y
+--(Stdlib.Float.add_v0 1.0 1.5) = -2.5
++5L + true = error="Builtin.int64Add's 2nd parameter `b` expects Int64, but got Bool (true)"
+ 5L + (Builtin.testRuntimeError "error") = error="Uncaught exception: error"
+ (Builtin.testRuntimeError "error") + 5L = error="Uncaught exception: error"
+ (Builtin.testRuntimeError "one") + (Builtin.testRuntimeError "two") = error="Uncaught exception: one"
+
 --- a/language/basic/eand.dark
 +++ b/language/basic/eand.dark
 @@ -2,15 +2,15 @@
@@ -39,13 +118,44 @@
    (let (_, _, _) = (1L, 2L, 3L) in 2L) = 2L
  
    (let (_, _, _) = (1L, 2L, Builtin.testRuntimeError "test") in 2L) = error="Uncaught exception: test"
-@@ -72,5 +72,5 @@
+@@ -70,37 +70,6 @@
+     (match Stdlib.Result.Result.Ok(Stdlib.Result.Result.Ok 6L) with
+      | Ok(Ok x) -> let x = 9L in x + 2L))) = [ 11L; 11L; 11L; 11L ]
  
- 
+-
+-module Wildcard =
+-  // Simple wildcard - should match any value without binding it
+-  (let _ = 5L in 10L) = 10L
+-
+-  // Wildcard with side effects - the value should still be evaluated
+-  (let _ = Builtin.testRuntimeError "test" in 10L) = error="Uncaught exception: test"
+-
+-  // Wildcard in tuple destructuring
+-  (let (x, _) = (1L, 2L) in x) = 1L
+-  (let (_, y) = (1L, 2L) in y) = 2L
+-  (let (_, _) = (1L, 2L) in 5L) = 5L
+-
+-  // Multiple wildcards in tuple
+-  (let (_, _, _) = (1L, 2L, 3L) in 10L) = 10L
+-  (let (x, _, _) = (1L, 2L, 3L) in x) = 1L
+-  (let (_, y, _) = (1L, 2L, 3L) in y) = 2L
+-  (let (_, _, z) = (1L, 2L, 3L) in z) = 3L
+-
+-  // Nested wildcards in tuples
+-  (let ((_, x), _) = ((1L, 2L), 3L) in x) = 2L
+-  (let (_, (_, y)) = (1L, (2L, 3L)) in y) = 3L
+-
+-  // Wildcard should not bind variable
+-  // This should fail because _ is not a variable
+-  // (let _ = 5L in _) should give a variable not found error
+-
+-  // Wildcard with complex values
+-  (let _ = [ 1L; 2L; 3L ] in "done") = "done"
+-
+-
  module Errors =
--  (let (a, _) = 1 in a) = error="Could not deconstruct value 1 into pattern ([variable], [variable])"
--  (let (a, _) = (1, 2, 3) in a) = error="Could not deconstruct value (1, 2, 3) into pattern ([variable], [variable])"
-\ No newline at end of file
+-  (let (a, _) = 1 in a) = error="Could not deconstruct value 1 into pattern ([variable], _)"
+-  (let (a, _) = (1, 2, 3) in a) = error="Could not deconstruct value (1, 2, 3) into pattern ([variable], _)"
 +  (let (a, _) = 1L in a) = error="Undefined variable: a"
 +  (let (a, _) = (1L, 2L, 3L) in a) = error="Undefined variable: a"
 
@@ -76,8 +186,8 @@
  
  (let one = "1" in $"test {one}") = "test 1"
  
--(let one = 1.0 in $"test {one}") = error="Expected String in string interpolation, got a Float (1.0) instead"
--(let one = 1L in $"test {one}") = error="Expected String in string interpolation, got an Int64 (1) instead"
+-(let one = 1.0 in $"test {one}") = error="Expected String in string interpolation, got a Float (1.0) instead. Try wrapping it with `Stdlib.Float.toString`."
+-(let one = 1L in $"test {one}") = error="Expected String in string interpolation, got an Int64 (1) instead. Try wrapping it with `Stdlib.Int64.toString`."
 +(let one = 1.0 in $"test {one}") = error="Expected String in string interpolation, got a Float instead"
 +(let one = 1L in $"test {one}") = error="Expected String in string interpolation, got an Int64 instead"
  (let name = "John"
@@ -134,6 +244,15 @@
 
 --- a/language/flow-control/ematch.dark
 +++ b/language/flow-control/ematch.dark
+@@ -348,7 +348,7 @@
+ 
+   (match [ 1L; 2L; 3L ] with
+    | var ->
+-     let length = (Stdlib.List.length var) |> Stdlib.Int.toString
++    let length = (Stdlib.List.length var) |> Stdlib.Int64.toString
+ 
+      $"pass with length: {length}"
+    | [ 1L; 2L; 3L ] -> "fail"
 @@ -376,7 +376,7 @@
    // duplicate variable name
    (match [ 1L; 2L; 5L ] with
@@ -183,6 +302,15 @@
  
    (match (5L, "hello") with
     | (x, y) when x > 0L && y == "hello" -> "pass"
+@@ -733,7 +733,7 @@
+    | _ -> "fail") = "fail"
+ 
+   (match (5L, "hello") with
+-   | (x, y) when x > 0L && Stdlib.String.length y == 5I -> "pass"
++   | (x, y) when x > 0L && Stdlib.String.length y == 5L -> "pass"
+    | _ -> "fail") = "pass"
+ 
+   (match -5L with
 @@ -741,7 +741,7 @@
     | _ -> false) = error="There is no variable named: y"
    (match 5L with

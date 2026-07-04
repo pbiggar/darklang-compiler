@@ -22,10 +22,14 @@ Stdlib.UInt64.power_v0 0UL 0UL = 1UL
 Stdlib.UInt64.power_v0 1UL 0UL = 1UL
 Stdlib.UInt64.power_v0 1000UL 0UL = 1UL
 
-Stdlib.UInt64.power_v0 200UL 20UL = error="Encountered out-of-range value for type of Int"
+Stdlib.UInt64.power_v0 200UL 20UL = 1152921504606846976UL
 Stdlib.UInt64.power_v0 200UL 7UL = 12800000000000000UL
 
 Stdlib.UInt64.power_v0 1UL 2147483649UL = 1UL
+// Non-trivial base with a huge (out-of-Int32-range) exponent wraps via modular
+// exponentiation, which stays cheap instead of building an enormous bigint.
+Stdlib.UInt64.power_v0 2UL 2147483649UL = 0UL
+Stdlib.UInt64.power_v0 2UL 64UL = 0UL
 
 Stdlib.UInt64.greaterThan_v0 20UL 1UL = true
 
@@ -60,8 +64,8 @@ Stdlib.UInt64.add_v0 1UL 0UL = 1UL
 Stdlib.UInt64.add_v0 18446744073709551614UL 1UL = 18446744073709551615UL
 
 // Overflow tests
-Stdlib.UInt64.add_v0 18446744073709551615UL 1UL = error="Encountered out-of-range value for type of Int"
-Stdlib.UInt64.add_v0 55UL 18446744073709551615UL = error="Encountered out-of-range value for type of Int"
+Stdlib.UInt64.add_v0 18446744073709551615UL 1UL = 0UL
+Stdlib.UInt64.add_v0 55UL 18446744073709551615UL = 54UL
 Stdlib.UInt64.subtract_v0 10UL 9UL = 1UL
 Stdlib.UInt64.subtract_v0 88UL 9UL = 79UL
 Stdlib.UInt64.subtract_v0 1UL 0UL = 1UL
@@ -69,41 +73,41 @@ Stdlib.UInt64.subtract_v0 1UL 0UL = 1UL
 Stdlib.UInt64.multiply_v0 8UL 8UL = 64UL
 Stdlib.UInt64.multiply_v0 5145UL 5145UL = 26471025UL
 
-Stdlib.UInt64.multiply_v0 9223372036854775808UL 2UL = error="Encountered out-of-range value for type of Int"
+Stdlib.UInt64.multiply_v0 9223372036854775808UL 2UL = 0UL
 Stdlib.UInt64.divide_v0 10UL 5UL = 2UL
 Stdlib.UInt64.divide_v0 17UL 3UL = 5UL
 Stdlib.UInt64.divide_v0 0UL 1UL = 0UL
 
 Stdlib.UInt64.divide_v0 1UL 0UL = error="Cannot divide by 0"
-(Stdlib.List.range_v0 1L 5L)
+(Stdlib.List.range_v0 1I 5I)
 |> Stdlib.List.map_v0 (fun x -> Stdlib.UInt64.random 1UL 2UL)
 |> Stdlib.List.map_v0 (fun x ->
   (Builtin.uint64GreaterThanOrEqualTo x 1UL)
   && (Builtin.uint64LessThanOrEqualTo x 2UL)) = [ true; true; true; true; true ]
 
-(Stdlib.List.range_v0 1L 5L)
+(Stdlib.List.range_v0 1I 5I)
 |> Stdlib.List.map_v0 (fun x -> Stdlib.UInt64.random 10UL 20UL)
 |> Stdlib.List.map_v0 (fun x ->
   (Builtin.uint64GreaterThanOrEqualTo x 10UL)
   && (Builtin.uint64LessThanOrEqualTo x 20UL)) = [ true; true; true; true; true ]
 
-(Stdlib.List.range_v0 1L 5L)
+(Stdlib.List.range_v0 1I 5I)
 |> Stdlib.List.map_v0 (fun x -> Stdlib.UInt64.random 2UL 1UL)
 |> Stdlib.List.map_v0 (fun x ->
   (Builtin.uint64GreaterThanOrEqualTo x 1UL)
   && (Builtin.uint64LessThanOrEqualTo x 2UL)) = [ true; true; true; true; true ]
 
-(Stdlib.List.range_v0 1L 5L)
+(Stdlib.List.range_v0 1I 5I)
 |> Stdlib.List.map_v0 (fun x -> Stdlib.UInt64.random 20UL 10UL)
 |> Stdlib.List.map_v0 (fun x ->
   (Builtin.uint64GreaterThanOrEqualTo x 10UL)
   && (Builtin.uint64LessThanOrEqualTo x 20UL)) = [ true; true; true; true; true ]
 
-((Stdlib.List.range_v0 1L 100L)
+((Stdlib.List.range_v0 1I 100I)
  |> Stdlib.List.map_v0 (fun x -> Stdlib.UInt64.random 0UL 1UL)
  |> Stdlib.List.unique_v0) = [ 0UL; 1UL ]
 
-((Stdlib.List.range_v0 1L 100L)
+((Stdlib.List.range_v0 1I 100I)
  |> Stdlib.List.map_v0 (fun x -> Stdlib.UInt64.random 0UL 2UL)
  |> Stdlib.List.unique_v0) = [ 0UL; 1UL; 2UL ]
 
@@ -202,3 +206,32 @@ Stdlib.UInt64.fromUInt128_v0 1Z = Stdlib.Option.Option.Some 1UL
 Stdlib.UInt64.fromUInt128_v0 18446744073709551615Z = Stdlib.Option.Option.Some 18446744073709551615UL
 Stdlib.UInt64.fromUInt128_v0 18446744073709551616Z = Stdlib.Option.Option.None
 Stdlib.UInt64.fromUInt128_v0 340282366920938463463374607431768211455Z = Stdlib.Option.Option.None
+
+Stdlib.UInt64.bitwiseAnd 12UL 10UL = 8UL
+Stdlib.UInt64.bitwiseAnd 0UL 0UL = 0UL
+Stdlib.UInt64.bitwiseAnd 18446744073709551615UL 0UL = 0UL
+Stdlib.UInt64.bitwiseAnd 18446744073709551615UL 18446744073709551615UL = 18446744073709551615UL
+
+Stdlib.UInt64.bitwiseOr 12UL 10UL = 14UL
+Stdlib.UInt64.bitwiseOr 0UL 0UL = 0UL
+Stdlib.UInt64.bitwiseOr 18446744073709551615UL 0UL = 18446744073709551615UL
+
+Stdlib.UInt64.bitwiseXor 12UL 10UL = 6UL
+Stdlib.UInt64.bitwiseXor 0UL 0UL = 0UL
+Stdlib.UInt64.bitwiseXor 18446744073709551615UL 18446744073709551615UL = 0UL
+
+Stdlib.UInt64.bitwiseNot 0UL = 18446744073709551615UL
+Stdlib.UInt64.bitwiseNot 18446744073709551615UL = 0UL
+Stdlib.UInt64.bitwiseNot 1UL = 18446744073709551614UL
+
+Stdlib.UInt64.shiftLeft 1UL 2UL = 4UL
+Stdlib.UInt64.shiftLeft 0UL 5UL = 0UL
+Stdlib.UInt64.shiftLeft 1UL 0UL = 1UL
+Stdlib.UInt64.shiftLeft 1UL 63UL = 9223372036854775808UL
+Stdlib.UInt64.shiftLeft 5UL 3UL = 40UL
+
+Stdlib.UInt64.shiftRight 8UL 2UL = 2UL
+Stdlib.UInt64.shiftRight 0UL 5UL = 0UL
+Stdlib.UInt64.shiftRight 1UL 0UL = 1UL
+Stdlib.UInt64.shiftRight 9223372036854775808UL 63UL = 1UL
+Stdlib.UInt64.shiftRight 40UL 3UL = 5UL

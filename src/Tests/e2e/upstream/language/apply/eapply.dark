@@ -141,4 +141,3 @@ module GenericTypeArgsAreOK =
   (let partial = outer<Bool, String> true
   partial "ignored") = true
 
-

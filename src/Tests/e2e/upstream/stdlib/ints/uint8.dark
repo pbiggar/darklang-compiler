@@ -19,11 +19,11 @@ Stdlib.UInt8.add_v0 88uy 9uy = 97uy
 Stdlib.UInt8.add_v0 1uy 0uy = 1uy
 Stdlib.UInt8.add_v0 254uy 1uy = 255uy
 
-Stdlib.UInt8.add_v0 255uy 1uy = error="Encountered out-of-range value for type of Int"
+Stdlib.UInt8.add_v0 255uy 1uy = 0uy
 Stdlib.UInt8.subtract_v0 10uy 9uy = 1uy
 Stdlib.UInt8.subtract_v0 88uy 9uy = 79uy
 
-Stdlib.UInt8.subtract_v0 0uy 1uy = error="Encountered out-of-range value for type of Int"
+Stdlib.UInt8.subtract_v0 0uy 1uy = 255uy
 Stdlib.UInt8.subtract_v0 1uy 0uy = 1uy
 Stdlib.UInt8.subtract_v0 255uy 1uy = 254uy
 
@@ -31,15 +31,15 @@ Stdlib.UInt8.multiply_v0 8uy 8uy = 64uy
 Stdlib.UInt8.multiply_v0 8uy 0uy = 0uy
 Stdlib.UInt8.multiply_v0 127uy 2uy = 254uy
 
-Stdlib.UInt8.multiply_v0 128uy 2uy = error="Encountered out-of-range value for type of Int"
-Stdlib.UInt8.multiply_v0 255uy 2uy = error="Encountered out-of-range value for type of Int"
+Stdlib.UInt8.multiply_v0 128uy 2uy = 0uy
+Stdlib.UInt8.multiply_v0 255uy 2uy = 254uy
 Stdlib.UInt8.power_v0 2uy 3uy = 8uy
 Stdlib.UInt8.power_v0 0uy 1uy = 0uy
 Stdlib.UInt8.power_v0 1uy 0uy = 1uy
 Stdlib.UInt8.power_v0 0uy 0uy = 1uy
 Stdlib.UInt8.power_v0 1uy 255uy = 1uy
 
-Stdlib.UInt8.power_v0 16uy 2uy = error="Encountered out-of-range value for type of Int"
+Stdlib.UInt8.power_v0 16uy 2uy = 0uy
 Stdlib.UInt8.divide_v0 10uy 5uy = 2uy
 Stdlib.UInt8.divide_v0 17uy 3uy = 5uy
 Stdlib.UInt8.divide_v0 8uy 5uy = 1uy
@@ -91,42 +91,41 @@ Stdlib.UInt8.mod_v0 128uy 53uy = 22uy
 Stdlib.UInt8.mod_v0 255uy 3uy = 0uy
 
 Stdlib.UInt8.mod_v0 5uy 0uy = error="Cannot evaluate modulus against 0"
-(Stdlib.List.range_v0 1L 5L)
+(Stdlib.List.range_v0 1I 5I)
 |> Stdlib.List.map_v0 (fun x -> Stdlib.UInt8.random 1uy 2uy)
 |> Stdlib.List.map_v0 (fun x ->
   (Stdlib.UInt8.greaterThanOrEqualTo x 1uy)
   && (Stdlib.UInt8.lessThanOrEqualTo x 2uy)) = [ true; true; true; true; true ]
 
-(Stdlib.List.range_v0 1L 5L)
+(Stdlib.List.range_v0 1I 5I)
 |> Stdlib.List.map_v0 (fun x -> Stdlib.UInt8.random 10uy 20uy)
 |> Stdlib.List.map_v0 (fun x ->
   (Stdlib.UInt8.greaterThanOrEqualTo x 10uy)
   && (Stdlib.UInt8.lessThanOrEqualTo x 20uy)) = [ true; true; true; true; true ]
 
-(Stdlib.List.range_v0 1L 5L)
+(Stdlib.List.range_v0 1I 5I)
 |> Stdlib.List.map_v0 (fun x -> Stdlib.UInt8.random 2uy 1uy)
 |> Stdlib.List.map_v0 (fun x ->
   (Stdlib.UInt8.greaterThanOrEqualTo x 1uy)
   && (Stdlib.UInt8.lessThanOrEqualTo x 2uy)) = [ true; true; true; true; true ]
 
-(Stdlib.List.range_v0 1L 5L)
+(Stdlib.List.range_v0 1I 5I)
 |> Stdlib.List.map_v0 (fun x -> Stdlib.UInt8.random 20uy 10uy)
 |> Stdlib.List.map_v0 (fun x ->
   (Stdlib.UInt8.greaterThanOrEqualTo x 10uy)
   && (Stdlib.UInt8.lessThanOrEqualTo x 20uy)) = [ true; true; true; true; true ]
 
-((Stdlib.List.range_v0 1L 100L)
+((Stdlib.List.range_v0 1I 100I)
  |> Stdlib.List.map_v0 (fun x -> Stdlib.UInt8.random 0uy 1uy)
  |> Stdlib.List.unique_v0) = [ 0uy; 1uy ]
 
-((Stdlib.List.range_v0 1L 100L)
+((Stdlib.List.range_v0 1I 100I)
  |> Stdlib.List.map_v0 (fun x -> Stdlib.UInt8.random 0uy 2uy)
  |> Stdlib.List.unique_v0) = [ 0uy; 1uy; 2uy ]
 
 Stdlib.UInt8.sum_v0 [ 1uy; 2uy ] = 3uy
 
-Stdlib.UInt8.sum_v0 [ 1uy; 255uy ] = error="Encountered out-of-range value for type of Int"
-// out of range
+Stdlib.UInt8.sum_v0 [ 1uy; 255uy ] = 0uy // wraps on overflow
 Stdlib.UInt8.parse_v0 "-129" = Stdlib.Result.Result.Error Stdlib.UInt8.ParseError.OutOfRange
 Stdlib.UInt8.parse_v0 "256" = Stdlib.Result.Result.Error Stdlib.UInt8.ParseError.OutOfRange
 
@@ -195,3 +194,32 @@ Stdlib.UInt8.fromUInt128_v0 0Z = Stdlib.Option.Option.Some 0uy
 Stdlib.UInt8.fromUInt128_v0 1Z = Stdlib.Option.Option.Some 1uy
 Stdlib.UInt8.fromUInt128_v0 255Z = Stdlib.Option.Option.Some 255uy
 Stdlib.UInt8.fromUInt128_v0 256Z = Stdlib.Option.Option.None
+
+Stdlib.UInt8.bitwiseAnd 12uy 10uy = 8uy
+Stdlib.UInt8.bitwiseAnd 0uy 0uy = 0uy
+Stdlib.UInt8.bitwiseAnd 255uy 0uy = 0uy
+Stdlib.UInt8.bitwiseAnd 255uy 255uy = 255uy
+
+Stdlib.UInt8.bitwiseOr 12uy 10uy = 14uy
+Stdlib.UInt8.bitwiseOr 0uy 0uy = 0uy
+Stdlib.UInt8.bitwiseOr 255uy 0uy = 255uy
+
+Stdlib.UInt8.bitwiseXor 12uy 10uy = 6uy
+Stdlib.UInt8.bitwiseXor 0uy 0uy = 0uy
+Stdlib.UInt8.bitwiseXor 255uy 255uy = 0uy
+
+Stdlib.UInt8.bitwiseNot 0uy = 255uy
+Stdlib.UInt8.bitwiseNot 255uy = 0uy
+Stdlib.UInt8.bitwiseNot 1uy = 254uy
+
+Stdlib.UInt8.shiftLeft 1uy 2uy = 4uy
+Stdlib.UInt8.shiftLeft 0uy 5uy = 0uy
+Stdlib.UInt8.shiftLeft 1uy 0uy = 1uy
+Stdlib.UInt8.shiftLeft 1uy 7uy = 128uy
+Stdlib.UInt8.shiftLeft 5uy 3uy = 40uy
+
+Stdlib.UInt8.shiftRight 8uy 2uy = 2uy
+Stdlib.UInt8.shiftRight 0uy 5uy = 0uy
+Stdlib.UInt8.shiftRight 1uy 0uy = 1uy
+Stdlib.UInt8.shiftRight 128uy 7uy = 1uy
+Stdlib.UInt8.shiftRight 40uy 3uy = 5uy

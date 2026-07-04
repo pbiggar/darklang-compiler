@@ -33,7 +33,7 @@ module DateParsing =
   p "2018-09-24T17:48:00" = Stdlib.Result.Result.Error "Invalid date format"
   p "2018-09-24T18:09:24+0200" = Stdlib.Result.Result.Error "Invalid date format"
   p "1999-03-22T05:06:07+01:00" = Stdlib.Result.Result.Error "Invalid date format"
-  p "1999-03-22T05:06:07.000Z" = Stdlib.Result.Result.Error "Invalid date format"
+  p "1999-03-22T05:06:07.000Z" = Stdlib.Result.Result.Ok "1999-03-22T05:06:07Z"
   p "2006-06-09T10:20:30.040" = Stdlib.Result.Result.Error "Invalid date format"
   p "2006-06-09T10:20:30.040+02:00" = Stdlib.Result.Result.Error "Invalid date format"
   p "20061204T1020Z" = Stdlib.Result.Result.Error "Invalid date format"
@@ -150,56 +150,56 @@ module GreaterThanOrEquals =
   Stdlib.DateTime.greaterThanOrEqualTo (d "2020-11-26T04:37:46Z") (d "2020-11-26T04:37:46Z") = true
 
 module Fields =
-  Stdlib.DateTime.year_v0 (d "2019-07-28T22:42:36Z") = 2019L
-  Stdlib.DateTime.month_v0 (d "2019-07-28T22:42:36Z") = 7L
-  Stdlib.DateTime.day_v0 (d "2019-07-28T22:42:36Z") = 28L
-  Stdlib.DateTime.hour (d "2019-12-27T03:27:36Z") = 3L // Leif's test case
-  Stdlib.DateTime.minute (d "2019-07-28T22:42:36Z") = 42L
-  Stdlib.DateTime.weekday_v0 (d "2019-07-22T22:42:36Z") = 1L // Monday
-  Stdlib.DateTime.weekday_v0 (d "2019-07-23T22:42:36Z") = 2L
-  Stdlib.DateTime.weekday_v0 (d "2019-07-24T22:42:36Z") = 3L
-  Stdlib.DateTime.weekday_v0 (d "2019-07-25T22:42:36Z") = 4L
-  Stdlib.DateTime.weekday_v0 (d "2019-07-26T22:42:36Z") = 5L
-  Stdlib.DateTime.weekday_v0 (d "2019-07-27T22:42:36Z") = 6L
-  Stdlib.DateTime.weekday_v0 (d "2019-07-28T22:42:36Z") = 7L
+  Stdlib.DateTime.year_v0 (d "2019-07-28T22:42:36Z") = 2019I
+  Stdlib.DateTime.month_v0 (d "2019-07-28T22:42:36Z") = 7I
+  Stdlib.DateTime.day_v0 (d "2019-07-28T22:42:36Z") = 28I
+  Stdlib.DateTime.hour (d "2019-12-27T03:27:36Z") = 3I // Leif's test case
+  Stdlib.DateTime.minute (d "2019-07-28T22:42:36Z") = 42I
+  Stdlib.DateTime.weekday_v0 (d "2019-07-22T22:42:36Z") = 1I // Monday
+  Stdlib.DateTime.weekday_v0 (d "2019-07-23T22:42:36Z") = 2I
+  Stdlib.DateTime.weekday_v0 (d "2019-07-24T22:42:36Z") = 3I
+  Stdlib.DateTime.weekday_v0 (d "2019-07-25T22:42:36Z") = 4I
+  Stdlib.DateTime.weekday_v0 (d "2019-07-26T22:42:36Z") = 5I
+  Stdlib.DateTime.weekday_v0 (d "2019-07-27T22:42:36Z") = 6I
+  Stdlib.DateTime.weekday_v0 (d "2019-07-28T22:42:36Z") = 7I
 
 
 module Epoch1919 =
-  Stdlib.DateTime.year_v0 (d "1919-07-28T22:42:36Z") = 1919L
-  Stdlib.DateTime.month_v0 (d "1919-07-28T22:42:36Z") = 7L
-  Stdlib.DateTime.day_v0 (d "1919-07-28T22:42:36Z") = 28L
-  Stdlib.DateTime.weekday_v0 (d "1919-07-28T22:42:36Z") = 1L
-  Stdlib.DateTime.hour (d "1919-12-27T03:27:36Z") = 3L
-  Stdlib.DateTime.minute (d "1919-07-28T22:42:36Z") = 42L
-  Stdlib.DateTime.second (d "1919-07-28T22:42:36Z") = 36L
+  Stdlib.DateTime.year_v0 (d "1919-07-28T22:42:36Z") = 1919I
+  Stdlib.DateTime.month_v0 (d "1919-07-28T22:42:36Z") = 7I
+  Stdlib.DateTime.day_v0 (d "1919-07-28T22:42:36Z") = 28I
+  Stdlib.DateTime.weekday_v0 (d "1919-07-28T22:42:36Z") = 1I
+  Stdlib.DateTime.hour (d "1919-12-27T03:27:36Z") = 3I
+  Stdlib.DateTime.minute (d "1919-07-28T22:42:36Z") = 42I
+  Stdlib.DateTime.second (d "1919-07-28T22:42:36Z") = 36I
 
 module Epoch1969 =
-  Stdlib.DateTime.year_v0 (d "1969-07-28T22:42:36Z") = 1969L
-  Stdlib.DateTime.month_v0 (d "1969-07-28T22:42:36Z") = 7L
-  Stdlib.DateTime.day_v0 (d "1969-07-28T22:42:36Z") = 28L
-  Stdlib.DateTime.weekday_v0 (d "1969-07-28T22:42:36Z") = 1L
-  Stdlib.DateTime.hour (d "1969-12-27T03:27:36Z") = 3L
-  Stdlib.DateTime.minute (d "1969-07-28T22:42:36Z") = 42L
-  Stdlib.DateTime.second (d "1969-07-28T22:42:36Z") = 36L
+  Stdlib.DateTime.year_v0 (d "1969-07-28T22:42:36Z") = 1969I
+  Stdlib.DateTime.month_v0 (d "1969-07-28T22:42:36Z") = 7I
+  Stdlib.DateTime.day_v0 (d "1969-07-28T22:42:36Z") = 28I
+  Stdlib.DateTime.weekday_v0 (d "1969-07-28T22:42:36Z") = 1I
+  Stdlib.DateTime.hour (d "1969-12-27T03:27:36Z") = 3I
+  Stdlib.DateTime.minute (d "1969-07-28T22:42:36Z") = 42I
+  Stdlib.DateTime.second (d "1969-07-28T22:42:36Z") = 36I
 
 module Epoch1970 =
-  Stdlib.DateTime.year_v0 (d "1970-07-28T22:42:36Z") = 1970L
-  Stdlib.DateTime.month_v0 (d "1970-07-28T22:42:36Z") = 7L
-  Stdlib.DateTime.day_v0 (d "1970-07-28T22:42:36Z") = 28L
-  Stdlib.DateTime.weekday_v0 (d "1970-07-28T22:42:36Z") = 2L
-  Stdlib.DateTime.hour (d "1970-12-27T03:27:36Z") = 3L
-  Stdlib.DateTime.minute (d "1970-07-28T22:42:36Z") = 42L
-  Stdlib.DateTime.minute (d "1970-07-28T22:42:36Z") = 42L
-  Stdlib.DateTime.second (d "1970-07-28T22:42:36Z") = 36L
-  Stdlib.DateTime.second (d "1970-07-28T22:42:36Z") = 36L
+  Stdlib.DateTime.year_v0 (d "1970-07-28T22:42:36Z") = 1970I
+  Stdlib.DateTime.month_v0 (d "1970-07-28T22:42:36Z") = 7I
+  Stdlib.DateTime.day_v0 (d "1970-07-28T22:42:36Z") = 28I
+  Stdlib.DateTime.weekday_v0 (d "1970-07-28T22:42:36Z") = 2I
+  Stdlib.DateTime.hour (d "1970-12-27T03:27:36Z") = 3I
+  Stdlib.DateTime.minute (d "1970-07-28T22:42:36Z") = 42I
+  Stdlib.DateTime.minute (d "1970-07-28T22:42:36Z") = 42I
+  Stdlib.DateTime.second (d "1970-07-28T22:42:36Z") = 36I
+  Stdlib.DateTime.second (d "1970-07-28T22:42:36Z") = 36I
 
 module Conversion =
   Stdlib.DateTime.toString_v0 (d "2019-07-28T22:42:36Z") = "2019-07-28T22:42:36Z"
 
   Stdlib.DateTime.atStartOfDay_v0 (d "2019-07-28T22:42:36Z") = (d "2019-07-28T00:00:00Z")
 
-  Stdlib.DateTime.toSeconds_v0 (d "2019-07-28T22:42:36Z") = 1564353756L
-  Stdlib.DateTime.toSeconds_v0 (d "2075-11-14T11:01:35Z") = 3340954895L
+  Stdlib.DateTime.toSeconds_v0 (d "2019-07-28T22:42:36Z") = 1564353756I
+  Stdlib.DateTime.toSeconds_v0 (d "2075-11-14T11:01:35Z") = 3340954895I
 
   Stdlib.DateTime.toStringISO8601BasicDateTime_v0 (d "2019-07-28T22:42:36Z") = "20190728T224236Z"
   Stdlib.DateTime.toStringISO8601BasicDateTime_v0 (d "1919-07-28T22:42:36Z") = "19190728T224236Z"
@@ -207,7 +207,18 @@ module Conversion =
   Stdlib.DateTime.toStringISO8601BasicDate_v0 (d "2019-07-28T22:42:36Z") = "20190728"
   Stdlib.DateTime.toStringISO8601BasicDate_v0 (d "1069-07-28T22:42:36Z") = "10690728"
 
-  1095379198L |> Stdlib.DateTime.fromSeconds_v0 |> Stdlib.DateTime.toSeconds_v0 = 1095379198L
+  1095379198I |> Stdlib.DateTime.fromSeconds_v0 |> Stdlib.DateTime.toSeconds_v0 = 1095379198I
+
+  // seconds past Int64 range can't be represented; surface a Dark error
+  (2I ^ 63I) |> Stdlib.DateTime.fromSeconds_v0 =
+    error="Encountered out-of-range value for type of Int"
+
+  // Int64.MaxValue fits int64 but is past NodaTime's instant range; the host
+  // exception is turned into a Dark error rather than escaping
+  9223372036854775807I |> Stdlib.DateTime.fromSeconds_v0 =
+    error="Encountered out-of-range value for type of Int"
+  Stdlib.DateTime.addSeconds_v0 (Stdlib.DateTime.fromSeconds_v0 0I) 9223372036854775807I =
+    error="Encountered out-of-range value for type of Int"
 
   (d "2019-07-28T22:42:36Z")
   |> Stdlib.DateTime.toSeconds_v0
@@ -216,36 +227,115 @@ module Conversion =
 // Stdlib.DateTime.today_v0 |> Stdlib.DateTime.toString_v0 = "2020-10-17T00:00:00Z" // todo, how can we test this
 
 module AddingSeconds =
-  let a (d1: String) (s: Int64) : DateTime =
+  let a (d1: String) (s: Int) : DateTime =
     Stdlib.DateTime.addSeconds_v0 (d d1) s
 
-  a "2020-11-26T04:37:46Z" 0L = (d "2020-11-26T04:37:46Z")
-  a "2020-11-26T04:37:46Z" 1L = (d "2020-11-26T04:37:47Z")
-  a "2020-11-26T04:37:46Z" 10L = (d "2020-11-26T04:37:56Z")
-  a "2020-11-26T04:37:46Z" 1000000L = (d "2020-12-07T18:24:26Z")
-  a "2020-11-26T04:37:46Z" -10L = (d "2020-11-26T04:37:36Z")
+  a "2020-11-26T04:37:46Z" 0I = (d "2020-11-26T04:37:46Z")
+  a "2020-11-26T04:37:46Z" 1I = (d "2020-11-26T04:37:47Z")
+  a "2020-11-26T04:37:46Z" 10I = (d "2020-11-26T04:37:56Z")
+  a "2020-11-26T04:37:46Z" 1000000I = (d "2020-12-07T18:24:26Z")
+  a "2020-11-26T04:37:46Z" -10I = (d "2020-11-26T04:37:36Z")
 
 
 module SubtractingSeconds =
-  let sub (d1: String) (s: Int64) : DateTime =
+  let sub (d1: String) (s: Int) : DateTime =
     Stdlib.DateTime.subtractSeconds (d d1) s
 
-  sub "2020-11-26T04:37:46Z" 0L = (d "2020-11-26T04:37:46Z")
-  sub "2020-11-26T04:37:46Z" 1L = (d "2020-11-26T04:37:45Z")
-  sub "2020-11-26T04:37:46Z" 10L = (d "2020-11-26T04:37:36Z")
-  sub "2020-11-26T04:37:46Z" 1000000L = (d "2020-11-14T14:51:06Z")
-  sub "2020-11-26T04:37:46Z" -10L = (d "2020-11-26T04:37:56Z")
+  sub "2020-11-26T04:37:46Z" 0I = (d "2020-11-26T04:37:46Z")
+  sub "2020-11-26T04:37:46Z" 1I = (d "2020-11-26T04:37:45Z")
+  sub "2020-11-26T04:37:46Z" 10I = (d "2020-11-26T04:37:36Z")
+  sub "2020-11-26T04:37:46Z" 1000000I = (d "2020-11-14T14:51:06Z")
+  sub "2020-11-26T04:37:46Z" -10I = (d "2020-11-26T04:37:56Z")
 
 
 module Difference =
-  let s (d1: String) (d2: String) : Int64 =
+  let s (d1: String) (d2: String) : Int =
     Stdlib.DateTime.subtract (d d1) (d d2)
 
-  s "2020-11-26T04:37:46Z" "2020-11-26T04:37:46Z" = 0L
-  s "2020-11-26T04:37:46Z" "2020-11-26T04:37:45Z" = 1L
-  s "2020-11-26T04:37:46Z" "2020-11-26T04:37:36Z" = 10L
-  s "2020-11-26T04:37:46Z" "2020-11-26T04:37:56Z" = -10L
-  s "2020-11-26T04:37:46Z" "2020-11-14T14:51:06Z" = 1000000L
-  s "2020-11-14T14:51:06Z" "2020-11-26T04:37:46Z" = -1000000L
-  s "1921-01-01T12:00:00Z" "2021-01-01T12:00:00Z" = -3155760000L
-  s "2021-01-01T12:00:00Z" "1921-01-01T12:00:00Z" = 3155760000L
+  s "2020-11-26T04:37:46Z" "2020-11-26T04:37:46Z" = 0I
+  s "2020-11-26T04:37:46Z" "2020-11-26T04:37:45Z" = 1I
+  s "2020-11-26T04:37:46Z" "2020-11-26T04:37:36Z" = 10I
+  s "2020-11-26T04:37:46Z" "2020-11-26T04:37:56Z" = -10I
+  s "2020-11-26T04:37:46Z" "2020-11-14T14:51:06Z" = 1000000I
+  s "2020-11-14T14:51:06Z" "2020-11-26T04:37:46Z" = -1000000I
+  s "1921-01-01T12:00:00Z" "2021-01-01T12:00:00Z" = -3155760000I
+  s "2021-01-01T12:00:00Z" "1921-01-01T12:00:00Z" = 3155760000I
+
+
+module MillisecondParsing =
+  // Fractional seconds are now accepted
+  p "2019-07-28T22:42:36.123Z" = Stdlib.Result.Result.Ok "2019-07-28T22:42:36.123Z"
+  p "2019-07-28T22:42:36.000Z" = Stdlib.Result.Result.Ok "2019-07-28T22:42:36Z"
+  p "2019-07-28T22:42:36.001Z" = Stdlib.Result.Result.Ok "2019-07-28T22:42:36.001Z"
+  p "2019-07-28T22:42:36.999Z" = Stdlib.Result.Result.Ok "2019-07-28T22:42:36.999Z"
+
+  // Original format still works
+  p "2019-07-28T22:42:36Z" = Stdlib.Result.Result.Ok "2019-07-28T22:42:36Z"
+
+  // Fractional seconds with wrong digit count still rejected
+  p "2019-07-28T22:42:36.1Z" = Stdlib.Result.Result.Error "Invalid date format"
+  p "2019-07-28T22:42:36.12Z" = Stdlib.Result.Result.Error "Invalid date format"
+  p "2019-07-28T22:42:36.1234Z" = Stdlib.Result.Result.Error "Invalid date format"
+
+
+module MillisecondConversion =
+  Stdlib.DateTime.toMilliseconds (d "2019-07-28T22:42:36Z") = 1564353756000I
+  Stdlib.DateTime.toMilliseconds (d "1970-01-01T00:00:00Z") = 0I
+
+  1564353756000I
+  |> Stdlib.DateTime.fromMilliseconds
+  |> Stdlib.DateTime.toMilliseconds = 1564353756000I
+
+  1564353756123I
+  |> Stdlib.DateTime.fromMilliseconds
+  |> Stdlib.DateTime.toMilliseconds = 1564353756123I
+
+  1564353756123I
+  |> Stdlib.DateTime.fromMilliseconds
+  |> Stdlib.DateTime.toString_v0 = "2019-07-28T22:42:36.123Z"
+
+  // Round-trip: ms -> DateTime -> ms
+  0I |> Stdlib.DateTime.fromMilliseconds |> Stdlib.DateTime.toMilliseconds = 0I
+  -1000I |> Stdlib.DateTime.fromMilliseconds |> Stdlib.DateTime.toMilliseconds = -1000I
+
+
+module MillisecondField =
+  let dMs (datestr: String) : DateTime =
+    (Stdlib.DateTime.parse datestr) |> Builtin.unwrap
+
+  Stdlib.DateTime.millisecond (dMs "2019-07-28T22:42:36.456Z") = 456I
+  Stdlib.DateTime.millisecond (dMs "2019-07-28T22:42:36.000Z") = 0I
+  Stdlib.DateTime.millisecond (d "2019-07-28T22:42:36Z") = 0I
+  Stdlib.DateTime.millisecond (dMs "2019-07-28T22:42:36.001Z") = 1I
+  Stdlib.DateTime.millisecond (dMs "2019-07-28T22:42:36.999Z") = 999I
+
+
+module AddMilliseconds =
+  let ams (d1: String) (ms: Int) : DateTime =
+    Stdlib.DateTime.addMilliseconds (d d1) ms
+
+  ams "2020-11-26T04:37:46Z" 0I = (d "2020-11-26T04:37:46Z")
+  (ams "2020-11-26T04:37:46Z" 500I) |> Stdlib.DateTime.millisecond = 500I
+  ams "2020-11-26T04:37:46Z" 1000I = (d "2020-11-26T04:37:47Z")
+  (ams "2020-11-26T04:37:46Z" 1500I) |> Stdlib.DateTime.toString_v0 = "2020-11-26T04:37:47.500Z"
+  (ams "2020-11-26T04:37:46Z" -500I) |> Stdlib.DateTime.toString_v0 = "2020-11-26T04:37:45.500Z"
+
+
+module SubtractMilliseconds =
+  let sms (d1: String) (ms: Int) : DateTime =
+    Stdlib.DateTime.subtractMilliseconds (d d1) ms
+
+  sms "2020-11-26T04:37:46Z" 0I = (d "2020-11-26T04:37:46Z")
+  (sms "2020-11-26T04:37:46Z" 500I) |> Stdlib.DateTime.millisecond = 500I
+  sms "2020-11-26T04:37:46Z" 1000I = (d "2020-11-26T04:37:45Z")
+  (sms "2020-11-26T04:37:46Z" -500I) |> Stdlib.DateTime.toString_v0 = "2020-11-26T04:37:46.500Z"
+
+
+module DifferenceMs =
+  let sMs (d1: String) (d2: String) : Int =
+    Stdlib.DateTime.subtractMs (d d1) (d d2)
+
+  sMs "2020-11-26T04:37:46Z" "2020-11-26T04:37:46Z" = 0I
+  sMs "2020-11-26T04:37:46Z" "2020-11-26T04:37:45Z" = 1000I
+  sMs "2020-11-26T04:37:46Z" "2020-11-26T04:37:56Z" = -10000I
+  sMs "2021-01-01T00:00:00Z" "2020-01-01T00:00:00Z" = 31622400000I

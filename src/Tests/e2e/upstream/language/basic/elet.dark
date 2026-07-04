@@ -70,7 +70,6 @@ module Shadowing =
     (match Stdlib.Result.Result.Ok(Stdlib.Result.Result.Ok 6L) with
      | Ok(Ok x) -> let x = 9L in x + 2L))) = [ 11L; 11L; 11L; 11L ]
 
-
 module Errors =
   (let (a, _) = 1L in a) = error="Undefined variable: a"
   (let (a, _) = (1L, 2L, 3L) in a) = error="Undefined variable: a"
