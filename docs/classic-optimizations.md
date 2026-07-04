@@ -67,6 +67,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical integer simplification that removes shifts whose left operand is already zero before MIR lowering.
 - Notes: Implemented for `0 << x -> 0` and `0 >> x -> 0` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Guided sandbox trial. Covered by `identity_shl_zero_left` and `identity_shr_zero_left` in `src/Tests/optimization/anf.opt`.
 
+### Subtraction from zero strength reduction
+
+- Optimization name: Subtraction from zero strength reduction
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical integer simplification that reuses unary negation lowering instead of materializing a binary subtract from literal zero.
+- Notes: Implemented for `0 - x -> -x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Guided sandbox trial. Covered by `strength_reduce_sub_from_zero` in `src/Tests/optimization/anf.opt`.
+
 ## Strength reduction
 
 ### Multiplication by power-of-two lowering

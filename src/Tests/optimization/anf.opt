@@ -142,6 +142,15 @@ let x = 42 in x - 0
 return 42
 
 ---NAME---
+strength_reduce_sub_from_zero
+---INPUT---
+def f(x: Int64) : Int64 = 0 - x
+---EXPECTED---
+Function f:
+let TempId 1 = -t0
+return t1
+
+---NAME---
 identity_mul_one_right
 ---INPUT---
 let x = 42 in x * 1
