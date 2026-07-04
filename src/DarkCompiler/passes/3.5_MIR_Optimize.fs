@@ -626,8 +626,9 @@ let eliminateDeadCode (cfg: CFG) : CFG * bool =
                         (acc', true)
                     | _ ->
                         // Keep instruction
-                        (acc' @ [instr], ch')
+                        (instr :: acc', ch')
                 ) ([], false)
+            let instrs' = List.rev instrs'
 
             let block' = { block with Instrs = instrs' }
             (Map.add label block' acc, ch || instrChanged)
@@ -804,23 +805,20 @@ let applyCopyPropagation (cfg: CFG) : CFG * bool =
     if Map.isEmpty copies then
         (cfg, false)
     else
-        // Track if any actual changes were made
-        let mutable changed = false
-
-        let blocks' =
+        let (blocks', changed) =
             cfg.Blocks
-            |> Map.map (fun _ block ->
-                let instrs' =
+            |> Map.fold (fun (acc, changedAcc) label block ->
+                let (instrs', instrChanged) =
                     block.Instrs
-                    |> List.map (fun instr ->
+                    |> List.fold (fun (instrAcc, ch) instr ->
                         let instr' = propagateCopyInstr copies instr
-                        if instr' <> instr then changed <- true
-                        instr'
-                    )
+                        (instr' :: instrAcc, ch || instr' <> instr)
+                    ) ([], false)
+                let instrs' = List.rev instrs'
                 let term' = propagateCopyTerminator copies block.Terminator
-                if term' <> block.Terminator then changed <- true
-                { block with Instrs = instrs'; Terminator = term' }
-            )
+                let block' = { block with Instrs = instrs'; Terminator = term' }
+                (Map.add label block' acc, changedAcc || instrChanged || term' <> block.Terminator)
+            ) (Map.empty, false)
         ({ cfg with Blocks = blocks' }, changed)
 
 /// CFG Simplification: Remove empty blocks (just a jump)
@@ -1009,10 +1007,11 @@ let eliminateUnreachableBlocks (cfg: CFG) : CFG * bool =
                         if List.isEmpty sources' then
                             Crash.crash $"Phi in {label} has no reachable sources after CFG prune"
                         let instr' = Phi (dest, sources', valueType)
-                        (acc' @ [instr'], ch' || sources' <> sources)
+                        (instr' :: acc', ch' || sources' <> sources)
                     | _ ->
-                        (acc' @ [instr], ch')
+                        (instr :: acc', ch')
                 ) ([], false)
+            let instrs' = List.rev instrs'
             (Map.add label { block with Instrs = instrs' } acc, ch || instrChanged)
         ) (Map.empty, false)
 
@@ -1195,25 +1194,26 @@ let applyCSE (cfg: CFG) : CFG * bool =
                         | Some prevDest ->
                             // Found a previous computation - replace with copy
                             let copy = Mov (dest, Register prevDest, None)
-                            (acc' @ [copy], exprMap, true)
+                            (copy :: acc', exprMap, true)
                         | None ->
                             // New expression - add to map
                             let exprMap' = Map.add key dest exprMap
-                            (acc' @ [instr], exprMap', ch')
+                            (instr :: acc', exprMap', ch')
                     | UnaryOp (dest, op, src) ->
                         let key = makeUnaryExprKey op src
                         match Map.tryFind key exprMap with
                         | Some prevDest ->
                             // Found a previous computation - replace with copy
                             let copy = Mov (dest, Register prevDest, None)
-                            (acc' @ [copy], exprMap, true)
+                            (copy :: acc', exprMap, true)
                         | None ->
                             // New expression - add to map
                             let exprMap' = Map.add key dest exprMap
-                            (acc' @ [instr], exprMap', ch')
+                            (instr :: acc', exprMap', ch')
                     | _ ->
-                        (acc' @ [instr], exprMap, ch')
+                        (instr :: acc', exprMap, ch')
                 ) ([], Map.empty, false)
+            let instrs' = List.rev instrs'
 
             let block' = { block with Instrs = instrs' }
             (Map.add label block' acc, ch || instrChanged)
@@ -1240,18 +1240,19 @@ let applyConstantFolding (cfg: CFG) : CFG * bool =
                     | BinOp (dest, op, left, right, opType) ->
                         match tryFoldBinOp op left right opType with
                         | Some result ->
-                            (acc' @ [Mov (dest, result, None)], true)
+                            (Mov (dest, result, None) :: acc', true)
                         | None ->
-                            (acc' @ [instr], ch')
+                            (instr :: acc', ch')
                     | UnaryOp (dest, op, src) ->
                         match tryFoldUnaryOp op src with
                         | Some result ->
-                            (acc' @ [Mov (dest, result, None)], true)
+                            (Mov (dest, result, None) :: acc', true)
                         | None ->
-                            (acc' @ [instr], ch')
+                            (instr :: acc', ch')
                     | _ ->
-                        (acc' @ [instr], ch')
+                        (instr :: acc', ch')
                 ) ([], false)
+            let instrs' = List.rev instrs'
 
             let block' = { block with Instrs = instrs' }
             (Map.add label block' acc, ch || instrChanged)
