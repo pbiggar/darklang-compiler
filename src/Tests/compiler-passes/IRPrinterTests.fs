@@ -4,6 +4,7 @@
 
 module IRPrinterTests
 
+open ANF
 open MIR
 open IRPrinter
 
@@ -90,9 +91,19 @@ let testFormatLIR () : TestResult =
     else
         Error $"formatLIR did not match.\nExpected:\n{expected}\nActual:\n{actual}"
 
+let testFormatANFUInt64Max () : TestResult =
+    let program = ANF.Program ([], ANF.Return (ANF.IntLiteral (ANF.UInt64 System.UInt64.MaxValue)))
+    let expected = "return 18446744073709551615"
+    let actual = formatANF program
+    if actual = expected then
+        Ok ()
+    else
+        Error $"formatANF UInt64 max did not match.\nExpected:\n{expected}\nActual:\n{actual}"
+
 let tests = [
     ("format MIR", testFormatMIR)
     ("format LIR", testFormatLIR)
+    ("format ANF UInt64 max", testFormatANFUInt64Max)
 ]
 
 let runAll () : TestResult =

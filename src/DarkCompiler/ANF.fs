@@ -51,6 +51,18 @@ let sizedIntToInt64 (si: SizedInt) : int64 =
     | UInt32 n -> int64 n
     | UInt64 n -> int64 n  // May lose high bit for values > Int64.MaxValue
 
+/// Format a SizedInt as the corresponding source-level integer value.
+let sizedIntToString (si: SizedInt) : string =
+    match si with
+    | Int8 n -> string n
+    | Int16 n -> string n
+    | Int32 n -> string n
+    | Int64 n -> string n
+    | UInt8 n -> string n
+    | UInt16 n -> string n
+    | UInt32 n -> string n
+    | UInt64 n -> string n
+
 /// Get the AST.Type corresponding to a SizedInt
 let sizedIntToType (si: SizedInt) : AST.Type =
     match si with

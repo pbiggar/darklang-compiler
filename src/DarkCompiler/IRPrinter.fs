@@ -11,7 +11,7 @@ open LIR
 /// Pretty-print ANF atom
 let private prettyPrintANFAtom = function
     | ANF.UnitLiteral -> "()"
-    | ANF.IntLiteral n -> string (ANF.sizedIntToInt64 n)
+    | ANF.IntLiteral n -> ANF.sizedIntToString n
     | ANF.BoolLiteral b -> if b then "true" else "false"
     | ANF.StringLiteral s -> $"\"{s}\""
     | ANF.FloatLiteral f -> string f
