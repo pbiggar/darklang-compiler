@@ -6,7 +6,7 @@ The factorial benchmark computes `factorial(20)` 10,000 times using a `repeat` h
 
 **Performance Results (instruction counts):**
 - Rust: 256,121 instructions (baseline)
-- Dark: 4,440,204 instructions (17.3x slower)
+- Dark: 4,420,203 instructions (17.3x slower)
 - OCaml: 7,937,785 instructions (31.0x slower)
 
 **Key insight**: Rust achieves its extreme performance through **complete compile-time evaluation**. LLVM constant-folds `factorial(20)` and `repeat(10000, 0)` at compile time, resulting in a program that simply prints a pre-computed constant. Dark is actually faster than OCaml on this benchmark.
@@ -152,8 +152,8 @@ return t10
 ```
 factorial:
   Label "factorial_L0":             ; Base case: n <= 1
-    X19 <- Mov(Imm 1)               ; return 1
-    Jump(Label "factorial_L2")
+    X0 <- Mov(Imm 1)                ; return 1
+    Ret
   Label "factorial_L1":             ; Recursive case
     X19 <- Sub(X20, Imm 1)          ; n - 1
     SaveRegs([], [])
@@ -162,9 +162,6 @@ factorial:
     RestoreRegs([], [])
     X19 <- Mov(Reg X0)
     X19 <- Mul(X20, Reg X19)        ; n * factorial(n-1)
-    X19 <- Mov(Reg X19)             ; REDUNDANT self-move
-    Jump(Label "factorial_L2")
-  Label "factorial_L2":
     X0 <- Mov(Reg X19)
     Ret
 
@@ -228,7 +225,7 @@ movk    x8, #8643, lsl #48       ; = 2432902008176640000
 
 ### 2. Empty SaveRegs/RestoreRegs Elimination
 
-**Impact: ~2-3% performance improvement**
+**Status: implemented in ARM64 code generation; no longer a standalone factorial optimization opportunity**
 
 **Root Cause:**
 Empty save/restore pairs appear around function calls:
@@ -240,16 +237,16 @@ X19 <- Call(factorial, [Imm 20])
 RestoreRegs([], [])            ; Empty - nothing to restore
 ```
 
-These generate no-op code or unnecessary stack frame operations.
+These remain visible in post-register-allocation LIR dumps as call-boundary markers.
 
-**Evidence:**
-The register allocator correctly determines that callee-saved registers X19, X20 don't need caller-save protection, but the SaveRegs/RestoreRegs instructions remain.
+**Current evidence:**
+The register allocator correctly determines that no caller-saved registers need protection at the factorial call sites, so the LIR still prints `SaveRegs([], [])` and `RestoreRegs([], [])`. ARM64 code generation now explicitly emits `Ok []` for both empty cases in `src/DarkCompiler/passes/arm64/6_CodeGen.fs`, so they do not allocate stack space or emit machine instructions. They are useful IR markers, not current runtime overhead.
 
-**Implementation Approach:**
-In code generation, skip generating any code for empty SaveRegs/RestoreRegs instructions.
+**Remaining cleanup:**
+If the textual LIR noise matters, remove empty save/restore markers in an LIR cleanup pass or hide them in dump output. Do not count that as a factorial instruction-count win unless assembly evidence shows emitted code.
 
 **Files to Modify:**
-- `src/DarkCompiler/passes/6_CodeGen.fs` - Skip empty save/restore
+- `src/DarkCompiler/passes/4.5_LIR_Peephole.fs` or `src/DarkCompiler/IRPrinter.fs` - Optional cleanup of empty markers in optimized dumps
 
 ---
 
@@ -288,16 +285,16 @@ repeat_L1:
 | Optimization | Estimated Impact | Complexity |
 |--------------|-----------------|------------|
 | Compile-Time Constant Folding | 90%+ (match Rust) | High |
-| Empty SaveRegs Elimination | 2-3% | Low |
 | Inline Small Pure Functions | 10-15% | Medium |
+| Hide or remove empty SaveRegs markers from dumps | Documentation/debuggability only | Low |
 
-**Note:** Compile-time constant folding would eliminate the entire benchmark computation, matching Rust. Without that optimization, the other improvements would reduce Dark's 17.3x slowdown to approximately 14-15x.
+**Note:** Compile-time constant folding would eliminate the entire benchmark computation, matching Rust. Without that optimization, inlining is the main remaining factorial-specific runtime opportunity documented here.
 
 ## Recommended Implementation Order
 
-1. **Empty SaveRegs Elimination** - Quick win, very low complexity
-2. **Inline Small Pure Functions** - Medium complexity, good improvement
-3. **Compile-Time Constant Folding** - Major impact, high complexity
+1. **Inline Small Pure Functions** - Medium complexity, good improvement
+2. **Compile-Time Constant Folding** - Major impact, high complexity
+3. **Optional LIR dump cleanup** - Remove or hide empty `SaveRegs`/`RestoreRegs` markers if they obscure investigation output
 
 ## Why Dark Beats OCaml
 
@@ -368,7 +365,7 @@ Function repeat:
     v8 <- v5 - 1 : TInt64
     v9 <- Call(factorial, [20])
     v5 <- v8 : TInt64
-    v6 <- v9 : TFunction ([TInt64], TInt64)
+    v6 <- v9 : TInt64
     jump repeat_body
   repeat_L2:
     ret v11
@@ -381,8 +378,8 @@ Function repeat:
 ```
 factorial:
   Label "factorial_L0":
-    X19 <- Mov(Imm 1)
-    Jump(Label "factorial_L2")
+    X0 <- Mov(Imm 1)
+    Ret
   Label "factorial_L1":
     X19 <- Sub(X20, Imm 1)
     SaveRegs([], [])
@@ -391,9 +388,6 @@ factorial:
     RestoreRegs([], [])
     X19 <- Mov(Reg X0)
     X19 <- Mul(X20, Reg X19)
-    X19 <- Mov(Reg X19)
-    Jump(Label "factorial_L2")
-  Label "factorial_L2":
     X0 <- Mov(Reg X19)
     Ret
   Label "factorial_body":
@@ -404,27 +398,25 @@ factorial:
     Jump(Label "factorial_body")
 
 repeat:
-  Label "repeat_L0":
-    Jump(Label "repeat_L2")
   Label "repeat_L1":
-    X20 <- Sub(X20, Imm 1)
+    X19 <- Sub(X19, Imm 1)
     SaveRegs([], [])
     ArgMoves(X0 <- Imm 20)
-    X19 <- Call(factorial, [Imm 20])
+    X20 <- Call(factorial, [Imm 20])
     RestoreRegs([], [])
-    X19 <- Mov(Reg X0)
-    X20 <- Mov(Reg X20)
+    X20 <- Mov(Reg X0)
     X19 <- Mov(Reg X19)
+    X20 <- Mov(Reg X20)
     Jump(Label "repeat_body")
   Label "repeat_L2":
-    X0 <- Mov(Reg X19)
+    X0 <- Mov(Reg X20)
     Ret
   Label "repeat_body":
-    Cmp(X20, Imm 0)
-    CondBranch(LE, Label "repeat_L0", Label "repeat_L1")
+    Cmp(X19, Imm 0)
+    CondBranch(LE, Label "repeat_L2", Label "repeat_L1")
   Label "repeat_entry":
-    X20 <- Mov(Reg X0)
-    X19 <- Mov(Reg X1)
+    X19 <- Mov(Reg X0)
+    X20 <- Mov(Reg X1)
     Jump(Label "repeat_body")
 ```
 
