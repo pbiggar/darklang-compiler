@@ -49,6 +49,8 @@ Alternatives may be included when useful, but they are optional.
 
 For source or test changes, full `./run-tests` is the default validation.
 
+Very small code-quality fixes may skip adding a new test when the change is already exercised by existing coverage, the approval request or review explains that coverage, and full validation is run against the changed surface. This exception is only for narrow maintainability fixes that do not add behavior, remove behavior, or change a contract.
+
 Benchmark validation is required for changes in `src`, `tests`, or benchmark-adjacent areas where performance regression is plausible.
 
 Docs-only changes and other changes outside source, tests, and benchmarks do not need benchmark validation unless the specific change creates a plausible performance or benchmark risk.
