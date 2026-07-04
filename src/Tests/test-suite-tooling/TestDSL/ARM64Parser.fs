@@ -36,6 +36,21 @@ let parseCond (text: string) : Result<Condition, string> =
     | "GE" -> Ok GE
     | cond -> Error $"Invalid ARM64 condition '{cond}'"
 
+let private parseUInt16Operand (lineNum: int) (fieldName: string) (text: string) : Result<uint16, string> =
+    match UInt16.TryParse(text.Trim()) with
+    | true, value -> Ok value
+    | _ -> Error $"Line {lineNum}: Invalid {fieldName} '{text}'"
+
+let private parseInt16Operand (lineNum: int) (fieldName: string) (text: string) : Result<int16, string> =
+    match Int16.TryParse(text.Trim()) with
+    | true, value -> Ok value
+    | _ -> Error $"Line {lineNum}: Invalid {fieldName} '{text}'"
+
+let private parseIntOperand (lineNum: int) (fieldName: string) (text: string) : Result<int, string> =
+    match Int32.TryParse(text.Trim()) with
+    | true, value -> Ok value
+    | _ -> Error $"Line {lineNum}: Invalid {fieldName} '{text}'"
+
 /// Parse a single ARM64 instruction
 let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
     let line = line.Trim()
@@ -51,9 +66,11 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
         match parseReg movzMatch.Groups.[1].Value with
         | Error e -> Error $"Line {lineNum}: {e}"
         | Ok dest ->
-            let imm = uint16 movzMatch.Groups.[2].Value
-            let shift = int movzMatch.Groups.[3].Value
-            Ok (MOVZ (dest, imm, shift))
+            match parseUInt16Operand lineNum "MOVZ immediate" movzMatch.Groups.[2].Value,
+                  parseIntOperand lineNum "MOVZ shift" movzMatch.Groups.[3].Value with
+            | Ok imm, Ok shift -> Ok (MOVZ (dest, imm, shift))
+            | Error e, _ -> Error e
+            | _, Error e -> Error e
     else
 
     // Try MOVK: "MOVK(X1, 10, 16)"
@@ -62,9 +79,11 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
         match parseReg movkMatch.Groups.[1].Value with
         | Error e -> Error $"Line {lineNum}: {e}"
         | Ok dest ->
-            let imm = uint16 movkMatch.Groups.[2].Value
-            let shift = int movkMatch.Groups.[3].Value
-            Ok (MOVK (dest, imm, shift))
+            match parseUInt16Operand lineNum "MOVK immediate" movkMatch.Groups.[2].Value,
+                  parseIntOperand lineNum "MOVK shift" movkMatch.Groups.[3].Value with
+            | Ok imm, Ok shift -> Ok (MOVK (dest, imm, shift))
+            | Error e, _ -> Error e
+            | _, Error e -> Error e
     else
 
     // Try ADD_imm: "ADD_imm(X1, X0, 5)"
@@ -76,8 +95,9 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             match parseReg addImmMatch.Groups.[2].Value with
             | Error e -> Error $"Line {lineNum}: {e}"
             | Ok src ->
-                let imm = uint16 addImmMatch.Groups.[3].Value
-                Ok (ADD_imm (dest, src, imm))
+                match parseUInt16Operand lineNum "ADD_imm immediate" addImmMatch.Groups.[3].Value with
+                | Error e -> Error e
+                | Ok imm -> Ok (ADD_imm (dest, src, imm))
     else
 
     // Try ADD_reg: "ADD_reg(X1, X0, X2)"
@@ -103,8 +123,9 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             match parseReg subImmMatch.Groups.[2].Value with
             | Error e -> Error $"Line {lineNum}: {e}"
             | Ok src ->
-                let imm = uint16 subImmMatch.Groups.[3].Value
-                Ok (SUB_imm (dest, src, imm))
+                match parseUInt16Operand lineNum "SUB_imm immediate" subImmMatch.Groups.[3].Value with
+                | Error e -> Error e
+                | Ok imm -> Ok (SUB_imm (dest, src, imm))
     else
 
     // Try SUB_reg: "SUB_reg(X1, X0, X2)"
@@ -163,8 +184,9 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
     // Try SVC: "SVC(128)"
     let svcMatch = Regex.Match(line, @"^SVC\((\d+)\)$")
     if svcMatch.Success then
-        let imm = uint16 svcMatch.Groups.[1].Value
-        Ok (SVC imm)
+        match parseUInt16Operand lineNum "SVC immediate" svcMatch.Groups.[1].Value with
+        | Error e -> Error e
+        | Ok imm -> Ok (SVC imm)
     else
 
     // Try STP: "STP(X29, X30, SP, -16)"
@@ -179,8 +201,9 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
                 match parseReg stpMatch.Groups.[3].Value with
                 | Error e -> Error $"Line {lineNum}: {e}"
                 | Ok addr ->
-                    let offset = int16 stpMatch.Groups.[4].Value
-                    Ok (STP (reg1, reg2, addr, offset))
+                    match parseInt16Operand lineNum "STP offset" stpMatch.Groups.[4].Value with
+                    | Error e -> Error e
+                    | Ok offset -> Ok (STP (reg1, reg2, addr, offset))
     else
 
     // Try STP_pre: "STP_pre(X29, X30, SP, -16)"
@@ -195,8 +218,9 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
                 match parseReg stpPreMatch.Groups.[3].Value with
                 | Error e -> Error $"Line {lineNum}: {e}"
                 | Ok addr ->
-                    let offset = int16 stpPreMatch.Groups.[4].Value
-                    Ok (STP_pre (reg1, reg2, addr, offset))
+                    match parseInt16Operand lineNum "STP_pre offset" stpPreMatch.Groups.[4].Value with
+                    | Error e -> Error e
+                    | Ok offset -> Ok (STP_pre (reg1, reg2, addr, offset))
     else
 
     // Try LDP: "LDP(X29, X30, SP, 16)"
@@ -211,8 +235,9 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
                 match parseReg ldpMatch.Groups.[3].Value with
                 | Error e -> Error $"Line {lineNum}: {e}"
                 | Ok addr ->
-                    let offset = int16 ldpMatch.Groups.[4].Value
-                    Ok (LDP (reg1, reg2, addr, offset))
+                    match parseInt16Operand lineNum "LDP offset" ldpMatch.Groups.[4].Value with
+                    | Error e -> Error e
+                    | Ok offset -> Ok (LDP (reg1, reg2, addr, offset))
     else
 
     // Try LDP_post: "LDP_post(X29, X30, SP, 16)"
@@ -227,8 +252,9 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
                 match parseReg ldpPostMatch.Groups.[3].Value with
                 | Error e -> Error $"Line {lineNum}: {e}"
                 | Ok addr ->
-                    let offset = int16 ldpPostMatch.Groups.[4].Value
-                    Ok (LDP_post (reg1, reg2, addr, offset))
+                    match parseInt16Operand lineNum "LDP_post offset" ldpPostMatch.Groups.[4].Value with
+                    | Error e -> Error e
+                    | Ok offset -> Ok (LDP_post (reg1, reg2, addr, offset))
     else
 
     // Try STR: "STR(X0, SP, 8)"
@@ -240,8 +266,9 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             match parseReg strMatch.Groups.[2].Value with
             | Error e -> Error $"Line {lineNum}: {e}"
             | Ok addr ->
-                let offset = int16 strMatch.Groups.[3].Value
-                Ok (STR (src, addr, offset))
+                match parseInt16Operand lineNum "STR offset" strMatch.Groups.[3].Value with
+                | Error e -> Error e
+                | Ok offset -> Ok (STR (src, addr, offset))
     else
 
     // Try STUR: "STUR(X0, X29, -8)"
@@ -253,8 +280,9 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             match parseReg sturMatch.Groups.[2].Value with
             | Error e -> Error $"Line {lineNum}: {e}"
             | Ok addr ->
-                let offset = int16 sturMatch.Groups.[3].Value
-                Ok (STUR (src, addr, offset))
+                match parseInt16Operand lineNum "STUR offset" sturMatch.Groups.[3].Value with
+                | Error e -> Error e
+                | Ok offset -> Ok (STUR (src, addr, offset))
     else
 
     // Try LDR: "LDR(X0, SP, 8)"
@@ -266,8 +294,9 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             match parseReg ldrMatch.Groups.[2].Value with
             | Error e -> Error $"Line {lineNum}: {e}"
             | Ok addr ->
-                let offset = int16 ldrMatch.Groups.[3].Value
-                Ok (LDR (dest, addr, offset))
+                match parseInt16Operand lineNum "LDR offset" ldrMatch.Groups.[3].Value with
+                | Error e -> Error e
+                | Ok offset -> Ok (LDR (dest, addr, offset))
     else
 
     // Try LDUR: "LDUR(X0, X29, -8)"
@@ -279,8 +308,9 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             match parseReg ldurMatch.Groups.[2].Value with
             | Error e -> Error $"Line {lineNum}: {e}"
             | Ok addr ->
-                let offset = int16 ldurMatch.Groups.[3].Value
-                Ok (LDUR (dest, addr, offset))
+                match parseInt16Operand lineNum "LDUR offset" ldurMatch.Groups.[3].Value with
+                | Error e -> Error e
+                | Ok offset -> Ok (LDUR (dest, addr, offset))
     else
 
     // Try B_label: "B_label(_epilogue_test)"

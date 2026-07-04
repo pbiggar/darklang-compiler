@@ -10,6 +10,11 @@ open TestDSL.PassTestRunner
 
 type TestResult = Result<unit, string>
 
+let private expectParserError (description: string) (result: Result<'a, string>) : TestResult =
+    match result with
+    | Error _ -> Ok ()
+    | Ok _ -> Error $"Expected parser error for {description}"
+
 let testPrettyPrintMirCfg () : TestResult =
     let entry = Label "entry"
     let exit = Label "exit"
@@ -64,9 +69,35 @@ let testParseLIRRejectsNonFinalTerminator () : TestResult =
     | Error msg -> Error $"Expected non-final terminator error, got: {msg}"
     | Ok _ -> Error "Expected parseLIR to reject a terminator before the final line"
 
+let testARM64ParserRejectsOutOfRangeNumericFields () : TestResult =
+    let rawCases =
+        [
+            "raw MOVZ immediate", TestDSL.ARM64Parser.parseARM64 "MOVZ(X0, 65536, 0)"
+            "raw STR offset", TestDSL.ARM64Parser.parseARM64 "STR(X0, SP, 32768)"
+        ]
+    let symbolicCases =
+        [
+            "symbolic MOVZ immediate", TestDSL.ARM64SymbolicParser.parseARM64Symbolic "MOVZ(X0, 65536, 0)"
+            "symbolic STR offset", TestDSL.ARM64SymbolicParser.parseARM64Symbolic "STR(X0, SP, 32768)"
+        ]
+    rawCases
+    |> List.fold
+        (fun state (description, result) ->
+            state
+            |> Result.bind (fun () -> expectParserError description result))
+        (Ok ())
+    |> Result.bind (fun () ->
+        symbolicCases
+        |> List.fold
+            (fun state (description, result) ->
+                state
+                |> Result.bind (fun () -> expectParserError description result))
+            (Ok ()))
+
 let tests = [
     ("pretty print MIR CFG", testPrettyPrintMirCfg)
     ("parse LIR rejects non-final terminator", testParseLIRRejectsNonFinalTerminator)
+    ("ARM64 parsers reject out-of-range numeric fields", testARM64ParserRejectsOutOfRangeNumericFields)
 ]
 
 let runAll () : TestResult =
