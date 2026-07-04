@@ -163,38 +163,7 @@ This is an advanced optimization known as "tail recursion modulo cons" (TRMC) or
 
 ---
 
-### 2. Redundant Self-Move Elimination (Post-Register Allocation)
-
-**Impact: ~5% performance improvement (estimated)**
-
-**Root Cause:**
-The register allocator generates redundant self-moves that survive to code generation:
-
-```
-X19 <- Mov(Reg X19)             ; Self-move - no effect!
-```
-
-This happens at the end of `fib_L1` block after the addition. While the LIR optimizer removes self-moves at the symbolic level, physical register assignment can reintroduce them.
-
-**Evidence from LIR (After Register Allocation):**
-```
-X19 <- Add(X20, Reg X19)        ; fib(n-1) + fib(n-2)
-X19 <- Mov(Reg X19)             ; REDUNDANT - X19 already contains result
-```
-
-**Implementation Approach:**
-Add a post-register-allocation pass to eliminate trivial moves:
-1. Scan through allocated instructions
-2. Remove `Mov(dest, Reg src)` where `dest == src`
-3. Remove `FMov(dest, Reg src)` where `dest == src`
-
-**Files to Modify:**
-- `src/DarkCompiler/passes/5_RegisterAllocation.fs` - Add cleanup pass after allocation
-- Or `src/DarkCompiler/passes/6_CodeGen.fs` - Filter out self-moves during code generation
-
----
-
-### 3. Empty SaveRegs/RestoreRegs Elimination
+### 2. Empty SaveRegs/RestoreRegs Elimination
 
 **Impact: ~2-5% performance improvement (estimated)**
 
@@ -220,7 +189,7 @@ In code generation, check if SaveRegs/RestoreRegs have empty register lists and 
 
 ---
 
-### 4. Phi Node Resolution Optimization
+### 3. Phi Node Resolution Optimization
 
 **Impact: ~5% performance improvement (estimated)**
 
@@ -248,7 +217,6 @@ Register allocation coalescing could assign X19 to X0 directly since they have t
 | Optimization | Estimated Impact | Complexity |
 |--------------|-----------------|------------|
 | Sibling Call / TRMC | 40-50% | High |
-| Redundant Self-Move Elimination | 5% | Low |
 | Empty SaveRegs Elimination | 2-5% | Low |
 | Phi/Return Coalescing | 5% | Medium |
 
@@ -256,10 +224,9 @@ Register allocation coalescing could assign X19 to X0 directly since they have t
 
 ## Recommended Implementation Order
 
-1. **Redundant Self-Move Elimination** - Quick win, low complexity
-2. **Empty SaveRegs Elimination** - Quick win, very low complexity
-3. **Sibling Call Optimization** - Major impact, high complexity, requires careful design
-4. **Phi/Return Coalescing** - Medium complexity, good follow-up
+1. **Empty SaveRegs Elimination** - Quick win, very low complexity
+2. **Sibling Call Optimization** - Major impact, high complexity, requires careful design
+3. **Phi/Return Coalescing** - Medium complexity, good follow-up
 
 ## Appendix: Full IR Dumps
 
