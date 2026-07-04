@@ -135,28 +135,33 @@ Function markMultiples:
 **Root Cause:**
 The `markMultiples` function makes a recursive call for each composite number. For n=100000, marking multiples of 2 alone requires ~50000 recursive calls - each consuming stack space.
 
-**Evidence from MIR - markMultiples is NOT tail-call optimized:**
+**Current evidence from MIR - markMultiples is NOT tail-call optimized:**
 ```
 Function markMultiples:
   markMultiples_L1:
-    v297 <- v292 + v293 : TInt64
-    v298 <- Call(Stdlib.Dict.set_i64_bool, [v295, v292, true])  ; NOT A TAIL CALL
-    ; Parameters are shuffled AFTER the Dict.set call
-    v301 <- v297 : TInt64
-    v302 <- v293 : TInt64
-    v303 <- v294 : TInt64
-    v304 <- v298 : TFunction...
-    jump markMultiples_body  ; Loop converted from tail recursion
+    v334 <- v329 + v330 : TInt64
+    v452 <- Call(__hash_i64, [v329])
+    v453 <- Call(Stdlib.__HAMT.__setHelper_i64_bool, [v332, v329, v452, true, 0])
+    v335 <- v453 : TDict (TInt64, TBool)
+    v336 <- Call(markMultiples, [v334, v330, v331, v335])
+    RefCountDec(v453, size=8, kind=dict)
+    v1011 <- v336 : TDict (TInt64, TBool)
+    jump markMultiples_L2
 ```
 
-The function has been converted to a loop (tail call optimization applied), but the real issue is the **recursive Dict.set_i64_bool call chain**. The Dict.set operation itself calls `__setHelper_i64_bool` which can recurse up to 10 levels deep for hash collisions, and allocates memory on each level.
+As of commit `d658fdaf`, `markMultiples` still has a post-recursive
+`RefCountDec`, so the self-call is not in tail position in MIR. This means the
+benchmark has two stack contributors: the sieve's own recursive marking loop and
+the recursive `Stdlib.__HAMT.__setHelper_i64_bool` path used by each Dict write.
+The Dict helper can recurse through internal nodes and allocates memory on each
+level.
 
-**Evidence from Dict.__setHelper complexity:**
+**Evidence from `Stdlib.__HAMT.__setHelper_i64_bool` complexity:**
 ```
-Function Stdlib.Dict.__setHelper_i64_bool:
+Function Stdlib.__HAMT.__setHelper_i64_bool:
   ; Checks tag (leaf, internal, collision)
   ; For internal nodes: recursively calls __setHelper with depth+1
-  v243 <- Stdlib.Dict.__setHelper_i64_bool(t241, t210, t211, t212, t242)
+  v280 <- Call(Stdlib.__HAMT.__setHelper_i64_bool, [v277, v247, v248, v249, v279])
   ; Can recurse up to depth 10 before creating collision node
 ```
 
