@@ -288,12 +288,17 @@ let private compileMirToLir
             println $"        {t}ms"
         Ok optimizedLir
 
-/// Allocate registers for a list of symbolic LIR functions
+/// Allocate registers for a list of symbolic LIR functions.
 let private allocateRegistersForFunctions
+    (archResult: Result<Platform.Arch, string>)
     (functions: LIR.Function list)
-    : LIR.Function list =
-    let arch = match Platform.detectArch () with Ok a -> a | Error _ -> Platform.ARM64
-    functions |> List.map (RegisterAllocation.allocateRegisters arch)
+    : Result<LIR.Function list, string> =
+    match archResult with
+    | Error err -> Error $"Architecture detection error: {err}"
+    | Ok arch ->
+        functions
+        |> List.map (RegisterAllocation.allocateRegisters arch)
+        |> Ok
 
 /// Run MIR+LIR passes (including register allocation) from ANF functions
 let private lowerToAllocatedLir
@@ -343,13 +348,15 @@ let private lowerToAllocatedLir
                     if verbosity >= 1 then println "  [5/7] Register Allocation..."
                     let allocStart = sw.Elapsed.TotalMilliseconds
                     let (LIR.Program (lirFuncs, _, _)) = lirProgram
-                    let allocatedFuncs = allocateRegistersForFunctions lirFuncs
-                    let allocElapsed = sw.Elapsed.TotalMilliseconds - allocStart
-                    recordPassTiming passTimingRecorder "Register Allocation" allocElapsed
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(allocElapsed, 1)
-                        println $"        {t}ms"
-                    Ok allocatedFuncs)
+                    match allocateRegistersForFunctions (Platform.detectArch ()) lirFuncs with
+                    | Error err -> Error err
+                    | Ok allocatedFuncs ->
+                        let allocElapsed = sw.Elapsed.TotalMilliseconds - allocStart
+                        recordPassTiming passTimingRecorder "Register Allocation" allocElapsed
+                        if verbosity >= 2 then
+                            let t = System.Math.Round(allocElapsed, 1)
+                            println $"        {t}ms"
+                        Ok allocatedFuncs)
 
     let compileFunctionsWithTiming
         (label: string)
