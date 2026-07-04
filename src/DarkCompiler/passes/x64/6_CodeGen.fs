@@ -188,7 +188,7 @@ let private genExitSyscall : X86_64.Instr list =
     loadImm64 X86_64.RAX (int64 syscalls.Exit) @ [X86_64.SYSCALL]
 
 /// Label for shared OOM handler (set per-program, not per-function)
-let mutable private oomHandlerLabel = "__heap_oom"
+let private oomHandlerLabel = "__heap_oom"
 
 /// Generate a jump to the shared OOM handler
 let private genOomJump () : X86_64.Instr list =
