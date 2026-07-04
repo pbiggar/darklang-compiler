@@ -509,6 +509,22 @@ Function f:
 return 0
 
 ---NAME---
+identity_bool_and_self
+---INPUT---
+def f(x: Bool) : Bool = x && x
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_bool_or_self
+---INPUT---
+def f(x: Bool) : Bool = x || x
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
 identity_bitand_all_ones_right
 ---INPUT---
 def f(x: Int64) : Int64 = x & -1

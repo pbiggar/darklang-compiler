@@ -134,6 +134,8 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | BitAnd, Var a, Var b when a = b -> Some (Atom (Var a))
     | BitOr, Var a, Var b when a = b -> Some (Atom (Var a))
     | BitXor, Var a, Var b when a = b -> Some (Atom (IntLiteral (Int64 0L)))
+    | And, Var a, Var b when a = b -> Some (Atom (Var a))
+    | Or, Var a, Var b when a = b -> Some (Atom (Var a))
 
     // Short-circuit boolean
     | And, BoolLiteral false, _ -> Some (Atom (BoolLiteral false))
