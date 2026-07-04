@@ -610,6 +610,14 @@ Function f:
 return t0
 
 ---NAME---
+identity_bitwise_double_not
+---INPUT---
+def f(x: Int64) : Int64 = ~~~(~~~x)
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
 identity_bitand_all_ones_right
 ---INPUT---
 def f(x: Int64) : Int64 = x & -1
