@@ -305,7 +305,7 @@ let lex (input: string) : Result<Token list, string> =
                     parseInt128OrError rest
                 | 'L' :: rest ->
                     parseInt64OrError rest
-                | 'Q' :: rest ->
+                | ('I' :: rest | 'Q' :: rest) ->
                     parseInt128OrError rest
                 | 'y' :: rest ->
                     parseSignedSizedIntOrError

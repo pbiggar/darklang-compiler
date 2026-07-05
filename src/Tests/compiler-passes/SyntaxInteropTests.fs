@@ -625,6 +625,16 @@ let testInterpreterParserParsesBareIntLiteral () : TestResult =
     | Ok other ->
         Error $"Unexpected AST for bare integer literal: {other}"
 
+let testInterpreterParserParsesUpstreamIntSuffixLiteral () : TestResult =
+    let source = "1I"
+    match InterpreterParser.parseString false source with
+    | Error err ->
+        Error $"Interpreter parser failed on upstream I-suffixed integer literal: {err}"
+    | Ok (Program [Expression (Int128Literal n)]) when n = System.Int128.One ->
+        Ok ()
+    | Ok other ->
+        Error $"Unexpected AST for upstream I-suffixed integer literal: {other}"
+
 let testInterpreterParserParsesNegativeInt8MinLiteral () : TestResult =
     let source = "Stdlib.Int128.fromInt8_v0 -128y"
     match InterpreterParser.parseString false source with
@@ -890,6 +900,7 @@ let tests = [
     ("parse compiler backtick identifiers", testCompilerParserParsesBacktickIdentifiers)
     ("pretty-print compiler escapes keyword field names", testPrettyPrintCompilerSyntaxEscapesKeywordFieldNames)
     ("parse bare int literal", testInterpreterParserParsesBareIntLiteral)
+    ("parse upstream I-suffixed int literal", testInterpreterParserParsesUpstreamIntSuffixLiteral)
     ("parse negative int8 minimum literal", testInterpreterParserParsesNegativeInt8MinLiteral)
     ("reject compiler lambda syntax", testInterpreterParserRejectsCompilerLambdaSyntax)
     ("parse comma-separated lists", testInterpreterParserParsesCommaSeparatedLists)
