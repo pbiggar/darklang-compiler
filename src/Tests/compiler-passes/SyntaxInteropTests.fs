@@ -872,6 +872,20 @@ let testPrettyPrintInterpreterSyntaxPreservesUncurriedLambdaApplyRoundtrip () : 
             else
                 Error $"Uncurried lambda-apply AST changed after interpreter pretty roundtrip.\nPrinted: {printed}\nOriginal: {ast}\nReparsed: {reparsedAst}"
 
+let testInterpreterParserParsesNestedFunctionAfterLetBinding () : TestResult =
+    let source =
+        "let limit = 10L\n"
+        + "let sumUpTo (i: Int64) : Int64 =\n"
+        + "  if i > limit then 0L else i + (sumUpTo (i + 1L))\n"
+        + "sumUpTo 1L"
+    match InterpreterParser.parseString false source with
+    | Error err ->
+        Error $"Interpreter parser failed for nested function after let binding: {err}"
+    | Ok (Program [Expression _]) ->
+        Ok ()
+    | Ok other ->
+        Error $"Unexpected program shape for nested function after let binding: {other}"
+
 let tests = [
     ("compiler library interpreter parse", testCompilerLibraryParseInterpreterSyntax)
     ("parse interpreter lambda/application", testParseInterpreterLambdaApplication)
@@ -931,4 +945,5 @@ let tests = [
     ("pretty-print interpreter preserves tuple-apply-in-list roundtrip", testPrettyPrintInterpreterSyntaxPreservesTupleApplyInsideListRoundtrip)
     ("pretty-print interpreter preserves nested tuple-apply-in-list roundtrip", testPrettyPrintInterpreterSyntaxPreservesNestedTupleApplyInsideListRoundtrip)
     ("pretty-print interpreter preserves uncurried-lambda-apply roundtrip", testPrettyPrintInterpreterSyntaxPreservesUncurriedLambdaApplyRoundtrip)
+    ("parse interpreter nested function after let binding", testInterpreterParserParsesNestedFunctionAfterLetBinding)
 ]
