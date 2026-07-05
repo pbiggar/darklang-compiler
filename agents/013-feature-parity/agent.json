@@ -1,0 +1,9 @@
+{
+  "id": 13,
+  "slug": "feature-parity",
+  "name": "Feature parity",
+  "autonomyLevel": "InitialDesign",
+  "enabled": true,
+  "purpose": "Making the compiler language feature parity with the interpreter",
+  "summary": "This agent is always learning. It starts in initial design, then can gain autonomy as its definition and validation evidence improve."
+}
