@@ -2,20 +2,21 @@
 
 ## Executive Summary
 
-The Dark compiler produces code that is **1.54x slower than Rust** and **1.10x slower than OCaml** for the mandelbrot benchmark. The primary causes are:
+The Dark compiler currently produces code that is **2.06x slower than Rust** and **1.10x slower than OCaml** for the mandelbrot benchmark. The primary causes are:
 
 1. **Redundant register moves in the iterate loop** (estimated 20-30% improvement potential)
 2. **Repeated float constant loads** (estimated 5-10% improvement potential)
 3. **Missing fused multiply-add (FMA) instructions** (estimated 10-15% improvement potential)
-4. **Non-optimal phi node resolution** (estimated 5-10% improvement potential)
+
+The previously identified `2.0 * x -> x + x` strength reduction has been implemented in current ANF/LIR and is no longer an open opportunity for this benchmark.
 
 ## Benchmark Results
 
 | Language | Mean Time | vs Rust |
 |----------|-----------|---------|
-| Rust     | 1.4 ms    | 1.00x   |
-| OCaml    | 1.9 ms    | 1.37x   |
-| Dark     | 2.1 ms    | 1.54x   |
+| Rust     | 12,553,096 ns | 1.00x |
+| OCaml    | 23,390,326 ns | 1.86x |
+| Dark     | 25,826,540 ns | 2.06x |
 
 ## Hot Loop Analysis
 
@@ -23,38 +24,29 @@ The Dark compiler produces code that is **1.54x slower than Rust** and **1.10x s
 
 The `iterate` function is the innermost loop, called ~2 million times (200 * 200 * ~50 iterations average).
 
-**LIR after Register Allocation (iterate_L4 - the hot continue path):**
+**Current LIR after Register Allocation (iterate_L4 - the hot continue path):**
 ```
 Label "iterate_L4":
-    D0 <- FSub(D2, D1)
+    D0 <- FSub(D0, D1)
     D1 <- FAdd(D0, D5)
-    fv1000 <- FLoad(float[2])        ; PROBLEM: Constant reload
-    D0 <- FMul(fv1000, D4)
-    D0 <- FMul(D0, D7)
-    D4 <- FAdd(D0, D6)
-    X2 <- Add(X1, Imm 1)
-    D0 <- FMov(D5)                   ; PROBLEM: Dead store
-    D0 <- FMov(D6)                   ; PROBLEM: Dead store
-    D0 <- FMov(D1)                   ; PROBLEM: Dead store
-    D0 <- FMov(D4)                   ; PROBLEM: Dead store
-    X1 <- Mov(Reg X2)
-    X1 <- Mov(Reg X3)                ; PROBLEM: Overwrites previous store
+    D0 <- FAdd(D3, D3)               ; strength-reduced 2.0 * zr
+    D0 <- FMul(D0, D2)
+    D0 <- FAdd(D0, D4)
+    X1 <- Add(X1, Imm 1)
     D3 <- FMov(D5)
-    D2 <- FMov(D6)
-    D1 <- FMov(D1)                   ; PROBLEM: Self-move (no-op)
-    D0 <- FMov(D4)
-    X1 <- Mov(Reg X2)                ; PROBLEM: Redundant (same as earlier)
-    X3 <- Mov(Reg X3)                ; PROBLEM: Self-move (no-op)
-    D7 <- FMov(D0)
-    D4 <- FMov(D1)
-    D6 <- FMov(D2)
+    D2 <- FMov(D4)
+    D1 <- FMov(D1)                   ; PROBLEM: Self-move
+    D0 <- FMov(D0)                   ; PROBLEM: Self-move
     D5 <- FMov(D3)
+    D4 <- FMov(D2)
+    D3 <- FMov(D1)
+    D2 <- FMov(D0)
     Jump(Label "iterate_body")
 ```
 
-**Instruction count in iterate hot path:** ~25 instructions
-**Redundant instructions:** ~10 (self-moves, dead stores, constant reloads)
-**Effective useful instructions:** ~15
+**Instruction count in iterate hot path:** ~16 instructions
+**Redundant instructions:** at least 2 direct self-moves, plus copy traffic for tail-call phi resolution
+**Effective useful instructions:** ~14
 
 ### Rust Compiler - Inlined `mandelbrot` Function
 
@@ -104,17 +96,17 @@ Rust aggressively inlines and optimizes:
 
 **Problem:** The register allocator generates redundant moves when resolving phi nodes.
 
-**Evidence (LIR after RegAlloc, iterate_L4):**
+**Current evidence (LIR after RegAlloc, iterate_L4):**
 ```
-D0 <- FMov(D5)     ; Dead - immediately overwritten
-D0 <- FMov(D6)     ; Dead - immediately overwritten
-D0 <- FMov(D1)     ; Dead - immediately overwritten
-D0 <- FMov(D4)     ; Dead - immediately overwritten
-X1 <- Mov(Reg X2)
-X1 <- Mov(Reg X3)  ; Overwrites previous value
+D1 <- FMov(D1)     ; self-move
+D0 <- FMov(D0)     ; self-move
+D3 <- FMov(D5)
+D2 <- FMov(D4)
+D5 <- FMov(D3)
+D4 <- FMov(D2)
 ```
 
-**Root Cause:** Phi resolution in `iterate_L4` generates moves for variables that will flow to `iterate_body`, but the register allocator doesn't eliminate self-moves or coalesce moves effectively.
+**Root Cause:** Phi resolution in `iterate_L4` generates moves for variables that will flow to `iterate_body`, but the register allocator still does not eliminate all self-moves or coalesce the floating-point copy chain effectively. Earlier consecutive overwrites are no longer present in the current dump.
 
 **Implementation Approach:**
 1. Add a post-regalloc pass to eliminate:
@@ -132,12 +124,10 @@ X1 <- Mov(Reg X3)  ; Overwrites previous value
 
 **Evidence (LIR iterate_L1 and iterate_L4):**
 ```
-fv1001 <- FLoad(float[4])    ; Loaded every iteration for escape check
-...
-fv1000 <- FLoad(float[2])    ; Loaded every iteration for 2.0 * zr
+D7 <- FLoad(float[4])        ; Loaded every iteration for escape check
 ```
 
-Rust keeps 4.0 in `d2` register throughout the entire function.
+Rust keeps 4.0 in `d2` register throughout the entire function. The earlier `2.0` load in the hot loop is gone because strength reduction now emits `FAdd`.
 
 **Implementation Approach:**
 1. Identify float constants used in loops
@@ -152,10 +142,13 @@ Rust keeps 4.0 in `d2` register throughout the entire function.
 
 **Problem:** Dark generates separate FMUL+FADD sequences where FMADD would be faster and more accurate.
 
-**Evidence - Dark LIR (countRow_L1):**
+**Evidence - Dark LIR (iterate_L1 and iterate_L4):**
 ```
-fv10083 <- FMul(fv1000, fv10081)   ; Separate multiply
-fv10084 <- FDiv(fv10083, fv10080)  ; Divide
+D0 <- FMul(D3, D3)
+D1 <- FMul(D2, D2)
+D6 <- FAdd(D0, D1)   ; could use FMADD for zr*zr + zi*zi
+...
+D0 <- FSub(D0, D1)   ; could use FMSUB for zr*zr - zi*zi
 ```
 
 **Evidence - OCaml uses FMADD:**
@@ -182,26 +175,21 @@ t2 = t1 + c   (or t1 - c)
 - `src/DarkCompiler/CodeGen.fs` - Emit FMADD/FMSUB encodings
 - `src/DarkCompiler/ARM64Encoding.fs` - Encode FMA instructions
 
-### 4. Strength Reduction: 2.0 * x → x + x (Low Impact: ~3-5%)
+### 4. Strength Reduction: 2.0 * x → x + x (Implemented)
 
-**Problem:** Multiplication by 2.0 uses FMUL when FADD would be faster.
+**Status:** Current optimized ANF and LIR show the mandelbrot `2.0 * zr` term has already been reduced to `zr + zr`.
 
-**Evidence - Dark ANF:**
+**Current evidence - Dark optimized ANF:**
 ```
-let TempId 16 = 2 * t2    ; 2.0 * zr uses FMul
+let TempId 16 = t2 + t2
 ```
 
-**Evidence - Rust uses FADD:**
+**Current evidence - Dark LIR after register allocation:**
 ```asm
-8478:   1e6728e7    fadd  d7, d7, d7    ; 2.0 * zr = zr + zr
+D0 <- FAdd(D3, D3)
 ```
 
-**Implementation Approach:**
-1. Pattern match `2.0 * x` or `x * 2.0` in ANF optimization
-2. Replace with `x + x`
-
-**Files to modify:**
-- `src/DarkCompiler/ANFOptimizations.fs` - Add strength reduction pattern
+No further action is needed for this specific opportunity unless a future compiler change regresses the pattern.
 
 ## Summary of Optimization Impact
 
@@ -210,8 +198,8 @@ let TempId 16 = 2 * t2    ; 2.0 * zr uses FMul
 | Dead store elimination | 20-30% | Medium |
 | Constant hoisting | 5-10% | Low |
 | FMA instructions | 10-15% | Medium |
-| Strength reduction | 3-5% | Low |
-| **Total potential** | **~40-50%** | |
+| Strength reduction | Implemented | Done |
+| **Remaining potential** | **~35-45%** | |
 
 If all optimizations are implemented, Dark could approach or match Rust performance on this benchmark.
 
@@ -234,7 +222,7 @@ else
   else
     let TempId 13 = t7 - t9
     let TempId 14 = t13 + t0
-    let TempId 16 = 2 * t2
+    let TempId 16 = t2 + t2
     let TempId 17 = t16 * t3
     let TempId 18 = t17 + t1
     let TempId 20 = t4 + 1
@@ -264,7 +252,7 @@ Function iterate:
   iterate_L4:
     v13 <- v7 - v9 : TFloat64
     v14 <- v13 + v0 : TFloat64
-    v16 <- float[2] * v2 : TFloat64
+    v16 <- v2 + v2 : TFloat64
     v17 <- v16 * v3 : TFloat64
     v18 <- v17 + v1 : TFloat64
     v20 <- v4 + 1 : TInt64
