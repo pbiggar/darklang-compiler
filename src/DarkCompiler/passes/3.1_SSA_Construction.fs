@@ -951,13 +951,13 @@ let renameBlock (state: RenamingState) (block: BasicBlock) : BasicBlock * Renami
         block.Instrs
         |> List.fold (fun (acc, s) instr ->
             let (instr', s') = renameInstr s instr
-            (acc @ [instr'], s')
+            (instr' :: acc, s')
         ) ([], state)
 
     // Rename terminator
     let term' = renameTerminator state' block.Terminator
 
-    ({ block with Instrs = instrs'; Terminator = term' }, state')
+    ({ block with Instrs = List.rev instrs'; Terminator = term' }, state')
 
 /// Update phi sources for successors
 let updatePhiSourcesForSuccessors (cfg: CFG) (currentLabel: Label) (state: RenamingState) : CFG =
