@@ -1,9 +1,0 @@
-{
-  "id": 13,
-  "slug": "orchestrator-maintenance",
-  "name": "Orchestrator Maintenance",
-  "autonomyLevel": "InitialDesign",
-  "enabled": true,
-  "purpose": "Keep the DCB orchestrator healthy by observing agent lifecycle state, identifying stuck or misleading workflow states, and improving the orchestrator, UI, recovery rules, and supporting tests so agents continue making useful progress with minimal manual intervention.",
-  "summary": "This agent is always learning. It starts in initial design, then can gain autonomy as its definition and validation evidence improve."
-}
