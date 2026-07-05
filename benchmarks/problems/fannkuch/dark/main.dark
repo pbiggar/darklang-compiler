@@ -36,7 +36,7 @@ def nextPerm(perm: List<Int64>, count: List<Int64>, i: Int64, n: Int64) : (List<
     else
         let newPerm = rotateLeft(perm, i) in
         let ci = getAt(count, i) in
-        if ci > 0 then
+        if ci > 1 then
             (newPerm, setAt(count, i, ci - 1), false)
         else
             let newCount = setAt(count, i, i) in
@@ -63,6 +63,5 @@ def fannkuch(n: Int64) : Int64 =
     let count = createRange(n) in
     fannkuchLoop(perm, count, n, 0)
 
-// n=6 is max size under cachegrind (output: 10)
-// Standard benchmark uses n=9 (output: 23) but we're stack-limited
-fannkuch(6)
+// Standard benchmark size (output: 23)
+fannkuch(9)

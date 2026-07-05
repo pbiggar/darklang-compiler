@@ -7,23 +7,6 @@ The fannkuch benchmark computes the maximum number of "pancake flips" needed to 
 **Key Finding:**
 Dark uses **immutable linked lists (FingerTrees)** for representing permutations, while Rust and OCaml use **mutable arrays** with in-place operations. This is the dominant source of performance difference.
 
-## 2026-03-03 Correctness Regression Note
-
-Current benchmark status is not only performance-limited: Dark `fannkuch` currently returns the wrong result for the reduced-size input.
-
-- Expected for `n=6`: `10`
-- Current Dark output: `6`
-
-Isolation runs indicate this is compiler-pass sensitive, not a benchmark-source typo:
-
-- default: `6`
-- `--disable-opt-lir-peephole`: `10`
-- `--disable-opt-tco`: `10`
-- `--disable-opt-inline`: `10`
-- `--disable-opt-mir`: `10`
-
-This points to an optimization-stage miscompile (most directly reproducible via LIR peephole), so correctness debugging should focus on optimized codegen pipelines before performance tuning.
-
 ## Benchmark Source Code
 
 ### Dark (`benchmarks/problems/fannkuch/dark/main.dark`)

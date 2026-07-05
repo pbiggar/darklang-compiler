@@ -28,6 +28,7 @@ These benchmarks compile and run reliably.
 | collatz       | Iteration      | Collatz sequence steps                  |
 | leibniz       | Numerical      | Float arithmetic, pi approximation      |
 | nqueen        | Backtracking   | N-Queens via bitwise operations         |
+| fannkuch      | Permutations   | Pancake flipping, permutation generation |
 | merkletrees   | Tree/Hashing   | Recursive tree hashing                  |
 | spectral_norm | Numerical      | Float array operations                  |
 | matmul        | Matrix         | Matrix multiplication                   |
@@ -63,37 +64,6 @@ Latest investigation update (`2026-03-04`):
 - Full-size quicksort still fails at `n=700` with allocator OOM both with and without TCO
 - `n=699` succeeds (`leaks: 17416` default, `16060` with `--disable-opt-tco`)
 - This indicates the remaining blocker is allocation pressure / heap budget, not only missing cleanup in TCO lowering
-
----
-
-## BUG: Fannkuch Output Mismatch
-
-**Status: BLOCKS `fannkuch` Dark result in full benchmark runs**
-
-`fannkuch` currently compiles and runs, but the Dark output is wrong for the reduced benchmark input:
-
-- Expected (Dark reduced-size target): `10`
-- Actual: `6`
-
-### Current Reproduction
-
-```bash
-./benchmarks/infrastructure/build_all.sh fannkuch
-./benchmarks/problems/fannkuch/dark/main
-# actual output: 6
-```
-
-Notes:
-
-- This reproduces on a clean `HEAD` worktree, so it is pre-existing and not from local uncommitted changes.
-- `benchmarks/problems/fannkuch/dark/expected_output.txt` still expects `10`.
-- Full `./benchmarks/run_benchmarks.sh` currently exits non-zero with `Benchmark run failures: fannkuch`.
-- Compiler flag isolation indicates optimization sensitivity:
-  - default: `6`
-  - `--disable-opt-mir`: `10`
-  - `--disable-opt-lir-peephole`: `10`
-  - `--disable-opt-tco`: `10`
-  - `--disable-opt-inline`: `10`
 
 ---
 
@@ -137,7 +107,6 @@ These benchmarks have implementations but are limited by stack depth or bugs.
 | quicksort  | RUNTIME OOM        | Full-size run exceeds current heap/allocation budget (skipped) |
 | pisum      | Working (reduced)  | Uses 5 rounds, n=1000 (full size causes stack overflow)        |
 | nsieve     | Stack overflow     | Uses n=1000 (n=100000 causes stack overflow) - outputs 168     |
-| fannkuch   | Output mismatch    | Uses n=6 but currently outputs 6 (expected 10); n=9 is stack-limited |
 | edigits    | Stack overflow     | Uses 50 digits, 1 iteration (full: 1000 digits, 10 iterations) |
 
 ---
@@ -154,11 +123,10 @@ These benchmarks are in the suite for other languages but don't have Dark implem
 
 ## Feature Requirements Summary
 
-| Feature                    | Benchmarks Blocked                                                           |
-| -------------------------- | ---------------------------------------------------------------------------- |
-| **Allocator capacity / allocation pressure** | quicksort                                                   |
-| **Benchmark correctness bug** | fannkuch                                                                  |
-| Stack depth / TCO          | pisum (full), nsieve (full), fannkuch (full), edigits (full)               |
+| Feature                                  | Benchmarks Blocked                                  |
+| ---------------------------------------- | --------------------------------------------------- |
+| **Allocator capacity / allocation pressure** | quicksort                                       |
+| Stack depth / TCO                        | pisum (full), nsieve (full), edigits (full)         |
 
 ---
 
