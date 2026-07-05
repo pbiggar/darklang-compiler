@@ -72,7 +72,7 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Optimization name: Bitwise all-ones identity simplification
 - Taxonomy category: Algebraic simplification
 - Priority/rationale: Small, low-risk canonical integer simplification that removes redundant bitwise operations in ANF before backend lowering.
-- Notes: Implemented for `x & -1 -> x`, `-1 & x -> x`, `x ||| -1 -> -1`, and `-1 ||| x -> -1` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Phase 2 hardening sandbox trial. Covered by `identity_bitand_all_ones_right`, `identity_bitand_all_ones_left`, `identity_bitor_all_ones_right`, and `identity_bitor_all_ones_left` in `src/Tests/optimization/anf.opt`.
+- Notes: Implemented for `x & -1 -> x`, `-1 & x -> x`, `x ||| -1 -> -1`, `-1 ||| x -> -1`, `x ^ -1 -> ~~~x`, and `-1 ^ x -> ~~~x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during sandbox trials. Covered by corresponding bitwise all-ones tests in `src/Tests/optimization/anf.opt`.
 
 ### Shift by zero elimination
 
