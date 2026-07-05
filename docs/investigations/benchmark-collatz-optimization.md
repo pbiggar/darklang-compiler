@@ -81,44 +81,7 @@ Odd path (11 instructions + 3 branches):
 
 ## Key Optimization Opportunities
 
-### 1. Strength Reduction: 3*n as Shift-Add (High Impact)
-
-**Issue:** Dark uses `MOV #3; MUL` for `3*n`, while Rust uses a single `ADD x, n, n LSL #1` instruction.
-
-**IR Evidence (ANF after optimization):**
-```
-let TempId 8 = 3 * t0
-```
-
-**Assembly Evidence:**
-```asm
-208: mov  x1, #0x3        ; load constant 3
-20c: mul  x5, x1, x3      ; multiply
-```
-
-**Rust Assembly:**
-```asm
-8434: add  x15, x13, x13, lsl #1  ; x15 = x13 + (x13 << 1) = 3*x13
-```
-
-**Root Cause:** The ANF optimizer in `2.3_ANF_Optimize.fs` only handles power-of-2 multiplications for strength reduction (lines 92-100). Multiplication by 3 is not recognized as a candidate for shift-add.
-
-**Impact Estimate:** ~15-20% improvement in hot loop. The MUL instruction has higher latency (3-4 cycles) than ADD with shifted operand (1 cycle).
-
-**Implementation:**
-- Add pattern matching for small constants like 3, 5, 7, 9 in `ANF_Optimize.foldBinOp`
-- Introduce a new ANF primitive or LIR instruction for shifted-add
-- Alternative: Handle in LIR optimization or code generation
-
-**Files to Modify:**
-- `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` (strength reduction patterns)
-- `src/DarkCompiler/LIR.fs` (add Add_shifted instruction)
-- `src/DarkCompiler/passes/6_CodeGen.fs` (emit ADD with LSL)
-- `src/DarkCompiler/ARM64.fs` (ADD with shifted register)
-
----
-
-### 2. Conditional Select (CSEL/CSINC) for If-Then-Else (High Impact)
+### 1. Conditional Select (CSEL/CSINC) for If-Then-Else (High Impact)
 
 **Issue:** Dark generates branching code for simple if-expressions, while Rust uses branchless conditional select.
 
@@ -160,7 +123,7 @@ Both branches compute their results then jump back to the loop.
 
 ---
 
-### 3. Redundant Register Moves (Medium Impact)
+### 2. Redundant Register Moves (Medium Impact)
 
 **Issue:** The hot loop contains redundant register-to-register moves.
 
@@ -186,7 +149,7 @@ These moves could be eliminated if the LSR/ADD instructions wrote directly to x3
 
 ---
 
-### 4. Speculative Computation of Both Branches (Medium Impact)
+### 3. Speculative Computation of Both Branches (Medium Impact)
 
 **Issue:** Dark computes only one branch per iteration, while Rust speculatively computes both n/2 and 3*n on every iteration.
 
@@ -203,7 +166,7 @@ These moves could be eliminated if the LSR/ADD instructions wrote directly to x3
 
 ---
 
-### 5. Loop-Invariant Code Motion for Constants (Low Impact)
+### 4. Loop-Invariant Code Motion for Constants (Low Impact)
 
 **Issue:** The constant 3 is loaded inside the loop (`mov x1, #0x3`) on every odd iteration.
 
@@ -231,7 +194,7 @@ Test: `src/Tests/optimization/lir.opt` (`licm_hoist_loop_constant`).
 
 | Optimization | Rust | Dark | OCaml |
 |-------------|------|------|-------|
-| 3*n as shift-add | Yes | **No** | Partial (uses MADD) |
+| 3*n as shift-add | Yes | Yes | Partial (uses MADD) |
 | Conditional select | Yes (CSINC) | **No** | No |
 | Branchless inner loop | Yes | **No** | No |
 | TCO | N/A (iterative) | Yes | Yes |
@@ -240,9 +203,8 @@ Test: `src/Tests/optimization/lir.opt` (`licm_hoist_loop_constant`).
 
 ## Recommended Implementation Priority
 
-1. **Strength reduction for 3*n** - Relatively easy, high impact
-2. **Conditional select for if-expressions** - Medium complexity, high impact
-3. **Register coalescing** - Higher complexity, medium impact
+1. **Conditional select for if-expressions** - Medium complexity, high impact
+2. **Register coalescing** - Higher complexity, medium impact
 
 ## Verification
 
