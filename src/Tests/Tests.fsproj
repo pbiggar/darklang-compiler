@@ -45,6 +45,7 @@
     <!-- Compiler pass tests (shared) -->
     <Compile Include="compiler-passes/IRSymbolTests.fs" />
     <Compile Include="compiler-passes/IRPrinterTests.fs" />
+    <Compile Include="compiler-passes/ANFToMIRTests.fs" />
     <Compile Include="compiler-passes/TypeCheckingTests.fs" />
     <Compile Include="compiler-passes/ParallelMoveTests.fs" />
     <Compile Include="compiler-passes/SSALivenessTests.fs" />
