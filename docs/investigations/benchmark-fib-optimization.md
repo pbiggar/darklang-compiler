@@ -163,33 +163,7 @@ This is an advanced optimization known as "tail recursion modulo cons" (TRMC) or
 
 ---
 
-### 2. Empty SaveRegs/RestoreRegs Elimination
-
-**Impact: ~2-5% performance improvement (estimated)**
-
-**Root Cause:**
-The LIR shows empty save/restore pairs:
-```
-SaveRegs([], [])
-ArgMoves(X0 <- Reg X19)
-X20 <- Call(fib, [Reg X19])
-RestoreRegs([], [])
-```
-
-When no caller-saved registers are live across a call, the SaveRegs/RestoreRegs instructions should be completely eliminated rather than generating empty operations.
-
-**Evidence:**
-The register allocator determines that X19, X20, X21 are callee-saved registers, so no caller-saved registers need saving. But the SaveRegs/RestoreRegs instructions still appear in the IR.
-
-**Implementation Approach:**
-In code generation, check if SaveRegs/RestoreRegs have empty register lists and skip generating any instructions for them.
-
-**Files to Modify:**
-- `src/DarkCompiler/passes/6_CodeGen.fs` - Skip code gen for empty save/restore
-
----
-
-### 3. Phi Node Resolution Optimization
+### 2. Phi Node Resolution Optimization
 
 **Impact: ~5% performance improvement (estimated)**
 
@@ -217,16 +191,14 @@ Register allocation coalescing could assign X19 to X0 directly since they have t
 | Optimization | Estimated Impact | Complexity |
 |--------------|-----------------|------------|
 | Sibling Call / TRMC | 40-50% | High |
-| Empty SaveRegs Elimination | 2-5% | Low |
 | Phi/Return Coalescing | 5% | Medium |
 
 **Total estimated improvement: ~2x faster** (bringing Dark to parity with Rust)
 
 ## Recommended Implementation Order
 
-1. **Empty SaveRegs Elimination** - Quick win, very low complexity
-2. **Sibling Call Optimization** - Major impact, high complexity, requires careful design
-3. **Phi/Return Coalescing** - Medium complexity, good follow-up
+1. **Sibling Call Optimization** - Major impact, high complexity, requires careful design
+2. **Phi/Return Coalescing** - Medium complexity, good follow-up
 
 ## Appendix: Full IR Dumps
 
