@@ -73,13 +73,50 @@ Char.isAlphanumeric("") = false
 // Char.isASCII - Check if character is in the ASCII codepoint range
 // ===================================================================
 
+Char.isASCII("a") = true
 Char.isASCII("A") = true
 Char.isASCII("3") = true
 Char.isASCII(" ") = true
 Char.isASCII("\t") = true
 Char.isASCII("á") = false
 Char.isASCII("ჾ") = false
+Char.isASCII("Ż") = false
+Char.isASCII("😂") = false
 Char.isASCII("") = false
+
+Char.isASCIILetter("a") = true
+Char.isASCIILetter("A") = true
+Char.isASCIILetter("z") = true
+Char.isASCIILetter("Z") = true
+Char.isASCIILetter("á") = false
+Char.isASCIILetter("3") = false
+Char.isASCIILetter(",") = false
+Char.isASCIILetter(" ") = false
+Char.isASCIILetter("") = false
+
+// ===================================================================
+// Char ordering by codepoint
+// ===================================================================
+
+Char.isLessThan("a", "b") = true
+Char.isLessThan("a", "A") = false
+Char.isLessThan("a", "á") = true
+Char.isLessThan("a", " ") = false
+Char.isLessThan("2", "1") = false
+
+Char.isLessThanOrEqualTo("a", "a") = true
+Char.isLessThanOrEqualTo("a", "b") = true
+Char.isLessThanOrEqualTo("b", "a") = false
+
+Char.isGreaterThan("a", "b") = false
+Char.isGreaterThan("a", "A") = true
+Char.isGreaterThan("a", "á") = false
+Char.isGreaterThan("a", " ") = true
+Char.isGreaterThan("2", "1") = true
+
+Char.isGreaterThanOrEqualTo("a", "a") = true
+Char.isGreaterThanOrEqualTo("b", "a") = true
+Char.isGreaterThanOrEqualTo("a", "b") = false
 
 // ===================================================================
 // Char.toUppercase - Convert to uppercase
@@ -119,3 +156,11 @@ Char.fromCode(65) = "A"
 Char.fromCode(97) = "a"
 Char.fromCode(48) = "0"
 Char.fromCode(32) = " "
+
+// ===================================================================
+// Char.toString - Identity conversion
+// ===================================================================
+
+Char.toString("A") = "A"
+Char.toString("á") = "á"
+Char.toString("😂") = "😂"

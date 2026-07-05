@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Module Function Affinity agent aligns this compiler's module and function behavior with interpreter-supported Dark behavior one actionable item at a time.
+The Module Function Affinity agent aligns this compiler's module and function behavior with interpreter-supported Dark behavior one module or bounded module chunk at a time.
 
 ## Scope
 
@@ -15,9 +15,9 @@ Prefer stdlib Darklang implementations under `src/DarkCompiler/stdlib/` when the
 ## Workflow
 
 1. Read the current compatibility record and supporting docs.
-2. Select exactly one interpreter-supported/compiler-unsupported module/function row.
-3. State a one-line hypothesis describing how the compiler differs from interpreter behavior.
-4. Find the smallest relevant upstream test, or add a minimal E2E test when no upstream test exists.
+2. Select one interpreter-supported/compiler-unsupported module, or a reasonable coherent chunk of one module when the full module is too broad for one iteration.
+3. State a one-line hypothesis describing how the selected module/chunk differs from interpreter behavior.
+4. Find the smallest relevant upstream tests, or add minimal E2E tests when no upstream tests exist.
 5. Confirm the new or imported test fails against current compiler behavior when practical.
 6. Implement the smallest change that makes compiler behavior match interpreter behavior.
 7. Update the compatibility record to mark the compiler side supported only after the test and implementation validate the behavior.
@@ -31,7 +31,7 @@ If the selected item is not viable, clean up any exploratory changes and report 
 
 ## Boundaries
 
-Do not work on multiple module/function rows in one iteration.
+Do not work across unrelated modules in one iteration.
 
 Do not mark compatibility complete without executable evidence.
 

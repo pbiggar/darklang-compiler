@@ -28,13 +28,13 @@ Bytes                        | set                                 | ❌   | ✅
 Bytes                        | toList                              | ❌   | ✅
 Char                         | fromCode                            | ❌   | ✅
 Char                         | isASCII                             | ✅   | ✅
-Char                         | isASCIILetter                       | ✅   | ❌
+Char                         | isASCIILetter                       | ✅   | ✅
 Char                         | isAlphanumeric                      | ❌   | ✅
 Char                         | isDigit                             | ✅   | ✅
-Char                         | isGreaterThan                       | ✅   | ❌
-Char                         | isGreaterThanOrEqualTo              | ✅   | ❌
-Char                         | isLessThan                          | ✅   | ❌
-Char                         | isLessThanOrEqualTo                 | ✅   | ❌
+Char                         | isGreaterThan                       | ✅   | ✅
+Char                         | isGreaterThanOrEqualTo              | ✅   | ✅
+Char                         | isLessThan                          | ✅   | ✅
+Char                         | isLessThanOrEqualTo                 | ✅   | ✅
 Char                         | isLetter                            | ❌   | ✅
 Char                         | isLowercase                         | ✅   | ✅
 Char                         | isUppercase                         | ✅   | ✅
@@ -42,7 +42,7 @@ Char                         | isWhitespace                        | ❌   | ✅
 Char                         | toAsciiCode                         | ✅   | ✅
 Char                         | toCode                              | ❌   | ✅
 Char                         | toLowercase                         | ✅   | ✅
-Char                         | toString                            | ✅   | ❌
+Char                         | toString                            | ✅   | ✅
 Char                         | toUppercase                         | ✅   | ✅
 Cli                          | ExecutionOutcome                    | ✅   | ❌
 Cli                          | execute                             | ✅   | ❌

@@ -65,6 +65,27 @@ def Stdlib.Char.isASCII(c: String) : Bool =
         | Some(cp) -> cp >= 0 && cp <= 127
         | None -> false
 
+// Check if character is an ASCII letter (a-z, A-Z)
+def Stdlib.Char.isASCIILetter(c: String) : Bool =
+    if Stdlib.Char.isASCII(c) then Stdlib.Char.isLetter(c)
+    else false
+
+// Compare characters by first codepoint
+def Stdlib.Char.isLessThan(left: String, right: String) : Bool =
+    Stdlib.Char.toCode(left) < Stdlib.Char.toCode(right)
+
+// Compare characters by first codepoint
+def Stdlib.Char.isLessThanOrEqualTo(left: String, right: String) : Bool =
+    Stdlib.Char.toCode(left) <= Stdlib.Char.toCode(right)
+
+// Compare characters by first codepoint
+def Stdlib.Char.isGreaterThan(left: String, right: String) : Bool =
+    Stdlib.Char.toCode(left) > Stdlib.Char.toCode(right)
+
+// Compare characters by first codepoint
+def Stdlib.Char.isGreaterThanOrEqualTo(left: String, right: String) : Bool =
+    Stdlib.Char.toCode(left) >= Stdlib.Char.toCode(right)
+
 // Convert ASCII character to uppercase
 def Stdlib.Char.toUppercase(c: String) : String =
     if Stdlib.String.isEmpty(c) then ""
