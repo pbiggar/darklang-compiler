@@ -11,7 +11,7 @@ The ackermann benchmark computes `A(3, 12) = 32765` using the classic Ackermann 
 - Node: 3,094,160,411 instructions (0.62x Rust)
 - Overall table header: Dark geometric performance ratio is 4.07x Rust
 
-Dark remains slower than Rust and OCaml on this benchmark, but several older notes in this investigation are now implemented or partially implemented. Current LIR shows the former nine-instruction entry shuffle has been reduced to two argument moves, the unreachable `ackermann_L5` block is gone by post-register-allocation LIR, and ARM64 `BranchZero` is lowered through `CBZ`.
+Dark remains slower than Rust and OCaml on this benchmark, but several older notes in this investigation are now implemented or partially implemented. Current LIR shows the former nine-instruction entry shuffle has been reduced to two argument moves, redundant post-register-allocation self moves are removed, the unreachable `ackermann_L5` block is gone by post-register-allocation LIR, and ARM64 `BranchZero` is lowered through `CBZ`.
 
 ## Benchmark Source Code
 
@@ -114,7 +114,6 @@ ackermann:
     BranchZero(X19, Label "ackermann_L3", Label "ackermann_L4")
   Label "ackermann_L3":
     X20 <- Sub(X20, Imm 1)
-    X20 <- Mov(Reg X20)
     X19 <- Mov(Imm 1)
     Jump(Label "ackermann_body")
   Label "ackermann_L4":
@@ -126,7 +125,6 @@ ackermann:
     RestoreRegs([], [])
     X19 <- Mov(Reg X0)
     X20 <- Mov(Reg X21)
-    X19 <- Mov(Reg X19)
     Jump(Label "ackermann_body")
   Label "ackermann_body":
 
@@ -138,7 +136,6 @@ ackermann:
 ```
 
 Remaining local inefficiencies visible in current LIR:
-- Two redundant self moves remain: `X20 <- Mov(Reg X20)` and `X19 <- Mov(Reg X19)`.
 - The nested recursive call still has `SaveRegs([], [])` and `RestoreRegs([], [])` markers in LIR, though ARM64 code generation emits no instructions for empty save/restore lists.
 - Register assignment uses `X19`, `X20`, and `X21`, with `m - 1` preserved across the inner recursive call in `X21`.
 
@@ -148,24 +145,7 @@ ARM64 code generation now maps `LIR.BranchZero` directly to `ARM64Symbolic.CBZ` 
 
 ## Current Optimization Opportunities
 
-### 1. Remove Redundant Self Moves After Register Allocation
-
-**Impact: low but direct for this benchmark**
-
-Current LIR still contains no-op moves in hot recursive paths:
-
-```text
-X20 <- Mov(Reg X20)
-X19 <- Mov(Reg X19)
-```
-
-ARM64 symbolic peephole removes redundant `MOV_reg` instructions late in code generation, so these may not reach final machine code on ARM64. A target-independent LIR cleanup would still make dumps more truthful and would help any backend that does not remove self moves later.
-
-Relevant area:
-- `src/DarkCompiler/passes/4.5_LIR_Peephole.fs`
-- `src/DarkCompiler/passes/5_RegisterAllocation.fs`
-
-### 2. Remove Unreachable MIR Blocks Before LIR
+### 1. Remove Unreachable MIR Blocks Before LIR
 
 **Impact: low for current final code, useful for IR quality**
 
@@ -175,7 +155,7 @@ Relevant area:
 - `src/DarkCompiler/passes/3_MIR_Optimizations.fs`
 - `src/DarkCompiler/passes/4_MIR_to_LIR.fs`
 
-### 3. Re-check Register Allocation Around Nested Recursion
+### 2. Re-check Register Allocation Around Nested Recursion
 
 **Impact: unknown; needs measurement**
 
@@ -190,7 +170,6 @@ ArgMoves(X0 <- Reg X20, X1 <- Reg X19)
 X19 <- Call(ackermann, [Reg X20, Reg X19])
 X19 <- Mov(Reg X0)
 X20 <- Mov(Reg X21)
-X19 <- Mov(Reg X19)
 Jump(Label "ackermann_body")
 ```
 
@@ -199,6 +178,7 @@ Jump(Label "ackermann_body")
 | Older opportunity | Current status |
 |-------------------|----------------|
 | Nine MOVs in `ackermann_entry` | Mostly implemented for this benchmark; current entry has two argument moves. |
+| Redundant post-register-allocation self moves | Implemented by target-independent post-allocation LIR cleanup. |
 | Dead `ackermann_L5` in final LIR | Still visible in MIR, but absent from post-register-allocation LIR. |
 | `BranchZero` should lower to ARM64 `CBZ`/`CBNZ` | Implemented for `BranchZero` on ARM64; codegen emits `CBZ` plus branch to the non-zero label. |
 | Empty `SaveRegs`/`RestoreRegs` should emit nothing | Implemented in ARM64 codegen; empty markers still appear in LIR only. |
@@ -206,5 +186,4 @@ Jump(Label "ackermann_body")
 ## Recommended Next Checks
 
 1. Confirm with final ARM64 disassembly when tooling can disassemble the sectionless generated ELF cleanly.
-2. Measure whether target-independent LIR self-move removal changes instruction counts on non-ARM64 backends.
-3. Consider MIR unreachable-block cleanup as an IR-quality improvement rather than a proven ackermann performance win.
+2. Consider MIR unreachable-block cleanup as an IR-quality improvement rather than a proven ackermann performance win.

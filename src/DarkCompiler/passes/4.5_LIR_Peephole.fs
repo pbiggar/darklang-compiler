@@ -380,6 +380,20 @@ let optimizeInstrs (instrs: Instr list) : Instr list =
     instrs
     |> List.choose optimizeInstr
 
+let removeSelfMovesFromInstrs (instrs: Instr list) : Instr list =
+    instrs
+    |> List.filter (fun instr ->
+        match instr with
+        | Mov (dest, Reg src) when sameReg dest src -> false
+        | _ -> true)
+
+let removeSelfMovesFromFunction (func: Function) : Function =
+    let blocks =
+        func.CFG.Blocks
+        |> Map.map (fun _ block ->
+            { block with Instrs = removeSelfMovesFromInstrs block.Instrs })
+    { func with CFG = { func.CFG with Blocks = blocks } }
+
 /// Check if a register is used in any instruction (for dead code detection)
 let isRegUsedInInstrs (reg: Reg) (instrs: Instr list) : bool =
     instrs |> List.exists (fun instr ->

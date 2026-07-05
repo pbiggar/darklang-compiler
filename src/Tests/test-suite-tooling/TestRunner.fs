@@ -278,6 +278,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "IR Symbol Tests"; Tests = IRSymbolTests.tests }
         { Name = "IR Printer Tests"; Tests = IRPrinterTests.tests }
         { Name = "MIR Optimize Tests"; Tests = MIROptimizeTests.tests }
+        { Name = "LIR Peephole Tests"; Tests = LIRPeepholeTests.tests }
         { Name = "ANF Optimize Tests"; Tests = ANFOptimizeTests.tests }
         { Name = "Script Helper Tests"; Tests = ScriptHelperTests.tests }
         { Name = "Test Runner Args Tests"; Tests = TestRunnerArgsTests.tests }
