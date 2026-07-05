@@ -39,6 +39,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical integer simplification that removes redundant XOR operations in ANF before backend lowering.
 - Notes: Implemented for `x ^ x -> 0` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Guided sandbox trial. Covered by `identity_bitxor_self` in `src/Tests/optimization/anf.opt`.
 
+### Bitwise XOR all-ones simplification
+
+- Optimization name: Bitwise XOR all-ones simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical integer simplification that reuses unary bitwise-not lowering for XOR with an all-ones literal.
+- Notes: Implemented for `x ^ -1 -> ~~~x` and `-1 ^ x -> ~~~x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Expanded Guided sandbox trial. Covered by `identity_bitxor_all_ones_right` and `identity_bitxor_all_ones_left` in `src/Tests/optimization/anf.opt`.
+
 ### Boolean idempotence simplification
 
 - Optimization name: Boolean idempotence simplification
