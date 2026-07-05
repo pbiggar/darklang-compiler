@@ -223,34 +223,7 @@ movk    x8, #8643, lsl #48       ; = 2432902008176640000
 
 ---
 
-### 2. Empty SaveRegs/RestoreRegs Elimination
-
-**Status: implemented in ARM64 code generation; no longer a standalone factorial optimization opportunity**
-
-**Root Cause:**
-Empty save/restore pairs appear around function calls:
-
-```
-SaveRegs([], [])               ; Empty - no registers to save
-ArgMoves(X0 <- Imm 20)
-X19 <- Call(factorial, [Imm 20])
-RestoreRegs([], [])            ; Empty - nothing to restore
-```
-
-These remain visible in post-register-allocation LIR dumps as call-boundary markers.
-
-**Current evidence:**
-The register allocator correctly determines that no caller-saved registers need protection at the factorial call sites, so the LIR still prints `SaveRegs([], [])` and `RestoreRegs([], [])`. ARM64 code generation now explicitly emits `Ok []` for both empty cases in `src/DarkCompiler/passes/arm64/6_CodeGen.fs`, so they do not allocate stack space or emit machine instructions. They are useful IR markers, not current runtime overhead.
-
-**Remaining cleanup:**
-If the textual LIR noise matters, remove empty save/restore markers in an LIR cleanup pass or hide them in dump output. Do not count that as a factorial instruction-count win unless assembly evidence shows emitted code.
-
-**Files to Modify:**
-- `src/DarkCompiler/passes/4.5_LIR_Peephole.fs` or `src/DarkCompiler/IRPrinter.fs` - Optional cleanup of empty markers in optimized dumps
-
----
-
-### 3. Inline Small Pure Functions
+### 2. Inline Small Pure Functions
 
 **Impact: ~10-15% performance improvement**
 
@@ -286,7 +259,6 @@ repeat_L1:
 |--------------|-----------------|------------|
 | Compile-Time Constant Folding | 90%+ (match Rust) | High |
 | Inline Small Pure Functions | 10-15% | Medium |
-| Hide or remove empty SaveRegs markers from dumps | Documentation/debuggability only | Low |
 
 **Note:** Compile-time constant folding would eliminate the entire benchmark computation, matching Rust. Without that optimization, inlining is the main remaining factorial-specific runtime opportunity documented here.
 
@@ -294,7 +266,6 @@ repeat_L1:
 
 1. **Inline Small Pure Functions** - Medium complexity, good improvement
 2. **Compile-Time Constant Folding** - Major impact, high complexity
-3. **Optional LIR dump cleanup** - Remove or hide empty `SaveRegs`/`RestoreRegs` markers if they obscure investigation output
 
 ## Why Dark Beats OCaml
 
