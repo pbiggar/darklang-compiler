@@ -83,6 +83,9 @@ python3 scripts/diff-upstream-execution-tests.py --ref main --regenerate-expecte
 python3 scripts/diff-upstream-execution-tests.py --ref main
 ```
 
+## No-op Refreshes
+If the upstream snapshot refresh, local delta replay, runner wiring check, and regenerated expected patch leave the working tree unchanged, treat the iteration as a no-op refresh verification. Report the upstream source checked, the clean diff-report result, the validation command result, and that no repository files changed. Do not create an empty implementation commit solely to make a review candidate.
+
 ## 6) Validate
 1. Run full tests:
 ```bash

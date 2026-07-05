@@ -27,6 +27,8 @@ It should not change compiler behavior unless a refreshed upstream test proves a
 9. Run the full test suite.
 10. Report all touched areas, rejects resolved, validation, and any upstream changes that require follow-up.
 
+If the refreshed upstream snapshot, reapplied local delta, regenerated patch, and runner wiring are all unchanged, report the run as a no-op refresh verification. Do not create an empty implementation candidate solely to satisfy review mechanics; include the upstream source checked, diff-report result, test result, and the fact that no repository files changed.
+
 ## Boundaries
 
 Do not use this agent for one-off upstream test enablement. That belongs to the Upstream Test Enabler agent.
@@ -38,3 +40,5 @@ Do not leave `.rej` files, temporary upstream clones, or generated scratch files
 ## Review Output
 
 Report the upstream snapshot source, expected-patch changes, runner wiring changes, rejects or conflicts resolved, full validation result, and any follow-up compatibility issues found.
+
+For no-op refresh verifications, explicitly report that the upstream snapshot and expected local delta already match, that no candidate files changed, and which validation commands passed.
