@@ -109,6 +109,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical integer simplification that reuses unary negation lowering instead of materializing multiplication by literal negative one.
 - Notes: Implemented for `x * -1 -> -x` and `-1 * x -> -x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during an Expanded Guided sandbox trial. Covered by `strength_reduce_mul_neg_one_right` and `strength_reduce_mul_neg_one_left` in `src/Tests/optimization/anf.opt`.
 
+### Float multiplication by negative one strength reduction
+
+- Optimization name: Float multiplication by negative one strength reduction
+- Taxonomy category: Strength reduction
+- Priority/rationale: Small, low-risk canonical float simplification that reuses unary negation lowering instead of materializing multiplication by literal negative one.
+- Notes: Implemented for `x * -1.0 -> -x` and `-1.0 * x -> -x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during an Expanded Guided sandbox trial. Covered by `strength_reduce_float_mul_neg_one_right` and `strength_reduce_float_mul_neg_one_left` in `src/Tests/optimization/anf.opt`.
+
 ### Division by negative one strength reduction
 
 - Optimization name: Division by negative one strength reduction
