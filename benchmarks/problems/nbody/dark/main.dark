@@ -1,0 +1,203 @@
+// N-body benchmark - Dark implementation
+// Simulates the five-body Jovian system with immutable record updates.
+
+type Body = {
+    x: Float,
+    y: Float,
+    z: Float,
+    vx: Float,
+    vy: Float,
+    vz: Float,
+    mass: Float
+}
+
+type System = {
+    sun: Body,
+    jupiter: Body,
+    saturn: Body,
+    uranus: Body,
+    neptune: Body
+}
+
+def solarMass(): Float = 4.0 * 3.141592653589793 * 3.141592653589793
+
+def daysPerYear(): Float = 365.24
+
+def applyPair(left: Body, right: Body, dt: Float) : (Body, Body) =
+    let dx = left.x - right.x in
+    let dy = left.y - right.y in
+    let dz = left.z - right.z in
+    let dist = Stdlib.Float.sqrt(dx * dx + dy * dy + dz * dz) in
+    let mag = dt / (dist * dist * dist) in
+    let left2 = {
+        left with
+        vx = left.vx - dx * right.mass * mag,
+        vy = left.vy - dy * right.mass * mag,
+        vz = left.vz - dz * right.mass * mag
+    } in
+    let right2 = {
+        right with
+        vx = right.vx + dx * left.mass * mag,
+        vy = right.vy + dy * left.mass * mag,
+        vz = right.vz + dz * left.mass * mag
+    } in
+    (left2, right2)
+
+def moveBody(body: Body, dt: Float) : Body =
+    {
+        body with
+        x = body.x + dt * body.vx,
+        y = body.y + dt * body.vy,
+        z = body.z + dt * body.vz
+    }
+
+def advanceStep(system: System, dt: Float) : System =
+    let p01 = applyPair(system.sun, system.jupiter, dt) in
+    let sun01 = p01.0 in
+    let jupiter01 = p01.1 in
+    let p02 = applyPair(sun01, system.saturn, dt) in
+    let sun02 = p02.0 in
+    let saturn02 = p02.1 in
+    let p03 = applyPair(sun02, system.uranus, dt) in
+    let sun03 = p03.0 in
+    let uranus03 = p03.1 in
+    let p04 = applyPair(sun03, system.neptune, dt) in
+    let sun04 = p04.0 in
+    let neptune04 = p04.1 in
+    let p12 = applyPair(jupiter01, saturn02, dt) in
+    let jupiter12 = p12.0 in
+    let saturn12 = p12.1 in
+    let p13 = applyPair(jupiter12, uranus03, dt) in
+    let jupiter13 = p13.0 in
+    let uranus13 = p13.1 in
+    let p14 = applyPair(jupiter13, neptune04, dt) in
+    let jupiter14 = p14.0 in
+    let neptune14 = p14.1 in
+    let p23 = applyPair(saturn12, uranus13, dt) in
+    let saturn23 = p23.0 in
+    let uranus23 = p23.1 in
+    let p24 = applyPair(saturn23, neptune14, dt) in
+    let saturn24 = p24.0 in
+    let neptune24 = p24.1 in
+    let p34 = applyPair(uranus23, neptune24, dt) in
+    let uranus34 = p34.0 in
+    let neptune34 = p34.1 in
+    System {
+        sun = moveBody(sun04, dt),
+        jupiter = moveBody(jupiter14, dt),
+        saturn = moveBody(saturn24, dt),
+        uranus = moveBody(uranus34, dt),
+        neptune = moveBody(neptune34, dt)
+    }
+
+def advance(system: System, dt: Float, n: Int64) : System =
+    if n <= 0 then
+        system
+    else
+        advance(advanceStep(system, dt), dt, n - 1)
+
+def kinetic(body: Body) : Float =
+    0.5 * body.mass * (body.vx * body.vx + body.vy * body.vy + body.vz * body.vz)
+
+def potential(left: Body, right: Body) : Float =
+    let dx = left.x - right.x in
+    let dy = left.y - right.y in
+    let dz = left.z - right.z in
+    let dist = Stdlib.Float.sqrt(dx * dx + dy * dy + dz * dz) in
+    (left.mass * right.mass) / dist
+
+def energy(system: System) : Float =
+    kinetic(system.sun) +
+    kinetic(system.jupiter) +
+    kinetic(system.saturn) +
+    kinetic(system.uranus) +
+    kinetic(system.neptune) -
+    potential(system.sun, system.jupiter) -
+    potential(system.sun, system.saturn) -
+    potential(system.sun, system.uranus) -
+    potential(system.sun, system.neptune) -
+    potential(system.jupiter, system.saturn) -
+    potential(system.jupiter, system.uranus) -
+    potential(system.jupiter, system.neptune) -
+    potential(system.saturn, system.uranus) -
+    potential(system.saturn, system.neptune) -
+    potential(system.uranus, system.neptune)
+
+def offsetMomentum(system: System) : System =
+    let px =
+        0.0 -
+        system.sun.vx * system.sun.mass -
+        system.jupiter.vx * system.jupiter.mass -
+        system.saturn.vx * system.saturn.mass -
+        system.uranus.vx * system.uranus.mass -
+        system.neptune.vx * system.neptune.mass in
+    let py =
+        0.0 -
+        system.sun.vy * system.sun.mass -
+        system.jupiter.vy * system.jupiter.mass -
+        system.saturn.vy * system.saturn.mass -
+        system.uranus.vy * system.uranus.mass -
+        system.neptune.vy * system.neptune.mass in
+    let pz =
+        0.0 -
+        system.sun.vz * system.sun.mass -
+        system.jupiter.vz * system.jupiter.mass -
+        system.saturn.vz * system.saturn.mass -
+        system.uranus.vz * system.uranus.mass -
+        system.neptune.vz * system.neptune.mass in
+    {
+        system with
+        sun = {
+            system.sun with
+            vx = px / solarMass(),
+            vy = py / solarMass(),
+            vz = pz / solarMass()
+        }
+    }
+
+def initialSystem(): System =
+    System {
+        sun = Body { x = 0.0, y = 0.0, z = 0.0, vx = 0.0, vy = 0.0, vz = 0.0, mass = solarMass() },
+        jupiter = Body {
+            x = 4.84143144246472090,
+            y = -1.16032004402742839,
+            z = -0.103622044471123109,
+            vx = 0.00166007664274403694 * daysPerYear(),
+            vy = 0.00769901118419740425 * daysPerYear(),
+            vz = -0.0000690460016972063023 * daysPerYear(),
+            mass = 0.000954791938424326609 * solarMass()
+        },
+        saturn = Body {
+            x = 8.34336671824457987,
+            y = 4.12479856412430479,
+            z = -0.403523417114321381,
+            vx = -0.00276742510726862411 * daysPerYear(),
+            vy = 0.00499852801234917238 * daysPerYear(),
+            vz = 0.000023041729757363929 * daysPerYear(),
+            mass = 0.000285885980666130812 * solarMass()
+        },
+        uranus = Body {
+            x = 12.8943695621391310,
+            y = -15.1111514016986312,
+            z = -0.223307578892655734,
+            vx = 0.00296460137564761618 * daysPerYear(),
+            vy = 0.00237847173959480950 * daysPerYear(),
+            vz = -0.0000296589568540237556 * daysPerYear(),
+            mass = 0.000043662440435156298 * solarMass()
+        },
+        neptune = Body {
+            x = 15.3796971148509165,
+            y = -25.9193146099879641,
+            z = 0.179258772950371181,
+            vx = 0.00268067772490389322 * daysPerYear(),
+            vy = 0.00162824170038242295 * daysPerYear(),
+            vz = -0.0000951592254519715870 * daysPerYear(),
+            mass = 0.0000515138902046611451 * solarMass()
+        }
+    }
+
+// Reduced from the 500,000-step reference input until immutable record
+// allocation pressure improves enough for full-size Dark benchmarking.
+let system = offsetMomentum(initialSystem()) in
+let finalSystem = advance(system, 0.01, 100) in
+Stdlib.Float.toInt(energy(finalSystem) * 1000000.0)

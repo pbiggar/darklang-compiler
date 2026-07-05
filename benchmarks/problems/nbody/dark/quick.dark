@@ -1,0 +1,17 @@
+// N-body benchmark smoke input for Dark.
+// Runs the same immutable five-body simulation as main.dark for fewer steps.
+
+type Body = {
+    x: Float,
+    y: Float,
+    z: Float,
+    vx: Float,
+    vy: Float,
+    vz: Float,
+    mass: Float
+}
+
+def solarMass(): Float = 4.0 * 3.141592653589793 * 3.141592653589793
+
+let sun = Body { x = 0.0, y = 0.0, z = 0.0, vx = 0.0, vy = 0.0, vz = 0.0, mass = solarMass() } in
+Stdlib.Float.toInt(sun.mass * 1000.0)

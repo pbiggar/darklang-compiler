@@ -108,16 +108,17 @@ These benchmarks have implementations but are limited by stack depth or bugs.
 | pisum      | Working (reduced)  | Uses 5 rounds, n=1000 (full size causes stack overflow)        |
 | nsieve     | Stack overflow     | Uses n=1000 (n=100000 causes stack overflow) - outputs 168     |
 | edigits    | Stack overflow     | Uses 50 digits, 1 iteration (full: 1000 digits, 10 iterations) |
+| nbody      | Working (reduced)  | Uses 100 simulation steps (full: 500000 steps)                 |
 
 ---
 
-## Not Implemented
+## Implementation Coverage
 
-These benchmarks are in the suite for other languages but don't have Dark implementations:
+These benchmarks are in the suite for other languages and their current Dark
+implementation coverage is:
 
-| Benchmark | Notes                                             |
-| --------- | ------------------------------------------------- |
-| nbody     | No Dark implementation exists                     |
+All benchmark directories now have a Dark implementation. Some implementations
+remain reduced or blocked as documented above.
 
 ---
 

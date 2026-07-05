@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-05 23:36:02
-**Commit:** `2d27b7ba` - Clarify pass optimization rejection flow
+**Last Updated:** 2026-07-06 00:00:21
+**Commit:** `ba05a56b` - Add Dark nbody benchmark
 
 | Benchmark     |           Dark (5.55x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
