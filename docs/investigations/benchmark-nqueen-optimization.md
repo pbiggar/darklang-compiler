@@ -239,57 +239,7 @@ This suggests issues with:
 
 ## Identified Optimization Opportunities
 
-### 1. Inline Int64.bitwiseOr to Single ORR Instruction
-
-**Impact: ~40-50% performance improvement (estimated)**
-
-**Root Cause:**
-`Int64.bitwiseOr` is a trivial function that should be intrinsified to a single ARM64 `orr` instruction. Currently, each call involves:
-- SaveRegs/RestoreRegs overhead (~2-4 instructions each)
-- Argument moves (~2 instructions)
-- Branch and link (~1 instruction)
-- Result move (~1 instruction)
-
-Total: ~10-12 instructions per bitwiseOr call vs 1 instruction for inline `orr`.
-
-With 5 calls per hot loop iteration, this adds ~50 unnecessary instructions per iteration.
-
-**Evidence from Rust:**
-```asm
-944c: orr  w9, w8, w21      ; cols | pos - ONE instruction
-9450: orr  w10, w8, w19     ; diag2 | pos - ONE instruction
-9454: orr  w0, w8, w20      ; diag1 | pos - ONE instruction
-```
-
-**Evidence from Dark (excessive call overhead):**
-```
-SaveRegs([X1, X2, X3], [])
-ArgMoves(X0 <- Reg X2, X1 <- Reg X20)
-X23 <- Call(Stdlib.Int64.bitwiseOr, [Reg X2, Reg X20])
-RestoreRegs([X1, X2, X3], [])
-X23 <- Mov(Reg X0)
-```
-
-**Implementation Approach:**
-Option 1 - Intrinsic at ANF level:
-- Recognize `Stdlib.Int64.bitwiseOr(a, b)` and replace with `a | b` primitive operation
-- Add `BitwiseOr` to the set of primitive operations alongside `&`, `<<`, `>>`
-
-Option 2 - Always-inline annotation:
-- Mark `Int64.bitwiseOr` as `[<InlineAlways>]`
-- Ensure inliner processes this before MIR lowering
-
-Option 3 - LIR peephole:
-- Recognize `Call(Stdlib.Int64.bitwiseOr, [a, b])` and replace with `Orr(a, b)`
-
-**Files to Modify:**
-- `src/DarkCompiler/passes/2.4_ANF_Inlining.fs` - Add always-inline for Int64 intrinsics
-- OR `src/DarkCompiler/Stdlib/Int64.fs` - Mark bitwiseOr as intrinsic
-- OR `src/DarkCompiler/passes/4_MIR_to_LIR.fs` - Intrinsify at LIR lowering
-
----
-
-### 2. Eliminate SaveRegs/RestoreRegs for Callee-Saved Only Live Ranges
+### 1. Eliminate SaveRegs/RestoreRegs for Callee-Saved Only Live Ranges
 
 **Impact: ~5-10% performance improvement (estimated)**
 
@@ -315,7 +265,7 @@ But notice that after allocation, the actual live values are in X19-X26 (callee-
 
 ---
 
-### 3. Convert Tail-Recursive Style to While Loop
+### 2. Convert Tail-Recursive Style to While Loop
 
 **Impact: ~5% performance improvement (estimated)**
 
@@ -351,7 +301,6 @@ This could be addressed by:
 
 | Optimization | Estimated Impact | Complexity |
 |--------------|-----------------|------------|
-| Inline Int64.bitwiseOr | 40-50% | Medium |
 | Redundant Self-Move Elimination | 10-15% | Low |
 | SaveRegs/RestoreRegs Optimization | 5-10% | Low-Medium |
 | Loop Structure Improvement | 5% | Medium |
@@ -360,10 +309,9 @@ This could be addressed by:
 
 ## Recommended Implementation Order
 
-1. **Inline Int64.bitwiseOr** - Highest impact, relatively straightforward
-2. **Redundant Self-Move Elimination** - Quick win, low complexity
-3. **SaveRegs/RestoreRegs Optimization** - Medium complexity, good impact
-4. **Loop Structure Improvement** - More complex, moderate benefit
+1. **Redundant Self-Move Elimination** - Quick win, low complexity
+2. **SaveRegs/RestoreRegs Optimization** - Medium complexity, good impact
+3. **Loop Structure Improvement** - More complex, moderate benefit
 
 ## Appendix: Full IR Dumps
 

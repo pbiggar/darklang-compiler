@@ -30,12 +30,15 @@ type InliningConfig = {
     MaxFunctionSize: int
     /// Maximum depth of recursive inlining
     MaxInlineDepth: int
+    /// Maximum external bit-manipulation wrapper calls to inline in one caller body
+    MaxExternalInlineSites: int
 }
 
 /// Default inlining configuration
 let defaultConfig = {
     MaxFunctionSize = 20
     MaxInlineDepth = 3
+    MaxExternalInlineSites = 8
 }
 
 /// Information about a function for inlining decisions
@@ -44,6 +47,8 @@ type FunctionInfo = {
     Size: int            // Count of TempIds (Let bindings) in body
     IsRecursive: bool    // Calls itself directly
     HasClosures: bool    // Contains ClosureAlloc or ClosureCall
+    HasTailCalls: bool   // Contains TailCall or ClosureTailCall
+    IsExternal: bool     // Body is available only as an inline candidate
     CallsCount: int      // Number of call sites (for future heuristics)
 }
 
@@ -73,6 +78,19 @@ let rec exprHasClosures (expr: AExpr) : bool =
     | Return _ -> false
     | If (_, thenBranch, elseBranch) ->
         exprHasClosures thenBranch || exprHasClosures elseBranch
+
+let cexprHasTailCalls (cexpr: CExpr) : bool =
+    match cexpr with
+    | TailCall _ | ClosureTailCall _ | IndirectTailCall _ -> true
+    | _ -> false
+
+let rec exprHasTailCalls (expr: AExpr) : bool =
+    match expr with
+    | Let (_, cexpr, body) ->
+        cexprHasTailCalls cexpr || exprHasTailCalls body
+    | Return _ -> false
+    | If (_, thenBranch, elseBranch) ->
+        exprHasTailCalls thenBranch || exprHasTailCalls elseBranch
 
 /// Collect all function names called in a CExpr
 let collectCallsInCExpr (cexpr: CExpr) : Set<string> =
@@ -201,6 +219,8 @@ let buildFunctionInfo (recursiveFuncs: Set<string>) (func: Function) : FunctionI
         Size = countTempIds func.Body
         IsRecursive = Set.contains func.Name recursiveFuncs
         HasClosures = exprHasClosures func.Body
+        HasTailCalls = exprHasTailCalls func.Body
+        IsExternal = false
         CallsCount = 0  // Will be updated later if needed
     }
 
@@ -315,7 +335,49 @@ let shouldInline (info: FunctionInfo) (config: InliningConfig) (depth: int) : bo
     info.Size <= config.MaxFunctionSize
     && not info.IsRecursive
     && not info.HasClosures
+    && not info.HasTailCalls
     && depth < config.MaxInlineDepth
+
+let private isExternalBitManipulationCExpr (cexpr: CExpr) : bool =
+    match cexpr with
+    | Prim (Shl, _, _)
+    | Prim (Shr, _, _)
+    | Prim (BitAnd, _, _)
+    | Prim (BitOr, _, _)
+    | Prim (BitXor, _, _)
+    | UnaryPrim (BitNot, _) -> true
+    | _ -> false
+
+let rec private isExternalBitManipulationExpr (expr: AExpr) : bool =
+    match expr with
+    | Let (_, cexpr, body) ->
+        isExternalBitManipulationCExpr cexpr && isExternalBitManipulationExpr body
+    | Return _ -> true
+    | If _ -> false
+
+let rec private countCallsToNames (names: Set<string>) (expr: AExpr) : int =
+    match expr with
+    | Let (_, Call (name, _), body) ->
+        (if Set.contains name names then 1 else 0) + countCallsToNames names body
+    | Let (_, _, body) ->
+        countCallsToNames names body
+    | Return _ -> 0
+    | If (_, thenBranch, elseBranch) ->
+        countCallsToNames names thenBranch + countCallsToNames names elseBranch
+
+let private shouldUseExternalCandidate (info: FunctionInfo) (config: InliningConfig) : bool =
+    shouldInline info config 0
+    && Set.isEmpty (collectCalls info.Func.Body)
+    && isExternalBitManipulationExpr info.Func.Body
+
+let filterExternalCandidates (config: InliningConfig) (functions: Function list) : Function list =
+    buildFunctionInfoMap functions
+    |> Map.toList
+    |> List.choose (fun (_name, info) ->
+        if shouldUseExternalCandidate info config then
+            Some info.Func
+        else
+            None)
 
 /// Substitute Return with a continuation expression
 /// This replaces `Return atom` with a binding and continues with the rest
@@ -359,9 +421,10 @@ let bindLiteralArgs
     loop parameters args Map.empty [] varGen
 
 /// Inline a function call
-/// Returns the inlined expression and updated VarGen
-let inlineCall (info: FunctionInfo) (args: Atom list) (resultTid: TempId)
-               (continuation: AExpr) (varGen: VarGen)
+/// Returns the renamed function body and updated VarGen. Callers choose whether
+/// to optimize the continuation before or after substitution based on the
+/// candidate source.
+let inlineCallBody (info: FunctionInfo) (args: Atom list) (varGen: VarGen)
     : AExpr * VarGen =
     // Step 1: Bind literal args and build parameter -> TempId mapping
     let (paramMapping, literalBindings, varGen') =
@@ -374,10 +437,7 @@ let inlineCall (info: FunctionInfo) (args: Atom list) (resultTid: TempId)
     let bodyWithLiteralBindings =
         List.foldBack (fun (tid, atom) acc -> Let (tid, Atom atom, acc)) literalBindings renamedBody
 
-    // Step 4: Substitute Return with continuation
-    let inlinedExpr = substituteReturn resultTid continuation bodyWithLiteralBindings
-
-    (inlinedExpr, varGen'')
+    (bodyWithLiteralBindings, varGen'')
 
 /// Recursively inline calls in an expression
 let rec inlineInExpr (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
@@ -388,11 +448,20 @@ let rec inlineInExpr (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
         // Check if this is a regular call (not tail call) to a user function
         match Map.tryFind funcName funcs with
         | Some info when shouldInline info config depth ->
-            // Inline the call
-            let (inlinedExpr, varGen') = inlineCall info args tid body varGen
-            // Recursively inline in the result (with increased depth)
-            let (result, varGen'', _) = inlineInExpr funcs config (depth + 1) varGen' inlinedExpr
-            (result, varGen'', true)
+            if info.IsExternal then
+                let (body', varGen', changedInContinuation) =
+                    inlineInExpr funcs config depth varGen body
+                let (inlinedBody, varGen'') = inlineCallBody info args varGen'
+                let (inlinedBody', varGen''', changedInCallee) =
+                    inlineInExpr funcs config (depth + 1) varGen'' inlinedBody
+                let result = substituteReturn tid body' inlinedBody'
+                (result, varGen''', true || changedInContinuation || changedInCallee)
+            else
+                let (inlinedBody, varGen') = inlineCallBody info args varGen
+                let inlinedExpr = substituteReturn tid body inlinedBody
+                let (result, varGen'', _) =
+                    inlineInExpr funcs config (depth + 1) varGen' inlinedExpr
+                (result, varGen'', true)
         | _ ->
             // Don't inline - continue processing body
             let (body', varGen', changed) = inlineInExpr funcs config depth varGen body
@@ -443,12 +512,37 @@ let maxTempIdInProgram (Program (funcs, main)) : int =
 // Phase 4: Main entry point
 // ============================================================================
 
-/// Inline functions in a program
-let inlineProgram (config: InliningConfig) (program: Program) : Program =
+/// Inline functions in a program, using optional external candidates for calls
+/// whose bodies are available but should not be emitted with this program.
+let inlineProgramWithExternalCandidates
+    (config: InliningConfig)
+    (externalCandidates: Function list)
+    (program: Program)
+    : Program =
     let (Program (funcs, main)) = program
 
-    // Build function info map (only for user functions, not stdlib)
-    let funcInfoMap = buildFunctionInfoMap funcs
+    let calledNames =
+        funcs
+        |> List.fold (fun acc func -> Set.union acc (collectCalls func.Body)) (collectCalls main)
+
+    let externalCandidatesCalledByProgram =
+        externalCandidates
+        |> List.filter (fun func -> Set.contains func.Name calledNames)
+
+    let externalInfoMap =
+        buildFunctionInfoMap externalCandidatesCalledByProgram
+        |> Map.filter (fun _ info -> shouldUseExternalCandidate info config)
+        |> Map.map (fun _ info -> { info with IsExternal = true })
+    let localInfoMap = buildFunctionInfoMap funcs
+    let funcInfoMap =
+        Map.fold (fun acc name info -> Map.add name info acc) localInfoMap externalInfoMap
+    let externalNames =
+        externalInfoMap |> Map.toList |> List.map fst |> Set.ofList
+    let funcsForBody body =
+        if countCallsToNames externalNames body <= config.MaxExternalInlineSites then
+            funcInfoMap
+        else
+            localInfoMap
 
     // Find starting VarGen value (must be higher than any existing TempId)
     let startVarGen = VarGen (maxTempIdInProgram program + 1)
@@ -457,14 +551,18 @@ let inlineProgram (config: InliningConfig) (program: Program) : Program =
     let (funcs', varGen', _) =
         funcs
         |> List.fold (fun (accFuncs, varGen, anyChanged) func ->
-            let (func', varGen', changed) = inlineInFunction funcInfoMap config varGen func
+            let (func', varGen', changed) = inlineInFunction (funcsForBody func.Body) config varGen func
             (func' :: accFuncs, varGen', anyChanged || changed)
         ) ([], startVarGen, false)
 
     // Inline in main expression
-    let (main', _, _) = inlineInExpr funcInfoMap config 0 varGen' main
+    let (main', _, _) = inlineInExpr (funcsForBody main) config 0 varGen' main
 
     Program (List.rev funcs', main')
+
+/// Inline functions in a program
+let inlineProgram (config: InliningConfig) (program: Program) : Program =
+    inlineProgramWithExternalCandidates config [] program
 
 /// Inline functions with default configuration
 let inlineProgramDefault (program: Program) : Program =
