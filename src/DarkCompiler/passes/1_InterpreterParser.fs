@@ -1584,8 +1584,69 @@ let parse (tokens: Token list) : Result<Program, string> =
             else
                 Ok (List.rev acc, toks)
 
+    and parseNestedFunctionLet (functionTokens: Token list) : Result<Expr * Token list, string> =
+        let buildNestedFunctionLet
+            (funcDef: FunctionDef)
+            (body: Expr)
+            (remainingAfterBody: Token list)
+            : Expr * Token list =
+            (Let (funcDef.Name, Lambda (funcDef.Params, funcDef.Body), body), remainingAfterBody)
+
+        let betterSplit
+            (currentBest: (Expr * Token list) option)
+            (candidate: Expr * Token list)
+            : (Expr * Token list) option =
+            match currentBest with
+            | None -> Some candidate
+            | Some (_, bestRemaining) ->
+                let (_, candidateRemaining) = candidate
+                if List.length candidateRemaining < List.length bestRemaining then
+                    Some candidate
+                else
+                    currentBest
+
+        let rec trySplits
+            (functionTokensRev: Token list)
+            (remainingTokens: Token list)
+            (bestCandidate: (Expr * Token list) option)
+            : Result<Expr * Token list, string> =
+            match remainingTokens with
+            | [] ->
+                match bestCandidate with
+                | Some best -> Ok best
+                | None -> Error "Expected expression"
+            | nextToken :: restTokens ->
+                let candidateFunctionTokens = List.rev (nextToken :: functionTokensRev)
+                let updatedBest =
+                    match parseFunctionDef candidateFunctionTokens parseExpr with
+                    | Ok (funcDef, []) ->
+                        let bodyTokens =
+                            match restTokens with
+                            | TIn :: afterIn -> afterIn
+                            | _ -> restTokens
+
+                        match parseExpr bodyTokens with
+                        | Ok (body, remainingAfterBody) ->
+                            buildNestedFunctionLet funcDef body remainingAfterBody
+                            |> betterSplit bestCandidate
+                        | Error _ ->
+                            bestCandidate
+                    | _ ->
+                        bestCandidate
+
+                trySplits (nextToken :: functionTokensRev) restTokens updatedBest
+
+        trySplits [] functionTokens None
+
     and parseExpr (toks: Token list) : Result<Expr * Token list, string> =
         match toks with
+        | TLet :: TIdent firstName :: TLParen :: rest ->
+            // Interpreter-style nested function declaration:
+            // let name(args) : ReturnType = fnBody body
+            parseNestedFunctionLet (TDef :: TIdent firstName :: TLParen :: rest)
+        | TLet :: TIdent firstName :: TLt :: rest ->
+            // Interpreter-style generic nested function declaration.
+            parseNestedFunctionLet (TDef :: TIdent firstName :: TLt :: rest)
         | TLet :: rest ->
             // Parse: let pattern = value in body
             // Supports simple let (let x = ...) and pattern matching (let (a, b) = ...)

@@ -40,6 +40,26 @@ let testParseInterpreterLambdaApplication () : TestResult =
     | Ok other ->
         Error $"Expected single expression program, got: {other}"
 
+let testParseInterpreterNestedFunctionAfterLetBinding () : TestResult =
+    let source =
+        "let limit = 10L let sumUpTo (i: Int64) : Int64 = if i > limit then 0L else i + (sumUpTo (i + 1L)) sumUpTo 1L"
+
+    match InterpreterParser.parseString false source with
+    | Error err ->
+        Error $"Interpreter parser failed on nested function after let binding: {err}"
+    | Ok (Program [Expression (Let ("limit", Int64Literal 10L, Let ("sumUpTo", Lambda (parameters, body), Call ("sumUpTo", callArgs))))]) ->
+        match NonEmptyList.toList parameters, body, NonEmptyList.toList callArgs with
+        | [("i", AST.TInt64)], If (BinOp (Gt, Var "i", Var "limit"), Int64Literal 0L, BinOp (Add, Var "i", Call ("sumUpTo", recursiveArgs))), [Int64Literal 1L] ->
+            match NonEmptyList.toList recursiveArgs with
+            | [BinOp (Add, Var "i", Int64Literal 1L)] -> Ok ()
+            | other -> Error $"Unexpected recursive call args for nested function: {other}"
+        | _ ->
+            Error $"Unexpected nested function AST: parameters={parameters}; body={body}; callArgs={callArgs}"
+    | Ok (Program [Expression expr]) ->
+        Error $"Unexpected AST for nested function after let binding: {expr}"
+    | Ok other ->
+        Error $"Expected single expression program, got: {other}"
+
 let testInterpreterParserParsesWildcardLambdaParameter () : TestResult =
     let source = "fun _ -> 1L"
     match InterpreterParser.parseString false source with
@@ -831,6 +851,7 @@ let testPrettyPrintInterpreterSyntaxPreservesUncurriedLambdaApplyRoundtrip () : 
 let tests = [
     ("compiler library interpreter parse", testCompilerLibraryParseInterpreterSyntax)
     ("parse interpreter lambda/application", testParseInterpreterLambdaApplication)
+    ("parse interpreter nested function after let binding", testParseInterpreterNestedFunctionAfterLetBinding)
     ("parse interpreter wildcard lambda parameter", testInterpreterParserParsesWildcardLambdaParameter)
     ("parse interpreter triple-quoted interpolation", testParseInterpreterTripleQuotedInterpolation)
     ("parse interpreter negative float application args", testParseInterpreterNegativeFloatApplicationArgs)
