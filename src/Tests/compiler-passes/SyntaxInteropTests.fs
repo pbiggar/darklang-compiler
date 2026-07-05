@@ -130,10 +130,10 @@ let testInterpreterParserParsesLegacyIntSuffix () : TestResult =
     match InterpreterParser.parseString false "1I" with
     | Error err ->
         Error $"Interpreter parser failed on legacy Int suffix: {err}"
-    | Ok (Program [Expression (Int128Literal value)]) when value = System.Int128.One ->
+    | Ok (Program [Expression (BigIntLiteral value)]) when value = System.Numerics.BigInteger.One ->
         Ok ()
     | Ok other ->
-        Error $"Expected Int128 literal program for legacy Int suffix, got: {other}"
+        Error $"Expected BigInt literal program for legacy Int suffix, got: {other}"
 
 let testCompilerParserParsesApostropheTypeArgAtCallSite () : TestResult =
     let source = "Stdlib.Json.parse<'a>(\"5\")"
@@ -644,10 +644,20 @@ let testInterpreterParserParsesUpstreamIntSuffixLiteral () : TestResult =
     match InterpreterParser.parseString false source with
     | Error err ->
         Error $"Interpreter parser failed on upstream I-suffixed integer literal: {err}"
-    | Ok (Program [Expression (Int128Literal n)]) when n = System.Int128.One ->
+    | Ok (Program [Expression (BigIntLiteral n)]) when n = System.Numerics.BigInteger.One ->
         Ok ()
     | Ok other ->
         Error $"Unexpected AST for upstream I-suffixed integer literal: {other}"
+
+let testInterpreterParserParsesOversizedUpstreamIntSuffixLiteral () : TestResult =
+    let source = "1606938044258990275541962092341162602522202993782792835301376I"
+    match InterpreterParser.parseString false source with
+    | Error err ->
+        Error $"Interpreter parser failed on oversized upstream I-suffixed integer literal: {err}"
+    | Ok (Program [Expression (BigIntLiteral n)]) when n.ToString() = "1606938044258990275541962092341162602522202993782792835301376" ->
+        Ok ()
+    | Ok other ->
+        Error $"Unexpected AST for oversized upstream I-suffixed integer literal: {other}"
 
 let testInterpreterParserParsesNegativeInt8MinLiteral () : TestResult =
     let source = "Stdlib.Int128.fromInt8_v0 -128y"
@@ -930,6 +940,7 @@ let tests = [
     ("pretty-print compiler escapes keyword field names", testPrettyPrintCompilerSyntaxEscapesKeywordFieldNames)
     ("parse bare int literal", testInterpreterParserParsesBareIntLiteral)
     ("parse upstream I-suffixed int literal", testInterpreterParserParsesUpstreamIntSuffixLiteral)
+    ("parse oversized upstream I-suffixed int literal", testInterpreterParserParsesOversizedUpstreamIntSuffixLiteral)
     ("parse negative int8 minimum literal", testInterpreterParserParsesNegativeInt8MinLiteral)
     ("reject compiler lambda syntax", testInterpreterParserRejectsCompilerLambdaSyntax)
     ("parse comma-separated lists", testInterpreterParserParsesCommaSeparatedLists)

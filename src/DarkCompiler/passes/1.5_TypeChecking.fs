@@ -575,7 +575,7 @@ let private formatValueArgumentArityError (funcName: string) (expectedCount: int
 /// This is used to propagate concrete types through nested TypeApp nodes
 let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
     match expr with
-    | UnitLiteral | Int64Literal _ | Int128Literal _ | Int8Literal _ | Int16Literal _ | Int32Literal _
+    | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
     | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ -> expr
     | BinOp (op, left, right) ->
@@ -882,7 +882,7 @@ let private buildEqExprForType
 /// bound: Set of names that are currently in scope (not free)
 let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
     match expr with
-    | UnitLiteral | Int64Literal _ | Int128Literal _ | Int8Literal _ | Int16Literal _ | Int32Literal _
+    | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
     | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ ->
         Set.empty
@@ -1405,6 +1405,9 @@ let rec checkExprWithParamNames
             match reconcileTypes (Some aliasReg) other TInt128 with
             | Some TInt128 -> Ok (TInt128, expr)
             | _ -> Error (TypeMismatch (other, TInt128, "integer literal"))
+
+    | BigIntLiteral _ ->
+        Ok (TSum ("Stdlib.Int.Int", []), expr)
 
     | Int8Literal _ ->
         match expectedType with
@@ -4435,7 +4438,7 @@ let rec private collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Ex
         |> List.fold Set.union Set.empty
 
     match expr with
-    | UnitLiteral | Int64Literal _ | Int128Literal _ | Int8Literal _ | Int16Literal _ | Int32Literal _
+    | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
     | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ ->
         Set.empty
@@ -4510,7 +4513,7 @@ let rec private materializeEqHelperCallsInExpr (aliasReg: AliasRegistry) (expr: 
     let recurse = materializeEqHelperCallsInExpr aliasReg
 
     match expr with
-    | UnitLiteral | Int64Literal _ | Int128Literal _ | Int8Literal _ | Int16Literal _ | Int32Literal _
+    | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
     | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ ->
         expr

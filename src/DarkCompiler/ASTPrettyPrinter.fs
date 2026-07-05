@@ -217,6 +217,7 @@ let rec private isAtomicExpr (expr: Expr) : bool =
     | UnitLiteral
     | Int64Literal _
     | Int128Literal _
+    | BigIntLiteral _
     | Int8Literal _
     | Int16Literal _
     | Int32Literal _
@@ -418,6 +419,7 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
         match arg with
         | Int64Literal n -> n < 0L
         | Int128Literal n -> n < System.Int128.Zero
+        | BigIntLiteral n -> n < System.Numerics.BigInteger.Zero
         | Int8Literal n -> n < 0y
         | Int16Literal n -> n < 0s
         | Int32Literal n -> n < 0l
@@ -468,6 +470,8 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
         match syntax with
         | CompilerSyntax -> $"{n}Q"
         | InterpreterSyntax -> $"{n}Q"
+    | BigIntLiteral n ->
+        $"{n}I"
     | Int8Literal n ->
         match syntax with
         | CompilerSyntax -> $"{n}y"
@@ -534,6 +538,7 @@ let rec private formatExpr (syntax: Syntax) (expr: Expr) : string =
             match expr with
             | Int64Literal _
             | Int128Literal _
+            | BigIntLiteral _
             | Int8Literal _
             | Int16Literal _
             | Int32Literal _

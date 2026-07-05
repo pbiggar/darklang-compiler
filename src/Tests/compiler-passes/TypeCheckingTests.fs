@@ -43,6 +43,7 @@ let rec countMatches (expr: Expr) : int =
         | UnitLiteral
         | Int64Literal _
         | Int128Literal _
+        | BigIntLiteral _
         | Int8Literal _
         | Int16Literal _
         | Int32Literal _

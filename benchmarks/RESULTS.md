@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-05 21:20:05
-**Commit:** `7079b5e4` - Update fannkuch benchmark to full input
+**Last Updated:** 2026-07-05 23:36:02
+**Commit:** `2d27b7ba` - Clarify pass optimization rejection flow
 
 | Benchmark     |           Dark (5.55x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

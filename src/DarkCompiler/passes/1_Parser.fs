@@ -26,6 +26,7 @@ type InterpPart =
 and Token =
     | TInt64 of int64       // Default integer (Int64)
     | TInt128 of System.Int128  // 128-bit signed: 1Q
+    | TBigInt of System.Numerics.BigInteger // arbitrary-precision signed Int: 1I
     | TInt8 of sbyte        // 8-bit signed: 1y
     | TInt16 of int16       // 16-bit signed: 1s
     | TInt32 of int32       // 32-bit signed: 1l
@@ -321,6 +322,10 @@ let lex (input: string) : Result<Token list, string> =
                             lexHelper rest (TInt128 System.Int128.MinValue :: acc)
                         else
                             Error $"Value {numStr} is out of range for Int128"
+                | 'I' :: rest ->
+                    match System.Numerics.BigInteger.TryParse(numStr) with
+                    | (true, value) -> lexHelper rest (TBigInt value :: acc)
+                    | (false, _) -> Error $"Invalid Int literal: {numStr}"
                 | 'Z' :: rest ->
                     // UInt128 suffix: 1Z
                     match System.UInt128.TryParse(numStr) with
@@ -1720,6 +1725,7 @@ let parse (tokens: Token list) : Result<Program, string> =
         | TMinus :: TInt128 n :: rest when n = System.Int128.MinValue ->
             Ok (Int128Literal System.Int128.MinValue, rest)
         | TMinus :: TInt128 n :: rest -> Ok (Int128Literal (-n), rest)
+        | TMinus :: TBigInt n :: rest -> Ok (BigIntLiteral (-n), rest)
         | TMinus :: TInt8 n :: rest when n = System.SByte.MinValue ->
             Ok (Int8Literal System.SByte.MinValue, rest)
         | TMinus :: TInt8 n :: rest -> Ok (Int8Literal (-n), rest)
@@ -1765,6 +1771,7 @@ let parse (tokens: Token list) : Result<Program, string> =
         match toks with
         | TInt64 n :: rest -> Ok (Int64Literal n, rest)
         | TInt128 n :: rest -> Ok (Int128Literal n, rest)
+        | TBigInt n :: rest -> Ok (BigIntLiteral n, rest)
         | TInt8 n :: rest -> Ok (Int8Literal n, rest)
         | TInt16 n :: rest -> Ok (Int16Literal n, rest)
         | TInt32 n :: rest -> Ok (Int32Literal n, rest)
@@ -2339,7 +2346,7 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
         validateNoInternalIdentifier funcName
         |> Result.bind (fun () ->
             captures |> List.fold (fun acc e -> Result.bind (fun () -> validateExpr e) acc) (Ok ()))
-    | UnitLiteral | Int64Literal _ | Int128Literal _ | Int8Literal _ | Int16Literal _ | Int32Literal _
+    | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
     | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ -> Ok ()
 
