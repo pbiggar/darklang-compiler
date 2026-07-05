@@ -125,8 +125,6 @@ let private tryGetMonomorphizedIntrinsicReturnType (ctx: TypeContext) (funcName:
     if funcName.StartsWith("__raw_get_") then
         funcName.Substring("__raw_get_".Length)
         |> tryParseMangled
-        |> Option.defaultValue AST.TInt64
-        |> Some
     elif funcName.StartsWith("__raw_slot_init_") then Some AST.TUnit
     elif funcName.StartsWith("__hash_") then Some AST.TInt64
     elif funcName.StartsWith("__key_eq_") then Some AST.TBool

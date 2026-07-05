@@ -589,6 +589,25 @@ let testInferCallReturnsFunctionReturnType () : TestResult =
     | None ->
         Error "Expected inferCExprType Call to return a concrete type, got None"
 
+let testMalformedRawGetIntrinsicDoesNotInferInt64 () : TestResult =
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = Map.empty
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+    }
+
+    let cexpr = Call ("__raw_get_not_a_mangled_type", [Var (TempId 1); IntLiteral (Int64 0L)])
+
+    match inferCExprType ctx cexpr with
+    | None ->
+        Ok ()
+    | Some actual ->
+        Error $"Expected malformed __raw_get_ suffix to remain unknown, got: {actual}"
+
 let rec private hasDecAfterNonSelfTailCall (funcName: string) (expr: AExpr) : bool =
     match expr with
     | Return _ ->
@@ -1616,6 +1635,7 @@ let tests = [
     ("RcShape requires record metadata", testRcShapeRequiresRecordMetadata)
     ("RcShape with sums requires sum metadata", testRcShapeWithSumsRequiresSumMetadata)
     ("inferCExprType Call returns function return type", testInferCallReturnsFunctionReturnType)
+    ("malformed raw_get intrinsic does not infer Int64", testMalformedRawGetIntrinsicDoesNotInferInt64)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
     ("map helper accumulator return transfers ownership without retain", testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator)
