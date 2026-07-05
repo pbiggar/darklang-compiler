@@ -39,7 +39,8 @@ let sameReg (r1: Reg) (r2: Reg) : bool =
     match r1, r2 with
     | LIR.Physical p1, LIR.Physical p2 -> p1 = p2
     | LIR.Virtual v1, LIR.Virtual v2 -> v1 = v2
-    | _ -> false
+    | LIR.Physical _, LIR.Virtual _
+    | LIR.Virtual _, LIR.Physical _ -> false
 
 /// Get successor labels from a terminator
 let getSuccessors (term: Terminator) : Label list =
