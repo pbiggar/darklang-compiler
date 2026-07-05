@@ -444,6 +444,20 @@ let testParseInterpreterNewlineDelimitedLetBodyAfterAppliedCallValue () : TestRe
     | Ok other ->
         Error $"Expected single expression program, got: {other}"
 
+let testParseInterpreterLocalLetFunctionBody () : TestResult =
+    let source =
+        "let limit = 10L\n"
+        + " let sumUpTo (i: Int64) : Int64 =\n"
+        + "   if i > limit then 0L else i + (sumUpTo (i + 1L))\n"
+        + " sumUpTo 1L"
+    match InterpreterParser.parseString false source with
+    | Error err ->
+        Error $"Interpreter parser failed on local let function body: {err}"
+    | Ok (Program [Expression _]) ->
+        Ok ()
+    | Ok other ->
+        Error $"Expected single expression program, got: {other}"
+
 let testParseInterpreterParenthesizedSequenceWithTrailingLet () : TestResult =
     let source =
         "(Stdlib.DB.set\n"
@@ -887,6 +901,7 @@ let tests = [
     ("parse interpreter record function field type", testParseInterpreterRecordFunctionFieldType)
     ("parse interpreter newline-delimited let body", testParseInterpreterNewlineDelimitedLetBody)
     ("parse interpreter newline-delimited let body after applied call value", testParseInterpreterNewlineDelimitedLetBodyAfterAppliedCallValue)
+    ("parse interpreter local let function body", testParseInterpreterLocalLetFunctionBody)
     ("parse interpreter parenthesized sequence with trailing let", testParseInterpreterParenthesizedSequenceWithTrailingLet)
     ("parse interpreter tuple-body top-level boundary", testInterpreterParserDoesNotTreatTupleBodyAsCallableAcrossTopLevelBoundary)
     ("typecheck interpreter record-function-field lambda", testTypeCheckInterpreterRecordFunctionFieldLambda)
