@@ -162,7 +162,19 @@ let private isComparisonOp (op: BinOp) : bool =
     | Gt
     | Lte
     | Gte -> true
-    | _ -> false
+    | Add
+    | Sub
+    | Mul
+    | Div
+    | Mod
+    | Shl
+    | Shr
+    | BitAnd
+    | BitOr
+    | BitXor
+    | StringConcat
+    | And
+    | Or -> false
 
 let private binOpPrecedence (op: BinOp) : int =
     match op with
