@@ -106,6 +106,8 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | Sub, IntLiteral (Int64 0L), x -> Some (UnaryPrim (Neg, x))
     | Mul, IntLiteral (Int64 1L), x -> Some (Atom x)
     | Mul, x, IntLiteral (Int64 1L) -> Some (Atom x)
+    | Mul, IntLiteral (Int64 -1L), x -> Some (UnaryPrim (Neg, x))
+    | Mul, x, IntLiteral (Int64 -1L) -> Some (UnaryPrim (Neg, x))
     | Mul, IntLiteral (Int64 0L), _ -> Some (Atom (IntLiteral (Int64 0L)))
     | Mul, _, IntLiteral (Int64 0L) -> Some (Atom (IntLiteral (Int64 0L)))
     | Div, x, IntLiteral (Int64 1L) -> Some (Atom x)

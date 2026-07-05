@@ -317,6 +317,24 @@ let x = 2 in x * 16
 return 32
 
 ---NAME---
+strength_reduce_mul_neg_one_right
+---INPUT---
+def f(x: Int64) : Int64 = x * -1
+---EXPECTED---
+Function f:
+let TempId 1 = -t0
+return t1
+
+---NAME---
+strength_reduce_mul_neg_one_left
+---INPUT---
+def f(x: Int64) : Int64 = -1 * x
+---EXPECTED---
+Function f:
+let TempId 1 = -t0
+return t1
+
+---NAME---
 strength_reduce_float_2_mul_left
 ---INPUT---
 def f(x: Float) : Float = 2.0 * x
