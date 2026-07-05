@@ -85,32 +85,6 @@ let private encodeRegReg (opcode: byte) (dest: Reg) (src: Reg) : byte array =
     // ModR/M: mod=11 (register direct), reg=src, r/m=dest
     Array.concat [| rex true srcExt false destExt; [| opcode; modRM 3 srcEnc destEnc |] |]
 
-/// Encode [base + disp32] memory operand with ModR/M (and SIB if needed)
-let private encodeMemOperand (regBits: int) (regExt: bool) (baseReg: Reg) (offset: int32) : byte array =
-    let (baseEnc, baseExt) = regEncoding baseReg
-    // RSP/R12 as base requires SIB byte; RBP/R13 with no offset requires disp8=0
-    let needsSIB = (baseEnc = 4) // RSP or R12
-    let modBits =
-        if offset = 0 && baseEnc <> 5 then 0  // [base] (RBP/R13 can't use mod=00)
-        elif fitsInt8 offset then 1             // [base + disp8]
-        else 2                                  // [base + disp32]
-    let rexBytes = rex true regExt false baseExt
-    if needsSIB then
-        let modrmByte = modRM modBits regBits 4  // r/m=4 means SIB follows
-        let sibByte = byte ((0 <<< 6) ||| (4 <<< 3) ||| baseEnc)  // scale=1, index=RSP(none), base
-        let dispBytes =
-            if modBits = 0 then [||]
-            elif modBits = 1 then imm8Bytes (int offset)
-            else imm32Bytes offset
-        Array.concat [| rexBytes; [| modrmByte; sibByte |]; dispBytes |]
-    else
-        let modrmByte = modRM modBits regBits baseEnc
-        let dispBytes =
-            if modBits = 0 then [||]
-            elif modBits = 1 then imm8Bytes (int offset)
-            else imm32Bytes offset
-        Array.concat [| rexBytes; [| modrmByte |]; dispBytes |]
-
 /// Encode a condition code to its 4-bit value (for Jcc, SETcc)
 let private condCode (cond: Condition) : byte =
     match cond with
