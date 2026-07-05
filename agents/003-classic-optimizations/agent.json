@@ -2,7 +2,7 @@
   "id": 3,
   "slug": "classic-optimizations",
   "name": "Classic Optimizations",
-  "autonomyLevel": "ExpandedGuided",
+  "autonomyLevel": "BoundedAutonomous",
   "enabled": true,
   "purpose": "Implementing classic optimizations",
   "summary": "This always-learning agent is currently guided: one testing turn at a time, with human review before changes are applied."
