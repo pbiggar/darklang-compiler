@@ -6,7 +6,7 @@
 #   --hyperfine              Use hyperfine for timing (default: cachegrind for instruction counts)
 #   --refresh-baseline       Re-run all baseline languages (default: use cached values)
 #   --refresh-baseline=LANGS Re-run specific languages only (comma-separated: rust,go,python,node,ocaml)
-#   --jobs, --jobs=N         Run up to N benchmarks in parallel (default: CPU count)
+#   --jobs, --jobs=N         Run up to N benchmarks in parallel (default: 1)
 #   --list                   Print the benchmarks that would run and exit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -61,21 +61,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-default_job_count() {
-    local count=""
-    count=$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)
-    if [ -z "$count" ]; then
-        count=$(sysctl -n hw.ncpu 2>/dev/null || true)
-    fi
-    case "$count" in
-        ''|*[!0-9]*) count="" ;;
-    esac
-    if [ -z "$count" ] || [ "$count" -lt 1 ]; then
-        count=4
-    fi
-    echo "$count"
-}
-
 OUTPUT_DIR="$SCRIPT_DIR/results/$(date +%Y-%m-%d_%H%M%S)"
 mkdir -p "$OUTPUT_DIR"
 
@@ -123,11 +108,7 @@ if [ -z "$JOB_COUNT" ]; then
     if [ -n "${BENCHMARK_JOBS:-}" ]; then
         JOB_COUNT="$BENCHMARK_JOBS"
     else
-        if [ "$USE_CACHEGRIND" = true ]; then
-            JOB_COUNT=$(default_job_count)
-        else
-            JOB_COUNT=1
-        fi
+        JOB_COUNT=1
     fi
 fi
 
