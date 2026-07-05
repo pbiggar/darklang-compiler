@@ -124,17 +124,6 @@ let private unaryOpDescription (op: ANF.UnaryOp) : string =
     | ANF.Not -> "UnaryPrim Not"
     | ANF.BitNot -> "UnaryPrim BitNot"
 
-/// Sequence a list of Results into a Result of list
-let sequenceResults (results: Result<'a, string> list) : Result<'a list, string> =
-    let rec loop acc remaining =
-        match remaining with
-        | [] -> Ok (List.rev acc)
-        | r :: rest ->
-            match r with
-            | Ok v -> loop (v :: acc) rest
-            | Error e -> Error e
-    loop [] results
-
 /// Append a list of instructions (in order) to a reversed instruction list
 let private appendInstrsRev (instrs: MIR.Instr list) (revInstrs: MIR.Instr list) : MIR.Instr list =
     (List.rev instrs) @ revInstrs
