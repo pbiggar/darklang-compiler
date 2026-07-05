@@ -30,6 +30,7 @@ python3 scripts/diff-upstream-execution-tests.py \
   --ignore-expected-diff \
   --output /tmp/upstream-refresh-before.txt
 ```
+This raw report exits nonzero when the current tree differs from upstream only by the intentional local delta. Keep the report as pre-flight evidence and continue unless the output shows unexpected drift.
 
 ## 2) Sync Local Upstream Copy
 1. Clone upstream execution test subtree:
@@ -74,6 +75,7 @@ find src/Tests/e2e/upstream -name '*.rej' -print
 ```bash
 python3 scripts/diff-upstream-execution-tests.py --ref main --ignore-expected-diff
 ```
+This command is expected to exit nonzero while intentional local deltas are present.
 2. Regenerate expected baseline to match intentional local deltas:
 ```bash
 python3 scripts/diff-upstream-execution-tests.py --ref main --regenerate-expected-diff
@@ -102,3 +104,5 @@ If the upstream snapshot refresh, local delta replay, runner wiring check, and r
 - [ ] `scripts/upstream-execution-expected.patch` regenerated
 - [ ] `python3 scripts/diff-upstream-execution-tests.py --ref main` exits clean
 - [ ] `./run-tests --ai` passes
+
+If the refreshed upstream snapshot, replayed patch, regenerated baseline, and runner wiring leave the repository unchanged, report that as an explicit no-op refresh with the upstream source and validation evidence.

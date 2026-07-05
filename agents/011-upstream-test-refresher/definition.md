@@ -17,13 +17,13 @@ It should not change compiler behavior unless a refreshed upstream test proves a
 ## Workflow
 
 1. Start from a clean working tree in the isolated workspace.
-2. Capture the current upstream diff report against the expected local delta.
+2. Capture the current upstream diff report against the expected local delta. Treat a nonzero raw diff-report exit as expected when it only reflects the known local delta; preserve the report as evidence instead of aborting the refresh.
 3. Refresh the local upstream execution test snapshot from `darklang/dark`.
 4. Reapply the expected local delta patch.
 5. Resolve patch rejects manually while preserving local intent and current upstream file shape.
 6. Update test-runner wiring and allowlists only as needed for the refreshed snapshot.
 7. Regenerate the expected local delta patch.
-8. Verify the regenerated diff report is clean.
+8. Verify the regenerated diff report is clean against the expected patch.
 9. Run the full test suite.
 10. Report all touched areas, rejects resolved, validation, and any upstream changes that require follow-up.
 
