@@ -2,7 +2,7 @@
   "id": 9,
   "slug": "module-function-affinity",
   "name": "Module Function Affinity",
-  "autonomyLevel": "initial-design",
+  "autonomyLevel": "Guided",
   "enabled": true,
   "purpose": "Align one compiler module/function behavior with interpreter-supported behavior using upstream or minimal E2E evidence.",
   "summary": "This always-learning agent starts from the modules/functions affinity playbook and works one interpreter/compiler gap at a time."
