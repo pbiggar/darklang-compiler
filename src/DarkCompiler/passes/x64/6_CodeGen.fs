@@ -23,6 +23,31 @@ let private syscalls = Platform.linuxX86_64SyscallNumbers
 
 let private invalidX64PhysRegReason (reg: LIR.PhysReg) : string option =
     match reg with
+    | LIR.X0
+    | LIR.X1
+    | LIR.X2
+    | LIR.X3
+    | LIR.X4
+    | LIR.X5
+    | LIR.X6
+    | LIR.X7
+    | LIR.X8
+    | LIR.X9
+    | LIR.X10
+    | LIR.X11
+    | LIR.X12
+    | LIR.X13
+    | LIR.X14
+    | LIR.X15
+    | LIR.X16
+    | LIR.X17
+    | LIR.X19
+    | LIR.X20
+    | LIR.X21
+    | LIR.X29
+    | LIR.X30
+    | LIR.SP ->
+        None
     | LIR.X22 ->
         Some "X22 maps to the x64 heap pointer runtime register"
     | LIR.X23 ->
@@ -33,8 +58,6 @@ let private invalidX64PhysRegReason (reg: LIR.PhysReg) : string option =
         Some $"{reg} has no allocatable x64 register mapping"
     | LIR.X27 ->
         Some "X27 is reserved runtime state and cannot be lowered on x64"
-    | _ ->
-        None
 
 /// Map LIR.PhysReg to x86-64 register
 let lirRegToX86 (reg: LIR.PhysReg) : X86_64.Reg =
