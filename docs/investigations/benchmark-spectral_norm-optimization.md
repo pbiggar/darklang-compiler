@@ -207,7 +207,44 @@ Even with arrays, calling `matA(i, j)` as a separate function in the inner loop 
 945c: 1e621802    fdiv d2, d0, d2         ; 1.0 / div
 ```
 
-**Dark's LIR for matA (currently not inlined into main):**
+**Current Dark status: the trivial `matA(0, 0)` call is now inlined before MIR.**
+
+The current simplified benchmark still does not exercise a hot loop, but `./dark --dump-anf
+benchmarks/problems/spectral_norm/dark/main.dark` shows that the only call site is expanded
+during reference-count insertion:
+
+```
+=== ANF (after RC insertion) ===
+Function _start:
+let TempId 16 = 0
+let TempId 17 = 0
+let TempId 18 = t16 + t17
+let TempId 19 = t18 + 1
+let TempId 20 = t18 * t19
+let TempId 21 = t20 >> 1
+let TempId 22 = t21 + t16
+let TempId 23 = t22 + 1
+let TempId 24 = Int64ToFloat(t23)
+let TempId 25 = 1 / t24
+...
+```
+
+The MIR and LIR for `_start` likewise contain no `Call(matA, ...)`; LIR has already reduced the
+constant input to the equivalent `1.0 / 1.0` path:
+
+```
+_start:
+  Label "_start_body":
+    X1 <- Mov(Imm 1)
+    D0 <- Int64ToFloat(X1)
+    D1 <- FLoad(float[1])
+    D0 <- FDiv(D1, D0)
+    D1 <- FLoad(float[1000000000])
+    D0 <- FMul(D0, D1)
+    X1 <- FloatToInt64(D0)
+```
+
+The standalone `matA` function is still emitted:
 ```
 matA:
   Label "matA_body":
@@ -222,7 +259,10 @@ matA:
     fv10018 <- FDiv(fv1000, fv10017)    ; 1.0 / div
 ```
 
-If Dark had the full algorithm, this function would need to be inlined into the inner loop to avoid ~n² function calls.
+So the old note that the current benchmark does not inline `matA` is stale for this constant call
+site. The remaining open question is whether the inliner keeps doing this for non-constant
+`matA(i, j)` calls inside a recursive or eventual array-backed inner loop; the current benchmark
+cannot prove that because it only computes `matA(0, 0)`.
 
 ## Identified Optimization Opportunities
 
@@ -306,22 +346,25 @@ This already works but creates intermediate list allocations.
 **Impact: ~2-4x performance improvement for numeric code**
 
 **Root Cause:**
-Small numeric functions like `matA(i, j)` should be inlined into their call sites to avoid function call overhead. In the inner loop of spectral_norm, `matA` is called n² times.
+Small numeric functions like `matA(i, j)` should be inlined into their call sites to avoid function call overhead. In the inner loop of spectral_norm, `matA` would be called n² times.
 
-**Evidence - Current Dark does not inline matA:**
+**Evidence - Current Dark does inline the simplified constant call:**
 ```
-Main:
-let TempId 12 = matA(0, 0)    ; Function call, not inlined
+Function _start:
+let TempId 18 = t16 + t17
+let TempId 20 = t18 * t19
+let TempId 21 = t20 >> 1
+let TempId 25 = 1 / t24
 ```
 
 **Evidence - Rust fully inlines the computation:**
 The entire `a(i,j)` computation is inlined into the loop body, eliminating call overhead.
 
 **Proposed Solution:**
-Enhance the inlining pass to:
-1. Inline small functions (< 20 IR instructions)
-2. Inline functions called in loops even if larger
-3. Inline pure numeric functions aggressively
+Keep this as a conditional opportunity for the full implementation:
+1. Confirm that `matA(i, j)` is still inlined when `i` and `j` are dynamic loop variables.
+2. If it is not, enhance the inlining pass for small pure numeric functions in loops.
+3. If it is, remove this as a separate spectral_norm blocker and track only the array/full-implementation work.
 
 **Files to Modify:**
 - `src/DarkCompiler/passes/2.4_Inlining.fs` - Enhance inlining heuristics
