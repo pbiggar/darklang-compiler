@@ -95,7 +95,9 @@ Function ackermann:
     branch v2 ? ackermann_L0 : ackermann_L1
 ```
 
-`ackermann_L5` is still present in MIR and has no apparent incoming edge, but it no longer survives to post-register-allocation LIR for this benchmark.
+`ackermann_L5` is still present in `--dump-mir` and has no apparent incoming
+edge, but it no longer survives to post-register-allocation LIR for this
+benchmark.
 
 ### LIR After Register Allocation
 
@@ -145,17 +147,7 @@ ARM64 code generation now maps `LIR.BranchZero` directly to `ARM64Symbolic.CBZ` 
 
 ## Current Optimization Opportunities
 
-### 1. Remove Unreachable MIR Blocks Before LIR
-
-**Impact: low for current final code, useful for IR quality**
-
-`ackermann_L5` remains in MIR even though the current LIR dump no longer includes it after register allocation. Removing unreachable MIR blocks earlier would simplify downstream analysis and make MIR dumps less misleading.
-
-Relevant area:
-- `src/DarkCompiler/passes/3_MIR_Optimizations.fs`
-- `src/DarkCompiler/passes/4_MIR_to_LIR.fs`
-
-### 2. Re-check Register Allocation Around Nested Recursion
+### 1. Re-check Register Allocation Around Nested Recursion
 
 **Impact: unknown; needs measurement**
 
@@ -179,11 +171,11 @@ Jump(Label "ackermann_body")
 |-------------------|----------------|
 | Nine MOVs in `ackermann_entry` | Mostly implemented for this benchmark; current entry has two argument moves. |
 | Redundant post-register-allocation self moves | Implemented by target-independent post-allocation LIR cleanup. |
-| Dead `ackermann_L5` in final LIR | Still visible in MIR, but absent from post-register-allocation LIR. |
+| Dead `ackermann_L5` in final LIR | Still visible in `--dump-mir`, but absent from post-register-allocation LIR. Early raw-MIR pruning was rejected after measurement. |
 | `BranchZero` should lower to ARM64 `CBZ`/`CBNZ` | Implemented for `BranchZero` on ARM64; codegen emits `CBZ` plus branch to the non-zero label. |
 | Empty `SaveRegs`/`RestoreRegs` should emit nothing | Implemented in ARM64 codegen; empty markers still appear in LIR only. |
 
 ## Recommended Next Checks
 
 1. Confirm with final ARM64 disassembly when tooling can disassemble the sectionless generated ELF cleanly.
-2. Consider MIR unreachable-block cleanup as an IR-quality improvement rather than a proven ackermann performance win.
+2. Use the rejected-experiments record before revisiting early raw-MIR unreachable-block cleanup for this benchmark.

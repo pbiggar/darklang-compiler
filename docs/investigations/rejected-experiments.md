@@ -2,6 +2,18 @@
 
 This file records benchmark optimization candidates that were investigated and removed from active investigation notes because measured evidence did not justify keeping the implementation.
 
+## 2026-07-05: ackermann early raw-MIR unreachable block pruning
+
+- Source candidate: `docs/investigations/benchmark-ackermann-optimization.md`, "Remove Unreachable MIR Blocks Before LIR"
+- Target benchmark: `ackermann`
+- Attempt: added program-level raw-MIR unreachable block pruning immediately after ANF-to-MIR conversion so `ackermann_L5` disappeared from `--dump-mir` before SSA construction and LIR lowering.
+- Correctness evidence: the focused program-level MIR prune test failed before the helper existed and passed after implementation; full `./run-tests --ai` passed.
+- IR evidence: `./dark --dump-mir benchmarks/problems/ackermann/dark/main.dark` no longer printed `ackermann_L5` with the attempted implementation.
+- Runtime evidence: `./benchmarks/run_benchmarks.sh all` completed with default serialized jobs, but `ackermann` regressed from `11,450,298,027` to `11,808,113,697` Dark instructions.
+- Compile-time evidence: `./dark -vv benchmarks/problems/ackermann/dark/main.dark -o /tmp/ackermann-prune-dark.out` reported compilation complete in `148.9ms`; no before/after compile-time win justified the runtime regression.
+- Reason rejected: pruning before SSA changed downstream allocation/code shape enough to regress the target benchmark while only improving MIR dump clarity.
+- Outcome: implementation and focused test were reverted; the active candidate was removed from the source investigation file.
+
 ## 2026-07-02: sum_to_n post-register-allocation self-move elimination
 
 - Source candidate: `docs/investigations/benchmark-sum_to_n-optimization.md`, "Redundant Move Elimination in LIR"
