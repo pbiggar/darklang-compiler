@@ -9,7 +9,12 @@ module ANFDeadCodeElimination
 let private extractFromAtom (atom: ANF.Atom) : string list =
     match atom with
     | ANF.FuncRef name -> [name]
-    | _ -> []
+    | ANF.UnitLiteral
+    | ANF.IntLiteral _
+    | ANF.BoolLiteral _
+    | ANF.StringLiteral _
+    | ANF.FloatLiteral _
+    | ANF.Var _ -> []
 
 /// Extract function names from a complex expression
 let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
