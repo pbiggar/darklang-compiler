@@ -39,7 +39,7 @@ Char                         | isLetter                            | ❌   | ✅
 Char                         | isLowercase                         | ✅   | ✅
 Char                         | isUppercase                         | ✅   | ✅
 Char                         | isWhitespace                        | ❌   | ✅
-Char                         | toAsciiCode                         | ✅   | ❌
+Char                         | toAsciiCode                         | ✅   | ✅
 Char                         | toCode                              | ❌   | ✅
 Char                         | toLowercase                         | ✅   | ✅
 Char                         | toString                            | ✅   | ❌

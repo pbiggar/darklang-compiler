@@ -89,6 +89,17 @@ def Stdlib.Char.toCode(c: String) : Int64 =
     | Some(cp) -> cp
     | None -> 0
 
+// Get the ASCII code of the first character when representable in 0..255
+def Stdlib.Char.toAsciiCode(c: String) : Stdlib.Option.Option<Int64> =
+    let cps = Stdlib.String.toCodepoints(c) in
+    match Stdlib.List.head<Int64>(cps) with
+    | Some(cp) ->
+        if cp >= 0 && cp <= 255 then
+            Some(cp)
+        else
+            None
+    | None -> None
+
 // Create a single character string from a codepoint
 def Stdlib.Char.fromCode(code: Int64) : String =
     Stdlib.String.fromCodepoints([code])

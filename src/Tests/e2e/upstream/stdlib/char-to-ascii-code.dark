@@ -1,0 +1,27 @@
+// Imported from darklang/dark backend/testfiles/execution/stdlib/char.dark.
+// Expected numeric literals use Int64 suffixes because this compiler does not
+// yet support the upstream BigInt `I` suffix.
+
+let smiley () : Char =
+  "😂" |> Stdlib.String.head |> Builtin.unwrap
+
+let hand () : Char =
+  "✋🏿" |> Stdlib.String.head |> Builtin.unwrap
+
+Stdlib.Char.toAsciiCode 'a' = Stdlib.Option.Option.Some 97L
+Stdlib.Char.toAsciiCode 'A' = Stdlib.Option.Option.Some 65L
+Stdlib.Char.toAsciiCode 'á' = Stdlib.Option.Option.Some 225L
+Stdlib.Char.toAsciiCode 'Á' = Stdlib.Option.Option.Some 193L
+Stdlib.Char.toAsciiCode '3' = Stdlib.Option.Option.Some 51L
+Stdlib.Char.toAsciiCode (smiley ()) = Stdlib.Option.Option.None
+Stdlib.Char.toAsciiCode 'ż' = Stdlib.Option.Option.None
+Stdlib.Char.toAsciiCode 'Ż' = Stdlib.Option.Option.None
+Stdlib.Char.toAsciiCode 'ó' = Stdlib.Option.Option.Some 243L
+Stdlib.Char.toAsciiCode 'Ó' = Stdlib.Option.Option.Some 211L
+Stdlib.Char.toAsciiCode 'ł' = Stdlib.Option.Option.None
+Stdlib.Char.toAsciiCode 'Ł' = Stdlib.Option.Option.None
+Stdlib.Char.toAsciiCode (hand ()) = Stdlib.Option.Option.None
+Stdlib.Char.toAsciiCode 'ჾ' = Stdlib.Option.Option.None
+Stdlib.Char.toAsciiCode 'Ჾ' = Stdlib.Option.Option.None
+Stdlib.Char.toAsciiCode ' ' = Stdlib.Option.Option.Some 32L
+Stdlib.Char.toAsciiCode '\t' = Stdlib.Option.Option.Some 9L
