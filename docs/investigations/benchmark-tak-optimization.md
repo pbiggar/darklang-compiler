@@ -1,16 +1,25 @@
 # Benchmark Investigation: tak (Takeuchi Function)
 
 **Date:** 2026-01-15
+**Last checked:** 2026-07-05
 **Benchmark:** tak
 **Randomly selected:** Yes
 
 ## Executive Summary
 
-The Dark implementation of the Takeuchi function performs worse than Rust due to:
-1. **Redundant MOV chains after PHI resolution**: 6 extra MOV instructions at function entry
-2. **Missing copy propagation in LIR**: Chains like `X19=X2; X22=X19` not simplified to `X22=X2`
-3. **Suboptimal PHI node lowering**: Extra intermediate registers used for PHI operands
-4. **No argument register reuse**: Arguments moved to callee-saved immediately, even when not needed
+The Dark implementation of the Takeuchi function still performs worse than Rust,
+but the original entry-block PHI-copy evidence is stale. Current ARM64 LIR has
+only three entry argument moves for `tak`, not the six-move chain previously
+recorded. The remaining evidence points to:
+
+1. **Missing self-move elimination after register allocation**: current LIR keeps
+   no-op moves such as `X20 <- Mov(Reg X20)` in the recursive loop.
+2. **Conservative argument lifetime handling**: Dark moves all three arguments to
+   callee-saved registers before the first comparison, while Rust compares `x0`
+   and `x1` first and only saves `x2` on the early-exit path.
+3. **Higher instruction count despite fixed entry PHI copies**: current benchmark
+   results show Dark at 635,804,177 instructions versus Rust at 39,336,450
+   instructions for `tak` (16.2x).
 
 ## Benchmark Overview
 
@@ -26,10 +35,10 @@ This creates deeply nested recursive calls - tak(24, 16, 8) makes millions of fu
 
 ## Performance Comparison
 
-| Language | Time | Instructions in hot path |
-|----------|------|--------------------------|
-| Rust     | ~50ms | 23 per iteration |
-| Dark     | ~53ms | 29+ per iteration |
+| Language | Current instruction count |
+|----------|---------------------------|
+| Rust     | 39,336,450 |
+| Dark     | 635,804,177 (16.2x) |
 
 ## Code Comparison
 
@@ -54,23 +63,29 @@ Key optimizations in Rust:
 - **Direct use of argument registers** for the comparison
 - **Conditional saves**: X20, X21 only saved if continuing
 
-### Dark tak Function Entry (from LIR after register allocation)
+### Dark tak Function Entry (current LIR after register allocation)
 
 ```
 Label "tak_entry":
     X21 <- Mov(Reg X0)    ; Save x to callee-saved
-    X20 <- Mov(Reg X1)    ; Save y to callee-saved
-    X19 <- Mov(Reg X2)    ; Save z to callee-saved
-    X22 <- Mov(Reg X19)   ; REDUNDANT: X22 = X19 = z
-    X23 <- Mov(Reg X20)   ; REDUNDANT: X23 = X20 = y
-    X24 <- Mov(Reg X21)   ; REDUNDANT: X24 = X21 = x
+    X22 <- Mov(Reg X1)    ; Save y to callee-saved
+    X20 <- Mov(Reg X2)    ; Save z to callee-saved
     Jump(Label "tak_body")
 ```
 
-Issues identified:
-- **6 register saves** (X19-X24)
-- **3 completely redundant MOV instructions** at entry
-- Arguments moved twice: first to intermediate, then to final location
+Current status:
+- The previous three redundant PHI-entry copies are no longer present.
+- `tak` still uses five callee-saved registers (`X19` through `X23`) across the
+  recursive calls.
+- Dark still saves all arguments before the first comparison, unlike Rust.
+
+The loop body still contains post-RA no-op moves:
+
+```
+X21 <- Mov(Reg X23)
+X22 <- Mov(Reg X19)
+X20 <- Mov(Reg X20)   ; no-op after third recursive call result
+```
 
 ### Root Cause: PHI Node Lowering
 
@@ -82,33 +97,51 @@ tak_body:
     v10020 <- Phi([(Reg v0, tak_entry), (Reg v10028, tak_L1)])      ; x
 ```
 
-After register allocation, v2 gets X19, but the PHI destination v10018 gets X22. This creates:
-1. Entry: `X19 <- X2` (v2 = argument z)
-2. Entry: `X22 <- X19` (v10018 = v2, PHI input)
-
-The register allocator doesn't coalesce v2 and v10018 to the same register.
+Current register allocation coalesces the entry-block PHI sources directly into
+the loop-carried registers for `tak`, so the old `X19 <- X2; X22 <- X19`
+evidence no longer applies. The remaining PHI cost appears after recursive
+calls, where the three call results are assigned back to the loop-carried
+registers.
 
 ## Optimization Opportunities
 
-### 1. Post-RA Copy Propagation (High Impact)
+### 1. Post-RA Self-Move Elimination (Low Impact, Confirmed Current)
 
-**Problem:** After register allocation, chains of MOV instructions exist that could be simplified.
+**Problem:** After register allocation, no-op MOV instructions remain in hot
+recursive loops.
 
 **Evidence from LIR:**
 ```
-X21 <- Mov(Reg X0)
-X24 <- Mov(Reg X21)   ; Could be X24 <- Mov(Reg X0)
+X20 <- Mov(Reg X20)
 ```
 
 **Solution:**
-- Add a post-register-allocation pass to propagate copies
-- When `Rd <- Rs` followed by `Rx <- Rd` where Rd is not used later, replace with `Rx <- Rs`
-- Estimate: 3-5% speedup on recursive functions
+- Add or extend a post-register-allocation cleanup to remove `Rd <- Mov(Reg Rd)`.
+- This is smaller than the original copy-propagation opportunity, but it is
+  directly visible in current `tak` and `repeat` LIR.
 
 **Files to modify:**
 - `src/DarkCompiler/passes/4.5_LIR_Optimize.fs` - Add cross-block copy propagation
 
-### 2. Improved PHI Coalescing (High Impact)
+### 2. Argument Register Reuse Before Calls (Medium Impact)
+
+**Problem:** Dark saves all `tak` arguments to callee-saved registers before the
+initial comparison.
+
+**Evidence:**
+Rust emits `cmp x0, x1` before moving `x2` to `x19`, while current Dark LIR
+emits the three entry moves and then compares `X21` with `X22` in `tak_body`.
+
+**Solution:**
+- Prefer argument registers for values used before the first possible call.
+- Move values to callee-saved registers only when they must survive recursive
+  calls or loop backedges.
+
+**Files to modify:**
+- `src/DarkCompiler/passes/5_RegisterAllocation.fs` - Add argument register
+  preference/lifetime handling
+
+### 3. Improved PHI Coalescing (Implemented for Entry Path, Still Relevant for Loop Backedge)
 
 **Problem:** PHI nodes with entry block operands don't share registers with their sources.
 
@@ -116,59 +149,28 @@ X24 <- Mov(Reg X21)   ; Could be X24 <- Mov(Reg X0)
 ```
 v10018 <- Phi([(Reg v2, tak_entry), ...])
 ```
-Here v2 (argument z) gets X19, but v10018 gets X22, requiring a MOV.
+The stale evidence for an entry-block copy chain no longer appears in current
+LIR. The current loop-carried PHI lowering still materializes moves from the
+three recursive call results back into the loop-carried registers.
 
 **Solution:**
-- Prioritize coalescing PHI destinations with their entry-block sources
-- Entry block operands are "free" - they come from argument registers
-- When a PHI operand comes from the entry block, try to allocate the PHI destination to the same register
+- Keep the entry-path improvement.
+- Investigate whether loop-backedge PHI moves can be reduced without increasing
+  call-clobber pressure.
 
 **Files to modify:**
 - `src/DarkCompiler/passes/5_RegisterAllocation.fs` - Enhance `collectPhiPreferences`
-
-### 3. Dead Move Elimination (Medium Impact)
-
-**Problem:** Intermediate registers used only to feed PHI nodes are not eliminated.
-
-**Evidence:**
-```
-X21 <- Mov(Reg X0)   ; X21 is only used by next line
-X24 <- Mov(Reg X21)  ; X24 is the actual live value
-```
-
-**Solution:**
-- Detect when a register is defined by MOV and only used by a single subsequent MOV
-- Eliminate the intermediate register by forwarding the source
-
-**Files to modify:**
-- `src/DarkCompiler/passes/4.5_LIR_Optimize.fs` - Add dead move chain elimination
-
-### 4. Argument Register Reuse in Comparisons (Medium Impact)
-
-**Problem:** Dark moves arguments to callee-saved before using them, even for the first comparison.
-
-**Evidence:**
-Rust directly uses X0, X1 for `cmp x0, x1` before saving to callee-saved.
-Dark saves all arguments first, then compares the saved copies.
-
-**Solution:**
-- Allow argument registers to be used in the first basic block before being clobbered
-- Only save to callee-saved when necessary (before a call or loop back)
-
-**Files to modify:**
-- `src/DarkCompiler/passes/3_ANF_to_MIR.fs` - Generate better CFG structure
-- `src/DarkCompiler/passes/5_RegisterAllocation.fs` - Add argument register preference
 
 ## Quantified Performance Impact
 
 | Optimization | Estimated Speedup | Implementation Effort |
 |--------------|------------------|----------------------|
-| Post-RA copy propagation | 3-5% | Low |
-| Improved PHI coalescing | 2-4% | Medium |
-| Dead move elimination | 1-2% | Low |
-| Argument register reuse | 1-2% | Medium |
+| Post-RA self-move elimination | <1% | Low |
+| Argument register reuse before calls | 1-2% | Medium |
+| Loop-backedge PHI coalescing | Unknown | Medium |
 
-Combined potential improvement: **7-13%** on tak-like recursive benchmarks.
+The previous combined estimate of **7-13%** depended on stale entry-copy
+evidence and should not be used as current guidance.
 
 ## Detailed IR Analysis
 
@@ -202,19 +204,26 @@ v10020 <- Phi([(Reg v0, tak_entry), (Reg v10028, tak_L1)])
 ```
 
 ### LIR Stage (After Register Allocation)
-The redundant moves are clearly visible:
+The old six-move entry chain is gone. Current LIR shows three entry moves plus
+one no-op move in the recursive loop:
 ```
 Label "tak_entry":
     X21 <- Mov(Reg X0)
-    X20 <- Mov(Reg X1)
-    X19 <- Mov(Reg X2)
-    X22 <- Mov(Reg X19)   ; REDUNDANT
-    X23 <- Mov(Reg X20)   ; REDUNDANT
-    X24 <- Mov(Reg X21)   ; REDUNDANT
+    X22 <- Mov(Reg X1)
+    X20 <- Mov(Reg X2)
+
+Label "tak_L1":
+    ...
+    X21 <- Mov(Reg X23)
+    X22 <- Mov(Reg X19)
+    X20 <- Mov(Reg X20)   ; no-op
 ```
 
 ## Conclusion
 
-The tak benchmark reveals inefficiencies in Dark's register allocation and PHI lowering phases. While the high-level optimizations (tail call detection) work correctly, the low-level code generation produces redundant register moves that add approximately 7-13% overhead compared to Rust.
-
-The most impactful fix would be post-RA copy propagation, which is straightforward to implement and would eliminate the redundant MOV chains. Improved PHI coalescing would provide additional benefit by reducing register pressure.
+The tak benchmark still reveals inefficiencies in Dark's register allocation and
+PHI lowering phases, but current evidence is narrower than the original
+investigation. Tail-call detection works and entry-block PHI copies are now
+coalesced. The durable current findings are the remaining post-RA self-moves,
+the conservative argument-save placement before the first comparison, and the
+large 16.2x instruction-count gap versus Rust.
