@@ -16,7 +16,27 @@ let getListDisplayStringFunc (elemType: AST.Type) : string option =
     | AST.TBool -> Some "Stdlib.List.toDisplayString_bool"
     | AST.TString -> Some "Stdlib.List.toDisplayString_str"
     | AST.TFloat64 -> Some "Stdlib.List.toDisplayString_f64"
-    | _ -> None
+    | AST.TInt8
+    | AST.TInt16
+    | AST.TInt32
+    | AST.TInt128
+    | AST.TUInt8
+    | AST.TUInt16
+    | AST.TUInt32
+    | AST.TUInt64
+    | AST.TUInt128
+    | AST.TBytes
+    | AST.TChar
+    | AST.TUnit
+    | AST.TRuntimeError
+    | AST.TFunction _
+    | AST.TTuple _
+    | AST.TRecord _
+    | AST.TSum _
+    | AST.TList _
+    | AST.TVar _
+    | AST.TRawPtr
+    | AST.TDict _ -> None
 
 /// Wrap the return value with a Print instruction
 /// Transforms: Return atom  →  Let (_, Print (atom, type), Return atom)
