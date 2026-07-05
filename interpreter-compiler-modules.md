@@ -27,7 +27,7 @@ Bytes                        | length                              | ❌   | ✅
 Bytes                        | set                                 | ❌   | ✅
 Bytes                        | toList                              | ❌   | ✅
 Char                         | fromCode                            | ❌   | ✅
-Char                         | isASCII                             | ✅   | ❌
+Char                         | isASCII                             | ✅   | ✅
 Char                         | isASCIILetter                       | ✅   | ❌
 Char                         | isAlphanumeric                      | ❌   | ✅
 Char                         | isDigit                             | ✅   | ✅

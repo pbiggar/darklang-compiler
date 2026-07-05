@@ -56,6 +56,15 @@ def Stdlib.Char.isLowercase(c: String) : Bool =
 def Stdlib.Char.isAlphanumeric(c: String) : Bool =
     Stdlib.Char.isLetter(c) || Stdlib.Char.isDigit(c)
 
+// Check if character is in the ASCII codepoint range
+def Stdlib.Char.isASCII(c: String) : Bool =
+    if Stdlib.String.isEmpty(c) then false
+    else
+        let cps = Stdlib.String.toCodepoints(c) in
+        match Stdlib.List.head<Int64>(cps) with
+        | Some(cp) -> cp >= 0 && cp <= 127
+        | None -> false
+
 // Convert ASCII character to uppercase
 def Stdlib.Char.toUppercase(c: String) : String =
     if Stdlib.String.isEmpty(c) then ""

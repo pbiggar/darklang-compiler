@@ -70,6 +70,18 @@ Char.isAlphanumeric("!") = false
 Char.isAlphanumeric("") = false
 
 // ===================================================================
+// Char.isASCII - Check if character is in the ASCII codepoint range
+// ===================================================================
+
+Char.isASCII("A") = true
+Char.isASCII("3") = true
+Char.isASCII(" ") = true
+Char.isASCII("\t") = true
+Char.isASCII("á") = false
+Char.isASCII("ჾ") = false
+Char.isASCII("") = false
+
+// ===================================================================
 // Char.toUppercase - Convert to uppercase
 // ===================================================================
 
