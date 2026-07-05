@@ -4710,6 +4710,88 @@ let checkFunctionDef
         else
             Error (TypeMismatch (canonicalReturnType, bodyType, $"function {funcDef.Name} body")))
 
+let private specializeFunctionForTypeCheck
+    (funcDef: FunctionDef)
+    (typeArgs: Type list)
+    : Result<FunctionDef, TypeError> =
+    match buildSubstitution funcDef.TypeParams typeArgs with
+    | Error msg ->
+        Error (GenericError msg)
+    | Ok subst ->
+        let specializedParams =
+            funcDef.Params
+            |> NonEmptyList.map (fun (name, typ) -> (name, applySubst subst typ))
+        Ok
+            { funcDef with
+                TypeParams = []
+                Params = specializedParams
+                ReturnType = applySubst subst funcDef.ReturnType
+                Body = applySubstToExpr subst funcDef.Body }
+
+let rec private collectTypeAppSpecs (expr: Expr) : Set<string * Type list> =
+    match expr with
+    | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
+    | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ | Closure _ ->
+        Set.empty
+    | BinOp (_, left, right) ->
+        Set.union (collectTypeAppSpecs left) (collectTypeAppSpecs right)
+    | UnaryOp (_, inner) ->
+        collectTypeAppSpecs inner
+    | Let (_, value, body) ->
+        Set.union (collectTypeAppSpecs value) (collectTypeAppSpecs body)
+    | If (cond, thenBranch, elseBranch) ->
+        Set.union (collectTypeAppSpecs cond) (Set.union (collectTypeAppSpecs thenBranch) (collectTypeAppSpecs elseBranch))
+    | Call (_, args) ->
+        args |> NonEmptyList.toList |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty
+    | TypeApp (funcName, typeArgs, args) ->
+        let argSpecs =
+            args |> NonEmptyList.toList |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty
+        Set.add (funcName, typeArgs) argSpecs
+    | TupleLiteral elements ->
+        elements |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty
+    | TupleAccess (tuple, _) ->
+        collectTypeAppSpecs tuple
+    | RecordLiteral (_, fields) ->
+        fields |> List.map (snd >> collectTypeAppSpecs) |> List.fold Set.union Set.empty
+    | RecordUpdate (record, updates) ->
+        Set.union
+            (collectTypeAppSpecs record)
+            (updates |> List.map (snd >> collectTypeAppSpecs) |> List.fold Set.union Set.empty)
+    | RecordAccess (record, _) ->
+        collectTypeAppSpecs record
+    | Constructor (_, _, payload) ->
+        payload |> Option.map collectTypeAppSpecs |> Option.defaultValue Set.empty
+    | Match (scrutinee, cases) ->
+        let scrutineeSpecs = collectTypeAppSpecs scrutinee
+        let caseSpecs =
+            cases
+            |> List.map (fun matchCase ->
+                Set.union
+                    (matchCase.Guard |> Option.map collectTypeAppSpecs |> Option.defaultValue Set.empty)
+                    (collectTypeAppSpecs matchCase.Body))
+            |> List.fold Set.union Set.empty
+        Set.union scrutineeSpecs caseSpecs
+    | ListLiteral elements ->
+        elements |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty
+    | ListCons (headElements, tail) ->
+        Set.union
+            (headElements |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty)
+            (collectTypeAppSpecs tail)
+    | Lambda (_, body) ->
+        collectTypeAppSpecs body
+    | Apply (funcExpr, args) ->
+        Set.union
+            (collectTypeAppSpecs funcExpr)
+            (args |> NonEmptyList.toList |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty)
+    | InterpolatedString parts ->
+        parts
+        |> List.choose (fun part ->
+            match part with
+            | StringText _ -> None
+            | StringExpr expr -> Some (collectTypeAppSpecs expr))
+        |> List.fold Set.union Set.empty
+
 /// Internal: Type-check a program and return the type checking environment
 /// This is the core implementation used by checkProgram, checkProgramWithEnv, and checkProgramWithBaseEnv
 /// When baseEnv is provided, registries are merged with it (for separate compilation)
@@ -4865,21 +4947,71 @@ let private checkProgramInternal
     |> Result.bind (fun topLevelsWithTypes ->
         // Extract just the top-levels
         let topLevels' = topLevelsWithTypes |> List.map snd
-        let topLevelsWithEqHelpers =
-            materializeEqHelpersInTopLevels mergedAliasReg typeReg variantLookup topLevels'
-        // Find the type of the main expression (if any)
-        let mainExprType = topLevelsWithTypes |> List.tryPick (function (Some t, Expression _) -> Some t | _ -> None)
-        match mainExprType with
-        | Some typ ->
-            // We have a main expression with its type - no need to re-check
-            Ok (typ, Program topLevelsWithEqHelpers, typeCheckEnv)
-        | None ->
-            // No main expression - just functions
-            // For now, require a "main" function with signature () -> int
-            match Map.tryFind "main" funcSigs with
-            | Some ([], TInt64) -> Ok (TInt64, Program topLevelsWithEqHelpers, typeCheckEnv)
-            | Some _ -> Error (GenericError "main function must have signature () -> int")
-            | None -> Error (GenericError "Program must have either a main expression or a main() : int function"))
+        let localGenericFuncDefs =
+            topLevels'
+            |> List.choose (function
+                | FunctionDef funcDef when not (List.isEmpty funcDef.TypeParams) ->
+                    Some (funcDef.Name, funcDef)
+                | _ ->
+                    None)
+            |> Map.ofList
+
+        let localExplicitSpecs =
+            topLevels'
+            |> List.map (function
+                | FunctionDef funcDef when List.isEmpty funcDef.TypeParams ->
+                    collectTypeAppSpecs funcDef.Body
+                | Expression expr ->
+                    collectTypeAppSpecs expr
+                | _ ->
+                    Set.empty)
+            |> List.fold Set.union Set.empty
+            |> Set.filter (fun (funcName, _typeArgs) -> Map.containsKey funcName localGenericFuncDefs)
+
+        let validateLocalSpecialization (funcName, typeArgs) =
+            match Map.tryFind funcName localGenericFuncDefs with
+            | None ->
+                Ok ()
+            | Some funcDef ->
+                specializeFunctionForTypeCheck funcDef typeArgs
+                |> Result.bind (fun specializedFunc ->
+                    checkFunctionDef
+                        funcParamNameReg
+                        specializedFunc
+                        funcEnv
+                        typeReg
+                        variantLookup
+                        genericFuncReg
+                        warningSettings
+                        moduleRegistry
+                        mergedAliasReg
+                    |> Result.map (fun _ -> ()))
+
+        let validateAllSpecializations specs =
+            specs
+            |> Set.toList
+            |> List.fold
+                (fun acc spec ->
+                    acc |> Result.bind (fun () -> validateLocalSpecialization spec))
+                (Ok ())
+
+        validateAllSpecializations localExplicitSpecs
+        |> Result.bind (fun () ->
+            let topLevelsWithEqHelpers =
+                materializeEqHelpersInTopLevels mergedAliasReg typeReg variantLookup topLevels'
+            // Find the type of the main expression (if any)
+            let mainExprType = topLevelsWithTypes |> List.tryPick (function (Some t, Expression _) -> Some t | _ -> None)
+            match mainExprType with
+            | Some typ ->
+                // We have a main expression with its type - no need to re-check
+                Ok (typ, Program topLevelsWithEqHelpers, typeCheckEnv)
+            | None ->
+                // No main expression - just functions
+                // For now, require a "main" function with signature () -> int
+                match Map.tryFind "main" funcSigs with
+                | Some ([], TInt64) -> Ok (TInt64, Program topLevelsWithEqHelpers, typeCheckEnv)
+                | Some _ -> Error (GenericError "main function must have signature () -> int")
+                | None -> Error (GenericError "Program must have either a main expression or a main() : int function")))
 
 /// Type-check a program
 /// Returns the type of the main expression and the transformed program
