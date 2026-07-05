@@ -60,6 +60,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical integer simplification that removes redundant paired bitwise-not operations in ANF before backend lowering.
 - Notes: Implemented for `~~~(~~~x) -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Guided sandbox trial. Covered by `identity_bitwise_double_not` in `src/Tests/optimization/anf.opt`.
 
+### Integer double negation simplification
+
+- Optimization name: Integer double negation simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical integer simplification that removes redundant paired unary negation operations in ANF before backend lowering.
+- Notes: Implemented for `-(-x) -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Expanded Guided sandbox trial. Covered by `identity_integer_double_negation` in `src/Tests/optimization/anf.opt`.
+
 ### Bitwise all-ones identity simplification
 
 - Optimization name: Bitwise all-ones identity simplification
