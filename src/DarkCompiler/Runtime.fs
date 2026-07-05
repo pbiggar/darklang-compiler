@@ -34,7 +34,7 @@ module Runtime
 ///
 /// Uses platform-specific syscall numbers from Platform module
 let generatePrintInt64 () : ARM64.Instr list =
-    // Platform detection at runtime - if it fails, default to Linux (most common for development)
+    // Platform detection for runtime support; unsupported platforms crash explicitly.
     let os =
         match Platform.detectOS () with
         | Ok platform -> platform
