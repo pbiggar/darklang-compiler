@@ -12,12 +12,10 @@ but the original entry-block PHI-copy evidence is stale. Current ARM64 LIR has
 only three entry argument moves for `tak`, not the six-move chain previously
 recorded. The remaining evidence points to:
 
-1. **Missing self-move elimination after register allocation**: current LIR keeps
-   no-op moves such as `X20 <- Mov(Reg X20)` in the recursive loop.
-2. **Conservative argument lifetime handling**: Dark moves all three arguments to
+1. **Conservative argument lifetime handling**: Dark moves all three arguments to
    callee-saved registers before the first comparison, while Rust compares `x0`
    and `x1` first and only saves `x2` on the early-exit path.
-3. **Higher instruction count despite fixed entry PHI copies**: current benchmark
+2. **Higher instruction count despite fixed entry PHI copies**: current benchmark
    results show Dark at 635,804,177 instructions versus Rust at 39,336,450
    instructions for `tak` (16.2x).
 
@@ -75,16 +73,16 @@ Label "tak_entry":
 
 Current status:
 - The previous three redundant PHI-entry copies are no longer present.
+- Post-register-allocation self-moves are removed by `LIR_Peephole.removeSelfMovesFromFunction`.
 - `tak` still uses five callee-saved registers (`X19` through `X23`) across the
   recursive calls.
 - Dark still saves all arguments before the first comparison, unlike Rust.
 
-The loop body still contains post-RA no-op moves:
+The loop body still contains non-self PHI-result moves after recursive calls:
 
 ```
 X21 <- Mov(Reg X23)
 X22 <- Mov(Reg X19)
-X20 <- Mov(Reg X20)   ; no-op after third recursive call result
 ```
 
 ### Root Cause: PHI Node Lowering
@@ -100,30 +98,11 @@ tak_body:
 Current register allocation coalesces the entry-block PHI sources directly into
 the loop-carried registers for `tak`, so the old `X19 <- X2; X22 <- X19`
 evidence no longer applies. The remaining PHI cost appears after recursive
-calls, where the three call results are assigned back to the loop-carried
-registers.
+calls, where two call results are assigned back to the loop-carried registers.
 
 ## Optimization Opportunities
 
-### 1. Post-RA Self-Move Elimination (Low Impact, Confirmed Current)
-
-**Problem:** After register allocation, no-op MOV instructions remain in hot
-recursive loops.
-
-**Evidence from LIR:**
-```
-X20 <- Mov(Reg X20)
-```
-
-**Solution:**
-- Add or extend a post-register-allocation cleanup to remove `Rd <- Mov(Reg Rd)`.
-- This is smaller than the original copy-propagation opportunity, but it is
-  directly visible in current `tak` and `repeat` LIR.
-
-**Files to modify:**
-- `src/DarkCompiler/passes/4.5_LIR_Optimize.fs` - Add cross-block copy propagation
-
-### 2. Argument Register Reuse Before Calls (Medium Impact)
+### 1. Argument Register Reuse Before Calls (Medium Impact)
 
 **Problem:** Dark saves all `tak` arguments to callee-saved registers before the
 initial comparison.
@@ -141,7 +120,7 @@ emits the three entry moves and then compares `X21` with `X22` in `tak_body`.
 - `src/DarkCompiler/passes/5_RegisterAllocation.fs` - Add argument register
   preference/lifetime handling
 
-### 3. Improved PHI Coalescing (Implemented for Entry Path, Still Relevant for Loop Backedge)
+### 2. Improved PHI Coalescing (Implemented for Entry Path, Still Relevant for Loop Backedge)
 
 **Problem:** PHI nodes with entry block operands don't share registers with their sources.
 
@@ -165,7 +144,6 @@ three recursive call results back into the loop-carried registers.
 
 | Optimization | Estimated Speedup | Implementation Effort |
 |--------------|------------------|----------------------|
-| Post-RA self-move elimination | <1% | Low |
 | Argument register reuse before calls | 1-2% | Medium |
 | Loop-backedge PHI coalescing | Unknown | Medium |
 
@@ -205,7 +183,7 @@ v10020 <- Phi([(Reg v0, tak_entry), (Reg v10028, tak_L1)])
 
 ### LIR Stage (After Register Allocation)
 The old six-move entry chain is gone. Current LIR shows three entry moves plus
-one no-op move in the recursive loop:
+two non-self PHI-result moves in the recursive loop:
 ```
 Label "tak_entry":
     X21 <- Mov(Reg X0)
@@ -216,7 +194,6 @@ Label "tak_L1":
     ...
     X21 <- Mov(Reg X23)
     X22 <- Mov(Reg X19)
-    X20 <- Mov(Reg X20)   ; no-op
 ```
 
 ## Conclusion
@@ -224,6 +201,7 @@ Label "tak_L1":
 The tak benchmark still reveals inefficiencies in Dark's register allocation and
 PHI lowering phases, but current evidence is narrower than the original
 investigation. Tail-call detection works and entry-block PHI copies are now
-coalesced. The durable current findings are the remaining post-RA self-moves,
-the conservative argument-save placement before the first comparison, and the
-large 16.2x instruction-count gap versus Rust.
+coalesced. Post-register-allocation self-move elimination is also complete for
+the current `tak` LIR. The durable current findings are the conservative
+argument-save placement before the first comparison and the large 16.2x
+instruction-count gap versus Rust.
