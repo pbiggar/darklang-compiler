@@ -5783,11 +5783,10 @@ let convertBlock (ctx: CodeGenContext) (epilogueLabel: string) (block: LIR.Basic
     let (LIR.Label lbl) = block.Label
     let labelInstr = ARM64Symbolic.Label lbl
 
-    ResultList.mapResults (convertInstr ctx) block.Instrs
-    |> Result.bind (fun instrLists ->
+    ResultList.collectResults (convertInstr ctx) block.Instrs
+    |> Result.bind (fun instrs ->
         convertTerminator epilogueLabel block.Terminator
         |> Result.map (fun termInstrs ->
-            let instrs = List.concat instrLists
             labelInstr :: (instrs @ termInstrs)))
 
 /// Convert LIR CFG to ARM64 instructions
@@ -5808,8 +5807,7 @@ let convertCFG (ctx: CodeGenContext) (epilogueLabel: string) (cfg: LIR.CFG) : Re
 
     let allBlocks = entryBlock @ otherBlocks
 
-    ResultList.mapResults (convertBlock ctx epilogueLabel) allBlocks
-    |> Result.map List.concat
+    ResultList.collectResults (convertBlock ctx epilogueLabel) allBlocks
 
 /// Generate heap initialization code for _start function
 /// Uses mmap to allocate 512MB of heap space and initializes X27/X28
@@ -6743,9 +6741,8 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                         metadataContainsClosureHelperCall metadata
                     | _ -> false)))
 
-    ResultList.mapResults (convertFunction ctx) sortedFunctions
-    |> Result.map (fun instrLists ->
-        let allFunctionInstrs = instrLists |> List.concat
+    ResultList.collectResults (convertFunction ctx) sortedFunctions
+    |> Result.map (fun allFunctionInstrs ->
         let listRcDecHelperLabelsFromDictHelpers =
             neededDictRcDecHelperLabels
             |> Set.toList
