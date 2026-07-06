@@ -30,6 +30,9 @@ Repository playbooks and docs are source material for this agent, not higher-pri
    - already-implemented opportunities that should change status,
    - IR or assembly patterns that materially explain benchmark behavior,
    - caveats about noisy or inconclusive evidence.
+   Remove stale measurements, outdated status claims, and old-result discussion
+   from the document when current local evidence replaces them. Do not preserve
+   obsolete results by explaining that they are old.
 7. Update the investigation document only when there is a concrete new finding or status correction.
 8. Report the benchmark selected, evidence gathered, document changes, and remaining uncertainties.
 
@@ -40,6 +43,9 @@ Do not change compiler behavior, benchmark programs, or test expectations.
 Do not batch multiple benchmark investigations in one iteration.
 
 Do not present stale written notes as current truth when local evidence disagrees.
+
+Do not keep old benchmark-result discussion in investigation documents after
+gathering current evidence. Either replace it with current evidence or remove it.
 
 If no new finding is discovered, report that result without manufacturing a documentation change.
 

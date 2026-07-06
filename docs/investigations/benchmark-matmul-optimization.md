@@ -1,222 +1,109 @@
-# Benchmark Investigation: matmul (Matrix Multiplication)
+# Benchmark Investigation: matmul
 
-**Date:** 2026-01-14
-**Benchmark:** matmul
-**Randomly selected:** Yes
+## Current Status
 
-## Executive Summary
+`matmul` currently compiles and runs as a 3x3 Dark benchmark. The benchmark
+source still documents that it uses hardcoded small matrices because nested list
+support is not ready for the full 100x100 reference problem.
 
-The Dark implementation of matrix multiplication performs significantly worse than Rust and OCaml due to:
-1. **Algorithmic overhead**: Dark uses FingerTree-based lists with O(log n) access vs O(1) array access
-2. **Missing constant folding**: Tag comparison functions return constants but are called as functions
-3. **Excessive heap allocation**: Option type wrappers allocated on every `getAt` call
-4. **No loop unrolling or vectorization**: Rust uses `madd` (multiply-add) instructions
+Current `./benchmarks/run_benchmarks.sh all` measured the reduced-size Dark
+benchmark at 51,485 instructions, then omitted that number from
+`benchmarks/RESULTS.md` because `matmul` is classified as a reduced-size
+benchmark. The results table records the reference implementations at:
 
-## Benchmark Comparison
+| Implementation | Instruction count |
+|----------------|-------------------|
+| Rust           | 16,956,533        |
+| OCaml          | 34,895,082        |
+| Python         | 894,891,413       |
+| Node           | 487,674,868       |
 
-### Source Code Differences
+The current Dark binary for `benchmarks/problems/matmul/dark/main.dark` prints
+the expected checksum `342786`.
 
-| Language | Matrix Size | Data Structure | Access Complexity |
-|----------|-------------|----------------|-------------------|
-| Rust     | 100x100     | Vec<Vec<i64>>  | O(1)              |
-| OCaml    | 100x100     | Array          | O(1)              |
-| Dark     | 3x3         | List (FingerTree) | O(log n)       |
+## Current Evidence
 
-**Critical Finding:** The Dark benchmark uses hardcoded 3x3 matrices instead of 100x100, with comment noting "nested list bugs". Even comparing the same algorithm, Dark's O(log n) access is fundamentally slower.
+The Dark implementation computes each matrix element through `dot3`, and each
+`dot3` call performs six `matGet` calls:
 
-### Inner Loop Analysis
-
-**Rust Inner Loop (10 instructions/iteration):**
-```asm
-990c: ldr  x1, [x4]           ; bounds check
-9928: ldr  x1, [x15, #8]      ; load row pointer
-9934: ldr  x1, [x1, x3, lsl #3] ; a[i][k] - direct indexed access
-9938: ldr  x5, [x5, x13, lsl #3]; b[k][j] - direct indexed access
-9940: add  x3, x3, #1         ; k++
-9944: cmp  x3, #0x64          ; k < 100
-9948: madd x17, x5, x1, x17   ; s += a[i][k] * b[k][j] (fused multiply-add)
-994c: b.ne 990c               ; loop back
+```dark
+matGet(a, i, 0) * matGet(b, 0, j) +
+matGet(a, i, 1) * matGet(b, 1, j) +
+matGet(a, i, 2) * matGet(b, 2, j)
 ```
 
-**Dark `matGet` function (per element access):**
-```
-matGet_body:
-  Call Stdlib.FingerTree.getAt_list_i64  ; O(log n) tree traversal
-  HeapLoad v11320, 8                     ; extract option payload
-  Call Stdlib.FingerTree.getAt_i64       ; another O(log n) traversal
-  HeapLoad v11323, 0                     ; check option discriminant
-  Cmp v11325, Imm 0                      ; is Some?
-  Branch...
-```
+Current ANF shows that `matGet` remains a nested list lookup followed by option
+matching:
 
-Each element access in Dark involves:
-- 2 function calls to `FingerTree.getAt` (O(log n) each)
-- Multiple heap allocations for Option wrappers
-- Tag checks and branches
-
-## Optimization Opportunities
-
-### 1. Inline Constant Tag Functions (High Impact)
-
-**Problem:** Functions like `__TAG_SINGLE`, `__TAG_DEEP`, `__TAG_LEAF` return constant values but are called via full function call overhead.
-
-**Evidence from LIR:**
-```
-Stdlib.FingerTree.__TAG_SINGLE:
-  Label "Stdlib.FingerTree.__TAG_SINGLE_body":
-    X0 <- Mov(Imm 1)
-    Ret
-
-Stdlib.FingerTree.__TAG_DEEP:
-  Label "Stdlib.FingerTree.__TAG_DEEP_body":
-    X0 <- Mov(Imm 2)
-    Ret
-```
-
-These functions are called repeatedly:
-```
-v11330 <- Call(Stdlib.FingerTree.__TAG_SINGLE, [])
-Cmp(v11328, Reg v11330)
-```
-
-**Solution:**
-- Mark these functions as `@inline` or `@const`
-- Constant propagation should replace `Call(__TAG_SINGLE)` with `Imm 1`
-- Estimate: 5-10% speedup on list-heavy code
-
-### 2. Eliminate Option Heap Allocation in getAt (High Impact)
-
-**Problem:** Every `getAt` call allocates a 16-byte Option wrapper on the heap:
-
-```
-v11356 <- HeapAlloc(16)
-HeapStore(v11356, 0, Imm 0)      ; discriminant = Some (0)
-HeapStore(v11356, 8, Reg v11355) ; payload
-```
-
-**Evidence:** The `getAt_i64` function has 6 `HeapAlloc(16)` calls for Option construction.
-
-**Solution:**
-- Use tagged pointers for Option<Int64> (null = None, non-null = Some)
-- Or use register pairs (discriminant, value) for small return types
-- Or implement unboxed option optimization
-- Estimate: 10-20% speedup on code using Option types
-
-### 3. Add Array Type with O(1) Access (Critical Impact)
-
-**Problem:** Dark lacks native array support, forcing use of FingerTree-based Lists.
-
-**Evidence from ANF:**
-```
-Function Stdlib.FingerTree.getAt_i64:
-  ; 17 labels, multiple nested function calls
-  ; O(log n) tree traversal for each access
-```
-
-**Rust equivalent:**
-```asm
-ldr x1, [x1, x3, lsl #3]  ; Single instruction, O(1)
-```
-
-**Solution:**
-- Add `Array<T>` type with contiguous memory layout
-- Implement `Array.get(arr, idx)` as single indexed load
-- Estimate: 10-100x speedup for array-heavy benchmarks
-
-### 4. Specialize Small List Access Patterns (Medium Impact)
-
-**Problem:** `getAt` for small lists (size < 4) goes through full FingerTree dispatch.
-
-**Evidence:**
-```
-Stdlib.FingerTree.getAt_i64:
-  Cmp(v551, Imm 0)           ; negative index check
-  Branch...
-  And_imm(v550, #7)          ; extract tag
-  Call(__TAG_SINGLE)         ; compare to SINGLE
-  Call(__TAG_DEEP)           ; compare to DEEP
-  ; many more branches
-```
-
-For a 3-element list, this is massive overhead.
-
-**Solution:**
-- Specialize getAt for lists known to be small at compile time
-- Pattern-match on list literals to generate direct accesses
-- Estimate: 2-5x speedup for small list access
-
-### 5. Implement Loop-Invariant Code Motion (Medium Impact)
-
-**Problem:** In the `dot3` function, same matrix references passed 6 times to `matGet`:
-
-```
-v10610 <- Call(matGet, [Reg v596, Reg v598, Imm 0])  ; a, i, 0
-v10611 <- Call(matGet, [Reg v597, Imm 0, Reg v599])  ; b, 0, j
-v10613 <- Call(matGet, [Reg v596, Reg v598, Imm 1])  ; a, i, 1 - same row!
-```
-
-**Solution:**
-- Hoist row lookup outside of column iteration
-- Cache intermediate FingerTree nodes
-- Estimate: 1.5-2x speedup in matrix-like access patterns
-
-## IR Analysis Details
-
-### ANF Stage (after optimization)
-
-Functions show reasonable structure but no inlining occurred:
-- `matGet` calls `Stdlib.List.getAt_list_i64` then `Stdlib.List.getAt_i64`
-- No constant propagation for known-small lists
-- Option type fully constructed even when immediately destructured
-
-### MIR Stage
-
-Control flow graphs generated but:
-- No loop detection (no loops in 3x3 unrolled version)
-- No vectorization opportunities identified
-
-### LIR Stage (after register allocation)
-
-Heavy stack spilling visible in complex functions:
-```
-Store(Stack -416, X11)
-Store(Stack -424, X11)
-Store(Stack -360, X11)
+```text
+Function matGet:
+let TempId 585 = Stdlib.List.getAt_list_i64(t582, t583)
 ...
+let TempId 593 = Stdlib.List.getAt_i64(t592, t584)
 ```
 
-Register pressure high due to many live values through call sites.
+Current ANF also shows each `dot3` body keeps the six `matGet` calls rather
+than specializing the known 3x3 access pattern:
 
-## Quantified Performance Impact
+```text
+Function dot3:
+let TempId 609 = matGet(t605, t607, 0)
+let TempId 610 = matGet(t606, 0, t608)
+let TempId 612 = matGet(t605, t607, 1)
+let TempId 613 = matGet(t606, 1, t608)
+let TempId 616 = matGet(t605, t607, 2)
+let TempId 617 = matGet(t606, 2, t608)
+```
 
-| Optimization | Estimated Speedup | Implementation Effort |
-|--------------|------------------|----------------------|
-| Array type   | 10-100x          | High                 |
-| Inline constants | 5-10%        | Low                  |
-| Unboxed Option | 10-20%         | Medium               |
-| Small list specialization | 2-5x | Medium             |
-| LICM for matrix access | 1.5-2x | Low                |
+Current LIR confirms that top-level constant calls start to specialize after the
+first `dot3` result is expanded, but later matrix elements still call `dot3`:
 
-## Files to Modify
+```text
+v12113 <- Call(matGet, [Reg v12102, Imm 0, Imm 0])
+...
+v12124 <- Call(dot3, [Reg v12054, Reg v12102, Imm 0, Imm 1])
+```
 
-1. **Constant inlining:**
-   - `src/anf_optimization.rs` - Add constant function detection
-   - `src/stdlib/finger_tree.rs` - Mark tag functions as const
+Rust and OCaml solve a different, larger benchmark shape: both allocate and
+multiply 100x100 matrices with indexed array/vector access. Dark's current
+source uses nested immutable lists and calls `Stdlib.List.getAt` for each access.
 
-2. **Unboxed Option:**
-   - `src/types.rs` - Add unboxed representation
-   - `src/lir_codegen.rs` - Generate inline Option handling
+## Durable Optimization Opportunities
 
-3. **Array type:**
-   - `src/parser.rs` - New Array syntax
-   - `src/types.rs` - Array type definition
-   - `src/stdlib/array.rs` - Array operations
-   - `src/lir_codegen.rs` - O(1) array access codegen
+### Add an Array Type for Matrix Benchmarks
 
-4. **Small list specialization:**
-   - `src/anf_optimization.rs` - List size tracking
-   - `src/stdlib/list.rs` - Specialized small list ops
+The highest-impact gap remains the lack of an array-backed Dark benchmark shape.
+Rust uses `Vec<Vec<i64>>`, OCaml uses `Array.make_matrix`, and both perform
+indexed loads and stores inside loops. Dark currently has no equivalent
+contiguous matrix representation for this benchmark.
 
-## Conclusion
+An `Array<T>` representation with indexed load/store operations would let the
+Dark benchmark express the same 100x100 algorithm as the reference
+implementations and would remove the nested `Stdlib.List.getAt` traversal from
+the hot path.
 
-The Dark compiler's performance gap on matmul stems from fundamental data structure choices (FingerTree vs Array) combined with missing micro-optimizations (constant inlining, unboxed options). Adding an Array type would provide the largest improvement, while the other optimizations would compound to improve performance across all list-using code.
+### Specialize Known Small List Access
+
+For the current 3x3 fallback benchmark, the matrix literals and all `dot3`
+indices are statically known. Current ANF and LIR still preserve generic
+`matGet` and `Stdlib.List.getAt` calls for many accesses.
+
+A small-list specialization pass could replace known accesses into literal
+lists with direct values or direct field loads. This would specifically improve
+the current fallback benchmark while the larger array-backed version is not yet
+available.
+
+### Unbox Option Results for List Access
+
+`matGet` immediately matches on the result of `Stdlib.List.getAt`. That keeps
+the option value on the critical path for every matrix element access. If
+`Option<Int64>` can be represented without heap allocation across the
+`getAt`/match boundary, list-heavy benchmarks should benefit even when they do
+not become array-backed.
+
+## Remaining Uncertainties
+
+The current results table intentionally omits the reduced-size Dark instruction
+count, so this investigation should not use the apparent Dark-vs-reference ratio
+as optimization guidance. The next useful benchmark change is making the Dark
+program solve the same 100x100 workload as Rust and OCaml.
