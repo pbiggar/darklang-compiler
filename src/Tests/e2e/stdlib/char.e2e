@@ -70,7 +70,7 @@ Char.isAlphanumeric("!") = false
 Char.isAlphanumeric("") = false
 
 // ===================================================================
-// Char.isASCII - Check if character is in the ASCII codepoint range
+// Char ASCII classification
 // ===================================================================
 
 Char.isASCII("a") = true
