@@ -76,6 +76,21 @@ let testMIRParserRejectsOutOfRangeVirtualRegister () : TestResult =
     | Error msg -> Error $"Expected invalid register format error, got: {msg}"
     | Ok reg -> Error $"Expected parseVReg to reject out-of-range register, got: {reg}"
 
+let testLIRParserRejectsOutOfRangeNumericFields () : TestResult =
+    let cases =
+        [
+            "virtual register", parseLIR "v999999999999999999999 <- Mov(Imm 1)"
+            "immediate", parseLIR "v0 <- Mov(Imm 999999999999999999999)"
+            "stack slot", parseLIR "Store(Stack 999999999999999999999, v0)"
+        ]
+
+    cases
+    |> List.fold
+        (fun state (description, result) ->
+            state
+            |> Result.bind (fun () -> expectParserError description result))
+        (Ok ())
+
 let testARM64ParserRejectsOutOfRangeNumericFields () : TestResult =
     let rawCases =
         [
@@ -142,6 +157,7 @@ let tests = [
     ("pretty print MIR CFG", testPrettyPrintMirCfg)
     ("parse LIR rejects non-final terminator", testParseLIRRejectsNonFinalTerminator)
     ("MIR parser rejects out-of-range virtual register", testMIRParserRejectsOutOfRangeVirtualRegister)
+    ("LIR parser rejects out-of-range numeric fields", testLIRParserRejectsOutOfRangeNumericFields)
     ("ARM64 parsers reject out-of-range numeric fields", testARM64ParserRejectsOutOfRangeNumericFields)
     ("ARM64 parsers accept all general-purpose registers", testARM64ParsersAcceptAllGeneralPurposeRegisters)
 ]

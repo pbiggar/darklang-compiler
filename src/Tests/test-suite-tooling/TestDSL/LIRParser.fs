@@ -14,6 +14,18 @@ open System.Text.RegularExpressions
 open LIR
 open TestDSL.Common
 
+let private parseInt32Field (description: string) (text: string) : Result<int, string> =
+    let trimmed = text.Trim()
+    match Int32.TryParse(trimmed) with
+    | true, value -> Ok value
+    | false, _ -> Error $"Invalid {description} '{trimmed}' (expected 32-bit integer)"
+
+let private parseInt64Field (description: string) (text: string) : Result<int64, string> =
+    let trimmed = text.Trim()
+    match Int64.TryParse(trimmed) with
+    | true, value -> Ok value
+    | false, _ -> Error $"Invalid {description} '{trimmed}' (expected 64-bit integer)"
+
 /// Parse physical register from text like "X0", "X1", etc.
 let parsePhysReg (text: string) : Result<PhysReg, string> =
     match text.Trim() with
@@ -44,7 +56,9 @@ let parseRegister (text: string) : Result<Reg, string> =
     if text.StartsWith("v") then
         let m = Regex.Match(text, @"^v(\d+)$")
         if m.Success then
-            Ok (Virtual (int m.Groups.[1].Value))
+            match parseInt32Field "virtual register" m.Groups.[1].Value with
+            | Ok regId -> Ok (Virtual regId)
+            | Error e -> Error e
         else
             Error $"Invalid virtual register '{text}' (expected 'v0', 'v1', etc.)"
     else
@@ -59,7 +73,9 @@ let parseOperand (text: string) : Result<Operand, string> =
     // Try immediate: "Imm 42"
     let immMatch = Regex.Match(text, @"^Imm\s+(-?\d+)$")
     if immMatch.Success then
-        Ok (Imm (int64 immMatch.Groups.[1].Value))
+        match parseInt64Field "immediate" immMatch.Groups.[1].Value with
+        | Ok value -> Ok (Imm value)
+        | Error e -> Error e
     else
 
     // Try register: "Reg X1" or "Reg v0"
@@ -73,7 +89,9 @@ let parseOperand (text: string) : Result<Operand, string> =
     // Try stack slot: "Stack 0"
     let stackMatch = Regex.Match(text, @"^Stack\s+(-?\d+)$")
     if stackMatch.Success then
-        Ok (StackSlot (int stackMatch.Groups.[1].Value))
+        match parseInt32Field "stack slot" stackMatch.Groups.[1].Value with
+        | Ok offset -> Ok (StackSlot offset)
+        | Error e -> Error e
     else
         Error $"Invalid operand '{text}' (expected 'Imm N', 'Reg X', or 'Stack N')"
 
