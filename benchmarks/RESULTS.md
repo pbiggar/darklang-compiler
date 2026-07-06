@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-06 15:04:41
-**Commit:** `8f53ea78` - Correct spectral norm benchmark status
+**Last Updated:** 2026-07-06 18:53:17
+**Commit:** `790b16ca` - Remove completed mandelbrot strength reduction note
 
 | Benchmark     |           Dark (5.55x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
