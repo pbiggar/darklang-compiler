@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-06 02:57:22
-**Commit:** `71b06877` - Remove completed fib save-regs note
+**Last Updated:** 2026-07-06 03:21:22
+**Commit:** `fbcb4ad9` - Align compiler with interpreter: Char module chunk
 
 | Benchmark     |           Dark (5.55x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
