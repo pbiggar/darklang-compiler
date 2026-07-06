@@ -1,0 +1,5 @@
+// Fun.dark - Stdlib.Fun definitions
+//
+// Generic function helpers.
+
+def Stdlib.Fun.identity<t>(value: t) : t = value

@@ -278,7 +278,7 @@ Float                        | sum                                 | ✅   | ❌
 Float                        | toString                            | ✅   | ❌
 Float                        | truncate                            | ✅   | ❌
 Float64                      | toString                            | ❌   | ✅
-Fun                          | identity                            | ✅   | ❌
+Fun                          | identity                            | ✅   | ✅
 Html                         | HtmlTag                             | ✅   | ❌
 Html                         | Node                                | ✅   | ❌
 Html                         | a                                   | ✅   | ❌
