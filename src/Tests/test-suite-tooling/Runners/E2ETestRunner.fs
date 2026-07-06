@@ -537,10 +537,9 @@ let private parsePreambleAsProgram
     CompilerLibrary.parseProgram sourceSyntax allowInternal preambleSource
 
 let private countLeadingSpaces (lineText: string) : int =
-    let mutable idx = 0
-    while idx < lineText.Length && lineText.[idx] = ' ' do
-        idx <- idx + 1
-    idx
+    lineText
+    |> Seq.takeWhile (fun c -> c = ' ')
+    |> Seq.length
 
 let private isTopLevelPreambleDefinitionStart (trimmedLine: string) : bool =
     trimmedLine.StartsWith("let ")
