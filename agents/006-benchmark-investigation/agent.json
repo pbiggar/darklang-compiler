@@ -2,7 +2,7 @@
   "id": 6,
   "slug": "benchmark-investigation",
   "name": "Benchmark Investigation",
-  "autonomyLevel": "Guided",
+  "autonomyLevel": "ExpandedGuided",
   "enabled": true,
   "purpose": "Investigate one benchmark at a time and improve the benchmark investigation notes with current compiler, IR, and assembly evidence.",
   "summary": "This always-learning agent starts from the benchmark investigation playbook and turns it into a reviewable, evidence-focused workflow."
