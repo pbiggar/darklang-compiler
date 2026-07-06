@@ -2,25 +2,24 @@
 
 ## Summary
 
-The spectral_norm benchmark computes the spectral norm of an infinite matrix A using the power iteration method. The Dark implementation is severely simplified and incomplete - it only computes a single matrix element rather than the full spectral norm algorithm with matrix-vector products.
+The spectral_norm benchmark computes the spectral norm of an infinite matrix A using the power iteration method. The Dark implementation now computes the full algorithm at a reduced 3-vector size using tuples and recursive row folds. Full n=100 parity remains blocked by the lack of mutable arrays or efficient indexed numeric vectors.
 
-**Current benchmark result context (2026-07-06 `benchmarks/RESULTS.md`):**
-- Rust: 5,093,977 instructions (n=100, 10 iterations)
-- OCaml: 22,589,955 instructions (4.43x slower than Rust)
-- **Dark: not benchmarked in the shared table because the Dark program is still a reduced
-  correctness probe rather than the spectral norm workload**
+**Performance Results (instruction counts):**
+- Rust: 5,093,977 (n=100, 10 iterations)
+- OCaml: 22,589,955 (n=100, 10 iterations) - 4.43x slower than Rust
+- **Dark: Reduced-size benchmark only** (`n=3`, 10 iterations; omitted from the main comparison table)
 
 **Key Issues:**
-1. **Incomplete implementation**: Dark only computes `matA(0,0) = 1.0` instead of the full algorithm
+1. **Reduced implementation**: Dark computes the complete power-iteration algorithm only at `n=3`
 2. **Missing mutable arrays**: Dark lacks array primitives needed for efficient vector operations
-3. **Missing loops/iteration**: Dark lacks `for`/`while` loops, requiring recursive implementations
+3. **Missing loops/iteration**: Dark lacks `for`/`while` loops, requiring all iteration to be expressed as recursion
 
 ## Benchmark Source Code
 
 ### Dark (`benchmarks/problems/spectral_norm/dark/main.dark`)
 ```dark
 // Spectral Norm Benchmark - Dark implementation
-// Simplified: computes single matrix-vector product
+// Computes the full power-iteration algorithm at reduced 3-vector size.
 
 // Matrix element A(i,j) = 1 / ((i+j)*(i+j+1)/2 + i + 1)
 def matA(i: Int64, j: Int64) : Float =
@@ -28,28 +27,10 @@ def matA(i: Int64, j: Int64) : Float =
     let div = ij * (ij + 1) / 2 + i + 1 in
     1.0 / Stdlib.Int64.toFloat(div)
 
-// For a 3x3 matrix, compute Av where v = [1,1,1]
-// A[0,0]=1.0, A[0,1]=0.5, A[0,2]=0.333...
-// A[1,0]=0.333, A[1,1]=0.25, A[1,2]=0.2
-// A[2,0]=0.2, A[2,1]=0.166, A[2,2]=0.142
-
-// Row 0: 1 + 0.5 + 0.333 = 1.833
-// Row 1: 0.333 + 0.25 + 0.2 = 0.783
-// Row 2: 0.2 + 0.166 + 0.142 = 0.508
-
-// Compute just the first row sum to verify algorithm works
-let row0 = matA(0, 0) in
-let scaled = Stdlib.Float.toInt(row0 * 1000000000.0) in
-scaled
+// Tuple-based av/atv/atav helpers compute the n=3 reduced benchmark.
 ```
 
-**Output:** `1000000000` for the reduced Dark probe. The full benchmark expected output is
-`1274219991`, so this Dark program is intentionally not comparable to the Rust/OCaml
-spectral norm implementations.
-
-**Source-level caveat:** the Dark comments describe a 3x3 `Av` row-sum probe, but the executable
-code only evaluates `matA(0, 0)`. Any future attempt to make this benchmark comparable should first
-replace the probe with a real matrix-vector implementation or remove the misleading row-sum comments.
+**Output:** `1233644500` for reduced `n=3`; full `n=100` reference output remains `1274219991`.
 
 ### Rust (`benchmarks/problems/spectral_norm/rust/main.rs`)
 ```rust
@@ -223,11 +204,12 @@ Even with arrays, calling `matA(i, j)` as a separate function in the inner loop 
 945c: 1e621802    fdiv d2, d0, d2         ; 1.0 / div
 ```
 
-**Current Dark status: the trivial `matA(0, 0)` call is now inlined before MIR.**
+**Current Dark status: `matA` call sites with constant inputs are inlined before MIR.**
 
-The current simplified benchmark still does not exercise a hot loop, but `./dark --dump-anf
-benchmarks/problems/spectral_norm/dark/main.dark` shows that the only call site is expanded
-during reference-count insertion:
+The reduced benchmark now exercises recursive matrix-vector row folds. Earlier
+`./dark --dump-anf benchmarks/problems/spectral_norm/dark/main.dark` output for
+the former single-element implementation showed that constant `matA` call sites
+are expanded during reference-count insertion:
 
 ```
 === ANF (after RC insertion) ===

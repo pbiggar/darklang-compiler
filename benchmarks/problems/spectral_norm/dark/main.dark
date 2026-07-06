@@ -1,22 +1,47 @@
 // Spectral Norm Benchmark - Dark implementation
-// Simplified: computes single matrix-vector product
+// Computes the full power-iteration algorithm at reduced 3-vector size.
 
-// Matrix element A(i,j) = 1 / ((i+j)*(i+j+1)/2 + i + 1)
 def matA(i: Int64, j: Int64) : Float =
     let ij = i + j in
     let div = ij * (ij + 1) / 2 + i + 1 in
     1.0 / Stdlib.Int64.toFloat(div)
 
-// For a 3x3 matrix, compute Av where v = [1,1,1]
-// A[0,0]=1.0, A[0,1]=0.5, A[0,2]=0.333...
-// A[1,0]=0.333, A[1,1]=0.25, A[1,2]=0.2
-// A[2,0]=0.2, A[2,1]=0.166, A[2,2]=0.142
+def get3(v: (Float, Float, Float), i: Int64) : Float =
+    if i == 0 then v.0
+    else if i == 1 then v.1
+    else v.2
 
-// Row 0: 1 + 0.5 + 0.333 = 1.833
-// Row 1: 0.333 + 0.25 + 0.2 = 0.783
-// Row 2: 0.2 + 0.166 + 0.142 = 0.508
+def avRow(i: Int64, j: Int64, n: Int64, v: (Float, Float, Float), acc: Float) : Float =
+    if j >= n then acc
+    else avRow(i, j + 1, n, v, acc + matA(i, j) * get3(v, j))
 
-// Compute just the first row sum to verify algorithm works
-let row0 = matA(0, 0) in
-let scaled = Stdlib.Float.toInt(row0 * 1000000000.0) in
-scaled
+def atvRow(i: Int64, j: Int64, n: Int64, v: (Float, Float, Float), acc: Float) : Float =
+    if j >= n then acc
+    else atvRow(i, j + 1, n, v, acc + matA(j, i) * get3(v, j))
+
+def av3(v: (Float, Float, Float)) : (Float, Float, Float) =
+    (avRow(0, 0, 3, v, 0.0), avRow(1, 0, 3, v, 0.0), avRow(2, 0, 3, v, 0.0))
+
+def atv3(v: (Float, Float, Float)) : (Float, Float, Float) =
+    (atvRow(0, 0, 3, v, 0.0), atvRow(1, 0, 3, v, 0.0), atvRow(2, 0, 3, v, 0.0))
+
+def atav3(v: (Float, Float, Float)) : (Float, Float, Float) =
+    atv3(av3(v))
+
+def iterate(n: Int64, u: (Float, Float, Float), v: (Float, Float, Float)) : ((Float, Float, Float), (Float, Float, Float)) =
+    if n <= 0 then (u, v)
+    else
+        let nextV = atav3(u) in
+        let nextU = atav3(nextV) in
+        iterate(n - 1, nextU, nextV)
+
+def dot3(a: (Float, Float, Float), b: (Float, Float, Float)) : Float =
+    a.0 * b.0 + a.1 * b.1 + a.2 * b.2
+
+def spectralNorm3(iterations: Int64) : Float =
+    let result = iterate(iterations, (1.0, 1.0, 1.0), (0.0, 0.0, 0.0)) in
+    let u = result.0 in
+    let v = result.1 in
+    Stdlib.Float.sqrt(dot3(u, v) / dot3(v, v))
+
+Stdlib.Float.toInt(spectralNorm3(10) * 1000000000.0)

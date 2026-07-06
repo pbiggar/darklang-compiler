@@ -355,6 +355,43 @@ fastaChecksum(100) = 19053841
 
 
 // ===================================================================
+// Spectral Norm (spectral_norm) - reduced 3-vector power iteration
+// ===================================================================
+
+def spectralMatA(i: Int64, j: Int64) : Float =
+    let ij = i + j in
+    let div = ij * (ij + 1) / 2 + i + 1 in
+    1.0 / Stdlib.Int64.toFloat(div)
+
+def spectralGet3(v: (Float, Float, Float), i: Int64) : Float =
+    if i == 0 then v.0
+    else if i == 1 then v.1
+    else v.2
+
+def spectralAvRow(i: Int64, j: Int64, n: Int64, v: (Float, Float, Float), acc: Float) : Float =
+    if j >= n then acc
+    else spectralAvRow(i, j + 1, n, v, acc + spectralMatA(i, j) * spectralGet3(v, j))
+
+def spectralAtvRow(i: Int64, j: Int64, n: Int64, v: (Float, Float, Float), acc: Float) : Float =
+    if j >= n then acc
+    else spectralAtvRow(i, j + 1, n, v, acc + spectralMatA(j, i) * spectralGet3(v, j))
+
+def spectralAv3(v: (Float, Float, Float)) : (Float, Float, Float) =
+    (spectralAvRow(0, 0, 3, v, 0.0), spectralAvRow(1, 0, 3, v, 0.0), spectralAvRow(2, 0, 3, v, 0.0))
+
+def spectralAtv3(v: (Float, Float, Float)) : (Float, Float, Float) =
+    (spectralAtvRow(0, 0, 3, v, 0.0), spectralAtvRow(1, 0, 3, v, 0.0), spectralAtvRow(2, 0, 3, v, 0.0))
+
+def spectralAtav3(v: (Float, Float, Float)) : (Float, Float, Float) =
+    spectralAtv3(spectralAv3(v))
+
+def spectralDot3(a: (Float, Float, Float), b: (Float, Float, Float)) : Float =
+    a.0 * b.0 + a.1 * b.1 + a.2 * b.2
+
+let spectralV = spectralAtav3((1.0, 1.0, 1.0)) in let spectralU = spectralAtav3(spectralV) in Stdlib.Float.toInt(Stdlib.Float.sqrt(spectralDot3(spectralU, spectralV) / spectralDot3(spectralV, spectralV)) * 1000000000.0) = 1233643706
+
+
+// ===================================================================
 // Hello World (helloworld) - simplest benchmark
 // ===================================================================
 
@@ -365,7 +402,7 @@ fastaChecksum(100) = 19053841
 // BLOCKED BENCHMARKS - require compiler bug fixes
 // ===================================================================
 //
-// nsieve, spectral_norm, matmul are blocked by a tail call optimization bug:
+// nsieve and matmul are blocked by a tail call optimization bug:
 //
 // Bug: Lists built by TAIL-RECURSIVE functions get corrupted when modified.
 // Non-tail-recursive list building works correctly.

@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-07 03:41:17
-**Commit:** `007e8484` - Skip LIR loop hoist on acyclic CFGs
+**Last Updated:** 2026-07-07 04:13:12
+**Commit:** `e5b724f9` - Complete reduced spectral norm benchmark
 
 | Benchmark     |           Dark (5.55x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

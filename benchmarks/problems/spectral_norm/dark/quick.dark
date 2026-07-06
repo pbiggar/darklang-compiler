@@ -1,11 +1,36 @@
 // Spectral Norm Benchmark - Quick check version
-// Already minimal - same as main
+// Uses one power-iteration round at the same reduced 3-vector size.
 
 def matA(i: Int64, j: Int64) : Float =
     let ij = i + j in
     let div = ij * (ij + 1) / 2 + i + 1 in
     1.0 / Stdlib.Int64.toFloat(div)
 
-let row0 = matA(0, 0) in
-let scaled = Stdlib.Float.toInt(row0 * 1000000000.0) in
-scaled
+def get3(v: (Float, Float, Float), i: Int64) : Float =
+    if i == 0 then v.0
+    else if i == 1 then v.1
+    else v.2
+
+def avRow(i: Int64, j: Int64, n: Int64, v: (Float, Float, Float), acc: Float) : Float =
+    if j >= n then acc
+    else avRow(i, j + 1, n, v, acc + matA(i, j) * get3(v, j))
+
+def atvRow(i: Int64, j: Int64, n: Int64, v: (Float, Float, Float), acc: Float) : Float =
+    if j >= n then acc
+    else atvRow(i, j + 1, n, v, acc + matA(j, i) * get3(v, j))
+
+def av3(v: (Float, Float, Float)) : (Float, Float, Float) =
+    (avRow(0, 0, 3, v, 0.0), avRow(1, 0, 3, v, 0.0), avRow(2, 0, 3, v, 0.0))
+
+def atv3(v: (Float, Float, Float)) : (Float, Float, Float) =
+    (atvRow(0, 0, 3, v, 0.0), atvRow(1, 0, 3, v, 0.0), atvRow(2, 0, 3, v, 0.0))
+
+def atav3(v: (Float, Float, Float)) : (Float, Float, Float) =
+    atv3(av3(v))
+
+def dot3(a: (Float, Float, Float), b: (Float, Float, Float)) : Float =
+    a.0 * b.0 + a.1 * b.1 + a.2 * b.2
+
+let v = atav3((1.0, 1.0, 1.0)) in
+let u = atav3(v) in
+Stdlib.Float.toInt(Stdlib.Float.sqrt(dot3(u, v) / dot3(v, v)) * 1000000000.0)
