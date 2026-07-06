@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-06 08:52:12
-**Commit:** `3b7bfa30` - Enable upstream typed return error test
+**Last Updated:** 2026-07-06 15:04:41
+**Commit:** `8f53ea78` - Correct spectral norm benchmark status
 
 | Benchmark     |           Dark (5.55x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

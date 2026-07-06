@@ -30,7 +30,6 @@ These benchmarks compile and run reliably.
 | nqueen        | Backtracking   | N-Queens via bitwise operations         |
 | fannkuch      | Permutations   | Pancake flipping, permutation generation |
 | merkletrees   | Tree/Hashing   | Recursive tree hashing                  |
-| spectral_norm | Numerical      | Float array operations                  |
 | matmul        | Matrix         | Matrix multiplication                   |
 | mandelbrot    | Numerical      | Complex number iteration, fractal       |
 | pisum         | Numerical      | Floating-point reciprocal-square sum    |
@@ -109,6 +108,7 @@ These benchmarks have implementations but are limited by stack depth or bugs.
 | nsieve     | Stack overflow     | Uses n=1000 (n=100000 causes stack overflow) - outputs 168     |
 | edigits    | Stack overflow     | Uses 50 digits, 1 iteration (full: 1000 digits, 10 iterations) |
 | nbody      | Working (reduced)  | Uses 100 simulation steps (full: 500000 steps)                 |
+| spectral_norm | Incomplete/reduced | Computes one matrix element instead of the full spectral norm algorithm |
 
 ---
 
@@ -128,6 +128,7 @@ remain reduced or blocked as documented above.
 | ---------------------------------------- | --------------------------------------------------- |
 | **Allocator capacity / allocation pressure** | quicksort                                       |
 | Stack depth / TCO                        | nsieve (full), edigits (full)                       |
+| Mutable arrays / efficient indexed numeric vectors | spectral_norm (full)                     |
 
 ---
 
