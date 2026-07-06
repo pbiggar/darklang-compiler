@@ -207,6 +207,18 @@ let TempId 2 = use(42)
 return t2
 
 ---NAME---
+identity_mod_negative_one
+---INPUT---
+def use(x: Int64): Int64 = x % -1
+use(42)
+---EXPECTED---
+Function use:
+return 0
+Main:
+let TempId 2 = use(42)
+return t2
+
+---NAME---
 dce_unused_binding
 ---INPUT---
 let unused = 1 + 2 in 42

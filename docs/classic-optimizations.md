@@ -11,6 +11,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical simplification that removes a runtime remainder operation when the divisor is the literal `1`. Low-risk canonical identity; previously used as the first Phase 1 sandbox trial target.
 - Notes: Implemented in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during sandbox testing. Covered by `identity_mod_one` in `src/Tests/optimization/anf.opt`; quick benchmark check did not report a regression. Prior sandbox trial implemented `x % 1 -> 0` in ANF optimization.
 
+### Modulo by negative one elimination
+
+- Optimization name: Modulo by negative one elimination
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical simplification that removes a runtime remainder operation when the divisor is the literal `-1`.
+- Notes: Implemented for `x % -1 -> 0` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `identity_mod_negative_one` in `src/Tests/optimization/anf.opt`; existing integer-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
+
 ### Integer self-comparison simplification
 
 - Optimization name: Integer self-comparison simplification
