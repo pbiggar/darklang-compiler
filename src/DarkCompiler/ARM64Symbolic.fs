@@ -94,6 +94,12 @@ type LabelRef =
     | CodeLabel of string
     | DataLabel of DataRef
 
+let coverageDataLabelName = "_coverage_data"
+let leakCounterLabelName = "_leak_count"
+
+let private isNamedDataLabel (name: string) : bool =
+    name = coverageDataLabelName || name = leakCounterLabelName
+
 /// ARM64 instruction types (symbolic label refs for data)
 type Instr =
     | MOVZ of dest:Reg * imm:uint16 * shift:int
@@ -185,10 +191,10 @@ type Instr =
 
 /// Classify labels from concrete ARM64 instructions
 let private classifyLabel (name: string) : LabelRef =
-    match name with
-    | "_coverage_data" -> DataLabel (Named name)
-    | "_leak_count" -> DataLabel (Named name)
-    | _ -> CodeLabel name
+    if isNamedDataLabel name then
+        DataLabel (Named name)
+    else
+        CodeLabel name
 
 /// Convert concrete ARM64 instruction to symbolic (for runtime helpers)
 let ofARM64 (instr: ARM64.Instr) : Instr =

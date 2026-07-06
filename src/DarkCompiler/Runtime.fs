@@ -2691,7 +2691,7 @@ let generateFileWriteFromPtr (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (ptrReg: 
 /// Writes coverage counters to /tmp/dark_cov.bin before program exit
 /// coverageExprCount: number of expressions (determines bytes to write = count * 8)
 ///
-/// Uses ADRP+ADD to get _coverage_data address from BSS section
+/// Uses ADRP+ADD to get coverage data address from BSS section
 /// Opens file, writes data, closes file (errors are silently ignored)
 let generateCoverageFlush (coverageExprCount: int) : ARM64.Instr list =
     if coverageExprCount = 0 then
@@ -2738,8 +2738,8 @@ let generateCoverageFlush (coverageExprCount: int) : ARM64.Instr list =
                 ARM64.STR (ARM64.X9, ARM64.SP, 16s)
 
                 // Get coverage data address via ADRP+ADD
-                ARM64.ADRP (ARM64.X10, "_coverage_data")
-                ARM64.ADD_label (ARM64.X10, ARM64.X10, "_coverage_data")
+                ARM64.ADRP (ARM64.X10, ARM64Symbolic.coverageDataLabelName)
+                ARM64.ADD_label (ARM64.X10, ARM64.X10, ARM64Symbolic.coverageDataLabelName)
 
                 // openat(AT_FDCWD, path, flags, mode)
                 ARM64.MOVZ (ARM64.X0, 100us, 0)
@@ -2758,7 +2758,7 @@ let generateCoverageFlush (coverageExprCount: int) : ARM64.Instr list =
 
                 // write(fd, buf, count)
                 ARM64.MOV_reg (ARM64.X0, ARM64.X11)  // fd
-                ARM64.MOV_reg (ARM64.X1, ARM64.X10)  // buf = _coverage_data
+                ARM64.MOV_reg (ARM64.X1, ARM64.X10)  // buf = coverage data
             ] @
             (if byteCount < 65536 then
                 [ARM64.MOVZ (ARM64.X2, uint16 byteCount, 0)]
@@ -2801,8 +2801,8 @@ let generateCoverageFlush (coverageExprCount: int) : ARM64.Instr list =
                 ARM64.STR (ARM64.X9, ARM64.SP, 16s)
 
                 // Get coverage data address via ADRP+ADD
-                ARM64.ADRP (ARM64.X10, "_coverage_data")
-                ARM64.ADD_label (ARM64.X10, ARM64.X10, "_coverage_data")
+                ARM64.ADRP (ARM64.X10, ARM64Symbolic.coverageDataLabelName)
+                ARM64.ADD_label (ARM64.X10, ARM64.X10, ARM64Symbolic.coverageDataLabelName)
 
                 // open(path, flags, mode) - macOS uses direct open syscall
                 ARM64.MOV_reg (ARM64.X0, ARM64.SP)  // path
@@ -2819,7 +2819,7 @@ let generateCoverageFlush (coverageExprCount: int) : ARM64.Instr list =
 
                 // write(fd, buf, count)
                 ARM64.MOV_reg (ARM64.X0, ARM64.X11)  // fd
-                ARM64.MOV_reg (ARM64.X1, ARM64.X10)  // buf = _coverage_data
+                ARM64.MOV_reg (ARM64.X1, ARM64.X10)  // buf = coverage data
             ] @
             (if byteCount < 65536 then
                 [ARM64.MOVZ (ARM64.X2, uint16 byteCount, 0)]

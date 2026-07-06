@@ -60,7 +60,7 @@ let private rcSumShapeRegistryFromVariantRegistry (variantRegistry: LIR.VariantR
             |> List.sortBy (fun variant -> variant.Tag)
             |> List.map (fun variant -> variant.Tag, variant.Payload) })
 
-let leakCounterLabel = "_leak_count"
+let leakCounterLabel = ARM64Symbolic.leakCounterLabelName
 let heapOutOfMemoryMessage = "Out of heap memory"
 let private heapMmapSizeBytes = 512L * 1024L * 1024L
 let private heapMmapSizeMovzImm16 = 0x2000us  // 512MB == 0x20000000
@@ -5678,8 +5678,8 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         let offset = exprId * 8
         Ok ([
             // Get address of coverage buffer using PC-relative addressing
-            ARM64Symbolic.ADRP (ARM64Symbolic.X9, dataLabel "_coverage_data")
-            ARM64Symbolic.ADD_label (ARM64Symbolic.X9, ARM64Symbolic.X9, dataLabel "_coverage_data")
+            ARM64Symbolic.ADRP (ARM64Symbolic.X9, dataLabel ARM64Symbolic.coverageDataLabelName)
+            ARM64Symbolic.ADD_label (ARM64Symbolic.X9, ARM64Symbolic.X9, dataLabel ARM64Symbolic.coverageDataLabelName)
         ] @
         // Add offset for this expression's counter
         (if offset = 0 then

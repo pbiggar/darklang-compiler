@@ -1443,12 +1443,12 @@ let private computeCodeFileOffset
         (headerSize + commandsSize + 200 + 7) &&& (~~~7)
 
 /// Compute leak counter label position
-/// Returns map with "_leak_count" label after all other data, 8-byte aligned
+/// Returns map with the leak counter label after all other data, 8-byte aligned
 let computeLeakCounterLabel (codeFileOffset: int) (codeSize: int) (floatPoolSize: int) (stringPoolSize: int) : Map<string, int> =
     let floatStart = (codeFileOffset + codeSize + 7) &&& (~~~7)
     let stringStart = floatStart + floatPoolSize
     let leakStart = (stringStart + stringPoolSize + 7) &&& (~~~7)
-    Map.ofList [("_leak_count", leakStart)]
+    Map.ofList [(ARM64Symbolic.leakCounterLabelName, leakStart)]
 
 /// Encoding with string and float pool support
 /// Computes label positions and encodes ADRP/ADD_label correctly
