@@ -193,67 +193,7 @@ The LIR shows 22 phi nodes in `countPrimes_body` - evidence of poor SSA construc
 
 ---
 
-## Optimization 3: Dead Code After Constant Boolean Branch
-
-### Impact Estimate: ~10-15% improvement
-
-### Root Cause
-After inlining `isPrime` into `countPrimes`, the compiler produces code that branches on literal booleans:
-
-**Dark ANF (after inlining):**
-```
-if t42 then
-    let TempId 30 = false       ; Constant false
-    if t30 then                 ; DEAD BRANCH - always false
-        ...                     ; unreachable code generated anyway
-    else
-        ...
-else
-    let TempId 30 = true        ; Constant true
-    if t30 then                 ; DEAD BRANCH - always true
-        ...
-    else
-        ...                     ; unreachable code generated anyway
-```
-
-**Generated LIR (countPrimes):**
-```
-Label "countPrimes_L21":
-    v10112 <- Mov(Imm 0)
-    v1002 <- Mov(Imm 0)
-    Branch(v1002, Label "countPrimes_L24", Label "countPrimes_L25")  ; Always goes to L25
-Label "countPrimes_L22":
-    v10102 <- Mov(Imm 1)
-    v1002 <- Mov(Imm 1)
-    Branch(v1002, Label "countPrimes_L27", Label "countPrimes_L28")  ; Always goes to L27
-```
-
-This generates unreachable code and unnecessary branch instructions.
-
-### Implementation Status
-Implemented in `src/DarkCompiler/passes/3.5_MIR_Optimize.fs` by:
-- Simplifying `Branch` with constant `true/false` to `Jump`
-- Pruning unreachable blocks and trimming phi sources in the MIR CFG
-
-### Evidence
-Dark `countPrimes` function has 30 basic blocks after compilation:
-- `countPrimes_L0` through `countPrimes_L29`
-- Many are unreachable due to constant branches
-
-Rust `main` function has the entire logic in ~15 instructions with no dead paths.
-
-### Implementation Approach
-1. Add constant folding for boolean branches in MIR
-2. If branch condition is constant, replace with unconditional jump
-3. Run DCE to eliminate unreachable blocks
-
-### Files to Modify
-- `src/mir/optimizations/const_prop.rs` - Add constant branch elimination
-- `src/mir/optimizations/dce.rs` - Mark/sweep unreachable blocks
-
----
-
-## Optimization 4: Better Register Allocation Across Function Calls
+## Optimization 3: Better Register Allocation Across Function Calls
 
 ### Impact Estimate: ~10-20% improvement
 
@@ -311,10 +251,9 @@ countPrimes_L16:
 |-------------|-------------|------------|----------|
 | 1. Hardware fsqrt for integer sqrt | 30-40% | Medium | High |
 | 2. CSE in ANF | 15-25% | Medium | High |
-| 3. Constant branch elimination | 10-15% | Low | Medium |
-| 4. Better register allocation | 10-20% | High | Medium |
+| 3. Better register allocation | 10-20% | High | Medium |
 
-**Combined potential improvement:** 50-80%, bringing Dark closer to 2-3x Rust performance.
+**Combined potential improvement:** 40-65%, bringing Dark closer to 2-3x Rust performance.
 
 ## Instruction Count Analysis
 
