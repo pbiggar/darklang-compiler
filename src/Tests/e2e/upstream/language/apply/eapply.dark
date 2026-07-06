@@ -81,7 +81,7 @@ strFn (X.B "str") = X.B "str"
 // TODO you shouldn't have to supply type arguments to definedPolyFn
 // -- we should be able to infer that based on the data passed in
 definedPolyFn<String>(X.A 5L) = definedPolyFn (X.A 5L)
-// definedPolyFn<String>(X.B "str") = definedPolyFn (X.B "str")
+definedPolyFn<String>(X.B "str") = definedPolyFn (X.B "str")
 
 
 module InvalidFnCalls =
