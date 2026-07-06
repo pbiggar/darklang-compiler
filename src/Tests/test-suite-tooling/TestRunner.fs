@@ -394,7 +394,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let upstreamEnablementLineAllowlist : Map<string, Set<int>> =
         Map.ofList
             [
-                ("src/Tests/e2e/upstream/language/apply/eapply.dark", Set.ofList [ 1; 4; 7; 10; 19; 62; 63; 64; 65; 66; 67; 68; 69; 70; 71; 72; 73; 75; 76; 78; 79; 88; 92; 93; 95; 96; 98; 100; 104; 108; 110; 124; 135; 136; 138; 139; 141; 142 ])
+                ("src/Tests/e2e/upstream/language/apply/eapply.dark", Set.ofList [ 1; 4; 7; 10; 19; 62; 63; 64; 65; 66; 67; 68; 69; 70; 71; 72; 73; 75; 76; 78; 79; 83; 88; 92; 93; 95; 96; 98; 100; 104; 108; 110; 124; 135; 136; 138; 139; 141; 142 ])
                 ("src/Tests/e2e/upstream/language/custom-data/aliases.dark", Set.ofList [ 6; 9 ])
                 ("src/Tests/e2e/upstream/stdlib/date.dark", Set.ofList [ 216 ])
             ]
