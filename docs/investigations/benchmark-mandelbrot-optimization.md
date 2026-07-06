@@ -8,8 +8,6 @@ The Dark compiler currently produces code that is **2.06x slower than Rust** and
 2. **Repeated float constant loads** (estimated 5-10% improvement potential)
 3. **Missing fused multiply-add (FMA) instructions** (estimated 10-15% improvement potential)
 
-The previously identified `2.0 * x -> x + x` strength reduction has been implemented in current ANF/LIR and is no longer an open opportunity for this benchmark.
-
 ## Benchmark Results
 
 | Language | Mean Time | vs Rust |
