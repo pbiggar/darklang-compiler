@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-06 02:10:12
-**Commit:** `bad8014d` - Stop defaulting raw_get MIR fallback to Int64
+**Last Updated:** 2026-07-06 02:57:22
+**Commit:** `71b06877` - Remove completed fib save-regs note
 
 | Benchmark     |           Dark (5.55x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
