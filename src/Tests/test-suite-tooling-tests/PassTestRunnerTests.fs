@@ -5,6 +5,7 @@
 module PassTestRunnerTests
 
 open MIR
+open TestDSL.MIRParser
 open TestDSL.LIRParser
 open TestDSL.PassTestRunner
 
@@ -69,6 +70,12 @@ let testParseLIRRejectsNonFinalTerminator () : TestResult =
     | Error msg -> Error $"Expected non-final terminator error, got: {msg}"
     | Ok _ -> Error "Expected parseLIR to reject a terminator before the final line"
 
+let testMIRParserRejectsOutOfRangeVirtualRegister () : TestResult =
+    match parseVReg "v999999999999999999999999999999999999999" with
+    | Error msg when msg.Contains("Invalid register format") -> Ok ()
+    | Error msg -> Error $"Expected invalid register format error, got: {msg}"
+    | Ok reg -> Error $"Expected parseVReg to reject out-of-range register, got: {reg}"
+
 let testARM64ParserRejectsOutOfRangeNumericFields () : TestResult =
     let rawCases =
         [
@@ -97,6 +104,7 @@ let testARM64ParserRejectsOutOfRangeNumericFields () : TestResult =
 let tests = [
     ("pretty print MIR CFG", testPrettyPrintMirCfg)
     ("parse LIR rejects non-final terminator", testParseLIRRejectsNonFinalTerminator)
+    ("MIR parser rejects out-of-range virtual register", testMIRParserRejectsOutOfRangeVirtualRegister)
     ("ARM64 parsers reject out-of-range numeric fields", testARM64ParserRejectsOutOfRangeNumericFields)
 ]
 

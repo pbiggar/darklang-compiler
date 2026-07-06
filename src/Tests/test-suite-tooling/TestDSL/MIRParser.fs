@@ -18,7 +18,9 @@ open TestDSL.Common
 let parseVReg (text: string) : Result<VReg, string> =
     let m = Regex.Match(text.Trim(), @"^v(\d+)$")
     if m.Success then
-        Ok (VReg (int m.Groups.[1].Value))
+        match Int32.TryParse(m.Groups.[1].Value) with
+        | true, id -> Ok (VReg id)
+        | false, _ -> Error $"Invalid register format '{text}' (expected 'v0', 'v1', etc.)"
     else
         Error $"Invalid register format '{text}' (expected 'v0', 'v1', etc.)"
 
