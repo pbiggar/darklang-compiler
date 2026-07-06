@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-06 07:52:07
-**Commit:** `89c36312` - Strength reduce float division by negative one
+**Last Updated:** 2026-07-06 08:52:12
+**Commit:** `3b7bfa30` - Enable upstream typed return error test
 
 | Benchmark     |           Dark (5.55x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
