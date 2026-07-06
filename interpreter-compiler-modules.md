@@ -231,7 +231,7 @@ DateTime                     | toStringISO8601BasicDateTime        | ✅   | ❌
 DateTime                     | today                               | ✅   | ❌
 DateTime                     | weekday                             | ✅   | ❌
 DateTime                     | year                                | ✅   | ❌
-Dict                         | empty                               | ✅   | ❌
+Dict                         | empty                               | ✅   | ✅
 Dict                         | filter                              | ✅   | ❌
 Dict                         | filterMap                           | ✅   | ❌
 Dict                         | fromList                            | ✅   | ❌

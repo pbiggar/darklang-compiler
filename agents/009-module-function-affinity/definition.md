@@ -25,6 +25,11 @@ Prefer stdlib Darklang implementations under `src/DarkCompiler/stdlib/` when the
 9. If a compiler-only public name was removed from the compiler, remove that old-name row from the compatibility record instead of leaving it marked compiler-supported.
 10. Run the full test suite.
 
+If the selected row is already implemented and covered by executable evidence,
+do not add redundant tests or implementation changes. Instead, verify the
+smallest existing local and upstream evidence for that row, update only the
+compatibility record, and report that the implementation was already present.
+
 ## Stop Conditions
 
 Stop and ask for guidance when the selected item requires more than one compiler pass, behavior is ambiguous or undocumented, or the iteration cannot be completed without broad unrelated cleanup.
