@@ -20,8 +20,10 @@ Prefer stdlib Darklang implementations under `src/DarkCompiler/stdlib/` when the
 4. Find the smallest relevant upstream tests, or add minimal E2E tests when no upstream tests exist.
 5. Confirm the new or imported test fails against current compiler behavior when practical.
 6. Implement the smallest change that makes compiler behavior match interpreter behavior.
-7. Update the compatibility record to mark the compiler side supported only after the test and implementation validate the behavior.
-8. Run the full test suite.
+7. Prefer interpreter-supported public names for equivalent behavior; rename compiler-only public functions instead of keeping compatibility aliases unless the human explicitly requests aliases.
+8. Update the compatibility record to mark the compiler side supported only after the test and implementation validate the behavior.
+9. If a compiler-only public name was removed from the compiler, remove that old-name row from the compatibility record instead of leaving it marked compiler-supported.
+10. Run the full test suite.
 
 ## Stop Conditions
 

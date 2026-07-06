@@ -402,8 +402,7 @@ Int16                        | bitwiseNot                          | ❌   | ✅
 Int16                        | bitwiseOr                           | ❌   | ✅
 Int16                        | bitwiseXor                          | ❌   | ✅
 Int16                        | clamp                               | ✅   | ✅
-Int16                        | div                                 | ❌   | ✅
-Int16                        | divide                              | ✅   | ❌
+Int16                        | divide                              | ✅   | ✅
 Int16                        | fromInt128                          | ✅   | ❌
 Int16                        | fromInt32                           | ✅   | ❌
 Int16                        | fromInt64                           | ✅   | ❌
@@ -422,8 +421,7 @@ Int16                        | lessThanOrEqualTo                   | ✅   | ✅
 Int16                        | max                                 | ✅   | ✅
 Int16                        | min                                 | ✅   | ✅
 Int16                        | mod                                 | ✅   | ✅
-Int16                        | mul                                 | ❌   | ✅
-Int16                        | multiply                            | ✅   | ❌
+Int16                        | multiply                            | ✅   | ✅
 Int16                        | negate                              | ✅   | ✅
 Int16                        | parse                               | ✅   | ❌
 Int16                        | popcount                            | ❌   | ✅
@@ -433,8 +431,7 @@ Int16                        | remainder                           | ✅   | ❌
 Int16                        | shiftLeft                           | ❌   | ✅
 Int16                        | shiftRight                          | ❌   | ✅
 Int16                        | sqrt                                | ✅   | ❌
-Int16                        | sub                                 | ❌   | ✅
-Int16                        | subtract                            | ✅   | ❌
+Int16                        | subtract                            | ✅   | ✅
 Int16                        | sum                                 | ✅   | ✅
 Int16                        | toFloat                             | ✅   | ❌
 Int16                        | toString                            | ✅   | ✅

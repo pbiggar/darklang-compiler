@@ -13,31 +13,31 @@ Int16.add(-5s, 5s) = 0s
 Int16.add(100s, 200s) = 300s
 
 // ===================================================================
-// Int16.sub - Subtract two integers
+// Int16.subtract - Subtract two integers
 // ===================================================================
 
-Int16.sub(10s, 9s) = 1s
-Int16.sub(0s, 0s) = 0s
-Int16.sub(100s, 50s) = 50s
-Int16.sub(5s, 10s) = -5s
+Int16.subtract(10s, 9s) = 1s
+Int16.subtract(0s, 0s) = 0s
+Int16.subtract(100s, 50s) = 50s
+Int16.subtract(5s, 10s) = -5s
 
 // ===================================================================
-// Int16.mul - Multiply two integers
+// Int16.multiply - Multiply two integers
 // ===================================================================
 
-Int16.mul(8s, 8s) = 64s
-Int16.mul(0s, 100s) = 0s
-Int16.mul(-5s, 5s) = -25s
-Int16.mul(100s, 100s) = 10000s
+Int16.multiply(8s, 8s) = 64s
+Int16.multiply(0s, 100s) = 0s
+Int16.multiply(-5s, 5s) = -25s
+Int16.multiply(100s, 100s) = 10000s
 
 // ===================================================================
-// Int16.div - Divide two integers
+// Int16.divide - Divide two integers
 // ===================================================================
 
-Int16.div(10s, 5s) = 2s
-Int16.div(10s, 3s) = 3s
-Int16.div(100s, 10s) = 10s
-Int16.div(-10s, 2s) = -5s
+Int16.divide(10s, 5s) = 2s
+Int16.divide(10s, 3s) = 3s
+Int16.divide(100s, 10s) = 10s
+Int16.divide(-10s, 2s) = -5s
 
 // ===================================================================
 // Int16.mod - Modulo operation

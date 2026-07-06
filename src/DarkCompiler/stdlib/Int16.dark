@@ -6,11 +6,11 @@
 
 def Stdlib.Int16.add(a: Int16, b: Int16) : Int16 = a + b
 
-def Stdlib.Int16.sub(a: Int16, b: Int16) : Int16 = a - b
+def Stdlib.Int16.subtract(a: Int16, b: Int16) : Int16 = a - b
 
-def Stdlib.Int16.mul(a: Int16, b: Int16) : Int16 = a * b
+def Stdlib.Int16.multiply(a: Int16, b: Int16) : Int16 = a * b
 
-def Stdlib.Int16.div(a: Int16, b: Int16) : Int16 = a / b
+def Stdlib.Int16.divide(a: Int16, b: Int16) : Int16 = a / b
 
 def Stdlib.Int16.max(a: Int16, b: Int16) : Int16 = if a > b then a else b
 
