@@ -2,7 +2,7 @@
   "id": 12,
   "slug": "benchmark-fixer",
   "name": "Benchmark fixer",
-  "autonomyLevel": "InitialDesign",
+  "autonomyLevel": "Guided",
   "enabled": true,
   "purpose": "Getting benchmark functionality parity",
   "summary": "This agent is always learning. It starts in initial design, then can gain autonomy as its definition and validation evidence improve."
