@@ -142,7 +142,7 @@ Remaining local inefficiencies visible in current LIR:
 
 ### Backend Lowering Status
 
-ARM64 code generation now maps `LIR.BranchZero` directly to `ARM64Symbolic.CBZ` followed by an unconditional branch to the non-zero label. Empty `SaveRegs` and `RestoreRegs` lists return `Ok []` in both ARM64 and x64 code generation, so they do not create stack traffic in generated code.
+ARM64 code generation now maps `LIR.BranchZero` directly to `ARM64Symbolic.CBZ` followed by an unconditional branch to the non-zero label.
 
 ## Current Optimization Opportunities
 
@@ -172,7 +172,6 @@ Jump(Label "ackermann_body")
 | Redundant post-register-allocation self moves | Implemented by target-independent post-allocation LIR cleanup. |
 | Dead `ackermann_L5` in final LIR | Still visible in `--dump-mir`, but absent from post-register-allocation LIR. Early raw-MIR pruning was rejected after measurement. |
 | `BranchZero` should lower to ARM64 `CBZ`/`CBNZ` | Implemented for `BranchZero` on ARM64; codegen emits `CBZ` plus branch to the non-zero label. |
-| Empty `SaveRegs`/`RestoreRegs` should emit nothing | Implemented in ARM64 and x64 codegen; empty markers still appear in LIR only. |
 
 ## Recommended Next Checks
 
