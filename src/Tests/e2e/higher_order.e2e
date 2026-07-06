@@ -111,6 +111,9 @@ def apply2Floats(f: (Float, Float) -> Float, a: Float, b: Float): Float = f(a, b
 // FuncRef with String parameter and return type
 def applyStr(f: (String) -> String, s: String): String = f(s) def addBang(s: String): String = s ++ "!" applyStr(addBang, "hello") = "hello!"
 
+// Returning a named function as a first-class value must use the wrapper calling convention
+def choose(): (String) -> String = addBang def addBang(s: String): String = s ++ "!" let f = choose() in f("ok") = "ok!"
+
 // FuncRef with mixed types (Int64 param, Bool return)
 def checkPositive(f: (Int64) -> Bool, n: Int64): Bool = f(n) def isPositive(x: Int64): Bool = x > 0 checkPositive(isPositive, 5) = true
 

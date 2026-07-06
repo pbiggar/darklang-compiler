@@ -2659,6 +2659,7 @@ let rec liftLambdasInProgram
 /// Collect function names that are used as values (not in Call position)
 and collectFuncRefsInExpr (expr: AST.Expr) (knownFuncs: Map<string, (string * AST.Type) list>) : string list =
     match expr with
+    | AST.Var name when Map.containsKey name knownFuncs -> [name]
     | AST.Call (_, args) ->
         // Check if any arg is a reference to a known function
         (exprArgsToList args)
