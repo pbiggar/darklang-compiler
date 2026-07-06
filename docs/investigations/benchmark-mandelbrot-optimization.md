@@ -175,22 +175,6 @@ t2 = t1 + c   (or t1 - c)
 - `src/DarkCompiler/CodeGen.fs` - Emit FMADD/FMSUB encodings
 - `src/DarkCompiler/ARM64Encoding.fs` - Encode FMA instructions
 
-### 4. Strength Reduction: 2.0 * x → x + x (Implemented)
-
-**Status:** Current optimized ANF and LIR show the mandelbrot `2.0 * zr` term has already been reduced to `zr + zr`.
-
-**Current evidence - Dark optimized ANF:**
-```
-let TempId 16 = t2 + t2
-```
-
-**Current evidence - Dark LIR after register allocation:**
-```asm
-D0 <- FAdd(D3, D3)
-```
-
-No further action is needed for this specific opportunity unless a future compiler change regresses the pattern.
-
 ## Summary of Optimization Impact
 
 | Optimization | Estimated Impact | Complexity |
@@ -198,7 +182,6 @@ No further action is needed for this specific opportunity unless a future compil
 | Dead store elimination | 20-30% | Medium |
 | Constant hoisting | 5-10% | Low |
 | FMA instructions | 10-15% | Medium |
-| Strength reduction | Implemented | Done |
 | **Remaining potential** | **~35-45%** | |
 
 If all optimizations are implemented, Dark could approach or match Rust performance on this benchmark.
