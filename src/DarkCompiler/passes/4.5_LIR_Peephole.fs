@@ -189,6 +189,37 @@ let private findNaturalLoopsWithCache
 
     (loops, cache')
 
+/// Check whether the CFG has any directed cycle.
+let private hasCycle (cfg: CFG) : bool =
+    let succs = buildSuccessors cfg
+    let rec visit (visiting: Set<Label>) (visited: Set<Label>) (label: Label) : bool * Set<Label> =
+        if Set.contains label visiting then
+            (true, visited)
+        elif Set.contains label visited then
+            (false, visited)
+        else
+            let visiting' = Set.add label visiting
+            let successors = Map.tryFind label succs |> Option.defaultValue []
+            let rec visitSuccessors remaining visitedAcc =
+                match remaining with
+                | [] -> (false, Set.add label visitedAcc)
+                | succ :: rest ->
+                    let (foundCycle, visited') = visit visiting' visitedAcc succ
+                    if foundCycle then (true, visited') else visitSuccessors rest visited'
+            visitSuccessors successors visited
+
+    let labels = cfg.Blocks |> Map.toList |> List.map fst
+    let rec visitAll remaining visited =
+        match remaining with
+        | [] -> false
+        | label :: rest ->
+            if Set.contains label visited then
+                visitAll rest visited
+            else
+                let (foundCycle, visited') = visit Set.empty visited label
+                foundCycle || visitAll rest visited'
+    visitAll labels Set.empty
+
 /// Check whether an instruction is a hoistable constant move
 let isHoistableConstMove (instr: Instr) : Reg option =
     match instr with
@@ -259,6 +290,9 @@ let private applyLoopInvariantConstHoist
     (cfg: CFG)
     (domCache: DominatorCache option)
     : CFG * bool * DominatorCache option =
+    if not (hasCycle cfg) then
+        (cfg, false, domCache)
+    else
     let (loops, cache') = findNaturalLoopsWithCache cfg domCache
     let preds = buildPredecessors cfg
     let labelName (LIR.Label name) = name
