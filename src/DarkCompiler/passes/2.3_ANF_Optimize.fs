@@ -140,6 +140,7 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | Mul, FloatLiteral -1.0, x -> Some (UnaryPrim (Neg, x))
     | Mul, x, FloatLiteral -1.0 -> Some (UnaryPrim (Neg, x))
     | Div, x, FloatLiteral 1.0 -> Some (Atom x)
+    | Div, x, FloatLiteral -1.0 -> Some (UnaryPrim (Neg, x))
 
     // Self-identities on integer operations. Float is excluded where NaN changes identity laws.
     | Sub, Var a, Var b when a = b -> Some (Atom (IntLiteral (Int64 0L)))

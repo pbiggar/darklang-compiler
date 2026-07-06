@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-06 03:21:22
-**Commit:** `fbcb4ad9` - Align compiler with interpreter: Char module chunk
+**Last Updated:** 2026-07-06 03:42:50
+**Commit:** `d629e6c0` - Enable upstream definedPolyFn Int64 ADT test
 
 | Benchmark     |           Dark (5.55x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
