@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-06 00:14:27
-**Commit:** `f15d2cb0` - Strength reduce float multiplication by negative one
+**Last Updated:** 2026-07-06 02:10:12
+**Commit:** `bad8014d` - Stop defaulting raw_get MIR fallback to Int64
 
 | Benchmark     |           Dark (5.55x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
