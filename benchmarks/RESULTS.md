@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-06 03:42:50
-**Commit:** `d629e6c0` - Enable upstream definedPolyFn Int64 ADT test
+**Last Updated:** 2026-07-06 07:52:07
+**Commit:** `89c36312` - Strength reduce float division by negative one
 
 | Benchmark     |           Dark (5.55x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
