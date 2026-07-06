@@ -4068,12 +4068,8 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                 | LIR.X0 -> 0 | LIR.X1 -> 1 | LIR.X2 -> 2 | LIR.X3 -> 3
                 | LIR.X4 -> 4 | LIR.X5 -> 5 | LIR.X6 -> 6 | LIR.X7 -> 7
                 | _ -> 100)
-            |> List.map generateMove
-            |> List.fold (fun acc r ->
-                match acc, r with
-                | Ok instrs, Ok newInstrs -> Ok (instrs @ newInstrs)
-                | Error e, _ -> Error e
-                | _, Error e -> Error e) (Ok [])
+            |> ResultList.mapResults generateMove
+            |> Result.map List.concat
 
         moveInstrs
 
@@ -4112,26 +4108,17 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
         let actions = ParallelMoves.resolve moves getSrcPhysReg
 
         // Convert actions to ARM64 instructions
-        let mutable allInstrs : ARM64Symbolic.Instr list = []
-        let mutable error : string option = None
-
-        for action in actions do
-            if error.IsNone then
-                match action with
-                | ParallelMoves.SaveToTemp reg ->
-                    // Save register to X16 (temp)
-                    allInstrs <- allInstrs @ [ARM64Symbolic.MOV_reg (ARM64Symbolic.X16, lirPhysRegToARM64Reg reg)]
-                | ParallelMoves.Move (dest, src) ->
-                    match generateMoveInstr (dest, src) with
-                    | Ok instrs -> allInstrs <- allInstrs @ instrs
-                    | Error e -> error <- Some e
-                | ParallelMoves.MoveFromTemp dest ->
-                    // Move from X16 (temp) to destination
-                    allInstrs <- allInstrs @ [ARM64Symbolic.MOV_reg (lirPhysRegToARM64Reg dest, ARM64Symbolic.X16)]
-
-        match error with
-        | Some e -> Error e
-        | None -> Ok allInstrs
+        actions
+        |> ResultList.mapResults (function
+            | ParallelMoves.SaveToTemp reg ->
+                // Save register to X16 (temp)
+                Ok [ARM64Symbolic.MOV_reg (ARM64Symbolic.X16, lirPhysRegToARM64Reg reg)]
+            | ParallelMoves.Move (dest, src) ->
+                generateMoveInstr (dest, src)
+            | ParallelMoves.MoveFromTemp dest ->
+                // Move from X16 (temp) to destination
+                Ok [ARM64Symbolic.MOV_reg (lirPhysRegToARM64Reg dest, ARM64Symbolic.X16)])
+        |> Result.map List.concat
 
     | LIR.FArgMoves moves ->
         // Float argument moves - move float values to D0-D7
@@ -4163,20 +4150,20 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
             // Convert actions to ARM64 instructions
             // Use D16 as temp register for cycle breaking
             // D16-D31 are the upper half of the SIMD register file, not used elsewhere
-            let mutable allInstrs : ARM64Symbolic.Instr list = []
-            for action in actions do
-                match action with
+            actions
+            |> List.collect (function
                 | ParallelMoves.SaveToTemp srcReg ->
                     // Save to D16 (temp) - using upper SIMD register
-                    allInstrs <- allInstrs @ [ARM64Symbolic.FMOV_reg (ARM64Symbolic.D16, srcReg)]
+                    [ARM64Symbolic.FMOV_reg (ARM64Symbolic.D16, srcReg)]
                 | ParallelMoves.Move (dest, src) ->
                     if dest <> src then
-                        allInstrs <- allInstrs @ [ARM64Symbolic.FMOV_reg (dest, src)]
+                        [ARM64Symbolic.FMOV_reg (dest, src)]
+                    else
+                        []
                 | ParallelMoves.MoveFromTemp dest ->
                     // Move from D16 (temp) to destination
-                    allInstrs <- allInstrs @ [ARM64Symbolic.FMOV_reg (dest, ARM64Symbolic.D16)]
-
-            Ok allInstrs
+                    [ARM64Symbolic.FMOV_reg (dest, ARM64Symbolic.D16)])
+            |> Ok
 
     | LIR.PrintInt64 reg ->
         // Value to print should be in X0 (no exit)
