@@ -39,8 +39,8 @@ Pass-level timing from compiler `-vv` output is the primary success signal for s
 
 Use repeated measurements rather than a single run:
 
-- Establish a selected-pass timing baseline with 5 `-vv` runs before making the retained optimization.
-- Measure each retained candidate with 5 comparable `-vv` runs.
+- Establish a selected-pass timing baseline with 10 `-vv` runs before making the retained optimization.
+- Measure each retained candidate with 10 comparable `-vv` runs.
 - Compare medians for the selected pass, and treat the change as successful only when the selected-pass timing improvement is statistically obvious relative to observed noise.
 
 When a pass is selected from benchmark compile-time evidence, collect pass timing across the full benchmark suite before and after the retained change. Report the selected pass's before/after timing delta for each benchmark, not just the benchmark that first exposed the candidate.
@@ -53,15 +53,17 @@ Do not claim success from a single favorable timing result.
 
 Wall-clock compile time may be reported as secondary context, especially to catch whole-compiler regressions, but it is not the primary success signal for this agent.
 
-Record before/after test-suite wall-clock timing when the optimization is intended to reduce compile-time cost. Treat it as a regression guard and reporting aid, not as a substitute for selected-pass timing.
+Record before/after test-suite wall-clock timing with 10 runs when the optimization is intended to reduce compile-time cost. Report the median before/after delta as a regression guard and reporting aid, not as a substitute for selected-pass timing.
+
+Do not present a pass optimization as review-ready unless every retained optimization has median-of-10 before/after compile-time evidence and the overall test suite has median-of-10 before/after wall-clock evidence.
 
 ## Optimization Workflow
 
 1. Inspect the selected pass and its callers, data structures, and nearby tests.
 2. Add temporary micro-profiling or timing if needed to identify the hot path inside the pass.
-3. Run the selected-pass baseline measurement 5 times before making optimization changes.
+3. Run the selected-pass baseline measurement 10 times before making optimization changes.
 4. Implement one candidate improvement at a time.
-5. Measure each retained candidate 5 times using the same command line as the baseline.
+5. Measure each retained candidate 10 times using the same command line as the baseline.
 6. Keep a candidate only if it clearly improves selected-pass `-vv` timing and does not harm correctness or benchmark behavior.
 7. Remove temporary profiling and exploratory instrumentation before the final commit.
 8. Run validation appropriate to the changed compiler surface.
@@ -96,10 +98,11 @@ The final report must include:
 - The selected compiler pass.
 - The evidence that made it a candidate.
 - The benchmark or compile command lines used.
-- Baseline timing numbers and median.
-- After-change timing numbers and median.
+- Baseline timing numbers and median from 10 comparable runs.
+- After-change timing numbers and median from 10 comparable runs.
+- Compile-time timing difference for each retained optimization, using median-of-10 before/after measurements.
 - Full benchmark suite selected-pass before/after timing deltas when benchmark compile-time evidence drove selection.
-- Before/after test-suite wall-clock timing when the change targets compile-time performance.
+- Before/after overall test-suite wall-clock timing from 10 runs and median delta when the change targets compile-time performance.
 - The observed performance problem.
 - Candidate solutions attempted.
 - The retained solution and why it was chosen.
