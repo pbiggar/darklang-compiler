@@ -18,6 +18,7 @@ let testRemoveSelfMovesFromAllocatedFunction () : TestResult =
             Mov (Physical X1, Reg (Physical X1))
             Mov (Physical X2, Reg (Physical X3))
             Mov (Virtual 4, Reg (Virtual 4))
+            FMov (FPhysical D3, FPhysical D3)
             Add (Physical X4, Physical X4, Imm 0L)
         ]
         Terminator = Ret

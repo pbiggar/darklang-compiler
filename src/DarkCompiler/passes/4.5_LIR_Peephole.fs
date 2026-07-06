@@ -42,6 +42,13 @@ let sameReg (r1: Reg) (r2: Reg) : bool =
     | LIR.Physical _, LIR.Virtual _
     | LIR.Virtual _, LIR.Physical _ -> false
 
+let sameFReg (r1: FReg) (r2: FReg) : bool =
+    match r1, r2 with
+    | LIR.FPhysical p1, LIR.FPhysical p2 -> p1 = p2
+    | LIR.FVirtual v1, LIR.FVirtual v2 -> v1 = v2
+    | LIR.FPhysical _, LIR.FVirtual _
+    | LIR.FVirtual _, LIR.FPhysical _ -> false
+
 /// Get successor labels from a terminator
 let getSuccessors (term: Terminator) : Label list =
     match term with
@@ -388,6 +395,8 @@ let optimizeInstr (instr: Instr) : Instr option =
     // Remove self-moves: mov x, x → remove
     | Mov (dest, Reg src) when sameReg dest src ->
         None
+    | FMov (dest, src) when sameFReg dest src ->
+        None
 
     // Add with zero: add x, y, 0 → mov x, y (if x != y) or remove (if x == y)
     | Add (dest, left, Imm 0L) ->
@@ -419,6 +428,7 @@ let removeSelfMovesFromInstrs (instrs: Instr list) : Instr list =
     |> List.filter (fun instr ->
         match instr with
         | Mov (dest, Reg src) when sameReg dest src -> false
+        | FMov (dest, src) when sameFReg dest src -> false
         | _ -> true)
 
 let removeSelfMovesFromFunction (func: Function) : Function =

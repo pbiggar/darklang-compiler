@@ -54,7 +54,7 @@ fn leibniz_pi(n: i64) -> f64 {
 
 Key Rust optimization: LLVM performs **induction variable optimization**. Instead of computing `2*i+1` each iteration, it keeps a counter that starts at 1 and increments by 2. This eliminates the multiply and add operations.
 
-### Dark LIR Hot Loop (17+ instructions per iteration)
+### Current Dark LIR Hot Loop
 
 ```
 Label "leibnizLoop_L1":
@@ -64,16 +64,8 @@ Label "leibnizLoop_L1":
     D0 <- FDiv(D2, D0)       // sign / divisor
     X2 <- Add(X2, Imm 1)     // i + 1
     D1 <- FAdd(D1, D0)       // sum += term
-    D2 <- FNeg(D2)           // -sign
-    // REDUNDANT MOVES (should be eliminated):
-    X1 <- Mov(Reg X2)        // unused write
-    X1 <- Mov(Reg X3)        // overwrites previous, unused
-    D0 <- FMov(D1)           // unused write
-    D0 <- FMov(D2)           // overwrites previous, unused
-    X2 <- Mov(Reg X2)        // self-move (no-op)
-    X3 <- Mov(Reg X3)        // self-move (no-op)
-    D1 <- FMov(D1)           // self-move (no-op)
-    D0 <- FMov(D2)           // unused write
+    D0 <- FNeg(D2)           // -sign
+    // REMAINING REDUNDANT MOVE:
     D2 <- FMov(D0)           // unnecessary double-move chain
     Jump(Label "leibnizLoop_body")
 ```
@@ -117,46 +109,32 @@ Add an induction variable detection pass in `3.5_MIR_Optimize.fs` that:
 
 ---
 
-### 2. Redundant Move Elimination in Register Allocator
+### 2. Redundant Move Chain Elimination in Register Allocator
 
-**Impact: ~40-50% performance improvement (estimated)**
+**Impact: small remaining improvement (estimated)**
 
 **Root Cause:**
-The register allocator is emitting many redundant moves that survive through code generation. The LIR after register allocation shows:
-- Self-moves: `X2 <- Mov(Reg X2)`, `X3 <- Mov(Reg X3)`, `D1 <- FMov(D1)`
-- Overwritten writes: `X1 <- Mov(X2)` followed immediately by `X1 <- Mov(X3)`
-- Move chains: `D0 <- FMov(D2)` then `D2 <- FMov(D0)`
+The register allocator still emits a move chain that survives in optimized LIR after register allocation. The current LIR after register allocation shows:
+- Move chain: `D0 <- FNeg(D2)` then `D2 <- FMov(D0)`
 
 **Evidence from LIR (After Register Allocation):**
 ```
-X1 <- Mov(Reg X2)
-X1 <- Mov(Reg X3)        // X1 overwritten, previous write wasted
-D0 <- FMov(D1)
-D0 <- FMov(D2)           // D0 overwritten, previous write wasted
-X2 <- Mov(Reg X2)        // Self-move, no effect
-X3 <- Mov(Reg X3)        // Self-move, no effect
-D1 <- FMov(D1)           // Self-move, no effect
-D0 <- FMov(D2)
-D2 <- FMov(D0)           // Move chain D2→D0→D2
+D0 <- FNeg(D2)
+D2 <- FMov(D0)           // Move chain through D0
 ```
 
-These account for 10 out of ~17 instructions in the hot loop, making it over 2x larger than necessary.
+This is one remaining instruction of copy traffic in the hot loop.
 
 **Why This Happens:**
-The tail-call optimization converts the recursive call into a loop, which requires moving values from their computed locations to the parameter positions for the next iteration. The phi nodes in SSA form generate move instructions during register allocation. However:
-1. The move sequencing logic is generating redundant intermediate moves
-2. Self-moves (reg to same reg) are not being eliminated
-3. Move coalescing is not eliminating enough copies
+The tail-call optimization converts the recursive call into a loop, which requires moving values from their computed locations to the parameter positions for the next iteration. The phi nodes in SSA form generate move instructions during register allocation. Post-allocation cleanup removes trivial integer and floating-point self-moves, but move coalescing is not eliminating this copy.
 
 **Implementation Approach:**
-1. Add a post-register-allocation pass to eliminate trivial moves
-2. Improve phi coalescing in register allocation to reduce move generation
-3. Add dead store elimination for overwrites (write followed by another write to same destination)
+1. Improve phi coalescing in register allocation to reduce move generation
+2. Add dead store elimination for safe overwrites where the destination is not read before the overwrite
 
 **Files to Modify:**
 - `src/DarkCompiler/passes/5_RegisterAllocation.fs` - Improve phi coalescing
-- `src/DarkCompiler/passes/6_CodeGen.fs` - Already has peephole but needs strengthening
-- Consider adding `src/DarkCompiler/passes/5.5_PostRA_Optimize.fs` - Post-register-allocation cleanup
+- `src/DarkCompiler/passes/4.5_LIR_Peephole.fs` - Extend post-allocation cleanup when safe
 
 ---
 
@@ -223,7 +201,7 @@ This is correctly detected as a tail call. However, the conversion to a loop in 
 
 | Optimization | Estimated Impact | Complexity |
 |--------------|-----------------|------------|
-| Redundant Move Elimination | 40-50% | Medium |
+| Redundant Move Chain Elimination | Small remaining | Medium |
 | Phi Resolution Optimization | 20-30% | Medium |
 | Induction Variable Optimization | 15-20% | High |
 | Tail Call Loop Optimization | 10-15% | Medium |
@@ -232,7 +210,7 @@ This is correctly detected as a tail call. However, the conversion to a loop in 
 
 ## Recommended Implementation Order
 
-1. **Redundant Move Elimination** - Easiest win, highest immediate impact
+1. **Redundant Move Chain Elimination** - Small cleanup remaining after trivial self-move cleanup
 2. **Phi Resolution Optimization** - Medium complexity, good payoff
 3. **Induction Variable Optimization** - Higher complexity but important for numerical code
 4. **Tail Call Loop Optimization** - Builds on other improvements
