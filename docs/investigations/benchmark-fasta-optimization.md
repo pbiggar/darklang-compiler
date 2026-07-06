@@ -303,24 +303,6 @@ D0 <- FDiv(D0, fv1001)        ; fv1001 = 139968.0
 D0 <- FMul(D0, fv_reciprocal) ; fv_reciprocal = 1.0/139968.0 = 7.1435e-6
 ```
 
-### Optimization 5: Tail Recursion to Loop Conversion
-
-**Title**: Convert Tail-Recursive Functions to Loops
-
-**Impact Estimate**: 10-20% improvement by eliminating function call overhead
-
-**Root Cause**: makeRepeatFasta and makeRandomFasta use tail recursion which has call/return overhead even when optimized.
-
-**Implementation Approach**:
-1. Detect tail-recursive patterns in ANF
-2. Convert to while-loop equivalent in LIR
-3. Eliminate stack frame setup/teardown
-4. Files to modify:
-   - `src/DarkCompiler/ANFOptimizer.fs` - Detect tail recursion
-   - `src/DarkCompiler/LIRGen.fs` - Generate loop instead of tail call
-
-**Note**: This may already be partially implemented via TCO; verify current implementation.
-
 ## Summary
 
 The primary performance gap between Dark and Rust/OCaml on the fasta benchmark comes from:
@@ -337,4 +319,3 @@ Combined estimated improvement potential: **10-30x** if all optimizations are im
 2. **High**: Specialize selectRandom for small tables
 3. **Medium**: Float division strength reduction
 4. **Low**: CSE for loop increments
-5. **Low**: Verify tail recursion optimization is complete
