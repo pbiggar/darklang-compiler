@@ -2,17 +2,23 @@
 
 ## Overview
 
-This investigation analyzes why the Dark compiler performs worse than Rust on the `sum_to_n` benchmark, which computes the sum 1+2+...+10000 repeatedly 100 times.
+This investigation analyzes why the Dark compiler performs worse than Rust on the
+`sum_to_n` benchmark, which computes the sum 1+2+...+10000 repeatedly
+100 times.
 
 ### Benchmark Results
 
-| Compiler | Time (mean) | Relative |
-|----------|-------------|----------|
-| Rust     | 97.5 µs     | 1.0x     |
-| Dark     | 314.7 µs    | 3.2x     |
-| OCaml    | 589.1 µs    | 6.0x     |
+Current `benchmarks/RESULTS.md` instruction-count context:
 
-**Key Finding**: Rust's extreme speed is due to complete constant folding - it computes the result (50005000) at compile time, storing it as an immediate constant in the binary.
+| Compiler | Instructions | Relative |
+|----------|--------------|----------|
+| Rust     | 256,081      | 1.0x     |
+| Dark     | 7,002,526    | 27.3x    |
+| OCaml    | 9,421,844    | 36.8x    |
+
+**Key Finding**: Rust's extreme speed is due to complete constant folding. It
+computes the result (`50005000`) at compile time and stores it as an immediate
+constant in the binary.
 
 ## Source Code
 
@@ -32,7 +38,8 @@ repeat(100, 0)
 
 ### Rust Optimization: Complete Constant Folding
 
-Rust/LLVM performs aggressive interprocedural constant propagation and folding. Looking at the Rust assembly for `main`:
+Rust/LLVM performs aggressive interprocedural constant propagation and folding.
+Looking at the Rust assembly for `main`:
 
 ```asm
 mov	w8, #0x408           ; Load lower 16 bits of 50005000
@@ -40,7 +47,8 @@ movk	w8, #0x2fb, lsl #16  ; Load upper 16 bits
 ; ... print w8 ...
 ```
 
-The entire computation is performed at compile time! `0x2fb << 16 | 0x408 = 50005000`
+The entire computation is performed at compile time:
+`0x2fb << 16 | 0x408 = 50005000`.
 
 ### OCaml Analysis
 
@@ -65,42 +73,51 @@ OCaml generates runtime code for `sum_to` and `repeat`:
 4fa38: bl	4f9b8               ; call sum_to
 ```
 
-OCaml's hot loop is tight but has overhead from:
-1. Tagged integer representation (odd numbers = integers)
-2. GC safepoint checks in the loop
+OCaml's hot loop is tight but has overhead from tagged integer representation
+and GC safepoint checks in the loop.
 
 ### Dark Analysis
 
-Dark's generated code for `sumTo`:
+Current ANF keeps both constant-argument calls as runtime calls:
 
-```asm
-; sumTo function at 0x190
-190: stp	x29, x30, [sp, #-16]!  ; frame setup
-194: mov	x29, sp
-198: mov	x9, x0                 ; x9 = n
-19c: mov	x10, x1                ; x10 = acc
-...
-1b8: sub	x2, x3, #0x1           ; n - 1
-1bc: add	x1, x1, x3             ; acc + n
-1c0: mov	x3, x2                 ; update n
-1c4: b	0x1d0                  ; loop
-1c8: mov	x0, x1                 ; return acc
-1d0: cmp	x3, #0x0               ; n <= 0?
-1d4: b.le	0x1b4
-1d8: b	0x1b8
-1dc: ldp	x29, x30, [sp], #16    ; frame cleanup
-1e0: ret
+```text
+Function _start:
+let TempId 12 = repeat(100, 0)
+return t12
+
+Function repeat:
+let TempId 9 = t6 - 1
+let TempId 10 = sumTo(10000, 0)
+let TempId 11 = TailCall(repeat, [t9, t10])
+return t11
 ```
 
-Dark's current loop shape is:
+Current MIR still calls `sumTo(10000, 0)` inside the `repeat` loop:
 
+```text
+repeat_L1:
+    v9 <- v6 - 1 : TInt64
+    v10 <- Call(sumTo, [10000, 0])
+    v6 <- v9 : TInt64
+    v7 <- v10 : TInt64
+    jump repeat_body
 ```
+
+Current register-allocated LIR for the hot `sumTo` loop:
+
+```text
 sumTo_L1:
-    X2 <- Sub(X3, Imm 1)
-    X1 <- Add(X1, Reg X3)
-    X3 <- Mov(Reg X2)
+    X3 <- Sub(X1, Imm 1)
+    X2 <- Add(X2, Reg X1)
+    X1 <- Mov(Reg X3)
     Jump(Label "sumTo_body")
+sumTo_body:
+    Cmp(X1, Imm 0)
+    CondBranch(LE, Label "sumTo_L2", Label "sumTo_L1")
 ```
+
+The loop is compact after register allocation, and the previous `Cset` plus
+`Branch` form has been fused to `CondBranch`.
 
 ## Identified Optimization Opportunities
 
@@ -118,7 +135,8 @@ return t12
 
 **Rust Comparison**: LLVM evaluates the entire computation at compile time.
 
-**Impact Estimate**: 3x speedup for this benchmark (matching Rust).
+**Impact Estimate**: Up to the current 27.3x Rust-relative gap for this
+benchmark if compile-time evaluation eliminates the full computation.
 
 **Implementation Approach**:
 1. Add purity analysis to mark functions as pure (no side effects)
@@ -130,40 +148,7 @@ return t12
 - `src/DarkCompiler/passes/2.3_ANF_Optimization.fs` - Add constant folding
 - `src/DarkCompiler/passes/2_AST_to_ANF.fs` - Track purity annotations
 
-### 2. Conditional Branch Optimization (Low Impact)
-
-**Issue**: Dark uses a two-instruction sequence for conditional branches.
-
-**Evidence**: Dark's code uses `cset` followed by `branch`:
-
-```
-v10011 <- Cset(LE)
-Branch(v10011, Label "sumTo_L0", Label "sumTo_L1")
-```
-
-Generated as:
-```asm
-cmp	x3, #0x0
-cset	w?, le      ; Set register to 1 if LE
-b.?? label         ; Branch based on register
-```
-
-OCaml uses a single conditional branch:
-```asm
-cmp	x0, #0x1
-b.gt	4f9e4
-```
-
-**Impact Estimate**: ~5% (saves one instruction in the hot loop).
-
-**Implementation Approach**:
-1. Modify code generation to directly emit conditional branches after comparisons
-2. Remove the intermediate `cset` instruction when immediately followed by a branch
-
-**Files to Modify**:
-- `src/DarkCompiler/passes/6_CodeGen.fs` - Optimize branch generation
-
-### 4. Loop-Invariant Code Motion for sumTo Call (Medium Impact)
+### 2. Loop-Invariant Code Motion for sumTo Call (Medium Impact)
 
 **Issue**: In `repeat`, the call `sumTo(10000, 0)` always returns the same value but is called 100 times.
 
@@ -177,7 +162,8 @@ repeat_L1:
     jump repeat_body
 ```
 
-**Impact Estimate**: ~99x speedup for this specific pattern (reduce 100 calls to 1).
+**Impact Estimate**: Up to ~100x for the repeated inner work in this specific
+pattern by reducing 100 identical `sumTo` calls to 1.
 
 **Implementation Approach**:
 1. Detect pure function calls with constant arguments inside loops
@@ -192,18 +178,17 @@ repeat_L1:
 ### Hot Loop (sumTo inner loop)
 
 | Compiler | Instructions per iteration |
-|----------|---------------------------|
-| Rust     | 0 (constant folded)       |
-| OCaml    | ~6 (with GC check)        |
-| Dark     | ~6                        |
+|----------|----------------------------|
+| Rust     | 0 (constant folded)        |
+| OCaml    | ~6 (with GC check)         |
+| Dark     | ~5 after branch fusion     |
 
 ### Dark sumTo loop body:
-1. `sub x2, x3, #1` - n - 1
-2. `add x1, x1, x3` - acc + n
-3. `mov x3, x2` - update n
+1. `sub` - n - 1
+2. `add` - acc + n
+3. `mov` - update n
 4. `b sumTo_body` - jump
-5. `cmp x3, #0` - compare
-6. `b.le/b.gt` - conditional branch
+5. `cmp` plus conditional branch in `sumTo_body`
 
 ### OCaml sum_to loop body:
 1. `add x2, x1, x0` - acc + n
@@ -217,9 +202,11 @@ repeat_L1:
 
 | Optimization | Impact | Effort | Priority |
 |--------------|--------|--------|----------|
-| Constant folding for pure functions | High (3x) | Medium | P1 |
-| Loop-invariant code motion | High (99x for pattern) | Medium | P1 |
-| Direct conditional branches | Low (5%) | Low | P3 |
+| Constant folding for pure functions | High (up to 27.3x) | Medium | P1 |
+| Loop-invariant code motion | High (~100x for repeated inner work) | Medium | P1 |
+
+Direct conditional-branch fusion has already been implemented for this loop
+shape and is no longer an open recommendation for `sum_to_n`.
 
 ## Conclusion
 
