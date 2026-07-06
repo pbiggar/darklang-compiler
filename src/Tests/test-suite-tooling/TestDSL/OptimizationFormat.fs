@@ -31,6 +31,14 @@ type OptimizationTest = {
     SourceFile: string
 }
 
+type private ParseState = {
+    Tests: OptimizationTest list
+    Sections: Map<string, string>
+    CurrentSection: string option
+    CurrentContent: string list
+    Errors: string list
+}
+
 /// Parse a single test from sections
 let parseTest (stage: IRStage) (filePath: string) (sections: Map<string, string>) : Result<OptimizationTest, string> =
     match Map.tryFind "NAME" sections, Map.tryFind "INPUT" sections, Map.tryFind "EXPECTED" sections with
@@ -53,45 +61,72 @@ let parseTestFile (stage: IRStage) (path: string) : Result<OptimizationTest list
         Error $"Test file not found: {path}"
     else
         let content = System.IO.File.ReadAllText(path)
+        let normalizedContent =
+            content.Replace("\r\n", "\n").Replace("\r", "\n")
 
-        // Split into individual tests by finding ---NAME--- markers
-        let lines = content.Split([|'\n'|], StringSplitOptions.None)
-        let mutable tests = []
-        let mutable currentSections = Map.empty<string, string>
-        let mutable currentSection = ""
-        let mutable currentContent = ResizeArray<string>()
-        let mutable errors = []
+        let saveCurrentSection (state: ParseState) : ParseState =
+            match state.CurrentSection with
+            | None -> state
+            | Some sectionName ->
+                { state with
+                    Sections =
+                        Map.add
+                            sectionName
+                            (state.CurrentContent |> List.rev |> String.concat "\n")
+                            state.Sections
+                    CurrentContent = [] }
 
-        for line in lines do
-            if line.StartsWith("---") && line.EndsWith("---") && line.Length > 6 then
-                let sectionName = line.Substring(3, line.Length - 6)
-
-                // Save previous section content
-                if currentSection <> "" then
-                    currentSections <- Map.add currentSection (String.concat "\n" currentContent) currentSections
-                    currentContent.Clear()
-
-                // If this is a NAME section and we already have sections, parse the previous test
-                if sectionName = "NAME" && not (Map.isEmpty currentSections) then
-                    match parseTest stage path currentSections with
-                    | Ok test -> tests <- test :: tests
-                    | Error e -> errors <- e :: errors
-                    currentSections <- Map.empty
-
-                currentSection <- sectionName
+        let parseCompletedTest (state: ParseState) : ParseState =
+            if Map.isEmpty state.Sections then
+                state
             else
-                currentContent.Add(line)
+                match parseTest stage path state.Sections with
+                | Ok test ->
+                    { state with
+                        Tests = test :: state.Tests
+                        Sections = Map.empty }
+                | Error e ->
+                    { state with
+                        Sections = Map.empty
+                        Errors = e :: state.Errors }
 
-        // Save last section and parse last test
-        if currentSection <> "" then
-            currentSections <- Map.add currentSection (String.concat "\n" currentContent) currentSections
+        let startSection (sectionName: string) (state: ParseState) : ParseState =
+            let stateWithSavedSection = saveCurrentSection state
+            let stateForNewSection =
+                if sectionName = "NAME" then
+                    parseCompletedTest stateWithSavedSection
+                else
+                    stateWithSavedSection
 
-        if not (Map.isEmpty currentSections) then
-            match parseTest stage path currentSections with
-            | Ok test -> tests <- test :: tests
-            | Error e -> errors <- e :: errors
+            { stateForNewSection with
+                CurrentSection = Some sectionName
+                CurrentContent = [] }
 
-        if errors.Length > 0 then
-            Error (String.concat "; " (List.rev errors))
+        let appendContentLine (line: string) (state: ParseState) : ParseState =
+            { state with CurrentContent = line :: state.CurrentContent }
+
+        let parseLine (state: ParseState) (line: string) : ParseState =
+            if line.StartsWith("---", StringComparison.Ordinal) && line.EndsWith("---", StringComparison.Ordinal) && line.Length > 6 then
+                let sectionName = line.Substring(3, line.Length - 6)
+                startSection sectionName state
+            else
+                appendContentLine line state
+
+        let initialState = {
+            Tests = []
+            Sections = Map.empty
+            CurrentSection = None
+            CurrentContent = []
+            Errors = []
+        }
+
+        let finalState =
+            normalizedContent.Split([|'\n'|], StringSplitOptions.None)
+            |> Array.fold parseLine initialState
+            |> saveCurrentSection
+            |> parseCompletedTest
+
+        if finalState.Errors.Length > 0 then
+            Error (String.concat "; " (List.rev finalState.Errors))
         else
-            Ok (List.rev tests)
+            Ok (List.rev finalState.Tests)
