@@ -443,7 +443,7 @@ def f(x: Float) : Float = -1.0 * x
 f(3.5)
 ---EXPECTED---
 Function f:
-let TempId 1 = -t0
+let TempId 1 = FloatNeg(t0)
 return t1
 
 Main:
@@ -457,7 +457,7 @@ def f(x: Float) : Float = x * -1.0
 f(3.5)
 ---EXPECTED---
 Function f:
-let TempId 1 = -t0
+let TempId 1 = FloatNeg(t0)
 return t1
 
 Main:
@@ -471,7 +471,7 @@ def f(x: Float) : Float = x / -1.0
 f(3.5)
 ---EXPECTED---
 Function f:
-let TempId 1 = -t0
+let TempId 1 = FloatNeg(t0)
 return t1
 
 Main:
