@@ -829,3 +829,12 @@ return t1
 Main:
 let TempId 2 = f(40)
 return t2
+
+---NAME---
+strength_reduce_sub_negative_literal
+---INPUT---
+def f(x: Int64) : Int64 = x - -4
+---EXPECTED---
+Function f:
+let TempId 1 = t0 + 4
+return t1
