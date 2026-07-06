@@ -43,6 +43,19 @@ let encodeFReg (reg: ARM64.FReg) : uint32 =
     | ARM64.D23 -> 23u | ARM64.D24 -> 24u | ARM64.D25 -> 25u | ARM64.D26 -> 26u
     | ARM64.D27 -> 27u | ARM64.D28 -> 28u | ARM64.D29 -> 29u | ARM64.D30 -> 30u | ARM64.D31 -> 31u
 
+let private encodeUnsignedScaled12Offset (instructionName: string) (offset: uint16) : uint32 =
+    let offsetInt = int offset
+    if offsetInt > 32760 || offsetInt % 8 <> 0 then
+        Crash.crash $"{instructionName}: unsigned scaled offset must be 0..32760 and 8-byte aligned, got {offsetInt}"
+    else
+        (uint32 (offsetInt / 8)) <<< 10
+
+let private encodeInt16UnsignedScaled12Offset (instructionName: string) (offset: int16) : uint32 =
+    if offset < 0s then
+        Crash.crash $"{instructionName}: unsigned scaled offset must be 0..32760 and 8-byte aligned, got {int offset}"
+    else
+        encodeUnsignedScaled12Offset instructionName (uint16 offset)
+
 /// Encode ARM64 instruction to 32-bit machine code
 let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
     match instr with
@@ -638,8 +651,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // imm12 is unsigned offset in units of 8 bytes (bits 21-10)
         let size = 3u <<< 30  // 64-bit (11)
         let fixedBits = 0b11100100u <<< 22  // STR unsigned offset mode
-        // Convert byte offset to 8-byte units and extract 12 bits
-        let imm12 = ((uint32 (int offset / 8)) &&& 0xFFFu) <<< 10
+        let imm12 = encodeInt16UnsignedScaled12Offset "STR" offset
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg src
         [size ||| fixedBits ||| imm12 ||| rn ||| rt]
@@ -650,7 +662,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // Same as STR but bit 22 = 1 for load
         let size = 3u <<< 30  // 64-bit (11)
         let fixedBits = 0b11100101u <<< 22  // LDR unsigned offset mode (bit 22=1)
-        let imm12 = ((uint32 (int offset / 8)) &&& 0xFFFu) <<< 10
+        let imm12 = encodeInt16UnsignedScaled12Offset "LDR" offset
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg dest
         [size ||| fixedBits ||| imm12 ||| rn ||| rt]
@@ -718,8 +730,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // size=11 for 64-bit (double), V=1 (FP), opc=01 (load)
         let size = 3u <<< 30  // 64-bit (double)
         let fixedBits = 0b11110101u <<< 22  // LDR FP unsigned offset mode
-        // imm12 is unsigned offset in units of 8 bytes (like integer LDR 64-bit)
-        let imm12 = ((uint32 (int offset / 8)) &&& 0xFFFu) <<< 10
+        let imm12 = encodeInt16UnsignedScaled12Offset "LDR_fp" offset
         let rn = (encodeReg addr) <<< 5
         let rt = encodeFReg dest
         [size ||| fixedBits ||| imm12 ||| rn ||| rt]
@@ -730,7 +741,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // size=11 for 64-bit (double), V=1 (FP), opc=00 (store)
         let size = 3u <<< 30  // 64-bit (double)
         let fixedBits = 0b11110100u <<< 22  // STR FP unsigned offset mode
-        let imm12 = ((uint32 (int offset / 8)) &&& 0xFFFu) <<< 10
+        let imm12 = encodeInt16UnsignedScaled12Offset "STR_fp" offset
         let rn = (encodeReg addr) <<< 5
         let rt = encodeFReg src
         [size ||| fixedBits ||| imm12 ||| rn ||| rt]

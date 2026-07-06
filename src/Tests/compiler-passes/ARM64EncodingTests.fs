@@ -89,10 +89,36 @@ let testMOVZMOVKSequence () : TestResult =
     | _ ->
         Error "MOVZ/MOVK sequence: unexpected encoding length"
 
+let private expectCrash (name: string) (f: unit -> unit) : TestResult =
+    try
+        f ()
+        Error $"{name}: expected encoder to reject invalid immediate offset"
+    with
+    | _ -> Ok ()
+
+let testUnsignedMemoryOffsetsRejectInvalidValues () : TestResult =
+    let cases = [
+        ("STR negative offset", fun () -> encode (STR (X0, SP, -8s)) |> ignore)
+        ("LDR unaligned offset", fun () -> encode (LDR (X0, SP, 2s)) |> ignore)
+        ("STR out-of-range offset", fun () -> encode (STR (X0, SP, 32761s)) |> ignore)
+        ("LDR_fp negative offset", fun () -> encode (LDR_fp (D0, SP, -8s)) |> ignore)
+    ]
+
+    let rec checkCases remaining =
+        match remaining with
+        | [] -> Ok ()
+        | (name, f) :: rest ->
+            match expectCrash name f with
+            | Ok () -> checkCases rest
+            | Error msg -> Error msg
+
+    checkCases cases
+
 let tests = [
     ("encodeReg", testEncodeReg)
     ("MOVK shift encoding", testMOVKShiftEncoding)
     ("MOVZ+MOVK sequence", testMOVZMOVKSequence)
+    ("unsigned memory offsets reject invalid values", testUnsignedMemoryOffsetsRejectInvalidValues)
 ]
 
 /// Run all encoding unit tests
