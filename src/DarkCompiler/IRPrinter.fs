@@ -8,6 +8,12 @@ open ANF
 open MIR
 open LIR
 
+/// Append a type suffix when available
+let private appendTypeSuffix (typOpt: AST.Type option) (value: string) : string =
+    match typOpt with
+    | None -> value
+    | Some typ -> $"{value} : {typ}"
+
 /// Pretty-print ANF atom
 let private prettyPrintANFAtom = function
     | ANF.UnitLiteral -> "()"
@@ -50,12 +56,6 @@ let private prettyPrintANFRcKind = function
     | ANF.TaggedList -> "list"
     | ANF.DictHeap -> "dict"
     | ANF.ClosureHeap -> "closure"
-
-/// Append a type suffix when available
-let private appendANFTypeSuffix (typOpt: AST.Type option) (value: string) : string =
-    match typOpt with
-    | None -> value
-    | Some typ -> $"{value} : {typ}"
 
 /// Pretty-print ANF complex expression
 let private prettyPrintANFCExpr = function
@@ -117,7 +117,7 @@ let private prettyPrintANFCExpr = function
         $"RawFree({prettyPrintANFAtom ptr})"
     | ANF.RawGet (ptr, byteOffset, valueType) ->
         let baseText = $"RawGet({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset})"
-        appendANFTypeSuffix valueType baseText
+        appendTypeSuffix valueType baseText
     | ANF.RawGetByte (ptr, byteOffset) ->
         $"RawGetByte({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset})"
     | ANF.RawWriteWord (ptr, byteOffset, value) ->
@@ -126,7 +126,7 @@ let private prettyPrintANFCExpr = function
         $"RawWriteByte({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset}, {prettyPrintANFAtom value})"
     | ANF.RawSlotInit (ptr, byteOffset, value, valueType) ->
         let baseText = $"RawSlotInit({prettyPrintANFAtom ptr}, {prettyPrintANFAtom byteOffset}, {prettyPrintANFAtom value})"
-        appendANFTypeSuffix (Some valueType) baseText
+        appendTypeSuffix (Some valueType) baseText
     | ANF.StringToRawPtr value ->
         $"StringToRawPtr({prettyPrintANFAtom value})"
     | ANF.RawPtrToString ptr ->
@@ -256,12 +256,6 @@ let private prettyPrintMIRVReg (MIR.VReg n) : string =
 /// Pretty-print MIR label
 let private prettyPrintMIRLabel (MIR.Label name) : string =
     name
-
-/// Append a type suffix when available
-let private appendTypeSuffix (typOpt: AST.Type option) (value: string) : string =
-    match typOpt with
-    | None -> value
-    | Some typ -> $"{value} : {typ}"
 
 /// Pretty-print MIR instruction
 let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
