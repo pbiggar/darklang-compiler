@@ -5,6 +5,9 @@ type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 20 } in p.x = 10
 
 type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 20 } in p.y = 20
 
+// Record patterns should read fields by record definition order, not pattern field order.
+type Point = { x: Int64, y: Int64 } let p = Point { x = 10, y = 20 } in match p with | Point { y = 20, x = 10 } -> 1 | _ -> 0 = 1
+
 // Record with arithmetic on fields
 type Point = { x: Int64, y: Int64 } let p = Point { x = 5, y = 3 } in p.x + p.y = 8
 
@@ -128,4 +131,3 @@ let p = Point { x = 10, y = 20 } in { p with x = 5 }.y = 20
 // Record update where variable only appears in the update part
 type Point = { x: Int64, y: Int64 }
 let val = 100 in { Point { x = 1, y = 2 } with x = val }.x = 100
-
