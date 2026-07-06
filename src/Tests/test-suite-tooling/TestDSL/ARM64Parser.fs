@@ -22,7 +22,11 @@ let parseReg (text: string) : Result<Reg, string> =
     | "X4" -> Ok X4 | "X5" -> Ok X5 | "X6" -> Ok X6 | "X7" -> Ok X7
     | "X8" -> Ok X8 | "X9" -> Ok X9 | "X10" -> Ok X10 | "X11" -> Ok X11
     | "X12" -> Ok X12 | "X13" -> Ok X13 | "X14" -> Ok X14 | "X15" -> Ok X15
-    | "X16" -> Ok X16 | "X29" -> Ok X29 | "X30" -> Ok X30 | "SP" -> Ok SP
+    | "X16" -> Ok X16 | "X17" -> Ok X17
+    | "X19" -> Ok X19 | "X20" -> Ok X20 | "X21" -> Ok X21 | "X22" -> Ok X22
+    | "X23" -> Ok X23 | "X24" -> Ok X24 | "X25" -> Ok X25 | "X26" -> Ok X26
+    | "X27" -> Ok X27 | "X28" -> Ok X28
+    | "X29" -> Ok X29 | "X30" -> Ok X30 | "SP" -> Ok SP
     | reg -> Error $"Invalid ARM64 register '{reg}'"
 
 /// Parse ARM64 condition from text like "EQ", "NE", etc.

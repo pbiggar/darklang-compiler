@@ -23,7 +23,11 @@ let parseReg (text: string) : Result<ARM64.Reg, string> =
     | "X4" -> Ok ARM64.X4 | "X5" -> Ok ARM64.X5 | "X6" -> Ok ARM64.X6 | "X7" -> Ok ARM64.X7
     | "X8" -> Ok ARM64.X8 | "X9" -> Ok ARM64.X9 | "X10" -> Ok ARM64.X10 | "X11" -> Ok ARM64.X11
     | "X12" -> Ok ARM64.X12 | "X13" -> Ok ARM64.X13 | "X14" -> Ok ARM64.X14 | "X15" -> Ok ARM64.X15
-    | "X16" -> Ok ARM64.X16 | "X29" -> Ok ARM64.X29 | "X30" -> Ok ARM64.X30 | "SP" -> Ok ARM64.SP
+    | "X16" -> Ok ARM64.X16 | "X17" -> Ok ARM64.X17
+    | "X19" -> Ok ARM64.X19 | "X20" -> Ok ARM64.X20 | "X21" -> Ok ARM64.X21 | "X22" -> Ok ARM64.X22
+    | "X23" -> Ok ARM64.X23 | "X24" -> Ok ARM64.X24 | "X25" -> Ok ARM64.X25 | "X26" -> Ok ARM64.X26
+    | "X27" -> Ok ARM64.X27 | "X28" -> Ok ARM64.X28
+    | "X29" -> Ok ARM64.X29 | "X30" -> Ok ARM64.X30 | "SP" -> Ok ARM64.SP
     | reg -> Error $"Invalid ARM64 register '{reg}'"
 
 /// Parse ARM64 condition from text like "EQ", "NE", etc.

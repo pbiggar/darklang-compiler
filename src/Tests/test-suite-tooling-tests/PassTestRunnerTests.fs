@@ -101,11 +101,49 @@ let testARM64ParserRejectsOutOfRangeNumericFields () : TestResult =
                 |> Result.bind (fun () -> expectParserError description result))
             (Ok ()))
 
+let testARM64ParsersAcceptAllGeneralPurposeRegisters () : TestResult =
+    let registerNames =
+        [
+            "X0"; "X1"; "X2"; "X3"; "X4"; "X5"; "X6"; "X7"; "X8"; "X9"
+            "X10"; "X11"; "X12"; "X13"; "X14"; "X15"; "X16"; "X17"
+            "X19"; "X20"; "X21"; "X22"; "X23"; "X24"; "X25"; "X26"; "X27"; "X28"
+            "X29"; "X30"; "SP"
+        ]
+
+    let rawCases =
+        registerNames
+        |> List.map (fun reg -> $"raw {reg}", TestDSL.ARM64Parser.parseARM64 $"MOV_reg({reg}, X0)")
+
+    let symbolicCases =
+        registerNames
+        |> List.map (fun reg -> $"symbolic {reg}", TestDSL.ARM64SymbolicParser.parseARM64Symbolic $"MOV_reg({reg}, X0)")
+
+    rawCases
+    |> List.fold
+        (fun state (description, result) ->
+            state
+            |> Result.bind (fun () ->
+                match result with
+                | Ok _ -> Ok ()
+                | Error msg -> Error $"Expected parser success for {description}, got: {msg}"))
+        (Ok ())
+    |> Result.bind (fun () ->
+        symbolicCases
+        |> List.fold
+            (fun state (description, result) ->
+                state
+                |> Result.bind (fun () ->
+                    match result with
+                    | Ok _ -> Ok ()
+                    | Error msg -> Error $"Expected parser success for {description}, got: {msg}"))
+            (Ok ()))
+
 let tests = [
     ("pretty print MIR CFG", testPrettyPrintMirCfg)
     ("parse LIR rejects non-final terminator", testParseLIRRejectsNonFinalTerminator)
     ("MIR parser rejects out-of-range virtual register", testMIRParserRejectsOutOfRangeVirtualRegister)
     ("ARM64 parsers reject out-of-range numeric fields", testARM64ParserRejectsOutOfRangeNumericFields)
+    ("ARM64 parsers accept all general-purpose registers", testARM64ParsersAcceptAllGeneralPurposeRegisters)
 ]
 
 let runAll () : TestResult =
