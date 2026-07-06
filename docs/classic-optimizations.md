@@ -109,6 +109,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical integer simplification that reuses unary negation lowering instead of materializing a binary subtract from literal zero.
 - Notes: Implemented for `0 - x -> -x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Guided sandbox trial. Covered by `strength_reduce_sub_from_zero` in `src/Tests/optimization/anf.opt`.
 
+### Integer self-subtraction simplification
+
+- Optimization name: Integer self-subtraction simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical simplification that removes subtraction when both integer operands are the same SSA variable.
+- Notes: Implemented for `x - x -> 0` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `self_subtraction_int` in `src/Tests/optimization/anf.opt`.
+
 ### Subtraction of negative literal strength reduction
 
 - Optimization name: Subtraction of negative literal strength reduction
