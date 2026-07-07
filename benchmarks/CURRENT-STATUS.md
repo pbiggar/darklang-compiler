@@ -31,6 +31,7 @@ These benchmarks compile and run reliably.
 | fannkuch      | Permutations   | Pancake flipping, permutation generation |
 | merkletrees   | Tree/Hashing   | Recursive tree hashing                  |
 | mandelbrot    | Numerical      | Complex number iteration, fractal       |
+| matmul        | Numerical      | Generated 100x100 matrix multiplication checksum |
 | pisum         | Numerical      | Floating-point reciprocal-square sum    |
 
 ---
@@ -106,7 +107,6 @@ These benchmarks have implementations but are limited by stack depth or bugs.
 | quicksort     | RUNTIME OOM       | Full-size run exceeds current heap/allocation budget (skipped) |
 | nsieve        | Stack overflow    | Uses n=1000 (n=100000 causes stack overflow) - outputs 168     |
 | edigits       | Stack overflow    | Uses 50 digits, 1 iteration (full: 1000 digits, 10 iterations) |
-| matmul        | Working (reduced) | Uses hardcoded 3x3 matrices (full: generated 100x100 matrices) |
 | nbody         | Working (reduced) | Uses 100 simulation steps (full: 500000 steps)                 |
 | spectral_norm | Working (reduced) | Computes the full power-iteration algorithm at 3-vector size (full: n=100) |
 
@@ -128,7 +128,6 @@ remain reduced or blocked as documented above.
 | ---------------------------------------- | --------------------------------------------------- |
 | **Allocator capacity / allocation pressure** | quicksort                                       |
 | Stack depth / TCO                        | nsieve (full), edigits (full)                       |
-| Matrix/list generation at benchmark scale | matmul (full)                                      |
 | Mutable arrays / efficient indexed numeric vectors | spectral_norm (full n=100)              |
 
 ---

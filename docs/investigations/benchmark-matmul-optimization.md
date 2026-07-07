@@ -2,14 +2,14 @@
 
 ## Current Status
 
-`matmul` currently compiles and runs as a 3x3 Dark benchmark. The benchmark
-source still documents that it uses hardcoded small matrices because nested list
-support is not ready for the full 100x100 reference problem.
+`matmul` now compiles and runs at the full 100x100 benchmark size. The Dark
+implementation generates the same input matrices as the reference
+implementations and computes the weighted checksum directly, without
+materializing the product matrix.
 
-Current `./benchmarks/run_benchmarks.sh all` measured the reduced-size Dark
-benchmark at 51,485 instructions, then omitted that number from
-`benchmarks/RESULTS.md` because `matmul` is classified as a reduced-size
-benchmark. The results table records the reference implementations at:
+The previous reduced-size Dark benchmark measured 51,485 instructions and was
+omitted from `benchmarks/RESULTS.md` because the result was not comparable. The
+last reduced-size run recorded the reference implementations at:
 
 | Implementation | Instruction count |
 |----------------|-------------------|
@@ -18,8 +18,8 @@ benchmark. The results table records the reference implementations at:
 | Python         | 894,891,413       |
 | Node           | 487,674,868       |
 
-The current Dark binary for `benchmarks/problems/matmul/dark/main.dark` prints
-the expected checksum `342786`.
+The full-size Dark binary for `benchmarks/problems/matmul/dark/main.dark`
+prints the expected checksum `222793267`.
 
 ## Current Evidence
 

@@ -402,7 +402,7 @@ let spectralV = spectralAtav3((1.0, 1.0, 1.0)) in let spectralU = spectralAtav3(
 // BLOCKED BENCHMARKS - require compiler bug fixes
 // ===================================================================
 //
-// nsieve and matmul are blocked by a tail call optimization bug:
+// nsieve is blocked by a tail call optimization bug:
 //
 // Bug: Lists built by TAIL-RECURSIVE functions get corrupted when modified.
 // Non-tail-recursive list building works correctly.
