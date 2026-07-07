@@ -5,7 +5,7 @@
 The fannkuch benchmark computes the maximum number of "pancake flips" needed to sort any permutation of n elements. The algorithm generates all n! permutations and counts flips for each.
 
 **Key Finding:**
-Dark uses **immutable linked lists (FingerTrees)** for representing permutations, while Rust and OCaml use **mutable arrays** with in-place operations. This is the dominant source of performance difference.
+Dark uses **immutable FingerTree-backed lists** for representing permutations, while Rust and OCaml use **mutable arrays** with in-place operations. Current cachegrind evidence shows this remains the dominant source of the performance difference: Dark executes 16,187,857,653 instructions for `fannkuch`, 1203.2x Rust and 519.1x OCaml.
 
 ## Benchmark Source Code
 
@@ -49,15 +49,27 @@ let fannkuch n =
 
 ## Analysis
 
+### Current Benchmark Evidence
+
+Current local cachegrind evidence from `./benchmarks/run_benchmarks.sh fannkuch`:
+
+| Language | Instructions | vs Rust | Data Refs | Branches |
+|----------|--------------|---------|-----------|----------|
+| Rust | 13,453,488 | baseline | 5,901,371 | 2,031,853 |
+| OCaml | 31,185,180 | 2.3x | 10,530,754 | 5,946,748 |
+| Dark | 16,187,857,653 | 1203.2x | 6,887,185,349 | 1,919,467,469 |
+
+The Dark result is not just branch-heavy. The decisive gap is data traffic: the Dark run performs roughly 1167x the Rust data references, matching the list reconstruction and reference-count churn visible in LIR.
+
 ### Data Structure Difference (Root Cause)
 
 **Rust/OCaml**: Use mutable arrays with O(1) element access and O(k) in-place reversal.
 
 **Dark**: Uses immutable FingerTree-based lists requiring:
 - `getAt(list, i)`: O(log n) lookup through FingerTree
-- `take(list, k)`: O(log n) split operation, allocates new tree nodes
-- `drop(list, k)`: O(log n) split operation, allocates new tree nodes
-- `reverse(list)`: O(n) operation creating new nodes
+- `take(list, k)`: O(log n) split operation plus new tree structure
+- `drop(list, k)`: O(log n) split operation plus new tree structure
+- `reverse(list)`: O(n) indexed reconstruction through `__reverseByIndexHelper_i64`
 - `append(a, b)`: O(log n) concatenation
 
 ### Hot Loop: `countFlips` Function
@@ -99,6 +111,8 @@ countFlips_L1:  ; When first != 0
   Jump(Label "countFlips_body")
 ```
 
+Current `-vvv --dump-anf --dump-mir --dump-lir` output confirms the same shape after optimization: `reversePrefix` still lowers through `Stdlib.List.__takeHelper_i64`, `Stdlib.List.__reverseByIndexHelper_i64`, and `Stdlib.__FingerTree.concat_i64`, then `countFlips` tail-recurses on the reconstructed list.
+
 ### Hot Loop: `rotateLeft` Function
 
 **Rust** (~15 instructions, in-place):
@@ -122,6 +136,24 @@ rotateLeft_body:
   TailCall(Stdlib.List.append_i64, [...])          ; Second append
 ```
 
+Current LIR still keeps this as list reconstruction. `rotateLeft` contains `Stdlib.List.__takeHelper_i64` calls for the middle/rest slices and a final FingerTree concatenation path instead of lowering to a bounded shift over contiguous storage.
+
+### Hot Loop: `nextPerm` Count Updates
+
+The existing investigation focused on prefix reversal and rotation. Current IR shows another per-permutation cost: updating the small `count` list is also a FingerTree rewrite.
+
+```
+nextPerm:
+  ci <- getAt(count, i)
+  if ci > 1 then
+    setAt(count, i, ci - 1)
+  else
+    setAt(count, i, i)
+    nextPerm(newPerm, newCount, i + 1, n)
+```
+
+In LIR, both `setAt` paths call into `Stdlib.__FingerTree.__setAtNode_i64` or `Stdlib.__FingerTree.__setAtDeep_i64`, with repeated `RefCountDec` cleanup along each tree case. Rust and OCaml update `count[i]` in place inside the permutation-generation loop, so this cost is unique to the current Dark representation.
+
 ### Memory Allocation Analysis
 
 Each flip in Dark allocates:
@@ -139,7 +171,7 @@ For n=9 (standard benchmark), this means **hundreds of allocations per permutati
 **Impact: 10-50x performance improvement (estimated)**
 
 **Root Cause:**
-Dark lacks a mutable array type. The immutable FingerTree-based List requires O(log n) operations and allocations for operations that should be O(1) with arrays.
+Dark lacks a mutable array type. The immutable FingerTree-based List requires O(log n) operations and allocations for operations that should be O(1) with arrays. This applies to both `perm` and the less-obvious `count` state list.
 
 **Evidence from Dark IR:**
 ```
@@ -163,9 +195,9 @@ reversePrefix:
 4. Optionally: Add escape analysis to auto-promote immutable Lists to Arrays
 
 **Files to Modify:**
-- `src/DarkCompiler/Types.fs` - Add Array type
-- `src/DarkCompiler/Stdlib.fs` - Add Array module with operations
-- `src/DarkCompiler/Codegen.fs` - Lower Array ops to memory instructions
+- `src/DarkCompiler/AST.fs` - Add Array type
+- `src/DarkCompiler/stdlib/Array.dark` and `src/DarkCompiler/Stdlib.fs` - Add Array module with operations and primitive registrations
+- `src/DarkCompiler/passes/arm64/6_CodeGen.fs` and `src/DarkCompiler/passes/x64/6_CodeGen.fs` - Lower Array ops to memory instructions
 
 ---
 
@@ -198,8 +230,8 @@ For a 6-element list, `getAt(0)` requires:
 4. Automatic promotion to FingerTree when list grows
 
 **Files to Modify:**
-- `src/DarkCompiler/Stdlib/FingerTree.fs` - Add small list representation
-- `src/DarkCompiler/Codegen.fs` - Add fast paths for small lists
+- `src/DarkCompiler/stdlib/__FingerTree.dark` - Add small list representation
+- `src/DarkCompiler/passes/arm64/6_CodeGen.fs` and `src/DarkCompiler/passes/x64/6_CodeGen.fs` - Add fast paths for small lists when they become compiler-recognized runtime shapes
 
 ---
 
@@ -234,7 +266,7 @@ countFlips_L1:
 4. Special case: inline `getAt` for constant indices (common pattern)
 
 **Files to Modify:**
-- `src/DarkCompiler/Passes/Inlining.fs` - Add Stdlib function inlining
+- `src/DarkCompiler/passes/2.4_ANF_Inlining.fs` - Add Stdlib function inlining policy
 - `src/DarkCompiler/Stdlib.fs` - Mark functions with `[<Inline>]` attribute
 
 ---
@@ -263,8 +295,8 @@ def rotateLeft(list: List<Int64>, i: Int64) : List<Int64> =
 3. Implement `head` as direct prefix access in FingerTree
 
 **Files to Modify:**
-- `src/DarkCompiler/Stdlib/List.fs` - Add `head` function
-- `src/DarkCompiler/Passes/Optimization.fs` - Pattern match `getAt(_, 0)`
+- `src/DarkCompiler/stdlib/List.dark` - Add `head` function
+- `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` - Pattern match `getAt(_, 0)` if this is kept as an ANF rewrite
 
 ---
 
@@ -301,7 +333,7 @@ nextPerm_L0:
 
 1. **Highest Priority**: Add mutable Array type (#1) - This is the fundamental issue
 2. **High Priority**: Specialize for small lists (#2) - Good ROI for benchmarks
-3. **Medium Priority**: Optimize getAt(0) pattern (#4) - Quick win
+3. **Medium Priority**: Optimize getAt(0) and `setAt` on known-small lists (#4 plus the `count` update evidence) - Quick win for the current source shape
 4. **Medium Priority**: Inline hot Stdlib functions (#3) - General improvement
 5. **Lower Priority**: Reference counting optimization (#5) - More complex
 
