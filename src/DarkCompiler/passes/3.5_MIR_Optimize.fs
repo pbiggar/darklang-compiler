@@ -241,6 +241,31 @@ let getSuccessors (block: BasicBlock) : Label list =
 let buildSuccessors (cfg: CFG) : Map<Label, Label list> =
     cfg.Blocks |> Map.map (fun _ block -> getSuccessors block)
 
+/// Check whether the reachable CFG contains any cycle.
+let cfgHasReachableCycle (cfg: CFG) : bool =
+    let succs = buildSuccessors cfg
+
+    let rec visit (visiting: Set<Label>) (visited: Set<Label>) (label: Label) : bool * Set<Label> =
+        if Set.contains label visiting then
+            (true, visited)
+        elif Set.contains label visited then
+            (false, visited)
+        else
+            let visiting' = Set.add label visiting
+            let successors = Map.tryFind label succs |> Option.defaultValue []
+            let rec visitSuccessors remaining visitedAcc =
+                match remaining with
+                | [] -> (false, visitedAcc)
+                | next :: rest ->
+                    let (hasCycle, visited') = visit visiting' visitedAcc next
+                    if hasCycle then (true, visited') else visitSuccessors rest visited'
+
+            let (hasCycle, visited') = visitSuccessors successors visited
+            (hasCycle, Set.add label visited')
+
+    let (hasCycle, _) = visit Set.empty Set.empty cfg.Entry
+    hasCycle
+
 /// Check if dominator dominates node (using idom chain)
 let dominates (entry: Label) (idoms: Dominators) (dominator: Label) (node: Label) : bool =
     if dominator = node then
@@ -259,51 +284,54 @@ let dominates (entry: Label) (idoms: Dominators) (dominator: Label) (node: Label
 
 /// Identify natural loops via backedges (header dominates source)
 let findNaturalLoops (cfg: CFG) : Map<Label, Set<Label>> =
-    let preds = buildPredecessors cfg
-    let idoms = computeDominators cfg preds
-    let entry = cfg.Entry
-    let succs = buildSuccessors cfg
+    if not (cfgHasReachableCycle cfg) then
+        Map.empty
+    else
+        let preds = buildPredecessors cfg
+        let idoms = computeDominators cfg preds
+        let entry = cfg.Entry
+        let succs = buildSuccessors cfg
 
-    let backedges =
-        succs
-        |> Map.fold (fun acc from successors ->
-            successors
-            |> List.fold (fun acc' succ ->
-                if dominates entry idoms succ from then
-                    let existing = Map.tryFind succ acc' |> Option.defaultValue []
-                    Map.add succ (from :: existing) acc'
-                else
-                    acc'
-            ) acc
+        let backedges =
+            succs
+            |> Map.fold (fun acc from successors ->
+                successors
+                |> List.fold (fun acc' succ ->
+                    if dominates entry idoms succ from then
+                        let existing = Map.tryFind succ acc' |> Option.defaultValue []
+                        Map.add succ (from :: existing) acc'
+                    else
+                        acc'
+                ) acc
+            ) Map.empty
+
+        backedges
+        |> Map.fold (fun loops header sources ->
+            let loopBlocks =
+                sources
+                |> List.fold (fun acc source ->
+                    let initial = Set.ofList [header; source]
+                    let rec grow work loopSet =
+                        match work with
+                        | [] -> loopSet
+                        | node :: rest ->
+                            let nodePreds = Map.tryFind node preds |> Option.defaultValue []
+                            let (loopSet', work') =
+                                nodePreds
+                                |> List.fold (fun (setAcc, workAcc) pred ->
+                                    if Set.contains pred setAcc then
+                                        (setAcc, workAcc)
+                                    elif dominates entry idoms header pred then
+                                        (Set.add pred setAcc, pred :: workAcc)
+                                    else
+                                        (setAcc, workAcc)
+                                ) (loopSet, rest)
+                            grow work' loopSet'
+                    Set.union acc (grow [source] initial)
+                ) Set.empty
+
+            if Set.isEmpty loopBlocks then loops else Map.add header loopBlocks loops
         ) Map.empty
-
-    backedges
-    |> Map.fold (fun loops header sources ->
-        let loopBlocks =
-            sources
-            |> List.fold (fun acc source ->
-                let initial = Set.ofList [header; source]
-                let rec grow work loopSet =
-                    match work with
-                    | [] -> loopSet
-                    | node :: rest ->
-                        let nodePreds = Map.tryFind node preds |> Option.defaultValue []
-                        let (loopSet', work') =
-                            nodePreds
-                            |> List.fold (fun (setAcc, workAcc) pred ->
-                                if Set.contains pred setAcc then
-                                    (setAcc, workAcc)
-                                elif dominates entry idoms header pred then
-                                    (Set.add pred setAcc, pred :: workAcc)
-                                else
-                                    (setAcc, workAcc)
-                            ) (loopSet, rest)
-                        grow work' loopSet'
-                Set.union acc (grow [source] initial)
-            ) Set.empty
-
-        if Set.isEmpty loopBlocks then loops else Map.add header loopBlocks loops
-    ) Map.empty
 
 /// Check if an instruction is safe to hoist out of a loop
 let isHoistableInstr (instr: Instr) : bool =

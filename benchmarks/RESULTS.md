@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-07 01:11:56
-**Commit:** `d5771285` - Remove mutable leading-space counter
+**Last Updated:** 2026-07-07 03:29:32
+**Commit:** `4d219707` - Align Int16 arithmetic names with interpreter
 
 | Benchmark     |           Dark (5.55x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
