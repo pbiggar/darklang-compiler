@@ -2,19 +2,21 @@
 
 ## Executive Summary
 
-The Dark compiler currently produces code that is **2.06x slower than Rust** and **1.10x slower than OCaml** for the mandelbrot benchmark. The primary causes are:
+The Dark compiler currently executes **2.06x more instructions than Rust** and **1.10x more instructions than OCaml** for the mandelbrot benchmark. The primary causes are:
 
-1. **Redundant register moves in the iterate loop** (estimated 20-30% improvement potential)
+1. **Redundant tail-call phi copy traffic in the iterate loop** (estimated 10-20% improvement potential)
 2. **Repeated float constant loads** (estimated 5-10% improvement potential)
 3. **Missing fused multiply-add (FMA) instructions** (estimated 10-15% improvement potential)
 
 ## Benchmark Results
 
-| Language | Mean Time | vs Rust |
-|----------|-----------|---------|
-| Rust     | 12,553,096 ns | 1.00x |
-| OCaml    | 23,390,326 ns | 1.86x |
-| Dark     | 25,826,540 ns | 2.06x |
+Cachegrind instruction counts from commit `633dca3d`:
+
+| Language | Instructions | vs Rust |
+|----------|--------------|---------|
+| Rust     | 12,553,096 | 1.00x |
+| OCaml    | 23,390,326 | 1.86x |
+| Dark     | 25,826,540 | 2.06x |
 
 ## Hot Loop Analysis
 
@@ -42,9 +44,28 @@ Label "iterate_L4":
     Jump(Label "iterate_body")
 ```
 
-**Instruction count in iterate hot path:** ~16 instructions
-**Redundant instructions:** at least 2 direct self-moves, plus copy traffic for tail-call phi resolution
-**Effective useful instructions:** ~14
+**Instruction count in iterate hot path:** ~16 LIR instructions after register allocation
+**Redundant instructions:** 2 direct self-moves in LIR plus copy traffic for tail-call phi resolution
+**Effective useful instructions:** ~14 after direct self-moves are removed during encoding
+
+**Current emitted assembly for the hot continue path:**
+```asm
+4001fc: fsub  d0, d0, d1
+400200: fadd  d1, d0, d5
+400204: fadd  d0, d3, d3
+400208: fmul  d0, d0, d2
+40020c: fadd  d0, d0, d4
+400210: add   x1, x1, #0x1
+400214: fmov  d3, d5
+400218: fmov  d2, d4
+40021c: fmov  d5, d3
+400220: fmov  d4, d2
+400224: fmov  d3, d1
+400228: fmov  d2, d0
+40022c: b     0x400238
+```
+
+The direct `D1 <- FMov(D1)` and `D0 <- FMov(D0)` LIR instructions are not emitted, but the sequential phi-resolution copy chain still produces redundant `fmov` traffic. The pair `d3 <- d5; d5 <- d3` and the pair `d2 <- d4; d4 <- d2` preserve invariant `cr`/`ci` values while the destination registers are overwritten again by the new `zr`/`zi` values.
 
 ### Rust Compiler - Inlined `mandelbrot` Function
 
@@ -90,7 +111,7 @@ Rust aggressively inlines and optimizes:
 
 ## Optimization Opportunities
 
-### 1. Dead Store Elimination in Phi Resolution (High Impact: ~20-30%)
+### 1. Dead Store Elimination in Phi Resolution (High Impact: ~10-20%)
 
 **Problem:** The register allocator generates redundant moves when resolving phi nodes.
 
@@ -104,7 +125,7 @@ D5 <- FMov(D3)
 D4 <- FMov(D2)
 ```
 
-**Root Cause:** Phi resolution in `iterate_L4` generates moves for variables that will flow to `iterate_body`, but the register allocator still does not eliminate all self-moves or coalesce the floating-point copy chain effectively. Earlier consecutive overwrites are no longer present in the current dump.
+**Root Cause:** Phi resolution in `iterate_L4` generates moves for variables that will flow to `iterate_body`, but the register allocator still does not coalesce the floating-point copy chain effectively. Direct self-moves remain visible in LIR, while the emitted assembly shows the larger remaining cost is redundant copy traffic around invariant `cr`/`ci` values.
 
 **Implementation Approach:**
 1. Add a post-regalloc pass to eliminate:
@@ -177,10 +198,10 @@ t2 = t1 + c   (or t1 - c)
 
 | Optimization | Estimated Impact | Complexity |
 |-------------|------------------|------------|
-| Dead store elimination | 20-30% | Medium |
+| Dead store elimination | 10-20% | Medium |
 | Constant hoisting | 5-10% | Low |
 | FMA instructions | 10-15% | Medium |
-| **Remaining potential** | **~35-45%** | |
+| **Remaining potential** | **~25-45%** | |
 
 If all optimizations are implemented, Dark could approach or match Rust performance on this benchmark.
 
