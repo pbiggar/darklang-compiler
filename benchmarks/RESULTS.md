@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-06 18:53:17
-**Commit:** `790b16ca` - Remove completed mandelbrot strength reduction note
+**Last Updated:** 2026-07-07 01:11:56
+**Commit:** `d5771285` - Remove mutable leading-space counter
 
 | Benchmark     |           Dark (5.55x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
