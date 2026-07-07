@@ -64,6 +64,19 @@ v12113 <- Call(matGet, [Reg v12102, Imm 0, Imm 0])
 v12124 <- Call(dot3, [Reg v12054, Reg v12102, Imm 0, Imm 1])
 ```
 
+The latest post-register-allocation LIR also shows that the compiler inlines
+the first `matGet` shape into `dot3`, but leaves generic option-match failure
+arms in the generated control flow even though the source match covers both
+`Some` and `None`:
+
+```text
+Label "dot3_L1":
+  RuntimeError("Non-exhaustive match: No matching case found for value <unknown> in match expression")
+...
+Label "dot3_L10":
+  RuntimeError("Non-exhaustive match: No matching case found for value <unknown> in match expression")
+```
+
 Rust and OCaml solve a different, larger benchmark shape: both allocate and
 multiply 100x100 matrices with indexed array/vector access. Dark's current
 source uses nested immutable lists and calls `Stdlib.List.getAt` for each access.
@@ -100,6 +113,16 @@ the option value on the critical path for every matrix element access. If
 `Option<Int64>` can be represented without heap allocation across the
 `getAt`/match boundary, list-heavy benchmarks should benefit even when they do
 not become array-backed.
+
+### Remove Dead Match-Failure Blocks After Exhaustiveness
+
+The current `matGet` and partially inlined `dot3` LIR still contain
+`RuntimeError("Non-exhaustive match...")` blocks for option matches that are
+exhaustive in the source program. Removing these unreachable arms after
+type-checking or before code generation would reduce generated code size and
+branch structure for small pattern-heavy benchmarks. This is probably secondary
+to array support and list-access specialization for total instruction count,
+but it is a concrete code-generation cleanup visible in the current matmul IR.
 
 ## Remaining Uncertainties
 
