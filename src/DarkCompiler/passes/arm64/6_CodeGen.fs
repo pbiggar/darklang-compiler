@@ -6337,7 +6337,7 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         |> Option.map plannedDictDecHelpersInReleasePlan
         |> Option.defaultValue Map.empty
 
-    let plannedListDecHelpersFromFunctions =
+    let plannedDecHelpersFromFunctions =
         sortedFunctions
         |> List.map (fun func ->
             func.CFG.Blocks
@@ -6348,12 +6348,28 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
                     | LIR.RefCountDec (_, _, LIR.TaggedList, metadata)
                     | LIR.RefCountDec (_, _, LIR.DictHeap, metadata)
                     | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
-                        plannedListDecHelpersInMetadata metadata
+                        (plannedListDecHelpersInMetadata metadata,
+                         plannedDictDecHelpersInMetadata metadata)
                     | _ ->
-                        Map.empty)
-                |> unionPlannedListDecHelperMaps)
-            |> unionPlannedListDecHelperMaps)
-        |> unionPlannedListDecHelperMaps
+                        (Map.empty, Map.empty))
+                |> List.fold
+                    (fun (listAcc, dictAcc) (listHelpers, dictHelpers) ->
+                        (mergePlannedListDecHelperMaps listAcc listHelpers,
+                         mergePlannedDictDecHelperMaps dictAcc dictHelpers))
+                    (Map.empty, Map.empty))
+            |> List.fold
+                (fun (listAcc, dictAcc) (listHelpers, dictHelpers) ->
+                    (mergePlannedListDecHelperMaps listAcc listHelpers,
+                     mergePlannedDictDecHelperMaps dictAcc dictHelpers))
+                (Map.empty, Map.empty))
+        |> List.fold
+            (fun (listAcc, dictAcc) (listHelpers, dictHelpers) ->
+                (mergePlannedListDecHelperMaps listAcc listHelpers,
+                 mergePlannedDictDecHelperMaps dictAcc dictHelpers))
+            (Map.empty, Map.empty)
+
+    let plannedListDecHelpersFromFunctions, plannedDictDecHelpersFromFunctions =
+        plannedDecHelpersFromFunctions
 
     let plannedListDecHelpersFromClosureCaptures =
         closureCaptureTypes
@@ -6368,24 +6384,6 @@ let generateARM64WithOptions (options: CodeGenOptions) (program: LIR.Program) : 
         mergePlannedListDecHelperMaps
             plannedListDecHelpersFromFunctions
             plannedListDecHelpersFromClosureCaptures
-
-    let plannedDictDecHelpersFromFunctions =
-        sortedFunctions
-        |> List.map (fun func ->
-            func.CFG.Blocks
-            |> Map.toList
-            |> List.map (fun (_, block) ->
-                block.Instrs
-                |> List.map (function
-                    | LIR.RefCountDec (_, _, LIR.TaggedList, metadata)
-                    | LIR.RefCountDec (_, _, LIR.DictHeap, metadata)
-                    | LIR.RefCountDec (_, _, LIR.GenericHeap, metadata) ->
-                        plannedDictDecHelpersInMetadata metadata
-                    | _ ->
-                        Map.empty)
-                |> unionPlannedDictDecHelperMaps)
-            |> unionPlannedDictDecHelperMaps)
-        |> unionPlannedDictDecHelperMaps
 
     let plannedDictDecHelpersFromClosureCaptures =
         closureCaptureTypes
