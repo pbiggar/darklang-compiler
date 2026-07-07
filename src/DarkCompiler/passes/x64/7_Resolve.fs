@@ -33,6 +33,19 @@ type ResolveResult = {
     DeferredFixups: Fixup list
 }
 
+/// Patch a signed rel32 displacement into already-encoded machine code.
+let patchRel32 (machineCode: byte array) (patchOffset: int) (rel: int) : unit =
+    let relBytes = [|
+        byte (uint32 rel &&& 0xFFu)
+        byte ((uint32 rel >>> 8) &&& 0xFFu)
+        byte ((uint32 rel >>> 16) &&& 0xFFu)
+        byte ((uint32 rel >>> 24) &&& 0xFFu)
+    |]
+    machineCode.[patchOffset] <- relBytes.[0]
+    machineCode.[patchOffset + 1] <- relBytes.[1]
+    machineCode.[patchOffset + 2] <- relBytes.[2]
+    machineCode.[patchOffset + 3] <- relBytes.[3]
+
 /// Returns the final machine code bytes and label positions.
 let resolveAndEncode (instructions: Instr list) : Result<ResolveResult, string> =
     // Pass 1: encode all instructions, collect label positions and fixups
@@ -92,16 +105,7 @@ let resolveAndEncode (instructions: Instr list) : Result<ResolveResult, string> 
         | Some targetOffset ->
             // rel32 = target - nextInstr
             let rel = targetOffset - fixup.NextInstrOffset
-            let relBytes = [|
-                byte (uint32 rel &&& 0xFFu)
-                byte ((uint32 rel >>> 8) &&& 0xFFu)
-                byte ((uint32 rel >>> 16) &&& 0xFFu)
-                byte ((uint32 rel >>> 24) &&& 0xFFu)
-            |]
-            result.[fixup.PatchOffset] <- relBytes.[0]
-            result.[fixup.PatchOffset + 1] <- relBytes.[1]
-            result.[fixup.PatchOffset + 2] <- relBytes.[2]
-            result.[fixup.PatchOffset + 3] <- relBytes.[3]
+            patchRel32 result fixup.PatchOffset rel
 
     Ok { MachineCode = result; LabelPositions = labelPositions; DeferredFixups = List.rev deferred }
 
@@ -116,16 +120,7 @@ let patchDataLabels (result: ResolveResult) (dataLabels: Map<string, int>) (code
         | Some fileOffset ->
             let targetCodeOffset = fileOffset - codeFileOffset
             let rel = targetCodeOffset - fixup.NextInstrOffset
-            let relBytes = [|
-                byte (uint32 rel &&& 0xFFu)
-                byte ((uint32 rel >>> 8) &&& 0xFFu)
-                byte ((uint32 rel >>> 16) &&& 0xFFu)
-                byte ((uint32 rel >>> 24) &&& 0xFFu)
-            |]
-            result.MachineCode.[fixup.PatchOffset] <- relBytes.[0]
-            result.MachineCode.[fixup.PatchOffset + 1] <- relBytes.[1]
-            result.MachineCode.[fixup.PatchOffset + 2] <- relBytes.[2]
-            result.MachineCode.[fixup.PatchOffset + 3] <- relBytes.[3]
+            patchRel32 result.MachineCode fixup.PatchOffset rel
     if errors.IsEmpty then
         Ok { result with DeferredFixups = [] }
     else
