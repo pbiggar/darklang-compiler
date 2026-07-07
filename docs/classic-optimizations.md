@@ -146,6 +146,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 
 ## Strength reduction
 
+### Float multiplication by two strength reduction
+
+- Optimization name: Float multiplication by two strength reduction
+- Taxonomy category: Strength reduction
+- Priority/rationale: Existing ANF optimization; keep as catalog evidence rather than a candidate for this iteration.
+- Notes: Implemented for `2.0 * x -> x + x` and `x * 2.0 -> x + x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `strength_reduce_float_mul_two_left` and `strength_reduce_float_mul_two_right` in `src/Tests/optimization/anf.opt`.
+
 ### Multiplication by power-of-two lowering
 
 - Optimization name: Multiplication by power-of-two lowering
