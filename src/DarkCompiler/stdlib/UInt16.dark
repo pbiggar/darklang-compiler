@@ -6,11 +6,11 @@
 
 def Stdlib.UInt16.add(a: UInt16, b: UInt16) : UInt16 = a + b
 
-def Stdlib.UInt16.sub(a: UInt16, b: UInt16) : UInt16 = a - b
+def Stdlib.UInt16.subtract(a: UInt16, b: UInt16) : UInt16 = a - b
 
-def Stdlib.UInt16.mul(a: UInt16, b: UInt16) : UInt16 = a * b
+def Stdlib.UInt16.multiply(a: UInt16, b: UInt16) : UInt16 = a * b
 
-def Stdlib.UInt16.div(a: UInt16, b: UInt16) : UInt16 = a / b
+def Stdlib.UInt16.divide(a: UInt16, b: UInt16) : UInt16 = a / b
 
 def Stdlib.UInt16.max(a: UInt16, b: UInt16) : UInt16 = if a > b then a else b
 

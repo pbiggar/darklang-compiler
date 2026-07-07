@@ -13,31 +13,31 @@ UInt16.add(5us, 5us) = 10us
 UInt16.add(100us, 200us) = 300us
 
 // ===================================================================
-// UInt16.sub - Subtract two integers
+// UInt16.subtract - Subtract two integers
 // ===================================================================
 
-UInt16.sub(10us, 9us) = 1us
-UInt16.sub(10us, 0us) = 10us
-UInt16.sub(100us, 50us) = 50us
-UInt16.sub(5us, 0us) = 5us
+UInt16.subtract(10us, 9us) = 1us
+UInt16.subtract(10us, 0us) = 10us
+UInt16.subtract(100us, 50us) = 50us
+UInt16.subtract(5us, 0us) = 5us
 
 // ===================================================================
-// UInt16.mul - Multiply two integers
+// UInt16.multiply - Multiply two integers
 // ===================================================================
 
-UInt16.mul(8us, 8us) = 64us
-UInt16.mul(0us, 100us) = 0us
-UInt16.mul(5us, 5us) = 25us
-UInt16.mul(100us, 100us) = 10000us
+UInt16.multiply(8us, 8us) = 64us
+UInt16.multiply(0us, 100us) = 0us
+UInt16.multiply(5us, 5us) = 25us
+UInt16.multiply(100us, 100us) = 10000us
 
 // ===================================================================
-// UInt16.div - Divide two integers
+// UInt16.divide - Divide two integers
 // ===================================================================
 
-UInt16.div(10us, 5us) = 2us
-UInt16.div(10us, 3us) = 3us
-UInt16.div(100us, 10us) = 10us
-UInt16.div(10us, 2us) = 5us
+UInt16.divide(10us, 5us) = 2us
+UInt16.divide(10us, 3us) = 3us
+UInt16.divide(100us, 10us) = 10us
+UInt16.divide(10us, 2us) = 5us
 
 // ===================================================================
 // UInt16.mod - Modulo operation

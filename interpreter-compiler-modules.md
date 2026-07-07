@@ -799,8 +799,7 @@ UInt16                       | bitwiseNot                          | ❌   | ✅
 UInt16                       | bitwiseOr                           | ❌   | ✅
 UInt16                       | bitwiseXor                          | ❌   | ✅
 UInt16                       | clamp                               | ✅   | ✅
-UInt16                       | div                                 | ❌   | ✅
-UInt16                       | divide                              | ✅   | ❌
+UInt16                       | divide                              | ✅   | ✅
 UInt16                       | fromInt128                          | ✅   | ❌
 UInt16                       | fromInt16                           | ✅   | ❌
 UInt16                       | fromInt32                           | ✅   | ❌
@@ -819,8 +818,7 @@ UInt16                       | lessThanOrEqualTo                   | ✅   | ✅
 UInt16                       | max                                 | ✅   | ✅
 UInt16                       | min                                 | ✅   | ✅
 UInt16                       | mod                                 | ✅   | ✅
-UInt16                       | mul                                 | ❌   | ✅
-UInt16                       | multiply                            | ✅   | ❌
+UInt16                       | multiply                            | ✅   | ✅
 UInt16                       | negate                              | ❌   | ✅
 UInt16                       | parse                               | ✅   | ❌
 UInt16                       | popcount                            | ❌   | ✅
@@ -829,8 +827,7 @@ UInt16                       | random                              | ✅   | ❌
 UInt16                       | shiftLeft                           | ❌   | ✅
 UInt16                       | shiftRight                          | ❌   | ✅
 UInt16                       | sqrt                                | ✅   | ❌
-UInt16                       | sub                                 | ❌   | ✅
-UInt16                       | subtract                            | ✅   | ❌
+UInt16                       | subtract                            | ✅   | ✅
 UInt16                       | sum                                 | ✅   | ✅
 UInt16                       | toFloat                             | ✅   | ❌
 UInt16                       | toString                            | ✅   | ✅
