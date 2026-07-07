@@ -11,7 +11,7 @@ This agent works only on plausible invalid `TInt64` default or fallback use in c
 Run one isolated, reviewable iteration at a time.
 
 1. Build a candidate pool using static source search only. Include source locations where `TInt64` appears to be used as a fallback, placeholder, default, or guessed concrete type in inference or propagation logic.
-2. Exclude legitimate `TInt64` uses, such as explicit integer literal representation, runtime tags, ABI-width behavior, representation-only pointer/tag/function-address bookkeeping, backend register tracking, diagnostic-only legacy error formatting after a source expression has already been proven `Int64`, tests whose purpose is already explicit Int64 behavior, and any site that is not plausibly an invalid default.
+2. Exclude legitimate `TInt64` uses, such as explicit integer literal representation, runtime tags, ABI-width behavior, representation-only pointer/tag/function-address bookkeeping, monomorphized empty collection intrinsics lowered to null pointers, backend register tracking, diagnostic-only legacy error formatting after a source expression has already been proven `Int64`, tests whose purpose is already explicit Int64 behavior, and any site that is not plausibly an invalid default.
 3. If no plausible candidates remain, report that as the iteration result instead of expanding scope.
 4. Randomly select exactly one candidate from the filtered pool. Do not choose by ease, expected impact, local familiarity, or deterministic ordering.
 5. Investigate only the selected candidate deeply enough to decide whether it can be exposed by a small end-to-end language test.
