@@ -714,17 +714,19 @@ let refCountIncForOverlappingArgs
     let rec findCleanupTargetAlias
         (vreg: MIR.VReg)
         (visited: Set<MIR.VReg>)
-        : MIR.VReg option =
+        : (MIR.VReg * (int * MIR.RcKind * ANF.RcMetadata option)) option =
         if Set.contains vreg visited then
             None
-        else if Map.containsKey vreg decInfos then
-            Some vreg
         else
-            match Map.tryFind vreg aliasMap with
-            | Some next ->
-                findCleanupTargetAlias next (Set.add vreg visited)
+            match Map.tryFind vreg decInfos with
+            | Some decInfo ->
+                Some (vreg, decInfo)
             | None ->
-                None
+                match Map.tryFind vreg aliasMap with
+                | Some next ->
+                    findCleanupTargetAlias next (Set.add vreg visited)
+                | None ->
+                    None
 
     let (_, incsRev) =
         argOperands
@@ -732,8 +734,7 @@ let refCountIncForOverlappingArgs
             match argOp with
             | MIR.Register vreg ->
                 match findCleanupTargetAlias vreg Set.empty with
-                | Some targetVReg when not (Set.contains targetVReg seen) ->
-                    let (payloadSize, kind, sourceType) = Map.find targetVReg decInfos
+                | Some (targetVReg, (payloadSize, kind, sourceType)) when not (Set.contains targetVReg seen) ->
                     (Set.add targetVReg seen, MIR.RefCountInc (targetVReg, payloadSize, kind, sourceType) :: incsRev)
                 | _ ->
                     (seen, incsRev)
