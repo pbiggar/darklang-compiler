@@ -261,35 +261,12 @@ b.pl next           ; If >= continue
 mov w3, #0          ; Return character 0
 ```
 
-### Optimization 3: Float Division Strength Reduction
-
-**Title**: Convert Division by Constant to Multiplication
-
-**Impact Estimate**: 2-3x improvement for float operations with constant divisors
-
-**Root Cause**: Division operations are 3-10x slower than multiplication on most CPUs.
-
-**Implementation Approach**:
-1. In MIR or LIR phase, detect division by floating-point constants
-2. Replace with multiplication by reciprocal
-3. Files to modify:
-   - `src/DarkCompiler/MIROptimizer.fs` - Add division strength reduction
-
-**Evidence**:
-```
-// Current:
-D0 <- FDiv(D0, fv1001)        ; fv1001 = 139968.0
-// Should become:
-D0 <- FMul(D0, fv_reciprocal) ; fv_reciprocal = 1.0/139968.0 = 7.1435e-6
-```
-
 ## Summary
 
 The primary performance gap between Dark and Rust/OCaml on the fasta benchmark comes from:
 
 1. **Data structure overhead** (finger trees vs arrays): 5-10x
 2. **Function call overhead** in hot loops: 3-5x
-3. **Missed optimizations** (strength reduction): 1.1-1.3x
 
 Combined estimated improvement potential: **10-30x** if all optimizations are implemented.
 
@@ -297,4 +274,3 @@ Combined estimated improvement potential: **10-30x** if all optimizations are im
 
 1. **High**: Static List-to-Array Conversion (biggest impact)
 2. **High**: Specialize selectRandom for small tables
-3. **Medium**: Float division strength reduction

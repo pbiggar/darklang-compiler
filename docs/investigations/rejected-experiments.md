@@ -2,6 +2,18 @@
 
 This file records benchmark optimization candidates that were investigated and removed from active investigation notes because measured evidence did not justify keeping the implementation.
 
+## 2026-07-08: fasta general float division strength reduction
+
+- Source candidate: `docs/investigations/benchmark-fasta-optimization.md`, "Float Division Strength Reduction"
+- Target benchmark: `fasta`
+- Attempt: inspected the ANF optimizer's current float strength-reduction rules and the fasta candidate's proposed replacement of division by `139968.0` with multiplication by its reciprocal.
+- Correctness evidence: existing ANF optimizer coverage already proves the intentionally narrow exact-power-of-two cases (`x / 2.0`, `x / -2.0`, `x / 4.0`, and related powers) are rewritten to multiplication by exactly representable reciprocals.
+- IR evidence: `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` limits float division strength reduction to exact powers of two and their negatives; `src/Tests/optimization/anf.opt` covers those cases.
+- Runtime evidence: no implementation was kept, so benchmark evidence is verification-only for the documentation cleanup.
+- Compile-time evidence: no compiler implementation was kept, so compile-time evidence is verification-only for the documentation cleanup.
+- Reason rejected: the active candidate asked for general floating-point division by constant to become multiplication by a reciprocal such as `1.0 / 139968.0`; that transformation is not generally semantics-preserving under IEEE-754 rounding and special values, while the safe exact-power-of-two subset is already implemented.
+- Outcome: no compiler code was changed; the active candidate was removed from the source investigation file.
+
 ## 2026-07-08: pisum adjacent post-RA move cleanup
 
 - Source candidate: `docs/investigations/benchmark-pisum-optimization.md`, "Eliminate Redundant Register Moves (Post-RA Cleanup)"
