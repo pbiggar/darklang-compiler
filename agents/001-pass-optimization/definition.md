@@ -37,6 +37,23 @@ Do not retain temporary profiling, logging, tracing, benchmark harness changes, 
 
 Pass-level timing from compiler `-vv` output is the primary success signal for selection and optimization claims.
 
+Current compiler `-vv` timing is printed as a stage line followed by a separate indented millisecond line, for example:
+
+```text
+  [6/7] Code Generation...
+        76.2ms
+```
+
+Collect this output without quiet mode; do not combine `-vv` timing collection with `-q` or any wrapper mode that suppresses stage/timing lines.
+
+Before using parsed timings for selection or success claims, validate the parser against a recent sample of actual compiler output. The parser must:
+
+- Pair only a recognized stage line with the immediately following indented timing line.
+- Extract the pass label from the bracketed stage line, excluding status suffixes such as `(user only)` and expanded optimization lists.
+- Ignore source text, comments, IR dumps, success messages, and unrelated lines.
+- Normalize display-only spelling differences such as Unicode arrows versus `->` before aggregating timings.
+- Reject the measurement as unreliable if expected stage/timing pairs are absent or if any parsed pass label cannot be mapped to a known compiler pass label or display label from `CompilerLibrary.fs`.
+
 Use repeated measurements rather than a single run:
 
 - Establish a selected-pass timing baseline with 10 `-vv` runs before making the retained optimization.
