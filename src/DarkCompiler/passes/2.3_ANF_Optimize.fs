@@ -437,6 +437,7 @@ let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (cexpr: CExpr) : CE
                 | Some folded -> Some folded
                 | None -> None
             | UnaryPrim (op, src) -> foldUnaryOp op src
+            | FloatNeg (FloatLiteral f) -> Some (Atom (FloatLiteral (-f)))
             | IfValue (BoolLiteral true, thenVal, _) -> Some (Atom thenVal)
             | IfValue (BoolLiteral false, _, elseVal) -> Some (Atom elseVal)
             | _ -> None
