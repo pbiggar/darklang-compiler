@@ -201,8 +201,58 @@ let testCfgSimplifyRemovesRetPhiJoin () : TestResult =
         let actual = formatMIR (Program ([optimizedFunc], Map.empty, Map.empty))
         Error $"Expected ret-phi join simplification.\nActual:\n{actual}"
 
+let testSelfComparisonFoldingRequiresConcreteSafeType () : TestResult =
+    let sameOperand = Register (VReg 0)
+
+    let cases = [
+        ("generic equality", Eq, AST.TVar "a")
+        ("float equality", Eq, AST.TFloat64)
+        ("string equality", Eq, AST.TString)
+        ("generic less-than", Lt, AST.TVar "a")
+        ("float less-than", Lt, AST.TFloat64)
+        ("generic greater-or-equal", Gte, AST.TVar "a")
+        ("float greater-or-equal", Gte, AST.TFloat64)
+    ]
+
+    let folded =
+        cases
+        |> List.choose (fun (name, op, opType) ->
+            match tryFoldBinOp op sameOperand sameOperand opType with
+            | Some result -> Some $"{name} folded to {result}"
+            | None -> None)
+
+    match folded with
+    | [] -> Ok ()
+    | first :: _ -> Error $"Expected self-comparison with non-concrete-safe type to stay unfolded, but {first}"
+
+let testSelfComparisonFoldingRequiresSameRegister () : TestResult =
+    let left = Register (VReg 1)
+    let right = Register (VReg 0)
+
+    let cases = [
+        ("equality", Eq)
+        ("inequality", Neq)
+        ("less-than", Lt)
+        ("greater-than", Gt)
+        ("less-or-equal", Lte)
+        ("greater-or-equal", Gte)
+    ]
+
+    let folded =
+        cases
+        |> List.choose (fun (name, op) ->
+            match tryFoldBinOp op left right AST.TInt64 with
+            | Some result -> Some $"{name} folded to {result}"
+            | None -> None)
+
+    match folded with
+    | [] -> Ok ()
+    | first :: _ -> Error $"Expected comparison of distinct registers to stay unfolded, but {first}"
+
 let tests = [
     ("MIR optimize fixed point CSE after copy prop", testCseAfterCopyPropFixpoint)
     ("MIR optimize removes dead self-referential phi", testDceRemovesSelfReferentialDeadPhi)
     ("MIR optimize removes ret-phi join blocks", testCfgSimplifyRemovesRetPhiJoin)
+    ("MIR self-comparison folding requires concrete safe type", testSelfComparisonFoldingRequiresConcreteSafeType)
+    ("MIR self-comparison folding requires same register", testSelfComparisonFoldingRequiresSameRegister)
 ]
