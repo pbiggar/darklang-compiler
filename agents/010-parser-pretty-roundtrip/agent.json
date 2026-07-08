@@ -2,7 +2,7 @@
   "id": 10,
   "slug": "parser-pretty-roundtrip",
   "name": "Parser Pretty Roundtrip",
-  "autonomyLevel": "initial-design",
+  "autonomyLevel": "Guided",
   "enabled": true,
   "purpose": "Fix parser and pretty-printer roundtrip failures one first-failing corpus case at a time.",
   "summary": "This always-learning agent starts from the parser/pretty roundtrip playbook and tightens source and interpreter syntax roundtrip behavior."
