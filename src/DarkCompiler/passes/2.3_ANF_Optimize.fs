@@ -96,6 +96,10 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | Eq, BoolLiteral true, x -> Some (Atom x)
     | Eq, x, BoolLiteral false -> Some (UnaryPrim (Not, x))
     | Eq, BoolLiteral false, x -> Some (UnaryPrim (Not, x))
+    | Neq, x, BoolLiteral true -> Some (UnaryPrim (Not, x))
+    | Neq, BoolLiteral true, x -> Some (UnaryPrim (Not, x))
+    | Neq, x, BoolLiteral false -> Some (Atom x)
+    | Neq, BoolLiteral false, x -> Some (Atom x)
 
     // Boolean operations
     | And, BoolLiteral a, BoolLiteral b -> Some (Atom (BoolLiteral (a && b)))
