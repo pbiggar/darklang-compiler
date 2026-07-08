@@ -546,6 +546,40 @@ let buildRecordFieldSubstitution (fields: (string * Type) list) (typeArgs: Type 
     else
         Ok (List.zip typeParams typeArgs |> Map.ofList)
 
+let private tryResolveGenericRecordAliasFields
+    (aliasReg: AliasRegistry)
+    (typeReg: TypeRegistry)
+    (typeName: string)
+    : (string * (string * Type) list) option =
+    match Map.tryFind typeName aliasReg with
+    | Some (_, (TRecord (targetName, targetTypeArgs) | TSum (targetName, targetTypeArgs))) ->
+        match Map.tryFind targetName typeReg with
+        | Some targetFields ->
+            match buildRecordFieldSubstitution targetFields targetTypeArgs with
+            | Ok subst ->
+                let fields =
+                    targetFields
+                    |> List.map (fun (fieldName, fieldType) -> (fieldName, applySubst subst fieldType))
+                Some (targetName, fields)
+            | Error _ ->
+                None
+        | None ->
+            None
+    | _ ->
+        None
+
+let private tryResolveRecordLiteralFields
+    (aliasReg: AliasRegistry)
+    (typeReg: TypeRegistry)
+    (typeName: string)
+    : (string * (string * Type) list) option =
+    let resolvedTypeName = resolveTypeName aliasReg typeName
+    match Map.tryFind resolvedTypeName typeReg with
+    | Some fields ->
+        Some (resolvedTypeName, fields)
+    | None ->
+        tryResolveGenericRecordAliasFields aliasReg typeReg typeName
+
 /// Build a substitution from type parameters and type arguments
 let buildSubstitution (typeParams: string list) (typeArgs: Type list) : Result<Substitution, string> =
     if List.length typeParams <> List.length typeArgs then
@@ -2942,12 +2976,10 @@ let rec checkExprWithParamNames
         if typeName = "" then
             Error (GenericError "Record literal requires type name: use 'TypeName { field = value, ... }'")
         else
-            // Resolve type alias if present
-            let resolvedTypeName = resolveTypeName aliasReg typeName
-            match Map.tryFind resolvedTypeName typeReg with
+            match tryResolveRecordLiteralFields aliasReg typeReg typeName with
             | None ->
                 Error (GenericError $"Unknown record type: {typeName}")
-            | Some expectedFields ->
+            | Some (resolvedTypeName, expectedFields) ->
                 let expectedFields =
                     expectedFields
                     |> List.map (fun (fieldName, fieldType) ->
