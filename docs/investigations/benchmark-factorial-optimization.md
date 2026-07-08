@@ -11,6 +11,11 @@ The factorial benchmark computes `factorial(20)` 10,000 times using a `repeat` h
 
 **Key insight**: Rust achieves its extreme performance through **complete compile-time evaluation**. LLVM constant-folds `factorial(20)` and `repeat(10000, 0)` at compile time, resulting in a program that simply prints a pre-computed constant. Dark is actually faster than OCaml on this benchmark.
 
+Current Dark evidence still shows one runtime `factorial(20)` call on every
+tail-recursive `repeat` iteration. Register allocation now removes the older
+redundant self-moves in the `repeat` loop, so the remaining benchmark gap is
+not caused by those moves.
+
 ## Benchmark Source Code
 
 ### Dark (`benchmarks/problems/factorial/dark/main.dark`)
@@ -166,17 +171,13 @@ factorial:
     Ret
 
 repeat:
-  Label "repeat_L0":                ; Base case
-    Jump(Label "repeat_L2")
   Label "repeat_L1":                ; Tail recursive case
-    X20 <- Sub(X20, Imm 1)
+    X19 <- Sub(X19, Imm 1)
     SaveRegs([], [])
     ArgMoves(X0 <- Imm 20)
-    X19 <- Call(factorial, [Imm 20])
+    X20 <- Call(factorial, [Imm 20])
     RestoreRegs([], [])
-    X19 <- Mov(Reg X0)
-    X20 <- Mov(Reg X20)             ; REDUNDANT self-move
-    X19 <- Mov(Reg X19)             ; REDUNDANT self-move
+    X20 <- Mov(Reg X0)
     Jump(Label "repeat_body")       ; Loop back (tail call!)
 ```
 
@@ -187,7 +188,58 @@ repeat:
 
 ## Identified Optimization Opportunities
 
-### 1. Compile-Time Constant Folding for Pure Functions
+### 1. Hoist Loop-Invariant Pure Calls from Tail-Recursive Loops
+
+**Impact: Large for this benchmark**
+
+**Root Cause:**
+`repeat` is compiled as a loop, but the pure call `factorial(20)` remains in
+the loop body even though it does not depend on the loop-carried values. The
+current LIR therefore executes the same factorial computation 10,000 times:
+
+```
+repeat:
+  Label "repeat_L1":
+    X19 <- Sub(X19, Imm 1)
+    ArgMoves(X0 <- Imm 20)
+    X20 <- Call(factorial, [Imm 20])
+    X20 <- Mov(Reg X0)
+    Jump(Label "repeat_body")
+```
+
+The generated ARM64 has the same shape: the repeat loop decrements `x19`,
+loads `20` into `x0`, calls `factorial`, stores the result in `x20`, and jumps
+back to the loop condition.
+
+```asm
+21c: sub x19, x19, #0x1
+220: mov x0, #0x14
+224: bl  0x190
+228: mov x20, x0
+22c: b   0x238
+```
+
+Because `factorial(20)` is loop-invariant, a purity-aware LICM pass for
+tail-recursive loops could compute it once before entering `repeat` and carry
+the value through the loop. That would not match Rust's full compile-time
+result, but it would remove the dominant repeated computation without needing
+full partial evaluation.
+
+**Implementation Approach:**
+1. Reuse or introduce purity information for calls in ANF or MIR.
+2. Detect values inside lowered tail-recursive loops that do not depend on
+   loop-carried parameters.
+3. Hoist safe pure calls before the loop entry while preserving call ordering
+   for any effectful operation.
+
+**Files to Modify:**
+- `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` or MIR lowering, depending on
+  where tail-recursive loops are easiest to analyze.
+- Add purity metadata only if existing call classification is insufficient.
+
+---
+
+### 2. Compile-Time Constant Folding for Pure Functions
 
 **Impact: Could match Rust performance (~17x improvement)**
 
@@ -223,7 +275,7 @@ movk    x8, #8643, lsl #48       ; = 2432902008176640000
 
 ---
 
-### 2. Inline Small Pure Functions
+### 3. Inline Small Pure Functions
 
 **Impact: ~10-15% performance improvement**
 
@@ -257,15 +309,17 @@ repeat_L1:
 
 | Optimization | Estimated Impact | Complexity |
 |--------------|-----------------|------------|
+| Hoist Loop-Invariant Pure Calls | Large for this benchmark | Medium |
 | Compile-Time Constant Folding | 90%+ (match Rust) | High |
 | Inline Small Pure Functions | 10-15% | Medium |
 
-**Note:** Compile-time constant folding would eliminate the entire benchmark computation, matching Rust. Without that optimization, inlining is the main remaining factorial-specific runtime opportunity documented here.
+**Note:** Compile-time constant folding would eliminate the entire benchmark computation, matching Rust. Without that optimization, loop-invariant pure-call hoisting is the main remaining factorial-specific runtime opportunity documented here.
 
 ## Recommended Implementation Order
 
-1. **Inline Small Pure Functions** - Medium complexity, good improvement
-2. **Compile-Time Constant Folding** - Major impact, high complexity
+1. **Hoist Loop-Invariant Pure Calls** - Medium complexity, removes the dominant repeated `factorial(20)` work
+2. **Inline Small Pure Functions** - Medium complexity, smaller improvement
+3. **Compile-Time Constant Folding** - Major impact, high complexity
 
 ## Why Dark Beats OCaml
 
@@ -376,8 +430,6 @@ repeat:
     X20 <- Call(factorial, [Imm 20])
     RestoreRegs([], [])
     X20 <- Mov(Reg X0)
-    X19 <- Mov(Reg X19)
-    X20 <- Mov(Reg X20)
     Jump(Label "repeat_body")
   Label "repeat_L2":
     X0 <- Mov(Reg X20)
