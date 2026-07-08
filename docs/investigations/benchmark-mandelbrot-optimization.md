@@ -10,7 +10,7 @@ The Dark compiler currently executes **2.06x more instructions than Rust** and *
 
 ## Benchmark Results
 
-Cachegrind instruction counts from commit `633dca3d`:
+Cachegrind instruction counts from commit `6b54e116`:
 
 | Language | Instructions | vs Rust |
 |----------|--------------|---------|
@@ -35,8 +35,6 @@ Label "iterate_L4":
     X1 <- Add(X1, Imm 1)
     D3 <- FMov(D5)
     D2 <- FMov(D4)
-    D1 <- FMov(D1)                   ; PROBLEM: Self-move
-    D0 <- FMov(D0)                   ; PROBLEM: Self-move
     D5 <- FMov(D3)
     D4 <- FMov(D2)
     D3 <- FMov(D1)
@@ -44,9 +42,9 @@ Label "iterate_L4":
     Jump(Label "iterate_body")
 ```
 
-**Instruction count in iterate hot path:** ~16 LIR instructions after register allocation
-**Redundant instructions:** 2 direct self-moves in LIR plus copy traffic for tail-call phi resolution
-**Effective useful instructions:** ~14 after direct self-moves are removed during encoding
+**Instruction count in iterate hot path:** 14 LIR instructions after register allocation
+**Redundant instructions:** tail-call phi copy traffic remains after direct self-moves have been eliminated
+**Effective useful instructions:** ~10 arithmetic/control instructions plus 4-6 avoidable copies depending on the phi-copy sequence
 
 **Current emitted assembly for the hot continue path:**
 ```asm
@@ -65,7 +63,7 @@ Label "iterate_L4":
 40022c: b     0x400238
 ```
 
-The direct `D1 <- FMov(D1)` and `D0 <- FMov(D0)` LIR instructions are not emitted, but the sequential phi-resolution copy chain still produces redundant `fmov` traffic. The pair `d3 <- d5; d5 <- d3` and the pair `d2 <- d4; d4 <- d2` preserve invariant `cr`/`ci` values while the destination registers are overwritten again by the new `zr`/`zi` values.
+The earlier direct `D1 <- FMov(D1)` and `D0 <- FMov(D0)` LIR instructions are no longer present. The remaining sequential phi-resolution copy chain still produces redundant `fmov` traffic. The pair `d3 <- d5; d5 <- d3` and the pair `d2 <- d4; d4 <- d2` preserve invariant `cr`/`ci` values while the destination registers are overwritten again by the new `zr`/`zi` values.
 
 ### Rust Compiler - Inlined `mandelbrot` Function
 
@@ -111,27 +109,25 @@ Rust aggressively inlines and optimizes:
 
 ## Optimization Opportunities
 
-### 1. Dead Store Elimination in Phi Resolution (High Impact: ~10-20%)
+### 1. Phi Copy Coalescing / Dead Store Elimination (High Impact: ~10-20%)
 
-**Problem:** The register allocator generates redundant moves when resolving phi nodes.
+**Problem:** The register allocator generates redundant moves when resolving phi nodes. Direct floating-point self-moves have been eliminated, but invariant argument shuffles remain in the hot path.
 
 **Current evidence (LIR after RegAlloc, iterate_L4):**
 ```
-D1 <- FMov(D1)     ; self-move
-D0 <- FMov(D0)     ; self-move
 D3 <- FMov(D5)
 D2 <- FMov(D4)
 D5 <- FMov(D3)
 D4 <- FMov(D2)
 ```
 
-**Root Cause:** Phi resolution in `iterate_L4` generates moves for variables that will flow to `iterate_body`, but the register allocator still does not coalesce the floating-point copy chain effectively. Direct self-moves remain visible in LIR, while the emitted assembly shows the larger remaining cost is redundant copy traffic around invariant `cr`/`ci` values.
+**Root Cause:** Phi resolution in `iterate_L4` generates moves for variables that will flow to `iterate_body`, but the register allocator still does not coalesce the floating-point copy chain effectively. The emitted assembly shows the remaining cost is redundant copy traffic around invariant `cr`/`ci` values.
 
 **Implementation Approach:**
 1. Add a post-regalloc pass to eliminate:
-   - Self-moves: `Xn <- Mov(Reg Xn)`
    - Consecutive overwrites to same register
-2. Improve phi node parallel copy sequencing
+   - Copy pairs whose only effect is preserving values that are immediately reintroduced by the loop phi mapping
+2. Improve phi node parallel copy sequencing so invariant tail-call arguments can stay in their assigned registers
 
 **Files to modify:**
 - `src/DarkCompiler/RegAlloc.fs` - Add move coalescing
