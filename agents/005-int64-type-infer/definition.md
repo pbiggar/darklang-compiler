@@ -20,7 +20,9 @@ Run one isolated, reviewable iteration at a time.
    - optimizer-created `Int64`-specific unary negation canonicalizations
    - backend register tracking
    - diagnostic-only legacy error formatting after a source expression has already been proven `Int64`
+   - concrete source-level `Int64` container specialization, ownership, or refcount handling, unless investigation shows that type was guessed upstream
    - tests whose purpose is already explicit `Int64` behavior
+   - unary negation paths that operate only after operand type checking has already selected a numeric type
    - any site that is not plausibly an invalid default
 3. If no plausible candidates remain, report that as the iteration result instead of expanding scope.
 4. Randomly select exactly one candidate from the filtered pool. Do not choose by ease, expected impact, local familiarity, or deterministic ordering.

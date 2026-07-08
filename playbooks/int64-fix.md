@@ -27,3 +27,15 @@ You are going to resolve EXACTLY ONE type checking issue.
 - Do not reintroduce a default type for missing type arguments. Preserve unresolved type variables and let later passes surface any problems.
 - If a later pass needs a concrete type (for example, monomorphized intrinsics like `__hash<k>`/`__key_eq<k>`), add explicit `*_unknown` intrinsics that crash at runtime rather than picking an arbitrary type.
 - Do not change the test under any circumstances
+- Exclude legitimate `TInt64` uses from the candidate pool, including:
+  - explicit integer literal representation
+  - runtime tags
+  - ABI-width behavior
+  - representation-only pointer, tag, and function-address bookkeeping
+  - monomorphized empty collection intrinsics lowered to null pointers
+  - backend register tracking
+  - diagnostic-only legacy error formatting after a source expression has already been proven `Int64`
+  - concrete source-level `Int64` container specialization, ownership, or refcount handling, unless investigation shows that type was guessed upstream
+  - tests whose purpose is already explicit `Int64` behavior
+  - unary negation paths that operate only after operand type checking has already selected a numeric type
+  - any site that is not plausibly an invalid default
