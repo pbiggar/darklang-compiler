@@ -261,27 +261,7 @@ b.pl next           ; If >= continue
 mov w3, #0          ; Return character 0
 ```
 
-### Optimization 3: Common Subexpression Elimination for Increment
-
-**Title**: CSE for Loop Counter Increments
-
-**Impact Estimate**: 5-10% improvement in tight loops
-
-**Root Cause**: `i + 1` is computed twice per iteration.
-
-**Implementation Approach**:
-1. Enhance CSE pass to track arithmetic operations across basic blocks
-2. Replace redundant computations with cached values
-3. Files to modify:
-   - `src/DarkCompiler/ANFOptimizer.fs` - Enhance CSE implementation
-
-**Evidence**:
-```
-let TempId 1359 = t1346 + 1
-let TempId 1364 = t1346 + 1  ; Should reuse t1359
-```
-
-### Optimization 4: Float Division Strength Reduction
+### Optimization 3: Float Division Strength Reduction
 
 **Title**: Convert Division by Constant to Multiplication
 
@@ -309,7 +289,7 @@ The primary performance gap between Dark and Rust/OCaml on the fasta benchmark c
 
 1. **Data structure overhead** (finger trees vs arrays): 5-10x
 2. **Function call overhead** in hot loops: 3-5x
-3. **Missed optimizations** (CSE, strength reduction): 1.1-1.3x
+3. **Missed optimizations** (strength reduction): 1.1-1.3x
 
 Combined estimated improvement potential: **10-30x** if all optimizations are implemented.
 
@@ -318,4 +298,3 @@ Combined estimated improvement potential: **10-30x** if all optimizations are im
 1. **High**: Static List-to-Array Conversion (biggest impact)
 2. **High**: Specialize selectRandom for small tables
 3. **Medium**: Float division strength reduction
-4. **Low**: CSE for loop increments

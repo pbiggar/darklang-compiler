@@ -5,6 +5,7 @@
 // - Constant propagation: replace variable uses with constant definitions
 // - Copy propagation: eliminate trivial bindings
 // - Dead code elimination: remove unused bindings
+// - Common subexpression elimination: reuse earlier pure computations
 // - Strength reduction: replace pow2 mul/div/mod with shifts/bitwise ops
 //
 // These optimizations run in a loop until no more changes occur.
@@ -22,6 +23,7 @@ type OptimizeOptions = {
     EnableConstProp: bool
     EnableCopyProp: bool
     EnableDCE: bool
+    EnableCSE: bool
     EnableStrengthReduction: bool
 }
 
@@ -36,6 +38,7 @@ let defaultOptimizeOptions = {
     EnableConstProp = true
     EnableCopyProp = true
     EnableDCE = true
+    EnableCSE = true
     EnableStrengthReduction = true
 }
 
@@ -463,6 +466,14 @@ type OptimizeAExprResult = {
     Uses: Set<TempId>
 }
 
+type CSEnv = Map<CExpr, TempId>
+
+let private isCSEEligible (cexpr: CExpr) : bool =
+    match cexpr with
+    | Prim _
+    | UnaryPrim _ -> true
+    | _ -> false
+
 let private trySimplifyDoubleUnary (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =
     match cexpr, body with
     | UnaryPrim (Not, source), Let (notTid, UnaryPrim (Not, Var sourceTid), notBody)
@@ -477,7 +488,13 @@ let private trySimplifyDoubleUnary (tid: TempId) (cexpr: CExpr) (body: AExpr) : 
     | _ -> None
 
 /// Optimize an AExpr, returning optimized expression, change flag, and used TempIds
-let rec private optimizeAExprWithUses (context: OptimizeContext) (options: OptimizeOptions) (env: ConstEnv) (aexpr: AExpr) : OptimizeAExprResult =
+let rec private optimizeAExprWithUses
+    (context: OptimizeContext)
+    (options: OptimizeOptions)
+    (env: ConstEnv)
+    (cseEnv: CSEnv)
+    (aexpr: AExpr)
+    : OptimizeAExprResult =
     match aexpr with
     | Return atom ->
         let atom' = substAtom env atom
@@ -490,11 +507,18 @@ let rec private optimizeAExprWithUses (context: OptimizeContext) (options: Optim
     | Let (tid, cexpr, body) ->
         // Optimize the CExpr
         let (cexpr', cexprChanged) = optimizeCExpr options env cexpr
+        let (cexpr'', cseChanged, cseEnv') =
+            if options.EnableCSE && isCSEEligible cexpr' then
+                match Map.tryFind cexpr' cseEnv with
+                | Some existingTid -> (Atom (Var existingTid), true, cseEnv)
+                | None -> (cexpr', false, Map.add cexpr' tid cseEnv)
+            else
+                (cexpr', false, cseEnv)
 
         // Check for copy propagation: if cexpr is just an Atom, substitute it
         let (env', skipBinding) =
-            match cexpr' with
-            | Atom a when options.EnableCopyProp && not (hasSideEffects context cexpr') ->
+            match cexpr'' with
+            | Atom a when options.EnableCopyProp && not (hasSideEffects context cexpr'') ->
                 // Copy propagation: don't emit binding, just substitute
                 (Map.add tid a env, true)
             | Atom (IntLiteral _ | BoolLiteral _ | FloatLiteral _ | StringLiteral _ | UnitLiteral as constAtom)
@@ -505,16 +529,16 @@ let rec private optimizeAExprWithUses (context: OptimizeContext) (options: Optim
                 (env, false)
 
         // Optimize the body
-        let bodyResult = optimizeAExprWithUses context options env' body
+        let bodyResult = optimizeAExprWithUses context options env' cseEnv' body
 
         // Dead code elimination: if tid is not used in body and cexpr has no side effects
         let usesInBody = bodyResult.Uses
-        let isDead = options.EnableDCE && not (Set.contains tid usesInBody) && not (hasSideEffects context cexpr')
+        let isDead = options.EnableDCE && not (Set.contains tid usesInBody) && not (hasSideEffects context cexpr'')
         let usesInBodyWithoutTid = Set.remove tid usesInBody
 
-        match trySimplifyDoubleUnary tid cexpr' bodyResult.Expr with
+        match trySimplifyDoubleUnary tid cexpr'' bodyResult.Expr with
         | Some replacement when options.EnableConstFolding ->
-            let replacementResult = optimizeAExprWithUses context options env replacement
+            let replacementResult = optimizeAExprWithUses context options env cseEnv replacement
             { replacementResult with Changed = true }
         | _ when skipBinding ->
             // Copy propagation: skip this binding entirely
@@ -531,11 +555,11 @@ let rec private optimizeAExprWithUses (context: OptimizeContext) (options: Optim
                 Uses = usesInBodyWithoutTid
             }
         | _ ->
-            let usesInCExpr = collectCExprUses cexpr'
+            let usesInCExpr = collectCExprUses cexpr''
             let uses = Set.union usesInCExpr usesInBodyWithoutTid
             {
-                Expr = Let (tid, cexpr', bodyResult.Expr)
-                Changed = cexprChanged || bodyResult.Changed
+                Expr = Let (tid, cexpr'', bodyResult.Expr)
+                Changed = cexprChanged || cseChanged || bodyResult.Changed
                 Uses = uses
             }
 
@@ -545,22 +569,22 @@ let rec private optimizeAExprWithUses (context: OptimizeContext) (options: Optim
         // Fold constant conditions
         match cond' with
         | BoolLiteral true when options.EnableConstFolding ->
-            let thenResult = optimizeAExprWithUses context options env thenBranch
+            let thenResult = optimizeAExprWithUses context options env cseEnv thenBranch
             {
                 Expr = thenResult.Expr
                 Changed = true
                 Uses = thenResult.Uses
             }
         | BoolLiteral false when options.EnableConstFolding ->
-            let elseResult = optimizeAExprWithUses context options env elseBranch
+            let elseResult = optimizeAExprWithUses context options env cseEnv elseBranch
             {
                 Expr = elseResult.Expr
                 Changed = true
                 Uses = elseResult.Uses
             }
         | _ ->
-            let thenResult = optimizeAExprWithUses context options env thenBranch
-            let elseResult = optimizeAExprWithUses context options env elseBranch
+            let thenResult = optimizeAExprWithUses context options env cseEnv thenBranch
+            let elseResult = optimizeAExprWithUses context options env cseEnv elseBranch
             let uses = Set.unionMany [collectAtomUses cond'; thenResult.Uses; elseResult.Uses]
             {
                 Expr = If (cond', thenResult.Expr, elseResult.Expr)
@@ -570,7 +594,7 @@ let rec private optimizeAExprWithUses (context: OptimizeContext) (options: Optim
 
 /// Optimize an AExpr
 let optimizeAExpr (context: OptimizeContext) (options: OptimizeOptions) (env: ConstEnv) (aexpr: AExpr) : AExpr * bool =
-    let result = optimizeAExprWithUses context options env aexpr
+    let result = optimizeAExprWithUses context options env Map.empty aexpr
     (result.Expr, result.Changed)
 
 /// Optimize a function
@@ -619,6 +643,7 @@ let optimizeConstFolding (context: OptimizeContext) (program: Program) : Program
             EnableConstProp = false
             EnableCopyProp = false
             EnableDCE = false
+            EnableCSE = false
             EnableStrengthReduction = false }
         program
 
@@ -630,6 +655,7 @@ let optimizeCopyProp (context: OptimizeContext) (program: Program) : Program =
             EnableConstProp = false
             EnableCopyProp = true
             EnableDCE = false
+            EnableCSE = false
             EnableStrengthReduction = false }
         program
 
@@ -641,5 +667,6 @@ let optimizeDCE (context: OptimizeContext) (program: Program) : Program =
             EnableConstProp = false
             EnableCopyProp = false
             EnableDCE = true
+            EnableCSE = false
             EnableStrengthReduction = false }
         program

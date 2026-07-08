@@ -154,6 +154,7 @@ let private buildANFOptimizeOptions (options: CompilerOptions) : ANF_Optimize.Op
         EnableConstProp = enabled && not options.DisableANFConstProp
         EnableCopyProp = enabled && not options.DisableANFCopyProp
         EnableDCE = enabled && not options.DisableANFDCE
+        EnableCSE = enabled
         EnableStrengthReduction = enabled && not options.DisableANFStrengthReduction
     }
 
@@ -162,6 +163,7 @@ let private shouldRunANFOptimize (anfOptions: ANF_Optimize.OptimizeOptions) : bo
     || anfOptions.EnableConstProp
     || anfOptions.EnableCopyProp
     || anfOptions.EnableDCE
+    || anfOptions.EnableCSE
     || anfOptions.EnableStrengthReduction
 
 let private buildMIROptimizeOptions (options: CompilerOptions) : MIR_Optimize.OptimizeOptions =
@@ -452,6 +454,7 @@ let private buildAnf
                 ("const_prop", anfOptions.EnableConstProp)
                 ("copy_prop", anfOptions.EnableCopyProp)
                 ("dce", anfOptions.EnableDCE)
+                ("cse", anfOptions.EnableCSE)
                 ("strength_reduction", anfOptions.EnableStrengthReduction)
             ]
     if verbosity >= 1 then println $"  [2.3/7] {anfPassLabel}..."

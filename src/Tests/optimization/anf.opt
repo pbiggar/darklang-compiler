@@ -859,3 +859,16 @@ def f(x: Int64) : Int64 = x - -4
 Function f:
 let TempId 1 = t0 + 4
 return t1
+
+---NAME---
+cse_reuses_duplicate_integer_add
+---INPUT---
+def f(x: Int64) : Int64 =
+  let y = x + 1 in
+  let z = x + 1 in
+  y + z
+---EXPECTED---
+Function f:
+let TempId 1 = t0 + 1
+let TempId 5 = t1 + t1
+return t5
