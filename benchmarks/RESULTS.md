@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-08 20:39:56
-**Commit:** `70e66f2c` - Add ANF common subexpression elimination
+**Last Updated:** 2026-07-08 21:43:37
+**Commit:** `ddfab4d5` - Enable full-size matmul benchmark
 
 | Benchmark     |           Dark (6.69x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
