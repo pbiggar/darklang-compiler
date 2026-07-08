@@ -1040,6 +1040,12 @@ let rec resolveAliasType (aliasReg: AliasRegistry) (typ: AST.Type) : AST.Type =
         AST.TFunction (List.map (resolveAliasType aliasReg) args, resolveAliasType aliasReg ret)
     | _ -> typ
 
+let resolveAliasesInTypeRegistry (aliasReg: AliasRegistry) (typeReg: TypeRegistry) : TypeRegistry =
+    typeReg
+    |> Map.map (fun _ fields ->
+        fields
+        |> List.map (fun (fieldName, fieldType) -> (fieldName, resolveAliasType aliasReg fieldType)))
+
 /// Resolve type aliases within function signatures
 let resolveAliasesInFunction (aliasReg: AliasRegistry) (funcDef: AST.FunctionDef) : AST.FunctionDef =
     let resolvedParams =
@@ -2522,7 +2528,10 @@ let rec liftLambdasInProgram
             | _ -> None)
         |> Map.ofList
 
-    let typeReg = expandTypeRegWithAliases typeRegBase aliasReg
+    let typeReg =
+        typeRegBase
+        |> resolveAliasesInTypeRegistry aliasReg
+        |> fun reg -> expandTypeRegWithAliases reg aliasReg
 
     let variantLookup : VariantLookup =
         topLevels
@@ -8891,7 +8900,10 @@ let buildRegistries
             |> List.mapi (fun idx variant -> (variant.Name, (typeName, typeParams, idx, variant.Payload))))
         |> Map.ofList
 
-    let typeReg = expandTypeRegWithAliases typeRegBase aliasReg
+    let typeReg =
+        typeRegBase
+        |> resolveAliasesInTypeRegistry aliasReg
+        |> fun reg -> expandTypeRegWithAliases reg aliasReg
 
     let funcReg : FunctionRegistry =
         functions

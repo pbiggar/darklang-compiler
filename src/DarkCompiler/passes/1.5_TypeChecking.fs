@@ -679,6 +679,12 @@ let rec resolveType (aliasReg: AliasRegistry) (typ: Type) : Type =
     | TBool | TFloat64 | TString | TBytes | TChar | TUnit | TRuntimeError | TRawPtr ->
         typ  // Primitive types and type variables are unchanged
 
+let resolveAliasesInTypeRegistry (aliasReg: AliasRegistry) (typeReg: TypeRegistry) : TypeRegistry =
+    typeReg
+    |> Map.map (fun _ fields ->
+        fields
+        |> List.map (fun (fieldName, fieldType) -> (fieldName, resolveType aliasReg fieldType)))
+
 let private canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: Type) : Type =
     let sumTypeNames =
         variantLookup
@@ -4882,7 +4888,7 @@ let private checkProgramInternal
 
     // Build the type check environment for THIS program
     let programEnv : TypeCheckEnv = {
-        TypeReg = programTypeReg
+        TypeReg = resolveAliasesInTypeRegistry aliasReg programTypeReg
         VariantLookup = programVariantLookup
         FuncEnv = programFuncEnv
         FuncParamNames = programFuncParamNameReg
