@@ -4438,16 +4438,6 @@ let translateFunction
     // at the start of the entry block (e.g., "D1 <- FMov(D0)"). These are
     // handled by the FMov case in translateInstr. No extra codegen needed.
 
-    // Translate all blocks in order (entry first)
-    let entryBlock = Map.find func.CFG.Entry func.CFG.Blocks
-    let otherBlocks =
-        func.CFG.Blocks
-        |> Map.toList
-        |> List.filter (fun (label, _) -> label <> func.CFG.Entry)
-        |> List.map snd
-
-    let allBlocks = entryBlock :: otherBlocks
-
     let rec translateBlocks acc remaining =
         match remaining with
         | [] -> Ok (List.rev acc |> List.concat)
@@ -4463,7 +4453,21 @@ let translateFunction
             | Error e -> Error e
             | Ok instrs -> translateBlocks (instrs :: acc) rest
 
-    match translateBlocks [] allBlocks with
+    // Translate all blocks in order (entry first), reporting malformed CFGs as
+    // codegen errors instead of letting Map.find throw.
+    let allBlocksResult =
+        match Map.tryFind func.CFG.Entry func.CFG.Blocks with
+        | None ->
+            Error $"x64 codegen: function {func.Name} missing entry block {func.CFG.Entry}"
+        | Some entryBlock ->
+            let otherBlocks =
+                func.CFG.Blocks
+                |> Map.toList
+                |> List.filter (fun (label, _) -> label <> func.CFG.Entry)
+                |> List.map snd
+            Ok (entryBlock :: otherBlocks)
+
+    match allBlocksResult |> Result.bind (translateBlocks []) with
     | Error e -> Error e
     | Ok blockInstrs ->
         // Heap initialization for _start only

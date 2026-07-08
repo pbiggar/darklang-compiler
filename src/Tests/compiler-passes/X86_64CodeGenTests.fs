@@ -357,6 +357,32 @@ let private makeEmptyFunction (name: string) (typedParams: LIR.TypedLIRParam lis
         UsedCalleeSaved = []
     }
 
+/// Test: malformed x64 CFGs should be reported as codegen errors rather than throwing Map.find.
+let testReportsMissingEntryBlock () : Result<unit, string> =
+    let entryLabel = LIR.Label "_start_entry"
+    let bodyLabel = LIR.Label "_start_body"
+    let bodyBlock : LIR.BasicBlock = {
+        Label = bodyLabel
+        Instrs = []
+        Terminator = LIR.Ret
+    }
+    let func : LIR.Function = {
+        Name = "_start"
+        TypedParams = []
+        CFG = {
+            Entry = entryLabel
+            Blocks = Map.ofList [(bodyLabel, bodyBlock)]
+        }
+        StackSize = 0
+        UsedCalleeSaved = []
+    }
+    let program = LIR.Program ([func], Map.empty, Map.empty)
+
+    match CodeGen_X86_64.translateProgram (completeFixtureVariants program) false with
+    | Error e when e.Contains "missing entry block" -> Ok ()
+    | Error e -> Error $"Expected missing entry block error, got '{e}'"
+    | Ok _ -> Error "Expected x64 codegen to reject a CFG whose entry block is absent"
+
 /// Test: x64 codegen rejects ARM64-only/overflow physical registers instead of aliasing runtime state.
 let testRejectsReservedOverflowPhysicalRegister () : Result<unit, string> =
     let program =
@@ -5409,6 +5435,7 @@ let testTaggedListRefCountDecNestedSumStringPayload () : Result<unit, string> =
         else Error $"Expected list nested sum payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
 let tests : (string * (unit -> Result<unit, string>)) list = [
+    ("LIR x64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("LIR rejects x64 overflow physical registers", testRejectsReservedOverflowPhysicalRegister)
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
