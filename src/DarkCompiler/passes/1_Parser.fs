@@ -1954,6 +1954,14 @@ let parse (tokens: Token list) : Result<Program, string> =
                 | TRParen :: rest' ->
                     Ok (Constructor ("", name, Some payloadExpr), rest')
                 | _ -> Error "Expected ')' after constructor payload")
+        | TIdent typeName :: TLt :: typeArgsStart when System.Char.IsUpper(typeName.[0]) ->
+            match parseTypeArgs typeArgsStart [] with
+            | Ok (_, TLBrace :: recordFieldsStart) ->
+                parseRecordLiteralFieldsWithTypeName typeName recordFieldsStart []
+            | Ok _ ->
+                Error $"Expected record literal after type arguments for '{typeName}'"
+            | Error _ ->
+                Ok (Constructor ("", typeName, None), TLt :: typeArgsStart)
         | TIdent typeName :: TLBrace :: rest when System.Char.IsUpper(typeName.[0]) ->
             // Record literal with type name: Point { x = 1, y = 2 }
             parseRecordLiteralFieldsWithTypeName typeName rest []

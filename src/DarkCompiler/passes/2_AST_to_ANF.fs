@@ -487,19 +487,74 @@ let rec resolveRecordTypeName (aliasReg: AliasRegistry) (typeName: string) : str
     | Some ([], AST.TSum (targetName, _)) -> resolveRecordTypeName aliasReg targetName
     | _ -> typeName
 
+let rec private resolveAliasTypeForRegistry (aliasReg: AliasRegistry) (typ: AST.Type) : AST.Type =
+    match typ with
+    | AST.TRecord (name, []) ->
+        match Map.tryFind name aliasReg with
+        | Some ([], targetType) -> resolveAliasTypeForRegistry aliasReg targetType
+        | _ -> AST.TRecord (name, [])
+    | AST.TRecord (name, typeArgs) ->
+        AST.TRecord (name, List.map (resolveAliasTypeForRegistry aliasReg) typeArgs)
+    | AST.TSum (name, []) ->
+        match Map.tryFind name aliasReg with
+        | Some ([], targetType) -> resolveAliasTypeForRegistry aliasReg targetType
+        | _ -> AST.TSum (name, [])
+    | AST.TSum (name, typeArgs) ->
+        AST.TSum (name, List.map (resolveAliasTypeForRegistry aliasReg) typeArgs)
+    | AST.TTuple elemTypes ->
+        AST.TTuple (List.map (resolveAliasTypeForRegistry aliasReg) elemTypes)
+    | AST.TList elemType ->
+        AST.TList (resolveAliasTypeForRegistry aliasReg elemType)
+    | AST.TDict (keyType, valueType) ->
+        AST.TDict (resolveAliasTypeForRegistry aliasReg keyType, resolveAliasTypeForRegistry aliasReg valueType)
+    | AST.TFunction (paramTypes, returnType) ->
+        AST.TFunction (
+            List.map (resolveAliasTypeForRegistry aliasReg) paramTypes,
+            resolveAliasTypeForRegistry aliasReg returnType
+        )
+    | AST.TVar _
+    | AST.TInt8
+    | AST.TInt16
+    | AST.TInt32
+    | AST.TInt64
+    | AST.TInt128
+    | AST.TUInt8
+    | AST.TUInt16
+    | AST.TUInt32
+    | AST.TUInt64
+    | AST.TUInt128
+    | AST.TBool
+    | AST.TFloat64
+    | AST.TString
+    | AST.TBytes
+    | AST.TChar
+    | AST.TUnit
+    | AST.TRawPtr
+    | AST.TRuntimeError ->
+        typ
+
+let private resolveRegistryFields (aliasReg: AliasRegistry) (fields: (string * AST.Type) list) : (string * AST.Type) list =
+    fields
+    |> List.map (fun (fieldName, fieldType) ->
+        (fieldName, resolveAliasTypeForRegistry aliasReg fieldType))
+
 /// Expand a type registry to include alias entries
 /// If "Vec" aliases to "Point" and "Point" has fields [x, y], then "Vec" also gets [x, y]
 let expandTypeRegWithAliases (typeReg: TypeRegistry) (aliasReg: AliasRegistry) : TypeRegistry =
+    let resolvedTypeReg =
+        typeReg
+        |> Map.map (fun _ fields -> resolveRegistryFields aliasReg fields)
+
     aliasReg
     |> Map.fold (fun accReg aliasName (typeParams, targetType) ->
         match typeParams, targetType with
         | [], AST.TRecord (targetName, _) ->
             let resolvedName = resolveRecordTypeName aliasReg targetName
-            match Map.tryFind resolvedName typeReg with
+            match Map.tryFind resolvedName resolvedTypeReg with
             | Some fields -> Map.add aliasName fields accReg
             | None -> accReg  // Target not found, skip
         | _ -> accReg  // Not a non-generic record alias, skip
-    ) typeReg
+    ) resolvedTypeReg
 
 /// Variable environment - maps variable names to their TempIds and types
 /// The type information is used for type-directed field lookup in record access
