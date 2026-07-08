@@ -17,6 +17,9 @@ open ANF
 /// Environment mapping TempIds to their constant values (for propagation)
 type ConstEnv = Map<TempId, Atom>
 
+/// Environment mapping TempIds to source types for type-sensitive rewrites.
+type TypeEnv = Map<TempId, AST.Type>
+
 /// Optimization toggles for ANF optimization passes
 type OptimizeOptions = {
     EnableConstFolding: bool
@@ -168,8 +171,19 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
 
     | _ -> None
 
-let tryStrengthReduce (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
+let private isInt64Atom (typeEnv: TypeEnv) (atom: Atom) : bool =
+    match atom with
+    | IntLiteral (Int64 _) -> true
+    | Var tid ->
+        match Map.tryFind tid typeEnv with
+        | Some AST.TInt64 -> true
+        | _ -> false
+    | _ -> false
+
+let tryStrengthReduce (typeEnv: TypeEnv) (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     match op, left, right with
+    | Add, Var leftTid, Var rightTid when leftTid = rightTid && isInt64Atom typeEnv left ->
+        Some (Prim (Shl, left, IntLiteral (Int64 1L)))
     | Mul, x, IntLiteral (Int64 n) ->
         match tryLog2 n with
         | Some shift -> Some (Prim (Shl, x, IntLiteral (Int64 shift)))
@@ -428,7 +442,7 @@ let substCExpr (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | RuntimeError message -> RuntimeError message
 
 /// Optimize a CExpr with constant folding
-let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (cexpr: CExpr) : CExpr * bool =
+let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) (cexpr: CExpr) : CExpr * bool =
     // First, substitute known constants
     let cexpr' = substCExpr env cexpr
 
@@ -453,7 +467,7 @@ let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (cexpr: CExpr) : CE
         if options.EnableStrengthReduction then
             match cexpr' with
             | Prim (op, left, right) ->
-                match tryStrengthReduce op left right with
+                match tryStrengthReduce typeEnv op left right with
                 | Some reduced -> (reduced, true)
                 | None -> (cexpr', cexpr' <> cexpr)
             | _ -> (cexpr', cexpr' <> cexpr)
@@ -492,6 +506,7 @@ let rec private optimizeAExprWithUses
     (context: OptimizeContext)
     (options: OptimizeOptions)
     (env: ConstEnv)
+    (typeEnv: TypeEnv)
     (cseEnv: CSEnv)
     (aexpr: AExpr)
     : OptimizeAExprResult =
@@ -506,7 +521,7 @@ let rec private optimizeAExprWithUses
 
     | Let (tid, cexpr, body) ->
         // Optimize the CExpr
-        let (cexpr', cexprChanged) = optimizeCExpr options env cexpr
+        let (cexpr', cexprChanged) = optimizeCExpr options env typeEnv cexpr
         let (cexpr'', cseChanged, cseEnv') =
             if options.EnableCSE && isCSEEligible cexpr' then
                 match Map.tryFind cexpr' cseEnv with
@@ -529,7 +544,7 @@ let rec private optimizeAExprWithUses
                 (env, false)
 
         // Optimize the body
-        let bodyResult = optimizeAExprWithUses context options env' cseEnv' body
+        let bodyResult = optimizeAExprWithUses context options env' typeEnv cseEnv' body
 
         // Dead code elimination: if tid is not used in body and cexpr has no side effects
         let usesInBody = bodyResult.Uses
@@ -538,7 +553,7 @@ let rec private optimizeAExprWithUses
 
         match trySimplifyDoubleUnary tid cexpr'' bodyResult.Expr with
         | Some replacement when options.EnableConstFolding ->
-            let replacementResult = optimizeAExprWithUses context options env cseEnv replacement
+            let replacementResult = optimizeAExprWithUses context options env typeEnv cseEnv replacement
             { replacementResult with Changed = true }
         | _ when skipBinding ->
             // Copy propagation: skip this binding entirely
@@ -569,22 +584,22 @@ let rec private optimizeAExprWithUses
         // Fold constant conditions
         match cond' with
         | BoolLiteral true when options.EnableConstFolding ->
-            let thenResult = optimizeAExprWithUses context options env cseEnv thenBranch
+            let thenResult = optimizeAExprWithUses context options env typeEnv cseEnv thenBranch
             {
                 Expr = thenResult.Expr
                 Changed = true
                 Uses = thenResult.Uses
             }
         | BoolLiteral false when options.EnableConstFolding ->
-            let elseResult = optimizeAExprWithUses context options env cseEnv elseBranch
+            let elseResult = optimizeAExprWithUses context options env typeEnv cseEnv elseBranch
             {
                 Expr = elseResult.Expr
                 Changed = true
                 Uses = elseResult.Uses
             }
         | _ ->
-            let thenResult = optimizeAExprWithUses context options env cseEnv thenBranch
-            let elseResult = optimizeAExprWithUses context options env cseEnv elseBranch
+            let thenResult = optimizeAExprWithUses context options env typeEnv cseEnv thenBranch
+            let elseResult = optimizeAExprWithUses context options env typeEnv cseEnv elseBranch
             let uses = Set.unionMany [collectAtomUses cond'; thenResult.Uses; elseResult.Uses]
             {
                 Expr = If (cond', thenResult.Expr, elseResult.Expr)
@@ -593,15 +608,19 @@ let rec private optimizeAExprWithUses
             }
 
 /// Optimize an AExpr
-let optimizeAExpr (context: OptimizeContext) (options: OptimizeOptions) (env: ConstEnv) (aexpr: AExpr) : AExpr * bool =
-    let result = optimizeAExprWithUses context options env Map.empty aexpr
+let optimizeAExpr (context: OptimizeContext) (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) (aexpr: AExpr) : AExpr * bool =
+    let result = optimizeAExprWithUses context options env typeEnv Map.empty aexpr
     (result.Expr, result.Changed)
 
 /// Optimize a function
 let optimizeFunction (context: OptimizeContext) (options: OptimizeOptions) (func: Function) : Function * bool =
     // Initialize env with function parameters (they're not constants)
     let env = Map.empty
-    let (body', changed) = optimizeAExpr context options env func.Body
+    let typeEnv =
+        func.TypedParams
+        |> List.map (fun param -> (param.Id, param.Type))
+        |> Map.ofList
+    let (body', changed) = optimizeAExpr context options env typeEnv func.Body
     ({ func with Body = body' }, changed)
 
 /// Optimize until fixed point

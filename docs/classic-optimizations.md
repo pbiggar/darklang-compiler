@@ -162,6 +162,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 
 ## Strength reduction
 
+### Integer self-addition strength reduction
+
+- Optimization name: Integer self-addition strength reduction
+- Taxonomy category: Strength reduction
+- Priority/rationale: Small, low-risk canonical integer simplification that reuses existing shift lowering for doubling an Int64 SSA value.
+- Notes: Implemented for `x + x -> x << 1` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `strength_reduce_add_self` in `src/Tests/optimization/anf.opt`; existing integer-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
+
 ### Float multiplication by two strength reduction
 
 - Optimization name: Float multiplication by two strength reduction

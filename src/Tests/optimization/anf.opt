@@ -142,6 +142,15 @@ let x = 42 in 0 + x
 return 42
 
 ---NAME---
+strength_reduce_add_self
+---INPUT---
+def f(x: Int64) : Int64 = x + x
+---EXPECTED---
+Function f:
+let TempId 1 = t0 << 1
+return t1
+
+---NAME---
 identity_sub_zero
 ---INPUT---
 let x = 42 in x - 0
