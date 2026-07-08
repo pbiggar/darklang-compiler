@@ -3,6 +3,7 @@
 # Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--refresh-baseline[=lang1,lang2]] [--jobs[=N]] [benchmark_name|all]
 #
 # Options:
+#   --help                   Show this help message and exit
 #   --hyperfine              Use hyperfine for timing (default: cachegrind for instruction counts)
 #   --refresh-baseline       Re-run all baseline languages (default: use cached values)
 #   --refresh-baseline=LANGS Re-run specific languages only (comma-separated: rust,go,python,node,ocaml)
@@ -12,6 +13,13 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/infrastructure/pretty.sh"
+
+show_help() {
+    sed -n '/^# Usage:/,/^$/ {
+        s/^# \{0,1\}//
+        p
+    }' "$0"
+}
 
 # Parse options
 USE_CACHEGRIND=true
@@ -26,6 +34,10 @@ SKIP_BENCHMARKS=("quicksort")
 
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --help|-h)
+            show_help
+            exit 0
+            ;;
         --hyperfine)
             USE_CACHEGRIND=false
             shift

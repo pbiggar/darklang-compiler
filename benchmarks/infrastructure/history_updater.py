@@ -170,23 +170,21 @@ def update_results_file(benchmarks_dir: Path, json_results: dict, baselines: dic
 
     # Merge with existing results from file
     for benchmark, langs in load_results_file(benchmarks_dir).items():
-        if benchmark not in existing:
-            existing[benchmark] = {}
-        existing[benchmark].update(langs)
+        if benchmark in existing:
+            existing[benchmark].update(langs)
 
     # Merge with new results (skip reduced-size Dark benchmarks)
     for benchmark, benchmark_results in json_results.items():
-        if benchmark not in existing:
-            existing[benchmark] = {}
-        for r in benchmark_results:
-            lang = r.get("language", "").lower()
-            instrs = r.get("instructions", 0)
-            if instrs > 0:
-                # Skip Dark results for reduced-size benchmarks
-                if lang == "dark" and is_reduced_size_benchmark(benchmarks_dir, benchmark):
-                    print(f"  Skipping {benchmark} Dark results (reduced-size benchmark)")
-                    continue
-                existing[benchmark][lang] = instrs
+        if benchmark in existing:
+            for r in benchmark_results:
+                lang = r.get("language", "").lower()
+                instrs = r.get("instructions", 0)
+                if instrs > 0:
+                    # Skip Dark results for reduced-size benchmarks
+                    if lang == "dark" and is_reduced_size_benchmark(benchmarks_dir, benchmark):
+                        print(f"  Skipping {benchmark} Dark results (reduced-size benchmark)")
+                        continue
+                    existing[benchmark][lang] = instrs
 
     # Merge with baselines
     for benchmark, baseline_list in baselines.items():

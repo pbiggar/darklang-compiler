@@ -2,12 +2,11 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-08 16:38:15
-**Commit:** `528d77cd` - Enable full-size matmul benchmark
+**Last Updated:** 2026-07-08 18:19:01
+**Commit:** `021a96b5` - Handle benchmark runner help option
 
 | Benchmark     |           Dark (6.69x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|
-| --help        |                      - |             - |                     - |                      - |                     - |
 | ackermann     | 11,450,298,027 (2.29x) | 5,009,839,130 | 8,946,136,766 (1.79x) |                      - | 3,094,160,411 (0.62x) |
 | binary_trees  |    154,007,725 (0.08x) | 1,842,791,955 |    82,339,690 (0.04x) | 24,066,589,690 (13.1x) |   699,817,640 (0.38x) |
 | collatz       |     81,441,905 (1.06x) |    76,732,899 |   259,001,363 (3.38x) |   8,739,724,145 (114x) |   424,626,770 (5.53x) |
