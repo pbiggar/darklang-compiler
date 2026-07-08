@@ -22,7 +22,7 @@ Bool                         | xor                                 | ✅   | ✅
 Bytes                        | create                              | ❌   | ✅
 Bytes                        | fromList                            | ❌   | ✅
 Bytes                        | get                                 | ❌   | ✅
-Bytes                        | hexEncode                           | ✅   | ❌
+Bytes                        | hexEncode                           | ✅   | ✅
 Bytes                        | length                              | ❌   | ✅
 Bytes                        | set                                 | ❌   | ✅
 Bytes                        | toList                              | ❌   | ✅

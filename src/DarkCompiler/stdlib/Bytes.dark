@@ -113,4 +113,24 @@ def Stdlib.Bytes.__toListHelper(b: Bytes, index: Int64, acc: List<Int64>) : List
         let byte = Stdlib.Bytes.get(b, index) in
         Stdlib.Bytes.__toListHelper(b, index - 1, [byte, ...acc])
 
+// Convert nibble (0-15) to uppercase hex digit.
+def Stdlib.Bytes.__hexDigit(n: Int64) : String =
+    Stdlib.String.slice("0123456789ABCDEF", n, n + 1)
+
+def Stdlib.Bytes.__byteToHex(b: Int64) : String =
+    let hi = b / 16 in
+    let lo = b % 16 in
+    Stdlib.Bytes.__hexDigit(hi) ++ Stdlib.Bytes.__hexDigit(lo)
+
+def Stdlib.Bytes.__hexEncodeHelper(b: Bytes, index: Int64, len: Int64, acc: String) : String =
+    if index >= len then
+        acc
+    else
+        let byte = Stdlib.Bytes.get(b, index) in
+        Stdlib.Bytes.__hexEncodeHelper(b, index + 1, len, acc ++ Stdlib.Bytes.__byteToHex(byte))
+
+// Convert bytes to an uppercase hexadecimal string.
+def Stdlib.Bytes.hexEncode(b: Bytes) : String =
+    Stdlib.Bytes.__hexEncodeHelper(b, 0, Stdlib.Bytes.length(b), "")
+
 // =============================================================================
