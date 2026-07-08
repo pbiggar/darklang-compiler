@@ -258,7 +258,7 @@ Until one of those exists, this item should remain a benchmark-specific observat
 
 ### 3. Reduce loop-carried floating-point copy pressure
 
-Status: partly improved, still worth a narrow cleanup.
+Status: partly improved; only the loop-carried phi/copy shape remains active.
 
 The current LIR contains:
 
@@ -276,6 +276,8 @@ fmov d1, d0
 ```
 
 The remaining `fmov` is a loop-carried accumulator copy introduced by the current phi/register assignment shape. It is a smaller issue than the literal-pool load because it is one register-register instruction rather than three address/load instructions, and it may be hard to remove without changing the loop's accumulator allocation. Still, a phi-aware register allocation or post-allocation copy coalescing pass could keep the accumulator in one physical register across the loop.
+
+A rejected adjacent post-register-allocation move cleanup experiment removed local overwrite/self-move patterns in a helper but did not change emitted `pisum` instruction counts. Future work here should target the loop-carried accumulator copy directly, not generic adjacent-move cleanup.
 
 ### 4. Consider inlining `innerSum` into `pisum` only after hot-loop work
 

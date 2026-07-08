@@ -2,6 +2,18 @@
 
 This file records benchmark optimization candidates that were investigated and removed from active investigation notes because measured evidence did not justify keeping the implementation.
 
+## 2026-07-08: pisum adjacent post-RA move cleanup
+
+- Source candidate: `docs/investigations/benchmark-pisum-optimization.md`, "Eliminate Redundant Register Moves (Post-RA Cleanup)"
+- Target benchmark: `pisum`
+- Attempt: added post-register-allocation LIR cleanup for adjacent overwritten integer moves, adjacent overwritten float moves, and floating-point self-moves, then wired register allocation to use the broader cleanup.
+- Correctness evidence: a focused `LIRPeepholeTests` case failed before the helper existed and passed after implementation; full `./run-tests --ai` passed.
+- IR evidence: `./dark --dump-lir benchmarks/problems/pisum/dark/main.dark` still showed useful `D0 <- FMov(D1)` traffic but no longer exposed the removed adjacent-overwrite pattern in the focused helper.
+- Runtime evidence: `./benchmarks/run_benchmarks.sh all` completed with no failures, but `pisum` remained at `65,014,671` Dark instructions and the full benchmark table stayed at performance ratio `5.55x`.
+- Compile-time evidence: `TIMEFORMAT='compile wall: %3R s'; time ./dark benchmarks/problems/pisum/dark/main.dark -o /tmp/pisum-post-ra-cleanup -q` reported `4.731 s`; no before/after compile-time benefit was established.
+- Reason rejected: the implementation improved a local LIR cleanup helper but did not change emitted instruction counts for the target benchmark, so the measured benefit did not justify keeping code.
+- Outcome: implementation and focused test were reverted; the active source investigation entry was narrowed to the remaining phi-copy coalescing opportunity.
+
 ## 2026-07-05: ackermann early raw-MIR unreachable block pruning
 
 - Source candidate: `docs/investigations/benchmark-ackermann-optimization.md`, "Remove Unreachable MIR Blocks Before LIR"
