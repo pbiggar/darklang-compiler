@@ -137,6 +137,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical float simplification that reuses existing `FloatNeg` lowering instead of materializing multiplication or division by literal negative one.
 - Notes: Implemented for `x * -1.0 -> FloatNeg(x)`, `-1.0 * x -> FloatNeg(x)`, and `x / -1.0 -> FloatNeg(x)` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `strength_reduce_float_mul_neg_one_right`, `strength_reduce_float_mul_neg_one_left`, and `strength_reduce_float_div_neg_one` in `src/Tests/optimization/anf.opt`; existing float-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
 
+### Float division by negative power-of-two strength reduction
+
+- Optimization name: Float division by negative power-of-two strength reduction
+- Taxonomy category: Strength reduction
+- Priority/rationale: Small, low-risk extension of the existing exact power-of-two float division lowering that removes division instructions for negative power-of-two divisors.
+- Notes: Implemented for `x / -2.0` through `x / -256.0` by multiplying by exact negative reciprocal literals in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `strength_reduce_float_div_negative_2` in `src/Tests/optimization/anf.opt`; existing float-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
+
 ### Division by negative one strength reduction
 
 - Optimization name: Division by negative one strength reduction

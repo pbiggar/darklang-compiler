@@ -190,13 +190,21 @@ let tryStrengthReduce (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     // Float division by power of 2 -> multiplication by reciprocal
     // These reciprocals are exactly representable in IEEE 754
     | Div, x, FloatLiteral 2.0 -> Some (Prim (Mul, x, FloatLiteral 0.5))
+    | Div, x, FloatLiteral -2.0 -> Some (Prim (Mul, x, FloatLiteral -0.5))
     | Div, x, FloatLiteral 4.0 -> Some (Prim (Mul, x, FloatLiteral 0.25))
+    | Div, x, FloatLiteral -4.0 -> Some (Prim (Mul, x, FloatLiteral -0.25))
     | Div, x, FloatLiteral 8.0 -> Some (Prim (Mul, x, FloatLiteral 0.125))
+    | Div, x, FloatLiteral -8.0 -> Some (Prim (Mul, x, FloatLiteral -0.125))
     | Div, x, FloatLiteral 16.0 -> Some (Prim (Mul, x, FloatLiteral 0.0625))
+    | Div, x, FloatLiteral -16.0 -> Some (Prim (Mul, x, FloatLiteral -0.0625))
     | Div, x, FloatLiteral 32.0 -> Some (Prim (Mul, x, FloatLiteral 0.03125))
+    | Div, x, FloatLiteral -32.0 -> Some (Prim (Mul, x, FloatLiteral -0.03125))
     | Div, x, FloatLiteral 64.0 -> Some (Prim (Mul, x, FloatLiteral 0.015625))
+    | Div, x, FloatLiteral -64.0 -> Some (Prim (Mul, x, FloatLiteral -0.015625))
     | Div, x, FloatLiteral 128.0 -> Some (Prim (Mul, x, FloatLiteral 0.0078125))
+    | Div, x, FloatLiteral -128.0 -> Some (Prim (Mul, x, FloatLiteral -0.0078125))
     | Div, x, FloatLiteral 256.0 -> Some (Prim (Mul, x, FloatLiteral 0.00390625))
+    | Div, x, FloatLiteral -256.0 -> Some (Prim (Mul, x, FloatLiteral -0.00390625))
     | _ -> None
 
 /// Fold a unary operation on constants

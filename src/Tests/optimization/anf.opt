@@ -803,6 +803,20 @@ let TempId 2 = f(10)
 return t2
 
 ---NAME---
+strength_reduce_float_div_negative_2
+---INPUT---
+def f(x: Float) : Float = x / -2.0
+f(10.0)
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * -0.5
+return t1
+
+Main:
+let TempId 2 = f(10)
+return t2
+
+---NAME---
 strength_reduce_float_div_4
 ---INPUT---
 def f(x: Float) : Float = x / 4.0
