@@ -5,6 +5,7 @@
 module PassTestRunnerTests
 
 open MIR
+open TestDSL.ANFParser
 open TestDSL.MIRParser
 open TestDSL.LIRParser
 open TestDSL.PassTestRunner
@@ -75,6 +76,12 @@ let testMIRParserRejectsOutOfRangeVirtualRegister () : TestResult =
     | Error msg when msg.Contains("Invalid register format") -> Ok ()
     | Error msg -> Error $"Expected invalid register format error, got: {msg}"
     | Ok reg -> Error $"Expected parseVReg to reject out-of-range register, got: {reg}"
+
+let testANFParserRejectsOutOfRangeTempId () : TestResult =
+    match parseTempId "t999999999999999999999999999999999999999" with
+    | Error msg when msg.Contains("Invalid temp id") -> Ok ()
+    | Error msg -> Error $"Expected invalid temp id error, got: {msg}"
+    | Ok tempId -> Error $"Expected parseTempId to reject out-of-range temp id, got: {tempId}"
 
 let testLIRParserRejectsOutOfRangeNumericFields () : TestResult =
     let cases =
@@ -157,6 +164,7 @@ let tests = [
     ("pretty print MIR CFG", testPrettyPrintMirCfg)
     ("parse LIR rejects non-final terminator", testParseLIRRejectsNonFinalTerminator)
     ("MIR parser rejects out-of-range virtual register", testMIRParserRejectsOutOfRangeVirtualRegister)
+    ("ANF parser rejects out-of-range temp id", testANFParserRejectsOutOfRangeTempId)
     ("LIR parser rejects out-of-range numeric fields", testLIRParserRejectsOutOfRangeNumericFields)
     ("ARM64 parsers reject out-of-range numeric fields", testARM64ParserRejectsOutOfRangeNumericFields)
     ("ARM64 parsers accept all general-purpose registers", testARM64ParsersAcceptAllGeneralPurposeRegisters)

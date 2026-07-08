@@ -16,11 +16,14 @@ open TestDSL.Common
 
 /// Parse temp ID from text like "t0", "t1", etc.
 let parseTempId (text: string) : Result<TempId, string> =
-    let m = Regex.Match(text.Trim(), @"^t(\d+)$")
+    let trimmed = text.Trim()
+    let m = Regex.Match(trimmed, @"^t(\d+)$")
     if m.Success then
-        Ok (TempId (int m.Groups.[1].Value))
+        match Int32.TryParse(m.Groups.[1].Value) with
+        | true, id -> Ok (TempId id)
+        | false, _ -> Error $"Invalid temp id '{trimmed}' (expected 't0', 't1', etc.)"
     else
-        Error $"Invalid temp id '{text}' (expected 't0', 't1', etc.)"
+        Error $"Invalid temp id '{trimmed}' (expected 't0', 't1', etc.)"
 
 /// Parse atom (number or temp variable)
 let parseAtom (text: string) : Result<Atom, string> =
