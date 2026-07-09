@@ -178,6 +178,7 @@ type Instr =
     | FSQRT of dest:FReg * src:FReg
     | FCMP of src1:FReg * src2:FReg
     | FMOV_reg of dest:FReg * src:FReg
+    | FMOV_imm of dest:FReg * value:float
     | FMOV_to_gp of dest:Reg * src:FReg
     | FMOV_from_gp of dest:FReg * src:Reg
     | SCVTF of dest:FReg * src:Reg
@@ -275,6 +276,7 @@ let ofARM64 (instr: ARM64.Instr) : Instr =
     | ARM64.FSQRT (dest, src) -> FSQRT (dest, src)
     | ARM64.FCMP (src1, src2) -> FCMP (src1, src2)
     | ARM64.FMOV_reg (dest, src) -> FMOV_reg (dest, src)
+    | ARM64.FMOV_imm (dest, value) -> FMOV_imm (dest, value)
     | ARM64.FMOV_to_gp (dest, src) -> FMOV_to_gp (dest, src)
     | ARM64.FMOV_from_gp (dest, src) -> FMOV_from_gp (dest, src)
     | ARM64.SCVTF (dest, src) -> SCVTF (dest, src)

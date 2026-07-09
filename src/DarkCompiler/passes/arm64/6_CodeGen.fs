@@ -4227,15 +4227,17 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
             |> Result.map (fun srcReg -> [ARM64Symbolic.FMOV_reg (destReg, srcReg)]))
 
     | LIR.FLoad (dest, value) ->
-        // Load float from literal pool into FP register
         lirFRegToARM64FReg dest
         |> Result.map (fun destReg ->
-            let labelRef = floatDataLabel value
-            [
-                ARM64Symbolic.ADRP (ARM64Symbolic.X9, labelRef)           // Load page address of float
-                ARM64Symbolic.ADD_label (ARM64Symbolic.X9, ARM64Symbolic.X9, labelRef)  // Add page offset
-                ARM64Symbolic.LDR_fp (destReg, ARM64Symbolic.X9, 0s)        // Load float from [X9]
-            ])
+            if value = 1.0 then
+                [ARM64Symbolic.FMOV_imm (destReg, value)]
+            else
+                let labelRef = floatDataLabel value
+                [
+                    ARM64Symbolic.ADRP (ARM64Symbolic.X9, labelRef)           // Load page address of float
+                    ARM64Symbolic.ADD_label (ARM64Symbolic.X9, ARM64Symbolic.X9, labelRef)  // Add page offset
+                    ARM64Symbolic.LDR_fp (destReg, ARM64Symbolic.X9, 0s)        // Load float from [X9]
+                ])
 
     | LIR.FAdd (dest, left, right) ->
         lirFRegToARM64FReg dest

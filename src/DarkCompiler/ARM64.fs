@@ -136,6 +136,7 @@ type Instr =
     | FSQRT of dest:FReg * src:FReg                  // FP square root: dest = sqrt(src)
     | FCMP of src1:FReg * src2:FReg                  // FP compare (sets condition flags)
     | FMOV_reg of dest:FReg * src:FReg               // FP move between registers
+    | FMOV_imm of dest:FReg * value:float            // FP immediate materialization
     | FMOV_to_gp of dest:Reg * src:FReg              // FP to GP register (bit-for-bit)
     | FMOV_from_gp of dest:FReg * src:Reg            // GP to FP register (bit-for-bit)
     | SCVTF of dest:FReg * src:Reg                   // Signed int to FP: dest = (double)src

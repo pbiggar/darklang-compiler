@@ -858,6 +858,13 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let rd = encodeFReg dest
         [fixedBits ||| rm ||| opcode ||| rn ||| rd]
 
+    | ARM64.FMOV_imm (dest, value) ->
+        if value <> 1.0 then
+            Crash.crash $"FMOV immediate only supports 1.0, got {value}"
+        else
+            // FMOV (scalar immediate, double) for #1.0: 0x1E6E1000 plus Rd.
+            [0x1E6E1000u ||| encodeFReg dest]
+
     | ARM64.FMOV_to_gp (dest, src) ->
         // FMOV (scalar to GP, double): 1001 1110 01 1 00110 000000 Vn Rd
         // sf=1, ftype=01 (double), rmode=00, opcode=110
@@ -1128,6 +1135,7 @@ let private resolveSymbolicInstr
     | ARM64Symbolic.FSQRT (dest, src) -> ARM64.FSQRT (dest, src)
     | ARM64Symbolic.FCMP (src1, src2) -> ARM64.FCMP (src1, src2)
     | ARM64Symbolic.FMOV_reg (dest, src) -> ARM64.FMOV_reg (dest, src)
+    | ARM64Symbolic.FMOV_imm (dest, value) -> ARM64.FMOV_imm (dest, value)
     | ARM64Symbolic.FMOV_to_gp (dest, src) -> ARM64.FMOV_to_gp (dest, src)
     | ARM64Symbolic.FMOV_from_gp (dest, src) -> ARM64.FMOV_from_gp (dest, src)
     | ARM64Symbolic.SCVTF (dest, src) -> ARM64.SCVTF (dest, src)

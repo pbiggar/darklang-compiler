@@ -324,6 +324,8 @@ let prettyPrintARM64Instr = function
         $"FCMP({src1}, {src2})"
     | ARM64Symbolic.FMOV_reg (dest, src) ->
         $"FMOV_reg({dest}, {src})"
+    | ARM64Symbolic.FMOV_imm (dest, value) ->
+        $"FMOV_imm({dest}, {value})"
     | ARM64Symbolic.FMOV_to_gp (dest, src) ->
         $"FMOV_to_gp({prettyPrintARM64Reg dest}, {src})"
     | ARM64Symbolic.FMOV_from_gp (dest, src) ->

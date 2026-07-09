@@ -157,6 +157,7 @@ let private resolveInstr
     | ARM64Symbolic.FSQRT (dest, src) -> (ARM64.FSQRT (dest, src), state)
     | ARM64Symbolic.FCMP (src1, src2) -> (ARM64.FCMP (src1, src2), state)
     | ARM64Symbolic.FMOV_reg (dest, src) -> (ARM64.FMOV_reg (dest, src), state)
+    | ARM64Symbolic.FMOV_imm (dest, value) -> (ARM64.FMOV_imm (dest, value), state)
     | ARM64Symbolic.FMOV_to_gp (dest, src) -> (ARM64.FMOV_to_gp (dest, src), state)
     | ARM64Symbolic.FMOV_from_gp (dest, src) -> (ARM64.FMOV_from_gp (dest, src), state)
     | ARM64Symbolic.SCVTF (dest, src) -> (ARM64.SCVTF (dest, src), state)

@@ -129,6 +129,42 @@ let testGeneratedCodeEliminatesSelfMoves () : TestResult =
         else
             Ok ()
 
+let testArm64FLoadOneUsesImmediate () : TestResult =
+    let program =
+        makeSimpleProgramWithVariants
+            [
+                LIR.FLoad (LIR.FPhysical LIR.D2, 1.0)
+            ]
+            Map.empty
+
+    match CodeGen.generateARM64 program with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let hasImmediate =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.FMOV_imm (ARM64.D2, 1.0) ->
+                    true
+                | _ ->
+                    false)
+        let hasLiteralLoad =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.ADRP (_, ARM64Symbolic.DataLabel (ARM64Symbolic.FloatLiteral 1.0))
+                | ARM64Symbolic.ADD_label (_, _, ARM64Symbolic.DataLabel (ARM64Symbolic.FloatLiteral 1.0))
+                | ARM64Symbolic.LDR_fp (ARM64.D2, ARM64.X9, 0s) ->
+                    true
+                | _ ->
+                    false)
+
+        if not hasImmediate then
+            Error "FLoad 1.0 did not emit a floating-point immediate"
+        elif hasLiteralLoad then
+            Error "FLoad 1.0 used a literal-pool load instead of an immediate"
+        else
+            Ok ()
+
 let testRawSlotInitPureEnumDoesNotEmitGenericRetain () : TestResult =
     let enumType = AST.TSum ("RawSlotInitPureEnum", [AST.TString])
     let variants : LIR.VariantRegistry =
@@ -1113,6 +1149,7 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
 
 let tests : (string * (unit -> TestResult)) list = [
     ("Generated ARM64 code eliminates self-moves", testGeneratedCodeEliminatesSelfMoves)
+    ("ARM64 FLoad 1.0 uses immediate", testArm64FLoadOneUsesImmediate)
     ("RawSlotInit pure enum skips generic retain", testRawSlotInitPureEnumDoesNotEmitGenericRetain)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
     ("List tuple3 string/list/dict-list uses typed dict helper", testListTuple3StringListDictListValueUsesTypedDictHelper)

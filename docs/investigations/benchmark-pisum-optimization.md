@@ -9,13 +9,12 @@ Current benchmark evidence shows Dark is slower than Rust but faster than OCaml 
 | Runtime | Instruction count | Relative to Rust |
 | --- | ---: | ---: |
 | Rust | 45,257,632 | 1.00x |
-| Dark | 65,014,671 | 1.44x |
+| Dark | 55,014,671 | 1.22x |
 | OCaml | 80,422,857 | 1.78x |
 
 The current gap is concentrated in `innerSum`. Dark does compile the recursive loop as a local branch loop after tail-call detection, so the main remaining evidence is not ordinary recursive call overhead. The current hot-loop differences are:
 
 - Dark converts `k` to float before squaring, while Rust and OCaml square as integers and convert the integer product.
-- Dark materializes the `1.0` divisor from the literal pool every inner-loop iteration.
 - Dark still emits small no-op or copy-through floating-point moves around phi/tail-call value passing, though this is no longer the primary cost.
 - The outer `pisum` loop still calls `innerSum` once per round instead of inlining or fusing the two loops, but that is 500 calls and should be secondary to the 5,000,000 inner iterations.
 
@@ -145,19 +144,15 @@ The emitted AArch64 loop for `innerSum` is:
 1dc: scvtf   d0, x1
 1e0: add     x1, x1, #0x1
 1e4: fmul    d0, d0, d0
-1e8: adrp    x9, 0x0
-1ec: add     x9, x9, #0x2b0
-1f0: ldr     d2, [x9]
-1f4: fdiv    d0, d2, d0
-1f8: fadd    d0, d1, d0
-1fc: fmov    d1, d0
-200: b       0x20c
-20c: cmp     x1, x2
-210: b.gt    0x204
-214: b       0x1dc
+1e8: fmov    d2, #1.0
+1ec: fdiv    d0, d2, d0
+1f0: fadd    d0, d1, d0
+1f4: fmov    d1, d0
+1f8: b       0x204
+204: cmp     x1, x2
+208: b.gt    0x1fc
+20c: b       0x1dc
 ```
-
-The literal-pool load costs three instructions in the hot loop (`adrp`, `add`, `ldr`). Since the divisor is always `1.0`, this should be either an immediate `fmov` or a value initialized before the loop and kept in a floating-point register.
 
 The emitted loop does not include the LIR no-op `D0 <- FMov(D0)`, so post-register-allocation cleanup has already improved compared with what the raw LIR listing suggests. The emitted `fmov d1, d0` remains because the loop keeps the accumulator in `d1` at the compare block and computes the next value in `d0`.
 
@@ -207,35 +202,7 @@ Rust could not be rebuilt in this sandbox because `cargo` was not installed, so 
 
 ## Optimization Opportunities
 
-### 1. Avoid literal-pool loading of `1.0` in the hot loop
-
-Status: open.
-
-The strongest current compiler-generated inefficiency is the per-iteration literal-pool load:
-
-```text
-D2 <- FLoad(float[1])
-D0 <- FDiv(D2, D0)
-```
-
-In assembly this becomes:
-
-```asm
-adrp x9, 0x0
-add  x9, x9, #0x2b0
-ldr  d2, [x9]
-fdiv d0, d2, d0
-```
-
-Possible implementation routes:
-
-- Teach AArch64 codegen to materialize common encodable floating constants such as `1.0` with `fmov` when legal.
-- Add loop-invariant code motion for constant loads so `FLoad(float[1])` is hoisted out of `innerSum_L1`.
-- Add a narrower preheader placement optimization for function-local floating constants used in loops.
-
-The `fmov #1.0` route is narrower than full LICM and would also match OCaml's emitted shape for this case. LICM is broader but must account for register pressure and loop preheader construction.
-
-### 2. Square as integer before converting to float when semantics permit it
+### 1. Square as integer before converting to float when semantics permit it
 
 Status: open, guarded by overflow semantics.
 
@@ -256,7 +223,7 @@ This should not be implemented as a blanket algebraic rewrite. In general, `floa
 
 Until one of those exists, this item should remain a benchmark-specific observation and not a general compiler transform.
 
-### 3. Reduce loop-carried floating-point copy pressure
+### 2. Reduce loop-carried floating-point copy pressure
 
 Status: partly improved; only the loop-carried phi/copy shape remains active.
 
@@ -275,24 +242,23 @@ fadd d0, d1, d0
 fmov d1, d0
 ```
 
-The remaining `fmov` is a loop-carried accumulator copy introduced by the current phi/register assignment shape. It is a smaller issue than the literal-pool load because it is one register-register instruction rather than three address/load instructions, and it may be hard to remove without changing the loop's accumulator allocation. Still, a phi-aware register allocation or post-allocation copy coalescing pass could keep the accumulator in one physical register across the loop.
+The remaining `fmov` is a loop-carried accumulator copy introduced by the current phi/register assignment shape. It may be hard to remove without changing the loop's accumulator allocation. Still, a phi-aware register allocation or post-allocation copy coalescing pass could keep the accumulator in one physical register across the loop.
 
 A rejected adjacent post-register-allocation move cleanup experiment removed local overwrite/self-move patterns in a helper but did not change emitted `pisum` instruction counts. Future work here should target the loop-carried accumulator copy directly, not generic adjacent-move cleanup.
 
-### 4. Consider inlining `innerSum` into `pisum` only after hot-loop work
+### 3. Consider inlining `innerSum` into `pisum` only after hot-loop work
 
 Status: open but lower priority.
 
 `pisum` calls `innerSum` 500 times, and the call-site has ordinary call and float move overhead. Inlining could expose the two nested loops in one function, reduce entry/exit moves, and potentially make constant placement easier.
 
-This is probably not the first optimization to implement for pisum because the inner loop runs about 10,000 times per outer round. Removing one to three instructions from the inner loop should matter more than reducing 500 calls. Inlining becomes more interesting after the inner-loop constant load and arithmetic shape have been addressed.
+This is probably not the first optimization to implement for pisum because the inner loop runs about 10,000 times per outer round. Removing an instruction from the inner loop should matter more than reducing 500 calls. Inlining becomes more interesting after the inner-loop arithmetic shape has been addressed.
 
 ## Current Priority
 
-1. Replace or hoist the hot-loop `FLoad(float[1])`.
-2. Decide whether pisum should be source-shaped as integer square before float conversion, or add compiler analysis strong enough to prove that rewrite sound.
-3. Coalesce the remaining loop-carried floating accumulator move if a local register-allocation cleanup can do it without broader churn.
-4. Revisit `innerSum` inlining after the hot-loop issues are smaller.
+1. Decide whether pisum should be source-shaped as integer square before float conversion, or add compiler analysis strong enough to prove that rewrite sound.
+2. Coalesce the remaining loop-carried floating accumulator move if a local register-allocation cleanup can do it without broader churn.
+3. Revisit `innerSum` inlining after the hot-loop issues are smaller.
 
 ## Evidence Commands
 

@@ -116,6 +116,7 @@ let formatMismatches (mismatches: (int * Instr * uint32 * uint32) list) : string
                     | FABS (dest, src) -> $"FABS({dest}, {src})"
                     | FCMP (src1, src2) -> $"FCMP({src1}, {src2})"
                     | FMOV_reg (dest, src) -> $"FMOV_reg({dest}, {src})"
+                    | FMOV_imm (dest, value) -> $"FMOV_imm({dest}, {value})"
                     | FMOV_to_gp (dest, src) -> $"FMOV_to_gp({dest}, {src})"
                     | FMOV_from_gp (dest, src) -> $"FMOV_from_gp({dest}, {src})"
                     | FSQRT (dest, src) -> $"FSQRT({dest}, {src})"

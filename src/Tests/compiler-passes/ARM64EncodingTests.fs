@@ -114,11 +114,21 @@ let testUnsignedMemoryOffsetsRejectInvalidValues () : TestResult =
 
     checkCases cases
 
+let testFMOVImmediateOneEncoding () : TestResult =
+    match encode (FMOV_imm (D2, 1.0)) with
+    | [word] when word = 0x1E6E1002u ->
+        Ok ()
+    | [word] ->
+        Error $"FMOV_imm D2, 1.0: expected 0x1E6E1002, got 0x{word:X8}"
+    | words ->
+        Error $"FMOV_imm D2, 1.0: expected 1 word, got {List.length words}"
+
 let tests = [
     ("encodeReg", testEncodeReg)
     ("MOVK shift encoding", testMOVKShiftEncoding)
     ("MOVZ+MOVK sequence", testMOVZMOVKSequence)
     ("unsigned memory offsets reject invalid values", testUnsignedMemoryOffsetsRejectInvalidValues)
+    ("FMOV immediate 1.0 encoding", testFMOVImmediateOneEncoding)
 ]
 
 /// Run all encoding unit tests
