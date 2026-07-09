@@ -32,8 +32,9 @@ Run one isolated, reviewable iteration at a time.
 8. Use `Crash.crash` only when a concrete type is genuinely impossible to avoid and the crash documents an impossible compiler state. Do not use it as a replacement default.
 9. Fix downstream propagation, checking, or code generation issues exposed by the regression test without weakening the test or changing it to match current broken behavior.
 10. If the selected candidate cannot be exposed by a small E2E test after investigation, stop and report that dead end as the reviewable iteration. Do not silently select another candidate in the same iteration.
-11. Include documentation updates only when the work produces a durable lesson that future iterations need. Do not add documentation just to satisfy a checklist.
-12. Commit only coherent sandbox work for the selected candidate, plus any durable documentation that belongs with that candidate.
+11. For a dead end or no-change investigation, do not create an empty commit. Report the selected candidate, evidence, and reason there is no reviewable diff; create a commit only when there is an actual code, test, benchmark-result, or durable documentation change.
+12. Include documentation updates only when the work produces a durable lesson that future iterations need. Do not add documentation just to satisfy a checklist.
+13. Commit only coherent sandbox work for the selected candidate, plus any durable documentation that belongs with that candidate.
 
 ## Review Output
 
