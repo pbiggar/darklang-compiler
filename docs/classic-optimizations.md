@@ -97,6 +97,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical float simplification that removes redundant paired float negation operations in ANF before backend lowering.
 - Notes: Implemented for `-(-x) -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `identity_float_double_negation` in `src/Tests/optimization/anf.opt`; existing float-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
 
+### Float abs idempotence simplification
+
+- Optimization name: Float abs idempotence simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical float simplification that removes redundant paired absolute-value operations in ANF before backend lowering.
+- Notes: Implemented for `Float.abs(Float.abs(x)) -> Float.abs(x)` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `identity_float_abs_idempotent` in `src/Tests/optimization/anf.opt`; existing float-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
+
 ### Bitwise all-ones identity simplification
 
 - Optimization name: Bitwise all-ones identity simplification

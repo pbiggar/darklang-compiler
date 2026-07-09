@@ -731,6 +731,15 @@ Function f:
 return t0
 
 ---NAME---
+identity_float_abs_idempotent
+---INPUT---
+def f(x: Float) : Float = Float.abs(Float.abs(x))
+---EXPECTED---
+Function f:
+let TempId 2 = FloatAbs(t0)
+return t2
+
+---NAME---
 identity_bitand_all_ones_right
 ---INPUT---
 def f(x: Int64) : Int64 = x & -1
