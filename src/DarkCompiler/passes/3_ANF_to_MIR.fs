@@ -450,7 +450,8 @@ let buildReturnTypeReg
 
 /// Return type for monomorphized intrinsics not tracked in the return type registry
 let tryGetIntrinsicReturnType (funcName: string) : AST.Type option =
-    if funcName.StartsWith("__raw_get_") then None
+    if funcName.StartsWith("__raw_get_") then
+        Crash.crash $"ANF_to_MIR: monomorphized raw_get return type missing from registry: {funcName}"
     elif funcName.StartsWith("__raw_slot_init_") then Some AST.TUnit
     elif funcName.StartsWith("__hash_") then Some AST.TInt64
     elif funcName.StartsWith("__key_eq_") then Some AST.TBool

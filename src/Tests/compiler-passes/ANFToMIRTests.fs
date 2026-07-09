@@ -7,12 +7,14 @@ module ANFToMIRTests
 type TestResult = Result<unit, string>
 
 let testRawGetIntrinsicReturnTypeDoesNotDefaultToInt64 () : TestResult =
-    match ANF_to_MIR.tryGetIntrinsicReturnType "__raw_get_str" with
-    | None -> Ok ()
-    | Some actual ->
-        Error $"Expected __raw_get_str fallback return type to remain unknown, got {actual}"
+    try
+        let actual = ANF_to_MIR.tryGetIntrinsicReturnType "__raw_get_str"
+        Error $"Expected __raw_get_str fallback return type to crash, got {actual}"
+    with
+    | ex when ex.Message.Contains("monomorphized raw_get return type missing") -> Ok ()
+    | ex -> Error $"Expected raw_get fallback crash, got: {ex.Message}"
 
 let tests : (string * (unit -> TestResult)) list =
     [
-        ("raw_get intrinsic fallback does not default to Int64", testRawGetIntrinsicReturnTypeDoesNotDefaultToInt64)
+        ("raw_get intrinsic fallback crashes instead of defaulting to Int64", testRawGetIntrinsicReturnTypeDoesNotDefaultToInt64)
     ]
