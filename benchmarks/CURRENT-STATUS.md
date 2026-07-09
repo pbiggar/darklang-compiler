@@ -32,6 +32,7 @@ These benchmarks compile and run reliably.
 | merkletrees   | Tree/Hashing   | Recursive tree hashing                  |
 | mandelbrot    | Numerical      | Complex number iteration, fractal       |
 | matmul        | Numerical      | Generated 100x100 matrix multiplication checksum |
+| nsieve        | Numerical      | Sieve of Eratosthenes using Dict-backed composites |
 | pisum         | Numerical      | Floating-point reciprocal-square sum    |
 
 ---
@@ -105,7 +106,6 @@ These benchmarks have implementations but are limited by stack depth or bugs.
 | Benchmark     | Status            | Limitation                                                     |
 | ------------- | ----------------- | -------------------------------------------------------------- |
 | quicksort     | RUNTIME OOM       | Full-size run exceeds current heap/allocation budget (skipped) |
-| nsieve        | Stack overflow    | Uses n=1000 (n=100000 causes stack overflow) - outputs 168     |
 | edigits       | Stack overflow    | Uses 50 digits, 1 iteration (full: 1000 digits, 10 iterations) |
 | nbody         | Working (reduced) | Uses 5,000 simulation steps (full: 500,000 steps)              |
 | spectral_norm | Working (reduced) | Computes the full power-iteration algorithm at 3-vector size (full: n=100) |
@@ -127,7 +127,7 @@ remain reduced or blocked as documented above.
 | Feature                                  | Benchmarks Blocked                                  |
 | ---------------------------------------- | --------------------------------------------------- |
 | **Allocator capacity / allocation pressure** | quicksort                                       |
-| Stack depth / TCO                        | nsieve (full), edigits (full)                       |
+| Stack depth / TCO                        | edigits (full)                                      |
 | Mutable arrays / efficient indexed numeric vectors | spectral_norm (full n=100)              |
 
 ---
@@ -138,3 +138,4 @@ remain reduced or blocked as documented above.
 - Quicksort is blocked by runtime heap pressure, not a compile-time closure issue
 - The mandelbrot "negative float bug" was actually a semantic mismatch - the Dark code was counting escaped points while the Rust reference counts points in the set. Fixed.
 - The pisum Dark benchmark now runs at the full benchmark size (`500` rounds, `n=10000`) and is tracked as working.
+- The nsieve Dark benchmark now runs at the full benchmark size (`n=100000`) and is tracked as working.
