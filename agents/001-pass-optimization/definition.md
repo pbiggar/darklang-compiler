@@ -60,7 +60,7 @@ Use repeated measurements rather than a single run:
 - Measure each retained candidate with 10 comparable `-vv` runs.
 - Compare medians for the selected pass, and treat the change as successful only when the selected-pass timing improvement is statistically obvious relative to observed noise.
 
-When a pass is selected from benchmark compile-time evidence, collect pass timing across the full benchmark suite before and after the retained change. Report the selected pass's before/after timing delta for each benchmark, not just the benchmark that first exposed the candidate.
+When a pass is selected from benchmark compile-time evidence, collect pass timing across every benchmark program before and after the retained change. Do not limit timing evidence to the benchmark that first exposed the candidate. Report the selected pass's before/after timing delta for each benchmark program, and call out any benchmark whose selected-pass timing regressed even if the median across the suite improved.
 
 Use the same benchmark command lines, environment, inputs, and build mode for before and after measurements unless there is a documented reason to change them.
 
@@ -70,9 +70,9 @@ Do not claim success from a single favorable timing result.
 
 Wall-clock compile time may be reported as secondary context, especially to catch whole-compiler regressions, but it is not the primary success signal for this agent.
 
-Record before/after test-suite wall-clock timing with 10 runs when the optimization is intended to reduce compile-time cost. Report the median before/after delta as a regression guard and reporting aid, not as a substitute for selected-pass timing.
+Record before/after test-suite wall-clock timing with 10 runs when the optimization is intended to reduce compile-time cost. Report the raw timings, medians, and median delta as a regression guard and reporting aid, not as a substitute for selected-pass timing.
 
-Do not present a pass optimization as review-ready unless every retained optimization has median-of-10 before/after compile-time evidence and the overall test suite has median-of-10 before/after wall-clock evidence.
+Do not present a pass optimization as review-ready unless every retained optimization has median-of-10 before/after compile-time evidence, full benchmark-suite selected-pass timing evidence when benchmark evidence drove selection, and overall test-suite median-of-10 before/after wall-clock evidence.
 
 ## Optimization Workflow
 
@@ -118,15 +118,15 @@ The final report must include:
 - Baseline timing numbers and median from 10 comparable runs.
 - After-change timing numbers and median from 10 comparable runs.
 - Compile-time timing difference for each retained optimization, using median-of-10 before/after measurements.
-- Full benchmark suite selected-pass before/after timing deltas when benchmark compile-time evidence drove selection.
-- Before/after overall test-suite wall-clock timing from 10 runs and median delta when the change targets compile-time performance.
+- Full benchmark suite selected-pass before/after timing deltas for every benchmark program when benchmark compile-time evidence drove selection.
+- Before/after overall test-suite wall-clock raw timings, medians, and median delta from 10 runs when the change targets compile-time performance.
 - The observed performance problem.
 - Candidate solutions attempted.
 - The retained solution and why it was chosen.
 - Correctness and benchmark validation commands and results.
 - Any residual risk or unresolved uncertainty.
 
-If code changes are committed, the commit message should include the same essential performance evidence: benchmark command lines, before/after numbers, the problem found, attempted solutions, and why the retained solution was chosen.
+If code changes are committed, the commit message should include the same essential performance evidence: benchmark command lines, full benchmark-suite before/after numbers when benchmark timing drove selection, test-suite timing deltas for compile-time optimizations, the problem found, attempted solutions, and why the retained solution was chosen.
 
 ## Collaboration Boundaries
 
