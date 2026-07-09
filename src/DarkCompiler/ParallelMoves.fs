@@ -39,100 +39,101 @@ let resolve<'Reg, 'Src when 'Reg : equality and 'Reg : comparison and 'Src : equ
 
     let nonSelfLoops = moves |> List.filter (not << isSelfLoop)
 
-    if List.isEmpty nonSelfLoops then
-        []
-    else
-        let mutable allActions : MoveAction<'Reg, 'Src> list = []
-        let mutable remaining = nonSelfLoops
+    let prependActions
+        (actionsRev: MoveAction<'Reg, 'Src> list)
+        (actions: MoveAction<'Reg, 'Src> list)
+        : MoveAction<'Reg, 'Src> list =
+        actions |> List.fold (fun acc action -> action :: acc) actionsRev
 
-        // Collect all source registers used by register-source moves
-        let allRegSrcRegs =
-            nonSelfLoops
+    let prependMoves
+        (actionsRev: MoveAction<'Reg, 'Src> list)
+        (moves': ('Reg * 'Src) list)
+        : MoveAction<'Reg, 'Src> list =
+        moves'
+        |> List.fold (fun acc (dest, src) -> Move (dest, src) :: acc) actionsRev
+
+    // Phase 1: Emit non-register-source moves whose destination is NOT used as
+    // a source. A move like X0 <- Imm cannot be emitted early if X0 is a source
+    // for another move.
+    let allRegSrcRegs =
+        nonSelfLoops
+        |> List.choose (fun (_, srcOp) -> getSrcReg srcOp)
+        |> Set.ofList
+
+    let (nonRegMoves, regMoves) =
+        nonSelfLoops |> List.partition (fun (_, srcOp) -> getSrcReg srcOp = None)
+
+    let (safeNonRegMoves, unsafeNonRegMoves) =
+        nonRegMoves |> List.partition (fun (dest, _) -> not (Set.contains dest allRegSrcRegs))
+
+    // Phase 2: Iteratively emit moves where dest is not a source for remaining moves.
+    let rec collectSafeMoves
+        (remaining: ('Reg * 'Src) list)
+        (actionsRev: MoveAction<'Reg, 'Src> list)
+        : MoveAction<'Reg, 'Src> list * ('Reg * 'Src) list =
+        let remainingSrcs =
+            remaining
             |> List.choose (fun (_, srcOp) -> getSrcReg srcOp)
             |> Set.ofList
 
-        // Phase 1: Emit non-register-source moves whose destination is NOT used as a source
-        // IMPORTANT: A move like X0 <- Imm cannot be emitted early if X0 is a source for another move!
-        let (nonRegMoves, regMoves) =
-            nonSelfLoops |> List.partition (fun (_, srcOp) -> getSrcReg srcOp = None)
+        let (safe, unsafe) =
+            remaining |> List.partition (fun (destReg, _) -> not (Set.contains destReg remainingSrcs))
 
-        let (safeNonRegMoves, unsafeNonRegMoves) =
-            nonRegMoves |> List.partition (fun (dest, _) -> not (Set.contains dest allRegSrcRegs))
+        match safe with
+        | [] -> (actionsRev, unsafe)
+        | _ -> collectSafeMoves unsafe (prependMoves actionsRev safe)
 
-        for (dest, src) in safeNonRegMoves do
-            allActions <- allActions @ [Move (dest, src)]
-
-        remaining <- unsafeNonRegMoves @ regMoves
-
-        // Phase 2: Iteratively emit moves where dest is not a source for remaining moves
-        let mutable changed = true
-        while changed && not (List.isEmpty remaining) do
-            changed <- false
-            let remainingSrcs =
-                remaining
-                |> List.choose (fun (_, srcOp) -> getSrcReg srcOp)
-                |> Set.ofList
-
-            let (safe, unsafe) =
-                remaining |> List.partition (fun (destReg, _) -> not (Set.contains destReg remainingSrcs))
-
-            if not (List.isEmpty safe) then
-                changed <- true
-                for (dest, src) in safe do
-                    allActions <- allActions @ [Move (dest, src)]
-                remaining <- unsafe
-
-        // Phase 3: Handle cycles using temp register
-        // At this point, all remaining moves form cycles. For each cycle:
-        // 1. Save the FIRST destination to temp (it gets clobbered first but read later)
-        // 2. Emit all moves in DEPENDENCY ORDER (so we read from registers before they're overwritten)
-        // 3. Any move that reads the saved register uses temp instead
-        //
-        // Example cycle: X0 <- X1, X1 <- X2, X2 <- X0
-        // 1. Save X0 to temp (X0 is written first but X2 <- X0 reads it later)
-        // 2. Emit in order: X0 <- X1, X1 <- X2, X2 <- temp
-
-        while not (List.isEmpty remaining) do
-            // Pick the first move and save its destination
-            let (firstDest, _) = remaining.Head
+    // Phase 3: Handle cycles using temp register. At this point, all remaining
+    // moves form cycles. For each cycle:
+    // 1. Save the FIRST destination to temp (it gets clobbered first but read later)
+    // 2. Emit all moves in DEPENDENCY ORDER (so we read from registers before they're overwritten)
+    // 3. Any move that reads the saved register uses temp instead
+    //
+    // Example cycle: X0 <- X1, X1 <- X2, X2 <- X0
+    // 1. Save X0 to temp (X0 is written first but X2 <- X0 reads it later)
+    // 2. Emit in order: X0 <- X1, X1 <- X2, X2 <- temp
+    let rec collectCycleMoves
+        (remaining: ('Reg * 'Src) list)
+        (actionsRev: MoveAction<'Reg, 'Src> list)
+        : MoveAction<'Reg, 'Src> list =
+        match remaining with
+        | [] -> actionsRev
+        | (firstDest, _) :: _ ->
             let savedReg = firstDest
 
-            // Save this register to temp
-            allActions <- allActions @ [SaveToTemp savedReg]
+            let rec buildOrderedChain
+                (currentDest: 'Reg)
+                (movesLeft: ('Reg * 'Src) list)
+                (chain: ('Reg * 'Src) list)
+                : ('Reg * 'Src) list =
+                match movesLeft |> List.tryFind (fun (dest, _) -> dest = currentDest) with
+                | Some ((_, src) as move) ->
+                    let movesLeft' = movesLeft |> List.filter (fun candidate -> candidate <> move)
+                    let chain' = move :: chain
 
-            // Build ordered chain starting from savedReg:
-            // 1. Find move that writes to savedReg (the first move to emit)
-            // 2. Get its source register
-            // 3. Find move that writes to that source register
-            // 4. Repeat until we find a move that reads savedReg (end of cycle)
-            let rec buildOrderedChain (currentDest: 'Reg) (movesLeft: ('Reg * 'Src) list)
-                                      (chain: ('Reg * 'Src) list) : ('Reg * 'Src) list =
-                match movesLeft |> List.tryFind (fun (d, _) -> d = currentDest) with
-                | Some ((dest, src) as move) ->
-                    let movesLeft' = movesLeft |> List.filter (fun m -> m <> move)
-                    let newChain = move :: chain
                     match getSrcReg src with
-                    | Some srcReg when srcReg <> savedReg ->
-                        // Continue following the chain
-                        buildOrderedChain srcReg movesLeft' newChain
-                    | _ ->
-                        // End of cycle (source is savedReg or not a register)
-                        newChain
-                | None ->
-                    // No more moves to this destination
-                    chain
+                    | Some srcReg when srcReg <> savedReg -> buildOrderedChain srcReg movesLeft' chain'
+                    | Some _
+                    | None -> chain'
+                | None -> chain
 
             let orderedMoves = buildOrderedChain savedReg remaining [] |> List.rev
 
-            // Emit moves in order, using MoveFromTemp for moves that read savedReg
-            for (dest, src) in orderedMoves do
-                match getSrcReg src with
-                | Some srcReg when srcReg = savedReg ->
-                    // Use temp instead of the saved register
-                    allActions <- allActions @ [MoveFromTemp dest]
-                | _ ->
-                    allActions <- allActions @ [Move (dest, src)]
+            let cycleActions =
+                orderedMoves
+                |> List.map (fun (dest, src) ->
+                    match getSrcReg src with
+                    | Some srcReg when srcReg = savedReg -> MoveFromTemp dest
+                    | Some _
+                    | None -> Move (dest, src))
 
-            remaining <- remaining |> List.filter (fun m -> not (List.contains m orderedMoves))
+            let remaining' =
+                remaining |> List.filter (fun move -> not (List.contains move orderedMoves))
 
-        allActions
+            collectCycleMoves remaining' (prependActions actionsRev (SaveToTemp savedReg :: cycleActions))
+
+    let phase1ActionsRev = prependMoves [] safeNonRegMoves
+    let phase1Remaining = unsafeNonRegMoves @ regMoves
+    let (phase2ActionsRev, phase2Remaining) = collectSafeMoves phase1Remaining phase1ActionsRev
+
+    collectCycleMoves phase2Remaining phase2ActionsRev |> List.rev
