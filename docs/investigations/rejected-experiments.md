@@ -49,3 +49,15 @@ This file records benchmark optimization candidates that were investigated and r
 - Compile-time evidence: timestamp measurement for compiling `benchmarks/problems/sum_to_n/dark/main.dark` reported `2.310s`; no before/after compile-time benefit was established.
 - Reason rejected: ARM64 codegen already removes `MOV Xn, Xn` in `peepholeOptimize`, so the allocator cleanup improves LIR dumps but does not reduce emitted instructions for the target benchmark.
 - Outcome: implementation and focused test were reverted; the active candidate was removed from the source investigation file.
+
+## 2026-07-09: nqueen post-register-allocation self-move elimination
+
+- Source candidate: `docs/investigations/benchmark-nqueen-optimization.md`, "Redundant Self-Move Elimination (Post-Register Allocation)"
+- Target benchmark: `nqueen`
+- Attempt: pre-checked the current generated LIR, ARM64 codegen, and generated-code tests before implementing another allocator cleanup.
+- Correctness evidence: `src/Tests/compiler-passes/ARM64CodeGenTests.fs` has a focused generated-code regression test that feeds integer and floating-point physical self-moves through `CodeGen.generateARM64` and fails if the symbolic ARM64 output contains `MOV_reg(dest, src)` or `FMOV_reg(dest, src)` with `dest = src`. `src/Tests/compiler-passes/ParallelMoveTests.fs` also covers `TailArgMoves` self-move elimination.
+- IR evidence: post-allocation LIR self-move markers can still appear in dumps, but `src/DarkCompiler/passes/arm64/6_CodeGen.fs` suppresses emitted integer self-moves whose destination and source lower to the same ARM64 register, and the generated-code test validates that these self-moves are absent from the ARM64 instruction stream.
+- Runtime evidence: no new implementation was kept. The earlier `sum_to_n` post-register-allocation self-move cleanup proved this class of cleanup changes LIR dumps without reducing emitted ARM64 instructions, because codegen already suppresses `MOV Xn, Xn`.
+- Compile-time evidence: no compiler implementation was kept, so compile-time evidence is verification-only for the documentation cleanup.
+- Reason rejected: implementing a second post-allocation self-move cleanup for `nqueen` would add compiler-pass complexity for an emitted-code optimization that is already handled during ARM64 code generation and covered by generated-code tests.
+- Outcome: the active candidate had already been removed from the source investigation file; this record preserves the generated-code validation evidence so the candidate is not reselected.
