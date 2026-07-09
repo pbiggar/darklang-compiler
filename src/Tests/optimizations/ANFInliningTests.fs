@@ -148,6 +148,64 @@ let testExternalInlineCandidateRemovesShiftCall () : TestResult =
     else
         Ok ()
 
+let testExternalInlineCandidateRemovesFloatToIntCall () : TestResult =
+    let param = { Id = TempId 0; Type = AST.TFloat64 }
+    let stdlibFloatToInt =
+        { Name = "Stdlib.Float.toInt"
+          TypedParams = [param]
+          ReturnType = AST.TInt64
+          ReturnOwnership = OwnedReturn
+          Body =
+            Let (
+                TempId 1,
+                FloatToInt64 (Var param.Id),
+                Return (Var (TempId 1))
+            ) }
+    let main =
+        Let (
+            TempId 2,
+            Call ("Stdlib.Float.toInt", [FloatLiteral 41.0]),
+            Return (Var (TempId 2))
+        )
+    let (Program (_, inlinedMain)) =
+        ANF_Inlining.inlineProgramWithExternalCandidates
+            ANF_Inlining.defaultConfig
+            [stdlibFloatToInt]
+            (Program ([], main))
+    if containsCall "Stdlib.Float.toInt" inlinedMain then
+        Error "Expected external float-to-int wrapper to be inlined, but Call remained in main expression"
+    else
+        Ok ()
+
+let testExternalInlineCandidateRejectsRawAllocBody () : TestResult =
+    let param = { Id = TempId 0; Type = AST.TInt64 }
+    let stdlibAllocate =
+        { Name = "Stdlib.Test.allocate"
+          TypedParams = [param]
+          ReturnType = AST.TRawPtr
+          ReturnOwnership = OwnedReturn
+          Body =
+            Let (
+                TempId 1,
+                RawAlloc (Var param.Id),
+                Return (Var (TempId 1))
+            ) }
+    let main =
+        Let (
+            TempId 2,
+            Call ("Stdlib.Test.allocate", [intAtom 41L]),
+            Return (Var (TempId 2))
+        )
+    let (Program (_, inlinedMain)) =
+        ANF_Inlining.inlineProgramWithExternalCandidates
+            ANF_Inlining.defaultConfig
+            [stdlibAllocate]
+            (Program ([], main))
+    if containsCall "Stdlib.Test.allocate" inlinedMain then
+        Ok ()
+    else
+        Error "Expected external raw allocation candidate to remain a call"
+
 let testExternalInlineCandidateRejectsControlFlowBody () : TestResult =
     let param = { Id = TempId 0; Type = AST.TInt64 }
     let stdlibAbs =
@@ -219,6 +277,8 @@ let tests = [
     ("Inlining literal args binds literal TempId", testInliningWithLiteralArgumentsBindsTemp)
     ("Inlining underscore-named functions", testInliningUnderscoreFunctionName)
     ("Inlining external shift candidate", testExternalInlineCandidateRemovesShiftCall)
+    ("Inlining external float-to-int candidate", testExternalInlineCandidateRemovesFloatToIntCall)
+    ("External raw allocation candidates are not inlined", testExternalInlineCandidateRejectsRawAllocBody)
     ("External control-flow candidates are not inlined", testExternalInlineCandidateRejectsControlFlowBody)
     ("External inlining honors caller budget", testExternalInliningHonorsCallerBudget)
 ]

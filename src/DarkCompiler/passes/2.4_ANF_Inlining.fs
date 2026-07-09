@@ -30,7 +30,7 @@ type InliningConfig = {
     MaxFunctionSize: int
     /// Maximum depth of recursive inlining
     MaxInlineDepth: int
-    /// Maximum external bit-manipulation wrapper calls to inline in one caller body
+    /// Maximum external stdlib wrapper calls to inline in one caller body
     MaxExternalInlineSites: int
 }
 
@@ -338,20 +338,28 @@ let shouldInline (info: FunctionInfo) (config: InliningConfig) (depth: int) : bo
     && not info.HasTailCalls
     && depth < config.MaxInlineDepth
 
-let private isExternalBitManipulationCExpr (cexpr: CExpr) : bool =
+let private isSimpleExternalCExpr (cexpr: CExpr) : bool =
     match cexpr with
-    | Prim (Shl, _, _)
-    | Prim (Shr, _, _)
-    | Prim (BitAnd, _, _)
-    | Prim (BitOr, _, _)
-    | Prim (BitXor, _, _)
-    | UnaryPrim (BitNot, _) -> true
+    | Atom _
+    | TypedAtom _
+    | Prim _
+    | UnaryPrim _
+    | IfValue _
+    | TupleGet _
+    | StringConcat _
+    | FloatSqrt _
+    | FloatAbs _
+    | FloatNeg _
+    | Int64ToFloat _
+    | FloatToInt64 _
+    | FloatToBits _
+    | FloatToString _ -> true
     | _ -> false
 
-let rec private isExternalBitManipulationExpr (expr: AExpr) : bool =
+let rec private isSimpleExternalExpr (expr: AExpr) : bool =
     match expr with
     | Let (_, cexpr, body) ->
-        isExternalBitManipulationCExpr cexpr && isExternalBitManipulationExpr body
+        isSimpleExternalCExpr cexpr && isSimpleExternalExpr body
     | Return _ -> true
     | If _ -> false
 
@@ -368,7 +376,7 @@ let rec private countCallsToNames (names: Set<string>) (expr: AExpr) : int =
 let private shouldUseExternalCandidate (info: FunctionInfo) (config: InliningConfig) : bool =
     shouldInline info config 0
     && Set.isEmpty (collectCalls info.Func.Body)
-    && isExternalBitManipulationExpr info.Func.Body
+    && isSimpleExternalExpr info.Func.Body
 
 let filterExternalCandidates (config: InliningConfig) (functions: Function list) : Function list =
     buildFunctionInfoMap functions
