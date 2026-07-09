@@ -48,6 +48,7 @@ Collect this output without quiet mode; do not combine `-vv` timing collection w
 
 Before using parsed timings for selection or success claims, validate the parser against a recent sample of actual compiler output. The parser must:
 
+- Recognize both integer and decimal stage numbers in bracketed stage prefixes, such as `[1/7]`, `[1.5/7]`, and `[2.3/7]`.
 - Pair only a recognized stage line with the immediately following indented timing line.
 - Extract the pass label from the bracketed stage line, excluding status suffixes such as `(user only)` and expanded optimization lists.
 - Ignore source text, comments, IR dumps, success messages, and unrelated lines.
