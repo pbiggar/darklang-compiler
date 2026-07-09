@@ -4147,7 +4147,7 @@ let rec checkExprWithParamNames
                 let numArgs = List.length argsList
                 // Check argument count - allow partial application
                 if numArgs > numParams then
-                    Error (GenericError $"Function expects {numParams} arguments, got {numArgs}")
+                    Error (GenericError $"Expected {numParams} arguments, got {numArgs}")
                 else if numArgs < numParams then
                     // Partial application of lambda/function value
                     let providedParamTypes = List.take numArgs paramTypes

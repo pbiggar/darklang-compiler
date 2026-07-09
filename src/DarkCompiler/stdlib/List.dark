@@ -149,6 +149,33 @@ def Stdlib.List.__reverseByIndexHelper<a>(list: List<a>, index: Int64, acc: List
         | Some(v) ->
             Stdlib.List.__reverseByIndexHelper<a>(list, index - 1, Stdlib.__FingerTree.pushBack<a>(acc, v))
 
+def Stdlib.List.sortByComparator<a>(list: List<a>, comparator: (a, a) -> Int32) : Stdlib.Result.Result<List<a>, String> =
+    Stdlib.List.__sortByComparatorHelper<a>(list, comparator, [])
+
+def Stdlib.List.__sortByComparatorHelper<a>(list: List<a>, comparator: (a, a) -> Int32, sorted: List<a>) : Stdlib.Result.Result<List<a>, String> =
+    match list with
+    | [] -> Ok(sorted)
+    | [h, ...t] ->
+        match Stdlib.List.__insertByComparator<a>(h, sorted, comparator) with
+        | Error(err) -> Error(err)
+        | Ok(nextSorted) -> Stdlib.List.__sortByComparatorHelper<a>(t, comparator, nextSorted)
+
+def Stdlib.List.__insertByComparator<a>(value: a, sorted: List<a>, comparator: (a, a) -> Int32) : Stdlib.Result.Result<List<a>, String> =
+    match sorted with
+    | [] -> Ok([value])
+    | [h, ...t] ->
+        let order = comparator(value, h) in
+        if order == -1l then
+            Ok([value, ...sorted])
+        else if order == 0l then
+            Ok([value, ...sorted])
+        else if order == 1l then
+            match Stdlib.List.__insertByComparator<a>(value, t, comparator) with
+            | Error(err) -> Error(err)
+            | Ok(insertedTail) -> Ok([h, ...insertedTail])
+        else
+            Error("Expected comparator function to return -1, 0, or 1, but it returned " ++ Stdlib.Int32.toString(order))
+
 // Fold left (reduce) over a list - O(n)
 def Stdlib.List.fold<a, b>(list: List<a>, init: b, fn: (b, a) -> b) : b =
     if Stdlib.__FingerTree.isEmpty<a>(list) then init

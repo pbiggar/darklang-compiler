@@ -908,7 +908,7 @@ let private evaluateExpectations (test: E2ETest) (run: E2ERun) : E2ETestResult =
                 if output.Contains(expectedMsg) then
                     Ok run
                 else
-                    failRun run $"Expected error message '{expectedMsg}' not found in stderr"
+                    failRun run $"Expected error message '{expectedMsg}' not found in stderr. Actual stderr: {output}"
             | None ->
                 Ok run
     elif Option.isSome test.ExpectedValueExpr then
