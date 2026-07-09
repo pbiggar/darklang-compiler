@@ -499,6 +499,9 @@ let private trySimplifyDoubleUnary (tid: TempId) (cexpr: CExpr) (body: AExpr) : 
     | UnaryPrim (Neg, source), Let (negTid, UnaryPrim (Neg, Var sourceTid), negBody)
         when sourceTid = tid ->
         Some (Let (negTid, Atom source, negBody))
+    | FloatNeg source, Let (negTid, FloatNeg (Var sourceTid), negBody)
+        when sourceTid = tid ->
+        Some (Let (negTid, Atom source, negBody))
     | _ -> None
 
 /// Optimize an AExpr, returning optimized expression, change flag, and used TempIds
