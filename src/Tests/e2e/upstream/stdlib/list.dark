@@ -284,8 +284,7 @@ Stdlib.List.sortByComparator_v0
 // - it seems to be from the perspective of the lambda
 //   (I'm a lambda and I'm expecting 2 arguments, but I got 1!!)
 //   rather than from the perspective of the function it's being used in
-// Stdlib.List.sortByComparator_v0 [ 6.0; 2.0 ] (fun x -> x) = error=
-//   "Expected 1 arguments, got 2"
+Stdlib.List.sortByComparator_v0 [ 6.0; 2.0 ] (fun x -> x) = error="Expected 1 arguments, got 2"
 
 Stdlib.List.tail_v0 [ 10L; 20L; 30L; 40L ] = Stdlib.Option.Option.Some[ 20L; 30L; 40L ]
 Stdlib.List.tail_v0 [] = Stdlib.Option.Option.None

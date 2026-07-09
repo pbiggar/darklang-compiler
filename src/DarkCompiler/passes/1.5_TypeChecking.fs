@@ -4093,9 +4093,7 @@ let rec checkExprWithParamNames
         match expectedType with
         | Some (TFunction (expectedParams, expectedRet)) ->
             if List.length expectedParams <> List.length parametersList then
-                let declaredParamTypes = parametersList |> List.map snd
-                let declaredFuncType = TFunction (declaredParamTypes, TVar "r")
-                Error (TypeMismatch (TFunction (expectedParams, expectedRet), declaredFuncType, "lambda parameter count"))
+                Error (GenericError $"Expected {List.length parametersList} arguments, got {List.length expectedParams}")
             else
                 let rec reconcileParamTypes
                     (remaining: ((string * Type) * Type) list)

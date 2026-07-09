@@ -7650,7 +7650,7 @@ let rec toANF (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: Type
             // Immediate application: ((x: int) => x + 1)(5) becomes let x = 5 in x + 1
             let parameterList = paramsToList parameters
             if List.length argsList <> List.length parameterList then
-                Error $"Lambda expects {List.length parameterList} arguments, got {List.length argsList}"
+                Error $"Expected {List.length parameterList} arguments, got {List.length argsList}"
             else
                 // Build nested let bindings: let p1 = arg1 in let p2 = arg2 in ... body
                 let rec buildLets (ps: (string * AST.Type) list) (as': AST.Expr list) : AST.Expr =
@@ -8663,7 +8663,7 @@ and toAtom (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeReg
             // Immediate application: desugar to let bindings
             let parameterList = paramsToList parameters
             if List.length argsList <> List.length parameterList then
-                Error $"Lambda expects {List.length parameterList} arguments, got {List.length argsList}"
+                Error $"Expected {List.length parameterList} arguments, got {List.length argsList}"
             else
                 let rec buildLets (ps: (string * AST.Type) list) (as': AST.Expr list) : AST.Expr =
                     match ps, as' with
