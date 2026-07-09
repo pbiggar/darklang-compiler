@@ -72,6 +72,13 @@ let x = 3.5 in -x
 return -3.5
 
 ---NAME---
+const_fold_float_abs
+---INPUT---
+let x = -3.5 in Float.abs(x)
+---EXPECTED---
+return 3.5
+
+---NAME---
 const_fold_comparison_lt
 ---INPUT---
 if 1 < 2 then 10 else 20
