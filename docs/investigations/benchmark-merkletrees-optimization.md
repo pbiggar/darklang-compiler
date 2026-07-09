@@ -2,9 +2,15 @@
 
 ## Executive Summary
 
-The Dark compiler generates **1,114,096,152 instructions** for the merkletrees benchmark, which is **9.83x slower** than Rust (113,304,119 instructions) and comparable to OCaml (1,004,581,199 instructions at 8.87x).
+The Dark compiler currently generates **733,993,597 instructions** for the
+merkletrees benchmark, which is **6.48x slower** than Rust
+(113,304,119 instructions) and faster than OCaml (1,004,581,199 instructions at
+8.87x).
 
-This investigation identified **5 optimization opportunities** that could significantly improve performance. The most impactful is a **duplicate function call bug** that causes Dark to call `buildTree` twice per iteration instead of once, effectively doubling the benchmark workload.
+This investigation currently tracks **3 remaining optimization opportunities**
+and **2 opportunities that no longer reproduce**. The most impactful remaining
+issue is a duplicate `buildTree` call in `benchmark` after `verifyTree` is
+inlined, which rebuilds the same tree twice per iteration.
 
 ## Benchmark Overview
 
@@ -19,8 +25,8 @@ The merkletrees benchmark:
 | Language | Instructions | vs Rust |
 |----------|-------------|---------|
 | Rust     | 113,304,119 | 1.00x   |
+| **Dark** | **733,993,597** | **6.48x** |
 | OCaml    | 1,004,581,199 | 8.87x |
-| **Dark** | **1,114,096,152** | **9.83x** |
 
 ## Optimization Opportunities
 
@@ -32,30 +38,30 @@ The merkletrees benchmark:
 
 After inlining `verifyTree`, the Dark compiler generates **two separate calls** to `buildTree` with identical arguments instead of reusing the first call's result.
 
-#### Evidence from ANF (after RC insertion, lines 262-264):
+#### Evidence from current ANF after inlining:
 
 ```
 let TempId 42 = buildTree(t37, t39)
-let TempId 62 = buildTree(t37, t39)   // <-- DUPLICATE CALL!
+let TempId 62 = buildTree(t37, t39)   // duplicate call
 let TempId 63 = t62 == t42
 ```
 
-#### Evidence from MIR (benchmark_L1, lines 516-518):
+#### Evidence from current MIR:
 
 ```
 v42 <- Call(buildTree, [v37, v39])
-v62 <- Call(buildTree, [v37, v39])   // <-- DUPLICATE CALL!
+v62 <- Call(buildTree, [v37, v39])   // duplicate call
 v63 <- v62 == v42 : TFunction ([TInt64; TInt64], TInt64)
 ```
 
-#### Evidence from LIR post-regalloc (lines 882-890):
+#### Evidence from current LIR:
 
 ```
-ArgMoves(X0 <- Reg X26, X1 <- Reg X24)
-X20 <- Call(buildTree, [Reg X26, Reg X24])
+ArgMoves(X0 <- Reg X22, X1 <- Reg X24)
+X20 <- Call(buildTree, [Reg X22, Reg X24])
 ...
-ArgMoves(X0 <- Reg X26, X1 <- Reg X24)
-X19 <- Call(buildTree, [Reg X26, Reg X24])   // <-- DUPLICATE CALL!
+ArgMoves(X0 <- Reg X22, X1 <- Reg X24)
+X19 <- Call(buildTree, [Reg X22, Reg X24])   // duplicate call
 ```
 
 #### Analysis
@@ -78,16 +84,18 @@ let root = buildTree(depth, i)
 let verified = (buildTree(depth, i) == root)  // Should reuse root!
 ```
 
-The compiler should recognize that `buildTree(depth, i)` is a pure function and the second call is redundant with `root`. This is a **missing Common Subexpression Elimination (CSE)** optimization.
+The compiler should recognize that `buildTree(depth, i)` is a pure function and
+the second call is redundant with `root`. Existing CSE does not eliminate this
+recursive function call.
 
 #### Implementation Approach
 
-1. Add CSE pass in ANF optimization phase
-2. For pure function calls, hash the (function, args) tuple and check for existing bindings
-3. Replace duplicate calls with reference to existing result
+1. Extend CSE to safely cover pure function calls, including recursive calls.
+2. Hash the `(function, args)` tuple and check for an existing binding.
+3. Replace duplicate calls with a reference to the existing result.
 
 #### Files to Modify
-- `src/DarkCompiler/ANFOptimization.fs` - Add CSE pass
+- `src/DarkCompiler/ANFOptimization.fs` - Extend CSE to eligible calls
 - `src/DarkCompiler/ANF.fs` - May need purity annotations
 
 ---
@@ -100,29 +108,22 @@ The compiler should recognize that `buildTree(depth, i)` is a pure function and 
 
 The `hashLoop` function iterates 8 times (fixed count) but Dark compiles it as a recursive tail-call loop, while Rust completely unrolls it into 8 inline XOR/MUL sequences.
 
-#### Evidence from Dark LIR (hashLoop_L1, lines 761-772):
+#### Evidence from current Dark LIR:
 
 ```asm
 hashLoop_L1:
-  X1 <- And_imm(X5, #255)
-  X1 <- Eor(X3, X1)
-  X2 <- Mov(Imm 1099511628211)
-  X3 <- Mul(X1, Reg X2)
-  X2 <- Add(X4, Imm 1)
-  X1 <- Mov(Reg X3)
-  X1 <- Mov(Reg X5)
-  X1 <- Mov(Reg X2)
-  X3 <- Mov(Reg X3)
-  X5 <- Mov(Reg X5)
-  X4 <- Mov(Reg X2)
+  X2 <- Eor(X2, X1)
+  X2 <- Mul(X2, Reg X4)
+  X3 <- Add(X3, Imm 1)
   Jump(Label "hashLoop_body")
 hashLoop_body:
-  Cmp(X4, Imm 8)
-  CondBranch(GE, Label "hashLoop_L0", Label "hashLoop_L1")
+  Cmp(X3, Imm 8)
+  CondBranch(GE, Label "hashLoop_L2", Label "hashLoop_L1")
 ```
 
-Each iteration: ~12 instructions + compare + branch = ~14 instructions
-Total for 8 iterations: ~112 instructions per hash
+Each iteration still pays loop control overhead: three body instructions plus a
+compare and branch in `hashLoop_body`. The loop is much cleaner than older
+evidence, but it is still not unrolled.
 
 #### Evidence from Rust disassembly (lines 5327-5349):
 
@@ -151,70 +152,59 @@ Total: 16 instructions (2 per iteration, no loop overhead)
 
 ---
 
-### 3. Redundant Register Moves in hashLoop
+### 3. RESOLVED: Redundant Register Moves in hashLoop
 
-**Impact: ~10% reduction in hashLoop execution time**
+Current evidence no longer reproduces the redundant move pattern previously
+recorded for `hashLoop`.
 
 #### Root Cause
 
-The register allocator produces redundant MOV instructions where the same register is written multiple times without reading the intermediate value.
+The current post-register-allocation LIR for `hashLoop` is compact and does not
+contain the earlier chain of dead writes or self-moves.
 
-#### Evidence from LIR post-regalloc (hashLoop_L1, lines 766-771):
-
-```asm
-X1 <- Mov(Reg X3)   // Dead write - X1 overwritten below
-X1 <- Mov(Reg X5)   // Dead write - X1 overwritten below
-X1 <- Mov(Reg X2)   // Dead write - X1 never read before next write
-X3 <- Mov(Reg X3)   // Useless self-move
-X5 <- Mov(Reg X5)   // Useless self-move
-X4 <- Mov(Reg X2)
-```
-
-#### Evidence from generated assembly (offset 0x1f0-0x200):
+#### Evidence from current LIR post-register-allocation:
 
 ```asm
-1f0: aa0303e1   mov x1, x3   // Dead
-1f4: aa0503e1   mov x1, x5   // Dead
-1f8: aa0203e1   mov x1, x2   // Dead
-1fc: aa0203e4   mov x4, x2   // This one is used
+hashLoop:
+  Label "hashLoop_L1":
+    X2 <- Eor(X2, X1)
+    X2 <- Mul(X2, Reg X4)
+    X3 <- Add(X3, Imm 1)
+    Jump(Label "hashLoop_body")
+  Label "hashLoop_body":
+    Cmp(X3, Imm 8)
+    CondBranch(GE, Label "hashLoop_L2", Label "hashLoop_L1")
 ```
 
-#### Implementation Approach
+#### Status
 
-1. Add dead store elimination after register allocation
-2. Remove self-moves (X <- X)
-3. Remove writes to registers that are overwritten before being read
-
-#### Files to Modify
-- `src/DarkCompiler/LIROptimization.fs` - Add post-regalloc dead store elimination
-- `src/DarkCompiler/RegisterAllocation.fs` - Consider coalescing improvements
+No follow-up is currently recommended for this specific `hashLoop` move issue.
 
 ---
 
-### 4. Missing CSE for (depth - 1) in buildTree
+### 4. RESOLVED: Local CSE for `(depth - 1)` in buildTree
 
-**Impact: ~5% reduction in buildTree execution time**
+Current evidence shows local arithmetic CSE is working for the repeated
+`depth - 1` expression in `buildTree`.
 
 #### Root Cause
 
-The expression `depth - 1` is computed 3 times in `buildTree` instead of once.
+The expression `depth - 1` is computed once in `buildTree` and reused for the
+left size and both recursive calls.
 
-#### Evidence from ANF (buildTree, lines 168-172):
+#### Evidence from current ANF:
 
 ```
-let TempId 21 = t17 - 1   // First computation
+let TempId 21 = t17 - 1
 let TempId 22 = 1 << t21
-let TempId 24 = t17 - 1   // Duplicate!
-let TempId 25 = buildTree(t24, t18)
-let TempId 27 = t17 - 1   // Duplicate!
+let TempId 25 = buildTree(t21, t18)
+let TempId 28 = t18 + t22
+let TempId 29 = buildTree(t21, t28)
 ```
 
-#### Implementation Approach
+#### Status
 
-Same as Optimization #1 - CSE pass will catch this.
-
-#### Files to Modify
-- `src/DarkCompiler/ANFOptimization.fs`
+No follow-up is currently recommended for this local arithmetic CSE case.
 
 ---
 
@@ -277,16 +267,15 @@ The hash code is completely inlined - no `call` instructions to a separate hash 
 
 ## Recommended Priority
 
-1. **Fix duplicate buildTree call (CSE)** - ~50% improvement, clear bug
-2. **Inline hashLoop into buildTree** - ~20% improvement, straightforward
-3. **Loop unrolling for hashLoop** - ~20% improvement when combined with inlining
-4. **Dead store elimination** - ~10% improvement
-5. **Local CSE for depth-1** - ~5% improvement (subsumed by #1)
+1. **Eliminate duplicate buildTree call** - largest remaining benchmark-specific opportunity.
+2. **Inline hashLoop into buildTree** - removes hot-path call overhead.
+3. **Loop unrolling for hashLoop** - most useful when combined with inlining.
 
 ## Estimated Combined Impact
 
 With all optimizations implemented, Dark could potentially achieve:
-- Current: 1,114,096,152 instructions (9.83x vs Rust)
+- Current: 733,993,597 instructions (6.48x vs Rust)
 - Target: ~300-400M instructions (~3-4x vs Rust)
 
-This would make Dark competitive with OCaml and closer to Rust performance on this benchmark.
+Dark is already ahead of OCaml on this benchmark by instruction count; the
+remaining opportunities would move it closer to Rust.
