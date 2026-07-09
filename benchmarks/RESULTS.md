@@ -2,8 +2,8 @@
 
 Latest Dark compiler performance vs other languages (instruction counts).
 
-**Last Updated:** 2026-07-08 21:43:37
-**Commit:** `ddfab4d5` - Enable full-size matmul benchmark
+**Last Updated:** 2026-07-09 13:37:55
+**Commit:** `0fbbbf0b` - Require per-optimization timing evidence
 
 | Benchmark     |           Dark (6.69x) |          Rust |         Ocaml (3.81x) |          Python (114x) |          Node (19.5x) |
 |---------------|------------------------|---------------|-----------------------|------------------------|-----------------------|

@@ -107,7 +107,7 @@ These benchmarks have implementations but are limited by stack depth or bugs.
 | quicksort     | RUNTIME OOM       | Full-size run exceeds current heap/allocation budget (skipped) |
 | nsieve        | Stack overflow    | Uses n=1000 (n=100000 causes stack overflow) - outputs 168     |
 | edigits       | Stack overflow    | Uses 50 digits, 1 iteration (full: 1000 digits, 10 iterations) |
-| nbody         | Working (reduced) | Uses 100 simulation steps (full: 500000 steps)                 |
+| nbody         | Working (reduced) | Uses 5,000 simulation steps (full: 500,000 steps)              |
 | spectral_norm | Working (reduced) | Computes the full power-iteration algorithm at 3-vector size (full: n=100) |
 
 ---
