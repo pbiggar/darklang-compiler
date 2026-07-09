@@ -7,17 +7,6 @@ implementation generates the same input matrices as the reference
 implementations and computes the weighted checksum directly, without
 materializing the product matrix.
 
-The previous reduced-size Dark benchmark measured 51,485 instructions and was
-omitted from `benchmarks/RESULTS.md` because the result was not comparable. The
-last reduced-size run recorded the reference implementations at:
-
-| Implementation | Instruction count |
-|----------------|-------------------|
-| Rust           | 16,956,533        |
-| OCaml          | 34,895,082        |
-| Python         | 894,891,413       |
-| Node           | 487,674,868       |
-
 The full-size Dark binary for `benchmarks/problems/matmul/dark/main.dark`
 prints the expected checksum `222793267`.
 
@@ -77,9 +66,9 @@ Label "dot3_L10":
   RuntimeError("Non-exhaustive match: No matching case found for value <unknown> in match expression")
 ```
 
-Rust and OCaml solve a different, larger benchmark shape: both allocate and
-multiply 100x100 matrices with indexed array/vector access. Dark's current
-source uses nested immutable lists and calls `Stdlib.List.getAt` for each access.
+Rust and OCaml allocate and multiply 100x100 matrices with indexed array/vector
+access. Dark's current source uses nested immutable lists and calls
+`Stdlib.List.getAt` for each access.
 
 ## Durable Optimization Opportunities
 
@@ -126,7 +115,7 @@ but it is a concrete code-generation cleanup visible in the current matmul IR.
 
 ## Remaining Uncertainties
 
-The current results table intentionally omits the reduced-size Dark instruction
-count, so this investigation should not use the apparent Dark-vs-reference ratio
-as optimization guidance. The next useful benchmark change is making the Dark
-program solve the same 100x100 workload as Rust and OCaml.
+This investigation has not yet compared a current full-size Dark instruction
+count against the reference implementations. The next useful benchmark evidence
+is a current full-size local measurement that can separate language/runtime
+overhead from differences in data structure and source shape.
