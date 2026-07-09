@@ -1169,7 +1169,7 @@ let rec insertRCWithAnalysis
                 let needsNestedRecordListDictDictDec =
                     functionReturnsNestedRecordListDict
                     && match inferredType with
-                       | AST.TDict (AST.TInt64, AST.TInt64) -> true
+                       | AST.TDict _ -> true
                        | _ -> false
 
                 if bindingNeedsShapeAutomaticDec ctx cexpr inferredType
@@ -1184,7 +1184,7 @@ let rec insertRCWithAnalysis
                         | _ -> None
                     let dec = (tempId, inferredType, kindOverride)
                     if needsNestedRecordListDictDictDec then
-                        // List<Record { List<Dict<Int64, Int64>> }> construction retains the
+                        // List<Record { List<Dict<_, _>> }> construction retains the
                         // dict once for the inner list payload and once for the returned graph.
                         // The current shape-specific ARM64 helpers release that graph, but the
                         // local dict temp still needs both ownership edges balanced.
