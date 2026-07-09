@@ -39,7 +39,7 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Optimization name: Integer self-comparison simplification
 - Taxonomy category: Algebraic simplification
 - Priority/rationale: Small, canonical boolean simplification with direct fit in MIR SSA constant folding; useful for eliminating provably constant branches.
-- Notes: Implemented in MIR constant folding during the second Phase 1 sandbox trial and extended to integer ordering self-comparisons in the Guided review revision. Covered by MIR tests for `==`, `!=`, `<`, `>`, `<=`, and `>=`; negative tests cover float equality and source variable shadowing so the fold remains type- and operand-aware.
+- Notes: Implemented in MIR constant folding during the second Phase 1 sandbox trial and extended to integer ordering self-comparisons in the Guided review revision. ANF strength reduction now also folds same-parameter Int64 comparisons for `==`, `!=`, `<`, `>`, `<=`, and `>=`. Covered by ANF tests in `src/Tests/optimization/anf.opt` and pipeline optimization snapshots for branch elimination; negative MIR tests cover float equality and source variable shadowing so the fold remains type- and operand-aware.
 
 ### Bitwise idempotence simplification
 

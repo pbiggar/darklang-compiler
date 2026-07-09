@@ -69,8 +69,8 @@ def pick(n: Int64) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    jump pick_L0
-  pick_L0:
+    jump pick_body
+  pick_body:
     ret 1
 
 ---NAME---
@@ -81,8 +81,8 @@ def pick(n: Int64) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    jump pick_L1
-  pick_L1:
+    jump pick_body
+  pick_body:
     ret 2
 
 ---NAME---
@@ -93,8 +93,8 @@ def pick(n: Int64) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    jump pick_L1
-  pick_L1:
+    jump pick_body
+  pick_body:
     ret 2
 
 ---NAME---
@@ -105,8 +105,8 @@ def pick(n: Int64) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    jump pick_L1
-  pick_L1:
+    jump pick_body
+  pick_body:
     ret 2
 
 ---NAME---
@@ -117,8 +117,8 @@ def pick(n: Int64) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    jump pick_L0
-  pick_L0:
+    jump pick_body
+  pick_body:
     ret 1
 
 ---NAME---
@@ -129,8 +129,8 @@ def pick(n: Int64) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    jump pick_L0
-  pick_L0:
+    jump pick_body
+  pick_body:
     ret 1
 
 ---NAME---

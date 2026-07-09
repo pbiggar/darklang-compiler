@@ -540,6 +540,84 @@ let TempId 2 = f(42)
 return t2
 
 ---NAME---
+self_comparison_int_eq
+---INPUT---
+def f(x: Int64) : Bool = x == x
+f(42)
+---EXPECTED---
+Function f:
+return true
+
+Main:
+let TempId 2 = f(42)
+return t2
+
+---NAME---
+self_comparison_int_lt
+---INPUT---
+def f(x: Int64) : Bool = x < x
+f(42)
+---EXPECTED---
+Function f:
+return false
+
+Main:
+let TempId 2 = f(42)
+return t2
+
+---NAME---
+self_comparison_int_neq
+---INPUT---
+def f(x: Int64) : Bool = x != x
+f(42)
+---EXPECTED---
+Function f:
+return false
+
+Main:
+let TempId 3 = f(42)
+return t3
+
+---NAME---
+self_comparison_int_gt
+---INPUT---
+def f(x: Int64) : Bool = x > x
+f(42)
+---EXPECTED---
+Function f:
+return false
+
+Main:
+let TempId 2 = f(42)
+return t2
+
+---NAME---
+self_comparison_int_lte
+---INPUT---
+def f(x: Int64) : Bool = x <= x
+f(42)
+---EXPECTED---
+Function f:
+return true
+
+Main:
+let TempId 2 = f(42)
+return t2
+
+---NAME---
+self_comparison_int_gte
+---INPUT---
+def f(x: Int64) : Bool = x >= x
+f(42)
+---EXPECTED---
+Function f:
+return true
+
+Main:
+let TempId 2 = f(42)
+return t2
+
+---NAME---
 identity_bitand_self
 ---INPUT---
 def f(x: Int64) : Int64 = x & x
