@@ -546,13 +546,43 @@ let buildRecordFieldSubstitution (fields: (string * Type) list) (typeArgs: Type 
     else
         Ok (List.zip typeParams typeArgs |> Map.ofList)
 
+let rec private resolveAliasTargetType (aliasReg: AliasRegistry) (typ: Type) : Type =
+    match typ with
+    | TRecord (name, typeArgs) ->
+        match Map.tryFind name aliasReg with
+        | Some (typeParams, targetType) when List.length typeArgs <= List.length typeParams ->
+            let subst = List.zip (List.take (List.length typeArgs) typeParams) typeArgs |> Map.ofList
+            targetType |> applySubst subst |> resolveAliasTargetType aliasReg
+        | _ ->
+            TRecord (name, List.map (resolveAliasTargetType aliasReg) typeArgs)
+    | TSum (name, typeArgs) ->
+        match Map.tryFind name aliasReg with
+        | Some (typeParams, targetType) when List.length typeArgs <= List.length typeParams ->
+            let subst = List.zip (List.take (List.length typeArgs) typeParams) typeArgs |> Map.ofList
+            targetType |> applySubst subst |> resolveAliasTargetType aliasReg
+        | _ ->
+            TSum (name, List.map (resolveAliasTargetType aliasReg) typeArgs)
+    | TFunction (paramTypes, returnType) ->
+        TFunction (List.map (resolveAliasTargetType aliasReg) paramTypes, resolveAliasTargetType aliasReg returnType)
+    | TTuple elemTypes ->
+        TTuple (List.map (resolveAliasTargetType aliasReg) elemTypes)
+    | TList elemType ->
+        TList (resolveAliasTargetType aliasReg elemType)
+    | TDict (keyType, valueType) ->
+        TDict (resolveAliasTargetType aliasReg keyType, resolveAliasTargetType aliasReg valueType)
+    | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128
+    | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
+    | TBool | TFloat64 | TString | TBytes | TChar | TUnit | TRuntimeError | TRawPtr ->
+        typ
+
 let private tryResolveGenericRecordAliasFields
     (aliasReg: AliasRegistry)
     (typeReg: TypeRegistry)
     (typeName: string)
     : (string * (string * Type) list) option =
-    match Map.tryFind typeName aliasReg with
-    | Some (_, (TRecord (targetName, targetTypeArgs) | TSum (targetName, targetTypeArgs))) ->
+    match resolveAliasTargetType aliasReg (TRecord (typeName, [])) with
+    | TRecord (targetName, targetTypeArgs)
+    | TSum (targetName, targetTypeArgs) when targetName <> typeName || not (List.isEmpty targetTypeArgs) ->
         match Map.tryFind targetName typeReg with
         | Some targetFields ->
             match buildRecordFieldSubstitution targetFields targetTypeArgs with
