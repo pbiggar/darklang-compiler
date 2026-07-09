@@ -332,11 +332,13 @@ let graphNeighbors (graph: InterferenceGraph) (vregId: int) : int list =
         if not (bitsetContainsIndex idx graph.Vertices) then
             []
         else
-            let mutable acc = []
-            bitsetIterIndices graph.Neighbors.[idx] (fun nidx ->
+            graph.Neighbors.[idx]
+            |> bitsetIndicesToList
+            |> List.choose (fun nidx ->
                 if bitsetContainsIndex nidx graph.Vertices then
-                    acc <- graph.Domain.Ids.[nidx] :: acc)
-            List.rev acc
+                    Some graph.Domain.Ids.[nidx]
+                else
+                    None)
 
 /// Get the assigned color of a vertex.
 let colorOf (result: ColoringResult) (vregId: int) : int option =
