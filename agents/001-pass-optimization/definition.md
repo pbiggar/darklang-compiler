@@ -63,6 +63,8 @@ Use repeated measurements rather than a single run:
 
 When a pass is selected from benchmark compile-time evidence, collect pass timing across every benchmark program before and after the retained change. Do not limit timing evidence to the benchmark that first exposed the candidate. Report the selected pass's before/after timing delta for each benchmark program, and call out any benchmark whose selected-pass timing regressed even if the median across the suite improved.
 
+Also collect total compilation timing for each benchmark in the suite before and after the retained change. Report the before/after timing delta for every benchmark's compilation, even when the selected-pass timing is the primary success signal, so reviewers can see whether the improvement is local, broad, or offset by other compiler work.
+
 Use the same benchmark command lines, environment, inputs, and build mode for before and after measurements unless there is a documented reason to change them.
 
 If results are noisy, increase runs or narrow the benchmark target before claiming a win.
@@ -74,6 +76,8 @@ Wall-clock compile time may be reported as secondary context, especially to catc
 Record before/after test-suite wall-clock timing with 10 runs when the optimization is intended to reduce compile-time cost. Report the raw timings, medians, and median delta as a regression guard and reporting aid, not as a substitute for selected-pass timing.
 
 Do not present a pass optimization as review-ready unless every retained optimization has median-of-10 before/after compile-time evidence, full benchmark-suite selected-pass timing evidence when benchmark evidence drove selection, and overall test-suite median-of-10 before/after wall-clock evidence.
+
+Do not present a benchmark-driven pass optimization as review-ready unless the review evidence also outlines before/after total compilation timing for each benchmark in the benchmark suite.
 
 ## Optimization Workflow
 
@@ -120,6 +124,7 @@ The final report must include:
 - After-change timing numbers and median from 10 comparable runs.
 - Compile-time timing difference for each retained optimization, using median-of-10 before/after measurements.
 - Full benchmark suite selected-pass before/after timing deltas for every benchmark program when benchmark compile-time evidence drove selection.
+- Full benchmark suite total compilation before/after timing deltas for every benchmark program when benchmark compile-time evidence drove selection.
 - Before/after overall test-suite wall-clock raw timings, medians, and median delta from 10 runs when the change targets compile-time performance.
 - The observed performance problem.
 - Candidate solutions attempted.
