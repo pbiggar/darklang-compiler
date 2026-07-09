@@ -2781,7 +2781,9 @@ and replaceInExpr (wrapperMap: Map<string, string>) (expr: AST.Expr) : AST.Expr 
     match expr with
     | AST.Var name when Map.containsKey name wrapperMap ->
         // This is a function reference used as a value - replace with closure to wrapper
-        AST.Closure (Map.find name wrapperMap, [])
+        match Map.tryFind name wrapperMap with
+        | Some wrapperName -> AST.Closure (wrapperName, [])
+        | None -> Crash.crash $"replaceInExpr expected wrapper for function '{name}'"
     | AST.Closure (funcName, caps) ->
         // If this closure references a known function, use the wrapper instead
         let newFuncName = Map.tryFind funcName wrapperMap |> Option.defaultValue funcName
@@ -3549,11 +3551,10 @@ let rec inferType (expr: AST.Expr) (typeEnv: Map<string, AST.Type>) (typeReg: Ty
                     // Preserve concrete field types from the matched record.
                     // Falling back to Int64 here causes downstream mis-lowering (e.g. string == uses pointer eq).
                     let recordFields =
-                        if Map.containsKey scrutRecordName typeReg then
-                            Map.find scrutRecordName typeReg
-                        elif Map.containsKey patternRecordName typeReg then
-                            Map.find patternRecordName typeReg
-                        else
+                        match Map.tryFind scrutRecordName typeReg, Map.tryFind patternRecordName typeReg with
+                        | Some fields, _ -> fields
+                        | None, Some fields -> fields
+                        | None, None ->
                             Crash.crash $"PRecord pattern could not find record type '{scrutRecordName}' (pattern: '{patternRecordName}')"
 
                     collectRecordFieldBindings (fun fieldName ->
