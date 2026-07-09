@@ -79,6 +79,15 @@ Do not present a pass optimization as review-ready unless every retained optimiz
 
 Do not present a benchmark-driven pass optimization as review-ready unless the review evidence also outlines before/after total compilation timing for each benchmark in the benchmark suite.
 
+Each retained optimization needs its own compile-time evidence. If an attempt keeps multiple production changes because each contributes to the compile-time improvement, measure and report each retained optimization separately or split the attempt into separate review candidates. Do not use the final combined before/after measurement as a substitute for showing the median-of-10 delta for each retained optimization.
+
+The review evidence must include a compact timing table with one row per retained optimization:
+
+- The optimization name or changed hot path.
+- The exact command line or benchmark input used for the before/after pass timing.
+- The before median, after median, absolute delta, and percent delta from 10 comparable pass-timing runs.
+- The overall test-suite wall-clock before median, after median, absolute delta, and percent delta from 10 comparable `./run-tests --ai` runs.
+
 ## Optimization Workflow
 
 1. Inspect the selected pass and its callers, data structures, and nearby tests.

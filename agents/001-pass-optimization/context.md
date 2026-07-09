@@ -8,3 +8,4 @@ This agent should optimize the compile-time performance of compiler passes. Take
 
 - Review evidence for benchmark-driven compiler pass optimizations must show total compilation timing for each benchmark in the suite, in addition to selected-pass timing, so reviewers can see whether a local pass improvement changes whole-compilation behavior across benchmarks.
 - Review evidence must also include before/after overall test-suite wall-clock timing when the optimization targets compile-time performance.
+- Review evidence for retained optimizations must make compile-time deltas reviewable: median-of-10 before/after timing for each retained optimization, plus median-of-10 before/after wall-clock timing for the full test suite.
