@@ -8,14 +8,12 @@
 ## Executive Summary
 
 The Dark implementation of the Takeuchi function still performs worse than Rust,
-but the original entry-block PHI-copy evidence is stale. Current ARM64 LIR has
-only three entry argument moves for `tak`, not the six-move chain previously
-recorded. The remaining evidence points to:
+with current evidence pointing to:
 
 1. **Conservative argument lifetime handling**: Dark moves all three arguments to
    callee-saved registers before the first comparison, while Rust compares `x0`
    and `x1` first and only saves `x2` on the early-exit path.
-2. **Higher instruction count despite fixed entry PHI copies**: current benchmark
+2. **Higher instruction count**: current benchmark
    results show Dark at 635,804,177 instructions versus Rust at 39,336,450
    instructions for `tak` (16.2x).
 
@@ -72,7 +70,6 @@ Label "tak_entry":
 ```
 
 Current status:
-- The previous three redundant PHI-entry copies are no longer present.
 - Post-register-allocation self-moves are removed by `LIR_Peephole.removeSelfMovesFromFunction`.
 - `tak` still uses five callee-saved registers (`X19` through `X23`) across the
   recursive calls.
@@ -95,10 +92,10 @@ tak_body:
     v10020 <- Phi([(Reg v0, tak_entry), (Reg v10028, tak_L1)])      ; x
 ```
 
-Current register allocation coalesces the entry-block PHI sources directly into
-the loop-carried registers for `tak`, so the old `X19 <- X2; X22 <- X19`
-evidence no longer applies. The remaining PHI cost appears after recursive
-calls, where two call results are assigned back to the loop-carried registers.
+Current register allocation coalesces entry-block PHI sources directly into the
+loop-carried registers for `tak`. The remaining PHI cost appears after
+recursive calls, where two call results are assigned back to the loop-carried
+registers.
 
 ## Optimization Opportunities
 
@@ -120,20 +117,23 @@ emits the three entry moves and then compares `X21` with `X22` in `tak_body`.
 - `src/DarkCompiler/passes/5_RegisterAllocation.fs` - Add argument register
   preference/lifetime handling
 
-### 2. Improved PHI Coalescing (Implemented for Entry Path, Still Relevant for Loop Backedge)
+### 2. Improved PHI Coalescing for Loop Backedge (Medium Impact)
 
-**Problem:** PHI nodes with entry block operands don't share registers with their sources.
+**Problem:** Loop-backedge PHI results still require moves after recursive calls.
 
 **Evidence:**
 ```
 v10018 <- Phi([(Reg v2, tak_entry), ...])
 ```
-The stale evidence for an entry-block copy chain no longer appears in current
-LIR. The current loop-carried PHI lowering still materializes moves from the
-three recursive call results back into the loop-carried registers.
+Current loop-carried PHI lowering materializes moves from recursive call results
+back into the loop-carried registers:
+
+```
+X21 <- Mov(Reg X23)
+X22 <- Mov(Reg X19)
+```
 
 **Solution:**
-- Keep the entry-path improvement.
 - Investigate whether loop-backedge PHI moves can be reduced without increasing
   call-clobber pressure.
 
@@ -147,8 +147,8 @@ three recursive call results back into the loop-carried registers.
 | Argument register reuse before calls | 1-2% | Medium |
 | Loop-backedge PHI coalescing | Unknown | Medium |
 
-The previous combined estimate of **7-13%** depended on stale entry-copy
-evidence and should not be used as current guidance.
+The direct speedup from PHI coalescing is not quantified by current local
+evidence.
 
 ## Detailed IR Analysis
 
@@ -182,8 +182,8 @@ v10020 <- Phi([(Reg v0, tak_entry), (Reg v10028, tak_L1)])
 ```
 
 ### LIR Stage (After Register Allocation)
-The old six-move entry chain is gone. Current LIR shows three entry moves plus
-two non-self PHI-result moves in the recursive loop:
+Current LIR shows three entry moves plus two non-self PHI-result moves in the
+recursive loop:
 ```
 Label "tak_entry":
     X21 <- Mov(Reg X0)
@@ -199,9 +199,8 @@ Label "tak_L1":
 ## Conclusion
 
 The tak benchmark still reveals inefficiencies in Dark's register allocation and
-PHI lowering phases, but current evidence is narrower than the original
-investigation. Tail-call detection works and entry-block PHI copies are now
-coalesced. Post-register-allocation self-move elimination is also complete for
-the current `tak` LIR. The durable current findings are the conservative
-argument-save placement before the first comparison and the large 16.2x
-instruction-count gap versus Rust.
+PHI lowering phases. Tail-call detection works, and current LIR keeps the
+entry path compact while still using conservative argument-save placement before
+the first comparison. The durable current findings are that argument-save
+placement, loop-backedge PHI-result moves, and the large 16.2x instruction-count
+gap versus Rust.
