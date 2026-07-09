@@ -37,16 +37,17 @@ asset_info="$(
   jq -r --arg re "$asset_regex" '
     def releases:
       if type == "array" then . else [.] end;
-    releases
-    | sort_by(.published_at // .created_at // "") | reverse
-    | .[]
-    | . as $release
-    | .assets[]?
-    | select(.name | test($re))
-    | [$release.tag_name // "", .name, .browser_download_url]
-    | @tsv
+    limit(1;
+      releases
+      | sort_by(.published_at // .created_at // "") | reverse
+      | .[]
+      | . as $release
+      | .assets[]?
+      | select(.name | test($re))
+      | [$release.tag_name // "", .name, .browser_download_url]
+      | @tsv
+    )
   ' <<< "$release_json" \
-  | head -n 1
 )"
 
 if [[ -z "$asset_info" ]]; then
