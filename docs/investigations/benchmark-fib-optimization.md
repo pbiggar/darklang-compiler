@@ -81,40 +81,38 @@ LLVM performs a remarkable optimization called **"sibling call optimization"** o
 
 ```
 fib:
-  Label "fib_entry":
-    X21 <- Mov(Reg X0)              ; Save n to callee-saved register
-    Jump(Label "fib_body")
-
-  Label "fib_body":
-    Cmp(X21, Imm 1)                 ; Compare n with 1
-    CondBranch(LE, Label "fib_L0", Label "fib_L1")
-
+  StackSize: 0
+  UsedCalleeSaved: [X19, X20, X21]
   Label "fib_L0":                   ; Base case: n <= 1
-    X19 <- Mov(Reg X21)             ; Result = n
-    Jump(Label "fib_L2")
+    X0 <- Mov(Reg X20)
+    Ret
 
   Label "fib_L1":                   ; Recursive case
-    X19 <- Sub(X21, Imm 1)          ; n - 1
+    X19 <- Sub(X20, Imm 1)          ; n - 1
     SaveRegs([], [])
     ArgMoves(X0 <- Reg X19)
-    X20 <- Call(fib, [Reg X19])     ; FIRST recursive call
+    X21 <- Call(fib, [Reg X19])     ; FIRST recursive call
     RestoreRegs([], [])
-    X20 <- Mov(Reg X0)
+    X21 <- Mov(Reg X0)
 
-    X19 <- Sub(X21, Imm 2)          ; n - 2
+    X19 <- Sub(X20, Imm 2)          ; n - 2
     SaveRegs([], [])
     ArgMoves(X0 <- Reg X19)
     X19 <- Call(fib, [Reg X19])     ; SECOND recursive call
     RestoreRegs([], [])
     X19 <- Mov(Reg X0)
 
-    X19 <- Add(X20, Reg X19)        ; fib(n-1) + fib(n-2)
-    X19 <- Mov(Reg X19)             ; REDUNDANT self-move
-    Jump(Label "fib_L2")
-
-  Label "fib_L2":
+    X19 <- Add(X21, Reg X19)        ; fib(n-1) + fib(n-2)
     X0 <- Mov(Reg X19)
     Ret
+
+  Label "fib_body":
+    Cmp(X20, Imm 1)                 ; Compare n with 1
+    CondBranch(LE, Label "fib_L0", Label "fib_L1")
+
+  Label "fib_entry":
+    X20 <- Mov(Reg X0)              ; Save n to callee-saved register
+    Jump(Label "fib_body")
 ```
 
 **Dark makes TWO recursive calls per invocation**, while Rust makes only ONE (plus a loop). This is the primary source of the 2x slowdown.
