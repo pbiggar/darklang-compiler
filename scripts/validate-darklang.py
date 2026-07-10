@@ -637,25 +637,26 @@ class SyntaxConverter:
         """Convert Ralph2 lambda syntax to Darklang."""
         result = expr
 
-        # Pattern: (x: Type) => body
-        # Convert to: fun x -> body
-
-        # Single parameter lambda: (x: Type) => body
-        single_param = r'\((\w+)\s*:\s*[\w\[\](),<>\s]+\)\s*=>'
-        result = re.sub(single_param, r'fun \1 ->', result)
-
-        # Multi-parameter lambda: (x: T1, y: T2) => body
+        # Pattern: (x: Type, y: Type) => body
         # Convert to: fun x y -> body
-        multi_param = r'\((\w+)\s*:\s*[\w\[\](),<>\s]+(?:\s*,\s*(\w+)\s*:\s*[\w\[\](),<>\s]+)+\)\s*=>'
+        lambda_params = r'\(([^()]*)\)\s*=>'
 
-        def replace_multi_lambda(m):
-            full_match = m.group(0)
-            # Extract all parameter names
-            param_pattern = r'(\w+)\s*:\s*[\w\[\](),<>\s]+'
-            params = re.findall(param_pattern, full_match.rstrip('=>').strip('() '))
-            return f'fun {" ".join(params)} ->'
+        def replace_lambda(m):
+            params_str = m.group(1).strip()
+            params = self._split_args(params_str)
+            names = []
 
-        result = re.sub(multi_param, replace_multi_lambda, result)
+            for param in params:
+                name_match = re.match(r'\s*(\w+)\s*:', param)
+                if not name_match:
+                    return m.group(0)
+                names.append(name_match.group(1))
+
+            if not names:
+                return m.group(0)
+            return f'fun {" ".join(names)} ->'
+
+        result = re.sub(lambda_params, replace_lambda, result)
 
         return result
 
