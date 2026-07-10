@@ -18,6 +18,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical fold that removes ANF-specific float absolute value operations after constant propagation exposes a literal operand.
 - Notes: Implemented for `FloatAbs(floatLiteral) -> floatLiteral` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `const_fold_float_abs` in `src/Tests/optimization/anf.opt`; existing float-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
 
+### Constant FloatSqrt folding
+
+- Optimization name: Constant FloatSqrt folding
+- Taxonomy category: Constant folding
+- Priority/rationale: Small, low-risk canonical fold that removes ANF-specific square root operations after constant propagation exposes a literal operand.
+- Notes: Implemented for `FloatSqrt(floatLiteral) -> floatLiteral` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `const_fold_float_sqrt` in `src/Tests/optimization/anf.opt`; existing float-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
+
 ## Algebraic simplification
 
 ### Modulo by one elimination
