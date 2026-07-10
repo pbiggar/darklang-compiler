@@ -26,18 +26,18 @@ You are going to fix EXACTLY ONE code quality issue that does not require adding
 
 4. Run the full test suite (`./run-tests --ai`). Fix the compiler, not the tests, until all tests pass.
 
-5. Run full benchmarks (`./benchmarks/run_benchmarks.sh`). Ignore quicksort failures. If `RESULTS.md` changes, record the new "Performance ratio: X.XX" in your report.
+5. Run full benchmarks (`./benchmarks/run_benchmarks.sh all`). Ignore quicksort failures. If `RESULTS.md` changes, record the new "Performance ratio: X.XX" in your report.
 
-7. Update documentation if the fix changes behavior or clarifies an invariant.
+6. Update documentation if the fix changes behavior or clarifies an invariant.
 
 7. Write a short report to the developer. Include:
 
    - The issue fixed (file path + short description)
-   - The new test (show the test)
-   - Why the test failed before and passes now
+   - The existing coverage cited for the change
+   - Why that coverage exercises the fixed path
    - Any benchmark impact (include the Performance ratio if `RESULTS.md` changed)
 
-8. DO NOT COMMIT OR MERGE UNTIL I SAY "approved". After approval, commit the code, tests, and benchmark results, then land using `./scripts/land-in-main.sh`.
+8. DO NOT COMMIT OR MERGE UNTIL I SAY "approved". After approval, commit the code and any intentional benchmark-result updates, then land using `./scripts/land-on-main.sh`.
 
 ## Policies for code quality fixes
 
