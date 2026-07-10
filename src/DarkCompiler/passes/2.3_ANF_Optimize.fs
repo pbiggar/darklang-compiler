@@ -186,10 +186,23 @@ let private isInt64Atom (typeEnv: TypeEnv) (atom: Atom) : bool =
         | _ -> false
     | _ -> false
 
+let private isBoolAtom (typeEnv: TypeEnv) (atom: Atom) : bool =
+    match atom with
+    | BoolLiteral _ -> true
+    | Var tid ->
+        match Map.tryFind tid typeEnv with
+        | Some AST.TBool -> true
+        | _ -> false
+    | _ -> false
+
 let tryStrengthReduce (typeEnv: TypeEnv) (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     match op, left, right with
     | Add, Var leftTid, Var rightTid when leftTid = rightTid && isInt64Atom typeEnv left ->
         Some (Prim (Shl, left, IntLiteral (Int64 1L)))
+    | Eq, Var leftTid, Var rightTid when leftTid = rightTid && isBoolAtom typeEnv left ->
+        Some (Atom (BoolLiteral true))
+    | Neq, Var leftTid, Var rightTid when leftTid = rightTid && isBoolAtom typeEnv left ->
+        Some (Atom (BoolLiteral false))
     | Eq, Var leftTid, Var rightTid when leftTid = rightTid && isInt64Atom typeEnv left ->
         Some (Atom (BoolLiteral true))
     | Neq, Var leftTid, Var rightTid when leftTid = rightTid && isInt64Atom typeEnv left ->

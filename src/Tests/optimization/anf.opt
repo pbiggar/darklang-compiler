@@ -744,6 +744,22 @@ Function f:
 return t0
 
 ---NAME---
+self_comparison_bool_eq
+---INPUT---
+def f(x: Bool) : Bool = x == x
+---EXPECTED---
+Function f:
+return true
+
+---NAME---
+self_comparison_bool_neq
+---INPUT---
+def f(x: Bool) : Bool = x != x
+---EXPECTED---
+Function f:
+return false
+
+---NAME---
 identity_bool_eq_true_right
 ---INPUT---
 def f(x: Bool) : Bool = x == true
