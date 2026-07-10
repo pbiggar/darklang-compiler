@@ -93,6 +93,13 @@ let x = 42 in Stdlib.Int64.toFloat(x)
 return 42
 
 ---NAME---
+const_fold_float_to_bits
+---INPUT---
+let x = 1.0 in Float.toBits(x)
+---EXPECTED---
+return 4607182418800017408
+
+---NAME---
 const_fold_comparison_lt
 ---INPUT---
 if 1 < 2 then 10 else 20

@@ -32,6 +32,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical fold that removes ANF-specific numeric conversion after constant propagation exposes an Int64 literal operand.
 - Notes: Implemented for `Int64ToFloat(Int64 literal) -> Float literal` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `const_fold_int64_to_float` in `src/Tests/optimization/anf.opt`; existing float-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
 
+### Constant Float.toBits folding
+
+- Optimization name: Constant Float.toBits folding
+- Taxonomy category: Constant folding
+- Priority/rationale: Small, low-risk canonical fold that removes a pure runtime bit-copy conversion when constant propagation exposes a float literal.
+- Notes: Implemented for `FloatToBits(floatLiteral) -> UInt64 literal` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `const_fold_float_to_bits` in `src/Tests/optimization/anf.opt`; existing float stdlib and float-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
+
 ### Constant Int64 shift folding
 
 - Optimization name: Constant Int64 shift folding

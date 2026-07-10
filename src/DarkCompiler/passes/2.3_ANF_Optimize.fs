@@ -492,6 +492,8 @@ let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) 
             | FloatAbs (FloatLiteral f) -> Some (Atom (FloatLiteral (abs f)))
             | FloatSqrt (FloatLiteral f) -> Some (Atom (FloatLiteral (sqrt f)))
             | Int64ToFloat (IntLiteral (Int64 n)) -> Some (Atom (FloatLiteral (float n)))
+            | FloatToBits (FloatLiteral f) ->
+                Some (Atom (IntLiteral (UInt64 (System.BitConverter.DoubleToUInt64Bits f))))
             | IfValue (BoolLiteral true, thenVal, _) -> Some (Atom thenVal)
             | IfValue (BoolLiteral false, _, elseVal) -> Some (Atom elseVal)
             | _ -> None
