@@ -95,7 +95,7 @@ def get_worktrees(repo_root):
         return []
     try:
         output = subprocess.run(
-            ['git', 'worktree', 'list'],
+            ['git', 'worktree', 'list', '--porcelain'],
             cwd=repo_root,
             capture_output=True,
             text=True
@@ -103,15 +103,26 @@ def get_worktrees(repo_root):
     except OSError:
         return []
     worktrees = []
-    for line in output.strip().split('\n'):
-        if not line: continue
-        parts = line.split()
-        path = parts[0]
-        prunable = 'prunable' in line
-        # Extract branch name
-        branch = line.split('[')[-1].rstrip(']').replace(' prunable', '') if '[' in line else ''
+    for record in output.strip().split('\n\n'):
+        if not record:
+            continue
 
-        # Short display name
+        fields = {}
+        prunable = False
+        for line in record.split('\n'):
+            if line == 'prunable' or line.startswith('prunable '):
+                prunable = True
+            elif ' ' in line:
+                key, value = line.split(' ', 1)
+                fields[key] = value
+
+        path = fields.get('worktree', '')
+        if not path:
+            continue
+
+        branch_ref = fields.get('branch', '')
+        branch = branch_ref.removeprefix('refs/heads/')
+
         display = branch
         if display.startswith('compiler-for-dark-'):
             display = display[18:]
