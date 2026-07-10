@@ -152,63 +152,7 @@ Total: 16 instructions (2 per iteration, no loop overhead)
 
 ---
 
-### 3. RESOLVED: Redundant Register Moves in hashLoop
-
-Current evidence no longer reproduces the redundant move pattern previously
-recorded for `hashLoop`.
-
-#### Root Cause
-
-The current post-register-allocation LIR for `hashLoop` is compact and does not
-contain the earlier chain of dead writes or self-moves.
-
-#### Evidence from current LIR post-register-allocation:
-
-```asm
-hashLoop:
-  Label "hashLoop_L1":
-    X2 <- Eor(X2, X1)
-    X2 <- Mul(X2, Reg X4)
-    X3 <- Add(X3, Imm 1)
-    Jump(Label "hashLoop_body")
-  Label "hashLoop_body":
-    Cmp(X3, Imm 8)
-    CondBranch(GE, Label "hashLoop_L2", Label "hashLoop_L1")
-```
-
-#### Status
-
-No follow-up is currently recommended for this specific `hashLoop` move issue.
-
----
-
-### 4. RESOLVED: Local CSE for `(depth - 1)` in buildTree
-
-Current evidence shows local arithmetic CSE is working for the repeated
-`depth - 1` expression in `buildTree`.
-
-#### Root Cause
-
-The expression `depth - 1` is computed once in `buildTree` and reused for the
-left size and both recursive calls.
-
-#### Evidence from current ANF:
-
-```
-let TempId 21 = t17 - 1
-let TempId 22 = 1 << t21
-let TempId 25 = buildTree(t21, t18)
-let TempId 28 = t18 + t22
-let TempId 29 = buildTree(t21, t28)
-```
-
-#### Status
-
-No follow-up is currently recommended for this local arithmetic CSE case.
-
----
-
-### 5. Function Call Overhead for hashLoop
+### 3. Function Call Overhead for hashLoop
 
 **Impact: ~15-20% reduction (combined with unrolling)**
 
