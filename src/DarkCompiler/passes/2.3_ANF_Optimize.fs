@@ -473,6 +473,7 @@ let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) 
             | FloatNeg (FloatLiteral f) -> Some (Atom (FloatLiteral (-f)))
             | FloatAbs (FloatLiteral f) -> Some (Atom (FloatLiteral (abs f)))
             | FloatSqrt (FloatLiteral f) -> Some (Atom (FloatLiteral (sqrt f)))
+            | Int64ToFloat (IntLiteral (Int64 n)) -> Some (Atom (FloatLiteral (float n)))
             | IfValue (BoolLiteral true, thenVal, _) -> Some (Atom thenVal)
             | IfValue (BoolLiteral false, _, elseVal) -> Some (Atom elseVal)
             | _ -> None

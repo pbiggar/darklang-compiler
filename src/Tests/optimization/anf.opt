@@ -86,6 +86,13 @@ let x = 9.0 in Float.sqrt(x)
 return 3
 
 ---NAME---
+const_fold_int64_to_float
+---INPUT---
+let x = 42 in Stdlib.Int64.toFloat(x)
+---EXPECTED---
+return 42
+
+---NAME---
 const_fold_comparison_lt
 ---INPUT---
 if 1 < 2 then 10 else 20
