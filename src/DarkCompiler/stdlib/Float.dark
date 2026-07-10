@@ -199,7 +199,10 @@ def Stdlib.Float.toString(f: Float) : String =
     if fracPart == 0.0 then
         signStr ++ intStr ++ ".0"
     else
-        let fracStr = Stdlib.Float.__getFracDigits(fracPart, 11) in
+        let intDigits = Stdlib.String.length(intStr) in
+        let fracDigits = if intPart == 0 then 12 else 12 - intDigits in
+        let fracDigitsClamped = if fracDigits < 1 then 1 else fracDigits in
+        let fracStr = Stdlib.Float.__getFracDigits(fracPart, fracDigitsClamped) in
         // Strip trailing zeros but keep at least 1 digit
         let strippedFrac = Stdlib.Float.__stripZeros(fracStr, 1) in
         signStr ++ intStr ++ "." ++ strippedFrac

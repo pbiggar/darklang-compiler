@@ -67,7 +67,7 @@ def useLocalFloat(c: Float) : Float = let x = 4.0 in c + x useLocalFloat(3.0) = 
 def addFloats(a: Float, b: Float) : Float = a + b addFloats(1.5, 2.5) = 4.0
 
 // Two float parameters - division
-def divFloats(a: Float, b: Float) : Float = a / b divFloats(1.0, 3.0) = 0.33333333333
+def divFloats(a: Float, b: Float) : Float = a / b divFloats(1.0, 3.0) = 0.333333333333
 
 // Two float parameters - subtraction
 def subFloats(a: Float, b: Float) : Float = a - b subFloats(5.0, 3.0) = 2.0
@@ -85,7 +85,7 @@ let l = [1.5, 2.5] in match l with | [x, y] -> x + y | _ -> 0.0 = 4.0
 def sum4Floats(a: Float, b: Float, c: Float, d: Float) : Float = a + b + c + d sum4Floats(1.0, 2.0, 3.0, 4.0) = 10.0
 
 // Mixed float and int parameters
-def mixedParams(sign: Float, i: Int64) : Float = let divisor = Stdlib.Int64.toFloat(2 * i + 1) in sign / divisor mixedParams(1.0, 1) = 0.33333333333
+def mixedParams(sign: Float, i: Int64) : Float = let divisor = Stdlib.Int64.toFloat(2 * i + 1) in sign / divisor mixedParams(1.0, 1) = 0.333333333333
 
 // Float param with stdlib call
 def floatWithStdlib(c: Float) : Int64 = Stdlib.Float.toInt(c) floatWithStdlib(3.7) = 3
