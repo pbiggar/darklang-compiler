@@ -142,25 +142,31 @@ let testSumEqualityUsesSinglePairMatch () : TestResult =
                     | FunctionDef funcDef when funcDef.Name.StartsWith("__dark_eq_") -> Some funcDef
                     | _ -> None)
 
-            let expressionMatchCount =
+            let expressionMatchCountResult =
                 topLevels
                 |> List.choose (function
                     | Expression typedExpr -> Some (countMatches typedExpr)
                     | _ -> None)
                 |> List.tryHead
-                |> Option.defaultValue -1
+                |> function
+                    | Some count -> Ok count
+                    | None -> Error "Expected checked program to include a top-level expression"
 
             match helperDefs with
             | [] ->
                 Error "Expected generated structural equality helper function for sum equality"
             | helperDef :: _ ->
                 let helperMatchCount = countMatches helperDef.Body
-                if helperMatchCount <> 1 then
-                    Error $"Expected helper body to contain one Match, got {helperMatchCount}"
-                elif expressionMatchCount <> 0 then
-                    Error $"Expected top-level expression to call helper without Match nodes, got {expressionMatchCount}"
-                else
-                    Ok ()
+                match expressionMatchCountResult with
+                | Error err ->
+                    Error err
+                | Ok expressionMatchCount ->
+                    if helperMatchCount <> 1 then
+                        Error $"Expected helper body to contain one Match, got {helperMatchCount}"
+                    elif expressionMatchCount <> 0 then
+                        Error $"Expected top-level expression to call helper without Match nodes, got {expressionMatchCount}"
+                    else
+                        Ok ()
     | Error err ->
         Error $"Type checking failed: {typeErrorToString err}"
 
