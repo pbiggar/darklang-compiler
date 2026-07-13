@@ -94,6 +94,7 @@ Int32.power(0l, 0l) = 1l
 Int32.power(5l, 0l) = 1l
 Int32.power(5l, 1l) = 5l
 Int32.power(2l, 8l) = 256l
+Int32.power(2l, -3l) = error="Uncaught exception: Cannot raise integer to a negative exponent"
 
 // ===================================================================
 // Int32.clamp - Clamp value between limits

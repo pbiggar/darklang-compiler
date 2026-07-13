@@ -23,7 +23,8 @@ def Stdlib.Int32.absoluteValue(a: Int32) : Int32 = if a < 0l then 0l - a else a
 def Stdlib.Int32.negate(a: Int32) : Int32 = 0l - a
 
 def Stdlib.Int32.power(base: Int32, exponent: Int32) : Int32 =
-    if exponent == 0l then 1l
+    if exponent < 0l then Builtin.testRuntimeError("Cannot raise integer to a negative exponent")
+    else if exponent == 0l then 1l
     else if exponent == 1l then base
     else base * Stdlib.Int32.power(base, exponent - 1l)
 
