@@ -4408,21 +4408,11 @@ let private translateTerminator (epilogueLabel: string) (term: LIR.Terminator) :
     | LIR.BranchBitZero (reg, bit, LIR.Label zeroLabel, LIR.Label nonZeroLabel) ->
         resolveReg reg
         |> Result.map (fun regX86 ->
-            // TEST reg with bit mask, branch on zero flag
             let mask = 1L <<< bit
-            if mask >= int64 System.Int32.MinValue && mask <= int64 System.Int32.MaxValue then
-                [X86_64.TEST_reg (regX86, regX86)  // Actually need to test specific bit
-                 // Use AND with immediate to test the bit
-                ] |> ignore
-                loadImm64 scratch mask
-                @ [X86_64.AND_reg (scratch, regX86)
-                   X86_64.Jcc (X86_64.EQ, zeroLabel)
-                   X86_64.JMP nonZeroLabel]
-            else
-                loadImm64 scratch mask
-                @ [X86_64.AND_reg (scratch, regX86)
-                   X86_64.Jcc (X86_64.EQ, zeroLabel)
-                   X86_64.JMP nonZeroLabel])
+            loadImm64 scratch mask
+            @ [X86_64.AND_reg (scratch, regX86)
+               X86_64.Jcc (X86_64.EQ, zeroLabel)
+               X86_64.JMP nonZeroLabel])
 
     | LIR.BranchBitNonZero (reg, bit, LIR.Label nonZeroLabel, LIR.Label zeroLabel) ->
         resolveReg reg
