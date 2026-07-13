@@ -98,7 +98,7 @@ You are going to fix EXACTLY ONE difference (syntactic or semantic).
    - If you discovered something is missing from interpreter, add to Section 5 (Missing from Interpreter)
    - Ensure the skip reason in validate-darklang.py matches a documented category
 
-9. After all tests pass, run all Dark benchmarks (`./benchmarks/run_benchmarks.sh`). If RESULTS.md changed, show the results.
+9. After all tests pass, run all Dark benchmarks (`./benchmarks/run_benchmarks.sh all`). Benchmarks should complete with no failures. If RESULTS.md changed, show the results.
 
 10. Write a short report to the developer. Include:
 

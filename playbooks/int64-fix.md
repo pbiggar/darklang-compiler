@@ -14,13 +14,13 @@ You are going to resolve EXACTLY ONE type checking issue.
 
 6. If the failing tests are incorrect and should be failing, continue and tell the developer.
 
-7. After all tests pass, run all Dark benchmarks. If RESULT.md has changed, show the results.
+7. After all tests pass, run all Dark benchmarks (`./benchmarks/run_benchmarks.sh all`). Benchmarks should complete with no failures. If RESULTS.md has changed, show the results.
 
 8. If there is any valuable documentation to create or information to capture, create a doc or add it to an existing doc.
 
 9. After all this, write a short report to the developer about this issue. Include what assumption was removed along with some context, what test was added (show it!). Explain what the test does before and after the change, and how the was fixed by the compiler changes, and what changes had to be made to the compiler to address the issue. If there is any change to the benchmark result in RESULTS.md, SHOW THE CHANGE!
 
-10. Commit the code, new tests, and new benchmark results, and include in the commit message a large discussion of the issue and the choices and assumptions made. Rebase off main branch if neccessary, and rerun tests if so.
+10. DO NOT COMMIT OR MERGE UNTIL I SAY "approved". After approval, commit the code, new tests, and new benchmark results. Include in the commit message a large discussion of the issue and the choices and assumptions made. Rebase off main branch if necessary, rerun tests if so, and land using `./scripts/land-on-main.sh`.
 
 ## Policies for handling removed type defaults
 

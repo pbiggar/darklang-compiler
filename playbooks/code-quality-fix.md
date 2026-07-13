@@ -26,7 +26,7 @@ You are going to fix EXACTLY ONE code quality issue that does not require adding
 
 4. Run the full test suite (`./run-tests --ai`). Fix the compiler, not the tests, until all tests pass.
 
-5. Run full benchmarks (`./benchmarks/run_benchmarks.sh all`). If `RESULTS.md` changes, record the new "Performance ratio: X.XX" in your report.
+5. Run full benchmarks (`./benchmarks/run_benchmarks.sh all`). Benchmarks should complete with no failures. If `RESULTS.md` changes, record the new "Performance ratio: X.XX" in your report.
 
 6. Update documentation if the fix changes behavior or clarifies an invariant.
 
