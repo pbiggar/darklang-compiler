@@ -99,7 +99,8 @@ type CExpr =
 
 ## Code Generation
 
-From `6_CodeGen.fs`:
+From `src/DarkCompiler/passes/arm64/6_CodeGen.fs` and
+`src/DarkCompiler/passes/x64/6_CodeGen.fs`:
 
 1. **ClosureAlloc**: Allocates tuple on heap, stores function address and captures
 2. **ClosureCall**: Loads function pointer from closure[0], passes closure as hidden first arg
@@ -170,7 +171,8 @@ in add(10)(32)  // 42
 |------|---------|
 | `2_AST_to_ANF.fs:696-1011` | Lambda lifting (freeVars, liftLambdasInExpr) |
 | `ANF.fs:76-78` | ClosureAlloc, ClosureCall, ClosureTailCall types |
-| `6_CodeGen.fs` | Closure runtime code generation |
+| `src/DarkCompiler/passes/arm64/6_CodeGen.fs` | ARM64 closure runtime code generation |
+| `src/DarkCompiler/passes/x64/6_CodeGen.fs` | x64 closure runtime code generation |
 
 ## Tests
 

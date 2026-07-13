@@ -128,7 +128,8 @@ Used for computations that may fail.
 
 ## Code Generation
 
-In `6_CodeGen.fs`:
+In `src/DarkCompiler/passes/arm64/6_CodeGen.fs` and
+`src/DarkCompiler/passes/x64/6_CodeGen.fs`:
 
 **Checking tags:**
 ```assembly
