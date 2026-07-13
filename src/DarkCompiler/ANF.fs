@@ -97,7 +97,7 @@ type BinOp =
     | Shl     // << (left shift)
     | Shr     // >> (right shift)
     | BitAnd  // & (bitwise and)
-    | BitOr   // | (bitwise or)
+    | BitOr   // ||| (bitwise or)
     | BitXor  // ^ (bitwise xor)
     // Comparisons
     | Eq
