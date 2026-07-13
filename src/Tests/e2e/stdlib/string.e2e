@@ -394,22 +394,22 @@ String.split("x666666y", "6") = ["x", "", "", "", "", "", "y"]
 
 // ===================================================================
 // String.join - Join strings with separator
-// NOTE: Join tests commented out due to crash - possible List<String> issue
 // ===================================================================
 
-// String.join(["a", "b", "c"], ",") = stdout="a,b,c\n"
-// String.join(["hello"], ",") = stdout="hello\n"
-// String.join([], ",") = stdout="\n"
-// String.join(["a", "b"], "") = stdout="ab\n"
-// String.join(["a", "b", "c"], " - ") = stdout="a - b - c\n"
-// String.join(["a", "b", "c", "d"], "|") = stdout="a|b|c|d\n"
-// String.join(["hello", " world"], "") = stdout="hello world\n"
+String.join(["a", "b", "c"], ",") = "a,b,c"
+String.join(["hello"], ",") = "hello"
+def emptyStringListForJoin() : List<String> = []
+String.join(emptyStringListForJoin(), ",") = ""
+String.join(["a", "b"], "") = "ab"
+String.join(["a", "b", "c"], " - ") = "a - b - c"
+String.join(["a", "b", "c", "d"], "|") = "a|b|c|d"
+String.join(["hello", " world"], "") = "hello world"
 
 // Unicode join tests
-// String.join(["﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽", "🧟‍♀️"], "") = stdout="﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽🧟‍♀️\n"
-// String.join(["👱👱🏻👱🏼👱🏽👱🏾👱🏿", "👨‍❤️‍💋‍👨", "﷽﷽﷽"], "") = stdout="👱👱🏻👱🏼👱🏽👱🏾👱🏿👨‍❤️‍💋‍👨﷽﷽﷽\n"
-// String.join(["🧟‍♀️🧟‍♂️", "🧟‍♀️🧑🏽‍🦰"], "") = stdout="🧟‍♀️🧟‍♂️🧟‍♀️🧑🏽‍🦰\n"
-// String.join(["👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️", "‍⚧️‍️🇵🇷"], "") = stdout="👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷\n"
+String.join(["﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽", "🧟‍♀️"], "") = "﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽🧟‍♀️"
+String.join(["👱👱🏻👱🏼👱🏽👱🏾👱🏿", "👨‍❤️‍💋‍👨", "﷽﷽﷽"], "") = "👱👱🏻👱🏼👱🏽👱🏾👱🏿👨‍❤️‍💋‍👨﷽﷽﷽"
+String.join(["🧟‍♀️🧟‍♂️", "🧟‍♀️🧑🏽‍🦰"], "") = "🧟‍♀️🧟‍♂️🧟‍♀️🧑🏽‍🦰"
+String.join(["👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️", "‍⚧️‍️🇵🇷"], "") = "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷"
 
 // ===================================================================
 // String.equals - String equality
