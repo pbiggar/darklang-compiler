@@ -36,17 +36,8 @@ let private addLabelRefToPools
     (state: PoolState)
     (labelRef: ARM64Symbolic.LabelRef)
     : PoolState =
-    match labelRef with
-    | ARM64Symbolic.CodeLabel _ -> state
-    | ARM64Symbolic.DataLabel dataRef ->
-        match dataRef with
-        | ARM64Symbolic.Named _ -> state
-        | ARM64Symbolic.StringLiteral value ->
-            let (_, pool') = LiteralPool.addString state.StringPool value
-            { state with StringPool = pool' }
-        | ARM64Symbolic.FloatLiteral value ->
-            let (_, pool') = LiteralPool.addFloat state.FloatPool value
-            { state with FloatPool = pool' }
+    let (_, state') = resolveLabelRef state labelRef
+    state'
 
 let collectPools
     (instructions: ARM64Symbolic.Instr list)
