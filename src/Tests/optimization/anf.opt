@@ -572,6 +572,20 @@ let TempId 2 = f(3.5)
 return t2
 
 ---NAME---
+strength_reduce_float_sub_from_zero
+---INPUT---
+def f(x: Float) : Float = 0.0 - x
+f(3.5)
+---EXPECTED---
+Function f:
+let TempId 1 = FloatNeg(t0)
+return t1
+
+Main:
+let TempId 2 = f(3.5)
+return t2
+
+---NAME---
 identity_float_mul_one_left
 ---INPUT---
 def f(x: Float) : Float = 1.0 * x

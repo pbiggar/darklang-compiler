@@ -180,6 +180,7 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | Add, FloatLiteral 0.0, x -> Some (Atom x)
     | Add, x, FloatLiteral 0.0 -> Some (Atom x)
     | Sub, x, FloatLiteral 0.0 -> Some (Atom x)
+    | Sub, FloatLiteral 0.0, x -> Some (FloatNeg x)
     | Mul, FloatLiteral 1.0, x -> Some (Atom x)
     | Mul, x, FloatLiteral 1.0 -> Some (Atom x)
     | Mul, FloatLiteral -1.0, x -> Some (FloatNeg x)
