@@ -190,20 +190,8 @@ let createExecutableWithPools
     let codeFileOffset = elfHeaderSize + (uint64 numProgramHeaders * programHeaderSize)
     let codeVAddr = baseVAddr + codeFileOffset
 
-    // Create ELF identification bytes
-    let ident = Array.create 16 0uy
-    ident.[0] <- Binary_ELF.EI_MAG0  // 0x7F
-    ident.[1] <- Binary_ELF.EI_MAG1  // 'E'
-    ident.[2] <- Binary_ELF.EI_MAG2  // 'L'
-    ident.[3] <- Binary_ELF.EI_MAG3  // 'F'
-    ident.[4] <- Binary_ELF.ELFCLASS64  // 64-bit
-    ident.[5] <- Binary_ELF.ELFDATA2LSB  // Little-endian
-    ident.[6] <- Binary_ELF.EV_CURRENT   // Current version
-    ident.[7] <- Binary_ELF.ELFOSABI_NONE  // System V ABI
-    // Remaining bytes are 0 (padding)
-
     let header : Binary_ELF.Elf64Header = {
-        Ident = ident
+        Ident = Binary_ELF.createIdent ()
         Type = Binary_ELF.ET_EXEC
         Machine = Binary_ELF.EM_AARCH64
         Version = 1u  // Current version
@@ -307,19 +295,8 @@ let createExecutableWithCoverage (machineCode: uint32 list) (stringPool: Literal
     let codeFileOffset = elfHeaderSize + (uint64 numProgramHeaders * programHeaderSize)
     let codeVAddr = baseVAddr + codeFileOffset
 
-    // Create ELF identification bytes
-    let ident = Array.create 16 0uy
-    ident.[0] <- Binary_ELF.EI_MAG0
-    ident.[1] <- Binary_ELF.EI_MAG1
-    ident.[2] <- Binary_ELF.EI_MAG2
-    ident.[3] <- Binary_ELF.EI_MAG3
-    ident.[4] <- Binary_ELF.ELFCLASS64
-    ident.[5] <- Binary_ELF.ELFDATA2LSB
-    ident.[6] <- Binary_ELF.EV_CURRENT
-    ident.[7] <- Binary_ELF.ELFOSABI_NONE
-
     let header : Binary_ELF.Elf64Header = {
-        Ident = ident
+        Ident = Binary_ELF.createIdent ()
         Type = Binary_ELF.ET_EXEC
         Machine = Binary_ELF.EM_AARCH64
         Version = 1u

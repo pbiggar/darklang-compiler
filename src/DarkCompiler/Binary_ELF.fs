@@ -36,6 +36,20 @@ let EV_CURRENT = 1uy
 /// OS/ABI identification
 let ELFOSABI_NONE = 0uy  // System V
 
+/// ELF identification bytes shared by all ELF64 backends.
+let createIdent () : byte array =
+    [|
+        EI_MAG0
+        EI_MAG1
+        EI_MAG2
+        EI_MAG3
+        ELFCLASS64
+        ELFDATA2LSB
+        EV_CURRENT
+        ELFOSABI_NONE
+        0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy
+    |]
+
 /// Object file type
 let ET_EXEC = 2us  // Executable file
 

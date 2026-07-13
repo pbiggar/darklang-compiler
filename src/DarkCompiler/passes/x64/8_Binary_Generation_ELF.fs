@@ -48,19 +48,8 @@ let createExecutableWithPools
     let codeFileOffset = elfHeaderSize + (uint64 numProgramHeaders * programHeaderSize)
     let entryVAddr = baseVAddr + codeFileOffset + uint64 entryOffset
 
-    // Create ELF identification bytes
-    let ident = Array.create 16 0uy
-    ident.[0] <- Binary_ELF.EI_MAG0
-    ident.[1] <- Binary_ELF.EI_MAG1
-    ident.[2] <- Binary_ELF.EI_MAG2
-    ident.[3] <- Binary_ELF.EI_MAG3
-    ident.[4] <- Binary_ELF.ELFCLASS64
-    ident.[5] <- Binary_ELF.ELFDATA2LSB
-    ident.[6] <- Binary_ELF.EV_CURRENT
-    ident.[7] <- Binary_ELF.ELFOSABI_NONE
-
     let header : Binary_ELF.Elf64Header = {
-        Ident = ident
+        Ident = Binary_ELF.createIdent ()
         Type = Binary_ELF.ET_EXEC
         Machine = Binary_ELF.EM_X86_64
         Version = 1u

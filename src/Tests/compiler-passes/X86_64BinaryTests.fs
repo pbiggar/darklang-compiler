@@ -47,6 +47,25 @@ let testGenerateElf () : Result<unit, string> =
     else
         Ok ()
 
+let testElfIdentHelper () : Result<unit, string> =
+    let ident = Binary_ELF.createIdent ()
+    let expected = [|
+        Binary_ELF.EI_MAG0
+        Binary_ELF.EI_MAG1
+        Binary_ELF.EI_MAG2
+        Binary_ELF.EI_MAG3
+        Binary_ELF.ELFCLASS64
+        Binary_ELF.ELFDATA2LSB
+        Binary_ELF.EV_CURRENT
+        Binary_ELF.ELFOSABI_NONE
+        0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy
+    |]
+
+    if ident = expected then
+        Ok ()
+    else
+        Error "ELF ident helper produced unexpected bytes"
+
 /// Run an ELF binary, using qemu-user-static if on a different architecture.
 /// Returns the exit code.
 let internal runElfBinary (binary: byte array) : Result<int, string> =
@@ -98,6 +117,7 @@ let testExecuteElf () : Result<unit, string> =
         else Error $"Expected exit code 42, got {exitCode}"
 
 let tests : (string * (unit -> Result<unit, string>)) list = [
+    ("ELF ident helper", testElfIdentHelper)
     ("Generate x86-64 ELF", testGenerateElf)
     ("Execute x86-64 ELF", testExecuteElf)
 ]
