@@ -23,7 +23,8 @@ def Stdlib.Int16.absoluteValue(a: Int16) : Int16 = if a < 0s then 0s - a else a
 def Stdlib.Int16.negate(a: Int16) : Int16 = 0s - a
 
 def Stdlib.Int16.power(base: Int16, exponent: Int16) : Int16 =
-    if exponent == 0s then 1s
+    if exponent < 0s then Builtin.testRuntimeError("Cannot raise integer to a negative exponent")
+    else if exponent == 0s then 1s
     else if exponent == 1s then base
     else base * Stdlib.Int16.power(base, exponent - 1s)
 

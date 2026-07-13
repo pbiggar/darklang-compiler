@@ -94,6 +94,7 @@ Int16.power(0s, 0s) = 1s
 Int16.power(5s, 0s) = 1s
 Int16.power(5s, 1s) = 5s
 Int16.power(2s, 8s) = 256s
+Int16.power(2s, -3s) = error="Cannot raise integer to a negative exponent"
 
 // ===================================================================
 // Int16.clamp - Clamp value between limits
