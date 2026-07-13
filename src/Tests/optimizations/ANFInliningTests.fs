@@ -1,7 +1,7 @@
-// ANFInliningTests.fs - Unit tests for ANF inlining behavior
+// ANFInliningTests.fs - Unit tests for ANF inlining behavior.
 //
-// Verifies that the inliner handles literal arguments by inlining the call
-// and binding literals to fresh TempIds in the inlined body.
+// Covers literal argument binding, local inlining eligibility, and external
+// stdlib candidate filtering/budgeting.
 
 module ANFInliningTests
 
