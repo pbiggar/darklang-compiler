@@ -56,6 +56,13 @@ let private encodeInt16UnsignedScaled12Offset (instructionName: string) (offset:
     else
         encodeUnsignedScaled12Offset instructionName (uint16 offset)
 
+let private encodeInt16SignedScaled7Offset (instructionName: string) (offset: int16) : uint32 =
+    let offsetInt = int offset
+    if offsetInt < -512 || offsetInt > 504 || offsetInt % 8 <> 0 then
+        Crash.crash $"{instructionName}: signed pair offset must be -512..504 and 8-byte aligned, got {offsetInt}"
+    else
+        ((uint32 (offsetInt / 8)) &&& 0x7Fu) <<< 15
+
 /// Encode ARM64 instruction to 32-bit machine code
 let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
     match instr with
@@ -606,8 +613,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // Bits 29-22 = 1010 010 0 = 0b10100100
         let opc = 2u <<< 30  // 64-bit
         let fixedBits = 0b10100100u <<< 22  // STP: 101 0 010 0 (mode=signed offset, L=0)
-        // Convert byte offset to 8-byte units and extract 7 bits
-        let imm7 = ((uint32 (int offset / 8)) &&& 0x7Fu) <<< 15
+        let imm7 = encodeInt16SignedScaled7Offset "STP" offset
         let rt2 = (encodeReg reg2) <<< 10
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg reg1
@@ -620,7 +626,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // Bits 29-22 = 1010 010 1 = 0b10100101
         let opc = 2u <<< 30  // 64-bit
         let fixedBits = 0b10100101u <<< 22  // LDP: 101 0 010 1 (mode=signed offset, L=1)
-        let imm7 = ((uint32 (int offset / 8)) &&& 0x7Fu) <<< 15
+        let imm7 = encodeInt16SignedScaled7Offset "LDP" offset
         let rt2 = (encodeReg reg2) <<< 10
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg reg1
@@ -633,7 +639,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // Bits 29-22 = 1010 011 0 = 0b10100110
         let opc = 2u <<< 30  // 64-bit
         let fixedBits = 0b10100110u <<< 22  // STP pre-indexed: 101 0 011 0
-        let imm7 = ((uint32 (int offset / 8)) &&& 0x7Fu) <<< 15
+        let imm7 = encodeInt16SignedScaled7Offset "STP_pre" offset
         let rt2 = (encodeReg reg2) <<< 10
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg reg1
@@ -646,7 +652,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // Bits 29-22 = 1010 001 1 = 0b10100011
         let opc = 2u <<< 30  // 64-bit
         let fixedBits = 0b10100011u <<< 22  // LDP post-indexed: 101 0 001 1
-        let imm7 = ((uint32 (int offset / 8)) &&& 0x7Fu) <<< 15
+        let imm7 = encodeInt16SignedScaled7Offset "LDP_post" offset
         let rt2 = (encodeReg reg2) <<< 10
         let rn = (encodeReg addr) <<< 5
         let rt = encodeReg reg1
@@ -761,7 +767,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // Bits 29-22 = 101 1 010 0 = 0b10110100
         let opc = 1u <<< 30  // 01 for 64-bit FP
         let fixedBits = 0b10110100u <<< 22  // STP FP: 101 1 010 0
-        let imm7 = ((uint32 (int offset / 8)) &&& 0x7Fu) <<< 15
+        let imm7 = encodeInt16SignedScaled7Offset "STP_fp" offset
         let rt2 = (encodeFReg freg2) <<< 10
         let rn = (encodeReg addr) <<< 5
         let rt = encodeFReg freg1
@@ -774,7 +780,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         // Bits 29-22 = 101 1 010 1 = 0b10110101
         let opc = 1u <<< 30  // 01 for 64-bit FP
         let fixedBits = 0b10110101u <<< 22  // LDP FP: 101 1 010 1
-        let imm7 = ((uint32 (int offset / 8)) &&& 0x7Fu) <<< 15
+        let imm7 = encodeInt16SignedScaled7Offset "LDP_fp" offset
         let rt2 = (encodeFReg freg2) <<< 10
         let rn = (encodeReg addr) <<< 5
         let rt = encodeFReg freg1

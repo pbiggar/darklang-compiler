@@ -114,6 +114,26 @@ let testUnsignedMemoryOffsetsRejectInvalidValues () : TestResult =
 
     checkCases cases
 
+let testSignedPairOffsetsRejectInvalidValues () : TestResult =
+    let cases = [
+        ("STP unaligned offset", fun () -> encode (STP (X0, X1, SP, 7s)) |> ignore)
+        ("LDP out-of-range offset", fun () -> encode (LDP (X0, X1, SP, 512s)) |> ignore)
+        ("STP_pre negative out-of-range offset", fun () -> encode (STP_pre (X0, X1, SP, -520s)) |> ignore)
+        ("LDP_post unaligned offset", fun () -> encode (LDP_post (X0, X1, SP, -7s)) |> ignore)
+        ("STP_fp out-of-range offset", fun () -> encode (STP_fp (D0, D1, SP, 512s)) |> ignore)
+        ("LDP_fp unaligned offset", fun () -> encode (LDP_fp (D0, D1, SP, 6s)) |> ignore)
+    ]
+
+    let rec checkCases remaining =
+        match remaining with
+        | [] -> Ok ()
+        | (name, f) :: rest ->
+            match expectCrash name f with
+            | Ok () -> checkCases rest
+            | Error msg -> Error msg
+
+    checkCases cases
+
 let testFMOVImmediateEncoding () : TestResult =
     let cases = [
         "1.0", FMOV_imm (D2, 1.0), 0x1E6E1002u
@@ -139,6 +159,7 @@ let tests = [
     ("MOVK shift encoding", testMOVKShiftEncoding)
     ("MOVZ+MOVK sequence", testMOVZMOVKSequence)
     ("unsigned memory offsets reject invalid values", testUnsignedMemoryOffsetsRejectInvalidValues)
+    ("signed pair offsets reject invalid values", testSignedPairOffsetsRejectInvalidValues)
     ("FMOV immediate encoding", testFMOVImmediateEncoding)
 ]
 
