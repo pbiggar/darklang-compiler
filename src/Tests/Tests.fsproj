@@ -49,6 +49,7 @@
     <Compile Include="compiler-passes/TypeCheckingTests.fs" />
     <Compile Include="compiler-passes/ParallelMoveTests.fs" />
     <Compile Include="compiler-passes/BitsetTests.fs" />
+    <Compile Include="compiler-passes/SSAConstructionTests.fs" />
     <Compile Include="compiler-passes/SSALivenessTests.fs" />
     <Compile Include="compiler-passes/PhiResolutionTests.fs" />
     <Compile Include="compiler-passes/ChordalGraphTests.fs" />

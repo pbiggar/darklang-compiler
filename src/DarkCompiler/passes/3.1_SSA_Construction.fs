@@ -427,6 +427,18 @@ let getSuccessors (block: BasicBlock) : Label list =
     | Jump target -> [target]
     | Branch (_, trueLabel, falseLabel) -> [trueLabel; falseLabel]
 
+let private labelName (Label name) = name
+
+let private requireBlock (context: string) (blocks: Map<Label, BasicBlock>) (label: Label) : BasicBlock =
+    match Map.tryFind label blocks with
+    | Some block -> block
+    | None -> Crash.crash $"SSA: Missing CFG block {labelName label} while {context}"
+
+let private requireVRegSet (context: string) (sets: Map<Label, Set<VReg>>) (label: Label) : Set<VReg> =
+    match Map.tryFind label sets with
+    | Some vregs -> vregs
+    | None -> Crash.crash $"SSA: Missing liveness set for block {labelName label} while {context}"
+
 /// Compute liveness information for the CFG
 /// Returns (liveIn, liveOut) maps from Label to Set<VReg>
 /// A variable is live-in at a block if it may be used before being defined
@@ -435,8 +447,14 @@ let computeLiveness (cfg: CFG) : Map<Label, Set<VReg>> * Map<Label, Set<VReg>> =
     let labels = cfg.Blocks |> Map.keys |> List.ofSeq
 
     // Precompute uses and defs for each block
-    let blockUses = labels |> List.map (fun l -> (l, getBlockUses (Map.find l cfg.Blocks))) |> Map.ofList
-    let blockDefs = labels |> List.map (fun l -> (l, getBlockDefs (Map.find l cfg.Blocks))) |> Map.ofList
+    let blockUses =
+        labels
+        |> List.map (fun l -> (l, getBlockUses (requireBlock "precomputing liveness uses" cfg.Blocks l)))
+        |> Map.ofList
+    let blockDefs =
+        labels
+        |> List.map (fun l -> (l, getBlockDefs (requireBlock "precomputing liveness definitions" cfg.Blocks l)))
+        |> Map.ofList
 
     // Initialize live-out to empty
     let initialLiveOut = labels |> List.map (fun l -> (l, Set.empty)) |> Map.ofList
@@ -446,22 +464,23 @@ let computeLiveness (cfg: CFG) : Map<Label, Set<VReg>> * Map<Label, Set<VReg>> =
         let (changed, liveOut') =
             labels
             |> List.fold (fun (changed, lo) label ->
-                let block = Map.find label cfg.Blocks
+                let block = requireBlock "computing liveness for block" cfg.Blocks label
                 let successors = getSuccessors block
 
                 // Live-out = union of live-in of all successors
                 let newLiveOut =
                     successors
                     |> List.fold (fun acc succ ->
+                        let _succBlock = requireBlock "computing liveness successor" cfg.Blocks succ
                         // Live-in of successor = uses + (live-out - defs)
-                        let succUses = Map.find succ blockUses
-                        let succDefs = Map.find succ blockDefs
+                        let succUses = requireVRegSet "computing liveness successor uses" blockUses succ
+                        let succDefs = requireVRegSet "computing liveness successor definitions" blockDefs succ
                         let succLiveOut = Map.tryFind succ lo |> Option.defaultValue Set.empty
                         let succLiveIn = Set.union succUses (Set.difference succLiveOut succDefs)
                         Set.union acc succLiveIn
                     ) Set.empty
 
-                let oldLiveOut = Map.find label lo
+                let oldLiveOut = requireVRegSet "checking liveness fixed point" lo label
                 if newLiveOut = oldLiveOut then
                     (changed, lo)
                 else
@@ -476,9 +495,9 @@ let computeLiveness (cfg: CFG) : Map<Label, Set<VReg>> * Map<Label, Set<VReg>> =
     let liveIn =
         labels
         |> List.map (fun label ->
-            let uses = Map.find label blockUses
-            let defs = Map.find label blockDefs
-            let lo = Map.find label finalLiveOut
+            let uses = requireVRegSet "computing final live-in uses" blockUses label
+            let defs = requireVRegSet "computing final live-in definitions" blockDefs label
+            let lo = requireVRegSet "computing final live-in live-out" finalLiveOut label
             let li = Set.union uses (Set.difference lo defs)
             (label, li)
         )
