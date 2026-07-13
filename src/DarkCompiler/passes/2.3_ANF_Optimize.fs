@@ -241,6 +241,24 @@ let private isUnsignedIntegerAtom (typeEnv: TypeEnv) (atom: Atom) : bool =
         | _ -> false
     | _ -> false
 
+let private isIntegerAtom (typeEnv: TypeEnv) (atom: Atom) : bool =
+    match atom with
+    | IntLiteral _ -> true
+    | Var tid ->
+        match Map.tryFind tid typeEnv with
+        | Some AST.TInt8
+        | Some AST.TInt16
+        | Some AST.TInt32
+        | Some AST.TInt64
+        | Some AST.TInt128
+        | Some AST.TUInt8
+        | Some AST.TUInt16
+        | Some AST.TUInt32
+        | Some AST.TUInt64
+        | Some AST.TUInt128 -> true
+        | _ -> false
+    | _ -> false
+
 let tryStrengthReduce (typeEnv: TypeEnv) (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     match op, left, right with
     | Add, Var leftTid, Var rightTid when leftTid = rightTid && isInt64Atom typeEnv left ->
@@ -249,17 +267,17 @@ let tryStrengthReduce (typeEnv: TypeEnv) (op: BinOp) (left: Atom) (right: Atom) 
         Some (Atom (BoolLiteral true))
     | Neq, Var leftTid, Var rightTid when leftTid = rightTid && isBoolAtom typeEnv left ->
         Some (Atom (BoolLiteral false))
-    | Eq, Var leftTid, Var rightTid when leftTid = rightTid && isInt64Atom typeEnv left ->
+    | Eq, Var leftTid, Var rightTid when leftTid = rightTid && isIntegerAtom typeEnv left ->
         Some (Atom (BoolLiteral true))
-    | Neq, Var leftTid, Var rightTid when leftTid = rightTid && isInt64Atom typeEnv left ->
+    | Neq, Var leftTid, Var rightTid when leftTid = rightTid && isIntegerAtom typeEnv left ->
         Some (Atom (BoolLiteral false))
-    | Lt, Var leftTid, Var rightTid when leftTid = rightTid && isInt64Atom typeEnv left ->
+    | Lt, Var leftTid, Var rightTid when leftTid = rightTid && isIntegerAtom typeEnv left ->
         Some (Atom (BoolLiteral false))
-    | Gt, Var leftTid, Var rightTid when leftTid = rightTid && isInt64Atom typeEnv left ->
+    | Gt, Var leftTid, Var rightTid when leftTid = rightTid && isIntegerAtom typeEnv left ->
         Some (Atom (BoolLiteral false))
-    | Lte, Var leftTid, Var rightTid when leftTid = rightTid && isInt64Atom typeEnv left ->
+    | Lte, Var leftTid, Var rightTid when leftTid = rightTid && isIntegerAtom typeEnv left ->
         Some (Atom (BoolLiteral true))
-    | Gte, Var leftTid, Var rightTid when leftTid = rightTid && isInt64Atom typeEnv left ->
+    | Gte, Var leftTid, Var rightTid when leftTid = rightTid && isIntegerAtom typeEnv left ->
         Some (Atom (BoolLiteral true))
     | Mul, x, IntLiteral (Int64 n) ->
         match tryLog2 n with

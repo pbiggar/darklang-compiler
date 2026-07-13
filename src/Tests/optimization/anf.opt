@@ -810,6 +810,32 @@ let TempId 1 = f(true)
 return t1
 
 ---NAME---
+self_comparison_uint64_eq
+---INPUT---
+def f(x: UInt64) : Bool = x == x
+f(42UL)
+---EXPECTED---
+Function f:
+return true
+
+Main:
+let TempId 2 = f(42)
+return t2
+
+---NAME---
+self_comparison_uint64_gte
+---INPUT---
+def f(x: UInt64) : Bool = x >= x
+f(42UL)
+---EXPECTED---
+Function f:
+return true
+
+Main:
+let TempId 2 = f(42)
+return t2
+
+---NAME---
 identity_bitand_self
 ---INPUT---
 def f(x: Int64) : Int64 = x & x
