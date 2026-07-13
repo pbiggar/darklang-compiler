@@ -139,6 +139,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical boolean simplification that removes redundant equality comparisons on the same Bool SSA variable in ANF before backend lowering.
 - Notes: Implemented for `x == x -> true` and `x != x -> false` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `self_comparison_bool_eq` and `self_comparison_bool_neq` in `src/Tests/optimization/anf.opt`; existing boolean-heavy test coverage exercises correctness, while benchmark programs do not isolate this micro-pattern.
 
+### Boolean absorption simplification
+
+- Optimization name: Boolean absorption simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical boolean simplification that removes redundant adjacent ANF boolean operations before backend lowering.
+- Notes: Implemented for adjacent ANF forms of `x && (x || y) -> x` and `x || (x && y) -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `identity_bool_and_absorption_left` and `identity_bool_or_absorption_left` in `src/Tests/optimization/anf.opt`; existing boolean-heavy tests provide regression coverage but do not isolate benchmark impact.
+
 ### Boolean comparison constant simplification
 
 - Optimization name: Boolean comparison constant simplification

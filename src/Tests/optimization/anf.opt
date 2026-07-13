@@ -982,6 +982,22 @@ Function f:
 return false
 
 ---NAME---
+identity_bool_and_absorption_left
+---INPUT---
+def f(x: Bool, y: Bool) : Bool = x && (x || y)
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_bool_or_absorption_left
+---INPUT---
+def f(x: Bool, y: Bool) : Bool = x || (x && y)
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
 identity_bool_eq_true_right
 ---INPUT---
 def f(x: Bool) : Bool = x == true

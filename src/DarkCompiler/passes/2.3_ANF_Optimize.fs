@@ -633,7 +633,11 @@ let private isCSEEligible (cexpr: CExpr) : bool =
     | FloatToInt64 _ -> true
     | _ -> false
 
-let private trySimplifyDoubleUnary (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =
+let private tryAbsorbedAtom (outer: Atom) (nestedLeft: Atom) (nestedRight: Atom) : Atom option =
+    if outer = nestedLeft || outer = nestedRight then Some outer
+    else None
+
+let private trySimplifyAdjacentLet (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =
     match cexpr, body with
     | UnaryPrim (Not, source), Let (notTid, UnaryPrim (Not, Var sourceTid), notBody)
         when sourceTid = tid ->
@@ -653,6 +657,22 @@ let private trySimplifyDoubleUnary (tid: TempId) (cexpr: CExpr) (body: AExpr) : 
     | FloatNeg source, Let (absTid, FloatAbs (Var sourceTid), absBody)
         when sourceTid = tid ->
         Some (Let (absTid, FloatAbs source, absBody))
+    | Prim (Or, nestedLeft, nestedRight), Let (andTid, Prim (And, outer, Var nestedTid), andBody)
+        when nestedTid = tid ->
+        tryAbsorbedAtom outer nestedLeft nestedRight
+        |> Option.map (fun absorbed -> Let (andTid, Atom absorbed, andBody))
+    | Prim (Or, nestedLeft, nestedRight), Let (andTid, Prim (And, Var nestedTid, outer), andBody)
+        when nestedTid = tid ->
+        tryAbsorbedAtom outer nestedLeft nestedRight
+        |> Option.map (fun absorbed -> Let (andTid, Atom absorbed, andBody))
+    | Prim (And, nestedLeft, nestedRight), Let (orTid, Prim (Or, outer, Var nestedTid), orBody)
+        when nestedTid = tid ->
+        tryAbsorbedAtom outer nestedLeft nestedRight
+        |> Option.map (fun absorbed -> Let (orTid, Atom absorbed, orBody))
+    | Prim (And, nestedLeft, nestedRight), Let (orTid, Prim (Or, Var nestedTid, outer), orBody)
+        when nestedTid = tid ->
+        tryAbsorbedAtom outer nestedLeft nestedRight
+        |> Option.map (fun absorbed -> Let (orTid, Atom absorbed, orBody))
     | _ -> None
 
 let private trySimplifyBoolComplement (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =
@@ -726,7 +746,7 @@ let rec private optimizeAExprWithUses
 
         let adjacentSimplification =
             if options.EnableConstFolding then
-                trySimplifyDoubleUnary tid cexpr'' bodyResult.Expr
+                trySimplifyAdjacentLet tid cexpr'' bodyResult.Expr
                 |> Option.orElseWith (fun () -> trySimplifyBoolComplement tid cexpr'' bodyResult.Expr)
             else
                 None
