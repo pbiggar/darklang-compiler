@@ -574,22 +574,25 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         let argStr = args |> commaSeparated prettyPrintLIROperand
         $"ClosureTailCall({prettyPrintLIRReg closure}, [{argStr}])"
     | LIR.SaveRegs (intRegs, floatRegs) ->
-        let intStr = intRegs |> List.map (sprintf "%A") |> String.concat ", "
-        let floatStr = floatRegs |> List.map (sprintf "%A") |> String.concat ", "
+        let intStr = intRegs |> List.map string |> String.concat ", "
+        let floatStr = floatRegs |> List.map string |> String.concat ", "
         $"SaveRegs([{intStr}], [{floatStr}])"
     | LIR.RestoreRegs (intRegs, floatRegs) ->
-        let intStr = intRegs |> List.map (sprintf "%A") |> String.concat ", "
-        let floatStr = floatRegs |> List.map (sprintf "%A") |> String.concat ", "
+        let intStr = intRegs |> List.map string |> String.concat ", "
+        let floatStr = floatRegs |> List.map string |> String.concat ", "
         $"RestoreRegs([{intStr}], [{floatStr}])"
     | LIR.ArgMoves moves ->
-        let moveStrs = moves |> List.map (fun (dest, src) -> sprintf "%A <- %s" dest (prettyPrintLIROperand src))
-        sprintf "ArgMoves(%s)" (String.concat ", " moveStrs)
+        let moveStrs = moves |> List.map (fun (dest, src) -> $"{dest} <- {prettyPrintLIROperand src}")
+        let movesText = String.concat ", " moveStrs
+        $"ArgMoves({movesText})"
     | LIR.TailArgMoves moves ->
-        let moveStrs = moves |> List.map (fun (dest, src) -> sprintf "%A <- %s" dest (prettyPrintLIROperand src))
-        sprintf "TailArgMoves(%s)" (String.concat ", " moveStrs)
+        let moveStrs = moves |> List.map (fun (dest, src) -> $"{dest} <- {prettyPrintLIROperand src}")
+        let movesText = String.concat ", " moveStrs
+        $"TailArgMoves({movesText})"
     | LIR.FArgMoves moves ->
-        let moveStrs = moves |> List.map (fun (dest, src) -> sprintf "%A <- %s" dest (prettyPrintLIRFReg src))
-        sprintf "FArgMoves(%s)" (String.concat ", " moveStrs)
+        let moveStrs = moves |> List.map (fun (dest, src) -> $"{dest} <- {prettyPrintLIRFReg src}")
+        let movesText = String.concat ", " moveStrs
+        $"FArgMoves({movesText})"
     | LIR.PrintInt64 reg ->
         $"PrintInt64({prettyPrintLIRReg reg})"
     | LIR.PrintBool reg ->
@@ -745,9 +748,9 @@ let formatLIR (LIR.Program (functions, _, _)) : string =
                     let instrStrs =
                         block.Instrs
                         |> List.map prettyPrintLIRInstr
-                        |> List.map (sprintf "    %s")
+                        |> List.map (fun line -> $"    {line}")
                         |> String.concat "\n"
-                    let termStr = sprintf "    %s" (prettyPrintLIRTerminator block.Terminator)
+                    let termStr = $"    {prettyPrintLIRTerminator block.Terminator}"
                     $"  {label}:\n{instrStrs}\n{termStr}")
                 |> String.concat "\n"
             let calleeSavedText = prettyPrintCalleeSaved func.UsedCalleeSaved
