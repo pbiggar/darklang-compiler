@@ -301,6 +301,48 @@ let testRawAllocUsesSharedHeapOverflowPath () : TestResult =
         else
             Ok ()
 
+let testRuntimePrintStringLengthUsesFullImmediate () : TestResult =
+    let instrs = Runtime.generatePrintString 65537
+
+    let hasLowerLengthChunk =
+        instrs
+        |> List.exists (function
+            | ARM64.MOVZ (ARM64.X2, 1us, 0) ->
+                true
+            | _ ->
+                false)
+
+    let hasUpperLengthChunk =
+        instrs
+        |> List.exists (function
+            | ARM64.MOVK (ARM64.X2, 1us, 16) ->
+                true
+            | _ ->
+                false)
+
+    let truncatesLengthToLowChunkOnly =
+        instrs
+        |> List.forall (function
+            | ARM64.MOVK (ARM64.X2, _, _) ->
+                false
+            | _ ->
+                true)
+        && instrs
+        |> List.exists (function
+            | ARM64.MOVZ (ARM64.X2, 0us, 0) ->
+                true
+            | ARM64.MOVZ (ARM64.X2, 1us, 0) ->
+                true
+            | _ ->
+                false)
+
+    if hasLowerLengthChunk && hasUpperLengthChunk then
+        Ok ()
+    elif truncatesLengthToLowChunkOnly then
+        Error "Runtime print string length truncated 65537 bytes to a 16-bit low chunk"
+    else
+        Error "Runtime print string length did not emit both length chunks"
+
 let testRawSlotInitPureEnumDoesNotEmitGenericRetain () : TestResult =
     let enumType = AST.TSum ("RawSlotInitPureEnum", [AST.TString])
     let variants : LIR.VariantRegistry =
@@ -1290,6 +1332,7 @@ let tests : (string * (unit -> TestResult)) list = [
     ("ARM64 UInt64 runtime preserves trailing newline", testPrintUInt64RuntimePreservesNewline)
     ("ARM64 FLoad encodable constants use immediate", testArm64FLoadEncodableConstantsUseImmediate)
     ("RawAlloc uses shared heap overflow path", testRawAllocUsesSharedHeapOverflowPath)
+    ("Runtime print string length uses full immediate", testRuntimePrintStringLengthUsesFullImmediate)
     ("RawSlotInit pure enum skips generic retain", testRawSlotInitPureEnumDoesNotEmitGenericRetain)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
     ("List tuple3 string/list/dict-list uses typed dict helper", testListTuple3StringListDictListValueUsesTypedDictHelper)

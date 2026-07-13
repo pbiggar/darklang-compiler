@@ -19,6 +19,37 @@ let private detectRuntimeOS () : Platform.OS =
 let private arm64SyscallsForRuntime () : ARM64.SyscallConfig =
     detectRuntimeOS () |> ARM64.syscallConfigFor
 
+let private generateLoadUInt64Immediate (dest: ARM64.Reg) (value: uint64) : ARM64.Instr list =
+    let chunk shift =
+        uint16 ((value >>> shift) &&& 0xFFFFUL)
+
+    let chunks = [
+        (chunk 0, 0)
+        (chunk 16, 16)
+        (chunk 32, 32)
+        (chunk 48, 48)
+    ]
+
+    match chunks |> List.tryFind (fun (value, _) -> value <> 0us) with
+    | None ->
+        [ARM64.MOVZ (dest, 0us, 0)]
+    | Some (firstValue, firstShift) ->
+        let movkInstrs =
+            chunks
+            |> List.choose (fun (value, shift) ->
+                if shift = firstShift || value = 0us then
+                    None
+                else
+                    Some (ARM64.MOVK (dest, value, shift)))
+
+        ARM64.MOVZ (dest, firstValue, firstShift) :: movkInstrs
+
+let private generateLoadNonNegativeIntImmediate (dest: ARM64.Reg) (value: int) : ARM64.Instr list =
+    if value < 0 then
+        Crash.crash $"Runtime: cannot load negative unsigned immediate {value}"
+    else
+        generateLoadUInt64Immediate dest (uint64 value)
+
 /// Generate ARM64 instructions to print int64 in X0 to stdout with newline
 /// Then exit with code 0
 ///
@@ -205,11 +236,10 @@ let generatePrintString (stringLen: int) : ARM64.Instr list =
         ARM64.ADD_imm (ARM64.X1, ARM64.X0, 8us)  // X1 = data address (skip 8-byte length)
         ARM64.MOVZ (ARM64.X0, 1us, 0)  // X0 = stdout fd (1)
 
-        // Load string length into X2
-        // For lengths > 16 bits, we'd need MOVK, but strings this long are unlikely
-        ARM64.MOVZ (ARM64.X2, uint16 stringLen, 0)  // X2 = length
-
-        // Call write syscall
+        // Load string length into X2 and call write syscall
+    ] @
+    generateLoadNonNegativeIntImmediate ARM64.X2 stringLen @
+    [
         ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
 
@@ -915,7 +945,9 @@ let generatePrintChars (chars: byte list) : ARM64.Instr list =
     @ [
         // Write to stdout
         ARM64.MOV_reg (ARM64.X1, ARM64.SP)          // buffer
-        ARM64.MOVZ (ARM64.X2, uint16 len, 0)        // length
+    ]
+    @ generateLoadNonNegativeIntImmediate ARM64.X2 len
+    @ [
         ARM64.MOVZ (ARM64.X0, 1us, 0)               // stdout = 1
         ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
@@ -939,7 +971,9 @@ let generatePrintCharsToStderr (chars: byte list) : ARM64.Instr list =
         ]) |> List.concat)
     @ [
         ARM64.MOV_reg (ARM64.X1, ARM64.SP)
-        ARM64.MOVZ (ARM64.X2, uint16 len, 0)
+    ]
+    @ generateLoadNonNegativeIntImmediate ARM64.X2 len
+    @ [
         ARM64.MOVZ (ARM64.X0, 2us, 0)
         ARM64.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Write, 0)
         ARM64.SVC syscalls.SvcImmediate
@@ -2747,12 +2781,7 @@ let generateCoverageFlush (coverageExprCount: int) : ARM64.Instr list =
                 ARM64.MOV_reg (ARM64.X0, ARM64.X11)  // fd
                 ARM64.MOV_reg (ARM64.X1, ARM64.X10)  // buf = coverage data
             ] @
-            (if byteCount < 65536 then
-                [ARM64.MOVZ (ARM64.X2, uint16 byteCount, 0)]
-             else
-                // Large count - load in two parts
-                [ARM64.MOVZ (ARM64.X2, uint16 (byteCount &&& 0xFFFF), 0)
-                 ARM64.MOVK (ARM64.X2, uint16 ((byteCount >>> 16) &&& 0xFFFF), 16)]) @
+            generateLoadNonNegativeIntImmediate ARM64.X2 byteCount @
             [
                 ARM64.MOVZ (ARM64.X8, syscalls.Numbers.Write, 0)
                 ARM64.SVC syscalls.SvcImmediate
@@ -2808,11 +2837,7 @@ let generateCoverageFlush (coverageExprCount: int) : ARM64.Instr list =
                 ARM64.MOV_reg (ARM64.X0, ARM64.X11)  // fd
                 ARM64.MOV_reg (ARM64.X1, ARM64.X10)  // buf = coverage data
             ] @
-            (if byteCount < 65536 then
-                [ARM64.MOVZ (ARM64.X2, uint16 byteCount, 0)]
-             else
-                [ARM64.MOVZ (ARM64.X2, uint16 (byteCount &&& 0xFFFF), 0)
-                 ARM64.MOVK (ARM64.X2, uint16 ((byteCount >>> 16) &&& 0xFFFF), 16)]) @
+            generateLoadNonNegativeIntImmediate ARM64.X2 byteCount @
             [
                 ARM64.MOVZ (ARM64.X16, syscalls.Numbers.Write, 0)
                 ARM64.SVC syscalls.SvcImmediate
