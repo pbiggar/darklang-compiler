@@ -215,6 +215,8 @@ let z = 0 in ~~~z = -1
 ~~~1y = -2y
 // Regression: unsigned bitwise-not must preserve UInt8, not widen via TInt64 fallback.
 ~~~1uy = 254uy
+// Regression: MIR constant folding must preserve the result width for UInt32 bitwise-not.
+~~~0ul = 4294967295ul
 
 
 // ===================================================================

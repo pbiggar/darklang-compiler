@@ -1058,6 +1058,11 @@ let truncateToType (value: int64) (opType: AST.Type) : int64 =
     | AST.TUInt32 -> int64 (uint32 value)  // Truncate to unsigned 32-bit
     | _ -> value                            // Int64/UInt64 and other types: no truncation
 
+let truncateOperandToType (operand: Operand) (opType: AST.Type) : Operand =
+    match operand with
+    | Int64Const value -> Int64Const (truncateToType value opType)
+    | _ -> operand
+
 /// Euclidean modulo: result has the sign of the divisor
 let euclideanMod (a: int64) (b: int64) : int64 =
     let remainder = a % b
@@ -1161,16 +1166,16 @@ let tryFoldBinOp (op: BinOp) (left: Operand) (right: Operand) (opType: AST.Type)
     // Bitwise identities
     | BitAnd, Int64Const 0L, _ -> Some (Int64Const 0L)
     | BitAnd, _, Int64Const 0L -> Some (Int64Const 0L)
-    | BitAnd, Int64Const -1L, x -> Some x  // -1 = all bits set
-    | BitAnd, x, Int64Const -1L -> Some x
+    | BitAnd, Int64Const -1L, x -> Some (truncateOperandToType x opType)  // -1 = all bits set
+    | BitAnd, x, Int64Const -1L -> Some (truncateOperandToType x opType)
     | BitAnd, x, y when x = y -> Some x  // x & x = x
-    | BitOr, Int64Const 0L, x -> Some x
-    | BitOr, x, Int64Const 0L -> Some x
-    | BitOr, Int64Const -1L, _ -> Some (Int64Const -1L)
-    | BitOr, _, Int64Const -1L -> Some (Int64Const -1L)
+    | BitOr, Int64Const 0L, x -> Some (truncateOperandToType x opType)
+    | BitOr, x, Int64Const 0L -> Some (truncateOperandToType x opType)
+    | BitOr, Int64Const -1L, _ -> Some (Int64Const (truncateToType -1L opType))
+    | BitOr, _, Int64Const -1L -> Some (Int64Const (truncateToType -1L opType))
     | BitOr, x, y when x = y -> Some x  // x | x = x
-    | BitXor, Int64Const 0L, x -> Some x
-    | BitXor, x, Int64Const 0L -> Some x
+    | BitXor, Int64Const 0L, x -> Some (truncateOperandToType x opType)
+    | BitXor, x, Int64Const 0L -> Some (truncateOperandToType x opType)
     | BitXor, x, y when x = y -> Some (Int64Const 0L)  // x ^ x = 0
 
     // Shift identities
