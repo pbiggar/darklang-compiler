@@ -5,6 +5,38 @@
 // Stdlib.Uuid - UUID v4 generation
 // ============================================================================
 
+type Uuid = String
+
+type Stdlib.Uuid.ParseError = BadFormat | UnsupportedUuidParseError
+
+def Stdlib.Uuid.toString(uuid: String) : String = uuid
+
+def Stdlib.Uuid.toString_v0(uuid: String) : String = Stdlib.Uuid.toString(uuid)
+
+def Stdlib.Uuid.__isHexByte(byte: Int64) : Bool =
+    (byte >= 48 && byte <= 57) ||
+    (byte >= 65 && byte <= 70) ||
+    (byte >= 97 && byte <= 102)
+
+def Stdlib.Uuid.__hasValidFormatAt(s: String, index: Int64) : Bool =
+    if index == 36 then
+        true
+    else
+        let byte = Stdlib.String.getByteAt(s, index) in
+        if index == 8 || index == 13 || index == 18 || index == 23 then
+            byte == 45 && Stdlib.Uuid.__hasValidFormatAt(s, index + 1)
+        else
+            Stdlib.Uuid.__isHexByte(byte) && Stdlib.Uuid.__hasValidFormatAt(s, index + 1)
+
+def Stdlib.Uuid.parse_v0(s: String) : Stdlib.Result.Result<String, Stdlib.Uuid.ParseError> =
+    if Stdlib.String.length(s) == 36 then
+        if Stdlib.Uuid.__hasValidFormatAt(s, 0) then
+            Ok(s)
+        else
+            Error(Stdlib.Uuid.ParseError.BadFormat)
+    else
+        Error(Stdlib.Uuid.ParseError.BadFormat)
+
 // Helper: convert nibble (0-15) to hex char
 def Stdlib.Uuid.__nibbleToHex(n: Int64) : String =
     match n with

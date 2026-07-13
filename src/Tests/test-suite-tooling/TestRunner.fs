@@ -191,6 +191,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "date.dark")
     let listUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "list.dark")
+    let uuidUpstreamDarkPath =
+        Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "uuid.dark")
     let charToAsciiCodeUpstreamDarkPath =
         Path.Combine(testDataRoot, "e2e", "upstream", "stdlib", "char-to-ascii-code.dark")
     let upstreamDarkPaths =
@@ -211,6 +213,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            dtupleUpstreamDarkPath
            dateUpstreamDarkPath
            listUpstreamDarkPath
+           uuidUpstreamDarkPath
            charToAsciiCodeUpstreamDarkPath |]
     let defaultUpstreamDarkPaths =
         [| eifUpstreamDarkPath
@@ -224,6 +227,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
            estringUpstreamDarkPath
            eletUpstreamDarkPath
            dtupleUpstreamDarkPath
+           uuidUpstreamDarkPath
            charToAsciiCodeUpstreamDarkPath |]
     for path in upstreamDarkPaths do
         if not (File.Exists path) then
@@ -405,6 +409,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 ("src/Tests/e2e/upstream/language/custom-data/aliases.dark", Set.ofList [ 6; 9; 15; 89; 91; 108 ])
                 ("src/Tests/e2e/upstream/stdlib/date.dark", Set.ofList [ 216 ])
                 ("src/Tests/e2e/upstream/stdlib/list.dark", Set.ofList [ 287 ])
+                ("src/Tests/e2e/upstream/stdlib/uuid.dark", Set.ofList [ 2; 6 ])
             ]
 
     let normalizePath (path: string) : string =
