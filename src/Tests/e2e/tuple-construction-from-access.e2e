@@ -1,5 +1,8 @@
-// E2E tests for constructing tuples from tuple access expressions
-// Regression test for ANF conversion bug: "Cannot access index on non-tuple type"
+// E2E tests for reconstructing tuples from tuple access expressions.
+// Covers the ANF regression where tuple access inside a new tuple literal could
+// lose the source tuple type and fail with "Cannot access index on non-tuple type".
+// Keep the scenarios broad enough to exercise direct lets, function returns,
+// returned tuples, and recursive reconstruction.
 
 // =====================================================
 // Basic tuple construction from access (no functions)
