@@ -288,19 +288,24 @@ let buildPassTimingColumns
     }
 
 let addExpectedActualDetails (expected: string option) (actual: string option) : string list =
-    let details = ResizeArray<string>()
     match expected, actual with
     | Some exp, Some act ->
         println "    Expected:"
-        for line in exp.Split('\n') do
-            println $"      {line}"
-            details.Add($"Expected: {line}")
+        let expectedDetails =
+            exp.Split('\n')
+            |> Array.toList
+            |> List.map (fun line ->
+                println $"      {line}"
+                $"Expected: {line}")
         println "    Actual:"
-        for line in act.Split('\n') do
-            println $"      {line}"
-            details.Add($"Actual: {line}")
-    | _ -> ()
-    details |> Seq.toList
+        let actualDetails =
+            act.Split('\n')
+            |> Array.toList
+            |> List.map (fun line ->
+                println $"      {line}"
+                $"Actual: {line}")
+        expectedDetails @ actualDetails
+    | _ -> []
 
 let runFileSuite
     (state: TestRunState)
