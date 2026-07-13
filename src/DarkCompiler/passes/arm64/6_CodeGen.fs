@@ -2992,14 +2992,6 @@ let generateEpilogue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM6
 
 /// Convert LIR instruction to ARM64 instructions
 let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symbolic.Instr list, string> =
-    let getListDisplayStringFunc (elemType: AST.Type) : string option =
-        match elemType with
-        | AST.TInt64 -> Some "Stdlib.List.toDisplayString_i64"
-        | AST.TBool -> Some "Stdlib.List.toDisplayString_bool"
-        | AST.TString -> Some "Stdlib.List.toDisplayString_str"
-        | AST.TFloat64 -> Some "Stdlib.List.toDisplayString_f64"
-        | _ -> None
-
     let generatePrintListInstrs (listReg: ARM64Symbolic.Reg) (elemType: AST.Type) (includeNewline: bool) : ARM64Symbolic.Instr list =
         let os =
             match Platform.detectOS () with
@@ -3616,7 +3608,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
                                     [ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.X0, 0s); ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X0, 8us)] @
                                     runtimeInstrs (Runtime.generatePrintStringNoNewline ())
                                 | AST.TList elemType ->
-                                    match getListDisplayStringFunc elemType with
+                                    match ListDisplay.getDisplayStringFunc elemType with
                                     | Some funcName ->
                                         let callToDisplay = [ARM64Symbolic.BL funcName]
                                         let saveDisplayString = [ARM64Symbolic.MOV_reg (ARM64Symbolic.X21, ARM64Symbolic.X0)]

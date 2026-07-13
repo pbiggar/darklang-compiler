@@ -9,35 +9,6 @@ module PrintInsertion
 
 open ANF
 
-/// Get the toDisplayString function name for list element type
-let getListDisplayStringFunc (elemType: AST.Type) : string option =
-    match elemType with
-    | AST.TInt64 -> Some "Stdlib.List.toDisplayString_i64"
-    | AST.TBool -> Some "Stdlib.List.toDisplayString_bool"
-    | AST.TString -> Some "Stdlib.List.toDisplayString_str"
-    | AST.TFloat64 -> Some "Stdlib.List.toDisplayString_f64"
-    | AST.TInt8
-    | AST.TInt16
-    | AST.TInt32
-    | AST.TInt128
-    | AST.TUInt8
-    | AST.TUInt16
-    | AST.TUInt32
-    | AST.TUInt64
-    | AST.TUInt128
-    | AST.TBytes
-    | AST.TChar
-    | AST.TUnit
-    | AST.TRuntimeError
-    | AST.TFunction _
-    | AST.TTuple _
-    | AST.TRecord _
-    | AST.TSum _
-    | AST.TList _
-    | AST.TVar _
-    | AST.TRawPtr
-    | AST.TDict _ -> None
-
 /// Wrap the return value with a Print instruction
 /// Transforms: Return atom  →  Let (_, Print (atom, type), Return atom)
 /// For list types, generates: Call toDisplayString, then Print the string
@@ -62,7 +33,7 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
         // For list types, call toDisplayString first
         match printType with
         | AST.TSum ("Stdlib.Option.Option", [AST.TList elemType]) ->
-            match getListDisplayStringFunc elemType with
+            match ListDisplay.getDisplayStringFunc elemType with
             | Some toDisplayStringName ->
                 // Keep the display helper reachable so tree shaking doesn't drop it.
                 let (keepFunc, varGen1) = freshVar varGen
@@ -75,7 +46,7 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
                 let (printTmp, varGen') = freshVar varGen
                 (Let (printTmp, Print (atom, printType), Return atom), varGen')
         | AST.TList elemType ->
-            match getListDisplayStringFunc elemType with
+            match ListDisplay.getDisplayStringFunc elemType with
             | Some toDisplayStringName ->
                 // Generate: let strTmp = Call(toDisplayString, [list]) in
                 //           let _ = Print(strTmp, String) in Return atom
