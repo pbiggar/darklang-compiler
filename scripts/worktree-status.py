@@ -151,10 +151,13 @@ def render_status():
     worktrees = get_worktrees(repo_root)
     log_entries = get_log_entries(repo_root)
     context = time.strftime('%H:%M:%S')
+    max_rows = 11
+    sorted_worktrees = sorted(worktrees, key=lambda w: (0 if w['branch'] == 'main' else 1, w['branch']))
+    visible_worktrees = sorted_worktrees[:max_rows - 1]
 
     # Build rows with worktree info
     rows = []
-    for wt in sorted(worktrees, key=lambda w: (0 if w['branch'] == 'main' else 1, w['branch'])):
+    for wt in visible_worktrees:
         path, branch, display = wt['path'], wt['branch'], wt['display']
         prunable = f" {DIM}(prunable){NC}" if wt['prunable'] else ""
 
@@ -193,7 +196,6 @@ def render_status():
     # Output (11 rows total: worktrees + context row + remaining log entries)
     output_lines = []
     log_idx = 0
-    max_rows = 11
     max_visible = min(len(rows), max_rows - 1)
 
     def build_log_display(entry):
