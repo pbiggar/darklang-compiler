@@ -222,6 +222,15 @@ let private bitsetCount (bits: BitSet) : int =
 let private bitsetIndicesToList (bits: BitSet) : int list =
     Bitset.indicesToList bits
 
+let private bitsetToList (domain: VRegDomain) (bits: BitSet) : int list =
+    bits
+    |> bitsetIndicesToList
+    |> List.choose (fun idx ->
+        if idx < domain.Ids.Length then
+            Some domain.Ids.[idx]
+        else
+            None)
+
 let private tryLabelIndex (labels: LIR.Label array) (label: LIR.Label) : int option =
     if labels.Length = 0 then
         None
@@ -2044,28 +2053,28 @@ let private tryFloatAllocation (floatAllocation: FAllocationResult) (fvregId: in
 
 /// Get the caller-saved physical registers that contain live values
 let getLiveCallerSavedRegs (allocation: AllocationResult) (liveVRegs: BitSet) : LIR.PhysReg list =
-    let mutable regs = []
-    bitsetIter allocation.Domain liveVRegs (fun vregId ->
+    bitsetToList allocation.Domain liveVRegs
+    |> List.choose (fun vregId ->
         match tryAllocation allocation vregId with
         | Some (PhysReg reg) when List.contains reg callerSavedRegs ->
-            if not (List.contains reg regs) then
-                regs <- reg :: regs
-        | _ -> ())
-    regs |> List.sort  // Keep consistent order for deterministic output
+            Some reg
+        | _ -> None)
+    |> List.distinct
+    |> List.sort  // Keep consistent order for deterministic output
 
 /// Get the caller-saved physical float registers that contain live values
 let getLiveCallerSavedFloatRegs
     (liveFVRegs: BitSet)
     (floatAllocation: FAllocationResult)
     : LIR.PhysFPReg list =
-    let mutable regs = []
-    bitsetIter floatAllocation.Domain liveFVRegs (fun vregId ->
+    bitsetToList floatAllocation.Domain liveFVRegs
+    |> List.choose (fun vregId ->
         match tryFloatAllocation floatAllocation vregId with
         | Some reg when List.contains reg floatCallerSavedRegs ->
-            if not (List.contains reg regs) then
-                regs <- reg :: regs
-        | _ -> ())
-    regs |> List.sort
+            Some reg
+        | _ -> None)
+    |> List.distinct
+    |> List.sort
 
 // ============================================================================
 // Apply Allocation to LIR
