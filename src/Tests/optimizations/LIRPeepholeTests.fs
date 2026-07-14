@@ -48,6 +48,46 @@ let testRemoveSelfMovesFromAllocatedFunction () : TestResult =
         else
             Error $"Expected only self-moves to be removed, got: {cleanedBlock.Instrs}"
 
+let testRemoveFloatingCopyBackMovesFromAllocatedFunction () : TestResult =
+    let label = Label "entry"
+    let block : BasicBlock = {
+        Label = label
+        Instrs = [
+            FMov (FPhysical D3, FPhysical D5)
+            FMov (FPhysical D2, FPhysical D4)
+            FMov (FPhysical D5, FPhysical D3)
+            FMov (FPhysical D4, FPhysical D2)
+            FAdd (FPhysical D0, FPhysical D3, FPhysical D2)
+        ]
+        Terminator = Ret
+    }
+    let func : Function = {
+        Name = "floating_copy_back_cleanup"
+        TypedParams = []
+        CFG = {
+            Entry = label
+            Blocks = Map.ofList [(label, block)]
+        }
+        StackSize = 0
+        UsedCalleeSaved = []
+    }
+
+    match removePostAllocationMovesFromFunction func |> fun f -> Map.tryFind label f.CFG.Blocks with
+    | None ->
+        Error "Expected cleanup to preserve the entry block"
+    | Some cleanedBlock ->
+        let expected = [
+            FMov (FPhysical D3, FPhysical D5)
+            FMov (FPhysical D2, FPhysical D4)
+            FAdd (FPhysical D0, FPhysical D3, FPhysical D2)
+        ]
+
+        if cleanedBlock.Instrs = expected then
+            Ok ()
+        else
+            Error $"Expected copy-back moves to be removed, got: {cleanedBlock.Instrs}"
+
 let tests = [
     ("LIR peephole removes self-moves from allocated function", testRemoveSelfMovesFromAllocatedFunction)
+    ("LIR peephole removes floating copy-back moves", testRemoveFloatingCopyBackMovesFromAllocatedFunction)
 ]

@@ -3834,7 +3834,7 @@ let private allocateRegistersInternal
         UsedCalleeSaved = result.UsedCalleeSaved
     }
 
-    (LIR_Peephole.removeSelfMovesFromFunction allocatedFunc, timings)
+    (LIR_Peephole.removePostAllocationMovesFromFunction allocatedFunc, timings)
 
 /// Allocate registers for a function
 let allocateRegisters (arch: Platform.Arch) (func: LIR.Function) : LIR.Function =

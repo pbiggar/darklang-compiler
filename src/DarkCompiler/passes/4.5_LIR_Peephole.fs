@@ -438,6 +438,89 @@ let removeSelfMovesFromFunction (func: Function) : Function =
             { block with Instrs = removeSelfMovesFromInstrs block.Instrs })
     { func with CFG = { func.CFG with Blocks = blocks } }
 
+let private removeFRegAliasesTo (dest: FReg) (aliases: Map<FReg, FReg>) : Map<FReg, FReg> =
+    aliases
+    |> Map.toList
+    |> List.filter (fun (reg, value) -> sameFReg reg dest || not (sameFReg value dest))
+    |> Map.ofList
+
+let private currentFRegValue (reg: FReg) (aliases: Map<FReg, FReg>) : FReg =
+    Map.tryFind reg aliases |> Option.defaultValue reg
+
+let private recordFRegWrite (dest: FReg) (aliases: Map<FReg, FReg>) : Map<FReg, FReg> =
+    aliases
+    |> removeFRegAliasesTo dest
+    |> Map.add dest dest
+
+let private fRegWriteDest (instr: Instr) : FReg option =
+    match instr with
+    | FLoad (dest, _)
+    | FAdd (dest, _, _)
+    | FSub (dest, _, _)
+    | FMul (dest, _, _)
+    | FDiv (dest, _, _)
+    | FNeg (dest, _)
+    | FAbs (dest, _)
+    | FSqrt (dest, _)
+    | Int64ToFloat (dest, _)
+    | GpToFp (dest, _) -> Some dest
+    | _ -> None
+
+let private clobbersFRegs (instr: Instr) : bool =
+    match instr with
+    | Call _
+    | TailCall _
+    | IndirectCall _
+    | IndirectTailCall _
+    | ClosureCall _
+    | ClosureTailCall _
+    | RestoreRegs _
+    | FArgMoves _ -> true
+    | _ -> false
+
+let removeRedundantFloatingCopyBackMoves (instrs: Instr list) : Instr list =
+    let rec loop aliases acc remaining =
+        match remaining with
+        | [] -> List.rev acc
+        | FMov (dest, src) as instr :: rest ->
+            let srcValue = currentFRegValue src aliases
+            let destValue = currentFRegValue dest aliases
+
+            if sameFReg destValue srcValue then
+                let aliases' =
+                    aliases
+                    |> removeFRegAliasesTo dest
+                    |> Map.add dest srcValue
+                loop aliases' acc rest
+            else
+                let aliases' =
+                    aliases
+                    |> removeFRegAliasesTo dest
+                    |> Map.add dest srcValue
+                loop aliases' (instr :: acc) rest
+        | instr :: rest ->
+            let aliases' =
+                if clobbersFRegs instr then
+                    Map.empty
+                else
+                    match fRegWriteDest instr with
+                    | Some dest -> recordFRegWrite dest aliases
+                    | None -> aliases
+            loop aliases' (instr :: acc) rest
+
+    loop Map.empty [] instrs
+
+let removePostAllocationMovesFromFunction (func: Function) : Function =
+    let blocks =
+        func.CFG.Blocks
+        |> Map.map (fun _ block ->
+            { block with
+                Instrs =
+                    block.Instrs
+                    |> removeSelfMovesFromInstrs
+                    |> removeRedundantFloatingCopyBackMoves })
+    { func with CFG = { func.CFG with Blocks = blocks } }
+
 /// Check if a register is used in any instruction (for dead code detection)
 let isRegUsedInInstrs (reg: Reg) (instrs: Instr list) : bool =
     instrs |> List.exists (fun instr ->
@@ -643,8 +726,9 @@ let applyAndBitBranchFusion (instrs: Instr list) (terminator: Terminator) : (Ins
 /// Optimize a basic block (returns whether anything changed)
 let optimizeBlock (block: BasicBlock) : BasicBlock * bool =
     let instrs' = optimizeInstrs block.Instrs
+    let instrsCopyCleaned = removeRedundantFloatingCopyBackMoves instrs'
     // Apply multiply-by-constant strength reduction (Mov + Mul → Lsl + Add/Sub)
-    let instrs1 = tryMulByConstant instrs'
+    let instrs1 = tryMulByConstant instrsCopyCleaned
     // Apply MUL + ADD → MADD fusion
     let instrs'' = tryFuseMulAdd instrs1
 
