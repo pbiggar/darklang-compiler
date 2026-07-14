@@ -55,7 +55,7 @@ This document lists the language features currently supported by the Dark compil
 
 - Function definitions with type signatures and calls
 - Recursion and implicit mutual recursion
-- Up to 8 parameters (ARM64 calling convention)
+- Up to 8 integer or pointer parameters and up to 8 Float parameters in registers
 - Lambda expressions with immediate application: `(x: Int64) => x + 1`
 - First-class functions (store lambdas in variables, call later)
 - Higher-order functions (pass named functions or lambdas as arguments)
