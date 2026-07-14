@@ -64,8 +64,8 @@ let testCallForward () : Result<unit, string> =
         else
             Ok ()
 
-/// Test undefined label is deferred (not an error) for data label patching
-let testUndefinedLabel () : Result<unit, string> =
+/// Test undefined label is deferred for data label patching
+let testUndefinedLabelDeferredFixup () : Result<unit, string> =
     let instructions = [
         JMP "nonexistent"
     ]
@@ -106,6 +106,6 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("Forward JMP", testForwardJump)
     ("Backward JMP", testBackwardJump)
     ("Forward CALL", testCallForward)
-    ("Undefined label error", testUndefinedLabel)
+    ("Undefined label deferred fixup", testUndefinedLabelDeferredFixup)
     ("CALL + execute", testCallAndExecute)
 ]
