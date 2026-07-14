@@ -151,8 +151,6 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | Div, x, IntLiteral (Int64 -1L) -> Some (UnaryPrim (Neg, x))
     | Mod, _, IntLiteral (Int64 1L) -> Some (Atom (IntLiteral (Int64 0L)))
     | Mod, _, IntLiteral (Int64 -1L) -> Some (Atom (IntLiteral (Int64 0L)))
-    | Div, x, IntLiteral (UInt64 1UL) -> Some (Atom x)
-    | Mod, _, IntLiteral (UInt64 1UL) -> Some (Atom (IntLiteral (UInt64 0UL)))
     | Shl, x, IntLiteral (Int64 0L) -> Some (Atom x)
     | Shr, x, IntLiteral (Int64 0L) -> Some (Atom x)
     | Shl, IntLiteral (Int64 0L), _ -> Some (Atom (IntLiteral (Int64 0L)))
@@ -174,6 +172,12 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | Add, IntLiteral (UInt64 0UL), x -> Some (Atom x)
     | Add, x, IntLiteral (UInt64 0UL) -> Some (Atom x)
     | Sub, x, IntLiteral (UInt64 0UL) -> Some (Atom x)
+    | Mul, IntLiteral (UInt64 1UL), x -> Some (Atom x)
+    | Mul, x, IntLiteral (UInt64 1UL) -> Some (Atom x)
+    | Mul, IntLiteral (UInt64 0UL), _ -> Some (Atom (IntLiteral (UInt64 0UL)))
+    | Mul, _, IntLiteral (UInt64 0UL) -> Some (Atom (IntLiteral (UInt64 0UL)))
+    | Div, x, IntLiteral (UInt64 1UL) -> Some (Atom x)
+    | Mod, _, IntLiteral (UInt64 1UL) -> Some (Atom (IntLiteral (UInt64 0UL)))
 
     // Algebraic identities - Float
     // Note: We skip 0.0 * x -> 0.0 because 0.0 * inf = NaN, 0.0 * NaN = NaN

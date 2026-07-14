@@ -307,6 +307,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical integer simplification that reuses unary negation lowering instead of materializing a binary divide by literal `-1`.
 - Notes: Implemented for `x / -1 -> -x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during the Expanded Guided sandbox trial. Covered by `strength_reduce_div_negative_one` in `src/Tests/optimization/anf.opt`.
 
+### UInt64 multiplicative identity simplification
+
+- Optimization name: UInt64 multiplicative identity simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical UInt64 simplification that removes redundant multiplication around identity and absorbing literals.
+- Notes: Implemented for `x * 1UL -> x`, `1UL * x -> x`, `x * 0UL -> 0UL`, and `0UL * x -> 0UL` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by corresponding UInt64 multiplication identity tests in `src/Tests/optimization/anf.opt`.
+
 ## Strength reduction
 
 ### Integer self-addition strength reduction

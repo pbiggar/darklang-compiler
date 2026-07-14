@@ -323,6 +323,38 @@ let TempId 2 = f(42)
 return t2
 
 ---NAME---
+identity_uint64_mul_one_right
+---INPUT---
+def f(x: UInt64) : UInt64 = x * 1UL
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_uint64_mul_one_left
+---INPUT---
+def f(x: UInt64) : UInt64 = 1UL * x
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_uint64_mul_zero_right
+---INPUT---
+def f(x: UInt64) : UInt64 = x * 0UL
+---EXPECTED---
+Function f:
+return 0
+
+---NAME---
+identity_uint64_mul_zero_left
+---INPUT---
+def f(x: UInt64) : UInt64 = 0UL * x
+---EXPECTED---
+Function f:
+return 0
+
+---NAME---
 strength_reduce_div_negative_one
 ---INPUT---
 def f(x: Int64) : Int64 = x / -1
