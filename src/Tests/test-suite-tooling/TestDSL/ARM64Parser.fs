@@ -194,6 +194,20 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
                 | Ok src2 -> Ok (SDIV (dest, src1, src2))
     else
 
+    // Try UDIV: "UDIV(X1, X0, X2)"
+    let udivMatch = Regex.Match(line, @"^UDIV\((.+?),\s*(.+?),\s*(.+?)\)$")
+    if udivMatch.Success then
+        match parseReg udivMatch.Groups.[1].Value with
+        | Error e -> Error $"Line {lineNum}: {e}"
+        | Ok dest ->
+            match parseReg udivMatch.Groups.[2].Value with
+            | Error e -> Error $"Line {lineNum}: {e}"
+            | Ok src1 ->
+                match parseReg udivMatch.Groups.[3].Value with
+                | Error e -> Error $"Line {lineNum}: {e}"
+                | Ok src2 -> Ok (UDIV (dest, src1, src2))
+    else
+
     // Try MOV_reg: "MOV_reg(X0, X1)"
     let movMatch = Regex.Match(line, @"^MOV_reg\((.+?),\s*(.+?)\)$")
     if movMatch.Success then

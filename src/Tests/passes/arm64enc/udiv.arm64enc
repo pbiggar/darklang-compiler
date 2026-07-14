@@ -1,0 +1,8 @@
+---NAME---
+Encode UDIV instruction
+
+---INPUT-ARM64---
+UDIV(X0, X1, X2)
+
+---OUTPUT-HEX---
+0x9AC20820
