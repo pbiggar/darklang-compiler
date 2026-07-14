@@ -80,9 +80,9 @@ UInt64.absoluteValue(1UL) = 1UL
 // ===================================================================
 
 UInt64.negate(0UL) = 0UL
-UInt64.negate(1UL) = -1UL
-UInt64.negate(5UL) = -5UL
-UInt64.negate(100UL) = -100UL
+UInt64.negate(1UL) = 18446744073709551615UL
+UInt64.negate(5UL) = 18446744073709551611UL
+UInt64.negate(100UL) = 18446744073709551516UL
 
 // ===================================================================
 // UInt64.power - Raise to a power
