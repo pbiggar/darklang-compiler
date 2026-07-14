@@ -135,6 +135,25 @@ let testSignedPairOffsetsRejectInvalidValues () : TestResult =
 
     checkCases cases
 
+let testArithmeticImmediatesRejectOutOfRangeValues () : TestResult =
+    let cases = [
+        ("ADD_imm 4096", fun () -> encode (ADD_imm (X0, X1, 4096us)) |> ignore)
+        ("SUB_imm 4096", fun () -> encode (SUB_imm (X0, X1, 4096us)) |> ignore)
+        ("SUB_imm12 4096", fun () -> encode (SUB_imm12 (X0, X1, 4096us)) |> ignore)
+        ("SUBS_imm 4096", fun () -> encode (SUBS_imm (X0, X1, 4096us)) |> ignore)
+        ("CMP_imm 4096", fun () -> encode (CMP_imm (X1, 4096us)) |> ignore)
+    ]
+
+    let rec checkCases remaining =
+        match remaining with
+        | [] -> Ok ()
+        | (name, f) :: rest ->
+            match expectCrash name f with
+            | Ok () -> checkCases rest
+            | Error msg -> Error msg
+
+    checkCases cases
+
 let testFMOVImmediateEncoding () : TestResult =
     let cases = [
         "1.0", FMOV_imm (D2, 1.0), 0x1E6E1002u
@@ -178,6 +197,7 @@ let tests = [
     ("MOVZ+MOVK sequence", testMOVZMOVKSequence)
     ("unsigned memory offsets reject invalid values", testUnsignedMemoryOffsetsRejectInvalidValues)
     ("signed pair offsets reject invalid values", testSignedPairOffsetsRejectInvalidValues)
+    ("arithmetic immediates reject out-of-range values", testArithmeticImmediatesRejectOutOfRangeValues)
     ("FMOV immediate encoding", testFMOVImmediateEncoding)
     ("invalid ASSERT-DIFFERENT value is rejected", testInvalidAssertDifferentValueIsRejected)
 ]

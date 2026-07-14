@@ -63,6 +63,13 @@ let private encodeInt16SignedScaled7Offset (instructionName: string) (offset: in
     else
         ((uint32 (offsetInt / 8)) &&& 0x7Fu) <<< 15
 
+let private encodeUnsigned12Immediate (instructionName: string) (imm: uint16) : uint32 =
+    let immInt = int imm
+    if immInt > 4095 then
+        Crash.crash $"{instructionName}: unsigned immediate must fit imm12 field (0..4095), got {immInt}"
+    else
+        (uint32 imm) <<< 10
+
 /// Encode ARM64 instruction to 32-bit machine code
 let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
     match instr with
@@ -105,7 +112,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let sf = 1u <<< 31
         let op = 0b10001u <<< 24
         let shift = 0u <<< 22  // No shift
-        let imm12 = (uint32 imm) <<< 10
+        let imm12 = encodeUnsigned12Immediate "ADD_imm" imm
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
         [sf ||| op ||| shift ||| imm12 ||| rn ||| rd]
@@ -137,7 +144,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let s = 0u <<< 29           // Don't set flags
         let opcode = 0b10001u <<< 24 // Fixed opcode bits
         let shift = 0u <<< 22       // No shift
-        let imm12 = (uint32 imm) <<< 10
+        let imm12 = encodeUnsigned12Immediate "SUB_imm" imm
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
         [sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd]
@@ -150,7 +157,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let s = 0u <<< 29           // Don't set flags
         let opcode = 0b10001u <<< 24 // Fixed opcode bits
         let shift = 1u <<< 22       // shift=1 means LSL #12
-        let imm12 = (uint32 imm) <<< 10
+        let imm12 = encodeUnsigned12Immediate "SUB_imm12" imm
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
         [sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd]
@@ -189,7 +196,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let s = 1u <<< 29           // Set flags (this is SUBS, not SUB)
         let opcode = 0b10001u <<< 24 // Fixed opcode bits
         let shift = 0u <<< 22       // No shift on immediate
-        let imm12 = (uint32 imm) <<< 10
+        let imm12 = encodeUnsigned12Immediate "SUBS_imm" imm
         let rn = (encodeReg src) <<< 5
         let rd = encodeReg dest
         [sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd]
@@ -436,7 +443,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let s = 1u <<< 29           // Set flags (critical for CMP)
         let opcode = 0b10001u <<< 24
         let shift = 0u <<< 22       // No shift
-        let imm12 = (uint32 imm) <<< 10
+        let imm12 = encodeUnsigned12Immediate "CMP_imm" imm
         let rn = (encodeReg src) <<< 5
         let rd = 31u                // XZR (discard result, only flags matter)
         [sf ||| op ||| s ||| opcode ||| shift ||| imm12 ||| rn ||| rd]
