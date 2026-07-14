@@ -375,6 +375,20 @@ let testRejectsReservedOverflowPhysicalRegister () : Result<unit, string> =
     | Error e -> Error $"Expected X24-specific codegen error, got '{e}'"
     | Ok _ -> Error "Expected x64 codegen to reject X24, but translation succeeded"
 
+/// Test: x64 file read path operands must be explicit string pointers, not silent null defaults.
+let testRejectsUnsupportedFileReadPathOperand () : Result<unit, string> =
+    let program =
+        makeSimpleProgram
+            [
+                LIR.FileReadText (LIR.Physical LIR.X0, LIR.Imm 0L)
+            ]
+            LIR.Ret
+
+    match CodeGen_X86_64.translateProgram (completeFixtureVariants program) false with
+    | Error e when e.Contains "FileReadText path" -> Ok ()
+    | Error e -> Error $"Expected FileReadText path operand error, got '{e}'"
+    | Ok _ -> Error "Expected x64 codegen to reject unsupported FileReadText path operand, but translation succeeded"
+
 /// Test: MOV immediate + exit
 let testMovAndExit () : Result<unit, string> =
     // exit(42): X0 <- 42; X1 <- X0; Exit
@@ -5415,6 +5429,7 @@ let testTaggedListRefCountDecNestedSumStringPayload () : Result<unit, string> =
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("LIR x64 codegen reports missing entry block", testReportsMissingEntryBlock)
     ("LIR rejects x64 overflow physical registers", testRejectsReservedOverflowPhysicalRegister)
+    ("LIR rejects unsupported x64 FileReadText path operands", testRejectsUnsupportedFileReadPathOperand)
     ("LIR MOV + Exit", testMovAndExit)
     ("LIR ADD immediate", testAddImm)
     ("LIR SUB", testSub)

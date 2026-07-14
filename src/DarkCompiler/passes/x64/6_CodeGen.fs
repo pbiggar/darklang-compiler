@@ -4042,7 +4042,8 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                     Ok [X86_64.MOV_load (X86_64.R10, X86_64.RBP, int32 (adjustStackOffset ctx offset))]
                 | LIR.StringSymbol value ->
                     Ok (emitStringLiteralNoRefCount X86_64.R10 value)
-                | _ -> Ok (loadImm64 X86_64.R10 0L)
+                | _ ->
+                    Error "FileReadText path operand must be a string pointer or string literal"
             let copyLabel = freshLabel "fr_copy"
             let doneLabel = freshLabel "fr_done"
             let errorLabel = freshLabel "fr_err"
@@ -4176,7 +4177,8 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                     Ok [X86_64.MOV_load (X86_64.R10, X86_64.RBP, int32 (adjustStackOffset ctx offset))]
                 | LIR.StringSymbol value ->
                     Ok (emitStringLiteralNoRefCount X86_64.R10 value)
-                | _ -> Ok (loadImm64 X86_64.R10 0L)
+                | _ ->
+                    Error "FileWriteText/FileAppendText path operand must be a string pointer or string literal"
             let resolveContentToR9 =
                 match content with
                 | LIR.Reg reg ->
@@ -4186,7 +4188,8 @@ let private translateInstr (ctx: FuncCtx) (instr: LIR.Instr) : Result<X86_64.Ins
                     Ok [X86_64.MOV_load (X86_64.R9, X86_64.RBP, int32 (adjustStackOffset ctx offset))]
                 | LIR.StringSymbol value ->
                     Ok (emitStringLiteralNoRefCount X86_64.R9 value)
-                | _ -> Ok (loadImm64 X86_64.R9 0L)
+                | _ ->
+                    Error "FileWriteText/FileAppendText content operand must be a string pointer or string literal"
             let copyLabel = freshLabel "fw_copy"
             let doneLabel = freshLabel "fw_done"
             let errorLabel = freshLabel "fw_err"
