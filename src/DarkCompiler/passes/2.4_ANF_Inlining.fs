@@ -49,7 +49,6 @@ type FunctionInfo = {
     HasClosures: bool    // Contains ClosureAlloc or ClosureCall
     HasTailCalls: bool   // Contains TailCall or ClosureTailCall
     IsExternal: bool     // Body is available only as an inline candidate
-    CallsCount: int      // Number of call sites (for future heuristics)
 }
 
 // ============================================================================
@@ -222,7 +221,6 @@ let buildFunctionInfo (recursiveFuncs: Set<string>) (func: Function) : FunctionI
         HasClosures = exprHasClosures func.Body
         HasTailCalls = exprHasTailCalls func.Body
         IsExternal = false
-        CallsCount = 0  // Will be updated later if needed
     }
 
 /// Build function info map for all functions
