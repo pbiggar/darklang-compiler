@@ -633,6 +633,24 @@ let private trySimplifyDoubleUnary (tid: TempId) (cexpr: CExpr) (body: AExpr) : 
         Some (Let (absTid, FloatAbs source, absBody))
     | _ -> None
 
+let private trySimplifyBoolComplement (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =
+    let replacementForBoolOp op =
+        match op with
+        | And -> Some (BoolLiteral false)
+        | Or -> Some (BoolLiteral true)
+        | _ -> None
+
+    match cexpr, body with
+    | UnaryPrim (Not, source), Let (boolTid, Prim (op, Var sourceTid, Var notTid), boolBody)
+    | UnaryPrim (Not, source), Let (boolTid, Prim (op, Var notTid, Var sourceTid), boolBody)
+        when notTid = tid ->
+        match source with
+        | Var originalTid when originalTid = sourceTid ->
+            replacementForBoolOp op
+            |> Option.map (fun replacement -> Let (boolTid, Atom replacement, boolBody))
+        | _ -> None
+    | _ -> None
+
 /// Optimize an AExpr, returning optimized expression, change flag, and used TempIds
 let rec private optimizeAExprWithUses
     (context: OptimizeContext)
@@ -684,11 +702,18 @@ let rec private optimizeAExprWithUses
         let isDead = options.EnableDCE && not (Set.contains tid usesInBody) && not (hasSideEffects context cexpr'')
         let usesInBodyWithoutTid = Set.remove tid usesInBody
 
-        match trySimplifyDoubleUnary tid cexpr'' bodyResult.Expr with
-        | Some replacement when options.EnableConstFolding ->
+        let adjacentSimplification =
+            if options.EnableConstFolding then
+                trySimplifyDoubleUnary tid cexpr'' bodyResult.Expr
+                |> Option.orElseWith (fun () -> trySimplifyBoolComplement tid cexpr'' bodyResult.Expr)
+            else
+                None
+
+        match adjacentSimplification with
+        | Some replacement ->
             let replacementResult = optimizeAExprWithUses context options env typeEnv cseEnv replacement
             { replacementResult with Changed = true }
-        | _ when skipBinding ->
+        | None when skipBinding ->
             // Copy propagation: skip this binding entirely
             {
                 Expr = bodyResult.Expr

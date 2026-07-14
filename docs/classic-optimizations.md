@@ -146,6 +146,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical boolean simplification that removes redundant equality comparisons against boolean literals in ANF before backend lowering.
 - Notes: Implemented for `x == true -> x`, `true == x -> x`, `x == false -> !x`, `false == x -> !x`, `x != true -> !x`, `true != x -> !x`, `x != false -> x`, and `false != x -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Guided sandbox trials. Boolean inequality literal cases are matched explicitly rather than relying on `not (x == false)` to become a later double-negation cleanup. Covered by corresponding boolean equality, inequality, and double-negation tests in `src/Tests/optimization/anf.opt`.
 
+### Boolean complement simplification
+
+- Optimization name: Boolean complement simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical boolean simplification that folds complement laws exposed as adjacent ANF bindings.
+- Notes: Implemented for `x && !x -> false`, `!x && x -> false`, `x || !x -> true`, and `!x || x -> true` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `identity_bool_and_complement_right` and `identity_bool_or_complement_right` in `src/Tests/optimization/anf.opt`; existing boolean and branch-heavy tests provide regression coverage but do not isolate this micro-pattern.
+
 ### String self-comparison simplification
 
 - Optimization name: String self-comparison simplification

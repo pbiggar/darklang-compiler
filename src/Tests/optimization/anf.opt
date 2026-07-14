@@ -1000,6 +1000,22 @@ Function f:
 return t0
 
 ---NAME---
+identity_bool_and_complement_right
+---INPUT---
+def f(x: Bool) : Bool = x && !x
+---EXPECTED---
+Function f:
+return false
+
+---NAME---
+identity_bool_or_complement_right
+---INPUT---
+def f(x: Bool) : Bool = x || !x
+---EXPECTED---
+Function f:
+return true
+
+---NAME---
 internal_string_eq_self_comparison
 ---INPUT---
 def f(x: String) : Bool = __string_eq(x, x)
