@@ -13,8 +13,8 @@ let private assertEncoding (label: string) (instr: Instr) (expected: byte array)
     if actual = expected then
         Ok ()
     else
-        let expectedHex = expected |> Array.map (fun b -> sprintf "%02X" b) |> String.concat " "
-        let actualHex = actual |> Array.map (fun b -> sprintf "%02X" b) |> String.concat " "
+        let expectedHex = expected |> Array.map (fun b -> b.ToString("X2")) |> String.concat " "
+        let actualHex = actual |> Array.map (fun b -> b.ToString("X2")) |> String.concat " "
         Error $"{label}: expected [{expectedHex}], got [{actualHex}]"
 
 let private assertEncodings (cases: (string * Instr * byte array) list) : Result<unit, string> =
