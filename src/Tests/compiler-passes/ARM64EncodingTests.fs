@@ -154,6 +154,23 @@ let testArithmeticImmediatesRejectOutOfRangeValues () : TestResult =
 
     checkCases cases
 
+let testMoveWideShiftsRejectInvalidValues () : TestResult =
+    let cases = [
+        ("MOVZ shift 8", fun () -> encode (MOVZ (X0, 1us, 8)) |> ignore)
+        ("MOVN shift 24", fun () -> encode (MOVN (X0, 1us, 24)) |> ignore)
+        ("MOVK shift 64", fun () -> encode (MOVK (X0, 1us, 64)) |> ignore)
+    ]
+
+    let rec checkCases remaining =
+        match remaining with
+        | [] -> Ok ()
+        | (name, f) :: rest ->
+            match expectCrash name f with
+            | Ok () -> checkCases rest
+            | Error msg -> Error msg
+
+    checkCases cases
+
 let testFMOVImmediateEncoding () : TestResult =
     let cases = [
         "1.0", FMOV_imm (D2, 1.0), 0x1E6E1002u
@@ -198,6 +215,7 @@ let tests = [
     ("unsigned memory offsets reject invalid values", testUnsignedMemoryOffsetsRejectInvalidValues)
     ("signed pair offsets reject invalid values", testSignedPairOffsetsRejectInvalidValues)
     ("arithmetic immediates reject out-of-range values", testArithmeticImmediatesRejectOutOfRangeValues)
+    ("move-wide shifts reject invalid values", testMoveWideShiftsRejectInvalidValues)
     ("FMOV immediate encoding", testFMOVImmediateEncoding)
     ("invalid ASSERT-DIFFERENT value is rejected", testInvalidAssertDifferentValueIsRejected)
 ]

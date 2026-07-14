@@ -70,6 +70,14 @@ let private encodeUnsigned12Immediate (instructionName: string) (imm: uint16) : 
     else
         (uint32 imm) <<< 10
 
+let private encodeMoveWideShift (instructionName: string) (shift: int) : uint32 =
+    match shift with
+    | 0 -> 0u
+    | 16 -> 1u <<< 21
+    | 32 -> 2u <<< 21
+    | 48 -> 3u <<< 21
+    | _ -> Crash.crash $"{instructionName}: shift must be one of 0, 16, 32, or 48, got {shift}"
+
 /// Encode ARM64 instruction to 32-bit machine code
 let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
     match instr with
@@ -79,7 +87,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let sf = 1u <<< 31
         let opc = 2u <<< 29
         let opcode = 0b100101u <<< 23
-        let hw = (uint32 shift / 16u) <<< 21
+        let hw = encodeMoveWideShift "MOVZ" shift
         let imm16 = (uint32 imm) <<< 5
         let rd = encodeReg dest
         [sf ||| opc ||| opcode ||| hw ||| imm16 ||| rd]
@@ -91,7 +99,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let sf = 1u <<< 31
         let opc = 0u <<< 29  // MOVN has opc=00
         let opcode = 0b100101u <<< 23
-        let hw = (uint32 shift / 16u) <<< 21
+        let hw = encodeMoveWideShift "MOVN" shift
         let imm16 = (uint32 imm) <<< 5
         let rd = encodeReg dest
         [sf ||| opc ||| opcode ||| hw ||| imm16 ||| rd]
@@ -102,7 +110,7 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         let sf = 1u <<< 31
         let opc = 3u <<< 29
         let opcode = 0b100101u <<< 23
-        let hw = (uint32 shift / 16u) <<< 21
+        let hw = encodeMoveWideShift "MOVK" shift
         let imm16 = (uint32 imm) <<< 5
         let rd = encodeReg dest
         [sf ||| opc ||| opcode ||| hw ||| imm16 ||| rd]
