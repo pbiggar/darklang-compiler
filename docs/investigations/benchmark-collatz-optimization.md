@@ -9,21 +9,22 @@ The remaining hot-loop gap is control flow: Dark still emits separate even and
 odd loop paths, while the best reference shape computes both candidate next
 values and selects branchlessly.
 
-The latest recorded benchmark table reports Dark at **81,441,905 instructions
-(1.06x Rust)** for Collatz, with OCaml at **259,001,363 instructions (3.38x
-Rust)**. That makes the remaining opportunity narrower than the older timing
-notes implied.
+The current focused Cachegrind refresh reports Dark at **81,441,905
+instructions (0.83x Rust)** for Collatz, with Rust at **98,242,566
+instructions** and OCaml at **259,003,323 instructions (2.6x Rust)**. That keeps
+the remaining opportunity narrower than the older timing notes implied.
 
 ## Current Benchmark Context
 
-From a full local `./benchmarks/run_benchmarks.sh all` run on the current
-checkout:
+From a focused local
+`./benchmarks/run_benchmarks.sh --refresh-baseline=rust,ocaml collatz` run on
+commit `16719658`:
 
 | Language | Instruction count | Relative to Rust |
 |----------|-------------------|------------------|
-| Rust     | 76,732,899        | 1.00x            |
-| Dark     | 81,441,905        | 1.06x            |
-| OCaml    | 259,001,363       | 3.38x            |
+| Rust     | 98,242,566        | 1.00x            |
+| Dark     | 81,441,905        | 0.83x            |
+| OCaml    | 259,003,323       | 2.6x             |
 
 All implementations produce the expected output:
 
@@ -95,10 +96,13 @@ return t11
 
 `./dark --dump-lir benchmarks/problems/collatz/dark/main.dark` shows that
 post-allocation LIR has also removed the older same-loop register-copy issue in
-`collatzSteps` and strength-reduced `3 * n` to shift-add form:
+`collatzSteps`, strength-reduced `3 * n` to shift-add form, and eliminated stack
+usage in the hot recursive helper:
 
 ```text
 collatzSteps:
+  StackSize: 0
+  UsedCalleeSaved: []
   Label "collatzSteps_L1":
 
     BranchBitZero(X1, #0, Label "collatzSteps_L3", Label "collatzSteps_L4")
@@ -192,6 +196,9 @@ select.
 - `/ 2 -> >> 1` is implemented in optimized ANF.
 - `3 * n` is lowered to `add x, x, x, lsl #1` after register allocation and in
   emitted ARM64 assembly.
+- Tail calls in both `collatzSteps` and `sumCollatzRange` are lowered to local
+  loop jumps, so the benchmark source comment about needing TCO is stale with
+  respect to current compiler behavior.
 - The older constant-load issue for `3` in the odd path is gone from current
   post-allocation LIR and emitted assembly.
 - The older same-loop register moves in `collatzSteps` are gone from current
@@ -205,4 +212,5 @@ select.
 ./dark -o /tmp/collatz.dark.out benchmarks/problems/collatz/dark/main.dark
 /tmp/collatz.dark.out
 aarch64-linux-gnu-objdump -D -b binary -m aarch64 /tmp/collatz.dark.out
+./benchmarks/run_benchmarks.sh --refresh-baseline=rust,ocaml collatz
 ```
