@@ -76,6 +76,13 @@ let testUndefinedLabelDeferredFixup () : Result<unit, string> =
            && result.DeferredFixups.[0].TargetLabel = "nonexistent" then Ok ()
         else Error $"Expected 1 deferred fixup for 'nonexistent', got {result.DeferredFixups}"
 
+/// Test: entry labels should be required explicitly, not replaced with offset 0.
+let testRequireLabelPositionRejectsMissingStart () : Result<unit, string> =
+    match X86_64_Resolve.requireLabelPosition "_start" Map.empty with
+    | Error msg when msg.Contains("Missing required label: _start") -> Ok ()
+    | Error msg -> Error $"Expected missing _start label error, got: {msg}"
+    | Ok offset -> Error $"Expected missing _start label to fail, got offset {offset}"
+
 /// Test: generate and execute a program with a forward call
 let testCallAndExecute () : Result<unit, string> =
     // main: call func; mov rax,60; syscall
@@ -107,5 +114,6 @@ let tests : (string * (unit -> Result<unit, string>)) list = [
     ("Backward JMP", testBackwardJump)
     ("Forward CALL", testCallForward)
     ("Undefined label deferred fixup", testUndefinedLabelDeferredFixup)
+    ("Require label position rejects missing _start", testRequireLabelPositionRejectsMissingStart)
     ("CALL + execute", testCallAndExecute)
 ]

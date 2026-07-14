@@ -596,20 +596,19 @@ let private generateBinary
                 match patchedResult with
                 | Error err -> Error $"x86-64 data label error: {err}"
                 | Ok resolveResult ->
-                let entryOffset =
-                    match Map.tryFind "_start" resolveResult.LabelPositions with
-                    | Some offset -> offset
-                    | None -> 0
-                let binary =
-                    Binary_Generation_ELF_X86_64.createExecutableWithPools
-                        resolveResult.MachineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool
-                        options.EnableLeakCheck entryOffset
-                let emitElapsed = sw.Elapsed.TotalMilliseconds - emitStart
-                recordPassTiming passTimingRecorder "x86-64 Emit" emitElapsed
-                if verbosity >= 2 then
-                    let t = System.Math.Round(emitElapsed, 1)
-                    println $"        {t}ms"
-                Ok binary
+                    match X86_64_Resolve.requireLabelPosition "_start" resolveResult.LabelPositions with
+                    | Error err -> Error $"x86-64 resolve error: {err}"
+                    | Ok entryOffset ->
+                        let binary =
+                            Binary_Generation_ELF_X86_64.createExecutableWithPools
+                                resolveResult.MachineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool
+                                options.EnableLeakCheck entryOffset
+                        let emitElapsed = sw.Elapsed.TotalMilliseconds - emitStart
+                        recordPassTiming passTimingRecorder "x86-64 Emit" emitElapsed
+                        if verbosity >= 2 then
+                            let t = System.Math.Round(emitElapsed, 1)
+                            println $"        {t}ms"
+                        Ok binary
 
     | Ok Platform.ARM64 ->
         // ARM64 backend (original)

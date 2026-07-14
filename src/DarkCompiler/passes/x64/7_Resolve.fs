@@ -33,6 +33,12 @@ type ResolveResult = {
     DeferredFixups: Fixup list
 }
 
+/// Require a code label position when downstream binary layout depends on it.
+let requireLabelPosition (label: string) (labelPositions: Map<string, int>) : Result<int, string> =
+    match Map.tryFind label labelPositions with
+    | Some offset -> Ok offset
+    | None -> Error $"Missing required label: {label}"
+
 /// Patch a signed rel32 displacement into already-encoded machine code.
 let patchRel32 (machineCode: byte array) (patchOffset: int) (rel: int) : unit =
     let relBytes = [|
