@@ -61,8 +61,8 @@ RC:
   reaches zero
 - `RawSlotInit<T>` retains child list and dict edges
 - direct leaf payload helpers release root element payloads
-- generic fixed-block and boxed-sum element payloads use planned
-  `RcReleasePlan` helpers
+- generic fixed-block and boxed-sum element payloads use `RcReleasePlan`
+  helpers
 
 Current leaf payload coverage includes:
 
@@ -71,14 +71,14 @@ Current leaf payload coverage includes:
 - nested lists
 - dict roots
 - closure roots
-- tuple payloads through planned `RcReleasePlan` helpers
-- record payloads through planned `RcReleasePlan` helpers
+- tuple payloads through `RcReleasePlan` helpers
+- record payloads through `RcReleasePlan` helpers
 - boxed sums carrying dynamic buffers, lists, dicts, closures, tuples, records,
-  and selected nested sums through planned `RcReleasePlan` helpers
+  and selected nested sums through `RcReleasePlan` helpers
 
 ARM64 and x64 both route generic fixed-block list payload cleanup through
-planned helpers derived from `RcReleasePlan`. x64 no longer has a static
-tuple/record/boxed-sum helper matrix.
+helpers derived from `RcReleasePlan`. x64 no longer has a static
+tuple/record/boxed-sum helper matrix for list payload cleanup.
 
 ## Remaining Work
 
