@@ -7,7 +7,7 @@ The spectral_norm benchmark computes the spectral norm of an infinite matrix A u
 **Performance Results (instruction counts):**
 - Rust: 5,093,977 (n=100, 10 iterations)
 - OCaml: 22,589,955 (n=100, 10 iterations) - 4.43x slower than Rust
-- **Dark: Reduced-size benchmark only** (`n=3`, 10 iterations; omitted from the main comparison table)
+- **Dark: 14,296** (`n=3`, 10 iterations; reduced-size result, omitted from the main comparison table)
 
 **Key Issues:**
 1. **Reduced implementation**: Dark computes the complete power-iteration algorithm only at `n=3`
@@ -204,45 +204,64 @@ Even with arrays, calling `matA(i, j)` as a separate function in the inner loop 
 945c: 1e621802    fdiv d2, d0, d2         ; 1.0 / div
 ```
 
-**Current Dark status: `matA` call sites with constant inputs are inlined before MIR.**
+**Current Dark status: `matA` and `get3` are inlined into the dynamic recursive row loops before MIR.**
 
-The reduced benchmark now exercises recursive matrix-vector row folds. Earlier
-`./dark --dump-anf benchmarks/problems/spectral_norm/dark/main.dark` output for
-the former single-element implementation showed that constant `matA` call sites
-are expanded during reference-count insertion:
+The reduced benchmark now exercises recursive matrix-vector row folds. Current
+`./dark -vvv --dump-anf --dump-mir --dump-lir benchmarks/problems/spectral_norm/dark/main.dark`
+output shows the optimized ANF still has calls:
 
 ```
-=== ANF (after RC insertion) ===
-Function _start:
-let TempId 16 = 0
-let TempId 17 = 0
-let TempId 18 = t16 + t17
-let TempId 19 = t18 + 1
-let TempId 20 = t18 * t19
-let TempId 21 = t20 >> 1
-let TempId 22 = t21 + t16
-let TempId 23 = t22 + 1
-let TempId 24 = Int64ToFloat(t23)
-let TempId 25 = 1 / t24
+Function avRow:
+let TempId 26 = matA(t19, t20)
+let TempId 27 = get3(t22, t20)
+...
+
+Function atvRow:
+let TempId 38 = matA(t32, t31)
+let TempId 39 = get3(t34, t32)
 ...
 ```
 
-The MIR and LIR for `_start` likewise contain no `Call(matA, ...)`; LIR has already reduced the
-constant input to the equivalent `1.0 / 1.0` path:
+After reference-count insertion, both calls are expanded directly in the row functions, even with dynamic `i` and `j` values:
 
 ```
-_start:
-  Label "_start_body":
-    X1 <- Mov(Imm 1)
+Function avRow:
+let TempId 128 = t19 + t20
+let TempId 130 = t128 * t129
+let TempId 131 = t130 >> 1
+let TempId 134 = Int64ToFloat(t133)
+let TempId 135 = 1 / t134
+...
+if t136 then
+  let TempId 137 = t22.0
+else if t138 then
+  let TempId 139 = t22.1
+else
+  let TempId 140 = t22.2
+```
+
+The register-allocated LIR also contains the row loop as a local branch loop, not a recursive call, and the matrix formula is inline:
+
+```
+avRow:
+  Label "avRow_L1":
+    X6 <- Add(X4, Imm 1)
+    X1 <- Add(X3, Reg X4)
+    X2 <- Add(X1, Imm 1)
+    X1 <- Mul(X1, Reg X2)
+    X1 <- Lsr_imm(X1, #1)
+    X1 <- Add(X1, Reg X3)
+    X1 <- Add(X1, Imm 1)
     D0 <- Int64ToFloat(X1)
-    D1 <- FLoad(float[1])
-    D0 <- FDiv(D1, D0)
-    D1 <- FLoad(float[1000000000])
-    D0 <- FMul(D0, D1)
-    X1 <- FloatToInt64(D0)
+    D5 <- FLoad(float[1])
+    D0 <- FDiv(D5, D0)
+    BranchZero(X4, Label "avRow_L3", Label "avRow_L4")
+  Label "avRow_body":
+    Cmp(X4, Reg X5)
+    CondBranch(GE, Label "avRow_L0", Label "avRow_L1")
 ```
 
-The standalone `matA` function is still emitted:
+The standalone `matA` function is still emitted because it remains a source-level function, but current hot row-loop calls do not call it:
 ```
 matA:
   Label "matA_body":
@@ -257,10 +276,35 @@ matA:
     fv10018 <- FDiv(fv1000, fv10017)    ; 1.0 / div
 ```
 
-So the old note that the current benchmark does not inline `matA` is stale for this constant call
-site. The remaining open question is whether the inliner keeps doing this for non-constant
-`matA(i, j)` calls inside a recursive or eventual array-backed inner loop; the current benchmark
-cannot prove that because it only computes `matA(0, 0)`.
+So the old note that dynamic `matA(i, j)` calls might remain in recursive hot loops is no longer current for this reduced benchmark. The remaining open question is whether the same inlining survives a future array-backed full `n=100` implementation with larger helper bodies and more register pressure.
+
+### Problem 4: Tuple Allocation in Outer Iteration
+
+Current Dark evidence shows the reduced-size tuple implementation allocates fresh 3-float tuples for intermediate vectors. This is correct for immutable values, but it is a benchmark-specific cost that would disappear with mutable arrays or an unboxed fixed-size tuple representation.
+
+The LIR for `iterate` allocates vectors during each recursive power-iteration step:
+
+```
+iterate:
+  Label "iterate_L1":
+    ...
+    X20 <- HeapAlloc(24)
+    HeapStore(X20, 0, Reg X9)
+    HeapStore(X20, 8, Reg X9)
+    HeapStore(X20, 16, Reg X9)
+    ...
+    X21 <- HeapAlloc(24)
+    HeapStore(X21, 0, Reg X9)
+    HeapStore(X21, 8, Reg X9)
+    HeapStore(X21, 16, Reg X9)
+    X22 <- Call(atav3, [Reg X21])
+    ...
+    RefCountDec(X22, 24, generic)
+    RefCountDec(X21, 24, generic)
+    RefCountDec(X20, 24, generic)
+```
+
+This makes mutable arrays the main full-parity blocker, but it also identifies a secondary optimization opportunity for small fixed numeric tuples: avoid boxing float tuple fields through generic heap objects when their shape is statically known.
 
 ## Identified Optimization Opportunities
 
@@ -339,42 +383,68 @@ This already works but creates intermediate list allocations.
 
 ---
 
-### 3. Aggressive Function Inlining in Hot Loops
+### 3. Preserve Aggressive Function Inlining in Hot Loops
 
-**Impact: ~2-4x performance improvement for numeric code**
+**Impact: Avoids regressing dynamic numeric row loops when full arrays are added**
 
 **Root Cause:**
-Small numeric functions like `matA(i, j)` should be inlined into their call sites to avoid function call overhead. In the inner loop of spectral_norm, `matA` would be called n² times.
+Small numeric functions like `matA(i, j)` must stay inlined into their call sites to avoid function call overhead. In the inner loop of full spectral_norm, `matA` would be called n² times.
 
-**Evidence - Current Dark does inline the simplified constant call:**
+**Evidence - Current Dark inlines dynamic reduced row-loop calls:**
 ```
-Function _start:
-let TempId 18 = t16 + t17
-let TempId 20 = t18 * t19
-let TempId 21 = t20 >> 1
-let TempId 25 = 1 / t24
+Function avRow:
+let TempId 128 = t19 + t20
+let TempId 130 = t128 * t129
+let TempId 131 = t130 >> 1
+let TempId 135 = 1 / t134
 ```
 
 **Evidence - Rust fully inlines the computation:**
 The entire `a(i,j)` computation is inlined into the loop body, eliminating call overhead.
 
 **Proposed Solution:**
-Keep this as a conditional opportunity for the full implementation:
-1. Confirm that `matA(i, j)` is still inlined when `i` and `j` are dynamic loop variables.
+Keep this as a regression guard for the full implementation:
+1. Confirm that `matA(i, j)` remains inlined after adding array-backed full `n=100` code.
 2. If it is not, enhance the inlining pass for small pure numeric functions in loops.
-3. If it is, remove this as a separate spectral_norm blocker and track only the array/full-implementation work.
+3. If it is, keep this as validation evidence rather than a separate blocker.
 
 **Files to Modify:**
 - `src/DarkCompiler/passes/2.4_Inlining.fs` - Enhance inlining heuristics
 
 ---
 
-### 4. Complete the Dark Implementation
+### 4. Avoid Boxing Small Numeric Tuples
+
+**Impact: Reduces reduced-size benchmark overhead; not a substitute for full mutable arrays**
+
+**Root Cause:**
+The current `n=3` implementation models vectors as `(Float, Float, Float)`, which are heap-allocated generic tuples. Each intermediate vector in `atav3` and `iterate` allocates a 24-byte tuple, stores float bit patterns through general-purpose registers, and later decrements the tuple reference count.
+
+**Evidence - register-allocated LIR from `iterate`:**
+```
+X20 <- HeapAlloc(24)
+HeapStore(X20, 0, Reg X9)
+HeapStore(X20, 8, Reg X9)
+HeapStore(X20, 16, Reg X9)
+...
+RefCountDec(X20, 24, generic)
+```
+
+**Proposed Solution:**
+Consider an unboxed fixed-size tuple or specialized float-tuple representation only if other benchmarks also show the same pattern. For spectral_norm full parity, mutable arrays remain the more important optimization.
+
+**Files to Modify:**
+- `src/DarkCompiler/Types.fs` / tuple representation sites - identify statically known float tuple shapes
+- `src/DarkCompiler/passes/arm64/6_CodeGen.fs` and `src/DarkCompiler/passes/x64/6_CodeGen.fs` - lower unboxed tuple fields if the representation is added
+
+---
+
+### 5. Complete the Dark Implementation
 
 **Impact: Required to run the benchmark at all**
 
 **Root Cause:**
-The current Dark implementation only computes `matA(0,0)` and returns a constant value. It needs the full algorithm.
+The current Dark implementation computes the full power-iteration algorithm only for a fixed 3-element vector. It needs array-backed vectors to run the full `n=100` benchmark used by the other implementations.
 
 **Once arrays and loops are available, implementation would be:**
 ```dark
@@ -436,7 +506,8 @@ def spectralNorm(n: Int64) : Float =
 |--------------|-----------------|------------|------------------|
 | Mutable Arrays | 10-100x vs Dict | High | Yes |
 | Loop Constructs | Code clarity + 10-20% | Medium | No (can use recursion) |
-| Aggressive Inlining | 2-4x for numeric code | Medium | No |
+| Preserve Aggressive Inlining | Prevents hot-loop regression | Medium | No |
+| Avoid Boxing Small Numeric Tuples | Reduced benchmark overhead | Medium | No |
 | Complete Implementation | Required | Medium | Yes |
 
 **With arrays, Dark spectral_norm could achieve:**
@@ -447,8 +518,9 @@ def spectralNorm(n: Int64) : Float =
 
 1. **Mutable Arrays** - Essential prerequisite for the algorithm
 2. **Complete the Implementation** - Make it produce correct output
-3. **Aggressive Inlining** - Optimize the hot numeric loops
+3. **Preserve Aggressive Inlining** - Keep the hot numeric loops call-free
 4. **Loop Constructs** - Improve ergonomics (optional)
+5. **Avoid Boxing Small Numeric Tuples** - Consider only if broader evidence supports it
 
 ## Appendix: Full IR Dumps
 
