@@ -386,4 +386,4 @@ Each pass can be tested in isolation:
 - **ANF**: PassTestRunner validates ANF output
 - **End-to-end**: `.e2e` files test full pipeline
 
-Run all tests: `dotnet test`
+Run all tests: `./run-tests --ai`
