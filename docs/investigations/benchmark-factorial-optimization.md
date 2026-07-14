@@ -16,6 +16,13 @@ tail-recursive `repeat` iteration. Register allocation now removes the older
 redundant self-moves in the `repeat` loop, so the remaining benchmark gap is
 not caused by those moves.
 
+Current focused Cachegrind evidence confirms the gap is stable: Dark still
+runs at 4,420,203 instructions, or 17.3x the cached Rust baseline. The same
+run reports 1,600,034 data references and 210,025 branches for Dark, consistent
+with repeated unboxed recursive integer work rather than heap allocation or
+cache behavior. The Rust, OCaml, F#, Python, and Node rows in that focused run
+used cached baselines from `benchmarks/BASELINES.md`.
+
 ## Benchmark Source Code
 
 ### Dark (`benchmarks/problems/factorial/dark/main.dark`)
@@ -224,6 +231,11 @@ tail-recursive loops could compute it once before entering `repeat` and carry
 the value through the loop. That would not match Rust's full compile-time
 result, but it would remove the dominant repeated computation without needing
 full partial evaluation.
+
+This remains the best factorial-specific runtime opportunity after the current
+register allocator: the post-allocation LIR has no spill slots and no saved
+registers around the `factorial(20)` call, so there is little local calling
+sequence cleanup left in `repeat`.
 
 **Implementation Approach:**
 1. Reuse or introduce purity information for calls in ANF or MIR.
