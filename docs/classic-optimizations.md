@@ -39,6 +39,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical fold that removes literal-only shift operations in ANF before MIR lowering.
 - Notes: Implemented for `intLiteral << shiftLiteral` and logical `intLiteral >> shiftLiteral` when the shift count is known to be in the backend immediate range `0..63`. Covered by `const_fold_int_shl` and `const_fold_int_shr` in `src/Tests/optimization/anf.opt`; existing bitwise and benchmark tests provide broader shift coverage but do not isolate this micro-pattern.
 
+### Constant Int64 bitwise folding
+
+- Optimization name: Constant Int64 bitwise folding
+- Taxonomy category: Constant folding
+- Priority/rationale: Small, low-risk canonical fold that removes runtime bitwise operations when both Int64 operands are literals.
+- Notes: Implemented for literal `BitAnd`, `BitOr`, and `BitXor` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `const_fold_int_bitand`, `const_fold_int_bitor`, and `const_fold_int_bitxor` in `src/Tests/optimization/anf.opt`; existing integer-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
+
 ## Algebraic simplification
 
 ### Modulo by one elimination

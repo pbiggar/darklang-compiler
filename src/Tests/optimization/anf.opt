@@ -163,6 +163,27 @@ const_fold_int_shr
 return 8
 
 ---NAME---
+const_fold_int_bitand
+---INPUT---
+6 & 3
+---EXPECTED---
+return 2
+
+---NAME---
+const_fold_int_bitor
+---INPUT---
+4 ||| 3
+---EXPECTED---
+return 7
+
+---NAME---
+const_fold_int_bitxor
+---INPUT---
+6 ^ 3
+---EXPECTED---
+return 5
+
+---NAME---
 identity_add_zero_right
 ---INPUT---
 let x = 42 in x + 0
