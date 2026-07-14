@@ -244,6 +244,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical simplification that removes subtraction when both integer operands are the same SSA variable.
 - Notes: Implemented for `x - x -> 0` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs`. Covered by `self_subtraction_int` in `src/Tests/optimization/anf.opt`.
 
+### UInt64 additive identity simplification
+
+- Optimization name: UInt64 additive identity simplification
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk canonical simplification that removes redundant unsigned addition and subtraction by literal zero in ANF before MIR lowering.
+- Notes: Implemented for `x + 0UL -> x`, `0UL + x -> x`, and `x - 0UL -> x` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `identity_uint64_add_zero_right`, `identity_uint64_add_zero_left`, and `identity_uint64_sub_zero` in `src/Tests/optimization/anf.opt`; existing UInt64 stdlib tests provide behavioral coverage but do not isolate this micro-pattern.
+
 ### Subtraction of negative literal strength reduction
 
 - Optimization name: Subtraction of negative literal strength reduction

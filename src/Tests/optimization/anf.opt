@@ -226,6 +226,22 @@ let x = 42 in 0 + x
 return 42
 
 ---NAME---
+identity_uint64_add_zero_right
+---INPUT---
+def f(x: UInt64) : UInt64 = x + 0UL
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
+identity_uint64_add_zero_left
+---INPUT---
+def f(x: UInt64) : UInt64 = 0UL + x
+---EXPECTED---
+Function f:
+return t0
+
+---NAME---
 strength_reduce_add_self
 ---INPUT---
 def f(x: Int64) : Int64 = x + x
@@ -240,6 +256,14 @@ identity_sub_zero
 let x = 42 in x - 0
 ---EXPECTED---
 return 42
+
+---NAME---
+identity_uint64_sub_zero
+---INPUT---
+def f(x: UInt64) : UInt64 = x - 0UL
+---EXPECTED---
+Function f:
+return t0
 
 ---NAME---
 strength_reduce_sub_from_zero

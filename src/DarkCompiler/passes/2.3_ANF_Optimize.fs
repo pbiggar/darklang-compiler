@@ -170,6 +170,11 @@ let foldBinOp (op: BinOp) (left: Atom) (right: Atom) : CExpr option =
     | BitXor, x, IntLiteral (Int64 -1L) -> Some (UnaryPrim (BitNot, x))
     | BitXor, IntLiteral (Int64 -1L), x -> Some (UnaryPrim (BitNot, x))
 
+    // Algebraic identities - UInt64
+    | Add, IntLiteral (UInt64 0UL), x -> Some (Atom x)
+    | Add, x, IntLiteral (UInt64 0UL) -> Some (Atom x)
+    | Sub, x, IntLiteral (UInt64 0UL) -> Some (Atom x)
+
     // Algebraic identities - Float
     // Note: We skip 0.0 * x -> 0.0 because 0.0 * inf = NaN, 0.0 * NaN = NaN
     | Add, FloatLiteral 0.0, x -> Some (Atom x)
