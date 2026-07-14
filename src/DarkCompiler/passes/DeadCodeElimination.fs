@@ -158,20 +158,9 @@ let buildCallGraph (funcs: LIR.Function list) : Map<string, Set<string>> =
     |> List.map (fun f -> f.Name, getCalledFunctions f)
     |> Map.ofList
 
-/// Compute transitive closure of reachable functions
+/// Compute transitive closure of reachable functions.
 let findReachable (callGraph: Map<string, Set<string>>) (roots: Set<string>) : Set<string> =
-    let rec visit visited toVisit =
-        if Set.isEmpty toVisit then visited
-        else
-            let name = Set.minElement toVisit
-            let toVisit' = Set.remove name toVisit
-            if Set.contains name visited then visit visited toVisit'
-            else
-                let visited' = Set.add name visited
-                let calls = Map.tryFind name callGraph |> Option.defaultValue Set.empty
-                let toVisit'' = Set.union toVisit' (Set.difference calls visited')
-                visit visited' toVisit''
-    visit Set.empty roots
+    CallGraphReachability.findReachable callGraph roots
 
 /// Filter functions to only include reachable ones
 let filterFunctions (callGraph: Map<string, Set<string>>)

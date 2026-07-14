@@ -17,6 +17,7 @@
     <Compile Include="ListDisplay.fs" />
     <Compile Include="Stdlib.fs" />
     <Compile Include="ResultList.fs" />
+    <Compile Include="CallGraphReachability.fs" />
     <Compile Include="Bitset.fs" />
 
     <!-- Pass 1: Parsing and type checking -->

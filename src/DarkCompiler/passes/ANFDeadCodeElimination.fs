@@ -115,21 +115,6 @@ let buildCallGraph (funcs: ANF.Function list) : Map<string, Set<string>> =
     |> List.map (fun f -> f.Name, getCalledFunctions f)
     |> Map.ofList
 
-/// Compute transitive closure of reachable functions
-let findReachable (callGraph: Map<string, Set<string>>) (roots: Set<string>) : Set<string> =
-    let rec visit visited toVisit =
-        if Set.isEmpty toVisit then visited
-        else
-            let name = Set.minElement toVisit
-            let toVisit' = Set.remove name toVisit
-            if Set.contains name visited then visit visited toVisit'
-            else
-                let visited' = Set.add name visited
-                let calls = Map.tryFind name callGraph |> Option.defaultValue Set.empty
-                let toVisit'' = Set.union toVisit' (Set.difference calls visited')
-                visit visited' toVisit''
-    visit Set.empty roots
-
 /// Get the set of stdlib functions reachable from user functions
 let getReachableStdlib (stdlibCallGraph: Map<string, Set<string>>)
                        (userFuncs: ANF.Function list) : Set<string> =
@@ -139,4 +124,4 @@ let getReachableStdlib (stdlibCallGraph: Map<string, Set<string>>)
         |> List.collect (fun f -> getCalledFunctions f |> Set.toList)
         |> Set.ofList
     // Expand to transitive closure
-    findReachable stdlibCallGraph userCalls
+    CallGraphReachability.findReachable stdlibCallGraph userCalls
