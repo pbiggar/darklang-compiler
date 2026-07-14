@@ -149,6 +149,20 @@ if false || false then 1 else 0
 return 0
 
 ---NAME---
+const_fold_int_shl
+---INPUT---
+8 << 3
+---EXPECTED---
+return 64
+
+---NAME---
+const_fold_int_shr
+---INPUT---
+64 >> 3
+---EXPECTED---
+return 8
+
+---NAME---
 identity_add_zero_right
 ---INPUT---
 let x = 42 in x + 0
