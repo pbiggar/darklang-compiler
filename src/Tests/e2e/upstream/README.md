@@ -1,18 +1,21 @@
-# Dark Execution test files
+# Upstream Dark end-to-end test files
 
-The files in these directories are unit tests for the Dark language and standard
-libraries. A typical test is a single line, such as:
+The files in these directories are imported end-to-end tests for the Dark
+language and standard libraries. A typical test is a single line, such as:
 
 `String.length_v0 "abcdef" = 6`
 
 This is written in a Dark-like syntax, and asserts that calling the function
 `String::length_v0` on `"abcdef"` is evaluated to 6. More details on the syntax
-of these tests may be found in `testfiles/README.md`.
+of these tests are captured in the parser and runner under
+`src/Tests/test-suite-tooling/`.
 
 Most tests are written as single lines, however, we support multi-line tests,
-test groups, functions, Datastores and workers.
+test groups, functions, types, and DB annotations.
 
-The implementation of the tests is in `LibExecution.Tests.fs`.
+The implementation of the test format is in
+`src/Tests/test-suite-tooling/TestDSL/E2EFormat.fs`; execution is handled by
+`src/Tests/test-suite-tooling/Runners/E2ETestRunner.fs`.
 
 All tests must be of the format `x = y` (or `x <> y`, though that's rarely
 used), that is, they must have a single expression on the left, one on the
