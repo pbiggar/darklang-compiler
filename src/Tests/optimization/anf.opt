@@ -286,6 +286,19 @@ let x = 42 in x / 1
 return 42
 
 ---NAME---
+identity_uint64_div_one
+---INPUT---
+def f(x: UInt64) : UInt64 = x / 1UL
+f(42UL)
+---EXPECTED---
+Function f:
+return t0
+
+Main:
+let TempId 2 = f(42)
+return t2
+
+---NAME---
 strength_reduce_div_negative_one
 ---INPUT---
 def f(x: Int64) : Int64 = x / -1
@@ -311,6 +324,18 @@ identity_mod_negative_one
 ---INPUT---
 def use(x: Int64): Int64 = x % -1
 use(42)
+---EXPECTED---
+Function use:
+return 0
+Main:
+let TempId 2 = use(42)
+return t2
+
+---NAME---
+identity_uint64_mod_one
+---INPUT---
+def use(x: UInt64): UInt64 = x % 1UL
+use(42UL)
 ---EXPECTED---
 Function use:
 return 0

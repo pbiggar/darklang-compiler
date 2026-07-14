@@ -83,6 +83,13 @@ Persistent backlog for audit-driven classic compiler optimization work.
 - Priority/rationale: Small, low-risk canonical simplification that removes a runtime remainder operation when the divisor is the literal `-1`.
 - Notes: Implemented for `x % -1 -> 0` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `identity_mod_negative_one` in `src/Tests/optimization/anf.opt`; existing integer-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
 
+### UInt64 division and modulo by one elimination
+
+- Optimization name: UInt64 division and modulo by one elimination
+- Taxonomy category: Algebraic simplification
+- Priority/rationale: Small, low-risk unsigned companion to existing Int64 division and modulo identities that removes redundant runtime arithmetic before backend lowering.
+- Notes: Implemented for `x / 1UL -> x` and `x % 1UL -> 0UL` in `src/DarkCompiler/passes/2.3_ANF_Optimize.fs` during Bounded Autonomous sandbox testing. Covered by `identity_uint64_div_one` and `identity_uint64_mod_one` in `src/Tests/optimization/anf.opt`; existing integer-heavy benchmark programs provide regression coverage but do not isolate this micro-pattern.
+
 ### Integer self-comparison simplification
 
 - Optimization name: Integer self-comparison simplification
