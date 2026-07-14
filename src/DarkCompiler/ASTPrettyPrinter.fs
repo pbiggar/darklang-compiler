@@ -829,7 +829,7 @@ let private formatFunctionDef (syntax: Syntax) (funcDef: FunctionDef) : string =
                     ""
                 else
                     parameters
-                    |> List.map (fun (name, typ) -> $"{name}: {formatType typ}")
+                    |> List.map (fun (name, typ) -> $"{formatIdentifierSegment name}: {formatType typ}")
                     |> String.concat ", ")
         $"def {formatIdentifierSegment funcDef.Name}{typeParamsText}({paramsText}) : {formatType funcDef.ReturnType} = {formatExpr syntax funcDef.Body}"
     | InterpreterSyntax ->
@@ -846,7 +846,7 @@ let private formatFunctionDef (syntax: Syntax) (funcDef: FunctionDef) : string =
                     ""
                 else
                     parameters
-                    |> List.map (fun (name, typ) -> $"{name}: {formatType typ}")
+                    |> List.map (fun (name, typ) -> $"{formatIdentifierSegment name}: {formatType typ}")
                     |> String.concat ", ")
         $"let {formatIdentifierSegment funcDef.Name}{typeParamsText}({paramsText}) : {formatType funcDef.ReturnType} = {formatExpr syntax funcDef.Body}"
 
