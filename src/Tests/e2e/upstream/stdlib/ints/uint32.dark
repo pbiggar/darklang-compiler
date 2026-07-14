@@ -47,6 +47,9 @@ Stdlib.UInt32.divide_v0 4294967295ul 2ul = 2147483647ul
 
 Stdlib.UInt32.divide_v0 1ul 0ul = error="Cannot divide by 0"
 Stdlib.UInt32.greaterThan_v0 20ul 1ul = true
+Stdlib.UInt32.greaterThan_v0 4294967295ul 0ul = true
+Stdlib.UInt32.greaterThan_v0 0ul 4294967295ul = false
+Stdlib.UInt32.greaterThan_v0 4294967295ul 4294967295ul = false
 
 Stdlib.UInt32.greaterThanOrEqualTo_v0 0ul 1ul = false
 Stdlib.UInt32.greaterThanOrEqualTo_v0 1ul 0ul = true
