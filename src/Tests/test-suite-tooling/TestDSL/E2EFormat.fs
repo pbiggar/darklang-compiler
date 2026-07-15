@@ -202,34 +202,28 @@ let private parseAttribute (attr: string) : Result<string * string, string> =
 /// Split string by spaces, respecting quoted strings with escape sequences
 /// e.g., 'stdout="hello world" exit=0' -> ['stdout="hello world"'; 'exit=0']
 let private splitBySpacesRespectingQuotes (s: string) : string list =
-    let mutable result = []
-    let mutable current = System.Text.StringBuilder()
-    let mutable inQuotes = false
-    let mutable i = 0
-    while i < s.Length do
-        let c = s.[i]
-        if c = '\\' && i + 1 < s.Length then
-            // Escape sequence - add both characters
-            current.Append(c) |> ignore
-            current.Append(s.[i + 1]) |> ignore
-            i <- i + 2
-        elif c = '"' then
-            inQuotes <- not inQuotes
-            current.Append(c) |> ignore
-            i <- i + 1
-        elif c = ' ' && not inQuotes then
-            // Space outside quotes - end current token
-            if current.Length > 0 then
-                result <- current.ToString() :: result
-                current.Clear() |> ignore
-            i <- i + 1
+    let tokenFromChars (charsRev: char list) : string =
+        charsRev |> List.rev |> List.toArray |> String
+
+    let rec loop (i: int) (inQuotes: bool) (currentRev: char list) (tokensRev: string list) : string list =
+        if i >= s.Length then
+            match currentRev with
+            | [] -> List.rev tokensRev
+            | chars -> List.rev (tokenFromChars chars :: tokensRev)
         else
-            current.Append(c) |> ignore
-            i <- i + 1
-    // Add final token
-    if current.Length > 0 then
-        result <- current.ToString() :: result
-    List.rev result
+            let c = s.[i]
+            if c = '\\' && i + 1 < s.Length then
+                loop (i + 2) inQuotes (s.[i + 1] :: c :: currentRev) tokensRev
+            elif c = '"' then
+                loop (i + 1) (not inQuotes) (c :: currentRev) tokensRev
+            elif c = ' ' && not inQuotes then
+                match currentRev with
+                | [] -> loop (i + 1) inQuotes [] tokensRev
+                | chars -> loop (i + 1) inQuotes [] (tokenFromChars chars :: tokensRev)
+            else
+                loop (i + 1) inQuotes (c :: currentRev) tokensRev
+
+    loop 0 false [] []
 
 /// Find start index of a `//` comment outside quoted strings.
 let private findCommentStartOutsideQuotes (line: string) : int option =
@@ -266,29 +260,24 @@ let private isExpectationStart (rest: string) : bool =
     else false
 
 let private stripQuotedContent (s: string) : string =
-    let sb = System.Text.StringBuilder()
-    let mutable i = 0
-    let mutable inQuotes = false
-    while i < s.Length do
-        let c = s.[i]
-        if c = '\\' && i + 1 < s.Length then
-            if inQuotes then
-                // Ignore escaped characters inside quoted sections.
-                i <- i + 2
-            else
-                sb.Append(c) |> ignore
-                sb.Append(s.[i + 1]) |> ignore
-                i <- i + 2
-        elif c = '"' then
-            inQuotes <- not inQuotes
-            sb.Append(' ') |> ignore
-            i <- i + 1
-        elif inQuotes then
-            i <- i + 1
+    let rec loop (i: int) (inQuotes: bool) (charsRev: char list) : string =
+        if i >= s.Length then
+            charsRev |> List.rev |> List.toArray |> String
         else
-            sb.Append(c) |> ignore
-            i <- i + 1
-    sb.ToString()
+            let c = s.[i]
+            if c = '\\' && i + 1 < s.Length then
+                if inQuotes then
+                    loop (i + 2) inQuotes charsRev
+                else
+                    loop (i + 2) inQuotes (s.[i + 1] :: c :: charsRev)
+            elif c = '"' then
+                loop (i + 1) (not inQuotes) (' ' :: charsRev)
+            elif inQuotes then
+                loop (i + 1) inQuotes charsRev
+            else
+                loop (i + 1) inQuotes (c :: charsRev)
+
+    loop 0 false []
 
 let private isExpectationCandidate (rest: string) : bool =
     let trimmed = rest.TrimStart()
