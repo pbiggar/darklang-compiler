@@ -8,12 +8,12 @@
 # ADDR is a hex address (e.g., 40283a). The tool finds the function starting at
 # that address and shows all instructions until the next RET.
 
-set -e
+set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUN="$HERE/../run-in-container"
 
-BIN="$1"
+BIN="${1:-}"
 ADDR="${2:-}"
 
 if [ -z "$BIN" ]; then
@@ -27,7 +27,7 @@ disasm() {
 
 if [ -z "$ADDR" ]; then
     echo "=== Function entry points (push rbp; mov rbp, rsp) ==="
-    disasm 2>&1 | awk '
+    disasm | awk '
         /push.*rbp$/ {
             addr = $1; sub(/:/, "", addr);
             getline;
@@ -36,5 +36,5 @@ if [ -z "$ADDR" ]; then
     '
 else
     echo "=== Function at 0x$ADDR ==="
-    disasm 2>&1 | sed -n "/^  ${ADDR}.*push.*rbp/,/c3.*ret$/p"
+    disasm | sed -n "/^  ${ADDR}.*push.*rbp/,/c3.*ret$/p"
 fi
