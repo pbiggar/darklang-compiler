@@ -124,7 +124,7 @@ def trib(n: Int64) : Int64 = if n <= 0 then 0 else if n == 1 then 1 else if n ==
 // Test 34: Three calls with different functions
 def add1(x: Int64) : Int64 = x + 1 def add2(x: Int64) : Int64 = x + 2 def add3(x: Int64) : Int64 = x + 3 add1(10) + add2(10) + add3(10) = 36
 
-// Test 35: Three calls using let bindings (workaround - should work)
+// Test 35: Three calls using let bindings
 def h(x: Int64) : Int64 = x * 2 let a = h(1) in let b = h(2) in let c = h(3) in a + b + c = 12
 
 // =====================================================
