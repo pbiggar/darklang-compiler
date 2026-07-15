@@ -65,6 +65,20 @@ const_fold_float_div
 return 4
 
 ---NAME---
+const_fold_float_lt
+---INPUT---
+if 1.5 < 2.5 then 10 else 20
+---EXPECTED---
+return 10
+
+---NAME---
+const_fold_float_eq
+---INPUT---
+if 1.5 == 1.5 then 10 else 20
+---EXPECTED---
+return 10
+
+---NAME---
 const_fold_float_neg
 ---INPUT---
 let x = 3.5 in -x
