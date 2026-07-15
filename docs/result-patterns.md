@@ -8,7 +8,9 @@ This codebase uses F#'s standard `Result<T, E>` type extensively for error handl
 ```fsharp
 type TypeError =
     | TypeMismatch of expected:Type * actual:Type * context:string
+    | IfBranchTypeMismatch of expected:Type * actual:Type
     | UndefinedVariable of name:string
+    | UndefinedCallTarget of name:string
     | MissingTypeAnnotation of context:string
     | InvalidOperation of op:string * types:Type list
     | GenericError of string
@@ -134,10 +136,10 @@ match checkExpr cond env, checkExpr thenBr env, checkExpr elseBr env with
 
 | File | Result Usage | Error Type |
 |------|-------------|------------|
-| `CompilerLibrary.fs` | Main orchestration | `string` |
-| `1.5_TypeChecking.fs` | Type validation | `TypeError` |
-| `1_Parser.fs` | Lexing/parsing | `string` |
-| `2_AST_to_ANF.fs` | ANF conversion | `string` |
+| `src/DarkCompiler/CompilerLibrary.fs` | Main orchestration | `string` |
+| `src/DarkCompiler/passes/1.5_TypeChecking.fs` | Type validation | `TypeError` |
+| `src/DarkCompiler/passes/1_Parser.fs` | Lexing/parsing | `string` |
+| `src/DarkCompiler/passes/2_AST_to_ANF.fs` | ANF conversion | `string` |
 
 ## Things to Avoid
 
