@@ -4229,7 +4229,7 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
     | LIR.FLoad (dest, value) ->
         lirFRegToARM64FReg dest
         |> Result.map (fun destReg ->
-            if value = 1.0 then
+            if ARM64.tryEncodeFmovFloatImmediate value |> Option.isSome then
                 [ARM64Symbolic.FMOV_imm (destReg, value)]
             else
                 let labelRef = floatDataLabel value

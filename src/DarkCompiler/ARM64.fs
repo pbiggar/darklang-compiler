@@ -44,6 +44,28 @@ type FReg =
     | D19 | D20 | D21 | D22 | D23 | D24 | D25 | D26  // Used for float call arg temps
     | D27 | D28 | D29 | D30 | D31  // Additional SSA temp registers
 
+/// Return the ARM64 modified-immediate byte for an encodable double-precision
+/// `FMOV` scalar immediate.
+let tryEncodeFmovFloatImmediate (value: float) : uint32 option =
+    [ for signBit in [0u; 1u] do
+        for exponentBits in [0u..7u] do
+            for fractionBits in [0u..15u] do
+                let sign = if signBit = 0u then 1.0 else -1.0
+                let exponent =
+                    if exponentBits >= 4u then
+                        int exponentBits - 7
+                    else
+                        int exponentBits + 1
+                let significand = 1.0 + (float fractionBits / 16.0)
+                let candidate = sign * significand * (pown 2.0 exponent)
+                let encoded = (signBit <<< 7) ||| (exponentBits <<< 4) ||| fractionBits
+                candidate, encoded ]
+    |> List.tryPick (fun (candidate, encoded) ->
+        if candidate = value then
+            Some encoded
+        else
+            None)
+
 /// Comparison conditions (for CSET)
 type Condition =
     | EQ   // Equal (Z set)

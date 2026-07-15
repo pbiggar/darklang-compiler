@@ -859,11 +859,12 @@ let encode (instr: ARM64.Instr) : ARM64.MachineCode list =
         [fixedBits ||| rm ||| opcode ||| rn ||| rd]
 
     | ARM64.FMOV_imm (dest, value) ->
-        if value <> 1.0 then
-            Crash.crash $"FMOV immediate only supports 1.0, got {value}"
-        else
-            // FMOV (scalar immediate, double) for #1.0: 0x1E6E1000 plus Rd.
-            [0x1E6E1000u ||| encodeFReg dest]
+        match ARM64.tryEncodeFmovFloatImmediate value with
+        | Some imm8 ->
+            // FMOV (scalar immediate, double): base opcode plus modified-immediate byte.
+            [0x1E601000u ||| (imm8 <<< 13) ||| encodeFReg dest]
+        | None ->
+            Crash.crash $"FMOV immediate does not support {value}"
 
     | ARM64.FMOV_to_gp (dest, src) ->
         // FMOV (scalar to GP, double): 1001 1110 01 1 00110 000000 Vn Rd

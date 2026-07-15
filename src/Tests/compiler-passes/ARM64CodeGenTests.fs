@@ -129,11 +129,12 @@ let testGeneratedCodeEliminatesSelfMoves () : TestResult =
         else
             Ok ()
 
-let testArm64FLoadOneUsesImmediate () : TestResult =
+let testArm64FLoadEncodableConstantsUseImmediate () : TestResult =
     let program =
         makeSimpleProgramWithVariants
             [
                 LIR.FLoad (LIR.FPhysical LIR.D2, 1.0)
+                LIR.FLoad (LIR.FPhysical LIR.D3, 4.0)
             ]
             Map.empty
 
@@ -141,10 +142,17 @@ let testArm64FLoadOneUsesImmediate () : TestResult =
     | Error e ->
         Error e
     | Ok instrs ->
-        let hasImmediate =
+        let hasOneImmediate =
             instrs
             |> List.exists (function
                 | ARM64Symbolic.FMOV_imm (ARM64.D2, 1.0) ->
+                    true
+                | _ ->
+                    false)
+        let hasFourImmediate =
+            instrs
+            |> List.exists (function
+                | ARM64Symbolic.FMOV_imm (ARM64.D3, 4.0) ->
                     true
                 | _ ->
                     false)
@@ -155,13 +163,19 @@ let testArm64FLoadOneUsesImmediate () : TestResult =
                 | ARM64Symbolic.ADD_label (_, _, ARM64Symbolic.DataLabel (ARM64Symbolic.FloatLiteral 1.0))
                 | ARM64Symbolic.LDR_fp (ARM64.D2, ARM64.X9, 0s) ->
                     true
+                | ARM64Symbolic.ADRP (_, ARM64Symbolic.DataLabel (ARM64Symbolic.FloatLiteral 4.0))
+                | ARM64Symbolic.ADD_label (_, _, ARM64Symbolic.DataLabel (ARM64Symbolic.FloatLiteral 4.0))
+                | ARM64Symbolic.LDR_fp (ARM64.D3, ARM64.X9, 0s) ->
+                    true
                 | _ ->
                     false)
 
-        if not hasImmediate then
+        if not hasOneImmediate then
             Error "FLoad 1.0 did not emit a floating-point immediate"
+        elif not hasFourImmediate then
+            Error "FLoad 4.0 did not emit a floating-point immediate"
         elif hasLiteralLoad then
-            Error "FLoad 1.0 used a literal-pool load instead of an immediate"
+            Error "Encodable FLoad used a literal-pool load instead of an immediate"
         else
             Ok ()
 
@@ -1149,7 +1163,7 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
 
 let tests : (string * (unit -> TestResult)) list = [
     ("Generated ARM64 code eliminates self-moves", testGeneratedCodeEliminatesSelfMoves)
-    ("ARM64 FLoad 1.0 uses immediate", testArm64FLoadOneUsesImmediate)
+    ("ARM64 FLoad encodable constants use immediate", testArm64FLoadEncodableConstantsUseImmediate)
     ("RawSlotInit pure enum skips generic retain", testRawSlotInitPureEnumDoesNotEmitGenericRetain)
     ("List tuple3 bytes/list/dict-list uses typed dict helper", testListTuple3BytesListDictListValueUsesTypedDictHelper)
     ("List tuple3 string/list/dict-list uses typed dict helper", testListTuple3StringListDictListValueUsesTypedDictHelper)

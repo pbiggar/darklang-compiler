@@ -2,21 +2,23 @@
 
 ## Executive Summary
 
-The Dark compiler currently executes **2.06x more instructions than Rust** and **1.10x more instructions than OCaml** for the mandelbrot benchmark. The primary causes are:
+The Dark compiler currently executes **1.89x more instructions than Rust** and
+**1.02x more instructions than OCaml** for the mandelbrot benchmark. The primary
+remaining causes are:
 
 1. **Remaining tail-call phi copy traffic in the iterate loop** (estimated 5-10% improvement potential)
-2. **Repeated float constant loads** (estimated 5-10% improvement potential)
-3. **Missing fused multiply-add (FMA) instructions** (estimated 10-15% improvement potential)
+2. **Missing fused multiply-add (FMA) instructions** (estimated 10-15% improvement potential)
 
 ## Benchmark Results
 
-Cachegrind instruction counts from commit `6b54e116`:
+Cachegrind instruction counts from commit `16719658` plus the ARM64 encodable
+float-immediate change:
 
 | Language | Instructions | vs Rust |
 |----------|--------------|---------|
 | Rust     | 12,553,096 | 1.00x |
 | OCaml    | 23,390,326 | 1.86x |
-| Dark     | 25,826,540 | 2.06x |
+| Dark     | 23,744,808 | 1.89x |
 
 ## Hot Loop Analysis
 
@@ -127,27 +129,7 @@ D2 <- FMov(D0)
 - `src/DarkCompiler/RegAlloc.fs` - Add move coalescing
 - `src/DarkCompiler/passes/4.5_LIR_Peephole.fs` - Extend post-allocation cleanup only if more local copy redundancies are found
 
-### 2. Float Constant Hoisting (Medium Impact: ~5-10%)
-
-**Problem:** Float constants are loaded from memory inside the loop.
-
-**Evidence (LIR iterate_L1 and iterate_L4):**
-```
-D7 <- FLoad(float[4])        ; Loaded every iteration for escape check
-```
-
-Rust keeps 4.0 in `d2` register throughout the entire function. The earlier `2.0` load in the hot loop is gone because strength reduction now emits `FAdd`.
-
-**Implementation Approach:**
-1. Identify float constants used in loops
-2. Hoist loads to function entry or loop preheader
-3. Allocate a dedicated register for frequently-used constants
-
-**Files to modify:**
-- `src/DarkCompiler/LIROptimizations.fs` - Add constant hoisting pass
-- `src/DarkCompiler/MIRToLIR.fs` - Improve constant handling
-
-### 3. Fused Multiply-Add Instructions (Medium Impact: ~10-15%)
+### 2. Fused Multiply-Add Instructions (Medium Impact: ~10-15%)
 
 **Problem:** Dark generates separate FMUL+FADD sequences where FMADD would be faster and more accurate.
 
@@ -189,9 +171,21 @@ t2 = t1 + c   (or t1 - c)
 | Optimization | Estimated Impact | Complexity |
 |-------------|------------------|------------|
 | Phi copy coalescing | 5-10% | Medium |
-| Constant hoisting | 5-10% | Low |
 | FMA instructions | 10-15% | Medium |
-| **Remaining potential** | **~25-45%** | |
+| **Remaining potential** | **~20-35%** | |
+
+## Completed Optimization Notes
+
+### ARM64 Encodable Float Immediates
+
+ARM64 code generation now materializes encodable double constants with scalar
+`FMOV` immediates instead of literal-pool loads. This removes the old
+Mandelbrot `4.0` escape-threshold memory load and also covers other encodable
+constants such as `0.5`, `1.0`, `2.0`, and `16.0`.
+
+The remaining constant-placement question is whether frequently-used immediates
+should be kept live across loop iterations instead of rematerialized, but the
+specific repeated literal-pool load candidate is complete.
 
 If all optimizations are implemented, Dark could approach or match Rust performance on this benchmark.
 
