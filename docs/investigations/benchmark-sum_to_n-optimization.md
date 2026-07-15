@@ -8,17 +8,21 @@ This investigation analyzes why the Dark compiler performs worse than Rust on th
 
 ### Benchmark Results
 
-Current `benchmarks/RESULTS.md` instruction-count context:
+Current local evidence gathered on 2026-07-15:
 
 | Compiler | Instructions | Relative |
 |----------|--------------|----------|
 | Rust     | 256,081      | 1.0x     |
 | Dark     | 7,002,526    | 27.3x    |
-| OCaml    | 9,421,844    | 36.8x    |
+| OCaml    | 9,423,431    | 36.8x    |
 
 **Key Finding**: Rust's extreme speed is due to complete constant folding. It
 computes the result (`50005000`) at compile time and stores it as an immediate
 constant in the binary.
+
+Rust was not installed in the local sandbox used for this refresh, so the Rust
+row remains the current `benchmarks/RESULTS.md` baseline. Dark and OCaml were
+rebuilt locally and measured with Cachegrind.
 
 ## Source Code
 
@@ -118,6 +122,33 @@ sumTo_body:
 
 The loop is compact after register allocation, and the previous `Cset` plus
 `Branch` form has been fused to `CondBranch`.
+
+Current Dark binary disassembly confirms the same shape. The inner `sumTo`
+loop is a compact subtract/add/move loop plus compare/branch:
+
+```asm
+1b4: sub x3, x1, #0x1
+1b8: add x2, x2, x1
+1bc: mov x1, x3
+1c0: b 0x1cc
+1cc: cmp x1, #0x0
+1d0: b.le 0x1c4
+1d4: b 0x1b4
+```
+
+The outer `repeat` loop still reloads the constant arguments and calls
+`sumTo` on every iteration:
+
+```asm
+20c: sub x19, x19, #0x1
+210: mov x0, #0x2710
+214: mov x1, #0x0
+218: bl 0x190
+21c: mov x20, x0
+22c: cmp x19, #0x0
+230: b.le 0x224
+234: b 0x20c
+```
 
 ## Identified Optimization Opportunities
 
