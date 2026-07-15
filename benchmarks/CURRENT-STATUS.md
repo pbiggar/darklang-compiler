@@ -34,37 +34,7 @@ These benchmarks compile and run reliably.
 | matmul        | Numerical      | Generated 100x100 matrix multiplication checksum |
 | nsieve        | Numerical      | Sieve of Eratosthenes using Dict-backed composites |
 | pisum         | Numerical      | Floating-point reciprocal-square sum    |
-
----
-
-## BUG: Quicksort Runtime OOM
-
-**Status: BLOCKS quicksort**
-
-The quicksort benchmark compiles, but still fails at runtime at full benchmark size.
-
-### Current Reproduction:
-
-```bash
-# Compiles, then exits with allocator OOM at runtime
-./dark benchmarks/problems/quicksort/dark/main.dark -o /tmp/quicksort -q
-/tmp/quicksort
-```
-
-### Current Evidence:
-
-- `benchmarks/problems/quicksort/dark/main.dark` exits with `Out of heap memory` (exit code 1)
-- `benchmarks/problems/quicksort/dark/quick.dark` runs successfully
-- Allocator now has bounds checks, so the old invalid-write SIGSEGV path is gone
-- `run_benchmarks.sh` currently skips quicksort (`SKIP_BENCHMARKS=("quicksort")`)
-
-Latest investigation update (`2026-03-04`):
-
-- Tail-call cleanup lowering was fixed in ANF->MIR; this removed major leak amplification in quicksort-related kernels
-- `benchmarks/problems/quicksort/dark/quick.dark` now reports `leaks: 144` (or `102` with `--disable-opt-tco`) and preserves checksum output
-- Full-size quicksort still fails at `n=700` with allocator OOM both with and without TCO
-- `n=699` succeeds (`leaks: 17416` default, `16060` with `--disable-opt-tco`)
-- This indicates the remaining blocker is allocation pressure / heap budget, not only missing cleanup in TCO lowering
+| quicksort     | Sorting        | Functional quicksort over generated list |
 
 ---
 
@@ -105,7 +75,6 @@ These benchmarks have implementations but are limited by stack depth or bugs.
 
 | Benchmark     | Status            | Limitation                                                     |
 | ------------- | ----------------- | -------------------------------------------------------------- |
-| quicksort     | RUNTIME OOM       | Full-size run exceeds current heap/allocation budget (skipped) |
 | edigits       | Stack overflow    | Uses 50 digits, 1 iteration (full: 1000 digits, 10 iterations) |
 | nbody         | Working (reduced) | Uses 5,000 simulation steps (full: 500,000 steps)              |
 | spectral_norm | Working (reduced) | Computes the full power-iteration algorithm at 3-vector size (full: n=100) |
@@ -126,7 +95,7 @@ remain reduced or blocked as documented above.
 
 | Feature                                  | Benchmarks Blocked                                  |
 | ---------------------------------------- | --------------------------------------------------- |
-| **Allocator capacity / allocation pressure** | quicksort                                       |
+| **Allocator capacity / allocation pressure** | nbody (full)                                  |
 | Stack depth / TCO                        | edigits (full)                                      |
 | Mutable arrays / efficient indexed numeric vectors | spectral_norm (full n=100)              |
 
@@ -134,8 +103,7 @@ remain reduced or blocked as documented above.
 
 ## Notes
 
-- Closure capture in quicksort predicates now works (benchmark compiles)
-- Quicksort is blocked by runtime heap pressure, not a compile-time closure issue
+- Closure capture in quicksort predicates now works, and quicksort is enabled in the full benchmark suite.
 - The mandelbrot "negative float bug" was actually a semantic mismatch - the Dark code was counting escaped points while the Rust reference counts points in the set. Fixed.
 - The pisum Dark benchmark now runs at the full benchmark size (`500` rounds, `n=10000`) and is tracked as working.
 - The nsieve Dark benchmark now runs at the full benchmark size (`n=100000`) and is tracked as working.

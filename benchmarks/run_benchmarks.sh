@@ -30,7 +30,7 @@ RUN_FAILURES=()
 PROCESS_FAILURES=()
 LIST_ONLY=false
 JOB_COUNT=""
-SKIP_BENCHMARKS=("quicksort")
+SKIP_BENCHMARKS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
