@@ -57,7 +57,7 @@ if [[ -z "$asset_info" ]]; then
         if type == "array" then . else [.] end;
       [releases[] | .assets[]?.name] | unique[]?
     ' <<< "$release_json" \
-    | paste -sd ', ' -
+    | awk 'NR == 1 { printf "%s", $0; next } { printf ", %s", $0 } END { if (NR > 0) print "" }'
   )"
   echo "Error: No release asset matched regex '${asset_regex}'. Available assets: ${available_assets:-none}" >&2
   exit 1
