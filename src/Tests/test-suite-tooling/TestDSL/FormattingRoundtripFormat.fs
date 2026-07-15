@@ -47,29 +47,46 @@ let parseFormattingRoundtripFile (path: string) : Result<FormattingRoundtripCase
         Error $"Formatting roundtrip file not found: {path}"
     else
         let lines = File.ReadAllLines(path)
-        let mutable tests = []
-        let mutable errors = []
-
-        for i in 0 .. lines.Length - 1 do
-            let line = lines.[i]
+        let parseLine (i: int) (line: string) : Result<FormattingRoundtripCase option, string> =
             let lineNumber = i + 1
             let trimmed = line.Trim()
 
             if trimmed.Length > 0 && not (trimmed.StartsWith("//")) then
                 let source, displayNameOpt = splitLineComment line
                 if String.IsNullOrWhiteSpace source then
-                    errors <- $"Line {lineNumber}: missing expression before comment" :: errors
+                    Error $"Line {lineNumber}: missing expression before comment"
                 else
                     let displayName = displayNameOpt |> Option.defaultValue source
-                    tests <-
-                        {
+                    Ok (
+                        Some {
                             Name = $"L{lineNumber}: {displayName}"
                             Source = source
                             SourceFile = path
                         }
-                        :: tests
+                    )
+            else
+                Ok None
+
+        let parsedLines =
+            lines
+            |> Array.mapi parseLine
+            |> Array.toList
+
+        let tests =
+            parsedLines
+            |> List.choose (fun result ->
+                match result with
+                | Ok (Some testCase) -> Some testCase
+                | _ -> None)
+
+        let errors =
+            parsedLines
+            |> List.choose (fun result ->
+                match result with
+                | Error error -> Some error
+                | _ -> None)
 
         if List.isEmpty errors then
-            Ok (List.rev tests)
+            Ok tests
         else
-            Error (String.concat "\n" (List.rev errors))
+            Error (String.concat "\n" errors)
