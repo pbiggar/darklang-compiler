@@ -10,7 +10,7 @@ if [[ $# -ne 1 ]]; then
 fi
 
 worktree_number="$1"
-if [[ ! "$worktree_number" =~ ^[0-9]+$ ]]; then
+if [[ ! "$worktree_number" =~ ^[1-9][0-9]*$ ]]; then
   echo "Worktree number must be a positive integer."
   exit 1
 fi
