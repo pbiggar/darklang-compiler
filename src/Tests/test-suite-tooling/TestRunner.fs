@@ -300,6 +300,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "x64 CodeGen Tests"; Tests = X86_64CodeGenTests.tests }
         { Name = "Type Checking Tests"; Tests = TypeCheckingTests.tests }
         { Name = "Parallel Move Tests"; Tests = ParallelMoveTests.tests }
+        { Name = "Bitset Tests"; Tests = BitsetTests.tests }
         { Name = "SSA Liveness Tests"; Tests = SSALivenessTests.tests }
         { Name = "Phi Resolution Tests"; Tests = PhiResolutionTests.tests }
         { Name = "Chordal Graph Tests"; Tests = ChordalGraphTests.tests }

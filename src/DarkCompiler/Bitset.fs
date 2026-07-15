@@ -13,6 +13,11 @@ let wordCount (bitCount: int) : int =
 let empty (wordCount: int) : Bitset =
     Array.zeroCreate<uint64> wordCount
 
+let private requireIndexInRange (operation: string) (wordCount: int) (idx: int) : unit =
+    let bitCapacity = wordCount * 64
+    if idx < 0 || idx >= bitCapacity then
+        Crash.crash $"{operation} index {idx} is outside bitset capacity {bitCapacity}"
+
 let all (bitCount: int) : Bitset =
     let wordCount = wordCount bitCount
     if wordCount = 0 then
@@ -26,6 +31,7 @@ let all (bitCount: int) : Bitset =
             if i = wordCount - 1 then lastMask else System.UInt64.MaxValue)
 
 let singleton (wordCount: int) (idx: int) : Bitset =
+    requireIndexInRange "Bitset.singleton" wordCount idx
     if wordCount = 0 then
         [||]
     else
@@ -78,6 +84,7 @@ let containsIndex (idx: int) (bits: Bitset) : bool =
         false
 
 let addIndexInPlace (idx: int) (bits: Bitset) : unit =
+    requireIndexInRange "Bitset.addIndexInPlace" bits.Length idx
     let wordIdx = idx >>> 6
     let bitIdx = idx &&& 63
     if wordIdx < bits.Length then
@@ -92,6 +99,7 @@ let add (idx: int) (bits: Bitset) : Bitset =
         updated
 
 let removeIndexInPlace (idx: int) (bits: Bitset) : unit =
+    requireIndexInRange "Bitset.removeIndexInPlace" bits.Length idx
     let wordIdx = idx >>> 6
     let bitIdx = idx &&& 63
     if wordIdx < bits.Length then

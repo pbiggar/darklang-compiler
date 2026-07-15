@@ -1,0 +1,32 @@
+// BitsetTests.fs - Unit tests for low-level bitset utilities.
+//
+// These tests cover invariants that compiler dataflow passes rely on when
+// mapping dense labels and virtual-register ids into bitset storage.
+
+module BitsetTests
+
+type TestResult = Result<unit, string>
+
+let private expectCrash (name: string) (action: unit -> unit) : TestResult =
+    try
+        action ()
+        Error $"Expected {name} to crash for an out-of-range index"
+    with
+    | _ -> Ok ()
+
+let testAddIndexInPlaceRejectsOutOfRangeIndex () : TestResult =
+    let bits = Bitset.empty 1
+    expectCrash "addIndexInPlace" (fun () -> Bitset.addIndexInPlace 64 bits)
+
+let testRemoveIndexInPlaceRejectsOutOfRangeIndex () : TestResult =
+    let bits = Bitset.all 64
+    expectCrash "removeIndexInPlace" (fun () -> Bitset.removeIndexInPlace 64 bits)
+
+let testSingletonRejectsOutOfRangeIndex () : TestResult =
+    expectCrash "singleton" (fun () -> Bitset.singleton 1 64 |> ignore)
+
+let tests = [
+    ("addIndexInPlace rejects out-of-range index", testAddIndexInPlaceRejectsOutOfRangeIndex)
+    ("removeIndexInPlace rejects out-of-range index", testRemoveIndexInPlaceRejectsOutOfRangeIndex)
+    ("singleton rejects out-of-range index", testSingletonRejectsOutOfRangeIndex)
+]
