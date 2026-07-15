@@ -160,6 +160,21 @@ let testARM64ParsersAcceptAllGeneralPurposeRegisters () : TestResult =
                     | Error msg -> Error $"Expected parser success for {description}, got: {msg}"))
             (Ok ()))
 
+let testARM64SymbolicParserReportsOriginalLineNumber () : TestResult =
+    let text =
+        [
+            "// generated setup"
+            ""
+            "MOV_reg(X0, X1)"
+            "MOV_reg(NOPE, X0)"
+        ]
+        |> String.concat "\n"
+
+    match TestDSL.ARM64SymbolicParser.parseARM64Symbolic text with
+    | Error msg when msg.Contains("Line 4:") -> Ok ()
+    | Error msg -> Error $"Expected original source line 4 in parser error, got: {msg}"
+    | Ok _ -> Error "Expected parser error for invalid symbolic ARM64 register"
+
 let tests = [
     ("pretty print MIR CFG", testPrettyPrintMirCfg)
     ("parse LIR rejects non-final terminator", testParseLIRRejectsNonFinalTerminator)
@@ -168,6 +183,7 @@ let tests = [
     ("LIR parser rejects out-of-range numeric fields", testLIRParserRejectsOutOfRangeNumericFields)
     ("ARM64 parsers reject out-of-range numeric fields", testARM64ParserRejectsOutOfRangeNumericFields)
     ("ARM64 parsers accept all general-purpose registers", testARM64ParsersAcceptAllGeneralPurposeRegisters)
+    ("ARM64 symbolic parser reports original line number", testARM64SymbolicParserReportsOriginalLineNumber)
 ]
 
 let runAll () : TestResult =

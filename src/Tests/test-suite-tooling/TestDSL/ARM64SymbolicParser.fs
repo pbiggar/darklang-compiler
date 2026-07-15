@@ -377,15 +377,15 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
 let parseARM64Symbolic (text: string) : Result<Instr list, string> =
     let lines =
         text.Split('\n')
-        |> Array.map (fun line -> line.Trim())
-        |> Array.filter (fun line -> line <> "" && not (line.StartsWith("//")))
+        |> Array.mapi (fun i line -> (i + 1, line.Trim()))
+        |> Array.filter (fun (_, line) -> line <> "" && not (line.StartsWith("//")))
         |> Array.toList
 
-    let rec parseLines lineNum acc = function
+    let rec parseLines acc = function
         | [] -> Ok (List.rev acc)
-        | line :: rest ->
+        | (lineNum, line) :: rest ->
             match parseInstruction lineNum line with
             | Error e -> Error e
-            | Ok instr -> parseLines (lineNum + 1) (instr :: acc) rest
+            | Ok instr -> parseLines (instr :: acc) rest
 
-    parseLines 1 [] lines
+    parseLines [] lines
