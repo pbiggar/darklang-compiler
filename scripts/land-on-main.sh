@@ -94,10 +94,10 @@ while true; do
   feature_head="$(git -C "$repo_root" rev-parse "$current_branch")"
 
   if [[ "$main_head" != "$feature_head" ]]; then
-    (cd "$repo_root" && ./run-tests --quiet)
+    (cd "$repo_root" && ./run-tests --ai)
 
-    # Quick benchmark regression check (deterministic instruction counts)
-    (cd "$repo_root" && ./benchmarks/quick_check.sh --quiet)
+    # Full benchmark regression check (deterministic instruction counts)
+    (cd "$repo_root" && ./benchmarks/run_benchmarks.sh all)
   else
     echo "No changes to land; main already matches $current_branch."
   fi
