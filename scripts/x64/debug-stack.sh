@@ -13,12 +13,12 @@
 # Requires gdb and objdump — run via scripts/run-in-container (auto-detects
 # the devcontainer if invoked from the host).
 
-set -e
+set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUN="$HERE/../run-in-container"
 
-EXPR="$1"
+EXPR="${1:-}"
 WATCH_FUNC="${2:-}"
 
 if [ -z "$EXPR" ]; then
@@ -27,6 +27,7 @@ if [ -z "$EXPR" ]; then
 fi
 
 BINPATH="/tmp/debug_stack_test"
+rm -f "$BINPATH"
 
 if [ -f "$EXPR" ]; then
     echo "=== Compiling file: $EXPR ==="
