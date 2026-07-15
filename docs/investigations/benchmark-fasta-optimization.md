@@ -58,16 +58,24 @@ Conclusion:
 - It does **not** materially change hot-path instruction count.
 - The remaining `fasta` regression is still dominated by per-allocation heap-end recomputation (`MOVZ + ADD`) plus the extra bounds-check branch.
 
-### Fix Strategy (Low Risk)
+### Remaining Fix Strategy
 
-1. Hoist heap end into a dedicated register during `generateHeapInit` (for example `X26`) and preserve it across codegen paths.
-2. Replace per-allocation heap-end recomputation with a single `CMP next_ptr, heap_end_reg`.
-3. Emit one shared OOM trap block/label and branch to it, instead of inlining the trap sequence at each allocation site.
-4. Keep checks only on the bump path (free-list pop path should remain check-free).
+The direct dedicated-register heap-end hoist experiment was rejected because
+reserving an allocatable callee-saved register caused larger benchmark
+regressions than the per-allocation instruction savings justified. See
+`docs/investigations/rejected-experiments.md`.
 
-Avoid moving bump allocation to a helper function call in the hot path: call/return and call-site save/restore overhead would likely outweigh the current regression.
+Remaining allocator-bound candidates should avoid permanently removing a
+general-purpose register from allocation. Possible directions include:
 
-Expected outcome: retain memory safety while removing most of the `fasta` regression and reducing binary-size inflation.
+1. Recompute heap end only where register pressure is already low, if that can
+   be proven locally.
+2. Keep checks only on the bump path (free-list pop path should remain
+   check-free).
+
+Avoid moving bump allocation to a helper function call in the hot path:
+call/return and call-site save/restore overhead would likely outweigh the
+current regression.
 
 ## Benchmark Characteristics
 

@@ -2,6 +2,18 @@
 
 This file records benchmark optimization candidates that were investigated and removed from active investigation notes because measured evidence did not justify keeping the implementation.
 
+## 2026-07-10: fasta dedicated heap-end register
+
+- Source candidate: `docs/investigations/benchmark-fasta-optimization.md`, "Hoist heap end into a dedicated register"
+- Target benchmark: `fasta`
+- Attempt: initialized `X26` as a process-wide heap-end register in ARM64 heap setup, changed allocation bounds checks to compare against `X26`, and removed `X26` from ARM64 register allocation so generated code would preserve it.
+- Correctness evidence: a focused `ParallelMoveTests` assertion failed before the implementation because `RawAlloc` still compared against recomputed `X11`, then passed after the implementation; full `./run-tests --ai` passed after the attempted code change.
+- IR evidence: the attempted codegen path removed the `MOVZ X11, #0x2000, LSL #16` and `ADD X11, X27, X11` heap-end recomputation from per-allocation bounds checks, replacing the compare with `CMP X14, X26`.
+- Runtime evidence: `./benchmarks/run_benchmarks.sh all` completed, but the target benchmark regressed from `2,495,827,474` to `2,534,045,119` Dark instructions. Other regressions included `fannkuch` from `15,997,493,901` to `16,116,552,677`, `nqueen` from `304,488,643` to `322,893,353`, and `matmul` from `1,661,903,645` to `1,663,926,059`.
+- Compile-time evidence: `time ./dark benchmarks/problems/fasta/dark/main.dark -o /tmp/dark-fasta-hoist -q` completed in `3.775s` wall time during the attempted implementation.
+- Reason rejected: reserving `X26` reduced register-allocation flexibility enough to outweigh the two-instruction per-allocation saving, including a clear regression in the target benchmark.
+- Outcome: implementation and focused test changes were reverted; the active source investigation entry was rewritten so future work does not retry a dedicated allocatable-register heap-end hoist.
+
 ## 2026-07-08: fasta general float division strength reduction
 
 - Source candidate: `docs/investigations/benchmark-fasta-optimization.md`, "Float Division Strength Reduction"
