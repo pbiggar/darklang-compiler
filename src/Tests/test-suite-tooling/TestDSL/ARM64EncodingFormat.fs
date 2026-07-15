@@ -16,6 +16,7 @@
 module TestDSL.ARM64EncodingFormat
 
 open System
+open System.Globalization
 open TestDSL.Common
 open TestDSL.ARM64Parser
 open ARM64
@@ -33,12 +34,15 @@ let parseHexValue (text: string) : Result<uint32, string> =
     let text = text.Trim()
 
     if text.StartsWith("0x") || text.StartsWith("0X") then
-        try
-            let hexStr = text.Substring(2)
-            Ok (Convert.ToUInt32(hexStr, 16))
-        with
-        | :? FormatException -> Error $"Invalid hex format: '{text}'"
-        | :? OverflowException -> Error $"Hex value too large: '{text}'"
+        let hexStr = text.Substring(2)
+        let isHexDigit (c: char) =
+            ('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')
+        let hasOnlyHexDigits = hexStr |> Seq.forall isHexDigit
+
+        match UInt32.TryParse(hexStr, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture) with
+        | true, value -> Ok value
+        | false, _ when hasOnlyHexDigits && hexStr.Length > 8 -> Error $"Hex value too large: '{text}'"
+        | false, _ -> Error $"Invalid hex format: '{text}'"
     else
         Error $"Hex value must start with '0x': '{text}'"
 
