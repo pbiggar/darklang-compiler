@@ -1,6 +1,12 @@
 # Known Bugs and Issues
 
-This document tracks known bugs that haven't been fixed yet. For each bug, we include reproduction steps, analysis of the likely cause, and workarounds.
+This document tracks currently known bugs that have not been fixed yet. For each
+open bug, include reproduction steps, analysis of the likely cause, and
+workarounds.
+
+---
+
+## Resolved Historical Bugs
 
 ---
 
@@ -71,6 +77,10 @@ match zipped with
 
 ---
 
+## Open Bugs
+
+---
+
 ## FingerTree Deep Operation Chain Bug
 
 **Status**: Open
@@ -131,7 +141,7 @@ fewer than 4 consecutive FingerTree operations.
 
 **Status**: Partially documented
 **Severity**: Low (rare in practice)
-**Documented in**: `KNOWN_ISSUES.md`
+**Related investigation**: `docs/register-allocation-bug-investigation.md`
 
 ### Description
 
@@ -149,21 +159,24 @@ When investigating bugs:
 
 1. **Minimize the test case**: Find the smallest program that reproduces the issue
 2. **Add a failing test**: Put it in the appropriate `.e2e` file with a comment
-3. **Use verbose output**: `./compile --verbose program.dark` shows intermediate representations
+3. **Use IR dumps**: `./dark --dump-anf`, `./dark --dump-mir`, and
+   `./dark --dump-lir` show intermediate representations
 4. **Check each pass**: The bug is usually in the transformation between two passes
 5. **Pattern match exhaustiveness**: If adding new features, F# will warn about missing cases
 
 ### Debugging Commands
 
 ```bash
-# Run with verbose output
-./compile --verbose program.dark
+# Dump intermediate representations
+./dark --dump-anf prog.dark
+./dark --dump-mir prog.dark
+./dark --dump-lir prog.dark
 
-# Run tests for specific file
-dotnet test --filter "FullyQualifiedName~strings"
+# Run the full test suite with AI-friendly progress output
+./run-tests --ai
 
 # Build and run a single program
-dotnet run --project src/DarkCompiler -- program.dark && ./a.out
+./dark -r prog.dark
 ```
 
 ---
@@ -175,5 +188,5 @@ When you find a new bug:
 1. Create the minimal reproduction case
 2. Document expected vs actual behavior
 3. Add to this file with your analysis
-4. Add a test case (can be commented out if it crashes)
+4. Add a failing test case before fixing the bug
 5. Note any workarounds you've found
