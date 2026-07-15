@@ -2,23 +2,23 @@
 
 ## Executive Summary
 
-The Dark compiler currently executes **1.89x more instructions than Rust** and
-**1.02x more instructions than OCaml** for the mandelbrot benchmark. The primary
-remaining causes are:
+The Dark compiler currently executes **1.74x as many instructions as the cached
+Rust baseline** and **0.93x as many instructions as the cached OCaml baseline**
+for the mandelbrot benchmark. The primary remaining causes relative to Rust are:
 
 1. **Remaining tail-call phi copy traffic in the iterate loop** (estimated 5-10% improvement potential)
 2. **Missing fused multiply-add (FMA) instructions** (estimated 10-15% improvement potential)
 
 ## Benchmark Results
 
-Cachegrind instruction counts from commit `16719658` plus the ARM64 encodable
-float-immediate change:
+Local Cachegrind evidence at commit `3312b4d5` for Dark, with cached baseline
+counts for Rust and OCaml because those toolchains were not available locally:
 
 | Language | Instructions | vs Rust |
 |----------|--------------|---------|
 | Rust     | 12,553,096 | 1.00x |
 | OCaml    | 23,390,326 | 1.86x |
-| Dark     | 23,744,808 | 1.89x |
+| Dark     | 21,791,658 | 1.74x |
 
 ## Hot Loop Analysis
 
@@ -48,20 +48,30 @@ Label "iterate_L4":
 
 **Current emitted assembly for the hot continue path:**
 ```asm
-4001fc: fsub  d0, d0, d1
-400200: fadd  d1, d0, d5
-400204: fadd  d0, d3, d3
-400208: fmul  d0, d0, d2
-40020c: fadd  d0, d0, d4
-400210: add   x1, x1, #0x1
-400214: fmov  d3, d5
-400218: fmov  d2, d4
-40021c: fmov  d3, d1
-400220: fmov  d2, d0
-400224: b     0x400230
+4001dc: fmul  d0, d3, d3
+4001e0: fmul  d1, d2, d2
+4001e4: fadd  d6, d0, d1
+4001e8: fmov  d7, #4.0
+4001ec: fcmp  d6, d7
+4001f0: b.gt  0x400220
+4001f4: fsub  d0, d0, d1
+4001f8: fadd  d1, d0, d5
+4001fc: fadd  d0, d3, d3
+400200: fmul  d0, d0, d2
+400204: fadd  d0, d0, d4
+400208: add   x1, x1, #0x1
+40020c: fmov  d3, d5
+400210: fmov  d2, d4
+400214: fmov  d3, d1
+400218: fmov  d2, d0
+40021c: b     0x400228
 ```
 
 The earlier direct `D1 <- FMov(D1)` and `D0 <- FMov(D0)` LIR instructions are no longer present. A post-allocation cleanup now also removes the floating copy-back moves that used to re-copy `d3` into `d5` and `d2` into `d4`. The remaining sequential phi-resolution copy chain still produces `fmov` traffic to move invariant `cr`/`ci` values and newly computed `zr`/`zi` values into the loop-body registers.
+
+The current LIR still presents the escape threshold as `D7 <- FLoad(float[4])`,
+but ARM64 code generation lowers that constant to `fmov d7, #4.0` in the final
+binary. Treat the literal-pool load issue as completed for this benchmark.
 
 ### Rust Compiler - Inlined `mandelbrot` Function
 
@@ -172,7 +182,7 @@ t2 = t1 + c   (or t1 - c)
 |-------------|------------------|------------|
 | Phi copy coalescing | 5-10% | Medium |
 | FMA instructions | 10-15% | Medium |
-| **Remaining potential** | **~20-35%** | |
+| **Remaining potential** | **~15-25%** | |
 
 ## Completed Optimization Notes
 
@@ -187,7 +197,8 @@ The remaining constant-placement question is whether frequently-used immediates
 should be kept live across loop iterations instead of rematerialized, but the
 specific repeated literal-pool load candidate is complete.
 
-If all optimizations are implemented, Dark could approach or match Rust performance on this benchmark.
+If all optimizations are implemented, Dark could get closer to Rust performance
+on this benchmark.
 
 ## Appendix: Full IR Dumps
 
