@@ -114,7 +114,7 @@ You are going to fix EXACTLY ONE difference (syntactic or semantic).
     - [ ] If fixed a semantic bug, Section 2 shows "Fixed" status
     - [ ] If found missing interpreter feature, it's in Section 5
 
-12. DO NOT COMMIT OR MERGE UNTIL I SAY "approved". After that, commit the code and updated tests. Include in the commit message a description of the difference that was fixed. Land using scripts/land-in-main.sh
+12. DO NOT COMMIT OR MERGE UNTIL I SAY "approved". After that, commit the code and updated tests. Include in the commit message a description of the difference that was fixed. Land using scripts/land-on-main.sh
 
 ## Policies for fixing differences
 

@@ -61,7 +61,7 @@ You are going to implement EXACTLY ONE optimization.
 10. DO NOT COMMIT OR MERGE UNTIL I SAY "approved". After approval:
     - Commit the code, tests, and updated RESULTS.md
     - Include a detailed commit message explaining the optimization
-    - Land using ./scripts/land-in-main.sh
+    - Land using ./scripts/land-on-main.sh
 
 Include before/after benchmark data in the commit message:
 
