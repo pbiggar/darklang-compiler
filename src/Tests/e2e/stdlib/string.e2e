@@ -99,6 +99,7 @@ String.toUpperCase("") = ""
 String.toUpperCase("abc123") = "ABC123"
 String.toUpperCase("mixedCASE") = "MIXEDCASE"
 String.toUpperCase("ab323cdef") = "AB323CDEF"
+String.toUpperCase("straße") = "STRASSE"
 
 // Unicode uppercase - emoji should be unchanged
 String.toUpperCase("hello😄world") = "HELLO😄WORLD"

@@ -281,32 +281,54 @@ def Stdlib.String.__asciiToUpper(cp: Int64) : Int64 =
 def Stdlib.String.__asciiToLower(cp: Int64) : Int64 =
     if cp >= 65 && cp <= 90 then cp + 32 else cp
 
-// Helper: map codepoints to uppercase ASCII (simple version)
-def Stdlib.String.__mapUpperAscii(cps: List<Int64>, acc: List<Int64>) : List<Int64> =
+def Stdlib.String.__upperMapping(cp: Int64) : List<Int64> =
+    if cp >= 97 && cp <= 122 then
+        [cp - 32]
+    else if cp == 223 then
+        [83, 83]
+    else if cp < 128 then
+        [cp]
+    else
+        match Stdlib.Dict.get<Int64, List<Int64>>(Unicode.Data.__upperCase(), cp) with
+        | Some(mapped) -> mapped
+        | None -> [cp]
+
+def Stdlib.String.__lowerMapping(cp: Int64) : List<Int64> =
+    if cp >= 65 && cp <= 90 then
+        [cp + 32]
+    else if cp < 128 then
+        [cp]
+    else
+        match Stdlib.Dict.get<Int64, List<Int64>>(Unicode.Data.__lowerCase(), cp) with
+        | Some(mapped) -> mapped
+        | None -> [cp]
+
+// Helper: map codepoints to uppercase, allowing one-to-many Unicode mappings.
+def Stdlib.String.__mapUpper(cps: List<Int64>, acc: List<Int64>) : List<Int64> =
     match cps with
     | [] -> Stdlib.List.reverse<Int64>(acc)
     | [cp, ...rest] ->
-        let upper = Stdlib.String.__asciiToUpper(cp) in
-        Stdlib.String.__mapUpperAscii(rest, [upper, ...acc])
+        let upper = Stdlib.String.__upperMapping(cp) in
+        Stdlib.String.__mapUpper(rest, Stdlib.List.append<Int64>(Stdlib.List.reverse<Int64>(upper), acc))
 
-// Helper: map codepoints to lowercase ASCII (simple version)
-def Stdlib.String.__mapLowerAscii(cps: List<Int64>, acc: List<Int64>) : List<Int64> =
+// Helper: map codepoints to lowercase, allowing one-to-many Unicode mappings.
+def Stdlib.String.__mapLower(cps: List<Int64>, acc: List<Int64>) : List<Int64> =
     match cps with
     | [] -> Stdlib.List.reverse<Int64>(acc)
     | [cp, ...rest] ->
-        let lower = Stdlib.String.__asciiToLower(cp) in
-        Stdlib.String.__mapLowerAscii(rest, [lower, ...acc])
+        let lower = Stdlib.String.__lowerMapping(cp) in
+        Stdlib.String.__mapLower(rest, Stdlib.List.append<Int64>(Stdlib.List.reverse<Int64>(lower), acc))
 
-// Convert string to uppercase (ASCII only for now)
+// Convert string to uppercase.
 def Stdlib.String.toUpperCase(s: String) : String =
     let codepoints = Stdlib.String.toCodepoints(s) in
-    let upper = Stdlib.String.__mapUpperAscii(codepoints, []) in
+    let upper = Stdlib.String.__mapUpper(codepoints, []) in
     Stdlib.String.fromCodepoints(upper)
 
-// Convert string to lowercase (ASCII only for now)
+// Convert string to lowercase.
 def Stdlib.String.toLowerCase(s: String) : String =
     let codepoints = Stdlib.String.toCodepoints(s) in
-    let lower = Stdlib.String.__mapLowerAscii(codepoints, []) in
+    let lower = Stdlib.String.__mapLower(codepoints, []) in
     Stdlib.String.fromCodepoints(lower)
 
 // =============================================================================
