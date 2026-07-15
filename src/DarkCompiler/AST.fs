@@ -3,17 +3,8 @@
 // Defines the abstract syntax tree data structures that represent the parsed
 // program structure. The AST is the output of the Parser and input to the ANF
 // transformation.
-//
-// Current language features:
-// - Integer literals (64-bit signed)
-// - Float literals (64-bit double)
-// - Binary operators: +, -, *, /
-// - Parenthesized expressions
-// - Let bindings: let x = expr in body
-// - Variables: identifiers bound by let
-//
-// Example AST for "let x = 5 in x + 3":
-//   Let("x", Int64Literal(5), BinOp(Add, Var("x"), Int64Literal(3)))
+// Keep this file as the structural source of truth for syntax-facing compiler
+// nodes; feature inventories belong in docs/current-language-features.md.
 
 module AST
 
