@@ -23,13 +23,20 @@ if [ -z "$EXPR" ]; then
     exit 1
 fi
 
-TMPFILE="/tmp/lir_dump_$$.txt"
+TMPFILE="$(mktemp -t dark-lir-dump.XXXXXX)"
+OUTFILE="$(mktemp -t dark-lir-output.XXXXXX)"
+
+cleanup() {
+    rm -f "$TMPFILE" "$OUTFILE"
+}
+
+trap cleanup EXIT
 
 # Compile and dump LIR
 if [ -f "$EXPR" ]; then
-    "$RUN" ./dark --dump-lir "$EXPR" -o /dev/null 2>&1 > "$TMPFILE" || true
+    "$RUN" ./dark --dump-lir "$EXPR" -o "$OUTFILE" > "$TMPFILE" 2>&1 || true
 else
-    "$RUN" ./dark --dump-lir -e "$EXPR" -o /dev/null 2>&1 > "$TMPFILE" || true
+    "$RUN" ./dark --dump-lir -e "$EXPR" -o "$OUTFILE" > "$TMPFILE" 2>&1 || true
 fi
 
 if [ -z "$FUNC" ]; then
@@ -53,5 +60,3 @@ else
         found {print}
     ' "$TMPFILE"
 fi
-
-rm -f "$TMPFILE"
