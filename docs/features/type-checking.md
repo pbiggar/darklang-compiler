@@ -16,21 +16,22 @@ have optional annotations.
 
 ## Type System
 
-Defined in `AST.fs:20-46`:
+Defined in `src/DarkCompiler/AST.fs`:
 
 ```fsharp
 type Type =
-    | TInt64 | TInt32 | TInt16 | TInt8
-    | TUInt64 | TUInt32 | TUInt16 | TUInt8
-    | TBool | TFloat64 | TString | TChar | TUnit
-    | TFunction of Type list * Type    // (params) -> return
-    | TTuple of Type list              // (Int64, Bool)
-    | TRecord of string                // record type name
-    | TSum of string * Type list       // sum type with type args
-    | TList of Type                    // List<T>
-    | TDict of Type * Type             // Dict<K, V>
-    | TVar of string                   // type variable (generics)
-    | TRawPtr                          // raw pointer (internal)
+    | TInt8 | TInt16 | TInt32 | TInt64 | TInt128
+    | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
+    | TBool | TFloat64 | TString | TBytes | TChar | TUnit
+    | TRuntimeError
+    | TFunction of Type list * Type
+    | TTuple of Type list
+    | TRecord of string * Type list
+    | TSum of string * Type list
+    | TList of Type
+    | TVar of string
+    | TRawPtr
+    | TDict of keyType:Type * valueType:Type
 ```
 
 ## Type Registries
@@ -149,7 +150,9 @@ let freshenTypeParams (typeParams: string list) : string list * Map<string, stri
 ```fsharp
 type TypeError =
     | TypeMismatch of expected:Type * actual:Type * context:string
+    | IfBranchTypeMismatch of expected:Type * actual:Type
     | UndefinedVariable of name:string
+    | UndefinedCallTarget of name:string
     | MissingTypeAnnotation of context:string
     | InvalidOperation of op:string * types:Type list
     | GenericError of string
@@ -173,8 +176,8 @@ type TypeError =
 
 | File | Purpose |
 |------|---------|
-| `1.5_TypeChecking.fs` | Main type checker (2212 lines) |
-| `AST.fs:20-46` | Type definitions |
+| `src/DarkCompiler/passes/1.5_TypeChecking.fs` | Main type checker |
+| `src/DarkCompiler/AST.fs` | Type definitions |
 
 ## Key Functions
 
@@ -182,6 +185,6 @@ type TypeError =
 |----------|---------|
 | `checkExpr` | Type check an expression |
 | `checkFunctionDef` | Type check a function definition |
-| `unify` | Check type compatibility |
-| `applyTypeSubst` | Apply type variable substitution |
+| `unifyTypes` | Check type compatibility and collect substitutions |
+| `applySubst` | Apply type variable substitution |
 | `freshenTypeParams` | Generate fresh type variable names |
