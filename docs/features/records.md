@@ -139,27 +139,32 @@ Records are heap-allocated and reference-counted:
 - owned record temporaries are released at scope exit unless returned
 - borrowed record projections returned from a function are retained before
   parent cleanup
-- destructors release many managed field shapes recursively, including dynamic
-  strings and bytes, lists, dict roots, closures, nested fixed blocks, and
-  selected sum payloads
+- record fields participate in `RcShape`/`RcReleasePlan` analysis, so managed
+  fields are retained and released by representation shape instead of by
+  record-specific special cases
+- covered managed field shapes include dynamic strings and bytes, lists, dict
+  roots, closures, nested fixed blocks, boxed sums, and selected nested sums
 - literal strings stored in record fields use sentinel refcounts and are skipped
   by dynamic-buffer release
 
 Record updates create new records (immutable semantics).
 
-The implementation is still moving toward a single shape-driven release plan.
-See [`memory-refcounting-remaining.md`](../../memory-refcounting-remaining.md)
+The generic record-list payload path now uses planned helpers derived from
+`RcReleasePlan` on both ARM64 and x64. Future recursive record cleanup should
+extend shape-plan execution rather than rebuilding record-specific helper
+matrices. See [`memory-refcounting-remaining.md`](../../memory-refcounting-remaining.md)
 for the current remaining coverage and backend parity work.
 
 ## Implementation Files
 
 | File | Purpose |
 |------|---------|
-| `AST.fs:41` | TRecord type |
-| `AST.fs:91` | PRecord pattern |
-| `AST.fs:125-127` | RecordLiteral, RecordUpdate, RecordAccess |
-| `1.5_TypeChecking.fs` | TypeRegistry |
-| `2_AST_to_ANF.fs` | Record compilation |
+| `src/DarkCompiler/AST.fs` | `TRecord`, record definitions, record patterns, literals, updates, and field access |
+| `src/DarkCompiler/passes/1.5_TypeChecking.fs` | record type registry, field resolution, and typed record access/update validation |
+| `src/DarkCompiler/passes/2_AST_to_ANF.fs` | record lowering to tuple-like fixed blocks and field projections |
+| `src/DarkCompiler/passes/2.5_RefCountInsertion.fs` | record lifetime insertion through `RcShape` decisions |
+| `src/DarkCompiler/passes/arm64/6_CodeGen.fs` | ARM64 fixed-block record allocation and release-plan execution |
+| `src/DarkCompiler/passes/x64/6_CodeGen.fs` | x64 fixed-block record allocation and release-plan execution |
 
 ## Differences from Tuples
 
