@@ -3,10 +3,8 @@
 //
 // Tests for List module functions
 //
-// NOTE: Many List functions are commented out because the compiler doesn't support
-// list construction with spread syntax. [h, ...rest] only works in pattern matching,
-// not in list construction. Functions like append, reverse, map, filter that build
-// new lists cannot be implemented without this feature.
+// NOTE: List spread syntax in expressions is supported and covered below.
+// Remaining disabled cases are documented near the affected tests.
 
 // ===================================================================
 // List.singleton - Create a single-element list
