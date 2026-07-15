@@ -317,6 +317,8 @@ the allocator is aware of this via `isX86_64 arch` checks.
 ### Responsibilities
 - **Prune unused functions**: Keep `_start` roots and reachable callees
 - **Stdlib filtering**: Include only stdlib functions called by user code
+- **Call graph helpers**: Uses `DeadCodeElimination.fs` for LIR reachability and
+  `ANFDeadCodeElimination.fs` when computing reachable stdlib names from ANF
 
 ---
 
