@@ -7,18 +7,22 @@ bitmasks for occupied columns and diagonals. The Dark implementation is written
 as a tail-recursive loop over available positions, with one non-tail recursive
 call when a partial board needs deeper search.
 
-Current benchmark table context from `benchmarks/RESULTS.md`:
+Current cachegrind context from `./benchmarks/run_benchmarks.sh nqueen`
+at compiler commit `3312b4d5`:
 
-| Implementation | Instruction count | Relative to Rust |
-|----------------|-------------------|------------------|
-| Rust | 164,529,075 | 1.00x |
-| OCaml | 297,970,462 | 1.81x |
-| Dark | 304,488,643 | 1.85x |
-| Node | 804,233,231 | 4.89x |
-| Python | 17,205,881,478 | 105x |
+| Implementation | Instructions | Relative to Rust | Data refs | Branches | Mispred |
+|----------------|--------------|------------------|-----------|----------|---------|
+| Rust | 164,529,075 | 1.00x | 65,548,558 | 13,996,655 | 24.9% |
+| OCaml | 297,970,462 | 1.81x | 116,331,272 | 23,319,520 | 17.9% |
+| Dark | 304,488,643 | 1.85x | 110,428,280 | 13,950,966 | 25.0% |
+| Node | 804,233,231 | 4.89x | 356,256,667 | 122,679,675 | 7.6% |
+| Python | 17,205,881,478 | 104.57x | 7,180,761,665 | 2,639,149,957 | 10.0% |
 
 Dark is currently close to OCaml for this benchmark and about 1.85x slower than
-Rust.
+Rust. Dark's branch count is essentially the same as Rust's, but its
+instruction count and data references are much higher. The current gap is
+therefore better explained by per-iteration instruction and stack/register
+traffic than by extra high-level branching in the N-Queens search.
 
 ## Current Compiler Evidence
 
