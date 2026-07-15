@@ -348,11 +348,7 @@ let rec private formatPattern (syntax: Syntax) (pattern: Pattern) : string =
         let payloadText = formatPattern syntax payload
         match syntax with
         | CompilerSyntax -> $"{formatIdentifierPath name}({payloadText})"
-        | InterpreterSyntax ->
-            if payloadText.StartsWith "(" then
-                $"{formatIdentifierPath name} {payloadText}"
-            else
-                $"{formatIdentifierPath name} {payloadText}"
+        | InterpreterSyntax -> $"{formatIdentifierPath name} {payloadText}"
     | PInt64 n ->
         match syntax with
         | CompilerSyntax -> $"{n}"
