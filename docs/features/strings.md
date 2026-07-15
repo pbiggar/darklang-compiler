@@ -29,6 +29,27 @@ String concatenation lowers to `LIR.StringConcat`, which allocates a new dynamic
 string, copies both inputs, initializes refcount to 1, and participates in leak
 accounting when leak checking is enabled.
 
+The stdlib exposes byte-oriented operations directly over this layout:
+
+- `Stdlib.String.length` returns the byte length stored at offset 0.
+- `Stdlib.String.getByteAt` reads a byte from the data region at offset 8.
+- `startsWith`, `endsWith`, `indexOf`, `contains`, `slice`, `substring`,
+  `take`, and `drop` operate on byte offsets.
+
+Unicode helpers are layered on top of the byte representation:
+
+- `toCodepoints` decodes UTF-8 to `List<Int64>`.
+- `fromCodepoints` allocates a dynamic string and encodes UTF-8 bytes.
+- `codepointLength`, `toUpperCase`, `toLowerCase`, and `reverse` use the
+  codepoint conversion helpers.
+- `toGraphemes` and `graphemeLength` use a simplified UAX #29-style segmenter
+  with explicit handling for combining marks, variation selectors, skin tone
+  modifiers, zero-width joiner, and CR/LF.
+
+Higher-level stdlib functions such as `repeat`, `join`, `trim`, `split`,
+`replace`, `first`, `last`, `dropFirst`, `dropLast`, `head`, `padStart`, and
+`padEnd` are implemented in `src/DarkCompiler/stdlib/String.dark`.
+
 String hashing and equality are backend intrinsics:
 
 ```fsharp
