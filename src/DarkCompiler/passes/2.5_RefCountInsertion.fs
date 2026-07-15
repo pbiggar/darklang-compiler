@@ -1149,7 +1149,6 @@ let rec insertRCWithAnalysis
                        | _ -> false
                 | None ->
                     false
-            let closureOwnershipTransferredToRawStorage = false
             let returnDecs' =
                 let functionReturnsNestedRecordListDict =
                     let isSingleListDictRecord (name: string) : bool =
@@ -1176,8 +1175,7 @@ let rec insertRCWithAnalysis
                    && not (Set.contains tempId bodyReturned)
                    && not (isBorrowingExpr cexpr)
                    && not skipReturnDecForMapHelperLists
-                   && not consumedByImmediateI64Push
-                   && not closureOwnershipTransferredToRawStorage then
+                   && not consumedByImmediateI64Push then
                     let kindOverride =
                         match inferredType with
                         | AST.TList (AST.TFunction _) -> Some TaggedList
@@ -1296,8 +1294,7 @@ let rec insertRCWithAnalysis
                     if bindingNeedsShapeAutomaticDec ctx cexpr inferredType
                        && not (isBorrowingExpr cexpr)
                        && not skipReturnDecForMapHelperLists
-                       && not consumedByImmediateI64Push
-                       && not closureOwnershipTransferredToRawStorage then
+                       && not consumedByImmediateI64Push then
                         let kindOverride =
                             match inferredType with
                             | AST.TList (AST.TFunction _) -> Some TaggedList
