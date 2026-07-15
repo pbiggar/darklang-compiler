@@ -8,6 +8,18 @@ open ANF
 open MIR
 open LIR
 
+let private escapeStringContent (input: string) : string =
+    input
+    |> String.collect (fun c ->
+        match c with
+        | '\\' -> "\\\\"
+        | '"' -> "\\\""
+        | '\n' -> "\\n"
+        | '\r' -> "\\r"
+        | '\t' -> "\\t"
+        | '\000' -> "\\0"
+        | _ -> string c)
+
 /// Append a type suffix when available
 let private appendTypeSuffix (typOpt: AST.Type option) (value: string) : string =
     match typOpt with
@@ -19,7 +31,7 @@ let private prettyPrintANFAtom = function
     | ANF.UnitLiteral -> "()"
     | ANF.IntLiteral n -> ANF.sizedIntToString n
     | ANF.BoolLiteral b -> if b then "true" else "false"
-    | ANF.StringLiteral s -> $"\"{s}\""
+    | ANF.StringLiteral s -> $"\"{escapeStringContent s}\""
     | ANF.FloatLiteral f -> string f
     | ANF.Var (ANF.TempId n) -> $"t{n}"
     | ANF.FuncRef name -> $"&{name}"
@@ -96,7 +108,7 @@ let private prettyPrintANFCExpr = function
     | ANF.Print (atom, valueType) ->
         $"print({prettyPrintANFAtom atom}, type={valueType})"
     | ANF.RuntimeError message ->
-        $"runtime_error(\"{message}\")"
+        $"runtime_error(\"{escapeStringContent message}\")"
     | ANF.FileReadText path ->
         $"FileReadText({prettyPrintANFAtom path})"
     | ANF.FileExists path ->
@@ -212,7 +224,7 @@ let private prettyPrintMIROperand = function
     | MIR.Int64Const n -> string n
     | MIR.BoolConst b -> if b then "true" else "false"
     | MIR.FloatSymbol value -> $"float[{value}]"
-    | MIR.StringSymbol value -> $"str[{value}]"
+    | MIR.StringSymbol value -> $"str[{escapeStringContent value}]"
     | MIR.Register (MIR.VReg n) -> $"v{n}"
     | MIR.FuncAddr name -> $"&{name}"
 
@@ -305,7 +317,7 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
     | MIR.Print (src, valueType) ->
         $"Print({prettyPrintMIROperand src}, type={valueType})"
     | MIR.RuntimeError message ->
-        $"RuntimeError(\"{message}\")"
+        $"RuntimeError(\"{escapeStringContent message}\")"
     | MIR.FileReadText (dest, path) ->
         $"{prettyPrintMIRVReg dest} <- FileReadText({prettyPrintMIROperand path})"
     | MIR.FileExists (dest, path) ->
@@ -581,12 +593,12 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
     | LIR.PrintFloat freg ->
         $"PrintFloat({prettyPrintLIRFReg freg})"
     | LIR.PrintString value ->
-        $"PrintString(str[{value}], len={value.Length})"
+        $"PrintString(str[{escapeStringContent value}], len={value.Length})"
     | LIR.RuntimeError message ->
-        $"RuntimeError(\"{message}\")"
+        $"RuntimeError(\"{escapeStringContent message}\")"
     | LIR.PrintChars chars ->
         let s = chars |> List.map (fun b -> char b) |> System.String.Concat
-        $"PrintChars(\"{s}\")"
+        $"PrintChars(\"{escapeStringContent s}\")"
     | LIR.PrintBytes reg ->
         $"PrintBytes({prettyPrintLIRReg reg})"
     | LIR.PrintInt64NoNewline reg ->

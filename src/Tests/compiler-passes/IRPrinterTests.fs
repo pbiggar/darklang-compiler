@@ -100,10 +100,20 @@ let testFormatANFUInt64Max () : TestResult =
     else
         Error $"formatANF UInt64 max did not match.\nExpected:\n{expected}\nActual:\n{actual}"
 
+let testFormatANFEscapedString () : TestResult =
+    let program = ANF.Program ([], ANF.Return (ANF.StringLiteral "a \"quote\"\nnext\\slash"))
+    let expected = "return \"a \\\"quote\\\"\\nnext\\\\slash\""
+    let actual = formatANF program
+    if actual = expected then
+        Ok ()
+    else
+        Error $"formatANF escaped string did not match.\nExpected:\n{expected}\nActual:\n{actual}"
+
 let tests = [
     ("format MIR", testFormatMIR)
     ("format LIR", testFormatLIR)
     ("format ANF UInt64 max", testFormatANFUInt64Max)
+    ("format ANF escaped string", testFormatANFEscapedString)
 ]
 
 let runAll () : TestResult =
