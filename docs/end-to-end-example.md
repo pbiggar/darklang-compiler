@@ -18,22 +18,35 @@ ANF after
 opt:        return 14
 
 ANF after
+RC:         return 14
+
+ANF after
 print:      let TempId 2000 = print(14, type=TInt64)
+            return 14
+
+ANF after
+tail-call:  let TempId 2000 = print(14, type=TInt64)
             return 14
 
 MIR:        Print(14, type=TInt64)
             ret 14
 
-LIR:        X0 <- Mov(Imm 14)
+LIR:        Label "_start_body":
+            X0 <- Mov(Imm 14)
             PrintInt64(X0)
             X0 <- Mov(Imm 14)
             Ret
+            Label "_start_entry":
+            Jump(Label "_start_body")
 
 Allocated
-LIR:        X0 <- Mov(Imm 14)
+LIR:        Label "_start_body":
+            X0 <- Mov(Imm 14)
             PrintInt64(X0)
             X0 <- Mov(Imm 14)
             Ret
+            Label "_start_entry":
+            Jump(Label "_start_body")
 
 Result:     Executable that prints 14 and exits with code 0
 ```
