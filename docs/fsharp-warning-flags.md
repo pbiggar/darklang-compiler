@@ -42,4 +42,7 @@ Since `TreatWarningsAsErrors` is enabled, all standard F# warnings are already t
 
 ## If Issues Arise
 
-If specific warnings become problematic, add them to `<WarningsAsErrors>` instead of `<NoWarn>` to ensure they remain visible but don't block builds during specific transitions.
+If specific warnings become problematic, prefer fixing the code rather than
+broadening `<NoWarn>`. If a transition really needs a temporary suppression,
+keep it narrow, document why it exists, and include the condition for removing
+it.
