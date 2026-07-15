@@ -1,7 +1,7 @@
 # Benchmark Investigation: tak (Takeuchi Function)
 
 **Date:** 2026-01-15
-**Last checked:** 2026-07-05
+**Last checked:** 2026-07-15
 **Benchmark:** tak
 **Randomly selected:** Yes
 
@@ -16,6 +16,9 @@ with current evidence pointing to:
 2. **Higher instruction count**: current benchmark
    results show Dark at 635,804,177 instructions versus Rust at 39,336,450
    instructions for `tak` (16.2x).
+3. **Redundant entry argument copies in emitted assembly**: current Dark ARM64
+   assembly copies arguments through temporary registers before moving them into
+   the long-lived callee-saved registers used by the recursive loop.
 
 ## Benchmark Overview
 
@@ -74,6 +77,23 @@ Current status:
 - `tak` still uses five callee-saved registers (`X19` through `X23`) across the
   recursive calls.
 - Dark still saves all arguments before the first comparison, unlike Rust.
+- Current generated ARM64 has an additional entry copy chain before the compare:
+
+```asm
+mov x9, x0
+mov x10, x1
+mov x11, x2
+mov x0, x9
+mov x1, x10
+mov x2, x11
+mov x21, x0
+mov x22, x1
+mov x20, x2
+```
+
+The LIR after register allocation only contains the final three moves into
+`X21`, `X22`, and `X20`, so the extra `x9`/`x10`/`x11` round trip is introduced
+after LIR, during final code generation or encoding.
 
 The loop body still contains non-self PHI-result moves after recursive calls:
 
@@ -140,12 +160,35 @@ X22 <- Mov(Reg X19)
 **Files to modify:**
 - `src/DarkCompiler/passes/5_RegisterAllocation.fs` - Enhance `collectPhiPreferences`
 
+### 3. Remove Redundant Function-Entry Argument Copy Chains (Low Impact)
+
+**Problem:** The emitted ARM64 for `tak` copies `x0`, `x1`, and `x2` through
+`x9`, `x10`, and `x11`, restores them to the argument registers, and only then
+moves them to `x21`, `x22`, and `x20`.
+
+**Evidence:**
+Current LIR does not contain the temporary-register round trip, but
+`aarch64-linux-gnu-objdump -b binary -m aarch64 -D dark.out` shows it at the
+start of the `tak` body before the first comparison.
+
+**Solution:**
+- Skip argument-preservation temporaries when the destination argument register
+  is not overwritten before its final assigned register move.
+- Alternatively, teach the late peephole/codegen path to collapse
+  `arg -> temp -> arg -> callee-saved` into `arg -> callee-saved`.
+
+**Files to inspect:**
+- `src/DarkCompiler/passes/arm64/6_CodeGen.fs`
+- `src/DarkCompiler/passes/arm64/7_Emit.fs`
+- `src/DarkCompiler/passes/arm64/7_Encoding.fs`
+
 ## Quantified Performance Impact
 
 | Optimization | Estimated Speedup | Implementation Effort |
 |--------------|------------------|----------------------|
 | Argument register reuse before calls | 1-2% | Medium |
 | Loop-backedge PHI coalescing | Unknown | Medium |
+| Remove redundant function-entry argument copy chains | <1% | Low |
 
 The direct speedup from PHI coalescing is not quantified by current local
 evidence.
@@ -196,11 +239,27 @@ Label "tak_L1":
     X22 <- Mov(Reg X19)
 ```
 
+### Current Assembly and Cachegrind Evidence
+
+Current Dark output for `tak(24, 16, 8)` repeated ten times is `9`.
+
+Targeted local Cachegrind after rebuilding only the Dark `tak` benchmark reports
+635,804,177 instructions, 261,801,696 data refs, 24,933,507 branches, and
+4,331,831 branch mispredicts. This matches the current benchmark-results table
+for Dark instruction count and keeps the Rust comparison at 16.2x.
+
+Dark's emitted ARM64 starts the `tak` function with a full frame and five
+callee-saved spills, then performs the redundant argument-copy chain before
+entering the recursive loop comparison. The recursive loop still performs three
+recursive `bl` instructions and two loop-carried result moves before jumping
+back to the comparison.
+
 ## Conclusion
 
 The tak benchmark still reveals inefficiencies in Dark's register allocation and
 PHI lowering phases. Tail-call detection works, and current LIR keeps the
 entry path compact while still using conservative argument-save placement before
-the first comparison. The durable current findings are that argument-save
-placement, loop-backedge PHI-result moves, and the large 16.2x instruction-count
-gap versus Rust.
+the first comparison. Current assembly adds a small late-stage argument-copy
+inefficiency not visible in LIR. The durable current findings are that
+argument-save placement, loop-backedge PHI-result moves, redundant entry
+argument copies, and the large 16.2x instruction-count gap versus Rust.
