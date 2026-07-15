@@ -81,7 +81,6 @@ match [5, 10, 15] with | [a, _, c] -> a + c | _ -> 0 = 20
 match [] with | [x] -> x | [] -> 99 = 99
 
 // Shorter list falls through to fallback
-// (Note: matching longer pattern against shorter list crashes due to null deref)
 match [1] with | [x] -> x | _ -> 99 = 1
 
 // === List in Variable ===
