@@ -51,12 +51,18 @@ let buildVariantRegistry (variantLookup: AST_to_ANF.VariantLookup) : MIR.Variant
     |> List.map (fun (typeName, entries) ->
         match entries with
         | [] -> Crash.crash $"ANF_to_MIR: variant group for type '{typeName}' had no variants"
-        | (_, typeParams, _) :: _ ->
-            let variants =
-                entries
-                |> List.map (fun (_, _, (name, tag, payload)) -> mkVariantInfo name tag payload)
-                |> List.sortBy (fun v -> v.Tag)
-            (typeName, mkTypeVariants typeParams variants))
+        | (_, typeParams, _) :: rest ->
+            let hasInconsistentTypeParams =
+                rest |> List.exists (fun (_, otherTypeParams, _) -> otherTypeParams <> typeParams)
+
+            if hasInconsistentTypeParams then
+                Crash.crash $"ANF_to_MIR: inconsistent type parameters in variant registry for type: {typeName}"
+            else
+                let variants =
+                    entries
+                    |> List.map (fun (_, _, (name, tag, payload)) -> mkVariantInfo name tag payload)
+                    |> List.sortBy (fun v -> v.Tag)
+                (typeName, mkTypeVariants typeParams variants))
     |> Map.ofList
 
 /// Build RecordRegistry from TypeReg
