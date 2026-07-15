@@ -9,12 +9,12 @@
 ## IR Pipeline
 
 ```
-Source -> AST -> ANF -> MIR -> LIR -> ISA -> Binary
+Source -> AST -> ANF -> MIR -> LIR -> RegAlloc -> CodeGen -> Encode -> Binary
 ```
 
-Passes 1-5 (Parser, TypeCheck, ANF, MIR, LIR, register allocation) are
-architecture-independent. Passes 6-8 (CodeGen, encoding, binary output)
-live under `passes/arm64/` or `passes/x64/` depending on the target.
+Passes 1-5 run through parsing, type checking, target-independent IR lowering,
+and register allocation. Passes 6-8 (CodeGen, encoding, binary output) live
+under `passes/arm64/` or `passes/x64/` depending on the target.
 
 ### Why Multiple IRs?
 
